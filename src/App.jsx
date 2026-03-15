@@ -299,8 +299,8 @@ function LoginScreen({ players, onLogin, teamNames }) {
 
   const PlayerBtn = ({ p, team }) => (
     <button onClick={() => onLogin(p)} style={{
-      width: "100%", padding: "10px 8px", background: team.color + "22",
-      border: `1px solid ${team.accent}33`, borderRadius: 7,
+      width: "100%", padding: "7px 8px", background: team.color + "22",
+      border: `1px solid ${team.accent}33`, borderRadius: 6,
       color: BC.t1, fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left",
       display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4,
     }}>
@@ -319,18 +319,18 @@ function LoginScreen({ players, onLogin, teamNames }) {
       }} />
 
       {/* Title */}
-      <div style={{ marginBottom: 10, textAlign: "center", position: "relative", zIndex: 1 }}>
-        <div style={{ fontSize: 22, fontWeight: 800, color: BC.gold, letterSpacing: 2 }}>THE BOURBON CUP</div>
-        <div style={{ fontSize: 10, color: BC.t3, letterSpacing: 4, marginTop: 2 }}>2026 GAYLORD, MI</div>
+      <div style={{ marginBottom: 8, textAlign: "center", position: "relative", zIndex: 1 }}>
+        <div style={{ fontSize: 28, fontWeight: 800, color: BC.gold, letterSpacing: 2 }}>THE BOURBON CUP</div>
+        <div style={{ fontSize: 11, color: BC.t3, letterSpacing: 4, marginTop: 3 }}>2026 GAYLORD, MI</div>
       </div>
 
 
 
       {/* Logos with VS */}
-      <div style={{ width: "100%", maxWidth: 420, display: "flex", alignItems: "center", justifyContent: "center", gap: 0, position: "relative", zIndex: 1, marginBottom: 10 }}>
-        <img src={teamA.logo} alt={teamA.name} style={{ width: 72, height: 72, objectFit: "contain" }} />
-        <div style={{ fontSize: 12, fontWeight: 800, color: BC.t3, letterSpacing: 2, padding: "0 8px" }}>v</div>
-        <img src={teamB.logo} alt={teamB.name} style={{ width: 72, height: 72, objectFit: "contain" }} />
+      <div style={{ width: "100%", maxWidth: 420, display: "flex", alignItems: "center", justifyContent: "center", gap: 0, position: "relative", zIndex: 1, marginBottom: 8 }}>
+        <img src={teamA.logo} alt={teamA.name} style={{ width: 120, height: 80, objectFit: "contain" }} />
+        <div style={{ fontSize: 14, fontWeight: 800, color: BC.t3, letterSpacing: 2, padding: "0 10px" }}>v</div>
+        <img src={teamB.logo} alt={teamB.name} style={{ width: 100, height: 80, objectFit: "contain" }} />
       </div>
 
       {/* Two-column team layout */}
@@ -340,7 +340,7 @@ function LoginScreen({ players, onLogin, teamNames }) {
           return (
             <div key={team.id} style={{ flex: 1, minWidth: 0 }}>
               {/* Player list */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 2, background: BC.card + "88", border: `1px solid ${team.accent}44`, borderTop: `2px solid ${team.accent}`, borderRadius: 10, padding: 4 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2, background: BC.card + "88", border: `1px solid ${team.accent}44`, borderTop: `2px solid ${team.accent}`, borderRadius: 10, padding: 3 }}>
                 {teamPlayers.length === 0
                   ? <div style={{ textAlign: "center", color: BC.t3, fontSize: 11, padding: "12px 4px" }}>No players</div>
                   : teamPlayers.map(p => <PlayerBtn key={p.player_id} p={p} team={team} />)
