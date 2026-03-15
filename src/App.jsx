@@ -299,9 +299,9 @@ function LoginScreen({ players, onLogin, teamNames }) {
 
   const PlayerBtn = ({ p, team }) => (
     <button onClick={() => onLogin(p)} style={{
-      width: "100%", padding: "7px 8px", background: team.color + "22",
+      width: "100%", padding: "2.5vw 3vw", background: team.color + "22",
       border: `1px solid ${team.accent}33`, borderRadius: 6,
-      color: BC.t1, fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left",
+      color: BC.t1, fontSize: "3.8vw", fontWeight: 600, cursor: "pointer", textAlign: "left",
       display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4,
     }}>
       <span style={{ flex: 1, lineHeight: 1.3 }}>{p.name}</span>
@@ -309,8 +309,8 @@ function LoginScreen({ players, onLogin, teamNames }) {
   );
 
   return (
-    <div style={{ height: "100svh", background: BC.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 12px", fontFamily: "'Montserrat', sans-serif", position: "relative", overflow: "hidden" }}>
-      {/* Silhouette background - full screen fill */}
+    <div style={{ height: "100svh", background: BC.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 10px", fontFamily: "'Montserrat', sans-serif", position: "relative", overflow: "hidden" }}>
+      {/* Silhouette background */}
       <img src={TROPHY_SILHOUETTE} alt="" style={{
         position: "absolute", top: "50%", left: "50%",
         transform: "translate(-50%, -50%)",
@@ -319,28 +319,28 @@ function LoginScreen({ players, onLogin, teamNames }) {
       }} />
 
       {/* Title */}
-      <div style={{ marginBottom: 8, textAlign: "center", position: "relative", zIndex: 1 }}>
-        <div style={{ fontSize: 28, fontWeight: 800, color: BC.gold, letterSpacing: 2 }}>THE BOURBON CUP</div>
-        <div style={{ fontSize: 11, color: BC.t3, letterSpacing: 4, marginTop: 3 }}>2026 GAYLORD, MI</div>
+      <div style={{ marginBottom: 10, textAlign: "center", position: "relative", zIndex: 1 }}>
+        <div style={{ fontSize: "8vw", fontWeight: 800, color: BC.gold, letterSpacing: 2 }}>THE BOURBON CUP</div>
+        <div style={{ fontSize: "3vw", color: BC.t3, letterSpacing: "0.3em", marginTop: 3 }}>2026 GAYLORD, MI</div>
       </div>
 
 
 
       {/* Logos with VS */}
-      <div style={{ width: "100%", maxWidth: 420, display: "flex", alignItems: "center", justifyContent: "center", gap: 0, position: "relative", zIndex: 1, marginBottom: 8 }}>
-        <img src={teamA.logo} alt={teamA.name} style={{ width: 120, height: 80, objectFit: "contain" }} />
-        <div style={{ fontSize: 14, fontWeight: 800, color: BC.t3, letterSpacing: 2, padding: "0 10px" }}>v</div>
-        <img src={teamB.logo} alt={teamB.name} style={{ width: 100, height: 80, objectFit: "contain" }} />
+      <div style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 0, position: "relative", zIndex: 1, marginBottom: 10 }}>
+        <img src={teamA.logo} alt={teamA.name} style={{ width: "32vw", height: "22vw", objectFit: "contain" }} />
+        <div style={{ fontSize: "4vw", fontWeight: 800, color: BC.t3, letterSpacing: 2, padding: "0 2vw" }}>v</div>
+        <img src={teamB.logo} alt={teamB.name} style={{ width: "28vw", height: "22vw", objectFit: "contain" }} />
       </div>
 
       {/* Two-column team layout */}
-      <div style={{ width: "100%", maxWidth: 420, display: "flex", gap: 6, position: "relative", zIndex: 1, alignItems: "flex-start" }}>
+      <div style={{ width: "100%", display: "flex", gap: "2vw", position: "relative", zIndex: 1, alignItems: "flex-start" }}>
         {[teamA, teamB].map(team => {
           const teamPlayers = filterPlayers(team.id === "A" ? teamAPlayers : teamBPlayers);
           return (
             <div key={team.id} style={{ flex: 1, minWidth: 0 }}>
               {/* Player list */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 2, background: BC.card + "88", border: `1px solid ${team.accent}44`, borderTop: `2px solid ${team.accent}`, borderRadius: 10, padding: 3 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1vw", background: BC.card + "88", border: `1px solid ${team.accent}44`, borderTop: `2px solid ${team.accent}`, borderRadius: 10, padding: "1.5vw" }}>
                 {teamPlayers.length === 0
                   ? <div style={{ textAlign: "center", color: BC.t3, fontSize: 11, padding: "12px 4px" }}>No players</div>
                   : teamPlayers.map(p => <PlayerBtn key={p.player_id} p={p} team={team} />)
