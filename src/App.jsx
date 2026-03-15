@@ -309,7 +309,7 @@ function LoginScreen({ players, onLogin, teamNames }) {
   );
 
   return (
-    <div style={{ height: "100vh", background: BC.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "12px 12px", fontFamily: "'Montserrat', sans-serif", position: "relative", overflow: "hidden" }}>
+    <div style={{ height: "100vh", background: BC.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", paddingTop: "12vh", padding: "12vh 12px 12px", fontFamily: "'Montserrat', sans-serif", position: "relative", overflow: "hidden" }}>
       {/* Silhouette background - full screen fill */}
       <img src={TROPHY_SILHOUETTE} alt="" style={{
         position: "absolute", top: "50%", left: "50%",
