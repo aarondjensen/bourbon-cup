@@ -1,0 +1,1623 @@
+import { initializeApp } from "firebase/app";
+import { getFirestore, collection, doc, setDoc, getDocs, query, where, writeBatch, onSnapshot, deleteDoc } from "firebase/firestore";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+
+// ─── BOURBON CUP BRANDING ───
+const BC = {
+  bg: "#0a0804",
+  card: "#12100d",
+  inp: "#0d0b09",
+  hover: "#1a1612",
+  bdr: "#2a2218",
+  t1: "#f0e8d8",
+  t2: "#b8a98a",
+  t3: "#6b5d47",
+  amber: "#c8860a",
+  amberGlow: "rgba(200,134,10,0.15)",
+  amberDim: "#8a5c07",
+  gold: "#d4a843",
+  goldGlow: "rgba(212,168,67,0.12)",
+  danger: "#ef4444",
+  warn: "#f59e0b",
+  green: "#22c55e",
+};
+
+
+// ── Inject Montserrat font ──
+const _link = document.createElement("link");
+_link.rel = "stylesheet";
+_link.href = "https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap";
+document.head.appendChild(_link);
+
+const TROPHY_PHOTO = "/trophy_photo.png";
+const LOGO_TEAM_A = "/mash_brothers_logo_on_black.png";
+const LOGO_TEAM_A_WHITE = "/mash_brothers_logo_on_white.png";
+const LOGO_TEAM_B = "/shot_callers_logo.png";
+const SHOT_CALLERS_LOGO = "/shot_callers_logo.png";
+const TROPHY_SILHOUETTE = "/trophy_logo_silhouette.png";
+
+let TEAM_A = { id: "A", name: "Team Alpha", color: "#004d24", accent: "#009144", glow: "rgba(0,145,68,0.2)", short: "α", logo: LOGO_TEAM_A };
+let TEAM_B = { id: "B", name: "Team Beta",  color: "#0d3235", accent: "#3A96A0", glow: "rgba(58,150,160,0.2)", short: "β", logo: LOGO_TEAM_B };
+
+const FORMATS = [
+  { id: "singles",       label: "Singles",          desc: "Match play, 1v1. Win hole = 1pt, halve = 0.5pt." },
+  { id: "best_ball",     label: "2-Man Best Ball",  desc: "Team uses the better net score on each hole." },
+  { id: "scramble",      label: "2-Man Scramble",   desc: "Both hit, choose best ball, both play from there." },
+  { id: "aggregate",     label: "2-Man Aggregate",  desc: "Combined net scores vs combined net scores." },
+  { id: "double_dot",    label: "Double Dot",       desc: "Standard Nassau with automatic double on last 3 holes." },
+  { id: "chapman",       label: "Chapman",          desc: "Both drive, swap, choose best approach for scramble in." },
+  { id: "stableford",    label: "Stableford",       desc: "Points per hole: eagle=4, birdie=3, par=2, bogey=1." },
+  { id: "stroke_play",   label: "Stroke Play",      desc: "Lowest net total wins the match." },
+];
+
+const NASSAU_DEFAULT = { front: 1, back: 1, overall: 1 };
+
+// ── Firebase ──
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCvR8I_5N0tXIXaPRkvsvBMzKfUY1_KzA0",
+  authDomain: "the-bourbon-cup.firebaseapp.com",
+  projectId: "the-bourbon-cup",
+  storageBucket: "the-bourbon-cup.firebasestorage.app",
+  messagingSenderId: "957218531964",
+  appId: "1:957218531964:web:753b42a551463fd50537f9",
+};
+const TOURNAMENT_ID = "bc_2025";
+const _app = initializeApp(FIREBASE_CONFIG);
+const _db = getFirestore(_app);
+
+const db = {
+  _q: (col, filters = []) => {
+    const ref = collection(_db, col);
+    return filters.length ? query(ref, ...filters.map(f => where(f.field, f.op, f.value))) : ref;
+  },
+  get: async (col, filters = []) => {
+    try { const s = await getDocs(db._q(col, filters)); return s.docs.map(d => d.data()); }
+    catch(e) { console.error("db.get", col, e); return []; }
+  },
+  upsert: async (col, data) => {
+    if (!data.id) return null;
+    try { await setDoc(doc(_db, col, String(data.id)), data, { merge: true }); return data; }
+    catch(e) { console.error("db.upsert", col, e); return null; }
+  },
+  delete: async (col, id) => {
+    try { await deleteDoc(doc(_db, col, String(id))); return true; }
+    catch(e) { console.error("db.delete", col, e); return null; }
+  },
+  subscribe: (col, filters = [], cb) => {
+    try {
+      return onSnapshot(db._q(col, filters), snap => cb(snap.docs.map(d => d.data())), e => console.error("subscribe", e));
+    } catch(e) { console.error("subscribe setup", e); return () => {}; }
+  },
+};
+
+// ── Helpers ──
+const calcCH = (hi, slope, rating, par) => (!hi && hi !== 0) ? 0 : Math.round((hi * (slope / 113)) + (rating - par));
+const fmtScore = (n) => n == null ? "—" : n === 0 ? "E" : n > 0 ? `+${n}` : `${n}`;
+const getTeam = (tid) => tid === "A" ? TEAM_A : TEAM_B;
+const oppTeam = (tid) => tid === "A" ? TEAM_B : TEAM_A;
+
+// ── Match Scoring Engine ──
+function computeMatchResult(match, holeData, courses, tRounds, tPlayers, format) {
+  // holeData: { pid_round: { holeIdx: score } }
+  const rnd = match.round;
+  const tr = tRounds.find(t => t.round_number === rnd);
+  const course = courses.find(c => c.id === tr?.course_id);
+  if (!course) return { status: "AS", frontPts: 0, backPts: 0, overallPts: 0, holes: [] };
+
+  const holePars = course.hole_pars || Array(18).fill(4);
+  const holeHcps = course.hole_handicaps || Array(18).fill(9);
+
+  const getPlayerScores = (pid) => holeData[`${pid}_${rnd}`] || {};
+  const getPlayerHI = (pid) => {
+    const tp = tPlayers.find(t => t.player_id === pid);
+    return parseFloat(tp?.handicap_index) || 0;
+  };
+  const getCH = (pid) => {
+    const hi = getPlayerHI(pid);
+    return calcCH(hi, course.slope || 113, course.rating || 72, course.par || 72);
+  };
+  const getStrokeMap = (ch) => {
+    const sorted = holeHcps.map((h,i) => ({ idx: i, hcp: h })).sort((a,b) => a.hcp - b.hcp);
+    const map = {};
+    let rem = Math.abs(ch);
+    const sign = ch >= 0 ? 1 : -1;
+    for (let pass = 0; pass < 3 && rem > 0; pass++) {
+      for (const h of sorted) { if (rem <= 0) break; map[h.idx] = (map[h.idx] || 0) + sign; rem--; }
+    }
+    return map;
+  };
+  const netScore = (gross, holeIdx, strokeMap) => gross == null ? null : gross - (strokeMap[holeIdx] || 0);
+
+  const teamA = match.teamA; // array of pids
+  const teamB = match.teamB;
+
+  // Compute per-hole results
+  const holeResults = Array(18).fill(null).map((_, h) => {
+    let aScore = null, bScore = null;
+    if (format === "singles") {
+      const aPid = teamA[0], bPid = teamB[0];
+      const aCH = getCH(aPid), bCH = getCH(bPid);
+      const aMap = getStrokeMap(aCH), bMap = getStrokeMap(bCH);
+      const aRaw = getPlayerScores(aPid)[h];
+      const bRaw = getPlayerScores(bPid)[h];
+      aScore = netScore(aRaw, h, aMap);
+      bScore = netScore(bRaw, h, bMap);
+    } else if (format === "best_ball") {
+      const aNets = teamA.map(pid => { const m = getStrokeMap(getCH(pid)); return netScore(getPlayerScores(pid)[h], h, m); }).filter(s => s != null);
+      const bNets = teamB.map(pid => { const m = getStrokeMap(getCH(pid)); return netScore(getPlayerScores(pid)[h], h, m); }).filter(s => s != null);
+      aScore = aNets.length ? Math.min(...aNets) : null;
+      bScore = bNets.length ? Math.min(...bNets) : null;
+    } else if (format === "aggregate") {
+      const aNets = teamA.map(pid => { const m = getStrokeMap(getCH(pid)); return netScore(getPlayerScores(pid)[h], h, m); });
+      const bNets = teamB.map(pid => { const m = getStrokeMap(getCH(pid)); return netScore(getPlayerScores(pid)[h], h, m); });
+      if (aNets.every(s => s != null)) aScore = aNets.reduce((a,b) => a+b, 0);
+      if (bNets.every(s => s != null)) bScore = bNets.reduce((a,b) => a+b, 0);
+    } else if (format === "scramble") {
+      // For scramble, team shares one score — use best raw, no individual handicaps
+      const aRaws = teamA.map(pid => getPlayerScores(pid)[h]).filter(s => s != null);
+      const bRaws = teamB.map(pid => getPlayerScores(pid)[h]).filter(s => s != null);
+      // Apply team handicap (avg of players / 2 for scramble)
+      const aAvgHI = teamA.reduce((s,p) => s + getPlayerHI(p), 0) / teamA.length;
+      const bAvgHI = teamB.reduce((s,p) => s + getPlayerHI(p), 0) / teamB.length;
+      const aTeamCH = Math.round(calcCH(aAvgHI * 0.35, course.slope || 113, course.rating || 72, course.par || 72));
+      const bTeamCH = Math.round(calcCH(bAvgHI * 0.35, course.slope || 113, course.rating || 72, course.par || 72));
+      const aMap = getStrokeMap(aTeamCH), bMap = getStrokeMap(bTeamCH);
+      aScore = aRaws.length ? netScore(Math.min(...aRaws), h, aMap) : null;
+      bScore = bRaws.length ? netScore(Math.min(...bRaws), h, bMap) : null;
+    } else if (format === "stableford") {
+      const aPid = teamA[0], bPid = teamB[0];
+      const aCH = getCH(aPid), bCH = getCH(bPid);
+      const aMap = getStrokeMap(aCH), bMap = getStrokeMap(bCH);
+      const aNet = netScore(getPlayerScores(aPid)[h], h, aMap);
+      const bNet = netScore(getPlayerScores(bPid)[h], h, bMap);
+      const sfPts = (net) => { if (net == null) return null; const d = net - holePars[h]; return Math.max(0, 2 - d); };
+      aScore = sfPts(aNet);
+      bScore = sfPts(bNet);
+    } else {
+      // Default: match play net
+      const aPid = teamA[0], bPid = teamB[0];
+      const aCH = getCH(aPid), bCH = getCH(bPid);
+      const aMap = getStrokeMap(aCH), bMap = getStrokeMap(bCH);
+      aScore = netScore(getPlayerScores(aPid)[h], h, aMap);
+      bScore = netScore(getPlayerScores(bPid)[h], h, bMap);
+    }
+
+    let winner = null;
+    if (aScore != null && bScore != null) {
+      if (format === "stableford") winner = aScore > bScore ? "A" : aScore < bScore ? "B" : null;
+      else winner = aScore < bScore ? "A" : aScore > bScore ? "B" : null;
+    }
+    return { h, aScore, bScore, winner, played: aScore != null && bScore != null };
+  });
+
+  // Nassau scoring
+  const nassau = match.nassau || NASSAU_DEFAULT;
+  const calcNassauSegment = (holes) => {
+    const played = holes.filter(r => r.played);
+    if (!played.length) return { winner: null, margin: 0, complete: false };
+    const aWins = played.filter(r => r.winner === "A").length;
+    const bWins = played.filter(r => r.winner === "B").length;
+    const margin = aWins - bWins;
+    const remaining = holes.filter(r => !r.played).length;
+    // Match play: can be clinched early
+    const canWin = Math.abs(margin) > remaining;
+    return {
+      winner: canWin ? (margin > 0 ? "A" : "B") : played.length === holes.length ? (margin > 0 ? "A" : margin < 0 ? "B" : null) : null,
+      margin,
+      complete: played.length === holes.length || canWin,
+      aWins, bWins, played: played.length, total: holes.length
+    };
+  };
+
+  const front = calcNassauSegment(holeResults.slice(0, 9));
+  const back = calcNassauSegment(holeResults.slice(9, 18));
+  const overall = calcNassauSegment(holeResults);
+
+  // Award points
+  const frontPts = { A: 0, B: 0 };
+  const backPts = { A: 0, B: 0 };
+  const overallPts = { A: 0, B: 0 };
+  const halfPt = nassau.front / 2;
+
+  if (front.complete) {
+    if (front.winner) frontPts[front.winner] = nassau.front;
+    else { frontPts.A = halfPt; frontPts.B = halfPt; }
+  }
+  if (back.complete) {
+    if (back.winner) backPts[back.winner] = nassau.back;
+    else { backPts.A = nassau.back / 2; backPts.B = nassau.back / 2; }
+  }
+  if (overall.complete) {
+    if (overall.winner) overallPts[overall.winner] = nassau.overall;
+    else { overallPts.A = nassau.overall / 2; overallPts.B = nassau.overall / 2; }
+  }
+
+  // Double dot: auto double on holes 16-18
+  if (format === "double_dot") {
+    const lastHoles = holeResults.slice(15, 18);
+    const dd = calcNassauSegment(lastHoles);
+    // extra point for winning 16-18 segment
+    if (dd.complete) {
+      if (dd.winner) overallPts[dd.winner] = (overallPts[dd.winner] || 0) + 1;
+    }
+  }
+
+  // Current match status string for display
+  const playedHoles = holeResults.filter(r => r.played);
+  const aUp = overall.aWins - overall.bWins;
+  let status = "AS";
+  if (playedHoles.length > 0) {
+    if (aUp > 0) status = `${aUp}UP (A)`;
+    else if (aUp < 0) status = `${Math.abs(aUp)}UP (B)`;
+    else status = "AS";
+  }
+
+  return {
+    holes: holeResults,
+    front, back, overall,
+    frontPts, backPts, overallPts,
+    status,
+    holesPlayed: playedHoles.length,
+    totalPts: {
+      A: (frontPts.A || 0) + (backPts.A || 0) + (overallPts.A || 0),
+      B: (frontPts.B || 0) + (backPts.B || 0) + (overallPts.B || 0),
+    }
+  };
+}
+
+// ── Notification Toast ──
+function Notif({ notif }) {
+  if (!notif) return null;
+  return (
+    <div style={{ position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)", zIndex: 9999,
+      background: notif.type === "error" ? "#7f1d1d" : "#1a2d1a", border: `1px solid ${notif.type === "error" ? "#ef4444" : "#22c55e"}`,
+      borderRadius: 10, padding: "10px 18px", fontSize: 13, fontWeight: 600, color: "#f0e8d8",
+      boxShadow: "0 4px 24px rgba(0,0,0,0.6)", maxWidth: "80vw", textAlign: "center" }}>
+      {notif.msg}
+    </div>
+  );
+}
+
+// ── Login Screen ──
+const DIRECTOR_CODE = "bcdir2025";
+function LoginScreen({ players, onLogin, teamNames }) {
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    if (search === DIRECTOR_CODE) {
+      onLogin({ player_id: "bootstrap_director", name: "Director (Setup)", team: null, isDirector: true });
+    }
+  }, [search]);
+
+  const teamA = { ...TEAM_A, name: teamNames?.A || TEAM_A.name };
+  const teamB = { ...TEAM_B, name: teamNames?.B || TEAM_B.name };
+
+  const teamAPlayers = players.filter(p => p.team === "A");
+  const teamBPlayers = players.filter(p => p.team === "B");
+
+  const filterPlayers = (list) => list;
+
+  const PlayerBtn = ({ p, team }) => (
+    <button onClick={() => onLogin(p)} style={{
+      width: "100%", padding: "9px 10px", background: team.color + "22",
+      border: `1px solid ${team.accent}33`, borderRadius: 8,
+      color: BC.t1, fontSize: 12, fontWeight: 600, cursor: "pointer", textAlign: "left",
+      display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4,
+    }}>
+      <span style={{ flex: 1, lineHeight: 1.3 }}>{p.name}</span>
+    </button>
+  );
+
+  return (
+    <div style={{ minHeight: "100vh", background: BC.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", padding: "20px 16px 30px", fontFamily: "'Montserrat', sans-serif", position: "relative", overflowY: "auto", overflowX: "hidden" }}>
+      {/* Silhouette background */}
+      <img src={TROPHY_SILHOUETTE} alt="" style={{
+        position: "absolute", top: "50%", left: "50%",
+        transform: "translate(-50%, -50%)",
+        width: "90%", height: "90%",
+        objectFit: "contain", opacity: 0.65, filter: "brightness(1.4) contrast(1.2)", pointerEvents: "none", userSelect: "none", zIndex: 0,
+      }} />
+
+      {/* Title */}
+      <div style={{ marginBottom: 14, textAlign: "center", position: "relative", zIndex: 1 }}>
+        <div style={{ fontSize: 26, fontWeight: 800, color: BC.gold, letterSpacing: 2 }}>THE BOURBON CUP</div>
+        <div style={{ fontSize: 11, color: BC.t3, letterSpacing: 4, marginTop: 3 }}>2026 GAYLORD, MI</div>
+      </div>
+
+
+
+      {/* Logos with VS */}
+      <div style={{ width: "100%", maxWidth: 420, display: "flex", alignItems: "center", justifyContent: "center", gap: 0, position: "relative", zIndex: 1, marginBottom: 12 }}>
+        <img src={teamA.logo} alt={teamA.name} style={{ width: 80, height: 80, objectFit: "contain" }} />
+        <div style={{ fontSize: 13, fontWeight: 800, color: BC.t3, letterSpacing: 2, padding: "0 10px" }}>v</div>
+        <img src={teamB.logo} alt={teamB.name} style={{ width: 80, height: 80, objectFit: "contain" }} />
+      </div>
+
+      {/* Two-column team layout */}
+      <div style={{ width: "100%", maxWidth: 420, display: "flex", gap: 8, position: "relative", zIndex: 1, alignItems: "flex-start" }}>
+        {[teamA, teamB].map(team => {
+          const teamPlayers = filterPlayers(team.id === "A" ? teamAPlayers : teamBPlayers);
+          return (
+            <div key={team.id} style={{ flex: 1, minWidth: 0 }}>
+              {/* Player list */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 3, background: BC.card + "88", border: `1px solid ${team.accent}44`, borderTop: `2px solid ${team.accent}`, borderRadius: 10, padding: 5 }}>
+                {teamPlayers.length === 0
+                  ? <div style={{ textAlign: "center", color: BC.t3, fontSize: 11, padding: "12px 4px" }}>No players</div>
+                  : teamPlayers.map(p => <PlayerBtn key={p.player_id} p={p} team={team} />)
+                }
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {players.length === 0 && (
+        <div style={{ textAlign: "center", color: BC.t3, padding: 16, fontSize: 12, position: "relative", zIndex: 1, marginTop: 12 }}>
+          No players yet. Type <span style={{ color: BC.amber, fontWeight: 700 }}>bcdir2025</span> to set up.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Team Scoreboard (main leaderboard) ──
+function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds, teamNames }) {
+  const [expandedMatch, setExpandedMatch] = useState(null);
+  const [activeRound, setActiveRound] = useState(rounds[0] || 1);
+
+  const tA = { ...TEAM_A, name: teamNames?.A || TEAM_A.name };
+  const tB = { ...TEAM_B, name: teamNames?.B || TEAM_B.name };
+  const roundMatches = matches.filter(m => m.round === activeRound);
+  const format = tRounds.find(t => t.round_number === activeRound)?.format || "singles";
+
+  const matchResults = useMemo(() => {
+    return roundMatches.map(m => ({
+      ...m,
+      result: computeMatchResult(m, holeData, courses, tRounds, tPlayers, format),
+    }));
+  }, [roundMatches, holeData, courses, tRounds, tPlayers, format]);
+
+  // Overall tournament totals
+  const tourneyTotals = useMemo(() => {
+    const tot = { A: 0, B: 0 };
+    matches.forEach(m => {
+      const fmt = tRounds.find(t => t.round_number === m.round)?.format || "singles";
+      const res = computeMatchResult(m, holeData, courses, tRounds, tPlayers, fmt);
+      tot.A += res.totalPts.A;
+      tot.B += res.totalPts.B;
+    });
+    return tot;
+  }, [matches, holeData, courses, tRounds, tPlayers]);
+
+  const maxPts = Math.max(tourneyTotals.A + tourneyTotals.B, 1);
+  const aWidth = (tourneyTotals.A / maxPts) * 100;
+  const bWidth = (tourneyTotals.B / maxPts) * 100;
+
+  return (
+    <div style={{ fontFamily: "'Montserrat', sans-serif", position: "relative" }}>
+      {/* Silhouette watermark */}
+      <img src={TROPHY_SILHOUETTE} alt="" style={{
+        position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
+        width: 420, height: "90vh", maxWidth: "100vw",
+        opacity: 0.04, pointerEvents: "none", userSelect: "none", zIndex: 0, objectFit: "contain",
+      }} />
+      <div style={{ position: "relative", zIndex: 1 }}>
+      {/* Tournament scoreboard */}
+      <div style={{ background: BC.card, borderRadius: 16, border: `1px solid ${BC.bdr}`, marginBottom: 16, overflow: "hidden" }}>
+        <div style={{ padding: "14px 16px 10px", borderBottom: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+          <img src={TROPHY_PHOTO} alt="" style={{ width: 28, height: 28, objectFit: "contain" }} />
+          <span style={{ fontSize: 14, fontWeight: 700, color: BC.gold, letterSpacing: 1 }}>BOURBON CUP STANDINGS</span>
+        </div>
+
+        <div style={{ padding: "16px 16px 12px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+            {[TEAM_A, TEAM_B].map(team => (
+              <div key={team.id} style={{ textAlign: team.id === "A" ? "left" : "right" }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: team.accent }}>{tourneyTotals[team.id].toFixed(1)}</div>
+                <div style={{ fontSize: 10, color: BC.t3, letterSpacing: 1 }}>{(team.id === "A" ? tA : tB).name.toUpperCase()}</div>
+              </div>
+            ))}
+          </div>
+          {/* Bar */}
+          <div style={{ height: 10, borderRadius: 5, background: BC.bdr, overflow: "hidden", display: "flex" }}>
+            <div style={{ width: `${aWidth}%`, background: `linear-gradient(90deg, ${TEAM_A.color}, ${TEAM_A.accent})`, transition: "width 0.6s ease" }} />
+            <div style={{ flex: 1, background: `linear-gradient(90deg, ${TEAM_B.accent}, ${TEAM_B.color})` }} />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+            <span style={{ fontSize: 9, color: TEAM_A.accent }}>▲ {aWidth.toFixed(0)}%</span>
+            <span style={{ fontSize: 9, color: TEAM_B.accent }}>{bWidth.toFixed(0)}% ▲</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Round tabs */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+        {rounds.map(r => {
+          const tr = tRounds.find(t => t.round_number === r);
+          const fmt = FORMATS.find(f => f.id === tr?.format);
+          return (
+            <button key={r} onClick={() => setActiveRound(r)} style={{
+              flex: 1, padding: "8px 4px", borderRadius: 10, border: `1px solid ${r === activeRound ? "transparent" : BC.bdr}`,
+              background: r === activeRound ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
+              color: r === activeRound ? "#0a0804" : BC.t2, fontSize: 11, fontWeight: 700, cursor: "pointer", lineHeight: 1.3,
+            }}>
+              <div>Rd {r}</div>
+              {fmt && <div style={{ fontSize: 8, opacity: 0.8, marginTop: 1 }}>{fmt.label.split(" ").slice(-1)[0]}</div>}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Round point totals */}
+      {(() => {
+        const rndTot = { A: 0, B: 0 };
+        matchResults.forEach(m => { rndTot.A += m.result.totalPts.A; rndTot.B += m.result.totalPts.B; });
+        return (
+          <div style={{ background: BC.card, borderRadius: 10, border: `1px solid ${BC.bdr}`, padding: "10px 14px", marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: TEAM_A.accent }}>{rndTot.A.toFixed(1)} pts</span>
+            <span style={{ fontSize: 10, color: BC.t3 }}>ROUND {activeRound}</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: TEAM_B.accent }}>{rndTot.B.toFixed(1)} pts</span>
+          </div>
+        );
+      })()}
+
+      {/* Match list */}
+      {matchResults.length === 0 && (
+        <div style={{ textAlign: "center", color: BC.t3, padding: 32, fontSize: 13 }}>No matches set up for this round yet.</div>
+      )}
+      {matchResults.map((m, i) => {
+        const res = m.result;
+        const exp = expandedMatch === m.id;
+        const nassau = m.nassau || NASSAU_DEFAULT;
+        return (
+          <div key={m.id} style={{ background: BC.card, borderRadius: 14, border: `1px solid ${exp ? BC.amber + "44" : BC.bdr}`, marginBottom: 10, overflow: "hidden" }}>
+            <button onClick={() => setExpandedMatch(exp ? null : m.id)} style={{
+              width: "100%", padding: "12px 14px", background: "transparent", border: "none", cursor: "pointer",
+              display: "flex", alignItems: "center", gap: 10,
+            }}>
+              <div style={{ flex: 1, textAlign: "left" }}>
+                <div style={{ fontSize: 11, color: TEAM_A.accent, fontWeight: 700 }}>{m.teamANames?.join(" / ") || "Team A"}</div>
+                <div style={{ fontSize: 9, color: BC.t3, marginTop: 2 }}>{tA.name}</div>
+              </div>
+              <div style={{ textAlign: "center", minWidth: 60 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: res.holesPlayed === 0 ? BC.t3 : BC.gold, letterSpacing: 0.5 }}>{res.holesPlayed === 0 ? "NOT STARTED" : res.status}</div>
+                <div style={{ fontSize: 8, color: BC.t3, marginTop: 2 }}>Thru {res.holesPlayed}</div>
+              </div>
+              <div style={{ flex: 1, textAlign: "right", display: "flex", flexDirection: "row-reverse", alignItems: "center", gap: 6 }}>
+                {TEAM_B.logo && <img src={TEAM_B.logo} alt="" style={{ width: 28, height: 28, objectFit: "contain", flexShrink: 0 }} />}
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 11, color: TEAM_B.accent, fontWeight: 700 }}>{m.teamBNames?.join(" / ") || "Team B"}</div>
+                  <div style={{ fontSize: 9, color: BC.t3, marginTop: 2 }}>{tB.name}</div>
+                </div>
+              </div>
+            </button>
+
+            {/* Nassau points row */}
+            <div style={{ padding: "4px 14px 10px", display: "flex", gap: 6, justifyContent: "center" }}>
+              {[["F", res.frontPts, nassau.front], ["B", res.backPts, nassau.back], ["T", res.overallPts, nassau.overall]].map(([label, pts, max]) => (
+                <div key={label} style={{ background: BC.bg, borderRadius: 8, padding: "4px 10px", textAlign: "center", flex: 1 }}>
+                  <div style={{ fontSize: 8, color: BC.t3, marginBottom: 2 }}>{label === "F" ? "FRONT" : label === "B" ? "BACK" : "TOTAL"}</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 4 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: (pts?.A || 0) > (pts?.B || 0) ? TEAM_A.accent : BC.t2 }}>{(pts?.A || 0).toFixed(1)}</span>
+                    <span style={{ fontSize: 8, color: BC.t3 }}>/{max}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: (pts?.B || 0) > (pts?.A || 0) ? TEAM_B.accent : BC.t2 }}>{(pts?.B || 0).toFixed(1)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Expanded: match scorecard */}
+            {exp && <MatchScorecard match={m} result={res} format={format} courses={courses} tRounds={tRounds} />}
+          </div>
+        );
+      })}
+      </div>
+    </div>
+  );
+}
+
+// ── Match Scorecard ──
+function MatchScorecard({ match, result, format, courses, tRounds }) {
+  const tr = tRounds.find(t => t.round_number === match.round);
+  const course = courses.find(c => c.id === tr?.course_id);
+  const holePars = course?.hole_pars || Array(18).fill(4);
+  const holes = result.holes;
+
+  const renderSegment = (start, end, label) => (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ fontSize: 9, color: BC.t3, fontWeight: 700, marginBottom: 4, letterSpacing: 1 }}>{label}</div>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${end - start}, 1fr) 32px`, gap: 2 }}>
+        {/* Hole numbers */}
+        {Array.from({ length: end - start }, (_, i) => (
+          <div key={i} style={{ textAlign: "center", fontSize: 8, color: BC.t3, paddingBottom: 2 }}>{start + i + 1}</div>
+        ))}
+        <div style={{ textAlign: "center", fontSize: 8, color: BC.t3, paddingBottom: 2 }}>▸</div>
+
+        {/* Par */}
+        {Array.from({ length: end - start }, (_, i) => (
+          <div key={i} style={{ textAlign: "center", fontSize: 8, color: BC.t3 }}>{holePars[start + i]}</div>
+        ))}
+        <div style={{ textAlign: "center", fontSize: 8, color: BC.t3 }}>{holePars.slice(start, end).reduce((a,b)=>a+b,0)}</div>
+
+        {/* Team A scores */}
+        {holes.slice(start, end).map((h, i) => (
+          <div key={i} style={{ textAlign: "center", fontSize: 10, fontWeight: 700,
+            color: h.winner === "A" ? TEAM_A.accent : h.winner === "B" ? BC.t3 : BC.t2,
+            background: h.winner === "A" ? TEAM_A.color + "33" : "transparent", borderRadius: 4, padding: "1px 0" }}>
+            {h.aScore != null ? h.aScore : "·"}
+          </div>
+        ))}
+        <div style={{ textAlign: "center", fontSize: 10, fontWeight: 700, color: TEAM_A.accent }}>
+          {holes.slice(start, end).filter(h => h.winner === "A").length}
+        </div>
+
+        {/* Team B scores */}
+        {holes.slice(start, end).map((h, i) => (
+          <div key={i} style={{ textAlign: "center", fontSize: 10, fontWeight: 700,
+            color: h.winner === "B" ? TEAM_B.accent : h.winner === "A" ? BC.t3 : BC.t2,
+            background: h.winner === "B" ? TEAM_B.color + "33" : "transparent", borderRadius: 4, padding: "1px 0" }}>
+            {h.bScore != null ? h.bScore : "·"}
+          </div>
+        ))}
+        <div style={{ textAlign: "center", fontSize: 10, fontWeight: 700, color: TEAM_B.accent }}>
+          {holes.slice(start, end).filter(h => h.winner === "B").length}
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ padding: "0 14px 14px", borderTop: `1px solid ${BC.bdr}` }}>
+      <div style={{ display: "flex", gap: 4, marginBottom: 8, marginTop: 10, justifyContent: "space-between" }}>
+        <span style={{ fontSize: 9, color: TEAM_A.accent, fontWeight: 700 }}>{match.teamANames?.join(" / ")}</span>
+        <span style={{ fontSize: 9, color: BC.t3 }}>vs</span>
+        <span style={{ fontSize: 9, color: TEAM_B.accent, fontWeight: 700 }}>{match.teamBNames?.join(" / ")}</span>
+      </div>
+      {renderSegment(0, 9, "FRONT NINE")}
+      {renderSegment(9, 18, "BACK NINE")}
+    </div>
+  );
+}
+
+// ── Score Entry ──
+function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teamNames }) {
+  const [view, setView] = useState("entry"); // "entry" | "card"
+  const [activeMatch, setActiveMatch] = useState(null);
+  const [activeHole, setActiveHole] = useState(0);
+
+  // Find matches this user is in
+  const userPid = user.player_id;
+  const tA = { ...TEAM_A, name: teamNames?.A || TEAM_A.name };
+  const tB = { ...TEAM_B, name: teamNames?.B || TEAM_B.name };
+  const myMatches = matches.filter(m => [...m.teamA, ...m.teamB].includes(userPid));
+
+  const match = activeMatch ? matches.find(m => m.id === activeMatch) : myMatches[0];
+  const format = tRounds.find(t => t.round_number === match?.round)?.format || "singles";
+  const tr = tRounds.find(t => t.round_number === match?.round);
+  const course = courses.find(c => c.id === tr?.course_id);
+
+  if (!match) return (
+    <div style={{ textAlign: "center", padding: 40, color: BC.t3, fontFamily: "'Montserrat', sans-serif" }}>
+      <div style={{ fontSize: 32, marginBottom: 12 }}>⛳</div>
+      <div>You're not in any matches yet.</div>
+    </div>
+  );
+
+  const allPlayers = [...match.teamA, ...match.teamB];
+  const holePars = course?.hole_pars || Array(18).fill(4);
+  const holePar = holePars[activeHole];
+
+  const getScore = (pid) => (holeData[`${pid}_${match.round}`] || {})[activeHole];
+
+  const setScore = async (pid, score) => {
+    await onSaveHole(pid, match.round, activeHole, score, tr?.course_id);
+  };
+
+  const result = useMemo(() => computeMatchResult(match, holeData, courses, tRounds, tPlayers, format), [match, holeData, format]);
+
+  const ScoreBtn = ({ pid, name, team }) => {
+    const cur = getScore(pid);
+    const par = holePar;
+    return (
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: getTeam(team).accent }} />
+          <span style={{ fontSize: 11, color: BC.t2, fontWeight: 600 }}>{name}</span>
+          {cur != null && <span style={{ fontSize: 10, color: cur - par < 0 ? "#22c55e" : cur - par > 0 ? BC.danger : BC.t3, fontWeight: 700 }}>{fmtScore(cur - par)}</span>}
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          {[1,2,3,4,5,6,7,8,9,10].map(s => (
+            <button key={s} onClick={() => setScore(pid, s)} style={{
+              flex: 1, padding: "10px 0", borderRadius: 8,
+              background: s === cur ? (s < par ? "#1a3a1a" : s === par ? BC.hover : "#3a1a1a") : BC.card,
+              border: `1px solid ${s === cur ? (s < par ? "#22c55e" : s === par ? BC.amber : BC.danger) : BC.bdr}`,
+              color: s === cur ? BC.t1 : BC.t3, fontSize: 13, fontWeight: s === cur ? 700 : 400, cursor: "pointer",
+            }}>{s}</button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
+      {/* Toggle */}
+      <div style={{ display: "flex", background: BC.card, borderRadius: 20, padding: 3, marginBottom: 16, border: `1px solid ${BC.bdr}` }}>
+        {[["entry","✏️ Score Entry"],["card","📋 Match View"]].map(([v, label]) => (
+          <button key={v} onClick={() => setView(v)} style={{
+            flex: 1, padding: "8px 0", borderRadius: 16, fontSize: 12, fontWeight: 700, cursor: "pointer",
+            background: view === v ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
+            color: view === v ? "#0a0804" : BC.t3, border: "none",
+          }}>{label}</button>
+        ))}
+      </div>
+
+      {/* Match selector if multiple matches */}
+      {myMatches.length > 1 && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+          {myMatches.map(m => (
+            <button key={m.id} onClick={() => setActiveMatch(m.id)} style={{
+              flex: 1, padding: "8px 6px", borderRadius: 10, fontSize: 10, fontWeight: 700, cursor: "pointer",
+              background: match?.id === m.id ? BC.amber + "22" : BC.card, border: `1px solid ${match?.id === m.id ? BC.amber : BC.bdr}`,
+              color: match?.id === m.id ? BC.amber : BC.t3,
+            }}>Rd {m.round}</button>
+          ))}
+        </div>
+      )}
+
+      {view === "entry" && (
+        <>
+          {/* Hole nav */}
+          <div style={{ background: BC.card, borderRadius: 12, padding: "10px 14px", marginBottom: 12, border: `1px solid ${BC.bdr}` }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <button onClick={() => setActiveHole(h => Math.max(0, h - 1))} disabled={activeHole === 0}
+                style={{ background: BC.hover, border: "none", color: BC.t1, borderRadius: 8, padding: "6px 14px", fontSize: 16, cursor: "pointer", opacity: activeHole === 0 ? 0.3 : 1 }}>‹</button>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 22, fontWeight: 700, color: BC.gold }}>Hole {activeHole + 1}</div>
+                <div style={{ fontSize: 11, color: BC.t3 }}>Par {holePar} &nbsp;·&nbsp; {activeHole < 9 ? "Front" : "Back"} Nine</div>
+                <div style={{ fontSize: 10, color: BC.t3, marginTop: 2 }}>Match: {result.status} (Thru {result.holesPlayed})</div>
+              </div>
+              <button onClick={() => setActiveHole(h => Math.min(17, h + 1))} disabled={activeHole === 17}
+                style={{ background: BC.hover, border: "none", color: BC.t1, borderRadius: 8, padding: "6px 14px", fontSize: 16, cursor: "pointer", opacity: activeHole === 17 ? 0.3 : 1 }}>›</button>
+            </div>
+            {/* Hole dots */}
+            <div style={{ display: "flex", gap: 3, justifyContent: "center" }}>
+              {Array.from({length: 18}, (_, i) => {
+                const allScored = allPlayers.every(p => getScore(p) != null);
+                const anyScored = allPlayers.some(p => (holeData[`${p}_${match.round}`] || {})[i] != null);
+                return (
+                  <button key={i} onClick={() => setActiveHole(i)} style={{
+                    width: 14, height: 14, borderRadius: "50%", border: "none", cursor: "pointer",
+                    background: i === activeHole ? BC.amber : anyScored ? (allScored ? BC.green : BC.amber + "66") : BC.bdr,
+                  }} />
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Score inputs */}
+          <div style={{ background: BC.card, borderRadius: 12, padding: 14, border: `1px solid ${BC.bdr}` }}>
+            <div style={{ fontSize: 10, color: BC.t3, marginBottom: 10, letterSpacing: 1, fontWeight: 700 }}>
+              {FORMATS.find(f => f.id === format)?.label?.toUpperCase() || "MATCH PLAY"} · ROUND {match.round}
+            </div>
+            {match.teamA.map((pid, i) => {
+              const tp = tPlayers.find(t => t.player_id === pid);
+              return <ScoreBtn key={pid} pid={pid} name={tp?.name || pid} team="A" />;
+            })}
+            <div style={{ borderTop: `1px dashed ${BC.bdr}`, margin: "10px 0" }} />
+            {match.teamB.map((pid, i) => {
+              const tp = tPlayers.find(t => t.player_id === pid);
+              return <ScoreBtn key={pid} pid={pid} name={tp?.name || pid} team="B" />;
+            })}
+          </div>
+        </>
+      )}
+
+      {view === "card" && (
+        <MatchScorecard match={match} result={result} format={format} courses={courses} tRounds={tRounds} />
+      )}
+    </div>
+  );
+}
+
+// ── Groups View ──
+function GroupsView({ matches, tRounds, tPlayers, courses, teamNames }) {
+  const rounds = [...new Set(matches.map(m => m.round))].sort();
+  const tA = { ...TEAM_A, name: teamNames?.A || TEAM_A.name };
+  const tB = { ...TEAM_B, name: teamNames?.B || TEAM_B.name };
+  const [activeRound, setActiveRound] = useState(rounds[0] || 1);
+  const rndMatches = matches.filter(m => m.round === activeRound);
+  const tr = tRounds.find(t => t.round_number === activeRound);
+  const course = courses.find(c => c.id === tr?.course_id);
+  const fmt = FORMATS.find(f => f.id === tr?.format);
+
+  return (
+    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
+      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+        {rounds.map(r => (
+          <button key={r} onClick={() => setActiveRound(r)} style={{
+            flex: 1, padding: "8px 4px", borderRadius: 10, border: `1px solid ${r === activeRound ? "transparent" : BC.bdr}`,
+            background: r === activeRound ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
+            color: r === activeRound ? "#0a0804" : BC.t2, fontSize: 11, fontWeight: 700, cursor: "pointer",
+          }}>Rd {r}</button>
+        ))}
+      </div>
+
+      <div style={{ background: BC.card, borderRadius: 10, padding: "10px 14px", marginBottom: 12, border: `1px solid ${BC.bdr}` }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold }}>{course?.name || "TBD"}</div>
+        {fmt && <div style={{ fontSize: 10, color: BC.t3, marginTop: 2 }}>{fmt.label} · {fmt.desc}</div>}
+        {tr?.tee_time && <div style={{ fontSize: 10, color: BC.amber, marginTop: 2 }}>First Tee: {tr.tee_time}</div>}
+      </div>
+
+      {rndMatches.length === 0 && <div style={{ textAlign: "center", color: BC.t3, padding: 32 }}>No matches scheduled.</div>}
+      {rndMatches.map((m, i) => (
+        <div key={m.id} style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: "12px 14px", marginBottom: 8 }}>
+          <div style={{ fontSize: 10, color: BC.t3, marginBottom: 6, fontWeight: 700 }}>MATCH {i + 1}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              {m.teamA.map(pid => {
+                const tp = tPlayers.find(t => t.player_id === pid);
+                return <div key={pid} style={{ fontSize: 12, fontWeight: 600, color: TEAM_A.accent }}>{tp?.name || pid}</div>;
+              })}
+            </div>
+            <div style={{ fontSize: 12, color: BC.t3, fontWeight: 700 }}>vs</div>
+            <div style={{ flex: 1, textAlign: "right" }}>
+              {m.teamB.map(pid => {
+                const tp = tPlayers.find(t => t.player_id === pid);
+                return <div key={pid} style={{ fontSize: 12, fontWeight: 600, color: TEAM_B.accent }}>{tp?.name || pid}</div>;
+              })}
+            </div>
+          </div>
+          {m.teeTime && <div style={{ fontSize: 10, color: BC.amber, marginTop: 6 }}>⏰ {m.teeTime}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Admin View ──
+function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, teamNames, onSaveTeamNames, notify }) {
+  const [tab, setTab] = useState("players");
+  const [editTeamNames, setEditTeamNames] = useState({ A: "", B: "" });
+  const [editingTeam, setEditingTeam] = useState(null);
+
+  useEffect(() => {
+    setEditTeamNames({ A: teamNames.A, B: teamNames.B });
+  }, [teamNames]);
+  const [newPlayerName, setNewPlayerName] = useState("");
+  const [newPlayerTeam, setNewPlayerTeam] = useState(null);
+  const [newPlayerHI, setNewPlayerHI] = useState("");
+  const [courseSearch, setCourseSearch] = useState("");
+  const [courseStateFilter, setCourseStateFilter] = useState("MI");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [coursePreview, setCoursePreview] = useState(null);
+  const [expandedCourse, setExpandedCourse] = useState(null);
+  const [searching, setSearching] = useState(false);
+  const searchTimerRef = useRef(null);
+
+  const [editRound, setEditRound] = useState(1);
+  const [roundFormat, setRoundFormat] = useState("");
+  const [roundCourse, setRoundCourse] = useState("");
+  const [roundTeeTime, setRoundTeeTime] = useState("");
+  const [nassau, setNassau] = useState(NASSAU_DEFAULT);
+
+  // Match builder
+  const [matchRound, setMatchRound] = useState(1);
+  const [matchTeamA, setMatchTeamA] = useState([]);
+  const [matchTeamB, setMatchTeamB] = useState([]);
+
+  const teamAPlayers = tPlayers.filter(p => p.team === "A"); // used in match builder
+  const teamBPlayers = tPlayers.filter(p => p.team === "B");
+
+  if (!user.isDirector) return (
+    <div style={{ textAlign: "center", padding: 40 }}>
+      <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: BC.t1 }}>Directors Only</div>
+      <div style={{ fontSize: 12, color: BC.t3, marginTop: 8 }}>Only tournament directors can manage settings.</div>
+    </div>
+  );
+
+  const saveRound = async () => {
+    const tr = tRounds.find(t => t.round_number === editRound) || {};
+    const data = {
+      id: `bc_round_${editRound}`,
+      tournament_id: TOURNAMENT_ID,
+      round_number: editRound,
+      course_id: roundCourse || tr.course_id || "",
+      format: roundFormat || tr.format || "singles",
+      tee_time: roundTeeTime || tr.tee_time || "",
+      nassau_front: nassau.front,
+      nassau_back: nassau.back,
+      nassau_overall: nassau.overall,
+    };
+    await onSetRound(data);
+    notify("Round saved!", "success");
+  };
+
+  const saveMatch = async () => {
+    if (matchTeamA.length === 0 || matchTeamB.length === 0) { notify("Select players for both teams", "error"); return; }
+    const mId = `bc_match_r${matchRound}_${matchTeamA.join("_")}_vs_${matchTeamB.join("_")}`;
+    const data = {
+      id: mId,
+      tournament_id: TOURNAMENT_ID,
+      round: matchRound,
+      teamA: matchTeamA,
+      teamB: matchTeamB,
+      teamANames: matchTeamA.map(pid => tPlayers.find(p => p.player_id === pid)?.name || pid),
+      teamBNames: matchTeamB.map(pid => tPlayers.find(p => p.player_id === pid)?.name || pid),
+      nassau: nassau,
+    };
+    await onSetMatch(data);
+    setMatchTeamA([]); setMatchTeamB([]);
+    notify("Match created!", "success");
+  };
+
+
+  // ── Course Search (ported from WBC) ──
+  const TEE_COLOR_MAP = {
+    black:"#2c2c2c",blue:"#2d8fd4",white:"#e8e8e8",gold:"#d4a843",red:"#9b2335",
+    green:"#2d8a4e",silver:"#a8b2bd",yellow:"#e6c619",orange:"#e67e22",purple:"#7b2d8b",
+    maroon:"#6b1c2a",navy:"#1b2a4a",teal:"#1a8a7a",tan:"#c4a86b",platinum:"#c0c0c0",
+  };
+  const resolveTeeColor = (tee, index) => {
+    const key = (tee.name || "").toLowerCase().trim();
+    if (TEE_COLOR_MAP[key]) return TEE_COLOR_MAP[key];
+    for (const [word, clr] of Object.entries(TEE_COLOR_MAP)) { if (key.includes(word)) return clr; }
+    if (tee.color && tee.color !== "#000" && tee.color !== "#000000") return tee.color;
+    return ["#60a5fa","#f59e0b","#a78bfa","#34d399","#fb923c"][index % 5];
+  };
+  const TeeColorSwatch = ({ color, name, size = 12 }) => {
+    const isLight = ["#e8e8e8","#a8b2bd","#c0c0c0","#f7e7ce"].includes((color||"").toLowerCase());
+    return <span style={{ display:"inline-block", width:size, height:size, borderRadius:3, background:color||"#888", border:`1px solid ${isLight?"#99999960":"#ffffff15"}`, flexShrink:0 }} />;
+  };
+
+  const doCourseSearch = (query, stateOverride) => {
+    setCourseSearch(query);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    if (!query.trim() || query.trim().length < 2) { setSearchResults([]); return; }
+    searchTimerRef.current = setTimeout(async () => {
+      setSearchLoading(true);
+      const stateFilter = stateOverride !== undefined ? stateOverride : courseStateFilter;
+      try {
+        const q = query.trim();
+        const stateParam = stateFilter ? `&state=${encodeURIComponent(stateFilter)}` : "";
+        let results = [];
+        const decodeHtml = (str) => str ? str.replace(/&amp;/g,"&").replace(/&quot;/g,'"').replace(/&#39;/g,"'") : str;
+        const hasRealSlope = (c) => (c.tee_boxes||[]).some(tb => parseInt(tb.slope) !== 113) || (parseInt(c.slope) !== 113 && !!c.slope);
+        const stateMatches = (courseState, filter) => {
+          if (!filter || !courseState) return true;
+          return courseState.trim().toUpperCase() === filter.trim().toUpperCase();
+        };
+
+        const parseRapidAPI = (rawCourses, sf) => rawCourses.filter(c => stateMatches(c.state, sf)).map((c, ci) => {
+          const sc = Array.isArray(c.scorecard) ? c.scorecard : [];
+          const hole_pars = sc.map(h => parseInt(h.Par) || 4);
+          const hole_handicaps = sc.map(h => parseInt(h.Handicap) || 0);
+          const par = hole_pars.reduce((a,b) => a+b, 0) || 72;
+          const teeKeys = [...new Set(sc.flatMap(h => h.tees ? Object.keys(h.tees) : []))];
+          const tees = teeKeys.length ? teeKeys.map((key, ti) => {
+            const sample = sc.find(h => h.tees?.[key]);
+            const color = sample?.tees?.[key]?.color || key;
+            const yardage = sc.reduce((a, h) => a + (parseInt(h.tees?.[key]?.yards) || 0), 0);
+            const hole_yards = sc.map(h => parseInt(h.tees?.[key]?.yards) || 0);
+            return { name: color || key, color: resolveTeeColor({ name: color||key, color: color||"" }, ti), slope: parseInt(c.slopeRating)||113, rating: parseFloat(c.courseRating)||72.0, par, yardage, hole_yards };
+          }) : [{ name:"Default", color: resolveTeeColor({name:"Default",color:""}, 0), slope: parseInt(c.slopeRating)||113, rating: parseFloat(c.courseRating)||72.0, par, yardage:0, hole_yards:[] }];
+          return { id:`rapid_${c._id||ci}`, name:decodeHtml(c.name)||"Unknown", city:c.city||"", state:c.state||"", par, slope:parseInt(c.slopeRating)||113, rating:parseFloat(c.courseRating)||72.0, hole_pars, hole_handicaps, tee_boxes:tees, _source:"RapidAPI" };
+        });
+
+        const parseGolfCourseAPI = (rawCourses) => {
+          const arr = Array.isArray(rawCourses) ? rawCourses : (rawCourses.courses || []);
+          return arr.map((c, ci) => {
+            const teesObj = c.tees || {};
+            const allTees = Array.isArray(teesObj.male) && teesObj.male.length ? teesObj.male : (teesObj.female || []);
+            const tees = allTees.map((t, ti) => ({ name:t.tee_name||"Default", color:resolveTeeColor({name:t.tee_name||"",color:""}, ti), rating:parseFloat(t.course_rating)||72.0, slope:parseInt(t.slope_rating)||113, par:parseInt(t.par_total)||72, yardage:parseInt(t.total_yards)||0, hole_yards:(t.holes||[]).map(h=>parseInt(h.yardage)||0) }));
+            const firstTee = allTees[0]; const holes = firstTee?.holes || [];
+            return { id:`gc_${c.id||ci}`, name:decodeHtml([c.club_name,c.course_name].filter(Boolean).join(" – ")||c.name||"Unknown"), city:c.location?.city||c.city||"", state:c.location?.state||c.state||"", par:parseInt(firstTee?.par_total)||72, slope:parseInt(firstTee?.slope_rating)||113, rating:parseFloat(firstTee?.course_rating)||72.0, hole_pars:holes.map(h=>parseInt(h.par)||4), hole_handicaps:holes.map(h=>parseInt(h.handicap)||0), tee_boxes:tees, _source:"GolfCourseAPI" };
+          });
+        };
+
+        // 1. RapidAPI
+        try {
+          const r = await fetch(`/api/courses2?search=${encodeURIComponent(q)}${stateParam}`);
+          if (r.ok) { const data = await r.json(); const raw = Array.isArray(data)?data:(data.courses||data.data||[]); results = [...results, ...parseRapidAPI(raw, stateFilter)]; }
+        } catch(e) { console.log("[RapidAPI] failed:", e); }
+
+        // 2. GolfCourseAPI
+        try {
+          const r2 = await fetch(`/api/courses?search=${encodeURIComponent(q)}${stateParam}`);
+          if (r2.ok) {
+            const data2 = await r2.json();
+            const gcParsed = parseGolfCourseAPI(data2);
+            const existingNames = new Set(results.map(r => r.name.toLowerCase()));
+            for (const gc of gcParsed) {
+              if (!stateMatches(gc.state, stateFilter)) continue;
+              if (!existingNames.has(gc.name.toLowerCase())) results.push(gc);
+            }
+          }
+        } catch(e) { console.log("[GolfCourseAPI] failed:", e); }
+
+        results = results.map(c => ({ ...c, _incompleteData: !hasRealSlope(c) }));
+        setSearchResults(results);
+      } catch(err) { console.log("Search failed:", err); setSearchResults([]); }
+      setSearchLoading(false);
+    }, 400);
+  };
+
+  const InputStyle = { width: "100%", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: 13, boxSizing: "border-box", outline: "none" };
+  const LabelStyle = { fontSize: 10, color: BC.t3, fontWeight: 700, letterSpacing: 1, marginBottom: 4, display: "block" };
+  const BtnStyle = { padding: "10px 20px", borderRadius: 10, border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer", background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`, color: "#0a0804" };
+
+  return (
+    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 16, background: BC.card, borderRadius: 12, padding: 4, border: `1px solid ${BC.bdr}` }}>
+        {[["players","Players"],["rounds","Rounds"],["matches","Matches"],["courses","Courses"]].map(([k, lbl]) => (
+          <button key={k} onClick={() => setTab(k)} style={{
+            flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: 10, fontWeight: 700, cursor: "pointer", border: "none",
+            background: tab === k ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
+            color: tab === k ? "#0a0804" : BC.t3,
+          }}>{lbl}</button>
+        ))}
+      </div>
+
+      {tab === "players" && (
+        <div>
+          {[TEAM_A, TEAM_B].map(team => (
+            <div key={team.id} style={{ marginBottom: 10 }}>
+              {/* Team header with editable name */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, padding: "8px 12px", background: team.color + "33", borderRadius: 10, border: `1px solid ${team.accent}44` }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: team.accent, flexShrink: 0 }} />
+                {team.logo && !editingTeam && (
+                  <img src={team.logo} alt={team.name} style={{ width: 28, height: 28, objectFit: "contain", flexShrink: 0 }} />
+                )}
+              {editingTeam === team.id ? (
+                  <input
+                    autoFocus
+                    value={editTeamNames[team.id]}
+                    onChange={e => setEditTeamNames(n => ({ ...n, [team.id]: e.target.value }))}
+                    onBlur={() => setEditingTeam(null)}
+                    onKeyDown={async e => {
+                      if (e.key === "Enter") {
+                        const newName = editTeamNames[team.id].trim();
+                        if (!newName) { setEditingTeam(null); return; }
+                        if (window.confirm(`Rename to "${newName}"?`)) {
+                          await onSaveTeamNames({ ...teamNames, [team.id]: newName });
+                        }
+                        setEditingTeam(null);
+                      }
+                      if (e.key === "Escape") setEditingTeam(null);
+                    }}
+                    style={{ flex: 1, background: "transparent", border: "none", borderBottom: `1px solid ${team.accent}`, color: team.accent, fontSize: 11, fontWeight: 800, letterSpacing: 1, outline: "none", textTransform: "uppercase" }}
+                  />
+                ) : (
+                  <span
+                    onClick={() => setEditingTeam(team.id)}
+                    title="Click to edit team name"
+                    style={{ fontSize: 11, fontWeight: 800, color: team.accent, letterSpacing: 1, flex: 1, cursor: "pointer", borderBottom: `1px dashed ${team.accent}44` }}
+                  >{teamNames[team.id].toUpperCase()}</span>
+                )}
+                {/* + Add button inline with team name */}
+                <button
+                  onClick={() => setNewPlayerTeam(prev => prev === team.id ? null : team.id)}
+                  style={{
+                    padding: "3px 10px", borderRadius: 8, border: `1px solid ${team.accent}66`,
+                    background: newPlayerTeam === team.id ? team.accent : "transparent",
+                    color: newPlayerTeam === team.id ? "#0a0804" : team.accent,
+                    fontSize: 16, fontWeight: 700, cursor: "pointer", lineHeight: 1, flexShrink: 0,
+                  }}>+</button>
+              </div>
+
+              {/* Expandable add card */}
+              {newPlayerTeam === team.id && (
+                <div style={{ background: BC.inp, borderRadius: 10, padding: 10, marginBottom: 10, border: `1px solid ${team.accent}44` }}>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <input
+                      autoFocus
+                      value={newPlayerName}
+                      onChange={e => setNewPlayerName(e.target.value)}
+                      onKeyDown={async e => { if (e.key === "Enter") { if (!newPlayerName.trim()) return; const pid = `bc_player_${Date.now()}`; await onAddPlayer({ id: pid, player_id: pid, tournament_id: TOURNAMENT_ID, name: newPlayerName.trim(), team: team.id, handicap_index: parseFloat(newPlayerHI) || 0 }); setNewPlayerName(""); setNewPlayerHI(""); setNewPlayerTeam(null); notify(`Added!`, "success"); } }}
+                      placeholder="Player name"
+                      style={{ flex: 2, padding: "9px 10px", background: "#1e1c18", border: `1px solid ${team.accent}55`, borderRadius: 8, color: "#ffffff", fontSize: 12, outline: "none" }}
+                    />
+                    <input
+                      value={newPlayerHI}
+                      onChange={e => setNewPlayerHI(e.target.value)}
+                      placeholder="HI"
+                      type="number"
+                      style={{ width: 52, padding: "9px 8px", background: "#1e1c18", border: `1px solid ${team.accent}55`, borderRadius: 8, color: "#ffffff", fontSize: 12, outline: "none" }}
+                    />
+                    <button onClick={async () => {
+                      if (!newPlayerName.trim()) { notify("Enter a name", "error"); return; }
+                      const pid = `bc_player_${Date.now()}`;
+                      await onAddPlayer({ id: pid, player_id: pid, tournament_id: TOURNAMENT_ID, name: newPlayerName.trim(), team: team.id, handicap_index: parseFloat(newPlayerHI) || 0 });
+                      setNewPlayerName(""); setNewPlayerHI(""); setNewPlayerTeam(null);
+                      notify(`Added!`, "success");
+                    }} style={{ padding: "9px 12px", borderRadius: 8, border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer", background: team.color, border: `1px solid ${team.accent}`, color: team.accent, flexShrink: 0 }}>✓</button>
+                    <button onClick={() => { setNewPlayerTeam(null); setNewPlayerName(""); setNewPlayerHI(""); }} style={{
+                      padding: "9px 10px", borderRadius: 8, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, fontSize: 12, cursor: "pointer", flexShrink: 0,
+                    }}>✕</button>
+                  </div>
+                </div>
+              )}
+
+              {/* Player list */}
+              {tPlayers.filter(p => p.team === team.id).map(p => (
+                <div key={p.player_id} style={{ background: BC.card, borderRadius: 7, padding: "6px 10px", marginBottom: 3, border: `1px solid ${BC.bdr}`, display: "grid", gridTemplateColumns: "1fr 44px auto auto", alignItems: "center", gap: 6, boxShadow: `inset 3px 0 0 ${team.accent}55, -2px 0 12px ${team.accent}11` }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
+                  <span style={{ fontSize: 12, fontWeight: 400, color: BC.t1, textAlign: "left" }}>{p.handicap_index}</span>
+                  <button onClick={() => onUpdatePlayer({ ...p, isDirector: !p.isDirector })} style={{
+                    fontSize: 8, padding: "2px 6px", borderRadius: 5, border: `1px solid ${p.isDirector ? BC.amber : BC.bdr}`,
+                    background: p.isDirector ? BC.amber + "22" : "transparent", color: p.isDirector ? BC.amber : BC.t3, cursor: "pointer", fontWeight: 700, flexShrink: 0,
+                  }}>DIR</button>
+                  <button onClick={() => { if (window.confirm(`Remove ${p.name}?`)) onRemovePlayer(p.player_id); }} style={{
+                    fontSize: 10, padding: "2px 6px", borderRadius: 5, border: `1px solid ${BC.danger}33`, background: "transparent", color: BC.danger, cursor: "pointer", flexShrink: 0,
+                  }}>✕</button>
+                </div>
+              ))}
+              {tPlayers.filter(p => p.team === team.id).length === 0 && (
+                <div style={{ color: BC.t3, fontSize: 11, padding: "6px 10px" }}>No players yet.</div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === "rounds" && (
+        <div>
+          <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+            {[1,2,3,4].map(r => (
+              <button key={r} onClick={() => {
+                setEditRound(r);
+                const tr = tRounds.find(t => t.round_number === r);
+                if (tr) {
+                  setRoundFormat(tr.format || "singles");
+                  setRoundCourse(tr.course_id || "");
+                  setRoundTeeTime(tr.tee_time || "");
+                  setNassau({ front: tr.nassau_front || 1, back: tr.nassau_back || 1, overall: tr.nassau_overall || 1 });
+                }
+              }} style={{
+                flex: 1, padding: "8px 4px", borderRadius: 10, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                background: editRound === r ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
+                border: `1px solid ${editRound === r ? "transparent" : BC.bdr}`,
+                color: editRound === r ? "#0a0804" : BC.t2,
+              }}>Rd {r}</button>
+            ))}
+          </div>
+          <div style={{ background: BC.card, borderRadius: 12, padding: 14, border: `1px solid ${BC.bdr}` }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, marginBottom: 12 }}>ROUND {editRound} SETTINGS</div>
+
+            <label style={LabelStyle}>Format</label>
+            <select value={roundFormat} onChange={e => setRoundFormat(e.target.value)} style={{ ...InputStyle, marginBottom: 10 }}>
+              <option value="">Select format...</option>
+              {FORMATS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+            </select>
+            {roundFormat && <div style={{ fontSize: 10, color: BC.t3, marginBottom: 10, padding: "6px 10px", background: BC.bg, borderRadius: 8 }}>{FORMATS.find(f => f.id === roundFormat)?.desc}</div>}
+
+            <label style={LabelStyle}>Course</label>
+            <select value={roundCourse} onChange={e => setRoundCourse(e.target.value)} style={{ ...InputStyle, marginBottom: 10 }}>
+              <option value="">Select course...</option>
+              {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+
+            <label style={LabelStyle}>First Tee Time</label>
+            <input value={roundTeeTime} onChange={e => setRoundTeeTime(e.target.value)} placeholder="e.g. 8:00 AM" style={{ ...InputStyle, marginBottom: 14 }} />
+
+            <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, marginBottom: 10 }}>NASSAU POINTS</div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+              {[["front", "Front 9"], ["back", "Back 9"], ["overall", "Overall"]].map(([k, lbl]) => (
+                <div key={k} style={{ flex: 1 }}>
+                  <label style={LabelStyle}>{lbl}</label>
+                  <input type="number" step="0.5" min="0" value={nassau[k]} onChange={e => setNassau(n => ({ ...n, [k]: parseFloat(e.target.value) || 0 }))}
+                    style={{ ...InputStyle }} />
+                </div>
+              ))}
+            </div>
+
+            <button onClick={saveRound} style={BtnStyle}>Save Round {editRound}</button>
+          </div>
+        </div>
+      )}
+
+      {tab === "matches" && (
+        <div>
+          <div style={{ background: BC.card, borderRadius: 12, padding: 14, marginBottom: 14, border: `1px solid ${BC.bdr}` }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, marginBottom: 12 }}>CREATE MATCH</div>
+
+            <label style={LabelStyle}>Round</label>
+            <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+              {[1,2,3,4].map(r => (
+                <button key={r} onClick={() => setMatchRound(r)} style={{
+                  flex: 1, padding: "8px 0", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                  background: matchRound === r ? BC.amber + "33" : BC.inp, border: `1px solid ${matchRound === r ? BC.amber : BC.bdr}`,
+                  color: matchRound === r ? BC.amber : BC.t3,
+                }}>Rd {r}</button>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", gap: 12 }}>
+              {[["A", teamAPlayers, matchTeamA, setMatchTeamA], ["B", teamBPlayers, matchTeamB, setMatchTeamB]].map(([tid, players, sel, setSel]) => (
+                <div key={tid} style={{ flex: 1 }}>
+                  <label style={{ ...LabelStyle, color: getTeam(tid).accent }}>{tid === "A" ? teamNames?.A : teamNames?.B}</label>
+                  {players.map(p => (
+                    <button key={p.player_id} onClick={() => setSel(prev => prev.includes(p.player_id) ? prev.filter(x => x !== p.player_id) : [...prev, p.player_id])} style={{
+                      width: "100%", padding: "8px 10px", marginBottom: 4, borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer", textAlign: "left",
+                      background: sel.includes(p.player_id) ? getTeam(tid).color + "44" : BC.inp,
+                      border: `1px solid ${sel.includes(p.player_id) ? getTeam(tid).accent : BC.bdr}`,
+                      color: sel.includes(p.player_id) ? getTeam(tid).accent : BC.t2,
+                    }}>{p.name}</button>
+                  ))}
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 10, color: BC.t3, marginBottom: 8 }}>NASSAU POINTS (overrides round default)</div>
+              <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                {[["front", "F9"], ["back", "B9"], ["overall", "OVR"]].map(([k, lbl]) => (
+                  <div key={k} style={{ flex: 1 }}>
+                    <label style={LabelStyle}>{lbl}</label>
+                    <input type="number" step="0.5" min="0" value={nassau[k]} onChange={e => setNassau(n => ({ ...n, [k]: parseFloat(e.target.value) || 0 }))}
+                      style={{ ...InputStyle, padding: "8px 8px" }} />
+                  </div>
+                ))}
+              </div>
+              <button onClick={saveMatch} style={BtnStyle}>Create Match</button>
+            </div>
+          </div>
+
+          {/* Existing matches */}
+          {[1,2,3,4].map(r => {
+            const rndM = matches.filter(m => m.round === r);
+            if (!rndM.length) return null;
+            return (
+              <div key={r} style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 10, color: BC.t3, fontWeight: 700, marginBottom: 8, letterSpacing: 1 }}>ROUND {r}</div>
+                {rndM.map(m => (
+                  <div key={m.id} style={{ background: BC.card, borderRadius: 10, padding: "10px 14px", marginBottom: 6, border: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ fontSize: 11, color: BC.t1 }}>
+                      <span style={{ color: TEAM_A.accent }}>{m.teamANames?.join("/")}</span>
+                      <span style={{ color: BC.t3 }}> vs </span>
+                      <span style={{ color: TEAM_B.accent }}>{m.teamBNames?.join("/")}</span>
+                    </div>
+                    <button onClick={() => onSetMatch({ ...m, _delete: true })} style={{
+                      fontSize: 9, padding: "4px 8px", borderRadius: 8, border: `1px solid ${BC.danger}22`, background: "transparent", color: BC.danger, cursor: "pointer",
+                    }}>✕</button>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {tab === "courses" && (
+        <div>
+          {/* Course Library */}
+          <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 14, overflow: "hidden" }}>
+            <div style={{ padding: "9px 14px", borderBottom: `1px solid ${BC.bdr}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: BC.gold }}>{courses.length} COURSE{courses.length !== 1 ? "S" : ""}</span>
+              <button onClick={() => { setSearching(!searching); setCourseSearch(""); setSearchResults([]); }} style={{ padding: "4px 10px", borderRadius: 6, background: "transparent", border: `1px solid ${BC.amber}66`, color: BC.amber, fontSize: 10, fontWeight: 700, cursor: "pointer" }}>
+                {searching ? "Close" : "+ Add Course"}
+              </button>
+            </div>
+
+            {courses.map((c, i) => (
+              <div key={c.id} style={{ borderBottom: i < courses.length - 1 ? `1px solid ${BC.bdr}22` : "none" }}>
+                <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 8 }}>
+                  <button onClick={() => setExpandedCourse(expandedCourse === c.id ? null : c.id)} style={{ flex: 1, background: "transparent", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: BC.t1 }}>{c.name}</div>
+                    <div style={{ fontSize: 10, color: BC.t3, marginTop: 1 }}>{[c.city, c.state].filter(Boolean).join(", ")} · Par {c.par} · Slope {c.slope}</div>
+                  </button>
+                  <button onClick={() => { if (window.confirm(`Remove ${c.name}?`)) onAddCourse({ ...c, _delete: true }); }} style={{ background: "transparent", border: "none", color: BC.t3, cursor: "pointer", fontSize: 14, padding: "2px 4px" }}>✕</button>
+                </div>
+                {expandedCourse === c.id && (
+                  <div style={{ padding: "0 14px 12px", background: BC.amber + "06" }}>
+                    {(c.tee_boxes || []).sort((a,b) => (parseFloat(b.slope)||0) - (parseFloat(a.slope)||0)).map((tb, tbi) => (
+                      <div key={tbi} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 3, fontSize: 10 }}>
+                        <span style={{ display:"inline-block", width:10, height:10, borderRadius:2, background:tb.color||"#888", flexShrink:0 }} />
+                        <span style={{ color: BC.t2, fontWeight: 600, width: 50 }}>{tb.name}</span>
+                        <span style={{ color: BC.t3 }}>Rating {tb.rating} · Slope {tb.slope} · Par {tb.par}</span>
+                      </div>
+                    ))}
+                    {(c.tee_boxes || []).length === 0 && <div style={{ fontSize: 10, color: BC.t3, fontStyle: "italic" }}>No tee data</div>}
+                  </div>
+                )}
+              </div>
+            ))}
+            {courses.length === 0 && <div style={{ padding: "16px 14px", color: BC.t3, fontSize: 12 }}>No courses yet. Add one below.</div>}
+          </div>
+
+          {/* Search panel */}
+          {searching && (
+            <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: 14 }}>
+              <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                <select value={courseStateFilter} onChange={e => { setCourseStateFilter(e.target.value); if (courseSearch.trim().length >= 2) doCourseSearch(courseSearch, e.target.value); }}
+                  style={{ width: 64, padding: "9px 6px", background: BC.inp, border: `1px solid ${BC.amber}44`, borderRadius: 8, color: BC.t1, fontSize: 12, flexShrink: 0 }}>
+                  <option value="">All</option>
+                  {["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"].map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <input value={courseSearch} onChange={e => doCourseSearch(e.target.value)} placeholder="Search by course or city..." autoFocus
+                  style={{ flex: 1, padding: "9px 12px", background: BC.inp, border: `1px solid ${BC.amber}44`, borderRadius: 8, color: BC.t1, fontSize: 13, outline: "none" }} />
+              </div>
+
+              {searchLoading && <div style={{ textAlign: "center", padding: 12, color: BC.t3, fontSize: 11 }}>Searching GolfCourseAPI...</div>}
+
+              {!searchLoading && courseSearch.trim().length >= 2 && searchResults.length === 0 && (
+                <div style={{ textAlign: "center", padding: "10px 0", color: BC.t3, fontSize: 11 }}>No courses found for "{courseSearch}"</div>
+              )}
+
+              {!searchLoading && searchResults.filter(c => !courses.find(ex => ex.name.toLowerCase() === c.name.toLowerCase())).map(c => (
+                <button key={c.id} onClick={() => setCoursePreview({ ...c, hole_pars: c.hole_pars?.length ? c.hole_pars : Array(18).fill(4), hole_handicaps: c.hole_handicaps?.length ? c.hole_handicaps : Array(18).fill(0).map((_,i)=>i+1) })}
+                  style={{ display: "block", width: "100%", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 10, padding: "10px 14px", cursor: "pointer", textAlign: "left", color: BC.t1, marginBottom: 6 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ fontWeight: 600, fontSize: 13 }}>{c.name}</span>
+                        {c._incompleteData && <span style={{ fontSize: 8, background: "#ef444420", border: "1px solid #ef444440", color: "#ef4444", borderRadius: 4, padding: "1px 5px", fontWeight: 700 }}>⚠ incomplete</span>}
+                        {c._source && <span style={{ fontSize: 8, background: `${BC.amber}15`, border: `1px solid ${BC.amber}30`, color: BC.amber, borderRadius: 4, padding: "1px 5px", fontWeight: 600 }}>{c._source}</span>}
+                      </div>
+                      <div style={{ fontSize: 10, color: BC.t3 }}>{[c.city, c.state].filter(Boolean).join(", ")}{c.par ? ` · Par ${c.par}` : ""}{c.slope && c.slope !== 113 ? ` · Slope ${c.slope}` : ""}</div>
+                    </div>
+                    <span style={{ color: BC.amber, fontSize: 11, fontWeight: 700 }}>Preview →</span>
+                  </div>
+                </button>
+              ))}
+
+              {!courseSearch.trim() && <div style={{ color: BC.t3, fontSize: 10, textAlign: "center", padding: 4 }}>Type at least 2 characters to search</div>}
+              <div style={{ fontSize: 9, color: BC.t3, textAlign: "center", marginTop: 8 }}>Powered by GolfCourseAPI.com · 35,000+ courses</div>
+            </div>
+          )}
+
+          {/* Course Preview / Edit Modal */}
+          {coursePreview && (() => {
+            const draft = coursePreview;
+            const setDraft = fn => setCoursePreview(prev => fn(prev));
+            const tbs = draft.tee_boxes || [];
+            const ti = { background: BC.bg, border: `1px solid ${BC.amber}30`, borderRadius: 4, color: BC.t1, fontSize: 9, textAlign: "center", width: "100%", padding: "3px 2px", boxSizing: "border-box" };
+            const tiL = { ...ti, textAlign: "left", padding: "3px 5px" };
+            return (
+              <div style={{ position: "fixed", top: 0, bottom: 0, left: 0, right: 0, background: "rgba(0,0,0,0.85)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+                <div style={{ background: BC.card, borderRadius: 16, border: `1px solid ${BC.amber}44`, width: "100%", maxWidth: 420, maxHeight: "calc(100vh - 48px)", overflowY: "auto", padding: 0 }}>
+
+                  {/* Header */}
+                  <div style={{ padding: "14px 16px 10px", borderBottom: `1px solid ${BC.bdr}`, position: "sticky", top: 0, background: BC.card, zIndex: 1 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div style={{ flex: 1, marginRight: 8 }}>
+                        <input value={draft.name} onChange={e => setDraft(p => ({...p, name: e.target.value}))}
+                          style={{ background: "transparent", border: "none", borderBottom: `1px solid ${BC.amber}44`, color: BC.t1, fontSize: 14, fontWeight: 800, width: "100%", padding: "2px 0", outline: "none" }} />
+                        <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                          <input value={draft.city||""} onChange={e => setDraft(p => ({...p, city: e.target.value}))} placeholder="City"
+                            style={{ ...tiL, fontSize: 10, flex: 1 }} />
+                          <select value={draft.state||""} onChange={e => setDraft(p => ({...p, state: e.target.value}))}
+                            style={{ ...ti, fontSize: 10, width: 52 }}>
+                            <option value="">—</option>
+                            {["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"].map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <button onClick={() => setCoursePreview(null)} style={{ background: "transparent", border: "none", color: BC.t3, fontSize: 18, cursor: "pointer", lineHeight: 1 }}>✕</button>
+                    </div>
+                    {draft._incompleteData && (
+                      <div style={{ marginTop: 8, padding: "7px 10px", background: "#ef444410", border: "1px solid #ef444440", borderRadius: 8, fontSize: 9, color: "#ef4444" }}>
+                        ⚠ Incomplete data — slope, rating, or tee boxes may be missing. Edit manually below.
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ padding: "12px 16px" }}>
+                    {/* Tee Boxes */}
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                        <div style={{ fontSize: 9, color: BC.t3, fontWeight: 700, textTransform: "uppercase" }}>Tee Boxes</div>
+                        <button onClick={() => setDraft(p => ({ ...p, tee_boxes: [...(p.tee_boxes||[]), { name: "", color: "#888888", rating: 72.0, slope: 113, par: 72, yardage: 0 }] }))}
+                          style={{ fontSize: 9, padding: "2px 7px", borderRadius: 4, background: "transparent", border: `1px solid ${BC.amber}60`, color: BC.amber, cursor: "pointer", fontWeight: 700 }}>+ Tee</button>
+                      </div>
+                      {tbs.length === 0 && <div style={{ fontSize: 10, color: BC.warn, marginBottom: 8, fontStyle: "italic" }}>⚠ No tees from API — add manually</div>}
+                      <div style={{ display: "grid", gridTemplateColumns: "18px 1fr 44px 38px 30px 46px 18px", gap: "3px 4px", fontSize: 8, color: BC.t3, fontWeight: 600, marginBottom: 3 }}>
+                        <div/><div>Name</div><div style={{textAlign:"center"}}>Rating</div><div style={{textAlign:"center"}}>Slope</div><div style={{textAlign:"center"}}>Par</div><div style={{textAlign:"center"}}>Yards</div><div/>
+                      </div>
+                      {tbs.map((tb, i) => (
+                        <div key={i} style={{ display: "grid", gridTemplateColumns: "18px 1fr 44px 38px 30px 46px 18px", gap: "3px 4px", marginBottom: 4, alignItems: "center" }}>
+                          <span style={{ display:"inline-block", width:18, height:18, borderRadius:3, background:tb.color||"#888", border:"1px solid #ffffff20", flexShrink:0 }} />
+                          <input value={tb.name} onChange={e => setDraft(p => { const t=[...p.tee_boxes]; t[i]={...t[i],name:e.target.value}; return {...p,tee_boxes:t}; })} style={{...tiL}} placeholder="Name" />
+                          <input value={tb.rating} onChange={e => setDraft(p => { const t=[...p.tee_boxes]; t[i]={...t[i],rating:e.target.value}; return {...p,tee_boxes:t}; })} style={ti} />
+                          <input value={tb.slope} onChange={e => setDraft(p => { const t=[...p.tee_boxes]; t[i]={...t[i],slope:e.target.value}; return {...p,tee_boxes:t}; })} style={ti} />
+                          <input value={tb.par} onChange={e => setDraft(p => { const t=[...p.tee_boxes]; t[i]={...t[i],par:e.target.value}; return {...p,tee_boxes:t}; })} style={ti} />
+                          <input value={tb.yardage} onChange={e => setDraft(p => { const t=[...p.tee_boxes]; t[i]={...t[i],yardage:e.target.value}; return {...p,tee_boxes:t}; })} style={ti} />
+                          <button onClick={() => setDraft(p => ({...p, tee_boxes: p.tee_boxes.filter((_,j) => j!==i)}))} style={{ background:"transparent", border:"none", color:BC.t3, fontSize:11, cursor:"pointer", padding:0 }}>✕</button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Scorecard */}
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ fontSize: 9, color: BC.t3, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>Scorecard</div>
+                      {[["Front", 0, 9], ["Back", 9, 9]].map(([lbl, start, count]) => {
+                        const pars = (draft.hole_pars || Array(18).fill(4)).slice(start, start+count);
+                        const hcps = (draft.hole_handicaps || Array(18).fill(0)).slice(start, start+count);
+                        const activeTee = (draft.tee_boxes || [])[0];
+                        const hy = (activeTee?.hole_yards || []).slice(start, start+count);
+                        const hasYds = hy.some(y => y > 0);
+                        return (
+                          <div key={lbl} style={{ marginBottom: 6 }}>
+                            <div style={{ display: "grid", gridTemplateColumns: `28px repeat(${count}, 1fr) 30px`, gap: 1, fontSize: 8 }}>
+                              <div style={{ color: BC.t3, fontWeight: 600, padding: "2px 0" }}>Hole</div>
+                              {Array.from({length:count},(_,i) => <div key={i} style={{ textAlign:"center", color:BC.t2, fontWeight:700, padding:"2px 0" }}>{start+i+1}</div>)}
+                              <div style={{ textAlign:"center", color:BC.t3, fontSize:7, padding:"2px 0" }}>Tot</div>
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: `28px repeat(${count}, 1fr) 30px`, gap: 1, fontSize: 8, background: BC.inp, borderRadius: 3, marginBottom: 1 }}>
+                              <div style={{ color: BC.t3, fontWeight: 600, padding: "3px 2px" }}>Par</div>
+                              {Array.from({length:count},(_,i) => (
+                                <input key={i} value={pars[i]??""} onChange={e => setDraft(p => { const hp=[...(p.hole_pars||Array(18).fill(4))]; hp[start+i]=e.target.value; return {...p,hole_pars:hp}; })}
+                                  style={{ background:"transparent", border:"none", color:BC.t1, fontSize:9, fontWeight:700, textAlign:"center", width:"100%", padding:"3px 0", outline:"none" }} />
+                              ))}
+                              <div style={{ textAlign:"center", color:BC.amber, fontWeight:800, padding:"3px 0", fontSize:9 }}>{pars.reduce((a,b)=>a+(parseInt(b)||0),0)}</div>
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: `28px repeat(${count}, 1fr) 30px`, gap: 1, fontSize: 8, marginBottom: 1 }}>
+                              <div style={{ color: BC.t3, fontWeight: 600, padding: "2px 2px" }}>HCP</div>
+                              {Array.from({length:count},(_,i) => (
+                                <input key={i} value={hcps[i]??""} onChange={e => setDraft(p => { const hh=[...(p.hole_handicaps||Array(18).fill(0))]; hh[start+i]=e.target.value; return {...p,hole_handicaps:hh}; })}
+                                  style={{ background:"transparent", border:"none", color:BC.t3, fontSize:9, textAlign:"center", width:"100%", padding:"2px 0", outline:"none" }} />
+                              ))}
+                              <div />
+                            </div>
+                            {hasYds && (
+                              <div style={{ display: "grid", gridTemplateColumns: `28px repeat(${count}, 1fr) 30px`, gap: 1, fontSize: 8 }}>
+                                <div style={{ color: BC.t3, fontWeight: 600, padding: "2px 2px" }}>Yds</div>
+                                {hy.map((y, i) => <div key={i} style={{ textAlign:"center", color:BC.t3, padding:"2px 0" }}>{y||"–"}</div>)}
+                                <div style={{ textAlign:"center", color:BC.t3, padding:"2px 0" }}>{hy.reduce((a,b)=>a+(parseInt(b)||0),0)||""}</div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Actions */}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button onClick={() => setCoursePreview(null)} style={{ flex: 1, padding: "10px 0", borderRadius: 8, background: "transparent", border: `1px solid ${BC.bdr}`, color: BC.t3, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                      <button onClick={async () => {
+                        const firstTee = draft.tee_boxes?.[0];
+                        const cid = `bc_course_${Date.now()}`;
+                        const finalCourse = {
+                          ...draft,
+                          id: draft.id?.startsWith("rapid_") || draft.id?.startsWith("gc_") ? cid : (draft.id || cid),
+                          tournament_id: TOURNAMENT_ID,
+                          par: parseInt(firstTee?.par) || draft.par || 72,
+                          slope: parseInt(firstTee?.slope) || draft.slope || 113,
+                          rating: parseFloat(firstTee?.rating) || draft.rating || 72.0,
+                          hole_pars: (draft.hole_pars||[]).map(v => parseInt(v)||4),
+                          hole_handicaps: (draft.hole_handicaps||[]).map(v => parseInt(v)||0),
+                          tee_boxes: (draft.tee_boxes||[]).map(tb => ({...tb, rating:parseFloat(tb.rating)||72.0, slope:parseInt(tb.slope)||113, par:parseInt(tb.par)||72, yardage:parseInt(tb.yardage)||0})),
+                          _source: undefined, _incompleteData: undefined,
+                        };
+                        await onAddCourse(finalCourse);
+                        setCoursePreview(null);
+                        setSearching(false);
+                        notify(`${finalCourse.name} added!`, "success");
+                      }} style={{ flex: 2, padding: "10px 0", borderRadius: 8, background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`, border: "none", color: "#0a0804", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>✓ Add Course</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main App ──
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [view, setView] = useState("leaderboard");
+  const [teamNames, setTeamNames] = useState({ A: "Team Alpha", B: "Team Beta" });
+
+  // Keep TEAM_A/TEAM_B module vars in sync with state
+  useEffect(() => {
+    TEAM_A = { ...TEAM_A, name: teamNames.A };
+    TEAM_B = { ...TEAM_B, name: teamNames.B };
+  }, [teamNames]);
+  const [tPlayers, setTPlayers] = useState([]);
+  const [tRounds, setTRounds] = useState([]);
+  const [courses, setCourses] = useState([]);
+  const [matches, setMatches] = useState([]);
+  const [holeData, setHoleData] = useState({});
+  const [notif, setNotif] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+
+  const notify = useCallback((msg, type = "success") => {
+    setNotif({ msg, type });
+    setTimeout(() => setNotif(null), 2800);
+  }, []);
+
+  // Subscribe to Firestore
+  useEffect(() => {
+    const unsubs = [];
+    const f = [{ field: "tournament_id", op: "==", value: TOURNAMENT_ID }];
+    unsubs.push(db.subscribe("bc_players", f, setTPlayers));
+    unsubs.push(db.subscribe("bc_settings", f, rows => {
+      const tn = rows.find(r => r.id === "team_names");
+      if (tn) setTeamNames({ A: tn.teamA || "Team Alpha", B: tn.teamB || "Team Beta" });
+    }));
+    unsubs.push(db.subscribe("bc_rounds", f, rows => setTRounds(rows)));
+    unsubs.push(db.subscribe("bc_courses", f, setCourses));
+    unsubs.push(db.subscribe("bc_matches", f, setMatches));
+    unsubs.push(db.subscribe("bc_hole_scores", f, rows => {
+      const hd = {};
+      rows.forEach(r => {
+        const key = `${r.player_id}_${r.round_number}`;
+        if (!hd[key]) hd[key] = {};
+        hd[key][r.hole_number - 1] = r.score;
+      });
+      setHoleData(hd);
+    }));
+    return () => unsubs.forEach(u => u());
+  }, []);
+
+  // Enhance tRounds with nassau data
+  const enrichedRounds = useMemo(() => tRounds.map(r => ({
+    ...r,
+    nassau: { front: r.nassau_front ?? 1, back: r.nassau_back ?? 1, overall: r.nassau_overall ?? 1 },
+  })), [tRounds]);
+
+  // Enhance matches with nassau from round
+  const enrichedMatches = useMemo(() => matches.map(m => {
+    const tr = enrichedRounds.find(t => t.round_number === m.round);
+    return { ...m, nassau: m.nassau || tr?.nassau || NASSAU_DEFAULT };
+  }), [matches, enrichedRounds]);
+
+  const onSaveHole = useCallback(async (pid, rnd, holeIdx, score, courseId) => {
+    setSyncing(true);
+    const data = {
+      id: `bc_hs_r${rnd}_${pid}_h${holeIdx + 1}`,
+      tournament_id: TOURNAMENT_ID,
+      player_id: pid,
+      round_number: rnd,
+      hole_number: holeIdx + 1,
+      score,
+      course_id: courseId || "",
+    };
+    // Optimistic update
+    setHoleData(prev => {
+      const key = `${pid}_${rnd}`;
+      return { ...prev, [key]: { ...prev[key], [holeIdx]: score } };
+    });
+    await db.upsert("bc_hole_scores", data);
+    setSyncing(false);
+  }, []);
+
+  const onAddPlayer = useCallback(async (p) => { await db.upsert("bc_players", p); }, []);
+  const onUpdatePlayer = useCallback(async (p) => { await db.upsert("bc_players", p); }, []);
+  const onRemovePlayer = useCallback(async (pid) => { await db.delete("bc_players", pid); }, []);
+  const onAddCourse = useCallback(async (c) => { if (c._delete) { await db.delete("bc_courses", c.id); } else { await db.upsert("bc_courses", c); } }, []);
+  const onSetRound = useCallback(async (r) => { await db.upsert("bc_rounds", r); }, []);
+  const onSetMatch = useCallback(async (m) => {
+    if (m._delete) { await db.delete("bc_matches", m.id); }
+    else { await db.upsert("bc_matches", m); }
+  }, []);
+
+  const availableRounds = useMemo(() => [...new Set(enrichedMatches.map(m => m.round))].sort(), [enrichedMatches]);
+
+  if (!user) return <LoginScreen players={tPlayers} teamNames={teamNames} onLogin={p => { setUser({ ...p, isDirector: !!p.isDirector }); }} />;
+
+  const navItems = [
+    { key: "scoring",     label: "Scoring", icon: "score" },
+    { key: "leaderboard", label: "Leaderboard", icon: "trophy" },
+    { key: "groups",      label: "Matches", icon: "groups" },
+  ];
+
+  const renderIcon = (icon, active) => {
+    const clr = active ? BC.amber : BC.t3;
+    const sz = 20;
+    if (icon === "trophy") return <img src={TROPHY_SILHOUETTE} alt="Board" style={{ width: sz + 6, height: sz + 6, objectFit: "contain", filter: active ? `brightness(0) saturate(100%) invert(65%) sepia(60%) saturate(500%) hue-rotate(5deg) brightness(105%)` : `brightness(0) saturate(100%) invert(40%) sepia(10%) saturate(400%) hue-rotate(185deg) brightness(80%)` }} />;
+    if (icon === "groups") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round"><circle cx="9" cy="7" r="3"/><circle cx="17" cy="7" r="3"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/><path d="M21 21v-2a3 3 0 00-2-2.83"/></svg>;
+    if (icon === "score") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4z"/></svg>;
+    if (icon === "admin") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>;
+    return null;
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", maxWidth: 480, margin: "0 auto", background: BC.bg, display: "flex", flexDirection: "column", position: "relative", fontFamily: "'Montserrat', sans-serif" }}>
+      <Notif notif={notif} />
+
+      {/* Minimal top strip */}
+      <div style={{ background: BC.card, borderBottom: `1px solid ${BC.bdr}`, padding: "6px 16px", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, flexShrink: 0 }}>
+        <div style={{ width: 6, height: 6, borderRadius: "50%", background: syncing ? BC.amber : "#22c55e" }} />
+        {user.isDirector && (
+          <button onClick={() => setView(view === "admin" ? "leaderboard" : "admin")} style={{
+            background: view === "admin" ? BC.amber + "22" : "transparent",
+            border: `1px solid ${view === "admin" ? BC.amber : BC.bdr}`,
+            color: view === "admin" ? BC.amber : BC.t3,
+            padding: "4px 8px", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center",
+          }}>
+            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+            </svg>
+          </button>
+        )}
+        <button onClick={() => setUser(null)} style={{ background: "transparent", border: `1px solid ${BC.bdr}`, color: BC.t3, padding: "3px 10px", borderRadius: 8, fontSize: 9, cursor: "pointer" }}>
+          Logout · <span style={{ color: BC.t2, fontWeight: 700 }}>{user.name}</span>
+        </button>
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "16px 20px", paddingBottom: 80 }}>
+        {view === "leaderboard" && (
+          <TeamLeaderboard
+            matches={enrichedMatches}
+            holeData={holeData}
+            courses={courses}
+            tRounds={enrichedRounds}
+            tPlayers={tPlayers}
+            rounds={availableRounds.length ? availableRounds : [1,2,3,4]}
+            teamNames={teamNames}
+          />
+        )}
+        {view === "scoring" && (
+          <ScoreEntry
+            user={user}
+            matches={enrichedMatches}
+            holeData={holeData}
+            onSaveHole={onSaveHole}
+            tPlayers={tPlayers}
+            courses={courses}
+            tRounds={enrichedRounds}
+            notify={notify}
+            teamNames={teamNames}
+          />
+        )}
+        {view === "groups" && (
+          <GroupsView
+            matches={enrichedMatches}
+            tRounds={enrichedRounds}
+            tPlayers={tPlayers}
+            courses={courses}
+            teamNames={teamNames}
+          />
+        )}
+        {view === "admin" && (
+          <AdminView
+            user={user}
+            tPlayers={tPlayers}
+            tRounds={enrichedRounds}
+            courses={courses}
+            matches={enrichedMatches}
+            onAddPlayer={onAddPlayer}
+            onUpdatePlayer={onUpdatePlayer}
+            onRemovePlayer={onRemovePlayer}
+            onAddCourse={onAddCourse}
+            onSetRound={onSetRound}
+            onSetMatch={onSetMatch}
+            teamNames={teamNames}
+            onSaveTeamNames={async (names) => {
+              setTeamNames(names);
+              await db.upsert("bc_settings", { id: "team_names", tournament_id: TOURNAMENT_ID, teamA: names.A, teamB: names.B });
+            }}
+            notify={notify}
+          />
+        )}
+      </div>
+
+      {/* Bottom Nav */}
+      <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, background: "rgba(18,16,13,0.97)", borderTop: `1px solid ${BC.bdr}`, display: "flex", zIndex: 100, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+        {navItems.map(item => {
+          const active = view === item.key;
+          const clr = active ? BC.amber : BC.t3;
+          return (
+            <button key={item.key} onClick={() => setView(item.key)} style={{
+              flex: 1, padding: "10px 4px 12px", display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+              background: "transparent", border: "none", cursor: "pointer",
+            }}>
+              {renderIcon(item.icon, active)}
+              <span style={{ fontSize: 9, fontWeight: active ? 700 : 500, color: clr }}>{item.label}</span>
+              {active && <div style={{ width: 16, height: 2, borderRadius: 1, background: BC.amber, marginTop: 1 }} />}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
