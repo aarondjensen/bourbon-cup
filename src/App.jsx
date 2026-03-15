@@ -320,26 +320,26 @@ function LoginScreen({ players, onLogin, teamNames }) {
 
       {/* Title */}
       <div style={{ marginBottom: 10, textAlign: "center", position: "relative", zIndex: 1 }}>
-        <div style={{ fontSize: "8vw", fontWeight: 800, color: BC.gold, letterSpacing: 2 }}>THE BOURBON CUP</div>
+        <div style={{ fontSize: "8vw", fontWeight: 800, color: BC.gold, letterSpacing: 2, textAlign: "center" }}>THE BOURBON CUP</div>
         <div style={{ fontSize: "3vw", color: BC.t3, letterSpacing: "0.3em", marginTop: 3 }}>2026 GAYLORD, MI</div>
       </div>
 
 
 
       {/* Logos with VS */}
-      {/* Two-column team layout with logos above columns */}
+      {/* Logos row with VS centered between */}
+      <div style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 0, position: "relative", zIndex: 1, marginBottom: 10 }}>
+        <img src={teamA.logo} alt={teamA.name} style={{ width: "32vw", height: "22vw", objectFit: "contain", flex: 1 }} />
+        <div style={{ fontSize: "5vw", fontWeight: 800, color: BC.gold, letterSpacing: 1, textAlign: "center", width: "10vw", flexShrink: 0 }}>VS</div>
+        <img src={teamB.logo} alt={teamB.name} style={{ width: "32vw", height: "22vw", objectFit: "contain", flex: 1, marginLeft: "auto" }} />
+      </div>
+
+      {/* Two-column team layout */}
       <div style={{ width: "100%", display: "flex", gap: "2vw", position: "relative", zIndex: 1, alignItems: "flex-start" }}>
         {[teamA, teamB].map((team, ti) => {
           const teamPlayers = filterPlayers(team.id === "A" ? teamAPlayers : teamBPlayers);
           return (
             <div key={team.id} style={{ flex: 1, minWidth: 0 }}>
-              {/* Logo centered above column */}
-              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginBottom: 6, position: "relative" }}>
-                <img src={team.logo} alt={team.name} style={{ width: "32vw", height: "22vw", objectFit: "contain" }} />
-                {ti === 0 && (
-                  <div style={{ position: "absolute", right: "-3.5vw", fontSize: "5vw", fontWeight: 800, color: BC.gold, letterSpacing: 1, zIndex: 2 }}>VS</div>
-                )}
-              </div>
               {/* Player list */}
               <div style={{ display: "flex", flexDirection: "column", gap: "1vw", background: BC.card + "88", border: `1px solid ${team.accent}44`, borderTop: `2px solid ${team.accent}`, borderRadius: 10, padding: "1.5vw" }}>
                 {teamPlayers.length === 0
