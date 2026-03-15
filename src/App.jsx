@@ -97,7 +97,7 @@ const getTeam = (tid) => tid === "A" ? TEAM_A : TEAM_B;
 const oppTeam = (tid) => tid === "A" ? TEAM_B : TEAM_A;
 
 // ── Match Scoring Engine ──
-function computeMatchResult(match, holeData, courses, tRounds, tPlayers, format) {
+function computeMatchResult(match, holeData, courses, tRounds, tPlayers, format, hcpOverrides) {
   // holeData: { pid_round: { holeIdx: score } }
   const rnd = match.round;
   const tr = tRounds.find(t => t.round_number === rnd);
@@ -109,6 +109,8 @@ function computeMatchResult(match, holeData, courses, tRounds, tPlayers, format)
 
   const getPlayerScores = (pid) => holeData[`${pid}_${rnd}`] || {};
   const getPlayerHI = (pid) => {
+    const roundOverrides = hcpOverrides?.[rnd] || {};
+    if (roundOverrides[pid] !== undefined && roundOverrides[pid] !== "") return parseFloat(roundOverrides[pid]) || 0;
     const tp = tPlayers.find(t => t.player_id === pid);
     return parseFloat(tp?.handicap_index) || 0;
   };
@@ -362,7 +364,7 @@ function LoginScreen({ players, onLogin, teamNames }) {
 }
 
 // ── Team Scoreboard (main leaderboard) ──
-function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds, teamNames }) {
+function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds, teamNames, hcpOverrides }) {
   const [expandedMatch, setExpandedMatch] = useState(null);
   const [activeRound, setActiveRound] = useState(rounds[0] || 1);
 
@@ -374,7 +376,7 @@ function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds
   const matchResults = useMemo(() => {
     return roundMatches.map(m => ({
       ...m,
-      result: computeMatchResult(m, holeData, courses, tRounds, tPlayers, format),
+      result: computeMatchResult(m, holeData, courses, tRounds, tPlayers, format, hcpOverrides),
     }));
   }, [roundMatches, holeData, courses, tRounds, tPlayers, format]);
 
@@ -383,7 +385,7 @@ function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds
     const tot = { A: 0, B: 0 };
     matches.forEach(m => {
       const fmt = tRounds.find(t => t.round_number === m.round)?.format || "singles";
-      const res = computeMatchResult(m, holeData, courses, tRounds, tPlayers, fmt);
+      const res = computeMatchResult(m, holeData, courses, tRounds, tPlayers, fmt, hcpOverrides);
       tot.A += res.totalPts.A;
       tot.B += res.totalPts.B;
     });
@@ -581,7 +583,7 @@ function MatchScorecard({ match, result, format, courses, tRounds }) {
 }
 
 // ── Score Entry ──
-function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teamNames }) {
+function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teamNames, hcpOverrides }) {
   const [view, setView] = useState("entry"); // "entry" | "card"
   const [activeMatch, setActiveMatch] = useState(null);
   const [activeHole, setActiveHole] = useState(0);
@@ -614,7 +616,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     await onSaveHole(pid, match.round, activeHole, score, tr?.course_id);
   };
 
-  const result = useMemo(() => computeMatchResult(match, holeData, courses, tRounds, tPlayers, format), [match, holeData, format]);
+  const result = useMemo(() => computeMatchResult(match, holeData, courses, tRounds, tPlayers, format, hcpOverrides), [match, holeData, format, hcpOverrides]);
 
   const ScoreBtn = ({ pid, name, team }) => {
     const cur = getScore(pid);
@@ -777,7 +779,24 @@ function GroupsView({ matches, tRounds, tPlayers, courses, teamNames }) {
 }
 
 // ── Admin View ──
-function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, teamNames, onSaveTeamNames, notify }) {
+
+// ── CH Delta Popup ── shows stroke change when tee or index changes
+function ChDeltaBadge({ delta }) {
+  if (delta === undefined || delta === null || delta === 0) return null;
+  const up = delta > 0;
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 1,
+      fontSize: 9, fontWeight: 800,
+      color: up ? "#22c55e" : "#ef4444",
+      animation: "fadeIn 0.2s ease",
+    }}>
+      {up ? "▲" : "▼"}{Math.abs(delta)}
+    </span>
+  );
+}
+
+function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, teamNames, onSaveTeamNames, hcpOverridesFromDb, notify }) {
   const [tab, setTab] = useState("players");
   const [editTeamNames, setEditTeamNames] = useState({ A: "", B: "" });
   const [editingTeam, setEditingTeam] = useState(null);
@@ -801,6 +820,16 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   const [roundFormat, setRoundFormat] = useState("");
   const [roundCourse, setRoundCourse] = useState("");
   const [roundTeeTime, setRoundTeeTime] = useState("");
+  const [hcpOverrides, setHcpOverrides] = useState({});
+  const [chDeltas, setChDeltas] = useState({});
+  const [teeAssignments, setTeeAssignments] = useState({}); // { round: { pid: teeName } } // { pid_context: delta } — auto-clears after 3.5s
+
+  const showChDelta = (key, delta) => {
+    if (!delta) return;
+    setChDeltas(prev => ({ ...prev, [key]: delta }));
+    setTimeout(() => setChDeltas(prev => { const n = {...prev}; delete n[key]; return n; }), 3500);
+  }; // { round: { pid: value } }
+  useEffect(() => { if (hcpOverridesFromDb) setHcpOverrides(hcpOverridesFromDb); }, [JSON.stringify(hcpOverridesFromDb)]);
   const [nassau, setNassau] = useState(NASSAU_DEFAULT);
 
   // Match builder
@@ -821,6 +850,11 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
   const saveRound = async () => {
     const tr = tRounds.find(t => t.round_number === editRound) || {};
+    // Save handicap overrides
+    const overrides = hcpOverrides[editRound] || {};
+    if (Object.keys(overrides).length > 0) {
+      await db.upsert("bc_hcp_overrides", { id: `bc_hcp_r${editRound}`, tournament_id: TOURNAMENT_ID, round_number: editRound, overrides });
+    }
     const data = {
       id: `bc_round_${editRound}`,
       tournament_id: TOURNAMENT_ID,
@@ -1044,11 +1078,11 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
               {/* Player list */}
               {tPlayers.filter(p => p.team === team.id).map(p => (
-                <div key={p.player_id} style={{ background: BC.card, borderRadius: 6, padding: "4px 8px", marginBottom: 2, border: `1px solid ${BC.bdr}`, display: "grid", gridTemplateColumns: "110px 36px 1fr auto auto", alignItems: "center", gap: 0, boxShadow: `inset 3px 0 0 ${team.accent}55, -2px 0 12px ${team.accent}11` }}>
+                <div key={p.player_id} style={{ background: BC.card, borderRadius: 6, padding: "4px 8px", marginBottom: 2, border: `1px solid ${BC.bdr}`, display: "grid", gridTemplateColumns: "110px 36px auto auto", alignItems: "center", gap: 6, boxShadow: `inset 3px 0 0 ${team.accent}55, -2px 0 12px ${team.accent}11` }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
                   <span style={{ fontSize: 11, fontWeight: 400, color: BC.t1, textAlign: "left" }}>{p.handicap_index}</span>
                   <button onClick={() => onUpdatePlayer({ ...p, isDirector: !p.isDirector })} style={{
-                    fontSize: 8, padding: "2px 6px", borderRadius: 5, border: `1px solid ${p.isDirector ? BC.amber : BC.bdr}`,
+                    fontSize: 8, padding: "1px 4px", borderRadius: 4, border: `1px solid ${p.isDirector ? BC.amber : BC.bdr}`,
                     background: p.isDirector ? BC.amber + "22" : "transparent", color: p.isDirector ? BC.amber : BC.t3, cursor: "pointer", fontWeight: 700, flexShrink: 0,
                   }}>DIR</button>
                   <button onClick={() => { if (window.confirm(`Remove ${p.name}?`)) onRemovePlayer(p.player_id); }} style={{
@@ -1077,6 +1111,8 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   setRoundTeeTime(tr.tee_time || "");
                   setNassau({ front: tr.nassau_front || 1, back: tr.nassau_back || 1, overall: tr.nassau_overall || 1 });
                 }
+                // Load existing overrides for this round
+                setHcpOverrides(prev => ({ ...prev }));
               }} style={{
                 flex: 1, padding: "8px 4px", borderRadius: 10, fontSize: 11, fontWeight: 700, cursor: "pointer",
                 background: editRound === r ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
@@ -1114,6 +1150,135 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 </div>
               ))}
             </div>
+
+            {/* Handicap Overrides */}
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold }}>HANDICAP INDEX OVERRIDES</div>
+                <div style={{ fontSize: 9, color: BC.t3 }}>Leave blank to use base index</div>
+              </div>
+              {tPlayers.length === 0 && <div style={{ fontSize: 11, color: BC.t3 }}>No players added yet.</div>}
+              {[TEAM_A, TEAM_B].map(team => (
+                <div key={team.id} style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: team.accent, letterSpacing: 1, marginBottom: 5 }}>{teamNames?.[team.id] || team.name}</div>
+                  {tPlayers.filter(p => p.team === team.id).map(p => {
+                    const baseHI = p.handicap_index;
+                    const override = hcpOverrides[editRound]?.[p.player_id];
+                    const hasOverride = override !== undefined && override !== "";
+                    return (
+                      <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: "1fr 72px 28px", gap: 6, alignItems: "center", marginBottom: 4 }}>
+                        <div style={{ fontSize: 12, color: BC.t1, fontWeight: 600 }}>
+                          {p.name}
+                          <span style={{ fontSize: 10, color: BC.t3, fontWeight: 400, marginLeft: 8 }}>base: {baseHI}</span>
+                        </div>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={hasOverride ? override : ""}
+                          onChange={e => {
+                            const newVal = e.target.value;
+                            const oldHI = parseFloat(hcpOverrides[editRound]?.[p.player_id] ?? p.handicap_index) || 0;
+                            const newHI = parseFloat(newVal) || parseFloat(p.handicap_index) || 0;
+                            // We need a course to calc CH delta
+                            const tr = tRounds.find(t => t.round_number === editRound);
+                            const course = courses.find(c => c.id === tr?.course_id);
+                            if (course && newVal !== "") {
+                              const oldCH = calcCH(oldHI, course.slope || 113, course.rating || 72, course.par || 72);
+                              const newCH = calcCH(newHI, course.slope || 113, course.rating || 72, course.par || 72);
+                              const delta = newCH - oldCH;
+                              showChDelta(`hcp_${editRound}_${p.player_id}`, delta);
+                            }
+                            setHcpOverrides(prev => ({
+                              ...prev,
+                              [editRound]: { ...(prev[editRound] || {}), [p.player_id]: newVal }
+                            }));
+                          }}
+                          placeholder={String(baseHI)}
+                          style={{ padding: "5px 8px", background: hasOverride ? BC.amber + "15" : BC.inp, border: `1px solid ${hasOverride ? BC.amber : BC.bdr}`, borderRadius: 6, color: hasOverride ? BC.amber : BC.t2, fontSize: 12, fontWeight: hasOverride ? 700 : 400, outline: "none", textAlign: "center" }}
+                        />
+                        {chDeltas[`hcp_${editRound}_${p.player_id}`] !== undefined && (
+                          <ChDeltaBadge delta={chDeltas[`hcp_${editRound}_${p.player_id}`]} />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+
+            {/* Tee Assignments */}
+            {(() => {
+              const tr = tRounds.find(t => t.round_number === editRound);
+              const course = courses.find(c => c.id === tr?.course_id);
+              const tees = course?.tee_boxes || [];
+              if (!course || tees.length === 0) return null;
+              const assignments = teeAssignments[editRound] || {};
+              const assignTee = (pid, teeName, playerHI) => {
+                const oldTeeName = assignments[pid] || tees[0]?.name;
+                const oldTee = tees.find(t => t.name === oldTeeName);
+                const newTee = tees.find(t => t.name === teeName);
+                if (oldTee && newTee) {
+                  const oldCH = calcCH(parseFloat(playerHI)||0, oldTee.slope||113, oldTee.rating||72, oldTee.par||72);
+                  const newCH = calcCH(parseFloat(playerHI)||0, newTee.slope||113, newTee.rating||72, newTee.par||72);
+                  const delta = newCH - oldCH;
+                  showChDelta(`tee_${editRound}_${pid}`, delta);
+                }
+                setTeeAssignments(prev => ({ ...prev, [editRound]: { ...(prev[editRound]||{}), [pid]: teeName } }));
+              };
+              return (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, marginBottom: 4 }}>TEE ASSIGNMENTS</div>
+                  <div style={{ fontSize: 9, color: BC.t3, marginBottom: 10 }}>{course.name}</div>
+                  {/* Tee legend */}
+                  <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
+                    {tees.map(tee => (
+                      <div key={tee.name} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, color: BC.t2 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: 2, background: tee.color || "#888", display: "inline-block" }} />
+                        {tee.name} ({tee.slope}/{tee.rating})
+                      </div>
+                    ))}
+                  </div>
+                  {[TEAM_A, TEAM_B].map(team => (
+                    <div key={team.id} style={{ marginBottom: 8 }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: team.accent, letterSpacing: 1, marginBottom: 4 }}>{teamNames?.[team.id] || team.name}</div>
+                      {tPlayers.filter(p => p.team === team.id).map(p => {
+                        const hi = hcpOverrides[editRound]?.[p.player_id] ?? p.handicap_index;
+                        const currentTee = assignments[p.player_id] || tees[0]?.name;
+                        const teeObj = tees.find(t => t.name === currentTee);
+                        const ch = teeObj ? calcCH(parseFloat(hi)||0, teeObj.slope||113, teeObj.rating||72, teeObj.par||72) : 0;
+                        const key = `tee_${editRound}_${p.player_id}`;
+                        return (
+                          <div key={p.player_id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: BC.t1 }}>{p.name}</span>
+                              <span style={{ fontSize: 9, color: BC.t3, marginLeft: 6 }}>
+                                HI {hi} · CH {ch}
+                                {chDeltas[key] !== undefined && <ChDeltaBadge delta={chDeltas[key]} />}
+                              </span>
+                            </div>
+                            <div style={{ display: "flex", gap: 4 }}>
+                              {tees.map(tee => {
+                                const isActive = currentTee === tee.name;
+                                return (
+                                  <button key={tee.name} onClick={() => assignTee(p.player_id, tee.name, hi)} style={{
+                                    padding: "4px 8px", borderRadius: 6, cursor: "pointer", fontSize: 9, fontWeight: 700,
+                                    background: isActive ? tee.color + "33" : BC.inp,
+                                    border: `1px solid ${isActive ? tee.color : BC.bdr}`,
+                                    color: isActive ? tee.color : BC.t3,
+                                    transform: isActive ? "scale(1.05)" : "scale(1)",
+                                    transition: "all 0.15s ease",
+                                  }}>{tee.name.substring(0,5)}</button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
 
             <button onClick={saveRound} style={BtnStyle}>Save Round {editRound}</button>
           </div>
@@ -1428,6 +1593,7 @@ export default function App() {
   const [holeData, setHoleData] = useState({});
   const [notif, setNotif] = useState(null);
   const [syncing, setSyncing] = useState(false);
+  const [hcpOverridesData, setHcpOverridesData] = useState({}); // { round: { pid: value } }
 
   const notify = useCallback((msg, type = "success") => {
     setNotif({ msg, type });
@@ -1444,6 +1610,11 @@ export default function App() {
       if (tn) setTeamNames({ A: tn.teamA || "Team Alpha", B: tn.teamB || "Team Beta" });
     }));
     unsubs.push(db.subscribe("bc_rounds", f, rows => setTRounds(rows)));
+    unsubs.push(db.subscribe("bc_hcp_overrides", f, rows => {
+      const data = {};
+      rows.forEach(r => { if (r.round_number) data[r.round_number] = r.overrides || {}; });
+      setHcpOverridesData(data);
+    }));
     unsubs.push(db.subscribe("bc_courses", f, setCourses));
     unsubs.push(db.subscribe("bc_matches", f, setMatches));
     unsubs.push(db.subscribe("bc_hole_scores", f, rows => {
@@ -1555,6 +1726,7 @@ export default function App() {
             tPlayers={tPlayers}
             rounds={availableRounds.length ? availableRounds : [1,2,3,4]}
             teamNames={teamNames}
+            hcpOverridesFromDb={hcpOverridesData}
           />
         )}
         {view === "scoring" && (
@@ -1568,6 +1740,7 @@ export default function App() {
             tRounds={enrichedRounds}
             notify={notify}
             teamNames={teamNames}
+            hcpOverrides={hcpOverridesData}
           />
         )}
         {view === "groups" && (
