@@ -301,8 +301,8 @@ function LoginScreen({ players, onLogin, teamNames }) {
     <button onClick={() => onLogin(p)} style={{
       width: "100%", padding: "2.5vw 3vw", background: team.color + "22",
       border: `1px solid ${team.accent}33`, borderRadius: 6,
-      color: BC.t1, fontSize: "3.8vw", fontWeight: 600, cursor: "pointer", textAlign: "left",
-      display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4,
+      color: BC.t1, fontSize: "3.8vw", fontWeight: 600, cursor: "pointer", textAlign: "center",
+      display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
     }}>
       <span style={{ flex: 1, lineHeight: 1.3 }}>{p.name}</span>
     </button>
@@ -327,18 +327,19 @@ function LoginScreen({ players, onLogin, teamNames }) {
 
 
       {/* Logos with VS */}
-      <div style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 0, position: "relative", zIndex: 1, marginBottom: 10 }}>
-        <img src={teamA.logo} alt={teamA.name} style={{ width: "32vw", height: "22vw", objectFit: "contain" }} />
-        <div style={{ fontSize: "4vw", fontWeight: 800, color: BC.t3, letterSpacing: 2, padding: "0 2vw" }}>v</div>
-        <img src={teamB.logo} alt={teamB.name} style={{ width: "28vw", height: "22vw", objectFit: "contain" }} />
-      </div>
-
-      {/* Two-column team layout */}
+      {/* Two-column team layout with logos above columns */}
       <div style={{ width: "100%", display: "flex", gap: "2vw", position: "relative", zIndex: 1, alignItems: "flex-start" }}>
-        {[teamA, teamB].map(team => {
+        {[teamA, teamB].map((team, ti) => {
           const teamPlayers = filterPlayers(team.id === "A" ? teamAPlayers : teamBPlayers);
           return (
             <div key={team.id} style={{ flex: 1, minWidth: 0 }}>
+              {/* Logo centered above column */}
+              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginBottom: 6, position: "relative" }}>
+                <img src={team.logo} alt={team.name} style={{ width: "32vw", height: "22vw", objectFit: "contain" }} />
+                {ti === 0 && (
+                  <div style={{ position: "absolute", right: "-3.5vw", fontSize: "5vw", fontWeight: 800, color: BC.gold, letterSpacing: 1, zIndex: 2 }}>VS</div>
+                )}
+              </div>
               {/* Player list */}
               <div style={{ display: "flex", flexDirection: "column", gap: "1vw", background: BC.card + "88", border: `1px solid ${team.accent}44`, borderTop: `2px solid ${team.accent}`, borderRadius: 10, padding: "1.5vw" }}>
                 {teamPlayers.length === 0
