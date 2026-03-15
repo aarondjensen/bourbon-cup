@@ -995,7 +995,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   <span
                     onClick={() => setEditingTeam(team.id)}
                     title="Click to edit team name"
-                    style={{ fontSize: 11, fontWeight: 800, color: team.accent, letterSpacing: 1, flex: 1, cursor: "pointer", borderBottom: `1px dashed ${team.accent}44` }}
+                    style={{ fontSize: 11, fontWeight: 800, color: team.accent, letterSpacing: 1, flex: 1, cursor: "pointer" }}
                   >{teamNames[team.id].toUpperCase()}</span>
                 )}
                 {/* + Add button inline with team name */}
@@ -1044,9 +1044,11 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
               {/* Player list */}
               {tPlayers.filter(p => p.team === team.id).map(p => (
-                <div key={p.player_id} style={{ background: BC.card, borderRadius: 7, padding: "6px 10px", marginBottom: 3, border: `1px solid ${BC.bdr}`, display: "grid", gridTemplateColumns: "1fr 44px auto auto", alignItems: "center", gap: 6, boxShadow: `inset 3px 0 0 ${team.accent}55, -2px 0 12px ${team.accent}11` }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
-                  <span style={{ fontSize: 12, fontWeight: 400, color: BC.t1, textAlign: "left" }}>{p.handicap_index}</span>
+                <div key={p.player_id} style={{ background: BC.card, borderRadius: 6, padding: "4px 8px", marginBottom: 2, border: `1px solid ${BC.bdr}`, display: "grid", gridTemplateColumns: "1fr auto auto auto", alignItems: "center", gap: 6, boxShadow: `inset 3px 0 0 ${team.accent}55, -2px 0 12px ${team.accent}11` }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
+                    <span style={{ fontSize: 11, fontWeight: 400, color: BC.t1 }}>{p.handicap_index}</span>
+                  </div>
                   <button onClick={() => onUpdatePlayer({ ...p, isDirector: !p.isDirector })} style={{
                     fontSize: 8, padding: "2px 6px", borderRadius: 5, border: `1px solid ${p.isDirector ? BC.amber : BC.bdr}`,
                     background: p.isDirector ? BC.amber + "22" : "transparent", color: p.isDirector ? BC.amber : BC.t3, cursor: "pointer", fontWeight: 700, flexShrink: 0,
