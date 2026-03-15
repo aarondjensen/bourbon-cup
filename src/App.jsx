@@ -1521,7 +1521,7 @@ export default function App() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", maxWidth: 480, margin: "0 auto", background: BC.bg, display: "flex", flexDirection: "column", position: "relative", fontFamily: "'Montserrat', sans-serif" }}>
+    <div style={{ height: "100svh", width: "100%", background: BC.bg, display: "flex", flexDirection: "column", position: "relative", fontFamily: "'Montserrat', sans-serif", overflow: "hidden" }}>
       <Notif notif={notif} />
 
       {/* Minimal top strip */}
@@ -1545,7 +1545,7 @@ export default function App() {
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "16px 20px", paddingBottom: 80 }}>
+      <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "12px 14px 80px 14px" }}>
         {view === "leaderboard" && (
           <TeamLeaderboard
             matches={enrichedMatches}
@@ -1603,7 +1603,7 @@ export default function App() {
       </div>
 
       {/* Bottom Nav */}
-      <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, background: "rgba(18,16,13,0.97)", borderTop: `1px solid ${BC.bdr}`, display: "flex", zIndex: 100, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(18,16,13,0.97)", borderTop: `1px solid ${BC.bdr}`, display: "flex", zIndex: 100, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
         {navItems.map(item => {
           const active = view === item.key;
           const clr = active ? BC.amber : BC.t3;
