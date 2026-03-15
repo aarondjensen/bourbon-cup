@@ -1044,7 +1044,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
               {/* Player list */}
               {tPlayers.filter(p => p.team === team.id).map(p => (
-                <div key={p.player_id} style={{ background: BC.card, borderRadius: 6, padding: "4px 8px", marginBottom: 2, border: `1px solid ${BC.bdr}`, display: "grid", gridTemplateColumns: "1fr 40px auto auto", alignItems: "center", gap: 6, boxShadow: `inset 3px 0 0 ${team.accent}55, -2px 0 12px ${team.accent}11` }}>
+                <div key={p.player_id} style={{ background: BC.card, borderRadius: 6, padding: "4px 8px", marginBottom: 2, border: `1px solid ${BC.bdr}`, display: "grid", gridTemplateColumns: "110px 36px 1fr auto auto", alignItems: "center", gap: 0, boxShadow: `inset 3px 0 0 ${team.accent}55, -2px 0 12px ${team.accent}11` }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
                   <span style={{ fontSize: 11, fontWeight: 400, color: BC.t1, textAlign: "left" }}>{p.handicap_index}</span>
                   <button onClick={() => onUpdatePlayer({ ...p, isDirector: !p.isDirector })} style={{
