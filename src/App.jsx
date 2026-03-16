@@ -331,9 +331,9 @@ function LoginScreen({ players, onLogin, teamNames }) {
       {/* Logos with VS */}
       {/* Logos row with VS centered between */}
       <div style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 0, position: "relative", zIndex: 1, marginBottom: 10 }}>
-        <img src={teamA.logo} alt={teamA.name} style={{ width: "32vw", height: "22vw", objectFit: "contain", flex: 1 }} />
+        <img src={teamA.logo} alt={teamA.name} style={{ width: "clamp(60px, 32vw, 90px)", height: "clamp(44px, 22vw, 64px)", objectFit: "contain" }} />
         <div style={{ fontSize: "5vw", fontWeight: 800, color: BC.gold, letterSpacing: 1, textAlign: "center", width: "10vw", flexShrink: 0 }}>VS</div>
-        <img src={teamB.logo} alt={teamB.name} style={{ width: "32vw", height: "22vw", objectFit: "contain", flex: 1, marginLeft: "auto" }} />
+        <img src={teamB.logo} alt={teamB.name} style={{ width: "clamp(60px, 32vw, 90px)", height: "clamp(44px, 22vw, 64px)", objectFit: "contain" }} />
       </div>
 
       {/* Two-column team layout */}
