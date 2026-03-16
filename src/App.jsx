@@ -107,7 +107,7 @@ const getTeam = (tid) => tid === "A" ? TEAM_A : TEAM_B;
 const oppTeam = (tid) => tid === "A" ? TEAM_B : TEAM_A;
 
 // ── Match Scoring Engine ──
-function computeMatchResult(match, holeData, courses, tRounds, tPlayers, format, hcpOverrides) {
+function computeMatchResult(match, holeData, courses, tRounds, tPlayers, format, hcpOverrides, handicapMode) {
   // holeData: { pid_round: { holeIdx: score } }
   const rnd = match.round;
   const tr = tRounds.find(t => t.round_number === rnd);
@@ -143,25 +143,37 @@ function computeMatchResult(match, holeData, courses, tRounds, tPlayers, format,
   const teamA = match.teamA; // array of pids
   const teamB = match.teamB;
 
+  // ── Handicap allocation ──
+  const roundHandicapMode = handicapMode || tRounds.find(t => t.round_number === rnd)?.handicap_mode || (rnd === 4 ? "full" : "low_man");
+  const allPids = [...teamA, ...teamB];
+  const allCHs = allPids.map(pid => getCH(pid));
+  const minCH = Math.min(...allCHs);
+  const getAdjustedStrokeMap = (pid) => {
+    if (roundHandicapMode === "full") return getStrokeMap(getCH(pid));
+    // Play off the low man: low man gets 0, others get the difference
+    const adjustedCH = getCH(pid) - minCH;
+    return getStrokeMap(adjustedCH);
+  };
+
   // Compute per-hole results
   const holeResults = Array(18).fill(null).map((_, h) => {
     let aScore = null, bScore = null;
     if (format === "singles") {
       const aPid = teamA[0], bPid = teamB[0];
-      const aCH = getCH(aPid), bCH = getCH(bPid);
-      const aMap = getStrokeMap(aCH), bMap = getStrokeMap(bCH);
+      const aMap = getAdjustedStrokeMap(aPid);
+      const bMap = getAdjustedStrokeMap(bPid);
       const aRaw = getPlayerScores(aPid)[h];
       const bRaw = getPlayerScores(bPid)[h];
       aScore = netScore(aRaw, h, aMap);
       bScore = netScore(bRaw, h, bMap);
     } else if (format === "best_ball") {
-      const aNets = teamA.map(pid => { const m = getStrokeMap(getCH(pid)); return netScore(getPlayerScores(pid)[h], h, m); }).filter(s => s != null);
-      const bNets = teamB.map(pid => { const m = getStrokeMap(getCH(pid)); return netScore(getPlayerScores(pid)[h], h, m); }).filter(s => s != null);
+      const aNets = teamA.map(pid => { const m = getAdjustedStrokeMap(pid); return netScore(getPlayerScores(pid)[h], h, m); }).filter(s => s != null);
+      const bNets = teamB.map(pid => { const m = getAdjustedStrokeMap(pid); return netScore(getPlayerScores(pid)[h], h, m); }).filter(s => s != null);
       aScore = aNets.length ? Math.min(...aNets) : null;
       bScore = bNets.length ? Math.min(...bNets) : null;
     } else if (format === "aggregate") {
-      const aNets = teamA.map(pid => { const m = getStrokeMap(getCH(pid)); return netScore(getPlayerScores(pid)[h], h, m); });
-      const bNets = teamB.map(pid => { const m = getStrokeMap(getCH(pid)); return netScore(getPlayerScores(pid)[h], h, m); });
+      const aNets = teamA.map(pid => { const m = getAdjustedStrokeMap(pid); return netScore(getPlayerScores(pid)[h], h, m); });
+      const bNets = teamB.map(pid => { const m = getAdjustedStrokeMap(pid); return netScore(getPlayerScores(pid)[h], h, m); });
       if (aNets.every(s => s != null)) aScore = aNets.reduce((a,b) => a+b, 0);
       if (bNets.every(s => s != null)) bScore = bNets.reduce((a,b) => a+b, 0);
     } else if (format === "scramble") {
@@ -188,8 +200,8 @@ function computeMatchResult(match, holeData, courses, tRounds, tPlayers, format,
     } else {
       // Default: match play net
       const aPid = teamA[0], bPid = teamB[0];
-      const aCH = getCH(aPid), bCH = getCH(bPid);
-      const aMap = getStrokeMap(aCH), bMap = getStrokeMap(bCH);
+      const aMap = getAdjustedStrokeMap(aPid);
+      const bMap = getAdjustedStrokeMap(bPid);
       aScore = netScore(getPlayerScores(aPid)[h], h, aMap);
       bScore = netScore(getPlayerScores(bPid)[h], h, bMap);
     }
@@ -828,6 +840,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   const [roundCourse, setRoundCourse] = useState("");
   const [roundTeeTime, setRoundTeeTime] = useState("");
   const [hcpOverrides, setHcpOverrides] = useState({});
+  const [handicapMode, setHandicapMode] = useState({ 1: "low_man", 2: "low_man", 3: "low_man", 4: "full" }); // per round
   const [chDeltas, setChDeltas] = useState({});
   const [teeAssignments, setTeeAssignments] = useState({}); // { round: { pid: teeName } } // { pid_context: delta } — auto-clears after 3.5s
 
@@ -868,6 +881,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
       round_number: editRound,
       course_id: tr?.course_id || "",
       format: roundFormat || tr.format || "singles",
+      handicap_mode: handicapMode[editRound] || "low_man",
       tee_time: roundTeeTime || tr.tee_time || "",
       nassau_front: nassau.front,
       nassau_back: nassau.back,
@@ -1130,8 +1144,9 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   setRoundTeeTime(tr.tee_time || "");
                   setNassau({ front: tr.nassau_front || 1, back: tr.nassau_back || 1, overall: tr.nassau_overall || 1 });
                 }
-                // Load existing overrides for this round
+                // Load existing overrides and handicap mode for this round
                 setHcpOverrides(prev => ({ ...prev }));
+                if (tr?.handicap_mode) setHandicapMode(prev => ({ ...prev, [r]: tr.handicap_mode }));
               }} style={{
                 flex: 1, padding: "8px 4px", borderRadius: 10, fontSize: 11, fontWeight: 700, cursor: "pointer",
                 background: editRound === r ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
@@ -1243,6 +1258,26 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   })}
                 </div>
               ))}
+            </div>
+
+            {/* Handicap Mode */}
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, marginBottom: 8 }}>HANDICAP MODE</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                {[["low_man", "Play Off Low Man", "Lowest CH plays scratch, others get the difference"], ["full", "Full Strokes", "Each player receives their full course handicap"]].map(([val, label, desc]) => {
+                  const active = (handicapMode[editRound] || "low_man") === val;
+                  return (
+                    <button key={val} onClick={() => setHandicapMode(prev => ({ ...prev, [editRound]: val }))} style={{
+                      flex: 1, padding: "10px 8px", borderRadius: 10, cursor: "pointer", textAlign: "left",
+                      background: active ? (val === "low_man" ? BC.amber + "15" : BC.card) : BC.inp,
+                      border: `1px solid ${active ? BC.amber : BC.bdr}`,
+                    }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: active ? BC.amber : BC.t2, marginBottom: 3 }}>{label}</div>
+                      <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.4 }}>{desc}</div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Tee Assignments */}
@@ -2038,6 +2073,7 @@ export default function App() {
   const enrichedRounds = useMemo(() => tRounds.map(r => ({
     ...r,
     nassau: { front: r.nassau_front ?? 1, back: r.nassau_back ?? 1, overall: r.nassau_overall ?? 1 },
+    handicap_mode: r.handicap_mode || (r.round_number === 4 ? 'full' : 'low_man'),
   })), [tRounds]);
 
   // Enhance matches with nassau from round
