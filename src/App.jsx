@@ -340,14 +340,8 @@ function LoginScreen({ players, onLogin, teamNames }) {
       {/* Two-column layout with logos above each column and VS between */}
       <div style={{ width: "100%", maxWidth: 480, display: "flex", gap: "clamp(6px, 2vw, 12px)", position: "relative", zIndex: 1, alignItems: "flex-start" }}>
         {[teamA, teamB].map((team, ti) => {
-          const isFirst = ti === 0;
           const teamPlayers = filterPlayers(team.id === "A" ? teamAPlayers : teamBPlayers);
           return (
-            <>{isFirst && (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", paddingTop: "clamp(20px, 10vw, 32px)", flexShrink: 0, width: "clamp(20px, 8vw, 28px)" }}>
-                <span style={{ fontSize: "clamp(11px, 4vw, 14px)", fontWeight: 800, color: BC.gold }}>VS</span>
-              </div>
-            )}
             <div key={team.id} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center" }}>
               {/* Logo centered above column */}
               <img src={team.logo} alt={team.name} style={{ width: "clamp(60px, 32vw, 90px)", height: "clamp(44px, 22vw, 64px)", objectFit: "contain", marginBottom: 6 }} />
@@ -359,7 +353,6 @@ function LoginScreen({ players, onLogin, teamNames }) {
                 }
               </div>
             </div>
-            </>
           );
         })}
       </div>
