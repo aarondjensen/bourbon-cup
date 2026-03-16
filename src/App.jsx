@@ -301,9 +301,9 @@ function LoginScreen({ players, onLogin, teamNames }) {
 
   const PlayerBtn = ({ p, team }) => (
     <button onClick={() => onLogin(p)} style={{
-      width: "100%", padding: "2.5vw 3vw", background: team.color + "22",
+      width: "100%", padding: "clamp(8px, 2.5vw, 12px) clamp(10px, 3vw, 14px)", background: team.color + "22",
       border: `1px solid ${team.accent}33`, borderRadius: 6,
-      color: BC.t1, fontSize: "3.8vw", fontWeight: 600, cursor: "pointer", textAlign: "center",
+      color: BC.t1, fontSize: "clamp(13px, 3.8vw, 16px)", fontWeight: 600, cursor: "pointer", textAlign: "center",
       display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
     }}>
       <span style={{ flex: 1, lineHeight: 1.3 }}>{p.name}</span>
@@ -322,8 +322,8 @@ function LoginScreen({ players, onLogin, teamNames }) {
 
       {/* Title */}
       <div style={{ marginBottom: 10, textAlign: "center", position: "relative", zIndex: 1 }}>
-        <div style={{ fontSize: "8vw", fontWeight: 800, color: BC.gold, letterSpacing: 2, textAlign: "center" }}>THE BOURBON CUP</div>
-        <div style={{ fontSize: "3vw", color: BC.t3, letterSpacing: "0.3em", marginTop: 3 }}>2026 GAYLORD, MI</div>
+        <div style={{ fontSize: "clamp(20px, 8vw, 42px)", fontWeight: 800, color: BC.gold, letterSpacing: 2, textAlign: "center" }}>THE BOURBON CUP</div>
+        <div style={{ fontSize: "clamp(10px, 3vw, 14px)", color: BC.t3, letterSpacing: "0.3em", marginTop: 3 }}>2026 GAYLORD, MI</div>
       </div>
 
 
@@ -337,13 +337,13 @@ function LoginScreen({ players, onLogin, teamNames }) {
       </div>
 
       {/* Two-column team layout */}
-      <div style={{ width: "100%", display: "flex", gap: "2vw", position: "relative", zIndex: 1, alignItems: "flex-start" }}>
+      <div style={{ width: "100%", maxWidth: 480, display: "flex", gap: "clamp(6px, 2vw, 12px)", position: "relative", zIndex: 1, alignItems: "flex-start" }}>
         {[teamA, teamB].map((team, ti) => {
           const teamPlayers = filterPlayers(team.id === "A" ? teamAPlayers : teamBPlayers);
           return (
             <div key={team.id} style={{ flex: 1, minWidth: 0 }}>
               {/* Player list */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "1vw", background: BC.card + "88", border: `1px solid ${team.accent}44`, borderTop: `2px solid ${team.accent}`, borderRadius: 10, padding: "1.5vw" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "clamp(3px, 1vw, 6px)", background: BC.card + "88", border: `1px solid ${team.accent}44`, borderTop: `2px solid ${team.accent}`, borderRadius: 10, padding: "clamp(4px, 1.5vw, 8px)" }}>
                 {teamPlayers.length === 0
                   ? <div style={{ textAlign: "center", color: BC.t3, fontSize: 11, padding: "12px 4px" }}>No players</div>
                   : teamPlayers.map(p => <PlayerBtn key={p.player_id} p={p} team={team} />)
@@ -1002,11 +1002,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             <div key={team.id} style={{ marginBottom: 10 }}>
               {/* Team header with editable name */}
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, padding: "8px 12px", background: team.color + "33", borderRadius: 10, border: `1px solid ${team.accent}44` }}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: team.accent, flexShrink: 0 }} />
                 {team.logo && !editingTeam && (
                   <img src={team.logo} alt={team.name} style={{ width: 28, height: 28, objectFit: "contain", flexShrink: 0 }} />
                 )}
-              {editingTeam === team.id ? (
+                {editingTeam === team.id ? (
                   <input
                     autoFocus
                     value={editTeamNames[team.id]}
@@ -1082,11 +1081,11 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   <span style={{ fontSize: 12, fontWeight: 600, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
                   <span style={{ fontSize: 11, fontWeight: 400, color: BC.t1, textAlign: "left" }}>{p.handicap_index}</span>
                   <button onClick={() => onUpdatePlayer({ ...p, isDirector: !p.isDirector })} style={{
-                    fontSize: 8, padding: "1px 4px", borderRadius: 4, border: `1px solid ${p.isDirector ? BC.amber : BC.bdr}`,
+                    fontSize: 7, padding: "1px 3px", borderRadius: 3, border: `1px solid ${p.isDirector ? BC.amber : BC.bdr}`,
                     background: p.isDirector ? BC.amber + "22" : "transparent", color: p.isDirector ? BC.amber : BC.t3, cursor: "pointer", fontWeight: 700, flexShrink: 0,
                   }}>DIR</button>
                   <button onClick={() => { if (window.confirm(`Remove ${p.name}?`)) onRemovePlayer(p.player_id); }} style={{
-                    fontSize: 10, padding: "2px 6px", borderRadius: 5, border: `1px solid ${BC.danger}33`, background: "transparent", color: BC.danger, cursor: "pointer", flexShrink: 0,
+                    fontSize: 7, padding: "1px 3px", borderRadius: 3, border: `1px solid ${BC.danger}33`, background: "transparent", color: BC.danger, cursor: "pointer", flexShrink: 0,
                   }}>✕</button>
                 </div>
               ))}
