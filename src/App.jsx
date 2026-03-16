@@ -1142,9 +1142,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                             if (editingPlayer.name !== p.name) changes.push(`Name: "${p.name}" → "${editingPlayer.name}"`);
                             if (parseFloat(editingPlayer.hi) !== parseFloat(p.handicap_index)) changes.push(`HI: ${p.handicap_index} → ${editingPlayer.hi}`);
                             if (changes.length === 0) { setEditingPlayer(null); return; }
-                            if (window.confirm(`Confirm changes for ${p.name}:
-${changes.join("
-")}`)) {
+                            if (window.confirm("Confirm changes for " + p.name + ":\n" + changes.join("\n"))) {
                               onUpdatePlayer({ ...p, name: editingPlayer.name.trim(), handicap_index: parseFloat(editingPlayer.hi) || 0 });
                             }
                             setEditingPlayer(null);
