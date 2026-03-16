@@ -978,15 +978,15 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
           }
         } catch(e) { console.log("[GolfCourseAPI] failed:", e); }
 
-        // If no results with state filter, retry without it
+        // If no results with state filter, retry without state param but still filter client-side
         if (results.length === 0 && stateFilter) {
           try {
             const r3 = await fetch(`/api/courses2?search=${encodeURIComponent(q)}`);
-            if (r3.ok) { const d3 = await r3.json(); const raw3 = Array.isArray(d3)?d3:(d3.courses||d3.data||[]); results = [...results, ...parseRapidAPI(raw3, "")]; }
+            if (r3.ok) { const d3 = await r3.json(); const raw3 = Array.isArray(d3)?d3:(d3.courses||d3.data||[]); results = [...results, ...parseRapidAPI(raw3, stateFilter)]; }
           } catch(e) {}
           try {
             const r4 = await fetch(`/api/courses?search=${encodeURIComponent(q)}`);
-            if (r4.ok) { const d4 = await r4.json(); const gc4 = parseGolfCourseAPI(d4); for (const gc of gc4) { if (!results.find(r => r.name.toLowerCase() === gc.name.toLowerCase())) results.push(gc); } }
+            if (r4.ok) { const d4 = await r4.json(); const gc4 = parseGolfCourseAPI(d4).filter(c => stateMatches(c.state, stateFilter)); for (const gc of gc4) { if (!results.find(r => r.name.toLowerCase() === gc.name.toLowerCase())) results.push(gc); } }
           } catch(e) {}
         }
 
