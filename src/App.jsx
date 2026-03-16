@@ -1390,121 +1390,112 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               }}>Rd {r}</button>
             ))}
           </div>
-          <div style={{ background: BC.card, borderRadius: 12, padding: 14, border: `1px solid ${BC.bdr}` }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, marginBottom: 12 }}>ROUND {editRound} SETTINGS</div>
+          <div style={{ background: BC.card, borderRadius: 12, padding: "12px 12px", border: `1px solid ${BC.bdr}` }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, marginBottom: 10 }}>ROUND {editRound} SETTINGS</div>
 
-            <label style={LabelStyle}>Format</label>
-            <select value={roundFormat} onChange={e => {
-              const fmt = FORMATS.find(f => f.id === e.target.value);
-              setRoundFormat(e.target.value);
-              if (fmt?.nassau) setNassau(fmt.nassau);
-            }} style={{ ...InputStyle, marginBottom: 10 }}>
-              <option value="">Select format...</option>
-              {FORMATS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
-            </select>
+            {/* Format + Course — 2 col compact */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+              <div>
+                <label style={LabelStyle}>Format</label>
+                <select value={roundFormat} onChange={e => {
+                  const fmt = FORMATS.find(f => f.id === e.target.value);
+                  setRoundFormat(e.target.value);
+                  if (fmt?.nassau) setNassau(fmt.nassau);
+                }} style={{ ...InputStyle, marginBottom: 0, fontSize: 11, padding: "8px 8px" }}>
+                  <option value="">Select...</option>
+                  {FORMATS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={LabelStyle}>Course</label>
+                {(() => {
+                  const tr = tRounds.find(t => t.round_number === editRound);
+                  const course = courses.find(c => c.id === tr?.course_id);
+                  return (
+                    <div style={{ padding: "8px 8px", background: BC.bg, borderRadius: 8, border: `1px solid ${BC.bdr}`, fontSize: 11, color: course ? BC.t1 : BC.t3, height: 36, display: "flex", alignItems: "center", overflow: "hidden" }}>
+                      {course ? <span style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{course.name}</span> : <span style={{ fontSize: 10 }}>Set in Courses tab</span>}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Format desc — compact */}
             {roundFormat && (() => {
               const fmt = FORMATS.find(f => f.id === roundFormat);
-              return (
-                <div style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 10, color: BC.t3, padding: "6px 10px", background: BC.bg, borderRadius: 8, marginBottom: 6 }}>{fmt?.desc}</div>
-                  {fmt?.scoringType === "custom" && <div style={{ fontSize: 10, color: BC.amber, padding: "6px 10px", background: BC.amber + "11", borderRadius: 8, border: `1px solid ${BC.amber}33` }}>⚠ Custom scoring — set point values manually with director</div>}
-                  {fmt?.scoringType === "tilt" && <div style={{ fontSize: 10, color: BC.amber, padding: "6px 10px", background: BC.amber + "11", borderRadius: 8, border: `1px solid ${BC.amber}33` }}>4-point format: Front/Back not used. Overall = 4 pts.</div>}
-                </div>
-              );
+              return <div style={{ fontSize: 9, color: BC.t3, padding: "5px 8px", background: BC.bg, borderRadius: 6, marginBottom: 8, lineHeight: 1.4 }}>
+                {fmt?.desc}
+                {fmt?.scoringType === "custom" && <span style={{ color: BC.amber }}> ⚠ Custom scoring</span>}
+                {fmt?.scoringType === "tilt" && <span style={{ color: BC.amber }}> · 4-pt format</span>}
+              </div>;
             })()}
 
-            {/* Show assigned course (read-only - assigned from Courses tab) */}
-            {(() => {
-              const tr = tRounds.find(t => t.round_number === editRound);
-              const course = courses.find(c => c.id === tr?.course_id);
-              return (
-                <div style={{ marginBottom: 12 }}>
-                  <label style={LabelStyle}>Course</label>
-                  <div style={{ padding: "8px 12px", background: BC.bg, borderRadius: 8, border: `1px solid ${BC.bdr}`, fontSize: 12, color: course ? BC.t1 : BC.t3 }}>
-                    {course ? <><span style={{ fontWeight: 600 }}>{course.name}</span><span style={{ color: BC.t3, marginLeft: 8, fontSize: 10 }}>Par {course.par} · Slope {course.slope}</span></> : "No course assigned — set in Courses tab"}
-                  </div>
-                </div>
-              );
-            })()}
+            {/* Tee Times — compact 4-field */}
             <label style={LabelStyle}>Tee Times</label>
             {(() => {
-              // Parse "8:00 AM" → minutes from midnight
               const parseTime = (str) => {
                 if (!str) return null;
-                const m = str.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+                const clean = str.trim();
+                const m = clean.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)?/i);
                 if (!m) return null;
-                let h = parseInt(m[1]), min = parseInt(m[2]);
-                const ap = (m[3] || "").toUpperCase();
-                if (ap === "PM" && h !== 12) h += 12;
-                if (ap === "AM" && h === 12) h = 0;
+                let h = parseInt(m[1]), min = parseInt(m[2] || "0");
+                const ap = (m[3] || "").toLowerCase();
+                if (ap === "pm" && h !== 12) h += 12;
+                if (ap === "am" && h === 12) h = 0;
+                if (!ap && h < 6) h += 12; // assume PM for 1-5
                 return h * 60 + min;
               };
-              // Format minutes → "8:00 AM"
               const formatTime = (mins) => {
                 if (mins == null) return "";
-                const h24 = Math.round(mins / 60 * 60) / 60; // keep as mins
-                let h = Math.floor(mins / 60) % 24;
-                const m = mins % 60;
+                let h = Math.floor(mins / 60) % 24, m = mins % 60;
                 const ap = h >= 12 ? "PM" : "AM";
                 if (h > 12) h -= 12;
                 if (h === 0) h = 12;
                 return `${h}:${String(m).padStart(2,"0")} ${ap}`;
               };
-              // Auto-complete partial input to full time with AM/PM
-              const autoComplete = (val) => {
-                if (!val) return val;
-                // Already has AM/PM → return as is
-                if (/[aApP][mM]/.test(val)) return val;
-                // Try to parse and add AM/PM
-                const m = val.match(/^(\d{1,2})(?::(\d{2}))?$/);
-                if (!m) return val;
-                let h = parseInt(m[1]), min = parseInt(m[2] || "0");
-                const ap = h < 12 ? "AM" : "PM";
-                if (h > 12) h -= 12;
-                return `${h}:${String(min).padStart(2,"0")} ${ap}`;
-              };
               const teeTimes = roundTeeTime ? roundTeeTime.split("|") : ["","","",""];
-              const updateTeeTime = (idx, val) => {
+              const commitTime = (idx, val) => {
                 const times = [...teeTimes];
-                times[idx] = val;
-                // Auto-propagate: if idx 0 or 1 is set, compute interval and fill subsequent
+                // Auto-complete
+                if (val && !/[aApP][mM]/.test(val)) {
+                  const mins = parseTime(val);
+                  times[idx] = mins != null ? formatTime(mins) : val;
+                } else {
+                  times[idx] = val;
+                }
+                // Propagate from idx 0 or 1
                 if (idx === 0) {
                   const t0 = parseTime(times[0]);
                   if (t0 != null) {
-                    // Default 8-min intervals for 1,2,3 if not set
-                    if (!times[1]) times[1] = formatTime(t0 + 8);
-                    if (!times[2]) times[2] = formatTime(t0 + 16);
-                    if (!times[3]) times[3] = formatTime(t0 + 24);
+                    times[1] = formatTime(t0 + 8);
+                    times[2] = formatTime(t0 + 16);
+                    times[3] = formatTime(t0 + 24);
                   }
                 } else if (idx === 1) {
                   const t0 = parseTime(times[0]);
                   const t1 = parseTime(times[1]);
                   if (t0 != null && t1 != null) {
-                    const interval = t1 - t0;
-                    times[2] = formatTime(t1 + interval);
-                    times[3] = formatTime(t1 + interval * 2);
+                    const iv = t1 - t0;
+                    times[2] = formatTime(t1 + iv);
+                    times[3] = formatTime(t1 + iv * 2);
                   }
                 }
                 setRoundTeeTime(times.join("|"));
               };
-              const handleBlur = (idx, val) => {
-                const completed = autoComplete(val);
-                const times = [...teeTimes];
-                times[idx] = completed;
-                setRoundTeeTime(times.join("|"));
-              };
+              const tt = roundTeeTime ? roundTeeTime.split("|") : ["","","",""];
               return (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
-                  {["Group 1","Group 2","Group 3","Group 4"].map((lbl, i) => (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6, marginBottom: 10 }}>
+                  {["G1","G2","G3","G4"].map((lbl, i) => (
                     <div key={i}>
-                      <div style={{ fontSize: 9, color: BC.t3, marginBottom: 4, fontWeight: 600 }}>{lbl}</div>
+                      <div style={{ fontSize: 9, color: BC.t3, marginBottom: 3, fontWeight: 600, textAlign: "center" }}>{lbl}</div>
                       <input
-                        value={teeTimes[i] || ""}
-                        onChange={e => updateTeeTime(i, e.target.value)}
-                        onBlur={e => handleBlur(i, e.target.value)}
+                        value={tt[i] || ""}
+                        onChange={e => { const times = [...tt]; times[i] = e.target.value; setRoundTeeTime(times.join("|")); }}
+                        onBlur={e => commitTime(i, e.target.value)}
                         onKeyDown={e => { if (e.key === "Enter") { e.target.blur(); } }}
-                        placeholder={i === 0 ? "e.g. 8:00 AM" : "Auto-fill"}
-                        style={{ ...InputStyle, marginBottom: 0 }}
+                        placeholder={i === 0 ? "8:00 AM" : "auto"}
+                        inputMode="numeric"
+                        style={{ ...InputStyle, marginBottom: 0, fontSize: 10, padding: "7px 6px", textAlign: "center" }}
                       />
                     </div>
                   ))}
@@ -1512,13 +1503,16 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               );
             })()}
 
-            <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, marginBottom: 10 }}>NASSAU POINTS</div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-              {[["front", "Front 9"], ["back", "Back 9"], ["overall", "Overall"]].map(([k, lbl]) => (
-                <div key={k} style={{ flex: 1 }}>
-                  <label style={LabelStyle}>{lbl}</label>
-                  <input type="number" step="0.5" min="0" value={nassau[k]} onChange={e => setNassau(n => ({ ...n, [k]: parseFloat(e.target.value) || 0 }))}
-                    style={{ ...InputStyle }} />
+            {/* Nassau — compact inline */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>NASSAU</div>
+              {[["front", "F9"], ["back", "B9"], ["overall", "OVR"]].map(([k, lbl]) => (
+                <div key={k} style={{ flex: 1, display: "flex", alignItems: "center", gap: 4 }}>
+                  <span style={{ fontSize: 9, color: BC.t3, flexShrink: 0 }}>{lbl}</span>
+                  <input type="number" step="0.5" min="0" value={nassau[k]}
+                    onChange={e => setNassau(n => ({ ...n, [k]: parseFloat(e.target.value) || 0 }))}
+                    onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                    style={{ ...InputStyle, marginBottom: 0, padding: "6px 6px", fontSize: 11, textAlign: "center" }} />
                 </div>
               ))}
             </div>
