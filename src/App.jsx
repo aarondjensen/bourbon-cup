@@ -1404,27 +1404,27 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
           <div style={{ background: BC.card, borderRadius: 12, padding: "12px 12px", border: `1px solid ${BC.bdr}` }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, marginBottom: 10 }}>ROUND {editRound} SETTINGS</div>
 
-            {/* Format + Course — 2 col compact */}
+            {/* Format + Course — 2 col compact, matched sizing */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
               <div>
-                <label style={LabelStyle}>Format</label>
+                <label style={LabelStyle}>FORMAT</label>
                 <select value={roundFormat} onChange={e => {
                   const fmt = FORMATS.find(f => f.id === e.target.value);
                   setRoundFormat(e.target.value);
                   if (fmt?.nassau) setNassau(fmt.nassau);
-                }} style={{ ...InputStyle, marginBottom: 0, fontSize: 11, padding: "8px 8px" }}>
+                }} style={{ ...InputStyle, marginBottom: 0, fontSize: 12, padding: "8px 8px", height: 38 }}>
                   <option value="">Select...</option>
                   {FORMATS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
                 </select>
               </div>
               <div>
-                <label style={LabelStyle}>Course</label>
+                <label style={LabelStyle}>COURSE</label>
                 {(() => {
                   const tr = tRounds.find(t => t.round_number === editRound);
                   const course = courses.find(c => c.id === tr?.course_id);
                   return (
-                    <div style={{ padding: "8px 8px", background: BC.bg, borderRadius: 8, border: `1px solid ${BC.bdr}`, fontSize: 11, color: course ? BC.t1 : BC.t3, height: 36, display: "flex", alignItems: "center", overflow: "hidden" }}>
-                      {course ? <span style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{course.name}</span> : <span style={{ fontSize: 10 }}>Set in Courses tab</span>}
+                    <div style={{ padding: "8px 8px", background: BC.inp, borderRadius: 8, border: `1px solid ${BC.bdr}`, fontSize: 12, color: course ? BC.t1 : BC.t3, height: 38, display: "flex", alignItems: "center", overflow: "hidden" }}>
+                      {course ? <span style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{course.name}</span> : <span>Set in Courses tab</span>}
                     </div>
                   );
                 })()}
@@ -1432,7 +1432,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             </div>
 
             {/* Tee Times */}
-            <label style={{ ...LabelStyle, marginTop: 4 }}>TEE TIMES</label>
+
             {(() => {
               const parseTime = (str) => {
                 if (!str) return null;
@@ -1498,18 +1498,19 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               };
               const tt = roundTeeTime ? roundTeeTime.split("|") : ["","","",""];
               return (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6, marginBottom: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>TEE TIMES</div>
                   {["G1","G2","G3","G4"].map((lbl, i) => (
-                    <div key={i}>
-                      <div style={{ fontSize: 9, color: BC.t3, marginBottom: 3, fontWeight: 600, textAlign: "center" }}>{lbl}</div>
+                    <div key={i} style={{ flex: 1, display: "flex", alignItems: "center", gap: 3 }}>
+                      <span style={{ fontSize: 9, color: BC.t3, flexShrink: 0, fontWeight: 600 }}>{lbl}</span>
                       <input
                         value={tt[i] || ""}
                         onChange={e => { const times = [...tt]; times[i] = e.target.value; setRoundTeeTime(times.join("|")); }}
                         onBlur={e => commitTime(i, e.target.value)}
                         onKeyDown={e => { if (e.key === "Enter") { e.target.blur(); } }}
-                        placeholder={i === 0 ? "8:00 AM" : "auto"}
+                        placeholder={i === 0 ? "8:00" : "auto"}
                         inputMode="numeric"
-                        style={{ ...InputStyle, marginBottom: 0, fontSize: 16, padding: "7px 6px", textAlign: "center" }}
+                        style={{ ...InputStyle, marginBottom: 0, fontSize: 16, padding: "6px 4px", textAlign: "center", minWidth: 0 }}
                       />
                     </div>
                   ))}
@@ -1534,7 +1535,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             {/* Handicap Overrides */}
             <div style={{ marginBottom: 14 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, gap: 8 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>HANDICAP INDEX OVERRIDES</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>PLAYER DETAILS</div>
                 {/* Handicap mode pill toggle */}
                 <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}`, flexShrink: 0 }}>
                   {[["low_man", "Low Man"], ["full", "Full"]].map(([val, lbl]) => {
@@ -1551,6 +1552,21 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 </div>
               </div>
               {tPlayers.length === 0 && <div style={{ fontSize: 11, color: BC.t3 }}>No players added yet.</div>}
+              {tPlayers.length > 0 && (() => {
+                const tr2h = tRounds.find(t => t.round_number === editRound);
+                const course2h = courses.find(c => c.id === tr2h?.course_id);
+                const tees2h = course2h?.tee_boxes || [];
+                const colHeaders = ["Player", "Init", "Round", ...tees2h.map(t => t.name.substring(0,4))];
+                const gridCols = `1fr 32px 56px ${tees2h.map(() => "34px").join(" ")} 24px`;
+                return (
+                  <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: 4, padding: "0 2px", marginBottom: 4 }}>
+                    {colHeaders.map((h, i) => (
+                      <div key={i} style={{ fontSize: 8, color: BC.t3, fontWeight: 700, textAlign: i > 0 ? "center" : "left", letterSpacing: 0.3 }}>{h}</div>
+                    ))}
+                    <div />
+                  </div>
+                );
+              })()}
               {[TEAM_A, TEAM_B].map(team => (
                 <div key={team.id} style={{ marginBottom: 10 }}>
                   <div style={{ fontSize: 9, fontWeight: 700, color: team.accent, letterSpacing: 1, marginBottom: 5 }}>{teamNames?.[team.id] || team.name}</div>
@@ -1574,23 +1590,9 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       setTeeAssignments(prev => ({ ...prev, [editRound]: { ...(prev[editRound]||{}), [p.player_id]: teeName } }));
                     };
                     return (
-                      <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: "1fr 36px 72px 28px", gap: 6, alignItems: "center", marginBottom: 4 }}>
-                        <div style={{ fontSize: 12, color: BC.t1, fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
-                          {p.name}
-                          {tees2.map(tee => {
-                            const isAct = currentTee2 === tee.name;
-                            const isBlack = tee.color === "#000000" || tee.color === "#000" || tee.color === "black";
-                            return (
-                              <button key={tee.name} onClick={() => assignTee2(tee.name)} style={{
-                                padding: "1px 5px", borderRadius: 4, cursor: "pointer", fontSize: 8, fontWeight: 700, flexShrink: 0,
-                                background: isAct ? (isBlack ? "#333" : tee.color + "33") : "transparent",
-                                border: `1px solid ${isAct ? (isBlack ? "#888" : tee.color) : BC.bdr+"66"}`,
-                                color: isAct ? (isBlack ? "#fff" : tee.color) : BC.t3,
-                              }}>{tee.name.substring(0,3)}</button>
-                            );
-                          })}
-                        </div>
-                        <div style={{ fontSize: 10, color: BC.t3, fontWeight: 400, textAlign: "right" }}>{baseHI}</div>
+                      <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: `1fr 32px 56px ${tees2.map(() => "34px").join(" ")} 24px`, gap: 4, alignItems: "center", marginBottom: 3 }}>
+                        <div style={{ fontSize: 11, color: BC.t1, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
+                        <div style={{ fontSize: 10, color: BC.t3, textAlign: "center" }}>{baseHI}</div>
                         <input
                           type="number" step="0.1"
                           value={hasOverride ? override : ""}
@@ -1610,9 +1612,24 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                           placeholder={String(baseHI)}
                           style={{ padding: "5px 8px", background: hasOverride ? BC.amber+"15" : BC.inp, border: `1px solid ${hasOverride ? BC.amber : BC.bdr}`, borderRadius: 6, color: hasOverride ? BC.amber : BC.t2, fontSize: 12, fontWeight: hasOverride ? 700 : 400, outline: "none", textAlign: "center" }}
                         />
-                        {chDeltas[`hcp_${editRound}_${p.player_id}`] !== undefined && (
-                          <ChDeltaBadge delta={chDeltas[`hcp_${editRound}_${p.player_id}`]} />
-                        )}
+                        {tees2.map(tee => {
+                          const isAct = currentTee2 === tee.name;
+                          const isBlack = tee.color === "#000000" || tee.color === "#000" || tee.color === "black";
+                          return (
+                            <button key={tee.name} onClick={() => assignTee2(tee.name)} style={{
+                              padding: "3px 0", borderRadius: 4, cursor: "pointer", fontSize: 8, fontWeight: 700,
+                              background: isAct ? (isBlack ? "#333" : tee.color + "33") : "transparent",
+                              border: `1px solid ${isAct ? (isBlack ? "#888" : tee.color) : BC.bdr+"55"}`,
+                              color: isAct ? (isBlack ? "#fff" : tee.color) : BC.t3,
+                              textAlign: "center",
+                            }}>{tee.name.substring(0,4)}</button>
+                          );
+                        })}
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          {chDeltas[`hcp_${editRound}_${p.player_id}`] !== undefined && (
+                            <ChDeltaBadge delta={chDeltas[`hcp_${editRound}_${p.player_id}`]} />
+                          )}
+                        </div>
                       </div>
                     );
                   })}
