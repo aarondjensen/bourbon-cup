@@ -1558,33 +1558,30 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     const baseHI = p.handicap_index;
                     const override = hcpOverrides[editRound]?.[p.player_id];
                     const hasOverride = override !== undefined && override !== "";
-                    return (() => {
-                        const tr2 = tRounds.find(t => t.round_number === editRound);
-                        const course2 = courses.find(c => c.id === tr2?.course_id);
-                        const tees2 = course2?.tee_boxes || [];
-                        const assignments2 = teeAssignments[editRound] || {};
-                        const assignTee2 = (pid, teeName, playerHI) => {
-                          const oldTeeName = assignments2[pid] || tees2[0]?.name;
-                          const oldTee = tees2.find(t => t.name === oldTeeName);
-                          const newTee = tees2.find(t => t.name === teeName);
-                          if (oldTee && newTee) {
-                            const oldCH = calcCH(parseFloat(playerHI)||0, oldTee.slope||113, oldTee.rating||72, oldTee.par||72);
-                            const newCH = calcCH(parseFloat(playerHI)||0, newTee.slope||113, newTee.rating||72, newTee.par||72);
-                            showChDelta(`tee_${editRound}_${p.player_id}`, newCH - oldCH);
-                          }
-                          setTeeAssignments(prev => ({ ...prev, [editRound]: { ...(prev[editRound]||{}), [pid]: teeName } }));
-                        };
-                        const currentTee2 = assignments2[p.player_id] || tees2[0]?.name;
-                        return (
+                    const tr2 = tRounds.find(t => t.round_number === editRound);
+                    const course2 = courses.find(c => c.id === tr2?.course_id);
+                    const tees2 = course2?.tee_boxes || [];
+                    const assignments2 = teeAssignments[editRound] || {};
+                    const currentTee2 = assignments2[p.player_id] || tees2[0]?.name;
+                    const assignTee2 = (teeName) => {
+                      const oldTee = tees2.find(t => t.name === (assignments2[p.player_id] || tees2[0]?.name));
+                      const newTee = tees2.find(t => t.name === teeName);
+                      if (oldTee && newTee) {
+                        const oldCH = calcCH(parseFloat(baseHI)||0, oldTee.slope||113, oldTee.rating||72, oldTee.par||72);
+                        const newCH = calcCH(parseFloat(baseHI)||0, newTee.slope||113, newTee.rating||72, newTee.par||72);
+                        showChDelta(`tee_${editRound}_${p.player_id}`, newCH - oldCH);
+                      }
+                      setTeeAssignments(prev => ({ ...prev, [editRound]: { ...(prev[editRound]||{}), [p.player_id]: teeName } }));
+                    };
+                    return (
                       <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: "1fr 36px 72px 28px", gap: 6, alignItems: "center", marginBottom: 4 }}>
                         <div style={{ fontSize: 12, color: BC.t1, fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
                           {p.name}
-                          {/* Tee buttons inline */}
-                          {tees2.length > 0 && tees2.map(tee => {
+                          {tees2.map(tee => {
                             const isAct = currentTee2 === tee.name;
                             const isBlack = tee.color === "#000000" || tee.color === "#000" || tee.color === "black";
                             return (
-                              <button key={tee.name} onClick={() => assignTee2(p.player_id, tee.name, baseHI)} style={{
+                              <button key={tee.name} onClick={() => assignTee2(tee.name)} style={{
                                 padding: "1px 5px", borderRadius: 4, cursor: "pointer", fontSize: 8, fontWeight: 700, flexShrink: 0,
                                 background: isAct ? (isBlack ? "#333" : tee.color + "33") : "transparent",
                                 border: `1px solid ${isAct ? (isBlack ? "#888" : tee.color) : BC.bdr+"66"}`,
@@ -1595,36 +1592,28 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         </div>
                         <div style={{ fontSize: 10, color: BC.t3, fontWeight: 400, textAlign: "right" }}>{baseHI}</div>
                         <input
-                          type="number"
-                          step="0.1"
+                          type="number" step="0.1"
                           value={hasOverride ? override : ""}
                           onChange={e => {
                             const newVal = e.target.value;
                             const oldHI = parseFloat(hcpOverrides[editRound]?.[p.player_id] ?? p.handicap_index) || 0;
                             const newHI = parseFloat(newVal) || parseFloat(p.handicap_index) || 0;
-                            // We need a course to calc CH delta
-                            const tr = tRounds.find(t => t.round_number === editRound);
-                            const course = courses.find(c => c.id === tr?.course_id);
-                            if (course && newVal !== "") {
-                              const oldCH = calcCH(oldHI, course.slope || 113, course.rating || 72, course.par || 72);
-                              const newCH = calcCH(newHI, course.slope || 113, course.rating || 72, course.par || 72);
-                              const delta = newCH - oldCH;
-                              showChDelta(`hcp_${editRound}_${p.player_id}`, delta);
+                            const trC = tRounds.find(t => t.round_number === editRound);
+                            const crs = courses.find(c => c.id === trC?.course_id);
+                            if (crs && newVal !== "") {
+                              showChDelta(`hcp_${editRound}_${p.player_id}`,
+                                calcCH(newHI, crs.slope||113, crs.rating||72, crs.par||72) -
+                                calcCH(oldHI, crs.slope||113, crs.rating||72, crs.par||72));
                             }
-                            setHcpOverrides(prev => ({
-                              ...prev,
-                              [editRound]: { ...(prev[editRound] || {}), [p.player_id]: newVal }
-                            }));
+                            setHcpOverrides(prev => ({ ...prev, [editRound]: { ...(prev[editRound]||{}), [p.player_id]: newVal } }));
                           }}
                           placeholder={String(baseHI)}
-                          style={{ padding: "5px 8px", background: hasOverride ? BC.amber + "15" : BC.inp, border: `1px solid ${hasOverride ? BC.amber : BC.bdr}`, borderRadius: 6, color: hasOverride ? BC.amber : BC.t2, fontSize: 12, fontWeight: hasOverride ? 700 : 400, outline: "none", textAlign: "center" }}
+                          style={{ padding: "5px 8px", background: hasOverride ? BC.amber+"15" : BC.inp, border: `1px solid ${hasOverride ? BC.amber : BC.bdr}`, borderRadius: 6, color: hasOverride ? BC.amber : BC.t2, fontSize: 12, fontWeight: hasOverride ? 700 : 400, outline: "none", textAlign: "center" }}
                         />
                         {chDeltas[`hcp_${editRound}_${p.player_id}`] !== undefined && (
                           <ChDeltaBadge delta={chDeltas[`hcp_${editRound}_${p.player_id}`]} />
                         )}
                       </div>
-                        );
-                      })()
                     );
                   })}
                 </div>
