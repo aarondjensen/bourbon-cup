@@ -385,155 +385,272 @@ function LoginScreen({ players, onLogin, teamNames }) {
 // ── Team Scoreboard (main leaderboard) ──
 function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds, teamNames, hcpOverrides }) {
   const [expandedMatch, setExpandedMatch] = useState(null);
-  const [activeRound, setActiveRound] = useState(rounds[0] || 1);
+  const [activeRound, setActiveRound] = useState(null); // null = show all rounds
 
   const tA = { ...TEAM_A, name: teamNames?.A || TEAM_A.name };
   const tB = { ...TEAM_B, name: teamNames?.B || TEAM_B.name };
-  const roundMatches = matches.filter(m => m.round === activeRound);
-  const format = tRounds.find(t => t.round_number === activeRound)?.format || "singles";
 
-  const matchResults = useMemo(() => {
-    return roundMatches.map(m => ({
-      ...m,
-      result: computeMatchResult(m, holeData, courses, tRounds, tPlayers, format, hcpOverrides),
-    }));
-  }, [roundMatches, holeData, courses, tRounds, tPlayers, format]);
-
-  // Overall tournament totals
+  // Tournament totals
   const tourneyTotals = useMemo(() => {
     const tot = { A: 0, B: 0 };
     matches.forEach(m => {
       const fmt = tRounds.find(t => t.round_number === m.round)?.format || "singles";
       const res = computeMatchResult(m, holeData, courses, tRounds, tPlayers, fmt, hcpOverrides);
-      tot.A += res.totalPts.A;
-      tot.B += res.totalPts.B;
+      tot.A += res.totalPts.A; tot.B += res.totalPts.B;
     });
     return tot;
   }, [matches, holeData, courses, tRounds, tPlayers]);
 
-  const maxPts = Math.max(tourneyTotals.A + tourneyTotals.B, 1);
-  const aWidth = (tourneyTotals.A / maxPts) * 100;
-  const bWidth = (tourneyTotals.B / maxPts) * 100;
+  const totalAvail = matches.reduce((s, m) => {
+    const n = m.nassau || NASSAU_DEFAULT;
+    return s + (n.front||0) + (n.back||0) + (n.overall||0);
+  }, 0);
+  const toWin = Math.floor(totalAvail / 2) + 0.5;
+  const aLeads = tourneyTotals.A > tourneyTotals.B;
+  const bLeads = tourneyTotals.B > tourneyTotals.A;
+  const gap = Math.abs(tourneyTotals.A - tourneyTotals.B);
+
+  // Group matches by round
+  const roundsWithMatches = [1,2,3,4].filter(r => matches.some(m => m.round === r));
+  const displayRounds = activeRound ? [activeRound] : roundsWithMatches;
 
   return (
-    <div style={{ fontFamily: "'Montserrat', sans-serif", position: "relative" }}>
-      {/* Silhouette watermark */}
-      <img src={TROPHY_SILHOUETTE} alt="" style={{
-        position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
-        width: 420, height: "90vh", maxWidth: "100vw",
-        opacity: 0.04, pointerEvents: "none", userSelect: "none", zIndex: 0, objectFit: "contain",
-      }} />
-      <div style={{ position: "relative", zIndex: 1 }}>
-      {/* Tournament scoreboard */}
-      <div style={{ background: BC.card, borderRadius: 16, border: `1px solid ${BC.bdr}`, marginBottom: 16, overflow: "hidden" }}>
-        <div style={{ padding: "14px 16px 10px", borderBottom: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-          <img src={TROPHY_PHOTO} alt="" style={{ width: 28, height: 28, objectFit: "contain" }} />
-          <span style={{ fontSize: 14, fontWeight: 700, color: BC.gold, letterSpacing: 1 }}>BOURBON CUP STANDINGS</span>
+    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
+
+      {/* ══ SCOREBOARD ══ */}
+      <div style={{ background: "#111", borderRadius: 14, border: `1px solid ${BC.bdr}`, marginBottom: 12, overflow: "hidden" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr" }}>
+          {/* Team A */}
+          <div style={{ background: aLeads ? TEAM_A.color + "66" : TEAM_A.color + "22", padding: "12px 10px", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
+            <img src={TEAM_A.logo} alt={tA.name} style={{ width: 44, height: 30, objectFit: "contain", marginBottom: 2 }} />
+            <div style={{ fontSize: 10, fontWeight: 800, color: TEAM_A.accent, letterSpacing: 0.5, lineHeight: 1 }}>{tA.name.toUpperCase()}</div>
+            <div style={{ fontSize: 42, fontWeight: 900, color: "#fff", lineHeight: 1, marginTop: 2 }}>
+              {tourneyTotals.A % 1 === 0 ? tourneyTotals.A : tourneyTotals.A.toFixed(1)}
+            </div>
+            {aLeads && <div style={{ fontSize: 8, color: TEAM_A.accent, fontWeight: 700, letterSpacing: 0.5 }}>Takes {(toWin - tourneyTotals.B).toFixed(1)} to Win</div>}
+          </div>
+
+          {/* Center */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "10px 8px", gap: 4, minWidth: 64 }}>
+            <img src={TROPHY_PHOTO} alt="" style={{ width: 34, height: 34, objectFit: "contain" }} />
+            <div style={{ fontSize: 8, color: BC.t3, textAlign: "center", lineHeight: 1.5 }}>
+              Pts Avail:<br/><span style={{ fontWeight: 700, color: BC.gold }}>{Math.max(0, totalAvail - tourneyTotals.A - tourneyTotals.B).toFixed(1)}</span>
+            </div>
+            {!aLeads && !bLeads && <div style={{ fontSize: 8, fontWeight: 800, color: BC.gold, letterSpacing: 1 }}>TIED</div>}
+          </div>
+
+          {/* Team B */}
+          <div style={{ background: bLeads ? TEAM_B.color + "66" : TEAM_B.color + "22", padding: "12px 10px", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+            <img src={TEAM_B.logo} alt={tB.name} style={{ width: 44, height: 30, objectFit: "contain", marginBottom: 2 }} />
+            <div style={{ fontSize: 10, fontWeight: 800, color: TEAM_B.accent, letterSpacing: 0.5, lineHeight: 1 }}>{tB.name.toUpperCase()}</div>
+            <div style={{ fontSize: 42, fontWeight: 900, color: "#fff", lineHeight: 1, marginTop: 2 }}>
+              {tourneyTotals.B % 1 === 0 ? tourneyTotals.B : tourneyTotals.B.toFixed(1)}
+            </div>
+            {bLeads && <div style={{ fontSize: 8, color: TEAM_B.accent, fontWeight: 700, letterSpacing: 0.5 }}>Takes {(toWin - tourneyTotals.A).toFixed(1)} to Win</div>}
+          </div>
         </div>
 
-        <div style={{ padding: "16px 16px 12px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-            {[TEAM_A, TEAM_B].map(team => (
-              <div key={team.id} style={{ textAlign: team.id === "A" ? "left" : "right" }}>
-                <div style={{ fontSize: 18, fontWeight: 800, color: team.accent }}>{tourneyTotals[team.id].toFixed(1)}</div>
-                <div style={{ fontSize: 10, color: BC.t3, letterSpacing: 1 }}>{(team.id === "A" ? tA : tB).name.toUpperCase()}</div>
-              </div>
-            ))}
-          </div>
-          {/* Bar */}
-          <div style={{ height: 10, borderRadius: 5, background: BC.bdr, overflow: "hidden", display: "flex" }}>
-            <div style={{ width: `${aWidth}%`, background: `linear-gradient(90deg, ${TEAM_A.color}, ${TEAM_A.accent})`, transition: "width 0.6s ease" }} />
-            <div style={{ flex: 1, background: `linear-gradient(90deg, ${TEAM_B.accent}, ${TEAM_B.color})` }} />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-            <span style={{ fontSize: 9, color: TEAM_A.accent }}>▲ {aWidth.toFixed(0)}%</span>
-            <span style={{ fontSize: 9, color: TEAM_B.accent }}>{bWidth.toFixed(0)}% ▲</span>
-          </div>
+        {/* Progress bar */}
+        <div style={{ height: 5, display: "flex" }}>
+          <div style={{ width: `${totalAvail > 0 ? (tourneyTotals.A / totalAvail) * 100 : 50}%`, background: TEAM_A.accent, transition: "width 0.6s ease" }} />
+          <div style={{ flex: 1, background: TEAM_B.accent }} />
         </div>
       </div>
 
-      {/* Round tabs */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-        {rounds.map(r => {
+      {/* ══ ROUND FILTER TABS ══ */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
+        <button onClick={() => setActiveRound(null)} style={{
+          flex: 1, padding: "7px 4px", borderRadius: 8, border: "none", fontSize: 10, fontWeight: 700, cursor: "pointer",
+          background: activeRound === null ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
+          color: activeRound === null ? "#0a0804" : BC.t2, border: `1px solid ${activeRound === null ? "transparent" : BC.bdr}`,
+        }}>All</button>
+        {[1,2,3,4].map(r => {
           const tr = tRounds.find(t => t.round_number === r);
           const fmt = FORMATS.find(f => f.id === tr?.format);
+          const has = matches.some(m => m.round === r);
           return (
-            <button key={r} onClick={() => setActiveRound(r)} style={{
-              flex: 1, padding: "8px 4px", borderRadius: 10, border: `1px solid ${r === activeRound ? "transparent" : BC.bdr}`,
-              background: r === activeRound ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
-              color: r === activeRound ? "#0a0804" : BC.t2, fontSize: 11, fontWeight: 700, cursor: "pointer", lineHeight: 1.3,
+            <button key={r} onClick={() => setActiveRound(r === activeRound ? null : r)} style={{
+              flex: 1, padding: "7px 4px", borderRadius: 8, border: "none", fontSize: 10, fontWeight: 700, cursor: "pointer",
+              background: activeRound === r ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
+              color: activeRound === r ? "#0a0804" : has ? BC.t2 : BC.t3,
+              border: `1px solid ${activeRound === r ? "transparent" : BC.bdr}`,
+              opacity: has ? 1 : 0.5,
             }}>
               <div>Rd {r}</div>
-              {fmt && <div style={{ fontSize: 8, opacity: 0.8, marginTop: 1 }}>{fmt.label.split(" ").slice(-1)[0]}</div>}
+              {fmt && <div style={{ fontSize: 7, opacity: 0.75, marginTop: 1 }}>{fmt.label.split(" ").slice(-1)[0].substring(0,5)}</div>}
             </button>
           );
         })}
       </div>
 
-      {/* Round point totals */}
-      {(() => {
+      {/* ══ MATCHES BY ROUND ══ */}
+      {displayRounds.map(rnd => {
+        const tr = tRounds.find(t => t.round_number === rnd);
+        const course = courses.find(c => c.id === tr?.course_id);
+        const fmt = FORMATS.find(f => f.id === tr?.format);
+        const rndMatches = matches.filter(m => m.round === rnd);
+        const format = tr?.format || "singles";
+
+        const rndResults = rndMatches.map(m => ({
+          ...m,
+          result: computeMatchResult(m, holeData, courses, tRounds, tPlayers, format, hcpOverrides),
+        }));
+
         const rndTot = { A: 0, B: 0 };
-        matchResults.forEach(m => { rndTot.A += m.result.totalPts.A; rndTot.B += m.result.totalPts.B; });
-        return (
-          <div style={{ background: BC.card, borderRadius: 10, border: `1px solid ${BC.bdr}`, padding: "10px 14px", marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: TEAM_A.accent }}>{rndTot.A.toFixed(1)} pts</span>
-            <span style={{ fontSize: 10, color: BC.t3 }}>ROUND {activeRound}</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: TEAM_B.accent }}>{rndTot.B.toFixed(1)} pts</span>
-          </div>
-        );
-      })()}
+        rndResults.forEach(m => { rndTot.A += m.result.totalPts.A; rndTot.B += m.result.totalPts.B; });
 
-      {/* Match list */}
-      {matchResults.length === 0 && (
-        <div style={{ textAlign: "center", color: BC.t3, padding: 32, fontSize: 13 }}>No matches set up for this round yet.</div>
-      )}
-      {matchResults.map((m, i) => {
-        const res = m.result;
-        const exp = expandedMatch === m.id;
-        const nassau = m.nassau || NASSAU_DEFAULT;
         return (
-          <div key={m.id} style={{ background: BC.card, borderRadius: 14, border: `1px solid ${exp ? BC.amber + "44" : BC.bdr}`, marginBottom: 10, overflow: "hidden" }}>
-            <button onClick={() => setExpandedMatch(exp ? null : m.id)} style={{
-              width: "100%", padding: "12px 14px", background: "transparent", border: "none", cursor: "pointer",
-              display: "flex", alignItems: "center", gap: 10,
-            }}>
-              <div style={{ flex: 1, textAlign: "left" }}>
-                <div style={{ fontSize: 11, color: TEAM_A.accent, fontWeight: 700 }}>{m.teamANames?.join(" / ") || "Team A"}</div>
-                <div style={{ fontSize: 9, color: BC.t3, marginTop: 2 }}>{tA.name}</div>
+          <div key={rnd}>
+            {/* Round header — like Google Sheet section header */}
+            <div style={{ background: BC.card, borderRadius: 10, border: `1px solid ${BC.bdr}`, padding: "8px 12px", marginBottom: 6, display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center" }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: TEAM_A.accent }}>{rndTot.A % 1 === 0 ? rndTot.A : rndTot.A.toFixed(1)} pts</div>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold }}>Round {rnd} {fmt ? `· ${fmt.label}` : ""}</div>
+                {course && <div style={{ fontSize: 9, color: BC.t3, marginTop: 1 }}>{course.name}</div>}
               </div>
-              <div style={{ textAlign: "center", minWidth: 60 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: res.holesPlayed === 0 ? BC.t3 : BC.gold, letterSpacing: 0.5 }}>{res.holesPlayed === 0 ? "NOT STARTED" : res.status}</div>
-                <div style={{ fontSize: 8, color: BC.t3, marginTop: 2 }}>Thru {res.holesPlayed}</div>
-              </div>
-              <div style={{ flex: 1, textAlign: "right", display: "flex", flexDirection: "row-reverse", alignItems: "center", gap: 6 }}>
-                {TEAM_B.logo && <img src={TEAM_B.logo} alt="" style={{ width: 28, height: 28, objectFit: "contain", flexShrink: 0 }} />}
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 11, color: TEAM_B.accent, fontWeight: 700 }}>{m.teamBNames?.join(" / ") || "Team B"}</div>
-                  <div style={{ fontSize: 9, color: BC.t3, marginTop: 2 }}>{tB.name}</div>
-                </div>
-              </div>
-            </button>
-
-            {/* Nassau points row */}
-            <div style={{ padding: "4px 14px 10px", display: "flex", gap: 6, justifyContent: "center" }}>
-              {[["F", res.frontPts, nassau.front], ["B", res.backPts, nassau.back], ["T", res.overallPts, nassau.overall]].map(([label, pts, max]) => (
-                <div key={label} style={{ background: BC.bg, borderRadius: 8, padding: "4px 10px", textAlign: "center", flex: 1 }}>
-                  <div style={{ fontSize: 8, color: BC.t3, marginBottom: 2 }}>{label === "F" ? "FRONT" : label === "B" ? "BACK" : "TOTAL"}</div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 4 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: (pts?.A || 0) > (pts?.B || 0) ? TEAM_A.accent : BC.t2 }}>{(pts?.A || 0).toFixed(1)}</span>
-                    <span style={{ fontSize: 8, color: BC.t3 }}>/{max}</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: (pts?.B || 0) > (pts?.A || 0) ? TEAM_B.accent : BC.t2 }}>{(pts?.B || 0).toFixed(1)}</span>
-                  </div>
-                </div>
-              ))}
+              <div style={{ fontSize: 12, fontWeight: 800, color: TEAM_B.accent, textAlign: "right" }}>{rndTot.B % 1 === 0 ? rndTot.B : rndTot.B.toFixed(1)} pts</div>
             </div>
 
-            {/* Expanded: match scorecard */}
-            {exp && <MatchScorecard match={m} result={res} format={format} courses={courses} tRounds={tRounds} />}
+            {rndMatches.length === 0 && (
+              <div style={{ textAlign: "center", color: BC.t3, padding: "16px 0 20px", fontSize: 12 }}>No matches set up yet.</div>
+            )}
+
+            {/* Match cards */}
+            {rndResults.map((m, mi) => {
+              const res = m.result;
+              const exp = expandedMatch === m.id;
+              const nassau = m.nassau || NASSAU_DEFAULT;
+              const aUp = res.overall.aWins - res.overall.bWins;
+              const holesLeft = 18 - res.holesPlayed;
+              const matchWinner = res.overall.complete ? (aUp > 0 ? "A" : aUp < 0 ? "B" : null) : null;
+
+              let statusText = "—";
+              if (res.holesPlayed > 0) {
+                if (res.overall.complete) {
+                  if (aUp === 0) statusText = "TIED";
+                  else statusText = `${Math.abs(aUp)}&${holesLeft === 0 ? "0" : holesLeft}`;
+                } else {
+                  statusText = aUp === 0 ? "AS" : `${Math.abs(aUp)} UP`;
+                }
+              }
+
+              return (
+                <div key={m.id} style={{ background: BC.card, borderRadius: 10, border: `1px solid ${exp ? BC.amber + "55" : BC.bdr}`, marginBottom: 6, overflow: "hidden" }}>
+                  <button onClick={() => setExpandedMatch(exp ? null : m.id)} style={{ width: "100%", background: "transparent", border: "none", cursor: "pointer", padding: 0 }}>
+
+                    {/* Top row: Round label | Thru | Match # */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", padding: "6px 10px 4px", alignItems: "center", borderBottom: `1px solid ${BC.bdr}10` }}>
+                      <div style={{ fontSize: 8, color: BC.t3, fontWeight: 700, letterSpacing: 0.5 }}>Round {rnd}</div>
+                      <div style={{ fontSize: 8, color: BC.t3, textAlign: "center" }}>
+                        {res.holesPlayed > 0 ? `Thru ${res.holesPlayed}` : "Not Started"}
+                      </div>
+                      <div style={{ fontSize: 8, color: BC.t3, fontWeight: 700, textAlign: "right" }}>Match {mi + 1}</div>
+                    </div>
+
+                    {/* Main row: Team A names | Status | Team B names */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", padding: "8px 10px 4px", gap: 8, alignItems: "center" }}>
+                      {/* Team A */}
+                      <div style={{ borderLeft: `3px solid ${TEAM_A.accent}`, paddingLeft: 6 }}>
+                        {(m.teamANames || ["Team A"]).map((name, ni) => (
+                          <div key={ni} style={{ fontSize: 12, fontWeight: 700, color: matchWinner === "A" ? TEAM_A.accent : BC.t1, lineHeight: 1.4 }}>{name}</div>
+                        ))}
+                      </div>
+
+                      {/* Status */}
+                      <div style={{ textAlign: "center", minWidth: 60 }}>
+                        {res.holesPlayed === 0 ? (
+                          <div style={{ fontSize: 9, color: BC.t3 }}>—</div>
+                        ) : (
+                          <div style={{
+                            fontSize: 13, fontWeight: 900, lineHeight: 1,
+                            color: matchWinner === "A" ? TEAM_A.accent : matchWinner === "B" ? TEAM_B.accent : BC.gold,
+                          }}>{statusText}</div>
+                        )}
+                        {res.overall.complete && <div style={{ fontSize: 7, color: BC.t3, marginTop: 2, fontWeight: 700, letterSpacing: 1 }}>FINAL</div>}
+                      </div>
+
+                      {/* Team B */}
+                      <div style={{ borderRight: `3px solid ${TEAM_B.accent}`, paddingRight: 6, textAlign: "right" }}>
+                        {(m.teamBNames || ["Team B"]).map((name, ni) => (
+                          <div key={ni} style={{ fontSize: 12, fontWeight: 700, color: matchWinner === "B" ? TEAM_B.accent : BC.t1, lineHeight: 1.4 }}>{name}</div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Nassau points row — Front | Back | Overall */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", borderTop: `1px solid ${BC.bdr}10`, margin: "0 10px" }}>
+                      {[["Front", res.frontPts, nassau.front], ["Back", res.backPts, nassau.back], ["Overall", res.overallPts, nassau.overall]].map(([lbl, pts, max]) => {
+                        const aW = (pts?.A||0) > (pts?.B||0);
+                        const bW = (pts?.B||0) > (pts?.A||0);
+                        return (
+                          <div key={lbl} style={{ padding: "5px 4px", textAlign: "center" }}>
+                            <div style={{ fontSize: 7, color: BC.t3, letterSpacing: 0.5, marginBottom: 2 }}>{lbl.toUpperCase()}</div>
+                            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 4 }}>
+                              <span style={{ fontSize: 11, fontWeight: 800, color: aW ? TEAM_A.accent : BC.t3, minWidth: 18, textAlign: "right" }}>{(pts?.A||0) % 1 === 0 ? (pts?.A||0) : (pts?.A||0).toFixed(1)}</span>
+                              <span style={{ fontSize: 8, color: BC.bdr }}>|</span>
+                              <span style={{ fontSize: 11, fontWeight: 800, color: bW ? TEAM_B.accent : BC.t3, minWidth: 18, textAlign: "left" }}>{(pts?.B||0) % 1 === 0 ? (pts?.B||0) : (pts?.B||0).toFixed(1)}</span>
+                            </div>
+                            <div style={{ fontSize: 7, color: BC.t3 }}>of {max} pts</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Cup Points row */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderTop: `1px solid ${BC.bdr}10`, padding: "5px 10px 6px" }}>
+                      <div>
+                        <div style={{ fontSize: 7, color: BC.t3, letterSpacing: 0.5 }}>CUP POINTS</div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: TEAM_A.accent }}>{res.totalPts.A % 1 === 0 ? res.totalPts.A : res.totalPts.A.toFixed(1)}</div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 7, color: BC.t3, letterSpacing: 0.5 }}>CUP POINTS</div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: TEAM_B.accent }}>{res.totalPts.B % 1 === 0 ? res.totalPts.B : res.totalPts.B.toFixed(1)}</div>
+                      </div>
+                    </div>
+
+                    {/* Hole tracker bar 1–18 with numbers */}
+                    <div style={{ padding: "0 10px 8px" }}>
+                      {/* Hole numbers */}
+                      <div style={{ display: "flex", gap: 1, marginBottom: 2 }}>
+                        {[...Array(9)].map((_,i) => (
+                          <div key={i} style={{ flex:1, textAlign:"center", fontSize:7, color:BC.t3 }}>{i+1}</div>
+                        ))}
+                        <div style={{ width: 4 }} />
+                        {[...Array(9)].map((_,i) => (
+                          <div key={i+9} style={{ flex:1, textAlign:"center", fontSize:7, color:BC.t3 }}>{i+10}</div>
+                        ))}
+                      </div>
+                      {/* Color bar */}
+                      <div style={{ display: "flex", gap: 1, alignItems: "center" }}>
+                        {res.holes.slice(0,9).map((h, hi) => (
+                          <div key={hi} style={{ flex:1, height:8, borderRadius:2,
+                            background: !h.played ? BC.bdr+"33" : h.winner==="A" ? TEAM_A.accent : h.winner==="B" ? TEAM_B.accent : BC.t3+"66",
+                          }} />
+                        ))}
+                        <div style={{ width:4, height:10, background:BC.bdr, borderRadius:1, flexShrink:0 }} />
+                        {res.holes.slice(9,18).map((h, hi) => (
+                          <div key={hi+9} style={{ flex:1, height:8, borderRadius:2,
+                            background: !h.played ? BC.bdr+"33" : h.winner==="A" ? TEAM_A.accent : h.winner==="B" ? TEAM_B.accent : BC.t3+"66",
+                          }} />
+                        ))}
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* Expanded scorecard */}
+                  {exp && <MatchScorecard match={m} result={res} format={format} courses={courses} tRounds={tRounds} tA={tA} tB={tB} />}
+                </div>
+              );
+            })}
+
+            <div style={{ marginBottom: 14 }} />
           </div>
         );
       })}
-      </div>
+
+      {displayRounds.length === 0 && (
+        <div style={{ textAlign: "center", color: BC.t3, padding: 40, fontSize: 13 }}>No matches set up yet.</div>
+      )}
     </div>
   );
 }
