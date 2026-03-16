@@ -1083,9 +1083,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
               {/* Player list */}
               {tPlayers.filter(p => p.team === team.id).map(p => (
-                <div key={p.player_id} style={{ background: BC.card, borderRadius: 6, padding: "4px 8px", marginBottom: 2, border: `1px solid ${BC.bdr}`, display: "grid", gridTemplateColumns: "110px 36px auto auto", alignItems: "center", gap: 6, boxShadow: `inset 3px 0 0 ${team.accent}55, -2px 0 12px ${team.accent}11` }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
-                  <span style={{ fontSize: 11, fontWeight: 400, color: BC.t1, textAlign: "left" }}>{p.handicap_index}</span>
+                <div key={p.player_id} style={{ background: BC.card, borderRadius: 6, padding: "4px 8px", marginBottom: 2, border: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", gap: 8, boxShadow: `inset 3px 0 0 ${team.accent}55, -2px 0 12px ${team.accent}11` }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: BC.t1, width: 110, flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
+                  <span style={{ fontSize: 11, fontWeight: 400, color: BC.t1, width: 36, flexShrink: 0 }}>{p.handicap_index}</span>
+                  <span style={{ flex: 1 }} />
                   <button onClick={() => onUpdatePlayer({ ...p, isDirector: !p.isDirector })} style={{
                     fontSize: 7, padding: "1px 3px", borderRadius: 3, border: `1px solid ${p.isDirector ? BC.amber : BC.bdr}`,
                     background: p.isDirector ? BC.amber + "22" : "transparent", color: p.isDirector ? BC.amber : BC.t3, cursor: "pointer", fontWeight: 700, flexShrink: 0,
