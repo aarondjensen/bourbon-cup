@@ -865,7 +865,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
       id: `bc_round_${editRound}`,
       tournament_id: TOURNAMENT_ID,
       round_number: editRound,
-      course_id: roundCourse || tr.course_id || "",
+      course_id: tr?.course_id || "",
       format: roundFormat || tr.format || "singles",
       tee_time: roundTeeTime || tr.tee_time || "",
       nassau_front: nassau.front,
@@ -1149,12 +1149,6 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             </select>
             {roundFormat && <div style={{ fontSize: 10, color: BC.t3, marginBottom: 10, padding: "6px 10px", background: BC.bg, borderRadius: 8 }}>{FORMATS.find(f => f.id === roundFormat)?.desc}</div>}
 
-            <label style={LabelStyle}>Course</label>
-            <select value={roundCourse} onChange={e => setRoundCourse(e.target.value)} style={{ ...InputStyle, marginBottom: 10 }}>
-              <option value="">Select course...</option>
-              {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-
             <label style={LabelStyle}>First Tee Time</label>
             <input value={roundTeeTime} onChange={e => setRoundTeeTime(e.target.value)} placeholder="e.g. 8:00 AM" style={{ ...InputStyle, marginBottom: 14 }} />
 
@@ -1393,6 +1387,32 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     <div style={{ fontWeight: 600, fontSize: 13, color: BC.t1 }}>{c.name}</div>
                     <div style={{ fontSize: 10, color: BC.t3, marginTop: 1 }}>{[c.city, c.state].filter(Boolean).join(", ")} · Par {c.par} · Slope {c.slope}</div>
                   </button>
+                  {/* Round assignment buttons */}
+                  <div style={{ display: "flex", gap: 3 }}>
+                    {[1,2,3,4].map(r => {
+                      const tr = tRounds.find(t => t.round_number === r);
+                      const isAssigned = tr?.course_id === c.id;
+                      const otherCourse = tr?.course_id && tr.course_id !== c.id && courses.find(x => x.id === tr.course_id);
+                      return (
+                        <button key={r} onClick={async () => {
+                          if (isAssigned) {
+                            await onSetRound({ id: `bc_round_${r}`, tournament_id: TOURNAMENT_ID, round_number: r, course_id: null, format: tr?.format || "singles", tee_time: tr?.tee_time || "", nassau_front: tr?.nassau_front || 1, nassau_back: tr?.nassau_back || 1, nassau_overall: tr?.nassau_overall || 1 });
+                          } else if (otherCourse) {
+                            if (window.confirm(`Replace ${otherCourse.name} for Rd ${r}?`)) {
+                              await onSetRound({ id: `bc_round_${r}`, tournament_id: TOURNAMENT_ID, round_number: r, course_id: c.id, format: tr?.format || "singles", tee_time: tr?.tee_time || "", nassau_front: tr?.nassau_front || 1, nassau_back: tr?.nassau_back || 1, nassau_overall: tr?.nassau_overall || 1 });
+                            }
+                          } else {
+                            await onSetRound({ id: `bc_round_${r}`, tournament_id: TOURNAMENT_ID, round_number: r, course_id: c.id, format: tr?.format || "singles", tee_time: tr?.tee_time || "", nassau_front: tr?.nassau_front || 1, nassau_back: tr?.nassau_back || 1, nassau_overall: tr?.nassau_overall || 1 });
+                          }
+                        }} style={{
+                          padding: "3px 6px", borderRadius: 4, fontSize: 9, fontWeight: 700, cursor: "pointer", minWidth: 24, textAlign: "center",
+                          background: isAssigned ? BC.amber : "transparent",
+                          color: isAssigned ? "#0a0804" : BC.t3,
+                          border: `1px solid ${isAssigned ? BC.amber : BC.bdr}`,
+                        }}>R{r}</button>
+                      );
+                    })}
+                  </div>
                   <button onClick={() => { if (window.confirm(`Remove ${c.name}?`)) onAddCourse({ ...c, _delete: true }); }} style={{ background: "transparent", border: "none", color: BC.t3, cursor: "pointer", fontSize: 14, padding: "2px 4px" }}>✕</button>
                 </div>
                 {expandedCourse === c.id && (
