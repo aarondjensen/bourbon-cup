@@ -1029,6 +1029,16 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   const [roundCourse, setRoundCourse] = useState("");
   const [roundTeeTime, setRoundTeeTime] = useState("");
   const [hcpOverrides, setHcpOverrides] = useState({});
+
+  // Auto-load round settings from Firestore when tRounds first populates
+  useEffect(() => {
+    const tr = tRounds.find(t => t.round_number === editRound);
+    if (!tr) return;
+    setRoundFormat(tr.format || "");
+    setRoundTeeTime(tr.tee_time || "");
+    setNassau({ front: tr.nassau_front ?? 1, back: tr.nassau_back ?? 1, overall: tr.nassau_overall ?? 1 });
+    if (tr.handicap_mode) setHandicapMode(prev => ({ ...prev, [editRound]: tr.handicap_mode }));
+  }, [tRounds]);
   const [handicapMode, setHandicapMode] = useState({ 1: "low_man", 2: "low_man", 3: "low_man", 4: "full" }); // per round
   const [chDeltas, setChDeltas] = useState({});
   const [editingPlayer, setEditingPlayer] = useState(null); // { pid, name, hi }
