@@ -1962,23 +1962,46 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
 }
 
 // ── Slide-up Menu ──
-function SlideMenu({ open, onClose, onNavigate, user, view }) {
+function SlideMenu({ open, onClose, onNavigate, onLogout, user, view }) {
+  const dragRef = useRef(null);
+  const startYRef = useRef(null);
+  const [dragY, setDragY] = useState(0);
+
+  const handleTouchStart = (e) => { startYRef.current = e.touches[0].clientY; setDragY(0); };
+  const handleTouchMove = (e) => {
+    if (startYRef.current == null) return;
+    const dy = e.touches[0].clientY - startYRef.current;
+    if (dy > 0) setDragY(dy);
+  };
+  const handleTouchEnd = () => {
+    if (dragY > 80) { onClose(); }
+    setDragY(0);
+    startYRef.current = null;
+  };
+
   if (!open) return null;
   const items = [
     { key: "analytics", label: "Player Analytics", icon: "📊" },
     { key: "history",   label: "Historical Data",  icon: "📅" },
     { key: "photos",    label: "Photo Library",     icon: "📸", external: true },
     ...(user?.isDirector ? [{ key: "admin", label: "Admin Settings", icon: "⚙️" }] : []),
+    { key: "logout", label: "Logout", icon: "🚪", onLogout: () => { onLogout(); onClose(); } },
   ];
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 200 }} />
-      <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 520, background: BC.card, borderRadius: "20px 20px 0 0", border: `1px solid ${BC.bdr}`, zIndex: 201, padding: "8px 0 32px" }}>
-        <div style={{ width: 36, height: 4, borderRadius: 2, background: BC.bdr, margin: "8px auto 16px" }} />
+      <div
+        ref={dragRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        style={{ position: "fixed", bottom: 0, left: "50%", transform: `translateX(-50%) translateY(${dragY}px)`, transition: dragY === 0 ? "transform 0.3s ease" : "none", width: "100%", maxWidth: 520, background: BC.card, borderRadius: "20px 20px 0 0", border: `1px solid ${BC.bdr}`, zIndex: 201, padding: "8px 0 32px" }}>
+        <div style={{ width: 36, height: 4, borderRadius: 2, background: dragY > 40 ? BC.amber : BC.bdr, margin: "8px auto 16px", transition: "background 0.2s" }} />
         <div style={{ fontSize: 10, fontWeight: 700, color: BC.t3, letterSpacing: 2, padding: "0 20px 10px" }}>MORE</div>
         {items.map(item => (
           <button key={item.key} onClick={() => {
             if (item.external) { window.open("https://thebourboncup.com/photos", "_blank"); onClose(); return; }
+            if (item.key === "logout") { item.onLogout && item.onLogout(); return; }
             onNavigate(item.key); onClose();
           }} style={{
             width: "100%", padding: "14px 20px", background: "transparent", border: "none", borderBottom: `1px solid ${BC.bdr}10`,
@@ -2132,8 +2155,8 @@ export default function App() {
 
   const navItems = [
     { key: "scoring",     label: "Scoring",     icon: "score" },
-    { key: "leaderboard", label: "Leaderboard", icon: "trophy" },
     { key: "groups",      label: "Matches",     icon: "groups" },
+    { key: "leaderboard", label: "Leaderboard", icon: "trophy" },
     { key: "betting",     label: "Betting",     icon: "betting" },
     { key: "menu",        label: "More",        icon: "menu" },
   ];
@@ -2141,7 +2164,7 @@ export default function App() {
   const renderIcon = (icon, active) => {
     const clr = active ? BC.amber : BC.t3;
     const sz = 20;
-    if (icon === "trophy") return <img src={TROPHY_SILHOUETTE} alt="Board" style={{ width: sz + 6, height: sz + 6, objectFit: "contain", filter: active ? `brightness(0) saturate(100%) invert(65%) sepia(60%) saturate(500%) hue-rotate(5deg) brightness(105%)` : `brightness(0) saturate(100%) invert(40%) sepia(10%) saturate(400%) hue-rotate(185deg) brightness(80%)` }} />;
+    if (icon === "trophy") return <img src={TROPHY_SILHOUETTE} alt="Board" style={{ width: sz, height: sz, objectFit: "contain", filter: active ? `brightness(0) saturate(100%) invert(65%) sepia(60%) saturate(500%) hue-rotate(5deg) brightness(105%)` : `brightness(0) saturate(100%) invert(40%) sepia(10%) saturate(400%) hue-rotate(185deg) brightness(80%)` }} />;
     if (icon === "groups") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round"><circle cx="9" cy="7" r="3"/><circle cx="17" cy="7" r="3"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/><path d="M21 21v-2a3 3 0 00-2-2.83"/></svg>;
     if (icon === "score") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4z"/></svg>;
     if (icon === "betting") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/><path d="M8 6l1.5 1.5"/><path d="M16 6l-1.5 1.5"/></svg>;
@@ -2155,27 +2178,7 @@ export default function App() {
       <div style={{ maxWidth: 520, width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", height: "100%", position: "relative" }}>
       <Notif notif={notif} />
 
-      {/* Minimal top strip */}
-      <div style={{ background: BC.card, borderBottom: `1px solid ${BC.bdr}`, flexShrink: 0 }}>
-      <div style={{ maxWidth: 520, margin: "0 auto", padding: "6px 16px", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
-        <div style={{ width: 6, height: 6, borderRadius: "50%", background: syncing ? BC.amber : "#22c55e" }} />
-        {user.isDirector && (
-          <button onClick={() => setView(view === "admin" ? "leaderboard" : "admin")} style={{
-            background: view === "admin" ? BC.amber + "22" : "transparent",
-            border: `1px solid ${view === "admin" ? BC.amber : BC.bdr}`,
-            color: view === "admin" ? BC.amber : BC.t3,
-            padding: "4px 8px", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center",
-          }}>
-            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/>
-            </svg>
-          </button>
-        )}
-        <button onClick={() => setUser(null)} style={{ background: "transparent", border: `1px solid ${BC.bdr}`, color: BC.t3, padding: "3px 10px", borderRadius: 8, fontSize: 9, cursor: "pointer" }}>
-          Logout · <span style={{ color: BC.t2, fontWeight: 700 }}>{user.name}</span>
-        </button>
-      </div>
-      </div>
+
 
       {/* Content */}
       <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "12px 14px 80px 14px" }}>
@@ -2251,7 +2254,7 @@ export default function App() {
         )}
       </div>
 
-      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} user={user} view={view} />
+      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={() => setUser(null)} user={user} view={view} />
 
       {/* Bottom Nav */}
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(18,16,13,0.97)", borderTop: `1px solid ${BC.bdr}`, zIndex: 100, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
@@ -2264,12 +2267,14 @@ export default function App() {
               if (item.key === "menu") { setMenuOpen(true); return; }
               setView(item.key);
             }} style={{
-              flex: 1, padding: "10px 4px 12px", display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
-              background: "transparent", border: "none", cursor: "pointer",
+              flex: 1, padding: "8px 4px 10px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 3,
+              background: "transparent", border: "none", cursor: "pointer", minHeight: 56,
             }}>
-              {renderIcon(item.icon, active)}
-              <span style={{ fontSize: 9, fontWeight: active ? 700 : 500, color: clr }}>{item.label}</span>
-              {active && <div style={{ width: 16, height: 2, borderRadius: 1, background: BC.amber, marginTop: 1 }} />}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 24 }}>
+                {renderIcon(item.icon, active)}
+              </div>
+              <span style={{ fontSize: 9, fontWeight: active ? 700 : 500, color: clr, lineHeight: 1 }}>{item.label}</span>
+              {active && <div style={{ width: 16, height: 2, borderRadius: 1, background: BC.amber, marginTop: 2 }} />}
             </button>
           );
         })}
