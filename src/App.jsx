@@ -49,14 +49,15 @@ let TEAM_A = { id: "A", name: "Team Alpha", color: "#004d24", accent: "#009144",
 let TEAM_B = { id: "B", name: "Team Beta",  color: "#0d3235", accent: "#3A96A0", glow: "rgba(58,150,160,0.2)", short: "β", logo: LOGO_TEAM_B };
 
 const FORMATS = [
-  { id: "singles",       label: "Singles",          desc: "Match play, 1v1. Win hole = 1pt, halve = 0.5pt." },
-  { id: "best_ball",     label: "2-Man Best Ball",  desc: "Team uses the better net score on each hole." },
-  { id: "scramble",      label: "2-Man Scramble",   desc: "Both hit, choose best ball, both play from there." },
-  { id: "aggregate",     label: "2-Man Aggregate",  desc: "Combined net scores vs combined net scores." },
-  { id: "double_dot",    label: "Double Dot",       desc: "Standard Nassau with automatic double on last 3 holes." },
-  { id: "chapman",       label: "Chapman",          desc: "Both drive, swap, choose best approach for scramble in." },
-  { id: "stableford",    label: "Stableford",       desc: "Points per hole: eagle=4, birdie=3, par=2, bogey=1." },
-  { id: "stroke_play",   label: "Stroke Play",      desc: "Lowest net total wins the match." },
+  { id: "singles",        label: "Singles",            desc: "Match play, 1v1. Nassau scored: front 9, back 9, overall.", nassau: { front: 1, back: 1, overall: 1 }, scoringType: "nassau" },
+  { id: "best_ball",      label: "2-Man Best Ball",    desc: "Each player plays their own ball, team uses the better net score per hole. Nassau scored.", nassau: { front: 1, back: 1, overall: 2 }, scoringType: "nassau" },
+  { id: "pinehurst",      label: "Pinehurst",          desc: "Partners each drive, swap balls, then choose best to finish as scramble. Nassau scored.", nassau: { front: 1, back: 1, overall: 2 }, scoringType: "nassau" },
+  { id: "team_best_ball", label: "Team Best Ball",     desc: "Full team format — custom scoring applies. See director for point structure.", nassau: { front: 0, back: 0, overall: 0 }, scoringType: "custom" },
+  { id: "double_dot",     label: "Double Dot",         desc: "Nassau with automatic press on the back 9 and last 3 holes.", nassau: { front: 1, back: 1, overall: 2 }, scoringType: "nassau" },
+  { id: "shamble",        label: "Shamble",            desc: "All players drive, choose best drive, each plays their own ball in. Nassau scored.", nassau: { front: 1, back: 1, overall: 2 }, scoringType: "nassau" },
+  { id: "scramble",       label: "2-Man Scramble",     desc: "Both hit every shot, choose best ball location, both play from there. Nassau scored.", nassau: { front: 1, back: 1, overall: 2 }, scoringType: "nassau" },
+  { id: "tilt",           label: "2-Man Tilt",         desc: "4-point match: 1pt per side, 2pt overall. No individual Nassau components.", nassau: { front: 0, back: 0, overall: 4 }, scoringType: "tilt" },
+  { id: "stableford",     label: "2-Man Stableford",   desc: "Points per hole: eagle=4, birdie=3, par=2, bogey=1. Nassau scored.", nassau: { front: 1, back: 1, overall: 2 }, scoringType: "nassau" },
 ];
 
 const NASSAU_DEFAULT = { front: 1, back: 1, overall: 1 };
@@ -1143,12 +1144,38 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, marginBottom: 12 }}>ROUND {editRound} SETTINGS</div>
 
             <label style={LabelStyle}>Format</label>
-            <select value={roundFormat} onChange={e => setRoundFormat(e.target.value)} style={{ ...InputStyle, marginBottom: 10 }}>
+            <select value={roundFormat} onChange={e => {
+              const fmt = FORMATS.find(f => f.id === e.target.value);
+              setRoundFormat(e.target.value);
+              if (fmt?.nassau) setNassau(fmt.nassau);
+            }} style={{ ...InputStyle, marginBottom: 10 }}>
               <option value="">Select format...</option>
               {FORMATS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
             </select>
-            {roundFormat && <div style={{ fontSize: 10, color: BC.t3, marginBottom: 10, padding: "6px 10px", background: BC.bg, borderRadius: 8 }}>{FORMATS.find(f => f.id === roundFormat)?.desc}</div>}
+            {roundFormat && (() => {
+              const fmt = FORMATS.find(f => f.id === roundFormat);
+              return (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 10, color: BC.t3, padding: "6px 10px", background: BC.bg, borderRadius: 8, marginBottom: 6 }}>{fmt?.desc}</div>
+                  {fmt?.scoringType === "custom" && <div style={{ fontSize: 10, color: BC.amber, padding: "6px 10px", background: BC.amber + "11", borderRadius: 8, border: `1px solid ${BC.amber}33` }}>⚠ Custom scoring — set point values manually with director</div>}
+                  {fmt?.scoringType === "tilt" && <div style={{ fontSize: 10, color: BC.amber, padding: "6px 10px", background: BC.amber + "11", borderRadius: 8, border: `1px solid ${BC.amber}33` }}>4-point format: Front/Back not used. Overall = 4 pts.</div>}
+                </div>
+              );
+            })()}
 
+            {/* Show assigned course (read-only - assigned from Courses tab) */}
+            {(() => {
+              const tr = tRounds.find(t => t.round_number === editRound);
+              const course = courses.find(c => c.id === tr?.course_id);
+              return (
+                <div style={{ marginBottom: 12 }}>
+                  <label style={LabelStyle}>Course</label>
+                  <div style={{ padding: "8px 12px", background: BC.bg, borderRadius: 8, border: `1px solid ${BC.bdr}`, fontSize: 12, color: course ? BC.t1 : BC.t3 }}>
+                    {course ? <><span style={{ fontWeight: 600 }}>{course.name}</span><span style={{ color: BC.t3, marginLeft: 8, fontSize: 10 }}>Par {course.par} · Slope {course.slope}</span></> : "No course assigned — set in Courses tab"}
+                  </div>
+                </div>
+              );
+            })()}
             <label style={LabelStyle}>First Tee Time</label>
             <input value={roundTeeTime} onChange={e => setRoundTeeTime(e.target.value)} placeholder="e.g. 8:00 AM" style={{ ...InputStyle, marginBottom: 14 }} />
 
