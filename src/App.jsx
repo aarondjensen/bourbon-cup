@@ -473,13 +473,13 @@ function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds
           <div style={{ background: "#111", borderRadius: 14, border: `1px solid ${BC.bdr}`, marginBottom: 12, overflow: "hidden" }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr" }}>
               {/* Team A */}
-              <div style={{ background: aLeads ? TEAM_A.color + "55" : TEAM_A.color + "1a", padding: "14px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ background: aLeads ? TEAM_A.color + "55" : TEAM_A.color + "1a", padding: "14px 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
                 <img src={TEAM_A.logo} alt={tA.name} style={{ width: 80, height: 52, objectFit: "contain" }} />
-                <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 5, justifyContent: "center" }}>
                   <div style={{ fontSize: 44, fontWeight: 900, color: "#fff", lineHeight: 1 }}>{fmtScore(tourneyTotals.A)}</div>
-                  {aProj > 0 && <div style={{ fontSize: 14, fontWeight: 700, color: TEAM_A.accent + "99" }}>+{fmtScore(aProj)}</div>}
+                  {aProj > 0 && <div style={{ fontSize: 13, fontWeight: 700, color: TEAM_A.accent + "99" }}>+{fmtScore(aProj)}</div>}
                 </div>
-                {aLeads && <div style={{ fontSize: 8, color: TEAM_A.accent, fontWeight: 700, letterSpacing: 0.5 }}>LEADS · {fmtScore(gap)} pts ahead</div>}
+                {aLeads && <div style={{ fontSize: 8, color: TEAM_A.accent, fontWeight: 700, letterSpacing: 0.5, textAlign: "center" }}>LEADS · {fmtScore(gap)} ahead</div>}
               </div>
 
               {/* Center */}
@@ -492,13 +492,13 @@ function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds
               </div>
 
               {/* Team B */}
-              <div style={{ background: bLeads ? TEAM_B.color + "55" : TEAM_B.color + "1a", padding: "14px 12px", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+              <div style={{ background: bLeads ? TEAM_B.color + "55" : TEAM_B.color + "1a", padding: "14px 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
                 <img src={TEAM_B.logo} alt={tB.name} style={{ width: 80, height: 52, objectFit: "contain" }} />
-                <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexDirection: "row-reverse" }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 5, justifyContent: "center" }}>
                   <div style={{ fontSize: 44, fontWeight: 900, color: "#fff", lineHeight: 1 }}>{fmtScore(tourneyTotals.B)}</div>
-                  {bProj > 0 && <div style={{ fontSize: 14, fontWeight: 700, color: TEAM_B.accent + "99" }}>+{fmtScore(bProj)}</div>}
+                  {bProj > 0 && <div style={{ fontSize: 13, fontWeight: 700, color: TEAM_B.accent + "99" }}>+{fmtScore(bProj)}</div>}
                 </div>
-                {bLeads && <div style={{ fontSize: 8, color: TEAM_B.accent, fontWeight: 700, letterSpacing: 0.5 }}>LEADS · {fmtScore(gap)} pts ahead</div>}
+                {bLeads && <div style={{ fontSize: 8, color: TEAM_B.accent, fontWeight: 700, letterSpacing: 0.5, textAlign: "center" }}>LEADS · {fmtScore(gap)} ahead</div>}
               </div>
             </div>
 
@@ -2528,13 +2528,13 @@ export default function App() {
 
   return (
     <div style={{ height: "100svh", width: "100%", background: BC.bg, display: "flex", flexDirection: "column", position: "relative", fontFamily: "'Montserrat', sans-serif", overflow: "hidden" }}>
-      <div style={{ maxWidth: 520, width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", height: "100%", position: "relative" }}>
+      <div style={{ maxWidth: 520, width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", height: "100%", position: "relative", padding: "0 4px" }}>
       <Notif notif={notif} />
 
 
 
       {/* Content */}
-      <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "12px 14px 80px 14px" }}>
+      <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "12px 10px 80px 10px" }}>
         {view === "leaderboard" && (
           <TeamLeaderboard
             matches={enrichedMatches}
