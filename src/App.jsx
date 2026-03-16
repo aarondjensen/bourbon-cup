@@ -842,6 +842,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   const [hcpOverrides, setHcpOverrides] = useState({});
   const [handicapMode, setHandicapMode] = useState({ 1: "low_man", 2: "low_man", 3: "low_man", 4: "full" }); // per round
   const [chDeltas, setChDeltas] = useState({});
+  const [editingPlayer, setEditingPlayer] = useState(null); // { pid, name, hi }
+  const [swipePid, setSwipePid] = useState(null);
+  const [swipeX, setSwipeX] = useState(0);
+  const swipeStartX = useRef(null);
   const [teeAssignments, setTeeAssignments] = useState({}); // { round: { pid: teeName } } // { pid_context: delta } — auto-clears after 3.5s
 
   const showChDelta = (key, delta) => {
@@ -1109,20 +1113,62 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               )}
 
               {/* Player list */}
-              {tPlayers.filter(p => p.team === team.id).map(p => (
-                <div key={p.player_id} style={{ background: BC.card, borderRadius: 6, padding: "4px 8px", marginBottom: 2, border: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", gap: 8, boxShadow: `inset 3px 0 0 ${team.accent}55, -2px 0 12px ${team.accent}11` }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: BC.t1, width: 110, flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
-                  <span style={{ fontSize: 11, fontWeight: 400, color: BC.t1, width: 36, flexShrink: 0 }}>{p.handicap_index}</span>
-                  <span style={{ flex: 1 }} />
-                  <button onClick={() => onUpdatePlayer({ ...p, isDirector: !p.isDirector })} style={{
-                    fontSize: 7, padding: "1px 3px", borderRadius: 3, border: `1px solid ${p.isDirector ? BC.amber : BC.bdr}`,
-                    background: p.isDirector ? BC.amber + "22" : "transparent", color: p.isDirector ? BC.amber : BC.t3, cursor: "pointer", fontWeight: 700, flexShrink: 0,
-                  }}>DIR</button>
-                  <button onClick={() => { if (window.confirm(`Remove ${p.name}?`)) onRemovePlayer(p.player_id); }} style={{
-                    fontSize: 7, padding: "1px 3px", borderRadius: 3, border: `1px solid ${BC.danger}33`, background: "transparent", color: BC.danger, cursor: "pointer", flexShrink: 0,
-                  }}>✕</button>
-                </div>
-              ))}
+              {tPlayers.filter(p => p.team === team.id).map(p => {
+                const isEditing = editingPlayer?.pid === p.player_id;
+                const isSwiping = swipePid === p.player_id;
+                const dx = isSwiping ? swipeX : 0;
+                const showDelete = dx < -60;
+                return (
+                  <div key={p.player_id} style={{ position: "relative", marginBottom: 2, borderRadius: 6, overflow: "hidden" }}>
+                    {/* Swipe-to-delete red background */}
+                    <div style={{ position: "absolute", inset: 0, background: BC.danger, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "flex-end", paddingRight: 16 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>Delete</span>
+                    </div>
+                    {/* Row */}
+                    <div
+                      onTouchStart={e => { swipeStartX.current = e.touches[0].clientX; setSwipePid(p.player_id); setSwipeX(0); }}
+                      onTouchMove={e => { if (swipeStartX.current == null) return; const dx2 = e.touches[0].clientX - swipeStartX.current; setSwipeX(Math.min(0, dx2)); }}
+                      onTouchEnd={() => { if (swipeX < -80) { if (window.confirm(`Remove ${p.name}?`)) { onRemovePlayer(p.player_id); } } setSwipePid(null); setSwipeX(0); swipeStartX.current = null; }}
+                      style={{ background: BC.card, borderRadius: 6, padding: "4px 8px", border: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", gap: 6, boxShadow: `inset 3px 0 0 ${team.accent}55`, position: "relative", transform: `translateX(${dx}px)`, transition: isSwiping ? "none" : "transform 0.2s ease" }}>
+                      {isEditing ? (
+                        <>
+                          <input autoFocus value={editingPlayer.name} onChange={e => setEditingPlayer(prev => ({...prev, name: e.target.value}))}
+                            style={{ fontSize: 12, fontWeight: 600, color: BC.t1, width: 110, flexShrink: 0, background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 4, padding: "2px 6px", outline: "none", fontFamily: "'Montserrat', sans-serif" }} />
+                          <input type="number" value={editingPlayer.hi} onChange={e => setEditingPlayer(prev => ({...prev, hi: e.target.value}))}
+                            style={{ fontSize: 11, color: BC.t1, width: 42, flexShrink: 0, background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 4, padding: "2px 6px", outline: "none", fontFamily: "'Montserrat', sans-serif" }} />
+                          <span style={{ flex: 1 }} />
+                          <button onClick={() => {
+                            const changes = [];
+                            if (editingPlayer.name !== p.name) changes.push(`Name: "${p.name}" → "${editingPlayer.name}"`);
+                            if (parseFloat(editingPlayer.hi) !== parseFloat(p.handicap_index)) changes.push(`HI: ${p.handicap_index} → ${editingPlayer.hi}`);
+                            if (changes.length === 0) { setEditingPlayer(null); return; }
+                            if (window.confirm(`Confirm changes for ${p.name}:
+${changes.join("
+")}`)) {
+                              onUpdatePlayer({ ...p, name: editingPlayer.name.trim(), handicap_index: parseFloat(editingPlayer.hi) || 0 });
+                            }
+                            setEditingPlayer(null);
+                          }} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, border: "none", background: team.accent, color: "#0a0804", fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>✓</button>
+                          <button onClick={() => setEditingPlayer(null)} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer", flexShrink: 0 }}>✕</button>
+                        </>
+                      ) : (
+                        <>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: BC.t1, width: 110, flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
+                          <span style={{ fontSize: 11, fontWeight: 400, color: BC.t1, width: 36, flexShrink: 0 }}>{p.handicap_index}</span>
+                          <span style={{ flex: 1 }} />
+                          <button onClick={() => setEditingPlayer({ pid: p.player_id, name: p.name, hi: String(p.handicap_index) })} style={{
+                            fontSize: 9, padding: "1px 5px", borderRadius: 4, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer", flexShrink: 0,
+                          }}>Edit</button>
+                          <button onClick={() => onUpdatePlayer({ ...p, isDirector: !p.isDirector })} style={{
+                            fontSize: 7, padding: "1px 3px", borderRadius: 3, border: `1px solid ${p.isDirector ? BC.amber : BC.bdr}`,
+                            background: p.isDirector ? BC.amber + "22" : "transparent", color: p.isDirector ? BC.amber : BC.t3, cursor: "pointer", fontWeight: 700, flexShrink: 0,
+                          }}>DIR</button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
               {tPlayers.filter(p => p.team === team.id).length === 0 && (
                 <div style={{ color: BC.t3, fontSize: 11, padding: "6px 10px" }}>No players yet.</div>
               )}
