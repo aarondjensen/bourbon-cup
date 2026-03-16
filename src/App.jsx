@@ -1357,8 +1357,91 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 </div>
               );
             })()}
-            <label style={LabelStyle}>First Tee Time</label>
-            <input value={roundTeeTime} onChange={e => setRoundTeeTime(e.target.value)} placeholder="e.g. 8:00 AM" style={{ ...InputStyle, marginBottom: 14 }} />
+            <label style={LabelStyle}>Tee Times</label>
+            {(() => {
+              // Parse "8:00 AM" → minutes from midnight
+              const parseTime = (str) => {
+                if (!str) return null;
+                const m = str.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+                if (!m) return null;
+                let h = parseInt(m[1]), min = parseInt(m[2]);
+                const ap = (m[3] || "").toUpperCase();
+                if (ap === "PM" && h !== 12) h += 12;
+                if (ap === "AM" && h === 12) h = 0;
+                return h * 60 + min;
+              };
+              // Format minutes → "8:00 AM"
+              const formatTime = (mins) => {
+                if (mins == null) return "";
+                const h24 = Math.round(mins / 60 * 60) / 60; // keep as mins
+                let h = Math.floor(mins / 60) % 24;
+                const m = mins % 60;
+                const ap = h >= 12 ? "PM" : "AM";
+                if (h > 12) h -= 12;
+                if (h === 0) h = 12;
+                return `${h}:${String(m).padStart(2,"0")} ${ap}`;
+              };
+              // Auto-complete partial input to full time with AM/PM
+              const autoComplete = (val) => {
+                if (!val) return val;
+                // Already has AM/PM → return as is
+                if (/[aApP][mM]/.test(val)) return val;
+                // Try to parse and add AM/PM
+                const m = val.match(/^(\d{1,2})(?::(\d{2}))?$/);
+                if (!m) return val;
+                let h = parseInt(m[1]), min = parseInt(m[2] || "0");
+                const ap = h < 12 ? "AM" : "PM";
+                if (h > 12) h -= 12;
+                return `${h}:${String(min).padStart(2,"0")} ${ap}`;
+              };
+              const teeTimes = roundTeeTime ? roundTeeTime.split("|") : ["","","",""];
+              const updateTeeTime = (idx, val) => {
+                const times = [...teeTimes];
+                times[idx] = val;
+                // Auto-propagate: if idx 0 or 1 is set, compute interval and fill subsequent
+                if (idx === 0) {
+                  const t0 = parseTime(times[0]);
+                  if (t0 != null) {
+                    // Default 8-min intervals for 1,2,3 if not set
+                    if (!times[1]) times[1] = formatTime(t0 + 8);
+                    if (!times[2]) times[2] = formatTime(t0 + 16);
+                    if (!times[3]) times[3] = formatTime(t0 + 24);
+                  }
+                } else if (idx === 1) {
+                  const t0 = parseTime(times[0]);
+                  const t1 = parseTime(times[1]);
+                  if (t0 != null && t1 != null) {
+                    const interval = t1 - t0;
+                    times[2] = formatTime(t1 + interval);
+                    times[3] = formatTime(t1 + interval * 2);
+                  }
+                }
+                setRoundTeeTime(times.join("|"));
+              };
+              const handleBlur = (idx, val) => {
+                const completed = autoComplete(val);
+                const times = [...teeTimes];
+                times[idx] = completed;
+                setRoundTeeTime(times.join("|"));
+              };
+              return (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+                  {["Group 1","Group 2","Group 3","Group 4"].map((lbl, i) => (
+                    <div key={i}>
+                      <div style={{ fontSize: 9, color: BC.t3, marginBottom: 4, fontWeight: 600 }}>{lbl}</div>
+                      <input
+                        value={teeTimes[i] || ""}
+                        onChange={e => updateTeeTime(i, e.target.value)}
+                        onBlur={e => handleBlur(i, e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") { e.target.blur(); } }}
+                        placeholder={i === 0 ? "e.g. 8:00 AM" : "Auto-fill"}
+                        style={{ ...InputStyle, marginBottom: 0 }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
 
             <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, marginBottom: 10 }}>NASSAU POINTS</div>
             <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
@@ -1399,11 +1482,9 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     const override = hcpOverrides[editRound]?.[p.player_id];
                     const hasOverride = override !== undefined && override !== "";
                     return (
-                      <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: "1fr 72px 28px", gap: 6, alignItems: "center", marginBottom: 4 }}>
-                        <div style={{ fontSize: 12, color: BC.t1, fontWeight: 600 }}>
-                          {p.name}
-                          <span style={{ fontSize: 10, color: BC.t3, fontWeight: 400, marginLeft: 8 }}>base: {baseHI}</span>
-                        </div>
+                      <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: "1fr 52px 72px 28px", gap: 6, alignItems: "center", marginBottom: 4 }}>
+                        <div style={{ fontSize: 12, color: BC.t1, fontWeight: 600 }}>{p.name}</div>
+                        <div style={{ fontSize: 10, color: BC.t3, fontWeight: 400, textAlign: "right" }}>{baseHI}</div>
                         <input
                           type="number"
                           step="0.1"
