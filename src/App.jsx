@@ -1558,8 +1558,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     const baseHI = p.handicap_index;
                     const override = hcpOverrides[editRound]?.[p.player_id];
                     const hasOverride = override !== undefined && override !== "";
-                    return (
-                      {(() => {
+                    return (() => {
                         const tr2 = tRounds.find(t => t.round_number === editRound);
                         const course2 = courses.find(c => c.id === tr2?.course_id);
                         const tees2 = course2?.tee_boxes || [];
@@ -1625,7 +1624,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         )}
                       </div>
                         );
-                      })()}
+                      })()
                     );
                   })}
                 </div>
