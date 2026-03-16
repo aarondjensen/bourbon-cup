@@ -1004,7 +1004,7 @@ function ChDeltaBadge({ delta }) {
   );
 }
 
-function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, teamNames, onSaveTeamNames, hcpOverridesFromDb, notify }) {
+function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, teamNames, onSaveTeamNames, hcpOverridesFromDb, teeAssignmentsFromDb, notify }) {
   const [tab, setTab] = useState("players");
   const [editTeamNames, setEditTeamNames] = useState({ A: "", B: "" });
   const [editingTeam, setEditingTeam] = useState(null);
@@ -1073,11 +1073,12 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
   const saveRound = async () => {
     const tr = tRounds.find(t => t.round_number === editRound) || {};
-    // Save handicap overrides
+    // Always save handicap overrides (even if empty, to clear old values)
     const overrides = hcpOverrides[editRound] || {};
-    if (Object.keys(overrides).length > 0) {
-      await db.upsert("bc_hcp_overrides", { id: `bc_hcp_r${editRound}`, tournament_id: TOURNAMENT_ID, round_number: editRound, overrides });
-    }
+    await db.upsert("bc_hcp_overrides", { id: `bc_hcp_r${editRound}`, tournament_id: TOURNAMENT_ID, round_number: editRound, overrides });
+    // Save tee assignments
+    const assignments = teeAssignments[editRound] || {};
+    await db.upsert("bc_tee_assignments", { id: `bc_tee_r${editRound}`, tournament_id: TOURNAMENT_ID, round_number: editRound, assignments });
     const data = {
       id: `bc_round_${editRound}`,
       tournament_id: TOURNAMENT_ID,
@@ -2359,6 +2360,7 @@ export default function App() {
   const [notif, setNotif] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [hcpOverridesData, setHcpOverridesData] = useState({}); // { round: { pid: value } }
+  const [teeAssignmentsData, setTeeAssignmentsData] = useState({});
 
   const notify = useCallback((msg, type = "success") => {
     setNotif({ msg, type });
@@ -2390,6 +2392,12 @@ export default function App() {
       if (s?.skins_pot) setSkinsPot(s.skins_pot);
     }));
     unsubs.push(db.subscribe("bc_historical", [{ field: "type", op: "==", value: "year" }], setHistoricalData));
+    unsubs.push(db.subscribe("bc_tee_assignments", f, rows => {
+      const data = {};
+      rows.forEach(r => { if (r.round_number) data[r.round_number] = r.assignments || {}; });
+      // Pass to AdminView via prop
+      setTeeAssignmentsData(data);
+    }));
     unsubs.push(db.subscribe("bc_hcp_overrides", f, rows => {
       const data = {};
       rows.forEach(r => { if (r.round_number) data[r.round_number] = r.overrides || {}; });
@@ -2509,6 +2517,7 @@ export default function App() {
             rounds={availableRounds.length ? availableRounds : [1,2,3,4]}
             teamNames={teamNames}
             hcpOverridesFromDb={hcpOverridesData}
+            teeAssignmentsFromDb={teeAssignmentsData}
           />
         )}
         {view === "scoring" && (
