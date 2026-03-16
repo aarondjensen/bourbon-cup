@@ -325,7 +325,7 @@ function LoginScreen({ players, onLogin, teamNames }) {
     <button onClick={() => onLogin(p)} style={{
       width: "100%", padding: "clamp(8px, 2.5vw, 12px) clamp(10px, 3vw, 14px)", background: team.color + "22",
       border: `1px solid ${team.accent}33`, borderRadius: 6,
-      color: BC.t1, fontSize: "clamp(13px, 3.8vw, 14px)", fontWeight: 600, cursor: "pointer", textAlign: "center",
+      color: BC.t2, fontSize: "clamp(13px, 3.8vw, 14px)", fontWeight: 600, cursor: "pointer", textAlign: "center",
       display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
     }}>
       <span style={{ flex: 1, lineHeight: 1.3 }}>{p.name}</span>
@@ -623,7 +623,7 @@ function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds
                       <div style={{ borderLeft: `3px solid ${TEAM_A.accent}`, paddingLeft: 6 }}>
                         <img src={TEAM_A.logo} alt={tA.name} style={{ width: 32, height: 22, objectFit: "contain", marginBottom: 3, display: "block" }} />
                         {(m.teamANames || ["Team A"]).map((name, ni) => (
-                          <div key={ni} style={{ fontSize: 12, fontWeight: 700, color: matchWinner === "A" ? TEAM_A.accent : BC.t1, lineHeight: 1.4 }}>{name}</div>
+                          <div key={ni} style={{ fontSize: 12, fontWeight: 700, color: matchWinner === "A" ? TEAM_A.accent : TEAM_A.accent + "99", lineHeight: 1.4 }}>{name}</div>
                         ))}
                       </div>
 
@@ -644,7 +644,7 @@ function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds
                       <div style={{ borderRight: `3px solid ${TEAM_B.accent}`, paddingRight: 6, textAlign: "right" }}>
                         <img src={TEAM_B.logo} alt={tB.name} style={{ width: 32, height: 22, objectFit: "contain", marginBottom: 3, display: "block", marginLeft: "auto" }} />
                         {(m.teamBNames || ["Team B"]).map((name, ni) => (
-                          <div key={ni} style={{ fontSize: 12, fontWeight: 700, color: matchWinner === "B" ? TEAM_B.accent : BC.t1, lineHeight: 1.4 }}>{name}</div>
+                          <div key={ni} style={{ fontSize: 12, fontWeight: 700, color: matchWinner === "B" ? TEAM_B.accent : TEAM_B.accent + "99", lineHeight: 1.4 }}>{name}</div>
                         ))}
                       </div>
                     </div>
@@ -1466,7 +1466,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 const ap = h >= 12 ? "PM" : "AM";
                 if (h > 12) h -= 12;
                 if (h === 0) h = 12;
-                return `${h}:${String(m).padStart(2,"0")} ${ap}`;
+                return `${h}:${String(m).padStart(2,"0")}`;
               };
               const teeTimes = roundTeeTime ? roundTeeTime.split("|") : ["","","",""];
               const commitTime = (idx, val) => {
@@ -1509,7 +1509,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         onChange={e => { const times = [...tt]; times[i] = e.target.value; setRoundTeeTime(times.join("|")); }}
                         onBlur={e => commitTime(i, e.target.value)}
                         onKeyDown={e => { if (e.key === "Enter") { e.target.blur(); } }}
-                        placeholder={i === 0 ? "8:00" : "auto"}
+                        placeholder=""
                         inputMode="numeric"
                         style={{ ...InputStyle, marginBottom: 0, fontSize: 16, padding: "6px 4px", textAlign: "center", minWidth: 0 }}
                       />
@@ -1521,14 +1521,14 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
             {/* Nassau — compact inline */}
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>NASSAU</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>SCORING</div>
               {[["front", "F9"], ["back", "B9"], ["overall", "OVR"]].map(([k, lbl]) => (
                 <div key={k} style={{ flex: 1, display: "flex", alignItems: "center", gap: 4 }}>
                   <span style={{ fontSize: 9, color: BC.t3, flexShrink: 0 }}>{lbl}</span>
                   <input type="number" step="0.5" min="0" value={nassau[k]}
                     onChange={e => setNassau(n => ({ ...n, [k]: parseFloat(e.target.value) || 0 }))}
                     onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
-                    style={{ ...InputStyle, marginBottom: 0, padding: "6px 6px", fontSize: 11, textAlign: "center" }} />
+                    style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: 11, textAlign: "center", width: 42 }} />
                 </div>
               ))}
             </div>
