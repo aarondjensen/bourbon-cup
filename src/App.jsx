@@ -1436,13 +1436,26 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               const parseTime = (str) => {
                 if (!str) return null;
                 const clean = str.trim();
-                const m = clean.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)?/i);
-                if (!m) return null;
-                let h = parseInt(m[1]), min = parseInt(m[2] || "0");
-                const ap = (m[3] || "").toLowerCase();
+                // Check for explicit AM/PM
+                const apMatch = clean.match(/[aApP][mM]/);
+                const ap = apMatch ? apMatch[0].toLowerCase() : null;
+                const digits = clean.replace(/[^0-9]/g, "");
+                if (!digits) return null;
+                let h, min;
+                // Interpret digit sequences: 1=1:00, 12=12:00, 110=1:10, 800=8:00, 1230=12:30
+                if (digits.length <= 2) {
+                  h = parseInt(digits); min = 0;
+                } else if (digits.length === 3) {
+                  h = parseInt(digits[0]); min = parseInt(digits.slice(1));
+                } else {
+                  h = parseInt(digits.slice(0, 2)); min = parseInt(digits.slice(2, 4));
+                }
                 if (ap === "pm" && h !== 12) h += 12;
-                if (ap === "am" && h === 12) h = 0;
-                if (!ap && h < 6) h += 12; // assume PM for 1-5
+                else if (ap === "am" && h === 12) h = 0;
+                else if (!ap) {
+                  // No AM/PM: golf is morning, assume AM for 5-11, PM for 1-4, keep 12
+                  if (h >= 1 && h <= 4) h += 12;
+                }
                 return h * 60 + min;
               };
               const formatTime = (mins) => {
@@ -1495,7 +1508,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         onKeyDown={e => { if (e.key === "Enter") { e.target.blur(); } }}
                         placeholder={i === 0 ? "8:00 AM" : "auto"}
                         inputMode="numeric"
-                        style={{ ...InputStyle, marginBottom: 0, fontSize: 10, padding: "7px 6px", textAlign: "center" }}
+                        style={{ ...InputStyle, marginBottom: 0, fontSize: 16, padding: "7px 6px", textAlign: "center" }}
                       />
                     </div>
                   ))}
