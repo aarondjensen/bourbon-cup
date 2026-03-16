@@ -623,7 +623,7 @@ function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds
                       <div style={{ borderLeft: `3px solid ${TEAM_A.accent}`, paddingLeft: 6 }}>
                         <img src={TEAM_A.logo} alt={tA.name} style={{ width: 32, height: 22, objectFit: "contain", marginBottom: 3, display: "block" }} />
                         {(m.teamANames || ["Team A"]).map((name, ni) => (
-                          <div key={ni} style={{ fontSize: 12, fontWeight: 700, color: matchWinner === "A" ? TEAM_A.accent : TEAM_A.accent + "99", lineHeight: 1.4 }}>{name}</div>
+                          <div key={ni} style={{ fontSize: 12, fontWeight: 700, color: matchWinner === "A" ? TEAM_A.accent : TEAM_A.accent + "66", lineHeight: 1.4 }}>{name}</div>
                         ))}
                       </div>
 
@@ -644,7 +644,7 @@ function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds
                       <div style={{ borderRight: `3px solid ${TEAM_B.accent}`, paddingRight: 6, textAlign: "right" }}>
                         <img src={TEAM_B.logo} alt={tB.name} style={{ width: 32, height: 22, objectFit: "contain", marginBottom: 3, display: "block", marginLeft: "auto" }} />
                         {(m.teamBNames || ["Team B"]).map((name, ni) => (
-                          <div key={ni} style={{ fontSize: 12, fontWeight: 700, color: matchWinner === "B" ? TEAM_B.accent : TEAM_B.accent + "99", lineHeight: 1.4 }}>{name}</div>
+                          <div key={ni} style={{ fontSize: 12, fontWeight: 700, color: matchWinner === "B" ? TEAM_B.accent : TEAM_B.accent + "66", lineHeight: 1.4 }}>{name}</div>
                         ))}
                       </div>
                     </div>
@@ -1354,7 +1354,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         </>
                       ) : (
                         <>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: team.accent, width: 110, flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: team.accent + "88", width: 110, flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
                           <span style={{ fontSize: 11, fontWeight: 400, color: BC.t1, width: 36, flexShrink: 0 }}>{p.handicap_index}</span>
                           <span style={{ flex: 1 }} />
                           <button onClick={() => setEditingPlayer({ pid: p.player_id, name: p.name, hi: String(p.handicap_index) })} style={{
@@ -1592,7 +1592,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     };
                     return (
                       <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: `1fr 32px 56px ${tees2.map(() => "34px").join(" ")} 24px`, gap: 4, alignItems: "center", marginBottom: 3 }}>
-                        <div style={{ fontSize: 11, color: (p.team === "A" ? TEAM_A : TEAM_B).accent, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
+                        <div style={{ fontSize: 11, color: (p.team === "A" ? TEAM_A : TEAM_B).accent + "88", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
                         <div style={{ fontSize: 10, color: BC.t3, textAlign: "center" }}>{baseHI}</div>
                         <input
                           type="number" step="0.1"
@@ -2201,7 +2201,7 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
                 <div key={p.name} style={{ display: "grid", gridTemplateColumns: "1fr 44px 44px 44px 52px", padding: "9px 12px", borderBottom: i < playerStats.length-1 ? `1px solid ${BC.bdr}10` : "none", alignItems: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <div style={{ width: 6, height: 6, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
-                    <span style={{ fontSize: 12, fontWeight: 600, color: (p.team === "A" ? TEAM_A : TEAM_B).accent }}>{p.name}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: (p.team === "A" ? TEAM_A : TEAM_B).accent + "88" }}>{p.name}</span>
                   </div>
                   <div style={{ textAlign: "center", fontSize: 12, color: "#22c55e", fontWeight: 600 }}>{p.wins}</div>
                   <div style={{ textAlign: "center", fontSize: 12, color: BC.danger, fontWeight: 600 }}>{p.losses}</div>
