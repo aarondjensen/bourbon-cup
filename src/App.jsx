@@ -321,6 +321,8 @@ function LoginScreen({ players, onLogin, teamNames }) {
 
   return (
     <div style={{ height: "100svh", background: BC.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 10px", fontFamily: "'Montserrat', sans-serif", position: "relative", overflow: "hidden" }}>
+      {/* Desktop centering wrapper */}
+      <div style={{ width: "100%", maxWidth: 520, display: "flex", flexDirection: "column", alignItems: "center", position: "relative", zIndex: 1 }}>
       {/* Silhouette background */}
       <img src={TROPHY_SILHOUETTE} alt="" style={{
         position: "absolute", top: "50%", left: "50%",
@@ -362,6 +364,7 @@ function LoginScreen({ players, onLogin, teamNames }) {
           No players yet. Type <span style={{ color: BC.amber, fontWeight: 700 }}>bcdir2025</span> to set up.
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -1695,6 +1698,7 @@ export default function App() {
 
   return (
     <div style={{ height: "100svh", width: "100%", background: BC.bg, display: "flex", flexDirection: "column", position: "relative", fontFamily: "'Montserrat', sans-serif", overflow: "hidden" }}>
+      <div style={{ maxWidth: 520, width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", height: "100%", position: "relative" }}>
       <Notif notif={notif} />
 
       {/* Minimal top strip */}
@@ -1793,6 +1797,7 @@ export default function App() {
             </button>
           );
         })}
+      </div>
       </div>
     </div>
   );
