@@ -978,6 +978,18 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
           }
         } catch(e) { console.log("[GolfCourseAPI] failed:", e); }
 
+        // If no results with state filter, retry without it
+        if (results.length === 0 && stateFilter) {
+          try {
+            const r3 = await fetch(`/api/courses2?search=${encodeURIComponent(q)}`);
+            if (r3.ok) { const d3 = await r3.json(); const raw3 = Array.isArray(d3)?d3:(d3.courses||d3.data||[]); results = [...results, ...parseRapidAPI(raw3, "")]; }
+          } catch(e) {}
+          try {
+            const r4 = await fetch(`/api/courses?search=${encodeURIComponent(q)}`);
+            if (r4.ok) { const d4 = await r4.json(); const gc4 = parseGolfCourseAPI(d4); for (const gc of gc4) { if (!results.find(r => r.name.toLowerCase() === gc.name.toLowerCase())) results.push(gc); } }
+          } catch(e) {}
+        }
+
         results = results.map(c => ({ ...c, _incompleteData: !hasRealSlope(c) }));
         setSearchResults(results);
       } catch(err) { console.log("Search failed:", err); setSearchResults([]); }
