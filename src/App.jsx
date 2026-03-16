@@ -1702,7 +1702,8 @@ export default function App() {
       <Notif notif={notif} />
 
       {/* Minimal top strip */}
-      <div style={{ background: BC.card, borderBottom: `1px solid ${BC.bdr}`, padding: "6px 16px", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, flexShrink: 0 }}>
+      <div style={{ background: BC.card, borderBottom: `1px solid ${BC.bdr}`, flexShrink: 0 }}>
+      <div style={{ maxWidth: 520, margin: "0 auto", padding: "6px 16px", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
         <div style={{ width: 6, height: 6, borderRadius: "50%", background: syncing ? BC.amber : "#22c55e" }} />
         {user.isDirector && (
           <button onClick={() => setView(view === "admin" ? "leaderboard" : "admin")} style={{
@@ -1719,6 +1720,7 @@ export default function App() {
         <button onClick={() => setUser(null)} style={{ background: "transparent", border: `1px solid ${BC.bdr}`, color: BC.t3, padding: "3px 10px", borderRadius: 8, fontSize: 9, cursor: "pointer" }}>
           Logout · <span style={{ color: BC.t2, fontWeight: 700 }}>{user.name}</span>
         </button>
+      </div>
       </div>
 
       {/* Content */}
@@ -1782,7 +1784,8 @@ export default function App() {
       </div>
 
       {/* Bottom Nav */}
-      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(18,16,13,0.97)", borderTop: `1px solid ${BC.bdr}`, display: "flex", zIndex: 100, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(18,16,13,0.97)", borderTop: `1px solid ${BC.bdr}`, zIndex: 100, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+      <div style={{ maxWidth: 520, margin: "0 auto", display: "flex" }}>
         {navItems.map(item => {
           const active = view === item.key;
           const clr = active ? BC.amber : BC.t3;
@@ -1797,6 +1800,7 @@ export default function App() {
             </button>
           );
         })}
+      </div>
       </div>
       </div>
     </div>
