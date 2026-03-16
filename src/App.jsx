@@ -2311,72 +2311,62 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view }) {
   ];
   return (
     <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200 }} />
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 200 }} />
       <div
         ref={dragRef}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         style={{
-          position: "fixed", bottom: 0, left: "50%",
-          transform: `translateX(-50%) translateY(${dragY}px)`,
-          transition: dragY === 0 ? "transform 0.25s ease" : "none",
-          width: "100%", maxWidth: 520,
-          background: "rgba(22,20,17,0.98)",
-          borderRadius: "16px 16px 0 0",
+          position: "fixed",
+          bottom: "calc(56px + env(safe-area-inset-bottom, 16px))",
+          right: "max(8px, calc(50vw - 252px))",
+          transform: `translateY(${dragY}px)`,
+          transition: dragY === 0 ? "transform 0.2s ease, opacity 0.15s ease" : "none",
+          width: 220,
+          background: "rgba(20,18,14,0.98)",
+          borderRadius: 12,
           border: `1px solid ${BC.bdr}`,
-          borderBottom: "none",
+          boxShadow: "0 -4px 24px rgba(0,0,0,0.6)",
           zIndex: 201,
-          paddingBottom: "env(safe-area-inset-bottom, 24px)",
+          overflow: "hidden",
         }}>
-        {/* Drag handle */}
-        <div style={{ width: 40, height: 4, borderRadius: 2, background: dragY > 40 ? BC.amber : "#444", margin: "10px auto 0", transition: "background 0.2s" }} />
 
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px 10px" }}>
-          <span style={{ fontSize: 16, fontWeight: 800, color: BC.gold }}>THE BOURBON CUP</span>
-          <button onClick={onClose} style={{ background: "#333", border: "none", color: BC.t2, width: 28, height: 28, borderRadius: "50%", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
-        </div>
-
-        <div style={{ height: 1, background: BC.bdr, margin: "0 20px 6px" }} />
-
-        {/* Menu items */}
-        {items.filter(i => i.key !== "logout").map(item => {
+        {/* Menu items — no icons */}
+        {items.filter(i => i.key !== "logout").map((item, idx) => {
           const isActive = item.key === view;
           return (
             <button key={item.key} onClick={() => {
               if (item.external) { window.open("https://thebourboncup.com/photos", "_blank"); onClose(); return; }
               onNavigate(item.key); onClose();
             }} style={{
-              width: "100%", padding: "13px 20px",
-              background: isActive ? BC.amber + "12" : "transparent",
-              border: "none",
+              width: "100%", padding: "12px 16px",
+              background: isActive ? BC.amber + "15" : "transparent",
+              borderTop: idx === 0 ? "none" : `1px solid ${BC.bdr}22`,
+              borderLeft: "none", borderRight: "none", borderBottom: "none",
               color: isActive ? BC.amber : BC.t1,
-              fontSize: 15, fontWeight: isActive ? 700 : 500,
+              fontSize: 13, fontWeight: isActive ? 700 : 500,
               cursor: "pointer", textAlign: "left",
-              display: "flex", alignItems: "center", gap: 14,
-              borderLeft: isActive ? `3px solid ${BC.amber}` : "3px solid transparent",
+              display: "flex", alignItems: "center", justifyContent: "space-between",
             }}>
-              <span style={{ fontSize: 20, width: 28, textAlign: "center" }}>{item.icon}</span>
-              <span style={{ flex: 1 }}>{item.label}</span>
-              <span style={{ fontSize: 12, color: BC.t3 }}>›</span>
+              <span>{item.label}</span>
+              {isActive && <span style={{ width: 6, height: 6, borderRadius: "50%", background: BC.amber, flexShrink: 0 }} />}
             </button>
           );
         })}
 
-        <div style={{ height: 1, background: BC.bdr, margin: "6px 20px" }} />
+        <div style={{ height: 1, background: BC.bdr + "55" }} />
 
-        {/* Logout at bottom */}
+        {/* Logout */}
         {items.filter(i => i.key === "logout").map(item => (
           <button key={item.key} onClick={() => { item.onLogout && item.onLogout(); }} style={{
-            width: "100%", padding: "13px 20px",
-            background: "transparent", border: "none",
-            color: BC.danger, fontSize: 15, fontWeight: 500,
+            width: "100%", padding: "12px 16px",
+            background: "transparent",
+            border: "none",
+            color: BC.danger, fontSize: 13, fontWeight: 500,
             cursor: "pointer", textAlign: "left",
-            display: "flex", alignItems: "center", gap: 14,
           }}>
-            <span style={{ fontSize: 20, width: 28, textAlign: "center" }}>{item.icon}</span>
-            <span>Logout</span>
+            Logout
           </button>
         ))}
       </div>
@@ -2623,7 +2613,7 @@ export default function App() {
       <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={() => setUser(null)} user={user} view={view} />
 
       {/* Bottom Nav */}
-      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(18,16,13,0.97)", borderTop: `1px solid ${BC.bdr}`, zIndex: 100, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(18,16,13,0.97)", borderTop: `1px solid ${BC.bdr}`, zIndex: 100, paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)" }}>
       <div style={{ maxWidth: 520, margin: "0 auto", display: "flex" }}>
         {navItems.map(item => {
           const active = view === item.key;
