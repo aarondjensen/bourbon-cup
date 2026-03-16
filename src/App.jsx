@@ -326,7 +326,7 @@ function LoginScreen({ players, onLogin, teamNames }) {
         position: "absolute", top: "50%", left: "50%",
         transform: "translate(-50%, -50%)",
         width: "100%", height: "100%",
-        objectFit: "contain", opacity: 0.18, filter: "brightness(1.2) contrast(1.1)", pointerEvents: "none", userSelect: "none", zIndex: 0,
+        objectFit: "contain", opacity: 0.28, filter: "brightness(1.4) contrast(1.2)", pointerEvents: "none", userSelect: "none", zIndex: 0,
       }} />
 
       {/* Title */}
@@ -337,28 +337,29 @@ function LoginScreen({ players, onLogin, teamNames }) {
 
 
 
-      {/* Logos with VS */}
-      {/* Logos row with VS centered between */}
-      <div style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 0, position: "relative", zIndex: 1, marginBottom: 10 }}>
-        <img src={teamA.logo} alt={teamA.name} style={{ width: "clamp(60px, 32vw, 90px)", height: "clamp(44px, 22vw, 64px)", objectFit: "contain" }} />
-        <div style={{ fontSize: "clamp(12px, 5vw, 16px)", fontWeight: 800, color: BC.gold, letterSpacing: 1, textAlign: "center", flexShrink: 0 }}>VS</div>
-        <img src={teamB.logo} alt={teamB.name} style={{ width: "clamp(60px, 32vw, 90px)", height: "clamp(44px, 22vw, 64px)", objectFit: "contain" }} />
-      </div>
-
-      {/* Two-column team layout */}
+      {/* Two-column layout with logos above each column and VS between */}
       <div style={{ width: "100%", maxWidth: 480, display: "flex", gap: "clamp(6px, 2vw, 12px)", position: "relative", zIndex: 1, alignItems: "flex-start" }}>
         {[teamA, teamB].map((team, ti) => {
+          const isFirst = ti === 0;
           const teamPlayers = filterPlayers(team.id === "A" ? teamAPlayers : teamBPlayers);
           return (
-            <div key={team.id} style={{ flex: 1, minWidth: 0 }}>
+            <>{isFirst && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", paddingTop: "clamp(20px, 10vw, 32px)", flexShrink: 0, width: "clamp(20px, 8vw, 28px)" }}>
+                <span style={{ fontSize: "clamp(11px, 4vw, 14px)", fontWeight: 800, color: BC.gold }}>VS</span>
+              </div>
+            )}
+            <div key={team.id} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center" }}>
+              {/* Logo centered above column */}
+              <img src={team.logo} alt={team.name} style={{ width: "clamp(60px, 32vw, 90px)", height: "clamp(44px, 22vw, 64px)", objectFit: "contain", marginBottom: 6 }} />
               {/* Player list */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "clamp(3px, 1vw, 6px)", background: BC.card + "88", border: `1px solid ${team.accent}44`, borderTop: `2px solid ${team.accent}`, borderRadius: 10, padding: "clamp(4px, 1.5vw, 8px)" }}>
+              <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "clamp(3px, 1vw, 6px)", background: BC.card + "88", border: `1px solid ${team.accent}44`, borderTop: `2px solid ${team.accent}`, borderRadius: 10, padding: "clamp(4px, 1.5vw, 8px)" }}>
                 {teamPlayers.length === 0
                   ? <div style={{ textAlign: "center", color: BC.t3, fontSize: 11, padding: "12px 4px" }}>No players</div>
                   : teamPlayers.map(p => <PlayerBtn key={p.player_id} p={p} team={team} />)
                 }
               </div>
             </div>
+            </>
           );
         })}
       </div>
