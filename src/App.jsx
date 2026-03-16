@@ -418,44 +418,113 @@ function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
 
       {/* ══ SCOREBOARD ══ */}
-      <div style={{ background: "#111", borderRadius: 14, border: `1px solid ${BC.bdr}`, marginBottom: 12, overflow: "hidden" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr" }}>
-          {/* Team A */}
-          <div style={{ background: aLeads ? TEAM_A.color + "66" : TEAM_A.color + "22", padding: "12px 10px", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
-            <img src={TEAM_A.logo} alt={tA.name} style={{ width: 44, height: 30, objectFit: "contain", marginBottom: 2 }} />
-            <div style={{ fontSize: 10, fontWeight: 800, color: TEAM_A.accent, letterSpacing: 0.5, lineHeight: 1 }}>{tA.name.toUpperCase()}</div>
-            <div style={{ fontSize: 42, fontWeight: 900, color: "#fff", lineHeight: 1, marginTop: 2 }}>
-              {tourneyTotals.A % 1 === 0 ? tourneyTotals.A : tourneyTotals.A.toFixed(1)}
-            </div>
-            {aLeads && <div style={{ fontSize: 8, color: TEAM_A.accent, fontWeight: 700, letterSpacing: 0.5 }}>Takes {(toWin - tourneyTotals.B).toFixed(1)} to Win</div>}
-          </div>
+      {(() => {
+        // Build progress bar segments from all matches
+        // earned = final pts, leading = pts if current match status holds, neutral = rest
+        const segments = { aEarned: 0, aLeading: 0, bLeading: 0, bEarned: 0, neutral: 0 };
+        matches.forEach(m => {
+          const fmt = tRounds.find(t => t.round_number === m.round)?.format || "singles";
+          const res = computeMatchResult(m, holeData, courses, tRounds, tPlayers, fmt, hcpOverrides);
+          const nassau = m.nassau || NASSAU_DEFAULT;
+          const maxPts = (nassau.front||0) + (nassau.back||0) + (nassau.overall||0);
+          const aP = res.totalPts.A, bP = res.totalPts.B;
+          const complete = res.overall?.complete;
+          if (complete) {
+            segments.aEarned += aP;
+            segments.bEarned += bP;
+            segments.neutral += maxPts - aP - bP;
+          } else if (aP > bP) {
+            segments.aEarned += aP; // already locked in segments
+            segments.aLeading += 0; // show projected
+            segments.neutral += maxPts - aP;
+          } else if (bP > aP) {
+            segments.bEarned += bP;
+            segments.neutral += maxPts - bP;
+          } else {
+            segments.neutral += maxPts;
+          }
+        });
+        const tot = totalAvail || 1;
+        // For in-progress matches, show projected pts as dim
+        const allResults = matches.map(m => {
+          const fmt = tRounds.find(t => t.round_number === m.round)?.format || "singles";
+          return computeMatchResult(m, holeData, courses, tRounds, tPlayers, fmt, hcpOverrides);
+        });
+        // Earned (final) vs projected (in-progress leading)
+        let aFinal = 0, aProj = 0, bFinal = 0, bProj = 0, neutral = 0;
+        allResults.forEach((res, i) => {
+          const nassau = matches[i].nassau || NASSAU_DEFAULT;
+          const maxPts = (nassau.front||0) + (nassau.back||0) + (nassau.overall||0);
+          const complete = res.overall?.complete;
+          if (complete) {
+            aFinal += res.totalPts.A;
+            bFinal += res.totalPts.B;
+            neutral += maxPts - res.totalPts.A - res.totalPts.B;
+          } else {
+            aProj += res.totalPts.A;
+            bProj += res.totalPts.B;
+            neutral += maxPts - res.totalPts.A - res.totalPts.B;
+          }
+        });
 
-          {/* Center */}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "10px 8px", gap: 4, minWidth: 64 }}>
-            <img src={TROPHY_PHOTO} alt="" style={{ width: 34, height: 34, objectFit: "contain" }} />
-            <div style={{ fontSize: 8, color: BC.t3, textAlign: "center", lineHeight: 1.5 }}>
-              Pts Avail:<br/><span style={{ fontWeight: 700, color: BC.gold }}>{Math.max(0, totalAvail - tourneyTotals.A - tourneyTotals.B).toFixed(1)}</span>
-            </div>
-            {!aLeads && !bLeads && <div style={{ fontSize: 8, fontWeight: 800, color: BC.gold, letterSpacing: 1 }}>TIED</div>}
-          </div>
+        const fmtScore = (n) => n % 1 === 0 ? String(n) : n.toFixed(1);
 
-          {/* Team B */}
-          <div style={{ background: bLeads ? TEAM_B.color + "66" : TEAM_B.color + "22", padding: "12px 10px", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
-            <img src={TEAM_B.logo} alt={tB.name} style={{ width: 44, height: 30, objectFit: "contain", marginBottom: 2 }} />
-            <div style={{ fontSize: 10, fontWeight: 800, color: TEAM_B.accent, letterSpacing: 0.5, lineHeight: 1 }}>{tB.name.toUpperCase()}</div>
-            <div style={{ fontSize: 42, fontWeight: 900, color: "#fff", lineHeight: 1, marginTop: 2 }}>
-              {tourneyTotals.B % 1 === 0 ? tourneyTotals.B : tourneyTotals.B.toFixed(1)}
-            </div>
-            {bLeads && <div style={{ fontSize: 8, color: TEAM_B.accent, fontWeight: 700, letterSpacing: 0.5 }}>Takes {(toWin - tourneyTotals.A).toFixed(1)} to Win</div>}
-          </div>
-        </div>
+        return (
+          <div style={{ background: "#111", borderRadius: 14, border: `1px solid ${BC.bdr}`, marginBottom: 12, overflow: "hidden" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr" }}>
+              {/* Team A */}
+              <div style={{ background: aLeads ? TEAM_A.color + "55" : TEAM_A.color + "1a", padding: "14px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+                <img src={TEAM_A.logo} alt={tA.name} style={{ width: 80, height: 52, objectFit: "contain" }} />
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                  <div style={{ fontSize: 44, fontWeight: 900, color: "#fff", lineHeight: 1 }}>{fmtScore(tourneyTotals.A)}</div>
+                  {aProj > 0 && <div style={{ fontSize: 14, fontWeight: 700, color: TEAM_A.accent + "99" }}>+{fmtScore(aProj)}</div>}
+                </div>
+                {aLeads && <div style={{ fontSize: 8, color: TEAM_A.accent, fontWeight: 700, letterSpacing: 0.5 }}>LEADS · {fmtScore(gap)} pts ahead</div>}
+              </div>
 
-        {/* Progress bar */}
-        <div style={{ height: 5, display: "flex" }}>
-          <div style={{ width: `${totalAvail > 0 ? (tourneyTotals.A / totalAvail) * 100 : 50}%`, background: TEAM_A.accent, transition: "width 0.6s ease" }} />
-          <div style={{ flex: 1, background: TEAM_B.accent }} />
-        </div>
-      </div>
+              {/* Center */}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "12px 10px", gap: 6, minWidth: 62 }}>
+                <img src={TROPHY_PHOTO} alt="" style={{ width: 38, height: 38, objectFit: "contain" }} />
+                {!aLeads && !bLeads && <div style={{ fontSize: 8, fontWeight: 800, color: BC.gold, letterSpacing: 1 }}>TIED</div>}
+                <div style={{ fontSize: 8, color: BC.t3, textAlign: "center", lineHeight: 1.6 }}>
+                  <span style={{ color: BC.gold, fontWeight: 700 }}>{fmtScore(Math.max(0, totalAvail - tourneyTotals.A - tourneyTotals.B - aProj - bProj))}</span><br/>avail
+                </div>
+              </div>
+
+              {/* Team B */}
+              <div style={{ background: bLeads ? TEAM_B.color + "55" : TEAM_B.color + "1a", padding: "14px 12px", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+                <img src={TEAM_B.logo} alt={tB.name} style={{ width: 80, height: 52, objectFit: "contain" }} />
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexDirection: "row-reverse" }}>
+                  <div style={{ fontSize: 44, fontWeight: 900, color: "#fff", lineHeight: 1 }}>{fmtScore(tourneyTotals.B)}</div>
+                  {bProj > 0 && <div style={{ fontSize: 14, fontWeight: 700, color: TEAM_B.accent + "99" }}>+{fmtScore(bProj)}</div>}
+                </div>
+                {bLeads && <div style={{ fontSize: 8, color: TEAM_B.accent, fontWeight: 700, letterSpacing: 0.5 }}>LEADS · {fmtScore(gap)} pts ahead</div>}
+              </div>
+            </div>
+
+            {/* Progress bar: bright=earned, dim=projected/leading, neutral=grey */}
+            <div style={{ height: 8, display: "flex" }}>
+              {/* A earned */}
+              <div style={{ width: `${(aFinal/tot)*100}%`, background: TEAM_A.accent, transition: "width 0.6s ease" }} />
+              {/* A projected (in-progress, leading) */}
+              <div style={{ width: `${(aProj/tot)*100}%`, background: TEAM_A.accent + "55", transition: "width 0.6s ease" }} />
+              {/* Neutral */}
+              <div style={{ flex: 1, background: BC.bdr + "66" }} />
+              {/* B projected */}
+              <div style={{ width: `${(bProj/tot)*100}%`, background: TEAM_B.accent + "55", transition: "width 0.6s ease" }} />
+              {/* B earned */}
+              <div style={{ width: `${(bFinal/tot)*100}%`, background: TEAM_B.accent, transition: "width 0.6s ease" }} />
+            </div>
+
+            {/* Legend */}
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 12px 6px", fontSize: 8, color: BC.t3 }}>
+              <span><span style={{ color: TEAM_A.accent }}>■</span> Earned <span style={{ color: TEAM_A.accent + "88" }}>■</span> Projected</span>
+              <span style={{ color: BC.gold, fontWeight: 700 }}>{fmtScore(toWin)} to win</span>
+              <span><span style={{ color: TEAM_B.accent + "88" }}>■</span> Projected <span style={{ color: TEAM_B.accent }}>■</span> Earned</span>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ══ ROUND FILTER TABS ══ */}
       <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
@@ -2235,28 +2304,72 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view }) {
   ];
   return (
     <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 200 }} />
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200 }} />
       <div
         ref={dragRef}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        style={{ position: "fixed", bottom: 0, left: "50%", transform: `translateX(-50%) translateY(${dragY}px)`, transition: dragY === 0 ? "transform 0.3s ease" : "none", width: "100%", maxWidth: 520, background: BC.card, borderRadius: "20px 20px 0 0", border: `1px solid ${BC.bdr}`, zIndex: 201, padding: "8px 0 32px" }}>
-        <div style={{ width: 36, height: 4, borderRadius: 2, background: dragY > 40 ? BC.amber : BC.bdr, margin: "8px auto 16px", transition: "background 0.2s" }} />
-        <div style={{ fontSize: 10, fontWeight: 700, color: BC.t3, letterSpacing: 2, padding: "0 20px 10px" }}>MORE</div>
-        {items.map(item => (
-          <button key={item.key} onClick={() => {
-            if (item.external) { window.open("https://thebourboncup.com/photos", "_blank"); onClose(); return; }
-            if (item.key === "logout") { item.onLogout && item.onLogout(); return; }
-            onNavigate(item.key); onClose();
-          }} style={{
-            width: "100%", padding: "14px 20px", background: "transparent", border: "none", borderBottom: `1px solid ${BC.bdr}10`,
-            color: BC.t1, fontSize: 14, fontWeight: 600, cursor: "pointer", textAlign: "left",
-            display: "flex", alignItems: "center", gap: 12,
+        style={{
+          position: "fixed", bottom: 0, left: "50%",
+          transform: `translateX(-50%) translateY(${dragY}px)`,
+          transition: dragY === 0 ? "transform 0.25s ease" : "none",
+          width: "100%", maxWidth: 520,
+          background: "rgba(22,20,17,0.98)",
+          borderRadius: "16px 16px 0 0",
+          border: `1px solid ${BC.bdr}`,
+          borderBottom: "none",
+          zIndex: 201,
+          paddingBottom: "env(safe-area-inset-bottom, 24px)",
+        }}>
+        {/* Drag handle */}
+        <div style={{ width: 40, height: 4, borderRadius: 2, background: dragY > 40 ? BC.amber : "#444", margin: "10px auto 0", transition: "background 0.2s" }} />
+
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px 10px" }}>
+          <span style={{ fontSize: 16, fontWeight: 800, color: BC.gold }}>THE BOURBON CUP</span>
+          <button onClick={onClose} style={{ background: "#333", border: "none", color: BC.t2, width: 28, height: 28, borderRadius: "50%", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+        </div>
+
+        <div style={{ height: 1, background: BC.bdr, margin: "0 20px 6px" }} />
+
+        {/* Menu items */}
+        {items.filter(i => i.key !== "logout").map(item => {
+          const isActive = item.key === view;
+          return (
+            <button key={item.key} onClick={() => {
+              if (item.external) { window.open("https://thebourboncup.com/photos", "_blank"); onClose(); return; }
+              onNavigate(item.key); onClose();
+            }} style={{
+              width: "100%", padding: "13px 20px",
+              background: isActive ? BC.amber + "12" : "transparent",
+              border: "none",
+              color: isActive ? BC.amber : BC.t1,
+              fontSize: 15, fontWeight: isActive ? 700 : 500,
+              cursor: "pointer", textAlign: "left",
+              display: "flex", alignItems: "center", gap: 14,
+              borderLeft: isActive ? `3px solid ${BC.amber}` : "3px solid transparent",
+            }}>
+              <span style={{ fontSize: 20, width: 28, textAlign: "center" }}>{item.icon}</span>
+              <span style={{ flex: 1 }}>{item.label}</span>
+              <span style={{ fontSize: 12, color: BC.t3 }}>›</span>
+            </button>
+          );
+        })}
+
+        <div style={{ height: 1, background: BC.bdr, margin: "6px 20px" }} />
+
+        {/* Logout at bottom */}
+        {items.filter(i => i.key === "logout").map(item => (
+          <button key={item.key} onClick={() => { item.onLogout && item.onLogout(); }} style={{
+            width: "100%", padding: "13px 20px",
+            background: "transparent", border: "none",
+            color: BC.danger, fontSize: 15, fontWeight: 500,
+            cursor: "pointer", textAlign: "left",
+            display: "flex", alignItems: "center", gap: 14,
           }}>
-            <span style={{ fontSize: 18 }}>{item.icon}</span>
-            <span>{item.label}</span>
-            {item.key === view && <span style={{ marginLeft: "auto", width: 8, height: 8, borderRadius: "50%", background: BC.amber }} />}
+            <span style={{ fontSize: 20, width: 28, textAlign: "center" }}>{item.icon}</span>
+            <span>Logout</span>
           </button>
         ))}
       </div>
@@ -2413,7 +2526,7 @@ export default function App() {
     if (icon === "trophy") return <img src={TROPHY_SILHOUETTE} alt="Board" style={{ width: sz, height: sz, objectFit: "contain", filter: active ? `brightness(0) saturate(100%) invert(65%) sepia(60%) saturate(500%) hue-rotate(5deg) brightness(105%)` : `brightness(0) saturate(100%) invert(40%) sepia(10%) saturate(400%) hue-rotate(185deg) brightness(80%)` }} />;
     if (icon === "groups") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round"><circle cx="9" cy="7" r="3"/><circle cx="17" cy="7" r="3"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/><path d="M21 21v-2a3 3 0 00-2-2.83"/></svg>;
     if (icon === "score") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4z"/></svg>;
-    if (icon === "betting") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/><path d="M8 6l1.5 1.5"/><path d="M16 6l-1.5 1.5"/></svg>;
+    if (icon === "betting") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v4c0 1.66 3.58 3 8 3s8-1.34 8-3V6"/><path d="M4 10v4c0 1.66 3.58 3 8 3s8-1.34 8-3v-4"/></svg>;
     if (icon === "menu") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>;
     if (icon === "admin") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>;
     return null;
