@@ -1641,10 +1641,334 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   );
 }
 
+
+// ── Betting View ──
+function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData, skinsPot, onSetSkin, onSetCtp, onUpdatePot, user, enrichedRounds }) {
+  const [activeTab, setActiveTab] = useState("skins");
+  const [activeRound, setActiveRound] = useState(1);
+  const [editPot, setEditPot] = useState(false);
+  const [potInput, setPotInput] = useState(String(skinsPot));
+  const [grossMode, setGrossMode] = useState(false);
+
+  const tr = tRounds.find(t => t.round_number === activeRound);
+  const course = courses.find(c => c.id === tr?.course_id);
+  const holePars = course?.hole_pars || Array(18).fill(4);
+  const par3s = holePars.map((p, i) => ({ hole: i, par: p })).filter(h => h.par === 3);
+
+  // Compute skins for a round
+  const computeSkins = (round, gross) => {
+    const tr2 = tRounds.find(t => t.round_number === round);
+    const course2 = courses.find(c => c.id === tr2?.course_id);
+    const pars = course2?.hole_pars || Array(18).fill(4);
+    const hcps = course2?.hole_handicaps || Array(18).fill(9);
+
+    const skins = [];
+    for (let h = 0; h < 18; h++) {
+      const scores = tPlayers.map(p => {
+        const raw = (holeData[`${p.player_id}_${round}`] || {})[h];
+        if (raw == null) return null;
+        if (gross) return { pid: p.player_id, name: p.name, score: raw };
+        // Net: simple stroke index
+        const hi = parseFloat(p.handicap_index) || 0;
+        const ch = calcCH(hi, course2?.slope || 113, course2?.rating || 72, course2?.par || 72);
+        const sorted = hcps.map((hcp, i) => ({ idx: i, hcp })).sort((a, b) => a.hcp - b.hcp);
+        let strokes = 0;
+        let rem = Math.abs(ch);
+        for (const s of sorted) { if (rem <= 0) break; if (s.idx === h) { strokes++; break; } rem--; }
+        return { pid: p.player_id, name: p.name, score: raw - strokes };
+      }).filter(Boolean);
+
+      if (scores.length < 2) { skins.push({ hole: h, winner: null, tied: false }); continue; }
+      const min = Math.min(...scores.map(s => s.score));
+      const winners = scores.filter(s => s.score === min);
+      if (winners.length === 1) skins.push({ hole: h, winner: winners[0], score: min, par: pars[h] });
+      else skins.push({ hole: h, winner: null, tied: true, score: min });
+    }
+    return skins;
+  };
+
+  const allSkins = [1,2,3,4].flatMap(r => computeSkins(r, grossMode).filter(s => s.winner).map(s => ({ ...s, round: r })));
+  const skinCount = {};
+  allSkins.forEach(s => { skinCount[s.winner.pid] = (skinCount[s.winner.pid] || 0) + 1; });
+  const totalSkins = allSkins.length;
+  const perSkin = totalSkins > 0 ? (skinsPot / totalSkins).toFixed(2) : "0.00";
+
+  return (
+    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
+      {/* Tab toggle */}
+      <div style={{ display: "flex", background: BC.card, borderRadius: 20, padding: 3, marginBottom: 14, border: `1px solid ${BC.bdr}` }}>
+        {[["skins","🎰 Skins"],["ctp","🎯 Closest to Pin"]].map(([k,lbl]) => (
+          <button key={k} onClick={() => setActiveTab(k)} style={{
+            flex: 1, padding: "8px 0", borderRadius: 16, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "none",
+            background: activeTab === k ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
+            color: activeTab === k ? "#0a0804" : BC.t3,
+          }}>{lbl}</button>
+        ))}
+      </div>
+
+      {activeTab === "skins" && (
+        <div>
+          {/* Pot */}
+          <div style={{ background: BC.card, borderRadius: 12, padding: "12px 14px", marginBottom: 12, border: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 10, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>SKINS POT</div>
+              {editPot ? (
+                <input autoFocus type="number" value={potInput} onChange={e => setPotInput(e.target.value)}
+                  onBlur={() => { onUpdatePot(parseFloat(potInput)||0); setEditPot(false); }}
+                  onKeyDown={e => { if (e.key === "Enter") { onUpdatePot(parseFloat(potInput)||0); setEditPot(false); }}}
+                  style={{ fontSize: 20, fontWeight: 800, color: BC.gold, background: "transparent", border: "none", borderBottom: `1px solid ${BC.amber}`, outline: "none", width: 100, fontFamily: "'Montserrat', sans-serif" }} />
+              ) : (
+                <div onClick={() => user?.isDirector && setEditPot(true)} style={{ fontSize: 20, fontWeight: 800, color: BC.gold, cursor: user?.isDirector ? "pointer" : "default" }}>
+                  ${skinsPot.toFixed(2)}
+                </div>
+              )}
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 10, color: BC.t3 }}>{totalSkins} skins won</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: BC.amber }}>${perSkin} / skin</div>
+            </div>
+          </div>
+
+          {/* Gross/Net toggle */}
+          <div style={{ display: "flex", background: BC.card, borderRadius: 16, padding: 3, marginBottom: 12, border: `1px solid ${BC.bdr}`, width: 160 }}>
+            {[["Net", false],["Gross", true]].map(([lbl, val]) => (
+              <button key={lbl} onClick={() => setGrossMode(val)} style={{
+                flex: 1, padding: "5px 0", borderRadius: 12, fontSize: 10, fontWeight: 700, cursor: "pointer", border: "none",
+                background: grossMode === val ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
+                color: grossMode === val ? "#0a0804" : BC.t3,
+              }}>{lbl}</button>
+            ))}
+          </div>
+
+          {/* Leaderboard */}
+          {Object.keys(skinCount).length > 0 && (
+            <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 12, overflow: "hidden" }}>
+              <div style={{ padding: "8px 14px", borderBottom: `1px solid ${BC.bdr}`, fontSize: 10, fontWeight: 700, color: BC.gold, letterSpacing: 1 }}>SKINS LEADERS</div>
+              {Object.entries(skinCount).sort((a,b) => b[1]-a[1]).map(([pid, count]) => {
+                const p = tPlayers.find(t => t.player_id === pid);
+                const team = p ? getTeam(p.team) : null;
+                return (
+                  <div key={pid} style={{ display: "flex", alignItems: "center", padding: "8px 14px", borderBottom: `1px solid ${BC.bdr}10`, gap: 8 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
+                    <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: BC.t1 }}>{p?.name || pid}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: BC.amber }}>{count} skin{count !== 1 ? "s" : ""}</span>
+                    <span style={{ fontSize: 11, color: BC.t3 }}>${(count * parseFloat(perSkin)).toFixed(2)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Round tabs */}
+          <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+            {[1,2,3,4].map(r => (
+              <button key={r} onClick={() => setActiveRound(r)} style={{
+                flex: 1, padding: "7px 4px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                background: activeRound === r ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
+                border: `1px solid ${activeRound === r ? "transparent" : BC.bdr}`,
+                color: activeRound === r ? "#0a0804" : BC.t2,
+              }}>Rd {r}</button>
+            ))}
+          </div>
+
+          {/* Hole-by-hole skins for active round */}
+          {computeSkins(activeRound, grossMode).map(s => (
+            <div key={s.hole} style={{ display: "flex", alignItems: "center", padding: "7px 12px", background: BC.card, borderRadius: 8, marginBottom: 4, border: `1px solid ${s.winner ? BC.amber + "44" : s.tied ? BC.bdr : BC.bdr}` }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: BC.t3, width: 40 }}>Hole {s.hole + 1}</span>
+              <span style={{ fontSize: 10, color: BC.t3, width: 30 }}>Par {holePars[s.hole]}</span>
+              <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: s.winner ? BC.amber : s.tied ? BC.t3 : BC.t3 }}>
+                {s.winner ? `${s.winner.name} (${s.score})` : s.tied ? "Tied — pushed" : "—"}
+              </span>
+              {s.winner && <span style={{ fontSize: 10, color: BC.amber, fontWeight: 700 }}>🏆 Skin</span>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {activeTab === "ctp" && (
+        <div>
+          <div style={{ fontSize: 11, color: BC.t3, marginBottom: 12 }}>Closest to the pin on all par 3s — director assigns winner per hole per round.</div>
+
+          {[1,2,3,4].map(r => {
+            const tr2 = tRounds.find(t => t.round_number === r);
+            const course2 = courses.find(c => c.id === tr2?.course_id);
+            const pars2 = course2?.hole_pars || [];
+            const par3holes = pars2.map((p, i) => ({ hole: i, par: p })).filter(h => h.par === 3);
+            if (par3holes.length === 0) return null;
+            return (
+              <div key={r} style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: BC.gold, letterSpacing: 1, marginBottom: 8 }}>ROUND {r} — {course2?.name || "TBD"}</div>
+                {par3holes.map(({ hole }) => {
+                  const key = `${r}_${hole}`;
+                  const winnerId = ctpData[key];
+                  const winner = tPlayers.find(p => p.player_id === winnerId);
+                  return (
+                    <div key={hole} style={{ background: BC.card, borderRadius: 8, padding: "8px 12px", marginBottom: 4, border: `1px solid ${winner ? BC.amber + "44" : BC.bdr}`, display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: BC.t3, width: 44, flexShrink: 0 }}>Hole {hole + 1}</span>
+                      {user?.isDirector ? (
+                        <select value={winnerId || ""} onChange={e => onSetCtp(r, hole, e.target.value || null)}
+                          style={{ flex: 1, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, color: BC.t1, fontSize: 11, padding: "4px 6px", fontFamily: "'Montserrat', sans-serif" }}>
+                          <option value="">-- Not set --</option>
+                          {tPlayers.map(p => <option key={p.player_id} value={p.player_id}>{p.name}</option>)}
+                        </select>
+                      ) : (
+                        <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: winner ? BC.amber : BC.t3 }}>{winner ? winner.name : "Not set"}</span>
+                      )}
+                      {winner && <span style={{ fontSize: 10, color: BC.amber }}>📍</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Analytics View ──
+function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historicalData, user }) {
+  const [analyticsTab, setAnalyticsTab] = useState("current");
+
+  // Compute current year player stats from match results
+  const playerStats = useMemo(() => {
+    const stats = {};
+    tPlayers.forEach(p => { stats[p.player_id] = { name: p.name, team: p.team, wins: 0, losses: 0, halves: 0, pts: 0, skinsWon: 0 }; });
+
+    matches.forEach(m => {
+      const fmt = tRounds.find(t => t.round_number === m.round)?.format || "singles";
+      const res = computeMatchResult(m, holeData, courses, tRounds, tPlayers, fmt, {});
+      const aTotal = res.totalPts.A, bTotal = res.totalPts.B;
+      [...m.teamA].forEach(pid => {
+        if (!stats[pid]) return;
+        stats[pid].pts += aTotal;
+        if (aTotal > bTotal) stats[pid].wins++;
+        else if (bTotal > aTotal) stats[pid].losses++;
+        else stats[pid].halves++;
+      });
+      [...m.teamB].forEach(pid => {
+        if (!stats[pid]) return;
+        stats[pid].pts += bTotal;
+        if (bTotal > aTotal) stats[pid].wins++;
+        else if (aTotal > bTotal) stats[pid].losses++;
+        else stats[pid].halves++;
+      });
+    });
+    return Object.values(stats).sort((a, b) => b.pts - a.pts);
+  }, [tPlayers, matches, holeData, tRounds, courses]);
+
+  return (
+    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
+      <div style={{ display: "flex", background: BC.card, borderRadius: 20, padding: 3, marginBottom: 14, border: `1px solid ${BC.bdr}` }}>
+        {[["current","2026 Stats"],["history","History"]].map(([k,lbl]) => (
+          <button key={k} onClick={() => setAnalyticsTab(k)} style={{
+            flex: 1, padding: "8px 0", borderRadius: 16, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "none",
+            background: analyticsTab === k ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
+            color: analyticsTab === k ? "#0a0804" : BC.t3,
+          }}>{lbl}</button>
+        ))}
+      </div>
+
+      {analyticsTab === "current" && (
+        <div>
+          <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 44px 44px 44px 52px", padding: "8px 12px", borderBottom: `1px solid ${BC.bdr}`, fontSize: 9, fontWeight: 700, color: BC.t3, letterSpacing: 1 }}>
+              <div>PLAYER</div><div style={{textAlign:"center"}}>W</div><div style={{textAlign:"center"}}>L</div><div style={{textAlign:"center"}}>H</div><div style={{textAlign:"right"}}>PTS</div>
+            </div>
+            {playerStats.map((p, i) => {
+              const team = getTeam(p.team);
+              return (
+                <div key={p.name} style={{ display: "grid", gridTemplateColumns: "1fr 44px 44px 44px 52px", padding: "9px 12px", borderBottom: i < playerStats.length-1 ? `1px solid ${BC.bdr}10` : "none", alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ width: 6, height: 6, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, fontWeight: 600, color: BC.t1 }}>{p.name}</span>
+                  </div>
+                  <div style={{ textAlign: "center", fontSize: 12, color: "#22c55e", fontWeight: 600 }}>{p.wins}</div>
+                  <div style={{ textAlign: "center", fontSize: 12, color: BC.danger, fontWeight: 600 }}>{p.losses}</div>
+                  <div style={{ textAlign: "center", fontSize: 12, color: BC.t3 }}>{p.halves}</div>
+                  <div style={{ textAlign: "right", fontSize: 12, fontWeight: 700, color: BC.amber }}>{p.pts.toFixed(1)}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {analyticsTab === "history" && (
+        <div>
+          {historicalData.length === 0 ? (
+            <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>
+              <div style={{ fontSize: 32, marginBottom: 12 }}>📊</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: BC.t2, marginBottom: 8 }}>No Historical Data Yet</div>
+              <div style={{ fontSize: 12 }}>Past tournament results will appear here after each year's event is archived.</div>
+            </div>
+          ) : (
+            historicalData.sort((a,b) => b.year - a.year).map(yr => (
+              <div key={yr.id} style={{ background: BC.card, borderRadius: 12, padding: 14, marginBottom: 12, border: `1px solid ${BC.bdr}` }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: BC.gold, marginBottom: 8 }}>{yr.year} · {yr.location}</div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                  <div style={{ fontSize: 12, color: BC.t1 }}><span style={{ color: TEAM_A.accent, fontWeight: 700 }}>{yr.teamAName}</span> {yr.teamAScore}</div>
+                  <div style={{ fontSize: 12, color: BC.t1 }}><span style={{ color: TEAM_B.accent, fontWeight: 700 }}>{yr.teamBName}</span> {yr.teamBScore}</div>
+                </div>
+                {yr.winner && <div style={{ fontSize: 11, color: BC.amber, fontWeight: 700 }}>🏆 {yr.winner} won the Bourbon Cup</div>}
+              </div>
+            ))
+          )}
+          {user?.isDirector && (
+            <div style={{ textAlign: "center", marginTop: 16 }}>
+              <div style={{ fontSize: 10, color: BC.t3 }}>Historical data can be added by directors via Firestore directly for now.</div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Slide-up Menu ──
+function SlideMenu({ open, onClose, onNavigate, user, view }) {
+  if (!open) return null;
+  const items = [
+    { key: "analytics", label: "Player Analytics", icon: "📊" },
+    { key: "history",   label: "Historical Data",  icon: "📅" },
+    { key: "photos",    label: "Photo Library",     icon: "📸", external: true },
+    ...(user?.isDirector ? [{ key: "admin", label: "Admin Settings", icon: "⚙️" }] : []),
+  ];
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 200 }} />
+      <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 520, background: BC.card, borderRadius: "20px 20px 0 0", border: `1px solid ${BC.bdr}`, zIndex: 201, padding: "8px 0 32px" }}>
+        <div style={{ width: 36, height: 4, borderRadius: 2, background: BC.bdr, margin: "8px auto 16px" }} />
+        <div style={{ fontSize: 10, fontWeight: 700, color: BC.t3, letterSpacing: 2, padding: "0 20px 10px" }}>MORE</div>
+        {items.map(item => (
+          <button key={item.key} onClick={() => {
+            if (item.external) { window.open("https://thebourboncup.com/photos", "_blank"); onClose(); return; }
+            onNavigate(item.key); onClose();
+          }} style={{
+            width: "100%", padding: "14px 20px", background: "transparent", border: "none", borderBottom: `1px solid ${BC.bdr}10`,
+            color: BC.t1, fontSize: 14, fontWeight: 600, cursor: "pointer", textAlign: "left",
+            display: "flex", alignItems: "center", gap: 12,
+          }}>
+            <span style={{ fontSize: 18 }}>{item.icon}</span>
+            <span>{item.label}</span>
+            {item.key === view && <span style={{ marginLeft: "auto", width: 8, height: 8, borderRadius: "50%", background: BC.amber }} />}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
 // ── Main App ──
 export default function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState("leaderboard");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [skinsData, setSkinsData] = useState({}); // { "round_hole": pid }
+  const [ctpData, setCtpData] = useState({});     // { "round_hole": pid }
+  const [skinsPot, setSkinsPot] = useState(0);
+  const [historicalData, setHistoricalData] = useState([]);
   const [teamNames, setTeamNames] = useState({ A: "Team Alpha", B: "Team Beta" });
 
   // Keep TEAM_A/TEAM_B module vars in sync with state
@@ -1676,6 +2000,21 @@ export default function App() {
       if (tn) setTeamNames({ A: tn.teamA || "Team Alpha", B: tn.teamB || "Team Beta" });
     }));
     unsubs.push(db.subscribe("bc_rounds", f, rows => setTRounds(rows)));
+    unsubs.push(db.subscribe("bc_skins", f, rows => {
+      const sd = {};
+      rows.forEach(r => { sd[`${r.round}_${r.hole}`] = r.player_id; });
+      setSkinsData(sd);
+    }));
+    unsubs.push(db.subscribe("bc_ctp", f, rows => {
+      const cd = {};
+      rows.forEach(r => { cd[`${r.round}_${r.hole}`] = r.player_id; });
+      setCtpData(cd);
+    }));
+    unsubs.push(db.subscribe("bc_tournament_settings", f, rows => {
+      const s = rows.find(r => r.id === "bc_settings_main");
+      if (s?.skins_pot) setSkinsPot(s.skins_pot);
+    }));
+    unsubs.push(db.subscribe("bc_historical", [{ field: "type", op: "==", value: "year" }], setHistoricalData));
     unsubs.push(db.subscribe("bc_hcp_overrides", f, rows => {
       const data = {};
       rows.forEach(r => { if (r.round_number) data[r.round_number] = r.overrides || {}; });
@@ -1731,6 +2070,20 @@ export default function App() {
   const onUpdatePlayer = useCallback(async (p) => { await db.upsert("bc_players", p); }, []);
   const onRemovePlayer = useCallback(async (pid) => { await db.delete("bc_players", pid); }, []);
   const onAddCourse = useCallback(async (c) => { if (c._delete) { await db.delete("bc_courses", c.id); } else { await db.upsert("bc_courses", c); } }, []);
+  const onSetSkin = useCallback(async (round, hole, pid) => {
+    const id = `bc_skin_r${round}_h${hole+1}`;
+    if (pid) await db.upsert("bc_skins", { id, tournament_id: TOURNAMENT_ID, round, hole, player_id: pid });
+    else await db.delete("bc_skins", id);
+  }, []);
+  const onSetCtp = useCallback(async (round, hole, pid) => {
+    const id = `bc_ctp_r${round}_h${hole+1}`;
+    if (pid) await db.upsert("bc_ctp", { id, tournament_id: TOURNAMENT_ID, round, hole, player_id: pid });
+    else await db.delete("bc_ctp", id);
+  }, []);
+  const onUpdatePot = useCallback(async (amt) => {
+    setSkinsPot(amt);
+    await db.upsert("bc_tournament_settings", { id: "bc_settings_main", tournament_id: TOURNAMENT_ID, skins_pot: amt });
+  }, []);
   const onSetRound = useCallback(async (r) => { await db.upsert("bc_rounds", r); }, []);
   const onSetMatch = useCallback(async (m) => {
     if (m._delete) { await db.delete("bc_matches", m.id); }
@@ -1742,9 +2095,11 @@ export default function App() {
   if (!user) return <LoginScreen players={tPlayers} teamNames={teamNames} onLogin={p => { setUser({ ...p, isDirector: !!p.isDirector }); }} />;
 
   const navItems = [
-    { key: "scoring",     label: "Scoring", icon: "score" },
+    { key: "scoring",     label: "Scoring",     icon: "score" },
     { key: "leaderboard", label: "Leaderboard", icon: "trophy" },
-    { key: "groups",      label: "Matches", icon: "groups" },
+    { key: "groups",      label: "Matches",     icon: "groups" },
+    { key: "betting",     label: "Betting",     icon: "betting" },
+    { key: "menu",        label: "More",        icon: "menu" },
   ];
 
   const renderIcon = (icon, active) => {
@@ -1753,6 +2108,8 @@ export default function App() {
     if (icon === "trophy") return <img src={TROPHY_SILHOUETTE} alt="Board" style={{ width: sz + 6, height: sz + 6, objectFit: "contain", filter: active ? `brightness(0) saturate(100%) invert(65%) sepia(60%) saturate(500%) hue-rotate(5deg) brightness(105%)` : `brightness(0) saturate(100%) invert(40%) sepia(10%) saturate(400%) hue-rotate(185deg) brightness(80%)` }} />;
     if (icon === "groups") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round"><circle cx="9" cy="7" r="3"/><circle cx="17" cy="7" r="3"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/><path d="M21 21v-2a3 3 0 00-2-2.83"/></svg>;
     if (icon === "score") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4z"/></svg>;
+    if (icon === "betting") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/><path d="M8 6l1.5 1.5"/><path d="M16 6l-1.5 1.5"/></svg>;
+    if (icon === "menu") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>;
     if (icon === "admin") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>;
     return null;
   };
@@ -1821,6 +2178,20 @@ export default function App() {
             teamNames={teamNames}
           />
         )}
+        {view === "betting" && (
+          <BettingView
+            tPlayers={tPlayers} tRounds={enrichedRounds} courses={courses}
+            holeData={holeData} skinsData={skinsData} ctpData={ctpData}
+            skinsPot={skinsPot} onSetSkin={onSetSkin} onSetCtp={onSetCtp}
+            onUpdatePot={onUpdatePot} user={user} enrichedRounds={enrichedRounds}
+          />
+        )}
+        {(view === "analytics" || view === "history") && (
+          <AnalyticsView
+            tPlayers={tPlayers} matches={enrichedMatches} holeData={holeData}
+            tRounds={enrichedRounds} courses={courses} historicalData={historicalData} user={user}
+          />
+        )}
         {view === "admin" && (
           <AdminView
             user={user}
@@ -1844,6 +2215,8 @@ export default function App() {
         )}
       </div>
 
+      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} user={user} view={view} />
+
       {/* Bottom Nav */}
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(18,16,13,0.97)", borderTop: `1px solid ${BC.bdr}`, zIndex: 100, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
       <div style={{ maxWidth: 520, margin: "0 auto", display: "flex" }}>
@@ -1851,7 +2224,10 @@ export default function App() {
           const active = view === item.key;
           const clr = active ? BC.amber : BC.t3;
           return (
-            <button key={item.key} onClick={() => setView(item.key)} style={{
+            <button key={item.key} onClick={() => {
+              if (item.key === "menu") { setMenuOpen(true); return; }
+              setView(item.key);
+            }} style={{
               flex: 1, padding: "10px 4px 12px", display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
               background: "transparent", border: "none", cursor: "pointer",
             }}>
