@@ -551,6 +551,7 @@ function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds
                     <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", padding: "8px 10px 4px", gap: 8, alignItems: "center" }}>
                       {/* Team A */}
                       <div style={{ borderLeft: `3px solid ${TEAM_A.accent}`, paddingLeft: 6 }}>
+                        <img src={TEAM_A.logo} alt={tA.name} style={{ width: 32, height: 22, objectFit: "contain", marginBottom: 3, display: "block" }} />
                         {(m.teamANames || ["Team A"]).map((name, ni) => (
                           <div key={ni} style={{ fontSize: 12, fontWeight: 700, color: matchWinner === "A" ? TEAM_A.accent : BC.t1, lineHeight: 1.4 }}>{name}</div>
                         ))}
@@ -571,6 +572,7 @@ function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds
 
                       {/* Team B */}
                       <div style={{ borderRight: `3px solid ${TEAM_B.accent}`, paddingRight: 6, textAlign: "right" }}>
+                        <img src={TEAM_B.logo} alt={tB.name} style={{ width: 32, height: 22, objectFit: "contain", marginBottom: 3, display: "block", marginLeft: "auto" }} />
                         {(m.teamBNames || ["Team B"]).map((name, ni) => (
                           <div key={ni} style={{ fontSize: 12, fontWeight: 700, color: matchWinner === "B" ? TEAM_B.accent : BC.t1, lineHeight: 1.4 }}>{name}</div>
                         ))}
@@ -1041,7 +1043,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
     const key = (tee.name || "").toLowerCase().trim();
     if (TEE_COLOR_MAP[key]) return TEE_COLOR_MAP[key];
     for (const [word, clr] of Object.entries(TEE_COLOR_MAP)) { if (key.includes(word)) return clr; }
-    if (tee.color && tee.color !== "#000" && tee.color !== "#000000") return tee.color;
+    const c = tee.color || "";
+    // Black tees: use white text/border so it's visible on dark background
+    if (!c || c === "#000" || c === "#000000" || c === "black") return "#ffffff";
+    if (c && tee.color !== "#000" && tee.color !== "#000000") return tee.color;
     return ["#60a5fa","#f59e0b","#a78bfa","#34d399","#fb923c"][index % 5];
   };
   const TeeColorSwatch = ({ color, name, size = 12 }) => {
@@ -1368,9 +1373,22 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
             {/* Handicap Overrides */}
             <div style={{ marginBottom: 14 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold }}>HANDICAP INDEX OVERRIDES</div>
-                <div style={{ fontSize: 9, color: BC.t3 }}>Leave blank to use base index</div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, gap: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>HANDICAP INDEX OVERRIDES</div>
+                {/* Handicap mode pill toggle */}
+                <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}`, flexShrink: 0 }}>
+                  {[["low_man", "Low Man"], ["full", "Full"]].map(([val, lbl]) => {
+                    const active = (handicapMode[editRound] || "low_man") === val;
+                    return (
+                      <button key={val} onClick={() => setHandicapMode(prev => ({ ...prev, [editRound]: val }))} style={{
+                        padding: "3px 8px", borderRadius: 16, fontSize: 9, fontWeight: 700, border: "none", cursor: "pointer",
+                        background: active ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
+                        color: active ? "#0a0804" : BC.t3,
+                        transition: "all 0.15s ease",
+                      }}>{lbl}</button>
+                    );
+                  })}
+                </div>
               </div>
               {tPlayers.length === 0 && <div style={{ fontSize: 11, color: BC.t3 }}>No players added yet.</div>}
               {[TEAM_A, TEAM_B].map(team => (
@@ -1419,26 +1437,6 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   })}
                 </div>
               ))}
-            </div>
-
-            {/* Handicap Mode */}
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, marginBottom: 8 }}>HANDICAP MODE</div>
-              <div style={{ display: "flex", gap: 8 }}>
-                {[["low_man", "Play Off Low Man", "Lowest CH plays scratch, others get the difference"], ["full", "Full Strokes", "Each player receives their full course handicap"]].map(([val, label, desc]) => {
-                  const active = (handicapMode[editRound] || "low_man") === val;
-                  return (
-                    <button key={val} onClick={() => setHandicapMode(prev => ({ ...prev, [editRound]: val }))} style={{
-                      flex: 1, padding: "10px 8px", borderRadius: 10, cursor: "pointer", textAlign: "left",
-                      background: active ? (val === "low_man" ? BC.amber + "15" : BC.card) : BC.inp,
-                      border: `1px solid ${active ? BC.amber : BC.bdr}`,
-                    }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: active ? BC.amber : BC.t2, marginBottom: 3 }}>{label}</div>
-                      <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.4 }}>{desc}</div>
-                    </button>
-                  );
-                })}
-              </div>
             </div>
 
             {/* Tee Assignments */}
@@ -1497,9 +1495,15 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                                 return (
                                   <button key={tee.name} onClick={() => assignTee(p.player_id, tee.name, hi)} style={{
                                     padding: "4px 8px", borderRadius: 6, cursor: "pointer", fontSize: 9, fontWeight: 700,
-                                    background: isActive ? tee.color + "33" : BC.inp,
-                                    border: `1px solid ${isActive ? tee.color : BC.bdr}`,
-                                    color: isActive ? tee.color : BC.t3,
+                                    background: isActive
+                                      ? (tee.color === "#000000" || tee.color === "#000" || tee.color === "black" ? "#333" : tee.color + "33")
+                                      : BC.inp,
+                                    border: `1px solid ${isActive
+                                      ? (tee.color === "#000000" || tee.color === "#000" || tee.color === "black" ? "#888" : tee.color)
+                                      : BC.bdr}`,
+                                    color: isActive
+                                      ? (tee.color === "#000000" || tee.color === "#000" || tee.color === "black" ? "#fff" : tee.color)
+                                      : BC.t3,
                                     transform: isActive ? "scale(1.05)" : "scale(1)",
                                     transition: "all 0.15s ease",
                                   }}>{tee.name.substring(0,5)}</button>
