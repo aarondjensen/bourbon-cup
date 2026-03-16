@@ -334,21 +334,22 @@ function LoginScreen({ players, onLogin, teamNames }) {
 
   return (
     <div style={{ height: "100svh", background: BC.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 10px", fontFamily: "'Montserrat', sans-serif", position: "relative", overflow: "hidden" }}>
-      {/* Desktop centering wrapper */}
-      <div style={{ width: "100%", maxWidth: 520, display: "flex", flexDirection: "column", alignItems: "center", position: "relative", zIndex: 1 }}>
-      {/* Silhouette background */}
+      {/* Silhouette — fixed full-screen background */}
       <img src={TROPHY_SILHOUETTE} alt="" style={{
-        position: "absolute", top: "50%", left: "50%",
+        position: "fixed", top: "50%", left: "50%",
         transform: "translate(-50%, -50%)",
         width: "100%", height: "100%",
         objectFit: "contain", opacity: 0.28, filter: "brightness(1.4) contrast(1.2)", pointerEvents: "none", userSelect: "none", zIndex: 0,
       }} />
 
-      {/* Title */}
-      <div style={{ marginBottom: 10, textAlign: "center", position: "relative", zIndex: 1 }}>
-        <div style={{ fontSize: "clamp(20px, 8vw, 28px)", fontWeight: 800, color: BC.gold, letterSpacing: 2, textAlign: "center" }}>THE BOURBON CUP</div>
+      {/* Title — sits above the silhouette, outside content card */}
+      <div style={{ textAlign: "center", position: "relative", zIndex: 1, marginBottom: 14 }}>
+        <div style={{ fontSize: "clamp(20px, 8vw, 28px)", fontWeight: 800, color: BC.gold, letterSpacing: 2 }}>THE BOURBON CUP</div>
         <div style={{ fontSize: "clamp(10px, 3vw, 12px)", color: BC.t3, letterSpacing: "0.3em", marginTop: 3 }}>2026 GAYLORD, MI</div>
       </div>
+
+      {/* Desktop centering wrapper */}
+      <div style={{ width: "100%", maxWidth: 520, display: "flex", flexDirection: "column", alignItems: "center", position: "relative", zIndex: 1 }}>
 
 
 
@@ -1420,18 +1421,8 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               </div>
             </div>
 
-            {/* Format desc — compact */}
-            {roundFormat && (() => {
-              const fmt = FORMATS.find(f => f.id === roundFormat);
-              return <div style={{ fontSize: 9, color: BC.t3, padding: "5px 8px", background: BC.bg, borderRadius: 6, marginBottom: 8, lineHeight: 1.4 }}>
-                {fmt?.desc}
-                {fmt?.scoringType === "custom" && <span style={{ color: BC.amber }}> ⚠ Custom scoring</span>}
-                {fmt?.scoringType === "tilt" && <span style={{ color: BC.amber }}> · 4-pt format</span>}
-              </div>;
-            })()}
-
-            {/* Tee Times — compact 4-field */}
-            <label style={LabelStyle}>Tee Times</label>
+            {/* Tee Times */}
+            <label style={{ ...LabelStyle, marginTop: 4 }}>TEE TIMES</label>
             {(() => {
               const parseTime = (str) => {
                 if (!str) return null;
@@ -1558,8 +1549,41 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     const override = hcpOverrides[editRound]?.[p.player_id];
                     const hasOverride = override !== undefined && override !== "";
                     return (
-                      <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: "1fr 52px 72px 28px", gap: 6, alignItems: "center", marginBottom: 4 }}>
-                        <div style={{ fontSize: 12, color: BC.t1, fontWeight: 600 }}>{p.name}</div>
+                      {(() => {
+                        const tr2 = tRounds.find(t => t.round_number === editRound);
+                        const course2 = courses.find(c => c.id === tr2?.course_id);
+                        const tees2 = course2?.tee_boxes || [];
+                        const assignments2 = teeAssignments[editRound] || {};
+                        const assignTee2 = (pid, teeName, playerHI) => {
+                          const oldTeeName = assignments2[pid] || tees2[0]?.name;
+                          const oldTee = tees2.find(t => t.name === oldTeeName);
+                          const newTee = tees2.find(t => t.name === teeName);
+                          if (oldTee && newTee) {
+                            const oldCH = calcCH(parseFloat(playerHI)||0, oldTee.slope||113, oldTee.rating||72, oldTee.par||72);
+                            const newCH = calcCH(parseFloat(playerHI)||0, newTee.slope||113, newTee.rating||72, newTee.par||72);
+                            showChDelta(`tee_${editRound}_${p.player_id}`, newCH - oldCH);
+                          }
+                          setTeeAssignments(prev => ({ ...prev, [editRound]: { ...(prev[editRound]||{}), [pid]: teeName } }));
+                        };
+                        const currentTee2 = assignments2[p.player_id] || tees2[0]?.name;
+                        return (
+                      <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: "1fr 36px 72px 28px", gap: 6, alignItems: "center", marginBottom: 4 }}>
+                        <div style={{ fontSize: 12, color: BC.t1, fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
+                          {p.name}
+                          {/* Tee buttons inline */}
+                          {tees2.length > 0 && tees2.map(tee => {
+                            const isAct = currentTee2 === tee.name;
+                            const isBlack = tee.color === "#000000" || tee.color === "#000" || tee.color === "black";
+                            return (
+                              <button key={tee.name} onClick={() => assignTee2(p.player_id, tee.name, baseHI)} style={{
+                                padding: "1px 5px", borderRadius: 4, cursor: "pointer", fontSize: 8, fontWeight: 700, flexShrink: 0,
+                                background: isAct ? (isBlack ? "#333" : tee.color + "33") : "transparent",
+                                border: `1px solid ${isAct ? (isBlack ? "#888" : tee.color) : BC.bdr+"66"}`,
+                                color: isAct ? (isBlack ? "#fff" : tee.color) : BC.t3,
+                              }}>{tee.name.substring(0,3)}</button>
+                            );
+                          })}
+                        </div>
                         <div style={{ fontSize: 10, color: BC.t3, fontWeight: 400, textAlign: "right" }}>{baseHI}</div>
                         <input
                           type="number"
@@ -1590,91 +1614,13 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                           <ChDeltaBadge delta={chDeltas[`hcp_${editRound}_${p.player_id}`]} />
                         )}
                       </div>
+                        );
+                      })()}
                     );
                   })}
                 </div>
               ))}
             </div>
-
-            {/* Tee Assignments */}
-            {(() => {
-              const tr = tRounds.find(t => t.round_number === editRound);
-              const course = courses.find(c => c.id === tr?.course_id);
-              const tees = course?.tee_boxes || [];
-              if (!course || tees.length === 0) return null;
-              const assignments = teeAssignments[editRound] || {};
-              const assignTee = (pid, teeName, playerHI) => {
-                const oldTeeName = assignments[pid] || tees[0]?.name;
-                const oldTee = tees.find(t => t.name === oldTeeName);
-                const newTee = tees.find(t => t.name === teeName);
-                if (oldTee && newTee) {
-                  const oldCH = calcCH(parseFloat(playerHI)||0, oldTee.slope||113, oldTee.rating||72, oldTee.par||72);
-                  const newCH = calcCH(parseFloat(playerHI)||0, newTee.slope||113, newTee.rating||72, newTee.par||72);
-                  const delta = newCH - oldCH;
-                  showChDelta(`tee_${editRound}_${pid}`, delta);
-                }
-                setTeeAssignments(prev => ({ ...prev, [editRound]: { ...(prev[editRound]||{}), [pid]: teeName } }));
-              };
-              return (
-                <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, marginBottom: 4 }}>TEE ASSIGNMENTS</div>
-                  <div style={{ fontSize: 9, color: BC.t3, marginBottom: 10 }}>{course.name}</div>
-                  {/* Tee legend */}
-                  <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
-                    {tees.map(tee => (
-                      <div key={tee.name} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, color: BC.t2 }}>
-                        <span style={{ width: 10, height: 10, borderRadius: 2, background: tee.color || "#888", display: "inline-block" }} />
-                        {tee.name} ({tee.slope}/{tee.rating})
-                      </div>
-                    ))}
-                  </div>
-                  {[TEAM_A, TEAM_B].map(team => (
-                    <div key={team.id} style={{ marginBottom: 8 }}>
-                      <div style={{ fontSize: 9, fontWeight: 700, color: team.accent, letterSpacing: 1, marginBottom: 4 }}>{teamNames?.[team.id] || team.name}</div>
-                      {tPlayers.filter(p => p.team === team.id).map(p => {
-                        const hi = hcpOverrides[editRound]?.[p.player_id] ?? p.handicap_index;
-                        const currentTee = assignments[p.player_id] || tees[0]?.name;
-                        const teeObj = tees.find(t => t.name === currentTee);
-                        const ch = teeObj ? calcCH(parseFloat(hi)||0, teeObj.slope||113, teeObj.rating||72, teeObj.par||72) : 0;
-                        const key = `tee_${editRound}_${p.player_id}`;
-                        return (
-                          <div key={p.player_id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <span style={{ fontSize: 12, fontWeight: 600, color: BC.t1 }}>{p.name}</span>
-                              <span style={{ fontSize: 9, color: BC.t3, marginLeft: 6 }}>
-                                HI {hi} · CH {ch}
-                                {chDeltas[key] !== undefined && <ChDeltaBadge delta={chDeltas[key]} />}
-                              </span>
-                            </div>
-                            <div style={{ display: "flex", gap: 4 }}>
-                              {tees.map(tee => {
-                                const isActive = currentTee === tee.name;
-                                return (
-                                  <button key={tee.name} onClick={() => assignTee(p.player_id, tee.name, hi)} style={{
-                                    padding: "4px 8px", borderRadius: 6, cursor: "pointer", fontSize: 9, fontWeight: 700,
-                                    background: isActive
-                                      ? (tee.color === "#000000" || tee.color === "#000" || tee.color === "black" ? "#333" : tee.color + "33")
-                                      : BC.inp,
-                                    border: `1px solid ${isActive
-                                      ? (tee.color === "#000000" || tee.color === "#000" || tee.color === "black" ? "#888" : tee.color)
-                                      : BC.bdr}`,
-                                    color: isActive
-                                      ? (tee.color === "#000000" || tee.color === "#000" || tee.color === "black" ? "#fff" : tee.color)
-                                      : BC.t3,
-                                    transform: isActive ? "scale(1.05)" : "scale(1)",
-                                    transition: "all 0.15s ease",
-                                  }}>{tee.name.substring(0,5)}</button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
 
             <button onClick={saveRound} style={BtnStyle}>Save Round {editRound}</button>
           </div>
