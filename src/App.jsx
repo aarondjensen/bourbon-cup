@@ -1552,7 +1552,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       <button onClick={async () => {
                         const firstTee = draft.tee_boxes?.[0];
                         const cid = `bc_course_${Date.now()}`;
-                        const finalCourse = {
+                        const rawCourse = {
                           ...draft,
                           id: draft.id?.startsWith("rapid_") || draft.id?.startsWith("gc_") ? cid : (draft.id || cid),
                           tournament_id: TOURNAMENT_ID,
@@ -1562,8 +1562,9 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                           hole_pars: (draft.hole_pars||[]).map(v => parseInt(v)||4),
                           hole_handicaps: (draft.hole_handicaps||[]).map(v => parseInt(v)||0),
                           tee_boxes: (draft.tee_boxes||[]).map(tb => ({...tb, rating:parseFloat(tb.rating)||72.0, slope:parseInt(tb.slope)||113, par:parseInt(tb.par)||72, yardage:parseInt(tb.yardage)||0})),
-                          _source: undefined, _incompleteData: undefined,
                         };
+                        // Strip all undefined fields — Firestore rejects them
+                        const finalCourse = Object.fromEntries(Object.entries(rawCourse).filter(([_, v]) => v !== undefined));
                         await onAddCourse(finalCourse);
                         setCoursePreview(null);
                         setSearching(false);
