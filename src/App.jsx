@@ -303,7 +303,7 @@ function LoginScreen({ players, onLogin, teamNames }) {
     <button onClick={() => onLogin(p)} style={{
       width: "100%", padding: "clamp(8px, 2.5vw, 12px) clamp(10px, 3vw, 14px)", background: team.color + "22",
       border: `1px solid ${team.accent}33`, borderRadius: 6,
-      color: BC.t1, fontSize: "clamp(13px, 3.8vw, 16px)", fontWeight: 600, cursor: "pointer", textAlign: "center",
+      color: BC.t1, fontSize: "clamp(13px, 3.8vw, 14px)", fontWeight: 600, cursor: "pointer", textAlign: "center",
       display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
     }}>
       <span style={{ flex: 1, lineHeight: 1.3 }}>{p.name}</span>
@@ -322,8 +322,8 @@ function LoginScreen({ players, onLogin, teamNames }) {
 
       {/* Title */}
       <div style={{ marginBottom: 10, textAlign: "center", position: "relative", zIndex: 1 }}>
-        <div style={{ fontSize: "clamp(20px, 8vw, 42px)", fontWeight: 800, color: BC.gold, letterSpacing: 2, textAlign: "center" }}>THE BOURBON CUP</div>
-        <div style={{ fontSize: "clamp(10px, 3vw, 14px)", color: BC.t3, letterSpacing: "0.3em", marginTop: 3 }}>2026 GAYLORD, MI</div>
+        <div style={{ fontSize: "clamp(20px, 8vw, 28px)", fontWeight: 800, color: BC.gold, letterSpacing: 2, textAlign: "center" }}>THE BOURBON CUP</div>
+        <div style={{ fontSize: "clamp(10px, 3vw, 12px)", color: BC.t3, letterSpacing: "0.3em", marginTop: 3 }}>2026 GAYLORD, MI</div>
       </div>
 
 
