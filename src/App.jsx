@@ -23,6 +23,15 @@ const BC = {
 };
 
 
+// ── Inject global styles ──
+const _style = document.createElement("style");
+_style.textContent = `
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body, #root { height: 100%; width: 100%; background: #0a0804; overflow: hidden; }
+  body { margin: 0; padding: 0; }
+`;
+document.head.appendChild(_style);
+
 // ── Inject Montserrat font ──
 const _link = document.createElement("link");
 _link.rel = "stylesheet";
@@ -332,7 +341,7 @@ function LoginScreen({ players, onLogin, teamNames }) {
       {/* Logos row with VS centered between */}
       <div style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 0, position: "relative", zIndex: 1, marginBottom: 10 }}>
         <img src={teamA.logo} alt={teamA.name} style={{ width: "clamp(60px, 32vw, 90px)", height: "clamp(44px, 22vw, 64px)", objectFit: "contain" }} />
-        <div style={{ fontSize: "5vw", fontWeight: 800, color: BC.gold, letterSpacing: 1, textAlign: "center", width: "10vw", flexShrink: 0 }}>VS</div>
+        <div style={{ fontSize: "clamp(12px, 5vw, 16px)", fontWeight: 800, color: BC.gold, letterSpacing: 1, textAlign: "center", flexShrink: 0 }}>VS</div>
         <img src={teamB.logo} alt={teamB.name} style={{ width: "clamp(60px, 32vw, 90px)", height: "clamp(44px, 22vw, 64px)", objectFit: "contain" }} />
       </div>
 
