@@ -1553,19 +1553,17 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 const tr2h = tRounds.find(t => t.round_number === editRound);
                 const course2h = courses.find(c => c.id === tr2h?.course_id);
                 const tees2h = course2h?.tee_boxes || [];
-                const gridCols = `1fr 32px 56px ${tees2h.map(() => "20px").join(" ")} 24px`;
+                // Grid: name | init | round-input | tee-dots... | delta
+                const gridCols = `1fr 30px 58px ${tees2h.map(() => "22px").join(" ")} 22px`;
                 return (
                   <div>
-                    {/* PLAYER DETAILS header row */}
-                    <div style={{ display: "flex", alignItems: "baseline", gap: 4, padding: "0 2px", marginBottom: 4 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flex: 1 }}>PLAYER DETAILS</div>
-                      {tees2h.length > 0 && <div style={{ fontSize: 8, color: BC.t3, fontWeight: 700, whiteSpace: "nowrap" }}>Tee Selection</div>}
-                    </div>
                     <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: 4, padding: "0 2px", marginBottom: 4, alignItems: "center" }}>
-                      <div />
-                      <div style={{ fontSize: 8, color: BC.t3, fontWeight: 700, textAlign: "right", paddingRight: 2 }}>Init</div>
-                      <div style={{ fontSize: 8, color: BC.t3, fontWeight: 700, textAlign: "center" }}>Round HI</div>
-                      {tees2h.map((_, ti) => <div key={ti} />)}
+                      <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold }}>PLAYER DETAILS</div>
+                      <div style={{ fontSize: 7, color: BC.t3, fontWeight: 700, textAlign: "center", lineHeight: 1.2 }}>Init HI</div>
+                      <div style={{ fontSize: 7, color: BC.t3, fontWeight: 700, textAlign: "center" }}>Round HI</div>
+                      {tees2h.length > 0
+                        ? <div style={{ fontSize: 7, color: BC.t3, fontWeight: 700, textAlign: "center", gridColumn: `span ${tees2h.length}` }}>Tee</div>
+                        : null}
                       <div />
                     </div>
                   </div>
@@ -1594,9 +1592,9 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       setTeeAssignments(prev => ({ ...prev, [editRound]: { ...(prev[editRound]||{}), [p.player_id]: teeName } }));
                     };
                     return (
-                      <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: `1fr 32px 56px ${tees2.map(() => "34px").join(" ")} 24px`, gap: 4, alignItems: "center", marginBottom: 3 }}>
+                      <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: `1fr 30px 58px ${tees2.map(() => "22px").join(" ")} 22px`, gap: 4, alignItems: "center", marginBottom: 3 }}>
                         <div style={{ fontSize: 11, color: (p.team === "A" ? TEAM_A : TEAM_B).accent + "88", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
-                        <div style={{ fontSize: 10, color: BC.t3, textAlign: "right", paddingRight: 2 }}>{baseHI}</div>
+                        <div style={{ fontSize: 10, color: BC.t3, textAlign: "center" }}>{baseHI}</div>
                         <input
                           type="number" step="0.1"
                           value={hasOverride ? override : ""}
@@ -1616,17 +1614,18 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                           placeholder={String(baseHI)}
                           style={{ padding: "5px 8px", background: hasOverride ? BC.amber+"15" : BC.inp, border: `1px solid ${hasOverride ? BC.amber : BC.bdr}`, borderRadius: 6, color: hasOverride ? BC.amber : BC.t2, fontSize: 12, fontWeight: hasOverride ? 700 : 400, outline: "none", textAlign: "center" }}
                         />
-                        {tees2.map(tee => {
+                        {tees2.map((tee, ti) => {
                           const isAct = currentTee2 === tee.name;
-                          const isBlack = tee.color === "#000000" || tee.color === "#000" || tee.color === "black";
                           return (
-                            <button key={tee.name} onClick={() => assignTee2(tee.name)} style={{
-                              padding: "3px 0", borderRadius: 4, cursor: "pointer", fontSize: 8, fontWeight: 700,
-                              background: isAct ? (isBlack ? "#333" : tee.color + "33") : "transparent",
-                              border: `1px solid ${isAct ? (isBlack ? "#888" : tee.color) : BC.bdr+"55"}`,
-                              color: isAct ? (isBlack ? "#fff" : tee.color) : BC.t3,
-                              textAlign: "center",
-                            }}>{tee.name.substring(0,4)}</button>
+                            <button key={tee.name} onClick={() => assignTee2(tee.name)} title={tee.name} style={{
+                              background: "transparent", border: "none", cursor: "pointer", padding: 0,
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              opacity: isAct ? 1 : 0.35,
+                              transform: isAct ? "scale(1.3)" : "scale(1)",
+                              transition: "all 0.15s ease",
+                            }}>
+                              <TeeCircle tee={tee} index={ti} size={14} active={isAct} />
+                            </button>
                           );
                         })}
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
