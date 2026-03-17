@@ -1645,69 +1645,125 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
         </div>
       )}
 
-      {tab === "matches" && (
+      {tab === "matches" && (() => {
+        const tr = tRounds.find(t => t.round_number === matchRound);
+        const course = courses.find(c => c.id === tr?.course_id);
+        const hcpMode = tr?.handicap_mode || "low_man";
+
+        // Get CH for a player using round overrides and tee assignments
+        const getPlayerCH = (pid) => {
+          const p = tPlayers.find(t => t.player_id === pid);
+          if (!p || !course) return 0;
+          const hi = parseFloat(hcpOverrides?.[matchRound]?.[pid] ?? p.handicap_index) || 0;
+          const teeAssign = teeAssignments[matchRound]?.[pid];
+          const teeObj = teeAssign ? (course.tee_boxes||[]).find(t => t.name === teeAssign) : (course.tee_boxes||[])[0];
+          return calcCH(hi, teeObj?.slope||course.slope||113, teeObj?.rating||course.rating||72, teeObj?.par||course.par||72);
+        };
+
+        // Stroke situation: given selected players, compute who gets strokes vs who
+        const strokeSituation = () => {
+          const allPids = [...matchTeamA, ...matchTeamB];
+          if (allPids.length < 2) return null;
+          const chs = allPids.map(pid => ({ pid, ch: getPlayerCH(pid) }));
+          const minCH = Math.min(...chs.map(c => c.ch));
+          if (hcpMode === "full") {
+            return chs.map(({pid, ch}) => ({ pid, strokes: ch }));
+          }
+          return chs.map(({pid, ch}) => ({ pid, strokes: ch - minCH }));
+        };
+
+        const allSelected = [...matchTeamA, ...matchTeamB];
+        const strokes = strokeSituation();
+
+        return (
         <div>
-          <div style={{ background: BC.card, borderRadius: 12, padding: 14, marginBottom: 14, border: `1px solid ${BC.bdr}` }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, marginBottom: 12 }}>CREATE MATCH</div>
-
-            <label style={LabelStyle}>Round</label>
-            <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-              {[1,2,3,4].map(r => (
-                <button key={r} onClick={() => setMatchRound(r)} style={{
-                  flex: 1, padding: "8px 0", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                  background: matchRound === r ? BC.amber + "33" : BC.inp, border: `1px solid ${matchRound === r ? BC.amber : BC.bdr}`,
-                  color: matchRound === r ? BC.amber : BC.t3,
-                }}>Rd {r}</button>
-              ))}
-            </div>
-
-            <div style={{ display: "flex", gap: 12 }}>
-              {[["A", teamAPlayers, matchTeamA, setMatchTeamA], ["B", teamBPlayers, matchTeamB, setMatchTeamB]].map(([tid, players, sel, setSel]) => (
-                <div key={tid} style={{ flex: 1 }}>
-                  <label style={{ ...LabelStyle, color: getTeam(tid).accent }}>{tid === "A" ? teamNames?.A : teamNames?.B}</label>
-                  {players.map(p => (
-                    <button key={p.player_id} onClick={() => setSel(prev => prev.includes(p.player_id) ? prev.filter(x => x !== p.player_id) : [...prev, p.player_id])} style={{
-                      width: "100%", padding: "8px 10px", marginBottom: 4, borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer", textAlign: "left",
-                      background: sel.includes(p.player_id) ? getTeam(tid).color + "44" : BC.inp,
-                      border: `1px solid ${sel.includes(p.player_id) ? getTeam(tid).accent : BC.bdr}`,
-                      color: sel.includes(p.player_id) ? getTeam(tid).accent : BC.t2,
-                    }}>{p.name}</button>
-                  ))}
-                </div>
-              ))}
-            </div>
-
-            <div style={{ marginTop: 14 }}>
-              <div style={{ fontSize: 10, color: BC.t3, marginBottom: 8 }}>NASSAU POINTS (overrides round default)</div>
-              <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-                {[["front", "F9"], ["back", "B9"], ["overall", "OVR"]].map(([k, lbl]) => (
-                  <div key={k} style={{ flex: 1 }}>
-                    <label style={LabelStyle}>{lbl}</label>
-                    <input type="number" step="0.5" min="0" value={nassau[k]} onChange={e => setNassau(n => ({ ...n, [k]: parseFloat(e.target.value) || 0 }))}
-                      style={{ ...InputStyle, padding: "8px 8px" }} />
-                  </div>
-                ))}
-              </div>
-              <button onClick={saveMatch} style={BtnStyle}>Create Match</button>
-            </div>
+          {/* Round tabs */}
+          <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
+            {[1,2,3,4].map(r => (
+              <button key={r} onClick={() => { setMatchRound(r); setMatchTeamA([]); setMatchTeamB([]); }} style={{
+                flex: 1, padding: "7px 4px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                background: matchRound === r ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
+                border: `1px solid ${matchRound === r ? "transparent" : BC.bdr}`,
+                color: matchRound === r ? "#0a0804" : BC.t2,
+              }}>Rd {r}</button>
+            ))}
           </div>
 
-          {/* Existing matches */}
+          {/* Player pool — two columns by team */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+            {[["A", teamAPlayers], ["B", teamBPlayers]].map(([tid, players]) => {
+              const team = getTeam(tid);
+              const sel = tid === "A" ? matchTeamA : matchTeamB;
+              const setSel = tid === "A" ? setMatchTeamA : setMatchTeamB;
+              return (
+                <div key={tid}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: team.accent, letterSpacing: 1, marginBottom: 5 }}>{teamNames?.[tid]}</div>
+                  {players.map(p => {
+                    const isSelected = sel.includes(p.player_id);
+                    const ch = getPlayerCH(p.player_id);
+                    return (
+                      <button key={p.player_id} onClick={() => setSel(prev => isSelected ? prev.filter(x => x !== p.player_id) : [...prev, p.player_id])} style={{
+                        width: "100%", padding: "7px 8px", marginBottom: 3, borderRadius: 8, cursor: "pointer", textAlign: "left",
+                        background: isSelected ? team.color + "55" : BC.inp,
+                        border: `1.5px solid ${isSelected ? team.accent : BC.bdr}`,
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                      }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: isSelected ? team.accent : BC.t2 }}>{p.name}</span>
+                        <span style={{ fontSize: 10, color: BC.t3 }}>CH {ch}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Stroke situation — shown when all players selected */}
+          {strokes && allSelected.length >= 2 && (
+            <div style={{ background: BC.card, borderRadius: 10, padding: "10px 12px", marginBottom: 10, border: `1px solid ${BC.bdr}` }}>
+              <div style={{ fontSize: 9, color: BC.t3, fontWeight: 700, letterSpacing: 1, marginBottom: 8 }}>
+                STROKE SITUATION · {hcpMode === "low_man" ? "Play Off Low Man" : "Full Strokes"}
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {strokes.map(({ pid, strokes: s }) => {
+                  const p = tPlayers.find(t => t.player_id === pid);
+                  const team = getTeam(p?.team);
+                  return (
+                    <div key={pid} style={{ background: team.color + "33", border: `1px solid ${team.accent}44`, borderRadius: 8, padding: "5px 10px", textAlign: "center" }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: team.accent }}>{p?.name?.split(" ")[0]}</div>
+                      <div style={{ fontSize: 13, fontWeight: 900, color: s === 0 ? BC.gold : BC.t1 }}>{s === 0 ? "Scratch" : `+${s}`}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Create Match button */}
+          {matchTeamA.length > 0 && matchTeamB.length > 0 && (
+            <button onClick={saveMatch} style={{ ...BtnStyle, marginBottom: 14 }}>
+              Create Match — {matchTeamA.map(pid => tPlayers.find(p=>p.player_id===pid)?.name?.split(" ")[0]).join("/")} vs {matchTeamB.map(pid => tPlayers.find(p=>p.player_id===pid)?.name?.split(" ")[0]).join("/")}
+            </button>
+          )}
+
+          {/* Existing matches by round */}
           {[1,2,3,4].map(r => {
             const rndM = matches.filter(m => m.round === r);
             if (!rndM.length) return null;
+            const trR = tRounds.find(t => t.round_number === r);
+            const fmt = FORMATS.find(f => f.id === trR?.format);
             return (
               <div key={r} style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 10, color: BC.t3, fontWeight: 700, marginBottom: 8, letterSpacing: 1 }}>ROUND {r}</div>
+                <div style={{ fontSize: 10, color: BC.gold, fontWeight: 700, marginBottom: 8, letterSpacing: 1 }}>ROUND {r}{fmt ? ` · ${fmt.label}` : ""}</div>
                 {rndM.map(m => (
-                  <div key={m.id} style={{ background: BC.card, borderRadius: 10, padding: "10px 14px", marginBottom: 6, border: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ fontSize: 11, color: BC.t1 }}>
-                      <span style={{ color: TEAM_A.accent }}>{m.teamANames?.join("/")}</span>
+                  <div key={m.id} style={{ background: BC.card, borderRadius: 10, padding: "8px 12px", marginBottom: 5, border: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ flex: 1, fontSize: 11 }}>
+                      <span style={{ color: TEAM_A.accent+"99", fontWeight: 600 }}>{m.teamANames?.join(" / ")}</span>
                       <span style={{ color: BC.t3 }}> vs </span>
-                      <span style={{ color: TEAM_B.accent }}>{m.teamBNames?.join("/")}</span>
+                      <span style={{ color: TEAM_B.accent+"99", fontWeight: 600 }}>{m.teamBNames?.join(" / ")}</span>
                     </div>
                     <button onClick={() => onSetMatch({ ...m, _delete: true })} style={{
-                      fontSize: 9, padding: "4px 8px", borderRadius: 8, border: `1px solid ${BC.danger}22`, background: "transparent", color: BC.danger, cursor: "pointer",
+                      fontSize: 9, padding: "3px 7px", borderRadius: 6, border: `1px solid ${BC.danger}22`, background: "transparent", color: BC.danger, cursor: "pointer", flexShrink: 0,
                     }}>✕</button>
                   </div>
                 ))}
@@ -1715,7 +1771,8 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             );
           })}
         </div>
-      )}
+        );
+      })()}
 
       {tab === "courses" && (
         <div>
