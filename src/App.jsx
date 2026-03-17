@@ -1423,7 +1423,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   const course = courses.find(c => c.id === tr?.course_id);
                   return (
                     <div style={{ padding: "8px 8px", background: BC.inp, borderRadius: 8, border: `1px solid ${BC.bdr}`, fontSize: 12, color: course ? BC.t1 : BC.t3, height: 38, display: "flex", alignItems: "center", overflow: "hidden" }}>
-                      {course ? <span style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{course.name}</span> : <span>Set in Courses tab</span>}
+                      {course ? <span style={{ fontWeight: 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{course.name}</span> : <span>Set in Courses tab</span>}
                     </div>
                   );
                 })()}
@@ -1466,6 +1466,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 if (h === 0) h = 12;
                 return `${h}:${String(m).padStart(2,"0")}`;
               };
+              const stripAMPM = (s) => s ? s.replace(/\s*(AM|PM)/gi, "").trim() : s;
               const teeTimes = roundTeeTime ? roundTeeTime.split("|") : ["","","",""];
               const commitTime = (idx, val) => {
                 const times = [...teeTimes];
@@ -1503,7 +1504,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     <div key={i} style={{ flex: 1, display: "flex", alignItems: "center", gap: 3 }}>
                       <span style={{ fontSize: 9, color: BC.t3, flexShrink: 0, fontWeight: 600 }}>{lbl}</span>
                       <input
-                        value={tt[i] || ""}
+                        value={stripAMPM(tt[i] || "")}
                         onChange={e => { const times = [...tt]; times[i] = e.target.value; setRoundTeeTime(times.join("|")); }}
                         onBlur={e => commitTime(i, e.target.value)}
                         onKeyDown={e => { if (e.key === "Enter") { e.target.blur(); } }}
@@ -1556,15 +1557,15 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 return (
                   <div>
                     {/* PLAYER DETAILS header row */}
-                    <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: 4, padding: "0 2px", marginBottom: 6, alignItems: "center" }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold }}>PLAYER DETAILS</div>
-                      <div style={{ fontSize: 8, color: BC.t3, fontWeight: 700, textAlign: "center" }}>Init</div>
-                      <div style={{ fontSize: 8, color: BC.t3, fontWeight: 700, textAlign: "center" }}>Round</div>
-                      {tees2h.map((tee, ti) => (
-                        <div key={ti} style={{ display: "flex", justifyContent: "center" }}>
-                          <TeeCircle tee={tee} index={ti} size={12} active={false} />
-                        </div>
-                      ))}
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 4, padding: "0 2px", marginBottom: 4 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flex: 1 }}>PLAYER DETAILS</div>
+                      {tees2h.length > 0 && <div style={{ fontSize: 8, color: BC.t3, fontWeight: 700, whiteSpace: "nowrap" }}>Tee Selection</div>}
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: 4, padding: "0 2px", marginBottom: 4, alignItems: "center" }}>
+                      <div />
+                      <div style={{ fontSize: 8, color: BC.t3, fontWeight: 700, textAlign: "right", paddingRight: 2 }}>Init</div>
+                      <div style={{ fontSize: 8, color: BC.t3, fontWeight: 700, textAlign: "center" }}>Round HI</div>
+                      {tees2h.map((_, ti) => <div key={ti} />)}
                       <div />
                     </div>
                   </div>
@@ -1595,7 +1596,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     return (
                       <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: `1fr 32px 56px ${tees2.map(() => "34px").join(" ")} 24px`, gap: 4, alignItems: "center", marginBottom: 3 }}>
                         <div style={{ fontSize: 11, color: (p.team === "A" ? TEAM_A : TEAM_B).accent + "88", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
-                        <div style={{ fontSize: 10, color: BC.t3, textAlign: "center" }}>{baseHI}</div>
+                        <div style={{ fontSize: 10, color: BC.t3, textAlign: "right", paddingRight: 2 }}>{baseHI}</div>
                         <input
                           type="number" step="0.1"
                           value={hasOverride ? override : ""}
