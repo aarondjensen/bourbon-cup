@@ -1403,12 +1403,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             ))}
           </div>
           <div style={{ background: BC.card, borderRadius: 12, padding: "12px 12px", border: `1px solid ${BC.bdr}` }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, marginBottom: 10 }}>ROUND {editRound} SETTINGS</div>
-
             {/* Format + Course — 2 col compact, matched sizing */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
               <div>
-                <label style={LabelStyle}>FORMAT</label>
+                <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, marginBottom: 6 }}>FORMAT</div>
                 <select value={roundFormat} onChange={e => {
                   const fmt = FORMATS.find(f => f.id === e.target.value);
                   setRoundFormat(e.target.value);
@@ -1419,7 +1417,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 </select>
               </div>
               <div>
-                <label style={LabelStyle}>COURSE</label>
+                <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, marginBottom: 6 }}>COURSE</div>
                 {(() => {
                   const tr = tRounds.find(t => t.round_number === editRound);
                   const course = courses.find(c => c.id === tr?.course_id);
@@ -1511,7 +1509,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         onKeyDown={e => { if (e.key === "Enter") { e.target.blur(); } }}
                         placeholder=""
                         inputMode="numeric"
-                        style={{ ...InputStyle, marginBottom: 0, fontSize: 16, padding: "6px 4px", textAlign: "center", minWidth: 0 }}
+                        style={{ ...InputStyle, marginBottom: 0, fontSize: 16, padding: "4px 3px", textAlign: "center", minWidth: 0, transform: "scale(0.85)", transformOrigin: "center" }}
                       />
                     </div>
                   ))}
@@ -1519,58 +1517,62 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               );
             })()}
 
-            {/* Nassau — compact inline */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            {/* Scoring + Low Man toggle on same line */}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>SCORING</div>
               {[["front", "F9"], ["back", "B9"], ["overall", "OVR"]].map(([k, lbl]) => (
-                <div key={k} style={{ flex: 1, display: "flex", alignItems: "center", gap: 4 }}>
+                <div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}>
                   <span style={{ fontSize: 9, color: BC.t3, flexShrink: 0 }}>{lbl}</span>
                   <input type="number" step="0.5" min="0" value={nassau[k]}
                     onChange={e => setNassau(n => ({ ...n, [k]: parseFloat(e.target.value) || 0 }))}
                     onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
-                    style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: 11, textAlign: "center", width: 42 }} />
+                    style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: 11, textAlign: "center", width: 38 }} />
                 </div>
               ))}
+              {/* Low Man / All toggle inline */}
+              <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}`, marginLeft: "auto" }}>
+                {[["low_man", "Low Man"], ["full", "All"]].map(([val, lbl]) => {
+                  const active = (handicapMode[editRound] || "low_man") === val;
+                  return (
+                    <button key={val} onClick={() => setHandicapMode(prev => ({ ...prev, [editRound]: val }))} style={{
+                      padding: "3px 8px", borderRadius: 16, fontSize: 9, fontWeight: 700, border: "none", cursor: "pointer",
+                      background: active ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
+                      color: active ? "#0a0804" : BC.t3,
+                    }}>{lbl}</button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Handicap Overrides */}
             <div style={{ marginBottom: 14 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, gap: 8 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>PLAYER DETAILS</div>
-                {/* Handicap mode pill toggle */}
-                <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}`, flexShrink: 0 }}>
-                  {[["low_man", "Low Man"], ["full", "Full"]].map(([val, lbl]) => {
-                    const active = (handicapMode[editRound] || "low_man") === val;
-                    return (
-                      <button key={val} onClick={() => setHandicapMode(prev => ({ ...prev, [editRound]: val }))} style={{
-                        padding: "3px 8px", borderRadius: 16, fontSize: 9, fontWeight: 700, border: "none", cursor: "pointer",
-                        background: active ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
-                        color: active ? "#0a0804" : BC.t3,
-                        transition: "all 0.15s ease",
-                      }}>{lbl}</button>
-                    );
-                  })}
-                </div>
-              </div>
+              {/* PLAYER DETAILS header already in column headers */}
               {tPlayers.length === 0 && <div style={{ fontSize: 11, color: BC.t3 }}>No players added yet.</div>}
               {tPlayers.length > 0 && (() => {
                 const tr2h = tRounds.find(t => t.round_number === editRound);
                 const course2h = courses.find(c => c.id === tr2h?.course_id);
                 const tees2h = course2h?.tee_boxes || [];
-                const colHeaders = ["Player", "Init", "Round", ...tees2h.map(t => t.name.substring(0,4))];
-                const gridCols = `1fr 32px 56px ${tees2h.map(() => "34px").join(" ")} 24px`;
+                const gridCols = `1fr 32px 56px ${tees2h.map(() => "20px").join(" ")} 24px`;
                 return (
-                  <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: 4, padding: "0 2px", marginBottom: 4 }}>
-                    {colHeaders.map((h, i) => (
-                      <div key={i} style={{ fontSize: 8, color: BC.t3, fontWeight: 700, textAlign: i > 0 ? "center" : "left", letterSpacing: 0.3 }}>{h}</div>
-                    ))}
-                    <div />
+                  <div>
+                    {/* PLAYER DETAILS header row */}
+                    <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: 4, padding: "0 2px", marginBottom: 6, alignItems: "center" }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold }}>PLAYER DETAILS</div>
+                      <div style={{ fontSize: 8, color: BC.t3, fontWeight: 700, textAlign: "center" }}>Init</div>
+                      <div style={{ fontSize: 8, color: BC.t3, fontWeight: 700, textAlign: "center" }}>Round</div>
+                      {tees2h.map((tee, ti) => (
+                        <div key={ti} style={{ display: "flex", justifyContent: "center" }}>
+                          <TeeCircle tee={tee} index={ti} size={12} active={false} />
+                        </div>
+                      ))}
+                      <div />
+                    </div>
                   </div>
                 );
               })()}
-              {[TEAM_A, TEAM_B].map(team => (
-                <div key={team.id} style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: team.accent, letterSpacing: 1, marginBottom: 5 }}>{teamNames?.[team.id] || team.name}</div>
+              {[TEAM_A, TEAM_B].map((team, teamIdx) => (
+                <div key={team.id} style={{ marginBottom: 4 }}>
+                  {teamIdx === 1 && <div style={{ height: 1, background: BC.bdr, margin: "6px 0 8px" }} />}
                   {tPlayers.filter(p => p.team === team.id).map(p => {
                     const baseHI = p.handicap_index;
                     const override = hcpOverrides[editRound]?.[p.player_id];
@@ -2335,6 +2337,42 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view }) {
     </>
   );
 }
+
+
+// ── Tee color helpers (from WBC) ──
+const TEE_COLOR_MAP = {
+  black: "#2c2c2c", blue: "#2d8fd4", white: "#e8e8e8", gold: "#d4a843", red: "#9b2335",
+  green: "#2d8a4e", silver: "#a8b2bd", yellow: "#e6c619", orange: "#e67e22", purple: "#7b2d8b",
+  maroon: "#6b1c2a", navy: "#1b2a4a", teal: "#1a8a7a", tan: "#c4a86b", copper: "#b87333",
+  bronze: "#cd7f32", champagne: "#f7e7ce", crimson: "#b22234", burgundy: "#800020",
+  platinum: "#c0c0c0", pewter: "#8e8e8e", sand: "#c2b280", coral: "#ff7f50",
+  tournament: "#1a1a2e", championship: "#1a1a2e", tips: "#1a1a2e", pro: "#2d8fd4",
+  ladies: "#c0392b", senior: "#d4a843", forward: "#d4a843", back: "#1a1a2e", middle: "#e8e8e8",
+};
+const resolveTeeColor = (tee, index) => {
+  const key = (tee.name || "").toLowerCase().trim();
+  if (TEE_COLOR_MAP[key]) return TEE_COLOR_MAP[key];
+  for (const [word, clr] of Object.entries(TEE_COLOR_MAP)) { if (key.includes(word)) return clr; }
+  if (tee.color && tee.color !== "#000" && tee.color !== "#000000") return tee.color;
+  return ["#5b8fb9","#8b5e3c","#6b7b3a","#8e44ad","#2e86ab","#a84632"][index % 6];
+};
+const isLightTeeBC = (clr) => ["#e8e8e8","#a8b2bd","#c0c0c0","#f7e7ce","#c2b280","#c4a86b","#8e8e8e"].includes((clr||"").toLowerCase());
+const isDarkTeeBC = (clr) => ["#1a1a2e","#000000","#111111","#0a0a0a","#1a1a1a","#222222","#2c2c2c","#2d2d2d","#0d0d0d","black"].includes((clr||"").toLowerCase());
+const TeeCircle = ({ tee, index, size = 14, active }) => {
+  const color = resolveTeeColor(tee, index || 0);
+  const isDark = isDarkTeeBC(color);
+  const isLight = isLightTeeBC(color);
+  if (isDark) {
+    return (
+      <span style={{ width: size, height: size, borderRadius: "50%", background: "#a8b2bd", border: `2px solid ${active ? "#fff" : "#88888860"}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <span style={{ width: size * 0.45, height: size * 0.45, borderRadius: "50%", background: "#111", display: "block" }} />
+      </span>
+    );
+  }
+  return (
+    <span style={{ width: size, height: size, borderRadius: "50%", background: color, border: `2px solid ${active ? "#fff" : (isLight ? "#99999960" : "#ffffff25")}`, display: "inline-block", flexShrink: 0 }} />
+  );
+};
 
 // ── Main App ──
 export default function App() {
