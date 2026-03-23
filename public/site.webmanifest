@@ -1,6 +1,6 @@
 {
-  "name": "www.thebourboncup.com",
-  "short_name": "BC",
+  "name": "Bourbon Cup",
+  "short_name": "Bourbon Cup",
   "icons": [
     {
       "src": "/web-app-manifest-192x192.png",
