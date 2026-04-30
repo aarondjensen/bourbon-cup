@@ -431,12 +431,20 @@ function computeMatchResult(match, holeData, courses, tRounds, tPlayers, format,
 //   bc_practice_ctp     — { id, hole, player_id }
 // (Skins are auto-computed from scores, no Firestore needed.)
 
-// 4 distinct team colors for the practice mode (independent of Mash/Shot)
+// 4 shades of green for the practice mode teams. All within the Mash Brothers
+// identity (since these events are intra-team), spaced across the green
+// spectrum (true → lime → emerald → teal) so adjacent teams are easy to
+// tell apart at a glance. Picked for decent contrast in both dark and light
+// modes — accents land in the 4-5:1 range against both BC.bg values, so the
+// "T1/T2/T3/T4" labels and initials badges stay readable in either theme.
+//
+// Team 1 = the actual Mash Brothers brand color, deliberately. Anchors the
+// palette and keeps the tournament identity present even in practice events.
 const PRACTICE_TEAM_COLORS = [
-  { color: "#1f4d2b", accent: "#3db461", glow: "rgba(61,180,97,0.2)" },   // green
-  { color: "#0f3a52", accent: "#4ba3d4", glow: "rgba(75,163,212,0.2)" },  // blue
-  { color: "#5a2d0f", accent: "#d48845", glow: "rgba(212,136,69,0.2)" }, // orange/copper
-  { color: "#3a1f4d", accent: "#a063d4", glow: "rgba(160,99,212,0.2)" }, // purple
+  { color: "#004d24", accent: "#009144", glow: "rgba(0,145,68,0.2)" },     // brand green (Mash Brothers)
+  { color: "#3a5b08", accent: "#65a30d", glow: "rgba(101,163,13,0.2)" },   // lime / chartreuse
+  { color: "#064e3b", accent: "#059669", glow: "rgba(5,150,105,0.2)" },    // emerald
+  { color: "#134e4a", accent: "#0d9488", glow: "rgba(13,148,136,0.2)" },   // teal
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2737,6 +2745,251 @@ function PracticeView({ user, tPlayers, courses, notify }) {
     else await db.delete("bc_practice_ctp", id);
   }, []);
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Shared scorecard helpers — used by both ScoringTab's modal and the
+  // LeaderboardTab's expanded-match view. Defined at PracticeView scope so
+  // both sub-tabs see them, and they close over event/course/tPlayers/
+  // scoresMap from the surrounding render.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Stroke allocation for the 4 players in a match. Mirrors the calculation
+  // in computePracticeMatch so the dots/strokes shown on the scorecard
+  // exactly match what the leaderboard math used.
+  const getStrokeMapsForMatch = (match) => {
+    const maps = {};
+    if (!match || !course || !event) return maps;
+    const allPids = [match.team1.player1, match.team1.player2, match.team2.player1, match.team2.player2].filter(Boolean);
+    const holeHcps = course.hole_handicaps || Array(18).fill(9);
+    const getHI = (pid) => {
+      if (event.hcp_overrides?.[pid] !== undefined && event.hcp_overrides[pid] !== "") return parseFloat(event.hcp_overrides[pid]) || 0;
+      const tp = tPlayers.find(p => p.player_id === pid);
+      return parseFloat(tp?.handicap_index) || 0;
+    };
+    const getCH = (pid) => calcCH(getHI(pid), course.slope || 113, course.rating || 72, course.par || 72);
+    const allCHs = allPids.map(getCH);
+    const minCH = allCHs.length ? Math.min(...allCHs) : 0;
+    const adjCH = (pid) => event.hcp_mode === "full" ? getCH(pid) : (getCH(pid) - minCH);
+    const buildMap = (ch) => {
+      const sorted = holeHcps.map((h, i) => ({ idx: i, hcp: h })).sort((a, b) => a.hcp - b.hcp);
+      const map = {};
+      let rem = Math.abs(ch);
+      for (let pass = 0; pass < 3 && rem > 0; pass++) {
+        for (const h of sorted) { if (rem <= 0) break; map[h.idx] = (map[h.idx] || 0) + 1; rem--; }
+      }
+      return map;
+    };
+    allPids.forEach(pid => { maps[pid] = buildMap(adjCH(pid)); });
+    return maps;
+  };
+
+  // Renders the full hole-by-hole scorecard JSX for a match — front 9 + back 9
+  // stacked, with team-1 player rows / NET / MATCH row / team-2 player rows /
+  // NET. The match row is always shown from T1's perspective so the layout
+  // stays symmetric (T1 on top, T2 on bottom). Used both inline in the
+  // leaderboard's expanded match view and inside the scoring modal.
+  const renderMatchScorecardBody = (match, strokeMaps) => {
+    if (!match || !course || !event) return null;
+    const t1Pids = [match.team1.player1, match.team1.player2].filter(Boolean);
+    const t2Pids = [match.team2.player1, match.team2.player2].filter(Boolean);
+    const t1Idx = event.teams.findIndex(t => t.id === match.team1.id);
+    const t2Idx = event.teams.findIndex(t => t.id === match.team2.id);
+    const tcA = PRACTICE_TEAM_COLORS[t1Idx];
+    const tcB = PRACTICE_TEAM_COLORS[t2Idx];
+    const gridLine = `1px solid ${BC.bdr}25`;
+    const holePars = course.hole_pars || Array(18).fill(4);
+    const holeHcps = course.hole_handicaps || Array(18).fill(9);
+    const getStrokes = (pid, h) => strokeMaps[pid]?.[h] || 0;
+
+    // Per-hole running cumulative status from T1's perspective
+    const t1Statuses = Array.from({ length: 18 }, (_, i) => {
+      let cum = 0, hasData = false;
+      for (let h = 0; h <= i; h++) {
+        let n1 = 0, n2 = 0, ok1 = true, ok2 = true;
+        t1Pids.forEach(pid => { const s = scoresMap[`${pid}_${h}`]; if (!s) ok1 = false; else n1 += s - getStrokes(pid, h); });
+        t2Pids.forEach(pid => { const s = scoresMap[`${pid}_${h}`]; if (!s) ok2 = false; else n2 += s - getStrokes(pid, h); });
+        if (ok1 && ok2) {
+          if (n1 < n2) cum += 1;
+          else if (n2 < n1) cum -= 1;
+          hasData = true;
+        } else { hasData = false; break; }
+      }
+      return hasData ? cum : null;
+    });
+    let t1ClinchHole = null, t1ClinchText = null;
+    for (let h = 0; h < 18; h++) {
+      if (t1Statuses[h] === null) break;
+      const lead = Math.abs(t1Statuses[h]);
+      const remaining = 17 - h;
+      if (remaining > 0 && lead > remaining) {
+        t1ClinchHole = h;
+        t1ClinchText = `${lead}&${remaining}`;
+        break;
+      }
+    }
+    const t1WonHole = (h) => {
+      const s = t1Statuses[h] === null ? null : (h === 0 ? t1Statuses[0] : t1Statuses[h] - t1Statuses[h - 1]);
+      return s === 1;
+    };
+    const t2WonHole = (h) => {
+      const s = t1Statuses[h] === null ? null : (h === 0 ? t1Statuses[0] : t1Statuses[h] - t1Statuses[h - 1]);
+      return s === -1;
+    };
+
+    // Render a single 9-hole section. `offset` is 0 (front) or 9 (back).
+    const renderSection = (offset) => {
+      const sectionPars = holePars.slice(offset, offset + 9);
+      const sectionHcps = holeHcps.slice(offset, offset + 9);
+      const sectionParTotal = sectionPars.reduce((a, b) => a + b, 0);
+      const labelW = 46;
+      const totW = 32;
+      const lblBase = { width: labelW, flexShrink: 0, fontSize: 9, fontWeight: 700, color: BC.t3, display: "flex", alignItems: "center", paddingLeft: 4, borderRight: gridLine, textTransform: "uppercase", letterSpacing: 0.3 };
+      const totBase = { width: totW, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", borderLeft: gridLine };
+
+      const renderPlayerRow = (pid) => {
+        const p = tPlayers.find(t => t.player_id === pid);
+        const slotIdx = event.teams.findIndex(t => t.player1 === pid || t.player2 === pid);
+        const tc = PRACTICE_TEAM_COLORS[slotIdx];
+        let grossTot = 0;
+        return (
+          <div key={pid} style={{ display: "flex", alignItems: "center", borderBottom: gridLine }}>
+            <div style={{ ...lblBase, height: 38, gap: 4, paddingTop: 0 }}>
+              <span style={{ fontSize: 12, fontWeight: 800, color: tc?.accent || BC.t1 }}>{getInitials(p?.name)}</span>
+            </div>
+            {Array.from({ length: 9 }, (_, i) => {
+              const h = i + offset;
+              const s = scoresMap[`${pid}_${h}`] || 0;
+              const st = strokeMaps[pid]?.[h] || 0;
+              if (s > 0) grossTot += s;
+              return (
+                <div key={i} style={{ flex: 1, height: 38, display: "flex", alignItems: "center", justifyContent: "center", borderRight: i < 8 ? gridLine : "none" }}>
+                  <ScoreCell score={s} par={holePars[h]} strokes={st} size={13} />
+                </div>
+              );
+            })}
+            <div style={{ ...totBase, height: 38 }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: BC.t1 }}>{grossTot || ""}</span>
+            </div>
+          </div>
+        );
+      };
+
+      const renderTeamNetRow = (pids, isT1Side) => {
+        let netTot = 0;
+        const tc = isT1Side ? tcA : tcB;
+        return (
+          <div style={{ display: "flex", alignItems: "center", borderBottom: gridLine, background: tc.color + "15" }}>
+            <div style={{ ...lblBase, height: 32, fontSize: 9, fontWeight: 800, color: tc.accent }}>NET</div>
+            {Array.from({ length: 9 }, (_, i) => {
+              const h = i + offset;
+              let tNet = 0, ok = true;
+              pids.forEach(pid => {
+                const s = scoresMap[`${pid}_${h}`];
+                if (!s) ok = false;
+                else tNet += s - (strokeMaps[pid]?.[h] || 0);
+              });
+              if (ok) netTot += tNet;
+              const won = isT1Side ? t1WonHole(h) : t2WonHole(h);
+              return (
+                <div key={i} style={{ flex: 1, height: 32, display: "flex", alignItems: "center", justifyContent: "center", borderRight: i < 8 ? gridLine : "none" }}>
+                  {won ? (
+                    <div style={{ width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 4, border: `1.5px solid ${tc.accent}`, background: tc.accent + "20" }}>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: BC.t1 }}>{ok ? tNet : "·"}</span>
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: 13, fontWeight: 800, color: ok ? BC.t1 : BC.t3 + "40" }}>{ok ? tNet : "·"}</span>
+                  )}
+                </div>
+              );
+            })}
+            <div style={{ ...totBase, height: 32 }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: BC.t1 }}>{netTot || ""}</span>
+            </div>
+          </div>
+        );
+      };
+
+      const renderMatchRow = () => (
+        <div style={{ display: "flex", alignItems: "center", background: BC.amber + "12", borderBottom: gridLine }}>
+          <div style={{ ...lblBase, height: 28, color: BC.amber, fontWeight: 800, fontSize: 9 }}>MATCH</div>
+          {Array.from({ length: 9 }, (_, i) => {
+            const h = i + offset;
+            const st = t1Statuses[h];
+            const colBdr = i < 8 ? { borderRight: gridLine } : {};
+            if (t1ClinchHole !== null && h === t1ClinchHole) {
+              const color = st > 0 ? "#22c55e" : st < 0 ? BC.danger : BC.t3;
+              return (
+                <div key={i} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", height: 28, ...colBdr }}>
+                  <div style={{ border: `1.5px solid ${color}`, borderRadius: 4, padding: "0 4px", lineHeight: "20px" }}>
+                    <span style={{ fontSize: 12, fontWeight: 800, color, whiteSpace: "nowrap" }}>{t1ClinchText}</span>
+                  </div>
+                </div>
+              );
+            }
+            if (t1ClinchHole !== null && h > t1ClinchHole) {
+              return <div key={i} style={{ flex: 1, height: 28, ...colBdr }} />;
+            }
+            if (st === null) {
+              return <div key={i} style={{ flex: 1, height: 28, ...colBdr }} />;
+            }
+            const color = st > 0 ? "#22c55e" : st < 0 ? BC.danger : BC.t3;
+            return (
+              <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 12, fontWeight: 800, color, lineHeight: "28px", ...colBdr }}>
+                {st > 0 ? <><span style={{ fontSize: 12 }}>▲</span>{st}</> : st < 0 ? <><span style={{ fontSize: 12 }}>▼</span>{Math.abs(st)}</> : <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.5 }}>TIED</span>}
+              </div>
+            );
+          })}
+          <div style={{ ...totBase, height: 28, borderLeft: gridLine }} />
+        </div>
+      );
+
+      return (
+        <div style={{ marginBottom: 10, border: `1px solid ${BC.bdr}`, borderRadius: 10, overflow: "hidden" }}>
+          <div style={{ display: "flex", background: BC.amber }}>
+            <div style={{ ...lblBase, height: 26, color: "#0a0804", opacity: 0.85, borderRight: "none", fontWeight: 800, fontSize: 10 }}>
+              {offset === 0 ? "FRONT" : "BACK"}
+            </div>
+            {Array.from({ length: 9 }, (_, i) => (
+              <div key={i} style={{ flex: 1, height: 26, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: "#0a0804" }}>{i + offset + 1}</span>
+              </div>
+            ))}
+            <div style={{ ...totBase, height: 26, borderLeft: "none" }}>
+              <span style={{ fontSize: 10, fontWeight: 800, color: "#0a0804" }}>TOT</span>
+            </div>
+          </div>
+          <div style={{ display: "flex", borderBottom: gridLine, background: BC.amber + "18" }}>
+            <div style={{ ...lblBase, height: 22 }}>PAR</div>
+            {sectionPars.map((p, i) => (
+              <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 11, color: BC.t2, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", height: 22, borderRight: i < 8 ? gridLine : "none" }}>{p}</div>
+            ))}
+            <div style={{ ...totBase, height: 22 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: BC.t3 }}>{sectionParTotal}</span>
+            </div>
+          </div>
+          <div style={{ display: "flex", borderBottom: gridLine, background: BC.inp }}>
+            <div style={{ ...lblBase, height: 20 }}>HCP</div>
+            {sectionHcps.map((h, i) => (
+              <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 10, color: BC.t3, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", height: 20, borderRight: i < 8 ? gridLine : "none" }}>{h}</div>
+            ))}
+            <div style={{ ...totBase, height: 20 }} />
+          </div>
+          {t1Pids.map(pid => renderPlayerRow(pid))}
+          {renderTeamNetRow(t1Pids, true)}
+          {renderMatchRow()}
+          {t2Pids.map(pid => renderPlayerRow(pid))}
+          {renderTeamNetRow(t2Pids, false)}
+        </div>
+      );
+    };
+
+    return (
+      <>
+        {renderSection(0)}
+        {renderSection(9)}
+      </>
+    );
+  };
+
   // ── Setup Sub-view ──
   const SetupTab = () => {
     const [selPlayers, setSelPlayers] = useState(event?.player_ids || []);
@@ -3061,30 +3314,8 @@ function PracticeView({ user, tPlayers, courses, notify }) {
     // the strokes used to compute the leaderboard. Memoized — useMemo always
     // fires (even when there's no match) so hook ordering stays stable.
     const strokeMaps = useMemo(() => {
-      const maps = {};
-      if (!event || !course || !activeMatch) return maps;
-      const allPids = matchPids;
-      const getHI = (pid) => {
-        if (event.hcp_overrides?.[pid] !== undefined && event.hcp_overrides[pid] !== "") return parseFloat(event.hcp_overrides[pid]) || 0;
-        const tp = tPlayers.find(p => p.player_id === pid);
-        return parseFloat(tp?.handicap_index) || 0;
-      };
-      const getCH = (pid) => calcCH(getHI(pid), course.slope || 113, course.rating || 72, course.par || 72);
-      const allCHs = allPids.map(getCH);
-      const minCH = allCHs.length ? Math.min(...allCHs) : 0;
-      const adjCH = (pid) => event.hcp_mode === "full" ? getCH(pid) : (getCH(pid) - minCH);
-      const buildMap = (ch) => {
-        const sorted = holeHcps.map((h, i) => ({ idx: i, hcp: h })).sort((a, b) => a.hcp - b.hcp);
-        const map = {};
-        let rem = Math.abs(ch);
-        for (let pass = 0; pass < 3 && rem > 0; pass++) {
-          for (const h of sorted) { if (rem <= 0) break; map[h.idx] = (map[h.idx] || 0) + 1; rem--; }
-        }
-        return map;
-      };
-      allPids.forEach(pid => { maps[pid] = buildMap(adjCH(pid)); });
-      return maps;
-    }, [activeMatch, event, course, holeHcps]);
+      return getStrokeMapsForMatch(activeMatch);
+    }, [activeMatch, event, course]);
 
     // ── No more hooks below this line — early returns are safe ─────────────
     if (!event || !course) {
@@ -3397,214 +3628,14 @@ function PracticeView({ user, tPlayers, courses, notify }) {
         </button>
 
         {showScorecard && (() => {
-          // Extract the rendering pieces we need for either nine. Each section
-          // shares the same header / par / hcp / player / team-net / match-row
-          // structure — only the hole-index offset differs. We render the
-          // section twice in the modal body.
-          const t1Pids2 = [activeMatch.team1.player1, activeMatch.team1.player2].filter(Boolean);
-          const t2Pids2 = [activeMatch.team2.player1, activeMatch.team2.player2].filter(Boolean);
+          // The body of the scorecard is rendered by the shared helper —
+          // we just provide the modal chrome (backdrop, header with team
+          // labels, close button) here.
           const t1Idx = event.teams.findIndex(t => t.id === activeMatch.team1.id);
           const t2Idx = event.teams.findIndex(t => t.id === activeMatch.team2.id);
           const tcA = PRACTICE_TEAM_COLORS[t1Idx];
           const tcB = PRACTICE_TEAM_COLORS[t2Idx];
           const matchIdx = event.matches.findIndex(m => m.id === activeMatch.id);
-          const gridLine = `1px solid ${BC.bdr}25`;
-
-          // Per-hole running cumulative status from T1's perspective (positive
-          // = T1 leading). Independent from the user-perspective `holeStatuses`
-          // computed above for the on-screen status bar — the scorecard always
-          // shows from T1's perspective so the layout is symmetric (T1 above,
-          // match row, T2 below).
-          const t1Statuses = Array.from({ length: 18 }, (_, i) => {
-            let cum = 0, hasData = false;
-            for (let h = 0; h <= i; h++) {
-              let n1 = 0, n2 = 0, ok1 = true, ok2 = true;
-              t1Pids2.forEach(pid => { const s = scoresMap[`${pid}_${h}`]; if (!s) ok1 = false; else n1 += s - getStrokes(pid, h); });
-              t2Pids2.forEach(pid => { const s = scoresMap[`${pid}_${h}`]; if (!s) ok2 = false; else n2 += s - getStrokes(pid, h); });
-              if (ok1 && ok2) {
-                if (n1 < n2) cum += 1;
-                else if (n2 < n1) cum -= 1;
-                hasData = true;
-              } else { hasData = false; break; }
-            }
-            return hasData ? cum : null;
-          });
-          let t1ClinchHole = null, t1ClinchText = null;
-          for (let h = 0; h < 18; h++) {
-            if (t1Statuses[h] === null) break;
-            const lead = Math.abs(t1Statuses[h]);
-            const remaining = 17 - h;
-            if (remaining > 0 && lead > remaining) {
-              t1ClinchHole = h;
-              t1ClinchText = `${lead}&${remaining}`;
-              break;
-            }
-          }
-
-          // Per-hole result for highlighting the team-net cell on holes won
-          const t1WonHole = (h) => {
-            const s = t1Statuses[h] === null ? null : (h === 0 ? t1Statuses[0] : t1Statuses[h] - t1Statuses[h - 1]);
-            return s === 1;
-          };
-          const t2WonHole = (h) => {
-            const s = t1Statuses[h] === null ? null : (h === 0 ? t1Statuses[0] : t1Statuses[h] - t1Statuses[h - 1]);
-            return s === -1;
-          };
-
-          // Render a single 9-hole section. `offset` is 0 (front) or 9 (back).
-          const renderSection = (offset) => {
-            const sectionPars = holePars.slice(offset, offset + 9);
-            const sectionHcps = holeHcps.slice(offset, offset + 9);
-            const sectionParTotal = sectionPars.reduce((a, b) => a + b, 0);
-            const labelW = 46;
-            const totW = 32;
-            const lblBase = { width: labelW, flexShrink: 0, fontSize: 9, fontWeight: 700, color: BC.t3, display: "flex", alignItems: "center", paddingLeft: 4, borderRight: gridLine, textTransform: "uppercase", letterSpacing: 0.3 };
-            const totBase = { width: totW, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", borderLeft: gridLine };
-
-            const renderPlayerRow = (pid) => {
-              const p = tPlayers.find(t => t.player_id === pid);
-              const slotIdx = event.teams.findIndex(t => t.player1 === pid || t.player2 === pid);
-              const tc = PRACTICE_TEAM_COLORS[slotIdx];
-              let grossTot = 0;
-              return (
-                <div key={pid} style={{ display: "flex", alignItems: "center", borderBottom: gridLine }}>
-                  <div style={{ ...lblBase, height: 38, gap: 4, paddingTop: 0 }}>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: tc?.accent || BC.t1 }}>{getInitials(p?.name)}</span>
-                  </div>
-                  {Array.from({ length: 9 }, (_, i) => {
-                    const h = i + offset;
-                    const s = scoresMap[`${pid}_${h}`] || 0;
-                    const st = strokeMaps[pid]?.[h] || 0;
-                    if (s > 0) grossTot += s;
-                    return (
-                      <div key={i} style={{ flex: 1, height: 38, display: "flex", alignItems: "center", justifyContent: "center", borderRight: i < 8 ? gridLine : "none" }}>
-                        <ScoreCell score={s} par={holePars[h]} strokes={st} size={13} />
-                      </div>
-                    );
-                  })}
-                  <div style={{ ...totBase, height: 38 }}>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: BC.t1 }}>{grossTot || ""}</span>
-                  </div>
-                </div>
-              );
-            };
-
-            const renderTeamNetRow = (pids, isT1Side) => {
-              let netTot = 0;
-              const tc = isT1Side ? tcA : tcB;
-              return (
-                <div style={{ display: "flex", alignItems: "center", borderBottom: gridLine, background: tc.color + "15" }}>
-                  <div style={{ ...lblBase, height: 32, fontSize: 9, fontWeight: 800, color: tc.accent }}>NET</div>
-                  {Array.from({ length: 9 }, (_, i) => {
-                    const h = i + offset;
-                    let tNet = 0, ok = true;
-                    pids.forEach(pid => {
-                      const s = scoresMap[`${pid}_${h}`];
-                      if (!s) ok = false;
-                      else tNet += s - (strokeMaps[pid]?.[h] || 0);
-                    });
-                    if (ok) netTot += tNet;
-                    const won = isT1Side ? t1WonHole(h) : t2WonHole(h);
-                    return (
-                      <div key={i} style={{ flex: 1, height: 32, display: "flex", alignItems: "center", justifyContent: "center", borderRight: i < 8 ? gridLine : "none" }}>
-                        {won ? (
-                          <div style={{ width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 4, border: `1.5px solid ${tc.accent}`, background: tc.accent + "20" }}>
-                            <span style={{ fontSize: 13, fontWeight: 800, color: BC.t1 }}>{ok ? tNet : "·"}</span>
-                          </div>
-                        ) : (
-                          <span style={{ fontSize: 13, fontWeight: 800, color: ok ? BC.t1 : BC.t3 + "40" }}>{ok ? tNet : "·"}</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                  <div style={{ ...totBase, height: 32 }}>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: BC.t1 }}>{netTot || ""}</span>
-                  </div>
-                </div>
-              );
-            };
-
-            // Match status row (T1 perspective for this view — symmetric layout)
-            const renderMatchRow = () => (
-              <div style={{ display: "flex", alignItems: "center", background: BC.amber + "12", borderBottom: gridLine }}>
-                <div style={{ ...lblBase, height: 28, color: BC.amber, fontWeight: 800, fontSize: 9 }}>MATCH</div>
-                {Array.from({ length: 9 }, (_, i) => {
-                  const h = i + offset;
-                  const st = t1Statuses[h];
-                  const colBdr = i < 8 ? { borderRight: gridLine } : {};
-                  if (t1ClinchHole !== null && h === t1ClinchHole) {
-                    const color = st > 0 ? "#22c55e" : st < 0 ? BC.danger : BC.t3;
-                    return (
-                      <div key={i} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", height: 28, ...colBdr }}>
-                        <div style={{ border: `1.5px solid ${color}`, borderRadius: 4, padding: "0 4px", lineHeight: "20px" }}>
-                          <span style={{ fontSize: 12, fontWeight: 800, color, whiteSpace: "nowrap" }}>{t1ClinchText}</span>
-                        </div>
-                      </div>
-                    );
-                  }
-                  if (t1ClinchHole !== null && h > t1ClinchHole) {
-                    return <div key={i} style={{ flex: 1, height: 28, ...colBdr }} />;
-                  }
-                  if (st === null) {
-                    return <div key={i} style={{ flex: 1, height: 28, ...colBdr }} />;
-                  }
-                  const color = st > 0 ? "#22c55e" : st < 0 ? BC.danger : BC.t3;
-                  return (
-                    <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 12, fontWeight: 800, color, lineHeight: "28px", ...colBdr }}>
-                      {st > 0 ? <><span style={{ fontSize: 12 }}>▲</span>{st}</> : st < 0 ? <><span style={{ fontSize: 12 }}>▼</span>{Math.abs(st)}</> : <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.5 }}>TIED</span>}
-                    </div>
-                  );
-                })}
-                <div style={{ ...totBase, height: 28, borderLeft: gridLine }} />
-              </div>
-            );
-
-            return (
-              <div style={{ marginBottom: 10, border: `1px solid ${BC.bdr}`, borderRadius: 10, overflow: "hidden" }}>
-                {/* HOLE row — amber filled header */}
-                <div style={{ display: "flex", background: BC.amber }}>
-                  <div style={{ ...lblBase, height: 26, color: "#0a0804", opacity: 0.85, borderRight: "none", fontWeight: 800, fontSize: 10 }}>
-                    {offset === 0 ? "FRONT" : "BACK"}
-                  </div>
-                  {Array.from({ length: 9 }, (_, i) => (
-                    <div key={i} style={{ flex: 1, height: 26, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <span style={{ fontSize: 12, fontWeight: 800, color: "#0a0804" }}>{i + offset + 1}</span>
-                    </div>
-                  ))}
-                  <div style={{ ...totBase, height: 26, borderLeft: "none" }}>
-                    <span style={{ fontSize: 10, fontWeight: 800, color: "#0a0804" }}>TOT</span>
-                  </div>
-                </div>
-                {/* PAR row */}
-                <div style={{ display: "flex", borderBottom: gridLine, background: BC.amber + "18" }}>
-                  <div style={{ ...lblBase, height: 22 }}>PAR</div>
-                  {sectionPars.map((p, i) => (
-                    <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 11, color: BC.t2, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", height: 22, borderRight: i < 8 ? gridLine : "none" }}>{p}</div>
-                  ))}
-                  <div style={{ ...totBase, height: 22 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: BC.t3 }}>{sectionParTotal}</span>
-                  </div>
-                </div>
-                {/* HCP row */}
-                <div style={{ display: "flex", borderBottom: gridLine, background: BC.inp }}>
-                  <div style={{ ...lblBase, height: 20 }}>HCP</div>
-                  {sectionHcps.map((h, i) => (
-                    <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 10, color: BC.t3, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", height: 20, borderRight: i < 8 ? gridLine : "none" }}>{h}</div>
-                  ))}
-                  <div style={{ ...totBase, height: 20 }} />
-                </div>
-                {/* Team 1 player rows + team net */}
-                {t1Pids2.map(pid => renderPlayerRow(pid))}
-                {renderTeamNetRow(t1Pids2, true)}
-                {/* Match status row */}
-                {renderMatchRow()}
-                {/* Team 2 player rows + team net (no border-bottom on the last row) */}
-                {t2Pids2.map(pid => renderPlayerRow(pid))}
-                {renderTeamNetRow(t2Pids2, false)}
-              </div>
-            );
-          };
-
           return (
             <>
               {/* Backdrop — tap anywhere to close */}
@@ -3640,10 +3671,9 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                     }}>×</button>
                   </div>
 
-                  {/* Body */}
+                  {/* Body — front 9 + back 9 sections via shared helper */}
                   <div style={{ padding: 10 }}>
-                    {renderSection(0)}
-                    {renderSection(9)}
+                    {renderMatchScorecardBody(activeMatch, strokeMaps)}
                   </div>
 
                   {/* Footer */}
@@ -3669,18 +3699,89 @@ function PracticeView({ user, tPlayers, courses, notify }) {
     const [expandedMatch, setExpandedMatch] = useState(null);
     const holePars = course?.hole_pars || Array(18).fill(4);
 
+    // Stroke maps for each match — keyed by match.id. Each value is the same
+    // shape as ScoringTab's strokeMaps (player_id → { hole: strokes }).
+    // Memoized on event/course because the allocation is per-match (low-man
+    // is computed within each match's 4 players, not across all 8).
+    const allMatchStrokeMaps = useMemo(() => {
+      const out = {};
+      if (!event || !course) return out;
+      event.matches.forEach(m => { out[m.id] = getStrokeMapsForMatch(m); });
+      return out;
+    }, [event, course]);
+
     if (!event || !course) {
       return <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>No event yet.</div>;
     }
 
+    // Per-team running totals — for the team-totals card at the top. For each
+    // team we walk the 18 holes contiguously from hole 1 and stop at the
+    // first hole where either teammate's score is missing. The "to par"
+    // figure is the SUM of each player's net-to-par contribution on each
+    // completed hole, which is equivalent to (combined_net − 2 × par_total).
+    const teamTotals = event.teams.map((team, idx) => {
+      const teamPids = [team.player1, team.player2].filter(Boolean);
+      // Look up which match this team is in, so we can use the right strokeMaps
+      const matchOfTeam = event.matches.find(m => m.team1.id === team.id || m.team2.id === team.id);
+      const sm = matchOfTeam ? (allMatchStrokeMaps[matchOfTeam.id] || {}) : {};
+      let toPar = 0, thru = 0;
+      for (let h = 0; h < 18; h++) {
+        let allOk = true, holeContrib = 0;
+        teamPids.forEach(pid => {
+          const s = scoresMap[`${pid}_${h}`];
+          if (!s) allOk = false;
+          else {
+            const strokes = sm[pid]?.[h] || 0;
+            holeContrib += (s - strokes - holePars[h]);
+          }
+        });
+        if (allOk) {
+          toPar += holeContrib;
+          thru = h + 1;
+        } else { break; }
+      }
+      return { team, idx, teamPids, toPar, thru };
+    });
+
     return (
       <div>
-        <div style={{ background: BC.card, borderRadius: 10, padding: "8px 12px", marginBottom: 10, border: `1px solid ${BC.bdr}` }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold }}>{course.name}</div>
-          <div style={{ fontSize: 9, color: BC.t3, marginTop: 2 }}>Team Total Match Play · {event.hcp_mode === "full" ? "Full Strokes" : "Low Man"}</div>
+        {/* TEAM TOTALS — combined net to par + thru hole, one row per team. */}
+        <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 10, overflow: "hidden" }}>
+          <div style={{ padding: "10px 14px", borderBottom: `1px solid ${BC.bdr}` }}>
+            <div style={{ fontSize: 9, color: BC.t3, fontWeight: 800, letterSpacing: 1 }}>TEAM TOTALS</div>
+          </div>
+          {teamTotals.map(({ team, idx, teamPids, toPar, thru }, rowIdx) => {
+            const tc = PRACTICE_TEAM_COLORS[idx];
+            const teamPlayers = teamPids.map(pid => tPlayers.find(p => p.player_id === pid)).filter(Boolean);
+            // Color the to-par number green when under, neutral at par,
+            // muted-warm when over — matches scoring net coloring.
+            const parColor = thru === 0 ? BC.t3 : toPar < 0 ? "#22c55e" : toPar === 0 ? BC.t1 : BC.t2;
+            return (
+              <div key={team.id} style={{
+                display: "flex", alignItems: "center", padding: "10px 14px",
+                borderBottom: rowIdx < teamTotals.length - 1 ? `1px solid ${BC.bdr}40` : "none",
+                borderLeft: `4px solid ${tc.accent}`,
+                gap: 10,
+              }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 9, fontWeight: 800, color: tc.accent, letterSpacing: 1 }}>TEAM {idx + 1}</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: BC.t1, marginTop: 2, lineHeight: 1.3 }}>
+                    {teamPlayers.map(p => p.name).join(" / ")}
+                  </div>
+                </div>
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: parColor, lineHeight: 1 }}>
+                    {thru === 0 ? "—" : fmtScore(toPar)}
+                  </div>
+                  <div style={{ fontSize: 9, color: BC.t3, marginTop: 3 }}>Thru {thru}</div>
+                </div>
+              </div>
+            );
+          })}
         </div>
 
-        {matchResults.map((mr, i) => {
+        {/* Match cards — one per match, with full scorecard available on expand. */}
+        {matchResults.map((mr) => {
           const m = mr.match;
           const r = mr.result;
           const t1Idx = event.teams.findIndex(t => t.id === m.team1.id);
@@ -3698,29 +3799,32 @@ function PracticeView({ user, tPlayers, courses, notify }) {
               <button onClick={() => setExpandedMatch(isExpanded ? null : m.id)} style={{
                 width: "100%", padding: "12px 14px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left",
               }}>
+                {/* "Thru N" + chevron at the top — no "MATCH N" label since both
+                    matches always render here, the order is the obvious cue. */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <div style={{ fontSize: 9, color: BC.t3, fontWeight: 800, letterSpacing: 1 }}>MATCH {i + 1}</div>
                   <div style={{ fontSize: 9, color: BC.t3 }}>Thru {r.thru}</div>
+                  <div style={{ fontSize: 11, color: BC.t3 }}>{isExpanded ? "▴" : "▾"}</div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10 }}>
-                  {/* Team 1 */}
+                  {/* Team 1 — full names, dimmed if their team is currently losing
+                      (and the match isn't dormie-tied). */}
                   <div style={{ textAlign: "left", opacity: r.thru > 0 && !isT1Winning && !r.dormie ? 0.6 : 1 }}>
                     <div style={{ fontSize: 9, color: tc1.accent, fontWeight: 800, letterSpacing: 1, marginBottom: 2 }}>TEAM {t1Idx + 1}</div>
-                    {t1Players.map(p => p && <div key={p.player_id} style={{ fontSize: 11, fontWeight: 600, color: BC.t1 }}>{p.name?.split(" ").slice(-1)[0]}</div>)}
+                    {t1Players.map(p => p && <div key={p.player_id} style={{ fontSize: 11, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{p.name}</div>)}
                     <div style={{ fontSize: 18, fontWeight: 800, color: tc1.accent, marginTop: 4 }}>{r.holesWon1}</div>
                   </div>
                   {/* Status */}
                   <div style={{ textAlign: "center", padding: "4px 10px", background: BC.inp, borderRadius: 6, border: `1px solid ${BC.bdr}` }}>
                     <div style={{ fontSize: 14, fontWeight: 800, color: BC.amber, letterSpacing: 0.5 }}>{r.matchResultText}</div>
                   </div>
-                  {/* Team 2 */}
+                  {/* Team 2 — full names, right-aligned. */}
                   <div style={{ textAlign: "right", opacity: r.thru > 0 && !isT2Winning && !r.dormie ? 0.6 : 1 }}>
                     <div style={{ fontSize: 9, color: tc2.accent, fontWeight: 800, letterSpacing: 1, marginBottom: 2 }}>TEAM {t2Idx + 1}</div>
-                    {t2Players.map(p => p && <div key={p.player_id} style={{ fontSize: 11, fontWeight: 600, color: BC.t1 }}>{p.name?.split(" ").slice(-1)[0]}</div>)}
+                    {t2Players.map(p => p && <div key={p.player_id} style={{ fontSize: 11, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{p.name}</div>)}
                     <div style={{ fontSize: 18, fontWeight: 800, color: tc2.accent, marginTop: 4 }}>{r.holesWon2}</div>
                   </div>
                 </div>
-                {/* Hole tracker */}
+                {/* Hole tracker — thin strip showing won/tied/unscored holes */}
                 <div style={{ display: "flex", gap: 1, marginTop: 8 }}>
                   {r.holes.map((h, hi) => {
                     const bg = h.result === 1 ? tc1.accent : h.result === -1 ? tc2.accent : h.result === 0 ? BC.t3 : BC.bdr;
@@ -3729,41 +3833,12 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                 </div>
               </button>
 
+              {/* Expanded view — full scorecard via the shared helper. Same
+                  rendering as the scoring modal so anyone viewing the
+                  leaderboard sees the exact same hole-by-hole detail. */}
               {isExpanded && (
-                <div style={{ padding: "10px 14px", borderTop: `1px solid ${BC.bdr}`, background: BC.inp }}>
-                  <div style={{ fontSize: 9, color: BC.t3, fontWeight: 800, letterSpacing: 1, marginBottom: 8 }}>HOLE-BY-HOLE</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(9, 1fr)", gap: 2, fontSize: 9, marginBottom: 6 }}>
-                    {Array.from({ length: 9 }, (_, h) => (
-                      <div key={h} style={{ textAlign: "center", color: BC.t3, fontWeight: 700 }}>{h + 1}</div>
-                    ))}
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(9, 1fr)", gap: 2, marginBottom: 4 }}>
-                    {r.holes.slice(0, 9).map((h, hi) => {
-                      const bg = h.result === 1 ? tc1.accent + "44" : h.result === -1 ? tc2.accent + "44" : h.result === 0 ? BC.t3 + "44" : BC.bdr;
-                      const txt = h.result === 1 ? tc1.accent : h.result === -1 ? tc2.accent : BC.t2;
-                      return (
-                        <div key={hi} style={{ background: bg, borderRadius: 3, padding: "3px 0", textAlign: "center", fontSize: 9, fontWeight: 700, color: txt }}>
-                          {h.n1 != null && h.n2 != null ? `${h.n1}-${h.n2}` : "—"}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(9, 1fr)", gap: 2, fontSize: 9, marginBottom: 6, marginTop: 8 }}>
-                    {Array.from({ length: 9 }, (_, h) => (
-                      <div key={h} style={{ textAlign: "center", color: BC.t3, fontWeight: 700 }}>{h + 10}</div>
-                    ))}
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(9, 1fr)", gap: 2 }}>
-                    {r.holes.slice(9, 18).map((h, hi) => {
-                      const bg = h.result === 1 ? tc1.accent + "44" : h.result === -1 ? tc2.accent + "44" : h.result === 0 ? BC.t3 + "44" : BC.bdr;
-                      const txt = h.result === 1 ? tc1.accent : h.result === -1 ? tc2.accent : BC.t2;
-                      return (
-                        <div key={hi} style={{ background: bg, borderRadius: 3, padding: "3px 0", textAlign: "center", fontSize: 9, fontWeight: 700, color: txt }}>
-                          {h.n1 != null && h.n2 != null ? `${h.n1}-${h.n2}` : "—"}
-                        </div>
-                      );
-                    })}
-                  </div>
+                <div style={{ padding: 10, borderTop: `1px solid ${BC.bdr}`, background: BC.bg }}>
+                  {renderMatchScorecardBody(m, allMatchStrokeMaps[m.id] || {})}
                 </div>
               )}
             </div>
