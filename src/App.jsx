@@ -3289,6 +3289,16 @@ function PracticeView({ user, tPlayers, courses, notify }) {
     // counter stays consistent across renders.
     const [activeHole, setActiveHole] = useState(0);
     const [showScorecard, setShowScorecard] = useState(false);
+    // `editing` = true when the user has navigated BACK to a previously-
+    // completed hole to fix a score. While editing, auto-advance is
+    // suppressed so a corrective tap doesn't jump the screen away. Reset
+    // to false whenever they reach the live edge (first unscored hole).
+    const [editing, setEditing] = useState(false);
+    // Initial-jump bookkeeping. On first arrival at the scoring view (after
+    // Firestore scores load), we jump activeHole forward to the first
+    // unscored hole — so a user joining mid-round doesn't have to flip
+    // through holes 1..N to reach the action. Only fires once per mount.
+    const initialJump = useRef(false);
 
     const holePars = course?.hole_pars || Array(18).fill(4);
     const holeHcps = course?.hole_handicaps || Array(18).fill(9);
@@ -3316,6 +3326,75 @@ function PracticeView({ user, tPlayers, courses, notify }) {
     const strokeMaps = useMemo(() => {
       return getStrokeMapsForMatch(activeMatch);
     }, [activeMatch, event, course]);
+
+    // ── Auto-advance derivations ────────────────────────────────────────────
+    // Whether every player in the match has a score on the active hole.
+    // When this flips true (after the 4th player's score is entered), we
+    // start a timer to jump to the next unscored hole.
+    const holeComplete = matchPids.length > 0 && matchPids.every(pid => (scoresMap[`${pid}_${activeHole}`] || 0) > 0);
+    // Whether every player has scores on every hole — if so, the round is
+    // done and we shouldn't auto-advance off the last hole.
+    const allComplete = matchPids.length > 0 && matchPids.every(pid => {
+      for (let h = 0; h < 18; h++) {
+        if (!(scoresMap[`${pid}_${h}`] > 0)) return false;
+      }
+      return true;
+    });
+    // Signature of the current hole's scores — flips whenever ANY score on
+    // this hole changes, even if the hole stays "complete" through the edit
+    // (e.g. correcting a 5 to a 4). Used as a useEffect dep so editing
+    // within the 1.8s auto-advance window restarts the timer rather than
+    // letting it lock in at the moment of first completion.
+    const curHoleScoreSig = matchPids.map(pid => scoresMap[`${pid}_${activeHole}`] || 0).join(",");
+
+    // Auto-advance effect — fires the timer when the active hole becomes
+    // fully scored. Cleanup function clears the pending timer if the hole
+    // changes, the user starts editing, or scores are edited again before
+    // 1.8s elapses. Always called (even when match is missing) to keep
+    // hook ordering consistent — guard inside.
+    useEffect(() => {
+      if (!activeMatch) return;
+      if (!holeComplete || activeHole >= 17 || editing || allComplete) return;
+      const timer = setTimeout(() => {
+        // Skip past any holes that are already fully scored (e.g. user
+        // back-filled a missing hole and the live edge has now leapfrogged
+        // forward). Land on the first hole that still needs entry.
+        let next = activeHole + 1;
+        while (next < 17 && matchPids.every(pid => (scoresMap[`${pid}_${next}`] || 0) > 0)) next++;
+        setActiveHole(next);
+        setEditing(false);
+      }, 1800);
+      return () => clearTimeout(timer);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [holeComplete, activeHole, editing, allComplete, curHoleScoreSig, activeMatch]);
+
+    // Initial-jump effect — once Firestore has delivered scores for this
+    // match, fast-forward activeHole to the first unscored hole so a late
+    // joiner doesn't have to manually navigate forward. Runs at most once
+    // per mount (guarded by the ref). Re-fires until it finds scores so
+    // it works whether the data was already cached or arrived after mount.
+    useEffect(() => {
+      if (initialJump.current) return;
+      if (!activeMatch) return;
+      const pids = [activeMatch.team1.player1, activeMatch.team1.player2, activeMatch.team2.player1, activeMatch.team2.player2].filter(Boolean);
+      if (pids.length === 0) return;
+      // Find the first hole where not all 4 players have a score
+      let edge = 18;
+      for (let h = 0; h < 18; h++) {
+        if (!pids.every(pid => (scoresMap[`${pid}_${h}`] || 0) > 0)) { edge = h; break; }
+      }
+      // Only jump (and lock the ref) once we've seen at least one score —
+      // otherwise the first render with empty scoresMap would consume our
+      // one-shot, leaving no chance to jump after Firestore arrives.
+      const hasAnyScores = pids.some(pid => {
+        for (let h = 0; h < 18; h++) if ((scoresMap[`${pid}_${h}`] || 0) > 0) return true;
+        return false;
+      });
+      if (hasAnyScores) {
+        if (edge > 0 && edge < 18) setActiveHole(edge);
+        initialJump.current = true;
+      }
+    }, [activeMatch, scoresMap]);
 
     // ── No more hooks below this line — early returns are safe ─────────────
     if (!event || !course) {
@@ -3427,6 +3506,22 @@ function PracticeView({ user, tPlayers, courses, notify }) {
       );
     };
 
+    // "Live edge" — first hole where not all players have scored yet. Anything
+    // earlier than this is a past hole the user might be editing. Used to
+    // suppress auto-advance when the user has navigated back to fix a score.
+    let liveEdge = 17;
+    for (let h = 0; h < 18; h++) {
+      if (!matchPids.every(pid => (scoresMap[`${pid}_${h}`] || 0) > 0)) { liveEdge = h; break; }
+    }
+    // Centralizes the "set hole + flip editing flag" pattern. Direct calls to
+    // setActiveHole alone would leak stale editing state — e.g. user fixes
+    // hole 3, then taps hole 5 (the live edge) but editing stays true and
+    // auto-advance never fires when they finish hole 5.
+    const goToHole = (h) => {
+      setActiveHole(h);
+      setEditing(h < liveEdge);
+    };
+
     return (
       <div>
         {/* Front 9 — hole strip */}
@@ -3436,7 +3531,7 @@ function PracticeView({ user, tPlayers, courses, notify }) {
             const allScored = matchPids.every(pid => scoresMap[`${pid}_${i}`]);
             const partial = !allScored && matchPids.some(pid => scoresMap[`${pid}_${i}`]);
             return (
-              <button key={i} onClick={() => setActiveHole(i)} style={{
+              <button key={i} onClick={() => goToHole(i)} style={{
                 flex: 1, height: 28, borderRadius: cur ? 8 : 6,
                 border: allScored && !cur ? `1.5px solid ${BC.amber}50` : "none",
                 background: cur ? BC.amber : allScored ? BC.amber + "15" : partial ? BC.amber + "08" : BC.card,
@@ -3459,7 +3554,7 @@ function PracticeView({ user, tPlayers, courses, notify }) {
             const allScored = matchPids.every(pid => scoresMap[`${pid}_${h}`]);
             const partial = !allScored && matchPids.some(pid => scoresMap[`${pid}_${h}`]);
             return (
-              <button key={h} onClick={() => setActiveHole(h)} style={{
+              <button key={h} onClick={() => goToHole(h)} style={{
                 flex: 1, height: 28, borderRadius: cur ? 8 : 6,
                 border: allScored && !cur ? `1.5px solid ${BC.amber}50` : "none",
                 background: cur ? BC.amber : allScored ? BC.amber + "15" : partial ? BC.amber + "08" : BC.card,
@@ -3481,7 +3576,7 @@ function PracticeView({ user, tPlayers, courses, notify }) {
           background: BC.amber, borderRadius: 10, padding: "4px 8px", marginBottom: 6,
           display: "flex", alignItems: "center",
         }}>
-          <button onClick={() => setActiveHole(h => Math.max(0, h - 1))} disabled={activeHole === 0} style={{
+          <button onClick={() => goToHole(Math.max(0, activeHole - 1))} disabled={activeHole === 0} style={{
             width: 28, height: 36, borderRadius: 8, background: "none", border: "none",
             cursor: activeHole === 0 ? "default" : "pointer",
             color: activeHole === 0 ? "#0a080440" : "#0a0804", fontSize: 18, fontWeight: 700,
@@ -3501,7 +3596,7 @@ function PracticeView({ user, tPlayers, courses, notify }) {
               <div style={{ fontSize: 15, fontWeight: 800, color: "#0a0804" }}>{hcp}</div>
             </div>
           </div>
-          <button onClick={() => setActiveHole(h => Math.min(17, h + 1))} disabled={activeHole === 17} style={{
+          <button onClick={() => goToHole(Math.min(17, activeHole + 1))} disabled={activeHole === 17} style={{
             width: 28, height: 36, borderRadius: 8, background: "none", border: "none",
             cursor: activeHole === 17 ? "default" : "pointer",
             color: activeHole === 17 ? "#0a080440" : "#0a0804", fontSize: 18, fontWeight: 700,
