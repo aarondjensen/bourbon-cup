@@ -106,6 +106,17 @@ const calcCH = (hi, slope, rating, par) => (!hi && hi !== 0) ? 0 : Math.round((h
 const fmtScore = (n) => n == null ? "—" : n === 0 ? "E" : n > 0 ? `+${n}` : `${n}`;
 const getTeam = (tid) => tid === "A" ? TEAM_A : TEAM_B;
 const oppTeam = (tid) => tid === "A" ? TEAM_B : TEAM_A;
+// First+last initials from a player's full name. "Aaron Jensen" → "AJ".
+// Single-name fallback grabs the first two letters (e.g. "Joe" → "JO") so a
+// missing surname doesn't produce a one-character badge that breaks the
+// 2-char width alignment elsewhere.
+const getInitials = (name) => {
+  if (!name) return "??";
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "??";
+  if (parts.length === 1) return (parts[0].slice(0, 2) || "??").toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
 
 // ── Match Scoring Engine ──
 function computeMatchResult(match, holeData, courses, tRounds, tPlayers, format, hcpOverrides, handicapMode) {
@@ -2757,6 +2768,11 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                   display: "flex", alignItems: "center", gap: 6,
                 }}>
                   <span style={{ width: 6, height: 6, borderRadius: "50%", background: teamColor, flexShrink: 0 }} />
+                  <span style={{
+                    fontSize: 9, fontWeight: 800, color: isSel ? BC.t1 : BC.t3, letterSpacing: 0.5,
+                    background: isSel ? teamColor + "44" : BC.bdr + "60",
+                    padding: "2px 5px", borderRadius: 4, flexShrink: 0,
+                  }}>{getInitials(p.name)}</span>
                   <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
                   {slotIdx !== -1 && (
                     <span style={{ fontSize: 9, fontWeight: 800, color: PRACTICE_TEAM_COLORS[slotIdx].accent, flexShrink: 0 }}>
@@ -2798,8 +2814,12 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                       const p = tPlayers.find(t => t.player_id === pid);
                       return (
                         <div key={pid} onClick={(e) => { e.stopPropagation(); setTeamSlots(s => s.map((sl, ix) => ix === i ? sl.filter(x => x !== pid) : sl)); }}
-                          style={{ fontSize: 11, fontWeight: 600, color: BC.t1, marginBottom: 2, cursor: "pointer" }}>
-                          {p?.name || pid}
+                          style={{ fontSize: 11, fontWeight: 600, color: BC.t1, marginBottom: 2, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+                          <span style={{
+                            fontSize: 9, fontWeight: 800, color: tc.accent, letterSpacing: 0.5,
+                            background: tc.color + "55", padding: "2px 4px", borderRadius: 3, flexShrink: 0,
+                          }}>{getInitials(p?.name)}</span>
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p?.name || pid}</span>
                         </div>
                       );
                     })}
@@ -2824,10 +2844,10 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                       padding: "6px 10px", borderRadius: 14,
                       background: inActive ? tc.accent + "33" : inOther ? BC.inp : BC.hover,
                       border: `1px solid ${inActive ? tc.accent : inOther ? tc.accent + "44" : BC.bdr}`,
-                      color: inOther ? BC.t3 : BC.t1, fontSize: 11, fontWeight: 600, cursor: "pointer",
-                      opacity: inOther && !inActive ? 0.55 : 1,
+                      color: inOther ? BC.t3 : BC.t1, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                      opacity: inOther && !inActive ? 0.55 : 1, letterSpacing: 0.5,
                     }}>
-                      {p?.name?.split(" ").slice(-1)[0] || pid}
+                      {getInitials(p?.name)}
                       {slotIdx !== -1 && <span style={{ marginLeft: 4, fontSize: 9, color: tc.accent, fontWeight: 800 }}>T{slotIdx + 1}</span>}
                     </button>
                   );
@@ -2902,105 +2922,299 @@ function PracticeView({ user, tPlayers, courses, notify }) {
     if (!event || !course) {
       return <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>Set up an event first.</div>;
     }
-    // Default to user's pid if they're in the event, else first player
-    const userInEvent = event.player_ids?.includes(user?.player_id);
-    const [activePid, setActivePid] = useState(userInEvent ? user.player_id : event.player_ids[0]);
-    const [activeHole, setActiveHole] = useState(0);
 
     const holePars = course.hole_pars || Array(18).fill(4);
-    const holePar = holePars[activeHole];
-    const activePlayer = tPlayers.find(p => p.player_id === activePid);
+    const holeHcps = course.hole_handicaps || Array(18).fill(9);
 
-    // Find which match this player is in for status display
-    const playerMatch = event.matches.find(m =>
-      [m.team1.player1, m.team1.player2, m.team2.player1, m.team2.player2].includes(activePid)
+    // Default to user's match if they're in one, else Match 1
+    const userMatchIdx = event.matches.findIndex(m =>
+      [m.team1.player1, m.team1.player2, m.team2.player1, m.team2.player2].includes(user?.player_id)
     );
-    const playerMatchResult = playerMatch
-      ? matchResults.find(mr => mr.match.id === playerMatch.id)?.result
-      : null;
+    const initialMatchId = userMatchIdx !== -1 ? event.matches[userMatchIdx].id : event.matches[0]?.id;
 
-    const cur = scoresMap[`${activePid}_${activeHole}`];
+    const [activeMatchId, setActiveMatchId] = useState(initialMatchId);
+    const [activeHole, setActiveHole] = useState(0);
+
+    const activeMatch = event.matches.find(m => m.id === activeMatchId) || event.matches[0];
+    const matchPids = activeMatch ? [
+      activeMatch.team1.player1, activeMatch.team1.player2,
+      activeMatch.team2.player1, activeMatch.team2.player2,
+    ].filter(Boolean) : [];
+
+    const par = holePars[activeHole];
+    const hcp = holeHcps[activeHole];
+    const matchResult = matchResults.find(mr => mr.match.id === activeMatchId)?.result;
+
+    // Stroke maps for the 4 players in this match. Mirrors the calculation used
+    // in computePracticeMatch so the dots shown beside each player exactly match
+    // the strokes used to compute the leaderboard. Memoized on match/event/course
+    // because rebuilding the per-player allocation isn't cheap if done every render.
+    const strokeMaps = useMemo(() => {
+      const maps = {};
+      if (!activeMatch) return maps;
+      const allPids = matchPids;
+      const getHI = (pid) => {
+        if (event.hcp_overrides?.[pid] !== undefined && event.hcp_overrides[pid] !== "") return parseFloat(event.hcp_overrides[pid]) || 0;
+        const tp = tPlayers.find(p => p.player_id === pid);
+        return parseFloat(tp?.handicap_index) || 0;
+      };
+      const getCH = (pid) => calcCH(getHI(pid), course.slope || 113, course.rating || 72, course.par || 72);
+      const allCHs = allPids.map(getCH);
+      const minCH = Math.min(...allCHs);
+      const adjCH = (pid) => event.hcp_mode === "full" ? getCH(pid) : (getCH(pid) - minCH);
+      const buildMap = (ch) => {
+        const sorted = holeHcps.map((h, i) => ({ idx: i, hcp: h })).sort((a, b) => a.hcp - b.hcp);
+        const map = {};
+        let rem = Math.abs(ch);
+        for (let pass = 0; pass < 3 && rem > 0; pass++) {
+          for (const h of sorted) { if (rem <= 0) break; map[h.idx] = (map[h.idx] || 0) + 1; rem--; }
+        }
+        return map;
+      };
+      allPids.forEach(pid => { maps[pid] = buildMap(adjCH(pid)); });
+      return maps;
+    }, [activeMatch, event, course, holeHcps]);
+
+    const getStrokes = (pid, h) => strokeMaps[pid]?.[h] || 0;
+
+    // Per-player running net "thru X" — sum of net scores up through and
+    // including the active hole. Used in the "Net: +1 thru 4" right-hand
+    // display on each card. Doesn't depend on opponent so it lives outside
+    // computePracticeMatch (which is a team-level calculation).
+    const getRunning = (pid) => {
+      let net = 0, gross = 0, thru = 0, parThru = 0;
+      for (let h = 0; h <= activeHole; h++) {
+        const raw = scoresMap[`${pid}_${h}`];
+        if (!raw) continue;
+        gross += raw;
+        net += raw - getStrokes(pid, h);
+        parThru += holePars[h];
+        thru++;
+      }
+      return { net, gross, thru, netVsPar: net - parThru };
+    };
+
+    // Score buttons: par-3 holes start at 1, par-4/5 start at 2. The displayed
+    // range shifts up or down if the saved score falls outside [min, max] so
+    // the active button is always visible without forcing the +/- adjusters.
+    const baseBtns = par === 3 ? [1, 2, 3, 4, 5, 6, 7] : [2, 3, 4, 5, 6, 7, 8];
 
     return (
       <div>
-        {/* Player selector */}
-        <div style={{ background: BC.card, borderRadius: 10, padding: 8, marginBottom: 10, border: `1px solid ${BC.bdr}` }}>
-          <div style={{ fontSize: 9, color: BC.t3, marginBottom: 6, fontWeight: 700, letterSpacing: 1, padding: "0 4px" }}>SCORING FOR</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
-            {event.player_ids.map(pid => {
-              const p = tPlayers.find(t => t.player_id === pid);
-              const slotIdx = event.teams.findIndex(t => t.player1 === pid || t.player2 === pid);
-              const tc = PRACTICE_TEAM_COLORS[slotIdx];
-              const isAct = pid === activePid;
+        {/* Match selector — only shown if multiple matches exist */}
+        {event.matches.length > 1 && (
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${event.matches.length}, 1fr)`, gap: 4, marginBottom: 8 }}>
+            {event.matches.map((m, mi) => {
+              const isAct = m.id === activeMatchId;
+              const t1Idx = event.teams.findIndex(t => t.id === m.team1.id);
+              const t2Idx = event.teams.findIndex(t => t.id === m.team2.id);
+              const tc1 = PRACTICE_TEAM_COLORS[t1Idx];
+              const tc2 = PRACTICE_TEAM_COLORS[t2Idx];
               return (
-                <button key={pid} onClick={() => setActivePid(pid)} style={{
-                  padding: "6px 8px", borderRadius: 6,
-                  background: isAct ? tc.color + "55" : BC.inp,
-                  border: `1px solid ${isAct ? tc.accent : BC.bdr}`,
-                  color: isAct ? BC.t1 : BC.t2, fontSize: 11, fontWeight: 600, cursor: "pointer",
-                  textAlign: "left", display: "flex", alignItems: "center", gap: 6,
+                <button key={m.id} onClick={() => setActiveMatchId(m.id)} style={{
+                  padding: "8px 6px", borderRadius: 8,
+                  background: isAct ? BC.amber + "22" : BC.card,
+                  border: `1px solid ${isAct ? BC.amber : BC.bdr}`,
+                  color: isAct ? BC.t1 : BC.t2, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                  display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
                 }}>
-                  <span style={{ width: 4, height: 4, borderRadius: "50%", background: tc.accent, flexShrink: 0 }} />
-                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p?.name?.split(" ").slice(-1)[0] || pid}</span>
-                  <span style={{ fontSize: 9, color: tc.accent, fontWeight: 800 }}>T{slotIdx + 1}</span>
+                  <span>Match {mi + 1}</span>
+                  <span style={{ fontSize: 9 }}>
+                    <span style={{ color: tc1.accent }}>T{t1Idx + 1}</span>
+                    <span style={{ color: BC.t3 }}> vs </span>
+                    <span style={{ color: tc2.accent }}>T{t2Idx + 1}</span>
+                  </span>
                 </button>
               );
             })}
           </div>
+        )}
+
+        {/* Hole strip — front 9 + back 9 (two rows). Active hole = solid amber,
+            all-4-scored = amber outline, partial = subtle amber tint, untouched = card.
+            Tap any hole to jump to it (including back to already-scored holes for editing). */}
+        <div style={{ display: "flex", gap: 3, marginBottom: 3 }}>
+          {Array.from({ length: 9 }, (_, i) => {
+            const cur = i === activeHole;
+            const allScored = matchPids.every(pid => scoresMap[`${pid}_${i}`]);
+            const partial = !allScored && matchPids.some(pid => scoresMap[`${pid}_${i}`]);
+            return (
+              <button key={i} onClick={() => setActiveHole(i)} style={{
+                flex: 1, height: 30, borderRadius: cur ? 8 : 6,
+                border: allScored && !cur ? `1.5px solid ${BC.amber}50` : "none",
+                background: cur ? BC.amber : allScored ? BC.amber + "15" : partial ? BC.amber + "08" : BC.card,
+                color: cur ? "#0a0804" : allScored ? BC.amber : BC.t3,
+                fontSize: 13, fontWeight: 800, cursor: "pointer",
+                outline: cur ? `2px solid ${BC.amber}` : "none", outlineOffset: 1,
+              }}>{i + 1}</button>
+            );
+          })}
+        </div>
+        <div style={{ display: "flex", gap: 3, marginBottom: 8 }}>
+          {Array.from({ length: 9 }, (_, i) => {
+            const h = i + 9;
+            const cur = h === activeHole;
+            const allScored = matchPids.every(pid => scoresMap[`${pid}_${h}`]);
+            const partial = !allScored && matchPids.some(pid => scoresMap[`${pid}_${h}`]);
+            return (
+              <button key={h} onClick={() => setActiveHole(h)} style={{
+                flex: 1, height: 30, borderRadius: cur ? 8 : 6,
+                border: allScored && !cur ? `1.5px solid ${BC.amber}50` : "none",
+                background: cur ? BC.amber : allScored ? BC.amber + "15" : partial ? BC.amber + "08" : BC.card,
+                color: cur ? "#0a0804" : allScored ? BC.amber : BC.t3,
+                fontSize: 13, fontWeight: 800, cursor: "pointer",
+                outline: cur ? `2px solid ${BC.amber}` : "none", outlineOffset: 1,
+              }}>{h + 1}</button>
+            );
+          })}
         </div>
 
-        {/* Hole nav */}
-        <div style={{ background: BC.card, borderRadius: 12, padding: "10px 14px", marginBottom: 10, border: `1px solid ${BC.bdr}` }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-            <button onClick={() => setActiveHole(h => Math.max(0, h - 1))} disabled={activeHole === 0}
-              style={{ background: BC.hover, border: "none", color: BC.t1, borderRadius: 8, padding: "6px 14px", fontSize: 16, cursor: "pointer", opacity: activeHole === 0 ? 0.3 : 1 }}>‹</button>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 22, fontWeight: 700, color: BC.gold }}>Hole {activeHole + 1}</div>
-              <div style={{ fontSize: 11, color: BC.t3 }}>Par {holePar} · {activeHole < 9 ? "Front" : "Back"} Nine</div>
-              {playerMatchResult && (
-                <div style={{ fontSize: 10, color: BC.amber, marginTop: 2 }}>Match: {playerMatchResult.matchResultText} (Thru {playerMatchResult.thru})</div>
-              )}
+        {/* Hole nav banner — amber filled bar showing Par / Hole / HCP, with prev/next.
+            Mirrors the MNQ scoring banner exactly. */}
+        <div style={{
+          background: BC.amber, borderRadius: 10, padding: "4px 8px", marginBottom: 6,
+          display: "flex", alignItems: "center",
+        }}>
+          <button onClick={() => setActiveHole(h => Math.max(0, h - 1))} disabled={activeHole === 0} style={{
+            width: 28, height: 36, borderRadius: 8, background: "none", border: "none",
+            cursor: activeHole === 0 ? "default" : "pointer",
+            color: activeHole === 0 ? "#0a080440" : "#0a0804", fontSize: 18, fontWeight: 700,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>‹</button>
+          <div style={{ flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 8px" }}>
+            <div style={{ textAlign: "center", minWidth: 32 }}>
+              <div style={{ fontSize: 8, color: "#0a0804", fontWeight: 600, opacity: 0.7 }}>Par</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: "#0a0804" }}>{par}</div>
             </div>
-            <button onClick={() => setActiveHole(h => Math.min(17, h + 1))} disabled={activeHole === 17}
-              style={{ background: BC.hover, border: "none", color: BC.t1, borderRadius: 8, padding: "6px 14px", fontSize: 16, cursor: "pointer", opacity: activeHole === 17 ? 0.3 : 1 }}>›</button>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 8, color: "#0a0804", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, opacity: 0.7 }}>Hole</div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: "#0a0804", lineHeight: 1 }}>{activeHole + 1}</div>
+            </div>
+            <div style={{ textAlign: "center", minWidth: 32 }}>
+              <div style={{ fontSize: 8, color: "#0a0804", fontWeight: 600, opacity: 0.7 }}>HCP</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: "#0a0804" }}>{hcp}</div>
+            </div>
           </div>
-          {/* Hole dots */}
-          <div style={{ display: "flex", gap: 3, justifyContent: "center" }}>
-            {Array.from({ length: 18 }, (_, i) => {
-              const scored = scoresMap[`${activePid}_${i}`] != null;
-              return (
-                <button key={i} onClick={() => setActiveHole(i)} style={{
-                  width: 14, height: 14, borderRadius: "50%", border: "none", cursor: "pointer",
-                  background: i === activeHole ? BC.amber : scored ? BC.green : BC.bdr,
-                }} />
-              );
-            })}
-          </div>
+          <button onClick={() => setActiveHole(h => Math.min(17, h + 1))} disabled={activeHole === 17} style={{
+            width: 28, height: 36, borderRadius: 8, background: "none", border: "none",
+            cursor: activeHole === 17 ? "default" : "pointer",
+            color: activeHole === 17 ? "#0a080440" : "#0a0804", fontSize: 18, fontWeight: 700,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>›</button>
         </div>
 
-        {/* Score buttons */}
-        <div style={{ background: BC.card, borderRadius: 12, padding: 14, border: `1px solid ${BC.bdr}` }}>
-          <div style={{ fontSize: 11, color: BC.t2, fontWeight: 600, marginBottom: 8, textAlign: "center" }}>
-            {activePlayer?.name || activePid}
-            {cur != null && <span style={{ marginLeft: 8, fontSize: 10, color: cur - holePar < 0 ? "#22c55e" : cur - holePar > 0 ? BC.danger : BC.t3, fontWeight: 700 }}>{fmtScore(cur - holePar)}</span>}
+        {/* Match status (current state of the active match, computed from all entered scores) */}
+        {matchResult && matchResult.thru > 0 && (
+          <div style={{ fontSize: 11, color: BC.amber, fontWeight: 700, padding: "4px 0", textAlign: "center", marginBottom: 6 }}>
+            Match: {matchResult.matchResultText} · Thru {matchResult.thru}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 6 }}>
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(s => (
-              <button key={s} onClick={() => onSavePracticeScore(activePid, activeHole, s)} style={{
-                padding: "12px 0", borderRadius: 8,
-                background: s === cur ? (s < holePar ? "#1a3a1a" : s === holePar ? BC.hover : "#3a1a1a") : BC.inp,
-                border: `1px solid ${s === cur ? (s < holePar ? "#22c55e" : s === holePar ? BC.amber : BC.danger) : BC.bdr}`,
-                color: s === cur ? BC.t1 : BC.t2, fontSize: 14, fontWeight: s === cur ? 700 : 500, cursor: "pointer",
-              }}>{s}</button>
-            ))}
-          </div>
-          {cur != null && (
-            <button onClick={() => onSavePracticeScore(activePid, activeHole, null)} style={{
-              width: "100%", marginTop: 8, padding: "6px 0", borderRadius: 6,
-              background: "transparent", border: `1px solid ${BC.bdr}`, color: BC.t3, fontSize: 10, fontWeight: 600, cursor: "pointer",
-            }}>Clear</button>
-          )}
-        </div>
+        )}
+
+        {/* Player score cards — 4 in match, T1 (rows 0-1) on top, T2 (rows 2-3) below a divider.
+            Each card shows: initials badge, name, (CH), stroke dots, "Net: ±X thru N",
+            then a row of par-relative score buttons + manual −/+ adjusters at the end. */}
+        {matchPids.map((pid, idx) => {
+          const p = tPlayers.find(t => t.player_id === pid);
+          if (!p) return null;
+          const slotIdx = event.teams.findIndex(t => t.player1 === pid || t.player2 === pid);
+          const tc = PRACTICE_TEAM_COLORS[slotIdx];
+          const score = scoresMap[`${pid}_${activeHole}`] || 0;
+          const strokes = getStrokes(pid, activeHole);
+          const hi = (() => {
+            if (event.hcp_overrides?.[pid] !== undefined && event.hcp_overrides[pid] !== "") return parseFloat(event.hcp_overrides[pid]) || 0;
+            return parseFloat(p.handicap_index) || 0;
+          })();
+          const ch = calcCH(hi, course.slope || 113, course.rating || 72, course.par || 72);
+          const run = getRunning(pid);
+
+          // Shift the button range when the saved score falls outside [min, max].
+          // E.g. saved a 9 on a par-4 (max button = 8) → shift right so [3..9] shows.
+          const maxBtn = baseBtns[baseBtns.length - 1];
+          const minBtn = baseBtns[0];
+          let btns = baseBtns;
+          if (score > maxBtn) {
+            const shift = score - maxBtn;
+            btns = baseBtns.map(b => b + shift);
+          } else if (score > 0 && score < minBtn) {
+            const shift = minBtn - score;
+            btns = baseBtns.map(b => b - shift);
+          }
+
+          return (
+            <div key={pid}>
+              {idx === 2 && <div style={{ borderTop: `1px dashed ${BC.bdr}`, margin: "6px 0" }} />}
+              <div style={{
+                background: BC.card, borderRadius: 10, marginBottom: 4, padding: "6px 10px",
+                border: `1px solid ${BC.bdr}`, borderLeft: `3px solid ${tc.accent}`,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5, minWidth: 0 }}>
+                  <span style={{
+                    fontSize: 9, fontWeight: 800, color: tc.accent, letterSpacing: 0.5,
+                    background: tc.color + "55", padding: "2px 4px", borderRadius: 3, flexShrink: 0,
+                  }}>{getInitials(p.name)}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: BC.t1, lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>{p.name}</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: BC.t3, flexShrink: 0 }}>({ch})</span>
+                  {strokes > 0 && (
+                    <span style={{ color: "#4ba3d4", fontSize: 12, letterSpacing: 1, flexShrink: 0, lineHeight: 1 }}>
+                      {"●".repeat(strokes)}
+                    </span>
+                  )}
+                  <div style={{ flex: 1 }} />
+                  {run.thru > 0 && (
+                    <span style={{ fontSize: 10, color: BC.t3, flexShrink: 0, whiteSpace: "nowrap" }}>
+                      Net: <strong style={{ color: run.netVsPar < 0 ? "#22c55e" : run.netVsPar === 0 ? BC.t3 : BC.t1 }}>
+                        {fmtScore(run.netVsPar)}
+                      </strong> thru {run.thru}
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: "flex", gap: 3 }}>
+                  {btns.map(btn => {
+                    const isCur = btn === score;
+                    const sd = btn - par;
+                    const boxSize = 32;
+                    return (
+                      <button key={btn} onClick={() => onSavePracticeScore(pid, activeHole, isCur ? null : btn)} style={{
+                        flex: 1, height: 38, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 800, border: "none",
+                        background: isCur ? BC.amber : BC.inp, color: isCur ? "#0a0804" : BC.t2,
+                        position: "relative", transition: "all .15s",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        {/* Score-vs-par overlay shape: bogey = square outline, double = nested square,
+                            birdie = circle outline, eagle = nested circle. Matches MNQ visualization. */}
+                        {isCur && sd !== 0 && (
+                          <div style={{ position: "absolute", width: boxSize, height: boxSize, left: "50%", top: "50%", transform: "translate(-50%, -50%)" }}>
+                            <div style={{
+                              position: "absolute", inset: 0,
+                              borderRadius: sd < 0 ? "50%" : 3,
+                              border: `1.5px solid ${sd < 0 ? BC.danger : "#0a0804"}`,
+                            }} />
+                            {Math.abs(sd) >= 2 && (
+                              <div style={{
+                                position: "absolute", inset: 3,
+                                borderRadius: sd < 0 ? "50%" : 2,
+                                border: `1px solid ${sd < 0 ? BC.danger : "#0a0804"}`,
+                              }} />
+                            )}
+                          </div>
+                        )}
+                        <span style={{ position: "relative", zIndex: 1 }}>{btn}</span>
+                      </button>
+                    );
+                  })}
+                  <button onClick={() => onSavePracticeScore(pid, activeHole, Math.max(1, (score || par) - 1))} style={{
+                    width: 26, height: 38, borderRadius: 8, background: BC.inp, border: "none",
+                    color: BC.t3, fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0,
+                  }}>−</button>
+                  <button onClick={() => onSavePracticeScore(pid, activeHole, (score || par) + 1)} style={{
+                    width: 26, height: 38, borderRadius: 8, background: BC.inp, border: "none",
+                    color: BC.t3, fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0,
+                  }}>+</button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     );
   };
@@ -3277,7 +3491,7 @@ function PracticeView({ user, tPlayers, courses, notify }) {
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
       {/* Header */}
       <div style={{ marginBottom: 12, padding: "10px 14px", background: BC.card, borderRadius: 10, border: `1px solid ${BC.amber}33` }}>
-        <div style={{ fontSize: 14, fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>PRACTICE EVENT</div>
+        <div style={{ fontSize: 14, fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>MASH ROUND</div>
         <div style={{ fontSize: 10, color: BC.t3, marginTop: 2 }}>
           {event ? `${course?.name || "Course TBD"} · ${event.player_ids?.length || 0} players · ${event.matches?.length || 0} matches` : "No event configured"}
         </div>
@@ -3329,7 +3543,6 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view }) {
 
   if (!open) return null;
   const items = [
-    { key: "practice",  label: "Practice Round",   icon: "🥃" },
     { key: "analytics", label: "Player Analytics", icon: "📊" },
     { key: "history",   label: "Historical Data",  icon: "📅" },
     { key: "photos",    label: "Photo Library",     icon: "📸", external: true },
@@ -3583,6 +3796,7 @@ export default function App() {
     { key: "scoring",     label: "Scoring",     icon: "score" },
     { key: "groups",      label: "Matches",     icon: "groups" },
     { key: "leaderboard", label: "Leaderboard", icon: "trophy" },
+    { key: "practice",    label: "Mash",        icon: "mash" },
     { key: "betting",     label: "Betting",     icon: "betting" },
     { key: "menu",        label: "More",        icon: "menu" },
   ];
@@ -3595,6 +3809,8 @@ export default function App() {
     if (icon === "score") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4z"/></svg>;
     if (icon === "betting") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v4c0 1.66 3.58 3 8 3s8-1.34 8-3V6"/><path d="M4 10v4c0 1.66 3.58 3 8 3s8-1.34 8-3v-4"/></svg>;
     if (icon === "menu") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>;
+    // Mash — flag on a pole, evoking the Mash Brothers logo without competing with their marks
+    if (icon === "mash") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="22" x2="5" y2="3"/><path d="M5 4 C 10 2, 14 6, 20 4 L 20 13 C 14 15, 10 11, 5 13 Z" fill={active ? BC.amber + "55" : BC.t3 + "33"}/></svg>;
     if (icon === "admin") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>;
     return null;
   };
