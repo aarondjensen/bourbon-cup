@@ -2,32 +2,80 @@ import { initializeApp } from "firebase/app";
 import { getFirestore, collection, doc, setDoc, getDocs, query, where, writeBatch, onSnapshot, deleteDoc } from "firebase/firestore";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
-// ─── BOURBON CUP BRANDING ───
-const BC = {
-  bg: "#0a0804",
-  card: "#12100d",
-  inp: "#0d0b09",
-  hover: "#1a1612",
-  bdr: "#2a2218",
-  t1: "#f0e8d8",
-  t2: "#b8a98a",
-  t3: "#6b5d47",
-  amber: "#c8860a",
-  amberGlow: "rgba(200,134,10,0.15)",
-  amberDim: "#8a5c07",
-  gold: "#d4a843",
-  goldGlow: "rgba(212,168,67,0.12)",
-  danger: "#ef4444",
-  warn: "#f59e0b",
-  green: "#22c55e",
+// ─── BOURBON CUP THEME ───
+// `BC` is mutated in place when the user toggles dark/light mode. The mutation
+// pattern (vs. swapping the reference) is intentional: every component holds
+// a stale closure over `BC` from when the module loaded, but since they all
+// point to the SAME object, mutating its keys updates every consumer at once.
+// React picks up the visual change because the App-level `darkMode` state
+// transition triggers a top-level re-render that propagates down — children
+// re-read the now-updated BC values inline in JSX.
+//
+// Borrowed from the MNQ pattern: getTheme(mode) → applyTheme(mode) mutates K.
+const getBCTheme = (mode) => {
+  if (mode === "light") {
+    return {
+      bg: "#faf6ec",        // warm cream — bourbon-soaked parchment
+      card: "#ffffff",      // pure white card surface
+      inp: "#f1ead8",       // input / inactive
+      hover: "#e8e0c9",     // hover
+      bdr: "#d8cdb0",       // warm border
+      t1: "#2a2010",        // ink — dark warm brown for primary text
+      t2: "#6b5d47",        // medium warm
+      t3: "#9c8d72",        // muted warm
+      amber: "#a8730a",     // bourbon gold (slightly darker for contrast on white)
+      amberGlow: "rgba(168,115,10,0.12)",
+      amberDim: "#7a5505",
+      gold: "#b8870a",      // brighter gold
+      goldGlow: "rgba(184,135,10,0.12)",
+      danger: "#dc2626",
+      warn: "#d97706",
+      green: "#059669",
+    };
+  }
+  // dark (default)
+  return {
+    bg: "#0a0804",
+    card: "#12100d",
+    inp: "#0d0b09",
+    hover: "#1a1612",
+    bdr: "#2a2218",
+    t1: "#f0e8d8",
+    t2: "#b8a98a",
+    t3: "#6b5d47",
+    amber: "#c8860a",
+    amberGlow: "rgba(200,134,10,0.15)",
+    amberDim: "#8a5c07",
+    gold: "#d4a843",
+    goldGlow: "rgba(212,168,67,0.12)",
+    danger: "#ef4444",
+    warn: "#f59e0b",
+    green: "#22c55e",
+  };
 };
 
+// Read saved preference (default: dark). Wrapped in try/catch so SSR or
+// blocked-localStorage envs don't crash module load.
+const _bcSavedMode = (() => {
+  try {
+    return typeof window !== "undefined" && localStorage.getItem("bc_theme") === "light" ? "light" : "dark";
+  } catch { return "dark"; }
+})();
+const BC = { ...getBCTheme(_bcSavedMode) };
+const applyBCTheme = (mode) => {
+  const next = getBCTheme(mode);
+  for (const key in next) BC[key] = next[key];
+};
 
 // ── Inject global styles ──
+// The body bg is set on initial load so the page paints the correct theme
+// before React mounts. A useEffect in App keeps it in sync when the user
+// toggles the theme (the inline rule below would otherwise be stale).
 const _style = document.createElement("style");
+_style.id = "bc-global-style";
 _style.textContent = `
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body, #root { height: 100%; width: 100%; background: #0a0804; overflow: hidden; }
+  html, body, #root { height: 100%; width: 100%; background: ${BC.bg}; overflow: hidden; }
   body { margin: 0; padding: 0; }
 `;
 document.head.appendChild(_style);
@@ -116,6 +164,70 @@ const getInitials = (name) => {
   if (!parts.length) return "??";
   if (parts.length === 1) return (parts[0].slice(0, 2) || "??").toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
+// ── ScoreCell ──
+// Single-cell rendering of a player's score on one hole, used in the full
+// scorecard popup. Mirrors MNQ's visualization:
+//   - Stroke dots ("•") on a tiny row above the score
+//   - Birdie (-1) → single circle outline
+//   - Eagle/Albatross (-2 or better) → nested circles
+//   - Bogey (+1) → single square outline
+//   - Double bogey or worse (+2+) → nested squares
+//   - Par or empty → no overlay
+// `colorOverride` lets the cell render in a non-default color (e.g. red for an
+// absent player). Empty cells still show stroke-dot row + a placeholder dot,
+// so column alignment stays consistent before and after a score is entered.
+const ScoreCell = ({ score, par, strokes, size = 13, colorOverride }) => {
+  const sh = size + 8;          // outer shape size (square or circle)
+  const dotH = 10;              // height of stroke-dots row above the score
+  const bc = colorOverride || BC.t2;
+  const empty = !score || score <= 0;
+
+  if (empty) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", height: dotH + sh, justifyContent: "flex-end" }}>
+        <div style={{ height: dotH, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+          {strokes > 0 && <span style={{ color: colorOverride || "#4ba3d4", fontSize: 10, fontWeight: 900, letterSpacing: 1, lineHeight: 1 }}>{"•".repeat(strokes)}</span>}
+        </div>
+        <div style={{ width: sh, height: sh, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <span style={{ color: BC.t3 + "30", fontSize: size, lineHeight: 1 }}>·</span>
+        </div>
+      </div>
+    );
+  }
+
+  const diff = score - par;
+  let border = null;
+  if (diff <= -2) {
+    border = (
+      <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: sh, height: sh, borderRadius: "50%", border: `1.5px solid ${bc}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ width: sh - 6, height: sh - 6, borderRadius: "50%", border: `1px solid ${bc}` }} />
+      </div>
+    );
+  } else if (diff === -1) {
+    border = <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: sh, height: sh, borderRadius: "50%", border: `1.5px solid ${bc}` }} />;
+  } else if (diff === 1) {
+    border = <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: sh, height: sh, borderRadius: 3, border: `1.5px solid ${bc}` }} />;
+  } else if (diff >= 2) {
+    border = (
+      <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: sh, height: sh, borderRadius: 3, border: `1.5px solid ${bc}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ width: sh - 6, height: sh - 6, borderRadius: 2, border: `1px solid ${bc}` }} />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", height: dotH + sh, justifyContent: "flex-end" }}>
+      <div style={{ height: dotH, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+        {strokes > 0 && <span style={{ color: colorOverride || "#4ba3d4", fontSize: 10, fontWeight: 900, letterSpacing: 1, lineHeight: 1 }}>{"•".repeat(strokes)}</span>}
+      </div>
+      <div style={{ position: "relative", width: sh, height: sh, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {border}
+        <span style={{ position: "relative", zIndex: 1, fontSize: size, fontWeight: 700, lineHeight: 1, color: colorOverride || BC.t1, transform: "translateY(0.5px)" }}>{score}</span>
+      </div>
+    </div>
+  );
 };
 
 // ── Match Scoring Engine ──
@@ -2923,6 +3035,7 @@ function PracticeView({ user, tPlayers, courses, notify }) {
     // event/course aren't loaded yet, we still call them so React's hook
     // counter stays consistent across renders.
     const [activeHole, setActiveHole] = useState(0);
+    const [showScorecard, setShowScorecard] = useState(false);
 
     const holePars = course?.hole_pars || Array(18).fill(4);
     const holeHcps = course?.hole_handicaps || Array(18).fill(9);
@@ -3270,6 +3383,283 @@ function PracticeView({ user, tPlayers, courses, notify }) {
             </div>
           );
         })}
+
+        {/* Full Scorecard button — opens a modal showing the full hole-by-hole
+            grid for both teams plus the running match status row. Mirrors MNQ's
+            "Full Scorecard" button but stacks front 9 + back 9 vertically since
+            18 columns is too cramped on mobile. */}
+        <button onClick={() => setShowScorecard(true)} style={{
+          width: "100%", padding: "9px 0", borderRadius: 8, marginTop: 6, cursor: "pointer",
+          background: BC.card, border: `1px solid ${BC.bdr}60`,
+          color: BC.t2, fontSize: 12, fontWeight: 700, letterSpacing: 0.5,
+        }}>
+          Full Scorecard
+        </button>
+
+        {showScorecard && (() => {
+          // Extract the rendering pieces we need for either nine. Each section
+          // shares the same header / par / hcp / player / team-net / match-row
+          // structure — only the hole-index offset differs. We render the
+          // section twice in the modal body.
+          const t1Pids2 = [activeMatch.team1.player1, activeMatch.team1.player2].filter(Boolean);
+          const t2Pids2 = [activeMatch.team2.player1, activeMatch.team2.player2].filter(Boolean);
+          const t1Idx = event.teams.findIndex(t => t.id === activeMatch.team1.id);
+          const t2Idx = event.teams.findIndex(t => t.id === activeMatch.team2.id);
+          const tcA = PRACTICE_TEAM_COLORS[t1Idx];
+          const tcB = PRACTICE_TEAM_COLORS[t2Idx];
+          const matchIdx = event.matches.findIndex(m => m.id === activeMatch.id);
+          const gridLine = `1px solid ${BC.bdr}25`;
+
+          // Per-hole running cumulative status from T1's perspective (positive
+          // = T1 leading). Independent from the user-perspective `holeStatuses`
+          // computed above for the on-screen status bar — the scorecard always
+          // shows from T1's perspective so the layout is symmetric (T1 above,
+          // match row, T2 below).
+          const t1Statuses = Array.from({ length: 18 }, (_, i) => {
+            let cum = 0, hasData = false;
+            for (let h = 0; h <= i; h++) {
+              let n1 = 0, n2 = 0, ok1 = true, ok2 = true;
+              t1Pids2.forEach(pid => { const s = scoresMap[`${pid}_${h}`]; if (!s) ok1 = false; else n1 += s - getStrokes(pid, h); });
+              t2Pids2.forEach(pid => { const s = scoresMap[`${pid}_${h}`]; if (!s) ok2 = false; else n2 += s - getStrokes(pid, h); });
+              if (ok1 && ok2) {
+                if (n1 < n2) cum += 1;
+                else if (n2 < n1) cum -= 1;
+                hasData = true;
+              } else { hasData = false; break; }
+            }
+            return hasData ? cum : null;
+          });
+          let t1ClinchHole = null, t1ClinchText = null;
+          for (let h = 0; h < 18; h++) {
+            if (t1Statuses[h] === null) break;
+            const lead = Math.abs(t1Statuses[h]);
+            const remaining = 17 - h;
+            if (remaining > 0 && lead > remaining) {
+              t1ClinchHole = h;
+              t1ClinchText = `${lead}&${remaining}`;
+              break;
+            }
+          }
+
+          // Per-hole result for highlighting the team-net cell on holes won
+          const t1WonHole = (h) => {
+            const s = t1Statuses[h] === null ? null : (h === 0 ? t1Statuses[0] : t1Statuses[h] - t1Statuses[h - 1]);
+            return s === 1;
+          };
+          const t2WonHole = (h) => {
+            const s = t1Statuses[h] === null ? null : (h === 0 ? t1Statuses[0] : t1Statuses[h] - t1Statuses[h - 1]);
+            return s === -1;
+          };
+
+          // Render a single 9-hole section. `offset` is 0 (front) or 9 (back).
+          const renderSection = (offset) => {
+            const sectionPars = holePars.slice(offset, offset + 9);
+            const sectionHcps = holeHcps.slice(offset, offset + 9);
+            const sectionParTotal = sectionPars.reduce((a, b) => a + b, 0);
+            const labelW = 46;
+            const totW = 32;
+            const lblBase = { width: labelW, flexShrink: 0, fontSize: 9, fontWeight: 700, color: BC.t3, display: "flex", alignItems: "center", paddingLeft: 4, borderRight: gridLine, textTransform: "uppercase", letterSpacing: 0.3 };
+            const totBase = { width: totW, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", borderLeft: gridLine };
+
+            const renderPlayerRow = (pid) => {
+              const p = tPlayers.find(t => t.player_id === pid);
+              const slotIdx = event.teams.findIndex(t => t.player1 === pid || t.player2 === pid);
+              const tc = PRACTICE_TEAM_COLORS[slotIdx];
+              let grossTot = 0;
+              return (
+                <div key={pid} style={{ display: "flex", alignItems: "center", borderBottom: gridLine }}>
+                  <div style={{ ...lblBase, height: 38, gap: 4, paddingTop: 0 }}>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: tc?.accent || BC.t1 }}>{getInitials(p?.name)}</span>
+                  </div>
+                  {Array.from({ length: 9 }, (_, i) => {
+                    const h = i + offset;
+                    const s = scoresMap[`${pid}_${h}`] || 0;
+                    const st = strokeMaps[pid]?.[h] || 0;
+                    if (s > 0) grossTot += s;
+                    return (
+                      <div key={i} style={{ flex: 1, height: 38, display: "flex", alignItems: "center", justifyContent: "center", borderRight: i < 8 ? gridLine : "none" }}>
+                        <ScoreCell score={s} par={holePars[h]} strokes={st} size={13} />
+                      </div>
+                    );
+                  })}
+                  <div style={{ ...totBase, height: 38 }}>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: BC.t1 }}>{grossTot || ""}</span>
+                  </div>
+                </div>
+              );
+            };
+
+            const renderTeamNetRow = (pids, isT1Side) => {
+              let netTot = 0;
+              const tc = isT1Side ? tcA : tcB;
+              return (
+                <div style={{ display: "flex", alignItems: "center", borderBottom: gridLine, background: tc.color + "15" }}>
+                  <div style={{ ...lblBase, height: 32, fontSize: 9, fontWeight: 800, color: tc.accent }}>NET</div>
+                  {Array.from({ length: 9 }, (_, i) => {
+                    const h = i + offset;
+                    let tNet = 0, ok = true;
+                    pids.forEach(pid => {
+                      const s = scoresMap[`${pid}_${h}`];
+                      if (!s) ok = false;
+                      else tNet += s - (strokeMaps[pid]?.[h] || 0);
+                    });
+                    if (ok) netTot += tNet;
+                    const won = isT1Side ? t1WonHole(h) : t2WonHole(h);
+                    return (
+                      <div key={i} style={{ flex: 1, height: 32, display: "flex", alignItems: "center", justifyContent: "center", borderRight: i < 8 ? gridLine : "none" }}>
+                        {won ? (
+                          <div style={{ width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 4, border: `1.5px solid ${tc.accent}`, background: tc.accent + "20" }}>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: BC.t1 }}>{ok ? tNet : "·"}</span>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: 13, fontWeight: 800, color: ok ? BC.t1 : BC.t3 + "40" }}>{ok ? tNet : "·"}</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <div style={{ ...totBase, height: 32 }}>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: BC.t1 }}>{netTot || ""}</span>
+                  </div>
+                </div>
+              );
+            };
+
+            // Match status row (T1 perspective for this view — symmetric layout)
+            const renderMatchRow = () => (
+              <div style={{ display: "flex", alignItems: "center", background: BC.amber + "12", borderBottom: gridLine }}>
+                <div style={{ ...lblBase, height: 28, color: BC.amber, fontWeight: 800, fontSize: 9 }}>MATCH</div>
+                {Array.from({ length: 9 }, (_, i) => {
+                  const h = i + offset;
+                  const st = t1Statuses[h];
+                  const colBdr = i < 8 ? { borderRight: gridLine } : {};
+                  if (t1ClinchHole !== null && h === t1ClinchHole) {
+                    const color = st > 0 ? "#22c55e" : st < 0 ? BC.danger : BC.t3;
+                    return (
+                      <div key={i} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", height: 28, ...colBdr }}>
+                        <div style={{ border: `1.5px solid ${color}`, borderRadius: 4, padding: "0 4px", lineHeight: "20px" }}>
+                          <span style={{ fontSize: 12, fontWeight: 800, color, whiteSpace: "nowrap" }}>{t1ClinchText}</span>
+                        </div>
+                      </div>
+                    );
+                  }
+                  if (t1ClinchHole !== null && h > t1ClinchHole) {
+                    return <div key={i} style={{ flex: 1, height: 28, ...colBdr }} />;
+                  }
+                  if (st === null) {
+                    return <div key={i} style={{ flex: 1, height: 28, ...colBdr }} />;
+                  }
+                  const color = st > 0 ? "#22c55e" : st < 0 ? BC.danger : BC.t3;
+                  return (
+                    <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 12, fontWeight: 800, color, lineHeight: "28px", ...colBdr }}>
+                      {st > 0 ? <><span style={{ fontSize: 12 }}>▲</span>{st}</> : st < 0 ? <><span style={{ fontSize: 12 }}>▼</span>{Math.abs(st)}</> : <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.5 }}>TIED</span>}
+                    </div>
+                  );
+                })}
+                <div style={{ ...totBase, height: 28, borderLeft: gridLine }} />
+              </div>
+            );
+
+            return (
+              <div style={{ marginBottom: 10, border: `1px solid ${BC.bdr}`, borderRadius: 10, overflow: "hidden" }}>
+                {/* HOLE row — amber filled header */}
+                <div style={{ display: "flex", background: BC.amber }}>
+                  <div style={{ ...lblBase, height: 26, color: "#0a0804", opacity: 0.85, borderRight: "none", fontWeight: 800, fontSize: 10 }}>
+                    {offset === 0 ? "FRONT" : "BACK"}
+                  </div>
+                  {Array.from({ length: 9 }, (_, i) => (
+                    <div key={i} style={{ flex: 1, height: 26, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: "#0a0804" }}>{i + offset + 1}</span>
+                    </div>
+                  ))}
+                  <div style={{ ...totBase, height: 26, borderLeft: "none" }}>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: "#0a0804" }}>TOT</span>
+                  </div>
+                </div>
+                {/* PAR row */}
+                <div style={{ display: "flex", borderBottom: gridLine, background: BC.amber + "18" }}>
+                  <div style={{ ...lblBase, height: 22 }}>PAR</div>
+                  {sectionPars.map((p, i) => (
+                    <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 11, color: BC.t2, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", height: 22, borderRight: i < 8 ? gridLine : "none" }}>{p}</div>
+                  ))}
+                  <div style={{ ...totBase, height: 22 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: BC.t3 }}>{sectionParTotal}</span>
+                  </div>
+                </div>
+                {/* HCP row */}
+                <div style={{ display: "flex", borderBottom: gridLine, background: BC.inp }}>
+                  <div style={{ ...lblBase, height: 20 }}>HCP</div>
+                  {sectionHcps.map((h, i) => (
+                    <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 10, color: BC.t3, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", height: 20, borderRight: i < 8 ? gridLine : "none" }}>{h}</div>
+                  ))}
+                  <div style={{ ...totBase, height: 20 }} />
+                </div>
+                {/* Team 1 player rows + team net */}
+                {t1Pids2.map(pid => renderPlayerRow(pid))}
+                {renderTeamNetRow(t1Pids2, true)}
+                {/* Match status row */}
+                {renderMatchRow()}
+                {/* Team 2 player rows + team net (no border-bottom on the last row) */}
+                {t2Pids2.map(pid => renderPlayerRow(pid))}
+                {renderTeamNetRow(t2Pids2, false)}
+              </div>
+            );
+          };
+
+          return (
+            <>
+              {/* Backdrop — tap anywhere to close */}
+              <div onClick={() => setShowScorecard(false)} style={{
+                position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 400,
+              }} />
+              {/* Scrollable centering wrapper — tapping outside the card also closes */}
+              <div onClick={() => setShowScorecard(false)} style={{
+                position: "fixed", inset: 0, zIndex: 450,
+                display: "flex", alignItems: "flex-start", justifyContent: "center",
+                padding: 12, overflowY: "auto",
+              }}>
+                <div onClick={e => e.stopPropagation()} style={{
+                  background: BC.bg, border: `1px solid ${BC.bdr}`, borderRadius: 14,
+                  width: "100%", maxWidth: 440,
+                  marginTop: 12, marginBottom: 12,
+                  display: "flex", flexDirection: "column",
+                  fontFamily: "'Montserrat', sans-serif",
+                }}>
+                  {/* Header */}
+                  <div style={{ padding: "12px 14px", borderBottom: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>SCORECARD</div>
+                      <div style={{ fontSize: 10, color: BC.t3, marginTop: 2 }}>
+                        Match {matchIdx + 1} · <span style={{ color: tcA.accent, fontWeight: 700 }}>T{t1Idx + 1}</span> vs <span style={{ color: tcB.accent, fontWeight: 700 }}>T{t2Idx + 1}</span>
+                      </div>
+                    </div>
+                    <button onClick={() => setShowScorecard(false)} style={{
+                      width: 28, height: 28, borderRadius: 6,
+                      background: BC.inp, border: `1px solid ${BC.bdr}`,
+                      color: BC.t2, fontSize: 14, fontWeight: 700, cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>×</button>
+                  </div>
+
+                  {/* Body */}
+                  <div style={{ padding: 10 }}>
+                    {renderSection(0)}
+                    {renderSection(9)}
+                  </div>
+
+                  {/* Footer */}
+                  <button onClick={() => setShowScorecard(false)} style={{
+                    display: "block", width: "calc(100% - 24px)", margin: "0 auto 12px",
+                    padding: "10px 0", background: BC.inp, border: `1px solid ${BC.bdr}`,
+                    borderRadius: 8, color: BC.t2, fontSize: 13, fontWeight: 600,
+                    cursor: "pointer", letterSpacing: 0.4,
+                  }}>
+                    Close
+                  </button>
+                </div>
+              </div>
+            </>
+          );
+        })()}
       </div>
     );
   };
@@ -3587,7 +3977,7 @@ function PracticeView({ user, tPlayers, courses, notify }) {
   );
 }
 
-function SlideMenu({ open, onClose, onNavigate, onLogout, user, view }) {
+function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, onToggleTheme }) {
   const dragRef = useRef(null);
   const startYRef = useRef(null);
   const [dragY, setDragY] = useState(0);
@@ -3627,10 +4017,10 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view }) {
           transform: `translateY(${dragY}px)`,
           transition: dragY === 0 ? "transform 0.2s ease, opacity 0.15s ease" : "none",
           width: 220,
-          background: "rgba(20,18,14,0.98)",
+          background: BC.card,
           borderRadius: 12,
           border: `1px solid ${BC.bdr}`,
-          boxShadow: "0 -4px 24px rgba(0,0,0,0.6)",
+          boxShadow: "0 -4px 24px rgba(0,0,0,0.4)",
           zIndex: 201,
           overflow: "hidden",
         }}>
@@ -3657,6 +4047,38 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view }) {
             </button>
           );
         })}
+
+        <div style={{ height: 1, background: BC.bdr + "55" }} />
+
+        {/* Theme toggle — pill-style switch. Labelled "Dark Mode" because that's
+            what the toggle controls; thumb-on-right = dark active, thumb-on-left
+            = light. Tap anywhere on the row flips it. */}
+        {onToggleTheme && (
+          <button onClick={(e) => { e.stopPropagation(); onToggleTheme(); }} style={{
+            width: "100%", padding: "12px 16px",
+            background: "transparent",
+            border: "none", borderTop: `1px solid ${BC.bdr}22`,
+            color: BC.t1, fontSize: 13, fontWeight: 500,
+            cursor: "pointer", textAlign: "left",
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+          }}>
+            <span>Dark Mode</span>
+            {/* iOS-style toggle: track + thumb. On = amber track + thumb right. */}
+            <span aria-hidden style={{
+              position: "relative", width: 36, height: 20, borderRadius: 10,
+              background: darkMode ? BC.amber : BC.bdr,
+              transition: "background 0.2s ease", flexShrink: 0,
+            }}>
+              <span style={{
+                position: "absolute", top: 2, left: darkMode ? 18 : 2,
+                width: 16, height: 16, borderRadius: "50%",
+                background: darkMode ? "#0a0804" : BC.card,
+                transition: "left 0.2s ease",
+                boxShadow: "0 1px 2px rgba(0,0,0,0.3)",
+              }} />
+            </span>
+          </button>
+        )}
 
         <div style={{ height: 1, background: BC.bdr + "55" }} />
 
@@ -3716,13 +4138,46 @@ const TeeCircle = ({ tee, index, size = 14, active }) => {
 // ── Main App ──
 export default function App() {
   const [user, setUser] = useState(null);
-  const [view, setView] = useState("leaderboard");
+  // Default landing view = Mash. For the test event tomorrow (and going
+  // forward as long as Mash is the active feature), users land on the Mash
+  // tab on first login and on every app restart. They can navigate away
+  // during a session, but a reload puts them back on Mash. Change the
+  // string below to "leaderboard" once the real tournament starts.
+  const [view, setView] = useState("practice");
   const [menuOpen, setMenuOpen] = useState(false);
   const [skinsData, setSkinsData] = useState({}); // { "round_hole": pid }
   const [ctpData, setCtpData] = useState({});     // { "round_hole": pid }
   const [skinsPot, setSkinsPot] = useState(0);
   const [historicalData, setHistoricalData] = useState([]);
   const [teamNames, setTeamNames] = useState({ A: "Team Alpha", B: "Team Beta" });
+
+  // Theme state — toggled via the More menu. The actual color values live in
+  // the module-level BC object (mutated by applyBCTheme); this state's only
+  // job is to trigger a top-level re-render so children re-read fresh BC
+  // values inline. Initial value comes from localStorage so the saved
+  // preference survives reloads.
+  const [darkMode, setDarkMode] = useState(_bcSavedMode === "dark");
+  const toggleTheme = useCallback(() => {
+    const newMode = darkMode ? "light" : "dark";
+    try { localStorage.setItem("bc_theme", newMode); } catch {}
+    applyBCTheme(newMode);
+    setDarkMode(!darkMode);
+  }, [darkMode]);
+
+  // Keep the global <style> tag's body bg in sync with the active theme.
+  // Without this, the html/body fill behind the React tree stays whatever
+  // color was painted on initial load — toggling the theme leaves a flash
+  // of the old color around the safe areas / scroll bounce.
+  useEffect(() => {
+    const styleEl = document.getElementById("bc-global-style");
+    if (styleEl) {
+      styleEl.textContent = `
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body, #root { height: 100%; width: 100%; background: ${BC.bg}; overflow: hidden; }
+        body { margin: 0; padding: 0; }
+      `;
+    }
+  }, [darkMode]);
 
   // Keep TEAM_A/TEAM_B module vars in sync with state
   useEffect(() => {
@@ -3968,10 +4423,10 @@ export default function App() {
         )}
       </div>
 
-      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={() => setUser(null)} user={user} view={view} />
+      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={() => setUser(null)} user={user} view={view} darkMode={darkMode} onToggleTheme={toggleTheme} />
 
       {/* Bottom Nav */}
-      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(18,16,13,0.97)", borderTop: `1px solid ${BC.bdr}`, zIndex: 100, paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)" }}>
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: BC.card, borderTop: `1px solid ${BC.bdr}`, zIndex: 100, paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)" }}>
       <div style={{ maxWidth: 520, margin: "0 auto", display: "flex" }}>
         {navItems.map(item => {
           const active = view === item.key;
