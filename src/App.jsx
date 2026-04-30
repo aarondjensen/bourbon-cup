@@ -3061,7 +3061,7 @@ function PracticeScoringTab({
             {idx === 2 && <div style={{ borderTop: `1px dashed ${BC.bdr}`, margin: "6px 0" }} />}
             <div style={{
               background: BC.card, borderRadius: 10, marginBottom: 4, padding: "6px 10px",
-              border: `1px solid ${BC.bdr}`, borderLeft: `3px solid ${tc.accent}`,
+              border: `1px solid ${BC.bdr}`,
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5, minWidth: 0 }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: BC.t1, lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>{p.name}</span>
@@ -3931,7 +3931,6 @@ function PracticeView({ user, tPlayers, courses, notify }) {
               <div key={team.id} style={{
                 display: "flex", alignItems: "center", padding: "10px 14px",
                 borderBottom: rowIdx < teamTotals.length - 1 ? `1px solid ${BC.bdr}40` : "none",
-                borderLeft: `4px solid ${tc.accent}`,
                 gap: 10,
               }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -3999,12 +3998,14 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                   <div style={{ fontSize: 11, color: BC.t3 }}>{isExpanded ? "▴" : "▾"}</div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10 }}>
-                  {/* Team 1 — full names with team-color stripe via the
-                      score number's color. Dimmed when their team is currently
-                      losing (and the match isn't dormie-tied). */}
+                  {/* Team 1 — full names with neutral score numbers. Dimmed when
+                      their team is currently losing (and the match isn't
+                      dormie-tied). The triangle indicator (below) carries the
+                      "who's leading" signal; team-color identifiers are
+                      intentionally not used. */}
                   <div style={{ textAlign: "left", opacity: r.thru > 0 && !isT1Winning && !r.dormie ? 0.6 : 1 }}>
                     {t1Players.map(p => p && <div key={p.player_id} style={{ fontSize: 12, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{p.name}</div>)}
-                    <div style={{ fontSize: 18, fontWeight: 800, color: tc1.accent, marginTop: 4 }}>{r.holesWon1}</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: BC.t1, marginTop: 4 }}>{r.holesWon1}</div>
                   </div>
                   {/* Status — triangles flank this box pointing at the leading
                       team. Hollow during play, filled when the match goes
@@ -4026,7 +4027,7 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                   {/* Team 2 — full names, right-aligned. */}
                   <div style={{ textAlign: "right", opacity: r.thru > 0 && !isT2Winning && !r.dormie ? 0.6 : 1 }}>
                     {t2Players.map(p => p && <div key={p.player_id} style={{ fontSize: 12, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{p.name}</div>)}
-                    <div style={{ fontSize: 18, fontWeight: 800, color: tc2.accent, marginTop: 4 }}>{r.holesWon2}</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: BC.t1, marginTop: 4 }}>{r.holesWon2}</div>
                   </div>
                 </div>
                 {/* Hole tracker — thin strip showing won/tied/unscored holes */}
