@@ -51,6 +51,7 @@ let TEAM_B = { id: "B", name: "Team Beta",  color: "#0d3235", accent: "#3A96A0",
 const FORMATS = [
   { id: "singles",        label: "Singles",            desc: "Match play, 1v1. Nassau scored: front 9, back 9, overall.", nassau: { front: 1, back: 1, overall: 1 }, scoringType: "nassau" },
   { id: "best_ball",      label: "2-Man Best Ball",    desc: "Each player plays their own ball, team uses the better net score per hole. Nassau scored.", nassau: { front: 1, back: 1, overall: 2 }, scoringType: "nassau" },
+  { id: "team_total",     label: "Team Total",         desc: "Combined team net per hole vs combined team net. Lower combined wins the hole. Nassau scored.", nassau: { front: 1, back: 1, overall: 2 }, scoringType: "nassau" },
   { id: "pinehurst",      label: "Pinehurst",          desc: "Partners each drive, swap balls, then choose best to finish as scramble. Nassau scored.", nassau: { front: 1, back: 1, overall: 2 }, scoringType: "nassau" },
   { id: "team_best_ball", label: "Team Best Ball",     desc: "Full team format — custom scoring applies. See director for point structure.", nassau: { front: 0, back: 0, overall: 0 }, scoringType: "custom" },
   { id: "double_dot",     label: "Double Dot",         desc: "Nassau with automatic press on the back 9 and last 3 holes.", nassau: { front: 1, back: 1, overall: 2 }, scoringType: "nassau" },
@@ -171,7 +172,11 @@ function computeMatchResult(match, holeData, courses, tRounds, tPlayers, format,
       const bNets = teamB.map(pid => { const m = getAdjustedStrokeMap(pid); return netScore(getPlayerScores(pid)[h], h, m); }).filter(s => s != null);
       aScore = aNets.length ? Math.min(...aNets) : null;
       bScore = bNets.length ? Math.min(...bNets) : null;
-    } else if (format === "aggregate") {
+    } else if (format === "aggregate" || format === "team_total") {
+      // Combined team net per hole — both teammates' net scores are summed
+      // and compared as a single team score. The Bourbon Cup name for this is
+      // "Team Total"; "aggregate" is a legacy alias retained for any matches
+      // saved before the format was officially exposed in the FORMATS list.
       const aNets = teamA.map(pid => { const m = getAdjustedStrokeMap(pid); return netScore(getPlayerScores(pid)[h], h, m); });
       const bNets = teamB.map(pid => { const m = getAdjustedStrokeMap(pid); return netScore(getPlayerScores(pid)[h], h, m); });
       if (aNets.every(s => s != null)) aScore = aNets.reduce((a,b) => a+b, 0);
