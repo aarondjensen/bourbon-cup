@@ -2919,23 +2919,21 @@ function PracticeView({ user, tPlayers, courses, notify }) {
 
   // ── Scoring Sub-view ──
   const ScoringTab = () => {
-    if (!event || !course) {
-      return <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>Set up an event first.</div>;
-    }
-
-    const holePars = course.hole_pars || Array(18).fill(4);
-    const holeHcps = course.hole_handicaps || Array(18).fill(9);
-
-    // Default to user's match if they're in one, else Match 1
-    const userMatchIdx = event.matches.findIndex(m =>
-      [m.team1.player1, m.team1.player2, m.team2.player1, m.team2.player2].includes(user?.player_id)
-    );
-    const initialMatchId = userMatchIdx !== -1 ? event.matches[userMatchIdx].id : event.matches[0]?.id;
-
-    const [activeMatchId, setActiveMatchId] = useState(initialMatchId);
+    // Hooks first — must fire unconditionally on every render. Even when
+    // event/course aren't loaded yet, we still call them so React's hook
+    // counter stays consistent across renders.
     const [activeHole, setActiveHole] = useState(0);
 
-    const activeMatch = event.matches.find(m => m.id === activeMatchId) || event.matches[0];
+    const holePars = course?.hole_pars || Array(18).fill(4);
+    const holeHcps = course?.hole_handicaps || Array(18).fill(9);
+
+    // Lock scoring to the user's own match. Switching to a different match is
+    // intentionally not allowed — only players in a match should be entering its
+    // scores. If the user isn't on any team in this event (e.g. a director who
+    // didn't include themselves), we render an empty state below.
+    const activeMatch = event?.matches?.find(m =>
+      [m.team1.player1, m.team1.player2, m.team2.player1, m.team2.player2].includes(user?.player_id)
+    );
     const matchPids = activeMatch ? [
       activeMatch.team1.player1, activeMatch.team1.player2,
       activeMatch.team2.player1, activeMatch.team2.player2,
@@ -2943,15 +2941,15 @@ function PracticeView({ user, tPlayers, courses, notify }) {
 
     const par = holePars[activeHole];
     const hcp = holeHcps[activeHole];
-    const matchResult = matchResults.find(mr => mr.match.id === activeMatchId)?.result;
+    const matchResult = activeMatch ? matchResults.find(mr => mr.match.id === activeMatch.id)?.result : null;
 
     // Stroke maps for the 4 players in this match. Mirrors the calculation used
     // in computePracticeMatch so the dots shown beside each player exactly match
-    // the strokes used to compute the leaderboard. Memoized on match/event/course
-    // because rebuilding the per-player allocation isn't cheap if done every render.
+    // the strokes used to compute the leaderboard. Memoized — useMemo always
+    // fires (even when there's no match) so hook ordering stays stable.
     const strokeMaps = useMemo(() => {
       const maps = {};
-      if (!activeMatch) return maps;
+      if (!event || !course || !activeMatch) return maps;
       const allPids = matchPids;
       const getHI = (pid) => {
         if (event.hcp_overrides?.[pid] !== undefined && event.hcp_overrides[pid] !== "") return parseFloat(event.hcp_overrides[pid]) || 0;
@@ -2960,7 +2958,7 @@ function PracticeView({ user, tPlayers, courses, notify }) {
       };
       const getCH = (pid) => calcCH(getHI(pid), course.slope || 113, course.rating || 72, course.par || 72);
       const allCHs = allPids.map(getCH);
-      const minCH = Math.min(...allCHs);
+      const minCH = allCHs.length ? Math.min(...allCHs) : 0;
       const adjCH = (pid) => event.hcp_mode === "full" ? getCH(pid) : (getCH(pid) - minCH);
       const buildMap = (ch) => {
         const sorted = holeHcps.map((h, i) => ({ idx: i, hcp: h })).sort((a, b) => a.hcp - b.hcp);
@@ -2974,6 +2972,18 @@ function PracticeView({ user, tPlayers, courses, notify }) {
       allPids.forEach(pid => { maps[pid] = buildMap(adjCH(pid)); });
       return maps;
     }, [activeMatch, event, course, holeHcps]);
+
+    // ── No more hooks below this line — early returns are safe ─────────────
+    if (!event || !course) {
+      return <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>Set up an event first.</div>;
+    }
+    if (!activeMatch) {
+      return (
+        <div style={{ textAlign: "center", padding: 40, color: BC.t3, fontSize: 13 }}>
+          You're not in a match for this Mash round.
+        </div>
+      );
+    }
 
     const getStrokes = (pid, h) => strokeMaps[pid]?.[h] || 0;
 
@@ -2999,48 +3009,91 @@ function PracticeView({ user, tPlayers, courses, notify }) {
     // the active button is always visible without forcing the +/- adjusters.
     const baseBtns = par === 3 ? [1, 2, 3, 4, 5, 6, 7] : [2, 3, 4, 5, 6, 7, 8];
 
+    // ── MNQ-style match status bar ─────────────────────────────────────────
+    // Cumulative match status per hole (1..18) from the USER'S team's
+    // perspective. Positive = your team is up by N going into that hole;
+    // negative = down by N; 0 = AS; null = at least one earlier hole still
+    // missing scores. The cumulative loop breaks on the first incomplete
+    // hole, so a gap freezes the strip at that point — fix the missing
+    // hole and the rest fills in.
+    const userOnT1 = activeMatch
+      ? (activeMatch.team1.player1 === user?.player_id || activeMatch.team1.player2 === user?.player_id)
+      : true;
+    const t1Pids = activeMatch ? [activeMatch.team1.player1, activeMatch.team1.player2].filter(Boolean) : [];
+    const t2Pids = activeMatch ? [activeMatch.team2.player1, activeMatch.team2.player2].filter(Boolean) : [];
+    const holeStatuses = Array.from({ length: 18 }, (_, i) => {
+      let cum = 0, hasData = false;
+      for (let h = 0; h <= i; h++) {
+        let n1 = 0, n2 = 0, ok1 = true, ok2 = true;
+        t1Pids.forEach(pid => { const s = scoresMap[`${pid}_${h}`]; if (!s) ok1 = false; else n1 += s - getStrokes(pid, h); });
+        t2Pids.forEach(pid => { const s = scoresMap[`${pid}_${h}`]; if (!s) ok2 = false; else n2 += s - getStrokes(pid, h); });
+        if (ok1 && ok2) {
+          if (n1 < n2) cum += userOnT1 ? 1 : -1;
+          else if (n2 < n1) cum += userOnT1 ? -1 : 1;
+          hasData = true;
+        } else { hasData = false; break; }
+      }
+      return hasData ? cum : null;
+    });
+    // Clinch hole — first hole where the lead exceeds the remaining holes.
+    // 18-hole rule: must be < hole 18 (you can't clinch on the final hole;
+    // a 1-up finish through 18 is "1UP", not "1&0").
+    let clinchHole = null, clinchText = null;
+    for (let h = 0; h < 18; h++) {
+      if (holeStatuses[h] === null) break;
+      const lead = Math.abs(holeStatuses[h]);
+      const remaining = 17 - h;
+      if (remaining > 0 && lead > remaining) {
+        clinchHole = h;
+        clinchText = `${lead}&${remaining}`;
+        break;
+      }
+    }
+
+    // Render a single status cell. Cells at positions 9 and 18 don't draw a
+    // right border (end of row); all others do, for the divider rhythm.
+    const renderStatusCell = (i) => {
+      const st = holeStatuses[i];
+      const isEndOfRow = (i + 1) % 9 === 0;
+      const colBorder = !isEndOfRow ? { borderRight: `1px solid ${BC.bdr}40` } : {};
+      const cellH = 22;
+      // Clinch hole — show "X&Y" prominently in green (you won) or red (you lost)
+      if (clinchHole !== null && i === clinchHole) {
+        const color = st > 0 ? "#22c55e" : st < 0 ? BC.danger : BC.t3;
+        return <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 11, color, fontWeight: 800, lineHeight: `${cellH}px`, ...colBorder }}>{clinchText}</div>;
+      }
+      // Post-clinch holes don't render a status (match is mathematically over)
+      if (clinchHole !== null && i > clinchHole) {
+        return <div key={i} style={{ flex: 1, height: cellH, ...colBorder }} />;
+      }
+      // Unscored hole — empty cell
+      if (st === null) {
+        return <div key={i} style={{ flex: 1, height: cellH, ...colBorder }} />;
+      }
+      // All-square — small "TIED" label
+      if (st === 0) {
+        return <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 8, fontWeight: 700, color: BC.t3, lineHeight: `${cellH}px`, letterSpacing: 0.5, ...colBorder }}>TIED</div>;
+      }
+      // Up or down — show the lead with arrow
+      const color = st > 0 ? "#22c55e" : BC.danger;
+      return (
+        <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 11, fontWeight: 800, color, lineHeight: `${cellH}px`, ...colBorder }}>
+          {st > 0 ? "▲" : "▼"}{Math.abs(st)}
+        </div>
+      );
+    };
+
     return (
       <div>
-        {/* Match selector — only shown if multiple matches exist */}
-        {event.matches.length > 1 && (
-          <div style={{ display: "grid", gridTemplateColumns: `repeat(${event.matches.length}, 1fr)`, gap: 4, marginBottom: 8 }}>
-            {event.matches.map((m, mi) => {
-              const isAct = m.id === activeMatchId;
-              const t1Idx = event.teams.findIndex(t => t.id === m.team1.id);
-              const t2Idx = event.teams.findIndex(t => t.id === m.team2.id);
-              const tc1 = PRACTICE_TEAM_COLORS[t1Idx];
-              const tc2 = PRACTICE_TEAM_COLORS[t2Idx];
-              return (
-                <button key={m.id} onClick={() => setActiveMatchId(m.id)} style={{
-                  padding: "8px 6px", borderRadius: 8,
-                  background: isAct ? BC.amber + "22" : BC.card,
-                  border: `1px solid ${isAct ? BC.amber : BC.bdr}`,
-                  color: isAct ? BC.t1 : BC.t2, fontSize: 11, fontWeight: 700, cursor: "pointer",
-                  display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-                }}>
-                  <span>Match {mi + 1}</span>
-                  <span style={{ fontSize: 9 }}>
-                    <span style={{ color: tc1.accent }}>T{t1Idx + 1}</span>
-                    <span style={{ color: BC.t3 }}> vs </span>
-                    <span style={{ color: tc2.accent }}>T{t2Idx + 1}</span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Hole strip — front 9 + back 9 (two rows). Active hole = solid amber,
-            all-4-scored = amber outline, partial = subtle amber tint, untouched = card.
-            Tap any hole to jump to it (including back to already-scored holes for editing). */}
-        <div style={{ display: "flex", gap: 3, marginBottom: 3 }}>
+        {/* Front 9 — hole strip */}
+        <div style={{ display: "flex", gap: 3, marginBottom: 2 }}>
           {Array.from({ length: 9 }, (_, i) => {
             const cur = i === activeHole;
             const allScored = matchPids.every(pid => scoresMap[`${pid}_${i}`]);
             const partial = !allScored && matchPids.some(pid => scoresMap[`${pid}_${i}`]);
             return (
               <button key={i} onClick={() => setActiveHole(i)} style={{
-                flex: 1, height: 30, borderRadius: cur ? 8 : 6,
+                flex: 1, height: 28, borderRadius: cur ? 8 : 6,
                 border: allScored && !cur ? `1.5px solid ${BC.amber}50` : "none",
                 background: cur ? BC.amber : allScored ? BC.amber + "15" : partial ? BC.amber + "08" : BC.card,
                 color: cur ? "#0a0804" : allScored ? BC.amber : BC.t3,
@@ -3050,7 +3103,12 @@ function PracticeView({ user, tPlayers, courses, notify }) {
             );
           })}
         </div>
-        <div style={{ display: "flex", gap: 3, marginBottom: 8 }}>
+        {/* Front 9 — match status row */}
+        <div style={{ display: "flex", marginBottom: 6, background: BC.card, border: `1px solid ${BC.bdr}60`, borderRadius: 8, padding: "3px 0", alignItems: "center" }}>
+          {Array.from({ length: 9 }, (_, i) => renderStatusCell(i))}
+        </div>
+        {/* Back 9 — hole strip */}
+        <div style={{ display: "flex", gap: 3, marginBottom: 2 }}>
           {Array.from({ length: 9 }, (_, i) => {
             const h = i + 9;
             const cur = h === activeHole;
@@ -3058,7 +3116,7 @@ function PracticeView({ user, tPlayers, courses, notify }) {
             const partial = !allScored && matchPids.some(pid => scoresMap[`${pid}_${h}`]);
             return (
               <button key={h} onClick={() => setActiveHole(h)} style={{
-                flex: 1, height: 30, borderRadius: cur ? 8 : 6,
+                flex: 1, height: 28, borderRadius: cur ? 8 : 6,
                 border: allScored && !cur ? `1.5px solid ${BC.amber}50` : "none",
                 background: cur ? BC.amber : allScored ? BC.amber + "15" : partial ? BC.amber + "08" : BC.card,
                 color: cur ? "#0a0804" : allScored ? BC.amber : BC.t3,
@@ -3067,6 +3125,10 @@ function PracticeView({ user, tPlayers, courses, notify }) {
               }}>{h + 1}</button>
             );
           })}
+        </div>
+        {/* Back 9 — match status row */}
+        <div style={{ display: "flex", marginBottom: 6, background: BC.card, border: `1px solid ${BC.bdr}60`, borderRadius: 8, padding: "3px 0", alignItems: "center" }}>
+          {Array.from({ length: 9 }, (_, i) => renderStatusCell(i + 9))}
         </div>
 
         {/* Hole nav banner — amber filled bar showing Par / Hole / HCP, with prev/next.
@@ -3102,13 +3164,6 @@ function PracticeView({ user, tPlayers, courses, notify }) {
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>›</button>
         </div>
-
-        {/* Match status (current state of the active match, computed from all entered scores) */}
-        {matchResult && matchResult.thru > 0 && (
-          <div style={{ fontSize: 11, color: BC.amber, fontWeight: 700, padding: "4px 0", textAlign: "center", marginBottom: 6 }}>
-            Match: {matchResult.matchResultText} · Thru {matchResult.thru}
-          </div>
-        )}
 
         {/* Player score cards — 4 in match, T1 (rows 0-1) on top, T2 (rows 2-3) below a divider.
             Each card shows: initials badge, name, (CH), stroke dots, "Net: ±X thru N",
@@ -3221,11 +3276,12 @@ function PracticeView({ user, tPlayers, courses, notify }) {
 
   // ── Leaderboard Sub-view ──
   const LeaderboardTab = () => {
+    const [expandedMatch, setExpandedMatch] = useState(null);
+    const holePars = course?.hole_pars || Array(18).fill(4);
+
     if (!event || !course) {
       return <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>No event yet.</div>;
     }
-    const [expandedMatch, setExpandedMatch] = useState(null);
-    const holePars = course.hole_pars || Array(18).fill(4);
 
     return (
       <div>
@@ -3329,14 +3385,12 @@ function PracticeView({ user, tPlayers, courses, notify }) {
 
   // ── Betting Sub-view ──
   const BettingTab = () => {
-    if (!event || !course) {
-      return <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>No event yet.</div>;
-    }
     const [tab, setTab] = useState("skins"); // skins | ctp
-    const holePars = course.hole_pars || Array(18).fill(4);
+    const holePars = course?.hole_pars || Array(18).fill(4);
     const par3Holes = holePars.map((p, i) => p === 3 ? i : -1).filter(i => i !== -1);
 
-    // Skins counts
+    // Skins counts — useMemo always fires, even when skins/eventPlayers
+    // are empty during initial load. Guards inside keep it cheap.
     const skinsByPlayer = useMemo(() => {
       const counts = {};
       eventPlayers.forEach(p => { counts[p.player_id] = { gross: 0, net: 0 }; });
@@ -3347,7 +3401,11 @@ function PracticeView({ user, tPlayers, courses, notify }) {
         if (skins.net[h]) counts[skins.net[h]].net++;
       }
       return counts;
-    }, [skins]);
+    }, [skins, eventPlayers]);
+
+    if (!event || !course) {
+      return <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>No event yet.</div>;
+    }
 
     const renderPlayerTeamColor = (pid) => {
       const slotIdx = event.teams.findIndex(t => t.player1 === pid || t.player2 === pid);
@@ -3475,17 +3533,24 @@ function PracticeView({ user, tPlayers, courses, notify }) {
   };
 
   // ── Top of view ──
+  // Setup is director-only — non-directors see only Scoring/Leaderboard/Betting.
+  // Plain text labels mirror MNQ's pill-style ViewToggle (no emojis).
+  const isDirector = !!user?.isDirector;
   const subTabs = [
-    { k: "setup", label: "Setup", icon: "⚙️" },
-    { k: "scoring", label: "Score", icon: "✏️" },
-    { k: "leaderboard", label: "Board", icon: "🏆" },
-    { k: "betting", label: "Bets", icon: "💰" },
+    ...(isDirector ? [{ k: "setup", label: "Setup" }] : []),
+    { k: "scoring", label: "Scoring" },
+    { k: "leaderboard", label: "Leaderboard" },
+    { k: "betting", label: "Betting" },
   ];
 
-  // If no event yet, force setup
+  // Default routing:
+  //   - Directors with no event → land on Setup so they can configure
+  //   - Non-directors (or directors with an event) → never on Setup
+  //   - Anyone whose subView no longer exists in their visible tabs → Scoring
   useEffect(() => {
-    if (!event && subView !== "setup") setSubView("setup");
-  }, [event]);
+    if (!isDirector && subView === "setup") { setSubView("scoring"); return; }
+    if (isDirector && !event && subView !== "setup") setSubView("setup");
+  }, [event, isDirector, subView]);
 
   return (
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
@@ -3497,26 +3562,24 @@ function PracticeView({ user, tPlayers, courses, notify }) {
         </div>
       </div>
 
-      {/* Sub-tabs */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 4, marginBottom: 12 }}>
+      {/* Sub-tabs — MNQ-style pill toggle. Active tab fills with amber, others transparent. */}
+      <div style={{ display: "flex", background: BC.inp, borderRadius: 20, border: `1px solid ${BC.bdr}`, padding: 3, marginBottom: 12 }}>
         {subTabs.map(t => {
           const isAct = subView === t.k;
           return (
-            <button key={t.k} onClick={() => setSubView(t.k)} style={{
-              padding: "8px 4px", borderRadius: 8,
-              background: isAct ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
-              border: `1px solid ${isAct ? "transparent" : BC.bdr}`,
-              color: isAct ? "#0a0804" : BC.t2, fontSize: 11, fontWeight: 700, cursor: "pointer",
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-            }}>
-              <span style={{ fontSize: 14 }}>{t.icon}</span>
-              <span>{t.label}</span>
-            </button>
+            <button key={t.k} onClick={() => { if (!isAct) setSubView(t.k); }} style={{
+              flex: 1, padding: "7px 8px", borderRadius: 17,
+              fontSize: 11, fontWeight: 700, border: "none",
+              background: isAct ? BC.amber : "transparent",
+              color: isAct ? "#0a0804" : BC.t3,
+              cursor: isAct ? "default" : "pointer",
+              transition: "all .2s",
+            }}>{t.label}</button>
           );
         })}
       </div>
 
-      {subView === "setup" && <SetupTab />}
+      {subView === "setup" && isDirector && <SetupTab />}
       {subView === "scoring" && <ScoringTab />}
       {subView === "leaderboard" && <LeaderboardTab />}
       {subView === "betting" && <BettingTab />}
@@ -3793,10 +3856,10 @@ export default function App() {
   if (!user) return <LoginScreen players={tPlayers} teamNames={teamNames} onLogin={p => { setUser({ ...p, isDirector: !!p.isDirector }); }} />;
 
   const navItems = [
+    { key: "practice",    label: "Mash",        icon: "mash" },
     { key: "scoring",     label: "Scoring",     icon: "score" },
     { key: "groups",      label: "Matches",     icon: "groups" },
     { key: "leaderboard", label: "Leaderboard", icon: "trophy" },
-    { key: "practice",    label: "Mash",        icon: "mash" },
     { key: "betting",     label: "Betting",     icon: "betting" },
     { key: "menu",        label: "More",        icon: "menu" },
   ];
