@@ -12,39 +12,54 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 // re-read the now-updated BC values inline in JSX.
 //
 // Borrowed from the MNQ pattern: getTheme(mode) → applyTheme(mode) mutates K.
+// ─── BOURBON CUP THEME ───
+// Design philosophy — "traditional clubhouse, not all-bourbon-everywhere".
+// The earlier palette tinted every surface (bg, card, inputs, borders, text)
+// with the same warm-brown family, which read as muddy/monochromatic. The
+// revised approach: keep the chrome NEUTRAL (warm-cream paper in light,
+// cool slate in dark) and reserve bourbon amber for the actual accents —
+// active buttons, MASH ROUND header, score-button selection, toast,
+// triangle indicators. Result: amber stops blending into its surroundings
+// and starts reading as the brand signature it's meant to be.
+//
+// Light mode is built like a vintage scorecard — soft linen-cream paper,
+// near-black ink for primary text, gentle neutral grays for borders. The
+// warmth in the bg is subtle (NOT yellow) so the amber accent doesn't
+// fight it. Dark mode goes cool-charcoal (think aged-leather binding seen
+// from a low-light angle) so amber reads as gold instead of beige.
 const getBCTheme = (mode) => {
   if (mode === "light") {
     return {
-      bg: "#faf6ec",        // warm cream — bourbon-soaked parchment
+      bg: "#f5f3ec",        // linen — quality cardstock, NOT yellow
       card: "#ffffff",      // pure white card surface
-      inp: "#f1ead8",       // input / inactive
-      hover: "#e8e0c9",     // hover
-      bdr: "#d8cdb0",       // warm border
-      t1: "#2a2010",        // ink — dark warm brown for primary text
-      t2: "#6b5d47",        // medium warm
-      t3: "#9c8d72",        // muted warm
-      amber: "#a8730a",     // bourbon gold (slightly darker for contrast on white)
+      inp: "#ebe8e0",       // input / inactive — neutral pale
+      hover: "#e0dcd2",     // hover
+      bdr: "#cfcabd",       // soft neutral border (less warm than before)
+      t1: "#1f1d1a",        // ink — near-black, the faintest warm tint
+      t2: "#5d574e",        // medium neutral with warmth
+      t3: "#8e887e",        // muted neutral, refined
+      amber: "#a8730a",     // bourbon gold — slightly darker for white-card contrast
       amberGlow: "rgba(168,115,10,0.12)",
       amberDim: "#7a5505",
-      gold: "#b8870a",      // brighter gold
-      goldGlow: "rgba(184,135,10,0.12)",
-      danger: "#dc2626",
-      warn: "#d97706",
-      green: "#059669",
+      gold: "#b8870a",      // brighter gold accent
+      goldGlow: "rgba(184,135,10,0.10)",
+      danger: "#c1272d",    // traditional deep red (less candy than #dc2626)
+      warn: "#c2570d",      // burnt orange — traditional, less yellow
+      green: "#047857",     // forest green — Augusta-leaning
     };
   }
-  // dark (default)
+  // dark (default) — cool charcoal, lets amber read as warm gold accent
   return {
-    bg: "#0a0804",
-    card: "#12100d",
-    inp: "#0d0b09",
-    hover: "#1a1612",
-    bdr: "#2a2218",
-    t1: "#f0e8d8",
-    t2: "#b8a98a",
-    t3: "#6b5d47",
-    amber: "#c8860a",
-    amberGlow: "rgba(200,134,10,0.15)",
+    bg: "#0c0d10",          // near-black with whisper of cool tone
+    card: "#15171b",        // elevated panel
+    inp: "#101216",         // sunken input
+    hover: "#1c1f24",
+    bdr: "#292c33",         // subtle cool border
+    t1: "#ecedef",          // clean cool white
+    t2: "#a7a9af",          // cool medium gray
+    t3: "#6a6c72",          // cool muted gray
+    amber: "#c8860a",       // bourbon (unchanged — brand signature)
+    amberGlow: "rgba(200,134,10,0.18)",
     amberDim: "#8a5c07",
     gold: "#d4a843",
     goldGlow: "rgba(212,168,67,0.12)",
