@@ -289,6 +289,220 @@ function computeMatchResult(match, holeData, courses, tRounds, tPlayers, format,
   };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PRACTICE / TEST EVENT MODE
+// ─────────────────────────────────────────────────────────────────────────────
+// Self-contained "practice round" feature — separate from main tournament data.
+// 8 players → 4 teams of 2 → 2 head-to-head Team Total match-play matches.
+//
+// Storage:
+//   bc_practice_event   — single doc { id: 'current', course_id, hcp_mode,
+//                         hcp_overrides, teams: [{id,name,p1,p2}],
+//                         matches: [{id,team1,team2}] }
+//   bc_practice_scores  — { id, player_id, hole_number (1-18), score }
+//   bc_practice_ctp     — { id, hole, player_id }
+// (Skins are auto-computed from scores, no Firestore needed.)
+
+// 4 distinct team colors for the practice mode (independent of Mash/Shot)
+const PRACTICE_TEAM_COLORS = [
+  { color: "#1f4d2b", accent: "#3db461", glow: "rgba(61,180,97,0.2)" },   // green
+  { color: "#0f3a52", accent: "#4ba3d4", glow: "rgba(75,163,212,0.2)" },  // blue
+  { color: "#5a2d0f", accent: "#d48845", glow: "rgba(212,136,69,0.2)" }, // orange/copper
+  { color: "#3a1f4d", accent: "#a063d4", glow: "rgba(160,99,212,0.2)" }, // purple
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Team Total match-play calculation (18 holes)
+// ─────────────────────────────────────────────────────────────────────────────
+// Per hole: sum each team's net scores. Lower combined net wins the hole.
+// Walk all 18; track running cumulative (T1 holes − T2 holes).
+// matchResultText: "AS" | "1UP" | "5&4" | "3&2"
+// Returns a thru count so the leaderboard knows how far along the match is.
+function computePracticeMatch({ match, scores, course, players, hcpOverrides, hcpMode }) {
+  const empty = { holes: Array(18).fill({ result: null, n1: null, n2: null }), running: Array(18).fill(0), thru: 0, matchResultText: "—", winnerTeamId: null, clinched: false, endHole: 17, holesWon1: 0, holesWon2: 0, dormie: false };
+  if (!course || !match) return empty;
+
+  const holePars = course.hole_pars || Array(18).fill(4);
+  const holeHcps = course.hole_handicaps || Array(18).fill(9);
+
+  const t1Pids = [match.team1.player1, match.team1.player2].filter(Boolean);
+  const t2Pids = [match.team2.player1, match.team2.player2].filter(Boolean);
+  const allPids = [...t1Pids, ...t2Pids];
+  if (allPids.length < 4) return empty;
+
+  // HI lookup with per-event override support
+  const getHI = (pid) => {
+    if (hcpOverrides && hcpOverrides[pid] !== undefined && hcpOverrides[pid] !== "") {
+      return parseFloat(hcpOverrides[pid]) || 0;
+    }
+    const tp = players.find(t => t.player_id === pid);
+    return parseFloat(tp?.handicap_index) || 0;
+  };
+  const getCH = (pid) => calcCH(getHI(pid), course.slope || 113, course.rating || 72, course.par || 72);
+
+  // Low-man adjustment: low CH plays scratch, others get diff
+  const allCHs = allPids.map(getCH);
+  const minCH = Math.min(...allCHs);
+  const adjustedCH = (pid) => hcpMode === "full" ? getCH(pid) : (getCH(pid) - minCH);
+
+  // Stroke map across 18 holes (allocates strokes to lowest-hcp holes first)
+  const buildStrokeMap = (ch) => {
+    const sorted = holeHcps.map((h, i) => ({ idx: i, hcp: h })).sort((a, b) => a.hcp - b.hcp);
+    const map = {};
+    let rem = Math.abs(ch);
+    for (let pass = 0; pass < 3 && rem > 0; pass++) {
+      for (const h of sorted) { if (rem <= 0) break; map[h.idx] = (map[h.idx] || 0) + 1; rem--; }
+    }
+    return map;
+  };
+  const strokeMaps = {};
+  allPids.forEach(pid => { strokeMaps[pid] = buildStrokeMap(adjustedCH(pid)); });
+
+  // Per-hole combined team net
+  const holes = [];
+  for (let h = 0; h < 18; h++) {
+    let n1 = 0, n2 = 0, ok1 = true, ok2 = true;
+    for (const pid of t1Pids) {
+      const raw = scores[`${pid}_${h}`];
+      if (raw == null || raw === 0) { ok1 = false; }
+      else { n1 += raw - (strokeMaps[pid][h] || 0); }
+    }
+    for (const pid of t2Pids) {
+      const raw = scores[`${pid}_${h}`];
+      if (raw == null || raw === 0) { ok2 = false; }
+      else { n2 += raw - (strokeMaps[pid][h] || 0); }
+    }
+    let result = null;
+    if (ok1 && ok2) {
+      if (n1 < n2) result = 1;
+      else if (n2 < n1) result = -1;
+      else result = 0;
+    }
+    holes.push({ result, n1: ok1 ? n1 : null, n2: ok2 ? n2 : null });
+  }
+
+  // Running cumulative; null holes don't change cumulative
+  const running = [];
+  let cum = 0;
+  holes.forEach(hole => {
+    if (hole.result !== null) cum += hole.result;
+    running.push(cum);
+  });
+
+  // Find clinch hole (lead > remaining holes). Only valid BEFORE hole 18 — if
+  // a match goes all 18 it's a "XUP" finish, not a clinched "X&0".
+  let endHole = 17;
+  let margin = Math.abs(running[17]);
+  let clinched = false;
+  for (let h = 0; h < 18; h++) {
+    if (holes[h].result === null) continue;  // can't clinch on unscored hole
+    const lead = Math.abs(running[h]);
+    const remaining = 17 - h;
+    if (remaining > 0 && lead > remaining) { endHole = h; margin = lead; clinched = true; break; }
+  }
+
+  // Last completed hole
+  let lastCompleted = -1;
+  for (let h = 17; h >= 0; h--) {
+    if (holes[h].result !== null) { lastCompleted = h; break; }
+  }
+  const thru = lastCompleted + 1;
+
+  let matchResultText = "—";
+  let winnerTeamId = null;
+  if (lastCompleted < 0) {
+    matchResultText = "—";
+  } else if (clinched) {
+    const remaining = 17 - endHole;
+    matchResultText = `${margin}&${remaining}`;
+    winnerTeamId = running[endHole] > 0 ? match.team1.id : match.team2.id;
+  } else if (lastCompleted === 17) {
+    const final = running[17];
+    if (final === 0) matchResultText = "AS";
+    else { matchResultText = `${Math.abs(final)}UP`; winnerTeamId = final > 0 ? match.team1.id : match.team2.id; }
+  } else {
+    // In progress
+    const cur = running[lastCompleted];
+    const remaining = 17 - lastCompleted;
+    if (cur === 0) matchResultText = "AS";
+    else if (Math.abs(cur) === remaining) matchResultText = `${Math.abs(cur)}UP (Dormie)`;
+    else matchResultText = `${Math.abs(cur)}UP`;
+  }
+
+  const dormie = !clinched && lastCompleted >= 0 && lastCompleted < 17 && Math.abs(running[lastCompleted]) === (17 - lastCompleted);
+
+  return {
+    holes,
+    running,
+    thru,
+    matchResultText,
+    winnerTeamId,
+    clinched,
+    endHole,
+    holesWon1: holes.filter(h => h.result === 1).length,
+    holesWon2: holes.filter(h => h.result === -1).length,
+    dormie,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Skins — auto-computed from scores (gross + net)
+// ─────────────────────────────────────────────────────────────────────────────
+// For each hole: lowest gross unique → gross skin; lowest net unique → net skin.
+// Tie = no skin on that hole. Returns { gross: {h: pid|null}, net: {h: pid|null} }.
+function computePracticeSkins({ scores, players, course, hcpOverrides }) {
+  const result = { gross: {}, net: {} };
+  if (!course || !players.length) return result;
+
+  const holeHcps = course.hole_handicaps || Array(18).fill(9);
+  const getHI = (pid) => {
+    if (hcpOverrides && hcpOverrides[pid] !== undefined && hcpOverrides[pid] !== "") {
+      return parseFloat(hcpOverrides[pid]) || 0;
+    }
+    const tp = players.find(t => t.player_id === pid);
+    return parseFloat(tp?.handicap_index) || 0;
+  };
+  const getCH = (pid) => calcCH(getHI(pid), course.slope || 113, course.rating || 72, course.par || 72);
+
+  // Each player gets their FULL course handicap for skins (not low-man adjusted —
+  // skins are an individual side game, not match play). Standard practice.
+  const buildStrokeMap = (ch) => {
+    const sorted = holeHcps.map((h, i) => ({ idx: i, hcp: h })).sort((a, b) => a.hcp - b.hcp);
+    const map = {};
+    let rem = Math.abs(ch);
+    for (let pass = 0; pass < 3 && rem > 0; pass++) {
+      for (const h of sorted) { if (rem <= 0) break; map[h.idx] = (map[h.idx] || 0) + 1; rem--; }
+    }
+    return map;
+  };
+  const strokeMaps = {};
+  players.forEach(p => { strokeMaps[p.player_id] = buildStrokeMap(getCH(p.player_id)); });
+
+  for (let h = 0; h < 18; h++) {
+    const grossEntries = [];
+    const netEntries = [];
+    for (const p of players) {
+      const raw = scores[`${p.player_id}_${h}`];
+      if (raw == null || raw === 0) continue;
+      grossEntries.push({ pid: p.player_id, score: raw });
+      netEntries.push({ pid: p.player_id, score: raw - (strokeMaps[p.player_id][h] || 0) });
+    }
+    if (grossEntries.length < 2) { result.gross[h] = null; result.net[h] = null; continue; }
+
+    // Gross skin
+    grossEntries.sort((a, b) => a.score - b.score);
+    if (grossEntries[0].score < grossEntries[1].score) result.gross[h] = grossEntries[0].pid;
+    else result.gross[h] = null;
+
+    // Net skin
+    netEntries.sort((a, b) => a.score - b.score);
+    if (netEntries[0].score < netEntries[1].score) result.net[h] = netEntries[0].pid;
+    else result.net[h] = null;
+  }
+  return result;
+}
+
+
 // ── Notification Toast ──
 function Notif({ notif }) {
   if (!notif) return null;
@@ -2305,6 +2519,792 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
 }
 
 // ── Slide-up Menu ──
+// ─────────────────────────────────────────────────────────────────────────────
+// PracticeView — Top-level component for test/practice events
+// ─────────────────────────────────────────────────────────────────────────────
+function PracticeView({ user, tPlayers, courses, notify }) {
+  const [event, setEvent] = useState(null);
+  const [scoresMap, setScoresMap] = useState({}); // {pid_h: score}
+  const [ctps, setCtps] = useState({}); // {h: pid}
+  const [subView, setSubView] = useState("setup"); // setup | scoring | leaderboard | betting
+  const [showSetupConfirm, setShowSetupConfirm] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  // Subscribe to practice collections
+  useEffect(() => {
+    const f = [{ field: "tournament_id", op: "==", value: TOURNAMENT_ID }];
+    const unsubs = [];
+    unsubs.push(db.subscribe("bc_practice_event", f, rows => {
+      setEvent(rows.find(r => r.id === "current") || null);
+    }));
+    unsubs.push(db.subscribe("bc_practice_scores", f, rows => {
+      const sc = {};
+      rows.forEach(r => { sc[`${r.player_id}_${r.hole_number - 1}`] = r.score; });
+      setScoresMap(sc);
+    }));
+    unsubs.push(db.subscribe("bc_practice_ctp", f, rows => {
+      const cp = {};
+      rows.forEach(r => { cp[r.hole] = r.player_id; });
+      setCtps(cp);
+    }));
+    return () => unsubs.forEach(u => u());
+  }, []);
+
+  const course = useMemo(() => courses.find(c => c.id === event?.course_id), [courses, event]);
+  const eventPlayers = useMemo(() => {
+    if (!event) return [];
+    return (event.player_ids || []).map(pid => tPlayers.find(p => p.player_id === pid)).filter(Boolean);
+  }, [event, tPlayers]);
+
+  // Compute match results
+  const matchResults = useMemo(() => {
+    if (!event || !course || !event.matches) return [];
+    return event.matches.map(m => ({
+      match: m,
+      result: computePracticeMatch({
+        match: m,
+        scores: scoresMap,
+        course,
+        players: tPlayers,
+        hcpOverrides: event.hcp_overrides || {},
+        hcpMode: event.hcp_mode || "low_man",
+      }),
+    }));
+  }, [event, course, scoresMap, tPlayers]);
+
+  const skins = useMemo(() => computePracticeSkins({
+    scores: scoresMap,
+    players: eventPlayers,
+    course,
+    hcpOverrides: event?.hcp_overrides || {},
+  }), [scoresMap, eventPlayers, course, event]);
+
+  // Save score
+  const onSavePracticeScore = useCallback(async (pid, h, score) => {
+    const id = `bc_ps_${pid}_h${h + 1}`;
+    if (score == null || score === 0) {
+      await db.delete("bc_practice_scores", id);
+    } else {
+      await db.upsert("bc_practice_scores", {
+        id,
+        tournament_id: TOURNAMENT_ID,
+        player_id: pid,
+        hole_number: h + 1,
+        score,
+      });
+    }
+    // Optimistic
+    setScoresMap(prev => {
+      const next = { ...prev };
+      if (score == null || score === 0) delete next[`${pid}_${h}`];
+      else next[`${pid}_${h}`] = score;
+      return next;
+    });
+  }, []);
+
+  // Save CTP
+  const onSetCtp = useCallback(async (h, pid) => {
+    const id = `bc_pctp_h${h + 1}`;
+    if (pid) await db.upsert("bc_practice_ctp", { id, tournament_id: TOURNAMENT_ID, hole: h, player_id: pid });
+    else await db.delete("bc_practice_ctp", id);
+  }, []);
+
+  // ── Setup Sub-view ──
+  const SetupTab = () => {
+    const [selPlayers, setSelPlayers] = useState(event?.player_ids || []);
+    const [selCourse, setSelCourse] = useState(event?.course_id || (courses[0]?.id || ""));
+    const [hcpMode, setHcpMode] = useState(event?.hcp_mode || "low_man");
+    const [teamSlots, setTeamSlots] = useState(() => {
+      if (event?.teams) {
+        return event.teams.map(t => [t.player1, t.player2].filter(Boolean));
+      }
+      return [[], [], [], []];
+    });
+    const [activeSlot, setActiveSlot] = useState(0);
+
+    const togglePlayer = (pid) => {
+      if (selPlayers.includes(pid)) {
+        setSelPlayers(selPlayers.filter(p => p !== pid));
+        // Also remove from any team slot
+        setTeamSlots(slots => slots.map(s => s.filter(p => p !== pid)));
+      } else {
+        if (selPlayers.length >= 8) { notify("Max 8 players", "warn"); return; }
+        setSelPlayers([...selPlayers, pid]);
+      }
+    };
+
+    const assignToSlot = (pid) => {
+      // Remove from any other slot first
+      const newSlots = teamSlots.map(s => s.filter(p => p !== pid));
+      // Add to active slot if it has room
+      if (newSlots[activeSlot].length >= 2) {
+        notify("Team full — pick another team", "warn");
+        return;
+      }
+      newSlots[activeSlot] = [...newSlots[activeSlot], pid];
+      setTeamSlots(newSlots);
+      // Auto-advance to next empty slot
+      const nextEmpty = newSlots.findIndex((s, i) => i > activeSlot && s.length < 2);
+      if (newSlots[activeSlot].length === 2 && nextEmpty !== -1) setActiveSlot(nextEmpty);
+    };
+
+    const findSlotOf = (pid) => teamSlots.findIndex(s => s.includes(pid));
+
+    const allTeamsComplete = teamSlots.every(s => s.length === 2);
+    const courseObj = courses.find(c => c.id === selCourse);
+
+    const saveSetup = async () => {
+      if (!allTeamsComplete) { notify("All 4 teams need 2 players", "warn"); return; }
+      if (!selCourse) { notify("Pick a course", "warn"); return; }
+
+      const teams = teamSlots.map((s, i) => ({
+        id: `T${i + 1}`,
+        name: `Team ${i + 1}`,
+        player1: s[0],
+        player2: s[1],
+      }));
+      const matches = [
+        { id: "M1", team1: teams[0], team2: teams[1] },
+        { id: "M2", team1: teams[2], team2: teams[3] },
+      ];
+
+      await db.upsert("bc_practice_event", {
+        id: "current",
+        tournament_id: TOURNAMENT_ID,
+        course_id: selCourse,
+        hcp_mode: hcpMode,
+        hcp_overrides: event?.hcp_overrides || {},
+        player_ids: selPlayers,
+        teams,
+        matches,
+        created_at: event?.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+      notify("Practice event saved", "success");
+      setSubView("scoring");
+    };
+
+    const resetEvent = async () => {
+      // Wipe event + scores + ctp
+      await db.delete("bc_practice_event", "current");
+      // Clear all scores & ctp for this tournament
+      const oldScores = await db.get("bc_practice_scores", [{ field: "tournament_id", op: "==", value: TOURNAMENT_ID }]);
+      const oldCtps = await db.get("bc_practice_ctp", [{ field: "tournament_id", op: "==", value: TOURNAMENT_ID }]);
+      for (const s of oldScores) await db.delete("bc_practice_scores", s.id);
+      for (const c of oldCtps) await db.delete("bc_practice_ctp", c.id);
+      setShowResetConfirm(false);
+      setSelPlayers([]);
+      setTeamSlots([[], [], [], []]);
+      setActiveSlot(0);
+      notify("Event reset", "success");
+    };
+
+    // Sort players: Mash Brothers first
+    const sortedPlayers = [...tPlayers].sort((a, b) => {
+      if (a.team !== b.team) return a.team === "A" ? -1 : 1;
+      return (a.name || "").localeCompare(b.name || "");
+    });
+
+    return (
+      <div>
+        {/* Course + HCP Mode */}
+        <div style={{ background: BC.card, borderRadius: 10, padding: 12, marginBottom: 12, border: `1px solid ${BC.bdr}` }}>
+          <div style={{ fontSize: 10, color: BC.t3, marginBottom: 6, fontWeight: 700, letterSpacing: 1 }}>COURSE</div>
+          <select value={selCourse} onChange={e => setSelCourse(e.target.value)} style={{
+            width: "100%", padding: "8px 10px", background: BC.inp, border: `1px solid ${BC.bdr}`,
+            borderRadius: 6, color: BC.t1, fontSize: 13, marginBottom: 10,
+          }}>
+            <option value="">— Select course —</option>
+            {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+
+          <div style={{ fontSize: 10, color: BC.t3, marginBottom: 6, fontWeight: 700, letterSpacing: 1 }}>HANDICAP MODE</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {[["low_man", "Low Man"], ["full", "Full Strokes"]].map(([k, label]) => (
+              <button key={k} onClick={() => setHcpMode(k)} style={{
+                flex: 1, padding: "8px 0", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                background: hcpMode === k ? BC.amber + "22" : BC.inp,
+                border: `1px solid ${hcpMode === k ? BC.amber : BC.bdr}`,
+                color: hcpMode === k ? BC.amber : BC.t2,
+              }}>{label}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Player picker */}
+        <div style={{ background: BC.card, borderRadius: 10, padding: 12, marginBottom: 12, border: `1px solid ${BC.bdr}` }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div style={{ fontSize: 10, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>SELECT 8 PLAYERS</div>
+            <div style={{ fontSize: 11, color: selPlayers.length === 8 ? BC.green : BC.amber, fontWeight: 700 }}>{selPlayers.length}/8</div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            {sortedPlayers.map(p => {
+              const isSel = selPlayers.includes(p.player_id);
+              const teamColor = p.team === "A" ? TEAM_A.accent : TEAM_B.accent;
+              const slotIdx = findSlotOf(p.player_id);
+              return (
+                <button key={p.player_id} onClick={() => togglePlayer(p.player_id)} style={{
+                  padding: "8px 10px", borderRadius: 8,
+                  background: isSel ? teamColor + "22" : BC.inp,
+                  border: `1px solid ${isSel ? teamColor : BC.bdr}`,
+                  color: isSel ? BC.t1 : BC.t2,
+                  fontSize: 12, fontWeight: 600, cursor: "pointer", textAlign: "left",
+                  display: "flex", alignItems: "center", gap: 6,
+                }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: teamColor, flexShrink: 0 }} />
+                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
+                  {slotIdx !== -1 && (
+                    <span style={{ fontSize: 9, fontWeight: 800, color: PRACTICE_TEAM_COLORS[slotIdx].accent, flexShrink: 0 }}>
+                      T{slotIdx + 1}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Team builder */}
+        {selPlayers.length === 8 && (
+          <div style={{ background: BC.card, borderRadius: 10, padding: 12, marginBottom: 12, border: `1px solid ${BC.bdr}` }}>
+            <div style={{ fontSize: 10, color: BC.t3, marginBottom: 10, fontWeight: 700, letterSpacing: 1 }}>BUILD 4 TEAMS OF 2</div>
+            <div style={{ fontSize: 11, color: BC.t2, marginBottom: 10 }}>
+              Tap a team slot to make it active, then tap players above to add them.
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+              {teamSlots.map((slot, i) => {
+                const isActive = i === activeSlot;
+                const tc = PRACTICE_TEAM_COLORS[i];
+                const filled = slot.length === 2;
+                return (
+                  <button key={i} onClick={() => setActiveSlot(i)} style={{
+                    padding: "10px 12px", borderRadius: 10,
+                    background: isActive ? tc.color + "55" : (filled ? tc.color + "20" : BC.inp),
+                    border: `2px solid ${isActive ? tc.accent : (filled ? tc.accent + "55" : BC.bdr)}`,
+                    color: BC.t1, fontSize: 11, fontWeight: 700, cursor: "pointer", textAlign: "left",
+                    minHeight: 70,
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <span style={{ color: tc.accent, letterSpacing: 1 }}>TEAM {i + 1}</span>
+                      <span style={{ fontSize: 9, color: BC.t3 }}>{slot.length}/2</span>
+                    </div>
+                    {slot.length === 0 && <div style={{ fontSize: 10, color: BC.t3, fontStyle: "italic" }}>(empty)</div>}
+                    {slot.map(pid => {
+                      const p = tPlayers.find(t => t.player_id === pid);
+                      return (
+                        <div key={pid} onClick={(e) => { e.stopPropagation(); setTeamSlots(s => s.map((sl, ix) => ix === i ? sl.filter(x => x !== pid) : sl)); }}
+                          style={{ fontSize: 11, fontWeight: 600, color: BC.t1, marginBottom: 2, cursor: "pointer" }}>
+                          {p?.name || pid}
+                        </div>
+                      );
+                    })}
+                  </button>
+                );
+              })}
+            </div>
+            {/* Player chips for assigning */}
+            <div style={{ borderTop: `1px solid ${BC.bdr}`, paddingTop: 10 }}>
+              <div style={{ fontSize: 9, color: BC.t3, fontWeight: 700, marginBottom: 6, letterSpacing: 1 }}>
+                TAP TO ASSIGN TO TEAM {activeSlot + 1}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                {selPlayers.map(pid => {
+                  const p = tPlayers.find(t => t.player_id === pid);
+                  const slotIdx = findSlotOf(pid);
+                  const inActive = slotIdx === activeSlot;
+                  const inOther = slotIdx !== -1 && slotIdx !== activeSlot;
+                  const tc = slotIdx !== -1 ? PRACTICE_TEAM_COLORS[slotIdx] : null;
+                  return (
+                    <button key={pid} onClick={() => assignToSlot(pid)} style={{
+                      padding: "6px 10px", borderRadius: 14,
+                      background: inActive ? tc.accent + "33" : inOther ? BC.inp : BC.hover,
+                      border: `1px solid ${inActive ? tc.accent : inOther ? tc.accent + "44" : BC.bdr}`,
+                      color: inOther ? BC.t3 : BC.t1, fontSize: 11, fontWeight: 600, cursor: "pointer",
+                      opacity: inOther && !inActive ? 0.55 : 1,
+                    }}>
+                      {p?.name?.split(" ").slice(-1)[0] || pid}
+                      {slotIdx !== -1 && <span style={{ marginLeft: 4, fontSize: 9, color: tc.accent, fontWeight: 800 }}>T{slotIdx + 1}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Match preview */}
+            {allTeamsComplete && (
+              <div style={{ marginTop: 12, padding: 10, background: BC.amber + "10", borderRadius: 8, border: `1px solid ${BC.amber}33` }}>
+                <div style={{ fontSize: 9, color: BC.amber, fontWeight: 800, letterSpacing: 1, marginBottom: 6 }}>MATCHUPS</div>
+                {[[0, 1], [2, 3]].map(([a, b], mi) => (
+                  <div key={mi} style={{ fontSize: 11, color: BC.t1, marginBottom: 4, display: "flex", gap: 4 }}>
+                    <span style={{ color: BC.t3, marginRight: 4 }}>Match {mi + 1}:</span>
+                    <span style={{ color: PRACTICE_TEAM_COLORS[a].accent, fontWeight: 700 }}>T{a + 1}</span>
+                    <span style={{ color: BC.t3 }}>vs</span>
+                    <span style={{ color: PRACTICE_TEAM_COLORS[b].accent, fontWeight: 700 }}>T{b + 1}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Save */}
+        <button onClick={saveSetup} disabled={!allTeamsComplete || !selCourse} style={{
+          width: "100%", padding: "12px 0", borderRadius: 10,
+          background: allTeamsComplete && selCourse ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.inp,
+          border: `1px solid ${allTeamsComplete && selCourse ? BC.amber : BC.bdr}`,
+          color: allTeamsComplete && selCourse ? "#0a0804" : BC.t3,
+          fontSize: 13, fontWeight: 800, cursor: allTeamsComplete && selCourse ? "pointer" : "not-allowed",
+          letterSpacing: 1, marginBottom: 10,
+        }}>
+          {event ? "UPDATE EVENT" : "SAVE EVENT"}
+        </button>
+
+        {/* Reset */}
+        {event && (
+          <button onClick={() => setShowResetConfirm(true)} style={{
+            width: "100%", padding: "8px 0", borderRadius: 8, background: "transparent",
+            border: `1px solid ${BC.danger}55`, color: BC.danger, fontSize: 11, fontWeight: 700, cursor: "pointer",
+          }}>
+            Reset Event (clear scores)
+          </button>
+        )}
+
+        {showResetConfirm && (
+          <>
+            <div onClick={() => setShowResetConfirm(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 200 }} />
+            <div style={{
+              position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+              background: BC.card, borderRadius: 12, padding: 20, border: `1px solid ${BC.danger}`,
+              maxWidth: 320, width: "90%", zIndex: 201,
+            }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: BC.t1, marginBottom: 8 }}>Reset Practice Event?</div>
+              <div style={{ fontSize: 12, color: BC.t2, marginBottom: 16, lineHeight: 1.5 }}>
+                This will delete the event, all scores, and all CTP entries. This can't be undone.
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => setShowResetConfirm(false)} style={{ flex: 1, padding: "10px 0", background: BC.inp, border: `1px solid ${BC.bdr}`, color: BC.t2, borderRadius: 8, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                <button onClick={resetEvent} style={{ flex: 1, padding: "10px 0", background: BC.danger, border: "none", color: "#fff", borderRadius: 8, fontWeight: 700, cursor: "pointer" }}>Reset</button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
+  // ── Scoring Sub-view ──
+  const ScoringTab = () => {
+    if (!event || !course) {
+      return <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>Set up an event first.</div>;
+    }
+    // Default to user's pid if they're in the event, else first player
+    const userInEvent = event.player_ids?.includes(user?.player_id);
+    const [activePid, setActivePid] = useState(userInEvent ? user.player_id : event.player_ids[0]);
+    const [activeHole, setActiveHole] = useState(0);
+
+    const holePars = course.hole_pars || Array(18).fill(4);
+    const holePar = holePars[activeHole];
+    const activePlayer = tPlayers.find(p => p.player_id === activePid);
+
+    // Find which match this player is in for status display
+    const playerMatch = event.matches.find(m =>
+      [m.team1.player1, m.team1.player2, m.team2.player1, m.team2.player2].includes(activePid)
+    );
+    const playerMatchResult = playerMatch
+      ? matchResults.find(mr => mr.match.id === playerMatch.id)?.result
+      : null;
+
+    const cur = scoresMap[`${activePid}_${activeHole}`];
+
+    return (
+      <div>
+        {/* Player selector */}
+        <div style={{ background: BC.card, borderRadius: 10, padding: 8, marginBottom: 10, border: `1px solid ${BC.bdr}` }}>
+          <div style={{ fontSize: 9, color: BC.t3, marginBottom: 6, fontWeight: 700, letterSpacing: 1, padding: "0 4px" }}>SCORING FOR</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
+            {event.player_ids.map(pid => {
+              const p = tPlayers.find(t => t.player_id === pid);
+              const slotIdx = event.teams.findIndex(t => t.player1 === pid || t.player2 === pid);
+              const tc = PRACTICE_TEAM_COLORS[slotIdx];
+              const isAct = pid === activePid;
+              return (
+                <button key={pid} onClick={() => setActivePid(pid)} style={{
+                  padding: "6px 8px", borderRadius: 6,
+                  background: isAct ? tc.color + "55" : BC.inp,
+                  border: `1px solid ${isAct ? tc.accent : BC.bdr}`,
+                  color: isAct ? BC.t1 : BC.t2, fontSize: 11, fontWeight: 600, cursor: "pointer",
+                  textAlign: "left", display: "flex", alignItems: "center", gap: 6,
+                }}>
+                  <span style={{ width: 4, height: 4, borderRadius: "50%", background: tc.accent, flexShrink: 0 }} />
+                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p?.name?.split(" ").slice(-1)[0] || pid}</span>
+                  <span style={{ fontSize: 9, color: tc.accent, fontWeight: 800 }}>T{slotIdx + 1}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Hole nav */}
+        <div style={{ background: BC.card, borderRadius: 12, padding: "10px 14px", marginBottom: 10, border: `1px solid ${BC.bdr}` }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+            <button onClick={() => setActiveHole(h => Math.max(0, h - 1))} disabled={activeHole === 0}
+              style={{ background: BC.hover, border: "none", color: BC.t1, borderRadius: 8, padding: "6px 14px", fontSize: 16, cursor: "pointer", opacity: activeHole === 0 ? 0.3 : 1 }}>‹</button>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 22, fontWeight: 700, color: BC.gold }}>Hole {activeHole + 1}</div>
+              <div style={{ fontSize: 11, color: BC.t3 }}>Par {holePar} · {activeHole < 9 ? "Front" : "Back"} Nine</div>
+              {playerMatchResult && (
+                <div style={{ fontSize: 10, color: BC.amber, marginTop: 2 }}>Match: {playerMatchResult.matchResultText} (Thru {playerMatchResult.thru})</div>
+              )}
+            </div>
+            <button onClick={() => setActiveHole(h => Math.min(17, h + 1))} disabled={activeHole === 17}
+              style={{ background: BC.hover, border: "none", color: BC.t1, borderRadius: 8, padding: "6px 14px", fontSize: 16, cursor: "pointer", opacity: activeHole === 17 ? 0.3 : 1 }}>›</button>
+          </div>
+          {/* Hole dots */}
+          <div style={{ display: "flex", gap: 3, justifyContent: "center" }}>
+            {Array.from({ length: 18 }, (_, i) => {
+              const scored = scoresMap[`${activePid}_${i}`] != null;
+              return (
+                <button key={i} onClick={() => setActiveHole(i)} style={{
+                  width: 14, height: 14, borderRadius: "50%", border: "none", cursor: "pointer",
+                  background: i === activeHole ? BC.amber : scored ? BC.green : BC.bdr,
+                }} />
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Score buttons */}
+        <div style={{ background: BC.card, borderRadius: 12, padding: 14, border: `1px solid ${BC.bdr}` }}>
+          <div style={{ fontSize: 11, color: BC.t2, fontWeight: 600, marginBottom: 8, textAlign: "center" }}>
+            {activePlayer?.name || activePid}
+            {cur != null && <span style={{ marginLeft: 8, fontSize: 10, color: cur - holePar < 0 ? "#22c55e" : cur - holePar > 0 ? BC.danger : BC.t3, fontWeight: 700 }}>{fmtScore(cur - holePar)}</span>}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 6 }}>
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(s => (
+              <button key={s} onClick={() => onSavePracticeScore(activePid, activeHole, s)} style={{
+                padding: "12px 0", borderRadius: 8,
+                background: s === cur ? (s < holePar ? "#1a3a1a" : s === holePar ? BC.hover : "#3a1a1a") : BC.inp,
+                border: `1px solid ${s === cur ? (s < holePar ? "#22c55e" : s === holePar ? BC.amber : BC.danger) : BC.bdr}`,
+                color: s === cur ? BC.t1 : BC.t2, fontSize: 14, fontWeight: s === cur ? 700 : 500, cursor: "pointer",
+              }}>{s}</button>
+            ))}
+          </div>
+          {cur != null && (
+            <button onClick={() => onSavePracticeScore(activePid, activeHole, null)} style={{
+              width: "100%", marginTop: 8, padding: "6px 0", borderRadius: 6,
+              background: "transparent", border: `1px solid ${BC.bdr}`, color: BC.t3, fontSize: 10, fontWeight: 600, cursor: "pointer",
+            }}>Clear</button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ── Leaderboard Sub-view ──
+  const LeaderboardTab = () => {
+    if (!event || !course) {
+      return <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>No event yet.</div>;
+    }
+    const [expandedMatch, setExpandedMatch] = useState(null);
+    const holePars = course.hole_pars || Array(18).fill(4);
+
+    return (
+      <div>
+        <div style={{ background: BC.card, borderRadius: 10, padding: "8px 12px", marginBottom: 10, border: `1px solid ${BC.bdr}` }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold }}>{course.name}</div>
+          <div style={{ fontSize: 9, color: BC.t3, marginTop: 2 }}>Team Total Match Play · {event.hcp_mode === "full" ? "Full Strokes" : "Low Man"}</div>
+        </div>
+
+        {matchResults.map((mr, i) => {
+          const m = mr.match;
+          const r = mr.result;
+          const t1Idx = event.teams.findIndex(t => t.id === m.team1.id);
+          const t2Idx = event.teams.findIndex(t => t.id === m.team2.id);
+          const tc1 = PRACTICE_TEAM_COLORS[t1Idx];
+          const tc2 = PRACTICE_TEAM_COLORS[t2Idx];
+          const t1Players = [m.team1.player1, m.team1.player2].map(pid => tPlayers.find(p => p.player_id === pid));
+          const t2Players = [m.team2.player1, m.team2.player2].map(pid => tPlayers.find(p => p.player_id === pid));
+          const isExpanded = expandedMatch === m.id;
+          const isT1Winning = r.winnerTeamId === m.team1.id;
+          const isT2Winning = r.winnerTeamId === m.team2.id;
+
+          return (
+            <div key={m.id} style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 10, overflow: "hidden" }}>
+              <button onClick={() => setExpandedMatch(isExpanded ? null : m.id)} style={{
+                width: "100%", padding: "12px 14px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left",
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ fontSize: 9, color: BC.t3, fontWeight: 800, letterSpacing: 1 }}>MATCH {i + 1}</div>
+                  <div style={{ fontSize: 9, color: BC.t3 }}>Thru {r.thru}</div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10 }}>
+                  {/* Team 1 */}
+                  <div style={{ textAlign: "left", opacity: r.thru > 0 && !isT1Winning && !r.dormie ? 0.6 : 1 }}>
+                    <div style={{ fontSize: 9, color: tc1.accent, fontWeight: 800, letterSpacing: 1, marginBottom: 2 }}>TEAM {t1Idx + 1}</div>
+                    {t1Players.map(p => p && <div key={p.player_id} style={{ fontSize: 11, fontWeight: 600, color: BC.t1 }}>{p.name?.split(" ").slice(-1)[0]}</div>)}
+                    <div style={{ fontSize: 18, fontWeight: 800, color: tc1.accent, marginTop: 4 }}>{r.holesWon1}</div>
+                  </div>
+                  {/* Status */}
+                  <div style={{ textAlign: "center", padding: "4px 10px", background: BC.inp, borderRadius: 6, border: `1px solid ${BC.bdr}` }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: BC.amber, letterSpacing: 0.5 }}>{r.matchResultText}</div>
+                  </div>
+                  {/* Team 2 */}
+                  <div style={{ textAlign: "right", opacity: r.thru > 0 && !isT2Winning && !r.dormie ? 0.6 : 1 }}>
+                    <div style={{ fontSize: 9, color: tc2.accent, fontWeight: 800, letterSpacing: 1, marginBottom: 2 }}>TEAM {t2Idx + 1}</div>
+                    {t2Players.map(p => p && <div key={p.player_id} style={{ fontSize: 11, fontWeight: 600, color: BC.t1 }}>{p.name?.split(" ").slice(-1)[0]}</div>)}
+                    <div style={{ fontSize: 18, fontWeight: 800, color: tc2.accent, marginTop: 4 }}>{r.holesWon2}</div>
+                  </div>
+                </div>
+                {/* Hole tracker */}
+                <div style={{ display: "flex", gap: 1, marginTop: 8 }}>
+                  {r.holes.map((h, hi) => {
+                    const bg = h.result === 1 ? tc1.accent : h.result === -1 ? tc2.accent : h.result === 0 ? BC.t3 : BC.bdr;
+                    return <div key={hi} style={{ flex: 1, height: 4, background: bg, borderRadius: 1 }} />;
+                  })}
+                </div>
+              </button>
+
+              {isExpanded && (
+                <div style={{ padding: "10px 14px", borderTop: `1px solid ${BC.bdr}`, background: BC.inp }}>
+                  <div style={{ fontSize: 9, color: BC.t3, fontWeight: 800, letterSpacing: 1, marginBottom: 8 }}>HOLE-BY-HOLE</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(9, 1fr)", gap: 2, fontSize: 9, marginBottom: 6 }}>
+                    {Array.from({ length: 9 }, (_, h) => (
+                      <div key={h} style={{ textAlign: "center", color: BC.t3, fontWeight: 700 }}>{h + 1}</div>
+                    ))}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(9, 1fr)", gap: 2, marginBottom: 4 }}>
+                    {r.holes.slice(0, 9).map((h, hi) => {
+                      const bg = h.result === 1 ? tc1.accent + "44" : h.result === -1 ? tc2.accent + "44" : h.result === 0 ? BC.t3 + "44" : BC.bdr;
+                      const txt = h.result === 1 ? tc1.accent : h.result === -1 ? tc2.accent : BC.t2;
+                      return (
+                        <div key={hi} style={{ background: bg, borderRadius: 3, padding: "3px 0", textAlign: "center", fontSize: 9, fontWeight: 700, color: txt }}>
+                          {h.n1 != null && h.n2 != null ? `${h.n1}-${h.n2}` : "—"}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(9, 1fr)", gap: 2, fontSize: 9, marginBottom: 6, marginTop: 8 }}>
+                    {Array.from({ length: 9 }, (_, h) => (
+                      <div key={h} style={{ textAlign: "center", color: BC.t3, fontWeight: 700 }}>{h + 10}</div>
+                    ))}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(9, 1fr)", gap: 2 }}>
+                    {r.holes.slice(9, 18).map((h, hi) => {
+                      const bg = h.result === 1 ? tc1.accent + "44" : h.result === -1 ? tc2.accent + "44" : h.result === 0 ? BC.t3 + "44" : BC.bdr;
+                      const txt = h.result === 1 ? tc1.accent : h.result === -1 ? tc2.accent : BC.t2;
+                      return (
+                        <div key={hi} style={{ background: bg, borderRadius: 3, padding: "3px 0", textAlign: "center", fontSize: 9, fontWeight: 700, color: txt }}>
+                          {h.n1 != null && h.n2 != null ? `${h.n1}-${h.n2}` : "—"}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // ── Betting Sub-view ──
+  const BettingTab = () => {
+    if (!event || !course) {
+      return <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>No event yet.</div>;
+    }
+    const [tab, setTab] = useState("skins"); // skins | ctp
+    const holePars = course.hole_pars || Array(18).fill(4);
+    const par3Holes = holePars.map((p, i) => p === 3 ? i : -1).filter(i => i !== -1);
+
+    // Skins counts
+    const skinsByPlayer = useMemo(() => {
+      const counts = {};
+      eventPlayers.forEach(p => { counts[p.player_id] = { gross: 0, net: 0 }; });
+      for (let h = 0; h < 18; h++) {
+        if (skins.gross[h]) counts[skins.gross[h]] = counts[skins.gross[h]] || { gross: 0, net: 0 };
+        if (skins.gross[h]) counts[skins.gross[h]].gross++;
+        if (skins.net[h]) counts[skins.net[h]] = counts[skins.net[h]] || { gross: 0, net: 0 };
+        if (skins.net[h]) counts[skins.net[h]].net++;
+      }
+      return counts;
+    }, [skins]);
+
+    const renderPlayerTeamColor = (pid) => {
+      const slotIdx = event.teams.findIndex(t => t.player1 === pid || t.player2 === pid);
+      return slotIdx !== -1 ? PRACTICE_TEAM_COLORS[slotIdx] : null;
+    };
+
+    return (
+      <div>
+        {/* Sub-tabs */}
+        <div style={{ display: "flex", background: BC.card, borderRadius: 20, padding: 3, marginBottom: 12, border: `1px solid ${BC.bdr}` }}>
+          {[["skins", "Skins"], ["ctp", "CTP"]].map(([k, label]) => (
+            <button key={k} onClick={() => setTab(k)} style={{
+              flex: 1, padding: "8px 0", borderRadius: 16, fontSize: 12, fontWeight: 700, cursor: "pointer",
+              background: tab === k ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
+              color: tab === k ? "#0a0804" : BC.t3, border: "none",
+            }}>{label}</button>
+          ))}
+        </div>
+
+        {tab === "skins" && (
+          <div>
+            {/* Per-hole table */}
+            <div style={{ background: BC.card, borderRadius: 10, padding: 12, marginBottom: 12, border: `1px solid ${BC.bdr}` }}>
+              <div style={{ display: "grid", gridTemplateColumns: "30px 1fr 1fr", gap: 4, fontSize: 9, color: BC.t3, fontWeight: 800, letterSpacing: 1, marginBottom: 6 }}>
+                <div>HOLE</div>
+                <div>GROSS</div>
+                <div>NET</div>
+              </div>
+              {Array.from({ length: 18 }, (_, h) => {
+                const grossP = skins.gross[h];
+                const netP = skins.net[h];
+                const grossPlayer = grossP ? tPlayers.find(p => p.player_id === grossP) : null;
+                const netPlayer = netP ? tPlayers.find(p => p.player_id === netP) : null;
+                const grossTc = grossP ? renderPlayerTeamColor(grossP) : null;
+                const netTc = netP ? renderPlayerTeamColor(netP) : null;
+                return (
+                  <div key={h} style={{ display: "grid", gridTemplateColumns: "30px 1fr 1fr", gap: 4, padding: "4px 0", borderTop: h ? `1px solid ${BC.bdr}33` : "none", fontSize: 11 }}>
+                    <div style={{ color: BC.t3, fontWeight: 700 }}>{h + 1}</div>
+                    <div style={{ color: grossTc?.accent || BC.t3, fontWeight: grossPlayer ? 700 : 400 }}>
+                      {grossPlayer ? grossPlayer.name?.split(" ").slice(-1)[0] : "—"}
+                    </div>
+                    <div style={{ color: netTc?.accent || BC.t3, fontWeight: netPlayer ? 700 : 400 }}>
+                      {netPlayer ? netPlayer.name?.split(" ").slice(-1)[0] : "—"}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Totals */}
+            <div style={{ background: BC.card, borderRadius: 10, padding: 12, border: `1px solid ${BC.bdr}` }}>
+              <div style={{ fontSize: 9, color: BC.t3, fontWeight: 800, letterSpacing: 1, marginBottom: 8 }}>SKINS TOTAL</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 6, fontSize: 11, marginBottom: 4, color: BC.t3, fontWeight: 700 }}>
+                <div>PLAYER</div>
+                <div style={{ width: 40, textAlign: "right" }}>GROSS</div>
+                <div style={{ width: 40, textAlign: "right" }}>NET</div>
+              </div>
+              {eventPlayers.map(p => {
+                const c = skinsByPlayer[p.player_id] || { gross: 0, net: 0 };
+                if (c.gross === 0 && c.net === 0) return null;
+                const tc = renderPlayerTeamColor(p.player_id);
+                return (
+                  <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 6, padding: "4px 0", borderTop: `1px solid ${BC.bdr}33`, fontSize: 12 }}>
+                    <div style={{ color: BC.t1, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ width: 4, height: 4, borderRadius: "50%", background: tc?.accent || BC.t3 }} />
+                      {p.name}
+                    </div>
+                    <div style={{ width: 40, textAlign: "right", color: c.gross ? BC.gold : BC.t3, fontWeight: 700 }}>{c.gross}</div>
+                    <div style={{ width: 40, textAlign: "right", color: c.net ? BC.gold : BC.t3, fontWeight: 700 }}>{c.net}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {tab === "ctp" && (
+          <div style={{ background: BC.card, borderRadius: 10, padding: 12, border: `1px solid ${BC.bdr}` }}>
+            <div style={{ fontSize: 9, color: BC.t3, fontWeight: 800, letterSpacing: 1, marginBottom: 10 }}>CLOSEST TO PIN — PAR 3 HOLES</div>
+            {par3Holes.length === 0 && (
+              <div style={{ fontSize: 11, color: BC.t3, padding: 12, textAlign: "center" }}>
+                No par 3s configured for this course. Set hole pars in Admin → Courses.
+              </div>
+            )}
+            {par3Holes.map(h => {
+              const winner = ctps[h];
+              return (
+                <div key={h} style={{ marginBottom: 14, paddingBottom: 10, borderBottom: `1px solid ${BC.bdr}33` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: BC.gold }}>Hole {h + 1}</div>
+                    {winner && (
+                      <button onClick={() => onSetCtp(h, null)} style={{
+                        background: "transparent", border: `1px solid ${BC.danger}55`, color: BC.danger,
+                        borderRadius: 4, padding: "2px 8px", fontSize: 9, fontWeight: 600, cursor: "pointer",
+                      }}>Clear</button>
+                    )}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
+                    {event.player_ids.map(pid => {
+                      const p = tPlayers.find(t => t.player_id === pid);
+                      const tc = renderPlayerTeamColor(pid);
+                      const isW = winner === pid;
+                      return (
+                        <button key={pid} onClick={() => onSetCtp(h, pid)} style={{
+                          padding: "6px 8px", borderRadius: 6,
+                          background: isW ? tc.color + "55" : BC.inp,
+                          border: `1px solid ${isW ? tc.accent : BC.bdr}`,
+                          color: isW ? BC.t1 : BC.t2, fontSize: 11, fontWeight: 600, cursor: "pointer", textAlign: "left",
+                          display: "flex", alignItems: "center", gap: 4,
+                        }}>
+                          <span style={{ width: 4, height: 4, borderRadius: "50%", background: tc.accent, flexShrink: 0 }} />
+                          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p?.name?.split(" ").slice(-1)[0] || pid}</span>
+                          {isW && <span style={{ fontSize: 10 }}>🎯</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ── Top of view ──
+  const subTabs = [
+    { k: "setup", label: "Setup", icon: "⚙️" },
+    { k: "scoring", label: "Score", icon: "✏️" },
+    { k: "leaderboard", label: "Board", icon: "🏆" },
+    { k: "betting", label: "Bets", icon: "💰" },
+  ];
+
+  // If no event yet, force setup
+  useEffect(() => {
+    if (!event && subView !== "setup") setSubView("setup");
+  }, [event]);
+
+  return (
+    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
+      {/* Header */}
+      <div style={{ marginBottom: 12, padding: "10px 14px", background: BC.card, borderRadius: 10, border: `1px solid ${BC.amber}33` }}>
+        <div style={{ fontSize: 14, fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>PRACTICE EVENT</div>
+        <div style={{ fontSize: 10, color: BC.t3, marginTop: 2 }}>
+          {event ? `${course?.name || "Course TBD"} · ${event.player_ids?.length || 0} players · ${event.matches?.length || 0} matches` : "No event configured"}
+        </div>
+      </div>
+
+      {/* Sub-tabs */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 4, marginBottom: 12 }}>
+        {subTabs.map(t => {
+          const isAct = subView === t.k;
+          return (
+            <button key={t.k} onClick={() => setSubView(t.k)} style={{
+              padding: "8px 4px", borderRadius: 8,
+              background: isAct ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
+              border: `1px solid ${isAct ? "transparent" : BC.bdr}`,
+              color: isAct ? "#0a0804" : BC.t2, fontSize: 11, fontWeight: 700, cursor: "pointer",
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+            }}>
+              <span style={{ fontSize: 14 }}>{t.icon}</span>
+              <span>{t.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {subView === "setup" && <SetupTab />}
+      {subView === "scoring" && <ScoringTab />}
+      {subView === "leaderboard" && <LeaderboardTab />}
+      {subView === "betting" && <BettingTab />}
+    </div>
+  );
+}
+
 function SlideMenu({ open, onClose, onNavigate, onLogout, user, view }) {
   const dragRef = useRef(null);
   const startYRef = useRef(null);
@@ -2324,6 +3324,7 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view }) {
 
   if (!open) return null;
   const items = [
+    { key: "practice",  label: "Practice Round",   icon: "🥃" },
     { key: "analytics", label: "Player Analytics", icon: "📊" },
     { key: "history",   label: "Historical Data",  icon: "📅" },
     { key: "photos",    label: "Photo Library",     icon: "📸", external: true },
@@ -2650,6 +3651,14 @@ export default function App() {
           <AnalyticsView
             tPlayers={tPlayers} matches={enrichedMatches} holeData={holeData}
             tRounds={enrichedRounds} courses={courses} historicalData={historicalData} user={user}
+          />
+        )}
+        {view === "practice" && (
+          <PracticeView
+            user={user}
+            tPlayers={tPlayers}
+            courses={courses}
+            notify={notify}
           />
         )}
         {view === "admin" && (
