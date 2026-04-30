@@ -2671,7 +2671,7 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
 // across parent re-renders, state survives, and timers run to completion.
 function PracticeScoringTab({
   event, course, user, scoresMap, matchResults,
-  onSavePracticeScore, getStrokeMapsForMatch, allMatchStrokeMaps,
+  onSavePracticeScore, getStrokeMapsForMatch,
   renderMatchScorecardBody, tPlayers,
 }) {
   // Hooks first — must fire unconditionally on every render. Even when
@@ -4263,7 +4263,6 @@ function PracticeView({ user, tPlayers, courses, notify }) {
           matchResults={matchResults}
           onSavePracticeScore={onSavePracticeScore}
           getStrokeMapsForMatch={getStrokeMapsForMatch}
-          allMatchStrokeMaps={allMatchStrokeMaps}
           renderMatchScorecardBody={renderMatchScorecardBody}
           tPlayers={tPlayers}
         />
