@@ -2657,6 +2657,589 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
 // ─────────────────────────────────────────────────────────────────────────────
 // PracticeView — Top-level component for test/practice events
 // ─────────────────────────────────────────────────────────────────────────────
+// ── Scoring Sub-view ── (extracted to top level so its function reference
+// stays stable across PracticeView re-renders. When defined inline, every
+// score that updated `scoresMap` caused PracticeView to re-render, which
+// produced a fresh `ScoringTab` function reference — React then treated
+// it as a different component, unmounted the old one and mounted a new
+// one. Consequence: every score wiped activeHole/toast/editing state and
+// killed any pending auto-advance setTimeout, so the toast never appeared
+// and the screen seemed to "instantly" advance (the freshly-mounted
+// instance ran its initial-jump effect, which jumped to the next unscored
+// hole during the same render cycle as the auto-advance was being set up).
+// Keeping the component top-level means React preserves the same instance
+// across parent re-renders, state survives, and timers run to completion.
+function PracticeScoringTab({
+  event, course, user, scoresMap, matchResults,
+  onSavePracticeScore, getStrokeMapsForMatch, allMatchStrokeMaps,
+  renderMatchScorecardBody, tPlayers,
+}) {
+  // Hooks first — must fire unconditionally on every render. Even when
+  // event/course aren't loaded yet, we still call them so React's hook
+  // counter stays consistent across renders.
+  const [activeHole, setActiveHole] = useState(0);
+  const [showScorecard, setShowScorecard] = useState(false);
+  // `editing` = true when the user has navigated BACK to a previously-
+  // completed hole to fix a score. While editing, auto-advance is
+  // suppressed so a corrective tap doesn't jump the screen away. Reset
+  // to false whenever they reach the live edge (first unscored hole).
+  const [editing, setEditing] = useState(false);
+  // Initial-jump bookkeeping. On first arrival at the scoring view (after
+  // Firestore scores load), we jump activeHole forward to the first
+  // unscored hole — so a user joining mid-round doesn't have to flip
+  // through holes 1..N to reach the action. Only fires once per mount.
+  const initialJump = useRef(false);
+  // Auto-advance toast — surfaced as a fixed-position banner during the
+  // 1.8s pause between "all scores in for this hole" and the screen
+  // jump. Without this, the wait feels like dead time and the eventual
+  // jump feels abrupt. Mirrors MNQ's `setToast(...)` UX.
+  const [toast, setToast] = useState(null);
+
+  const holePars = course?.hole_pars || Array(18).fill(4);
+  const holeHcps = course?.hole_handicaps || Array(18).fill(9);
+
+  // Lock scoring to the user's own match. Switching to a different match is
+  // intentionally not allowed — only players in a match should be entering its
+  // scores. If the user isn't on any team in this event (e.g. a director who
+  // didn't include themselves), we render an empty state below.
+  const activeMatch = event?.matches?.find(m =>
+    [m.team1.player1, m.team1.player2, m.team2.player1, m.team2.player2].includes(user?.player_id)
+  );
+  const matchPids = activeMatch ? [
+    activeMatch.team1.player1, activeMatch.team1.player2,
+    activeMatch.team2.player1, activeMatch.team2.player2,
+  ].filter(Boolean) : [];
+
+  const par = holePars[activeHole];
+  const hcp = holeHcps[activeHole];
+  const matchResult = activeMatch ? matchResults.find(mr => mr.match.id === activeMatch.id)?.result : null;
+
+  // Stroke maps for the 4 players in this match. Mirrors the calculation used
+  // in computePracticeMatch so the dots shown beside each player exactly match
+  // the strokes used to compute the leaderboard. Memoized — useMemo always
+  // fires (even when there's no match) so hook ordering stays stable.
+  const strokeMaps = useMemo(() => {
+    return getStrokeMapsForMatch(activeMatch);
+  }, [activeMatch, event, course]);
+
+  // ── Auto-advance derivations ────────────────────────────────────────────
+  // Whether every player in the match has a score on the active hole.
+  // When this flips true (after the 4th player's score is entered), we
+  // start a timer to jump to the next unscored hole.
+  const holeComplete = matchPids.length > 0 && matchPids.every(pid => (scoresMap[`${pid}_${activeHole}`] || 0) > 0);
+  // Whether every player has scores on every hole — if so, the round is
+  // done and we shouldn't auto-advance off the last hole.
+  const allComplete = matchPids.length > 0 && matchPids.every(pid => {
+    for (let h = 0; h < 18; h++) {
+      if (!(scoresMap[`${pid}_${h}`] > 0)) return false;
+    }
+    return true;
+  });
+  // Signature of the current hole's scores — flips whenever ANY score on
+  // this hole changes, even if the hole stays "complete" through the edit
+  // (e.g. correcting a 5 to a 4). Used as a useEffect dep so editing
+  // within the 1.8s auto-advance window restarts the timer rather than
+  // letting it lock in at the moment of first completion.
+  const curHoleScoreSig = matchPids.map(pid => scoresMap[`${pid}_${activeHole}`] || 0).join(",");
+
+  // Auto-advance effect — fires the timer when the active hole becomes
+  // fully scored. Surfaces a toast during the 1.8s wait so the screen
+  // jump feels intentional, not abrupt. Cleanup clears the pending
+  // timer AND the toast if the hole changes, the user starts editing,
+  // or scores are edited again before the timer fires. Always called
+  // (even when match is missing) to keep hook ordering consistent.
+  useEffect(() => {
+    if (!activeMatch) return;
+    if (!holeComplete || activeHole >= 17 || editing || allComplete) return;
+    // Fire the toast immediately so users see "saving — advancing..."
+    // throughout the wait, not just after the jump.
+    setToast(`✓ Hole ${activeHole + 1} saved — advancing...`);
+    const timer = setTimeout(() => {
+      setToast(null);
+      // Skip past any holes that are already fully scored (e.g. user
+      // back-filled a missing hole and the live edge has now leapfrogged
+      // forward). Land on the first hole that still needs entry.
+      let next = activeHole + 1;
+      while (next < 17 && matchPids.every(pid => (scoresMap[`${pid}_${next}`] || 0) > 0)) next++;
+      setActiveHole(next);
+      setEditing(false);
+    }, 1800);
+    return () => {
+      clearTimeout(timer);
+      // If the effect re-runs because the user edited a score within the
+      // window, the next pass will set the toast again. If the effect
+      // re-runs because the user navigated away from the completed hole,
+      // we want the toast cleared — which this catch-all handles.
+      setToast(null);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [holeComplete, activeHole, editing, allComplete, curHoleScoreSig, activeMatch]);
+
+  // Safety net — always clear the toast after 3s even if some edge case
+  // misses cleanup. Mirrors MNQ's safety useEffect.
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  // Initial-jump effect — runs once on mount per match. Waits a brief
+  // moment for Firestore's cached snapshot to land, then reads the latest
+  // scoresMap via a ref and jumps activeHole forward to the live edge if
+  // there's pre-existing data. The previous version listened on
+  // [activeMatch, scoresMap] and re-fired each time scoresMap changed —
+  // which meant the user's FIRST score (a scoresMap change with
+  // hasAnyScores newly true) triggered a same-frame jump that raced with
+  // the auto-advance effect and pre-empted the 1.8s toast wait. Listening
+  // only on activeMatch.id and reading scoresMap via a ref makes this
+  // strictly a "joining mid-round" UX feature; live scoring is left to
+  // the auto-advance effect.
+  const scoresMapRef = useRef(scoresMap);
+  scoresMapRef.current = scoresMap;
+  useEffect(() => {
+    if (initialJump.current) return;
+    if (!activeMatch) return;
+    const t = setTimeout(() => {
+      if (initialJump.current) return;
+      initialJump.current = true; // lock regardless of outcome
+      const sMap = scoresMapRef.current;
+      const pids = [activeMatch.team1.player1, activeMatch.team1.player2, activeMatch.team2.player1, activeMatch.team2.player2].filter(Boolean);
+      if (pids.length === 0) return;
+      let edge = 18;
+      for (let h = 0; h < 18; h++) {
+        if (!pids.every(pid => (sMap[`${pid}_${h}`] || 0) > 0)) { edge = h; break; }
+      }
+      const hasAnyScores = pids.some(pid => {
+        for (let h = 0; h < 18; h++) if ((sMap[`${pid}_${h}`] || 0) > 0) return true;
+        return false;
+      });
+      if (hasAnyScores && edge > 0 && edge < 18) setActiveHole(edge);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [activeMatch?.id]);
+
+  // ── No more hooks below this line — early returns are safe ─────────────
+  if (!event || !course) {
+    return <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>Set up an event first.</div>;
+  }
+  if (!activeMatch) {
+    return (
+      <div style={{ textAlign: "center", padding: 40, color: BC.t3, fontSize: 13 }}>
+        You're not in a match for this Mash round.
+      </div>
+    );
+  }
+
+  const getStrokes = (pid, h) => strokeMaps[pid]?.[h] || 0;
+
+  // Per-player running net "thru X" — sum of net scores up through and
+  // including the active hole. Used in the "Net: +1 thru 4" right-hand
+  // display on each card. Doesn't depend on opponent so it lives outside
+  // computePracticeMatch (which is a team-level calculation).
+  const getRunning = (pid) => {
+    let net = 0, gross = 0, thru = 0, parThru = 0;
+    for (let h = 0; h <= activeHole; h++) {
+      const raw = scoresMap[`${pid}_${h}`];
+      if (!raw) continue;
+      gross += raw;
+      net += raw - getStrokes(pid, h);
+      parThru += holePars[h];
+      thru++;
+    }
+    return { net, gross, thru, netVsPar: net - parThru };
+  };
+
+  // Score buttons: par-3 holes start at 1, par-4/5 start at 2. The displayed
+  // range shifts up or down if the saved score falls outside [min, max] so
+  // the active button is always visible without forcing the +/- adjusters.
+  const baseBtns = par === 3 ? [1, 2, 3, 4, 5, 6, 7] : [2, 3, 4, 5, 6, 7, 8];
+
+  // ── MNQ-style match status bar ─────────────────────────────────────────
+  // Cumulative match status per hole (1..18) from the USER'S team's
+  // perspective. Positive = your team is up by N going into that hole;
+  // negative = down by N; 0 = AS; null = at least one earlier hole still
+  // missing scores. The cumulative loop breaks on the first incomplete
+  // hole, so a gap freezes the strip at that point — fix the missing
+  // hole and the rest fills in.
+  const userOnT1 = activeMatch
+    ? (activeMatch.team1.player1 === user?.player_id || activeMatch.team1.player2 === user?.player_id)
+    : true;
+  const t1Pids = activeMatch ? [activeMatch.team1.player1, activeMatch.team1.player2].filter(Boolean) : [];
+  const t2Pids = activeMatch ? [activeMatch.team2.player1, activeMatch.team2.player2].filter(Boolean) : [];
+  const holeStatuses = Array.from({ length: 18 }, (_, i) => {
+    let cum = 0, hasData = false;
+    for (let h = 0; h <= i; h++) {
+      let n1 = 0, n2 = 0, ok1 = true, ok2 = true;
+      t1Pids.forEach(pid => { const s = scoresMap[`${pid}_${h}`]; if (!s) ok1 = false; else n1 += s - getStrokes(pid, h); });
+      t2Pids.forEach(pid => { const s = scoresMap[`${pid}_${h}`]; if (!s) ok2 = false; else n2 += s - getStrokes(pid, h); });
+      if (ok1 && ok2) {
+        if (n1 < n2) cum += userOnT1 ? 1 : -1;
+        else if (n2 < n1) cum += userOnT1 ? -1 : 1;
+        hasData = true;
+      } else { hasData = false; break; }
+    }
+    return hasData ? cum : null;
+  });
+  // Clinch hole — first hole where the lead exceeds the remaining holes.
+  // 18-hole rule: must be < hole 18 (you can't clinch on the final hole;
+  // a 1-up finish through 18 is "1UP", not "1&0").
+  let clinchHole = null, clinchText = null;
+  for (let h = 0; h < 18; h++) {
+    if (holeStatuses[h] === null) break;
+    const lead = Math.abs(holeStatuses[h]);
+    const remaining = 17 - h;
+    if (remaining > 0 && lead > remaining) {
+      clinchHole = h;
+      clinchText = `${lead}&${remaining}`;
+      break;
+    }
+  }
+
+  // Render a single status cell. Cells at positions 9 and 18 don't draw a
+  // right border (end of row); all others do, for the divider rhythm.
+  const renderStatusCell = (i) => {
+    const st = holeStatuses[i];
+    const isEndOfRow = (i + 1) % 9 === 0;
+    const colBorder = !isEndOfRow ? { borderRight: `1px solid ${BC.bdr}40` } : {};
+    const cellH = 22;
+    // Clinch hole — show "X&Y" prominently in green (you won) or red (you lost)
+    if (clinchHole !== null && i === clinchHole) {
+      const color = st > 0 ? "#22c55e" : st < 0 ? BC.danger : BC.t3;
+      return <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 11, color, fontWeight: 800, lineHeight: `${cellH}px`, ...colBorder }}>{clinchText}</div>;
+    }
+    // Post-clinch holes don't render a status (match is mathematically over)
+    if (clinchHole !== null && i > clinchHole) {
+      return <div key={i} style={{ flex: 1, height: cellH, ...colBorder }} />;
+    }
+    // Unscored hole — empty cell
+    if (st === null) {
+      return <div key={i} style={{ flex: 1, height: cellH, ...colBorder }} />;
+    }
+    // All-square — small "TIED" label
+    if (st === 0) {
+      return <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 8, fontWeight: 700, color: BC.t3, lineHeight: `${cellH}px`, letterSpacing: 0.5, ...colBorder }}>TIED</div>;
+    }
+    // Up or down — show the lead with arrow
+    const color = st > 0 ? "#22c55e" : BC.danger;
+    return (
+      <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 11, fontWeight: 800, color, lineHeight: `${cellH}px`, ...colBorder }}>
+        {st > 0 ? "▲" : "▼"}{Math.abs(st)}
+      </div>
+    );
+  };
+
+  // "Live edge" — first hole where not all players have scored yet. Anything
+  // earlier than this is a past hole the user might be editing. Used to
+  // suppress auto-advance when the user has navigated back to fix a score.
+  let liveEdge = 17;
+  for (let h = 0; h < 18; h++) {
+    if (!matchPids.every(pid => (scoresMap[`${pid}_${h}`] || 0) > 0)) { liveEdge = h; break; }
+  }
+  // Centralizes the "set hole + flip editing flag" pattern. Direct calls to
+  // setActiveHole alone would leak stale editing state — e.g. user fixes
+  // hole 3, then taps hole 5 (the live edge) but editing stays true and
+  // auto-advance never fires when they finish hole 5.
+  const goToHole = (h) => {
+    setActiveHole(h);
+    setEditing(h < liveEdge);
+  };
+
+  return (
+    <div>
+      {/* Front 9 — hole strip */}
+      <div style={{ display: "flex", gap: 3, marginBottom: 2 }}>
+        {Array.from({ length: 9 }, (_, i) => {
+          const cur = i === activeHole;
+          const allScored = matchPids.every(pid => scoresMap[`${pid}_${i}`]);
+          const partial = !allScored && matchPids.some(pid => scoresMap[`${pid}_${i}`]);
+          return (
+            <button key={i} onClick={() => goToHole(i)} style={{
+              flex: 1, height: 28, borderRadius: cur ? 8 : 6,
+              border: allScored && !cur ? `1.5px solid ${BC.amber}50` : "none",
+              background: cur ? BC.amber : allScored ? BC.amber + "15" : partial ? BC.amber + "08" : BC.card,
+              color: cur ? "#0a0804" : allScored ? BC.amber : BC.t3,
+              fontSize: 13, fontWeight: 800, cursor: "pointer",
+              outline: cur ? `2px solid ${BC.amber}` : "none", outlineOffset: 1,
+            }}>{i + 1}</button>
+          );
+        })}
+      </div>
+      {/* Front 9 — match status row */}
+      <div style={{ display: "flex", marginBottom: 6, background: BC.card, border: `1px solid ${BC.bdr}60`, borderRadius: 8, padding: "3px 0", alignItems: "center" }}>
+        {Array.from({ length: 9 }, (_, i) => renderStatusCell(i))}
+      </div>
+      {/* Back 9 — hole strip */}
+      <div style={{ display: "flex", gap: 3, marginBottom: 2 }}>
+        {Array.from({ length: 9 }, (_, i) => {
+          const h = i + 9;
+          const cur = h === activeHole;
+          const allScored = matchPids.every(pid => scoresMap[`${pid}_${h}`]);
+          const partial = !allScored && matchPids.some(pid => scoresMap[`${pid}_${h}`]);
+          return (
+            <button key={h} onClick={() => goToHole(h)} style={{
+              flex: 1, height: 28, borderRadius: cur ? 8 : 6,
+              border: allScored && !cur ? `1.5px solid ${BC.amber}50` : "none",
+              background: cur ? BC.amber : allScored ? BC.amber + "15" : partial ? BC.amber + "08" : BC.card,
+              color: cur ? "#0a0804" : allScored ? BC.amber : BC.t3,
+              fontSize: 13, fontWeight: 800, cursor: "pointer",
+              outline: cur ? `2px solid ${BC.amber}` : "none", outlineOffset: 1,
+            }}>{h + 1}</button>
+          );
+        })}
+      </div>
+      {/* Back 9 — match status row */}
+      <div style={{ display: "flex", marginBottom: 6, background: BC.card, border: `1px solid ${BC.bdr}60`, borderRadius: 8, padding: "3px 0", alignItems: "center" }}>
+        {Array.from({ length: 9 }, (_, i) => renderStatusCell(i + 9))}
+      </div>
+
+      {/* Hole nav banner — amber filled bar showing Par / Hole / HCP, with prev/next.
+          Mirrors the MNQ scoring banner exactly. */}
+      <div style={{
+        background: BC.amber, borderRadius: 10, padding: "4px 8px", marginBottom: 6,
+        display: "flex", alignItems: "center",
+      }}>
+        <button onClick={() => goToHole(Math.max(0, activeHole - 1))} disabled={activeHole === 0} style={{
+          width: 28, height: 36, borderRadius: 8, background: "none", border: "none",
+          cursor: activeHole === 0 ? "default" : "pointer",
+          color: activeHole === 0 ? "#0a080440" : "#0a0804", fontSize: 18, fontWeight: 700,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>‹</button>
+        <div style={{ flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 8px" }}>
+          <div style={{ textAlign: "center", minWidth: 32 }}>
+            <div style={{ fontSize: 8, color: "#0a0804", fontWeight: 600, opacity: 0.7 }}>Par</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: "#0a0804" }}>{par}</div>
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 8, color: "#0a0804", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, opacity: 0.7 }}>Hole</div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: "#0a0804", lineHeight: 1 }}>{activeHole + 1}</div>
+          </div>
+          <div style={{ textAlign: "center", minWidth: 32 }}>
+            <div style={{ fontSize: 8, color: "#0a0804", fontWeight: 600, opacity: 0.7 }}>HCP</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: "#0a0804" }}>{hcp}</div>
+          </div>
+        </div>
+        <button onClick={() => goToHole(Math.min(17, activeHole + 1))} disabled={activeHole === 17} style={{
+          width: 28, height: 36, borderRadius: 8, background: "none", border: "none",
+          cursor: activeHole === 17 ? "default" : "pointer",
+          color: activeHole === 17 ? "#0a080440" : "#0a0804", fontSize: 18, fontWeight: 700,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>›</button>
+      </div>
+
+      {/* Player score cards — 4 in match, T1 (rows 0-1) on top, T2 (rows 2-3) below a divider.
+          Each card shows: initials badge, name, (CH), stroke dots, "Net: ±X thru N",
+          then a row of par-relative score buttons + manual −/+ adjusters at the end. */}
+      {matchPids.map((pid, idx) => {
+        const p = tPlayers.find(t => t.player_id === pid);
+        if (!p) return null;
+        const slotIdx = event.teams.findIndex(t => t.player1 === pid || t.player2 === pid);
+        const tc = PRACTICE_TEAM_COLORS[slotIdx];
+        const score = scoresMap[`${pid}_${activeHole}`] || 0;
+        const strokes = getStrokes(pid, activeHole);
+        const hi = (() => {
+          if (event.hcp_overrides?.[pid] !== undefined && event.hcp_overrides[pid] !== "") return parseFloat(event.hcp_overrides[pid]) || 0;
+          return parseFloat(p.handicap_index) || 0;
+        })();
+        const ch = calcCH(hi, course.slope || 113, course.rating || 72, course.par || 72);
+        const run = getRunning(pid);
+
+        // Shift the button range when the saved score falls outside [min, max].
+        // E.g. saved a 9 on a par-4 (max button = 8) → shift right so [3..9] shows.
+        const maxBtn = baseBtns[baseBtns.length - 1];
+        const minBtn = baseBtns[0];
+        let btns = baseBtns;
+        if (score > maxBtn) {
+          const shift = score - maxBtn;
+          btns = baseBtns.map(b => b + shift);
+        } else if (score > 0 && score < minBtn) {
+          const shift = minBtn - score;
+          btns = baseBtns.map(b => b - shift);
+        }
+
+        return (
+          <div key={pid}>
+            {idx === 2 && <div style={{ borderTop: `1px dashed ${BC.bdr}`, margin: "6px 0" }} />}
+            <div style={{
+              background: BC.card, borderRadius: 10, marginBottom: 4, padding: "6px 10px",
+              border: `1px solid ${BC.bdr}`, borderLeft: `3px solid ${tc.accent}`,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5, minWidth: 0 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: BC.t1, lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>{p.name}</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: BC.t3, flexShrink: 0 }}>({ch})</span>
+                {strokes > 0 && (
+                  <span style={{ color: "#4ba3d4", fontSize: 12, letterSpacing: 1, flexShrink: 0, lineHeight: 1 }}>
+                    {"●".repeat(strokes)}
+                  </span>
+                )}
+                <div style={{ flex: 1 }} />
+                {run.thru > 0 && (
+                  <span style={{ fontSize: 10, color: BC.t3, flexShrink: 0, whiteSpace: "nowrap" }}>
+                    {/* PGA-leaderboard color convention: red for under par,
+                        neutral text color for even/over par. The brand
+                        green was reading as "good news" in the wrong
+                        register — golfers are trained to scan red. */}
+                    Net: <strong style={{ color: run.netVsPar < 0 ? BC.danger : run.netVsPar === 0 ? BC.t3 : BC.t1 }}>
+                      {fmtScore(run.netVsPar)}
+                    </strong> thru {run.thru}
+                  </span>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: 3 }}>
+                {btns.map(btn => {
+                  const isCur = btn === score;
+                  const sd = btn - par;
+                  const boxSize = 32;
+                  return (
+                    <button key={btn} onClick={() => onSavePracticeScore(pid, activeHole, isCur ? null : btn)} style={{
+                      flex: 1, height: 38, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 800, border: "none",
+                      background: isCur ? BC.amber : BC.inp, color: isCur ? "#0a0804" : BC.t2,
+                      position: "relative",
+                      // No CSS transition — when the active hole changes
+                      // (auto-advance) or a score is corrected, the four
+                      // selected buttons should swap state instantly. With
+                      // a fade transition they all cross-fade through a
+                      // half-amber state, which reads as "ghost selections
+                      // flashing" rather than a clean state change.
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      {/* Score-vs-par overlay shape: bogey = square outline, double = nested square,
+                          birdie = circle outline, eagle = nested circle. Matches MNQ visualization. */}
+                      {isCur && sd !== 0 && (
+                        <div style={{ position: "absolute", width: boxSize, height: boxSize, left: "50%", top: "50%", transform: "translate(-50%, -50%)" }}>
+                          <div style={{
+                            position: "absolute", inset: 0,
+                            borderRadius: sd < 0 ? "50%" : 3,
+                            border: `1.5px solid ${sd < 0 ? BC.danger : "#0a0804"}`,
+                          }} />
+                          {Math.abs(sd) >= 2 && (
+                            <div style={{
+                              position: "absolute", inset: 3,
+                              borderRadius: sd < 0 ? "50%" : 2,
+                              border: `1px solid ${sd < 0 ? BC.danger : "#0a0804"}`,
+                            }} />
+                          )}
+                        </div>
+                      )}
+                      <span style={{ position: "relative", zIndex: 1 }}>{btn}</span>
+                    </button>
+                  );
+                })}
+                <button onClick={() => onSavePracticeScore(pid, activeHole, Math.max(1, (score || par) - 1))} style={{
+                  width: 26, height: 38, borderRadius: 8, background: BC.inp, border: "none",
+                  color: BC.t3, fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0,
+                }}>−</button>
+                <button onClick={() => onSavePracticeScore(pid, activeHole, (score || par) + 1)} style={{
+                  width: 26, height: 38, borderRadius: 8, background: BC.inp, border: "none",
+                  color: BC.t3, fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0,
+                }}>+</button>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Full Scorecard button — opens a modal showing the full hole-by-hole
+          grid for both teams plus the running match status row. Mirrors MNQ's
+          "Full Scorecard" button but stacks front 9 + back 9 vertically since
+          18 columns is too cramped on mobile. */}
+      <button onClick={() => setShowScorecard(true)} style={{
+        width: "100%", padding: "9px 0", borderRadius: 8, marginTop: 6, cursor: "pointer",
+        background: BC.card, border: `1px solid ${BC.bdr}60`,
+        color: BC.t2, fontSize: 12, fontWeight: 700, letterSpacing: 0.5,
+      }}>
+        Full Scorecard
+      </button>
+
+      {showScorecard && (() => {
+        // The body of the scorecard is rendered by the shared helper —
+        // we just provide the modal chrome (backdrop, header with team
+        // labels, close button) here.
+        const t1Idx = event.teams.findIndex(t => t.id === activeMatch.team1.id);
+        const t2Idx = event.teams.findIndex(t => t.id === activeMatch.team2.id);
+        const tcA = PRACTICE_TEAM_COLORS[t1Idx];
+        const tcB = PRACTICE_TEAM_COLORS[t2Idx];
+        const matchIdx = event.matches.findIndex(m => m.id === activeMatch.id);
+        return (
+          <>
+            {/* Backdrop — tap anywhere to close */}
+            <div onClick={() => setShowScorecard(false)} style={{
+              position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 400,
+            }} />
+            {/* Scrollable centering wrapper — tapping outside the card also closes */}
+            <div onClick={() => setShowScorecard(false)} style={{
+              position: "fixed", inset: 0, zIndex: 450,
+              display: "flex", alignItems: "flex-start", justifyContent: "center",
+              padding: 12, overflowY: "auto",
+            }}>
+              <div onClick={e => e.stopPropagation()} style={{
+                background: BC.bg, border: `1px solid ${BC.bdr}`, borderRadius: 14,
+                width: "100%", maxWidth: 440,
+                marginTop: 12, marginBottom: 12,
+                display: "flex", flexDirection: "column",
+                fontFamily: "'Montserrat', sans-serif",
+              }}>
+                {/* Header */}
+                <div style={{ padding: "12px 14px", borderBottom: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>SCORECARD</div>
+                    <div style={{ fontSize: 10, color: BC.t3, marginTop: 2 }}>
+                      Match {matchIdx + 1} · <span style={{ color: tcA.accent, fontWeight: 700 }}>T{t1Idx + 1}</span> vs <span style={{ color: tcB.accent, fontWeight: 700 }}>T{t2Idx + 1}</span>
+                    </div>
+                  </div>
+                  <button onClick={() => setShowScorecard(false)} style={{
+                    width: 28, height: 28, borderRadius: 6,
+                    background: BC.inp, border: `1px solid ${BC.bdr}`,
+                    color: BC.t2, fontSize: 14, fontWeight: 700, cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>×</button>
+                </div>
+
+                {/* Body — front 9 + back 9 sections via shared helper */}
+                <div style={{ padding: 10 }}>
+                  {renderMatchScorecardBody(activeMatch, strokeMaps)}
+                </div>
+
+                {/* Footer */}
+                <button onClick={() => setShowScorecard(false)} style={{
+                  display: "block", width: "calc(100% - 24px)", margin: "0 auto 12px",
+                  padding: "10px 0", background: BC.inp, border: `1px solid ${BC.bdr}`,
+                  borderRadius: 8, color: BC.t2, fontSize: 13, fontWeight: 600,
+                  cursor: "pointer", letterSpacing: 0.4,
+                }}>
+                  Close
+                </button>
+              </div>
+            </div>
+          </>
+        );
+      })()}
+
+      {/* Auto-advance toast — slides down from the top during the 1.8s
+          wait between "all scores in" and the screen advance. Lives at
+          the highest z-index so it sits above the hole nav, scorecard
+          modal, and bottom nav. Mirrors MNQ's toast styling exactly so
+          the two apps feel consistent for users who switch between. */}
+      {toast && (
+        <>
+          <style>{`@keyframes bcToastDown { 0% { transform: translateX(-50%) translateY(-20px); opacity: 0; } 100% { transform: translateX(-50%) translateY(0); opacity: 1; } }`}</style>
+          <div style={{
+            position: "fixed", top: 30, left: "50%", transform: "translateX(-50%)",
+            background: BC.amber, color: "#0a0804",
+            padding: "12px 32px", borderRadius: 12,
+            fontSize: 13, fontWeight: 700, zIndex: 1000,
+            whiteSpace: "nowrap", textAlign: "center",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+            animation: "bcToastDown 0.3s ease",
+            fontFamily: "'Montserrat', sans-serif",
+          }}>
+            {toast}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function PracticeView({ user, tPlayers, courses, notify }) {
   const [event, setEvent] = useState(null);
   const [scoresMap, setScoresMap] = useState({}); // {pid_h: score}
@@ -3281,566 +3864,6 @@ function PracticeView({ user, tPlayers, courses, notify }) {
     );
   };
 
-  // ── Scoring Sub-view ──
-  const ScoringTab = () => {
-    // Hooks first — must fire unconditionally on every render. Even when
-    // event/course aren't loaded yet, we still call them so React's hook
-    // counter stays consistent across renders.
-    const [activeHole, setActiveHole] = useState(0);
-    const [showScorecard, setShowScorecard] = useState(false);
-    // `editing` = true when the user has navigated BACK to a previously-
-    // completed hole to fix a score. While editing, auto-advance is
-    // suppressed so a corrective tap doesn't jump the screen away. Reset
-    // to false whenever they reach the live edge (first unscored hole).
-    const [editing, setEditing] = useState(false);
-    // Initial-jump bookkeeping. On first arrival at the scoring view (after
-    // Firestore scores load), we jump activeHole forward to the first
-    // unscored hole — so a user joining mid-round doesn't have to flip
-    // through holes 1..N to reach the action. Only fires once per mount.
-    const initialJump = useRef(false);
-    // Auto-advance toast — surfaced as a fixed-position banner during the
-    // 1.8s pause between "all scores in for this hole" and the screen
-    // jump. Without this, the wait feels like dead time and the eventual
-    // jump feels abrupt. Mirrors MNQ's `setToast(...)` UX.
-    const [toast, setToast] = useState(null);
-
-    const holePars = course?.hole_pars || Array(18).fill(4);
-    const holeHcps = course?.hole_handicaps || Array(18).fill(9);
-
-    // Lock scoring to the user's own match. Switching to a different match is
-    // intentionally not allowed — only players in a match should be entering its
-    // scores. If the user isn't on any team in this event (e.g. a director who
-    // didn't include themselves), we render an empty state below.
-    const activeMatch = event?.matches?.find(m =>
-      [m.team1.player1, m.team1.player2, m.team2.player1, m.team2.player2].includes(user?.player_id)
-    );
-    const matchPids = activeMatch ? [
-      activeMatch.team1.player1, activeMatch.team1.player2,
-      activeMatch.team2.player1, activeMatch.team2.player2,
-    ].filter(Boolean) : [];
-
-    const par = holePars[activeHole];
-    const hcp = holeHcps[activeHole];
-    const matchResult = activeMatch ? matchResults.find(mr => mr.match.id === activeMatch.id)?.result : null;
-
-    // Stroke maps for the 4 players in this match. Mirrors the calculation used
-    // in computePracticeMatch so the dots shown beside each player exactly match
-    // the strokes used to compute the leaderboard. Memoized — useMemo always
-    // fires (even when there's no match) so hook ordering stays stable.
-    const strokeMaps = useMemo(() => {
-      return getStrokeMapsForMatch(activeMatch);
-    }, [activeMatch, event, course]);
-
-    // ── Auto-advance derivations ────────────────────────────────────────────
-    // Whether every player in the match has a score on the active hole.
-    // When this flips true (after the 4th player's score is entered), we
-    // start a timer to jump to the next unscored hole.
-    const holeComplete = matchPids.length > 0 && matchPids.every(pid => (scoresMap[`${pid}_${activeHole}`] || 0) > 0);
-    // Whether every player has scores on every hole — if so, the round is
-    // done and we shouldn't auto-advance off the last hole.
-    const allComplete = matchPids.length > 0 && matchPids.every(pid => {
-      for (let h = 0; h < 18; h++) {
-        if (!(scoresMap[`${pid}_${h}`] > 0)) return false;
-      }
-      return true;
-    });
-    // Signature of the current hole's scores — flips whenever ANY score on
-    // this hole changes, even if the hole stays "complete" through the edit
-    // (e.g. correcting a 5 to a 4). Used as a useEffect dep so editing
-    // within the 1.8s auto-advance window restarts the timer rather than
-    // letting it lock in at the moment of first completion.
-    const curHoleScoreSig = matchPids.map(pid => scoresMap[`${pid}_${activeHole}`] || 0).join(",");
-
-    // Auto-advance effect — fires the timer when the active hole becomes
-    // fully scored. Surfaces a toast during the 1.8s wait so the screen
-    // jump feels intentional, not abrupt. Cleanup clears the pending
-    // timer AND the toast if the hole changes, the user starts editing,
-    // or scores are edited again before the timer fires. Always called
-    // (even when match is missing) to keep hook ordering consistent.
-    useEffect(() => {
-      if (!activeMatch) return;
-      if (!holeComplete || activeHole >= 17 || editing || allComplete) return;
-      // Fire the toast immediately so users see "saving — advancing..."
-      // throughout the wait, not just after the jump.
-      setToast(`✓ Hole ${activeHole + 1} saved — advancing...`);
-      const timer = setTimeout(() => {
-        setToast(null);
-        // Skip past any holes that are already fully scored (e.g. user
-        // back-filled a missing hole and the live edge has now leapfrogged
-        // forward). Land on the first hole that still needs entry.
-        let next = activeHole + 1;
-        while (next < 17 && matchPids.every(pid => (scoresMap[`${pid}_${next}`] || 0) > 0)) next++;
-        setActiveHole(next);
-        setEditing(false);
-      }, 1800);
-      return () => {
-        clearTimeout(timer);
-        // If the effect re-runs because the user edited a score within the
-        // window, the next pass will set the toast again. If the effect
-        // re-runs because the user navigated away from the completed hole,
-        // we want the toast cleared — which this catch-all handles.
-        setToast(null);
-      };
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [holeComplete, activeHole, editing, allComplete, curHoleScoreSig, activeMatch]);
-
-    // Safety net — always clear the toast after 3s even if some edge case
-    // misses cleanup. Mirrors MNQ's safety useEffect.
-    useEffect(() => {
-      if (!toast) return;
-      const t = setTimeout(() => setToast(null), 3000);
-      return () => clearTimeout(t);
-    }, [toast]);
-
-    // Initial-jump effect — once Firestore has delivered scores for this
-    // match, fast-forward activeHole to the first unscored hole so a late
-    // joiner doesn't have to manually navigate forward. Runs at most once
-    // per mount (guarded by the ref). Re-fires until it finds scores so
-    // it works whether the data was already cached or arrived after mount.
-    useEffect(() => {
-      if (initialJump.current) return;
-      if (!activeMatch) return;
-      const pids = [activeMatch.team1.player1, activeMatch.team1.player2, activeMatch.team2.player1, activeMatch.team2.player2].filter(Boolean);
-      if (pids.length === 0) return;
-      // Find the first hole where not all 4 players have a score
-      let edge = 18;
-      for (let h = 0; h < 18; h++) {
-        if (!pids.every(pid => (scoresMap[`${pid}_${h}`] || 0) > 0)) { edge = h; break; }
-      }
-      // Only jump (and lock the ref) once we've seen at least one score —
-      // otherwise the first render with empty scoresMap would consume our
-      // one-shot, leaving no chance to jump after Firestore arrives.
-      const hasAnyScores = pids.some(pid => {
-        for (let h = 0; h < 18; h++) if ((scoresMap[`${pid}_${h}`] || 0) > 0) return true;
-        return false;
-      });
-      if (hasAnyScores) {
-        if (edge > 0 && edge < 18) setActiveHole(edge);
-        initialJump.current = true;
-      }
-    }, [activeMatch, scoresMap]);
-
-    // ── No more hooks below this line — early returns are safe ─────────────
-    if (!event || !course) {
-      return <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>Set up an event first.</div>;
-    }
-    if (!activeMatch) {
-      return (
-        <div style={{ textAlign: "center", padding: 40, color: BC.t3, fontSize: 13 }}>
-          You're not in a match for this Mash round.
-        </div>
-      );
-    }
-
-    const getStrokes = (pid, h) => strokeMaps[pid]?.[h] || 0;
-
-    // Per-player running net "thru X" — sum of net scores up through and
-    // including the active hole. Used in the "Net: +1 thru 4" right-hand
-    // display on each card. Doesn't depend on opponent so it lives outside
-    // computePracticeMatch (which is a team-level calculation).
-    const getRunning = (pid) => {
-      let net = 0, gross = 0, thru = 0, parThru = 0;
-      for (let h = 0; h <= activeHole; h++) {
-        const raw = scoresMap[`${pid}_${h}`];
-        if (!raw) continue;
-        gross += raw;
-        net += raw - getStrokes(pid, h);
-        parThru += holePars[h];
-        thru++;
-      }
-      return { net, gross, thru, netVsPar: net - parThru };
-    };
-
-    // Score buttons: par-3 holes start at 1, par-4/5 start at 2. The displayed
-    // range shifts up or down if the saved score falls outside [min, max] so
-    // the active button is always visible without forcing the +/- adjusters.
-    const baseBtns = par === 3 ? [1, 2, 3, 4, 5, 6, 7] : [2, 3, 4, 5, 6, 7, 8];
-
-    // ── MNQ-style match status bar ─────────────────────────────────────────
-    // Cumulative match status per hole (1..18) from the USER'S team's
-    // perspective. Positive = your team is up by N going into that hole;
-    // negative = down by N; 0 = AS; null = at least one earlier hole still
-    // missing scores. The cumulative loop breaks on the first incomplete
-    // hole, so a gap freezes the strip at that point — fix the missing
-    // hole and the rest fills in.
-    const userOnT1 = activeMatch
-      ? (activeMatch.team1.player1 === user?.player_id || activeMatch.team1.player2 === user?.player_id)
-      : true;
-    const t1Pids = activeMatch ? [activeMatch.team1.player1, activeMatch.team1.player2].filter(Boolean) : [];
-    const t2Pids = activeMatch ? [activeMatch.team2.player1, activeMatch.team2.player2].filter(Boolean) : [];
-    const holeStatuses = Array.from({ length: 18 }, (_, i) => {
-      let cum = 0, hasData = false;
-      for (let h = 0; h <= i; h++) {
-        let n1 = 0, n2 = 0, ok1 = true, ok2 = true;
-        t1Pids.forEach(pid => { const s = scoresMap[`${pid}_${h}`]; if (!s) ok1 = false; else n1 += s - getStrokes(pid, h); });
-        t2Pids.forEach(pid => { const s = scoresMap[`${pid}_${h}`]; if (!s) ok2 = false; else n2 += s - getStrokes(pid, h); });
-        if (ok1 && ok2) {
-          if (n1 < n2) cum += userOnT1 ? 1 : -1;
-          else if (n2 < n1) cum += userOnT1 ? -1 : 1;
-          hasData = true;
-        } else { hasData = false; break; }
-      }
-      return hasData ? cum : null;
-    });
-    // Clinch hole — first hole where the lead exceeds the remaining holes.
-    // 18-hole rule: must be < hole 18 (you can't clinch on the final hole;
-    // a 1-up finish through 18 is "1UP", not "1&0").
-    let clinchHole = null, clinchText = null;
-    for (let h = 0; h < 18; h++) {
-      if (holeStatuses[h] === null) break;
-      const lead = Math.abs(holeStatuses[h]);
-      const remaining = 17 - h;
-      if (remaining > 0 && lead > remaining) {
-        clinchHole = h;
-        clinchText = `${lead}&${remaining}`;
-        break;
-      }
-    }
-
-    // Render a single status cell. Cells at positions 9 and 18 don't draw a
-    // right border (end of row); all others do, for the divider rhythm.
-    const renderStatusCell = (i) => {
-      const st = holeStatuses[i];
-      const isEndOfRow = (i + 1) % 9 === 0;
-      const colBorder = !isEndOfRow ? { borderRight: `1px solid ${BC.bdr}40` } : {};
-      const cellH = 22;
-      // Clinch hole — show "X&Y" prominently in green (you won) or red (you lost)
-      if (clinchHole !== null && i === clinchHole) {
-        const color = st > 0 ? "#22c55e" : st < 0 ? BC.danger : BC.t3;
-        return <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 11, color, fontWeight: 800, lineHeight: `${cellH}px`, ...colBorder }}>{clinchText}</div>;
-      }
-      // Post-clinch holes don't render a status (match is mathematically over)
-      if (clinchHole !== null && i > clinchHole) {
-        return <div key={i} style={{ flex: 1, height: cellH, ...colBorder }} />;
-      }
-      // Unscored hole — empty cell
-      if (st === null) {
-        return <div key={i} style={{ flex: 1, height: cellH, ...colBorder }} />;
-      }
-      // All-square — small "TIED" label
-      if (st === 0) {
-        return <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 8, fontWeight: 700, color: BC.t3, lineHeight: `${cellH}px`, letterSpacing: 0.5, ...colBorder }}>TIED</div>;
-      }
-      // Up or down — show the lead with arrow
-      const color = st > 0 ? "#22c55e" : BC.danger;
-      return (
-        <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 11, fontWeight: 800, color, lineHeight: `${cellH}px`, ...colBorder }}>
-          {st > 0 ? "▲" : "▼"}{Math.abs(st)}
-        </div>
-      );
-    };
-
-    // "Live edge" — first hole where not all players have scored yet. Anything
-    // earlier than this is a past hole the user might be editing. Used to
-    // suppress auto-advance when the user has navigated back to fix a score.
-    let liveEdge = 17;
-    for (let h = 0; h < 18; h++) {
-      if (!matchPids.every(pid => (scoresMap[`${pid}_${h}`] || 0) > 0)) { liveEdge = h; break; }
-    }
-    // Centralizes the "set hole + flip editing flag" pattern. Direct calls to
-    // setActiveHole alone would leak stale editing state — e.g. user fixes
-    // hole 3, then taps hole 5 (the live edge) but editing stays true and
-    // auto-advance never fires when they finish hole 5.
-    const goToHole = (h) => {
-      setActiveHole(h);
-      setEditing(h < liveEdge);
-    };
-
-    return (
-      <div>
-        {/* Front 9 — hole strip */}
-        <div style={{ display: "flex", gap: 3, marginBottom: 2 }}>
-          {Array.from({ length: 9 }, (_, i) => {
-            const cur = i === activeHole;
-            const allScored = matchPids.every(pid => scoresMap[`${pid}_${i}`]);
-            const partial = !allScored && matchPids.some(pid => scoresMap[`${pid}_${i}`]);
-            return (
-              <button key={i} onClick={() => goToHole(i)} style={{
-                flex: 1, height: 28, borderRadius: cur ? 8 : 6,
-                border: allScored && !cur ? `1.5px solid ${BC.amber}50` : "none",
-                background: cur ? BC.amber : allScored ? BC.amber + "15" : partial ? BC.amber + "08" : BC.card,
-                color: cur ? "#0a0804" : allScored ? BC.amber : BC.t3,
-                fontSize: 13, fontWeight: 800, cursor: "pointer",
-                outline: cur ? `2px solid ${BC.amber}` : "none", outlineOffset: 1,
-              }}>{i + 1}</button>
-            );
-          })}
-        </div>
-        {/* Front 9 — match status row */}
-        <div style={{ display: "flex", marginBottom: 6, background: BC.card, border: `1px solid ${BC.bdr}60`, borderRadius: 8, padding: "3px 0", alignItems: "center" }}>
-          {Array.from({ length: 9 }, (_, i) => renderStatusCell(i))}
-        </div>
-        {/* Back 9 — hole strip */}
-        <div style={{ display: "flex", gap: 3, marginBottom: 2 }}>
-          {Array.from({ length: 9 }, (_, i) => {
-            const h = i + 9;
-            const cur = h === activeHole;
-            const allScored = matchPids.every(pid => scoresMap[`${pid}_${h}`]);
-            const partial = !allScored && matchPids.some(pid => scoresMap[`${pid}_${h}`]);
-            return (
-              <button key={h} onClick={() => goToHole(h)} style={{
-                flex: 1, height: 28, borderRadius: cur ? 8 : 6,
-                border: allScored && !cur ? `1.5px solid ${BC.amber}50` : "none",
-                background: cur ? BC.amber : allScored ? BC.amber + "15" : partial ? BC.amber + "08" : BC.card,
-                color: cur ? "#0a0804" : allScored ? BC.amber : BC.t3,
-                fontSize: 13, fontWeight: 800, cursor: "pointer",
-                outline: cur ? `2px solid ${BC.amber}` : "none", outlineOffset: 1,
-              }}>{h + 1}</button>
-            );
-          })}
-        </div>
-        {/* Back 9 — match status row */}
-        <div style={{ display: "flex", marginBottom: 6, background: BC.card, border: `1px solid ${BC.bdr}60`, borderRadius: 8, padding: "3px 0", alignItems: "center" }}>
-          {Array.from({ length: 9 }, (_, i) => renderStatusCell(i + 9))}
-        </div>
-
-        {/* Hole nav banner — amber filled bar showing Par / Hole / HCP, with prev/next.
-            Mirrors the MNQ scoring banner exactly. */}
-        <div style={{
-          background: BC.amber, borderRadius: 10, padding: "4px 8px", marginBottom: 6,
-          display: "flex", alignItems: "center",
-        }}>
-          <button onClick={() => goToHole(Math.max(0, activeHole - 1))} disabled={activeHole === 0} style={{
-            width: 28, height: 36, borderRadius: 8, background: "none", border: "none",
-            cursor: activeHole === 0 ? "default" : "pointer",
-            color: activeHole === 0 ? "#0a080440" : "#0a0804", fontSize: 18, fontWeight: 700,
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>‹</button>
-          <div style={{ flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 8px" }}>
-            <div style={{ textAlign: "center", minWidth: 32 }}>
-              <div style={{ fontSize: 8, color: "#0a0804", fontWeight: 600, opacity: 0.7 }}>Par</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: "#0a0804" }}>{par}</div>
-            </div>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 8, color: "#0a0804", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, opacity: 0.7 }}>Hole</div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: "#0a0804", lineHeight: 1 }}>{activeHole + 1}</div>
-            </div>
-            <div style={{ textAlign: "center", minWidth: 32 }}>
-              <div style={{ fontSize: 8, color: "#0a0804", fontWeight: 600, opacity: 0.7 }}>HCP</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: "#0a0804" }}>{hcp}</div>
-            </div>
-          </div>
-          <button onClick={() => goToHole(Math.min(17, activeHole + 1))} disabled={activeHole === 17} style={{
-            width: 28, height: 36, borderRadius: 8, background: "none", border: "none",
-            cursor: activeHole === 17 ? "default" : "pointer",
-            color: activeHole === 17 ? "#0a080440" : "#0a0804", fontSize: 18, fontWeight: 700,
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>›</button>
-        </div>
-
-        {/* Player score cards — 4 in match, T1 (rows 0-1) on top, T2 (rows 2-3) below a divider.
-            Each card shows: initials badge, name, (CH), stroke dots, "Net: ±X thru N",
-            then a row of par-relative score buttons + manual −/+ adjusters at the end. */}
-        {matchPids.map((pid, idx) => {
-          const p = tPlayers.find(t => t.player_id === pid);
-          if (!p) return null;
-          const slotIdx = event.teams.findIndex(t => t.player1 === pid || t.player2 === pid);
-          const tc = PRACTICE_TEAM_COLORS[slotIdx];
-          const score = scoresMap[`${pid}_${activeHole}`] || 0;
-          const strokes = getStrokes(pid, activeHole);
-          const hi = (() => {
-            if (event.hcp_overrides?.[pid] !== undefined && event.hcp_overrides[pid] !== "") return parseFloat(event.hcp_overrides[pid]) || 0;
-            return parseFloat(p.handicap_index) || 0;
-          })();
-          const ch = calcCH(hi, course.slope || 113, course.rating || 72, course.par || 72);
-          const run = getRunning(pid);
-
-          // Shift the button range when the saved score falls outside [min, max].
-          // E.g. saved a 9 on a par-4 (max button = 8) → shift right so [3..9] shows.
-          const maxBtn = baseBtns[baseBtns.length - 1];
-          const minBtn = baseBtns[0];
-          let btns = baseBtns;
-          if (score > maxBtn) {
-            const shift = score - maxBtn;
-            btns = baseBtns.map(b => b + shift);
-          } else if (score > 0 && score < minBtn) {
-            const shift = minBtn - score;
-            btns = baseBtns.map(b => b - shift);
-          }
-
-          return (
-            <div key={pid}>
-              {idx === 2 && <div style={{ borderTop: `1px dashed ${BC.bdr}`, margin: "6px 0" }} />}
-              <div style={{
-                background: BC.card, borderRadius: 10, marginBottom: 4, padding: "6px 10px",
-                border: `1px solid ${BC.bdr}`, borderLeft: `3px solid ${tc.accent}`,
-              }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5, minWidth: 0 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: BC.t1, lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>{p.name}</span>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: BC.t3, flexShrink: 0 }}>({ch})</span>
-                  {strokes > 0 && (
-                    <span style={{ color: "#4ba3d4", fontSize: 12, letterSpacing: 1, flexShrink: 0, lineHeight: 1 }}>
-                      {"●".repeat(strokes)}
-                    </span>
-                  )}
-                  <div style={{ flex: 1 }} />
-                  {run.thru > 0 && (
-                    <span style={{ fontSize: 10, color: BC.t3, flexShrink: 0, whiteSpace: "nowrap" }}>
-                      {/* PGA-leaderboard color convention: red for under par,
-                          neutral text color for even/over par. The brand
-                          green was reading as "good news" in the wrong
-                          register — golfers are trained to scan red. */}
-                      Net: <strong style={{ color: run.netVsPar < 0 ? BC.danger : run.netVsPar === 0 ? BC.t3 : BC.t1 }}>
-                        {fmtScore(run.netVsPar)}
-                      </strong> thru {run.thru}
-                    </span>
-                  )}
-                </div>
-                <div style={{ display: "flex", gap: 3 }}>
-                  {btns.map(btn => {
-                    const isCur = btn === score;
-                    const sd = btn - par;
-                    const boxSize = 32;
-                    return (
-                      <button key={btn} onClick={() => onSavePracticeScore(pid, activeHole, isCur ? null : btn)} style={{
-                        flex: 1, height: 38, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 800, border: "none",
-                        background: isCur ? BC.amber : BC.inp, color: isCur ? "#0a0804" : BC.t2,
-                        position: "relative",
-                        // No CSS transition — when the active hole changes
-                        // (auto-advance) or a score is corrected, the four
-                        // selected buttons should swap state instantly. With
-                        // a fade transition they all cross-fade through a
-                        // half-amber state, which reads as "ghost selections
-                        // flashing" rather than a clean state change.
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                      }}>
-                        {/* Score-vs-par overlay shape: bogey = square outline, double = nested square,
-                            birdie = circle outline, eagle = nested circle. Matches MNQ visualization. */}
-                        {isCur && sd !== 0 && (
-                          <div style={{ position: "absolute", width: boxSize, height: boxSize, left: "50%", top: "50%", transform: "translate(-50%, -50%)" }}>
-                            <div style={{
-                              position: "absolute", inset: 0,
-                              borderRadius: sd < 0 ? "50%" : 3,
-                              border: `1.5px solid ${sd < 0 ? BC.danger : "#0a0804"}`,
-                            }} />
-                            {Math.abs(sd) >= 2 && (
-                              <div style={{
-                                position: "absolute", inset: 3,
-                                borderRadius: sd < 0 ? "50%" : 2,
-                                border: `1px solid ${sd < 0 ? BC.danger : "#0a0804"}`,
-                              }} />
-                            )}
-                          </div>
-                        )}
-                        <span style={{ position: "relative", zIndex: 1 }}>{btn}</span>
-                      </button>
-                    );
-                  })}
-                  <button onClick={() => onSavePracticeScore(pid, activeHole, Math.max(1, (score || par) - 1))} style={{
-                    width: 26, height: 38, borderRadius: 8, background: BC.inp, border: "none",
-                    color: BC.t3, fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0,
-                  }}>−</button>
-                  <button onClick={() => onSavePracticeScore(pid, activeHole, (score || par) + 1)} style={{
-                    width: 26, height: 38, borderRadius: 8, background: BC.inp, border: "none",
-                    color: BC.t3, fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0,
-                  }}>+</button>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-
-        {/* Full Scorecard button — opens a modal showing the full hole-by-hole
-            grid for both teams plus the running match status row. Mirrors MNQ's
-            "Full Scorecard" button but stacks front 9 + back 9 vertically since
-            18 columns is too cramped on mobile. */}
-        <button onClick={() => setShowScorecard(true)} style={{
-          width: "100%", padding: "9px 0", borderRadius: 8, marginTop: 6, cursor: "pointer",
-          background: BC.card, border: `1px solid ${BC.bdr}60`,
-          color: BC.t2, fontSize: 12, fontWeight: 700, letterSpacing: 0.5,
-        }}>
-          Full Scorecard
-        </button>
-
-        {showScorecard && (() => {
-          // The body of the scorecard is rendered by the shared helper —
-          // we just provide the modal chrome (backdrop, header with team
-          // labels, close button) here.
-          const t1Idx = event.teams.findIndex(t => t.id === activeMatch.team1.id);
-          const t2Idx = event.teams.findIndex(t => t.id === activeMatch.team2.id);
-          const tcA = PRACTICE_TEAM_COLORS[t1Idx];
-          const tcB = PRACTICE_TEAM_COLORS[t2Idx];
-          const matchIdx = event.matches.findIndex(m => m.id === activeMatch.id);
-          return (
-            <>
-              {/* Backdrop — tap anywhere to close */}
-              <div onClick={() => setShowScorecard(false)} style={{
-                position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 400,
-              }} />
-              {/* Scrollable centering wrapper — tapping outside the card also closes */}
-              <div onClick={() => setShowScorecard(false)} style={{
-                position: "fixed", inset: 0, zIndex: 450,
-                display: "flex", alignItems: "flex-start", justifyContent: "center",
-                padding: 12, overflowY: "auto",
-              }}>
-                <div onClick={e => e.stopPropagation()} style={{
-                  background: BC.bg, border: `1px solid ${BC.bdr}`, borderRadius: 14,
-                  width: "100%", maxWidth: 440,
-                  marginTop: 12, marginBottom: 12,
-                  display: "flex", flexDirection: "column",
-                  fontFamily: "'Montserrat', sans-serif",
-                }}>
-                  {/* Header */}
-                  <div style={{ padding: "12px 14px", borderBottom: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>SCORECARD</div>
-                      <div style={{ fontSize: 10, color: BC.t3, marginTop: 2 }}>
-                        Match {matchIdx + 1} · <span style={{ color: tcA.accent, fontWeight: 700 }}>T{t1Idx + 1}</span> vs <span style={{ color: tcB.accent, fontWeight: 700 }}>T{t2Idx + 1}</span>
-                      </div>
-                    </div>
-                    <button onClick={() => setShowScorecard(false)} style={{
-                      width: 28, height: 28, borderRadius: 6,
-                      background: BC.inp, border: `1px solid ${BC.bdr}`,
-                      color: BC.t2, fontSize: 14, fontWeight: 700, cursor: "pointer",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>×</button>
-                  </div>
-
-                  {/* Body — front 9 + back 9 sections via shared helper */}
-                  <div style={{ padding: 10 }}>
-                    {renderMatchScorecardBody(activeMatch, strokeMaps)}
-                  </div>
-
-                  {/* Footer */}
-                  <button onClick={() => setShowScorecard(false)} style={{
-                    display: "block", width: "calc(100% - 24px)", margin: "0 auto 12px",
-                    padding: "10px 0", background: BC.inp, border: `1px solid ${BC.bdr}`,
-                    borderRadius: 8, color: BC.t2, fontSize: 13, fontWeight: 600,
-                    cursor: "pointer", letterSpacing: 0.4,
-                  }}>
-                    Close
-                  </button>
-                </div>
-              </div>
-            </>
-          );
-        })()}
-
-        {/* Auto-advance toast — slides down from the top during the 1.8s
-            wait between "all scores in" and the screen advance. Lives at
-            the highest z-index so it sits above the hole nav, scorecard
-            modal, and bottom nav. Mirrors MNQ's toast styling exactly so
-            the two apps feel consistent for users who switch between. */}
-        {toast && (
-          <>
-            <style>{`@keyframes bcToastDown { 0% { transform: translateX(-50%) translateY(-20px); opacity: 0; } 100% { transform: translateX(-50%) translateY(0); opacity: 1; } }`}</style>
-            <div style={{
-              position: "fixed", top: 30, left: "50%", transform: "translateX(-50%)",
-              background: BC.amber, color: "#0a0804",
-              padding: "12px 32px", borderRadius: 12,
-              fontSize: 13, fontWeight: 700, zIndex: 1000,
-              whiteSpace: "nowrap", textAlign: "center",
-              boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
-              animation: "bcToastDown 0.3s ease",
-              fontFamily: "'Montserrat', sans-serif",
-            }}>
-              {toast}
-            </div>
-          </>
-        )}
-      </div>
-    );
-  };
 
   // ── Leaderboard Sub-view ──
   const LeaderboardTab = () => {
@@ -4230,7 +4253,20 @@ function PracticeView({ user, tPlayers, courses, notify }) {
       </div>
 
       {subView === "setup" && isDirector && <SetupTab />}
-      {subView === "scoring" && <ScoringTab />}
+      {subView === "scoring" && (
+        <PracticeScoringTab
+          event={event}
+          course={course}
+          user={user}
+          scoresMap={scoresMap}
+          matchResults={matchResults}
+          onSavePracticeScore={onSavePracticeScore}
+          getStrokeMapsForMatch={getStrokeMapsForMatch}
+          allMatchStrokeMaps={allMatchStrokeMaps}
+          renderMatchScorecardBody={renderMatchScorecardBody}
+          tPlayers={tPlayers}
+        />
+      )}
       {subView === "leaderboard" && <LeaderboardTab />}
       {subView === "betting" && <BettingTab />}
     </div>
