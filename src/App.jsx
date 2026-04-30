@@ -432,19 +432,18 @@ function computeMatchResult(match, holeData, courses, tRounds, tPlayers, format,
 // (Skins are auto-computed from scores, no Firestore needed.)
 
 // 4 shades of green for the practice mode teams. All within the Mash Brothers
-// identity (since these events are intra-team), spaced across the green
-// spectrum (true → lime → emerald → teal) so adjacent teams are easy to
-// tell apart at a glance. Picked for decent contrast in both dark and light
-// modes — accents land in the 4-5:1 range against both BC.bg values, so the
-// "T1/T2/T3/T4" labels and initials badges stay readable in either theme.
+// identity. Avoiding teal (cyan-leaning greens) — every accent here reads as
+// a true green. Differentiated by hue lean (yellow/pure/cool) AND by
+// lightness so the four teams are easy to tell apart at a glance even
+// when shown next to each other in a list.
 //
 // Team 1 = the actual Mash Brothers brand color, deliberately. Anchors the
 // palette and keeps the tournament identity present even in practice events.
 const PRACTICE_TEAM_COLORS = [
   { color: "#004d24", accent: "#009144", glow: "rgba(0,145,68,0.2)" },     // brand green (Mash Brothers)
-  { color: "#3a5b08", accent: "#65a30d", glow: "rgba(101,163,13,0.2)" },   // lime / chartreuse
-  { color: "#064e3b", accent: "#059669", glow: "rgba(5,150,105,0.2)" },    // emerald
-  { color: "#134e4a", accent: "#0d9488", glow: "rgba(13,148,136,0.2)" },   // teal
+  { color: "#3a5b08", accent: "#65a30d", glow: "rgba(101,163,13,0.2)" },   // lime / chartreuse (yellow-green)
+  { color: "#054a35", accent: "#15803d", glow: "rgba(21,128,61,0.2)" },    // forest (deep, darker than brand)
+  { color: "#3f4a2a", accent: "#7a9d4e", glow: "rgba(122,157,78,0.2)" },   // sage (muted, lighter, dustier)
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -3299,6 +3298,11 @@ function PracticeView({ user, tPlayers, courses, notify }) {
     // unscored hole — so a user joining mid-round doesn't have to flip
     // through holes 1..N to reach the action. Only fires once per mount.
     const initialJump = useRef(false);
+    // Auto-advance toast — surfaced as a fixed-position banner during the
+    // 1.8s pause between "all scores in for this hole" and the screen
+    // jump. Without this, the wait feels like dead time and the eventual
+    // jump feels abrupt. Mirrors MNQ's `setToast(...)` UX.
+    const [toast, setToast] = useState(null);
 
     const holePars = course?.hole_pars || Array(18).fill(4);
     const holeHcps = course?.hole_handicaps || Array(18).fill(9);
@@ -3348,14 +3352,19 @@ function PracticeView({ user, tPlayers, courses, notify }) {
     const curHoleScoreSig = matchPids.map(pid => scoresMap[`${pid}_${activeHole}`] || 0).join(",");
 
     // Auto-advance effect — fires the timer when the active hole becomes
-    // fully scored. Cleanup function clears the pending timer if the hole
-    // changes, the user starts editing, or scores are edited again before
-    // 1.8s elapses. Always called (even when match is missing) to keep
-    // hook ordering consistent — guard inside.
+    // fully scored. Surfaces a toast during the 1.8s wait so the screen
+    // jump feels intentional, not abrupt. Cleanup clears the pending
+    // timer AND the toast if the hole changes, the user starts editing,
+    // or scores are edited again before the timer fires. Always called
+    // (even when match is missing) to keep hook ordering consistent.
     useEffect(() => {
       if (!activeMatch) return;
       if (!holeComplete || activeHole >= 17 || editing || allComplete) return;
+      // Fire the toast immediately so users see "saving — advancing..."
+      // throughout the wait, not just after the jump.
+      setToast(`✓ Hole ${activeHole + 1} saved — advancing...`);
       const timer = setTimeout(() => {
+        setToast(null);
         // Skip past any holes that are already fully scored (e.g. user
         // back-filled a missing hole and the live edge has now leapfrogged
         // forward). Land on the first hole that still needs entry.
@@ -3364,9 +3373,24 @@ function PracticeView({ user, tPlayers, courses, notify }) {
         setActiveHole(next);
         setEditing(false);
       }, 1800);
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        // If the effect re-runs because the user edited a score within the
+        // window, the next pass will set the toast again. If the effect
+        // re-runs because the user navigated away from the completed hole,
+        // we want the toast cleared — which this catch-all handles.
+        setToast(null);
+      };
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [holeComplete, activeHole, editing, allComplete, curHoleScoreSig, activeMatch]);
+
+    // Safety net — always clear the toast after 3s even if some edge case
+    // misses cleanup. Mirrors MNQ's safety useEffect.
+    useEffect(() => {
+      if (!toast) return;
+      const t = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(t);
+    }, [toast]);
 
     // Initial-jump effect — once Firestore has delivered scores for this
     // match, fast-forward activeHole to the first unscored hole so a late
@@ -3642,10 +3666,6 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                 border: `1px solid ${BC.bdr}`, borderLeft: `3px solid ${tc.accent}`,
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5, minWidth: 0 }}>
-                  <span style={{
-                    fontSize: 9, fontWeight: 800, color: tc.accent, letterSpacing: 0.5,
-                    background: tc.color + "55", padding: "2px 4px", borderRadius: 3, flexShrink: 0,
-                  }}>{getInitials(p.name)}</span>
                   <span style={{ fontSize: 13, fontWeight: 700, color: BC.t1, lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>{p.name}</span>
                   <span style={{ fontSize: 11, fontWeight: 600, color: BC.t3, flexShrink: 0 }}>({ch})</span>
                   {strokes > 0 && (
@@ -3656,7 +3676,11 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                   <div style={{ flex: 1 }} />
                   {run.thru > 0 && (
                     <span style={{ fontSize: 10, color: BC.t3, flexShrink: 0, whiteSpace: "nowrap" }}>
-                      Net: <strong style={{ color: run.netVsPar < 0 ? "#22c55e" : run.netVsPar === 0 ? BC.t3 : BC.t1 }}>
+                      {/* PGA-leaderboard color convention: red for under par,
+                          neutral text color for even/over par. The brand
+                          green was reading as "good news" in the wrong
+                          register — golfers are trained to scan red. */}
+                      Net: <strong style={{ color: run.netVsPar < 0 ? BC.danger : run.netVsPar === 0 ? BC.t3 : BC.t1 }}>
                         {fmtScore(run.netVsPar)}
                       </strong> thru {run.thru}
                     </span>
@@ -3671,7 +3695,13 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                       <button key={btn} onClick={() => onSavePracticeScore(pid, activeHole, isCur ? null : btn)} style={{
                         flex: 1, height: 38, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 800, border: "none",
                         background: isCur ? BC.amber : BC.inp, color: isCur ? "#0a0804" : BC.t2,
-                        position: "relative", transition: "all .15s",
+                        position: "relative",
+                        // No CSS transition — when the active hole changes
+                        // (auto-advance) or a score is corrected, the four
+                        // selected buttons should swap state instantly. With
+                        // a fade transition they all cross-fade through a
+                        // half-amber state, which reads as "ghost selections
+                        // flashing" rather than a clean state change.
                         display: "flex", alignItems: "center", justifyContent: "center",
                       }}>
                         {/* Score-vs-par overlay shape: bogey = square outline, double = nested square,
@@ -3785,6 +3815,29 @@ function PracticeView({ user, tPlayers, courses, notify }) {
             </>
           );
         })()}
+
+        {/* Auto-advance toast — slides down from the top during the 1.8s
+            wait between "all scores in" and the screen advance. Lives at
+            the highest z-index so it sits above the hole nav, scorecard
+            modal, and bottom nav. Mirrors MNQ's toast styling exactly so
+            the two apps feel consistent for users who switch between. */}
+        {toast && (
+          <>
+            <style>{`@keyframes bcToastDown { 0% { transform: translateX(-50%) translateY(-20px); opacity: 0; } 100% { transform: translateX(-50%) translateY(0); opacity: 1; } }`}</style>
+            <div style={{
+              position: "fixed", top: 30, left: "50%", transform: "translateX(-50%)",
+              background: BC.amber, color: "#0a0804",
+              padding: "12px 32px", borderRadius: 12,
+              fontSize: 13, fontWeight: 700, zIndex: 1000,
+              whiteSpace: "nowrap", textAlign: "center",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+              animation: "bcToastDown 0.3s ease",
+              fontFamily: "'Montserrat', sans-serif",
+            }}>
+              {toast}
+            </div>
+          </>
+        )}
       </div>
     );
   };
@@ -3859,8 +3912,7 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                 gap: 10,
               }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 9, fontWeight: 800, color: tc.accent, letterSpacing: 1 }}>TEAM {idx + 1}</div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: BC.t1, marginTop: 2, lineHeight: 1.3 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>
                     {teamPlayers.map(p => p.name).join(" / ")}
                   </div>
                 </div>
@@ -3888,6 +3940,29 @@ function PracticeView({ user, tPlayers, courses, notify }) {
           const isExpanded = expandedMatch === m.id;
           const isT1Winning = r.winnerTeamId === m.team1.id;
           const isT2Winning = r.winnerTeamId === m.team2.id;
+          // Leading = ahead on holes-won count, regardless of whether the match
+          // is final yet. Drives the triangle indicator (hollow during play,
+          // filled when final). Tie = neither team leading, no triangle shown.
+          const isT1Leading = r.thru > 0 && r.holesWon1 > r.holesWon2;
+          const isT2Leading = r.thru > 0 && r.holesWon2 > r.holesWon1;
+          // A match is "final" when it's been clinched (lead > remaining
+          // holes — match ended early) or all 18 holes have been played.
+          const isFinal = r.clinched || r.thru >= 18;
+
+          // Triangle indicator — renders inline as SVG so we can do hollow
+          // (in-progress) vs filled (final) cleanly. CSS border-triangles
+          // can't go hollow without stacking tricks.
+          const Triangle = ({ direction }) => (
+            <svg width={11} height={14} viewBox="0 0 11 14" style={{ display: "block" }}>
+              <polygon
+                points={direction === "left" ? "1,7 10,1.5 10,12.5" : "10,7 1,1.5 1,12.5"}
+                fill={isFinal ? "#22c55e" : "transparent"}
+                stroke="#22c55e"
+                strokeWidth={1.5}
+                strokeLinejoin="round"
+              />
+            </svg>
+          );
 
           return (
             <div key={m.id} style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 10, overflow: "hidden" }}>
@@ -3901,21 +3976,33 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                   <div style={{ fontSize: 11, color: BC.t3 }}>{isExpanded ? "▴" : "▾"}</div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10 }}>
-                  {/* Team 1 — full names, dimmed if their team is currently losing
-                      (and the match isn't dormie-tied). */}
+                  {/* Team 1 — full names with team-color stripe via the
+                      score number's color. Dimmed when their team is currently
+                      losing (and the match isn't dormie-tied). */}
                   <div style={{ textAlign: "left", opacity: r.thru > 0 && !isT1Winning && !r.dormie ? 0.6 : 1 }}>
-                    <div style={{ fontSize: 9, color: tc1.accent, fontWeight: 800, letterSpacing: 1, marginBottom: 2 }}>TEAM {t1Idx + 1}</div>
-                    {t1Players.map(p => p && <div key={p.player_id} style={{ fontSize: 11, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{p.name}</div>)}
+                    {t1Players.map(p => p && <div key={p.player_id} style={{ fontSize: 12, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{p.name}</div>)}
                     <div style={{ fontSize: 18, fontWeight: 800, color: tc1.accent, marginTop: 4 }}>{r.holesWon1}</div>
                   </div>
-                  {/* Status */}
-                  <div style={{ textAlign: "center", padding: "4px 10px", background: BC.inp, borderRadius: 6, border: `1px solid ${BC.bdr}` }}>
+                  {/* Status — triangles flank this box pointing at the leading
+                      team. Hollow during play, filled when the match goes
+                      final (clinched or 18 holes complete). Position is
+                      relative so the absolute triangles anchor here. */}
+                  <div style={{ position: "relative", textAlign: "center", padding: "4px 10px", background: BC.inp, borderRadius: 6, border: `1px solid ${BC.bdr}` }}>
+                    {isT1Leading && (
+                      <div style={{ position: "absolute", right: "100%", top: "50%", transform: "translateY(-50%)", marginRight: 6 }}>
+                        <Triangle direction="left" />
+                      </div>
+                    )}
+                    {isT2Leading && (
+                      <div style={{ position: "absolute", left: "100%", top: "50%", transform: "translateY(-50%)", marginLeft: 6 }}>
+                        <Triangle direction="right" />
+                      </div>
+                    )}
                     <div style={{ fontSize: 14, fontWeight: 800, color: BC.amber, letterSpacing: 0.5 }}>{r.matchResultText}</div>
                   </div>
                   {/* Team 2 — full names, right-aligned. */}
                   <div style={{ textAlign: "right", opacity: r.thru > 0 && !isT2Winning && !r.dormie ? 0.6 : 1 }}>
-                    <div style={{ fontSize: 9, color: tc2.accent, fontWeight: 800, letterSpacing: 1, marginBottom: 2 }}>TEAM {t2Idx + 1}</div>
-                    {t2Players.map(p => p && <div key={p.player_id} style={{ fontSize: 11, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{p.name}</div>)}
+                    {t2Players.map(p => p && <div key={p.player_id} style={{ fontSize: 12, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{p.name}</div>)}
                     <div style={{ fontSize: 18, fontWeight: 800, color: tc2.accent, marginTop: 4 }}>{r.holesWon2}</div>
                   </div>
                 </div>
@@ -4114,8 +4201,11 @@ function PracticeView({ user, tPlayers, courses, notify }) {
 
   return (
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
-      {/* Header */}
-      <div style={{ marginBottom: 12, padding: "10px 14px", background: BC.card, borderRadius: 10, border: `1px solid ${BC.amber}33` }}>
+      {/* Header — centered. The MASH ROUND mark functions as the
+          tournament banner for this view; left-aligned it read as a
+          page header, but centered it carries the same weight as the
+          team-vs-team identity that motivates the round. */}
+      <div style={{ marginBottom: 12, padding: "10px 14px", background: BC.card, borderRadius: 10, border: `1px solid ${BC.amber}33`, textAlign: "center" }}>
         <div style={{ fontSize: 14, fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>MASH ROUND</div>
         <div style={{ fontSize: 10, color: BC.t3, marginTop: 2 }}>
           {event ? `${course?.name || "Course TBD"} · ${event.player_ids?.length || 0} players · ${event.matches?.length || 0} matches` : "No event configured"}
@@ -4492,7 +4582,17 @@ export default function App() {
   const renderIcon = (icon, active) => {
     const clr = active ? BC.amber : BC.t3;
     const sz = 20;
-    if (icon === "trophy") return <img src={TROPHY_SILHOUETTE} alt="Board" style={{ width: sz, height: sz, objectFit: "contain", filter: active ? `brightness(0) saturate(100%) invert(65%) sepia(60%) saturate(500%) hue-rotate(5deg) brightness(105%)` : `brightness(0) saturate(100%) invert(40%) sepia(10%) saturate(400%) hue-rotate(185deg) brightness(80%)` }} />;
+    // Trophy silhouette is a PNG, not an SVG, so we can't simply stroke it
+    // with `clr` like the other icons. Filter chains can approximate one
+    // color but not arbitrary theme colors, which is why the inactive
+    // trophy used to read as a different hue from its tab-mates. Switching
+    // to a CSS mask + solid background means the icon takes the EXACT
+    // BC.t3 / BC.amber currently in use, with zero color drift.
+    if (icon === "trophy") return <div style={{
+      width: sz, height: sz, background: clr,
+      WebkitMask: `url(${TROPHY_SILHOUETTE}) center/contain no-repeat`,
+      mask: `url(${TROPHY_SILHOUETTE}) center/contain no-repeat`,
+    }} />;
     if (icon === "groups") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round"><circle cx="9" cy="7" r="3"/><circle cx="17" cy="7" r="3"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/><path d="M21 21v-2a3 3 0 00-2-2.83"/></svg>;
     if (icon === "score") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4z"/></svg>;
     if (icon === "betting") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v4c0 1.66 3.58 3 8 3s8-1.34 8-3V6"/><path d="M4 10v4c0 1.66 3.58 3 8 3s8-1.34 8-3v-4"/></svg>;
