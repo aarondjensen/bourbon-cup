@@ -3981,7 +3981,7 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                 gap: 10,
               }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>
                     {teamPlayers.map(p => p.name).join(" / ")}
                   </div>
                 </div>
@@ -4037,46 +4037,69 @@ function PracticeView({ user, tPlayers, courses, notify }) {
             <div key={m.id} style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 10, overflow: "hidden" }}>
               <button onClick={() => setExpandedMatch(isExpanded ? null : m.id)} style={{
                 width: "100%", padding: "12px 14px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left",
+                position: "relative",
               }}>
-                {/* "Thru N" + chevron at the top — no "MATCH N" label since both
-                    matches always render here, the order is the obvious cue. */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <div style={{ fontSize: 9, color: BC.t3 }}>Thru {r.thru}</div>
-                  <div style={{ fontSize: 11, color: BC.t3 }}>{isExpanded ? "▴" : "▾"}</div>
+                {/* Chevron — anchored to the top-right corner via absolute
+                    positioning. Was previously sharing a row with the
+                    "Thru N" label, but Thru moves down to under the
+                    match-status pill so it's spatially associated with
+                    score data instead of being a header element. The
+                    chevron remains the obvious "this card expands" cue. */}
+                <div style={{ position: "absolute", top: 8, right: 12, fontSize: 12, color: BC.t3 }}>
+                  {isExpanded ? "▴" : "▾"}
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10 }}>
-                  {/* Team 1 — full names with neutral score numbers. Dimmed when
-                      their team is currently losing (and the match isn't
-                      dormie-tied). The triangle indicator (below) carries the
-                      "who's leading" signal; team-color identifiers are
-                      intentionally not used. The big holes-won number that
-                      previously sat below each team has been removed —
-                      it duplicated information already shown by the
-                      MATCH STATUS pill ("2UP") plus the per-hole tracker
-                      strip below. */}
-                  <div style={{ textAlign: "left", opacity: r.thru > 0 && !isT1Winning && !r.dormie ? 0.6 : 1 }}>
-                    {t1Players.map(p => p && <div key={p.player_id} style={{ fontSize: 12, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{p.name}</div>)}
+                  {/* Team 1 — full names with a vertical Mash-green stripe
+                      on the LEFT edge to identify this team as the green
+                      (top) row in the per-hole tracker below. Names use
+                      solid BC.t1 (no opacity dimming) — the "who's
+                      leading" signal is now carried entirely by the
+                      green-triangle indicator and the matchResultText
+                      pill, so dimming losing names was both visually
+                      busy and redundant. The big holes-won number that
+                      previously sat below each team is also gone since
+                      the same info lives in the pill + tracker. */}
+                  <div style={{
+                    textAlign: "left",
+                    borderLeft: `3px solid ${BC.amber}`,
+                    paddingLeft: 8,
+                  }}>
+                    {t1Players.map(p => p && <div key={p.player_id} style={{ fontSize: 14, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{p.name}</div>)}
                   </div>
-                  {/* Status — triangles flank this box pointing at the leading
-                      team. Hollow during play, filled when the match goes
-                      final (clinched or 18 holes complete). Position is
-                      relative so the absolute triangles anchor here. */}
-                  <div style={{ position: "relative", textAlign: "center", padding: "4px 10px", background: BC.inp, borderRadius: 6, border: `1px solid ${BC.bdr}` }}>
-                    {isT1Leading && (
-                      <div style={{ position: "absolute", right: "100%", top: "50%", transform: "translateY(-50%)", marginRight: 6 }}>
-                        <Triangle direction="left" />
-                      </div>
-                    )}
-                    {isT2Leading && (
-                      <div style={{ position: "absolute", left: "100%", top: "50%", transform: "translateY(-50%)", marginLeft: 6 }}>
-                        <Triangle direction="right" />
-                      </div>
-                    )}
-                    <div style={{ fontSize: 14, fontWeight: 800, color: BC.amber, letterSpacing: 0.5 }}>{r.matchResultText}</div>
+                  {/* Status column — vertical stack: matchResultText pill
+                      on top, "Thru N" subtitle below it. Triangles flank
+                      the pill (not the whole stack) so they sit at pill-
+                      height, not in the dead space between pill and
+                      subtitle. Hollow triangle during play, filled when
+                      the match goes final (clinched or 18 holes done). */}
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+                    <div style={{ position: "relative", textAlign: "center", padding: "4px 10px", background: BC.inp, borderRadius: 6, border: `1px solid ${BC.bdr}` }}>
+                      {isT1Leading && (
+                        <div style={{ position: "absolute", right: "100%", top: "50%", transform: "translateY(-50%)", marginRight: 6 }}>
+                          <Triangle direction="left" />
+                        </div>
+                      )}
+                      {isT2Leading && (
+                        <div style={{ position: "absolute", left: "100%", top: "50%", transform: "translateY(-50%)", marginLeft: 6 }}>
+                          <Triangle direction="right" />
+                        </div>
+                      )}
+                      <div style={{ fontSize: 14, fontWeight: 800, color: BC.amber, letterSpacing: 0.5 }}>{r.matchResultText}</div>
+                    </div>
+                    <div style={{ fontSize: 9, color: BC.t3, fontWeight: 600 }}>Thru {r.thru}</div>
                   </div>
-                  {/* Team 2 — full names, right-aligned. */}
-                  <div style={{ textAlign: "right", opacity: r.thru > 0 && !isT2Winning && !r.dormie ? 0.6 : 1 }}>
-                    {t2Players.map(p => p && <div key={p.player_id} style={{ fontSize: 12, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{p.name}</div>)}
+                  {/* Team 2 — full names with a vertical bourbon-brown
+                      stripe on the RIGHT edge to identify this team as
+                      the brown (bottom) row in the per-hole tracker
+                      below. Mirror layout to T1 — stripe on the outside
+                      edge of each name block produces a balanced visual
+                      frame around the score column in the middle. */}
+                  <div style={{
+                    textAlign: "right",
+                    borderRight: `3px solid ${BC.gold}`,
+                    paddingRight: 8,
+                  }}>
+                    {t2Players.map(p => p && <div key={p.player_id} style={{ fontSize: 14, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{p.name}</div>)}
                   </div>
                 </div>
                 {/* Hole-by-hole tracker — two-row "battleship" layout.
