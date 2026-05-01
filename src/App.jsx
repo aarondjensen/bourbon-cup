@@ -4270,48 +4270,42 @@ function PracticeView({ user, tPlayers, courses, notify }) {
 
     return (
       <div>
-        {/* Sub-tabs — solid Mash green fill on the active tab to mirror
-            the TEAMS banner on the leaderboard. The earlier gradient
-            (135deg amber → amberDim) read as decoration; flat green
-            with white text is the consistent "this section is active"
-            language used elsewhere in the Mash UI. */}
-        <div style={{ display: "flex", background: BC.card, borderRadius: 20, padding: 3, marginBottom: 12, border: `1px solid ${BC.bdr}` }}>
-          {[["skins", "Skins"], ["ctp", "CTP"]].map(([k, label]) => (
-            <button key={k} onClick={() => setTab(k)} style={{
-              flex: 1, padding: "8px 0", borderRadius: 16, fontSize: 12, fontWeight: 700, cursor: "pointer",
-              background: tab === k ? BC.amber : "transparent",
-              color: tab === k ? "#fff" : BC.t3, border: "none",
-              letterSpacing: 0.5,
-            }}>{label}</button>
-          ))}
+        {/* Toggles row — Skins/CTP on the left (primary section
+            switcher), Gross/Net on the right (visible only when on
+            Skins; selects which scoring mode the grids render). The
+            two are kept on the same horizontal axis so the user
+            doesn't need to scan vertically to find related controls.
+            The parent Skins/CTP is full-flex (takes most of the row);
+            Gross/Net is a smaller inline pill anchored to the right
+            edge with its own background to signal "this is a
+            sub-control of the active section". */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+          <div style={{ flex: 1, display: "flex", background: BC.card, borderRadius: 20, padding: 3, border: `1px solid ${BC.bdr}` }}>
+            {[["skins", "Skins"], ["ctp", "CTP"]].map(([k, label]) => (
+              <button key={k} onClick={() => setTab(k)} style={{
+                flex: 1, padding: "8px 0", borderRadius: 16, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                background: tab === k ? BC.amber : "transparent",
+                color: tab === k ? "#fff" : BC.t3, border: "none",
+                letterSpacing: 0.5,
+              }}>{label}</button>
+            ))}
+          </div>
+          {tab === "skins" && (
+            <div style={{ display: "inline-flex", background: BC.inp, borderRadius: 10, padding: 2, border: `1px solid ${BC.bdr}`, flexShrink: 0 }}>
+              {[["gross", "Gross"], ["net", "Net"]].map(([k, label]) => (
+                <button key={k} onClick={() => setSkinsMode(k)} style={{
+                  padding: "5px 10px", borderRadius: 8, fontSize: 10, fontWeight: 700, cursor: "pointer",
+                  background: skinsMode === k ? BC.amberDim : "transparent",
+                  color: skinsMode === k ? "#fff" : BC.t3, border: "none",
+                  letterSpacing: 0.4,
+                }}>{label}</button>
+              ))}
+            </div>
+          )}
         </div>
 
         {tab === "skins" && (
           <div>
-            {/* Gross / Net toggle — sub-control nested under the parent
-                Skins tab, so it's intentionally smaller and uses a
-                different shade than its parent. Right-aligned (rather
-                than full-width like the parent) and tinted with the
-                deeper Mash green BC.amberDim (the dark-shade end of the
-                brand-green range) instead of the bright BC.amber the
-                parent uses. The visual hierarchy reads: parent toggle =
-                "which betting mode" (full-width, bright green), this
-                toggle = "which skin variety" (compact, deeper green) —
-                the user's eye lands on the parent first, then the
-                child. */}
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
-              <div style={{ display: "inline-flex", background: BC.inp, borderRadius: 10, padding: 2, border: `1px solid ${BC.bdr}` }}>
-                {[["gross", "Gross"], ["net", "Net"]].map(([k, label]) => (
-                  <button key={k} onClick={() => setSkinsMode(k)} style={{
-                    padding: "3px 14px", borderRadius: 8, fontSize: 10, fontWeight: 700, cursor: "pointer",
-                    background: skinsMode === k ? BC.amberDim : "transparent",
-                    color: skinsMode === k ? "#fff" : BC.t3, border: "none",
-                    letterSpacing: 0.4,
-                  }}>{label}</button>
-                ))}
-              </div>
-            </div>
-
             {/* Two-card layout — front 9 and back 9 stacked. Each card is
                 a CSS grid of (2 + N) rows × 10 columns: HOLE / PAR header
                 rows, then one row per event player. The 28px first column
@@ -4365,65 +4359,49 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                       holes.forEach(h => {
                         const score = scoresMap[`${p.player_id}_${h}`];
                         const strokes = skins.strokeMaps?.[p.player_id]?.[h] || 0;
-                        // Net = gross minus strokes received on that hole.
-                        // Hole-level handicap allocation already happened in
-                        // computePracticeSkins (one stroke per HCP-ranked
-                        // hole, then a second pass for high-handicap players,
-                        // etc.), so this is a straight subtraction.
                         const netScore = score ? score - strokes : null;
-                        // The skin-winner lookup keys on the active mode.
-                        // At most one highlight per cell, dictated by the
-                        // toggle. Cleaner read, simpler logic.
                         const skinWin = skins[skinsMode]?.[h] === p.player_id;
                         const cellBG = skinWin ? BC.amber : "transparent";
                         const cellColor = skinWin ? "#fff" : score ? BC.t1 : BC.t3;
                         const cellBorder = skinWin ? "1px solid transparent" : `1px solid ${BC.bdr}40`;
                         // Stroke-dot color follows the cell-state contrast:
-                        // blue on neutral cells (the standard scorecard
-                        // treatment used in ScoreCell), white on green
-                        // skin-winning cells so the dots stay visible
-                        // against the saturated fill.
+                        // standard blue on neutral cells (matches the
+                        // scorecard treatment used in ScoreCell elsewhere),
+                        // white on green skin-winning cells so dots stay
+                        // visible against the saturated fill.
                         const dotColor = skinWin ? "#fff" : "#4ba3d4";
-                        // Net text color — muted gray on neutral cells,
-                        // white-translucent on skin-winning cells. Slightly
-                        // lighter than gross to enforce the visual
-                        // hierarchy (gross is what you played; net is the
-                        // adjusted figure used for scoring).
-                        const netColor = skinWin ? "rgba(255,255,255,0.85)" : BC.t3;
+                        // Mode-specific layout. Gross mode shows just the
+                        // gross score — the simple, classic scorecard
+                        // view. Net mode shows stroke dots above the net
+                        // score — the relevant figure when judging net
+                        // skins. Single-mode display means the user
+                        // always sees ONE number per cell, no dual-stack
+                        // ambiguity. The cell minHeight is tuned per
+                        // mode: gross cells stay compact since they
+                        // skip the stroke-dot row, net cells reserve
+                        // the extra row so the grid stays uniform.
+                        const isGross = skinsMode === "gross";
                         cells.push(
                           <div key={`${p.player_id}-${h}`} style={{
                             display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                            padding: "3px 0",
+                            padding: "4px 0",
                             background: cellBG, color: cellColor,
                             border: cellBorder, borderRadius: 3,
                             boxSizing: "border-box",
-                            // Reserved minimum height keeps every cell the
-                            // same size whether or not strokes/net render,
-                            // so the grid stays visually aligned across
-                            // rows. Without this, holes where one player
-                            // got strokes and another didn't would render
-                            // at different heights in the same row.
-                            minHeight: 34,
+                            minHeight: isGross ? 26 : 32,
                           }}>
-                            {/* Stroke dot row — fixed 8px tall regardless of
-                                whether dots show, so cells without strokes
-                                stay the same height as cells with them. */}
-                            <div style={{ height: 8, display: "flex", alignItems: "center", fontSize: 8, fontWeight: 900, letterSpacing: 1, lineHeight: 1, color: dotColor }}>
-                              {strokes > 0 ? "•".repeat(strokes) : ""}
-                            </div>
-                            {/* Gross — the score actually played. Always
-                                shown (or "—" when not yet entered). Bold
-                                if a skin was won here. */}
-                            <div style={{ fontSize: 11, fontWeight: skinWin ? 800 : 700, lineHeight: "13px" }}>
-                              {score || "—"}
-                            </div>
-                            {/* Net — score after stroke deduction. Only
-                                renders when strokes > 0 and a score was
-                                entered (otherwise net == gross or
-                                undefined, both redundant). The reserved
-                                row keeps cell height consistent. */}
-                            <div style={{ height: 9, fontSize: 8, fontWeight: 700, lineHeight: "9px", color: netColor }}>
-                              {strokes > 0 && score ? netScore : ""}
+                            {!isGross && (
+                              // Stroke dot row — net mode only. Reserved
+                              // 8px tall regardless of whether dots show,
+                              // so net-mode cells in the same row stay
+                              // aligned even when only some players got
+                              // strokes on a given hole.
+                              <div style={{ height: 8, display: "flex", alignItems: "center", fontSize: 8, fontWeight: 900, letterSpacing: 1, lineHeight: 1, color: dotColor }}>
+                                {strokes > 0 ? "•".repeat(strokes) : ""}
+                              </div>
+                            )}
+                            <div style={{ fontSize: 12, fontWeight: skinWin ? 800 : 700, lineHeight: "14px" }}>
+                              {isGross ? (score || "—") : (score ? netScore : "—")}
                             </div>
                           </div>
                         );
