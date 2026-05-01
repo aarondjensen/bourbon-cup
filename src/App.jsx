@@ -4173,9 +4173,20 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                         const won = h.result === 1;
                         const tied = h.result === 0;
                         const unscored = h.result == null;
+                        // Tied holes get a diagonal green/brown split
+                        // (BC.amber top-left, BC.gold bottom-right). The
+                        // split visually says "this hole has both teams
+                        // in it" — neither side claimed it outright. The
+                        // same gradient renders on BOTH rows for a tied
+                        // hole, so the tied state reads as "both rows
+                        // show the same symbol simultaneously" and stays
+                        // distinct from any won-state cell. Previously
+                        // tied was a flat gray which got lost next to
+                        // the unscored faint-outline cells.
+                        const tiedGradient = `linear-gradient(135deg, ${BC.amber} 50%, ${BC.gold} 50%)`;
                         return <div key={hi} style={{
                           flex: 1, height: 10, borderRadius: 2,
-                          background: won ? BC.amber : tied ? BC.t3 + "60" : unscored ? "transparent" : BC.inp,
+                          background: won ? BC.amber : tied ? tiedGradient : unscored ? "transparent" : BC.inp,
                           border: unscored ? `1px solid ${BC.bdr}80` : "none",
                           boxSizing: "border-box",
                         }} />;
@@ -4187,9 +4198,10 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                         const won = h.result === -1;
                         const tied = h.result === 0;
                         const unscored = h.result == null;
+                        const tiedGradient = `linear-gradient(135deg, ${BC.amber} 50%, ${BC.gold} 50%)`;
                         return <div key={hi} style={{
                           flex: 1, height: 10, borderRadius: 2,
-                          background: won ? BC.gold : tied ? BC.t3 + "60" : unscored ? "transparent" : BC.inp,
+                          background: won ? BC.gold : tied ? tiedGradient : unscored ? "transparent" : BC.inp,
                           border: unscored ? `1px solid ${BC.bdr}80` : "none",
                           boxSizing: "border-box",
                         }} />;
@@ -4217,6 +4229,14 @@ function PracticeView({ user, tPlayers, courses, notify }) {
   // ── Betting Sub-view ──
   const BettingTab = () => {
     const [tab, setTab] = useState("skins"); // skins | ctp
+    // Skins display mode — toggles which skin type is rendered in the
+    // hole grids. Showing both at the same time (the previous behavior)
+    // forced the user to mentally separate two sets of highlights on a
+    // single canvas; the gross-vs-net toggle keeps each view focused
+    // on one signal at a time. The Totals card below the grids still
+    // shows both columns since its tabular layout makes the gross/net
+    // distinction obvious without crowding.
+    const [skinsMode, setSkinsMode] = useState("gross"); // gross | net
     const holePars = course?.hole_pars || Array(18).fill(4);
     const par3Holes = holePars.map((p, i) => p === 3 ? i : -1).filter(i => i !== -1);
 
@@ -4245,33 +4265,42 @@ function PracticeView({ user, tPlayers, courses, notify }) {
 
     return (
       <div>
-        {/* Sub-tabs */}
+        {/* Sub-tabs — solid Mash green fill on the active tab to mirror
+            the TEAMS banner on the leaderboard. The earlier gradient
+            (135deg amber → amberDim) read as decoration; flat green
+            with white text is the consistent "this section is active"
+            language used elsewhere in the Mash UI. */}
         <div style={{ display: "flex", background: BC.card, borderRadius: 20, padding: 3, marginBottom: 12, border: `1px solid ${BC.bdr}` }}>
           {[["skins", "Skins"], ["ctp", "CTP"]].map(([k, label]) => (
             <button key={k} onClick={() => setTab(k)} style={{
               flex: 1, padding: "8px 0", borderRadius: 16, fontSize: 12, fontWeight: 700, cursor: "pointer",
-              background: tab === k ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
-              color: tab === k ? "#0a0804" : BC.t3, border: "none",
+              background: tab === k ? BC.amber : "transparent",
+              color: tab === k ? "#fff" : BC.t3, border: "none",
+              letterSpacing: 0.5,
             }}>{label}</button>
           ))}
         </div>
 
         {tab === "skins" && (
           <div>
-            {/* Legend — explains the cell-highlighting language used in
-                the grids below. Mirrors the dual-skin convention from the
-                main app's betting view: GROSS = filled with Mash green,
-                NET = bordered with bourbon. Cells that are both (gross
-                winner who also took net) get the fill AND the border. */}
-            <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 10, padding: "8px 12px", background: BC.card, border: `1px solid ${BC.bdr}`, borderRadius: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <div style={{ width: 20, height: 20, borderRadius: 3, background: BC.amber, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800 }}>4</div>
-                <span style={{ fontSize: 10, fontWeight: 700, color: BC.t2, letterSpacing: 0.5 }}>GROSS</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <div style={{ width: 20, height: 20, borderRadius: 3, border: `2px solid ${BC.gold}`, color: BC.t1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, boxSizing: "border-box" }}>4</div>
-                <span style={{ fontSize: 10, fontWeight: 700, color: BC.t2, letterSpacing: 0.5 }}>NET</span>
-              </div>
+            {/* Gross / Net toggle — pill-style segmented control. Replaces
+                the legend that previously explained the dual-highlight
+                language; now the user picks one mode at a time and the
+                grids render only that mode's skins, which makes the
+                visual much cleaner. The active mode reads as solid
+                green / white text to mirror the parent Skins/CTP toggle
+                and the leaderboard TEAMS banner — same activation
+                language wherever a Mash UI element shows "this is the
+                live one". */}
+            <div style={{ display: "flex", background: BC.card, borderRadius: 16, padding: 3, marginBottom: 10, border: `1px solid ${BC.bdr}` }}>
+              {[["gross", "Gross"], ["net", "Net"]].map(([k, label]) => (
+                <button key={k} onClick={() => setSkinsMode(k)} style={{
+                  flex: 1, padding: "6px 0", borderRadius: 12, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                  background: skinsMode === k ? BC.amber : "transparent",
+                  color: skinsMode === k ? "#fff" : BC.t3, border: "none",
+                  letterSpacing: 0.5,
+                }}>{label}</button>
+              ))}
             </div>
 
             {/* Two-card layout — front 9 and back 9 stacked. Each card is
@@ -4282,11 +4311,7 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                 are encoded in cell appearance, not a separate column —
                 the player-by-hole matrix reads top-to-bottom so the user
                 can scan a single hole vertically (who won this hole?) or
-                a single player horizontally (which holes did they take?).
-                The previous "Hole / Gross / Net" three-column list forced
-                the user to mentally cross-reference 18 separate rows; the
-                grid replaces that with a single visually-coherent canvas
-                per nine. */}
+                a single player horizontally (which holes did they take?). */}
             {[[0, "FRONT 9"], [9, "BACK 9"]].map(([startHole, title]) => {
               const holes = Array.from({ length: 9 }, (_, i) => startHole + i);
               return (
@@ -4312,10 +4337,11 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                     ))}
                     {/* Player rows — one per event player, with two-letter
                         initials at the left edge. Each cell holds that
-                        player's gross score for that hole and renders the
-                        skin-state styling. Cells without a recorded score
-                        show "—" muted; that's distinct from "0" (which
-                        wouldn't be a valid score anyway). */}
+                        player's gross score for that hole, with a single
+                        skin-state highlight: filled with Mash green if
+                        this player won the active mode's skin on this
+                        hole, plain otherwise. The toggle above selects
+                        which mode (gross/net) drives the highlight. */}
                     {eventPlayers.flatMap((p) => {
                       const cells = [];
                       cells.push(
@@ -4329,20 +4355,18 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                       );
                       holes.forEach(h => {
                         const score = scoresMap[`${p.player_id}_${h}`];
-                        const grossWin = skins.gross[h] === p.player_id;
-                        const netWin = skins.net[h] === p.player_id;
-                        // State machine for cell appearance:
-                        //  - both gross + net (the modal case for low handicaps): green fill with gold outline
-                        //  - gross only: solid green fill
-                        //  - net only (high handicap got a stroke): gold outline
-                        //  - neither: plain cell
-                        const cellBG = grossWin ? BC.amber : "transparent";
-                        const cellColor = grossWin ? "#fff" : score ? BC.t1 : BC.t3;
-                        const cellBorder = netWin ? `2px solid ${BC.gold}` : `1px solid ${BC.bdr}40`;
+                        // The skin-winner lookup keys on the active mode.
+                        // No more split-state cells — at most one mode's
+                        // highlight ever shows on a cell, dictated by the
+                        // toggle. Cleaner read, simpler logic.
+                        const skinWin = skins[skinsMode]?.[h] === p.player_id;
+                        const cellBG = skinWin ? BC.amber : "transparent";
+                        const cellColor = skinWin ? "#fff" : score ? BC.t1 : BC.t3;
+                        const cellBorder = skinWin ? "1px solid transparent" : `1px solid ${BC.bdr}40`;
                         cells.push(
                           <div key={`${p.player_id}-${h}`} style={{
                             fontSize: 11,
-                            fontWeight: grossWin || netWin ? 800 : 600,
+                            fontWeight: skinWin ? 800 : 600,
                             padding: "5px 0", textAlign: "center",
                             background: cellBG, color: cellColor,
                             border: cellBorder, borderRadius: 3,
