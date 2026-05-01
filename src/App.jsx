@@ -5238,12 +5238,25 @@ export default function App() {
           />
         )}
         {view === "betting" && (
-          <BettingView
-            tPlayers={tPlayers} tRounds={enrichedRounds} courses={courses}
-            holeData={holeData} skinsData={skinsData} ctpData={ctpData}
-            skinsPot={skinsPot} onSetSkin={onSetSkin} onSetCtp={onSetCtp}
-            onUpdatePot={onUpdatePot} user={user} enrichedRounds={enrichedRounds}
-          />
+          // Main-app betting view is parked behind a placeholder while
+          // the real tournament betting flow (skins/CTP for the Bourbon
+          // Cup proper) is finalized. The Mash sub-app under the
+          // Practice / Mash tab still has its own fully-working betting
+          // grid for internal team rounds. Restore the original
+          // <BettingView ... /> render below when the main flow is
+          // ready to ship.
+          <div style={{
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            padding: "60px 20px", textAlign: "center", minHeight: "50vh",
+          }}>
+            <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.4 }}>🥃</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: BC.t1, marginBottom: 6, letterSpacing: 0.3 }}>
+              No bets yet
+            </div>
+            <div style={{ fontSize: 12, color: BC.t3, maxWidth: 280, lineHeight: 1.5 }}>
+              Tournament betting will open closer to game time.
+            </div>
+          </div>
         )}
         {(view === "analytics" || view === "history") && (
           <AnalyticsView
