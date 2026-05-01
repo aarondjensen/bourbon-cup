@@ -27,41 +27,64 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 // warmth in the bg is subtle (NOT yellow) so the amber accent doesn't
 // fight it. Dark mode goes cool-charcoal (think aged-leather binding seen
 // from a low-light angle) so amber reads as gold instead of beige.
+// ─── BOURBON CUP THEME — Mash Brothers Edition ───
+// Design philosophy — temporary all-Mash skin while internal practice rounds
+// are the focus. Mash Brothers brand green (#009144 deep / #004d24 deeper)
+// becomes the PRIMARY accent everywhere amber used to live: active tabs,
+// hole nav banner, score-button selection, auto-advance toast, MASH ROUND
+// header, leaderboard active states. Bourbon brown is demoted to a
+// SECONDARY accent and used only where it carries real "Bourbon Cup"
+// brand meaning — the login screen title and the trophy silhouette
+// glow. Net effect: the app reads as Mash team property with bourbon
+// as the parent-tournament flavor.
+//
+// Implementation note — `BC.amber` keeps its key name despite now holding
+// green values. Renaming would require touching ~100 call sites; instead,
+// the convention is "BC.amber = primary brand accent (whatever color
+// that currently is)" and "BC.gold = bourbon brown secondary accent".
+// The few places that genuinely need bourbon brown (login title) read
+// from BC.gold explicitly.
+//
+// Light mode is paper-with-a-whisper-of-green — like the natural fiber
+// of a Mash Brothers scorecard. Dark mode evokes the black-bg/green-flag
+// palette of the team logo itself, with a subtle green undertone in the
+// "near-black" so the green accent reads as part of a deliberate system
+// rather than as a pop of color floating on neutral charcoal.
 const getBCTheme = (mode) => {
   if (mode === "light") {
     return {
-      bg: "#f5f3ec",        // linen — quality cardstock, NOT yellow
+      bg: "#f4f7f3",        // pale linen with whisper of Mash green
       card: "#ffffff",      // pure white card surface
-      inp: "#ebe8e0",       // input / inactive — neutral pale
-      hover: "#e0dcd2",     // hover
-      bdr: "#cfcabd",       // soft neutral border (less warm than before)
-      t1: "#1f1d1a",        // ink — near-black, the faintest warm tint
-      t2: "#5d574e",        // medium neutral with warmth
-      t3: "#8e887e",        // muted neutral, refined
-      amber: "#a8730a",     // bourbon gold — slightly darker for white-card contrast
-      amberGlow: "rgba(168,115,10,0.12)",
-      amberDim: "#7a5505",
-      gold: "#b8870a",      // brighter gold accent
-      goldGlow: "rgba(184,135,10,0.10)",
-      danger: "#c1272d",    // traditional deep red (less candy than #dc2626)
-      warn: "#c2570d",      // burnt orange — traditional, less yellow
-      green: "#047857",     // forest green — Augusta-leaning
+      inp: "#e6ebe7",       // pale green-tinted gray (input/inactive)
+      hover: "#d8dfd9",
+      bdr: "#c4cfc6",       // soft green-tinted border
+      t1: "#1a1f1c",        // near-black with cool/green tint
+      t2: "#5a615c",        // medium neutral with green lean
+      t3: "#8b918d",        // muted neutral, refined
+      amber: "#009144",     // PRIMARY ACCENT — Mash Brothers brand green
+      amberGlow: "rgba(0,145,68,0.14)",
+      amberDim: "#004d24",  // Mash deep green (gradients, hover-state)
+      gold: "#a8730a",      // SECONDARY ACCENT — bourbon brown (login title only)
+      goldGlow: "rgba(168,115,10,0.10)",
+      danger: "#c1272d",    // traditional deep red
+      warn: "#c2570d",      // burnt orange
+      green: "#047857",     // generic positive (distinct from brand accent)
     };
   }
-  // dark (default) — cool charcoal, lets amber read as warm gold accent
+  // dark (default) — Mash logo "black bg + green flag" inspired
   return {
-    bg: "#0c0d10",          // near-black with whisper of cool tone
-    card: "#15171b",        // elevated panel
-    inp: "#101216",         // sunken input
-    hover: "#1c1f24",
-    bdr: "#292c33",         // subtle cool border
-    t1: "#ecedef",          // clean cool white
-    t2: "#a7a9af",          // cool medium gray
-    t3: "#6a6c72",          // cool muted gray
-    amber: "#c8860a",       // bourbon (unchanged — brand signature)
-    amberGlow: "rgba(200,134,10,0.18)",
-    amberDim: "#8a5c07",
-    gold: "#d4a843",
+    bg: "#0a1410",          // near-black with green undertone (Mash logo bg)
+    card: "#121d18",        // elevated panel
+    inp: "#0e1813",         // sunken input
+    hover: "#1a2922",
+    bdr: "#1f3026",         // subtle green-tinted border
+    t1: "#e8eee9",          // slightly green-tinted clean white
+    t2: "#a3aea7",          // green-leaning medium gray
+    t3: "#6b766f",          // green-leaning muted gray
+    amber: "#16a34a",       // PRIMARY ACCENT — brightened Mash green for dark
+    amberGlow: "rgba(22,163,74,0.20)",
+    amberDim: "#15803d",
+    gold: "#d4a843",        // SECONDARY ACCENT — bourbon brown
     goldGlow: "rgba(212,168,67,0.12)",
     danger: "#ef4444",
     warn: "#f59e0b",
@@ -4241,9 +4264,11 @@ function PracticeView({ user, tPlayers, courses, notify }) {
   return (
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
       {/* Header — centered. The MASH ROUND mark functions as the
-          tournament banner for this view; left-aligned it read as a
-          page header, but centered it carries the same weight as the
-          team-vs-team identity that motivates the round. */}
+          tournament banner for this view. Reads from BC.amber (the
+          primary brand accent, currently Mash green per the active
+          palette) so it tunes automatically between light and dark
+          modes — full brand green #009144 on white in light, brightened
+          #16a34a for visibility on the dark green-tinted bg. */}
       <div style={{ marginBottom: 12, padding: "10px 14px", background: BC.card, borderRadius: 10, border: `1px solid ${BC.amber}33`, textAlign: "center" }}>
         <div style={{ fontSize: 14, fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>MASH ROUND</div>
         <div style={{ fontSize: 10, color: BC.t3, marginTop: 2 }}>
