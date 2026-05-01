@@ -696,7 +696,7 @@ function Notif({ notif }) {
 
 // ── Login Screen ──
 const DIRECTOR_CODE = "bcdir2025";
-function LoginScreen({ players, onLogin, teamNames }) {
+function LoginScreen({ players, onLogin, teamNames, darkMode }) {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
@@ -705,7 +705,14 @@ function LoginScreen({ players, onLogin, teamNames }) {
     }
   }, [search]);
 
-  const teamA = { ...TEAM_A, name: teamNames?.A || TEAM_A.name };
+  // Mash Brothers has TWO logo variants — one designed to be displayed
+  // on a black background (the original, with the green flag/white
+  // type), and one designed for a white/light background. Picking the
+  // right variant per theme is important: the on-black logo loses its
+  // outline definition against the cream paper of light mode, and the
+  // on-white logo's dark elements disappear against dark-mode charcoal.
+  // Shot Callers ships a single logo so it isn't theme-swapped.
+  const teamA = { ...TEAM_A, name: teamNames?.A || TEAM_A.name, logo: darkMode ? LOGO_TEAM_A : LOGO_TEAM_A_WHITE };
   const teamB = { ...TEAM_B, name: teamNames?.B || TEAM_B.name };
 
   const teamAPlayers = players.filter(p => p.team === "A");
@@ -5100,7 +5107,7 @@ export default function App() {
 
   const availableRounds = useMemo(() => [...new Set(enrichedMatches.map(m => m.round))].sort(), [enrichedMatches]);
 
-  if (!user) return <LoginScreen players={tPlayers} teamNames={teamNames} onLogin={p => { setUser({ ...p, isDirector: !!p.isDirector }); }} />;
+  if (!user) return <LoginScreen players={tPlayers} teamNames={teamNames} darkMode={darkMode} onLogin={p => { setUser({ ...p, isDirector: !!p.isDirector }); }} />;
 
   const navItems = [
     { key: "practice",    label: "Mash",        icon: "mash" },
