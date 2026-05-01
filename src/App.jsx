@@ -3954,17 +3954,26 @@ function PracticeView({ user, tPlayers, courses, notify }) {
 
     return (
       <div>
-        {/* TEAM TOTALS — combined net to par + thru hole, one row per team. */}
+        {/* TEAMS — combined net to par + thru hole, one row per team.
+            Header banner is filled with Mash brand green (BC.amber under
+            the active palette) to anchor the leaderboard as a Mash team
+            artifact. Title is centered and singular ("TEAMS" — the word
+            "TOTALS" was redundant since the to-par column already
+            communicates "this is summed up"). */}
         <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 10, overflow: "hidden" }}>
-          <div style={{ padding: "10px 14px", borderBottom: `1px solid ${BC.bdr}` }}>
-            <div style={{ fontSize: 9, color: BC.t3, fontWeight: 800, letterSpacing: 1 }}>TEAM TOTALS</div>
+          <div style={{ padding: "8px 14px", background: BC.amber, textAlign: "center" }}>
+            <div style={{ fontSize: 11, color: "#fff", fontWeight: 800, letterSpacing: 2 }}>TEAMS</div>
           </div>
           {teamTotals.map(({ team, idx, teamPids, toPar, thru }, rowIdx) => {
             const tc = PRACTICE_TEAM_COLORS[idx];
             const teamPlayers = teamPids.map(pid => tPlayers.find(p => p.player_id === pid)).filter(Boolean);
-            // Color the to-par number green when under, neutral at par,
-            // muted-warm when over — matches scoring net coloring.
-            const parColor = thru === 0 ? BC.t3 : toPar < 0 ? "#22c55e" : toPar === 0 ? BC.t1 : BC.t2;
+            // PGA-leaderboard color convention: red ink for under par
+            // (the "good news" color for a golfer scanning a board), and
+            // muted neutral for at/over par. The previous `#22c55e`
+            // green for under-par read as inverted on a green-themed
+            // app — the under-par signal got confused with the brand
+            // accent. Red is unambiguous regardless of theme.
+            const parColor = thru === 0 ? BC.t3 : toPar < 0 ? BC.danger : toPar === 0 ? BC.t1 : BC.t2;
             return (
               <div key={team.id} style={{
                 display: "flex", alignItems: "center", padding: "10px 14px",
@@ -4068,12 +4077,78 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                     <div style={{ fontSize: 18, fontWeight: 800, color: BC.t1, marginTop: 4 }}>{r.holesWon2}</div>
                   </div>
                 </div>
-                {/* Hole tracker — thin strip showing won/tied/unscored holes */}
-                <div style={{ display: "flex", gap: 1, marginTop: 8 }}>
-                  {r.holes.map((h, hi) => {
-                    const bg = h.result === 1 ? tc1.accent : h.result === -1 ? tc2.accent : h.result === 0 ? BC.t3 : BC.bdr;
-                    return <div key={hi} style={{ flex: 1, height: 4, background: bg, borderRadius: 1 }} />;
-                  })}
+                {/* Hole-by-hole tracker — two-row "battleship" layout.
+                    Each row is one team's per-hole results: tile fills
+                    with that team's signature color when they win, gray
+                    when tied, faint outline when not yet played. Triple
+                    redundancy in identifying which team is which:
+                    (1) row position — top vs bottom,
+                    (2) row color — Mash green vs bourbon brown
+                        (deliberately chosen for high cross-channel
+                        contrast; the previous tracker used two similar
+                        green shades that bled together at a glance), and
+                    (3) leading-edge initials label — last-name initials
+                        of each player on that team.
+                    The colors don't index on PRACTICE_TEAM_COLORS for
+                    this widget — using BC.amber/BC.gold means every
+                    match card uses the same green-vs-brown pairing, so
+                    a glance at any tracker bar instantly maps to the
+                    initials shown on the left, regardless of which two
+                    teams are facing off. */}
+                <div style={{ marginTop: 10, display: "flex", gap: 6, alignItems: "stretch" }}>
+                  {/* Initials column — left-edge label for each row. Uses
+                      last-name initial of each player; concatenated for
+                      pairs (e.g., Aaron Jensen + Pete Crawford → "JC"). */}
+                  <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: 2, paddingTop: 9 }}>
+                    <div style={{ fontSize: 9, color: BC.amber, fontWeight: 800, letterSpacing: 0.5, lineHeight: "10px", minWidth: 22, textAlign: "right" }}>
+                      {t1Players.map(p => p?.name?.trim().split(/\s+/).slice(-1)[0]?.[0]?.toUpperCase() || "?").join("")}
+                    </div>
+                    <div style={{ fontSize: 9, color: BC.gold, fontWeight: 800, letterSpacing: 0.5, lineHeight: "10px", minWidth: 22, textAlign: "right" }}>
+                      {t2Players.map(p => p?.name?.trim().split(/\s+/).slice(-1)[0]?.[0]?.toUpperCase() || "?").join("")}
+                    </div>
+                  </div>
+                  {/* Tracker grid — hole numbers above, then T1 row, then T2 row. */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {/* Hole numbers — milestone holes only (1, 9, 18) plus
+                        every third hole. Rendering all 18 numbers crowded
+                        the strip; this gives spatial reference without
+                        clutter. */}
+                    <div style={{ display: "flex", gap: 1, marginBottom: 2 }}>
+                      {Array.from({ length: 18 }, (_, i) => (
+                        <div key={i} style={{ flex: 1, fontSize: 7, color: BC.t3, textAlign: "center", fontWeight: 700, lineHeight: "9px" }}>
+                          {(i === 0 || i === 8 || i === 17 || (i + 1) % 3 === 0) ? i + 1 : ""}
+                        </div>
+                      ))}
+                    </div>
+                    {/* T1 row */}
+                    <div style={{ display: "flex", gap: 1, marginBottom: 2 }}>
+                      {r.holes.map((h, hi) => {
+                        const won = h.result === 1;
+                        const tied = h.result === 0;
+                        const unscored = h.result == null;
+                        return <div key={hi} style={{
+                          flex: 1, height: 10, borderRadius: 2,
+                          background: won ? BC.amber : tied ? BC.t3 + "60" : unscored ? "transparent" : BC.inp,
+                          border: unscored ? `1px solid ${BC.bdr}80` : "none",
+                          boxSizing: "border-box",
+                        }} />;
+                      })}
+                    </div>
+                    {/* T2 row */}
+                    <div style={{ display: "flex", gap: 1 }}>
+                      {r.holes.map((h, hi) => {
+                        const won = h.result === -1;
+                        const tied = h.result === 0;
+                        const unscored = h.result == null;
+                        return <div key={hi} style={{
+                          flex: 1, height: 10, borderRadius: 2,
+                          background: won ? BC.gold : tied ? BC.t3 + "60" : unscored ? "transparent" : BC.inp,
+                          border: unscored ? `1px solid ${BC.bdr}80` : "none",
+                          boxSizing: "border-box",
+                        }} />;
+                      })}
+                    </div>
+                  </div>
                 </div>
               </button>
 
@@ -4136,33 +4211,106 @@ function PracticeView({ user, tPlayers, courses, notify }) {
 
         {tab === "skins" && (
           <div>
-            {/* Per-hole table */}
-            <div style={{ background: BC.card, borderRadius: 10, padding: 12, marginBottom: 12, border: `1px solid ${BC.bdr}` }}>
-              <div style={{ display: "grid", gridTemplateColumns: "30px 1fr 1fr", gap: 4, fontSize: 9, color: BC.t3, fontWeight: 800, letterSpacing: 1, marginBottom: 6 }}>
-                <div>HOLE</div>
-                <div>GROSS</div>
-                <div>NET</div>
+            {/* Legend — explains the cell-highlighting language used in
+                the grids below. Mirrors the dual-skin convention from the
+                main app's betting view: GROSS = filled with Mash green,
+                NET = bordered with bourbon. Cells that are both (gross
+                winner who also took net) get the fill AND the border. */}
+            <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 10, padding: "8px 12px", background: BC.card, border: `1px solid ${BC.bdr}`, borderRadius: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ width: 20, height: 20, borderRadius: 3, background: BC.amber, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800 }}>4</div>
+                <span style={{ fontSize: 10, fontWeight: 700, color: BC.t2, letterSpacing: 0.5 }}>GROSS</span>
               </div>
-              {Array.from({ length: 18 }, (_, h) => {
-                const grossP = skins.gross[h];
-                const netP = skins.net[h];
-                const grossPlayer = grossP ? tPlayers.find(p => p.player_id === grossP) : null;
-                const netPlayer = netP ? tPlayers.find(p => p.player_id === netP) : null;
-                const grossTc = grossP ? renderPlayerTeamColor(grossP) : null;
-                const netTc = netP ? renderPlayerTeamColor(netP) : null;
-                return (
-                  <div key={h} style={{ display: "grid", gridTemplateColumns: "30px 1fr 1fr", gap: 4, padding: "4px 0", borderTop: h ? `1px solid ${BC.bdr}33` : "none", fontSize: 11 }}>
-                    <div style={{ color: BC.t3, fontWeight: 700 }}>{h + 1}</div>
-                    <div style={{ color: grossTc?.accent || BC.t3, fontWeight: grossPlayer ? 700 : 400 }}>
-                      {grossPlayer ? grossPlayer.name?.split(" ").slice(-1)[0] : "—"}
-                    </div>
-                    <div style={{ color: netTc?.accent || BC.t3, fontWeight: netPlayer ? 700 : 400 }}>
-                      {netPlayer ? netPlayer.name?.split(" ").slice(-1)[0] : "—"}
-                    </div>
-                  </div>
-                );
-              })}
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ width: 20, height: 20, borderRadius: 3, border: `2px solid ${BC.gold}`, color: BC.t1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, boxSizing: "border-box" }}>4</div>
+                <span style={{ fontSize: 10, fontWeight: 700, color: BC.t2, letterSpacing: 0.5 }}>NET</span>
+              </div>
             </div>
+
+            {/* Two-card layout — front 9 and back 9 stacked. Each card is
+                a CSS grid of (2 + N) rows × 10 columns: HOLE / PAR header
+                rows, then one row per event player. The 28px first column
+                holds the player's two-letter initials (e.g., "AJ"); the
+                remaining 9 columns are equal-width hole cells. Skin wins
+                are encoded in cell appearance, not a separate column —
+                the player-by-hole matrix reads top-to-bottom so the user
+                can scan a single hole vertically (who won this hole?) or
+                a single player horizontally (which holes did they take?).
+                The previous "Hole / Gross / Net" three-column list forced
+                the user to mentally cross-reference 18 separate rows; the
+                grid replaces that with a single visually-coherent canvas
+                per nine. */}
+            {[[0, "FRONT 9"], [9, "BACK 9"]].map(([startHole, title]) => {
+              const holes = Array.from({ length: 9 }, (_, i) => startHole + i);
+              return (
+                <div key={title} style={{ background: BC.card, borderRadius: 10, padding: 8, marginBottom: 10, border: `1px solid ${BC.bdr}` }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: BC.amber, letterSpacing: 1.5, marginBottom: 6, padding: "2px 4px 4px" }}>
+                    {title}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: `28px repeat(9, 1fr)`, gap: 2 }}>
+                    {/* HOLE row — header strip with hole numbers, tinted to
+                        sit visually above the data rows. */}
+                    <div style={{ fontSize: 8, color: BC.t3, fontWeight: 800, padding: "5px 0", textAlign: "right", paddingRight: 4, letterSpacing: 0.5 }}>HOLE</div>
+                    {holes.map(h => (
+                      <div key={`hole-${h}`} style={{ fontSize: 11, fontWeight: 800, color: BC.t1, padding: "5px 0", textAlign: "center", background: BC.inp, borderRadius: 3 }}>
+                        {h + 1}
+                      </div>
+                    ))}
+                    {/* PAR row — secondary reference, lighter weight than HOLE. */}
+                    <div style={{ fontSize: 8, color: BC.t3, fontWeight: 700, padding: "3px 0", textAlign: "right", paddingRight: 4, letterSpacing: 0.5 }}>PAR</div>
+                    {holes.map(h => (
+                      <div key={`par-${h}`} style={{ fontSize: 10, color: BC.t3, fontWeight: 600, padding: "3px 0", textAlign: "center" }}>
+                        {holePars[h]}
+                      </div>
+                    ))}
+                    {/* Player rows — one per event player, with two-letter
+                        initials at the left edge. Each cell holds that
+                        player's gross score for that hole and renders the
+                        skin-state styling. Cells without a recorded score
+                        show "—" muted; that's distinct from "0" (which
+                        wouldn't be a valid score anyway). */}
+                    {eventPlayers.flatMap((p) => {
+                      const cells = [];
+                      cells.push(
+                        <div key={`init-${p.player_id}`} style={{
+                          fontSize: 10, fontWeight: 800, color: BC.t1,
+                          padding: "5px 0", textAlign: "right", paddingRight: 4,
+                          alignSelf: "center", letterSpacing: 0.3,
+                        }}>
+                          {getInitials(p.name)}
+                        </div>
+                      );
+                      holes.forEach(h => {
+                        const score = scoresMap[`${p.player_id}_${h}`];
+                        const grossWin = skins.gross[h] === p.player_id;
+                        const netWin = skins.net[h] === p.player_id;
+                        // State machine for cell appearance:
+                        //  - both gross + net (the modal case for low handicaps): green fill with gold outline
+                        //  - gross only: solid green fill
+                        //  - net only (high handicap got a stroke): gold outline
+                        //  - neither: plain cell
+                        const cellBG = grossWin ? BC.amber : "transparent";
+                        const cellColor = grossWin ? "#fff" : score ? BC.t1 : BC.t3;
+                        const cellBorder = netWin ? `2px solid ${BC.gold}` : `1px solid ${BC.bdr}40`;
+                        cells.push(
+                          <div key={`${p.player_id}-${h}`} style={{
+                            fontSize: 11,
+                            fontWeight: grossWin || netWin ? 800 : 600,
+                            padding: "5px 0", textAlign: "center",
+                            background: cellBG, color: cellColor,
+                            border: cellBorder, borderRadius: 3,
+                            boxSizing: "border-box",
+                          }}>
+                            {score || "—"}
+                          </div>
+                        );
+                      });
+                      return cells;
+                    })}
+                  </div>
+                </div>
+              );
+            })}
 
             {/* Totals */}
             <div style={{ background: BC.card, borderRadius: 10, padding: 12, border: `1px solid ${BC.bdr}` }}>
