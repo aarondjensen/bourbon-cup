@@ -202,22 +202,32 @@ const db = {
 //   - Par is the par of the tee (almost always == course par)
 // Result is rounded to the nearest integer per USGA convention.
 const calcCH = (hi, slope, rating, par) => (!hi && hi !== 0) ? 0 : Math.round((hi * (slope / 113)) + (rating - par));
-// Resolves slope/rating/par for a course doc and runs calcCH. Many course
-// docs (especially API-imported ones) store the real slope/rating/par on
-// individual tee boxes rather than at the top level — falling through to
-// the 113/72/72 defaults in those cases would have produced CH == HI,
-// which is what made handicap output look "off." Lookup order:
-//   1. Top-level course.slope/rating/par if they were set explicitly
-//   2. First tee box (the imported primary tee) as the fallback
-//   3. USGA neutral defaults as the absolute floor
-// All values are coerced through parseFloat so string-stored values from
-// the imported APIs (e.g. "126") still work.
-const calcCHForCourse = (hi, course) => {
+// Resolves slope/rating/par for a course doc and runs calcCH. The tee
+// the player is actually playing matters — different tees on the same
+// course can have wildly different slope ratings (e.g. Black 138 vs
+// White 122), and the USGA formula uses the playing tee's values, not
+// course-level averages. When a specific tee is named, its values are
+// definitive — they ARE the playing conditions. When no tee is named
+// (legacy events created before tee selection existed), we fall back
+// through: top-level course.slope/rating/par → first tee box → USGA
+// neutral defaults (113/72/72). All values are coerced through
+// parseFloat so string-stored values from imported APIs still work.
+const calcCHForCourse = (hi, course, teeName) => {
   if (!course) return calcCH(hi, 113, 72, 72);
-  const tee = (course.tee_boxes && course.tee_boxes[0]) || {};
-  const slope = parseFloat(course.slope) || parseFloat(tee.slope) || 113;
-  const rating = parseFloat(course.rating) || parseFloat(tee.rating) || 72;
-  const par = parseFloat(course.par) || parseFloat(tee.par) || 72;
+  const teeBoxes = course.tee_boxes || [];
+  if (teeName) {
+    const tee = teeBoxes.find(t => t.name === teeName);
+    if (tee) {
+      const slope = parseFloat(tee.slope) || 113;
+      const rating = parseFloat(tee.rating) || 72;
+      const par = parseFloat(tee.par) || 72;
+      return calcCH(hi, slope, rating, par);
+    }
+  }
+  const fallbackTee = teeBoxes[0] || {};
+  const slope = parseFloat(course.slope) || parseFloat(fallbackTee.slope) || 113;
+  const rating = parseFloat(course.rating) || parseFloat(fallbackTee.rating) || 72;
+  const par = parseFloat(course.par) || parseFloat(fallbackTee.par) || 72;
   return calcCH(hi, slope, rating, par);
 };
 const fmtScore = (n) => n == null ? "—" : n === 0 ? "E" : n > 0 ? `+${n}` : `${n}`;
@@ -522,7 +532,7 @@ const PRACTICE_TEAM_COLORS = [
 // Walk all 18; track running cumulative (T1 holes − T2 holes).
 // matchResultText: "AS" | "1UP" | "5&4" | "3&2"
 // Returns a thru count so the leaderboard knows how far along the match is.
-function computePracticeMatch({ match, scores, course, players, hcpOverrides, hcpMode }) {
+function computePracticeMatch({ match, scores, course, players, hcpOverrides, hcpMode, teeName }) {
   const empty = { holes: Array(18).fill({ result: null, n1: null, n2: null }), running: Array(18).fill(0), thru: 0, matchResultText: "—", winnerTeamId: null, clinched: false, endHole: 17, holesWon1: 0, holesWon2: 0, dormie: false };
   if (!course || !match) return empty;
 
@@ -542,7 +552,7 @@ function computePracticeMatch({ match, scores, course, players, hcpOverrides, hc
     const tp = players.find(t => t.player_id === pid);
     return parseFloat(tp?.handicap_index) || 0;
   };
-  const getCH = (pid) => calcCHForCourse(getHI(pid), course);
+  const getCH = (pid) => calcCHForCourse(getHI(pid), course, teeName);
 
   // Low-man adjustment: low CH plays scratch, others get diff
   const allCHs = allPids.map(getCH);
@@ -654,7 +664,7 @@ function computePracticeMatch({ match, scores, course, players, hcpOverrides, hc
 // ─────────────────────────────────────────────────────────────────────────────
 // For each hole: lowest gross unique → gross skin; lowest net unique → net skin.
 // Tie = no skin on that hole. Returns { gross: {h: pid|null}, net: {h: pid|null} }.
-function computePracticeSkins({ scores, players, course, hcpOverrides }) {
+function computePracticeSkins({ scores, players, course, hcpOverrides, teeName }) {
   const result = { gross: {}, net: {}, strokeMaps: {} };
   if (!course || !players.length) return result;
 
@@ -666,7 +676,7 @@ function computePracticeSkins({ scores, players, course, hcpOverrides }) {
     const tp = players.find(t => t.player_id === pid);
     return parseFloat(tp?.handicap_index) || 0;
   };
-  const getCH = (pid) => calcCHForCourse(getHI(pid), course);
+  const getCH = (pid) => calcCHForCourse(getHI(pid), course, teeName);
 
   // Each player gets their FULL course handicap for skins (not low-man adjusted —
   // skins are an individual side game, not match play). Standard practice.
@@ -3163,7 +3173,7 @@ function PracticeScoringTab({
           if (event.hcp_overrides?.[pid] !== undefined && event.hcp_overrides[pid] !== "") return parseFloat(event.hcp_overrides[pid]) || 0;
           return parseFloat(p.handicap_index) || 0;
         })();
-        const ch = calcCHForCourse(hi, course);
+        const ch = calcCHForCourse(hi, course, event.tee_box);
         const run = getRunning(pid);
 
         // Shift the button range when the saved score falls outside [min, max].
@@ -3409,6 +3419,7 @@ function PracticeView({ user, tPlayers, courses, notify }) {
         players: tPlayers,
         hcpOverrides: event.hcp_overrides || {},
         hcpMode: event.hcp_mode || "low_man",
+        teeName: event.tee_box,
       }),
     }));
   }, [event, course, scoresMap, tPlayers]);
@@ -3418,6 +3429,7 @@ function PracticeView({ user, tPlayers, courses, notify }) {
     players: eventPlayers,
     course,
     hcpOverrides: event?.hcp_overrides || {},
+    teeName: event?.tee_box,
   }), [scoresMap, eventPlayers, course, event]);
 
   // Save score
@@ -3470,7 +3482,7 @@ function PracticeView({ user, tPlayers, courses, notify }) {
       const tp = tPlayers.find(p => p.player_id === pid);
       return parseFloat(tp?.handicap_index) || 0;
     };
-    const getCH = (pid) => calcCHForCourse(getHI(pid), course);
+    const getCH = (pid) => calcCHForCourse(getHI(pid), course, event.tee_box);
     const allCHs = allPids.map(getCH);
     const minCH = allCHs.length ? Math.min(...allCHs) : 0;
     const adjCH = (pid) => event.hcp_mode === "full" ? getCH(pid) : (getCH(pid) - minCH);
@@ -3699,6 +3711,13 @@ function PracticeView({ user, tPlayers, courses, notify }) {
   const SetupTab = () => {
     const [selPlayers, setSelPlayers] = useState(event?.player_ids || []);
     const [selCourse, setSelCourse] = useState(event?.course_id || (courses[0]?.id || ""));
+    // Tee selection — Mash practice events assume all 4 players in a match
+    // play the same tee (consistent with how the team rounds back at home
+    // course actually run). The selected tee's slope/rating/par are what
+    // get fed into calcCHForCourse, which is what fixes the "CH always
+    // equals HI" symptom on courses where the tee data lives only on
+    // tee_boxes and not at the top level.
+    const [selTee, setSelTee] = useState(event?.tee_box || "");
     const [hcpMode, setHcpMode] = useState(event?.hcp_mode || "low_man");
     const [teamSlots, setTeamSlots] = useState(() => {
       if (event?.teams) {
@@ -3738,6 +3757,18 @@ function PracticeView({ user, tPlayers, courses, notify }) {
 
     const allTeamsComplete = teamSlots.every(s => s.length === 2);
     const courseObj = courses.find(c => c.id === selCourse);
+    const courseTees = courseObj?.tee_boxes || [];
+    // When the user picks a different course (or this is a fresh setup),
+    // pre-select a sensible default tee so the dropdown isn't blank. Pick
+    // the first tee_box if no selection exists yet, OR if the previously-
+    // selected tee name doesn't exist on the new course. Don't clobber a
+    // valid existing selection on re-renders.
+    useEffect(() => {
+      if (!courseTees.length) { if (selTee !== "") setSelTee(""); return; }
+      const stillValid = courseTees.some(t => t.name === selTee);
+      if (!stillValid) setSelTee(courseTees[0].name || "");
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selCourse, courseTees.length]);
 
     const saveSetup = async () => {
       if (!allTeamsComplete) { notify("All 4 teams need 2 players", "warn"); return; }
@@ -3758,6 +3789,7 @@ function PracticeView({ user, tPlayers, courses, notify }) {
         id: "current",
         tournament_id: TOURNAMENT_ID,
         course_id: selCourse,
+        tee_box: selTee || "",
         hcp_mode: hcpMode,
         hcp_overrides: event?.hcp_overrides || {},
         player_ids: selPlayers,
@@ -3803,6 +3835,34 @@ function PracticeView({ user, tPlayers, courses, notify }) {
             <option value="">— Select course —</option>
             {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
+
+          {/* Tee selector — appears once a course with tee_boxes is chosen.
+              All four players in a practice match play the same tee (matches
+              real-world team-round behavior), so this is a single event-level
+              setting rather than per-player. The label includes slope and
+              rating in parens so the director picking the tee can see at a
+              glance that they're picking real numeric values, not arbitrary
+              tee names. */}
+          {courseTees.length > 0 && (
+            <>
+              <div style={{ fontSize: 10, color: BC.t3, marginBottom: 6, fontWeight: 700, letterSpacing: 1 }}>TEE BOX</div>
+              <select value={selTee} onChange={e => setSelTee(e.target.value)} style={{
+                width: "100%", padding: "8px 10px", background: BC.inp, border: `1px solid ${BC.bdr}`,
+                borderRadius: 6, color: BC.t1, fontSize: 13, marginBottom: 10,
+              }}>
+                {courseTees.map(t => {
+                  const slope = parseFloat(t.slope) || 113;
+                  const rating = parseFloat(t.rating) || 72;
+                  const par = parseFloat(t.par) || 72;
+                  return (
+                    <option key={t.name} value={t.name}>
+                      {t.name} — slope {slope}, rating {rating}, par {par}
+                    </option>
+                  );
+                })}
+              </select>
+            </>
+          )}
 
           <div style={{ fontSize: 10, color: BC.t3, marginBottom: 6, fontWeight: 700, letterSpacing: 1 }}>HANDICAP MODE</div>
           <div style={{ display: "flex", gap: 6 }}>
