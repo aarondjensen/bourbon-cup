@@ -193,7 +193,33 @@ const db = {
 };
 
 // ── Helpers ──
+// USGA Course Handicap formula:
+//   CH = HI × (Slope / 113) + (Course Rating - Par)
+// where:
+//   - HI is the player's official Handicap Index from admin setup
+//   - Slope is the slope rating of the tee being played (113 = neutral)
+//   - Course Rating is the difficulty rating of the tee
+//   - Par is the par of the tee (almost always == course par)
+// Result is rounded to the nearest integer per USGA convention.
 const calcCH = (hi, slope, rating, par) => (!hi && hi !== 0) ? 0 : Math.round((hi * (slope / 113)) + (rating - par));
+// Resolves slope/rating/par for a course doc and runs calcCH. Many course
+// docs (especially API-imported ones) store the real slope/rating/par on
+// individual tee boxes rather than at the top level — falling through to
+// the 113/72/72 defaults in those cases would have produced CH == HI,
+// which is what made handicap output look "off." Lookup order:
+//   1. Top-level course.slope/rating/par if they were set explicitly
+//   2. First tee box (the imported primary tee) as the fallback
+//   3. USGA neutral defaults as the absolute floor
+// All values are coerced through parseFloat so string-stored values from
+// the imported APIs (e.g. "126") still work.
+const calcCHForCourse = (hi, course) => {
+  if (!course) return calcCH(hi, 113, 72, 72);
+  const tee = (course.tee_boxes && course.tee_boxes[0]) || {};
+  const slope = parseFloat(course.slope) || parseFloat(tee.slope) || 113;
+  const rating = parseFloat(course.rating) || parseFloat(tee.rating) || 72;
+  const par = parseFloat(course.par) || parseFloat(tee.par) || 72;
+  return calcCH(hi, slope, rating, par);
+};
 const fmtScore = (n) => n == null ? "—" : n === 0 ? "E" : n > 0 ? `+${n}` : `${n}`;
 const getTeam = (tid) => tid === "A" ? TEAM_A : TEAM_B;
 const oppTeam = (tid) => tid === "A" ? TEAM_B : TEAM_A;
@@ -293,7 +319,7 @@ function computeMatchResult(match, holeData, courses, tRounds, tPlayers, format,
   };
   const getCH = (pid) => {
     const hi = getPlayerHI(pid);
-    return calcCH(hi, course.slope || 113, course.rating || 72, course.par || 72);
+    return calcCHForCourse(hi, course);
   };
   const getStrokeMap = (ch) => {
     const sorted = holeHcps.map((h,i) => ({ idx: i, hcp: h })).sort((a,b) => a.hcp - b.hcp);
@@ -354,8 +380,8 @@ function computeMatchResult(match, holeData, courses, tRounds, tPlayers, format,
       // Apply team handicap (avg of players / 2 for scramble)
       const aAvgHI = teamA.reduce((s,p) => s + getPlayerHI(p), 0) / teamA.length;
       const bAvgHI = teamB.reduce((s,p) => s + getPlayerHI(p), 0) / teamB.length;
-      const aTeamCH = Math.round(calcCH(aAvgHI * 0.35, course.slope || 113, course.rating || 72, course.par || 72));
-      const bTeamCH = Math.round(calcCH(bAvgHI * 0.35, course.slope || 113, course.rating || 72, course.par || 72));
+      const aTeamCH = Math.round(calcCHForCourse(aAvgHI * 0.35, course));
+      const bTeamCH = Math.round(calcCHForCourse(bAvgHI * 0.35, course));
       const aMap = getStrokeMap(aTeamCH), bMap = getStrokeMap(bTeamCH);
       aScore = aRaws.length ? netScore(Math.min(...aRaws), h, aMap) : null;
       bScore = bRaws.length ? netScore(Math.min(...bRaws), h, bMap) : null;
@@ -516,7 +542,7 @@ function computePracticeMatch({ match, scores, course, players, hcpOverrides, hc
     const tp = players.find(t => t.player_id === pid);
     return parseFloat(tp?.handicap_index) || 0;
   };
-  const getCH = (pid) => calcCH(getHI(pid), course.slope || 113, course.rating || 72, course.par || 72);
+  const getCH = (pid) => calcCHForCourse(getHI(pid), course);
 
   // Low-man adjustment: low CH plays scratch, others get diff
   const allCHs = allPids.map(getCH);
@@ -640,7 +666,7 @@ function computePracticeSkins({ scores, players, course, hcpOverrides }) {
     const tp = players.find(t => t.player_id === pid);
     return parseFloat(tp?.handicap_index) || 0;
   };
-  const getCH = (pid) => calcCH(getHI(pid), course.slope || 113, course.rating || 72, course.par || 72);
+  const getCH = (pid) => calcCHForCourse(getHI(pid), course);
 
   // Each player gets their FULL course handicap for skins (not low-man adjusted —
   // skins are an individual side game, not match play). Standard practice.
@@ -3077,36 +3103,48 @@ function PracticeScoringTab({
         {Array.from({ length: 9 }, (_, i) => renderStatusCell(i + 9))}
       </div>
 
-      {/* Hole nav banner — amber filled bar showing Par / Hole / HCP, with prev/next.
-          Mirrors the MNQ scoring banner exactly. */}
+      {/* Hole nav banner — deep Mash green filled bar showing
+          Par / Hole / HCP, with prev/next arrows. Uses BC.amberDim
+          (the deep brand-green) with white text — the SAME treatment
+          as the betting Gross/Net toggle's active state, the
+          completed hole-strip cells above, and any other "this is
+          the firm/established surface" element across the Mash UI.
+          Bright BC.amber stays reserved for "currently active /
+          interactive" surfaces (active sub-tabs, the active hole on
+          the strip, score-button selection, etc.); deep BC.amberDim
+          is for the chrome and reference surfaces.
+          The banner is the most prominent always-visible element on
+          the scoring screen, so this color treatment immediately
+          signals the visual hierarchy of the Mash design system to
+          anyone landing on this view. */}
       <div style={{
-        background: BC.amber, borderRadius: 10, padding: "4px 8px", marginBottom: 6,
+        background: BC.amberDim, borderRadius: 10, padding: "4px 8px", marginBottom: 6,
         display: "flex", alignItems: "center",
       }}>
         <button onClick={() => goToHole(Math.max(0, activeHole - 1))} disabled={activeHole === 0} style={{
           width: 28, height: 36, borderRadius: 8, background: "none", border: "none",
           cursor: activeHole === 0 ? "default" : "pointer",
-          color: activeHole === 0 ? "#0a080440" : "#0a0804", fontSize: 18, fontWeight: 700,
+          color: activeHole === 0 ? "rgba(255,255,255,0.35)" : "#fff", fontSize: 18, fontWeight: 700,
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>‹</button>
         <div style={{ flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 8px" }}>
           <div style={{ textAlign: "center", minWidth: 32 }}>
-            <div style={{ fontSize: 8, color: "#0a0804", fontWeight: 600, opacity: 0.7 }}>Par</div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: "#0a0804" }}>{par}</div>
+            <div style={{ fontSize: 8, color: "#fff", fontWeight: 600, opacity: 0.75 }}>Par</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: "#fff" }}>{par}</div>
           </div>
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 8, color: "#0a0804", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, opacity: 0.7 }}>Hole</div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: "#0a0804", lineHeight: 1 }}>{activeHole + 1}</div>
+            <div style={{ fontSize: 8, color: "#fff", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, opacity: 0.75 }}>Hole</div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: "#fff", lineHeight: 1 }}>{activeHole + 1}</div>
           </div>
           <div style={{ textAlign: "center", minWidth: 32 }}>
-            <div style={{ fontSize: 8, color: "#0a0804", fontWeight: 600, opacity: 0.7 }}>HCP</div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: "#0a0804" }}>{hcp}</div>
+            <div style={{ fontSize: 8, color: "#fff", fontWeight: 600, opacity: 0.75 }}>HCP</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: "#fff" }}>{hcp}</div>
           </div>
         </div>
         <button onClick={() => goToHole(Math.min(17, activeHole + 1))} disabled={activeHole === 17} style={{
           width: 28, height: 36, borderRadius: 8, background: "none", border: "none",
           cursor: activeHole === 17 ? "default" : "pointer",
-          color: activeHole === 17 ? "#0a080440" : "#0a0804", fontSize: 18, fontWeight: 700,
+          color: activeHole === 17 ? "rgba(255,255,255,0.35)" : "#fff", fontSize: 18, fontWeight: 700,
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>›</button>
       </div>
@@ -3125,7 +3163,7 @@ function PracticeScoringTab({
           if (event.hcp_overrides?.[pid] !== undefined && event.hcp_overrides[pid] !== "") return parseFloat(event.hcp_overrides[pid]) || 0;
           return parseFloat(p.handicap_index) || 0;
         })();
-        const ch = calcCH(hi, course.slope || 113, course.rating || 72, course.par || 72);
+        const ch = calcCHForCourse(hi, course);
         const run = getRunning(pid);
 
         // Shift the button range when the saved score falls outside [min, max].
@@ -3432,7 +3470,7 @@ function PracticeView({ user, tPlayers, courses, notify }) {
       const tp = tPlayers.find(p => p.player_id === pid);
       return parseFloat(tp?.handicap_index) || 0;
     };
-    const getCH = (pid) => calcCH(getHI(pid), course.slope || 113, course.rating || 72, course.par || 72);
+    const getCH = (pid) => calcCHForCourse(getHI(pid), course);
     const allCHs = allPids.map(getCH);
     const minCH = allCHs.length ? Math.min(...allCHs) : 0;
     const adjCH = (pid) => event.hcp_mode === "full" ? getCH(pid) : (getCH(pid) - minCH);
