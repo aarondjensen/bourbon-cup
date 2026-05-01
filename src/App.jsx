@@ -4049,10 +4049,13 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                       their team is currently losing (and the match isn't
                       dormie-tied). The triangle indicator (below) carries the
                       "who's leading" signal; team-color identifiers are
-                      intentionally not used. */}
+                      intentionally not used. The big holes-won number that
+                      previously sat below each team has been removed —
+                      it duplicated information already shown by the
+                      MATCH STATUS pill ("2UP") plus the per-hole tracker
+                      strip below. */}
                   <div style={{ textAlign: "left", opacity: r.thru > 0 && !isT1Winning && !r.dormie ? 0.6 : 1 }}>
                     {t1Players.map(p => p && <div key={p.player_id} style={{ fontSize: 12, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{p.name}</div>)}
-                    <div style={{ fontSize: 18, fontWeight: 800, color: BC.t1, marginTop: 4 }}>{r.holesWon1}</div>
                   </div>
                   {/* Status — triangles flank this box pointing at the leading
                       team. Hollow during play, filled when the match goes
@@ -4074,7 +4077,6 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                   {/* Team 2 — full names, right-aligned. */}
                   <div style={{ textAlign: "right", opacity: r.thru > 0 && !isT2Winning && !r.dormie ? 0.6 : 1 }}>
                     {t2Players.map(p => p && <div key={p.player_id} style={{ fontSize: 12, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{p.name}</div>)}
-                    <div style={{ fontSize: 18, fontWeight: 800, color: BC.t1, marginTop: 4 }}>{r.holesWon2}</div>
                   </div>
                 </div>
                 {/* Hole-by-hole tracker — two-row "battleship" layout.
@@ -4096,27 +4098,49 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                     initials shown on the left, regardless of which two
                     teams are facing off. */}
                 <div style={{ marginTop: 10, display: "flex", gap: 6, alignItems: "stretch" }}>
-                  {/* Initials column — left-edge label for each row. Uses
-                      last-name initial of each player; concatenated for
-                      pairs (e.g., Aaron Jensen + Pete Crawford → "JC"). */}
-                  <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: 2, paddingTop: 9 }}>
-                    <div style={{ fontSize: 9, color: BC.amber, fontWeight: 800, letterSpacing: 0.5, lineHeight: "10px", minWidth: 22, textAlign: "right" }}>
-                      {t1Players.map(p => p?.name?.trim().split(/\s+/).slice(-1)[0]?.[0]?.toUpperCase() || "?").join("")}
+                  {/* Initials column — each player's last-name initial
+                      gets ITS OWN sub-cell (instead of two letters
+                      smushed into one block). Two sub-cells per row;
+                      since both teams in a match always have two
+                      players, the columns line up perfectly between
+                      rows visually. So if T1 = "Jensen + Williams" and
+                      T2 = "Jones + Clark", the user sees:
+                          J  W
+                          J  C
+                      with the J's stacked over each other and the W
+                      above C — easy to scan vertically as well as
+                      horizontally. The fixed sub-cell width (12px)
+                      keeps alignment consistent regardless of the
+                      letter shapes. */}
+                  <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: 2, paddingTop: 13 }}>
+                    <div style={{ display: "flex", gap: 1 }}>
+                      {(t1Players.length ? t1Players : [null, null]).map((p, idx) => (
+                        <div key={`t1-${idx}`} style={{ width: 12, fontSize: 9, color: BC.amber, fontWeight: 800, lineHeight: "10px", textAlign: "center" }}>
+                          {p?.name?.trim().split(/\s+/).slice(-1)[0]?.[0]?.toUpperCase() || "?"}
+                        </div>
+                      ))}
                     </div>
-                    <div style={{ fontSize: 9, color: BC.gold, fontWeight: 800, letterSpacing: 0.5, lineHeight: "10px", minWidth: 22, textAlign: "right" }}>
-                      {t2Players.map(p => p?.name?.trim().split(/\s+/).slice(-1)[0]?.[0]?.toUpperCase() || "?").join("")}
+                    <div style={{ display: "flex", gap: 1 }}>
+                      {(t2Players.length ? t2Players : [null, null]).map((p, idx) => (
+                        <div key={`t2-${idx}`} style={{ width: 12, fontSize: 9, color: BC.gold, fontWeight: 800, lineHeight: "10px", textAlign: "center" }}>
+                          {p?.name?.trim().split(/\s+/).slice(-1)[0]?.[0]?.toUpperCase() || "?"}
+                        </div>
+                      ))}
                     </div>
                   </div>
                   {/* Tracker grid — hole numbers above, then T1 row, then T2 row. */}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    {/* Hole numbers — milestone holes only (1, 9, 18) plus
-                        every third hole. Rendering all 18 numbers crowded
-                        the strip; this gives spatial reference without
-                        clutter. */}
+                    {/* Hole numbers — ALL 18 shown so the user can pick
+                        out any specific hole at a glance. Each number
+                        sits centered above its corresponding bar cell
+                        (matching `flex: 1` on each column means they
+                        share the available width equally). Font is
+                        sized small enough that even two-digit numbers
+                        (10-18) fit cleanly within their cell width. */}
                     <div style={{ display: "flex", gap: 1, marginBottom: 2 }}>
                       {Array.from({ length: 18 }, (_, i) => (
-                        <div key={i} style={{ flex: 1, fontSize: 7, color: BC.t3, textAlign: "center", fontWeight: 700, lineHeight: "9px" }}>
-                          {(i === 0 || i === 8 || i === 17 || (i + 1) % 3 === 0) ? i + 1 : ""}
+                        <div key={i} style={{ flex: 1, fontSize: 7, color: BC.t3, textAlign: "center", fontWeight: 700, lineHeight: "10px" }}>
+                          {i + 1}
                         </div>
                       ))}
                     </div>
@@ -4678,10 +4702,197 @@ export default function App() {
   const [hcpOverridesData, setHcpOverridesData] = useState({}); // { round: { pid: value } }
   const [teeAssignmentsData, setTeeAssignmentsData] = useState({});
 
+  // ── Pull-to-refresh ──
+  // Mirrors MNQ's gesture: drag down at the top of the scroll container,
+  // trigger threshold reached → app checks for a fresh build and either
+  // hard-reloads (deployment update detected) or just shows a brief
+  // confirmation spin (data is already live via onSnapshot subscriptions
+  // so no manual refetch is needed). The dampening (0.4x), max-pull
+  // distance (120px), and threshold (80px) are tuned to match MNQ so
+  // users get the same muscle-memory between the two apps. The body
+  // scroll container is tagged className="bc-app-body" below; the touch
+  // handlers walk up from the touch target looking for that class to
+  // confirm the gesture is happening on the main scroll area (and not,
+  // say, inside the slide menu or a modal). Refs hold the live values
+  // because touch handlers run far more often than React renders, so
+  // routing every dy through setState would be a thrash.
+  const PULL_THRESHOLD = 80;
+  const [pullY, setPullY] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const touchStartY = useRef(0);
+  const pullYRef = useRef(0);
+  const pullingRef = useRef(false);
+  // popupOpenRef = true whenever a top-level modal/menu is showing. Read
+  // synchronously by the touch handlers (refs don't trigger re-renders
+  // and are always up-to-date). Updated via the effect below whenever
+  // menuOpen changes.
+  const popupOpenRef = useRef(false);
+
   const notify = useCallback((msg, type = "success") => {
     setNotif({ msg, type });
     setTimeout(() => setNotif(null), 2800);
   }, []);
+
+  // Keep popupOpenRef in sync with menuOpen so touch handlers see
+  // "popup is open" without having to participate in React's render cycle.
+  // If additional top-level modals get added later, OR them in here.
+  useEffect(() => { popupOpenRef.current = menuOpen; }, [menuOpen]);
+
+  // hasNewBundle — checks whether a new app build has been deployed since
+  // the running client loaded. Vite produces hashed asset URLs on each
+  // build, so comparing the script/stylesheet paths in a freshly-fetched
+  // index.html against what's currently in the DOM tells us if the user
+  // is running stale code. When a mismatch is detected, the pull-to-
+  // refresh handler force-reloads the page so the user picks up the
+  // newest version. Wrapped in AbortController + 4s timeout so a flaky
+  // network can't hang the refresh gesture.
+  const hasNewBundle = useCallback(async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    try {
+      const html = await fetch(`/index.html?t=${Date.now()}`, {
+        cache: 'no-store', signal: controller.signal,
+      }).then(r => r.text());
+      const fresh = [];
+      let m;
+      const scriptRe = /<script[^>]+src="([^"]+)"/g;
+      while ((m = scriptRe.exec(html)) !== null) fresh.push(m[1]);
+      const linkRe = /<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"/g;
+      while ((m = linkRe.exec(html)) !== null) fresh.push(m[1]);
+      const linkRe2 = /<link[^>]+href="([^"]+)"[^>]+rel="stylesheet"/g;
+      while ((m = linkRe2.exec(html)) !== null) fresh.push(m[1]);
+      const toPath = (u) => { try { return new URL(u, location.href).pathname; } catch { return u; } };
+      const current = new Set([
+        ...Array.from(document.querySelectorAll('script[src]')).map(s => toPath(s.src)),
+        ...Array.from(document.querySelectorAll('link[rel="stylesheet"][href]')).map(l => toPath(l.href)),
+      ]);
+      return fresh.some(a => !current.has(toPath(a)));
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+  }, []);
+
+  // Touch handler effect — installs document-level touchstart/move/end
+  // listeners that watch for a downward drag at the top of the scroll
+  // container. Suppressed entirely while `refreshing` is true (one
+  // refresh at a time) and while a popup is open. The gesture's "at
+  // top" detection walks up from the touch target to find the
+  // .bc-app-body element — if the target isn't inside that element,
+  // the gesture is ignored (e.g., touches inside the slide menu, the
+  // login screen, or a modal). passive:false on touchmove is required
+  // because we call preventDefault() to stop the browser's native
+  // overscroll/bounce while the user is pulling.
+  useEffect(() => {
+    if (refreshing) return;
+    const findScrollEl = (target) => {
+      let el = target;
+      while (el) {
+        if (el.classList && el.classList.contains('bc-app-body')) return el;
+        el = el.parentElement;
+      }
+      return null;
+    };
+    let activeScrollEl = null;
+
+    const handleStart = (e) => {
+      if (popupOpenRef.current) { touchStartY.current = 0; return; }
+      activeScrollEl = findScrollEl(e.target);
+      if (!activeScrollEl) { touchStartY.current = 0; return; }
+      touchStartY.current = e.touches[0].clientY;
+      pullingRef.current = false;
+    };
+
+    const handleMove = (e) => {
+      if (!touchStartY.current) return;
+      if (popupOpenRef.current) {
+        if (pullingRef.current) { pullingRef.current = false; pullYRef.current = 0; setPullY(0); }
+        touchStartY.current = 0;
+        return;
+      }
+      const atTop = activeScrollEl ? activeScrollEl.scrollTop <= 1 : false;
+      const currentY = e.touches[0].clientY;
+      const diff = currentY - touchStartY.current;
+
+      if (pullingRef.current) {
+        if (diff <= 0 || !atTop) {
+          pullingRef.current = false;
+          pullYRef.current = 0;
+          setPullY(0);
+          touchStartY.current = currentY;
+        } else {
+          // 0.4x dampening makes the indicator feel like there's
+          // tension in the pull — the user moves the finger a long
+          // way for a moderate visual change. Capped at 120 so the
+          // indicator can't drift indefinitely.
+          e.preventDefault();
+          const val = Math.min(diff * 0.4, 120);
+          pullYRef.current = val;
+          setPullY(val);
+        }
+      } else if (atTop && diff > 10) {
+        // 10px dead zone before pull starts — keeps small accidental
+        // taps from initiating the gesture.
+        touchStartY.current = currentY;
+        pullingRef.current = true;
+        e.preventDefault();
+        pullYRef.current = 0;
+        setPullY(0);
+      } else if (!atTop) {
+        touchStartY.current = currentY;
+      }
+    };
+
+    const handleEnd = () => {
+      if (popupOpenRef.current) {
+        pullingRef.current = false;
+        pullYRef.current = 0;
+        setPullY(0);
+        touchStartY.current = 0;
+        activeScrollEl = null;
+        return;
+      }
+      pullingRef.current = false;
+      activeScrollEl = null;
+      if (pullYRef.current >= PULL_THRESHOLD) {
+        // Threshold met — commit to refresh. Pin the indicator at
+        // threshold height while the work runs so it doesn't snap
+        // back mid-spin. 8s hard safety in case the bundle check or
+        // the work itself hangs (e.g., offline).
+        setPullY(PULL_THRESHOLD); pullYRef.current = PULL_THRESHOLD;
+        setRefreshing(true);
+        const hardSafety = setTimeout(() => {
+          setRefreshing(false); setPullY(0); pullYRef.current = 0; touchStartY.current = 0;
+        }, 8000);
+        setTimeout(async () => {
+          try {
+            const needsUpdate = await hasNewBundle();
+            if (needsUpdate) { clearTimeout(hardSafety); window.location.reload(); return; }
+            // Live data via onSnapshot is already current — no manual
+            // refetch needed. The brief 600ms hold above gave the user
+            // visual feedback that the refresh "happened".
+          } catch {} finally {
+            clearTimeout(hardSafety);
+            setRefreshing(false); setPullY(0); pullYRef.current = 0; touchStartY.current = 0;
+          }
+        }, 600);
+      } else {
+        setPullY(0); pullYRef.current = 0; touchStartY.current = 0;
+      }
+    };
+
+    document.addEventListener('touchstart', handleStart, { passive: true });
+    document.addEventListener('touchmove', handleMove, { passive: false });
+    document.addEventListener('touchend', handleEnd, { passive: true });
+    document.addEventListener('touchcancel', handleEnd, { passive: true });
+    return () => {
+      document.removeEventListener('touchstart', handleStart);
+      document.removeEventListener('touchmove', handleMove);
+      document.removeEventListener('touchend', handleEnd);
+      document.removeEventListener('touchcancel', handleEnd);
+    };
+  }, [refreshing, hasNewBundle]);
 
   // Subscribe to Firestore
   useEffect(() => {
@@ -4832,10 +5043,56 @@ export default function App() {
       <div style={{ maxWidth: 520, width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", height: "100%", position: "relative", padding: "0 4px" }}>
       <Notif notif={notif} />
 
+      {/* Pull-to-refresh indicator — circular badge with the trophy
+          silhouette inside, fixed-positioned and overlaid above the
+          content. Slides down from the top as the user pulls; rotates
+          proportionally to the pull distance for tactile feedback;
+          highlights the border when the threshold is crossed; and
+          spins continuously with a glow pulse while the actual refresh
+          is in flight. The trophy icon doubles as both the visual
+          identity (BC's logo mark) and the spinner — there's no need
+          for a separate progress glyph. */}
+      {pullY > 0 && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, zIndex: 999,
+          display: "flex", justifyContent: "center",
+          paddingTop: Math.min(pullY, 100) - 20,
+          transition: refreshing ? "all .3s" : "none",
+          pointerEvents: "none",
+        }}>
+          <style>{`
+            @keyframes bcPullSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+            @keyframes bcPullGlow { 0%,100% { box-shadow: 0 0 8px ${BC.amber}40; } 50% { box-shadow: 0 0 18px ${BC.amber}80; } }
+          `}</style>
+          <div style={{
+            width: 44, height: 44, borderRadius: "50%", background: BC.card,
+            border: `2.5px solid ${pullY >= PULL_THRESHOLD ? BC.amber : BC.bdr}`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: pullY >= PULL_THRESHOLD ? `0 0 12px ${BC.amber}50` : "0 2px 12px rgba(0,0,0,.3)",
+            transition: "border-color .2s, box-shadow .3s", overflow: "hidden",
+            animation: refreshing ? "bcPullGlow 1s ease-in-out infinite" : "none",
+          }}>
+            {/* Trophy mask — same technique as the leaderboard nav icon
+                so the silhouette can be tinted any color and rotated
+                cleanly. Opacity ramps from 30% → 100% as the user pulls
+                to give a "loading energy" feeling. */}
+            <div style={{
+              width: 26, height: 26, background: BC.amber,
+              WebkitMask: `url(${TROPHY_SILHOUETTE}) center/contain no-repeat`,
+              mask: `url(${TROPHY_SILHOUETTE}) center/contain no-repeat`,
+              opacity: pullY >= PULL_THRESHOLD ? 1 : 0.3 + (pullY / PULL_THRESHOLD) * 0.7,
+              transform: refreshing ? "none" : `rotate(${pullY * 3}deg)`,
+              animation: refreshing ? "bcPullSpin .8s linear infinite" : "none",
+              transition: refreshing ? "none" : "opacity .2s",
+            }} />
+          </div>
+        </div>
+      )}
+
 
 
       {/* Content */}
-      <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "12px 10px 80px 10px" }}>
+      <div className="bc-app-body" style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "12px 10px 80px 10px" }}>
         {view === "leaderboard" && (
           <TeamLeaderboard
             matches={enrichedMatches}
