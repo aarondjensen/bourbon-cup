@@ -69,6 +69,10 @@ const getBCTheme = (mode) => {
       danger: "#c1272d",    // traditional deep red
       warn: "#c2570d",      // burnt orange
       green: "#047857",     // generic positive (distinct from brand accent)
+      // Handicap blue — matches MNQ's K.hcpBlue exactly so users
+      // moving between the two apps see consistent visual language for
+      // handicap strokes / stroke dots / (CH) labels. Tailwind blue-500.
+      hcpBlue: "#3b82f6",
     };
   }
   // dark (default) — Mash logo "black bg + green flag" inspired
@@ -89,6 +93,7 @@ const getBCTheme = (mode) => {
     danger: "#ef4444",
     warn: "#f59e0b",
     green: "#22c55e",
+    hcpBlue: "#3b82f6",
   };
 };
 
@@ -226,7 +231,7 @@ const ScoreCell = ({ score, par, strokes, size = 13, colorOverride }) => {
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", height: dotH + sh, justifyContent: "flex-end" }}>
         <div style={{ height: dotH, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-          {strokes > 0 && <span style={{ color: colorOverride || "#4ba3d4", fontSize: 10, fontWeight: 900, letterSpacing: 1, lineHeight: 1 }}>{"•".repeat(strokes)}</span>}
+          {strokes > 0 && <span style={{ color: colorOverride || BC.hcpBlue, fontSize: 10, fontWeight: 900, letterSpacing: 1, lineHeight: 1 }}>{"•".repeat(strokes)}</span>}
         </div>
         <div style={{ width: sh, height: sh, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <span style={{ color: BC.t3 + "30", fontSize: size, lineHeight: 1 }}>·</span>
@@ -258,7 +263,7 @@ const ScoreCell = ({ score, par, strokes, size = 13, colorOverride }) => {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", height: dotH + sh, justifyContent: "flex-end" }}>
       <div style={{ height: dotH, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-        {strokes > 0 && <span style={{ color: colorOverride || "#4ba3d4", fontSize: 10, fontWeight: 900, letterSpacing: 1, lineHeight: 1 }}>{"•".repeat(strokes)}</span>}
+        {strokes > 0 && <span style={{ color: colorOverride || BC.hcpBlue, fontSize: 10, fontWeight: 900, letterSpacing: 1, lineHeight: 1 }}>{"•".repeat(strokes)}</span>}
       </div>
       <div style={{ position: "relative", width: sh, height: sh, display: "flex", alignItems: "center", justifyContent: "center" }}>
         {border}
@@ -2961,8 +2966,22 @@ function PracticeScoringTab({
     if (clinchHole !== null && i > clinchHole) {
       return <div key={i} style={{ flex: 1, height: cellH, ...colBorder }} />;
     }
-    // Unscored hole — empty cell
+    // Unscored hole — could be either "completely untouched" OR
+    // "some players have scored but not all". Distinguishing matters:
+    // a fully-untouched hole is normal (it's ahead of where play is),
+    // but a hole with some-but-not-all scores is a data integrity
+    // problem — somebody navigated past without entering everyone's
+    // score, and the match math can't compute a result for it. Surface
+    // those with a yellow warning triangle so they don't get
+    // overlooked when reviewing the round. The currently-active hole
+    // is excluded from this check — partial state on the active hole
+    // is normal mid-entry behavior, not a problem.
     if (st === null) {
+      const someScored = matchPids.some(pid => (scoresMap[`${pid}_${i}`] || 0) > 0);
+      const isActive = i === activeHole;
+      if (someScored && !isActive) {
+        return <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 13, lineHeight: `${cellH}px`, ...colBorder }} title="Missing score">⚠️</div>;
+      }
       return <div key={i} style={{ flex: 1, height: cellH, ...colBorder }} />;
     }
     // All-square — small "TIED" label
@@ -2996,7 +3015,23 @@ function PracticeScoringTab({
 
   return (
     <div>
-      {/* Front 9 — hole strip */}
+      {/* Front 9 — hole strip. Three-state visual hierarchy:
+          - Current hole: bright BC.amber with dark text — "this is
+            the live one, you're entering it now"
+          - Completed hole (all 4 players have scores): deep
+            BC.amberDim with white text — "locked in, done"
+          - Partial (some players have scored): subtle amber tint
+          - Untouched: card background
+          The deep-green-on-white "completed" state mirrors the
+          gross/net toggle's deeper-green active treatment, which
+          creates visual consistency: anywhere on the Mash UI where
+          something is "the firm/established/locked-in option", it
+          uses the deep BC.amberDim + white pairing. Bright BC.amber
+          stays reserved for "currently active / interactive".
+          The three states give a clear at-a-glance read of round
+          progress: scan the strip and you immediately see which
+          holes are done (solid deep green), which are in flight
+          (current + bright), and which are still ahead (faint). */}
       <div style={{ display: "flex", gap: 3, marginBottom: 2 }}>
         {Array.from({ length: 9 }, (_, i) => {
           const cur = i === activeHole;
@@ -3005,9 +3040,9 @@ function PracticeScoringTab({
           return (
             <button key={i} onClick={() => goToHole(i)} style={{
               flex: 1, height: 28, borderRadius: cur ? 8 : 6,
-              border: allScored && !cur ? `1.5px solid ${BC.amber}50` : "none",
-              background: cur ? BC.amber : allScored ? BC.amber + "15" : partial ? BC.amber + "08" : BC.card,
-              color: cur ? "#0a0804" : allScored ? BC.amber : BC.t3,
+              border: "none",
+              background: cur ? BC.amber : allScored ? BC.amberDim : partial ? BC.amber + "20" : BC.card,
+              color: cur ? "#0a0804" : allScored ? "#fff" : BC.t3,
               fontSize: 13, fontWeight: 800, cursor: "pointer",
               outline: cur ? `2px solid ${BC.amber}` : "none", outlineOffset: 1,
             }}>{i + 1}</button>
@@ -3018,7 +3053,7 @@ function PracticeScoringTab({
       <div style={{ display: "flex", marginBottom: 6, background: BC.card, border: `1px solid ${BC.bdr}60`, borderRadius: 8, padding: "3px 0", alignItems: "center" }}>
         {Array.from({ length: 9 }, (_, i) => renderStatusCell(i))}
       </div>
-      {/* Back 9 — hole strip */}
+      {/* Back 9 — hole strip. Same three-state hierarchy as front 9. */}
       <div style={{ display: "flex", gap: 3, marginBottom: 2 }}>
         {Array.from({ length: 9 }, (_, i) => {
           const h = i + 9;
@@ -3028,9 +3063,9 @@ function PracticeScoringTab({
           return (
             <button key={h} onClick={() => goToHole(h)} style={{
               flex: 1, height: 28, borderRadius: cur ? 8 : 6,
-              border: allScored && !cur ? `1.5px solid ${BC.amber}50` : "none",
-              background: cur ? BC.amber : allScored ? BC.amber + "15" : partial ? BC.amber + "08" : BC.card,
-              color: cur ? "#0a0804" : allScored ? BC.amber : BC.t3,
+              border: "none",
+              background: cur ? BC.amber : allScored ? BC.amberDim : partial ? BC.amber + "20" : BC.card,
+              color: cur ? "#0a0804" : allScored ? "#fff" : BC.t3,
               fontSize: 13, fontWeight: 800, cursor: "pointer",
               outline: cur ? `2px solid ${BC.amber}` : "none", outlineOffset: 1,
             }}>{h + 1}</button>
@@ -3115,9 +3150,9 @@ function PracticeScoringTab({
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5, minWidth: 0 }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: BC.t1, lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>{p.name}</span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: BC.t3, flexShrink: 0 }}>({ch})</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: BC.hcpBlue, flexShrink: 0 }}>({ch})</span>
                 {strokes > 0 && (
-                  <span style={{ color: "#4ba3d4", fontSize: 12, letterSpacing: 1, flexShrink: 0, lineHeight: 1 }}>
+                  <span style={{ color: BC.hcpBlue, fontSize: 12, letterSpacing: 1, flexShrink: 0, lineHeight: 1 }}>
                     {"●".repeat(strokes)}
                   </span>
                 )}
@@ -4379,7 +4414,7 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                         // scorecard treatment used in ScoreCell elsewhere),
                         // white on green skin-winning cells so dots stay
                         // visible against the saturated fill.
-                        const dotColor = skinWin ? "#fff" : "#4ba3d4";
+                        const dotColor = skinWin ? "#fff" : BC.hcpBlue;
                         // Mode-specific layout. Gross mode shows just the
                         // gross score — the simple, classic scorecard
                         // view. Net mode shows stroke dots above the net
