@@ -4271,14 +4271,13 @@ function PracticeView({ user, tPlayers, courses, notify }) {
     return (
       <div>
         {/* Toggles row — Skins/CTP on the left (primary section
-            switcher), Gross/Net on the right (visible only when on
-            Skins; selects which scoring mode the grids render). The
-            two are kept on the same horizontal axis so the user
-            doesn't need to scan vertically to find related controls.
-            The parent Skins/CTP is full-flex (takes most of the row);
-            Gross/Net is a smaller inline pill anchored to the right
-            edge with its own background to signal "this is a
-            sub-control of the active section". */}
+            switcher), Gross/Net on the right (sub-control for the
+            Skins grids). The Gross/Net toggle is ALWAYS rendered so
+            the row layout doesn't shift when toggling between Skins
+            and CTP — it just gets a disabled visual state when CTP
+            is the active section, since gross/net only applies to
+            skins. The disabled state uses opacity + pointer-events
+            so taps fall through harmlessly. */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
           <div style={{ flex: 1, display: "flex", background: BC.card, borderRadius: 20, padding: 3, border: `1px solid ${BC.bdr}` }}>
             {[["skins", "Skins"], ["ctp", "CTP"]].map(([k, label]) => (
@@ -4290,18 +4289,22 @@ function PracticeView({ user, tPlayers, courses, notify }) {
               }}>{label}</button>
             ))}
           </div>
-          {tab === "skins" && (
-            <div style={{ display: "inline-flex", background: BC.inp, borderRadius: 10, padding: 2, border: `1px solid ${BC.bdr}`, flexShrink: 0 }}>
-              {[["gross", "Gross"], ["net", "Net"]].map(([k, label]) => (
-                <button key={k} onClick={() => setSkinsMode(k)} style={{
-                  padding: "5px 10px", borderRadius: 8, fontSize: 10, fontWeight: 700, cursor: "pointer",
-                  background: skinsMode === k ? BC.amberDim : "transparent",
-                  color: skinsMode === k ? "#fff" : BC.t3, border: "none",
-                  letterSpacing: 0.4,
-                }}>{label}</button>
-              ))}
-            </div>
-          )}
+          <div style={{
+            display: "inline-flex", background: BC.inp, borderRadius: 10, padding: 2,
+            border: `1px solid ${BC.bdr}`, flexShrink: 0,
+            opacity: tab === "skins" ? 1 : 0.35,
+            pointerEvents: tab === "skins" ? "auto" : "none",
+            transition: "opacity .15s",
+          }}>
+            {[["gross", "Gross"], ["net", "Net"]].map(([k, label]) => (
+              <button key={k} onClick={() => setSkinsMode(k)} style={{
+                padding: "5px 10px", borderRadius: 8, fontSize: 10, fontWeight: 700, cursor: "pointer",
+                background: skinsMode === k ? BC.amberDim : "transparent",
+                color: skinsMode === k ? "#fff" : BC.t3, border: "none",
+                letterSpacing: 0.4,
+              }}>{label}</button>
+            ))}
+          </div>
         </div>
 
         {tab === "skins" && (
@@ -4888,7 +4891,12 @@ export default function App() {
         touchStartY.current = 0;
         return;
       }
-      const atTop = activeScrollEl ? activeScrollEl.scrollTop <= 1 : false;
+      // `atTop` tolerance is 2px to absorb subpixel rounding (iOS often
+      // reports scrollTop as a fractional value due to the
+      // `safe-area-inset-top` and momentum cleanup; 1px was too strict
+      // and caused the gesture to fail when the page was visually at
+      // top but the engine reported scrollTop=1.5).
+      const atTop = activeScrollEl ? activeScrollEl.scrollTop <= 2 : false;
       const currentY = e.touches[0].clientY;
       const diff = currentY - touchStartY.current;
 
@@ -4908,14 +4916,26 @@ export default function App() {
           pullYRef.current = val;
           setPullY(val);
         }
-      } else if (atTop && diff > 10) {
-        // 10px dead zone before pull starts — keeps small accidental
-        // taps from initiating the gesture.
-        touchStartY.current = currentY;
-        pullingRef.current = true;
+      } else if (atTop && diff > 0) {
+        // CRITICAL: preventDefault has to be called on EVERY at-top
+        // downward touchmove, not only after the threshold is crossed.
+        // iOS Safari's native overscroll bounce starts kicking in on
+        // the very first downward touchmove at scrollTop=0; once the
+        // bounce animation has begun, our subsequent preventDefault
+        // calls are ignored and the bounce overrides our custom pull
+        // visual. By preventDefaulting before the 5px threshold, we
+        // shut the native bounce down before it has a chance to
+        // commit. This is what was making the gesture feel "stuck"
+        // when started on certain elements (e.g., the Teams card
+        // banner): the 10px gap left enough time for native bounce
+        // to start and steal the gesture.
         e.preventDefault();
-        pullYRef.current = 0;
-        setPullY(0);
+        if (diff > 5) {
+          touchStartY.current = currentY;
+          pullingRef.current = true;
+          pullYRef.current = 0;
+          setPullY(0);
+        }
       } else if (!atTop) {
         touchStartY.current = currentY;
       }
@@ -5169,7 +5189,18 @@ export default function App() {
 
 
       {/* Content */}
-      <div className="bc-app-body" style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "12px 10px 80px 10px" }}>
+      <div className="bc-app-body" style={{
+        flex: 1, overflowY: "auto", overflowX: "hidden", padding: "12px 10px 80px 10px",
+        // overscroll-behavior-y: contain blocks the browser's native
+        // overscroll bounce at the boundaries of THIS scroll container.
+        // Without it, iOS Safari starts a bounce animation the moment
+        // the user pulls down past scrollTop=0 — and once that bounce
+        // is in flight, our touchmove preventDefault gets ignored, so
+        // the custom pull visual fights with the native bounce and
+        // the gesture feels broken/sticky. With `contain`, the native
+        // bounce is suppressed and our handler has full control.
+        overscrollBehaviorY: "contain",
+      }}>
         {view === "leaderboard" && (
           <TeamLeaderboard
             matches={enrichedMatches}
