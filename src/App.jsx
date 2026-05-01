@@ -4513,16 +4513,16 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                         // white on green skin-winning cells so dots stay
                         // visible against the saturated fill.
                         const dotColor = skinWin ? "#fff" : BC.hcpBlue;
-                        // Mode-specific layout. Gross mode shows just the
-                        // gross score — the simple, classic scorecard
-                        // view. Net mode shows stroke dots above the net
-                        // score — the relevant figure when judging net
-                        // skins. Single-mode display means the user
-                        // always sees ONE number per cell, no dual-stack
-                        // ambiguity. The cell minHeight is tuned per
-                        // mode: gross cells stay compact since they
-                        // skip the stroke-dot row, net cells reserve
-                        // the extra row so the grid stays uniform.
+                        // Mode-specific layout — but cell DIMENSIONS are
+                        // identical between modes. Both modes reserve
+                        // the same minHeight and the same 8px dot row;
+                        // in gross mode the dot row is rendered empty
+                        // (transparent) so the layout doesn't shift
+                        // between toggle states. This keeps the grid
+                        // visually stable when the user flips between
+                        // Gross and Net — same number of cells, same
+                        // sizes, just the central number changes (and
+                        // the dot row populates with strokes in net).
                         const isGross = skinsMode === "gross";
                         cells.push(
                           <div key={`${p.player_id}-${h}`} style={{
@@ -4531,18 +4531,11 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                             background: cellBG, color: cellColor,
                             border: cellBorder, borderRadius: 3,
                             boxSizing: "border-box",
-                            minHeight: isGross ? 26 : 32,
+                            minHeight: 32,
                           }}>
-                            {!isGross && (
-                              // Stroke dot row — net mode only. Reserved
-                              // 8px tall regardless of whether dots show,
-                              // so net-mode cells in the same row stay
-                              // aligned even when only some players got
-                              // strokes on a given hole.
-                              <div style={{ height: 8, display: "flex", alignItems: "center", fontSize: 8, fontWeight: 900, letterSpacing: 1, lineHeight: 1, color: dotColor }}>
-                                {strokes > 0 ? "•".repeat(strokes) : ""}
-                              </div>
-                            )}
+                            <div style={{ height: 8, display: "flex", alignItems: "center", fontSize: 8, fontWeight: 900, letterSpacing: 1, lineHeight: 1, color: dotColor }}>
+                              {!isGross && strokes > 0 ? "•".repeat(strokes) : ""}
+                            </div>
                             <div style={{ fontSize: 12, fontWeight: skinWin ? 800 : 700, lineHeight: "14px" }}>
                               {isGross ? (score || "—") : (score ? netScore : "—")}
                             </div>
@@ -4618,7 +4611,19 @@ function PracticeView({ user, tPlayers, courses, notify }) {
                           display: "flex", alignItems: "center", gap: 4,
                         }}>
                           <span style={{ width: 4, height: 4, borderRadius: "50%", background: tc.accent, flexShrink: 0 }} />
-                          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p?.name?.split(" ").slice(-1)[0] || pid}</span>
+                          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(() => {
+                            // First name + last initial — "Aaron Jensen" → "Aaron J".
+                            // The previous rendering (split + slice(-1)[0]) returned
+                            // the LAST WORD, which on full names produced "Jensen"
+                            // and on single-token names produced the whole name —
+                            // not what we want for a tight CTP picker. Single-name
+                            // entries (e.g. "TJSC") render as-is since there's no
+                            // first/last to split.
+                            const nm = p?.name || pid;
+                            const parts = nm.trim().split(/\s+/).filter(Boolean);
+                            if (parts.length <= 1) return nm;
+                            return `${parts[0]} ${parts[parts.length - 1][0]}`;
+                          })()}</span>
                           {isW && <span style={{ fontSize: 10 }}>🎯</span>}
                         </button>
                       );
