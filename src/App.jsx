@@ -1163,7 +1163,6 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   const [traditionalPoints, setTraditionalPoints] = useState(traditionalDefaultFor("singles"));
 
   // Match builder
-  const [matchRound, setMatchRound] = useState(1);
   const [matchTeamA, setMatchTeamA] = useState([]);
   const [matchTeamB, setMatchTeamB] = useState([]);
 
@@ -1245,11 +1244,11 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
   const saveMatch = async () => {
     if (matchTeamA.length === 0 || matchTeamB.length === 0) { notify("Select players for both teams", "error"); return; }
-    const mId = `bc_match_r${matchRound}_${matchTeamA.join("_")}_vs_${matchTeamB.join("_")}`;
+    const mId = `bc_match_r${editRound}_${matchTeamA.join("_")}_vs_${matchTeamB.join("_")}`;
     const data = {
       id: mId,
       tournament_id: TOURNAMENT_ID,
-      round: matchRound,
+      round: editRound,
       teamA: matchTeamA,
       teamB: matchTeamB,
       teamANames: matchTeamA.map(pid => tPlayers.find(p => p.player_id === pid)?.name || pid),
@@ -1377,10 +1376,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
     <div>
       {/* Tabs */}
       <div style={{ display: "flex", gap: 4, marginBottom: 16, background: BC.card, borderRadius: 12, padding: 4, border: `1px solid ${BC.bdr}` }}>
-        {[["players","Players"],["rounds","Rounds"],["matches","Matches"],["courses","Courses"]].map(([k, lbl]) => (
+        {[["players","Players"],["rounds","Rounds"],["courses","Courses"]].map(([k, lbl]) => (
           <button key={k} onClick={() => setTab(k)} style={{
             flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: 10, fontWeight: 700, cursor: "pointer", border: "none",
-            background: tab === k ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
+            background: tab === k ? BC.amber : "transparent",
             color: tab === k ? "#0a0804" : BC.t3,
           }}>{lbl}</button>
         ))}
@@ -1546,6 +1545,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 // Load existing overrides and handicap mode for this round
                 setHcpOverrides(prev => ({ ...prev }));
                 if (tr?.handicap_mode) setHandicapMode(prev => ({ ...prev, [r]: tr.handicap_mode }));
+                // Reset match-builder selections when switching rounds —
+                // Team A/B picks for one round don't carry meaning into another.
+                setMatchTeamA([]);
+                setMatchTeamB([]);
               }} style={{
                 flex: 1, padding: "8px 4px", borderRadius: 10, fontSize: 11, fontWeight: 700, cursor: "pointer",
                 background: editRound === r ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
@@ -1830,137 +1833,128 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               ))}
             </div>
           </div>
-        </div>
-      )}
 
-      {tab === "matches" && (() => {
-        const tr = tRounds.find(t => t.round_number === matchRound);
-        const course = courses.find(c => c.id === tr?.course_id);
-        const hcpMode = tr?.handicap_mode || "low_man";
+          {/* ── Matches for this round ──
+              Match builder + existing-matches list, scoped to whichever
+              round is selected above. The round selector at the top is the
+              single source of "which round are we working on". Stroke preview
+              uses local form state for handicap mode + overrides + tee
+              assignments, so any edit in the form above updates strokes
+              live without needing a Save first. */}
+          {(() => {
+            const tr = tRounds.find(t => t.round_number === editRound);
+            const course = courses.find(c => c.id === tr?.course_id);
+            const hcpMode = handicapMode[editRound] || tr?.handicap_mode || (editRound === 4 ? "full" : "low_man");
 
-        // Get CH for a player using round overrides and tee assignments
-        const getPlayerCH = (pid) => {
-          const p = tPlayers.find(t => t.player_id === pid);
-          if (!p || !course) return 0;
-          const hi = parseFloat(hcpOverrides?.[matchRound]?.[pid] ?? p.handicap_index) || 0;
-          const teeAssign = teeAssignments[matchRound]?.[pid];
-          const teeObj = teeAssign ? (course.tee_boxes||[]).find(t => t.name === teeAssign) : (course.tee_boxes||[])[0];
-          return calcCH(hi, teeObj?.slope||course.slope||113, teeObj?.rating||course.rating||72, teeObj?.par||course.par||72);
-        };
+            const getPlayerCH = (pid) => {
+              const p = tPlayers.find(t => t.player_id === pid);
+              if (!p || !course) return 0;
+              const hi = parseFloat(hcpOverrides?.[editRound]?.[pid] ?? p.handicap_index) || 0;
+              const teeAssign = teeAssignments[editRound]?.[pid];
+              const teeObj = teeAssign ? (course.tee_boxes||[]).find(t => t.name === teeAssign) : (course.tee_boxes||[])[0];
+              return calcCH(hi, teeObj?.slope||course.slope||113, teeObj?.rating||course.rating||72, teeObj?.par||course.par||72);
+            };
 
-        // Stroke situation: given selected players, compute who gets strokes vs who
-        const strokeSituation = () => {
-          const allPids = [...matchTeamA, ...matchTeamB];
-          if (allPids.length < 2) return null;
-          const chs = allPids.map(pid => ({ pid, ch: getPlayerCH(pid) }));
-          const minCH = Math.min(...chs.map(c => c.ch));
-          if (hcpMode === "full") {
-            return chs.map(({pid, ch}) => ({ pid, strokes: ch }));
-          }
-          return chs.map(({pid, ch}) => ({ pid, strokes: ch - minCH }));
-        };
+            const strokeSituation = () => {
+              const allPids = [...matchTeamA, ...matchTeamB];
+              if (allPids.length < 2) return null;
+              const chs = allPids.map(pid => ({ pid, ch: getPlayerCH(pid) }));
+              const minCH = Math.min(...chs.map(c => c.ch));
+              if (hcpMode === "full") return chs.map(({pid, ch}) => ({ pid, strokes: ch }));
+              return chs.map(({pid, ch}) => ({ pid, strokes: ch - minCH }));
+            };
 
-        const allSelected = [...matchTeamA, ...matchTeamB];
-        const strokes = strokeSituation();
+            const allSelected = [...matchTeamA, ...matchTeamB];
+            const strokes = strokeSituation();
+            const roundMatches = matches.filter(m => m.round === editRound);
 
-        return (
-        <div>
-          {/* Round tabs */}
-          <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
-            {[1,2,3,4].map(r => (
-              <button key={r} onClick={() => { setMatchRound(r); setMatchTeamA([]); setMatchTeamB([]); }} style={{
-                flex: 1, padding: "7px 4px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
-                background: matchRound === r ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
-                border: `1px solid ${matchRound === r ? "transparent" : BC.bdr}`,
-                color: matchRound === r ? "#0a0804" : BC.t2,
-              }}>Rd {r}</button>
-            ))}
-          </div>
+            return (
+              <div style={{ marginTop: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: BC.amber, letterSpacing: 1, marginBottom: 10, paddingLeft: 4 }}>
+                  MATCHES — ROUND {editRound}
+                </div>
 
-          {/* Player pool — two columns by team */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-            {[["A", teamAPlayers], ["B", teamBPlayers]].map(([tid, players]) => {
-              const team = getTeam(tid);
-              const sel = tid === "A" ? matchTeamA : matchTeamB;
-              const setSel = tid === "A" ? setMatchTeamA : setMatchTeamB;
-              return (
-                <div key={tid}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: team.accent, letterSpacing: 1, marginBottom: 5 }}>{teamNames?.[tid]}</div>
-                  {players.map(p => {
-                    const isSelected = sel.includes(p.player_id);
-                    const ch = getPlayerCH(p.player_id);
+                {/* Player pool — two columns by team */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+                  {[["A", teamAPlayers], ["B", teamBPlayers]].map(([tid, players]) => {
+                    const team = getTeam(tid);
+                    const sel = tid === "A" ? matchTeamA : matchTeamB;
+                    const setSel = tid === "A" ? setMatchTeamA : setMatchTeamB;
                     return (
-                      <button key={p.player_id} onClick={() => setSel(prev => isSelected ? prev.filter(x => x !== p.player_id) : [...prev, p.player_id])} style={{
-                        width: "100%", padding: "7px 8px", marginBottom: 3, borderRadius: 8, cursor: "pointer", textAlign: "left",
-                        background: isSelected ? team.color + "55" : BC.inp,
-                        border: `1.5px solid ${isSelected ? team.accent : BC.bdr}`,
-                        display: "flex", alignItems: "center", justifyContent: "space-between",
-                      }}>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: isSelected ? team.accent : BC.t2 }}>{p.name}</span>
-                        <span style={{ fontSize: 10, color: BC.t3 }}>CH {ch}</span>
-                      </button>
+                      <div key={tid}>
+                        <div style={{ fontSize: 9, fontWeight: 700, color: team.accent, letterSpacing: 1, marginBottom: 5 }}>{teamNames?.[tid]}</div>
+                        {players.map(p => {
+                          const isSelected = sel.includes(p.player_id);
+                          const ch = getPlayerCH(p.player_id);
+                          return (
+                            <button key={p.player_id} onClick={() => setSel(prev => isSelected ? prev.filter(x => x !== p.player_id) : [...prev, p.player_id])} style={{
+                              width: "100%", padding: "7px 8px", marginBottom: 3, borderRadius: 8, cursor: "pointer", textAlign: "left",
+                              background: isSelected ? team.color + "55" : BC.inp,
+                              border: `1.5px solid ${isSelected ? team.accent : BC.bdr}`,
+                              display: "flex", alignItems: "center", justifyContent: "space-between",
+                            }}>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: isSelected ? team.accent : BC.t2 }}>{p.name}</span>
+                              <span style={{ fontSize: 10, color: BC.t3 }}>CH {ch}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     );
                   })}
                 </div>
-              );
-            })}
-          </div>
 
-          {/* Stroke situation — shown when all players selected */}
-          {strokes && allSelected.length >= 2 && (
-            <div style={{ background: BC.card, borderRadius: 10, padding: "10px 12px", marginBottom: 10, border: `1px solid ${BC.bdr}` }}>
-              <div style={{ fontSize: 9, color: BC.t3, fontWeight: 700, letterSpacing: 1, marginBottom: 8 }}>
-                STROKE SITUATION · {hcpMode === "low_man" ? "Play Off Low Man" : "Full Strokes"}
-              </div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {strokes.map(({ pid, strokes: s }) => {
-                  const p = tPlayers.find(t => t.player_id === pid);
-                  const team = getTeam(p?.team);
-                  return (
-                    <div key={pid} style={{ background: team.color + "33", border: `1px solid ${team.accent}44`, borderRadius: 8, padding: "5px 10px", textAlign: "center" }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: team.accent }}>{p?.name?.split(" ")[0]}</div>
-                      <div style={{ fontSize: 13, fontWeight: 900, color: s === 0 ? BC.gold : BC.t1 }}>{s === 0 ? "Scratch" : `+${s}`}</div>
+                {/* Stroke situation */}
+                {strokes && allSelected.length >= 2 && (
+                  <div style={{ background: BC.card, borderRadius: 10, padding: "10px 12px", marginBottom: 10, border: `1px solid ${BC.bdr}` }}>
+                    <div style={{ fontSize: 9, color: BC.t3, fontWeight: 700, letterSpacing: 1, marginBottom: 8 }}>
+                      STROKE SITUATION · {hcpMode === "low_man" ? "Play Off Low Man" : "Full Strokes"}
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Create Match button */}
-          {matchTeamA.length > 0 && matchTeamB.length > 0 && (
-            <button onClick={saveMatch} style={{ ...BtnStyle, marginBottom: 14 }}>
-              Create Match — {matchTeamA.map(pid => tPlayers.find(p=>p.player_id===pid)?.name?.split(" ")[0]).join("/")} vs {matchTeamB.map(pid => tPlayers.find(p=>p.player_id===pid)?.name?.split(" ")[0]).join("/")}
-            </button>
-          )}
-
-          {/* Existing matches by round */}
-          {[1,2,3,4].map(r => {
-            const rndM = matches.filter(m => m.round === r);
-            if (!rndM.length) return null;
-            const trR = tRounds.find(t => t.round_number === r);
-            const fmt = FORMATS.find(f => f.id === trR?.format);
-            return (
-              <div key={r} style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 10, color: BC.gold, fontWeight: 700, marginBottom: 8, letterSpacing: 1 }}>ROUND {r}{fmt ? ` · ${fmt.label}` : ""}</div>
-                {rndM.map(m => (
-                  <div key={m.id} style={{ background: BC.card, borderRadius: 10, padding: "8px 12px", marginBottom: 5, border: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ flex: 1, fontSize: 11 }}>
-                      <span style={{ color: TEAM_A.accent+"99", fontWeight: 600 }}>{m.teamANames?.join(" / ")}</span>
-                      <span style={{ color: BC.t3 }}> vs </span>
-                      <span style={{ color: TEAM_B.accent+"99", fontWeight: 600 }}>{m.teamBNames?.join(" / ")}</span>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {strokes.map(({ pid, strokes: s }) => {
+                        const p = tPlayers.find(t => t.player_id === pid);
+                        const team = getTeam(p?.team);
+                        return (
+                          <div key={pid} style={{ background: team.color + "33", border: `1px solid ${team.accent}44`, borderRadius: 8, padding: "5px 10px", textAlign: "center" }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: team.accent }}>{p?.name?.split(" ")[0]}</div>
+                            <div style={{ fontSize: 13, fontWeight: 900, color: s === 0 ? BC.gold : BC.t1 }}>{s === 0 ? "Scratch" : `+${s}`}</div>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <button onClick={() => onSetMatch({ ...m, _delete: true })} style={{
-                      fontSize: 9, padding: "3px 7px", borderRadius: 6, border: `1px solid ${BC.danger}22`, background: "transparent", color: BC.danger, cursor: "pointer", flexShrink: 0,
-                    }}>✕</button>
                   </div>
-                ))}
+                )}
+
+                {/* Create Match */}
+                {matchTeamA.length > 0 && matchTeamB.length > 0 && (
+                  <button onClick={saveMatch} style={{ ...BtnStyle, marginBottom: 14 }}>
+                    Create Match — {matchTeamA.map(pid => tPlayers.find(p=>p.player_id===pid)?.name?.split(" ")[0]).join("/")} vs {matchTeamB.map(pid => tPlayers.find(p=>p.player_id===pid)?.name?.split(" ")[0]).join("/")}
+                  </button>
+                )}
+
+                {/* Existing matches — scoped to this round only */}
+                {roundMatches.length > 0 ? (
+                  roundMatches.map(m => (
+                    <div key={m.id} style={{ background: BC.card, borderRadius: 10, padding: "8px 12px", marginBottom: 5, border: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ flex: 1, fontSize: 11 }}>
+                        <span style={{ color: TEAM_A.accent+"99", fontWeight: 600 }}>{m.teamANames?.join(" / ")}</span>
+                        <span style={{ color: BC.t3 }}> vs </span>
+                        <span style={{ color: TEAM_B.accent+"99", fontWeight: 600 }}>{m.teamBNames?.join(" / ")}</span>
+                      </div>
+                      <button onClick={() => onSetMatch({ ...m, _delete: true })} style={{
+                        fontSize: 9, padding: "3px 7px", borderRadius: 6, border: `1px solid ${BC.danger}22`, background: "transparent", color: BC.danger, cursor: "pointer", flexShrink: 0,
+                      }}>✕</button>
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ fontSize: 11, color: BC.t3, textAlign: "center", padding: "10px 0" }}>
+                    No matches set up for Round {editRound} yet.
+                  </div>
+                )}
               </div>
             );
-          })}
+          })()}
         </div>
-        );
-      })()}
+      )}
 
       {tab === "courses" && (
         <div>
