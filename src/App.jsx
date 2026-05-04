@@ -243,6 +243,38 @@ function LoginScreen({ players, onPlayerClick, onBootstrapDirector, teamNames, d
   );
 }
 
+// Translate Firebase auth error codes into messages a user can act on.
+// The default `e.message` from Firebase tends to be of the form
+// "Firebase: Error (auth/some-code)." which is not useful in front of
+// a non-technical user. Anything we don't have a friendly mapping for
+// falls back to whatever message Firebase gave us.
+function authErrorMessage(e) {
+  const code = e?.code || "";
+  switch (code) {
+    case "auth/configuration-not-found":
+    case "auth/operation-not-allowed":
+      return "This sign-in method isn't set up on the app yet. Talk to the director.";
+    case "auth/unauthorized-domain":
+      return "This domain isn't authorized for sign-in. Talk to the director.";
+    case "auth/popup-blocked":
+      return "Your browser blocked the sign-in popup. Allow popups and try again.";
+    case "auth/popup-closed-by-user":
+    case "auth/cancelled-popup-request":
+      return "Sign-in was cancelled. Try again when you're ready.";
+    case "auth/network-request-failed":
+      return "Couldn't reach the sign-in server. Check your connection and retry.";
+    case "auth/invalid-email":
+      return "That doesn't look like a valid email address.";
+    case "auth/user-disabled":
+      return "This account has been disabled.";
+    case "auth/expired-action-code":
+    case "auth/invalid-action-code":
+      return "This sign-in link has expired or already been used. Request a new one.";
+    default:
+      return e?.message || "Sign-in failed. Try again.";
+  }
+}
+
 // ── Login modal ──
 // Opens when a user clicks their name on LoginScreen. Two sign-in options:
 //   - Google: one-click popup. On success, the App's auth-state listener
@@ -255,7 +287,7 @@ function LoginScreen({ players, onPlayerClick, onBootstrapDirector, teamNames, d
 // the user knows which name they're claiming. The actual binding (authed
 // email must match the player's stored email) is enforced by the parent
 // after auth completes — this modal just runs the auth flow.
-function LoginModal({ player, onClose, onError }) {
+function LoginModal({ player, onClose, onError, error }) {
   const [mode, setMode] = useState("choose"); // "choose" | "email-form" | "email-sent" | "loading"
   const [email, setEmail] = useState("");
 
@@ -275,7 +307,7 @@ function LoginModal({ player, onClose, onError }) {
       // flash back to the choose state before the redirect fires.
     } catch (e) {
       setMode("choose");
-      onError(e?.message || "Google sign-in failed. Try again.");
+      onError(authErrorMessage(e));
     }
   };
 
@@ -290,7 +322,7 @@ function LoginModal({ player, onClose, onError }) {
       setMode("email-sent");
     } catch (e) {
       setMode("email-form");
-      onError(e?.message || "Couldn't send the sign-in link. Try again.");
+      onError(authErrorMessage(e));
     }
   };
 
@@ -316,6 +348,18 @@ function LoginModal({ player, onClose, onError }) {
           <div style={{ fontSize: 10, color: BC.t3, letterSpacing: 2, fontWeight: 700, marginBottom: 4 }}>SIGN IN AS</div>
           <div style={{ fontSize: 18, fontWeight: 800, color: BC.t1 }}>{player.name}</div>
         </div>
+
+        {/* Error — surfaces auth failures inside the modal so the user
+            doesn't have to dismiss it to see what went wrong. */}
+        {error && (
+          <div style={{
+            marginBottom: 12, padding: "8px 12px", borderRadius: 8,
+            background: BC.danger + "15", border: `1px solid ${BC.danger}55`,
+            color: BC.danger, fontSize: 11, lineHeight: 1.45,
+          }}>
+            {error}
+          </div>
+        )}
 
         {mode === "choose" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -5387,6 +5431,7 @@ export default function App() {
       {pendingPlayer && (
         <LoginModal
           player={pendingPlayer}
+          error={loginError}
           onClose={() => setPendingPlayer(null)}
           onError={msg => setLoginError(msg)}
         />
