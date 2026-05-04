@@ -7,7 +7,7 @@
 // Both paths use the same getEffectiveHI / buildStrokeMap helpers so the
 // dots displayed on a scoring screen always reflect the strokes used in
 // the leaderboard math.
-import { NASSAU_DEFAULT } from "./constants";
+import { NASSAU_DEFAULT, POINT_METHOD_NASSAU, POINT_METHOD_TRADITIONAL } from "./constants";
 
 // ── Course Handicap math ──
 // USGA Course Handicap formula:
@@ -188,9 +188,11 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
     return { h, aScore, bScore, winner, played: aScore != null && bScore != null };
   });
 
-  // Nassau scoring
-  const nassau = match.nassau || NASSAU_DEFAULT;
-  const calcNassauSegment = (holes) => {
+  // Match-play segment helper — used for both Nassau (front/back/overall)
+  // and Traditional (overall only) point allocation. Tracks winner, margin,
+  // and whether the segment is complete (either all holes played or
+  // mathematically clinched).
+  const calcSegment = (holes) => {
     const played = holes.filter(r => r.played);
     if (!played.length) return { winner: null, margin: 0, complete: false };
     const aWins = played.filter(r => r.winner === "A").length;
@@ -207,36 +209,53 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
     };
   };
 
-  const front = calcNassauSegment(holeResults.slice(0, 9));
-  const back = calcNassauSegment(holeResults.slice(9, 18));
-  const overall = calcNassauSegment(holeResults);
+  // Always compute all three segments so the leaderboard can show
+  // front/back progress regardless of point method (the per-hole tracker
+  // and "to win" math don't care which method is in use).
+  const front = calcSegment(holeResults.slice(0, 9));
+  const back = calcSegment(holeResults.slice(9, 18));
+  const overall = calcSegment(holeResults);
 
-  // Award points
+  // Award points based on the match's configured point_method.
+  //   Traditional → single pot for the overall result; ½/½ on a halve.
+  //   Nassau      → independent pots for front, back, and overall.
+  // Method falls back to Nassau when absent so legacy matches saved
+  // before this field existed continue to score correctly.
+  const pointMethod = match.point_method || POINT_METHOD_NASSAU;
   const frontPts = { A: 0, B: 0 };
   const backPts = { A: 0, B: 0 };
   const overallPts = { A: 0, B: 0 };
-  const halfPt = nassau.front / 2;
 
-  if (front.complete) {
-    if (front.winner) frontPts[front.winner] = nassau.front;
-    else { frontPts.A = halfPt; frontPts.B = halfPt; }
-  }
-  if (back.complete) {
-    if (back.winner) backPts[back.winner] = nassau.back;
-    else { backPts.A = nassau.back / 2; backPts.B = nassau.back / 2; }
-  }
-  if (overall.complete) {
-    if (overall.winner) overallPts[overall.winner] = nassau.overall;
-    else { overallPts.A = nassau.overall / 2; overallPts.B = nassau.overall / 2; }
-  }
+  if (pointMethod === POINT_METHOD_TRADITIONAL) {
+    const pot = match.traditional_points ?? 1;
+    if (overall.complete) {
+      if (overall.winner) overallPts[overall.winner] = pot;
+      else { overallPts.A = pot / 2; overallPts.B = pot / 2; }
+    }
+  } else {
+    // Nassau
+    const nassau = match.nassau || NASSAU_DEFAULT;
+    if (front.complete) {
+      if (front.winner) frontPts[front.winner] = nassau.front;
+      else { frontPts.A = nassau.front / 2; frontPts.B = nassau.front / 2; }
+    }
+    if (back.complete) {
+      if (back.winner) backPts[back.winner] = nassau.back;
+      else { backPts.A = nassau.back / 2; backPts.B = nassau.back / 2; }
+    }
+    if (overall.complete) {
+      if (overall.winner) overallPts[overall.winner] = nassau.overall;
+      else { overallPts.A = nassau.overall / 2; overallPts.B = nassau.overall / 2; }
+    }
 
-  // Double dot: auto double on holes 16-18
-  if (format === "double_dot") {
-    const lastHoles = holeResults.slice(15, 18);
-    const dd = calcNassauSegment(lastHoles);
-    // extra point for winning 16-18 segment
-    if (dd.complete) {
-      if (dd.winner) overallPts[dd.winner] = (overallPts[dd.winner] || 0) + 1;
+    // Double dot: bonus point for winning the last 3 holes. This is
+    // conceptually a Nassau press, so it only applies in Nassau mode —
+    // in Traditional there's only a single pot, no presses to add to.
+    if (format === "double_dot") {
+      const dd = calcSegment(holeResults.slice(15, 18));
+      if (dd.complete && dd.winner) {
+        overallPts[dd.winner] = (overallPts[dd.winner] || 0) + 1;
+      }
     }
   }
 
