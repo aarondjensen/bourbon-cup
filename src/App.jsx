@@ -264,10 +264,15 @@ function LoginModal({ player, onClose, onError }) {
   const handleGoogle = async () => {
     setMode("loading");
     try {
-      await auth.signInWithGoogle();
-      // Auth-state listener in App handles the rest. Modal closes when
-      // the parent navigates past LoginScreen on successful resolution.
-      onClose();
+      const u = await auth.signInWithGoogle();
+      if (u) {
+        // Popup path completed in-page. Auth-state listener in App
+        // handles the rest; modal closes when LoginScreen unmounts.
+        onClose();
+      }
+      // If u is undefined, redirect path was engaged — the page is
+      // about to navigate away. Stay in "loading" so the modal doesn't
+      // flash back to the choose state before the redirect fires.
     } catch (e) {
       setMode("choose");
       onError(e?.message || "Google sign-in failed. Try again.");
@@ -4851,8 +4856,30 @@ export default function App() {
   // loginError: surfaced back on LoginScreen when an auth attempt fails
   //   (wrong email, network error, etc).
   const [firebaseUser, setFirebaseUser] = useState(null);
-  const [pendingPlayer, setPendingPlayer] = useState(null);
+  // pendingPlayer is mirrored to sessionStorage so a Google sign-in
+  // redirect (full-page bounce to Google and back) can restore which
+  // name the user clicked. Without this, redirected users would land on
+  // LoginScreen post-auth instead of completing self-bind.
+  const [pendingPlayer, setPendingPlayer] = useState(() => {
+    try {
+      const stored = window.sessionStorage.getItem("bc_pending_player");
+      return stored ? JSON.parse(stored) : null;
+    } catch { return null; }
+  });
   const [loginError, setLoginError] = useState(null);
+
+  // Mirror pendingPlayer to sessionStorage. Cleared on null so
+  // successful sign-in (or explicit modal close) doesn't leave stale
+  // state for the next visit.
+  useEffect(() => {
+    try {
+      if (pendingPlayer) {
+        window.sessionStorage.setItem("bc_pending_player", JSON.stringify(pendingPlayer));
+      } else {
+        window.sessionStorage.removeItem("bc_pending_player");
+      }
+    } catch {}
+  }, [pendingPlayer]);
   // Default landing view. Was "practice" while the standalone Mash tab
   // was the focus of validation; now that the Mash UI patterns power
   // the tournament tabs, Leaderboard is the right home base — the
@@ -4940,6 +4967,19 @@ export default function App() {
           window.history.replaceState({}, "", window.location.origin + "/");
         });
     }
+  }, []);
+
+  // ── Auth: consume any pending Google redirect result ──
+  // signInWithGoogle falls back to a full-page redirect when popup auth
+  // fails (mobile Safari, COOP, in-app browsers). After Google bounces
+  // the user back here, getRedirectResult resolves with the credential
+  // and the auth-state listener picks it up. Errors surface to
+  // LoginScreen; success is silent because the resolver effect handles
+  // the rest of the flow (match-or-bind).
+  useEffect(() => {
+    auth.getGoogleRedirectResult().catch(e => {
+      setLoginError(e?.message || "Google sign-in didn't complete. Try again.");
+    });
   }, []);
 
   // ── Auth: resolve Firebase user → player record ──

@@ -14,7 +14,7 @@ import {
 } from "firebase/firestore";
 import {
   getAuth, setPersistence, browserLocalPersistence,
-  GoogleAuthProvider, signInWithPopup,
+  GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink,
   signOut as fbSignOut, onAuthStateChanged as fbOnAuthStateChanged,
 } from "firebase/auth";
@@ -88,14 +88,48 @@ export const auth = {
   // Returns an unsubscribe function.
   onAuthStateChanged: (cb) => fbOnAuthStateChanged(_auth, cb),
 
-  // Sign in with Google via popup. Returns the user on success.
+  // Sign in with Google. Tries popup first (slick UX on desktop) and
+  // falls back to full-page redirect on common popup failures: COOP-
+  // related handoff blocks (typical on Vercel), mobile Safari closing
+  // popups aggressively, in-app browsers (Instagram/Facebook webview)
+  // not supporting cross-window messaging, and explicit popup blockers.
+  // Returns the user on popup success; returns undefined when redirecting
+  // (the page will navigate away before this resolves anyway).
   signInWithGoogle: async () => {
+    const provider = new GoogleAuthProvider();
     try {
-      const provider = new GoogleAuthProvider();
       const cred = await signInWithPopup(_auth, provider);
       return cred.user;
     } catch(e) {
+      const fallbackCodes = new Set([
+        "auth/popup-blocked",
+        "auth/popup-closed-by-user",
+        "auth/cancelled-popup-request",
+        "auth/operation-not-supported-in-this-environment",
+        "auth/web-storage-unsupported",
+        "auth/internal-error", // covers many COOP-related closes
+      ]);
+      if (fallbackCodes.has(e?.code)) {
+        // signInWithRedirect navigates the page away. Anything queued
+        // after this point will not run; the redirect-return handler on
+        // the next page load picks up the result via getRedirectResult.
+        await signInWithRedirect(_auth, provider);
+        return undefined;
+      }
       console.error("auth.signInWithGoogle", e);
+      throw e;
+    }
+  },
+
+  // Consume any pending Google-redirect result. Called once on app mount;
+  // if the user just returned from a Google redirect, this resolves with
+  // the credential. If not, it resolves with null. Errors here surface
+  // OAuth failures (e.g. user cancelled, account selection mismatch).
+  getGoogleRedirectResult: async () => {
+    try {
+      return await getRedirectResult(_auth);
+    } catch(e) {
+      console.error("auth.getGoogleRedirectResult", e);
       throw e;
     }
   },
