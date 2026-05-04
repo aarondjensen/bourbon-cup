@@ -124,7 +124,7 @@ if (typeof document !== "undefined") {
   _style.textContent = `
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body, #root { height: 100%; width: 100%; background: ${BC.bg}; overflow: hidden; }
-    body { margin: 0; padding: 0; }
+    body { margin: 0; padding: 0; font-family: 'Montserrat', sans-serif; }
     /* Native form controls don't inherit font-family by default — they
        reset to the system UI font (San Francisco / Roboto / Segoe UI).
        Force inheritance so every button/input/select picks up Montserrat

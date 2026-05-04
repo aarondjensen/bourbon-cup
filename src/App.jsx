@@ -140,7 +140,7 @@ function LoginScreen({ players, onLogin, teamNames, darkMode }) {
   );
 
   return (
-    <div style={{ height: "100svh", background: BC.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 10px", fontFamily: "'Montserrat', sans-serif", position: "relative", overflow: "hidden" }}>
+    <div style={{ height: "100svh", background: BC.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 10px", position: "relative", overflow: "hidden" }}>
       {/* Silhouette — fixed full-screen background */}
       <img src={TROPHY_SILHOUETTE} alt="" style={{
         position: "fixed", top: "50%", left: "50%",
@@ -257,7 +257,7 @@ function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds
   );
 
   return (
-    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
+    <div>
       {/* TEAMS banner — top-of-view summary card. Mash green header
           strip with centered white text; below it, one row per team
           with their Nassau total. The team that is currently leading
@@ -666,13 +666,13 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
 
   // No more hooks below this line.
   if (!match) return (
-    <div style={{ textAlign: "center", padding: 40, color: BC.t3, fontFamily: "'Montserrat', sans-serif" }}>
+    <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>
       <div style={{ fontSize: 32, marginBottom: 12 }}>⛳</div>
       <div>You're not in any matches yet.</div>
     </div>
   );
   if (!course) return (
-    <div style={{ textAlign: "center", padding: 40, color: BC.t3, fontFamily: "'Montserrat', sans-serif" }}>
+    <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>
       Round {match.round} course not configured yet.
     </div>
   );
@@ -735,7 +735,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   const baseBtns = par === 3 ? [1, 2, 3, 4, 5, 6, 7] : [2, 3, 4, 5, 6, 7, 8];
 
   return (
-    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
+    <div>
       {/* Round selector — visible only when user is in matches across
           multiple rounds (typical mid-tournament scenario). Uses the
           deep-green active-tab styling consistent with the Mash visual
@@ -992,7 +992,6 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
             whiteSpace: "nowrap", textAlign: "center",
             boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
             animation: "bcToastDown 0.3s ease",
-            fontFamily: "'Montserrat', sans-serif",
           }}>
             {toast}
           </div>
@@ -1015,7 +1014,7 @@ function GroupsView({ matches, tRounds, tPlayers, courses, teamNames }) {
   const fmt = FORMATS.find(f => f.id === tr?.format);
 
   return (
-    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
+    <div>
       {/* Round selector — pill toggle, deep Mash green for active state.
           Mirrors the Mash visual language used on Scoring + Leaderboard. */}
       <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
@@ -1370,12 +1369,12 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
     }, 400);
   };
 
-  const InputStyle = { width: "100%", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: 13, boxSizing: "border-box", outline: "none", fontFamily: "'Montserrat', sans-serif" };
+  const InputStyle = { width: "100%", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: 13, boxSizing: "border-box", outline: "none" };
   const LabelStyle = { fontSize: 10, color: BC.t3, fontWeight: 700, letterSpacing: 1, marginBottom: 4, display: "block" };
   const BtnStyle = { padding: "10px 20px", borderRadius: 10, border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer", background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`, color: "#0a0804" };
 
   return (
-    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
+    <div>
       {/* Tabs */}
       <div style={{ display: "flex", gap: 4, marginBottom: 16, background: BC.card, borderRadius: 12, padding: 4, border: `1px solid ${BC.bdr}` }}>
         {[["players","Players"],["rounds","Rounds"],["matches","Matches"],["courses","Courses"]].map(([k, lbl]) => (
@@ -1487,9 +1486,9 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       {isEditing ? (
                         <>
                           <input autoFocus value={editingPlayer.name} onChange={e => setEditingPlayer(prev => ({...prev, name: e.target.value}))}
-                            style={{ fontSize: 12, fontWeight: 600, color: BC.t1, width: 110, flexShrink: 0, background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 4, padding: "2px 6px", outline: "none", fontFamily: "'Montserrat', sans-serif" }} />
+                            style={{ fontSize: 12, fontWeight: 600, color: BC.t1, width: 110, flexShrink: 0, background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 4, padding: "2px 6px", outline: "none" }} />
                           <input type="number" value={editingPlayer.hi} onChange={e => setEditingPlayer(prev => ({...prev, hi: e.target.value}))}
-                            style={{ fontSize: 11, color: BC.t1, width: 42, flexShrink: 0, background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 4, padding: "2px 6px", outline: "none", fontFamily: "'Montserrat', sans-serif" }} />
+                            style={{ fontSize: 11, color: BC.t1, width: 42, flexShrink: 0, background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 4, padding: "2px 6px", outline: "none" }} />
                           <span style={{ flex: 1 }} />
                           <button onClick={() => {
                             const changes = [];
@@ -2261,7 +2260,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
   const perSkin = totalSkins > 0 ? (skinsPot / totalSkins).toFixed(2) : "0.00";
 
   return (
-    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
+    <div>
       {/* Tab toggle */}
       <div style={{ display: "flex", background: BC.card, borderRadius: 20, padding: 3, marginBottom: 14, border: `1px solid ${BC.bdr}` }}>
         {[["skins","🎰 Skins"],["ctp","🎯 Closest to Pin"]].map(([k,lbl]) => (
@@ -2283,7 +2282,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
                 <input autoFocus type="number" value={potInput} onChange={e => setPotInput(e.target.value)}
                   onBlur={() => { onUpdatePot(parseFloat(potInput)||0); setEditPot(false); }}
                   onKeyDown={e => { if (e.key === "Enter") { onUpdatePot(parseFloat(potInput)||0); setEditPot(false); }}}
-                  style={{ fontSize: 20, fontWeight: 800, color: BC.gold, background: "transparent", border: "none", borderBottom: `1px solid ${BC.amber}`, outline: "none", width: 100, fontFamily: "'Montserrat', sans-serif" }} />
+                  style={{ fontSize: 20, fontWeight: 800, color: BC.gold, background: "transparent", border: "none", borderBottom: `1px solid ${BC.amber}`, outline: "none", width: 100 }} />
               ) : (
                 <div onClick={() => user?.isDirector && setEditPot(true)} style={{ fontSize: 20, fontWeight: 800, color: BC.gold, cursor: user?.isDirector ? "pointer" : "default" }}>
                   ${skinsPot.toFixed(2)}
@@ -2374,7 +2373,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
                       <span style={{ fontSize: 11, fontWeight: 700, color: BC.t3, width: 44, flexShrink: 0 }}>Hole {hole + 1}</span>
                       {user?.isDirector ? (
                         <select value={winnerId || ""} onChange={e => onSetCtp(r, hole, e.target.value || null)}
-                          style={{ flex: 1, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, color: BC.t1, fontSize: 11, padding: "4px 6px", fontFamily: "'Montserrat', sans-serif" }}>
+                          style={{ flex: 1, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, color: BC.t1, fontSize: 11, padding: "4px 6px" }}>
                           <option value="">-- Not set --</option>
                           {tPlayers.map(p => <option key={p.player_id} value={p.player_id}>{p.name}</option>)}
                         </select>
@@ -2426,7 +2425,7 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
   }, [tPlayers, matches, holeData, tRounds, courses, hcpOverrides, teeAssignments]);
 
   return (
-    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
+    <div>
       <div style={{ display: "flex", background: BC.card, borderRadius: 20, padding: 3, marginBottom: 14, border: `1px solid ${BC.bdr}` }}>
         {[["current","2026 Stats"],["history","History"]].map(([k,lbl]) => (
           <button key={k} onClick={() => setAnalyticsTab(k)} style={{
@@ -3058,7 +3057,6 @@ function PracticeScoringTab({
                 width: "100%", maxWidth: 440,
                 marginTop: 12, marginBottom: 12,
                 display: "flex", flexDirection: "column",
-                fontFamily: "'Montserrat', sans-serif",
               }}>
                 {/* Header */}
                 <div style={{ padding: "12px 14px", borderBottom: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -3112,7 +3110,6 @@ function PracticeScoringTab({
             whiteSpace: "nowrap", textAlign: "center",
             boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
             animation: "bcToastDown 0.3s ease",
-            fontFamily: "'Montserrat', sans-serif",
           }}>
             {toast}
           </div>
@@ -4399,7 +4396,7 @@ function PracticeView({ user, tPlayers, courses, notify }) {
   }, [event, isDirector, subView]);
 
   return (
-    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
+    <div>
       {/* Header — centered. The MASH ROUND mark functions as the
           tournament banner for this view. Reads from BC.amber (the
           primary brand accent, currently Mash green per the active
@@ -4655,7 +4652,8 @@ export default function App() {
       styleEl.textContent = `
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         html, body, #root { height: 100%; width: 100%; background: ${BC.bg}; overflow: hidden; }
-        body { margin: 0; padding: 0; }
+        body { margin: 0; padding: 0; font-family: 'Montserrat', sans-serif; }
+        button, input, select, textarea { font-family: inherit; }
       `;
     }
   }, [darkMode]);
@@ -5048,7 +5046,7 @@ export default function App() {
   };
 
   return (
-    <div style={{ height: "100svh", width: "100%", background: BC.bg, display: "flex", flexDirection: "column", position: "relative", fontFamily: "'Montserrat', sans-serif", overflow: "hidden" }}>
+    <div style={{ height: "100svh", width: "100%", background: BC.bg, display: "flex", flexDirection: "column", position: "relative", overflow: "hidden" }}>
       <div style={{ maxWidth: 520, width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", height: "100%", position: "relative", padding: "0 4px" }}>
       <Notif notif={notif} />
 
@@ -5160,7 +5158,7 @@ export default function App() {
           // (TEAMS-banner-style header, neutral "no data" body) so when
           // real betting data lands, the visual scaffold is already
           // consistent with the rest of the app.
-          <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
+          <div>
             {/* Skins/CTP toggle scaffold — disabled visual, identical
                 shape to the working Practice Round version. Communicates
                 "this section will have these two modes" without
