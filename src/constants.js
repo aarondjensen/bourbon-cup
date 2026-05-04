@@ -29,25 +29,59 @@ export const getTeam = (tid) => tid === "A" ? TEAM_A : TEAM_B;
 export const oppTeam = (tid) => tid === "A" ? TEAM_B : TEAM_A;
 
 // ── Match-play format catalog ──
-// `nassau` is the default point allocation for {front, back, overall}.
-// `scoringType` flags non-Nassau formats:
-//   - "tilt"   → fixed 4-point match, no Nassau decomposition
-//   - "custom" → director-defined points (Team Best Ball)
-//   - "nassau" → standard front/back/overall split
+// Format dictates how holes are compared (singles = 1v1 net, best ball =
+// better-of-two net, team total = sum of nets, etc.). Point allocation is
+// a SEPARATE concern — every format can be scored either as Nassau (front,
+// back, overall as independent point pots) or Traditional (single pot for
+// the overall match result, W/L/T only). The director picks both at round
+// setup.
+//
+// `nassau` is the default point allocation for {front, back, overall} when
+// the round is configured as Nassau. The Traditional default is computed as
+// the sum of those three (singles → 3, all others → 4) so a director who
+// flips a Nassau round to Traditional gets the same total points at stake.
+//
+// Format defaults are baseline only — the director can override any value
+// in the round setup form.
 export const FORMATS = [
-  { id: "singles",        label: "Singles",            desc: "Match play, 1v1. Nassau scored: front 9, back 9, overall.", nassau: { front: 1, back: 1, overall: 1 }, scoringType: "nassau" },
-  { id: "best_ball",      label: "2-Man Best Ball",    desc: "Each player plays their own ball, team uses the better net score per hole. Nassau scored.", nassau: { front: 1, back: 1, overall: 2 }, scoringType: "nassau" },
-  { id: "team_total",     label: "Team Total",         desc: "Combined team net per hole vs combined team net. Lower combined wins the hole. Nassau scored.", nassau: { front: 1, back: 1, overall: 2 }, scoringType: "nassau" },
-  { id: "pinehurst",      label: "Pinehurst",          desc: "Partners each drive, swap balls, then choose best to finish as scramble. Nassau scored.", nassau: { front: 1, back: 1, overall: 2 }, scoringType: "nassau" },
-  { id: "team_best_ball", label: "Team Best Ball",     desc: "Full team format — custom scoring applies. See director for point structure.", nassau: { front: 0, back: 0, overall: 0 }, scoringType: "custom" },
-  { id: "double_dot",     label: "Double Dot",         desc: "Nassau with automatic press on the back 9 and last 3 holes.", nassau: { front: 1, back: 1, overall: 2 }, scoringType: "nassau" },
-  { id: "shamble",        label: "Shamble",            desc: "All players drive, choose best drive, each plays their own ball in. Nassau scored.", nassau: { front: 1, back: 1, overall: 2 }, scoringType: "nassau" },
-  { id: "scramble",       label: "2-Man Scramble",     desc: "Both hit every shot, choose best ball location, both play from there. Nassau scored.", nassau: { front: 1, back: 1, overall: 2 }, scoringType: "nassau" },
-  { id: "tilt",           label: "2-Man Tilt",         desc: "4-point match: 1pt per side, 2pt overall. No individual Nassau components.", nassau: { front: 0, back: 0, overall: 4 }, scoringType: "tilt" },
-  { id: "stableford",     label: "2-Man Stableford",   desc: "Points per hole: eagle=4, birdie=3, par=2, bogey=1. Nassau scored.", nassau: { front: 1, back: 1, overall: 2 }, scoringType: "nassau" },
+  { id: "singles",        label: "Singles",            desc: "Match play, 1v1 net comparison per hole.",                                              nassau: { front: 1, back: 1, overall: 1 } },
+  { id: "best_ball",      label: "2-Man Best Ball",    desc: "Each player plays their own ball; team uses the better net score per hole.",            nassau: { front: 1, back: 1, overall: 2 } },
+  { id: "team_total",     label: "Team Total",         desc: "Combined team net per hole vs combined team net. Lower combined wins the hole.",        nassau: { front: 1, back: 1, overall: 2 } },
+  { id: "pinehurst",      label: "Pinehurst",          desc: "Partners each drive, swap balls, then choose best to finish as scramble.",              nassau: { front: 1, back: 1, overall: 2 } },
+  { id: "team_best_ball", label: "Team Best Ball",     desc: "Full team format — best of all team-member nets per hole.",                             nassau: { front: 1, back: 1, overall: 2 } },
+  { id: "double_dot",     label: "Double Dot",         desc: "Match play with an automatic bonus point for winning the last 3 holes.",                nassau: { front: 1, back: 1, overall: 2 } },
+  { id: "shamble",        label: "Shamble",            desc: "All players drive, choose best drive, each plays their own ball in.",                   nassau: { front: 1, back: 1, overall: 2 } },
+  { id: "scramble",       label: "2-Man Scramble",     desc: "Both hit every shot, choose best ball location, both play from there.",                 nassau: { front: 1, back: 1, overall: 2 } },
+  { id: "tilt",           label: "2-Man Tilt",         desc: "2-man match play — net comparison per hole.",                                           nassau: { front: 1, back: 1, overall: 2 } },
+  { id: "stableford",     label: "2-Man Stableford",   desc: "Points per hole: eagle=4, birdie=3, par=2, bogey=1. Higher segment points wins.",       nassau: { front: 1, back: 1, overall: 2 } },
+];
+
+// ── Point-allocation methods ──
+// Two ways to convert hole-by-hole results into match points:
+//   - "nassau"      → independent points awarded for front-9, back-9, and
+//                     overall match results (default; matches existing data).
+//   - "traditional" → single pot awarded for the overall match result only;
+//                     halved match splits the pot ½ / ½.
+// Stored on both bc_rounds (round-level default) and bc_matches (per-match
+// override; falls back to round when absent).
+export const POINT_METHOD_NASSAU = "nassau";
+export const POINT_METHOD_TRADITIONAL = "traditional";
+export const POINT_METHODS = [
+  { id: POINT_METHOD_NASSAU,      label: "Nassau" },
+  { id: POINT_METHOD_TRADITIONAL, label: "Traditional" },
 ];
 
 export const NASSAU_DEFAULT = { front: 1, back: 1, overall: 1 };
+
+// Default Traditional point value for a given format = sum of its Nassau
+// defaults (singles → 3, everything else → 4). Keeps the total points at
+// stake constant when a director flips between methods on the same format.
+export const traditionalDefaultFor = (formatId) => {
+  const fmt = FORMATS.find(f => f.id === formatId);
+  if (!fmt) return 1;
+  const n = fmt.nassau || NASSAU_DEFAULT;
+  return (n.front || 0) + (n.back || 0) + (n.overall || 0);
+};
 
 // ── Practice event colors ──
 // 4 shades of green for the practice mode teams. All within the Mash Brothers
