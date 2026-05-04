@@ -5,6 +5,7 @@ import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
   TEAM_A, TEAM_B, getTeam, oppTeam,
   FORMATS, NASSAU_DEFAULT, PRACTICE_TEAM_COLORS, DIRECTOR_CODE,
+  POINT_METHOD_NASSAU, POINT_METHOD_TRADITIONAL, traditionalDefaultFor,
 } from "./constants";
 import {
   calcCH, calcCHForCourse, fmtScore,
@@ -227,7 +228,12 @@ function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds
     return tot;
   }, [matchResults]);
 
+  // Total points at stake across all matches. Each match contributes
+  // either its single Traditional pot or the sum of its Nassau pots.
   const totalAvail = matches.reduce((s, m) => {
+    if (m.point_method === POINT_METHOD_TRADITIONAL) {
+      return s + (m.traditional_points || 0);
+    }
     const n = m.nassau || NASSAU_DEFAULT;
     return s + (n.front || 0) + (n.back || 0) + (n.overall || 0);
   }, 0);
@@ -1124,6 +1130,8 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
     setRoundFormat(tr.format || "");
     setRoundTeeTime(tr.tee_time || "");
     setNassau({ front: tr.nassau_front ?? 1, back: tr.nassau_back ?? 1, overall: tr.nassau_overall ?? 1 });
+    setPointMethod(tr.point_method || POINT_METHOD_NASSAU);
+    setTraditionalPoints(tr.traditional_points ?? traditionalDefaultFor(tr.format || "singles"));
     if (tr.handicap_mode) setHandicapMode(prev => ({ ...prev, [editRound]: tr.handicap_mode }));
   }, [tRounds]);
   const [handicapMode, setHandicapMode] = useState({ 1: "low_man", 2: "low_man", 3: "low_man", 4: "full" }); // per round
@@ -1148,6 +1156,12 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   useEffect(() => { if (hcpOverridesFromDb) setHcpOverrides(hcpOverridesFromDb); }, [JSON.stringify(hcpOverridesFromDb)]);
   useEffect(() => { if (teeAssignmentsFromDb) setTeeAssignments(teeAssignmentsFromDb); }, [JSON.stringify(teeAssignmentsFromDb)]);
   const [nassau, setNassau] = useState(NASSAU_DEFAULT);
+  // Point allocation method (Nassau vs Traditional). Independent of the
+  // format — the director picks both at round setup. See constants.js for
+  // the model. Defaults to Nassau so any pre-existing rounds without this
+  // field saved keep behaving exactly as they did before.
+  const [pointMethod, setPointMethod] = useState(POINT_METHOD_NASSAU);
+  const [traditionalPoints, setTraditionalPoints] = useState(traditionalDefaultFor("singles"));
 
   // Match builder
   const [matchRound, setMatchRound] = useState(1);
@@ -1156,6 +1170,45 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
   const teamAPlayers = tPlayers.filter(p => p.team === "A"); // used in match builder
   const teamBPlayers = tPlayers.filter(p => p.team === "B");
+
+  // ── Round-form dirty tracking ──
+  // Compares the local form state (roundFormat, tee_time, nassau, handicap
+  // mode, hcp overrides, tee assignments) against what's currently saved
+  // for this round. Drives the Save button's disabled state — no point
+  // letting the director re-save identical values, and the dimmed button
+  // makes it obvious when an edit is unsaved vs. when nothing has changed.
+  // Course is intentionally excluded — it's read-only here (set in the
+  // Courses tab) so it can never be "dirty" in this form.
+  const isRoundDirty = useMemo(() => {
+    if (!editRound) return false;
+    const tr = tRounds.find(t => t.round_number === editRound) || {};
+    if ((roundFormat || "") !== (tr.format || "")) return true;
+    if ((roundTeeTime || "") !== (tr.tee_time || "")) return true;
+    if ((nassau.front ?? 1) !== (tr.nassau_front ?? 1)) return true;
+    if ((nassau.back ?? 1) !== (tr.nassau_back ?? 1)) return true;
+    if ((nassau.overall ?? 1) !== (tr.nassau_overall ?? 1)) return true;
+    if (pointMethod !== (tr.point_method || POINT_METHOD_NASSAU)) return true;
+    const savedTrad = tr.traditional_points ?? traditionalDefaultFor(tr.format || "singles");
+    if ((traditionalPoints ?? 0) !== savedTrad) return true;
+    const defaultMode = editRound === 4 ? "full" : "low_man";
+    const localMode = handicapMode[editRound] || defaultMode;
+    const savedMode = tr.handicap_mode || defaultMode;
+    if (localMode !== savedMode) return true;
+    // Compare per-round override and tee-assignment maps. Empty strings
+    // are treated as "no override" so typing a value and clearing it
+    // doesn't leave the form spuriously dirty.
+    const cleanMap = (obj) => {
+      const out = {};
+      for (const k of Object.keys(obj || {}).sort()) {
+        const v = obj[k];
+        if (v !== "" && v !== null && v !== undefined) out[k] = v;
+      }
+      return JSON.stringify(out);
+    };
+    if (cleanMap(hcpOverrides[editRound]) !== cleanMap(hcpOverridesFromDb?.[editRound])) return true;
+    if (cleanMap(teeAssignments[editRound]) !== cleanMap(teeAssignmentsFromDb?.[editRound])) return true;
+    return false;
+  }, [editRound, tRounds, roundFormat, roundTeeTime, nassau, pointMethod, traditionalPoints, handicapMode, hcpOverrides, hcpOverridesFromDb, teeAssignments, teeAssignmentsFromDb]);
 
   if (!user.isDirector) return (
     <div style={{ textAlign: "center", padding: 40 }}>
@@ -1181,6 +1234,8 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
       format: roundFormat || tr.format || "singles",
       handicap_mode: handicapMode[editRound] || "low_man",
       tee_time: roundTeeTime || tr.tee_time || "",
+      point_method: pointMethod,
+      traditional_points: traditionalPoints,
       nassau_front: nassau.front,
       nassau_back: nassau.back,
       nassau_overall: nassau.overall,
@@ -1201,6 +1256,8 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
       teamANames: matchTeamA.map(pid => tPlayers.find(p => p.player_id === pid)?.name || pid),
       teamBNames: matchTeamB.map(pid => tPlayers.find(p => p.player_id === pid)?.name || pid),
       nassau: nassau,
+      point_method: pointMethod,
+      traditional_points: traditionalPoints,
     };
     await onSetMatch(data);
     setMatchTeamA([]); setMatchTeamB([]);
@@ -1484,6 +1541,8 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   setRoundCourse(tr.course_id || "");
                   setRoundTeeTime(tr.tee_time || "");
                   setNassau({ front: tr.nassau_front || 1, back: tr.nassau_back || 1, overall: tr.nassau_overall || 1 });
+                  setPointMethod(tr.point_method || POINT_METHOD_NASSAU);
+                  setTraditionalPoints(tr.traditional_points ?? traditionalDefaultFor(tr.format || "singles"));
                 }
                 // Load existing overrides and handicap mode for this round
                 setHcpOverrides(prev => ({ ...prev }));
@@ -1496,6 +1555,22 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               }}>Rd {r}</button>
             ))}
           </div>
+          {/* Save button — top of form, disabled until something changes.
+              Placed above the form card so it's reachable without scrolling
+              past the handicap-overrides table on long rounds. */}
+          <button
+            onClick={saveRound}
+            disabled={!isRoundDirty}
+            style={{
+              ...BtnStyle,
+              width: "100%",
+              marginBottom: 10,
+              cursor: isRoundDirty ? "pointer" : "not-allowed",
+              opacity: isRoundDirty ? 1 : 0.4,
+              transition: "opacity 0.15s ease",
+            }}>
+            Save Round {editRound}
+          </button>
           <div style={{ background: BC.card, borderRadius: 12, padding: "12px 12px", border: `1px solid ${BC.bdr}` }}>
             {/* Format + Course — 2 col compact, matched sizing */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
@@ -1505,6 +1580,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   const fmt = FORMATS.find(f => f.id === e.target.value);
                   setRoundFormat(e.target.value);
                   if (fmt?.nassau) setNassau(fmt.nassau);
+                  setTraditionalPoints(traditionalDefaultFor(e.target.value));
                 }} style={{ ...InputStyle, marginBottom: 0, fontSize: 12, padding: "8px 8px", height: 38 }}>
                   <option value="">Select...</option>
                   {FORMATS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
@@ -1615,15 +1691,36 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             {/* Scoring + Low Man toggle on same line */}
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>SCORING</div>
-              {[["front", "F9"], ["back", "B9"], ["overall", "OVR"]].map(([k, lbl]) => (
-                <div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                  <span style={{ fontSize: 9, color: BC.t3, flexShrink: 0 }}>{lbl}</span>
-                  <input type="number" step="0.5" min="0" value={nassau[k]}
-                    onChange={e => setNassau(n => ({ ...n, [k]: parseFloat(e.target.value) || 0 }))}
+              {/* Nassau toggle — checked shows F9/B9/OVR fields (Nassau);
+                  unchecked collapses to a single PTS field (Traditional). */}
+              <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", flexShrink: 0 }}>
+                <input
+                  type="checkbox"
+                  checked={pointMethod === POINT_METHOD_NASSAU}
+                  onChange={e => setPointMethod(e.target.checked ? POINT_METHOD_NASSAU : POINT_METHOD_TRADITIONAL)}
+                  style={{ accentColor: BC.amber, cursor: "pointer", margin: 0, width: 14, height: 14 }}
+                />
+                <span style={{ fontSize: 10, color: BC.t2, fontWeight: 600 }}>Nassau</span>
+              </label>
+              {pointMethod === POINT_METHOD_NASSAU ? (
+                [["front", "F9"], ["back", "B9"], ["overall", "OVR"]].map(([k, lbl]) => (
+                  <div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                    <span style={{ fontSize: 9, color: BC.t3, flexShrink: 0 }}>{lbl}</span>
+                    <input type="number" step="0.5" min="0" value={nassau[k]}
+                      onChange={e => setNassau(n => ({ ...n, [k]: parseFloat(e.target.value) || 0 }))}
+                      onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                      style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: 11, textAlign: "center", width: 38 }} />
+                  </div>
+                ))
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                  <span style={{ fontSize: 9, color: BC.t3, flexShrink: 0 }}>PTS</span>
+                  <input type="number" step="0.5" min="0" value={traditionalPoints}
+                    onChange={e => setTraditionalPoints(parseFloat(e.target.value) || 0)}
                     onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
                     style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: 11, textAlign: "center", width: 38 }} />
                 </div>
-              ))}
+              )}
               {/* Low Man / All toggle inline */}
               <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}`, marginLeft: "auto" }}>
                 {[["low_man", "Low Man"], ["full", "All"]].map(([val, lbl]) => {
@@ -1733,8 +1830,6 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 </div>
               ))}
             </div>
-
-            <button onClick={saveRound} style={BtnStyle}>Save Round {editRound}</button>
           </div>
         </div>
       )}
@@ -4844,17 +4939,25 @@ export default function App() {
     return () => unsubs.forEach(u => u());
   }, []);
 
-  // Enhance tRounds with nassau data
+  // Enhance tRounds with nassau data + point method config
   const enrichedRounds = useMemo(() => tRounds.map(r => ({
     ...r,
     nassau: { front: r.nassau_front ?? 1, back: r.nassau_back ?? 1, overall: r.nassau_overall ?? 1 },
+    point_method: r.point_method || POINT_METHOD_NASSAU,
+    traditional_points: r.traditional_points ?? traditionalDefaultFor(r.format || "singles"),
     handicap_mode: r.handicap_mode || (r.round_number === 4 ? 'full' : 'low_man'),
   })), [tRounds]);
 
-  // Enhance matches with nassau from round
+  // Enhance matches: if a match doesn't carry its own scoring config (older
+  // matches saved before these fields existed), inherit from the round.
   const enrichedMatches = useMemo(() => matches.map(m => {
     const tr = enrichedRounds.find(t => t.round_number === m.round);
-    return { ...m, nassau: m.nassau || tr?.nassau || NASSAU_DEFAULT };
+    return {
+      ...m,
+      nassau: m.nassau || tr?.nassau || NASSAU_DEFAULT,
+      point_method: m.point_method || tr?.point_method || POINT_METHOD_NASSAU,
+      traditional_points: m.traditional_points ?? tr?.traditional_points ?? 1,
+    };
   }), [matches, enrichedRounds]);
 
   const onSaveHole = useCallback(async (pid, rnd, holeIdx, score, courseId) => {
