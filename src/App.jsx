@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { BC, applyBCTheme, initialBCMode } from "./theme";
-import { db, TOURNAMENT_ID } from "./firebase";
+import { db, auth, TOURNAMENT_ID } from "./firebase";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
   TEAM_A, TEAM_B, getTeam, oppTeam,
@@ -104,12 +104,15 @@ function Notif({ notif }) {
 }
 
 // ── Login Screen ──
-function LoginScreen({ players, onLogin, teamNames, darkMode }) {
+function LoginScreen({ players, onPlayerClick, onBootstrapDirector, teamNames, darkMode, loginError, onClearError, firebaseUser, onSwitchAccount }) {
   const [search, setSearch] = useState("");
 
+  // DIRECTOR_CODE bootstrap — typed into the search box, no auth required.
+  // Kept as a backup path so a director can always get in (e.g., if their
+  // email isn't yet registered, or the auth provider is misconfigured).
   useEffect(() => {
     if (search === DIRECTOR_CODE) {
-      onLogin({ player_id: "bootstrap_director", name: "Director (Setup)", team: null, isDirector: true });
+      onBootstrapDirector();
     }
   }, [search]);
 
@@ -129,7 +132,7 @@ function LoginScreen({ players, onLogin, teamNames, darkMode }) {
   const filterPlayers = (list) => list;
 
   const PlayerBtn = ({ p, team }) => (
-    <button onClick={() => onLogin(p)} style={{
+    <button onClick={() => { if (loginError) onClearError(); onPlayerClick(p); }} style={{
       width: "100%", padding: "clamp(8px, 2.5vw, 12px) clamp(10px, 3vw, 14px)", background: team.color + "22",
       border: `1px solid ${team.accent}33`, borderRadius: 6,
       color: BC.t2, fontSize: "clamp(13px, 3.8vw, 14px)", fontWeight: 600, cursor: "pointer", textAlign: "center",
@@ -182,11 +185,218 @@ function LoginScreen({ players, onLogin, teamNames, darkMode }) {
 
       {players.length === 0 && (
         <div style={{ textAlign: "center", color: BC.t3, padding: 16, fontSize: 12, position: "relative", zIndex: 1, marginTop: 12 }}>
-          No players yet. Type <span style={{ color: BC.amber, fontWeight: 700 }}>bcdir2025</span> to set up.
+          No players yet. Type <span style={{ color: BC.amber, fontWeight: 700 }}>bcdir2025</span> below to set up.
         </div>
       )}
+
+      {/* Login error banner — surfaces auth issues like "your email isn't
+          registered" so the user knows why they're back on this screen. */}
+      {loginError && (
+        <div style={{
+          marginTop: 14, padding: "10px 14px", borderRadius: 8,
+          background: BC.danger + "15", border: `1px solid ${BC.danger}55`,
+          color: BC.danger, fontSize: 12, textAlign: "center",
+          maxWidth: 480, position: "relative", zIndex: 1,
+        }}>
+          {loginError}
+        </div>
+      )}
+
+      {/* "Signed in as X" affordance — appears when there's a Firebase user
+          but no resolved player. Lets the user sign out and try a
+          different account (e.g., they used the wrong Google account
+          and need to retry). */}
+      {firebaseUser && (
+        <div style={{
+          marginTop: 12, padding: "8px 12px", borderRadius: 8,
+          background: BC.card, border: `1px solid ${BC.bdr}`,
+          fontSize: 11, color: BC.t3, textAlign: "center",
+          display: "flex", alignItems: "center", gap: 8,
+          position: "relative", zIndex: 1,
+        }}>
+          <span>Signed in as <span style={{ color: BC.t1, fontWeight: 600 }}>{firebaseUser.email}</span></span>
+          <button onClick={onSwitchAccount} style={{
+            padding: "3px 8px", borderRadius: 6, border: `1px solid ${BC.bdr}`,
+            background: "transparent", color: BC.amber, fontSize: 10, fontWeight: 700, cursor: "pointer",
+          }}>
+            Switch account
+          </button>
+        </div>
+      )}
+
+      {/* Director-code backup input — kept subtle so it doesn't compete
+          with the main player-list flow. Used when the director's email
+          isn't registered yet, or as an escape hatch during setup. */}
+      <input
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        placeholder="Director code"
+        style={{
+          marginTop: 16, padding: "6px 10px", width: 140,
+          background: "transparent", border: `1px solid ${BC.bdr}`, borderRadius: 6,
+          color: BC.t3, fontSize: 11, textAlign: "center", outline: "none",
+          position: "relative", zIndex: 1,
+        }}
+      />
       </div>
     </div>
+  );
+}
+
+// ── Login modal ──
+// Opens when a user clicks their name on LoginScreen. Two sign-in options:
+//   - Google: one-click popup. On success, the App's auth-state listener
+//     resolves the authed email to a player record.
+//   - Magic link: user enters email, link is sent, modal shows a "check
+//     your email" confirmation. The actual sign-in completes when the
+//     user clicks the link in their email and returns to the app.
+//
+// The clicked player is passed in as `player` and shown in the header so
+// the user knows which name they're claiming. The actual binding (authed
+// email must match the player's stored email) is enforced by the parent
+// after auth completes — this modal just runs the auth flow.
+function LoginModal({ player, onClose, onError }) {
+  const [mode, setMode] = useState("choose"); // "choose" | "email-form" | "email-sent" | "loading"
+  const [email, setEmail] = useState("");
+
+  if (!player) return null;
+
+  const handleGoogle = async () => {
+    setMode("loading");
+    try {
+      await auth.signInWithGoogle();
+      // Auth-state listener in App handles the rest. Modal closes when
+      // the parent navigates past LoginScreen on successful resolution.
+      onClose();
+    } catch (e) {
+      setMode("choose");
+      onError(e?.message || "Google sign-in failed. Try again.");
+    }
+  };
+
+  const handleSendLink = async () => {
+    if (!email.trim() || !email.includes("@")) {
+      onError("Enter a valid email address.");
+      return;
+    }
+    setMode("loading");
+    try {
+      await auth.sendMagicLink(email.trim());
+      setMode("email-sent");
+    } catch (e) {
+      setMode("email-form");
+      onError(e?.message || "Couldn't send the sign-in link. Try again.");
+    }
+  };
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div onClick={onClose} style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)",
+        zIndex: 300, backdropFilter: "blur(2px)",
+      }} />
+      {/* Modal card */}
+      <div style={{
+        position: "fixed", top: "50%", left: "50%",
+        transform: "translate(-50%, -50%)",
+        width: "calc(100% - 32px)", maxWidth: 360,
+        background: BC.card, borderRadius: 14,
+        border: `1px solid ${BC.bdr}`,
+        boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
+        zIndex: 301, padding: 20,
+      }}>
+        {/* Header */}
+        <div style={{ marginBottom: 14, textAlign: "center" }}>
+          <div style={{ fontSize: 10, color: BC.t3, letterSpacing: 2, fontWeight: 700, marginBottom: 4 }}>SIGN IN AS</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: BC.t1 }}>{player.name}</div>
+        </div>
+
+        {mode === "choose" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <button onClick={handleGoogle} style={{
+              padding: "11px 14px", borderRadius: 10, border: `1px solid ${BC.bdr}`,
+              background: BC.inp, color: BC.t1, fontSize: 14, fontWeight: 600,
+              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+            }}>
+              {/* Google "G" mark */}
+              <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+                <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z" />
+                <path fill="#34A853" d="M9 18c2.43 0 4.47-.81 5.96-2.18l-2.92-2.26c-.81.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.32A9 9 0 0 0 9 18z" />
+                <path fill="#FBBC05" d="M3.97 10.71A5.41 5.41 0 0 1 3.68 9c0-.6.1-1.17.29-1.71V4.97H.96A9 9 0 0 0 0 9c0 1.45.35 2.82.96 4.03l3.01-2.32z" />
+                <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A9 9 0 0 0 9 0a9 9 0 0 0-8.04 4.97l3.01 2.32C4.68 5.16 6.66 3.58 9 3.58z" />
+              </svg>
+              Continue with Google
+            </button>
+            <button onClick={() => setMode("email-form")} style={{
+              padding: "11px 14px", borderRadius: 10, border: `1px solid ${BC.bdr}`,
+              background: BC.inp, color: BC.t1, fontSize: 14, fontWeight: 600,
+              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+            }}>
+              ✉ Email me a sign-in link
+            </button>
+            <button onClick={onClose} style={{
+              marginTop: 4, padding: "8px 14px", borderRadius: 10, border: "none",
+              background: "transparent", color: BC.t3, fontSize: 12, cursor: "pointer",
+            }}>
+              Cancel
+            </button>
+          </div>
+        )}
+
+        {mode === "email-form" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <input
+              autoFocus
+              type="email"
+              inputMode="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") handleSendLink(); }}
+              placeholder="you@example.com"
+              style={{
+                padding: "11px 12px", borderRadius: 10, border: `1px solid ${BC.bdr}`,
+                background: BC.inp, color: BC.t1, fontSize: 16, outline: "none",
+              }}
+            />
+            <button onClick={handleSendLink} style={{
+              padding: "11px 14px", borderRadius: 10, border: "none",
+              background: BC.amber, color: "#0a0804", fontSize: 14, fontWeight: 700, cursor: "pointer",
+            }}>
+              Send sign-in link
+            </button>
+            <button onClick={() => setMode("choose")} style={{
+              padding: "8px 14px", borderRadius: 10, border: "none",
+              background: "transparent", color: BC.t3, fontSize: 12, cursor: "pointer",
+            }}>
+              ← Back
+            </button>
+          </div>
+        )}
+
+        {mode === "email-sent" && (
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>✉</div>
+            <div style={{ fontSize: 14, color: BC.t1, fontWeight: 600, marginBottom: 6 }}>Check your email</div>
+            <div style={{ fontSize: 12, color: BC.t3, lineHeight: 1.5, marginBottom: 14 }}>
+              We sent a sign-in link to <span style={{ color: BC.t1, fontWeight: 600 }}>{email}</span>. Click the link to finish signing in.
+            </div>
+            <button onClick={onClose} style={{
+              padding: "9px 18px", borderRadius: 10, border: `1px solid ${BC.bdr}`,
+              background: "transparent", color: BC.t2, fontSize: 12, cursor: "pointer",
+            }}>
+              Close
+            </button>
+          </div>
+        )}
+
+        {mode === "loading" && (
+          <div style={{ textAlign: "center", padding: "20px 0" }}>
+            <div style={{ fontSize: 12, color: BC.t3 }}>Signing in…</div>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -1107,6 +1317,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   const [newPlayerName, setNewPlayerName] = useState("");
   const [newPlayerTeam, setNewPlayerTeam] = useState(null);
   const [newPlayerHI, setNewPlayerHI] = useState("");
+  const [newPlayerEmail, setNewPlayerEmail] = useState("");
   const [courseSearch, setCourseSearch] = useState("");
   const [courseStateFilter, setCourseStateFilter] = useState("MI");
   const [searchResults, setSearchResults] = useState([]);
@@ -1433,13 +1644,13 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
               {/* Expandable add card */}
               {newPlayerTeam === team.id && (
-                <div style={{ background: BC.inp, borderRadius: 10, padding: 10, marginBottom: 10, border: `1px solid ${team.accent}44` }}>
+                <div style={{ background: BC.inp, borderRadius: 10, padding: 10, marginBottom: 10, border: `1px solid ${team.accent}44`, display: "flex", flexDirection: "column", gap: 6 }}>
                   <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                     <input
                       autoFocus
                       value={newPlayerName}
                       onChange={e => setNewPlayerName(e.target.value)}
-                      onKeyDown={async e => { if (e.key === "Enter") { if (!newPlayerName.trim()) return; const pid = `bc_player_${Date.now()}`; await onAddPlayer({ id: pid, player_id: pid, tournament_id: TOURNAMENT_ID, name: newPlayerName.trim(), team: team.id, handicap_index: parseFloat(newPlayerHI) || 0 }); setNewPlayerName(""); setNewPlayerHI(""); setNewPlayerTeam(null); notify(`Added!`, "success"); } }}
+                      onKeyDown={async e => { if (e.key === "Enter") { if (!newPlayerName.trim()) return; const pid = `bc_player_${Date.now()}`; await onAddPlayer({ id: pid, player_id: pid, tournament_id: TOURNAMENT_ID, name: newPlayerName.trim(), team: team.id, handicap_index: parseFloat(newPlayerHI) || 0, email: newPlayerEmail.trim().toLowerCase() }); setNewPlayerName(""); setNewPlayerHI(""); setNewPlayerEmail(""); setNewPlayerTeam(null); notify(`Added!`, "success"); } }}
                       placeholder="Player name"
                       style={{ flex: 2, padding: "9px 10px", background: "#1e1c18", border: `1px solid ${team.accent}55`, borderRadius: 8, color: "#ffffff", fontSize: 12, outline: "none" }}
                     />
@@ -1453,14 +1664,22 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     <button onClick={async () => {
                       if (!newPlayerName.trim()) { notify("Enter a name", "error"); return; }
                       const pid = `bc_player_${Date.now()}`;
-                      await onAddPlayer({ id: pid, player_id: pid, tournament_id: TOURNAMENT_ID, name: newPlayerName.trim(), team: team.id, handicap_index: parseFloat(newPlayerHI) || 0 });
-                      setNewPlayerName(""); setNewPlayerHI(""); setNewPlayerTeam(null);
+                      await onAddPlayer({ id: pid, player_id: pid, tournament_id: TOURNAMENT_ID, name: newPlayerName.trim(), team: team.id, handicap_index: parseFloat(newPlayerHI) || 0, email: newPlayerEmail.trim().toLowerCase() });
+                      setNewPlayerName(""); setNewPlayerHI(""); setNewPlayerEmail(""); setNewPlayerTeam(null);
                       notify(`Added!`, "success");
-                    }} style={{ padding: "9px 12px", borderRadius: 8, border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer", background: team.color, border: `1px solid ${team.accent}`, color: team.accent, flexShrink: 0 }}>✓</button>
-                    <button onClick={() => { setNewPlayerTeam(null); setNewPlayerName(""); setNewPlayerHI(""); }} style={{
+                    }} style={{ padding: "9px 12px", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer", background: team.color, border: `1px solid ${team.accent}`, color: team.accent, flexShrink: 0 }}>✓</button>
+                    <button onClick={() => { setNewPlayerTeam(null); setNewPlayerName(""); setNewPlayerHI(""); setNewPlayerEmail(""); }} style={{
                       padding: "9px 10px", borderRadius: 8, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, fontSize: 12, cursor: "pointer", flexShrink: 0,
                     }}>✕</button>
                   </div>
+                  <input
+                    value={newPlayerEmail}
+                    onChange={e => setNewPlayerEmail(e.target.value)}
+                    placeholder="Email (optional — set on first login if blank)"
+                    type="email"
+                    inputMode="email"
+                    style={{ padding: "9px 10px", background: "#1e1c18", border: `1px solid ${team.accent}55`, borderRadius: 8, color: "#ffffff", fontSize: 12, outline: "none" }}
+                  />
                 </div>
               )}
 
@@ -1481,32 +1700,45 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       onTouchStart={e => { swipeStartX.current = e.touches[0].clientX; setSwipePid(p.player_id); setSwipeX(0); }}
                       onTouchMove={e => { if (swipeStartX.current == null) return; const dx2 = e.touches[0].clientX - swipeStartX.current; setSwipeX(Math.min(0, dx2)); }}
                       onTouchEnd={() => { if (swipeX < -80) { if (window.confirm(`Remove ${p.name}?`)) { onRemovePlayer(p.player_id); } } setSwipePid(null); setSwipeX(0); swipeStartX.current = null; }}
-                      style={{ background: BC.card, borderRadius: 6, padding: "4px 8px", border: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", gap: 6, boxShadow: `inset 3px 0 0 ${team.accent}55`, position: "relative", transform: `translateX(${dx}px)`, transition: isSwiping ? "none" : "transform 0.2s ease" }}>
+                      style={{ background: BC.card, borderRadius: 6, padding: "4px 8px", border: `1px solid ${BC.bdr}`, display: "flex", flexDirection: isEditing ? "column" : "row", alignItems: isEditing ? "stretch" : "center", gap: 6, boxShadow: `inset 3px 0 0 ${team.accent}55`, position: "relative", transform: `translateX(${dx}px)`, transition: isSwiping ? "none" : "transform 0.2s ease" }}>
                       {isEditing ? (
                         <>
-                          <input autoFocus value={editingPlayer.name} onChange={e => setEditingPlayer(prev => ({...prev, name: e.target.value}))}
-                            style={{ fontSize: 12, fontWeight: 600, color: BC.t1, width: 110, flexShrink: 0, background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 4, padding: "2px 6px", outline: "none" }} />
-                          <input type="number" value={editingPlayer.hi} onChange={e => setEditingPlayer(prev => ({...prev, hi: e.target.value}))}
-                            style={{ fontSize: 11, color: BC.t1, width: 42, flexShrink: 0, background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 4, padding: "2px 6px", outline: "none" }} />
-                          <span style={{ flex: 1 }} />
-                          <button onClick={() => {
-                            const changes = [];
-                            if (editingPlayer.name !== p.name) changes.push(`Name: "${p.name}" → "${editingPlayer.name}"`);
-                            if (parseFloat(editingPlayer.hi) !== parseFloat(p.handicap_index)) changes.push(`HI: ${p.handicap_index} → ${editingPlayer.hi}`);
-                            if (changes.length === 0) { setEditingPlayer(null); return; }
-                            if (window.confirm("Confirm changes for " + p.name + ":\n" + changes.join("\n"))) {
-                              onUpdatePlayer({ ...p, name: editingPlayer.name.trim(), handicap_index: parseFloat(editingPlayer.hi) || 0 });
-                            }
-                            setEditingPlayer(null);
-                          }} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, border: "none", background: team.accent, color: "#0a0804", fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>✓</button>
-                          <button onClick={() => setEditingPlayer(null)} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer", flexShrink: 0 }}>✕</button>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <input autoFocus value={editingPlayer.name} onChange={e => setEditingPlayer(prev => ({...prev, name: e.target.value}))}
+                              style={{ fontSize: 12, fontWeight: 600, color: BC.t1, width: 110, flexShrink: 0, background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 4, padding: "2px 6px", outline: "none" }} />
+                            <input type="number" value={editingPlayer.hi} onChange={e => setEditingPlayer(prev => ({...prev, hi: e.target.value}))}
+                              style={{ fontSize: 11, color: BC.t1, width: 42, flexShrink: 0, background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 4, padding: "2px 6px", outline: "none" }} />
+                            <span style={{ flex: 1 }} />
+                            <button onClick={() => {
+                              const changes = [];
+                              const newEmail = (editingPlayer.email || "").trim().toLowerCase();
+                              const oldEmail = (p.email || "").toLowerCase();
+                              if (editingPlayer.name !== p.name) changes.push(`Name: "${p.name}" → "${editingPlayer.name}"`);
+                              if (parseFloat(editingPlayer.hi) !== parseFloat(p.handicap_index)) changes.push(`HI: ${p.handicap_index} → ${editingPlayer.hi}`);
+                              if (newEmail !== oldEmail) changes.push(`Email: "${p.email || "—"}" → "${newEmail || "—"}"`);
+                              if (changes.length === 0) { setEditingPlayer(null); return; }
+                              if (window.confirm("Confirm changes for " + p.name + ":\n" + changes.join("\n"))) {
+                                onUpdatePlayer({ ...p, name: editingPlayer.name.trim(), handicap_index: parseFloat(editingPlayer.hi) || 0, email: newEmail });
+                              }
+                              setEditingPlayer(null);
+                            }} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, border: "none", background: team.accent, color: "#0a0804", fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>✓</button>
+                            <button onClick={() => setEditingPlayer(null)} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer", flexShrink: 0 }}>✕</button>
+                          </div>
+                          <input
+                            type="email"
+                            inputMode="email"
+                            value={editingPlayer.email || ""}
+                            onChange={e => setEditingPlayer(prev => ({...prev, email: e.target.value}))}
+                            placeholder="Email (auto-set on first login; clear to allow re-bind)"
+                            style={{ fontSize: 11, color: BC.t1, background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 4, padding: "4px 6px", outline: "none" }}
+                          />
                         </>
                       ) : (
                         <>
                           <span style={{ fontSize: 12, fontWeight: 600, color: team.accent + "88", width: 110, flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
                           <span style={{ fontSize: 11, fontWeight: 400, color: BC.t1, width: 36, flexShrink: 0 }}>{p.handicap_index}</span>
                           <span style={{ flex: 1 }} />
-                          <button onClick={() => setEditingPlayer({ pid: p.player_id, name: p.name, hi: String(p.handicap_index) })} style={{
+                          <button onClick={() => setEditingPlayer({ pid: p.player_id, name: p.name, hi: String(p.handicap_index), email: p.email || "" })} style={{
                             fontSize: 9, padding: "1px 5px", borderRadius: 4, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer", flexShrink: 0,
                           }}>Edit</button>
                           <button onClick={() => onUpdatePlayer({ ...p, isDirector: !p.isDirector })} style={{
@@ -4610,6 +4842,17 @@ const TeeCircle = ({ tee, index, size = 14, active }) => {
 // ── Main App ──
 export default function App() {
   const [user, setUser] = useState(null);
+  // ── Auth state ──
+  // firebaseUser: the underlying Firebase Auth user (or null). Updated by
+  //   the onAuthStateChanged listener mounted below.
+  // pendingPlayer: the player whose name was clicked, used to scope the
+  //   LoginModal and (after auth) to verify that the authed email matches
+  //   the player record they claimed.
+  // loginError: surfaced back on LoginScreen when an auth attempt fails
+  //   (wrong email, network error, etc).
+  const [firebaseUser, setFirebaseUser] = useState(null);
+  const [pendingPlayer, setPendingPlayer] = useState(null);
+  const [loginError, setLoginError] = useState(null);
   // Default landing view. Was "practice" while the standalone Mash tab
   // was the focus of validation; now that the Mash UI patterns power
   // the tournament tabs, Leaderboard is the right home base — the
@@ -4671,6 +4914,96 @@ export default function App() {
   const [syncing, setSyncing] = useState(false);
   const [hcpOverridesData, setHcpOverridesData] = useState({}); // { round: { pid: value } }
   const [teeAssignmentsData, setTeeAssignmentsData] = useState({});
+
+  // ── Auth: subscribe to Firebase auth state ──
+  // Fires once immediately with current state, then on every sign-in /
+  // sign-out. The resolver effect below maps fbUser → player record.
+  useEffect(() => {
+    return auth.onAuthStateChanged(setFirebaseUser);
+  }, []);
+
+  // ── Auth: handle magic-link return URL ──
+  // When a user clicks the link from their email, they land back on the
+  // app with a special URL fragment. Detect it once on mount, complete
+  // the sign-in, and clean the URL so a refresh doesn't re-trigger.
+  // Runs only once — auth state listener takes over from there.
+  useEffect(() => {
+    if (auth.isMagicLinkReturn(window.location.href)) {
+      auth.completeMagicLink()
+        .then(() => {
+          // Clean up the magic-link query params so a refresh doesn't
+          // try to consume the (now-used) link again.
+          window.history.replaceState({}, "", window.location.origin + "/");
+        })
+        .catch(e => {
+          setLoginError(e?.message || "Sign-in link couldn't be verified. Try again.");
+          window.history.replaceState({}, "", window.location.origin + "/");
+        });
+    }
+  }, []);
+
+  // ── Auth: resolve Firebase user → player record ──
+  // Self-bind model: each player record's `email` field is set to the
+  // first authed identity that successfully claims that name. After
+  // binding, only that authed email can sign in as that player; cross-
+  // claims by other emails are refused.
+  //
+  // Three outcomes per run:
+  //   (a) authed email matches an existing player.email → sign in as that
+  //       player. Handles returning users on any device (no pending click
+  //       required).
+  //   (b) no match, but there's a pendingPlayer (a name was just clicked)
+  //       and that player has no email yet → self-bind: write the authed
+  //       email onto the player record. The Firestore subscription will
+  //       deliver the updated record on the next tick, the resolver re-
+  //       runs, and outcome (a) takes over.
+  //   (c) no match, but the clicked player already has a different email
+  //       → refuse cross-claim, surface error, clear pendingPlayer so
+  //       they can try a different name. firebaseUser is intentionally
+  //       NOT cleared — the user can still claim an unbound slot.
+  //
+  // Bootstrap-director sessions (synthetic player_id) skip the resolver.
+  useEffect(() => {
+    if (user?.player_id === "bootstrap_director") return;
+    if (!firebaseUser) {
+      if (user) setUser(null);
+      return;
+    }
+    if (tPlayers.length === 0) return; // wait for players to load
+    const fbEmail = (firebaseUser.email || "").toLowerCase();
+    if (!fbEmail) return; // shouldn't happen for Google or email-link
+
+    // (a) Returning user — match by email
+    const matched = tPlayers.find(p => (p.email || "").toLowerCase() === fbEmail);
+    if (matched) {
+      setUser({ ...matched, isDirector: !!matched.isDirector });
+      setLoginError(null);
+      setPendingPlayer(null);
+      return;
+    }
+
+    // No match — check pendingPlayer for self-bind eligibility
+    if (!pendingPlayer) {
+      // Signed in but didn't click a name (e.g., refresh after sign-in
+      // with an email that's not bound anywhere). Leave them on
+      // LoginScreen with a hint via the "switch account" affordance.
+      return;
+    }
+    const targetSlotEmail = (pendingPlayer.email || "").toLowerCase();
+    if (!targetSlotEmail) {
+      // (b) Self-bind: claim this slot for the authed email
+      db.upsert("bc_players", { ...pendingPlayer, email: fbEmail }).then(() => {
+        // Resolver re-runs when the subscription delivers the updated
+        // player; outcome (a) signs them in. Clear pendingPlayer here
+        // so a stale ref doesn't trigger another bind.
+        setPendingPlayer(null);
+      });
+      return;
+    }
+    // (c) Cross-claim refused
+    setLoginError(`The "${pendingPlayer.name}" slot is already claimed by another email. Pick a different name, or talk to the director if this is your slot.`);
+    setPendingPlayer(null);
+  }, [firebaseUser, tPlayers, pendingPlayer]);
 
   // ── Pull-to-refresh ──
   // Mirrors MNQ's gesture: drag down at the top of the scroll container,
@@ -4998,7 +5331,28 @@ export default function App() {
 
   const availableRounds = useMemo(() => [...new Set(enrichedMatches.map(m => m.round))].sort(), [enrichedMatches]);
 
-  if (!user) return <LoginScreen players={tPlayers} teamNames={teamNames} darkMode={darkMode} onLogin={p => { setUser({ ...p, isDirector: !!p.isDirector }); }} />;
+  if (!user) return (
+    <>
+      <LoginScreen
+        players={tPlayers}
+        teamNames={teamNames}
+        darkMode={darkMode}
+        loginError={loginError}
+        firebaseUser={firebaseUser}
+        onClearError={() => setLoginError(null)}
+        onPlayerClick={p => setPendingPlayer(p)}
+        onBootstrapDirector={() => setUser({ player_id: "bootstrap_director", name: "Director (Setup)", team: null, isDirector: true })}
+        onSwitchAccount={async () => { setLoginError(null); await auth.signOut(); }}
+      />
+      {pendingPlayer && (
+        <LoginModal
+          player={pendingPlayer}
+          onClose={() => setPendingPlayer(null)}
+          onError={msg => setLoginError(msg)}
+        />
+      )}
+    </>
+  );
 
   // Bottom-nav items. The Practice tab (formerly "Mash") was relocated
   // to the More menu and is gated to directors only — practice rounds
@@ -5228,7 +5582,7 @@ export default function App() {
         )}
       </div>
 
-      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={() => setUser(null)} user={user} view={view} darkMode={darkMode} onToggleTheme={toggleTheme} />
+      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={async () => { await auth.signOut(); setUser(null); }} user={user} view={view} darkMode={darkMode} onToggleTheme={toggleTheme} />
 
       {/* Bottom Nav */}
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: BC.card, borderTop: `1px solid ${BC.bdr}`, zIndex: 100, paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)" }}>
