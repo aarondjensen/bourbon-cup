@@ -824,6 +824,15 @@ function LoginScreen({ players, onLogin, teamNames, darkMode }) {
 }
 
 // ── Team Scoreboard (main leaderboard) ──
+// ── Team Leaderboard — Mash-style ──
+// Rewritten using Mash UI patterns on top of the main app's per-round /
+// per-match data model. Top of view: a TEAMS banner (Mash green fill,
+// white text, centered) showing tournament-wide team totals (Nassau
+// points). Below: matches grouped by round with a round selector. Each
+// match card uses the Mash visual: vertical green/brown stripes flanking
+// player names, score-status pill in the middle with the green leader
+// triangle, and a two-row hole-by-hole tracker with diagonal-tied-hole
+// splits. Tap a card to expand the full scorecard.
 function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds, teamNames, hcpOverrides }) {
   const [expandedMatch, setExpandedMatch] = useState(null);
   const [activeRound, setActiveRound] = useState(null); // null = show all rounds
@@ -831,331 +840,250 @@ function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds
   const tA = { ...TEAM_A, name: teamNames?.A || TEAM_A.name };
   const tB = { ...TEAM_B, name: teamNames?.B || TEAM_B.name };
 
-  // Tournament totals
-  const tourneyTotals = useMemo(() => {
-    const tot = { A: 0, B: 0 };
-    matches.forEach(m => {
+  // Pre-compute every match's result once so we can use it across the
+  // tournament-totals banner, the per-round headers, and the per-match
+  // cards without recomputing.
+  const matchResults = useMemo(() => {
+    return matches.map(m => {
       const fmt = tRounds.find(t => t.round_number === m.round)?.format || "singles";
       const res = computeMatchResult(m, holeData, courses, tRounds, tPlayers, fmt, hcpOverrides);
-      tot.A += res.totalPts.A; tot.B += res.totalPts.B;
+      return { match: m, result: res, format: fmt };
+    });
+  }, [matches, holeData, courses, tRounds, tPlayers, hcpOverrides]);
+
+  // Tournament totals — Nassau points summed across all matches and rounds.
+  const tourneyTotals = useMemo(() => {
+    const tot = { A: 0, B: 0 };
+    matchResults.forEach(({ result }) => {
+      tot.A += result.totalPts.A;
+      tot.B += result.totalPts.B;
     });
     return tot;
-  }, [matches, holeData, courses, tRounds, tPlayers]);
+  }, [matchResults]);
 
   const totalAvail = matches.reduce((s, m) => {
     const n = m.nassau || NASSAU_DEFAULT;
-    return s + (n.front||0) + (n.back||0) + (n.overall||0);
+    return s + (n.front || 0) + (n.back || 0) + (n.overall || 0);
   }, 0);
-  const toWin = Math.floor(totalAvail / 2) + 0.5;
-  const aLeads = tourneyTotals.A > tourneyTotals.B;
-  const bLeads = tourneyTotals.B > tourneyTotals.A;
-  const gap = Math.abs(tourneyTotals.A - tourneyTotals.B);
 
   // Group matches by round
-  const roundsWithMatches = [1,2,3,4].filter(r => matches.some(m => m.round === r));
+  const roundsWithMatches = [1, 2, 3, 4].filter(r => matches.some(m => m.round === r));
   const displayRounds = activeRound ? [activeRound] : roundsWithMatches;
+
+  // Triangle indicator — used by per-match cards to point at the leading
+  // team. Hollow during play, filled when the match is final.
+  const Triangle = ({ direction, isFinal }) => (
+    <svg width={11} height={14} viewBox="0 0 11 14" style={{ display: "block" }}>
+      <polygon
+        points={direction === "left" ? "1,7 10,1.5 10,12.5" : "10,7 1,1.5 1,12.5"}
+        fill={isFinal ? "#22c55e" : "transparent"}
+        stroke="#22c55e"
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
 
   return (
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
-
-      {/* ══ SCOREBOARD ══ */}
-      {(() => {
-        // Build progress bar segments from all matches
-        // earned = final pts, leading = pts if current match status holds, neutral = rest
-        const segments = { aEarned: 0, aLeading: 0, bLeading: 0, bEarned: 0, neutral: 0 };
-        matches.forEach(m => {
-          const fmt = tRounds.find(t => t.round_number === m.round)?.format || "singles";
-          const res = computeMatchResult(m, holeData, courses, tRounds, tPlayers, fmt, hcpOverrides);
-          const nassau = m.nassau || NASSAU_DEFAULT;
-          const maxPts = (nassau.front||0) + (nassau.back||0) + (nassau.overall||0);
-          const aP = res.totalPts.A, bP = res.totalPts.B;
-          const complete = res.overall?.complete;
-          if (complete) {
-            segments.aEarned += aP;
-            segments.bEarned += bP;
-            segments.neutral += maxPts - aP - bP;
-          } else if (aP > bP) {
-            segments.aEarned += aP; // already locked in segments
-            segments.aLeading += 0; // show projected
-            segments.neutral += maxPts - aP;
-          } else if (bP > aP) {
-            segments.bEarned += bP;
-            segments.neutral += maxPts - bP;
-          } else {
-            segments.neutral += maxPts;
-          }
-        });
-        const tot = totalAvail || 1;
-        // For in-progress matches, show projected pts as dim
-        const allResults = matches.map(m => {
-          const fmt = tRounds.find(t => t.round_number === m.round)?.format || "singles";
-          return computeMatchResult(m, holeData, courses, tRounds, tPlayers, fmt, hcpOverrides);
-        });
-        // Earned (final) vs projected (in-progress leading)
-        let aFinal = 0, aProj = 0, bFinal = 0, bProj = 0, neutral = 0;
-        allResults.forEach((res, i) => {
-          const nassau = matches[i].nassau || NASSAU_DEFAULT;
-          const maxPts = (nassau.front||0) + (nassau.back||0) + (nassau.overall||0);
-          const complete = res.overall?.complete;
-          if (complete) {
-            aFinal += res.totalPts.A;
-            bFinal += res.totalPts.B;
-            neutral += maxPts - res.totalPts.A - res.totalPts.B;
-          } else {
-            aProj += res.totalPts.A;
-            bProj += res.totalPts.B;
-            neutral += maxPts - res.totalPts.A - res.totalPts.B;
-          }
-        });
-
-        const fmtScore = (n) => n % 1 === 0 ? String(n) : n.toFixed(1);
-
-        return (
-          <div style={{ background: "#111", borderRadius: 14, border: `1px solid ${BC.bdr}`, marginBottom: 12, overflow: "hidden" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr" }}>
-              {/* Team A */}
-              <div style={{ background: aLeads ? TEAM_A.color + "55" : TEAM_A.color + "1a", padding: "14px 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-                <img src={TEAM_A.logo} alt={tA.name} style={{ width: 80, height: 52, objectFit: "contain" }} />
-                <div style={{ display: "flex", alignItems: "baseline", gap: 5, justifyContent: "center" }}>
-                  <div style={{ fontSize: 44, fontWeight: 900, color: "#fff", lineHeight: 1 }}>{fmtScore(tourneyTotals.A)}</div>
-                  {aProj > 0 && <div style={{ fontSize: 13, fontWeight: 700, color: TEAM_A.accent + "99" }}>+{fmtScore(aProj)}</div>}
-                </div>
-                {aLeads && <div style={{ fontSize: 8, color: TEAM_A.accent, fontWeight: 700, letterSpacing: 0.5, textAlign: "center" }}>LEADS · {fmtScore(gap)} ahead</div>}
-              </div>
-
-              {/* Center */}
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "12px 10px", gap: 6, minWidth: 62 }}>
-                <img src={TROPHY_PHOTO} alt="" style={{ width: 38, height: 38, objectFit: "contain" }} />
-                {!aLeads && !bLeads && <div style={{ fontSize: 8, fontWeight: 800, color: BC.gold, letterSpacing: 1 }}>TIED</div>}
-                <div style={{ fontSize: 8, color: BC.t3, textAlign: "center", lineHeight: 1.6 }}>
-                  <span style={{ color: BC.gold, fontWeight: 700 }}>{fmtScore(Math.max(0, totalAvail - tourneyTotals.A - tourneyTotals.B - aProj - bProj))}</span><br/>avail
-                </div>
-              </div>
-
-              {/* Team B */}
-              <div style={{ background: bLeads ? TEAM_B.color + "55" : TEAM_B.color + "1a", padding: "14px 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-                <img src={TEAM_B.logo} alt={tB.name} style={{ width: 80, height: 52, objectFit: "contain" }} />
-                <div style={{ display: "flex", alignItems: "baseline", gap: 5, justifyContent: "center" }}>
-                  <div style={{ fontSize: 44, fontWeight: 900, color: "#fff", lineHeight: 1 }}>{fmtScore(tourneyTotals.B)}</div>
-                  {bProj > 0 && <div style={{ fontSize: 13, fontWeight: 700, color: TEAM_B.accent + "99" }}>+{fmtScore(bProj)}</div>}
-                </div>
-                {bLeads && <div style={{ fontSize: 8, color: TEAM_B.accent, fontWeight: 700, letterSpacing: 0.5, textAlign: "center" }}>LEADS · {fmtScore(gap)} ahead</div>}
-              </div>
-            </div>
-
-            {/* Progress bar: bright=earned, dim=projected/leading, neutral=grey */}
-            <div style={{ height: 8, display: "flex" }}>
-              {/* A earned */}
-              <div style={{ width: `${(aFinal/tot)*100}%`, background: TEAM_A.accent, transition: "width 0.6s ease" }} />
-              {/* A projected (in-progress, leading) */}
-              <div style={{ width: `${(aProj/tot)*100}%`, background: TEAM_A.accent + "55", transition: "width 0.6s ease" }} />
-              {/* Neutral */}
-              <div style={{ flex: 1, background: BC.bdr + "66" }} />
-              {/* B projected */}
-              <div style={{ width: `${(bProj/tot)*100}%`, background: TEAM_B.accent + "55", transition: "width 0.6s ease" }} />
-              {/* B earned */}
-              <div style={{ width: `${(bFinal/tot)*100}%`, background: TEAM_B.accent, transition: "width 0.6s ease" }} />
-            </div>
-
-            {/* Legend */}
-            <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 12px 6px", fontSize: 8, color: BC.t3 }}>
-              <span><span style={{ color: TEAM_A.accent }}>■</span> Earned <span style={{ color: TEAM_A.accent + "88" }}>■</span> Projected</span>
-              <span style={{ color: BC.gold, fontWeight: 700 }}>{fmtScore(toWin)} to win</span>
-              <span><span style={{ color: TEAM_B.accent + "88" }}>■</span> Projected <span style={{ color: TEAM_B.accent }}>■</span> Earned</span>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* ══ ROUND FILTER TABS ══ */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
-        <button onClick={() => setActiveRound(null)} style={{
-          flex: 1, padding: "7px 4px", borderRadius: 8, border: "none", fontSize: 10, fontWeight: 700, cursor: "pointer",
-          background: activeRound === null ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
-          color: activeRound === null ? "#0a0804" : BC.t2, border: `1px solid ${activeRound === null ? "transparent" : BC.bdr}`,
-        }}>All</button>
-        {[1,2,3,4].map(r => {
-          const tr = tRounds.find(t => t.round_number === r);
-          const fmt = FORMATS.find(f => f.id === tr?.format);
-          const has = matches.some(m => m.round === r);
+      {/* TEAMS banner — top-of-view summary card. Mash green header
+          strip with centered white text; below it, one row per team
+          with their Nassau total. The team that is currently leading
+          gets the deeper text color; the team behind gets a muted
+          variant. The numeric to-win is always available. */}
+      <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 10, overflow: "hidden" }}>
+        <div style={{ padding: "8px 14px", background: BC.amber, textAlign: "center" }}>
+          <div style={{ fontSize: 11, color: "#fff", fontWeight: 800, letterSpacing: 2 }}>TEAMS</div>
+        </div>
+        {[
+          { team: tA, pts: tourneyTotals.A },
+          { team: tB, pts: tourneyTotals.B },
+        ].map(({ team, pts }, i) => {
+          const leading = i === 0 ? tourneyTotals.A > tourneyTotals.B : tourneyTotals.B > tourneyTotals.A;
+          const stripeColor = i === 0 ? BC.amber : BC.gold;
           return (
-            <button key={r} onClick={() => setActiveRound(r === activeRound ? null : r)} style={{
-              flex: 1, padding: "7px 4px", borderRadius: 8, border: "none", fontSize: 10, fontWeight: 700, cursor: "pointer",
-              background: activeRound === r ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
-              color: activeRound === r ? "#0a0804" : has ? BC.t2 : BC.t3,
-              border: `1px solid ${activeRound === r ? "transparent" : BC.bdr}`,
-              opacity: has ? 1 : 0.5,
+            <div key={team.id} style={{
+              display: "flex", alignItems: "center", padding: "10px 14px",
+              borderBottom: i === 0 ? `1px solid ${BC.bdr}40` : "none",
+              borderLeft: `4px solid ${stripeColor}`,
+              gap: 10,
             }}>
-              <div>Rd {r}</div>
-              {fmt && <div style={{ fontSize: 7, opacity: 0.75, marginTop: 1 }}>{fmt.label.split(" ").slice(-1)[0].substring(0,5)}</div>}
-            </button>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: BC.t1 }}>{team.name}</div>
+              </div>
+              <div style={{ textAlign: "right", flexShrink: 0 }}>
+                <div style={{ fontSize: 22, fontWeight: 800, color: leading ? BC.t1 : BC.t2, lineHeight: 1 }}>{pts}</div>
+                <div style={{ fontSize: 9, color: BC.t3, marginTop: 3 }}>of {totalAvail}</div>
+              </div>
+            </div>
           );
         })}
       </div>
 
-      {/* ══ MATCHES BY ROUND ══ */}
+      {/* Round selector — pill toggle. "All" shows every round's
+          matches; tap a specific round to filter. Active state uses
+          deep Mash green + white per the design language. */}
+      {roundsWithMatches.length > 1 && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+          <button onClick={() => setActiveRound(null)} style={{
+            flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
+            background: activeRound === null ? BC.amberDim : BC.card,
+            border: `1px solid ${activeRound === null ? BC.amberDim : BC.bdr}`,
+            color: activeRound === null ? "#fff" : BC.t2,
+          }}>All</button>
+          {roundsWithMatches.map(r => {
+            const active = r === activeRound;
+            return (
+              <button key={r} onClick={() => setActiveRound(r)} style={{
+                flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                background: active ? BC.amberDim : BC.card,
+                border: `1px solid ${active ? BC.amberDim : BC.bdr}`,
+                color: active ? "#fff" : BC.t2,
+              }}>Rd {r}</button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Per-round sections — each round shows its course/format header
+          followed by the match cards for that round. */}
       {displayRounds.map(rnd => {
         const tr = tRounds.find(t => t.round_number === rnd);
         const course = courses.find(c => c.id === tr?.course_id);
         const fmt = FORMATS.find(f => f.id === tr?.format);
-        const rndMatches = matches.filter(m => m.round === rnd);
-        const format = tr?.format || "singles";
-
-        const rndResults = rndMatches.map(m => ({
-          ...m,
-          result: computeMatchResult(m, holeData, courses, tRounds, tPlayers, format, hcpOverrides),
-        }));
-
-        const rndTot = { A: 0, B: 0 };
-        rndResults.forEach(m => { rndTot.A += m.result.totalPts.A; rndTot.B += m.result.totalPts.B; });
+        const rndMatchResults = matchResults.filter(mr => mr.match.round === rnd);
 
         return (
-          <div key={rnd}>
-            {/* Round header — like Google Sheet section header */}
-            <div style={{ background: BC.card, borderRadius: 10, border: `1px solid ${BC.bdr}`, padding: "8px 12px", marginBottom: 6, display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center" }}>
-              <div style={{ fontSize: 12, fontWeight: 800, color: TEAM_A.accent }}>{rndTot.A % 1 === 0 ? rndTot.A : rndTot.A.toFixed(1)} pts</div>
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold }}>Round {rnd} {fmt ? `· ${fmt.label}` : ""}</div>
-                {course && <div style={{ fontSize: 9, color: BC.t3, marginTop: 1 }}>{course.name}</div>}
+          <div key={rnd} style={{ marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px 6px" }}>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>ROUND {rnd}</div>
+                <div style={{ fontSize: 10, color: BC.t3 }}>{course?.name || "TBD"}{fmt ? ` · ${fmt.label}` : ""}</div>
               </div>
-              <div style={{ fontSize: 12, fontWeight: 800, color: TEAM_B.accent, textAlign: "right" }}>{rndTot.B % 1 === 0 ? rndTot.B : rndTot.B.toFixed(1)} pts</div>
             </div>
 
-            {rndMatches.length === 0 && (
-              <div style={{ textAlign: "center", color: BC.t3, padding: "16px 0 20px", fontSize: 12 }}>No matches set up yet.</div>
+            {rndMatchResults.length === 0 && (
+              <div style={{ padding: 20, textAlign: "center", color: BC.t3, fontSize: 11, background: BC.card, borderRadius: 10, border: `1px solid ${BC.bdr}` }}>
+                No matches set up for this round.
+              </div>
             )}
 
-            {/* Match cards */}
-            {rndResults.map((m, mi) => {
-              const res = m.result;
-              const exp = expandedMatch === m.id;
-              const nassau = m.nassau || NASSAU_DEFAULT;
-              const aUp = res.overall.aWins - res.overall.bWins;
-              const holesLeft = 18 - res.holesPlayed;
-              const matchWinner = res.overall.complete ? (aUp > 0 ? "A" : aUp < 0 ? "B" : null) : null;
-
-              let statusText = "—";
-              if (res.holesPlayed > 0) {
-                if (res.overall.complete) {
-                  if (aUp === 0) statusText = "TIED";
-                  else statusText = `${Math.abs(aUp)}&${holesLeft === 0 ? "0" : holesLeft}`;
-                } else {
-                  statusText = aUp === 0 ? "AS" : `${Math.abs(aUp)} UP`;
-                }
-              }
+            {rndMatchResults.map(({ match: m, result: r, format }) => {
+              const t1Players = m.teamA.map(pid => tPlayers.find(p => p.player_id === pid));
+              const t2Players = m.teamB.map(pid => tPlayers.find(p => p.player_id === pid));
+              const isExpanded = expandedMatch === m.id;
+              const aWins = r.holes.filter(h => h.winner === "A").length;
+              const bWins = r.holes.filter(h => h.winner === "B").length;
+              const isT1Leading = r.holesPlayed > 0 && aWins > bWins;
+              const isT2Leading = r.holesPlayed > 0 && bWins > aWins;
+              const isFinal = r.overall?.complete || r.holesPlayed >= 18;
 
               return (
-                <div key={m.id} style={{ background: BC.card, borderRadius: 10, border: `1px solid ${exp ? BC.amber + "55" : BC.bdr}`, marginBottom: 6, overflow: "hidden" }}>
-                  <button onClick={() => setExpandedMatch(exp ? null : m.id)} style={{ width: "100%", background: "transparent", border: "none", cursor: "pointer", padding: 0 }}>
-
-                    {/* Top row: Round label | Thru | Match # */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", padding: "6px 10px 4px", alignItems: "center", borderBottom: `1px solid ${BC.bdr}10` }}>
-                      <div style={{ fontSize: 8, color: BC.t3, fontWeight: 700, letterSpacing: 0.5 }}>Round {rnd}</div>
-                      <div style={{ fontSize: 8, color: BC.t3, textAlign: "center" }}>
-                        {res.holesPlayed > 0 ? `Thru ${res.holesPlayed}` : "Not Started"}
-                      </div>
-                      <div style={{ fontSize: 8, color: BC.t3, fontWeight: 700, textAlign: "right" }}>Match {mi + 1}</div>
+                <div key={m.id} style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 10, overflow: "hidden" }}>
+                  <button onClick={() => setExpandedMatch(isExpanded ? null : m.id)} style={{
+                    width: "100%", padding: "12px 14px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", position: "relative",
+                  }}>
+                    <div style={{ position: "absolute", top: 8, right: 12, fontSize: 12, color: BC.t3 }}>
+                      {isExpanded ? "▴" : "▾"}
                     </div>
-
-                    {/* Main row: Team A names | Status | Team B names */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", padding: "8px 10px 4px", gap: 8, alignItems: "center" }}>
-                      {/* Team A */}
-                      <div style={{ borderLeft: `3px solid ${TEAM_A.accent}`, paddingLeft: 6 }}>
-                        <img src={TEAM_A.logo} alt={tA.name} style={{ width: 32, height: 22, objectFit: "contain", marginBottom: 3, display: "block" }} />
-                        {(m.teamANames || ["Team A"]).map((name, ni) => (
-                          <div key={ni} style={{ fontSize: 12, fontWeight: 700, color: matchWinner === "A" ? TEAM_A.accent : TEAM_A.accent + "66", lineHeight: 1.4 }}>{name}</div>
-                        ))}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10 }}>
+                      {/* Team A — Mash green stripe on LEFT edge */}
+                      <div style={{ textAlign: "left", borderLeft: `3px solid ${BC.amber}`, paddingLeft: 8 }}>
+                        {t1Players.map(p => p && <div key={p.player_id} style={{ fontSize: 14, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{p.name}</div>)}
                       </div>
-
-                      {/* Status */}
-                      <div style={{ textAlign: "center", minWidth: 60 }}>
-                        {res.holesPlayed === 0 ? (
-                          <div style={{ fontSize: 9, color: BC.t3 }}>—</div>
-                        ) : (
-                          <div style={{
-                            fontSize: 13, fontWeight: 900, lineHeight: 1,
-                            color: matchWinner === "A" ? TEAM_A.accent : matchWinner === "B" ? TEAM_B.accent : BC.gold,
-                          }}>{statusText}</div>
-                        )}
-                        {res.overall.complete && <div style={{ fontSize: 7, color: BC.t3, marginTop: 2, fontWeight: 700, letterSpacing: 1 }}>FINAL</div>}
-                      </div>
-
-                      {/* Team B */}
-                      <div style={{ borderRight: `3px solid ${TEAM_B.accent}`, paddingRight: 6, textAlign: "right" }}>
-                        <img src={TEAM_B.logo} alt={tB.name} style={{ width: 32, height: 22, objectFit: "contain", marginBottom: 3, display: "block", marginLeft: "auto" }} />
-                        {(m.teamBNames || ["Team B"]).map((name, ni) => (
-                          <div key={ni} style={{ fontSize: 12, fontWeight: 700, color: matchWinner === "B" ? TEAM_B.accent : TEAM_B.accent + "66", lineHeight: 1.4 }}>{name}</div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Nassau points row — Front | Back | Overall */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", borderTop: `1px solid ${BC.bdr}10`, margin: "0 10px" }}>
-                      {[["Front", res.frontPts, nassau.front], ["Back", res.backPts, nassau.back], ["Overall", res.overallPts, nassau.overall]].map(([lbl, pts, max]) => {
-                        const aW = (pts?.A||0) > (pts?.B||0);
-                        const bW = (pts?.B||0) > (pts?.A||0);
-                        return (
-                          <div key={lbl} style={{ padding: "5px 4px", textAlign: "center" }}>
-                            <div style={{ fontSize: 7, color: BC.t3, letterSpacing: 0.5, marginBottom: 2 }}>{lbl.toUpperCase()}</div>
-                            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 4 }}>
-                              <span style={{ fontSize: 11, fontWeight: 800, color: aW ? TEAM_A.accent : BC.t3, minWidth: 18, textAlign: "right" }}>{(pts?.A||0) % 1 === 0 ? (pts?.A||0) : (pts?.A||0).toFixed(1)}</span>
-                              <span style={{ fontSize: 8, color: BC.bdr }}>|</span>
-                              <span style={{ fontSize: 11, fontWeight: 800, color: bW ? TEAM_B.accent : BC.t3, minWidth: 18, textAlign: "left" }}>{(pts?.B||0) % 1 === 0 ? (pts?.B||0) : (pts?.B||0).toFixed(1)}</span>
+                      {/* Status — pill with triangles flanking, "Thru N" below */}
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+                        <div style={{ position: "relative", textAlign: "center", padding: "4px 10px", background: BC.inp, borderRadius: 6, border: `1px solid ${BC.bdr}` }}>
+                          {isT1Leading && (
+                            <div style={{ position: "absolute", right: "100%", top: "50%", transform: "translateY(-50%)", marginRight: 6 }}>
+                              <Triangle direction="left" isFinal={isFinal} />
                             </div>
-                            <div style={{ fontSize: 7, color: BC.t3 }}>of {max} pts</div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Cup Points row */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderTop: `1px solid ${BC.bdr}10`, padding: "5px 10px 6px" }}>
-                      <div>
-                        <div style={{ fontSize: 7, color: BC.t3, letterSpacing: 0.5 }}>CUP POINTS</div>
-                        <div style={{ fontSize: 13, fontWeight: 800, color: TEAM_A.accent }}>{res.totalPts.A % 1 === 0 ? res.totalPts.A : res.totalPts.A.toFixed(1)}</div>
+                          )}
+                          {isT2Leading && (
+                            <div style={{ position: "absolute", left: "100%", top: "50%", transform: "translateY(-50%)", marginLeft: 6 }}>
+                              <Triangle direction="right" isFinal={isFinal} />
+                            </div>
+                          )}
+                          <div style={{ fontSize: 14, fontWeight: 800, color: BC.amber, letterSpacing: 0.5 }}>{r.status || "AS"}</div>
+                        </div>
+                        <div style={{ fontSize: 9, color: BC.t3, fontWeight: 600 }}>Thru {r.holesPlayed}</div>
                       </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 7, color: BC.t3, letterSpacing: 0.5 }}>CUP POINTS</div>
-                        <div style={{ fontSize: 13, fontWeight: 800, color: TEAM_B.accent }}>{res.totalPts.B % 1 === 0 ? res.totalPts.B : res.totalPts.B.toFixed(1)}</div>
+                      {/* Team B — bourbon brown stripe on RIGHT edge */}
+                      <div style={{ textAlign: "right", borderRight: `3px solid ${BC.gold}`, paddingRight: 8 }}>
+                        {t2Players.map(p => p && <div key={p.player_id} style={{ fontSize: 14, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{p.name}</div>)}
                       </div>
                     </div>
 
-                    {/* Hole tracker bar 1–18 with numbers */}
-                    <div style={{ padding: "0 10px 8px" }}>
-                      {/* Hole numbers */}
-                      <div style={{ display: "flex", gap: 1, marginBottom: 2 }}>
-                        {[...Array(9)].map((_,i) => (
-                          <div key={i} style={{ flex:1, textAlign:"center", fontSize:7, color:BC.t3 }}>{i+1}</div>
-                        ))}
-                        <div style={{ width: 4 }} />
-                        {[...Array(9)].map((_,i) => (
-                          <div key={i+9} style={{ flex:1, textAlign:"center", fontSize:7, color:BC.t3 }}>{i+10}</div>
-                        ))}
+                    {/* Hole-by-hole tracker — two-row "battleship" layout
+                        with per-letter initials column, hole numbers
+                        across the top, and team-color rows below. Tied
+                        holes render as a diagonal green/brown split on
+                        BOTH rows. */}
+                    <div style={{ marginTop: 10, display: "flex", gap: 6, alignItems: "stretch" }}>
+                      <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: 2, paddingTop: 13 }}>
+                        <div style={{ display: "flex", gap: 1 }}>
+                          {(t1Players.length ? t1Players : [null, null]).map((p, idx) => (
+                            <div key={`a-${idx}`} style={{ width: 12, fontSize: 9, color: BC.amber, fontWeight: 800, lineHeight: "10px", textAlign: "center" }}>
+                              {p?.name?.trim().split(/\s+/).slice(-1)[0]?.[0]?.toUpperCase() || "?"}
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ display: "flex", gap: 1 }}>
+                          {(t2Players.length ? t2Players : [null, null]).map((p, idx) => (
+                            <div key={`b-${idx}`} style={{ width: 12, fontSize: 9, color: BC.gold, fontWeight: 800, lineHeight: "10px", textAlign: "center" }}>
+                              {p?.name?.trim().split(/\s+/).slice(-1)[0]?.[0]?.toUpperCase() || "?"}
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      {/* Color bar */}
-                      <div style={{ display: "flex", gap: 1, alignItems: "center" }}>
-                        {res.holes.slice(0,9).map((h, hi) => (
-                          <div key={hi} style={{ flex:1, height:8, borderRadius:2,
-                            background: !h.played ? BC.bdr+"33" : h.winner==="A" ? TEAM_A.accent : h.winner==="B" ? TEAM_B.accent : BC.t3+"66",
-                          }} />
-                        ))}
-                        <div style={{ width:4, height:10, background:BC.bdr, borderRadius:1, flexShrink:0 }} />
-                        {res.holes.slice(9,18).map((h, hi) => (
-                          <div key={hi+9} style={{ flex:1, height:8, borderRadius:2,
-                            background: !h.played ? BC.bdr+"33" : h.winner==="A" ? TEAM_A.accent : h.winner==="B" ? TEAM_B.accent : BC.t3+"66",
-                          }} />
-                        ))}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", gap: 1, marginBottom: 2 }}>
+                          {Array.from({ length: 18 }, (_, i) => (
+                            <div key={i} style={{ flex: 1, fontSize: 7, color: BC.t3, textAlign: "center", fontWeight: 700, lineHeight: "10px" }}>
+                              {i + 1}
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ display: "flex", gap: 1, marginBottom: 2 }}>
+                          {r.holes.map((h, hi) => {
+                            const won = h.winner === "A";
+                            const tied = h.played && h.winner == null;
+                            const unscored = !h.played;
+                            const tiedGradient = `linear-gradient(135deg, ${BC.amber} 50%, ${BC.gold} 50%)`;
+                            return <div key={hi} style={{
+                              flex: 1, height: 10, borderRadius: 2,
+                              background: won ? BC.amber : tied ? tiedGradient : unscored ? "transparent" : BC.inp,
+                              border: unscored ? `1px solid ${BC.bdr}80` : "none",
+                              boxSizing: "border-box",
+                            }} />;
+                          })}
+                        </div>
+                        <div style={{ display: "flex", gap: 1 }}>
+                          {r.holes.map((h, hi) => {
+                            const won = h.winner === "B";
+                            const tied = h.played && h.winner == null;
+                            const unscored = !h.played;
+                            const tiedGradient = `linear-gradient(135deg, ${BC.amber} 50%, ${BC.gold} 50%)`;
+                            return <div key={hi} style={{
+                              flex: 1, height: 10, borderRadius: 2,
+                              background: won ? BC.gold : tied ? tiedGradient : unscored ? "transparent" : BC.inp,
+                              border: unscored ? `1px solid ${BC.bdr}80` : "none",
+                              boxSizing: "border-box",
+                            }} />;
+                          })}
+                        </div>
                       </div>
                     </div>
                   </button>
 
-                  {/* Expanded scorecard */}
-                  {exp && <MatchScorecard match={m} result={res} format={format} courses={courses} tRounds={tRounds} tA={tA} tB={tB} />}
+                  {isExpanded && (
+                    <div style={{ padding: 10, borderTop: `1px solid ${BC.bdr}`, background: BC.bg }}>
+                      <MatchScorecard match={m} result={r} format={format} courses={courses} tRounds={tRounds} />
+                    </div>
+                  )}
                 </div>
               );
             })}
-
-            <div style={{ marginBottom: 14 }} />
           </div>
         );
       })}
@@ -1166,6 +1094,7 @@ function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds
     </div>
   );
 }
+
 
 // ── Match Scorecard ──
 function MatchScorecard({ match, result, format, courses, tRounds }) {
@@ -1231,145 +1160,484 @@ function MatchScorecard({ match, result, format, courses, tRounds }) {
 }
 
 // ── Score Entry ──
+// ── Score Entry — Mash-style ──
+// Rewritten to use the Mash UI patterns (hole strip, deep-green Par/Hole/HCP
+// banner, two-row match status bar, vertically-stacked PlayerScoreCards with
+// stroke dots and net display, par-relative score buttons with auto-shift,
+// auto-advance with toast) on top of the main-app's per-round / per-match /
+// multi-format data model. The legacy ScoreEntry data flow stays — this view
+// still receives `matches` (from bc_matches), `holeData` (from bc_holes), and
+// uses computeMatchResult/calcCHForCourse — but the visual presentation now
+// matches the rest of the app. Round selector at the top supports the multi-
+// round structure that the original Mash sub-app didn't have.
 function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teamNames, hcpOverrides }) {
-  const [view, setView] = useState("entry"); // "entry" | "card"
-  const [activeMatch, setActiveMatch] = useState(null);
-  const [activeHole, setActiveHole] = useState(0);
-
-  // Find matches this user is in
   const userPid = user.player_id;
-  const tA = { ...TEAM_A, name: teamNames?.A || TEAM_A.name };
-  const tB = { ...TEAM_B, name: teamNames?.B || TEAM_B.name };
   const myMatches = matches.filter(m => [...m.teamA, ...m.teamB].includes(userPid));
 
-  const match = activeMatch ? matches.find(m => m.id === activeMatch) : myMatches[0];
-  const format = tRounds.find(t => t.round_number === match?.round)?.format || "singles";
-  const tr = tRounds.find(t => t.round_number === match?.round);
-  const course = courses.find(c => c.id === tr?.course_id);
+  // ── Hooks (always fire, in stable order) ──
+  const [activeMatchId, setActiveMatchId] = useState(myMatches[0]?.id || null);
+  const [activeHole, setActiveHole] = useState(0);
+  const [editing, setEditing] = useState(false);
+  const [showScorecard, setShowScorecard] = useState(false);
+  const [toast, setToast] = useState(null);
+  const initialJump = useRef(false);
 
+  const match = activeMatchId ? matches.find(m => m.id === activeMatchId) : myMatches[0];
+  const tr = match ? tRounds.find(t => t.round_number === match.round) : null;
+  const course = tr ? courses.find(c => c.id === tr.course_id) : null;
+  const format = tr?.format || "singles";
+  const teeName = tr?.tee_box;
+  const holePars = course?.hole_pars || Array(18).fill(4);
+  const holeHcps = course?.hole_handicaps || Array(18).fill(9);
+  const par = holePars[activeHole];
+  const hcp = holeHcps[activeHole];
+
+  const matchPids = match ? [...match.teamA, ...match.teamB] : [];
+
+  const result = useMemo(
+    () => match ? computeMatchResult(match, holeData, courses, tRounds, tPlayers, format, hcpOverrides) : null,
+    [match, holeData, courses, tRounds, tPlayers, format, hcpOverrides]
+  );
+
+  // Read a player's gross score for the active hole. holeData is keyed
+  // \\`pid_round\\` and inner-keyed by hole index.
+  const getScore = (pid, h = activeHole) => {
+    if (!match) return 0;
+    return (holeData[`${pid}_${match.round}`] || {})[h] || 0;
+  };
+
+  // Per-player stroke maps for this match. Computed once via useMemo
+  // since the inputs change rarely. Mirrors the allocation logic
+  // computeMatchResult uses internally so the dots shown on the
+  // scoring screen match the strokes used in the leaderboard math.
+  const strokeMaps = useMemo(() => {
+    const maps = {};
+    if (!match || !course) return maps;
+    const holeHcpsLocal = course.hole_handicaps || Array(18).fill(9);
+    const getPlayerHI = (pid) => {
+      const ro = hcpOverrides?.[match.round] || {};
+      if (ro[pid] !== undefined && ro[pid] !== "") return parseFloat(ro[pid]) || 0;
+      const tp = tPlayers.find(t => t.player_id === pid);
+      return parseFloat(tp?.handicap_index) || 0;
+    };
+    const getCH = (pid) => calcCHForCourse(getPlayerHI(pid), course, teeName);
+    const allCHs = matchPids.map(getCH);
+    const minCH = allCHs.length ? Math.min(...allCHs) : 0;
+    const roundHandicapMode = tr?.handicap_mode || (match.round === 4 ? "full" : "low_man");
+    const buildMap = (ch) => {
+      const sorted = holeHcpsLocal.map((h, i) => ({ idx: i, hcp: h })).sort((a, b) => a.hcp - b.hcp);
+      const map = {};
+      let rem = Math.abs(ch);
+      for (let pass = 0; pass < 3 && rem > 0; pass++) {
+        for (const h of sorted) { if (rem <= 0) break; map[h.idx] = (map[h.idx] || 0) + 1; rem--; }
+      }
+      return map;
+    };
+    matchPids.forEach(pid => {
+      const ch = getCH(pid);
+      const adj = roundHandicapMode === "full" ? ch : ch - minCH;
+      maps[pid] = buildMap(adj);
+    });
+    return maps;
+  }, [match, course, tPlayers, hcpOverrides, teeName, tr, matchPids.join(",")]);
+
+  // ── Auto-advance state derivations ──
+  const holeComplete = matchPids.length > 0 && matchPids.every(pid => getScore(pid, activeHole) > 0);
+  const allComplete = matchPids.length > 0 && matchPids.every(pid => {
+    for (let h = 0; h < 18; h++) if (!(getScore(pid, h) > 0)) return false;
+    return true;
+  });
+  const curHoleScoreSig = matchPids.map(pid => getScore(pid, activeHole)).join(",");
+
+  // Auto-advance — when all 4 players have scored the active hole, after
+  // 1.8s show toast and jump to next unscored hole. Clean-up cancels on
+  // edit/navigation. Same pattern as Mash PracticeScoringTab.
+  useEffect(() => {
+    if (!match) return;
+    if (!holeComplete || activeHole >= 17 || editing || allComplete) return;
+    setToast(`✓ Hole ${activeHole + 1} saved — advancing...`);
+    const timer = setTimeout(() => {
+      setToast(null);
+      let next = activeHole + 1;
+      while (next < 17 && matchPids.every(pid => getScore(pid, next) > 0)) next++;
+      setActiveHole(next);
+      setEditing(false);
+    }, 1800);
+    return () => { clearTimeout(timer); setToast(null); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [holeComplete, activeHole, editing, allComplete, curHoleScoreSig, match?.id]);
+
+  // Safety net — clear toast after 3s in case the cleanup misses an edge case.
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  // Initial-jump on mount per match — fast-forward to first unscored hole.
+  useEffect(() => {
+    initialJump.current = false;
+  }, [match?.id]);
+  useEffect(() => {
+    if (initialJump.current) return;
+    if (!match) return;
+    const t = setTimeout(() => {
+      if (initialJump.current) return;
+      initialJump.current = true;
+      let edge = 18;
+      for (let h = 0; h < 18; h++) {
+        if (!matchPids.every(pid => getScore(pid, h) > 0)) { edge = h; break; }
+      }
+      const hasAny = matchPids.some(pid => {
+        for (let h = 0; h < 18; h++) if (getScore(pid, h) > 0) return true;
+        return false;
+      });
+      if (hasAny && edge > 0 && edge < 18) setActiveHole(edge);
+    }, 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [match?.id, holeData]);
+
+  // No more hooks below this line.
   if (!match) return (
     <div style={{ textAlign: "center", padding: 40, color: BC.t3, fontFamily: "'Montserrat', sans-serif" }}>
       <div style={{ fontSize: 32, marginBottom: 12 }}>⛳</div>
       <div>You're not in any matches yet.</div>
     </div>
   );
+  if (!course) return (
+    <div style={{ textAlign: "center", padding: 40, color: BC.t3, fontFamily: "'Montserrat', sans-serif" }}>
+      Round {match.round} course not configured yet.
+    </div>
+  );
 
-  const allPlayers = [...match.teamA, ...match.teamB];
-  const holePars = course?.hole_pars || Array(18).fill(4);
-  const holePar = holePars[activeHole];
+  // Live edge — first hole where not everyone has scored. Used to detect
+  // "editing past hole" navigation so auto-advance stays suppressed
+  // while the user fixes a missed score.
+  let liveEdge = 17;
+  for (let h = 0; h < 18; h++) {
+    if (!matchPids.every(pid => getScore(pid, h) > 0)) { liveEdge = h; break; }
+  }
+  const goToHole = (h) => { setActiveHole(h); setEditing(h < liveEdge); };
 
-  const getScore = (pid) => (holeData[`${pid}_${match.round}`] || {})[activeHole];
+  const tA = { ...TEAM_A, name: teamNames?.A || TEAM_A.name };
+  const tB = { ...TEAM_B, name: teamNames?.B || TEAM_B.name };
 
-  const setScore = async (pid, score) => {
-    await onSaveHole(pid, match.round, activeHole, score, tr?.course_id);
+  const onTapScore = async (pid, score) => {
+    const cur = getScore(pid, activeHole);
+    const newScore = cur === score ? 0 : score; // Tapping the active button clears
+    await onSaveHole(pid, match.round, activeHole, newScore || null, tr?.course_id);
   };
 
-  const result = useMemo(() => computeMatchResult(match, holeData, courses, tRounds, tPlayers, format, hcpOverrides), [match, holeData, format, hcpOverrides]);
-
-  const ScoreBtn = ({ pid, name, team }) => {
-    const cur = getScore(pid);
-    const par = holePar;
+  // Status cell rendering — for the two-row match status bar between
+  // the front and back hole strips. From the user's team perspective:
+  // ▲N when their team is up, ▼N when down, "AS" tied, "X&Y" if clinched.
+  const userTeam = match.teamA.includes(userPid) ? "A" : "B";
+  const renderStatusCell = (i) => {
+    const cellH = 22;
+    const colBorder = { borderRight: i % 9 === 8 ? "none" : `1px solid ${BC.bdr}33` };
+    if (!result || !result.holes[i]) {
+      return <div key={i} style={{ flex: 1, height: cellH, ...colBorder }} />;
+    }
+    const hr = result.holes[i];
+    const aWins = result.holes.slice(0, i + 1).filter(r => r.winner === "A").length;
+    const bWins = result.holes.slice(0, i + 1).filter(r => r.winner === "B").length;
+    const upTeam = aWins > bWins ? "A" : bWins > aWins ? "B" : null;
+    const upN = Math.abs(aWins - bWins);
+    const fromUserView = upTeam === userTeam ? upN : upTeam == null ? 0 : -upN;
+    // Partial-score warning for non-active past holes
+    if (!hr.played) {
+      const someScored = matchPids.some(pid => getScore(pid, i) > 0);
+      if (someScored && i !== activeHole) {
+        return <div key={i} title="Missing score" style={{ flex: 1, textAlign: "center", fontSize: 13, lineHeight: `${cellH}px`, ...colBorder }}>⚠️</div>;
+      }
+      return <div key={i} style={{ flex: 1, height: cellH, ...colBorder }} />;
+    }
+    let label, color;
+    if (fromUserView > 0) { label = `▲${fromUserView}`; color = BC.amber; }
+    else if (fromUserView < 0) { label = `▼${Math.abs(fromUserView)}`; color = BC.danger; }
+    else { label = "AS"; color = BC.t3; }
     return (
-      <div style={{ marginBottom: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-          <div style={{ width: 8, height: 8, borderRadius: "50%", background: getTeam(team).accent }} />
-          <span style={{ fontSize: 11, color: BC.t2, fontWeight: 600 }}>{name}</span>
-          {cur != null && <span style={{ fontSize: 10, color: cur - par < 0 ? "#22c55e" : cur - par > 0 ? BC.danger : BC.t3, fontWeight: 700 }}>{fmtScore(cur - par)}</span>}
-        </div>
-        <div style={{ display: "flex", gap: 6 }}>
-          {[1,2,3,4,5,6,7,8,9,10].map(s => (
-            <button key={s} onClick={() => setScore(pid, s)} style={{
-              flex: 1, padding: "10px 0", borderRadius: 8,
-              background: s === cur ? (s < par ? "#1a3a1a" : s === par ? BC.hover : "#3a1a1a") : BC.card,
-              border: `1px solid ${s === cur ? (s < par ? "#22c55e" : s === par ? BC.amber : BC.danger) : BC.bdr}`,
-              color: s === cur ? BC.t1 : BC.t3, fontSize: 13, fontWeight: s === cur ? 700 : 400, cursor: "pointer",
-            }}>{s}</button>
-          ))}
-        </div>
+      <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 9, fontWeight: 800, color, lineHeight: `${cellH}px`, ...colBorder }}>
+        {label}
       </div>
     );
   };
 
+  // Score buttons — par-relative range. par-3: 1-7, par-4/5: 2-8.
+  // Auto-shift if the saved score is outside the standard range.
+  const baseBtns = par === 3 ? [1, 2, 3, 4, 5, 6, 7] : [2, 3, 4, 5, 6, 7, 8];
+
   return (
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
-      {/* Toggle */}
-      <div style={{ display: "flex", background: BC.card, borderRadius: 20, padding: 3, marginBottom: 16, border: `1px solid ${BC.bdr}` }}>
-        {[["entry","✏️ Score Entry"],["card","📋 Match View"]].map(([v, label]) => (
-          <button key={v} onClick={() => setView(v)} style={{
-            flex: 1, padding: "8px 0", borderRadius: 16, fontSize: 12, fontWeight: 700, cursor: "pointer",
-            background: view === v ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
-            color: view === v ? "#0a0804" : BC.t3, border: "none",
-          }}>{label}</button>
-        ))}
-      </div>
-
-      {/* Match selector if multiple matches */}
+      {/* Round selector — visible only when user is in matches across
+          multiple rounds (typical mid-tournament scenario). Uses the
+          deep-green active-tab styling consistent with the Mash visual
+          language. */}
       {myMatches.length > 1 && (
-        <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-          {myMatches.map(m => (
-            <button key={m.id} onClick={() => setActiveMatch(m.id)} style={{
-              flex: 1, padding: "8px 6px", borderRadius: 10, fontSize: 10, fontWeight: 700, cursor: "pointer",
-              background: match?.id === m.id ? BC.amber + "22" : BC.card, border: `1px solid ${match?.id === m.id ? BC.amber : BC.bdr}`,
-              color: match?.id === m.id ? BC.amber : BC.t3,
-            }}>Rd {m.round}</button>
-          ))}
+        <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+          {myMatches.map(m => {
+            const active = m.id === match.id;
+            return (
+              <button key={m.id} onClick={() => { setActiveMatchId(m.id); setActiveHole(0); initialJump.current = false; }} style={{
+                flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                background: active ? BC.amberDim : BC.card,
+                border: `1px solid ${active ? BC.amberDim : BC.bdr}`,
+                color: active ? "#fff" : BC.t2,
+              }}>Rd {m.round}</button>
+            );
+          })}
         </div>
       )}
 
-      {view === "entry" && (
-        <>
-          {/* Hole nav */}
-          <div style={{ background: BC.card, borderRadius: 12, padding: "10px 14px", marginBottom: 12, border: `1px solid ${BC.bdr}` }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <button onClick={() => setActiveHole(h => Math.max(0, h - 1))} disabled={activeHole === 0}
-                style={{ background: BC.hover, border: "none", color: BC.t1, borderRadius: 8, padding: "6px 14px", fontSize: 16, cursor: "pointer", opacity: activeHole === 0 ? 0.3 : 1 }}>‹</button>
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 22, fontWeight: 700, color: BC.gold }}>Hole {activeHole + 1}</div>
-                <div style={{ fontSize: 11, color: BC.t3 }}>Par {holePar} &nbsp;·&nbsp; {activeHole < 9 ? "Front" : "Back"} Nine</div>
-                <div style={{ fontSize: 10, color: BC.t3, marginTop: 2 }}>Match: {result.status} (Thru {result.holesPlayed})</div>
-              </div>
-              <button onClick={() => setActiveHole(h => Math.min(17, h + 1))} disabled={activeHole === 17}
-                style={{ background: BC.hover, border: "none", color: BC.t1, borderRadius: 8, padding: "6px 14px", fontSize: 16, cursor: "pointer", opacity: activeHole === 17 ? 0.3 : 1 }}>›</button>
-            </div>
-            {/* Hole dots */}
-            <div style={{ display: "flex", gap: 3, justifyContent: "center" }}>
-              {Array.from({length: 18}, (_, i) => {
-                const allScored = allPlayers.every(p => getScore(p) != null);
-                const anyScored = allPlayers.some(p => (holeData[`${p}_${match.round}`] || {})[i] != null);
-                return (
-                  <button key={i} onClick={() => setActiveHole(i)} style={{
-                    width: 14, height: 14, borderRadius: "50%", border: "none", cursor: "pointer",
-                    background: i === activeHole ? BC.amber : anyScored ? (allScored ? BC.green : BC.amber + "66") : BC.bdr,
-                  }} />
-                );
-              })}
-            </div>
-          </div>
+      {/* Front 9 — hole strip. Three-state hierarchy: current (bright
+          green + outline), completed all-scored (deep green + white
+          text), partial (light tint), untouched (card bg). */}
+      <div style={{ display: "flex", gap: 3, marginBottom: 2 }}>
+        {Array.from({ length: 9 }, (_, i) => {
+          const cur = i === activeHole;
+          const allScored = matchPids.every(pid => getScore(pid, i) > 0);
+          const partial = !allScored && matchPids.some(pid => getScore(pid, i) > 0);
+          return (
+            <button key={i} onClick={() => goToHole(i)} style={{
+              flex: 1, height: 28, borderRadius: cur ? 8 : 6, border: "none",
+              background: cur ? BC.amber : allScored ? BC.amberDim : partial ? BC.amber + "20" : BC.card,
+              color: cur ? "#0a0804" : allScored ? "#fff" : BC.t3,
+              fontSize: 13, fontWeight: 800, cursor: "pointer",
+              outline: cur ? `2px solid ${BC.amber}` : "none", outlineOffset: 1,
+            }}>{i + 1}</button>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", marginBottom: 6, background: BC.card, border: `1px solid ${BC.bdr}60`, borderRadius: 8, padding: "3px 0", alignItems: "center" }}>
+        {Array.from({ length: 9 }, (_, i) => renderStatusCell(i))}
+      </div>
 
-          {/* Score inputs */}
-          <div style={{ background: BC.card, borderRadius: 12, padding: 14, border: `1px solid ${BC.bdr}` }}>
-            <div style={{ fontSize: 10, color: BC.t3, marginBottom: 10, letterSpacing: 1, fontWeight: 700 }}>
-              {FORMATS.find(f => f.id === format)?.label?.toUpperCase() || "MATCH PLAY"} · ROUND {match.round}
-            </div>
-            {match.teamA.map((pid, i) => {
-              const tp = tPlayers.find(t => t.player_id === pid);
-              return <ScoreBtn key={pid} pid={pid} name={tp?.name || pid} team="A" />;
-            })}
-            <div style={{ borderTop: `1px dashed ${BC.bdr}`, margin: "10px 0" }} />
-            {match.teamB.map((pid, i) => {
-              const tp = tPlayers.find(t => t.player_id === pid);
-              return <ScoreBtn key={pid} pid={pid} name={tp?.name || pid} team="B" />;
-            })}
+      {/* Back 9 — hole strip + status row. */}
+      <div style={{ display: "flex", gap: 3, marginBottom: 2 }}>
+        {Array.from({ length: 9 }, (_, i) => {
+          const h = i + 9;
+          const cur = h === activeHole;
+          const allScored = matchPids.every(pid => getScore(pid, h) > 0);
+          const partial = !allScored && matchPids.some(pid => getScore(pid, h) > 0);
+          return (
+            <button key={h} onClick={() => goToHole(h)} style={{
+              flex: 1, height: 28, borderRadius: cur ? 8 : 6, border: "none",
+              background: cur ? BC.amber : allScored ? BC.amberDim : partial ? BC.amber + "20" : BC.card,
+              color: cur ? "#0a0804" : allScored ? "#fff" : BC.t3,
+              fontSize: 13, fontWeight: 800, cursor: "pointer",
+              outline: cur ? `2px solid ${BC.amber}` : "none", outlineOffset: 1,
+            }}>{h + 1}</button>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", marginBottom: 6, background: BC.card, border: `1px solid ${BC.bdr}60`, borderRadius: 8, padding: "3px 0", alignItems: "center" }}>
+        {Array.from({ length: 9 }, (_, i) => renderStatusCell(i + 9))}
+      </div>
+
+      {/* Hole nav banner — deep Mash green with white text, mirroring the
+          Mash design system's "established/chrome" surface. */}
+      <div style={{
+        background: BC.amberDim, borderRadius: 10, padding: "4px 8px", marginBottom: 6,
+        display: "flex", alignItems: "center",
+      }}>
+        <button onClick={() => goToHole(Math.max(0, activeHole - 1))} disabled={activeHole === 0} style={{
+          width: 28, height: 36, borderRadius: 8, background: "none", border: "none",
+          cursor: activeHole === 0 ? "default" : "pointer",
+          color: activeHole === 0 ? "rgba(255,255,255,0.35)" : "#fff", fontSize: 18, fontWeight: 700,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>‹</button>
+        <div style={{ flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 8px" }}>
+          <div style={{ textAlign: "center", minWidth: 32 }}>
+            <div style={{ fontSize: 8, color: "#fff", fontWeight: 600, opacity: 0.75 }}>Par</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: "#fff" }}>{par}</div>
           </div>
-        </>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 8, color: "#fff", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, opacity: 0.75 }}>Hole</div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: "#fff", lineHeight: 1 }}>{activeHole + 1}</div>
+          </div>
+          <div style={{ textAlign: "center", minWidth: 32 }}>
+            <div style={{ fontSize: 8, color: "#fff", fontWeight: 600, opacity: 0.75 }}>HCP</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: "#fff" }}>{hcp}</div>
+          </div>
+        </div>
+        <button onClick={() => goToHole(Math.min(17, activeHole + 1))} disabled={activeHole === 17} style={{
+          width: 28, height: 36, borderRadius: 8, background: "none", border: "none",
+          cursor: activeHole === 17 ? "default" : "pointer",
+          color: activeHole === 17 ? "rgba(255,255,255,0.35)" : "#fff", fontSize: 18, fontWeight: 700,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>›</button>
+      </div>
+
+      {/* Format / round badge — small sticker between banner and player cards.
+          Tells the user what scoring format their entries are being judged
+          against. Useful since this app supports multiple formats per round. */}
+      <div style={{ fontSize: 9, color: BC.t3, fontWeight: 700, letterSpacing: 1, padding: "2px 4px", marginBottom: 4 }}>
+        {(FORMATS.find(f => f.id === format)?.label || "MATCH PLAY").toUpperCase()} · ROUND {match.round}
+      </div>
+
+      {/* Player score cards — 4 stacked, T1 above dashed divider, T2 below.
+          Each shows: name, (CH), stroke dots, "Net: ±X thru N", then a row
+          of par-relative score buttons. Tap a saved score again to clear. */}
+      <div>
+        {[...match.teamA, "DIVIDER", ...match.teamB].map((pid, idx) => {
+          if (pid === "DIVIDER") return <div key="div" style={{ borderTop: `1px dashed ${BC.bdr}`, margin: "8px 0" }} />;
+          const tp = tPlayers.find(t => t.player_id === pid);
+          const team = match.teamA.includes(pid) ? "A" : "B";
+          const tc = team === "A" ? tA : tB;
+          const cur = getScore(pid, activeHole);
+          const strokes = strokeMaps[pid]?.[activeHole] || 0;
+          // CH for display
+          const hi = (() => {
+            const ro = hcpOverrides?.[match.round] || {};
+            if (ro[pid] !== undefined && ro[pid] !== "") return parseFloat(ro[pid]) || 0;
+            return parseFloat(tp?.handicap_index) || 0;
+          })();
+          const ch = calcCHForCourse(hi, course, teeName);
+          // Running net to par for this player thru holes scored
+          let netToPar = 0, thru = 0;
+          for (let h = 0; h < 18; h++) {
+            const s = getScore(pid, h);
+            if (s > 0) {
+              const st = strokeMaps[pid]?.[h] || 0;
+              netToPar += (s - st) - holePars[h];
+              thru = h + 1;
+            }
+          }
+
+          // Score-button range — auto-shift if saved score is out of base range.
+          const maxBtn = baseBtns[baseBtns.length - 1];
+          const minBtn = baseBtns[0];
+          let btns = baseBtns;
+          if (cur > maxBtn) {
+            const shift = cur - maxBtn;
+            btns = baseBtns.map(b => b + shift);
+          } else if (cur > 0 && cur < minBtn) {
+            const shift = minBtn - cur;
+            btns = baseBtns.map(b => Math.max(1, b - shift));
+          }
+
+          return (
+            <div key={pid} style={{
+              background: BC.card, borderRadius: 10, marginBottom: 4, padding: "6px 10px",
+              border: `1px solid ${BC.bdr}`,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5, minWidth: 0 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: BC.t1, lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>{tp?.name || pid}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: BC.hcpBlue, flexShrink: 0 }}>({ch})</span>
+                {strokes > 0 && (
+                  <span style={{ color: BC.hcpBlue, fontSize: 12, letterSpacing: 1, flexShrink: 0, lineHeight: 1 }}>
+                    {"●".repeat(strokes)}
+                  </span>
+                )}
+                <div style={{ flex: 1 }} />
+                {thru > 0 && (
+                  <span style={{ fontSize: 10, color: BC.t3, flexShrink: 0, whiteSpace: "nowrap" }}>
+                    Net: <strong style={{ color: netToPar < 0 ? BC.danger : netToPar === 0 ? BC.t3 : BC.t1 }}>
+                      {fmtScore(netToPar)}
+                    </strong> thru {thru}
+                  </span>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: 3 }}>
+                {btns.map(btn => {
+                  const isCur = btn === cur;
+                  const sd = btn - par;
+                  const boxSize = 32;
+                  return (
+                    <button key={btn} onClick={() => onTapScore(pid, btn)} style={{
+                      flex: 1, height: 38, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 800, border: "none",
+                      background: isCur ? BC.amber : BC.inp, color: isCur ? "#0a0804" : BC.t2,
+                      position: "relative",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      {/* Score-shape overlays — circle for birdie, nested
+                          circle for eagle, square for bogey, nested square
+                          for double-bogey+. Mirrors ScoreCell's iconography. */}
+                      {sd === -1 && <div style={{ position: "absolute", inset: 3, border: `1.5px solid ${isCur ? "#0a0804" : BC.t2}`, borderRadius: "50%", pointerEvents: "none" }} />}
+                      {sd <= -2 && <>
+                        <div style={{ position: "absolute", inset: 3, border: `1.5px solid ${isCur ? "#0a0804" : BC.t2}`, borderRadius: "50%", pointerEvents: "none" }} />
+                        <div style={{ position: "absolute", inset: 6, border: `1.5px solid ${isCur ? "#0a0804" : BC.t2}`, borderRadius: "50%", pointerEvents: "none" }} />
+                      </>}
+                      {sd === 1 && <div style={{ position: "absolute", inset: 4, border: `1.5px solid ${isCur ? "#0a0804" : BC.t2}`, pointerEvents: "none" }} />}
+                      {sd >= 2 && <>
+                        <div style={{ position: "absolute", inset: 4, border: `1.5px solid ${isCur ? "#0a0804" : BC.t2}`, pointerEvents: "none" }} />
+                        <div style={{ position: "absolute", inset: 7, border: `1.5px solid ${isCur ? "#0a0804" : BC.t2}`, pointerEvents: "none" }} />
+                      </>}
+                      <span style={{ position: "relative", zIndex: 1 }}>{btn}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Full Scorecard button — opens a modal showing both teams x 18 holes. */}
+      <button onClick={() => setShowScorecard(true)} style={{
+        width: "100%", marginTop: 8, padding: "10px 0", background: BC.card, border: `1px solid ${BC.bdr}`,
+        borderRadius: 10, color: BC.t2, fontSize: 12, fontWeight: 700, cursor: "pointer", letterSpacing: 0.5,
+      }}>
+        Full Scorecard
+      </button>
+
+      {/* Scorecard modal — uses the existing MatchScorecard component
+          which already renders both teams and 18 holes for the main app. */}
+      {showScorecard && (
+        <div onClick={() => setShowScorecard(false)} style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 500,
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 12,
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: BC.card, borderRadius: 12, border: `1px solid ${BC.amber}44`, width: "100%",
+            maxWidth: 480, maxHeight: "calc(100vh - 48px)", overflowY: "auto",
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderBottom: `1px solid ${BC.bdr}` }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>SCORECARD — RD {match.round}</div>
+              <button onClick={() => setShowScorecard(false)} style={{
+                background: "transparent", border: "none", color: BC.t2, fontSize: 18, cursor: "pointer", padding: "0 4px",
+              }}>×</button>
+            </div>
+            <div style={{ padding: 12 }}>
+              <MatchScorecard match={match} result={result} format={format} courses={courses} tRounds={tRounds} />
+            </div>
+            <button onClick={() => setShowScorecard(false)} style={{
+              display: "block", width: "calc(100% - 24px)", margin: "0 auto 12px",
+              padding: "10px 0", background: BC.inp, border: `1px solid ${BC.bdr}`,
+              borderRadius: 8, color: BC.t2, fontSize: 13, fontWeight: 600,
+              cursor: "pointer", letterSpacing: 0.4,
+            }}>
+              Close
+            </button>
+          </div>
+        </div>
       )}
 
-      {view === "card" && (
-        <MatchScorecard match={match} result={result} format={format} courses={courses} tRounds={tRounds} />
+      {/* Auto-advance toast — slides down from the top during the 1.8s
+          wait between "all scores in" and the screen advance. Mirrors
+          the Mash toast styling for cross-app visual consistency. */}
+      {toast && (
+        <>
+          <style>{`@keyframes bcToastDown { 0% { transform: translateX(-50%) translateY(-20px); opacity: 0; } 100% { transform: translateX(-50%) translateY(0); opacity: 1; } }`}</style>
+          <div style={{
+            position: "fixed", top: 30, left: "50%", transform: "translateX(-50%)",
+            background: BC.amber, color: "#0a0804",
+            padding: "12px 32px", borderRadius: 12,
+            fontSize: 13, fontWeight: 700, zIndex: 1000,
+            whiteSpace: "nowrap", textAlign: "center",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+            animation: "bcToastDown 0.3s ease",
+            fontFamily: "'Montserrat', sans-serif",
+          }}>
+            {toast}
+          </div>
+        </>
       )}
     </div>
   );
 }
+
 
 // ── Groups View ──
 function GroupsView({ matches, tRounds, tPlayers, courses, teamNames }) {
@@ -1384,42 +1652,63 @@ function GroupsView({ matches, tRounds, tPlayers, courses, teamNames }) {
 
   return (
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
-      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-        {rounds.map(r => (
-          <button key={r} onClick={() => setActiveRound(r)} style={{
-            flex: 1, padding: "8px 4px", borderRadius: 10, border: `1px solid ${r === activeRound ? "transparent" : BC.bdr}`,
-            background: r === activeRound ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
-            color: r === activeRound ? "#0a0804" : BC.t2, fontSize: 11, fontWeight: 700, cursor: "pointer",
-          }}>Rd {r}</button>
-        ))}
+      {/* Round selector — pill toggle, deep Mash green for active state.
+          Mirrors the Mash visual language used on Scoring + Leaderboard. */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+        {rounds.map(r => {
+          const active = r === activeRound;
+          return (
+            <button key={r} onClick={() => setActiveRound(r)} style={{
+              flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
+              background: active ? BC.amberDim : BC.card,
+              border: `1px solid ${active ? BC.amberDim : BC.bdr}`,
+              color: active ? "#fff" : BC.t2,
+            }}>Rd {r}</button>
+          );
+        })}
       </div>
 
-      <div style={{ background: BC.card, borderRadius: 10, padding: "10px 14px", marginBottom: 12, border: `1px solid ${BC.bdr}` }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold }}>{course?.name || "TBD"}</div>
-        {fmt && <div style={{ fontSize: 10, color: BC.t3, marginTop: 2 }}>{fmt.label} · {fmt.desc}</div>}
-        {tr?.tee_time && <div style={{ fontSize: 10, color: BC.amber, marginTop: 2 }}>First Tee: {tr.tee_time}</div>}
+      {/* Course / format / tee-time banner — uses the TEAMS-banner style
+          (Mash green fill, white centered text) for the section header,
+          with details below. Anchors the round visually in the same
+          visual language as the Leaderboard's TEAMS card. */}
+      <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 12, overflow: "hidden" }}>
+        <div style={{ padding: "8px 14px", background: BC.amber, textAlign: "center" }}>
+          <div style={{ fontSize: 11, color: "#fff", fontWeight: 800, letterSpacing: 2 }}>ROUND {activeRound}</div>
+        </div>
+        <div style={{ padding: "10px 14px" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: BC.t1 }}>{course?.name || "Course TBD"}</div>
+          {fmt && <div style={{ fontSize: 11, color: BC.t3, marginTop: 2 }}>{fmt.label}{fmt.desc ? ` · ${fmt.desc}` : ""}</div>}
+          {tr?.tee_time && <div style={{ fontSize: 11, color: BC.amber, marginTop: 4, fontWeight: 700 }}>First Tee: {tr.tee_time}</div>}
+        </div>
       </div>
 
-      {rndMatches.length === 0 && <div style={{ textAlign: "center", color: BC.t3, padding: 32 }}>No matches scheduled.</div>}
+      {rndMatches.length === 0 && <div style={{ textAlign: "center", color: BC.t3, padding: 32, fontSize: 12 }}>No matches scheduled.</div>}
+
+      {/* Match cards — same visual identity as the Leaderboard cards
+          (vertical green/brown stripes flanking each team) so the
+          "this is a Match X" element is recognizable across tabs. */}
       {rndMatches.map((m, i) => (
         <div key={m.id} style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: "12px 14px", marginBottom: 8 }}>
-          <div style={{ fontSize: 10, color: BC.t3, marginBottom: 6, fontWeight: 700 }}>MATCH {i + 1}</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 9, color: BC.t3, marginBottom: 8, fontWeight: 800, letterSpacing: 1 }}>MATCH {i + 1}{m.teeTime ? `  ·  ${m.teeTime}` : ""}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10 }}>
+            {/* Team A — Mash green stripe LEFT */}
+            <div style={{ textAlign: "left", borderLeft: `3px solid ${BC.amber}`, paddingLeft: 8 }}>
               {m.teamA.map(pid => {
                 const tp = tPlayers.find(t => t.player_id === pid);
-                return <div key={pid} style={{ fontSize: 12, fontWeight: 600, color: TEAM_A.accent }}>{tp?.name || pid}</div>;
+                return <div key={pid} style={{ fontSize: 13, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{tp?.name || pid}</div>;
               })}
             </div>
-            <div style={{ fontSize: 12, color: BC.t3, fontWeight: 700 }}>vs</div>
-            <div style={{ flex: 1, textAlign: "right" }}>
+            {/* vs */}
+            <div style={{ fontSize: 11, color: BC.t3, fontWeight: 700, padding: "0 4px" }}>vs</div>
+            {/* Team B — bourbon brown stripe RIGHT */}
+            <div style={{ textAlign: "right", borderRight: `3px solid ${BC.gold}`, paddingRight: 8 }}>
               {m.teamB.map(pid => {
                 const tp = tPlayers.find(t => t.player_id === pid);
-                return <div key={pid} style={{ fontSize: 12, fontWeight: 600, color: TEAM_B.accent }}>{tp?.name || pid}</div>;
+                return <div key={pid} style={{ fontSize: 13, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{tp?.name || pid}</div>;
               })}
             </div>
           </div>
-          {m.teeTime && <div style={{ fontSize: 10, color: BC.amber, marginTop: 6 }}>⏰ {m.teeTime}</div>}
         </div>
       ))}
     </div>
@@ -4732,6 +5021,14 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, 
     { key: "analytics", label: "Player Analytics", icon: "📊" },
     { key: "history",   label: "Historical Data",  icon: "📅" },
     { key: "photos",    label: "Photo Library",     icon: "📸", external: true },
+    // Practice tab — was the standalone "Mash" bottom-nav tab while
+    // we were validating the new UI patterns. Now that the same
+    // patterns drive the main Scoring/Leaderboard/Betting tabs against
+    // tournament data, the standalone Mash event becomes a director-
+    // only sandbox for off-tournament team rehearsals (single round,
+    // single course, 8 guys). Hidden from regular players to keep
+    // their menu uncluttered with an internal-tooling option.
+    ...(user?.isDirector ? [{ key: "practice", label: "Practice Round", icon: "🥃" }] : []),
     ...(user?.isDirector ? [{ key: "admin", label: "Admin Settings", icon: "⚙️" }] : []),
     { key: "logout", label: "Logout", icon: "🚪", onLogout: () => { onLogout(); onClose(); } },
   ];
@@ -4871,12 +5168,12 @@ const TeeCircle = ({ tee, index, size = 14, active }) => {
 // ── Main App ──
 export default function App() {
   const [user, setUser] = useState(null);
-  // Default landing view = Mash. For the test event tomorrow (and going
-  // forward as long as Mash is the active feature), users land on the Mash
-  // tab on first login and on every app restart. They can navigate away
-  // during a session, but a reload puts them back on Mash. Change the
-  // string below to "leaderboard" once the real tournament starts.
-  const [view, setView] = useState("practice");
+  // Default landing view. Was "practice" while the standalone Mash tab
+  // was the focus of validation; now that the Mash UI patterns power
+  // the tournament tabs, Leaderboard is the right home base — the
+  // most-glanced screen during a round, and the natural place for a
+  // user reopening the app to check current state.
+  const [view, setView] = useState("leaderboard");
   const [menuOpen, setMenuOpen] = useState(false);
   const [skinsData, setSkinsData] = useState({}); // { "round_hole": pid }
   const [ctpData, setCtpData] = useState({});     // { "round_hole": pid }
@@ -5247,8 +5544,14 @@ export default function App() {
 
   if (!user) return <LoginScreen players={tPlayers} teamNames={teamNames} darkMode={darkMode} onLogin={p => { setUser({ ...p, isDirector: !!p.isDirector }); }} />;
 
+  // Bottom-nav items. The Practice tab (formerly "Mash") was relocated
+  // to the More menu and is gated to directors only — practice rounds
+  // are an internal team-rehearsal artifact, not a tournament feature.
+  // The Mash UI patterns themselves (hole strip, status bar, auto-
+  // advance toast, two-row tracker, skins grid) live on across the
+  // Scoring / Leaderboard / Betting tabs which now use them on the
+  // tournament's per-round / per-course / multi-format data model.
   const navItems = [
-    { key: "practice",    label: "Mash",        icon: "mash" },
     { key: "scoring",     label: "Scoring",     icon: "score" },
     { key: "groups",      label: "Matches",     icon: "groups" },
     { key: "leaderboard", label: "Leaderboard", icon: "trophy" },
@@ -5355,8 +5658,7 @@ export default function App() {
             tPlayers={tPlayers}
             rounds={availableRounds.length ? availableRounds : [1,2,3,4]}
             teamNames={teamNames}
-            hcpOverridesFromDb={hcpOverridesData}
-            teeAssignmentsFromDb={teeAssignmentsData}
+            hcpOverrides={hcpOverridesData}
           />
         )}
         {view === "scoring" && (
@@ -5383,23 +5685,48 @@ export default function App() {
           />
         )}
         {view === "betting" && (
-          // Main-app betting view is parked behind a placeholder while
-          // the real tournament betting flow (skins/CTP for the Bourbon
-          // Cup proper) is finalized. The Mash sub-app under the
-          // Practice / Mash tab still has its own fully-working betting
-          // grid for internal team rounds. Restore the original
-          // <BettingView ... /> render below when the main flow is
-          // ready to ship.
-          <div style={{
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            padding: "60px 20px", textAlign: "center", minHeight: "50vh",
-          }}>
-            <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.4 }}>🥃</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: BC.t1, marginBottom: 6, letterSpacing: 0.3 }}>
-              No bets yet
+          // Main-app betting view is parked behind a placeholder until
+          // the real tournament betting flow is finalized (skins/CTP at
+          // the Bourbon Cup level — multi-round, multi-pot, with the
+          // skins-pot accumulator). The Practice Round view in More
+          // menu still has its own fully-working betting grid for
+          // internal team rounds. This placeholder uses Mash UI styling
+          // (TEAMS-banner-style header, neutral "no data" body) so when
+          // real betting data lands, the visual scaffold is already
+          // consistent with the rest of the app.
+          <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
+            {/* Skins/CTP toggle scaffold — disabled visual, identical
+                shape to the working Practice Round version. Communicates
+                "this section will have these two modes" without
+                committing to data the user can't act on. */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, opacity: 0.5, pointerEvents: "none" }}>
+              <div style={{ flex: 1, display: "flex", background: BC.card, borderRadius: 20, padding: 3, border: `1px solid ${BC.bdr}` }}>
+                {[["skins", "Skins"], ["ctp", "CTP"]].map(([k, label]) => (
+                  <div key={k} style={{
+                    flex: 1, padding: "8px 0", borderRadius: 16, fontSize: 12, fontWeight: 700, textAlign: "center",
+                    background: k === "skins" ? BC.amber : "transparent",
+                    color: k === "skins" ? "#fff" : BC.t3, letterSpacing: 0.5,
+                  }}>{label}</div>
+                ))}
+              </div>
             </div>
-            <div style={{ fontSize: 12, color: BC.t3, maxWidth: 280, lineHeight: 1.5 }}>
-              Tournament betting will open closer to game time.
+
+            <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
+              <div style={{ padding: "8px 14px", background: BC.amber, textAlign: "center" }}>
+                <div style={{ fontSize: 11, color: "#fff", fontWeight: 800, letterSpacing: 2 }}>SKINS</div>
+              </div>
+              <div style={{
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                padding: "60px 20px", textAlign: "center",
+              }}>
+                <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.4 }}>🥃</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: BC.t1, marginBottom: 6, letterSpacing: 0.3 }}>
+                  No bets yet
+                </div>
+                <div style={{ fontSize: 12, color: BC.t3, maxWidth: 280, lineHeight: 1.5 }}>
+                  Tournament betting will open closer to game time.
+                </div>
+              </div>
             </div>
           </div>
         )}
