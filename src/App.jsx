@@ -1,238 +1,17 @@
-import { initializeApp } from "firebase/app";
-import { getFirestore, collection, doc, setDoc, getDocs, query, where, writeBatch, onSnapshot, deleteDoc } from "firebase/firestore";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { BC, applyBCTheme, initialBCMode } from "./theme";
+import { db, TOURNAMENT_ID } from "./firebase";
+import {
+  TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
+  TEAM_A, TEAM_B, getTeam, oppTeam,
+  FORMATS, NASSAU_DEFAULT, PRACTICE_TEAM_COLORS, DIRECTOR_CODE,
+} from "./constants";
+import {
+  calcCH, calcCHForCourse, fmtScore,
+  getEffectiveHI, buildStrokeMap,
+  computeMatchResult, computePracticeMatch, computePracticeSkins,
+} from "./scoring";
 
-// ─── BOURBON CUP THEME ───
-// `BC` is mutated in place when the user toggles dark/light mode. The mutation
-// pattern (vs. swapping the reference) is intentional: every component holds
-// a stale closure over `BC` from when the module loaded, but since they all
-// point to the SAME object, mutating its keys updates every consumer at once.
-// React picks up the visual change because the App-level `darkMode` state
-// transition triggers a top-level re-render that propagates down — children
-// re-read the now-updated BC values inline in JSX.
-//
-// Borrowed from the MNQ pattern: getTheme(mode) → applyTheme(mode) mutates K.
-// ─── BOURBON CUP THEME ───
-// Design philosophy — "traditional clubhouse, not all-bourbon-everywhere".
-// The earlier palette tinted every surface (bg, card, inputs, borders, text)
-// with the same warm-brown family, which read as muddy/monochromatic. The
-// revised approach: keep the chrome NEUTRAL (warm-cream paper in light,
-// cool slate in dark) and reserve bourbon amber for the actual accents —
-// active buttons, MASH ROUND header, score-button selection, toast,
-// triangle indicators. Result: amber stops blending into its surroundings
-// and starts reading as the brand signature it's meant to be.
-//
-// Light mode is built like a vintage scorecard — soft linen-cream paper,
-// near-black ink for primary text, gentle neutral grays for borders. The
-// warmth in the bg is subtle (NOT yellow) so the amber accent doesn't
-// fight it. Dark mode goes cool-charcoal (think aged-leather binding seen
-// from a low-light angle) so amber reads as gold instead of beige.
-// ─── BOURBON CUP THEME — Mash Brothers Edition ───
-// Design philosophy — temporary all-Mash skin while internal practice rounds
-// are the focus. Mash Brothers brand green (#009144 deep / #004d24 deeper)
-// becomes the PRIMARY accent everywhere amber used to live: active tabs,
-// hole nav banner, score-button selection, auto-advance toast, MASH ROUND
-// header, leaderboard active states. Bourbon brown is demoted to a
-// SECONDARY accent and used only where it carries real "Bourbon Cup"
-// brand meaning — the login screen title and the trophy silhouette
-// glow. Net effect: the app reads as Mash team property with bourbon
-// as the parent-tournament flavor.
-//
-// Implementation note — `BC.amber` keeps its key name despite now holding
-// green values. Renaming would require touching ~100 call sites; instead,
-// the convention is "BC.amber = primary brand accent (whatever color
-// that currently is)" and "BC.gold = bourbon brown secondary accent".
-// The few places that genuinely need bourbon brown (login title) read
-// from BC.gold explicitly.
-//
-// Light mode is paper-with-a-whisper-of-green — like the natural fiber
-// of a Mash Brothers scorecard. Dark mode evokes the black-bg/green-flag
-// palette of the team logo itself, with a subtle green undertone in the
-// "near-black" so the green accent reads as part of a deliberate system
-// rather than as a pop of color floating on neutral charcoal.
-const getBCTheme = (mode) => {
-  if (mode === "light") {
-    return {
-      bg: "#f4f7f3",        // pale linen with whisper of Mash green
-      card: "#ffffff",      // pure white card surface
-      inp: "#e6ebe7",       // pale green-tinted gray (input/inactive)
-      hover: "#d8dfd9",
-      bdr: "#c4cfc6",       // soft green-tinted border
-      t1: "#1a1f1c",        // near-black with cool/green tint
-      t2: "#5a615c",        // medium neutral with green lean
-      t3: "#8b918d",        // muted neutral, refined
-      amber: "#009144",     // PRIMARY ACCENT — Mash Brothers brand green
-      amberGlow: "rgba(0,145,68,0.14)",
-      amberDim: "#004d24",  // Mash deep green (gradients, hover-state)
-      gold: "#a8730a",      // SECONDARY ACCENT — bourbon brown (login title only)
-      goldGlow: "rgba(168,115,10,0.10)",
-      danger: "#c1272d",    // traditional deep red
-      warn: "#c2570d",      // burnt orange
-      green: "#047857",     // generic positive (distinct from brand accent)
-      // Handicap blue — matches MNQ's K.hcpBlue exactly so users
-      // moving between the two apps see consistent visual language for
-      // handicap strokes / stroke dots / (CH) labels. Tailwind blue-500.
-      hcpBlue: "#3b82f6",
-    };
-  }
-  // dark (default) — Mash logo "black bg + green flag" inspired
-  return {
-    bg: "#0a1410",          // near-black with green undertone (Mash logo bg)
-    card: "#121d18",        // elevated panel
-    inp: "#0e1813",         // sunken input
-    hover: "#1a2922",
-    bdr: "#1f3026",         // subtle green-tinted border
-    t1: "#e8eee9",          // slightly green-tinted clean white
-    t2: "#a3aea7",          // green-leaning medium gray
-    t3: "#6b766f",          // green-leaning muted gray
-    amber: "#16a34a",       // PRIMARY ACCENT — brightened Mash green for dark
-    amberGlow: "rgba(22,163,74,0.20)",
-    amberDim: "#15803d",
-    gold: "#d4a843",        // SECONDARY ACCENT — bourbon brown
-    goldGlow: "rgba(212,168,67,0.12)",
-    danger: "#ef4444",
-    warn: "#f59e0b",
-    green: "#22c55e",
-    hcpBlue: "#3b82f6",
-  };
-};
-
-// Read saved preference (default: dark). Wrapped in try/catch so SSR or
-// blocked-localStorage envs don't crash module load.
-const _bcSavedMode = (() => {
-  try {
-    return typeof window !== "undefined" && localStorage.getItem("bc_theme") === "light" ? "light" : "dark";
-  } catch { return "dark"; }
-})();
-const BC = { ...getBCTheme(_bcSavedMode) };
-const applyBCTheme = (mode) => {
-  const next = getBCTheme(mode);
-  for (const key in next) BC[key] = next[key];
-};
-
-// ── Inject global styles ──
-// The body bg is set on initial load so the page paints the correct theme
-// before React mounts. A useEffect in App keeps it in sync when the user
-// toggles the theme (the inline rule below would otherwise be stale).
-const _style = document.createElement("style");
-_style.id = "bc-global-style";
-_style.textContent = `
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body, #root { height: 100%; width: 100%; background: ${BC.bg}; overflow: hidden; }
-  body { margin: 0; padding: 0; }
-`;
-document.head.appendChild(_style);
-
-// ── Inject Montserrat font ──
-const _link = document.createElement("link");
-_link.rel = "stylesheet";
-_link.href = "https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap";
-document.head.appendChild(_link);
-
-const TROPHY_PHOTO = "/trophy_photo.png";
-const LOGO_TEAM_A = "/mash_brothers_logo_on_black.png";
-const LOGO_TEAM_A_WHITE = "/mash_brothers_logo_on_white.png";
-const LOGO_TEAM_B = "/shot_callers_logo.png";
-const SHOT_CALLERS_LOGO = "/shot_callers_logo.png";
-const TROPHY_SILHOUETTE = "/trophy_logo_silhouette.png";
-
-let TEAM_A = { id: "A", name: "Team Alpha", color: "#004d24", accent: "#009144", glow: "rgba(0,145,68,0.2)", short: "α", logo: LOGO_TEAM_A };
-let TEAM_B = { id: "B", name: "Team Beta",  color: "#0d3235", accent: "#3A96A0", glow: "rgba(58,150,160,0.2)", short: "β", logo: LOGO_TEAM_B };
-
-const FORMATS = [
-  { id: "singles",        label: "Singles",            desc: "Match play, 1v1. Nassau scored: front 9, back 9, overall.", nassau: { front: 1, back: 1, overall: 1 }, scoringType: "nassau" },
-  { id: "best_ball",      label: "2-Man Best Ball",    desc: "Each player plays their own ball, team uses the better net score per hole. Nassau scored.", nassau: { front: 1, back: 1, overall: 2 }, scoringType: "nassau" },
-  { id: "team_total",     label: "Team Total",         desc: "Combined team net per hole vs combined team net. Lower combined wins the hole. Nassau scored.", nassau: { front: 1, back: 1, overall: 2 }, scoringType: "nassau" },
-  { id: "pinehurst",      label: "Pinehurst",          desc: "Partners each drive, swap balls, then choose best to finish as scramble. Nassau scored.", nassau: { front: 1, back: 1, overall: 2 }, scoringType: "nassau" },
-  { id: "team_best_ball", label: "Team Best Ball",     desc: "Full team format — custom scoring applies. See director for point structure.", nassau: { front: 0, back: 0, overall: 0 }, scoringType: "custom" },
-  { id: "double_dot",     label: "Double Dot",         desc: "Nassau with automatic press on the back 9 and last 3 holes.", nassau: { front: 1, back: 1, overall: 2 }, scoringType: "nassau" },
-  { id: "shamble",        label: "Shamble",            desc: "All players drive, choose best drive, each plays their own ball in. Nassau scored.", nassau: { front: 1, back: 1, overall: 2 }, scoringType: "nassau" },
-  { id: "scramble",       label: "2-Man Scramble",     desc: "Both hit every shot, choose best ball location, both play from there. Nassau scored.", nassau: { front: 1, back: 1, overall: 2 }, scoringType: "nassau" },
-  { id: "tilt",           label: "2-Man Tilt",         desc: "4-point match: 1pt per side, 2pt overall. No individual Nassau components.", nassau: { front: 0, back: 0, overall: 4 }, scoringType: "tilt" },
-  { id: "stableford",     label: "2-Man Stableford",   desc: "Points per hole: eagle=4, birdie=3, par=2, bogey=1. Nassau scored.", nassau: { front: 1, back: 1, overall: 2 }, scoringType: "nassau" },
-];
-
-const NASSAU_DEFAULT = { front: 1, back: 1, overall: 1 };
-
-// ── Firebase ──
-const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyCvR8I_5N0tXIXaPRkvsvBMzKfUY1_KzA0",
-  authDomain: "the-bourbon-cup.firebaseapp.com",
-  projectId: "the-bourbon-cup",
-  storageBucket: "the-bourbon-cup.firebasestorage.app",
-  messagingSenderId: "957218531964",
-  appId: "1:957218531964:web:753b42a551463fd50537f9",
-};
-const TOURNAMENT_ID = "bc_2025";
-const _app = initializeApp(FIREBASE_CONFIG);
-const _db = getFirestore(_app);
-
-const db = {
-  _q: (col, filters = []) => {
-    const ref = collection(_db, col);
-    return filters.length ? query(ref, ...filters.map(f => where(f.field, f.op, f.value))) : ref;
-  },
-  get: async (col, filters = []) => {
-    try { const s = await getDocs(db._q(col, filters)); return s.docs.map(d => d.data()); }
-    catch(e) { console.error("db.get", col, e); return []; }
-  },
-  upsert: async (col, data) => {
-    if (!data.id) return null;
-    try { await setDoc(doc(_db, col, String(data.id)), data, { merge: true }); return data; }
-    catch(e) { console.error("db.upsert", col, e); return null; }
-  },
-  delete: async (col, id) => {
-    try { await deleteDoc(doc(_db, col, String(id))); return true; }
-    catch(e) { console.error("db.delete", col, e); return null; }
-  },
-  subscribe: (col, filters = [], cb) => {
-    try {
-      return onSnapshot(db._q(col, filters), snap => cb(snap.docs.map(d => d.data())), e => console.error("subscribe", e));
-    } catch(e) { console.error("subscribe setup", e); return () => {}; }
-  },
-};
-
-// ── Helpers ──
-// USGA Course Handicap formula:
-//   CH = HI × (Slope / 113) + (Course Rating - Par)
-// where:
-//   - HI is the player's official Handicap Index from admin setup
-//   - Slope is the slope rating of the tee being played (113 = neutral)
-//   - Course Rating is the difficulty rating of the tee
-//   - Par is the par of the tee (almost always == course par)
-// Result is rounded to the nearest integer per USGA convention.
-const calcCH = (hi, slope, rating, par) => (!hi && hi !== 0) ? 0 : Math.round((hi * (slope / 113)) + (rating - par));
-// Resolves slope/rating/par for a course doc and runs calcCH. The tee
-// the player is actually playing matters — different tees on the same
-// course can have wildly different slope ratings (e.g. Black 138 vs
-// White 122), and the USGA formula uses the playing tee's values, not
-// course-level averages. When a specific tee is named, its values are
-// definitive — they ARE the playing conditions. When no tee is named
-// (legacy events created before tee selection existed), we fall back
-// through: top-level course.slope/rating/par → first tee box → USGA
-// neutral defaults (113/72/72). All values are coerced through
-// parseFloat so string-stored values from imported APIs still work.
-const calcCHForCourse = (hi, course, teeName) => {
-  if (!course) return calcCH(hi, 113, 72, 72);
-  const teeBoxes = course.tee_boxes || [];
-  if (teeName) {
-    const tee = teeBoxes.find(t => t.name === teeName);
-    if (tee) {
-      const slope = parseFloat(tee.slope) || 113;
-      const rating = parseFloat(tee.rating) || 72;
-      const par = parseFloat(tee.par) || 72;
-      return calcCH(hi, slope, rating, par);
-    }
-  }
-  const fallbackTee = teeBoxes[0] || {};
-  const slope = parseFloat(course.slope) || parseFloat(fallbackTee.slope) || 113;
-  const rating = parseFloat(course.rating) || parseFloat(fallbackTee.rating) || 72;
-  const par = parseFloat(course.par) || parseFloat(fallbackTee.par) || 72;
-  return calcCH(hi, slope, rating, par);
-};
-const fmtScore = (n) => n == null ? "—" : n === 0 ? "E" : n > 0 ? `+${n}` : `${n}`;
-const getTeam = (tid) => tid === "A" ? TEAM_A : TEAM_B;
-const oppTeam = (tid) => tid === "A" ? TEAM_B : TEAM_A;
 // First+last initials from a player's full name. "Aaron Jensen" → "AJ".
 // Single-name fallback grabs the first two letters (e.g. "Joe" → "JO") so a
 // missing surname doesn't produce a one-character badge that breaks the
@@ -309,418 +88,6 @@ const ScoreCell = ({ score, par, strokes, size = 13, colorOverride }) => {
   );
 };
 
-// ── Match Scoring Engine ──
-function computeMatchResult(match, holeData, courses, tRounds, tPlayers, format, hcpOverrides, handicapMode) {
-  // holeData: { pid_round: { holeIdx: score } }
-  const rnd = match.round;
-  const tr = tRounds.find(t => t.round_number === rnd);
-  const course = courses.find(c => c.id === tr?.course_id);
-  if (!course) return { status: "AS", frontPts: 0, backPts: 0, overallPts: 0, holes: [] };
-
-  const holePars = course.hole_pars || Array(18).fill(4);
-  const holeHcps = course.hole_handicaps || Array(18).fill(9);
-
-  const getPlayerScores = (pid) => holeData[`${pid}_${rnd}`] || {};
-  const getPlayerHI = (pid) => {
-    const roundOverrides = hcpOverrides?.[rnd] || {};
-    if (roundOverrides[pid] !== undefined && roundOverrides[pid] !== "") return parseFloat(roundOverrides[pid]) || 0;
-    const tp = tPlayers.find(t => t.player_id === pid);
-    return parseFloat(tp?.handicap_index) || 0;
-  };
-  const getCH = (pid) => {
-    const hi = getPlayerHI(pid);
-    return calcCHForCourse(hi, course);
-  };
-  const getStrokeMap = (ch) => {
-    const sorted = holeHcps.map((h,i) => ({ idx: i, hcp: h })).sort((a,b) => a.hcp - b.hcp);
-    const map = {};
-    let rem = Math.abs(ch);
-    const sign = ch >= 0 ? 1 : -1;
-    for (let pass = 0; pass < 3 && rem > 0; pass++) {
-      for (const h of sorted) { if (rem <= 0) break; map[h.idx] = (map[h.idx] || 0) + sign; rem--; }
-    }
-    return map;
-  };
-  const netScore = (gross, holeIdx, strokeMap) => gross == null ? null : gross - (strokeMap[holeIdx] || 0);
-
-  const teamA = match.teamA; // array of pids
-  const teamB = match.teamB;
-
-  // ── Handicap allocation ──
-  const roundHandicapMode = handicapMode || tRounds.find(t => t.round_number === rnd)?.handicap_mode || (rnd === 4 ? "full" : "low_man");
-  const allPids = [...teamA, ...teamB];
-  const allCHs = allPids.map(pid => getCH(pid));
-  const minCH = Math.min(...allCHs);
-  const getAdjustedStrokeMap = (pid) => {
-    if (roundHandicapMode === "full") return getStrokeMap(getCH(pid));
-    // Play off the low man: low man gets 0, others get the difference
-    const adjustedCH = getCH(pid) - minCH;
-    return getStrokeMap(adjustedCH);
-  };
-
-  // Compute per-hole results
-  const holeResults = Array(18).fill(null).map((_, h) => {
-    let aScore = null, bScore = null;
-    if (format === "singles") {
-      const aPid = teamA[0], bPid = teamB[0];
-      const aMap = getAdjustedStrokeMap(aPid);
-      const bMap = getAdjustedStrokeMap(bPid);
-      const aRaw = getPlayerScores(aPid)[h];
-      const bRaw = getPlayerScores(bPid)[h];
-      aScore = netScore(aRaw, h, aMap);
-      bScore = netScore(bRaw, h, bMap);
-    } else if (format === "best_ball") {
-      const aNets = teamA.map(pid => { const m = getAdjustedStrokeMap(pid); return netScore(getPlayerScores(pid)[h], h, m); }).filter(s => s != null);
-      const bNets = teamB.map(pid => { const m = getAdjustedStrokeMap(pid); return netScore(getPlayerScores(pid)[h], h, m); }).filter(s => s != null);
-      aScore = aNets.length ? Math.min(...aNets) : null;
-      bScore = bNets.length ? Math.min(...bNets) : null;
-    } else if (format === "aggregate" || format === "team_total") {
-      // Combined team net per hole — both teammates' net scores are summed
-      // and compared as a single team score. The Bourbon Cup name for this is
-      // "Team Total"; "aggregate" is a legacy alias retained for any matches
-      // saved before the format was officially exposed in the FORMATS list.
-      const aNets = teamA.map(pid => { const m = getAdjustedStrokeMap(pid); return netScore(getPlayerScores(pid)[h], h, m); });
-      const bNets = teamB.map(pid => { const m = getAdjustedStrokeMap(pid); return netScore(getPlayerScores(pid)[h], h, m); });
-      if (aNets.every(s => s != null)) aScore = aNets.reduce((a,b) => a+b, 0);
-      if (bNets.every(s => s != null)) bScore = bNets.reduce((a,b) => a+b, 0);
-    } else if (format === "scramble") {
-      // For scramble, team shares one score — use best raw, no individual handicaps
-      const aRaws = teamA.map(pid => getPlayerScores(pid)[h]).filter(s => s != null);
-      const bRaws = teamB.map(pid => getPlayerScores(pid)[h]).filter(s => s != null);
-      // Apply team handicap (avg of players / 2 for scramble)
-      const aAvgHI = teamA.reduce((s,p) => s + getPlayerHI(p), 0) / teamA.length;
-      const bAvgHI = teamB.reduce((s,p) => s + getPlayerHI(p), 0) / teamB.length;
-      const aTeamCH = Math.round(calcCHForCourse(aAvgHI * 0.35, course));
-      const bTeamCH = Math.round(calcCHForCourse(bAvgHI * 0.35, course));
-      const aMap = getStrokeMap(aTeamCH), bMap = getStrokeMap(bTeamCH);
-      aScore = aRaws.length ? netScore(Math.min(...aRaws), h, aMap) : null;
-      bScore = bRaws.length ? netScore(Math.min(...bRaws), h, bMap) : null;
-    } else if (format === "stableford") {
-      const aPid = teamA[0], bPid = teamB[0];
-      const aCH = getCH(aPid), bCH = getCH(bPid);
-      const aMap = getStrokeMap(aCH), bMap = getStrokeMap(bCH);
-      const aNet = netScore(getPlayerScores(aPid)[h], h, aMap);
-      const bNet = netScore(getPlayerScores(bPid)[h], h, bMap);
-      const sfPts = (net) => { if (net == null) return null; const d = net - holePars[h]; return Math.max(0, 2 - d); };
-      aScore = sfPts(aNet);
-      bScore = sfPts(bNet);
-    } else {
-      // Default: match play net
-      const aPid = teamA[0], bPid = teamB[0];
-      const aMap = getAdjustedStrokeMap(aPid);
-      const bMap = getAdjustedStrokeMap(bPid);
-      aScore = netScore(getPlayerScores(aPid)[h], h, aMap);
-      bScore = netScore(getPlayerScores(bPid)[h], h, bMap);
-    }
-
-    let winner = null;
-    if (aScore != null && bScore != null) {
-      if (format === "stableford") winner = aScore > bScore ? "A" : aScore < bScore ? "B" : null;
-      else winner = aScore < bScore ? "A" : aScore > bScore ? "B" : null;
-    }
-    return { h, aScore, bScore, winner, played: aScore != null && bScore != null };
-  });
-
-  // Nassau scoring
-  const nassau = match.nassau || NASSAU_DEFAULT;
-  const calcNassauSegment = (holes) => {
-    const played = holes.filter(r => r.played);
-    if (!played.length) return { winner: null, margin: 0, complete: false };
-    const aWins = played.filter(r => r.winner === "A").length;
-    const bWins = played.filter(r => r.winner === "B").length;
-    const margin = aWins - bWins;
-    const remaining = holes.filter(r => !r.played).length;
-    // Match play: can be clinched early
-    const canWin = Math.abs(margin) > remaining;
-    return {
-      winner: canWin ? (margin > 0 ? "A" : "B") : played.length === holes.length ? (margin > 0 ? "A" : margin < 0 ? "B" : null) : null,
-      margin,
-      complete: played.length === holes.length || canWin,
-      aWins, bWins, played: played.length, total: holes.length
-    };
-  };
-
-  const front = calcNassauSegment(holeResults.slice(0, 9));
-  const back = calcNassauSegment(holeResults.slice(9, 18));
-  const overall = calcNassauSegment(holeResults);
-
-  // Award points
-  const frontPts = { A: 0, B: 0 };
-  const backPts = { A: 0, B: 0 };
-  const overallPts = { A: 0, B: 0 };
-  const halfPt = nassau.front / 2;
-
-  if (front.complete) {
-    if (front.winner) frontPts[front.winner] = nassau.front;
-    else { frontPts.A = halfPt; frontPts.B = halfPt; }
-  }
-  if (back.complete) {
-    if (back.winner) backPts[back.winner] = nassau.back;
-    else { backPts.A = nassau.back / 2; backPts.B = nassau.back / 2; }
-  }
-  if (overall.complete) {
-    if (overall.winner) overallPts[overall.winner] = nassau.overall;
-    else { overallPts.A = nassau.overall / 2; overallPts.B = nassau.overall / 2; }
-  }
-
-  // Double dot: auto double on holes 16-18
-  if (format === "double_dot") {
-    const lastHoles = holeResults.slice(15, 18);
-    const dd = calcNassauSegment(lastHoles);
-    // extra point for winning 16-18 segment
-    if (dd.complete) {
-      if (dd.winner) overallPts[dd.winner] = (overallPts[dd.winner] || 0) + 1;
-    }
-  }
-
-  // Current match status string for display
-  const playedHoles = holeResults.filter(r => r.played);
-  const aUp = overall.aWins - overall.bWins;
-  let status = "AS";
-  if (playedHoles.length > 0) {
-    if (aUp > 0) status = `${aUp}UP (A)`;
-    else if (aUp < 0) status = `${Math.abs(aUp)}UP (B)`;
-    else status = "AS";
-  }
-
-  return {
-    holes: holeResults,
-    front, back, overall,
-    frontPts, backPts, overallPts,
-    status,
-    holesPlayed: playedHoles.length,
-    totalPts: {
-      A: (frontPts.A || 0) + (backPts.A || 0) + (overallPts.A || 0),
-      B: (frontPts.B || 0) + (backPts.B || 0) + (overallPts.B || 0),
-    }
-  };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PRACTICE / TEST EVENT MODE
-// ─────────────────────────────────────────────────────────────────────────────
-// Self-contained "practice round" feature — separate from main tournament data.
-// 8 players → 4 teams of 2 → 2 head-to-head Team Total match-play matches.
-//
-// Storage:
-//   bc_practice_event   — single doc { id: 'current', course_id, hcp_mode,
-//                         hcp_overrides, teams: [{id,name,p1,p2}],
-//                         matches: [{id,team1,team2}] }
-//   bc_practice_scores  — { id, player_id, hole_number (1-18), score }
-//   bc_practice_ctp     — { id, hole, player_id }
-// (Skins are auto-computed from scores, no Firestore needed.)
-
-// 4 shades of green for the practice mode teams. All within the Mash Brothers
-// identity. Avoiding teal (cyan-leaning greens) — every accent here reads as
-// a true green. Differentiated by hue lean (yellow/pure/cool) AND by
-// lightness so the four teams are easy to tell apart at a glance even
-// when shown next to each other in a list.
-//
-// Team 1 = the actual Mash Brothers brand color, deliberately. Anchors the
-// palette and keeps the tournament identity present even in practice events.
-const PRACTICE_TEAM_COLORS = [
-  { color: "#004d24", accent: "#009144", glow: "rgba(0,145,68,0.2)" },     // brand green (Mash Brothers)
-  { color: "#3a5b08", accent: "#65a30d", glow: "rgba(101,163,13,0.2)" },   // lime / chartreuse (yellow-green)
-  { color: "#054a35", accent: "#15803d", glow: "rgba(21,128,61,0.2)" },    // forest (deep, darker than brand)
-  { color: "#3f4a2a", accent: "#7a9d4e", glow: "rgba(122,157,78,0.2)" },   // sage (muted, lighter, dustier)
-];
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Team Total match-play calculation (18 holes)
-// ─────────────────────────────────────────────────────────────────────────────
-// Per hole: sum each team's net scores. Lower combined net wins the hole.
-// Walk all 18; track running cumulative (T1 holes − T2 holes).
-// matchResultText: "AS" | "1UP" | "5&4" | "3&2"
-// Returns a thru count so the leaderboard knows how far along the match is.
-function computePracticeMatch({ match, scores, course, players, hcpOverrides, hcpMode, teeName }) {
-  const empty = { holes: Array(18).fill({ result: null, n1: null, n2: null }), running: Array(18).fill(0), thru: 0, matchResultText: "—", winnerTeamId: null, clinched: false, endHole: 17, holesWon1: 0, holesWon2: 0, dormie: false };
-  if (!course || !match) return empty;
-
-  const holePars = course.hole_pars || Array(18).fill(4);
-  const holeHcps = course.hole_handicaps || Array(18).fill(9);
-
-  const t1Pids = [match.team1.player1, match.team1.player2].filter(Boolean);
-  const t2Pids = [match.team2.player1, match.team2.player2].filter(Boolean);
-  const allPids = [...t1Pids, ...t2Pids];
-  if (allPids.length < 4) return empty;
-
-  // HI lookup with per-event override support
-  const getHI = (pid) => {
-    if (hcpOverrides && hcpOverrides[pid] !== undefined && hcpOverrides[pid] !== "") {
-      return parseFloat(hcpOverrides[pid]) || 0;
-    }
-    const tp = players.find(t => t.player_id === pid);
-    return parseFloat(tp?.handicap_index) || 0;
-  };
-  const getCH = (pid) => calcCHForCourse(getHI(pid), course, teeName);
-
-  // Low-man adjustment: low CH plays scratch, others get diff
-  const allCHs = allPids.map(getCH);
-  const minCH = Math.min(...allCHs);
-  const adjustedCH = (pid) => hcpMode === "full" ? getCH(pid) : (getCH(pid) - minCH);
-
-  // Stroke map across 18 holes (allocates strokes to lowest-hcp holes first)
-  const buildStrokeMap = (ch) => {
-    const sorted = holeHcps.map((h, i) => ({ idx: i, hcp: h })).sort((a, b) => a.hcp - b.hcp);
-    const map = {};
-    let rem = Math.abs(ch);
-    for (let pass = 0; pass < 3 && rem > 0; pass++) {
-      for (const h of sorted) { if (rem <= 0) break; map[h.idx] = (map[h.idx] || 0) + 1; rem--; }
-    }
-    return map;
-  };
-  const strokeMaps = {};
-  allPids.forEach(pid => { strokeMaps[pid] = buildStrokeMap(adjustedCH(pid)); });
-
-  // Per-hole combined team net
-  const holes = [];
-  for (let h = 0; h < 18; h++) {
-    let n1 = 0, n2 = 0, ok1 = true, ok2 = true;
-    for (const pid of t1Pids) {
-      const raw = scores[`${pid}_${h}`];
-      if (raw == null || raw === 0) { ok1 = false; }
-      else { n1 += raw - (strokeMaps[pid][h] || 0); }
-    }
-    for (const pid of t2Pids) {
-      const raw = scores[`${pid}_${h}`];
-      if (raw == null || raw === 0) { ok2 = false; }
-      else { n2 += raw - (strokeMaps[pid][h] || 0); }
-    }
-    let result = null;
-    if (ok1 && ok2) {
-      if (n1 < n2) result = 1;
-      else if (n2 < n1) result = -1;
-      else result = 0;
-    }
-    holes.push({ result, n1: ok1 ? n1 : null, n2: ok2 ? n2 : null });
-  }
-
-  // Running cumulative; null holes don't change cumulative
-  const running = [];
-  let cum = 0;
-  holes.forEach(hole => {
-    if (hole.result !== null) cum += hole.result;
-    running.push(cum);
-  });
-
-  // Find clinch hole (lead > remaining holes). Only valid BEFORE hole 18 — if
-  // a match goes all 18 it's a "XUP" finish, not a clinched "X&0".
-  let endHole = 17;
-  let margin = Math.abs(running[17]);
-  let clinched = false;
-  for (let h = 0; h < 18; h++) {
-    if (holes[h].result === null) continue;  // can't clinch on unscored hole
-    const lead = Math.abs(running[h]);
-    const remaining = 17 - h;
-    if (remaining > 0 && lead > remaining) { endHole = h; margin = lead; clinched = true; break; }
-  }
-
-  // Last completed hole
-  let lastCompleted = -1;
-  for (let h = 17; h >= 0; h--) {
-    if (holes[h].result !== null) { lastCompleted = h; break; }
-  }
-  const thru = lastCompleted + 1;
-
-  let matchResultText = "—";
-  let winnerTeamId = null;
-  if (lastCompleted < 0) {
-    matchResultText = "—";
-  } else if (clinched) {
-    const remaining = 17 - endHole;
-    matchResultText = `${margin}&${remaining}`;
-    winnerTeamId = running[endHole] > 0 ? match.team1.id : match.team2.id;
-  } else if (lastCompleted === 17) {
-    const final = running[17];
-    if (final === 0) matchResultText = "AS";
-    else { matchResultText = `${Math.abs(final)}UP`; winnerTeamId = final > 0 ? match.team1.id : match.team2.id; }
-  } else {
-    // In progress
-    const cur = running[lastCompleted];
-    const remaining = 17 - lastCompleted;
-    if (cur === 0) matchResultText = "AS";
-    else if (Math.abs(cur) === remaining) matchResultText = `${Math.abs(cur)}UP (Dormie)`;
-    else matchResultText = `${Math.abs(cur)}UP`;
-  }
-
-  const dormie = !clinched && lastCompleted >= 0 && lastCompleted < 17 && Math.abs(running[lastCompleted]) === (17 - lastCompleted);
-
-  return {
-    holes,
-    running,
-    thru,
-    matchResultText,
-    winnerTeamId,
-    clinched,
-    endHole,
-    holesWon1: holes.filter(h => h.result === 1).length,
-    holesWon2: holes.filter(h => h.result === -1).length,
-    dormie,
-  };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Skins — auto-computed from scores (gross + net)
-// ─────────────────────────────────────────────────────────────────────────────
-// For each hole: lowest gross unique → gross skin; lowest net unique → net skin.
-// Tie = no skin on that hole. Returns { gross: {h: pid|null}, net: {h: pid|null} }.
-function computePracticeSkins({ scores, players, course, hcpOverrides, teeName }) {
-  const result = { gross: {}, net: {}, strokeMaps: {} };
-  if (!course || !players.length) return result;
-
-  const holeHcps = course.hole_handicaps || Array(18).fill(9);
-  const getHI = (pid) => {
-    if (hcpOverrides && hcpOverrides[pid] !== undefined && hcpOverrides[pid] !== "") {
-      return parseFloat(hcpOverrides[pid]) || 0;
-    }
-    const tp = players.find(t => t.player_id === pid);
-    return parseFloat(tp?.handicap_index) || 0;
-  };
-  const getCH = (pid) => calcCHForCourse(getHI(pid), course, teeName);
-
-  // Each player gets their FULL course handicap for skins (not low-man adjusted —
-  // skins are an individual side game, not match play). Standard practice.
-  const buildStrokeMap = (ch) => {
-    const sorted = holeHcps.map((h, i) => ({ idx: i, hcp: h })).sort((a, b) => a.hcp - b.hcp);
-    const map = {};
-    let rem = Math.abs(ch);
-    for (let pass = 0; pass < 3 && rem > 0; pass++) {
-      for (const h of sorted) { if (rem <= 0) break; map[h.idx] = (map[h.idx] || 0) + 1; rem--; }
-    }
-    return map;
-  };
-  const strokeMaps = {};
-  players.forEach(p => { strokeMaps[p.player_id] = buildStrokeMap(getCH(p.player_id)); });
-
-  for (let h = 0; h < 18; h++) {
-    const grossEntries = [];
-    const netEntries = [];
-    for (const p of players) {
-      const raw = scores[`${p.player_id}_${h}`];
-      if (raw == null || raw === 0) continue;
-      grossEntries.push({ pid: p.player_id, score: raw });
-      netEntries.push({ pid: p.player_id, score: raw - (strokeMaps[p.player_id][h] || 0) });
-    }
-    if (grossEntries.length < 2) { result.gross[h] = null; result.net[h] = null; continue; }
-
-    // Gross skin
-    grossEntries.sort((a, b) => a.score - b.score);
-    if (grossEntries[0].score < grossEntries[1].score) result.gross[h] = grossEntries[0].pid;
-    else result.gross[h] = null;
-
-    // Net skin
-    netEntries.sort((a, b) => a.score - b.score);
-    if (netEntries[0].score < netEntries[1].score) result.net[h] = netEntries[0].pid;
-    else result.net[h] = null;
-  }
-  // Expose the per-player stroke maps so the UI can render stroke
-  // dots and net scores per hole. The maps are already computed for
-  // skin determination; surfacing them avoids re-computing the same
-  // thing in the betting view.
-  result.strokeMaps = strokeMaps;
-  return result;
-}
-
 
 // ── Notification Toast ──
 function Notif({ notif }) {
@@ -736,7 +103,6 @@ function Notif({ notif }) {
 }
 
 // ── Login Screen ──
-const DIRECTOR_CODE = "bcdir2025";
 function LoginScreen({ players, onLogin, teamNames, darkMode }) {
   const [search, setSearch] = useState("");
 
@@ -833,7 +199,7 @@ function LoginScreen({ players, onLogin, teamNames, darkMode }) {
 // player names, score-status pill in the middle with the green leader
 // triangle, and a two-row hole-by-hole tracker with diagonal-tied-hole
 // splits. Tap a card to expand the full scorecard.
-function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds, teamNames, hcpOverrides }) {
+function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds, teamNames, hcpOverrides, teeAssignments }) {
   const [expandedMatch, setExpandedMatch] = useState(null);
   const [activeRound, setActiveRound] = useState(null); // null = show all rounds
 
@@ -846,10 +212,10 @@ function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds
   const matchResults = useMemo(() => {
     return matches.map(m => {
       const fmt = tRounds.find(t => t.round_number === m.round)?.format || "singles";
-      const res = computeMatchResult(m, holeData, courses, tRounds, tPlayers, fmt, hcpOverrides);
+      const res = computeMatchResult(m, holeData, courses, tRounds, tPlayers, fmt, hcpOverrides, undefined, teeAssignments);
       return { match: m, result: res, format: fmt };
     });
-  }, [matches, holeData, courses, tRounds, tPlayers, hcpOverrides]);
+  }, [matches, holeData, courses, tRounds, tPlayers, hcpOverrides, teeAssignments]);
 
   // Tournament totals — Nassau points summed across all matches and rounds.
   const tourneyTotals = useMemo(() => {
@@ -1170,7 +536,7 @@ function MatchScorecard({ match, result, format, courses, tRounds }) {
 // uses computeMatchResult/calcCHForCourse — but the visual presentation now
 // matches the rest of the app. Round selector at the top supports the multi-
 // round structure that the original Mash sub-app didn't have.
-function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teamNames, hcpOverrides }) {
+function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teamNames, hcpOverrides, teeAssignments }) {
   const userPid = user.player_id;
   const myMatches = matches.filter(m => [...m.teamA, ...m.teamB].includes(userPid));
 
@@ -1186,7 +552,10 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   const tr = match ? tRounds.find(t => t.round_number === match.round) : null;
   const course = tr ? courses.find(c => c.id === tr.course_id) : null;
   const format = tr?.format || "singles";
-  const teeName = tr?.tee_box;
+  // Per-round default tee — used as a per-player fallback in stroke maps
+  // below. Per-player assignments from `teeAssignments[round][pid]` take
+  // precedence; this is the "everyone is on the same tee" default.
+  const roundTee = tr?.tee_box;
   const holePars = course?.hole_pars || Array(18).fill(4);
   const holeHcps = course?.hole_handicaps || Array(18).fill(9);
   const par = holePars[activeHole];
@@ -1195,8 +564,8 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   const matchPids = match ? [...match.teamA, ...match.teamB] : [];
 
   const result = useMemo(
-    () => match ? computeMatchResult(match, holeData, courses, tRounds, tPlayers, format, hcpOverrides) : null,
-    [match, holeData, courses, tRounds, tPlayers, format, hcpOverrides]
+    () => match ? computeMatchResult(match, holeData, courses, tRounds, tPlayers, format, hcpOverrides, undefined, teeAssignments) : null,
+    [match, holeData, courses, tRounds, tPlayers, format, hcpOverrides, teeAssignments]
   );
 
   // Read a player's gross score for the active hole. holeData is keyed
@@ -1206,40 +575,31 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     return (holeData[`${pid}_${match.round}`] || {})[h] || 0;
   };
 
-  // Per-player stroke maps for this match. Computed once via useMemo
-  // since the inputs change rarely. Mirrors the allocation logic
-  // computeMatchResult uses internally so the dots shown on the
-  // scoring screen match the strokes used in the leaderboard math.
+  // Per-player stroke maps for this match. Mirrors computeMatchResult's
+  // internal allocation EXACTLY (same shared helpers, same per-player tee
+  // resolution) so the dots shown on the scoring screen always match the
+  // strokes used in the leaderboard math.
   const strokeMaps = useMemo(() => {
     const maps = {};
     if (!match || !course) return maps;
     const holeHcpsLocal = course.hole_handicaps || Array(18).fill(9);
-    const getPlayerHI = (pid) => {
-      const ro = hcpOverrides?.[match.round] || {};
-      if (ro[pid] !== undefined && ro[pid] !== "") return parseFloat(ro[pid]) || 0;
-      const tp = tPlayers.find(t => t.player_id === pid);
-      return parseFloat(tp?.handicap_index) || 0;
-    };
-    const getCH = (pid) => calcCHForCourse(getPlayerHI(pid), course, teeName);
+    const roundOverrides = hcpOverrides?.[match.round] || {};
+    const roundTees = teeAssignments?.[match.round] || {};
+    const getCH = (pid) => calcCHForCourse(
+      getEffectiveHI(pid, tPlayers, roundOverrides),
+      course,
+      roundTees[pid] || roundTee
+    );
     const allCHs = matchPids.map(getCH);
     const minCH = allCHs.length ? Math.min(...allCHs) : 0;
     const roundHandicapMode = tr?.handicap_mode || (match.round === 4 ? "full" : "low_man");
-    const buildMap = (ch) => {
-      const sorted = holeHcpsLocal.map((h, i) => ({ idx: i, hcp: h })).sort((a, b) => a.hcp - b.hcp);
-      const map = {};
-      let rem = Math.abs(ch);
-      for (let pass = 0; pass < 3 && rem > 0; pass++) {
-        for (const h of sorted) { if (rem <= 0) break; map[h.idx] = (map[h.idx] || 0) + 1; rem--; }
-      }
-      return map;
-    };
     matchPids.forEach(pid => {
       const ch = getCH(pid);
       const adj = roundHandicapMode === "full" ? ch : ch - minCH;
-      maps[pid] = buildMap(adj);
+      maps[pid] = buildStrokeMap(adj, holeHcpsLocal);
     });
     return maps;
-  }, [match, course, tPlayers, hcpOverrides, teeName, tr, matchPids.join(",")]);
+  }, [match, course, tPlayers, hcpOverrides, teeAssignments, roundTee, tr, matchPids.join(",")]);
 
   // ── Auto-advance state derivations ──
   const holeComplete = matchPids.length > 0 && matchPids.every(pid => getScore(pid, activeHole) > 0);
@@ -1487,13 +847,11 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           const tc = team === "A" ? tA : tB;
           const cur = getScore(pid, activeHole);
           const strokes = strokeMaps[pid]?.[activeHole] || 0;
-          // CH for display
-          const hi = (() => {
-            const ro = hcpOverrides?.[match.round] || {};
-            if (ro[pid] !== undefined && ro[pid] !== "") return parseFloat(ro[pid]) || 0;
-            return parseFloat(tp?.handicap_index) || 0;
-          })();
-          const ch = calcCHForCourse(hi, course, teeName);
+          // CH for display — per-player tee assignment overrides round default,
+          // matching the strokeMaps memo above and computeMatchResult.
+          const hi = getEffectiveHI(pid, tPlayers, hcpOverrides?.[match.round] || {});
+          const playerTee = (teeAssignments?.[match.round] || {})[pid] || roundTee;
+          const ch = calcCHForCourse(hi, course, playerTee);
           // Running net to par for this player thru holes scored
           let netToPar = 0, thru = 0;
           for (let h = 0; h < 18; h++) {
@@ -1774,14 +1132,21 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   const [swipePid, setSwipePid] = useState(null);
   const [swipeX, setSwipeX] = useState(0);
   const swipeStartX = useRef(null);
-  const [teeAssignments, setTeeAssignments] = useState({}); // { round: { pid: teeName } } // { pid_context: delta } — auto-clears after 3.5s
+  const [teeAssignments, setTeeAssignments] = useState({}); // { round: { pid: teeName } }
 
   const showChDelta = (key, delta) => {
     if (!delta) return;
     setChDeltas(prev => ({ ...prev, [key]: delta }));
     setTimeout(() => setChDeltas(prev => { const n = {...prev}; delete n[key]; return n; }), 3500);
-  }; // { round: { pid: value } }
+  };
+  // Hydrate from Firestore once the parent's subscriptions resolve. Without
+  // these effects, the local state starts empty and a director opening the
+  // Admin tab would see "no overrides set" / "no tees assigned" for rounds
+  // that actually have data — and any save would overwrite the real values
+  // with the empty form state. Stringify-deps is a structural-equality
+  // shortcut: cheap because these maps stay small.
   useEffect(() => { if (hcpOverridesFromDb) setHcpOverrides(hcpOverridesFromDb); }, [JSON.stringify(hcpOverridesFromDb)]);
+  useEffect(() => { if (teeAssignmentsFromDb) setTeeAssignments(teeAssignmentsFromDb); }, [JSON.stringify(teeAssignmentsFromDb)]);
   const [nassau, setNassau] = useState(NASSAU_DEFAULT);
 
   // Match builder
@@ -2935,7 +2300,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
 }
 
 // ── Analytics View ──
-function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historicalData, user }) {
+function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historicalData, user, hcpOverrides, teeAssignments }) {
   const [analyticsTab, setAnalyticsTab] = useState("current");
 
   // Compute current year player stats from match results
@@ -2945,7 +2310,7 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
 
     matches.forEach(m => {
       const fmt = tRounds.find(t => t.round_number === m.round)?.format || "singles";
-      const res = computeMatchResult(m, holeData, courses, tRounds, tPlayers, fmt, {});
+      const res = computeMatchResult(m, holeData, courses, tRounds, tPlayers, fmt, hcpOverrides || {}, undefined, teeAssignments);
       const aTotal = res.totalPts.A, bTotal = res.totalPts.B;
       [...m.teamA].forEach(pid => {
         if (!stats[pid]) return;
@@ -2963,7 +2328,7 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
       });
     });
     return Object.values(stats).sort((a, b) => b.pts - a.pts);
-  }, [tPlayers, matches, holeData, tRounds, courses]);
+  }, [tPlayers, matches, holeData, tRounds, courses, hcpOverrides, teeAssignments]);
 
   return (
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
@@ -3766,25 +3131,16 @@ function PracticeView({ user, tPlayers, courses, notify }) {
     if (!match || !course || !event) return maps;
     const allPids = [match.team1.player1, match.team1.player2, match.team2.player1, match.team2.player2].filter(Boolean);
     const holeHcps = course.hole_handicaps || Array(18).fill(9);
-    const getHI = (pid) => {
-      if (event.hcp_overrides?.[pid] !== undefined && event.hcp_overrides[pid] !== "") return parseFloat(event.hcp_overrides[pid]) || 0;
-      const tp = tPlayers.find(p => p.player_id === pid);
-      return parseFloat(tp?.handicap_index) || 0;
-    };
-    const getCH = (pid) => calcCHForCourse(getHI(pid), course, event.tee_box);
+    const overrides = event.hcp_overrides || {};
+    const getCH = (pid) => calcCHForCourse(
+      getEffectiveHI(pid, tPlayers, overrides),
+      course,
+      event.tee_box
+    );
     const allCHs = allPids.map(getCH);
     const minCH = allCHs.length ? Math.min(...allCHs) : 0;
     const adjCH = (pid) => event.hcp_mode === "full" ? getCH(pid) : (getCH(pid) - minCH);
-    const buildMap = (ch) => {
-      const sorted = holeHcps.map((h, i) => ({ idx: i, hcp: h })).sort((a, b) => a.hcp - b.hcp);
-      const map = {};
-      let rem = Math.abs(ch);
-      for (let pass = 0; pass < 3 && rem > 0; pass++) {
-        for (const h of sorted) { if (rem <= 0) break; map[h.idx] = (map[h.idx] || 0) + 1; rem--; }
-      }
-      return map;
-    };
-    allPids.forEach(pid => { maps[pid] = buildMap(adjCH(pid)); });
+    allPids.forEach(pid => { maps[pid] = buildStrokeMap(adjCH(pid), holeHcps); });
     return maps;
   };
 
@@ -5186,7 +4542,7 @@ export default function App() {
   // job is to trigger a top-level re-render so children re-read fresh BC
   // values inline. Initial value comes from localStorage so the saved
   // preference survives reloads.
-  const [darkMode, setDarkMode] = useState(_bcSavedMode === "dark");
+  const [darkMode, setDarkMode] = useState(initialBCMode === "dark");
   const toggleTheme = useCallback(() => {
     const newMode = darkMode ? "light" : "dark";
     try { localStorage.setItem("bc_theme", newMode); } catch {}
@@ -5209,10 +4565,15 @@ export default function App() {
     }
   }, [darkMode]);
 
-  // Keep TEAM_A/TEAM_B module vars in sync with state
+  // Keep TEAM_A/TEAM_B module vars in sync with state. Property-level
+  // mutation (not rebind) — TEAM_A/TEAM_B come from the constants module
+  // as imported bindings, and those bindings are read-only. Mutating a
+  // property of the underlying object is allowed and propagates to every
+  // consumer because they all hold the same object reference. Same
+  // pattern as `BC` in theme.js.
   useEffect(() => {
-    TEAM_A = { ...TEAM_A, name: teamNames.A };
-    TEAM_B = { ...TEAM_B, name: teamNames.B };
+    TEAM_A.name = teamNames.A;
+    TEAM_B.name = teamNames.B;
   }, [teamNames]);
   const [tPlayers, setTPlayers] = useState([]);
   const [tRounds, setTRounds] = useState([]);
@@ -5659,6 +5020,7 @@ export default function App() {
             rounds={availableRounds.length ? availableRounds : [1,2,3,4]}
             teamNames={teamNames}
             hcpOverrides={hcpOverridesData}
+            teeAssignments={teeAssignmentsData}
           />
         )}
         {view === "scoring" && (
@@ -5673,6 +5035,7 @@ export default function App() {
             notify={notify}
             teamNames={teamNames}
             hcpOverrides={hcpOverridesData}
+            teeAssignments={teeAssignmentsData}
           />
         )}
         {view === "groups" && (
@@ -5734,6 +5097,7 @@ export default function App() {
           <AnalyticsView
             tPlayers={tPlayers} matches={enrichedMatches} holeData={holeData}
             tRounds={enrichedRounds} courses={courses} historicalData={historicalData} user={user}
+            hcpOverrides={hcpOverridesData} teeAssignments={teeAssignmentsData}
           />
         )}
         {view === "practice" && (
@@ -5762,6 +5126,8 @@ export default function App() {
               setTeamNames(names);
               await db.upsert("bc_settings", { id: "team_names", tournament_id: TOURNAMENT_ID, teamA: names.A, teamB: names.B });
             }}
+            hcpOverridesFromDb={hcpOverridesData}
+            teeAssignmentsFromDb={teeAssignmentsData}
             notify={notify}
           />
         )}
