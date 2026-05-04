@@ -4,7 +4,7 @@ import { db, auth, TOURNAMENT_ID } from "./firebase";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
   TEAM_A, TEAM_B, getTeam, oppTeam,
-  FORMATS, NASSAU_DEFAULT, PRACTICE_TEAM_COLORS, DIRECTOR_CODE,
+  FORMATS, NASSAU_DEFAULT, PRACTICE_TEAM_COLORS,
   POINT_METHOD_NASSAU, POINT_METHOD_TRADITIONAL, traditionalDefaultFor,
 } from "./constants";
 import {
@@ -104,18 +104,7 @@ function Notif({ notif }) {
 }
 
 // ── Login Screen ──
-function LoginScreen({ players, onPlayerClick, onBootstrapDirector, teamNames, darkMode, loginError, onClearError, firebaseUser, onSwitchAccount }) {
-  const [search, setSearch] = useState("");
-
-  // DIRECTOR_CODE bootstrap — typed into the search box, no auth required.
-  // Kept as a backup path so a director can always get in (e.g., if their
-  // email isn't yet registered, or the auth provider is misconfigured).
-  useEffect(() => {
-    if (search === DIRECTOR_CODE) {
-      onBootstrapDirector();
-    }
-  }, [search]);
-
+function LoginScreen({ players, onPlayerClick, teamNames, darkMode, loginError, onClearError, firebaseUser, onSwitchAccount }) {
   // Mash Brothers has TWO logo variants — one designed to be displayed
   // on a black background (the original, with the green flag/white
   // type), and one designed for a white/light background. Picking the
@@ -185,7 +174,7 @@ function LoginScreen({ players, onPlayerClick, onBootstrapDirector, teamNames, d
 
       {players.length === 0 && (
         <div style={{ textAlign: "center", color: BC.t3, padding: 16, fontSize: 12, position: "relative", zIndex: 1, marginTop: 12 }}>
-          No players yet. Type <span style={{ color: BC.amber, fontWeight: 700 }}>bcdir2025</span> below to set up.
+          No players have been added yet.
         </div>
       )}
 
@@ -223,21 +212,6 @@ function LoginScreen({ players, onPlayerClick, onBootstrapDirector, teamNames, d
           </button>
         </div>
       )}
-
-      {/* Director-code backup input — kept subtle so it doesn't compete
-          with the main player-list flow. Used when the director's email
-          isn't registered yet, or as an escape hatch during setup. */}
-      <input
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-        placeholder="Director code"
-        style={{
-          marginTop: 16, padding: "6px 10px", width: 140,
-          background: "transparent", border: `1px solid ${BC.bdr}`, borderRadius: 6,
-          color: BC.t3, fontSize: 11, textAlign: "center", outline: "none",
-          position: "relative", zIndex: 1,
-        }}
-      />
       </div>
     </div>
   );
@@ -296,15 +270,15 @@ function LoginModal({ player, onClose, onError, error }) {
   const handleGoogle = async () => {
     setMode("loading");
     try {
-      const u = await auth.signInWithGoogle();
-      if (u) {
-        // Popup path completed in-page. Auth-state listener in App
-        // handles the rest; modal closes when LoginScreen unmounts.
-        onClose();
-      }
-      // If u is undefined, redirect path was engaged — the page is
-      // about to navigate away. Stay in "loading" so the modal doesn't
-      // flash back to the choose state before the redirect fires.
+      await auth.signInWithGoogle();
+      // Stay in "loading" — the auth-state listener fires asynchronously,
+      // the resolver runs, self-binds (or matches), and sets user.
+      // When user is set, the parent's `if (!user)` guard stops rendering
+      // LoginScreen, which unmounts this modal. Calling onClose here would
+      // clear pendingPlayer before the resolver can use it for self-binding,
+      // and the user would land back on the player-selection screen.
+      // The redirect-fallback path returns undefined and is about to navigate
+      // away anyway — same "stay in loading" behavior is correct.
     } catch (e) {
       setMode("choose");
       onError(authErrorMessage(e));
@@ -326,12 +300,19 @@ function LoginModal({ player, onClose, onError, error }) {
     }
   };
 
+  // Backdrop is only dismissable when the user hasn't initiated an
+  // in-flight auth step. Once they hit Send (email-sent) or kick off
+  // Google sign-in (loading), accidental backdrop taps would lose
+  // pendingPlayer and break the bind on return.
+  const canDismissByBackdrop = mode === "choose" || mode === "email-form";
+
   return (
     <>
       {/* Backdrop */}
-      <div onClick={onClose} style={{
+      <div onClick={canDismissByBackdrop ? onClose : undefined} style={{
         position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)",
         zIndex: 300, backdropFilter: "blur(2px)",
+        cursor: canDismissByBackdrop ? "pointer" : "default",
       }} />
       {/* Modal card */}
       <div style={{
@@ -430,11 +411,16 @@ function LoginModal({ player, onClose, onError, error }) {
             <div style={{ fontSize: 12, color: BC.t3, lineHeight: 1.5, marginBottom: 14 }}>
               We sent a sign-in link to <span style={{ color: BC.t1, fontWeight: 600 }}>{email}</span>. Click the link to finish signing in.
             </div>
-            <button onClick={onClose} style={{
-              padding: "9px 18px", borderRadius: 10, border: `1px solid ${BC.bdr}`,
-              background: "transparent", color: BC.t2, fontSize: 12, cursor: "pointer",
+            {/* No "Close" button here on purpose — closing the modal would
+                clear pendingPlayer, and the link-return self-bind would
+                have nothing to bind to. The modal stays up until the
+                user clicks the link (auth completes, modal unmounts) or
+                they decide to retry with a different email. */}
+            <button onClick={() => setMode("email-form")} style={{
+              padding: "8px 14px", borderRadius: 10, border: "none",
+              background: "transparent", color: BC.t3, fontSize: 12, cursor: "pointer",
             }}>
-              Close
+              ← Use a different email
             </button>
           </div>
         )}
@@ -5045,10 +5031,7 @@ export default function App() {
   //       → refuse cross-claim, surface error, clear pendingPlayer so
   //       they can try a different name. firebaseUser is intentionally
   //       NOT cleared — the user can still claim an unbound slot.
-  //
-  // Bootstrap-director sessions (synthetic player_id) skip the resolver.
   useEffect(() => {
-    if (user?.player_id === "bootstrap_director") return;
     if (!firebaseUser) {
       if (user) setUser(null);
       return;
@@ -5425,7 +5408,6 @@ export default function App() {
         firebaseUser={firebaseUser}
         onClearError={() => setLoginError(null)}
         onPlayerClick={p => setPendingPlayer(p)}
-        onBootstrapDirector={() => setUser({ player_id: "bootstrap_director", name: "Director (Setup)", team: null, isDirector: true })}
         onSwitchAccount={async () => { setLoginError(null); await auth.signOut(); }}
       />
       {pendingPlayer && (
