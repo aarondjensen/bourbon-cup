@@ -1,0 +1,413 @@
+year,round,format,player,opponent,team,after9,final,margin,won,halved,involves_ghost,opponent_absent,trajectory
+2016,1,2man_best_ball,Ryan M,Tim C + Dave K,SHOOTERS,3,8,8,1,0,0,0,1 0 0 0 1 2 2 2 3 4 4 5 6 6 5 6 7 8
+2016,1,2man_best_ball,Jim H,Tim C + Dave K,SHOOTERS,3,8,8,1,0,0,0,1 0 0 0 1 2 2 2 3 4 4 5 6 6 5 6 7 8
+2016,1,2man_best_ball,Tim C,Ryan M + Jim H,BIRDS,-3,-8,8,0,0,0,0,-1 0 0 0 -1 -2 -2 -2 -3 -4 -4 -5 -6 -6 -5 -6 -7 -8
+2016,1,2man_best_ball,Dave K,Ryan M + Jim H,BIRDS,-3,-8,8,0,0,0,0,-1 0 0 0 -1 -2 -2 -2 -3 -4 -4 -5 -6 -6 -5 -6 -7 -8
+2016,1,2man_best_ball,Andy H,Ben T + Dave B,SHOOTERS,-4,-2,2,0,0,0,0,-1 -1 -2 -3 -3 -3 -2 -3 -4 -4 -3 -4 -4 -4 -4 -3 -3 -2
+2016,1,2man_best_ball,TJSC,Ben T + Dave B,SHOOTERS,-4,-2,2,0,0,0,0,-1 -1 -2 -3 -3 -3 -2 -3 -4 -4 -3 -4 -4 -4 -4 -3 -3 -2
+2016,1,2man_best_ball,Ben T,Andy H + TJSC,BIRDS,4,2,2,1,0,0,0,1 1 2 3 3 3 2 3 4 4 3 4 4 4 4 3 3 2
+2016,1,2man_best_ball,Dave B,Andy H + TJSC,BIRDS,4,2,2,1,0,0,0,1 1 2 3 3 3 2 3 4 4 3 4 4 4 4 3 3 2
+2016,1,2man_best_ball,John S,Adam P + Joe O,SHOOTERS,-3,1,1,1,0,0,0,-1 -1 -2 -3 -2 -2 -2 -2 -3 -2 -3 -2 -1 0 0 1 2 1
+2016,1,2man_best_ball,Kevin J,Adam P + Joe O,SHOOTERS,-3,1,1,1,0,0,0,-1 -1 -2 -3 -2 -2 -2 -2 -3 -2 -3 -2 -1 0 0 1 2 1
+2016,1,2man_best_ball,Adam P,John S + Kevin J,BIRDS,3,-1,1,0,0,0,0,1 1 2 3 2 2 2 2 3 2 3 2 1 0 0 -1 -2 -1
+2016,1,2man_best_ball,Joe O,John S + Kevin J,BIRDS,3,-1,1,0,0,0,0,1 1 2 3 2 2 2 2 3 2 3 2 1 0 0 -1 -2 -1
+2016,1,2man_best_ball,Ryan M,Paul W + Paul S,SHOOTERS,5,5,5,1,0,0,0,1 0 1 2 3 4 5 4 5 6 5 5 6 5 4 5 5 5
+2016,1,2man_best_ball,Pete C,Paul W + Paul S,SHOOTERS,5,5,5,1,0,0,0,1 0 1 2 3 4 5 4 5 6 5 5 6 5 4 5 5 5
+2016,1,2man_best_ball,Paul W,Ryan M + Pete C,BIRDS,-5,-5,5,0,0,0,0,-1 0 -1 -2 -3 -4 -5 -4 -5 -6 -5 -5 -6 -5 -4 -5 -5 -5
+2016,1,2man_best_ball,Paul S,Ryan M + Pete C,BIRDS,-5,-5,5,0,0,0,0,-1 0 -1 -2 -3 -4 -5 -4 -5 -6 -5 -5 -6 -5 -4 -5 -5 -5
+2016,2,2man_hi_lo,Andy H,Tim C + Paul W,SHOOTERS,-1,-3,3,0,0,0,0,-1 0 -1 1 1 0 -1 -2 -1 0 -2 -2 -4 -3 -1 -2 -2 -3
+2016,2,2man_hi_lo,Ryan M,Tim C + Paul W,SHOOTERS,-1,-3,3,0,0,0,0,-1 0 -1 1 1 0 -1 -2 -1 0 -2 -2 -4 -3 -1 -2 -2 -3
+2016,2,2man_hi_lo,Tim C,Andy H + Ryan M,BIRDS,1,3,3,1,0,0,0,1 0 1 -1 -1 0 1 2 1 0 2 2 4 3 1 2 2 3
+2016,2,2man_hi_lo,Paul W,Andy H + Ryan M,BIRDS,1,3,3,1,0,0,0,1 0 1 -1 -1 0 1 2 1 0 2 2 4 3 1 2 2 3
+2016,2,2man_hi_lo,TJSC,Adam P + Paul S,SHOOTERS,2,-3,3,0,0,0,0,1 2 4 2 2 3 3 1 2 1 -1 1 2 0 0 -1 -1 -3
+2016,2,2man_hi_lo,Jim H,Adam P + Paul S,SHOOTERS,2,-3,3,0,0,0,0,1 2 4 2 2 3 3 1 2 1 -1 1 2 0 0 -1 -1 -3
+2016,2,2man_hi_lo,Adam P,TJSC + Jim H,BIRDS,-2,3,3,1,0,0,0,-1 -2 -4 -2 -2 -3 -3 -1 -2 -1 1 -1 -2 0 0 1 1 3
+2016,2,2man_hi_lo,Paul S,TJSC + Jim H,BIRDS,-2,3,3,1,0,0,0,-1 -2 -4 -2 -2 -3 -3 -1 -2 -1 1 -1 -2 0 0 1 1 3
+2016,2,2man_hi_lo,John S,Ben T + Dave K,SHOOTERS,-2,0,0,0,1,0,0,0 0 1 -1 -1 1 -1 -1 -2 -3 -3 -1 1 0 0 0 -2 0
+2016,2,2man_hi_lo,Pete C,Ben T + Dave K,SHOOTERS,-2,0,0,0,1,0,0,0 0 1 -1 -1 1 -1 -1 -2 -3 -3 -1 1 0 0 0 -2 0
+2016,2,2man_hi_lo,Ben T,John S + Pete C,BIRDS,2,0,0,0,1,0,0,0 0 -1 1 1 -1 1 1 2 3 3 1 -1 0 0 0 2 0
+2016,2,2man_hi_lo,Dave K,John S + Pete C,BIRDS,2,0,0,0,1,0,0,0 0 -1 1 1 -1 1 1 2 3 3 1 -1 0 0 0 2 0
+2016,2,2man_hi_lo,Kevin J,Dave B + Joe O,SHOOTERS,-3,-9,9,0,0,0,0,1 -1 -3 -3 -4 -5 -5 -5 -3 -4 -4 -5 -4 -6 -8 -9 -11 -9
+2016,2,2man_hi_lo,Pete C,Dave B + Joe O,SHOOTERS,-3,-9,9,0,0,0,0,1 -1 -3 -3 -4 -5 -5 -5 -3 -4 -4 -5 -4 -6 -8 -9 -11 -9
+2016,2,2man_hi_lo,Dave B,Kevin J + Pete C,BIRDS,3,9,9,1,0,0,0,-1 1 3 3 4 5 5 5 3 4 4 5 4 6 8 9 11 9
+2016,2,2man_hi_lo,Joe O,Kevin J + Pete C,BIRDS,3,9,9,1,0,0,0,-1 1 3 3 4 5 5 5 3 4 4 5 4 6 8 9 11 9
+2016,3,singles,TJSC,Ben T,SHOOTERS,-3,-7,7,0,0,0,0,-1 -2 -1 -2 -3 -2 -2 -3 -3 -2 -2 -3 -4 -4 -5 -5 -6 -7
+2016,3,singles,Ben T,TJSC,BIRDS,3,7,7,1,0,0,0,1 2 1 2 3 2 2 3 3 2 2 3 4 4 5 5 6 7
+2016,3,singles,TJSC,Paul W,SHOOTERS,2,-2,2,0,0,0,0,0 0 0 0 0 1 2 2 2 2 2 1 1 0 -1 -1 -2 -2
+2016,3,singles,Paul W,TJSC,BIRDS,-2,2,2,1,0,0,0,0 0 0 0 0 -1 -2 -2 -2 -2 -2 -1 -1 0 1 1 2 2
+2016,3,singles,Jim H,Dave B,SHOOTERS,2,1,1,1,0,0,0,0 0 0 -1 -2 -1 0 1 2 3 2 1 0 0 0 0 0 1
+2016,3,singles,Dave B,Jim H,BIRDS,-2,-1,1,0,0,0,0,0 0 0 1 2 1 0 -1 -2 -3 -2 -1 0 0 0 0 0 -1
+2016,3,singles,Kevin J,Adam P,SHOOTERS,-2,-2,2,0,0,0,0,1 0 -1 -2 -1 -2 -2 -1 -2 -2 -2 -1 0 -1 -2 -2 -1 -2
+2016,3,singles,Adam P,Kevin J,BIRDS,2,2,2,1,0,0,0,-1 0 1 2 1 2 2 1 2 2 2 1 0 1 2 2 1 2
+2016,3,singles,Andy H,Dave K,SHOOTERS,1,1,1,1,0,0,0,1 2 2 2 1 0 -1 0 1 0 1 1 2 1 2 2 1 1
+2016,3,singles,Dave K,Andy H,BIRDS,-1,-1,1,0,0,0,0,-1 -2 -2 -2 -1 0 1 0 -1 0 -1 -1 -2 -1 -2 -2 -1 -1
+2016,3,singles,Ryan M,Tim C,SHOOTERS,,,,0,0,0,1,
+2016,3,singles,John S,Joe O,SHOOTERS,8,9,9,1,0,0,0,1 2 3 4 4 5 6 7 8 7 7 8 7 8 8 8 8 9
+2016,3,singles,Joe O,John S,BIRDS,-8,-9,9,0,0,0,0,-1 -2 -3 -4 -4 -5 -6 -7 -8 -7 -7 -8 -7 -8 -8 -8 -8 -9
+2016,3,singles,Pete C,Paul S,SHOOTERS,1,2,2,1,0,0,0,1 2 2 1 0 1 0 1 1 2 3 2 1 2 1 2 1 2
+2016,3,singles,Paul S,Pete C,BIRDS,-1,-2,2,0,0,0,0,-1 -2 -2 -1 0 -1 0 -1 -1 -2 -3 -2 -1 -2 -1 -2 -1 -2
+2017,1,2man_best_ball,Kyle M,Grant S + Paul W,G-MEN,-5,-5,5,0,0,0,0,-1 -1 0 -1 -2 -3 -3 -4 -5 -6 -5 -4 -3 -3 -4 -5 -5 -5
+2017,1,2man_best_ball,Matt H,Grant S + Paul W,G-MEN,-5,-5,5,0,0,0,0,-1 -1 0 -1 -2 -3 -3 -4 -5 -6 -5 -4 -3 -3 -4 -5 -5 -5
+2017,1,2man_best_ball,Grant S,Kyle M + Matt H,B9B,5,5,5,1,0,0,0,1 1 0 1 2 3 3 4 5 6 5 4 3 3 4 5 5 5
+2017,1,2man_best_ball,Paul W,Kyle M + Matt H,B9B,5,5,5,1,0,0,0,1 1 0 1 2 3 3 4 5 6 5 4 3 3 4 5 5 5
+2017,1,2man_best_ball,Ryan M,Nick S + Kevin J,G-MEN,0,-1,1,0,0,0,0,-1 -1 -1 -2 -1 0 1 1 0 1 1 0 0 -1 -1 0 -1 -1
+2017,1,2man_best_ball,Jim H,Nick S + Kevin J,G-MEN,0,-1,1,0,0,0,0,-1 -1 -1 -2 -1 0 1 1 0 1 1 0 0 -1 -1 0 -1 -1
+2017,1,2man_best_ball,Nick S,Ryan M + Jim H,B9B,0,1,1,1,0,0,0,1 1 1 2 1 0 -1 -1 0 -1 -1 0 0 1 1 0 1 1
+2017,1,2man_best_ball,Kevin J,Ryan M + Jim H,B9B,0,1,1,1,0,0,0,1 1 1 2 1 0 -1 -1 0 -1 -1 0 0 1 1 0 1 1
+2017,1,2man_best_ball,Aaron J,TJSC + Dave B,G-MEN,-2,-1,1,0,0,0,0,-1 -2 -2 -2 -1 0 -1 -1 -2 -2 -3 -3 -2 -2 -2 -2 -2 -1
+2017,1,2man_best_ball,Pete C,TJSC + Dave B,G-MEN,-2,-1,1,0,0,0,0,-1 -2 -2 -2 -1 0 -1 -1 -2 -2 -3 -3 -2 -2 -2 -2 -2 -1
+2017,1,2man_best_ball,TJSC,Aaron J + Pete C,B9B,2,1,1,1,0,0,0,1 2 2 2 1 0 1 1 2 2 3 3 2 2 2 2 2 1
+2017,1,2man_best_ball,Dave B,Aaron J + Pete C,B9B,2,1,1,1,0,0,0,1 2 2 2 1 0 1 1 2 2 3 3 2 2 2 2 2 1
+2017,1,2man_best_ball,Andy H,Ben T + Paul S,G-MEN,-1,-3,3,0,0,0,0,0 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -2 -3 -4 -3 -4 -3
+2017,1,2man_best_ball,Adam P,Ben T + Paul S,G-MEN,-1,-3,3,0,0,0,0,0 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -2 -3 -4 -3 -4 -3
+2017,1,2man_best_ball,Ben T,Andy H + Adam P,B9B,1,3,3,1,0,0,0,0 1 1 1 1 1 1 1 1 1 1 1 2 3 4 3 4 3
+2017,1,2man_best_ball,Paul S,Andy H + Adam P,B9B,1,3,3,1,0,0,0,0 1 1 1 1 1 1 1 1 1 1 1 2 3 4 3 4 3
+2017,2,singles,Aaron J,Nick S,G-MEN,-3,0,0,0,1,0,0,-1 -1 -2 -2 -1 -1 -1 -2 -3 -2 -2 -1 -1 -1 0 -1 0 0
+2017,2,singles,Nick S,Aaron J,B9B,3,0,0,0,1,0,0,1 1 2 2 1 1 1 2 3 2 2 1 1 1 0 1 0 0
+2017,2,singles,Adam P,Grant S,G-MEN,3,5,5,1,0,0,0,1 0 -1 0 -1 0 1 2 3 4 4 4 3 4 3 3 4 5
+2017,2,singles,Grant S,Adam P,B9B,-3,-5,5,0,0,0,0,-1 0 1 0 1 0 -1 -2 -3 -4 -4 -4 -3 -4 -3 -3 -4 -5
+2017,2,singles,Andy H,Kevin J,G-MEN,0,4,4,1,0,0,0,1 0 1 0 -1 -1 0 0 0 1 2 2 1 2 3 4 5 4
+2017,2,singles,Kevin J,Andy H,B9B,0,-4,4,0,0,0,0,-1 0 -1 0 1 1 0 0 0 -1 -2 -2 -1 -2 -3 -4 -5 -4
+2017,2,singles,Ryan M,Dave B,G-MEN,-3,1,1,1,0,0,0,0 -1 -2 -1 -1 -2 -1 -2 -3 -2 -2 -1 -2 -1 0 -1 0 1
+2017,2,singles,Dave B,Ryan M,B9B,3,-1,1,0,0,0,0,0 1 2 1 1 2 1 2 3 2 2 1 2 1 0 1 0 -1
+2017,2,singles,Pete C,TJSC,G-MEN,4,6,6,1,0,0,0,0 1 2 3 4 5 6 5 4 3 4 4 5 6 6 7 6 6
+2017,2,singles,TJSC,Pete C,B9B,-4,-6,6,0,0,0,0,0 -1 -2 -3 -4 -5 -6 -5 -4 -3 -4 -4 -5 -6 -6 -7 -6 -6
+2017,2,singles,Matt H,Ben T,G-MEN,1,-4,4,0,0,0,0,-1 0 1 0 1 1 1 0 1 0 -1 -2 -2 -2 -3 -4 -5 -4
+2017,2,singles,Ben T,Matt H,B9B,-1,4,4,1,0,0,0,1 0 -1 0 -1 -1 -1 0 -1 0 1 2 2 2 3 4 5 4
+2017,2,singles,Jim H,Paul W,G-MEN,-3,-2,2,0,0,0,0,-1 -1 -1 0 0 0 -1 -2 -3 -3 -3 -4 -3 -4 -3 -2 -3 -2
+2017,2,singles,Paul W,Jim H,B9B,3,2,2,1,0,0,0,1 1 1 0 0 0 1 2 3 3 3 4 3 4 3 2 3 2
+2017,2,singles,Kyle M,Paul S,G-MEN,2,-5,5,0,0,0,0,1 1 2 3 2 1 2 1 2 2 1 0 0 -1 -2 -3 -4 -5
+2017,2,singles,Paul S,Kyle M,B9B,-2,5,5,1,0,0,0,-1 -1 -2 -3 -2 -1 -2 -1 -2 -2 -1 0 0 1 2 3 4 5
+2017,3,pinehurst,Ryan M,Ben T + Kevin J,G-MEN,4,5,5,1,0,0,0,1 1 2 2 2 3 4 5 4 5 4 3 3 3 2 3 4 5
+2017,3,pinehurst,Pete C,Ben T + Kevin J,G-MEN,4,5,5,1,0,0,0,1 1 2 2 2 3 4 5 4 5 4 3 3 3 2 3 4 5
+2017,3,pinehurst,Ben T,Ryan M + Pete C,B9B,-4,-5,5,0,0,0,0,-1 -1 -2 -2 -2 -3 -4 -5 -4 -5 -4 -3 -3 -3 -2 -3 -4 -5
+2017,3,pinehurst,Kevin J,Ryan M + Pete C,B9B,-4,-5,5,0,0,0,0,-1 -1 -2 -2 -2 -3 -4 -5 -4 -5 -4 -3 -3 -3 -2 -3 -4 -5
+2017,3,pinehurst,Adam P,Nick S + TJSC,G-MEN,-2,0,0,0,1,0,0,0 -1 -1 -2 -2 -3 -2 -2 -2 -1 -2 -2 -1 0 1 1 1 0
+2017,3,pinehurst,Jim H,Nick S + TJSC,G-MEN,-2,0,0,0,1,0,0,0 -1 -1 -2 -2 -3 -2 -2 -2 -1 -2 -2 -1 0 1 1 1 0
+2017,3,pinehurst,Nick S,Adam P + Jim H,B9B,2,0,0,0,1,0,0,0 1 1 2 2 3 2 2 2 1 2 2 1 0 -1 -1 -1 0
+2017,3,pinehurst,TJSC,Adam P + Jim H,B9B,2,0,0,0,1,0,0,0 1 1 2 2 3 2 2 2 1 2 2 1 0 -1 -1 -1 0
+2017,3,pinehurst,Aaron J,Grant S + Paul S,G-MEN,1,1,1,1,0,0,0,1 0 -1 -1 0 0 0 0 1 1 2 1 0 1 0 1 2 1
+2017,3,pinehurst,Matt H,Grant S + Paul S,G-MEN,1,1,1,1,0,0,0,1 0 -1 -1 0 0 0 0 1 1 2 1 0 1 0 1 2 1
+2017,3,pinehurst,Grant S,Aaron J + Matt H,B9B,-1,-1,1,0,0,0,0,-1 0 1 1 0 0 0 0 -1 -1 -2 -1 0 -1 0 -1 -2 -1
+2017,3,pinehurst,Paul S,Aaron J + Matt H,B9B,-1,-1,1,0,0,0,0,-1 0 1 1 0 0 0 0 -1 -1 -2 -1 0 -1 0 -1 -2 -1
+2017,3,pinehurst,Andy H,Paul W + Dave B,G-MEN,2,1,1,1,0,0,0,1 1 1 2 1 2 1 2 2 2 1 0 1 2 2 3 2 1
+2017,3,pinehurst,Kyle M,Paul W + Dave B,G-MEN,2,1,1,1,0,0,0,1 1 1 2 1 2 1 2 2 2 1 0 1 2 2 3 2 1
+2017,3,pinehurst,Paul W,Andy H + Kyle M,B9B,-2,-1,1,0,0,0,0,-1 -1 -1 -2 -1 -2 -1 -2 -2 -2 -1 0 -1 -2 -2 -3 -2 -1
+2017,3,pinehurst,Dave B,Andy H + Kyle M,B9B,-2,-1,1,0,0,0,0,-1 -1 -1 -2 -1 -2 -1 -2 -2 -2 -1 0 -1 -2 -2 -3 -2 -1
+2018,1,shamble,Grant S,Paul S + Jim H,BEASTS,-3,1,1,1,0,0,0,0 -1 -2 -3 -2 -2 -3 -2 -3 -2 -2 -1 0 0 -1 0 0 1
+2018,1,shamble,Dave B,Paul S + Jim H,BEASTS,-3,1,1,1,0,0,0,0 -1 -2 -3 -2 -2 -3 -2 -3 -2 -2 -1 0 0 -1 0 0 1
+2018,1,shamble,Paul S,Grant S + Dave B,TEE'S CO.,3,-1,1,0,0,0,0,0 1 2 3 2 2 3 2 3 2 2 1 0 0 1 0 0 -1
+2018,1,shamble,Jim H,Grant S + Dave B,TEE'S CO.,3,-1,1,0,0,0,0,0 1 2 3 2 2 3 2 3 2 2 1 0 0 1 0 0 -1
+2018,1,shamble,Aaron J,Nick S + Shaun W,BEASTS,1,4,4,1,0,0,0,1 0 1 2 2 2 1 1 1 2 2 1 2 2 3 3 4 4
+2018,1,shamble,Kevin J,Nick S + Shaun W,BEASTS,1,4,4,1,0,0,0,1 0 1 2 2 2 1 1 1 2 2 1 2 2 3 3 4 4
+2018,1,shamble,Nick S,Aaron J + Kevin J,TEE'S CO.,-1,-4,4,0,0,0,0,-1 0 -1 -2 -2 -2 -1 -1 -1 -2 -2 -1 -2 -2 -3 -3 -4 -4
+2018,1,shamble,Shaun W,Aaron J + Kevin J,TEE'S CO.,-1,-4,4,0,0,0,0,-1 0 -1 -2 -2 -2 -1 -1 -1 -2 -2 -1 -2 -2 -3 -3 -4 -4
+2018,1,shamble,Andy H,Ben T + Paul W,BEASTS,1,3,3,1,0,0,0,-1 -1 0 0 -1 0 -1 0 1 2 2 2 3 4 5 4 4 3
+2018,1,shamble,Dave K,Ben T + Paul W,BEASTS,1,3,3,1,0,0,0,-1 -1 0 0 -1 0 -1 0 1 2 2 2 3 4 5 4 4 3
+2018,1,shamble,Ben T,Andy H + Dave K,TEE'S CO.,-1,-3,3,0,0,0,0,1 1 0 0 1 0 1 0 -1 -2 -2 -2 -3 -4 -5 -4 -4 -3
+2018,1,shamble,Paul W,Andy H + Dave K,TEE'S CO.,-1,-3,3,0,0,0,0,1 1 0 0 1 0 1 0 -1 -2 -2 -2 -3 -4 -5 -4 -4 -3
+2018,1,shamble,Ryan M,TJSC + Tim C,BEASTS,-3,-3,3,0,0,0,0,0 -1 -1 0 0 0 -1 -2 -3 -3 -2 -3 -3 -2 -3 -3 -4 -3
+2018,1,shamble,Pete C,TJSC + Tim C,BEASTS,-3,-3,3,0,0,0,0,0 -1 -1 0 0 0 -1 -2 -3 -3 -2 -3 -3 -2 -3 -3 -4 -3
+2018,1,shamble,TJSC,Ryan M + Pete C,TEE'S CO.,3,3,3,1,0,0,0,0 1 1 0 0 0 1 2 3 3 2 3 3 2 3 3 4 3
+2018,1,shamble,Tim C,Ryan M + Pete C,TEE'S CO.,3,3,3,1,0,0,0,0 1 1 0 0 0 1 2 3 3 2 3 3 2 3 3 4 3
+2018,2,singles,Aaron J,Tim C,BEASTS,-3,-2,2,0,0,0,0,1 1 2 1 0 -1 -1 -2 -3 -2 -1 -2 -1 -2 -2 -3 -3 -2
+2018,2,singles,Tim C,Aaron J,TEE'S CO.,3,2,2,1,0,0,0,-1 -1 -2 -1 0 1 1 2 3 2 1 2 1 2 2 3 3 2
+2018,2,singles,Ryan M,Nick S,BEASTS,-1,-2,2,0,0,0,0,-1 -1 0 0 0 0 1 0 -1 0 0 -1 -1 -2 -2 -3 -3 -2
+2018,2,singles,Nick S,Ryan M,TEE'S CO.,1,2,2,1,0,0,0,1 1 0 0 0 0 -1 0 1 0 0 1 1 2 2 3 3 2
+2018,2,singles,Dave B,Paul W,BEASTS,2,0,0,0,1,0,0,1 0 0 1 1 2 2 1 2 1 0 0 -1 0 0 1 0 0
+2018,2,singles,Paul W,Dave B,TEE'S CO.,-2,0,0,0,1,0,0,-1 0 0 -1 -1 -2 -2 -1 -2 -1 0 0 1 0 0 -1 0 0
+2018,2,singles,Dave K,TJSC,BEASTS,-2,-1,1,0,0,0,0,1 1 2 1 0 1 0 -1 -2 -3 -2 -1 0 1 1 1 0 -1
+2018,2,singles,TJSC,Dave K,TEE'S CO.,2,1,1,1,0,0,0,-1 -1 -2 -1 0 -1 0 1 2 3 2 1 0 -1 -1 -1 0 1
+2018,2,singles,Grant S,Ben T,BEASTS,-4,-4,4,0,0,0,0,-1 -2 -1 -2 -2 -2 -2 -3 -4 -3 -4 -4 -3 -3 -4 -4 -4 -4
+2018,2,singles,Ben T,Grant S,TEE'S CO.,4,4,4,1,0,0,0,1 2 1 2 2 2 2 3 4 3 4 4 3 3 4 4 4 4
+2018,2,singles,Kevin J,Paul S,BEASTS,1,2,2,1,0,0,0,0 1 1 0 -1 0 0 1 1 0 1 1 1 2 3 2 2 2
+2018,2,singles,Paul S,Kevin J,TEE'S CO.,-1,-2,2,0,0,0,0,0 -1 -1 0 1 0 0 -1 -1 0 -1 -1 -1 -2 -3 -2 -2 -2
+2018,2,singles,Andy H,Shaun W,BEASTS,-2,-4,4,0,0,0,0,-1 -2 -2 -3 -3 -2 -3 -3 -2 -2 -1 -2 -1 -2 -3 -2 -3 -4
+2018,2,singles,Shaun W,Andy H,TEE'S CO.,2,4,4,1,0,0,0,1 2 2 3 3 2 3 3 2 2 1 2 1 2 3 2 3 4
+2018,2,singles,Pete C,Jim H,BEASTS,2,3,3,1,0,0,0,-1 -2 -1 -1 -2 -1 0 1 2 2 2 1 1 0 1 2 3 3
+2018,2,singles,Jim H,Pete C,TEE'S CO.,-2,-3,3,0,0,0,0,1 2 1 1 2 1 0 -1 -2 -2 -2 -1 -1 0 -1 -2 -3 -3
+2018,3,2man_best_ball,Ryan M,Ben T + Tim C,BEASTS,-1,-1,1,0,0,0,0,-1 -2 -1 0 -1 -2 -1 0 -1 0 -1 -1 -2 -1 -1 -2 -1 -1
+2018,3,2man_best_ball,Kevin J,Ben T + Tim C,BEASTS,-1,-1,1,0,0,0,0,-1 -2 -1 0 -1 -2 -1 0 -1 0 -1 -1 -2 -1 -1 -2 -1 -1
+2018,3,2man_best_ball,Ben T,Ryan M + Kevin J,TEE'S CO.,1,1,1,1,0,0,0,1 2 1 0 1 2 1 0 1 0 1 1 2 1 1 2 1 1
+2018,3,2man_best_ball,Tim C,Ryan M + Kevin J,TEE'S CO.,1,1,1,1,0,0,0,1 2 1 0 1 2 1 0 1 0 1 1 2 1 1 2 1 1
+2018,3,2man_best_ball,Aaron J,TJSC + Jim H,BEASTS,4,3,3,1,0,0,0,1 2 3 4 4 5 4 3 4 5 4 5 5 4 3 3 2 3
+2018,3,2man_best_ball,Dave B,TJSC + Jim H,BEASTS,4,3,3,1,0,0,0,1 2 3 4 4 5 4 3 4 5 4 5 5 4 3 3 2 3
+2018,3,2man_best_ball,TJSC,Aaron J + Dave B,TEE'S CO.,-4,-3,3,0,0,0,0,-1 -2 -3 -4 -4 -5 -4 -3 -4 -5 -4 -5 -5 -4 -3 -3 -2 -3
+2018,3,2man_best_ball,Jim H,Aaron J + Dave B,TEE'S CO.,-4,-3,3,0,0,0,0,-1 -2 -3 -4 -4 -5 -4 -3 -4 -5 -4 -5 -5 -4 -3 -3 -2 -3
+2018,3,2man_best_ball,Andy H,Nick S + Paul S,BEASTS,4,2,2,1,0,0,0,1 2 1 1 1 1 2 3 4 5 5 4 3 4 3 2 2 2
+2018,3,2man_best_ball,Grant S,Nick S + Paul S,BEASTS,4,2,2,1,0,0,0,1 2 1 1 1 1 2 3 4 5 5 4 3 4 3 2 2 2
+2018,3,2man_best_ball,Nick S,Andy H + Grant S,TEE'S CO.,-4,-2,2,0,0,0,0,-1 -2 -1 -1 -1 -1 -2 -3 -4 -5 -5 -4 -3 -4 -3 -2 -2 -2
+2018,3,2man_best_ball,Paul S,Andy H + Grant S,TEE'S CO.,-4,-2,2,0,0,0,0,-1 -2 -1 -1 -1 -1 -2 -3 -4 -5 -5 -4 -3 -4 -3 -2 -2 -2
+2018,3,2man_best_ball,Dave K,Shaun W + Paul W,BEASTS,1,0,0,0,1,0,0,1 0 1 0 0 1 0 0 1 2 1 1 1 2 1 2 1 0
+2018,3,2man_best_ball,Pete C,Shaun W + Paul W,BEASTS,1,0,0,0,1,0,0,1 0 1 0 0 1 0 0 1 2 1 1 1 2 1 2 1 0
+2018,3,2man_best_ball,Shaun W,Dave K + Pete C,TEE'S CO.,-1,0,0,0,1,0,0,-1 0 -1 0 0 -1 0 0 -1 -2 -1 -1 -1 -2 -1 -2 -1 0
+2018,3,2man_best_ball,Paul W,Dave K + Pete C,TEE'S CO.,-1,0,0,0,1,0,0,-1 0 -1 0 0 -1 0 0 -1 -2 -1 -1 -1 -2 -1 -2 -1 0
+2023,2,singles,Aaron J,Nick S,WEEZ,0,1,1,1,0,0,0,-1 -1 0 -1 -1 0 0 0 0 1 0 0 0 0 0 1 1 1
+2023,2,singles,Nick S,Aaron J,TEES,0,-1,1,0,0,0,0,1 1 0 1 1 0 0 0 0 -1 0 0 0 0 0 -1 -1 -1
+2023,2,singles,Joe E,Shaun W,WEEZ,-3,-5,5,0,0,0,0,0 -1 -2 -2 -2 -3 -2 -2 -3 -4 -5 -5 -5 -4 -3 -4 -4 -5
+2023,2,singles,Shaun W,Joe E,TEES,3,5,5,1,0,0,0,0 1 2 2 2 3 2 2 3 4 5 5 5 4 3 4 4 5
+2023,2,singles,Tim C,Kevin J,WEEZ,-2,-4,4,0,0,0,0,-1 -1 -2 -1 -2 -3 -2 -3 -2 -2 -3 -3 -3 -2 -2 -3 -3 -4
+2023,2,singles,Kevin J,Tim C,TEES,2,4,4,1,0,0,0,1 1 2 1 2 3 2 3 2 2 3 3 3 2 2 3 3 4
+2023,2,singles,Paul W,TJSC,WEEZ,2,4,4,1,0,0,0,1 2 2 2 3 4 3 2 2 2 3 3 4 3 2 3 4 4
+2023,2,singles,TJSC,Paul W,TEES,-2,-4,4,0,0,0,0,-1 -2 -2 -2 -3 -4 -3 -2 -2 -2 -3 -3 -4 -3 -2 -3 -4 -4
+2023,2,singles,Adam P,Ben T,WEEZ,-4,-6,6,0,0,0,0,-1 -2 -2 -1 -2 -3 -4 -3 -4 -3 -4 -4 -4 -4 -4 -5 -5 -6
+2023,2,singles,Ben T,Adam P,TEES,4,6,6,1,0,0,0,1 2 2 1 2 3 4 3 4 3 4 4 4 4 4 5 5 6
+2023,2,singles,Andy H,Dave K,WEEZ,-1,-3,3,0,0,0,0,1 0 1 0 1 0 -1 0 -1 0 0 -1 0 0 0 -1 -2 -3
+2023,2,singles,Dave K,Andy H,TEES,1,3,3,1,0,0,0,-1 0 -1 0 -1 0 1 0 1 0 0 1 0 0 0 1 2 3
+2023,2,singles,Joe O,Ryan M,WEEZ,-3,-5,5,0,0,0,0,-1 -1 0 0 -1 -1 -2 -2 -3 -3 -4 -4 -3 -3 -4 -3 -4 -5
+2023,2,singles,Ryan M,Joe O,TEES,3,5,5,1,0,0,0,1 1 0 0 1 1 2 2 3 3 4 4 3 3 4 3 4 5
+2023,2,singles,Jim H,Paul S,WEEZ,-1,0,0,0,1,0,0,-1 -1 -2 -3 -2 -2 -2 -1 -1 -1 -1 -2 -1 0 1 2 1 0
+2023,2,singles,Paul S,Jim H,TEES,1,0,0,0,1,0,0,1 1 2 3 2 2 2 1 1 1 1 2 1 0 -1 -2 -1 0
+2023,3,2man_scramble,Joe E,Ben T + Kevin J,WEEZ,-4,-2,2,0,0,0,0,0 0 -1 -1 -2 -2 -2 -3 -4 -3 -2 -2 -1 -1 -2 -2 -2 -2
+2023,3,2man_scramble,Andy H,Ben T + Kevin J,WEEZ,-4,-2,2,0,0,0,0,0 0 -1 -1 -2 -2 -2 -3 -4 -3 -2 -2 -1 -1 -2 -2 -2 -2
+2023,3,2man_scramble,Ben T,Joe E + Andy H,TEES,4,2,2,1,0,0,0,0 0 1 1 2 2 2 3 4 3 2 2 1 1 2 2 2 2
+2023,3,2man_scramble,Kevin J,Joe E + Andy H,TEES,4,2,2,1,0,0,0,0 0 1 1 2 2 2 3 4 3 2 2 1 1 2 2 2 2
+2023,3,2man_scramble,Aaron J,Ryan M + Nick S,WEEZ,1,7,7,1,0,0,0,1 1 0 1 2 1 1 2 1 1 2 3 3 4 4 5 6 7
+2023,3,2man_scramble,Adam P,Ryan M + Nick S,WEEZ,1,7,7,1,0,0,0,1 1 0 1 2 1 1 2 1 1 2 3 3 4 4 5 6 7
+2023,3,2man_scramble,Ryan M,Aaron J + Adam P,TEES,-1,-7,7,0,0,0,0,-1 -1 0 -1 -2 -1 -1 -2 -1 -1 -2 -3 -3 -4 -4 -5 -6 -7
+2023,3,2man_scramble,Nick S,Aaron J + Adam P,TEES,-1,-7,7,0,0,0,0,-1 -1 0 -1 -2 -1 -1 -2 -1 -1 -2 -3 -3 -4 -4 -5 -6 -7
+2023,3,2man_scramble,Tim C,Shaun W + TJSC,WEEZ,3,-1,1,0,0,0,0,1 1 2 2 2 2 2 3 3 2 1 1 1 1 0 0 -1 -1
+2023,3,2man_scramble,Joe O,Shaun W + TJSC,WEEZ,3,-1,1,0,0,0,0,1 1 2 2 2 2 2 3 3 2 1 1 1 1 0 0 -1 -1
+2023,3,2man_scramble,Shaun W,Tim C + Joe O,TEES,-3,1,1,1,0,0,0,-1 -1 -2 -2 -2 -2 -2 -3 -3 -2 -1 -1 -1 -1 0 0 1 1
+2023,3,2man_scramble,TJSC,Tim C + Joe O,TEES,-3,1,1,1,0,0,0,-1 -1 -2 -2 -2 -2 -2 -3 -3 -2 -1 -1 -1 -1 0 0 1 1
+2023,3,2man_scramble,Jim H,Dave K + Paul S,WEEZ,-2,-3,3,0,0,0,0,0 0 -1 -1 -2 -1 0 -1 -2 -2 -2 -3 -3 -3 -2 -3 -3 -3
+2023,3,2man_scramble,Paul W,Dave K + Paul S,WEEZ,-2,-3,3,0,0,0,0,0 0 -1 -1 -2 -1 0 -1 -2 -2 -2 -3 -3 -3 -2 -3 -3 -3
+2023,3,2man_scramble,Dave K,Jim H + Paul W,TEES,2,3,3,1,0,0,0,0 0 1 1 2 1 0 1 2 2 2 3 3 3 2 3 3 3
+2023,3,2man_scramble,Paul S,Jim H + Paul W,TEES,2,3,3,1,0,0,0,0 0 1 1 2 1 0 1 2 2 2 3 3 3 2 3 3 3
+2019,1,2man_scramble,John S,Aaron J + Ben T,BULLEIT,0,3,3,1,0,0,0,1 2 2 1 1 0 0 0 0 0 0 0 0 1 1 2 2 3
+2019,1,2man_scramble,Andy H,Aaron J + Ben T,BULLEIT,0,3,3,1,0,0,0,1 2 2 1 1 0 0 0 0 0 0 0 0 1 1 2 2 3
+2019,1,2man_scramble,Aaron J,John S + Andy H,DEFCON,0,-3,3,0,0,0,0,-1 -2 -2 -1 -1 0 0 0 0 0 0 0 0 -1 -1 -2 -2 -3
+2019,1,2man_scramble,Ben T,John S + Andy H,DEFCON,0,-3,3,0,0,0,0,-1 -2 -2 -1 -1 0 0 0 0 0 0 0 0 -1 -1 -2 -2 -3
+2019,1,2man_scramble,Adam P,Tim C + Paul W,BULLEIT,3,1,1,1,0,0,0,0 0 0 1 2 3 2 3 3 2 2 1 2 2 2 1 0 1
+2019,1,2man_scramble,Grant S,Tim C + Paul W,BULLEIT,3,1,1,1,0,0,0,0 0 0 1 2 3 2 3 3 2 2 1 2 2 2 1 0 1
+2019,1,2man_scramble,Tim C,Adam P + Grant S,DEFCON,-3,-1,1,0,0,0,0,0 0 0 -1 -2 -3 -2 -3 -3 -2 -2 -1 -2 -2 -2 -1 0 -1
+2019,1,2man_scramble,Paul W,Adam P + Grant S,DEFCON,-3,-1,1,0,0,0,0,0 0 0 -1 -2 -3 -2 -3 -3 -2 -2 -1 -2 -2 -2 -1 0 -1
+2019,1,2man_scramble,Ryan M,TJSC + Dave K,BULLEIT,4,2,2,1,0,0,0,1 2 3 4 4 3 2 3 4 5 4 3 3 4 3 3 2 2
+2019,1,2man_scramble,Kevin J,TJSC + Dave K,BULLEIT,4,2,2,1,0,0,0,1 2 3 4 4 3 2 3 4 5 4 3 3 4 3 3 2 2
+2019,1,2man_scramble,TJSC,Ryan M + Kevin J,DEFCON,-4,-2,2,0,0,0,0,-1 -2 -3 -4 -4 -3 -2 -3 -4 -5 -4 -3 -3 -4 -3 -3 -2 -2
+2019,1,2man_scramble,Dave K,Ryan M + Kevin J,DEFCON,-4,-2,2,0,0,0,0,-1 -2 -3 -4 -4 -3 -2 -3 -4 -5 -4 -3 -3 -4 -3 -3 -2 -2
+2019,1,2man_scramble,Kyle M,Jim H + Paul S,BULLEIT,2,5,5,1,0,0,0,0 1 0 1 2 2 3 2 2 3 4 4 4 5 6 5 4 5
+2019,1,2man_scramble,Pete C,Jim H + Paul S,BULLEIT,2,5,5,1,0,0,0,0 1 0 1 2 2 3 2 2 3 4 4 4 5 6 5 4 5
+2019,1,2man_scramble,Jim H,Kyle M + Pete C,DEFCON,-2,-5,5,0,0,0,0,0 -1 0 -1 -2 -2 -3 -2 -2 -3 -4 -4 -4 -5 -6 -5 -4 -5
+2019,1,2man_scramble,Paul S,Kyle M + Pete C,DEFCON,-2,-5,5,0,0,0,0,0 -1 0 -1 -2 -2 -3 -2 -2 -3 -4 -4 -4 -5 -6 -5 -4 -5
+2019,2,singles,Kevin J,Aaron J,BULLEIT,-3,0,0,0,1,0,0,-1 -2 -2 -3 -3 -4 -3 -4 -3 -3 -2 -3 -2 -1 0 0 1 0
+2019,2,singles,Aaron J,Kevin J,DEFCON,3,0,0,0,1,0,0,1 2 2 3 3 4 3 4 3 3 2 3 2 1 0 0 -1 0
+2019,2,singles,Kyle M,Tim C,BULLEIT,0,-2,2,0,0,0,0,-1 -1 -1 0 1 0 1 0 0 -1 0 1 2 1 1 0 -1 -2
+2019,2,singles,Tim C,Kyle M,DEFCON,0,2,2,1,0,0,0,1 1 1 0 -1 0 -1 0 0 1 0 -1 -2 -1 -1 0 1 2
+2019,2,singles,Andy H,Jim H,BULLEIT,5,4,4,1,0,0,0,1 0 1 0 1 2 3 4 5 6 5 4 3 4 3 4 5 4
+2019,2,singles,Jim H,Andy H,DEFCON,-5,-4,4,0,0,0,0,-1 0 -1 0 -1 -2 -3 -4 -5 -6 -5 -4 -3 -4 -3 -4 -5 -4
+2019,2,singles,Grant S,Paul W,BULLEIT,0,4,4,1,0,0,0,1 2 2 2 1 1 0 -1 0 1 1 2 3 3 3 2 3 4
+2019,2,singles,Paul W,Grant S,DEFCON,0,-4,4,0,0,0,0,-1 -2 -2 -2 -1 -1 0 1 0 -1 -1 -2 -3 -3 -3 -2 -3 -4
+2019,2,singles,Adam P,TJSC,BULLEIT,1,-4,4,0,0,0,0,1 2 3 2 1 0 1 1 1 1 0 -1 -2 -3 -4 -4 -5 -4
+2019,2,singles,TJSC,Adam P,DEFCON,-1,4,4,1,0,0,0,-1 -2 -3 -2 -1 0 -1 -1 -1 -1 0 1 2 3 4 4 5 4
+2019,2,singles,Pete C,Paul S,BULLEIT,3,4,4,1,0,0,0,1 0 1 0 1 2 3 4 3 4 3 3 4 5 4 3 3 4
+2019,2,singles,Paul S,Pete C,DEFCON,-3,-4,4,0,0,0,0,-1 0 -1 0 -1 -2 -3 -4 -3 -4 -3 -3 -4 -5 -4 -3 -3 -4
+2019,2,singles,John S,Dave K,BULLEIT,0,-1,1,0,0,0,0,1 0 1 0 0 1 2 1 0 0 0 0 -1 0 0 0 0 -1
+2019,2,singles,Dave K,John S,DEFCON,0,1,1,1,0,0,0,-1 0 -1 0 0 -1 -2 -1 0 0 0 0 1 0 0 0 0 1
+2019,2,singles,Ryan M,Ben T,BULLEIT,-2,-2,2,0,0,0,0,1 0 0 1 2 1 0 -1 -2 -3 -4 -3 -4 -4 -3 -3 -3 -2
+2019,2,singles,Ben T,Ryan M,DEFCON,2,2,2,1,0,0,0,-1 0 0 -1 -2 -1 0 1 2 3 4 3 4 4 3 3 3 2
+2019,3,2man_best_ball,Grant S,Aaron J + Paul S,BULLEIT,1,3,3,1,0,0,0,-1 -2 -3 -2 -1 0 1 0 1 1 1 1 2 2 3 3 3 3
+2019,3,2man_best_ball,Kyle M,Aaron J + Paul S,BULLEIT,1,3,3,1,0,0,0,-1 -2 -3 -2 -1 0 1 0 1 1 1 1 2 2 3 3 3 3
+2019,3,2man_best_ball,Aaron J,Grant S + Kyle M,DEFCON,-1,-3,3,0,0,0,0,1 2 3 2 1 0 -1 0 -1 -1 -1 -1 -2 -2 -3 -3 -3 -3
+2019,3,2man_best_ball,Paul S,Grant S + Kyle M,DEFCON,-1,-3,3,0,0,0,0,1 2 3 2 1 0 -1 0 -1 -1 -1 -1 -2 -2 -3 -3 -3 -3
+2019,3,2man_best_ball,Kevin J,Tim C + TJSC,BULLEIT,1,2,2,1,0,0,0,0 1 0 -1 0 1 0 0 1 1 2 1 2 2 3 4 3 2
+2019,3,2man_best_ball,Pete C,Tim C + TJSC,BULLEIT,1,2,2,1,0,0,0,0 1 0 -1 0 1 0 0 1 1 2 1 2 2 3 4 3 2
+2019,3,2man_best_ball,Tim C,Kevin J + Pete C,DEFCON,-1,-2,2,0,0,0,0,0 -1 0 1 0 -1 0 0 -1 -1 -2 -1 -2 -2 -3 -4 -3 -2
+2019,3,2man_best_ball,TJSC,Kevin J + Pete C,DEFCON,-1,-2,2,0,0,0,0,0 -1 0 1 0 -1 0 0 -1 -1 -2 -1 -2 -2 -3 -4 -3 -2
+2019,3,2man_best_ball,Andy H,Dave K + Jim H,BULLEIT,1,0,0,0,1,0,0,1 1 2 3 3 2 2 1 1 0 0 1 1 1 0 -1 -1 0
+2019,3,2man_best_ball,Ryan M,Dave K + Jim H,BULLEIT,1,0,0,0,1,0,0,1 1 2 3 3 2 2 1 1 0 0 1 1 1 0 -1 -1 0
+2019,3,2man_best_ball,Dave K,Andy H + Ryan M,DEFCON,-1,0,0,0,1,0,0,-1 -1 -2 -3 -3 -2 -2 -1 -1 0 0 -1 -1 -1 0 1 1 0
+2019,3,2man_best_ball,Jim H,Andy H + Ryan M,DEFCON,-1,0,0,0,1,0,0,-1 -1 -2 -3 -3 -2 -2 -1 -1 0 0 -1 -1 -1 0 1 1 0
+2019,3,2man_best_ball,John S,Ben T + Paul W,BULLEIT,3,8,8,1,0,0,0,0 1 2 3 3 4 3 4 3 3 4 5 5 6 6 7 7 8
+2019,3,2man_best_ball,Adam P,Ben T + Paul W,BULLEIT,3,8,8,1,0,0,0,0 1 2 3 3 4 3 4 3 3 4 5 5 6 6 7 7 8
+2019,3,2man_best_ball,Ben T,John S + Adam P,DEFCON,-3,-8,8,0,0,0,0,0 -1 -2 -3 -3 -4 -3 -4 -3 -3 -4 -5 -5 -6 -6 -7 -7 -8
+2019,3,2man_best_ball,Paul W,John S + Adam P,DEFCON,-3,-8,8,0,0,0,0,0 -1 -2 -3 -3 -4 -3 -4 -3 -3 -4 -5 -5 -6 -6 -7 -7 -8
+2021,1,2man_best_ball,Shaun W,Nick S + Aaron J,TALL BOYS,2,3,3,1,0,0,0,1 1 1 1 2 3 3 3 2 3 3 2 2 2 3 3 2 3
+2021,1,2man_best_ball,Ryan M,Nick S + Aaron J,TALL BOYS,2,3,3,1,0,0,0,1 1 1 1 2 3 3 3 2 3 3 2 2 2 3 3 2 3
+2021,1,2man_best_ball,Nick S,Shaun W + Ryan M,CHOY'S BOYZ,-2,-3,3,0,0,0,0,-1 -1 -1 -1 -2 -3 -3 -3 -2 -3 -3 -2 -2 -2 -3 -3 -2 -3
+2021,1,2man_best_ball,Aaron J,Shaun W + Ryan M,CHOY'S BOYZ,-2,-3,3,0,0,0,0,-1 -1 -1 -1 -2 -3 -3 -3 -2 -3 -3 -2 -2 -2 -3 -3 -2 -3
+2021,1,2man_best_ball,Tim C,Jim H + Paul S,TALL BOYS,0,1,1,1,0,0,0,1 1 2 1 1 1 0 0 0 1 2 3 4 4 3 3 2 1
+2021,1,2man_best_ball,Joe O,Jim H + Paul S,TALL BOYS,0,1,1,1,0,0,0,1 1 2 1 1 1 0 0 0 1 2 3 4 4 3 3 2 1
+2021,1,2man_best_ball,Jim H,Tim C + Joe O,CHOY'S BOYZ,0,-1,1,0,0,0,0,-1 -1 -2 -1 -1 -1 0 0 0 -1 -2 -3 -4 -4 -3 -3 -2 -1
+2021,1,2man_best_ball,Paul S,Tim C + Joe O,CHOY'S BOYZ,0,-1,1,0,0,0,0,-1 -1 -2 -1 -1 -1 0 0 0 -1 -2 -3 -4 -4 -3 -3 -2 -1
+2021,1,2man_best_ball,Paul W,TJSC + Dave K,TALL BOYS,0,-2,2,0,0,0,0,0 -1 0 -1 0 1 0 -1 0 0 -1 -2 -3 -3 -3 -3 -3 -2
+2021,1,2man_best_ball,Pete C,TJSC + Dave K,TALL BOYS,0,-2,2,0,0,0,0,0 -1 0 -1 0 1 0 -1 0 0 -1 -2 -3 -3 -3 -3 -3 -2
+2021,1,2man_best_ball,TJSC,Paul W + Pete C,CHOY'S BOYZ,0,2,2,1,0,0,0,0 1 0 1 0 -1 0 1 0 0 1 2 3 3 3 3 3 2
+2021,1,2man_best_ball,Dave K,Paul W + Pete C,CHOY'S BOYZ,0,2,2,1,0,0,0,0 1 0 1 0 -1 0 1 0 0 1 2 3 3 3 3 3 2
+2021,1,2man_best_ball,Andy H,Ben T + Kevin J,TALL BOYS,3,4,4,1,0,0,0,-1 0 1 1 2 1 1 2 3 4 4 4 3 3 3 4 5 4
+2021,1,2man_best_ball,Adam P,Ben T + Kevin J,TALL BOYS,3,4,4,1,0,0,0,-1 0 1 1 2 1 1 2 3 4 4 4 3 3 3 4 5 4
+2021,1,2man_best_ball,Ben T,Andy H + Adam P,CHOY'S BOYZ,-3,-4,4,0,0,0,0,1 0 -1 -1 -2 -1 -1 -2 -3 -4 -4 -4 -3 -3 -3 -4 -5 -4
+2021,1,2man_best_ball,Kevin J,Andy H + Adam P,CHOY'S BOYZ,-3,-4,4,0,0,0,0,1 0 -1 -1 -2 -1 -1 -2 -3 -4 -4 -4 -3 -3 -3 -4 -5 -4
+2021,2,singles,Shaun W,TJSC,TALL BOYS,3,5,5,1,0,0,0,0 1 2 1 1 2 3 3 3 3 4 5 5 5 6 5 5 5
+2021,2,singles,TJSC,Shaun W,CHOY'S BOYZ,-3,-5,5,0,0,0,0,0 -1 -2 -1 -1 -2 -3 -3 -3 -3 -4 -5 -5 -5 -6 -5 -5 -5
+2021,2,singles,Ryan M,Kevin J,TALL BOYS,-3,-5,5,0,0,0,0,-1 -1 -2 -2 -3 -4 -3 -3 -3 -4 -5 -5 -6 -7 -7 -6 -5 -5
+2021,2,singles,Kevin J,Ryan M,CHOY'S BOYZ,3,5,5,1,0,0,0,1 1 2 2 3 4 3 3 3 4 5 5 6 7 7 6 5 5
+2021,2,singles,Joe O,Paul S,TALL BOYS,4,7,7,1,0,0,0,0 1 1 2 3 2 3 3 4 3 2 1 2 3 4 5 6 7
+2021,2,singles,Paul S,Joe O,CHOY'S BOYZ,-4,-7,7,0,0,0,0,0 -1 -1 -2 -3 -2 -3 -3 -4 -3 -2 -1 -2 -3 -4 -5 -6 -7
+2021,2,singles,Pete C,Dave K,TALL BOYS,3,3,3,1,0,0,0,1 2 3 3 2 3 3 2 3 2 1 0 1 0 1 2 3 3
+2021,2,singles,Dave K,Pete C,CHOY'S BOYZ,-3,-3,3,0,0,0,0,-1 -2 -3 -3 -2 -3 -3 -2 -3 -2 -1 0 -1 0 -1 -2 -3 -3
+2021,2,singles,Tim C,Ben T,TALL BOYS,-5,-2,2,0,0,0,0,1 0 0 -1 -2 -3 -4 -5 -5 -6 -6 -6 -5 -4 -4 -3 -2 -2
+2021,2,singles,Ben T,Tim C,CHOY'S BOYZ,5,2,2,1,0,0,0,-1 0 0 1 2 3 4 5 5 6 6 6 5 4 4 3 2 2
+2021,2,singles,Adam P,Jim H,TALL BOYS,-2,1,1,1,0,0,0,-1 -2 -1 0 0 -1 -2 -3 -2 -1 0 1 2 3 2 1 0 1
+2021,2,singles,Jim H,Adam P,CHOY'S BOYZ,2,-1,1,0,0,0,0,1 2 1 0 0 1 2 3 2 1 0 -1 -2 -3 -2 -1 0 -1
+2021,2,singles,Andy H,Aaron J,TALL BOYS,-3,-3,3,0,0,0,0,-1 0 -1 -2 -1 -2 -1 -2 -3 -2 -3 -2 -2 -3 -4 -3 -4 -3
+2021,2,singles,Aaron J,Andy H,CHOY'S BOYZ,3,3,3,1,0,0,0,1 0 1 2 1 2 1 2 3 2 3 2 2 3 4 3 4 3
+2021,2,singles,Paul W,Nick S,TALL BOYS,1,2,2,1,0,0,0,-1 0 0 -1 0 1 1 2 1 2 2 3 2 3 2 3 2 2
+2021,2,singles,Nick S,Paul W,CHOY'S BOYZ,-1,-2,2,0,0,0,0,1 0 0 1 0 -1 -1 -2 -1 -2 -2 -3 -2 -3 -2 -3 -2 -2
+2021,3,2man_scramble,Paul W,Dave K + Jim H,TALL BOYS,-4,-6,6,0,0,0,0,0 -1 -2 -3 -4 -5 -5 -4 -4 -5 -4 -5 -5 -6 -6 -6 -6 -6
+2021,3,2man_scramble,Pete C,Dave K + Jim H,TALL BOYS,-4,-6,6,0,0,0,0,0 -1 -2 -3 -4 -5 -5 -4 -4 -5 -4 -5 -5 -6 -6 -6 -6 -6
+2021,3,2man_scramble,Dave K,Paul W + Pete C,CHOY'S BOYZ,4,6,6,1,0,0,0,0 1 2 3 4 5 5 4 4 5 4 5 5 6 6 6 6 6
+2021,3,2man_scramble,Jim H,Paul W + Pete C,CHOY'S BOYZ,4,6,6,1,0,0,0,0 1 2 3 4 5 5 4 4 5 4 5 5 6 6 6 6 6
+2021,3,2man_scramble,Tim C,Ben T + Paul S,TALL BOYS,1,5,5,1,0,0,0,1 1 0 0 -1 0 0 0 1 2 2 3 3 4 5 4 4 5
+2021,3,2man_scramble,Ryan M,Ben T + Paul S,TALL BOYS,1,5,5,1,0,0,0,1 1 0 0 -1 0 0 0 1 2 2 3 3 4 5 4 4 5
+2021,3,2man_scramble,Ben T,Tim C + Ryan M,CHOY'S BOYZ,-1,-5,5,0,0,0,0,-1 -1 0 0 1 0 0 0 -1 -2 -2 -3 -3 -4 -5 -4 -4 -5
+2021,3,2man_scramble,Paul S,Tim C + Ryan M,CHOY'S BOYZ,-1,-5,5,0,0,0,0,-1 -1 0 0 1 0 0 0 -1 -2 -2 -3 -3 -4 -5 -4 -4 -5
+2021,3,2man_scramble,Andy H,Aaron J + Kevin J,TALL BOYS,1,5,5,1,0,0,0,1 0 1 1 1 0 1 0 1 2 2 3 3 4 4 5 5 5
+2021,3,2man_scramble,Joe O,Aaron J + Kevin J,TALL BOYS,1,5,5,1,0,0,0,1 0 1 1 1 0 1 0 1 2 2 3 3 4 4 5 5 5
+2021,3,2man_scramble,Aaron J,Andy H + Joe O,CHOY'S BOYZ,-1,-5,5,0,0,0,0,-1 0 -1 -1 -1 0 -1 0 -1 -2 -2 -3 -3 -4 -4 -5 -5 -5
+2021,3,2man_scramble,Kevin J,Andy H + Joe O,CHOY'S BOYZ,-1,-5,5,0,0,0,0,-1 0 -1 -1 -1 0 -1 0 -1 -2 -2 -3 -3 -4 -4 -5 -5 -5
+2021,3,2man_scramble,Shaun W,Nick S + TJSC,TALL BOYS,0,-1,1,0,0,0,0,0 -1 -1 -1 -1 0 1 0 0 0 -1 -2 -3 -2 -2 -2 -1 -1
+2021,3,2man_scramble,Adam P,Nick S + TJSC,TALL BOYS,0,-1,1,0,0,0,0,0 -1 -1 -1 -1 0 1 0 0 0 -1 -2 -3 -2 -2 -2 -1 -1
+2021,3,2man_scramble,Nick S,Shaun W + Adam P,CHOY'S BOYZ,0,1,1,1,0,0,0,0 1 1 1 1 0 -1 0 0 0 1 2 3 2 2 2 1 1
+2021,3,2man_scramble,TJSC,Shaun W + Adam P,CHOY'S BOYZ,0,1,1,1,0,0,0,0 1 1 1 1 0 -1 0 0 0 1 2 3 2 2 2 1 1
+2022,1,2man_best_ball,TJSC,Nick S + Paul S,DRIVERS,-7,-8,8,0,0,0,0,-1 -2 -3 -4 -3 -4 -5 -6 -7 -7 -7 -7 -8 -8 -7 -8 -9 -8
+2022,1,2man_best_ball,Joe O,Nick S + Paul S,DRIVERS,-7,-8,8,0,0,0,0,-1 -2 -3 -4 -3 -4 -5 -6 -7 -7 -7 -7 -8 -8 -7 -8 -9 -8
+2022,1,2man_best_ball,Nick S,TJSC + Joe O,IRONS,7,8,8,1,0,0,0,1 2 3 4 3 4 5 6 7 7 7 7 8 8 7 8 9 8
+2022,1,2man_best_ball,Paul S,TJSC + Joe O,IRONS,7,8,8,1,0,0,0,1 2 3 4 3 4 5 6 7 7 7 7 8 8 7 8 9 8
+2022,1,2man_best_ball,Ryan M,Andy H + Adam P,DRIVERS,-3,-5,5,0,0,0,0,-1 -1 -2 -3 -3 -3 -3 -2 -3 -4 -4 -3 -3 -4 -5 -4 -4 -5
+2022,1,2man_best_ball,Tim C,Andy H + Adam P,DRIVERS,-3,-5,5,0,0,0,0,-1 -1 -2 -3 -3 -3 -3 -2 -3 -4 -4 -3 -3 -4 -5 -4 -4 -5
+2022,1,2man_best_ball,Andy H,Ryan M + Tim C,IRONS,3,5,5,1,0,0,0,1 1 2 3 3 3 3 2 3 4 4 3 3 4 5 4 4 5
+2022,1,2man_best_ball,Adam P,Ryan M + Tim C,IRONS,3,5,5,1,0,0,0,1 1 2 3 3 3 3 2 3 4 4 3 3 4 5 4 4 5
+2022,1,2man_best_ball,Kevin J,Shaun W + Pete C,DRIVERS,1,4,4,1,0,0,0,-1 0 0 -1 0 0 1 1 1 2 3 3 3 3 4 4 5 4
+2022,1,2man_best_ball,Paul W,Shaun W + Pete C,DRIVERS,1,4,4,1,0,0,0,-1 0 0 -1 0 0 1 1 1 2 3 3 3 3 4 4 5 4
+2022,1,2man_best_ball,Shaun W,Kevin J + Paul W,IRONS,-1,-4,4,0,0,0,0,1 0 0 1 0 0 -1 -1 -1 -2 -3 -3 -3 -3 -4 -4 -5 -4
+2022,1,2man_best_ball,Pete C,Kevin J + Paul W,IRONS,-1,-4,4,0,0,0,0,1 0 0 1 0 0 -1 -1 -1 -2 -3 -3 -3 -3 -4 -4 -5 -4
+2022,1,2man_best_ball,Ben T,Aaron J + Dave K,DRIVERS,-4,-4,4,0,0,0,0,-1 -1 -1 -1 -2 -2 -3 -4 -4 -3 -3 -2 -2 -3 -4 -3 -4 -4
+2022,1,2man_best_ball,Jim H,Aaron J + Dave K,DRIVERS,-4,-4,4,0,0,0,0,-1 -1 -1 -1 -2 -2 -3 -4 -4 -3 -3 -2 -2 -3 -4 -3 -4 -4
+2022,1,2man_best_ball,Aaron J,Ben T + Jim H,IRONS,4,4,4,1,0,0,0,1 1 1 1 2 2 3 4 4 3 3 2 2 3 4 3 4 4
+2022,1,2man_best_ball,Dave K,Ben T + Jim H,IRONS,4,4,4,1,0,0,0,1 1 1 1 2 2 3 4 4 3 3 2 2 3 4 3 4 4
+2022,2,singles,Ben T,Nick S,DRIVERS,-1,0,0,0,1,0,0,1 0 1 0 -1 -2 -2 -2 -1 -1 -1 -1 -1 -1 -2 -1 -1 0
+2022,2,singles,Nick S,Ben T,IRONS,1,0,0,0,1,0,0,-1 0 -1 0 1 2 2 2 1 1 1 1 1 1 2 1 1 0
+2022,2,singles,Ryan M,Andy H,DRIVERS,0,2,2,1,0,0,0,-1 -1 0 1 1 1 0 1 0 -1 0 1 0 1 1 1 1 2
+2022,2,singles,Andy H,Ryan M,IRONS,0,-2,2,0,0,0,0,1 1 0 -1 -1 -1 0 -1 0 1 0 -1 0 -1 -1 -1 -1 -2
+2022,2,singles,Paul W,Adam P,DRIVERS,1,1,1,1,0,0,0,1 0 0 1 2 1 2 2 1 2 3 2 1 0 0 -1 0 1
+2022,2,singles,Adam P,Paul W,IRONS,-1,-1,1,0,0,0,0,-1 0 0 -1 -2 -1 -2 -2 -1 -2 -3 -2 -1 0 0 1 0 -1
+2022,2,singles,Tim C,Shaun W,DRIVERS,1,2,2,1,0,0,0,-1 -1 -1 -2 -1 -1 -1 0 1 1 0 1 2 2 1 1 2 2
+2022,2,singles,Shaun W,Tim C,IRONS,-1,-2,2,0,0,0,0,1 1 1 2 1 1 1 0 -1 -1 0 -1 -2 -2 -1 -1 -2 -2
+2022,2,singles,Kevin J,Aaron J,DRIVERS,-3,1,1,1,0,0,0,-1 -1 -1 0 0 -1 -2 -3 -3 -4 -4 -4 -3 -2 -2 -1 0 1
+2022,2,singles,Aaron J,Kevin J,IRONS,3,-1,1,0,0,0,0,1 1 1 0 0 1 2 3 3 4 4 4 3 2 2 1 0 -1
+2022,2,singles,TJSC,Dave K,DRIVERS,-1,-2,2,0,0,0,0,-1 0 0 1 2 1 1 0 -1 0 -1 -2 -2 -3 -2 -2 -3 -2
+2022,2,singles,Dave K,TJSC,IRONS,1,2,2,1,0,0,0,1 0 0 -1 -2 -1 -1 0 1 0 1 2 2 3 2 2 3 2
+2022,2,singles,Joe O,Pete C,DRIVERS,1,3,3,1,0,0,0,1 0 1 1 2 2 2 2 1 2 1 2 3 2 2 1 2 3
+2022,2,singles,Pete C,Joe O,IRONS,-1,-3,3,0,0,0,0,-1 0 -1 -1 -2 -2 -2 -2 -1 -2 -1 -2 -3 -2 -2 -1 -2 -3
+2022,2,singles,Jim H,Paul S,DRIVERS,3,8,8,1,0,0,0,1 1 1 1 1 2 3 4 3 4 5 4 5 6 6 6 7 8
+2022,2,singles,Paul S,Jim H,IRONS,-3,-8,8,0,0,0,0,-1 -1 -1 -1 -1 -2 -3 -4 -3 -4 -5 -4 -5 -6 -6 -6 -7 -8
+2020,1,2man_hi_lo,Shaun W,Tim C + Julius P,TEEHAWKS,2,2,2,1,0,0,0,0 1 -1 0 1 2 1 0 2 4 3 1 2 1 -1 0 1 2
+2020,1,2man_hi_lo,Dave K,Tim C + Julius P,TEEHAWKS,2,2,2,1,0,0,0,0 1 -1 0 1 2 1 0 2 4 3 1 2 1 -1 0 1 2
+2020,1,2man_hi_lo,Tim C,Shaun W + Dave K,FAMILY BIZ,-2,-2,2,0,0,0,0,0 -1 1 0 -1 -2 -1 0 -2 -4 -3 -1 -2 -1 1 0 -1 -2
+2020,1,2man_hi_lo,Julius P,Shaun W + Dave K,FAMILY BIZ,-2,-2,2,0,0,0,0,0 -1 1 0 -1 -2 -1 0 -2 -4 -3 -1 -2 -1 1 0 -1 -2
+2020,1,2man_hi_lo,Pete C,Aaron J + Kevin J,TEEHAWKS,-7,-4,4,0,0,1,0,-2 -3 -5 -7 -6 -8 -7 -7 -7 -5 -6 -8 -6 -7 -5 -5 -5 -4
+2020,1,2man_hi_lo,Aaron J,Pete C + Ghost,FAMILY BIZ,7,4,4,1,0,1,0,2 3 5 7 6 8 7 7 7 5 6 8 6 7 5 5 5 4
+2020,1,2man_hi_lo,Kevin J,Pete C + Ghost,FAMILY BIZ,7,4,4,1,0,1,0,2 3 5 7 6 8 7 7 7 5 6 8 6 7 5 5 5 4
+2020,1,2man_hi_lo,Ben T,Nick S + TJSC,TEEHAWKS,-6,-7,7,0,0,0,0,-2 -3 -4 -6 -8 -9 -7 -6 -6 -6 -7 -8 -7 -7 -9 -8 -8 -7
+2020,1,2man_hi_lo,Andy H,Nick S + TJSC,TEEHAWKS,-6,-7,7,0,0,0,0,-2 -3 -4 -6 -8 -9 -7 -6 -6 -6 -7 -8 -7 -7 -9 -8 -8 -7
+2020,1,2man_hi_lo,Nick S,Ben T + Andy H,FAMILY BIZ,6,7,7,1,0,0,0,2 3 4 6 8 9 7 6 6 6 7 8 7 7 9 8 8 7
+2020,1,2man_hi_lo,TJSC,Ben T + Andy H,FAMILY BIZ,6,7,7,1,0,0,0,2 3 4 6 8 9 7 6 6 6 7 8 7 7 9 8 8 7
+2020,1,2man_hi_lo,Scott R,Adam P + Joe O,TEEHAWKS,-1,-4,4,0,0,0,0,-2 0 -1 -2 -3 -1 -3 -3 -1 -2 -3 -5 -7 -7 -5 -5 -5 -4
+2020,1,2man_hi_lo,Kyle M,Adam P + Joe O,TEEHAWKS,-1,-4,4,0,0,0,0,-2 0 -1 -2 -3 -1 -3 -3 -1 -2 -3 -5 -7 -7 -5 -5 -5 -4
+2020,1,2man_hi_lo,Adam P,Scott R + Kyle M,FAMILY BIZ,1,4,4,1,0,0,0,2 0 1 2 3 1 3 3 1 2 3 5 7 7 5 5 5 4
+2020,1,2man_hi_lo,Joe O,Scott R + Kyle M,FAMILY BIZ,1,4,4,1,0,0,0,2 0 1 2 3 1 3 3 1 2 3 5 7 7 5 5 5 4
+2020,2,singles,Andy H,Julius P,TEEHAWKS,-4,-6,6,0,0,0,0,-1 -2 -2 -3 -4 -4 -4 -5 -4 -5 -5 -5 -4 -5 -6 -6 -6 -6
+2020,2,singles,Julius P,Andy H,FAMILY BIZ,4,6,6,1,0,0,0,1 2 2 3 4 4 4 5 4 5 5 5 4 5 6 6 6 6
+2020,2,singles,Joe O,Ghost,FAMILY BIZ,-4,-6,6,0,0,1,0,1 2 1 1 0 -1 -2 -3 -4 -3 -4 -4 -4 -3 -4 -5 -6 -6
+2020,2,singles,Scott R,Nick S,TEEHAWKS,-1,4,4,1,0,0,0,0 -1 -2 -1 0 -1 -2 -2 -1 0 -1 0 1 1 2 3 4 4
+2020,2,singles,Nick S,Scott R,FAMILY BIZ,1,-4,4,0,0,0,0,0 1 2 1 0 1 2 2 1 0 1 0 -1 -1 -2 -3 -4 -4
+2020,2,singles,Shaun W,Tim C,TEEHAWKS,-1,-5,5,0,0,0,0,0 1 1 0 0 -1 -2 -1 -1 -2 -3 -4 -5 -5 -4 -3 -4 -5
+2020,2,singles,Tim C,Shaun W,FAMILY BIZ,1,5,5,1,0,0,0,0 -1 -1 0 0 1 2 1 1 2 3 4 5 5 4 3 4 5
+2020,2,singles,Ben T,Adam P,TEEHAWKS,-1,-4,4,0,0,0,0,-1 0 0 0 0 -1 -2 -2 -1 0 1 0 -1 -2 -2 -3 -3 -4
+2020,2,singles,Adam P,Ben T,FAMILY BIZ,1,4,4,1,0,0,0,1 0 0 0 0 1 2 2 1 0 -1 0 1 2 2 3 3 4
+2020,2,singles,Pete C,Aaron J,TEEHAWKS,2,1,1,1,0,0,0,1 0 1 1 2 1 0 1 2 3 3 3 3 3 3 2 2 1
+2020,2,singles,Aaron J,Pete C,FAMILY BIZ,-2,-1,1,0,0,0,0,-1 0 -1 -1 -2 -1 0 -1 -2 -3 -3 -3 -3 -3 -3 -2 -2 -1
+2020,2,singles,Dave K,Kevin J,TEEHAWKS,1,3,3,1,0,0,0,1 0 1 1 2 3 2 2 1 0 0 0 0 -1 0 1 2 3
+2020,2,singles,Kevin J,Dave K,FAMILY BIZ,-1,-3,3,0,0,0,0,-1 0 -1 -1 -2 -3 -2 -2 -1 0 0 0 0 1 0 -1 -2 -3
+2020,2,singles,Kyle M,TJSC,TEEHAWKS,-2,-3,3,0,0,0,0,-1 0 -1 -2 -2 -1 -2 -1 -2 -3 -4 -3 -2 -1 -2 -3 -3 -3
+2020,2,singles,TJSC,Kyle M,FAMILY BIZ,2,3,3,1,0,0,0,1 0 1 2 2 1 2 1 2 3 4 3 2 1 2 3 3 3
+2020,3,2man_best_ball,Scott R,Nick S + Adam P,TEEHAWKS,0,1,1,1,0,0,0,1 1 0 1 1 1 1 0 0 1 2 3 2 1 1 1 1 1
+2020,3,2man_best_ball,Shaun W,Nick S + Adam P,TEEHAWKS,0,1,1,1,0,0,0,1 1 0 1 1 1 1 0 0 1 2 3 2 1 1 1 1 1
+2020,3,2man_best_ball,Nick S,Scott R + Shaun W,FAMILY BIZ,0,-1,1,0,0,0,0,-1 -1 0 -1 -1 -1 -1 0 0 -1 -2 -3 -2 -1 -1 -1 -1 -1
+2020,3,2man_best_ball,Adam P,Scott R + Shaun W,FAMILY BIZ,0,-1,1,0,0,0,0,-1 -1 0 -1 -1 -1 -1 0 0 -1 -2 -3 -2 -1 -1 -1 -1 -1
+2020,3,2man_best_ball,Ben T,Julius P + TJSC,TEEHAWKS,1,0,0,0,1,0,0,0 1 1 2 2 3 2 1 1 1 1 0 1 0 0 -1 0 0
+2020,3,2man_best_ball,Dave K,Julius P + TJSC,TEEHAWKS,1,0,0,0,1,0,0,0 1 1 2 2 3 2 1 1 1 1 0 1 0 0 -1 0 0
+2020,3,2man_best_ball,Julius P,Ben T + Dave K,FAMILY BIZ,-1,0,0,0,1,0,0,0 -1 -1 -2 -2 -3 -2 -1 -1 -1 -1 0 -1 0 0 1 0 0
+2020,3,2man_best_ball,TJSC,Ben T + Dave K,FAMILY BIZ,-1,0,0,0,1,0,0,0 -1 -1 -2 -2 -3 -2 -1 -1 -1 -1 0 -1 0 0 1 0 0
+2020,3,2man_best_ball,Andy H,Tim C + Kevin J,TEEHAWKS,-1,-3,3,0,0,0,0,-1 -1 -1 0 -1 -2 -3 -2 -1 -1 0 -1 -2 -3 -2 -3 -3 -3
+2020,3,2man_best_ball,Kyle M,Tim C + Kevin J,TEEHAWKS,-1,-3,3,0,0,0,0,-1 -1 -1 0 -1 -2 -3 -2 -1 -1 0 -1 -2 -3 -2 -3 -3 -3
+2020,3,2man_best_ball,Tim C,Andy H + Kyle M,FAMILY BIZ,1,3,3,1,0,0,0,1 1 1 0 1 2 3 2 1 1 0 1 2 3 2 3 3 3
+2020,3,2man_best_ball,Kevin J,Andy H + Kyle M,FAMILY BIZ,1,3,3,1,0,0,0,1 1 1 0 1 2 3 2 1 1 0 1 2 3 2 3 3 3
+2020,3,2man_best_ball,Pete C,Aaron J + Joe O,TEEHAWKS,0,-1,1,0,0,1,0,0 1 1 2 1 1 0 0 0 -1 -2 -1 -2 -2 -1 -2 -2 -1
+2020,3,2man_best_ball,Aaron J,Ghost + Pete C,FAMILY BIZ,0,1,1,1,0,1,0,0 -1 -1 -2 -1 -1 0 0 0 1 2 1 2 2 1 2 2 1
+2020,3,2man_best_ball,Joe O,Ghost + Pete C,FAMILY BIZ,0,1,1,1,0,1,0,0 -1 -1 -2 -1 -1 0 0 0 1 2 1 2 2 1 2 2 1
+2024,2,singles,Shaun W,Nick S,ADMIN,0,1,1,1,0,0,0,1 2 2 1 0 1 0 -1 0 0 1 2 2 3 2 3 2 1
+2024,2,singles,Nick S,Shaun W,FOXES,0,-1,1,0,0,0,0,-1 -2 -2 -1 0 -1 0 1 0 0 -1 -2 -2 -3 -2 -3 -2 -1
+2024,2,singles,Jim H,Paul S,ADMIN,-1,0,0,0,1,0,0,0 0 1 2 3 2 1 0 -1 -1 0 0 1 0 1 0 1 0
+2024,2,singles,Paul S,Jim H,FOXES,1,0,0,0,1,0,0,0 0 -1 -2 -3 -2 -1 0 1 1 0 0 -1 0 -1 0 -1 0
+2024,2,singles,Kevin J,Dave K,ADMIN,2,0,0,0,1,0,0,0 1 0 1 1 2 2 1 2 1 0 0 -1 -1 0 0 1 0
+2024,2,singles,Dave K,Kevin J,FOXES,-2,0,0,0,1,0,0,0 -1 0 -1 -1 -2 -2 -1 -2 -1 0 0 1 1 0 0 -1 0
+2024,2,singles,Paul W,Pete C,ADMIN,0,-1,1,0,0,0,0,0 -1 -1 -2 -1 -2 -1 -1 0 -1 0 0 1 1 0 -1 0 -1
+2024,2,singles,Pete C,Paul W,FOXES,0,1,1,1,0,0,0,0 1 1 2 1 2 1 1 0 1 0 0 -1 -1 0 1 0 1
+2024,2,singles,Ryan M,Ben T,ADMIN,-1,-8,8,0,0,0,0,0 0 0 0 1 0 0 0 -1 -2 -3 -3 -4 -5 -6 -7 -8 -8
+2024,2,singles,Ben T,Ryan M,FOXES,1,8,8,1,0,0,0,0 0 0 0 -1 0 0 0 1 2 3 3 4 5 6 7 8 8
+2024,2,singles,Joe O,TJSC,ADMIN,-2,2,2,1,0,0,0,-1 0 -1 -2 -1 -2 -1 -2 -2 -1 0 1 2 2 1 1 2 2
+2024,2,singles,TJSC,Joe O,FOXES,2,-2,2,0,0,0,0,1 0 1 2 1 2 1 2 2 1 0 -1 -2 -2 -1 -1 -2 -2
+2024,2,singles,Aaron J,Andy H,ADMIN,0,-2,2,0,0,0,0,1 2 2 1 0 1 1 0 0 1 2 2 1 0 -1 -1 -1 -2
+2024,2,singles,Andy H,Aaron J,FOXES,0,2,2,1,0,0,0,-1 -2 -2 -1 0 -1 -1 0 0 -1 -2 -2 -1 0 1 1 1 2
+2024,2,singles,Tim C,Adam P,ADMIN,0,1,1,1,0,0,0,1 1 2 1 0 -1 -2 -1 0 0 0 0 1 1 2 2 2 1
+2024,2,singles,Adam P,Tim C,FOXES,0,-1,1,0,0,0,0,-1 -1 -2 -1 0 1 2 1 0 0 0 0 -1 -1 -2 -2 -2 -1
+2024,3,2man_scramble,Ryan M,Dave K + Paul S,ADMIN,0,4,4,1,0,0,0,0 0 -1 -1 0 1 1 1 0 0 1 2 3 4 3 4 5 4
+2024,3,2man_scramble,Jim H,Dave K + Paul S,ADMIN,0,4,4,1,0,0,0,0 0 -1 -1 0 1 1 1 0 0 1 2 3 4 3 4 5 4
+2024,3,2man_scramble,Dave K,Ryan M + Jim H,FOXES,0,-4,4,0,0,0,0,0 0 1 1 0 -1 -1 -1 0 0 -1 -2 -3 -4 -3 -4 -5 -4
+2024,3,2man_scramble,Paul S,Ryan M + Jim H,FOXES,0,-4,4,0,0,0,0,0 0 1 1 0 -1 -1 -1 0 0 -1 -2 -3 -4 -3 -4 -5 -4
+2024,3,2man_scramble,Aaron J,Nick S + TJSC,ADMIN,-7,-7,7,0,0,0,0,-1 -2 -3 -4 -5 -6 -6 -6 -7 -6 -7 -8 -8 -7 -7 -7 -7 -7
+2024,3,2man_scramble,Paul W,Nick S + TJSC,ADMIN,-7,-7,7,0,0,0,0,-1 -2 -3 -4 -5 -6 -6 -6 -7 -6 -7 -8 -8 -7 -7 -7 -7 -7
+2024,3,2man_scramble,Nick S,Aaron J + Paul W,FOXES,7,7,7,1,0,0,0,1 2 3 4 5 6 6 6 7 6 7 8 8 7 7 7 7 7
+2024,3,2man_scramble,TJSC,Aaron J + Paul W,FOXES,7,7,7,1,0,0,0,1 2 3 4 5 6 6 6 7 6 7 8 8 7 7 7 7 7
+2024,3,2man_scramble,Shaun W,Andy H + Pete C,ADMIN,0,5,5,1,0,0,0,0 -1 -1 0 -1 -1 0 0 0 1 1 2 3 4 3 4 4 5
+2024,3,2man_scramble,Joe O,Andy H + Pete C,ADMIN,0,5,5,1,0,0,0,0 -1 -1 0 -1 -1 0 0 0 1 1 2 3 4 3 4 4 5
+2024,3,2man_scramble,Andy H,Shaun W + Joe O,FOXES,0,-5,5,0,0,0,0,0 1 1 0 1 1 0 0 0 -1 -1 -2 -3 -4 -3 -4 -4 -5
+2024,3,2man_scramble,Pete C,Shaun W + Joe O,FOXES,0,-5,5,0,0,0,0,0 1 1 0 1 1 0 0 0 -1 -1 -2 -3 -4 -3 -4 -4 -5
+2024,3,2man_scramble,Kevin J,Ben T + Adam P,ADMIN,-4,-2,2,0,0,0,0,-1 0 -1 -1 -1 -2 -3 -4 -4 -4 -3 -3 -3 -2 -1 -1 -2 -2
+2024,3,2man_scramble,Tim C,Ben T + Adam P,ADMIN,-4,-2,2,0,0,0,0,-1 0 -1 -1 -1 -2 -3 -4 -4 -4 -3 -3 -3 -2 -1 -1 -2 -2
+2024,3,2man_scramble,Ben T,Kevin J + Tim C,FOXES,4,2,2,1,0,0,0,1 0 1 1 1 2 3 4 4 4 3 3 3 2 1 1 2 2
+2024,3,2man_scramble,Adam P,Kevin J + Tim C,FOXES,4,2,2,1,0,0,0,1 0 1 1 1 2 3 4 4 4 3 3 3 2 1 1 2 2
+2025,2,singles,Ben T,Ryan M,SHOT CALLERS,4,8,8,1,0,0,0,0 1 2 1 2 3 4 4 4 5 5 5 5 6 6 7 8 8
+2025,2,singles,Ryan M,Ben T,MASH BROTHERS,-4,-8,8,0,0,0,0,0 -1 -2 -1 -2 -3 -4 -4 -4 -5 -5 -5 -5 -6 -6 -7 -8 -8
+2025,2,singles,Tim C,Pete C,SHOT CALLERS,-2,1,1,1,0,0,0,1 2 1 1 0 1 0 -1 -2 -2 -1 -2 -1 0 0 0 1 1
+2025,2,singles,Pete C,Tim C,MASH BROTHERS,2,-1,1,0,0,0,0,-1 -2 -1 -1 0 -1 0 1 2 2 1 2 1 0 0 0 -1 -1
+2025,2,singles,Nick S,Aaron J,SHOT CALLERS,-3,-1,1,0,0,0,0,0 -1 -1 -2 -3 -3 -4 -4 -3 -2 -1 -1 0 -1 0 -1 0 -1
+2025,2,singles,Aaron J,Nick S,MASH BROTHERS,3,1,1,1,0,0,0,0 1 1 2 3 3 4 4 3 2 1 1 0 1 0 1 0 1
+2025,2,singles,Adam P,Andy H,SHOT CALLERS,-5,-6,6,0,0,0,0,0 -1 -2 -3 -4 -5 -5 -6 -5 -6 -5 -5 -6 -6 -5 -5 -5 -6
+2025,2,singles,Andy H,Adam P,MASH BROTHERS,5,6,6,1,0,0,0,0 1 2 3 4 5 5 6 5 6 5 5 6 6 5 5 5 6
+2025,2,singles,Joe O,TJSC,SHOT CALLERS,-4,-9,9,0,0,0,0,1 1 0 -1 0 -1 -2 -3 -4 -4 -5 -5 -6 -7 -8 -9 -8 -9
+2025,2,singles,TJSC,Joe O,MASH BROTHERS,4,9,9,1,0,0,0,-1 -1 0 1 0 1 2 3 4 4 5 5 6 7 8 9 8 9
+2025,2,singles,Paul S,Jim H,SHOT CALLERS,0,4,4,1,0,0,0,0 1 0 0 1 0 1 0 0 0 1 2 3 2 3 2 3 4
+2025,2,singles,Jim H,Paul S,MASH BROTHERS,0,-4,4,0,0,0,0,0 -1 0 0 -1 0 -1 0 0 0 -1 -2 -3 -2 -3 -2 -3 -4
+2025,2,singles,Paul W,Shaun W,SHOT CALLERS,1,0,0,0,1,0,0,1 2 3 3 3 2 2 2 1 2 1 2 1 0 0 1 0 0
+2025,2,singles,Shaun W,Paul W,MASH BROTHERS,-1,0,0,0,1,0,0,-1 -2 -3 -3 -3 -2 -2 -2 -1 -2 -1 -2 -1 0 0 -1 0 0
+2025,2,singles,Dave K,Kevin J,SHOT CALLERS,2,4,4,1,0,0,0,-1 0 1 0 0 1 2 3 2 1 2 3 2 1 2 3 4 4
+2025,2,singles,Kevin J,Dave K,MASH BROTHERS,-2,-4,4,0,0,0,0,1 0 -1 0 0 -1 -2 -3 -2 -1 -2 -3 -2 -1 -2 -3 -4 -4
+2025,3,2man_scramble,Adam P,Andy H + Ryan M,SHOT CALLERS,0,-3,3,0,0,0,0,-1 -2 -2 -1 -1 -1 -1 -1 0 -1 -1 0 -1 -1 -1 -2 -2 -3
+2025,3,2man_scramble,Tim C,Andy H + Ryan M,SHOT CALLERS,0,-3,3,0,0,0,0,-1 -2 -2 -1 -1 -1 -1 -1 0 -1 -1 0 -1 -1 -1 -2 -2 -3
+2025,3,2man_scramble,Andy H,Adam P + Tim C,MASH BROTHERS,0,3,3,1,0,0,0,1 2 2 1 1 1 1 1 0 1 1 0 1 1 1 2 2 3
+2025,3,2man_scramble,Ryan M,Adam P + Tim C,MASH BROTHERS,0,3,3,1,0,0,0,1 2 2 1 1 1 1 1 0 1 1 0 1 1 1 2 2 3
+2025,3,2man_scramble,Ben T,Kevin J + TJSC,SHOT CALLERS,2,7,7,1,0,0,0,0 1 1 0 -1 0 0 1 2 3 3 4 4 4 4 5 6 7
+2025,3,2man_scramble,Nick S,Kevin J + TJSC,SHOT CALLERS,2,7,7,1,0,0,0,0 1 1 0 -1 0 0 1 2 3 3 4 4 4 4 5 6 7
+2025,3,2man_scramble,Kevin J,Ben T + Nick S,MASH BROTHERS,-2,-7,7,0,0,0,0,0 -1 -1 0 1 0 0 -1 -2 -3 -3 -4 -4 -4 -4 -5 -6 -7
+2025,3,2man_scramble,TJSC,Ben T + Nick S,MASH BROTHERS,-2,-7,7,0,0,0,0,0 -1 -1 0 1 0 0 -1 -2 -3 -3 -4 -4 -4 -4 -5 -6 -7
+2025,3,2man_scramble,Dave K,Aaron J + Pete C,SHOT CALLERS,-2,1,1,1,0,0,0,0 -1 -1 -2 -1 -2 -1 -2 -2 -1 0 0 1 0 0 1 1 1
+2025,3,2man_scramble,Paul S,Aaron J + Pete C,SHOT CALLERS,-2,1,1,1,0,0,0,0 -1 -1 -2 -1 -2 -1 -2 -2 -1 0 0 1 0 0 1 1 1
+2025,3,2man_scramble,Aaron J,Dave K + Paul S,MASH BROTHERS,2,-1,1,0,0,0,0,0 1 1 2 1 2 1 2 2 1 0 0 -1 0 0 -1 -1 -1
+2025,3,2man_scramble,Pete C,Dave K + Paul S,MASH BROTHERS,2,-1,1,0,0,0,0,0 1 1 2 1 2 1 2 2 1 0 0 -1 0 0 -1 -1 -1
+2025,3,2man_scramble,Joe O,Shaun W + Jim H,SHOT CALLERS,0,-1,1,0,0,0,0,-1 -2 -2 -1 0 0 1 1 0 0 1 1 0 -1 -1 -1 0 -1
+2025,3,2man_scramble,Paul W,Shaun W + Jim H,SHOT CALLERS,0,-1,1,0,0,0,0,-1 -2 -2 -1 0 0 1 1 0 0 1 1 0 -1 -1 -1 0 -1
+2025,3,2man_scramble,Shaun W,Joe O + Paul W,MASH BROTHERS,0,1,1,1,0,0,0,1 2 2 1 0 0 -1 -1 0 0 -1 -1 0 1 1 1 0 1
+2025,3,2man_scramble,Jim H,Joe O + Paul W,MASH BROTHERS,0,1,1,1,0,0,0,1 2 2 1 0 0 -1 -1 0 0 -1 -1 0 1 1 1 0 1
