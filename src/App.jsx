@@ -1,17 +1,17 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { BC, applyBCTheme, initialBCMode } from "./theme";
-import { db, auth, TOURNAMENT_ID } from "./firebase";
+import { db, TOURNAMENT_ID } from "./firebase";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
   TEAM_A, TEAM_B, getTeam, oppTeam,
-  FORMATS, NASSAU_DEFAULT, PRACTICE_TEAM_COLORS,
-  POINT_METHOD_NASSAU, POINT_METHOD_TRADITIONAL, traditionalDefaultFor,
+  FORMATS, NASSAU_DEFAULT, PRACTICE_TEAM_COLORS, DIRECTOR_CODE,
 } from "./constants";
 import {
   calcCH, calcCHForCourse, fmtScore,
   getEffectiveHI, buildStrokeMap,
   computeMatchResult, computePracticeMatch, computePracticeSkins,
 } from "./scoring";
+import { usePullToRefresh } from "./lib/usePullToRefresh";
 
 // First+last initials from a player's full name. "Aaron Jensen" → "AJ".
 // Single-name fallback grabs the first two letters (e.g. "Joe" → "JO") so a
@@ -104,7 +104,15 @@ function Notif({ notif }) {
 }
 
 // ── Login Screen ──
-function LoginScreen({ players, onPlayerClick, teamNames, darkMode, loginError, onClearError, firebaseUser, onSwitchAccount }) {
+function LoginScreen({ players, onLogin, teamNames, darkMode }) {
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    if (search === DIRECTOR_CODE) {
+      onLogin({ player_id: "bootstrap_director", name: "Director (Setup)", team: null, isDirector: true });
+    }
+  }, [search]);
+
   // Mash Brothers has TWO logo variants — one designed to be displayed
   // on a black background (the original, with the green flag/white
   // type), and one designed for a white/light background. Picking the
@@ -121,7 +129,7 @@ function LoginScreen({ players, onPlayerClick, teamNames, darkMode, loginError, 
   const filterPlayers = (list) => list;
 
   const PlayerBtn = ({ p, team }) => (
-    <button onClick={() => { if (loginError) onClearError(); onPlayerClick(p); }} style={{
+    <button onClick={() => onLogin(p)} style={{
       width: "100%", padding: "clamp(8px, 2.5vw, 12px) clamp(10px, 3vw, 14px)", background: team.color + "22",
       border: `1px solid ${team.accent}33`, borderRadius: 6,
       color: BC.t2, fontSize: "clamp(13px, 3.8vw, 14px)", fontWeight: 600, cursor: "pointer", textAlign: "center",
@@ -132,7 +140,7 @@ function LoginScreen({ players, onPlayerClick, teamNames, darkMode, loginError, 
   );
 
   return (
-    <div style={{ height: "100svh", background: BC.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 10px", position: "relative", overflow: "hidden" }}>
+    <div style={{ height: "100svh", background: BC.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 10px", fontFamily: "'Montserrat', sans-serif", position: "relative", overflow: "hidden" }}>
       {/* Silhouette — fixed full-screen background */}
       <img src={TROPHY_SILHOUETTE} alt="" style={{
         position: "fixed", top: "50%", left: "50%",
@@ -174,264 +182,11 @@ function LoginScreen({ players, onPlayerClick, teamNames, darkMode, loginError, 
 
       {players.length === 0 && (
         <div style={{ textAlign: "center", color: BC.t3, padding: 16, fontSize: 12, position: "relative", zIndex: 1, marginTop: 12 }}>
-          No players have been added yet.
-        </div>
-      )}
-
-      {/* Login error banner — surfaces auth issues like "your email isn't
-          registered" so the user knows why they're back on this screen. */}
-      {loginError && (
-        <div style={{
-          marginTop: 14, padding: "10px 14px", borderRadius: 8,
-          background: BC.danger + "15", border: `1px solid ${BC.danger}55`,
-          color: BC.danger, fontSize: 12, textAlign: "center",
-          maxWidth: 480, position: "relative", zIndex: 1,
-        }}>
-          {loginError}
-        </div>
-      )}
-
-      {/* "Signed in as X" affordance — appears when there's a Firebase user
-          but no resolved player. Lets the user sign out and try a
-          different account (e.g., they used the wrong Google account
-          and need to retry). */}
-      {firebaseUser && (
-        <div style={{
-          marginTop: 12, padding: "8px 12px", borderRadius: 8,
-          background: BC.card, border: `1px solid ${BC.bdr}`,
-          fontSize: 11, color: BC.t3, textAlign: "center",
-          display: "flex", alignItems: "center", gap: 8,
-          position: "relative", zIndex: 1,
-        }}>
-          <span>Signed in as <span style={{ color: BC.t1, fontWeight: 600 }}>{firebaseUser.email}</span></span>
-          <button onClick={onSwitchAccount} style={{
-            padding: "3px 8px", borderRadius: 6, border: `1px solid ${BC.bdr}`,
-            background: "transparent", color: BC.amber, fontSize: 10, fontWeight: 700, cursor: "pointer",
-          }}>
-            Switch account
-          </button>
+          No players yet. Type <span style={{ color: BC.amber, fontWeight: 700 }}>bcdir2025</span> to set up.
         </div>
       )}
       </div>
     </div>
-  );
-}
-
-// Translate Firebase auth error codes into messages a user can act on.
-// The default `e.message` from Firebase tends to be of the form
-// "Firebase: Error (auth/some-code)." which is not useful in front of
-// a non-technical user. Anything we don't have a friendly mapping for
-// falls back to whatever message Firebase gave us.
-function authErrorMessage(e) {
-  const code = e?.code || "";
-  switch (code) {
-    case "auth/configuration-not-found":
-    case "auth/operation-not-allowed":
-      return "This sign-in method isn't set up on the app yet. Talk to the director.";
-    case "auth/unauthorized-domain":
-      return "This domain isn't authorized for sign-in. Talk to the director.";
-    case "auth/popup-blocked":
-      return "Your browser blocked the sign-in popup. Allow popups and try again.";
-    case "auth/popup-closed-by-user":
-    case "auth/cancelled-popup-request":
-      return "Sign-in was cancelled. Try again when you're ready.";
-    case "auth/network-request-failed":
-      return "Couldn't reach the sign-in server. Check your connection and retry.";
-    case "auth/invalid-email":
-      return "That doesn't look like a valid email address.";
-    case "auth/user-disabled":
-      return "This account has been disabled.";
-    case "auth/expired-action-code":
-    case "auth/invalid-action-code":
-      return "This sign-in link has expired or already been used. Request a new one.";
-    default:
-      return e?.message || "Sign-in failed. Try again.";
-  }
-}
-
-// ── Login modal ──
-// Opens when a user clicks their name on LoginScreen. Two sign-in options:
-//   - Google: one-click popup. On success, the App's auth-state listener
-//     resolves the authed email to a player record.
-//   - Magic link: user enters email, link is sent, modal shows a "check
-//     your email" confirmation. The actual sign-in completes when the
-//     user clicks the link in their email and returns to the app.
-//
-// The clicked player is passed in as `player` and shown in the header so
-// the user knows which name they're claiming. The actual binding (authed
-// email must match the player's stored email) is enforced by the parent
-// after auth completes — this modal just runs the auth flow.
-function LoginModal({ player, onClose, onError, error }) {
-  const [mode, setMode] = useState("choose"); // "choose" | "email-form" | "email-sent" | "loading"
-  const [email, setEmail] = useState("");
-
-  if (!player) return null;
-
-  const handleGoogle = async () => {
-    setMode("loading");
-    try {
-      await auth.signInWithGoogle();
-      // Stay in "loading" — the auth-state listener fires asynchronously,
-      // the resolver runs, self-binds (or matches), and sets user.
-      // When user is set, the parent's `if (!user)` guard stops rendering
-      // LoginScreen, which unmounts this modal. Calling onClose here would
-      // clear pendingPlayer before the resolver can use it for self-binding,
-      // and the user would land back on the player-selection screen.
-      // The redirect-fallback path returns undefined and is about to navigate
-      // away anyway — same "stay in loading" behavior is correct.
-    } catch (e) {
-      setMode("choose");
-      onError(authErrorMessage(e));
-    }
-  };
-
-  const handleSendLink = async () => {
-    if (!email.trim() || !email.includes("@")) {
-      onError("Enter a valid email address.");
-      return;
-    }
-    setMode("loading");
-    try {
-      await auth.sendMagicLink(email.trim());
-      setMode("email-sent");
-    } catch (e) {
-      setMode("email-form");
-      onError(authErrorMessage(e));
-    }
-  };
-
-  // Backdrop is only dismissable when the user hasn't initiated an
-  // in-flight auth step. Once they hit Send (email-sent) or kick off
-  // Google sign-in (loading), accidental backdrop taps would lose
-  // pendingPlayer and break the bind on return.
-  const canDismissByBackdrop = mode === "choose" || mode === "email-form";
-
-  return (
-    <>
-      {/* Backdrop */}
-      <div onClick={canDismissByBackdrop ? onClose : undefined} style={{
-        position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)",
-        zIndex: 300, backdropFilter: "blur(2px)",
-        cursor: canDismissByBackdrop ? "pointer" : "default",
-      }} />
-      {/* Modal card */}
-      <div style={{
-        position: "fixed", top: "50%", left: "50%",
-        transform: "translate(-50%, -50%)",
-        width: "calc(100% - 32px)", maxWidth: 360,
-        background: BC.card, borderRadius: 14,
-        border: `1px solid ${BC.bdr}`,
-        boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
-        zIndex: 301, padding: 20,
-      }}>
-        {/* Header */}
-        <div style={{ marginBottom: 14, textAlign: "center" }}>
-          <div style={{ fontSize: 10, color: BC.t3, letterSpacing: 2, fontWeight: 700, marginBottom: 4 }}>SIGN IN AS</div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: BC.t1 }}>{player.name}</div>
-        </div>
-
-        {/* Error — surfaces auth failures inside the modal so the user
-            doesn't have to dismiss it to see what went wrong. */}
-        {error && (
-          <div style={{
-            marginBottom: 12, padding: "8px 12px", borderRadius: 8,
-            background: BC.danger + "15", border: `1px solid ${BC.danger}55`,
-            color: BC.danger, fontSize: 11, lineHeight: 1.45,
-          }}>
-            {error}
-          </div>
-        )}
-
-        {mode === "choose" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <button onClick={handleGoogle} style={{
-              padding: "11px 14px", borderRadius: 10, border: `1px solid ${BC.bdr}`,
-              background: BC.inp, color: BC.t1, fontSize: 14, fontWeight: 600,
-              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-            }}>
-              {/* Google "G" mark */}
-              <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
-                <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z" />
-                <path fill="#34A853" d="M9 18c2.43 0 4.47-.81 5.96-2.18l-2.92-2.26c-.81.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.32A9 9 0 0 0 9 18z" />
-                <path fill="#FBBC05" d="M3.97 10.71A5.41 5.41 0 0 1 3.68 9c0-.6.1-1.17.29-1.71V4.97H.96A9 9 0 0 0 0 9c0 1.45.35 2.82.96 4.03l3.01-2.32z" />
-                <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A9 9 0 0 0 9 0a9 9 0 0 0-8.04 4.97l3.01 2.32C4.68 5.16 6.66 3.58 9 3.58z" />
-              </svg>
-              Continue with Google
-            </button>
-            <button onClick={() => setMode("email-form")} style={{
-              padding: "11px 14px", borderRadius: 10, border: `1px solid ${BC.bdr}`,
-              background: BC.inp, color: BC.t1, fontSize: 14, fontWeight: 600,
-              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-            }}>
-              ✉ Email me a sign-in link
-            </button>
-            <button onClick={onClose} style={{
-              marginTop: 4, padding: "8px 14px", borderRadius: 10, border: "none",
-              background: "transparent", color: BC.t3, fontSize: 12, cursor: "pointer",
-            }}>
-              Cancel
-            </button>
-          </div>
-        )}
-
-        {mode === "email-form" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <input
-              autoFocus
-              type="email"
-              inputMode="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") handleSendLink(); }}
-              placeholder="you@example.com"
-              style={{
-                padding: "11px 12px", borderRadius: 10, border: `1px solid ${BC.bdr}`,
-                background: BC.inp, color: BC.t1, fontSize: 16, outline: "none",
-              }}
-            />
-            <button onClick={handleSendLink} style={{
-              padding: "11px 14px", borderRadius: 10, border: "none",
-              background: BC.amber, color: "#0a0804", fontSize: 14, fontWeight: 700, cursor: "pointer",
-            }}>
-              Send sign-in link
-            </button>
-            <button onClick={() => setMode("choose")} style={{
-              padding: "8px 14px", borderRadius: 10, border: "none",
-              background: "transparent", color: BC.t3, fontSize: 12, cursor: "pointer",
-            }}>
-              ← Back
-            </button>
-          </div>
-        )}
-
-        {mode === "email-sent" && (
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}>✉</div>
-            <div style={{ fontSize: 14, color: BC.t1, fontWeight: 600, marginBottom: 6 }}>Check your email</div>
-            <div style={{ fontSize: 12, color: BC.t3, lineHeight: 1.5, marginBottom: 14 }}>
-              We sent a sign-in link to <span style={{ color: BC.t1, fontWeight: 600 }}>{email}</span>. Click the link to finish signing in.
-            </div>
-            {/* No "Close" button here on purpose — closing the modal would
-                clear pendingPlayer, and the link-return self-bind would
-                have nothing to bind to. The modal stays up until the
-                user clicks the link (auth completes, modal unmounts) or
-                they decide to retry with a different email. */}
-            <button onClick={() => setMode("email-form")} style={{
-              padding: "8px 14px", borderRadius: 10, border: "none",
-              background: "transparent", color: BC.t3, fontSize: 12, cursor: "pointer",
-            }}>
-              ← Use a different email
-            </button>
-          </div>
-        )}
-
-        {mode === "loading" && (
-          <div style={{ textAlign: "center", padding: "20px 0" }}>
-            <div style={{ fontSize: 12, color: BC.t3 }}>Signing in…</div>
-          </div>
-        )}
-      </div>
-    </>
   );
 }
 
@@ -473,12 +228,7 @@ function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds
     return tot;
   }, [matchResults]);
 
-  // Total points at stake across all matches. Each match contributes
-  // either its single Traditional pot or the sum of its Nassau pots.
   const totalAvail = matches.reduce((s, m) => {
-    if (m.point_method === POINT_METHOD_TRADITIONAL) {
-      return s + (m.traditional_points || 0);
-    }
     const n = m.nassau || NASSAU_DEFAULT;
     return s + (n.front || 0) + (n.back || 0) + (n.overall || 0);
   }, 0);
@@ -502,7 +252,7 @@ function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds
   );
 
   return (
-    <div>
+    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
       {/* TEAMS banner — top-of-view summary card. Mash green header
           strip with centered white text; below it, one row per team
           with their Nassau total. The team that is currently leading
@@ -911,13 +661,13 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
 
   // No more hooks below this line.
   if (!match) return (
-    <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>
+    <div style={{ textAlign: "center", padding: 40, color: BC.t3, fontFamily: "'Montserrat', sans-serif" }}>
       <div style={{ fontSize: 32, marginBottom: 12 }}>⛳</div>
       <div>You're not in any matches yet.</div>
     </div>
   );
   if (!course) return (
-    <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>
+    <div style={{ textAlign: "center", padding: 40, color: BC.t3, fontFamily: "'Montserrat', sans-serif" }}>
       Round {match.round} course not configured yet.
     </div>
   );
@@ -980,7 +730,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   const baseBtns = par === 3 ? [1, 2, 3, 4, 5, 6, 7] : [2, 3, 4, 5, 6, 7, 8];
 
   return (
-    <div>
+    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
       {/* Round selector — visible only when user is in matches across
           multiple rounds (typical mid-tournament scenario). Uses the
           deep-green active-tab styling consistent with the Mash visual
@@ -1237,6 +987,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
             whiteSpace: "nowrap", textAlign: "center",
             boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
             animation: "bcToastDown 0.3s ease",
+            fontFamily: "'Montserrat', sans-serif",
           }}>
             {toast}
           </div>
@@ -1259,7 +1010,7 @@ function GroupsView({ matches, tRounds, tPlayers, courses, teamNames }) {
   const fmt = FORMATS.find(f => f.id === tr?.format);
 
   return (
-    <div>
+    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
       {/* Round selector — pill toggle, deep Mash green for active state.
           Mirrors the Mash visual language used on Scoring + Leaderboard. */}
       <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
@@ -1352,7 +1103,6 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   const [newPlayerName, setNewPlayerName] = useState("");
   const [newPlayerTeam, setNewPlayerTeam] = useState(null);
   const [newPlayerHI, setNewPlayerHI] = useState("");
-  const [newPlayerEmail, setNewPlayerEmail] = useState("");
   const [courseSearch, setCourseSearch] = useState("");
   const [courseStateFilter, setCourseStateFilter] = useState("MI");
   const [searchResults, setSearchResults] = useState([]);
@@ -1375,8 +1125,6 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
     setRoundFormat(tr.format || "");
     setRoundTeeTime(tr.tee_time || "");
     setNassau({ front: tr.nassau_front ?? 1, back: tr.nassau_back ?? 1, overall: tr.nassau_overall ?? 1 });
-    setPointMethod(tr.point_method || POINT_METHOD_NASSAU);
-    setTraditionalPoints(tr.traditional_points ?? traditionalDefaultFor(tr.format || "singles"));
     if (tr.handicap_mode) setHandicapMode(prev => ({ ...prev, [editRound]: tr.handicap_mode }));
   }, [tRounds]);
   const [handicapMode, setHandicapMode] = useState({ 1: "low_man", 2: "low_man", 3: "low_man", 4: "full" }); // per round
@@ -1401,58 +1149,14 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   useEffect(() => { if (hcpOverridesFromDb) setHcpOverrides(hcpOverridesFromDb); }, [JSON.stringify(hcpOverridesFromDb)]);
   useEffect(() => { if (teeAssignmentsFromDb) setTeeAssignments(teeAssignmentsFromDb); }, [JSON.stringify(teeAssignmentsFromDb)]);
   const [nassau, setNassau] = useState(NASSAU_DEFAULT);
-  // Point allocation method (Nassau vs Traditional). Independent of the
-  // format — the director picks both at round setup. See constants.js for
-  // the model. Defaults to Nassau so any pre-existing rounds without this
-  // field saved keep behaving exactly as they did before.
-  const [pointMethod, setPointMethod] = useState(POINT_METHOD_NASSAU);
-  const [traditionalPoints, setTraditionalPoints] = useState(traditionalDefaultFor("singles"));
 
   // Match builder
+  const [matchRound, setMatchRound] = useState(1);
   const [matchTeamA, setMatchTeamA] = useState([]);
   const [matchTeamB, setMatchTeamB] = useState([]);
 
   const teamAPlayers = tPlayers.filter(p => p.team === "A"); // used in match builder
   const teamBPlayers = tPlayers.filter(p => p.team === "B");
-
-  // ── Round-form dirty tracking ──
-  // Compares the local form state (roundFormat, tee_time, nassau, handicap
-  // mode, hcp overrides, tee assignments) against what's currently saved
-  // for this round. Drives the Save button's disabled state — no point
-  // letting the director re-save identical values, and the dimmed button
-  // makes it obvious when an edit is unsaved vs. when nothing has changed.
-  // Course is intentionally excluded — it's read-only here (set in the
-  // Courses tab) so it can never be "dirty" in this form.
-  const isRoundDirty = useMemo(() => {
-    if (!editRound) return false;
-    const tr = tRounds.find(t => t.round_number === editRound) || {};
-    if ((roundFormat || "") !== (tr.format || "")) return true;
-    if ((roundTeeTime || "") !== (tr.tee_time || "")) return true;
-    if ((nassau.front ?? 1) !== (tr.nassau_front ?? 1)) return true;
-    if ((nassau.back ?? 1) !== (tr.nassau_back ?? 1)) return true;
-    if ((nassau.overall ?? 1) !== (tr.nassau_overall ?? 1)) return true;
-    if (pointMethod !== (tr.point_method || POINT_METHOD_NASSAU)) return true;
-    const savedTrad = tr.traditional_points ?? traditionalDefaultFor(tr.format || "singles");
-    if ((traditionalPoints ?? 0) !== savedTrad) return true;
-    const defaultMode = editRound === 4 ? "full" : "low_man";
-    const localMode = handicapMode[editRound] || defaultMode;
-    const savedMode = tr.handicap_mode || defaultMode;
-    if (localMode !== savedMode) return true;
-    // Compare per-round override and tee-assignment maps. Empty strings
-    // are treated as "no override" so typing a value and clearing it
-    // doesn't leave the form spuriously dirty.
-    const cleanMap = (obj) => {
-      const out = {};
-      for (const k of Object.keys(obj || {}).sort()) {
-        const v = obj[k];
-        if (v !== "" && v !== null && v !== undefined) out[k] = v;
-      }
-      return JSON.stringify(out);
-    };
-    if (cleanMap(hcpOverrides[editRound]) !== cleanMap(hcpOverridesFromDb?.[editRound])) return true;
-    if (cleanMap(teeAssignments[editRound]) !== cleanMap(teeAssignmentsFromDb?.[editRound])) return true;
-    return false;
-  }, [editRound, tRounds, roundFormat, roundTeeTime, nassau, pointMethod, traditionalPoints, handicapMode, hcpOverrides, hcpOverridesFromDb, teeAssignments, teeAssignmentsFromDb]);
 
   if (!user.isDirector) return (
     <div style={{ textAlign: "center", padding: 40 }}>
@@ -1478,8 +1182,6 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
       format: roundFormat || tr.format || "singles",
       handicap_mode: handicapMode[editRound] || "low_man",
       tee_time: roundTeeTime || tr.tee_time || "",
-      point_method: pointMethod,
-      traditional_points: traditionalPoints,
       nassau_front: nassau.front,
       nassau_back: nassau.back,
       nassau_overall: nassau.overall,
@@ -1490,18 +1192,16 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
   const saveMatch = async () => {
     if (matchTeamA.length === 0 || matchTeamB.length === 0) { notify("Select players for both teams", "error"); return; }
-    const mId = `bc_match_r${editRound}_${matchTeamA.join("_")}_vs_${matchTeamB.join("_")}`;
+    const mId = `bc_match_r${matchRound}_${matchTeamA.join("_")}_vs_${matchTeamB.join("_")}`;
     const data = {
       id: mId,
       tournament_id: TOURNAMENT_ID,
-      round: editRound,
+      round: matchRound,
       teamA: matchTeamA,
       teamB: matchTeamB,
       teamANames: matchTeamA.map(pid => tPlayers.find(p => p.player_id === pid)?.name || pid),
       teamBNames: matchTeamB.map(pid => tPlayers.find(p => p.player_id === pid)?.name || pid),
       nassau: nassau,
-      point_method: pointMethod,
-      traditional_points: traditionalPoints,
     };
     await onSetMatch(data);
     setMatchTeamA([]); setMatchTeamB([]);
@@ -1614,18 +1314,18 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
     }, 400);
   };
 
-  const InputStyle = { width: "100%", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: 13, boxSizing: "border-box", outline: "none" };
+  const InputStyle = { width: "100%", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: 13, boxSizing: "border-box", outline: "none", fontFamily: "'Montserrat', sans-serif" };
   const LabelStyle = { fontSize: 10, color: BC.t3, fontWeight: 700, letterSpacing: 1, marginBottom: 4, display: "block" };
   const BtnStyle = { padding: "10px 20px", borderRadius: 10, border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer", background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`, color: "#0a0804" };
 
   return (
-    <div>
+    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
       {/* Tabs */}
       <div style={{ display: "flex", gap: 4, marginBottom: 16, background: BC.card, borderRadius: 12, padding: 4, border: `1px solid ${BC.bdr}` }}>
-        {[["players","Players"],["rounds","Rounds"],["courses","Courses"]].map(([k, lbl]) => (
+        {[["players","Players"],["rounds","Rounds"],["matches","Matches"],["courses","Courses"]].map(([k, lbl]) => (
           <button key={k} onClick={() => setTab(k)} style={{
             flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: 10, fontWeight: 700, cursor: "pointer", border: "none",
-            background: tab === k ? BC.amber : "transparent",
+            background: tab === k ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
             color: tab === k ? "#0a0804" : BC.t3,
           }}>{lbl}</button>
         ))}
@@ -1679,13 +1379,13 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
               {/* Expandable add card */}
               {newPlayerTeam === team.id && (
-                <div style={{ background: BC.inp, borderRadius: 10, padding: 10, marginBottom: 10, border: `1px solid ${team.accent}44`, display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ background: BC.inp, borderRadius: 10, padding: 10, marginBottom: 10, border: `1px solid ${team.accent}44` }}>
                   <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                     <input
                       autoFocus
                       value={newPlayerName}
                       onChange={e => setNewPlayerName(e.target.value)}
-                      onKeyDown={async e => { if (e.key === "Enter") { if (!newPlayerName.trim()) return; const pid = `bc_player_${Date.now()}`; await onAddPlayer({ id: pid, player_id: pid, tournament_id: TOURNAMENT_ID, name: newPlayerName.trim(), team: team.id, handicap_index: parseFloat(newPlayerHI) || 0, email: newPlayerEmail.trim().toLowerCase() }); setNewPlayerName(""); setNewPlayerHI(""); setNewPlayerEmail(""); setNewPlayerTeam(null); notify(`Added!`, "success"); } }}
+                      onKeyDown={async e => { if (e.key === "Enter") { if (!newPlayerName.trim()) return; const pid = `bc_player_${Date.now()}`; await onAddPlayer({ id: pid, player_id: pid, tournament_id: TOURNAMENT_ID, name: newPlayerName.trim(), team: team.id, handicap_index: parseFloat(newPlayerHI) || 0 }); setNewPlayerName(""); setNewPlayerHI(""); setNewPlayerTeam(null); notify(`Added!`, "success"); } }}
                       placeholder="Player name"
                       style={{ flex: 2, padding: "9px 10px", background: "#1e1c18", border: `1px solid ${team.accent}55`, borderRadius: 8, color: "#ffffff", fontSize: 12, outline: "none" }}
                     />
@@ -1699,22 +1399,14 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     <button onClick={async () => {
                       if (!newPlayerName.trim()) { notify("Enter a name", "error"); return; }
                       const pid = `bc_player_${Date.now()}`;
-                      await onAddPlayer({ id: pid, player_id: pid, tournament_id: TOURNAMENT_ID, name: newPlayerName.trim(), team: team.id, handicap_index: parseFloat(newPlayerHI) || 0, email: newPlayerEmail.trim().toLowerCase() });
-                      setNewPlayerName(""); setNewPlayerHI(""); setNewPlayerEmail(""); setNewPlayerTeam(null);
+                      await onAddPlayer({ id: pid, player_id: pid, tournament_id: TOURNAMENT_ID, name: newPlayerName.trim(), team: team.id, handicap_index: parseFloat(newPlayerHI) || 0 });
+                      setNewPlayerName(""); setNewPlayerHI(""); setNewPlayerTeam(null);
                       notify(`Added!`, "success");
-                    }} style={{ padding: "9px 12px", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer", background: team.color, border: `1px solid ${team.accent}`, color: team.accent, flexShrink: 0 }}>✓</button>
-                    <button onClick={() => { setNewPlayerTeam(null); setNewPlayerName(""); setNewPlayerHI(""); setNewPlayerEmail(""); }} style={{
+                    }} style={{ padding: "9px 12px", borderRadius: 8, border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer", background: team.color, border: `1px solid ${team.accent}`, color: team.accent, flexShrink: 0 }}>✓</button>
+                    <button onClick={() => { setNewPlayerTeam(null); setNewPlayerName(""); setNewPlayerHI(""); }} style={{
                       padding: "9px 10px", borderRadius: 8, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, fontSize: 12, cursor: "pointer", flexShrink: 0,
                     }}>✕</button>
                   </div>
-                  <input
-                    value={newPlayerEmail}
-                    onChange={e => setNewPlayerEmail(e.target.value)}
-                    placeholder="Email (optional — set on first login if blank)"
-                    type="email"
-                    inputMode="email"
-                    style={{ padding: "9px 10px", background: "#1e1c18", border: `1px solid ${team.accent}55`, borderRadius: 8, color: "#ffffff", fontSize: 12, outline: "none" }}
-                  />
                 </div>
               )}
 
@@ -1735,45 +1427,32 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       onTouchStart={e => { swipeStartX.current = e.touches[0].clientX; setSwipePid(p.player_id); setSwipeX(0); }}
                       onTouchMove={e => { if (swipeStartX.current == null) return; const dx2 = e.touches[0].clientX - swipeStartX.current; setSwipeX(Math.min(0, dx2)); }}
                       onTouchEnd={() => { if (swipeX < -80) { if (window.confirm(`Remove ${p.name}?`)) { onRemovePlayer(p.player_id); } } setSwipePid(null); setSwipeX(0); swipeStartX.current = null; }}
-                      style={{ background: BC.card, borderRadius: 6, padding: "4px 8px", border: `1px solid ${BC.bdr}`, display: "flex", flexDirection: isEditing ? "column" : "row", alignItems: isEditing ? "stretch" : "center", gap: 6, boxShadow: `inset 3px 0 0 ${team.accent}55`, position: "relative", transform: `translateX(${dx}px)`, transition: isSwiping ? "none" : "transform 0.2s ease" }}>
+                      style={{ background: BC.card, borderRadius: 6, padding: "4px 8px", border: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", gap: 6, boxShadow: `inset 3px 0 0 ${team.accent}55`, position: "relative", transform: `translateX(${dx}px)`, transition: isSwiping ? "none" : "transform 0.2s ease" }}>
                       {isEditing ? (
                         <>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <input autoFocus value={editingPlayer.name} onChange={e => setEditingPlayer(prev => ({...prev, name: e.target.value}))}
-                              style={{ fontSize: 12, fontWeight: 600, color: BC.t1, width: 110, flexShrink: 0, background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 4, padding: "2px 6px", outline: "none" }} />
-                            <input type="number" value={editingPlayer.hi} onChange={e => setEditingPlayer(prev => ({...prev, hi: e.target.value}))}
-                              style={{ fontSize: 11, color: BC.t1, width: 42, flexShrink: 0, background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 4, padding: "2px 6px", outline: "none" }} />
-                            <span style={{ flex: 1 }} />
-                            <button onClick={() => {
-                              const changes = [];
-                              const newEmail = (editingPlayer.email || "").trim().toLowerCase();
-                              const oldEmail = (p.email || "").toLowerCase();
-                              if (editingPlayer.name !== p.name) changes.push(`Name: "${p.name}" → "${editingPlayer.name}"`);
-                              if (parseFloat(editingPlayer.hi) !== parseFloat(p.handicap_index)) changes.push(`HI: ${p.handicap_index} → ${editingPlayer.hi}`);
-                              if (newEmail !== oldEmail) changes.push(`Email: "${p.email || "—"}" → "${newEmail || "—"}"`);
-                              if (changes.length === 0) { setEditingPlayer(null); return; }
-                              if (window.confirm("Confirm changes for " + p.name + ":\n" + changes.join("\n"))) {
-                                onUpdatePlayer({ ...p, name: editingPlayer.name.trim(), handicap_index: parseFloat(editingPlayer.hi) || 0, email: newEmail });
-                              }
-                              setEditingPlayer(null);
-                            }} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, border: "none", background: team.accent, color: "#0a0804", fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>✓</button>
-                            <button onClick={() => setEditingPlayer(null)} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer", flexShrink: 0 }}>✕</button>
-                          </div>
-                          <input
-                            type="email"
-                            inputMode="email"
-                            value={editingPlayer.email || ""}
-                            onChange={e => setEditingPlayer(prev => ({...prev, email: e.target.value}))}
-                            placeholder="Email (auto-set on first login; clear to allow re-bind)"
-                            style={{ fontSize: 11, color: BC.t1, background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 4, padding: "4px 6px", outline: "none" }}
-                          />
+                          <input autoFocus value={editingPlayer.name} onChange={e => setEditingPlayer(prev => ({...prev, name: e.target.value}))}
+                            style={{ fontSize: 12, fontWeight: 600, color: BC.t1, width: 110, flexShrink: 0, background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 4, padding: "2px 6px", outline: "none", fontFamily: "'Montserrat', sans-serif" }} />
+                          <input type="number" value={editingPlayer.hi} onChange={e => setEditingPlayer(prev => ({...prev, hi: e.target.value}))}
+                            style={{ fontSize: 11, color: BC.t1, width: 42, flexShrink: 0, background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 4, padding: "2px 6px", outline: "none", fontFamily: "'Montserrat', sans-serif" }} />
+                          <span style={{ flex: 1 }} />
+                          <button onClick={() => {
+                            const changes = [];
+                            if (editingPlayer.name !== p.name) changes.push(`Name: "${p.name}" → "${editingPlayer.name}"`);
+                            if (parseFloat(editingPlayer.hi) !== parseFloat(p.handicap_index)) changes.push(`HI: ${p.handicap_index} → ${editingPlayer.hi}`);
+                            if (changes.length === 0) { setEditingPlayer(null); return; }
+                            if (window.confirm("Confirm changes for " + p.name + ":\n" + changes.join("\n"))) {
+                              onUpdatePlayer({ ...p, name: editingPlayer.name.trim(), handicap_index: parseFloat(editingPlayer.hi) || 0 });
+                            }
+                            setEditingPlayer(null);
+                          }} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, border: "none", background: team.accent, color: "#0a0804", fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>✓</button>
+                          <button onClick={() => setEditingPlayer(null)} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer", flexShrink: 0 }}>✕</button>
                         </>
                       ) : (
                         <>
                           <span style={{ fontSize: 12, fontWeight: 600, color: team.accent + "88", width: 110, flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
                           <span style={{ fontSize: 11, fontWeight: 400, color: BC.t1, width: 36, flexShrink: 0 }}>{p.handicap_index}</span>
                           <span style={{ flex: 1 }} />
-                          <button onClick={() => setEditingPlayer({ pid: p.player_id, name: p.name, hi: String(p.handicap_index), email: p.email || "" })} style={{
+                          <button onClick={() => setEditingPlayer({ pid: p.player_id, name: p.name, hi: String(p.handicap_index) })} style={{
                             fontSize: 9, padding: "1px 5px", borderRadius: 4, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer", flexShrink: 0,
                           }}>Edit</button>
                           <button onClick={() => onUpdatePlayer({ ...p, isDirector: !p.isDirector })} style={{
@@ -1806,16 +1485,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   setRoundCourse(tr.course_id || "");
                   setRoundTeeTime(tr.tee_time || "");
                   setNassau({ front: tr.nassau_front || 1, back: tr.nassau_back || 1, overall: tr.nassau_overall || 1 });
-                  setPointMethod(tr.point_method || POINT_METHOD_NASSAU);
-                  setTraditionalPoints(tr.traditional_points ?? traditionalDefaultFor(tr.format || "singles"));
                 }
                 // Load existing overrides and handicap mode for this round
                 setHcpOverrides(prev => ({ ...prev }));
                 if (tr?.handicap_mode) setHandicapMode(prev => ({ ...prev, [r]: tr.handicap_mode }));
-                // Reset match-builder selections when switching rounds —
-                // Team A/B picks for one round don't carry meaning into another.
-                setMatchTeamA([]);
-                setMatchTeamB([]);
               }} style={{
                 flex: 1, padding: "8px 4px", borderRadius: 10, fontSize: 11, fontWeight: 700, cursor: "pointer",
                 background: editRound === r ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
@@ -1824,22 +1497,6 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               }}>Rd {r}</button>
             ))}
           </div>
-          {/* Save button — top of form, disabled until something changes.
-              Placed above the form card so it's reachable without scrolling
-              past the handicap-overrides table on long rounds. */}
-          <button
-            onClick={saveRound}
-            disabled={!isRoundDirty}
-            style={{
-              ...BtnStyle,
-              width: "100%",
-              marginBottom: 10,
-              cursor: isRoundDirty ? "pointer" : "not-allowed",
-              opacity: isRoundDirty ? 1 : 0.4,
-              transition: "opacity 0.15s ease",
-            }}>
-            Save Round {editRound}
-          </button>
           <div style={{ background: BC.card, borderRadius: 12, padding: "12px 12px", border: `1px solid ${BC.bdr}` }}>
             {/* Format + Course — 2 col compact, matched sizing */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
@@ -1849,7 +1506,6 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   const fmt = FORMATS.find(f => f.id === e.target.value);
                   setRoundFormat(e.target.value);
                   if (fmt?.nassau) setNassau(fmt.nassau);
-                  setTraditionalPoints(traditionalDefaultFor(e.target.value));
                 }} style={{ ...InputStyle, marginBottom: 0, fontSize: 12, padding: "8px 8px", height: 38 }}>
                   <option value="">Select...</option>
                   {FORMATS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
@@ -1960,36 +1616,15 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             {/* Scoring + Low Man toggle on same line */}
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>SCORING</div>
-              {/* Nassau toggle — checked shows F9/B9/OVR fields (Nassau);
-                  unchecked collapses to a single PTS field (Traditional). */}
-              <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", flexShrink: 0 }}>
-                <input
-                  type="checkbox"
-                  checked={pointMethod === POINT_METHOD_NASSAU}
-                  onChange={e => setPointMethod(e.target.checked ? POINT_METHOD_NASSAU : POINT_METHOD_TRADITIONAL)}
-                  style={{ accentColor: BC.amber, cursor: "pointer", margin: 0, width: 14, height: 14 }}
-                />
-                <span style={{ fontSize: 10, color: BC.t2, fontWeight: 600 }}>Nassau</span>
-              </label>
-              {pointMethod === POINT_METHOD_NASSAU ? (
-                [["front", "F9"], ["back", "B9"], ["overall", "OVR"]].map(([k, lbl]) => (
-                  <div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                    <span style={{ fontSize: 9, color: BC.t3, flexShrink: 0 }}>{lbl}</span>
-                    <input type="number" step="0.5" min="0" value={nassau[k]}
-                      onChange={e => setNassau(n => ({ ...n, [k]: parseFloat(e.target.value) || 0 }))}
-                      onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
-                      style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: 11, textAlign: "center", width: 38 }} />
-                  </div>
-                ))
-              ) : (
-                <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                  <span style={{ fontSize: 9, color: BC.t3, flexShrink: 0 }}>PTS</span>
-                  <input type="number" step="0.5" min="0" value={traditionalPoints}
-                    onChange={e => setTraditionalPoints(parseFloat(e.target.value) || 0)}
+              {[["front", "F9"], ["back", "B9"], ["overall", "OVR"]].map(([k, lbl]) => (
+                <div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                  <span style={{ fontSize: 9, color: BC.t3, flexShrink: 0 }}>{lbl}</span>
+                  <input type="number" step="0.5" min="0" value={nassau[k]}
+                    onChange={e => setNassau(n => ({ ...n, [k]: parseFloat(e.target.value) || 0 }))}
                     onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
                     style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: 11, textAlign: "center", width: 38 }} />
                 </div>
-              )}
+              ))}
               {/* Low Man / All toggle inline */}
               <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}`, marginLeft: "auto" }}>
                 {[["low_man", "Low Man"], ["full", "All"]].map(([val, lbl]) => {
@@ -2099,129 +1734,140 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 </div>
               ))}
             </div>
+
+            <button onClick={saveRound} style={BtnStyle}>Save Round {editRound}</button>
+          </div>
+        </div>
+      )}
+
+      {tab === "matches" && (() => {
+        const tr = tRounds.find(t => t.round_number === matchRound);
+        const course = courses.find(c => c.id === tr?.course_id);
+        const hcpMode = tr?.handicap_mode || "low_man";
+
+        // Get CH for a player using round overrides and tee assignments
+        const getPlayerCH = (pid) => {
+          const p = tPlayers.find(t => t.player_id === pid);
+          if (!p || !course) return 0;
+          const hi = parseFloat(hcpOverrides?.[matchRound]?.[pid] ?? p.handicap_index) || 0;
+          const teeAssign = teeAssignments[matchRound]?.[pid];
+          const teeObj = teeAssign ? (course.tee_boxes||[]).find(t => t.name === teeAssign) : (course.tee_boxes||[])[0];
+          return calcCH(hi, teeObj?.slope||course.slope||113, teeObj?.rating||course.rating||72, teeObj?.par||course.par||72);
+        };
+
+        // Stroke situation: given selected players, compute who gets strokes vs who
+        const strokeSituation = () => {
+          const allPids = [...matchTeamA, ...matchTeamB];
+          if (allPids.length < 2) return null;
+          const chs = allPids.map(pid => ({ pid, ch: getPlayerCH(pid) }));
+          const minCH = Math.min(...chs.map(c => c.ch));
+          if (hcpMode === "full") {
+            return chs.map(({pid, ch}) => ({ pid, strokes: ch }));
+          }
+          return chs.map(({pid, ch}) => ({ pid, strokes: ch - minCH }));
+        };
+
+        const allSelected = [...matchTeamA, ...matchTeamB];
+        const strokes = strokeSituation();
+
+        return (
+        <div>
+          {/* Round tabs */}
+          <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
+            {[1,2,3,4].map(r => (
+              <button key={r} onClick={() => { setMatchRound(r); setMatchTeamA([]); setMatchTeamB([]); }} style={{
+                flex: 1, padding: "7px 4px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                background: matchRound === r ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
+                border: `1px solid ${matchRound === r ? "transparent" : BC.bdr}`,
+                color: matchRound === r ? "#0a0804" : BC.t2,
+              }}>Rd {r}</button>
+            ))}
           </div>
 
-          {/* ── Matches for this round ──
-              Match builder + existing-matches list, scoped to whichever
-              round is selected above. The round selector at the top is the
-              single source of "which round are we working on". Stroke preview
-              uses local form state for handicap mode + overrides + tee
-              assignments, so any edit in the form above updates strokes
-              live without needing a Save first. */}
-          {(() => {
-            const tr = tRounds.find(t => t.round_number === editRound);
-            const course = courses.find(c => c.id === tr?.course_id);
-            const hcpMode = handicapMode[editRound] || tr?.handicap_mode || (editRound === 4 ? "full" : "low_man");
-
-            const getPlayerCH = (pid) => {
-              const p = tPlayers.find(t => t.player_id === pid);
-              if (!p || !course) return 0;
-              const hi = parseFloat(hcpOverrides?.[editRound]?.[pid] ?? p.handicap_index) || 0;
-              const teeAssign = teeAssignments[editRound]?.[pid];
-              const teeObj = teeAssign ? (course.tee_boxes||[]).find(t => t.name === teeAssign) : (course.tee_boxes||[])[0];
-              return calcCH(hi, teeObj?.slope||course.slope||113, teeObj?.rating||course.rating||72, teeObj?.par||course.par||72);
-            };
-
-            const strokeSituation = () => {
-              const allPids = [...matchTeamA, ...matchTeamB];
-              if (allPids.length < 2) return null;
-              const chs = allPids.map(pid => ({ pid, ch: getPlayerCH(pid) }));
-              const minCH = Math.min(...chs.map(c => c.ch));
-              if (hcpMode === "full") return chs.map(({pid, ch}) => ({ pid, strokes: ch }));
-              return chs.map(({pid, ch}) => ({ pid, strokes: ch - minCH }));
-            };
-
-            const allSelected = [...matchTeamA, ...matchTeamB];
-            const strokes = strokeSituation();
-            const roundMatches = matches.filter(m => m.round === editRound);
-
-            return (
-              <div style={{ marginTop: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: BC.amber, letterSpacing: 1, marginBottom: 10, paddingLeft: 4 }}>
-                  MATCHES — ROUND {editRound}
-                </div>
-
-                {/* Player pool — two columns by team */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-                  {[["A", teamAPlayers], ["B", teamBPlayers]].map(([tid, players]) => {
-                    const team = getTeam(tid);
-                    const sel = tid === "A" ? matchTeamA : matchTeamB;
-                    const setSel = tid === "A" ? setMatchTeamA : setMatchTeamB;
+          {/* Player pool — two columns by team */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+            {[["A", teamAPlayers], ["B", teamBPlayers]].map(([tid, players]) => {
+              const team = getTeam(tid);
+              const sel = tid === "A" ? matchTeamA : matchTeamB;
+              const setSel = tid === "A" ? setMatchTeamA : setMatchTeamB;
+              return (
+                <div key={tid}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: team.accent, letterSpacing: 1, marginBottom: 5 }}>{teamNames?.[tid]}</div>
+                  {players.map(p => {
+                    const isSelected = sel.includes(p.player_id);
+                    const ch = getPlayerCH(p.player_id);
                     return (
-                      <div key={tid}>
-                        <div style={{ fontSize: 9, fontWeight: 700, color: team.accent, letterSpacing: 1, marginBottom: 5 }}>{teamNames?.[tid]}</div>
-                        {players.map(p => {
-                          const isSelected = sel.includes(p.player_id);
-                          const ch = getPlayerCH(p.player_id);
-                          return (
-                            <button key={p.player_id} onClick={() => setSel(prev => isSelected ? prev.filter(x => x !== p.player_id) : [...prev, p.player_id])} style={{
-                              width: "100%", padding: "7px 8px", marginBottom: 3, borderRadius: 8, cursor: "pointer", textAlign: "left",
-                              background: isSelected ? team.color + "55" : BC.inp,
-                              border: `1.5px solid ${isSelected ? team.accent : BC.bdr}`,
-                              display: "flex", alignItems: "center", justifyContent: "space-between",
-                            }}>
-                              <span style={{ fontSize: 12, fontWeight: 600, color: isSelected ? team.accent : BC.t2 }}>{p.name}</span>
-                              <span style={{ fontSize: 10, color: BC.t3 }}>CH {ch}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
+                      <button key={p.player_id} onClick={() => setSel(prev => isSelected ? prev.filter(x => x !== p.player_id) : [...prev, p.player_id])} style={{
+                        width: "100%", padding: "7px 8px", marginBottom: 3, borderRadius: 8, cursor: "pointer", textAlign: "left",
+                        background: isSelected ? team.color + "55" : BC.inp,
+                        border: `1.5px solid ${isSelected ? team.accent : BC.bdr}`,
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                      }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: isSelected ? team.accent : BC.t2 }}>{p.name}</span>
+                        <span style={{ fontSize: 10, color: BC.t3 }}>CH {ch}</span>
+                      </button>
                     );
                   })}
                 </div>
+              );
+            })}
+          </div>
 
-                {/* Stroke situation */}
-                {strokes && allSelected.length >= 2 && (
-                  <div style={{ background: BC.card, borderRadius: 10, padding: "10px 12px", marginBottom: 10, border: `1px solid ${BC.bdr}` }}>
-                    <div style={{ fontSize: 9, color: BC.t3, fontWeight: 700, letterSpacing: 1, marginBottom: 8 }}>
-                      STROKE SITUATION · {hcpMode === "low_man" ? "Play Off Low Man" : "Full Strokes"}
+          {/* Stroke situation — shown when all players selected */}
+          {strokes && allSelected.length >= 2 && (
+            <div style={{ background: BC.card, borderRadius: 10, padding: "10px 12px", marginBottom: 10, border: `1px solid ${BC.bdr}` }}>
+              <div style={{ fontSize: 9, color: BC.t3, fontWeight: 700, letterSpacing: 1, marginBottom: 8 }}>
+                STROKE SITUATION · {hcpMode === "low_man" ? "Play Off Low Man" : "Full Strokes"}
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {strokes.map(({ pid, strokes: s }) => {
+                  const p = tPlayers.find(t => t.player_id === pid);
+                  const team = getTeam(p?.team);
+                  return (
+                    <div key={pid} style={{ background: team.color + "33", border: `1px solid ${team.accent}44`, borderRadius: 8, padding: "5px 10px", textAlign: "center" }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: team.accent }}>{p?.name?.split(" ")[0]}</div>
+                      <div style={{ fontSize: 13, fontWeight: 900, color: s === 0 ? BC.gold : BC.t1 }}>{s === 0 ? "Scratch" : `+${s}`}</div>
                     </div>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {strokes.map(({ pid, strokes: s }) => {
-                        const p = tPlayers.find(t => t.player_id === pid);
-                        const team = getTeam(p?.team);
-                        return (
-                          <div key={pid} style={{ background: team.color + "33", border: `1px solid ${team.accent}44`, borderRadius: 8, padding: "5px 10px", textAlign: "center" }}>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: team.accent }}>{p?.name?.split(" ")[0]}</div>
-                            <div style={{ fontSize: 13, fontWeight: 900, color: s === 0 ? BC.gold : BC.t1 }}>{s === 0 ? "Scratch" : `+${s}`}</div>
-                          </div>
-                        );
-                      })}
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Create Match button */}
+          {matchTeamA.length > 0 && matchTeamB.length > 0 && (
+            <button onClick={saveMatch} style={{ ...BtnStyle, marginBottom: 14 }}>
+              Create Match — {matchTeamA.map(pid => tPlayers.find(p=>p.player_id===pid)?.name?.split(" ")[0]).join("/")} vs {matchTeamB.map(pid => tPlayers.find(p=>p.player_id===pid)?.name?.split(" ")[0]).join("/")}
+            </button>
+          )}
+
+          {/* Existing matches by round */}
+          {[1,2,3,4].map(r => {
+            const rndM = matches.filter(m => m.round === r);
+            if (!rndM.length) return null;
+            const trR = tRounds.find(t => t.round_number === r);
+            const fmt = FORMATS.find(f => f.id === trR?.format);
+            return (
+              <div key={r} style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 10, color: BC.gold, fontWeight: 700, marginBottom: 8, letterSpacing: 1 }}>ROUND {r}{fmt ? ` · ${fmt.label}` : ""}</div>
+                {rndM.map(m => (
+                  <div key={m.id} style={{ background: BC.card, borderRadius: 10, padding: "8px 12px", marginBottom: 5, border: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ flex: 1, fontSize: 11 }}>
+                      <span style={{ color: TEAM_A.accent+"99", fontWeight: 600 }}>{m.teamANames?.join(" / ")}</span>
+                      <span style={{ color: BC.t3 }}> vs </span>
+                      <span style={{ color: TEAM_B.accent+"99", fontWeight: 600 }}>{m.teamBNames?.join(" / ")}</span>
                     </div>
+                    <button onClick={() => onSetMatch({ ...m, _delete: true })} style={{
+                      fontSize: 9, padding: "3px 7px", borderRadius: 6, border: `1px solid ${BC.danger}22`, background: "transparent", color: BC.danger, cursor: "pointer", flexShrink: 0,
+                    }}>✕</button>
                   </div>
-                )}
-
-                {/* Create Match */}
-                {matchTeamA.length > 0 && matchTeamB.length > 0 && (
-                  <button onClick={saveMatch} style={{ ...BtnStyle, marginBottom: 14 }}>
-                    Create Match — {matchTeamA.map(pid => tPlayers.find(p=>p.player_id===pid)?.name?.split(" ")[0]).join("/")} vs {matchTeamB.map(pid => tPlayers.find(p=>p.player_id===pid)?.name?.split(" ")[0]).join("/")}
-                  </button>
-                )}
-
-                {/* Existing matches — scoped to this round only */}
-                {roundMatches.length > 0 ? (
-                  roundMatches.map(m => (
-                    <div key={m.id} style={{ background: BC.card, borderRadius: 10, padding: "8px 12px", marginBottom: 5, border: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{ flex: 1, fontSize: 11 }}>
-                        <span style={{ color: TEAM_A.accent+"99", fontWeight: 600 }}>{m.teamANames?.join(" / ")}</span>
-                        <span style={{ color: BC.t3 }}> vs </span>
-                        <span style={{ color: TEAM_B.accent+"99", fontWeight: 600 }}>{m.teamBNames?.join(" / ")}</span>
-                      </div>
-                      <button onClick={() => onSetMatch({ ...m, _delete: true })} style={{
-                        fontSize: 9, padding: "3px 7px", borderRadius: 6, border: `1px solid ${BC.danger}22`, background: "transparent", color: BC.danger, cursor: "pointer", flexShrink: 0,
-                      }}>✕</button>
-                    </div>
-                  ))
-                ) : (
-                  <div style={{ fontSize: 11, color: BC.t3, textAlign: "center", padding: "10px 0" }}>
-                    No matches set up for Round {editRound} yet.
-                  </div>
-                )}
+                ))}
               </div>
             );
-          })()}
+          })}
         </div>
-      )}
+        );
+      })()}
 
       {tab === "courses" && (
         <div>
@@ -2521,7 +2167,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
   const perSkin = totalSkins > 0 ? (skinsPot / totalSkins).toFixed(2) : "0.00";
 
   return (
-    <div>
+    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
       {/* Tab toggle */}
       <div style={{ display: "flex", background: BC.card, borderRadius: 20, padding: 3, marginBottom: 14, border: `1px solid ${BC.bdr}` }}>
         {[["skins","🎰 Skins"],["ctp","🎯 Closest to Pin"]].map(([k,lbl]) => (
@@ -2543,7 +2189,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
                 <input autoFocus type="number" value={potInput} onChange={e => setPotInput(e.target.value)}
                   onBlur={() => { onUpdatePot(parseFloat(potInput)||0); setEditPot(false); }}
                   onKeyDown={e => { if (e.key === "Enter") { onUpdatePot(parseFloat(potInput)||0); setEditPot(false); }}}
-                  style={{ fontSize: 20, fontWeight: 800, color: BC.gold, background: "transparent", border: "none", borderBottom: `1px solid ${BC.amber}`, outline: "none", width: 100 }} />
+                  style={{ fontSize: 20, fontWeight: 800, color: BC.gold, background: "transparent", border: "none", borderBottom: `1px solid ${BC.amber}`, outline: "none", width: 100, fontFamily: "'Montserrat', sans-serif" }} />
               ) : (
                 <div onClick={() => user?.isDirector && setEditPot(true)} style={{ fontSize: 20, fontWeight: 800, color: BC.gold, cursor: user?.isDirector ? "pointer" : "default" }}>
                   ${skinsPot.toFixed(2)}
@@ -2634,7 +2280,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
                       <span style={{ fontSize: 11, fontWeight: 700, color: BC.t3, width: 44, flexShrink: 0 }}>Hole {hole + 1}</span>
                       {user?.isDirector ? (
                         <select value={winnerId || ""} onChange={e => onSetCtp(r, hole, e.target.value || null)}
-                          style={{ flex: 1, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, color: BC.t1, fontSize: 11, padding: "4px 6px" }}>
+                          style={{ flex: 1, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, color: BC.t1, fontSize: 11, padding: "4px 6px", fontFamily: "'Montserrat', sans-serif" }}>
                           <option value="">-- Not set --</option>
                           {tPlayers.map(p => <option key={p.player_id} value={p.player_id}>{p.name}</option>)}
                         </select>
@@ -2686,7 +2332,7 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
   }, [tPlayers, matches, holeData, tRounds, courses, hcpOverrides, teeAssignments]);
 
   return (
-    <div>
+    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
       <div style={{ display: "flex", background: BC.card, borderRadius: 20, padding: 3, marginBottom: 14, border: `1px solid ${BC.bdr}` }}>
         {[["current","2026 Stats"],["history","History"]].map(([k,lbl]) => (
           <button key={k} onClick={() => setAnalyticsTab(k)} style={{
@@ -3318,6 +2964,7 @@ function PracticeScoringTab({
                 width: "100%", maxWidth: 440,
                 marginTop: 12, marginBottom: 12,
                 display: "flex", flexDirection: "column",
+                fontFamily: "'Montserrat', sans-serif",
               }}>
                 {/* Header */}
                 <div style={{ padding: "12px 14px", borderBottom: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -3371,6 +3018,7 @@ function PracticeScoringTab({
             whiteSpace: "nowrap", textAlign: "center",
             boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
             animation: "bcToastDown 0.3s ease",
+            fontFamily: "'Montserrat', sans-serif",
           }}>
             {toast}
           </div>
@@ -4657,7 +4305,7 @@ function PracticeView({ user, tPlayers, courses, notify }) {
   }, [event, isDirector, subView]);
 
   return (
-    <div>
+    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
       {/* Header — centered. The MASH ROUND mark functions as the
           tournament banner for this view. Reads from BC.amber (the
           primary brand accent, currently Mash green per the active
@@ -4877,39 +4525,6 @@ const TeeCircle = ({ tee, index, size = 14, active }) => {
 // ── Main App ──
 export default function App() {
   const [user, setUser] = useState(null);
-  // ── Auth state ──
-  // firebaseUser: the underlying Firebase Auth user (or null). Updated by
-  //   the onAuthStateChanged listener mounted below.
-  // pendingPlayer: the player whose name was clicked, used to scope the
-  //   LoginModal and (after auth) to verify that the authed email matches
-  //   the player record they claimed.
-  // loginError: surfaced back on LoginScreen when an auth attempt fails
-  //   (wrong email, network error, etc).
-  const [firebaseUser, setFirebaseUser] = useState(null);
-  // pendingPlayer is mirrored to sessionStorage so a Google sign-in
-  // redirect (full-page bounce to Google and back) can restore which
-  // name the user clicked. Without this, redirected users would land on
-  // LoginScreen post-auth instead of completing self-bind.
-  const [pendingPlayer, setPendingPlayer] = useState(() => {
-    try {
-      const stored = window.sessionStorage.getItem("bc_pending_player");
-      return stored ? JSON.parse(stored) : null;
-    } catch { return null; }
-  });
-  const [loginError, setLoginError] = useState(null);
-
-  // Mirror pendingPlayer to sessionStorage. Cleared on null so
-  // successful sign-in (or explicit modal close) doesn't leave stale
-  // state for the next visit.
-  useEffect(() => {
-    try {
-      if (pendingPlayer) {
-        window.sessionStorage.setItem("bc_pending_player", JSON.stringify(pendingPlayer));
-      } else {
-        window.sessionStorage.removeItem("bc_pending_player");
-      }
-    } catch {}
-  }, [pendingPlayer]);
   // Default landing view. Was "practice" while the standalone Mash tab
   // was the focus of validation; now that the Mash UI patterns power
   // the tournament tabs, Leaderboard is the right home base — the
@@ -4946,8 +4561,7 @@ export default function App() {
       styleEl.textContent = `
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         html, body, #root { height: 100%; width: 100%; background: ${BC.bg}; overflow: hidden; }
-        body { margin: 0; padding: 0; font-family: 'Montserrat', sans-serif; }
-        button, input, select, textarea { font-family: inherit; }
+        body { margin: 0; padding: 0; }
       `;
     }
   }, [darkMode]);
@@ -4972,126 +4586,10 @@ export default function App() {
   const [hcpOverridesData, setHcpOverridesData] = useState({}); // { round: { pid: value } }
   const [teeAssignmentsData, setTeeAssignmentsData] = useState({});
 
-  // ── Auth: subscribe to Firebase auth state ──
-  // Fires once immediately with current state, then on every sign-in /
-  // sign-out. The resolver effect below maps fbUser → player record.
-  useEffect(() => {
-    return auth.onAuthStateChanged(setFirebaseUser);
-  }, []);
-
-  // ── Auth: handle magic-link return URL ──
-  // When a user clicks the link from their email, they land back on the
-  // app with a special URL fragment. Detect it once on mount, complete
-  // the sign-in, and clean the URL so a refresh doesn't re-trigger.
-  // Runs only once — auth state listener takes over from there.
-  useEffect(() => {
-    if (auth.isMagicLinkReturn(window.location.href)) {
-      auth.completeMagicLink()
-        .then(() => {
-          // Clean up the magic-link query params so a refresh doesn't
-          // try to consume the (now-used) link again.
-          window.history.replaceState({}, "", window.location.origin + "/");
-        })
-        .catch(e => {
-          setLoginError(e?.message || "Sign-in link couldn't be verified. Try again.");
-          window.history.replaceState({}, "", window.location.origin + "/");
-        });
-    }
-  }, []);
-
-  // ── Auth: consume any pending Google redirect result ──
-  // signInWithGoogle falls back to a full-page redirect when popup auth
-  // fails (mobile Safari, COOP, in-app browsers). After Google bounces
-  // the user back here, getRedirectResult resolves with the credential
-  // and the auth-state listener picks it up. Errors surface to
-  // LoginScreen; success is silent because the resolver effect handles
-  // the rest of the flow (match-or-bind).
-  useEffect(() => {
-    auth.getGoogleRedirectResult().catch(e => {
-      setLoginError(e?.message || "Google sign-in didn't complete. Try again.");
-    });
-  }, []);
-
-  // ── Auth: resolve Firebase user → player record ──
-  // Self-bind model: each player record's `email` field is set to the
-  // first authed identity that successfully claims that name. After
-  // binding, only that authed email can sign in as that player; cross-
-  // claims by other emails are refused.
-  //
-  // Three outcomes per run:
-  //   (a) authed email matches an existing player.email → sign in as that
-  //       player. Handles returning users on any device (no pending click
-  //       required).
-  //   (b) no match, but there's a pendingPlayer (a name was just clicked)
-  //       and that player has no email yet → self-bind: write the authed
-  //       email onto the player record. The Firestore subscription will
-  //       deliver the updated record on the next tick, the resolver re-
-  //       runs, and outcome (a) takes over.
-  //   (c) no match, but the clicked player already has a different email
-  //       → refuse cross-claim, surface error, clear pendingPlayer so
-  //       they can try a different name. firebaseUser is intentionally
-  //       NOT cleared — the user can still claim an unbound slot.
-  useEffect(() => {
-    if (!firebaseUser) {
-      if (user) setUser(null);
-      return;
-    }
-    if (tPlayers.length === 0) return; // wait for players to load
-    const fbEmail = (firebaseUser.email || "").toLowerCase();
-    if (!fbEmail) return; // shouldn't happen for Google or email-link
-
-    // (a) Returning user — match by email
-    const matched = tPlayers.find(p => (p.email || "").toLowerCase() === fbEmail);
-    if (matched) {
-      setUser({ ...matched, isDirector: !!matched.isDirector });
-      setLoginError(null);
-      setPendingPlayer(null);
-      return;
-    }
-
-    // No match — check pendingPlayer for self-bind eligibility
-    if (!pendingPlayer) {
-      // Signed in but didn't click a name (e.g., refresh after sign-in
-      // with an email that's not bound anywhere). Leave them on
-      // LoginScreen with a hint via the "switch account" affordance.
-      return;
-    }
-    const targetSlotEmail = (pendingPlayer.email || "").toLowerCase();
-    if (!targetSlotEmail) {
-      // (b) Self-bind: claim this slot for the authed email
-      db.upsert("bc_players", { ...pendingPlayer, email: fbEmail }).then(() => {
-        // Resolver re-runs when the subscription delivers the updated
-        // player; outcome (a) signs them in. Clear pendingPlayer here
-        // so a stale ref doesn't trigger another bind.
-        setPendingPlayer(null);
-      });
-      return;
-    }
-    // (c) Cross-claim refused
-    setLoginError(`The "${pendingPlayer.name}" slot is already claimed by another email. Pick a different name, or talk to the director if this is your slot.`);
-    setPendingPlayer(null);
-  }, [firebaseUser, tPlayers, pendingPlayer]);
-
-  // ── Pull-to-refresh ──
-  // Mirrors MNQ's gesture: drag down at the top of the scroll container,
-  // trigger threshold reached → app checks for a fresh build and either
-  // hard-reloads (deployment update detected) or just shows a brief
-  // confirmation spin (data is already live via onSnapshot subscriptions
-  // so no manual refetch is needed). The dampening (0.4x), max-pull
-  // distance (120px), and threshold (80px) are tuned to match MNQ so
-  // users get the same muscle-memory between the two apps. The body
-  // scroll container is tagged className="bc-app-body" below; the touch
-  // handlers walk up from the touch target looking for that class to
-  // confirm the gesture is happening on the main scroll area (and not,
-  // say, inside the slide menu or a modal). Refs hold the live values
-  // because touch handlers run far more often than React renders, so
-  // routing every dy through setState would be a thrash.
-  const PULL_THRESHOLD = 80;
-  const [pullY, setPullY] = useState(0);
-  const [refreshing, setRefreshing] = useState(false);
-  const touchStartY = useRef(0);
-  const pullYRef = useRef(0);
-  const pullingRef = useRef(false);
+  // ── Pull-to-refresh ── the gesture machinery lives in the shared
+  // usePullToRefresh hook (src/lib/usePullToRefresh.js); it's wired up
+  // below, after hasNewBundle. popupOpenRef stays here because the
+  // caller owns it and passes it into the hook.
   // popupOpenRef = true whenever a top-level modal/menu is showing. Read
   // synchronously by the touch handlers (refs don't trigger re-renders
   // and are always up-to-date). Updated via the effect below whenever
@@ -5144,142 +4642,14 @@ export default function App() {
     }
   }, []);
 
-  // Touch handler effect — installs document-level touchstart/move/end
-  // listeners that watch for a downward drag at the top of the scroll
-  // container. Suppressed entirely while `refreshing` is true (one
-  // refresh at a time) and while a popup is open. The gesture's "at
-  // top" detection walks up from the touch target to find the
-  // .bc-app-body element — if the target isn't inside that element,
-  // the gesture is ignored (e.g., touches inside the slide menu, the
-  // login screen, or a modal). passive:false on touchmove is required
-  // because we call preventDefault() to stop the browser's native
-  // overscroll/bounce while the user is pulling.
-  useEffect(() => {
-    if (refreshing) return;
-    const findScrollEl = (target) => {
-      let el = target;
-      while (el) {
-        if (el.classList && el.classList.contains('bc-app-body')) return el;
-        el = el.parentElement;
-      }
-      return null;
-    };
-    let activeScrollEl = null;
-
-    const handleStart = (e) => {
-      if (popupOpenRef.current) { touchStartY.current = 0; return; }
-      activeScrollEl = findScrollEl(e.target);
-      if (!activeScrollEl) { touchStartY.current = 0; return; }
-      touchStartY.current = e.touches[0].clientY;
-      pullingRef.current = false;
-    };
-
-    const handleMove = (e) => {
-      if (!touchStartY.current) return;
-      if (popupOpenRef.current) {
-        if (pullingRef.current) { pullingRef.current = false; pullYRef.current = 0; setPullY(0); }
-        touchStartY.current = 0;
-        return;
-      }
-      // `atTop` tolerance is 2px to absorb subpixel rounding (iOS often
-      // reports scrollTop as a fractional value due to the
-      // `safe-area-inset-top` and momentum cleanup; 1px was too strict
-      // and caused the gesture to fail when the page was visually at
-      // top but the engine reported scrollTop=1.5).
-      const atTop = activeScrollEl ? activeScrollEl.scrollTop <= 2 : false;
-      const currentY = e.touches[0].clientY;
-      const diff = currentY - touchStartY.current;
-
-      if (pullingRef.current) {
-        if (diff <= 0 || !atTop) {
-          pullingRef.current = false;
-          pullYRef.current = 0;
-          setPullY(0);
-          touchStartY.current = currentY;
-        } else {
-          // 0.4x dampening makes the indicator feel like there's
-          // tension in the pull — the user moves the finger a long
-          // way for a moderate visual change. Capped at 120 so the
-          // indicator can't drift indefinitely.
-          e.preventDefault();
-          const val = Math.min(diff * 0.4, 120);
-          pullYRef.current = val;
-          setPullY(val);
-        }
-      } else if (atTop && diff > 0) {
-        // CRITICAL: preventDefault has to be called on EVERY at-top
-        // downward touchmove, not only after the threshold is crossed.
-        // iOS Safari's native overscroll bounce starts kicking in on
-        // the very first downward touchmove at scrollTop=0; once the
-        // bounce animation has begun, our subsequent preventDefault
-        // calls are ignored and the bounce overrides our custom pull
-        // visual. By preventDefaulting before the 5px threshold, we
-        // shut the native bounce down before it has a chance to
-        // commit. This is what was making the gesture feel "stuck"
-        // when started on certain elements (e.g., the Teams card
-        // banner): the 10px gap left enough time for native bounce
-        // to start and steal the gesture.
-        e.preventDefault();
-        if (diff > 5) {
-          touchStartY.current = currentY;
-          pullingRef.current = true;
-          pullYRef.current = 0;
-          setPullY(0);
-        }
-      } else if (!atTop) {
-        touchStartY.current = currentY;
-      }
-    };
-
-    const handleEnd = () => {
-      if (popupOpenRef.current) {
-        pullingRef.current = false;
-        pullYRef.current = 0;
-        setPullY(0);
-        touchStartY.current = 0;
-        activeScrollEl = null;
-        return;
-      }
-      pullingRef.current = false;
-      activeScrollEl = null;
-      if (pullYRef.current >= PULL_THRESHOLD) {
-        // Threshold met — commit to refresh. Pin the indicator at
-        // threshold height while the work runs so it doesn't snap
-        // back mid-spin. 8s hard safety in case the bundle check or
-        // the work itself hangs (e.g., offline).
-        setPullY(PULL_THRESHOLD); pullYRef.current = PULL_THRESHOLD;
-        setRefreshing(true);
-        const hardSafety = setTimeout(() => {
-          setRefreshing(false); setPullY(0); pullYRef.current = 0; touchStartY.current = 0;
-        }, 8000);
-        setTimeout(async () => {
-          try {
-            const needsUpdate = await hasNewBundle();
-            if (needsUpdate) { clearTimeout(hardSafety); window.location.reload(); return; }
-            // Live data via onSnapshot is already current — no manual
-            // refetch needed. The brief 600ms hold above gave the user
-            // visual feedback that the refresh "happened".
-          } catch {} finally {
-            clearTimeout(hardSafety);
-            setRefreshing(false); setPullY(0); pullYRef.current = 0; touchStartY.current = 0;
-          }
-        }, 600);
-      } else {
-        setPullY(0); pullYRef.current = 0; touchStartY.current = 0;
-      }
-    };
-
-    document.addEventListener('touchstart', handleStart, { passive: true });
-    document.addEventListener('touchmove', handleMove, { passive: false });
-    document.addEventListener('touchend', handleEnd, { passive: true });
-    document.addEventListener('touchcancel', handleEnd, { passive: true });
-    return () => {
-      document.removeEventListener('touchstart', handleStart);
-      document.removeEventListener('touchmove', handleMove);
-      document.removeEventListener('touchend', handleEnd);
-      document.removeEventListener('touchcancel', handleEnd);
-    };
-  }, [refreshing, hasNewBundle]);
+  // Pull-to-refresh gesture — the touch-handler machinery lives in the
+  // shared hook (src/lib/usePullToRefresh.js), preserving BC's exact
+  // behavior (2px at-top tolerance, iOS bounce fix, 0.4x damp, 120px
+  // max, 80px threshold). Data is live via onSnapshot, so no onRefresh
+  // is passed — a new build reloads, otherwise the gesture shows a
+  // brief confirmation spin. pullY / refreshing / PULL_THRESHOLD feed
+  // the indicator render below.
+  const { pullY, refreshing, PULL_THRESHOLD } = usePullToRefresh({ popupOpenRef, hasNewBundle });
 
   // Subscribe to Firestore
   useEffect(() => {
@@ -5331,25 +4701,17 @@ export default function App() {
     return () => unsubs.forEach(u => u());
   }, []);
 
-  // Enhance tRounds with nassau data + point method config
+  // Enhance tRounds with nassau data
   const enrichedRounds = useMemo(() => tRounds.map(r => ({
     ...r,
     nassau: { front: r.nassau_front ?? 1, back: r.nassau_back ?? 1, overall: r.nassau_overall ?? 1 },
-    point_method: r.point_method || POINT_METHOD_NASSAU,
-    traditional_points: r.traditional_points ?? traditionalDefaultFor(r.format || "singles"),
     handicap_mode: r.handicap_mode || (r.round_number === 4 ? 'full' : 'low_man'),
   })), [tRounds]);
 
-  // Enhance matches: if a match doesn't carry its own scoring config (older
-  // matches saved before these fields existed), inherit from the round.
+  // Enhance matches with nassau from round
   const enrichedMatches = useMemo(() => matches.map(m => {
     const tr = enrichedRounds.find(t => t.round_number === m.round);
-    return {
-      ...m,
-      nassau: m.nassau || tr?.nassau || NASSAU_DEFAULT,
-      point_method: m.point_method || tr?.point_method || POINT_METHOD_NASSAU,
-      traditional_points: m.traditional_points ?? tr?.traditional_points ?? 1,
-    };
+    return { ...m, nassau: m.nassau || tr?.nassau || NASSAU_DEFAULT };
   }), [matches, enrichedRounds]);
 
   const onSaveHole = useCallback(async (pid, rnd, holeIdx, score, courseId) => {
@@ -5398,28 +4760,7 @@ export default function App() {
 
   const availableRounds = useMemo(() => [...new Set(enrichedMatches.map(m => m.round))].sort(), [enrichedMatches]);
 
-  if (!user) return (
-    <>
-      <LoginScreen
-        players={tPlayers}
-        teamNames={teamNames}
-        darkMode={darkMode}
-        loginError={loginError}
-        firebaseUser={firebaseUser}
-        onClearError={() => setLoginError(null)}
-        onPlayerClick={p => setPendingPlayer(p)}
-        onSwitchAccount={async () => { setLoginError(null); await auth.signOut(); }}
-      />
-      {pendingPlayer && (
-        <LoginModal
-          player={pendingPlayer}
-          error={loginError}
-          onClose={() => setPendingPlayer(null)}
-          onError={msg => setLoginError(msg)}
-        />
-      )}
-    </>
-  );
+  if (!user) return <LoginScreen players={tPlayers} teamNames={teamNames} darkMode={darkMode} onLogin={p => { setUser({ ...p, isDirector: !!p.isDirector }); }} />;
 
   // Bottom-nav items. The Practice tab (formerly "Mash") was relocated
   // to the More menu and is gated to directors only — practice rounds
@@ -5461,7 +4802,7 @@ export default function App() {
   };
 
   return (
-    <div style={{ height: "100svh", width: "100%", background: BC.bg, display: "flex", flexDirection: "column", position: "relative", overflow: "hidden" }}>
+    <div style={{ height: "100svh", width: "100%", background: BC.bg, display: "flex", flexDirection: "column", position: "relative", fontFamily: "'Montserrat', sans-serif", overflow: "hidden" }}>
       <div style={{ maxWidth: 520, width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", height: "100%", position: "relative", padding: "0 4px" }}>
       <Notif notif={notif} />
 
@@ -5573,7 +4914,7 @@ export default function App() {
           // (TEAMS-banner-style header, neutral "no data" body) so when
           // real betting data lands, the visual scaffold is already
           // consistent with the rest of the app.
-          <div>
+          <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
             {/* Skins/CTP toggle scaffold — disabled visual, identical
                 shape to the working Practice Round version. Communicates
                 "this section will have these two modes" without
@@ -5649,7 +4990,7 @@ export default function App() {
         )}
       </div>
 
-      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={async () => { await auth.signOut(); setUser(null); }} user={user} view={view} darkMode={darkMode} onToggleTheme={toggleTheme} />
+      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={() => setUser(null)} user={user} view={view} darkMode={darkMode} onToggleTheme={toggleTheme} />
 
       {/* Bottom Nav */}
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: BC.card, borderTop: `1px solid ${BC.bdr}`, zIndex: 100, paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)" }}>
