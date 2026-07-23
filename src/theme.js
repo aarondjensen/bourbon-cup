@@ -46,9 +46,59 @@
 // palette of the team logo itself, with a subtle green undertone in the
 // "near-black" so the green accent reads as part of a deliberate system
 // rather than as a pop of color floating on neutral charcoal.
-export const getBCTheme = (mode) => {
+// ── Brand-driven accents ──────────────────────────────────────────
+// Neutral chrome (bg/card/inp/bdr/text) is fixed per mode. The ACCENTS
+// are tournament-configurable: each team's color is extracted from its
+// uploaded logo at setup time (see lib/logoBrand.js) and stored in the
+// branding doc. `brand` shape:
+//   { tournamentAccent?: "#rrggbb",
+//     teamA?: { color: "#rrggbb" }, teamB?: { color: "#rrggbb" } }
+// Any field omitted falls back to a built-in default, so the app is
+// fully functional before anything is configured — the defaults
+// reproduce today's look (Mash green for team A, a teal for team B,
+// and the existing primary accent for chrome).
+const _clampC = (n) => Math.max(0, Math.min(255, Math.round(n)));
+const _hxC = (n) => _clampC(n).toString(16).padStart(2, "0");
+const _rgbC = (hex) => {
+  const h = String(hex).replace("#", "");
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+};
+// Darker variant for gradients / hover / deep-fills. Kept in sync with
+// lib/logoBrand.js so the theme and the extractor agree on shades.
+export const dimHex = (hex, f = 0.62) => {
+  const [r, g, b] = _rgbC(hex);
+  return `#${_hxC(r * f)}${_hxC(g * f)}${_hxC(b * f)}`;
+};
+// Low-alpha wash for glows / tinted backgrounds.
+export const glowHex = (hex, a = 0.16) => {
+  const [r, g, b] = _rgbC(hex);
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
+};
+
+// Augments a base palette in place with per-team tokens (and an optional
+// tournament-accent override), then returns it.
+function withBrand(mode, brand, base) {
+  const glowA = mode === "light" ? 0.14 : 0.20;
+  const defTeamA = mode === "light" ? "#009144" : "#16a34a"; // Mash green
+  const defTeamB = mode === "light" ? "#0a5f6e" : "#22a3b5"; // teal
+  const aCol = brand?.teamA?.color || defTeamA;
+  const bCol = brand?.teamB?.color || defTeamB;
+  base.teamA = aCol;  base.teamADim = dimHex(aCol);  base.teamAGlow = glowHex(aCol, glowA);
+  base.teamB = bCol;  base.teamBDim = dimHex(bCol);  base.teamBGlow = glowHex(bCol, glowA);
+  // Optional override of the neutral tournament accent (chrome). When
+  // omitted, the existing amber/green primary accent is kept as-is, so
+  // adopting this is visually a no-op until a tournament is configured.
+  if (brand?.tournamentAccent) {
+    base.amber = brand.tournamentAccent;
+    base.amberDim = dimHex(brand.tournamentAccent);
+    base.amberGlow = glowHex(brand.tournamentAccent, glowA);
+  }
+  return base;
+}
+
+export const getBCTheme = (mode, brand = null) => {
   if (mode === "light") {
-    return {
+    return withBrand("light", brand, {
       bg: "#f4f7f3",        // pale linen with whisper of Mash green
       card: "#ffffff",      // pure white card surface
       inp: "#e6ebe7",       // pale green-tinted gray (input/inactive)
@@ -69,10 +119,10 @@ export const getBCTheme = (mode) => {
       // moving between the two apps see consistent visual language for
       // handicap strokes / stroke dots / (CH) labels. Tailwind blue-500.
       hcpBlue: "#3b82f6",
-    };
+    });
   }
   // dark (default) — Mash logo "black bg + green flag" inspired
-  return {
+  return withBrand("dark", brand, {
     bg: "#0a1410",          // near-black with green undertone (Mash logo bg)
     card: "#121d18",        // elevated panel
     inp: "#0e1813",         // sunken input
@@ -90,7 +140,7 @@ export const getBCTheme = (mode) => {
     warn: "#f59e0b",
     green: "#22c55e",
     hcpBlue: "#3b82f6",
-  };
+  });
 };
 
 // Read saved preference (default: dark). Wrapped in try/catch so SSR or
@@ -107,8 +157,8 @@ export const initialBCMode = (() => {
 // and reads up-to-date values inline in JSX after a top-level re-render.
 export const BC = { ...getBCTheme(initialBCMode) };
 
-export const applyBCTheme = (mode) => {
-  const next = getBCTheme(mode);
+export const applyBCTheme = (mode, brand = null) => {
+  const next = getBCTheme(mode, brand);
   for (const key in next) BC[key] = next[key];
 };
 
@@ -124,12 +174,7 @@ if (typeof document !== "undefined") {
   _style.textContent = `
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body, #root { height: 100%; width: 100%; background: ${BC.bg}; overflow: hidden; }
-    body { margin: 0; padding: 0; font-family: 'Montserrat', sans-serif; }
-    /* Native form controls don't inherit font-family by default — they
-       reset to the system UI font (San Francisco / Roboto / Segoe UI).
-       Force inheritance so every button/input/select picks up Montserrat
-       from its container without needing fontFamily set inline. */
-    button, input, select, textarea { font-family: inherit; }
+    body { margin: 0; padding: 0; }
   `;
   document.head.appendChild(_style);
 
