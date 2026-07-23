@@ -12,6 +12,8 @@ import {
   computeMatchResult, computePracticeMatch, computePracticeSkins,
 } from "./scoring";
 import { usePullToRefresh } from "./lib/usePullToRefresh";
+import ErrorBoundary from "./components/ErrorBoundary";
+import { EditionSwitcher } from "./components/EditionSwitcher";
 
 // First+last initials from a player's full name. "Aaron Jensen" → "AJ".
 // Single-name fallback grabs the first two letters (e.g. "Joe" → "JO") so a
@@ -1154,6 +1156,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   const [matchRound, setMatchRound] = useState(1);
   const [matchTeamA, setMatchTeamA] = useState([]);
   const [matchTeamB, setMatchTeamB] = useState([]);
+  const [showEditions, setShowEditions] = useState(false);
 
   const teamAPlayers = tPlayers.filter(p => p.team === "A"); // used in match builder
   const teamBPlayers = tPlayers.filter(p => p.team === "B");
@@ -1320,6 +1323,17 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
   return (
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
+      <EditionSwitcher open={showEditions} onClose={() => setShowEditions(false)} />
+      {/* Active-edition bar — switch year or create a new edition */}
+      <button onClick={() => setShowEditions(true)} style={{
+        width: "100%", marginBottom: 12, padding: "10px 14px", borderRadius: 10,
+        background: BC.card, border: `1px solid ${BC.bdr}`, color: BC.t1,
+        fontSize: 12, fontWeight: 700, letterSpacing: 0.3, cursor: "pointer",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+      }}>
+        <span>Active edition · <span style={{ color: BC.amber }}>{TOURNAMENT_ID}</span></span>
+        <span style={{ fontSize: 11, color: BC.t3 }}>Change</span>
+      </button>
       {/* Tabs */}
       <div style={{ display: "flex", gap: 4, marginBottom: 16, background: BC.card, borderRadius: 12, padding: 4, border: `1px solid ${BC.bdr}` }}>
         {[["players","Players"],["rounds","Rounds"],["matches","Matches"],["courses","Courses"]].map(([k, lbl]) => (
@@ -4867,6 +4881,11 @@ export default function App() {
         // bounce is suppressed and our handler has full control.
         overscrollBehaviorY: "contain",
       }}>
+        {/* Keyed ErrorBoundary: keying on `view` remounts the boundary
+            whenever the tab changes, so a crashed screen self-heals the
+            moment the user navigates away instead of showing a blank
+            white page. */}
+        <ErrorBoundary key={view}>
         {view === "leaderboard" && (
           <TeamLeaderboard
             matches={enrichedMatches}
@@ -4988,6 +5007,7 @@ export default function App() {
             notify={notify}
           />
         )}
+        </ErrorBoundary>
       </div>
 
       <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={() => setUser(null)} user={user} view={view} darkMode={darkMode} onToggleTheme={toggleTheme} />
