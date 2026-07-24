@@ -23,29 +23,15 @@
 // warmth in the bg is subtle (NOT yellow) so the amber accent doesn't
 // fight it. Dark mode goes cool-charcoal (think aged-leather binding seen
 // from a low-light angle) so amber reads as gold instead of beige.
-// ─── BOURBON CUP THEME — Mash Brothers Edition ───
-// Design philosophy — temporary all-Mash skin while internal practice rounds
-// are the focus. Mash Brothers brand green (#009144 deep / #004d24 deeper)
-// becomes the PRIMARY accent everywhere amber used to live: active tabs,
-// hole nav banner, score-button selection, auto-advance toast, MASH ROUND
-// header, leaderboard active states. Bourbon brown is demoted to a
-// SECONDARY accent and used only where it carries real "Bourbon Cup"
-// brand meaning — the login screen title and the trophy silhouette
-// glow. Net effect: the app reads as Mash team property with bourbon
-// as the parent-tournament flavor.
-//
-// Implementation note — `BC.amber` keeps its key name despite now holding
-// green values. Renaming would require touching ~100 call sites; instead,
-// the convention is "BC.amber = primary brand accent (whatever color
-// that currently is)" and "BC.gold = bourbon brown secondary accent".
-// The few places that genuinely need bourbon brown (login title) read
-// from BC.gold explicitly.
-//
-// Light mode is paper-with-a-whisper-of-green — like the natural fiber
-// of a Mash Brothers scorecard. Dark mode evokes the black-bg/green-flag
-// palette of the team logo itself, with a subtle green undertone in the
-// "near-black" so the green accent reads as part of a deliberate system
-// rather than as a pop of color floating on neutral charcoal.
+// ─── BOURBON CUP THEME — Gold (Blackout) default ───
+// Tournament chrome is a true-neutral black base with a sharp gold-amber
+// primary accent ("amber") and a bourbon-brown secondary ("gold"). This
+// is the CONSTANT Bourbon Cup identity. Per-team colors are NOT baked in
+// here — they are extracted from each team's uploaded logo at setup time
+// (see lib/logoBrand.js) and layered on via the brand config below
+// (teamA/teamB tokens). Swap teams year to year; this chrome stays put.
+// Light mode is a crisp near-white; dark mode is the black shown in the
+// Gold mockup. The key name "amber" now genuinely holds amber.
 // ── Brand-driven accents ──────────────────────────────────────────
 // Neutral chrome (bg/card/inp/bdr/text) is fixed per mode. The ACCENTS
 // are tournament-configurable: each team's color is extracted from its
@@ -99,19 +85,19 @@ function withBrand(mode, brand, base) {
 export const getBCTheme = (mode, brand = null) => {
   if (mode === "light") {
     return withBrand("light", brand, {
-      bg: "#f4f7f3",        // pale linen with whisper of Mash green
+      bg: "#fafaf9",        // crisp near-white page
       card: "#ffffff",      // pure white card surface
-      inp: "#e6ebe7",       // pale green-tinted gray (input/inactive)
-      hover: "#d8dfd9",
-      bdr: "#c4cfc6",       // soft green-tinted border
-      t1: "#1a1f1c",        // near-black with cool/green tint
-      t2: "#5a615c",        // medium neutral with green lean
-      t3: "#8b918d",        // muted neutral, refined
-      amber: "#009144",     // PRIMARY ACCENT — Mash Brothers brand green
-      amberGlow: "rgba(0,145,68,0.14)",
-      amberDim: "#004d24",  // Mash deep green (gradients, hover-state)
-      gold: "#a8730a",      // SECONDARY ACCENT — bourbon brown (login title only)
-      goldGlow: "rgba(168,115,10,0.10)",
+      inp: "#f0f0ee",       // light neutral gray (input/inactive)
+      hover: "#e7e7e4",
+      bdr: "#dcdcd9",       // soft neutral border
+      t1: "#16161a",        // near-black ink
+      t2: "#5c5c62",        // medium neutral
+      t3: "#93939a",        // muted neutral
+      amber: "#b8801a",     // PRIMARY ACCENT — bourbon amber (Blackout/Gold)
+      amberGlow: "rgba(184,128,26,0.14)",
+      amberDim: "#8a5f10",  // deeper amber (gradients, hover-state)
+      gold: "#8a5a2b",      // SECONDARY ACCENT — bourbon brown (login title, trophy glow)
+      goldGlow: "rgba(138,90,43,0.10)",
       danger: "#c1272d",    // traditional deep red
       warn: "#c2570d",      // burnt orange
       green: "#047857",     // generic positive (distinct from brand accent)
@@ -123,20 +109,20 @@ export const getBCTheme = (mode, brand = null) => {
   }
   // dark (default) — Mash logo "black bg + green flag" inspired
   return withBrand("dark", brand, {
-    bg: "#0a1410",          // near-black with green undertone (Mash logo bg)
-    card: "#121d18",        // elevated panel
-    inp: "#0e1813",         // sunken input
-    hover: "#1a2922",
-    bdr: "#1f3026",         // subtle green-tinted border
-    t1: "#e8eee9",          // slightly green-tinted clean white
-    t2: "#a3aea7",          // green-leaning medium gray
-    t3: "#6b766f",          // green-leaning muted gray
-    amber: "#16a34a",       // PRIMARY ACCENT — brightened Mash green for dark
-    amberGlow: "rgba(22,163,74,0.20)",
-    amberDim: "#15803d",
+    bg: "#0a0a0b",          // true neutral black (Blackout/Gold)
+    card: "#161618",        // elevated panel
+    inp: "#1d1d20",         // sunken input
+    hover: "#26262a",
+    bdr: "#2a2a2e",         // neutral border
+    t1: "#f5f4f2",          // crisp off-white
+    t2: "#a0a0a6",          // neutral medium gray
+    t3: "#6a6a70",          // muted neutral gray
+    amber: "#e0a93c",       // PRIMARY ACCENT — sharp gold-amber for dark
+    amberGlow: "rgba(224,169,60,0.20)",
+    amberDim: "#b8801a",
     gold: "#d4a843",        // SECONDARY ACCENT — bourbon brown
     goldGlow: "rgba(212,168,67,0.12)",
-    danger: "#ef4444",
+    danger: "#ef5350",
     warn: "#f59e0b",
     green: "#22c55e",
     hcpBlue: "#3b82f6",
