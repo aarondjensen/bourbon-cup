@@ -459,7 +459,26 @@ function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds
       })}
 
       {displayRounds.length === 0 && (
-        <div style={{ textAlign: "center", color: BC.t3, padding: 40, fontSize: 13 }}>No matches set up yet.</div>
+        // Empty state fills the remaining viewport height and centers its
+        // message vertically, so an unstarted tournament doesn't leave a
+        // large dead gap between the TEAMS card and the bottom nav. The
+        // minHeight subtracts a rough allowance for the TEAMS card, the
+        // body's top padding, and the fixed nav clearance.
+        <div style={{
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          minHeight: "calc(100svh - 250px)", textAlign: "center", padding: "0 24px", gap: 10,
+        }}>
+          <div style={{
+            width: 40, height: 40, background: BC.amber,
+            WebkitMask: `url(${TROPHY_SILHOUETTE}) center/contain no-repeat`,
+            mask: `url(${TROPHY_SILHOUETTE}) center/contain no-repeat`,
+            opacity: 0.3,
+          }} />
+          <div style={{ fontSize: 15, fontWeight: 700, color: BC.t1, letterSpacing: 0.3 }}>No matches yet</div>
+          <div style={{ fontSize: 12, color: BC.t3, maxWidth: 260, lineHeight: 1.5 }}>
+            Matches will appear here once the tournament schedule is set.
+          </div>
+        </div>
       )}
     </div>
   );
