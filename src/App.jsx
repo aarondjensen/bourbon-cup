@@ -10,7 +10,15 @@ import {
   calcCH, calcCHForCourse, fmtScore,
   getEffectiveHI, buildStrokeMap,
   computeMatchResult, computePracticeMatch, computePracticeSkins,
+  getRoundCH, getRoundHI, getRoundTee, getRoundHandicapMode, lockForRound,
 } from "./scoring";
+import {
+  ROUND_LOCKS_COL, buildRoundLockDoc, refreshRoundLockDoc,
+  markRoundFinal, unfinalizeRound, clearRoundLockDoc,
+  isRoundFinal, roundLockState, describeLock,
+  describeHiChangeImpact, lockedPlayerEntry,
+  LOCK_OPEN, LOCK_FINAL, LOCK_STATE_LABEL,
+} from "./lib/roundLocks";
 import { usePullToRefresh } from "./lib/usePullToRefresh";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { EditionSwitcher } from "./components/EditionSwitcher";
@@ -203,7 +211,7 @@ function LoginScreen({ players, onLogin, teamNames, darkMode }) {
 // player names, score-status pill in the middle with the green leader
 // triangle, and a two-row hole-by-hole tracker with diagonal-tied-hole
 // splits. Tap a card to expand the full scorecard.
-function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds, teamNames, hcpOverrides, teeAssignments }) {
+function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds, teamNames, hcpOverrides, teeAssignments, roundLocks }) {
   const [expandedMatch, setExpandedMatch] = useState(null);
   const [activeRound, setActiveRound] = useState(null); // null = show all rounds
 
@@ -216,10 +224,10 @@ function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds
   const matchResults = useMemo(() => {
     return matches.map(m => {
       const fmt = tRounds.find(t => t.round_number === m.round)?.format || "singles";
-      const res = computeMatchResult(m, holeData, courses, tRounds, tPlayers, fmt, hcpOverrides, undefined, teeAssignments);
+      const res = computeMatchResult(m, holeData, courses, tRounds, tPlayers, fmt, hcpOverrides, undefined, teeAssignments, roundLocks);
       return { match: m, result: res, format: fmt };
     });
-  }, [matches, holeData, courses, tRounds, tPlayers, hcpOverrides, teeAssignments]);
+  }, [matches, holeData, courses, tRounds, tPlayers, hcpOverrides, teeAssignments, roundLocks]);
 
   // Tournament totals — Nassau points summed across all matches and rounds.
   const tourneyTotals = useMemo(() => {
@@ -559,7 +567,7 @@ function MatchScorecard({ match, result, format, courses, tRounds }) {
 // uses computeMatchResult/calcCHForCourse — but the visual presentation now
 // matches the rest of the app. Round selector at the top supports the multi-
 // round structure that the original Mash sub-app didn't have.
-function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teamNames, hcpOverrides, teeAssignments }) {
+function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teamNames, hcpOverrides, teeAssignments, roundLocks }) {
   const userPid = user.player_id;
   const myMatches = matches.filter(m => [...m.teamA, ...m.teamB].includes(userPid));
 
@@ -573,22 +581,27 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
 
   const match = activeMatchId ? matches.find(m => m.id === activeMatchId) : myMatches[0];
   const tr = match ? tRounds.find(t => t.round_number === match.round) : null;
-  const course = tr ? courses.find(c => c.id === tr.course_id) : null;
+  // Round handicap lock (src/lib/roundLocks.js). When present, the course
+  // pointer and the hole tables come from the snapshot so this screen shows
+  // exactly the strokes the leaderboard is scoring with — not a fresh
+  // derivation off whatever the course/handicap data says right now.
+  const lock = match ? lockForRound(roundLocks, match.round) : null;
+  const course = (lock || tr) ? courses.find(c => c.id === (lock?.course_id || tr?.course_id)) : null;
   const format = tr?.format || "singles";
   // Per-round default tee — used as a per-player fallback in stroke maps
   // below. Per-player assignments from `teeAssignments[round][pid]` take
   // precedence; this is the "everyone is on the same tee" default.
   const roundTee = tr?.tee_box;
-  const holePars = course?.hole_pars || Array(18).fill(4);
-  const holeHcps = course?.hole_handicaps || Array(18).fill(9);
+  const holePars = lock?.hole_pars || course?.hole_pars || Array(18).fill(4);
+  const holeHcps = lock?.hole_handicaps || course?.hole_handicaps || Array(18).fill(9);
   const par = holePars[activeHole];
   const hcp = holeHcps[activeHole];
 
   const matchPids = match ? [...match.teamA, ...match.teamB] : [];
 
   const result = useMemo(
-    () => match ? computeMatchResult(match, holeData, courses, tRounds, tPlayers, format, hcpOverrides, undefined, teeAssignments) : null,
-    [match, holeData, courses, tRounds, tPlayers, format, hcpOverrides, teeAssignments]
+    () => match ? computeMatchResult(match, holeData, courses, tRounds, tPlayers, format, hcpOverrides, undefined, teeAssignments, roundLocks) : null,
+    [match, holeData, courses, tRounds, tPlayers, format, hcpOverrides, teeAssignments, roundLocks]
   );
 
   // Read a player's gross score for the active hole. holeData is keyed
@@ -604,25 +617,24 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // strokes used in the leaderboard math.
   const strokeMaps = useMemo(() => {
     const maps = {};
-    if (!match || !course) return maps;
-    const holeHcpsLocal = course.hole_handicaps || Array(18).fill(9);
-    const roundOverrides = hcpOverrides?.[match.round] || {};
-    const roundTees = teeAssignments?.[match.round] || {};
-    const getCH = (pid) => calcCHForCourse(
-      getEffectiveHI(pid, tPlayers, roundOverrides),
-      course,
-      roundTees[pid] || roundTee
-    );
+    if (!match || (!course && !lock)) return maps;
+    // Same resolvers computeMatchResult uses, so a locked round's dots can
+    // never disagree with the leaderboard — both read the frozen snapshot.
+    const holeHcpsLocal = lock?.hole_handicaps || course?.hole_handicaps || Array(18).fill(9);
+    const getCH = (pid) => getRoundCH({
+      roundLocks, round: match.round, pid, players: tPlayers,
+      course, hcpOverrides, teeAssignments, roundTee,
+    });
     const allCHs = matchPids.map(getCH);
     const minCH = allCHs.length ? Math.min(...allCHs) : 0;
-    const roundHandicapMode = tr?.handicap_mode || (match.round === 4 ? "full" : "low_man");
+    const roundHandicapMode = getRoundHandicapMode({ roundLocks, round: match.round, tRounds });
     matchPids.forEach(pid => {
       const ch = getCH(pid);
       const adj = roundHandicapMode === "full" ? ch : ch - minCH;
       maps[pid] = buildStrokeMap(adj, holeHcpsLocal);
     });
     return maps;
-  }, [match, course, tPlayers, hcpOverrides, teeAssignments, roundTee, tr, matchPids.join(",")]);
+  }, [match, course, lock, tPlayers, hcpOverrides, teeAssignments, roundLocks, roundTee, tRounds, matchPids.join(",")]);
 
   // ── Auto-advance state derivations ──
   const holeComplete = matchPids.length > 0 && matchPids.every(pid => getScore(pid, activeHole) > 0);
@@ -872,9 +884,12 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           const strokes = strokeMaps[pid]?.[activeHole] || 0;
           // CH for display — per-player tee assignment overrides round default,
           // matching the strokeMaps memo above and computeMatchResult.
-          const hi = getEffectiveHI(pid, tPlayers, hcpOverrides?.[match.round] || {});
-          const playerTee = (teeAssignments?.[match.round] || {})[pid] || roundTee;
-          const ch = calcCHForCourse(hi, course, playerTee);
+          const hi = getRoundHI({ roundLocks, round: match.round, pid, players: tPlayers, hcpOverrides });
+          const playerTee = getRoundTee({ roundLocks, round: match.round, pid, teeAssignments, roundTee });
+          const ch = getRoundCH({
+            roundLocks, round: match.round, pid, players: tPlayers,
+            course, hcpOverrides, teeAssignments, roundTee,
+          });
           // Running net to par for this player thru holes scored
           let netToPar = 0, thru = 0;
           for (let h = 0; h < 18; h++) {
@@ -1114,7 +1129,7 @@ function ChDeltaBadge({ delta }) {
   );
 }
 
-function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, teamNames, onSaveTeamNames, hcpOverridesFromDb, teeAssignmentsFromDb, notify }) {
+function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, teamNames, onSaveTeamNames, hcpOverridesFromDb, teeAssignmentsFromDb, notify, roundLocks, onLockRound, onFinalizeRound, onClearRoundLock }) {
   const [tab, setTab] = useState("players");
   const [editTeamNames, setEditTeamNames] = useState({ A: "", B: "" });
   const [editingTeam, setEditingTeam] = useState(null);
@@ -1122,7 +1137,22 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   useEffect(() => {
     setEditTeamNames({ A: teamNames.A, B: teamNames.B });
   }, [teamNames]);
-  const [newPlayerName, setNewPlayerName] = useState("");
+  const [newPlayerFirst, setNewPlayerFirst] = useState("");
+  const [newPlayerLast, setNewPlayerLast] = useState("");
+
+  // Every place outside this console shows "First LastInitial" (e.g. "Kevin J").
+  // We persist that as the player's `name` so all existing display code keeps
+  // working unchanged; first_name/last_name are the full source of truth,
+  // edited only here. Falls back to first-name-only when no last name is set.
+  const toDisplayName = (first, last) => {
+    const f = (first || "").trim();
+    const l = (last || "").trim();
+    return l ? `${f} ${l[0].toUpperCase()}` : f;
+  };
+  const fullName = (p) =>
+    (p.first_name || p.last_name)
+      ? [p.first_name, p.last_name].filter(Boolean).join(" ").trim()
+      : (p.name || "");
   const [newPlayerTeam, setNewPlayerTeam] = useState(null);
   const [newPlayerHI, setNewPlayerHI] = useState("");
   const [courseSearch, setCourseSearch] = useState("");
@@ -1156,6 +1186,13 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   const [swipeX, setSwipeX] = useState(0);
   const swipeStartX = useRef(null);
   const [teeAssignments, setTeeAssignments] = useState({}); // { round: { pid: teeName } }
+  // ── Handicap-lock UI state ──
+  const [showLockDetail, setShowLockDetail] = useState(false);
+  const [unlockText, setUnlockText] = useState("");   // typed confirmation for un-finalizing
+  const lockState = roundLockState(roundLocks, editRound);
+  const roundIsLocked = lockState !== LOCK_OPEN;
+  const roundIsFinal = lockState === LOCK_FINAL;
+  const activeLock = roundLocks?.[editRound]?.locked ? roundLocks[editRound] : null;
 
   const showChDelta = (key, delta) => {
     if (!delta) return;
@@ -1191,6 +1228,14 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
   const saveRound = async () => {
     const tr = tRounds.find(t => t.round_number === editRound) || {};
+    // A final round is closed. Its overrides, tees and handicap mode are
+    // already frozen in the snapshot, so writing them back would only
+    // create a confusing mismatch between what the form shows and what the
+    // round actually scored with. Refuse rather than pretend.
+    if (isRoundFinal(roundLocks, editRound)) {
+      notify(`Round ${editRound} is final — unlock it first`, "error");
+      return;
+    }
     // Always save handicap overrides (even if empty, to clear old values)
     const overrides = hcpOverrides[editRound] || {};
     await db.upsert("bc_hcp_overrides", { id: `bc_hcp_r${editRound}`, tournament_id: TOURNAMENT_ID, round_number: editRound, overrides });
@@ -1417,31 +1462,40 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               {/* Expandable add card */}
               {newPlayerTeam === team.id && (
                 <div style={{ background: BC.inp, borderRadius: 10, padding: 10, marginBottom: 10, border: `1px solid ${team.accent}44` }}>
-                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
                     <input
                       autoFocus
-                      value={newPlayerName}
-                      onChange={e => setNewPlayerName(e.target.value)}
-                      onKeyDown={async e => { if (e.key === "Enter") { if (!newPlayerName.trim()) return; const pid = `bc_player_${Date.now()}`; await onAddPlayer({ id: pid, player_id: pid, tournament_id: TOURNAMENT_ID, name: newPlayerName.trim(), team: team.id, handicap_index: parseFloat(newPlayerHI) || 0 }); setNewPlayerName(""); setNewPlayerHI(""); setNewPlayerTeam(null); notify(`Added!`, "success"); } }}
-                      placeholder="Player name"
-                      style={{ flex: 2, padding: "9px 10px", background: "#1e1c18", border: `1px solid ${team.accent}55`, borderRadius: 8, color: "#ffffff", fontSize: 12, outline: "none" }}
+                      value={newPlayerFirst}
+                      onChange={e => setNewPlayerFirst(e.target.value)}
+                      placeholder="First name"
+                      style={{ flex: 1, minWidth: 0, padding: "9px 10px", background: "#1e1c18", border: `1px solid ${team.accent}55`, borderRadius: 8, color: "#ffffff", fontSize: 12, outline: "none" }}
                     />
+                    <input
+                      value={newPlayerLast}
+                      onChange={e => setNewPlayerLast(e.target.value)}
+                      placeholder="Last name"
+                      style={{ flex: 1, minWidth: 0, padding: "9px 10px", background: "#1e1c18", border: `1px solid ${team.accent}55`, borderRadius: 8, color: "#ffffff", fontSize: 12, outline: "none" }}
+                    />
+                  </div>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                     <input
                       value={newPlayerHI}
                       onChange={e => setNewPlayerHI(e.target.value)}
                       placeholder="HI"
                       type="number"
-                      style={{ width: 52, padding: "9px 8px", background: "#1e1c18", border: `1px solid ${team.accent}55`, borderRadius: 8, color: "#ffffff", fontSize: 12, outline: "none" }}
+                      style={{ width: 64, padding: "9px 8px", background: "#1e1c18", border: `1px solid ${team.accent}55`, borderRadius: 8, color: "#ffffff", fontSize: 12, outline: "none" }}
                     />
+                    <span style={{ flex: 1 }} />
                     <button onClick={async () => {
-                      if (!newPlayerName.trim()) { notify("Enter a name", "error"); return; }
+                      const first = newPlayerFirst.trim(), last = newPlayerLast.trim();
+                      if (!first) { notify("Enter a first name", "error"); return; }
                       const pid = `bc_player_${Date.now()}`;
-                      await onAddPlayer({ id: pid, player_id: pid, tournament_id: TOURNAMENT_ID, name: newPlayerName.trim(), team: team.id, handicap_index: parseFloat(newPlayerHI) || 0 });
-                      setNewPlayerName(""); setNewPlayerHI(""); setNewPlayerTeam(null);
+                      await onAddPlayer({ id: pid, player_id: pid, tournament_id: TOURNAMENT_ID, name: toDisplayName(first, last), first_name: first, last_name: last, team: team.id, handicap_index: parseFloat(newPlayerHI) || 0 });
+                      setNewPlayerFirst(""); setNewPlayerLast(""); setNewPlayerHI(""); setNewPlayerTeam(null);
                       notify(`Added!`, "success");
-                    }} style={{ padding: "9px 12px", borderRadius: 8, border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer", background: team.color, border: `1px solid ${team.accent}`, color: team.accent, flexShrink: 0 }}>✓</button>
-                    <button onClick={() => { setNewPlayerTeam(null); setNewPlayerName(""); setNewPlayerHI(""); }} style={{
-                      padding: "9px 10px", borderRadius: 8, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, fontSize: 12, cursor: "pointer", flexShrink: 0,
+                    }} style={{ padding: "9px 16px", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer", background: team.color, border: `1px solid ${team.accent}`, color: team.accent, flexShrink: 0 }}>Add</button>
+                    <button onClick={() => { setNewPlayerTeam(null); setNewPlayerFirst(""); setNewPlayerLast(""); setNewPlayerHI(""); }} style={{
+                      padding: "9px 12px", borderRadius: 8, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, fontSize: 12, cursor: "pointer", flexShrink: 0,
                     }}>✕</button>
                   </div>
                 </div>
@@ -1464,32 +1518,45 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       onTouchStart={e => { swipeStartX.current = e.touches[0].clientX; setSwipePid(p.player_id); setSwipeX(0); }}
                       onTouchMove={e => { if (swipeStartX.current == null) return; const dx2 = e.touches[0].clientX - swipeStartX.current; setSwipeX(Math.min(0, dx2)); }}
                       onTouchEnd={() => { if (swipeX < -80) { if (window.confirm(`Remove ${p.name}?`)) { onRemovePlayer(p.player_id); } } setSwipePid(null); setSwipeX(0); swipeStartX.current = null; }}
-                      style={{ background: BC.card, borderRadius: 6, padding: "4px 8px", border: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", gap: 6, boxShadow: `inset 3px 0 0 ${team.accent}55`, position: "relative", transform: `translateX(${dx}px)`, transition: isSwiping ? "none" : "transform 0.2s ease" }}>
+                      style={{ background: BC.card, borderRadius: 6, padding: isEditing ? "8px" : "4px 8px", border: `1px solid ${BC.bdr}`, display: "flex", flexDirection: isEditing ? "column" : "row", alignItems: isEditing ? "stretch" : "center", gap: 6, boxShadow: `inset 3px 0 0 ${team.accent}55`, position: "relative", transform: `translateX(${dx}px)`, transition: isSwiping ? "none" : "transform 0.2s ease" }}>
                       {isEditing ? (
                         <>
-                          <input autoFocus value={editingPlayer.name} onChange={e => setEditingPlayer(prev => ({...prev, name: e.target.value}))}
-                            style={{ fontSize: 12, fontWeight: 600, color: BC.t1, width: 110, flexShrink: 0, background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 4, padding: "2px 6px", outline: "none", fontFamily: "'Montserrat', sans-serif" }} />
-                          <input type="number" value={editingPlayer.hi} onChange={e => setEditingPlayer(prev => ({...prev, hi: e.target.value}))}
-                            style={{ fontSize: 11, color: BC.t1, width: 42, flexShrink: 0, background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 4, padding: "2px 6px", outline: "none", fontFamily: "'Montserrat', sans-serif" }} />
-                          <span style={{ flex: 1 }} />
-                          <button onClick={() => {
-                            const changes = [];
-                            if (editingPlayer.name !== p.name) changes.push(`Name: "${p.name}" → "${editingPlayer.name}"`);
-                            if (parseFloat(editingPlayer.hi) !== parseFloat(p.handicap_index)) changes.push(`HI: ${p.handicap_index} → ${editingPlayer.hi}`);
-                            if (changes.length === 0) { setEditingPlayer(null); return; }
-                            if (window.confirm("Confirm changes for " + p.name + ":\n" + changes.join("\n"))) {
-                              onUpdatePlayer({ ...p, name: editingPlayer.name.trim(), handicap_index: parseFloat(editingPlayer.hi) || 0 });
-                            }
-                            setEditingPlayer(null);
-                          }} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, border: "none", background: team.accent, color: "#0a0804", fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>✓</button>
-                          <button onClick={() => setEditingPlayer(null)} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer", flexShrink: 0 }}>✕</button>
+                          <input autoFocus placeholder="First name" value={editingPlayer.first} onChange={e => setEditingPlayer(prev => ({...prev, first: e.target.value}))}
+                            style={{ fontSize: 13, fontWeight: 600, color: BC.t1, boxSizing: "border-box", background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 6, padding: "8px 10px", outline: "none", fontFamily: "'Montserrat', sans-serif" }} />
+                          <input placeholder="Last name" value={editingPlayer.last} onChange={e => setEditingPlayer(prev => ({...prev, last: e.target.value}))}
+                            style={{ fontSize: 13, fontWeight: 600, color: BC.t1, boxSizing: "border-box", background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 6, padding: "8px 10px", outline: "none", fontFamily: "'Montserrat', sans-serif" }} />
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <input type="number" placeholder="HI" value={editingPlayer.hi} onChange={e => setEditingPlayer(prev => ({...prev, hi: e.target.value}))}
+                              style={{ fontSize: 12, color: BC.t1, width: 64, flexShrink: 0, boxSizing: "border-box", background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 6, padding: "8px 8px", outline: "none", fontFamily: "'Montserrat', sans-serif" }} />
+                            <span style={{ flex: 1 }} />
+                            <button onClick={() => {
+                              const first = (editingPlayer.first || "").trim(), last = (editingPlayer.last || "").trim();
+                              if (!first) { notify("Enter a first name", "error"); return; }
+                              const newName = toDisplayName(first, last);
+                              const changes = [];
+                              if (newName !== p.name || first !== (p.first_name||"") || last !== (p.last_name||"")) changes.push(`Name → "${fullName({ first_name: first, last_name: last })}" (shows as "${newName}")`);
+                              const hiChanged = parseFloat(editingPlayer.hi) !== parseFloat(p.handicap_index);
+                              if (hiChanged) changes.push(`HI: ${p.handicap_index} → ${editingPlayer.hi}`);
+                              if (changes.length === 0) { setEditingPlayer(null); return; }
+                              // Spell out the blast radius. A handicap edit mid-event
+                              // is safe by construction — locked rounds ignore it —
+                              // but the director should see that stated, not assume it.
+                              const impact = hiChanged
+                                ? "\n\n" + describeHiChangeImpact(roundLocks, [1, 2, 3, 4]).text
+                                : "";
+                              if (window.confirm("Confirm changes:\n" + changes.join("\n") + impact)) {
+                                onUpdatePlayer({ ...p, name: newName, first_name: first, last_name: last, handicap_index: parseFloat(editingPlayer.hi) || 0 });
+                              }
+                              setEditingPlayer(null);
+                            }} style={{ fontSize: 12, padding: "8px 16px", borderRadius: 6, border: "none", background: team.accent, color: "#0a0804", fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Save</button>
+                            <button onClick={() => setEditingPlayer(null)} style={{ fontSize: 12, padding: "8px 12px", borderRadius: 6, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer", flexShrink: 0 }}>✕</button>
+                          </div>
                         </>
                       ) : (
                         <>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: team.accent + "88", width: 110, flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
-                          <span style={{ fontSize: 11, fontWeight: 400, color: BC.t1, width: 36, flexShrink: 0 }}>{p.handicap_index}</span>
-                          <span style={{ flex: 1 }} />
-                          <button onClick={() => setEditingPlayer({ pid: p.player_id, name: p.name, hi: String(p.handicap_index) })} style={{
+                          <span style={{ fontSize: 12, fontWeight: 600, color: team.accent + "88", flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fullName(p)}</span>
+                          <span style={{ fontSize: 11, fontWeight: 400, color: BC.t1, width: 36, flexShrink: 0, textAlign: "right" }}>{p.handicap_index}</span>
+                          <button onClick={() => setEditingPlayer({ pid: p.player_id, first: p.first_name || (p.last_name ? "" : (p.name || "")), last: p.last_name || "", hi: String(p.handicap_index) })} style={{
                             fontSize: 9, padding: "1px 5px", borderRadius: 4, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer", flexShrink: 0,
                           }}>Edit</button>
                           <button onClick={() => onUpdatePlayer({ ...p, isDirector: !p.isDirector })} style={{
@@ -1678,9 +1745,187 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               </div>
             </div>
 
+            {/* ── Handicap lock ──────────────────────────────────────────
+                The control surface for src/lib/roundLocks.js. A locked round
+                has frozen every input to stroke allocation — handicap index,
+                per-round override, tee, low_man/full, course and hole tables.
+                Editing a player's handicap after this point changes future
+                rounds only. */}
+            <div style={{
+              marginBottom: 12, borderRadius: 10, overflow: "hidden",
+              background: BC.bg,
+              border: `1px solid ${roundIsFinal ? BC.danger + "66" : roundIsLocked ? BC.amber + "66" : BC.bdr}`,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, letterSpacing: 0.5 }}>HANDICAP LOCK</div>
+                <span style={{
+                  fontSize: 8, fontWeight: 800, letterSpacing: 1, padding: "2px 7px", borderRadius: 10,
+                  background: roundIsFinal ? BC.danger : roundIsLocked ? BC.amber : "transparent",
+                  color: roundIsLocked ? "#0a0804" : BC.t3,
+                  border: roundIsLocked ? "none" : `1px solid ${BC.bdr}`,
+                }}>{LOCK_STATE_LABEL[lockState]}</span>
+                <span style={{ flex: 1 }} />
+                {activeLock && (
+                  <button onClick={() => setShowLockDetail(v => !v)} style={{
+                    fontSize: 9, padding: "2px 7px", borderRadius: 5, border: `1px solid ${BC.bdr}`,
+                    background: "transparent", color: BC.t3, cursor: "pointer",
+                  }}>{showLockDetail ? "Hide" : "Frozen values"}</button>
+                )}
+              </div>
+
+              <div style={{ padding: "0 10px 10px" }}>
+                <div style={{ fontSize: 10, color: BC.t3, lineHeight: 1.55, marginBottom: 8 }}>
+                  {!roundIsLocked &&
+                    `Round ${editRound} is scoring off live handicaps. It locks by itself the moment the first score is entered, so nothing here needs remembering.`}
+                  {roundIsLocked && !roundIsFinal &&
+                    `${describeLock(activeLock)}. Handicap edits made from now on will not touch this round.`}
+                  {roundIsFinal &&
+                    `${describeLock(activeLock)}. This round is closed — nothing recalculates it.`}
+                </div>
+
+                {/* OPEN → offer a deliberate pre-lock */}
+                {!roundIsLocked && (
+                  <button onClick={async () => {
+                    if (!window.confirm(
+                      `Lock handicaps for Round ${editRound}?\n\n` +
+                      `Every player's index, override, tee and the low-man setting will be frozen for this round. ` +
+                      `Later handicap changes will apply to other rounds only.`
+                    )) return;
+                    await onLockRound(editRound);
+                    notify(`Round ${editRound} handicaps locked`, "success");
+                  }} style={{ ...BtnStyle, padding: "7px 14px", fontSize: 11 }}>Lock handicaps now</button>
+                )}
+
+                {/* LOCKED, not final → refresh / finalize / release */}
+                {roundIsLocked && !roundIsFinal && (
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <button onClick={async () => {
+                      if (!window.confirm(
+                        `Re-take the Round ${editRound} snapshot?\n\n` +
+                        `This is the ONLY thing that changes a locked round's handicaps. ` +
+                        `Every player's strokes for Round ${editRound} will be recalculated from current values. ` +
+                        `Only do this if the round has not really been played yet.`
+                      )) return;
+                      await onLockRound(editRound, { refresh: true });
+                      notify(`Round ${editRound} snapshot refreshed`, "success");
+                    }} style={{
+                      padding: "6px 12px", borderRadius: 8, border: `1px solid ${BC.amber}`, background: "transparent",
+                      color: BC.amber, fontSize: 10, fontWeight: 700, cursor: "pointer",
+                    }}>Refresh snapshot</button>
+
+                    <button onClick={async () => {
+                      if (!window.confirm(
+                        `Mark Round ${editRound} final?\n\n` +
+                        `Its handicaps can no longer be refreshed. Scores stay editable.`
+                      )) return;
+                      await onFinalizeRound(editRound, true);
+                      notify(`Round ${editRound} marked final`, "success");
+                    }} style={{ ...BtnStyle, padding: "6px 12px", fontSize: 10 }}>Mark round final</button>
+
+                    <button onClick={async () => {
+                      if (!window.confirm(
+                        `Release the Round ${editRound} lock?\n\n` +
+                        `The round goes back to live handicaps. Use this only if the round was locked by a stray score before play began.`
+                      )) return;
+                      await onClearRoundLock(editRound);
+                      notify(`Round ${editRound} lock released`, "success");
+                    }} style={{
+                      padding: "6px 12px", borderRadius: 8, border: `1px solid ${BC.bdr}`, background: "transparent",
+                      color: BC.t3, fontSize: 10, fontWeight: 700, cursor: "pointer",
+                    }}>Release lock</button>
+                  </div>
+                )}
+
+                {/* FINAL → typed confirmation, deliberately awkward */}
+                {roundIsFinal && (
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                    <input
+                      value={unlockText}
+                      onChange={e => setUnlockText(e.target.value)}
+                      placeholder="Type UNLOCK"
+                      style={{
+                        ...InputStyle, marginBottom: 0, width: 130, padding: "6px 8px", fontSize: 11,
+                        borderColor: unlockText === "UNLOCK" ? BC.danger : BC.bdr,
+                      }} />
+                    <button
+                      disabled={unlockText !== "UNLOCK"}
+                      onClick={async () => {
+                        await onFinalizeRound(editRound, false);
+                        setUnlockText("");
+                        notify(`Round ${editRound} reopened — snapshot still in place`, "success");
+                      }}
+                      style={{
+                        padding: "6px 12px", borderRadius: 8, border: `1px solid ${BC.danger}`,
+                        background: unlockText === "UNLOCK" ? BC.danger : "transparent",
+                        color: unlockText === "UNLOCK" ? "#fff" : BC.t3,
+                        fontSize: 10, fontWeight: 700,
+                        cursor: unlockText === "UNLOCK" ? "pointer" : "not-allowed",
+                        opacity: unlockText === "UNLOCK" ? 1 : 0.5,
+                      }}>Unlock round</button>
+                    <span style={{ fontSize: 9, color: BC.t3 }}>
+                      Reopening alone changes nothing — you would still have to refresh the snapshot.
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Frozen values — what this round is ACTUALLY scoring with */}
+              {showLockDetail && activeLock && (
+                <div style={{ borderTop: `1px solid ${BC.bdr}`, background: BC.card, padding: "8px 10px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 42px 60px 34px", gap: 4, marginBottom: 4 }}>
+                    {["PLAYER", "HI", "TEE", "CH"].map((h, i) => (
+                      <div key={h} style={{
+                        fontSize: 7, fontWeight: 700, color: BC.t3, letterSpacing: 0.5,
+                        textAlign: i === 0 ? "left" : "center",
+                      }}>{h}</div>
+                    ))}
+                  </div>
+                  {tPlayers.map(p => {
+                    const e = lockedPlayerEntry(roundLocks, editRound, p.player_id);
+                    const tm = p.team === "A" ? TEAM_A : TEAM_B;
+                    return (
+                      <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: "1fr 42px 60px 34px", gap: 4, alignItems: "center", marginBottom: 2 }}>
+                        <div style={{ fontSize: 10, color: tm.accent + "aa", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
+                        <div style={{ fontSize: 10, color: e?.overridden ? BC.amber : BC.t2, textAlign: "center", fontWeight: e?.overridden ? 700 : 400 }}>
+                          {e ? e.hi : "—"}
+                        </div>
+                        <div style={{ fontSize: 9, color: BC.t3, textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {e?.tee || "—"}
+                        </div>
+                        <div style={{ fontSize: 11, color: e ? BC.t1 : BC.t3, textAlign: "center", fontWeight: 700 }}>
+                          {e ? e.ch : "—"}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div style={{ fontSize: 9, color: BC.t3, marginTop: 6, lineHeight: 1.5 }}>
+                    Mode: {activeLock.handicap_mode === "full" ? "All handicaps" : "Low man"} ·
+                    {" "}Course: {activeLock.course_name || "—"}
+                    {tPlayers.some(p => !lockedPlayerEntry(roundLocks, editRound, p.player_id)) && (
+                      <span style={{ color: BC.amber }}>
+                        {" "}· Players showing — joined after the lock and will use live handicaps.
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Handicap Overrides */}
             <div style={{ marginBottom: 14 }}>
               {/* PLAYER DETAILS header already in column headers */}
+              {roundIsLocked && (
+                <div style={{
+                  fontSize: 9, color: roundIsFinal ? BC.danger : BC.amber, lineHeight: 1.5,
+                  marginBottom: 6, padding: "5px 7px", borderRadius: 6,
+                  background: (roundIsFinal ? BC.danger : BC.amber) + "12",
+                  border: `1px solid ${(roundIsFinal ? BC.danger : BC.amber)}33`,
+                }}>
+                  {roundIsFinal
+                    ? `Round ${editRound} is final. These fields are read-only.`
+                    : `Round ${editRound} is locked. Changes here are saved for reference but will not affect its scoring until you refresh the snapshot above.`}
+                </div>
+              )}
               {tPlayers.length === 0 && <div style={{ fontSize: 11, color: BC.t3 }}>No players added yet.</div>}
               {tPlayers.length > 0 && (() => {
                 const tr2h = tRounds.find(t => t.round_number === editRound);
@@ -1730,8 +1975,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         <div style={{ fontSize: 10, color: BC.t3, textAlign: "center" }}>{baseHI}</div>
                         <input
                           type="number" step="0.1"
+                          disabled={roundIsFinal}
                           value={hasOverride ? override : ""}
                           onChange={e => {
+                            if (roundIsFinal) return;
                             const newVal = e.target.value;
                             const oldHI = parseFloat(hcpOverrides[editRound]?.[p.player_id] ?? p.handicap_index) || 0;
                             const newHI = parseFloat(newVal) || parseFloat(p.handicap_index) || 0;
@@ -1745,15 +1992,15 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                             setHcpOverrides(prev => ({ ...prev, [editRound]: { ...(prev[editRound]||{}), [p.player_id]: newVal } }));
                           }}
                           placeholder={String(baseHI)}
-                          style={{ padding: "5px 8px", background: hasOverride ? BC.amber+"15" : BC.inp, border: `1px solid ${hasOverride ? BC.amber : BC.bdr}`, borderRadius: 6, color: hasOverride ? BC.amber : BC.t2, fontSize: 12, fontWeight: hasOverride ? 700 : 400, outline: "none", textAlign: "center" }}
+                          style={{ padding: "5px 8px", background: hasOverride ? BC.amber+"15" : BC.inp, border: `1px solid ${hasOverride ? BC.amber : BC.bdr}`, borderRadius: 6, color: hasOverride ? BC.amber : BC.t2, fontSize: 12, fontWeight: hasOverride ? 700 : 400, outline: "none", textAlign: "center", opacity: roundIsFinal ? 0.5 : 1, cursor: roundIsFinal ? "not-allowed" : "text" }}
                         />
                         {tees2.map((tee, ti) => {
                           const isAct = currentTee2 === tee.name;
                           return (
-                            <button key={tee.name} onClick={() => assignTee2(tee.name)} title={tee.name} style={{
-                              background: "transparent", border: "none", cursor: "pointer", padding: 0,
+                            <button key={tee.name} disabled={roundIsFinal} onClick={() => { if (roundIsFinal) return; assignTee2(tee.name); }} title={tee.name} style={{
+                              background: "transparent", border: "none", cursor: roundIsFinal ? "not-allowed" : "pointer", padding: 0,
                               display: "flex", alignItems: "center", justifyContent: "center",
-                              opacity: isAct ? 1 : 0.35,
+                              opacity: roundIsFinal ? (isAct ? 0.55 : 0.2) : (isAct ? 1 : 0.35),
                               transform: isAct ? "scale(1.3)" : "scale(1)",
                               transition: "all 0.15s ease",
                             }}>
@@ -1780,18 +2027,18 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
       {tab === "matches" && (() => {
         const tr = tRounds.find(t => t.round_number === matchRound);
-        const course = courses.find(c => c.id === tr?.course_id);
-        const hcpMode = tr?.handicap_mode || "low_man";
+        const mLock = lockForRound(roundLocks, matchRound);
+        const course = courses.find(c => c.id === (mLock?.course_id || tr?.course_id));
+        const hcpMode = getRoundHandicapMode({ roundLocks, round: matchRound, tRounds });
 
-        // Get CH for a player using round overrides and tee assignments
-        const getPlayerCH = (pid) => {
-          const p = tPlayers.find(t => t.player_id === pid);
-          if (!p || !course) return 0;
-          const hi = parseFloat(hcpOverrides?.[matchRound]?.[pid] ?? p.handicap_index) || 0;
-          const teeAssign = teeAssignments[matchRound]?.[pid];
-          const teeObj = teeAssign ? (course.tee_boxes||[]).find(t => t.name === teeAssign) : (course.tee_boxes||[])[0];
-          return calcCH(hi, teeObj?.slope||course.slope||113, teeObj?.rating||course.rating||72, teeObj?.par||course.par||72);
-        };
+        // CH preview for the match builder. Routed through the same resolver
+        // the scoring engine uses, so once a round is locked this panel shows
+        // the strokes that will ACTUALLY be played — not a live re-derivation
+        // that would disagree with the leaderboard.
+        const getPlayerCH = (pid) => getRoundCH({
+          roundLocks, round: matchRound, pid, players: tPlayers,
+          course, hcpOverrides, teeAssignments, roundTee: tr?.tee_box,
+        });
 
         // Stroke situation: given selected players, compute who gets strokes vs who
         const strokeSituation = () => {
@@ -2154,7 +2401,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
 
 // ── Betting View ──
-function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData, skinsPot, onSetSkin, onSetCtp, onUpdatePot, user, enrichedRounds }) {
+function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData, skinsPot, onSetSkin, onSetCtp, onUpdatePot, user, enrichedRounds, roundLocks, hcpOverrides, teeAssignments }) {
   const [activeTab, setActiveTab] = useState("skins");
   const [activeRound, setActiveRound] = useState(1);
   const [editPot, setEditPot] = useState(false);
@@ -2169,9 +2416,13 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
   // Compute skins for a round
   const computeSkins = (round, gross) => {
     const tr2 = tRounds.find(t => t.round_number === round);
-    const course2 = courses.find(c => c.id === tr2?.course_id);
-    const pars = course2?.hole_pars || Array(18).fill(4);
-    const hcps = course2?.hole_handicaps || Array(18).fill(9);
+    // Net skins are handicap-derived, so they answer to the round lock too —
+    // a settled skin must not change hands because someone synced a GHIN
+    // index the next morning.
+    const bLock = lockForRound(roundLocks, round);
+    const course2 = courses.find(c => c.id === (bLock?.course_id || tr2?.course_id));
+    const pars = bLock?.hole_pars || course2?.hole_pars || Array(18).fill(4);
+    const hcps = bLock?.hole_handicaps || course2?.hole_handicaps || Array(18).fill(9);
 
     const skins = [];
     for (let h = 0; h < 18; h++) {
@@ -2179,9 +2430,11 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
         const raw = (holeData[`${p.player_id}_${round}`] || {})[h];
         if (raw == null) return null;
         if (gross) return { pid: p.player_id, name: p.name, score: raw };
-        // Net: simple stroke index
-        const hi = parseFloat(p.handicap_index) || 0;
-        const ch = calcCH(hi, course2?.slope || 113, course2?.rating || 72, course2?.par || 72);
+        // Net: simple stroke index, off the frozen CH when the round is locked
+        const ch = getRoundCH({
+          roundLocks, round, pid: p.player_id, players: tPlayers,
+          course: course2, hcpOverrides, teeAssignments, roundTee: tr2?.tee_box,
+        });
         const sorted = hcps.map((hcp, i) => ({ idx: i, hcp })).sort((a, b) => a.hcp - b.hcp);
         let strokes = 0;
         let rem = Math.abs(ch);
@@ -2339,7 +2592,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
 }
 
 // ── Analytics View ──
-function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historicalData, user, hcpOverrides, teeAssignments }) {
+function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historicalData, user, hcpOverrides, teeAssignments, roundLocks }) {
   const [analyticsTab, setAnalyticsTab] = useState("current");
 
   // Compute current year player stats from match results
@@ -2349,7 +2602,7 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
 
     matches.forEach(m => {
       const fmt = tRounds.find(t => t.round_number === m.round)?.format || "singles";
-      const res = computeMatchResult(m, holeData, courses, tRounds, tPlayers, fmt, hcpOverrides || {}, undefined, teeAssignments);
+      const res = computeMatchResult(m, holeData, courses, tRounds, tPlayers, fmt, hcpOverrides || {}, undefined, teeAssignments, roundLocks);
       const aTotal = res.totalPts.A, bTotal = res.totalPts.B;
       [...m.teamA].forEach(pid => {
         if (!stats[pid]) return;
@@ -2367,7 +2620,7 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
       });
     });
     return Object.values(stats).sort((a, b) => b.pts - a.pts);
-  }, [tPlayers, matches, holeData, tRounds, courses, hcpOverrides, teeAssignments]);
+  }, [tPlayers, matches, holeData, tRounds, courses, hcpOverrides, teeAssignments, roundLocks]);
 
   return (
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
@@ -4623,6 +4876,19 @@ export default function App() {
   const [syncing, setSyncing] = useState(false);
   const [hcpOverridesData, setHcpOverridesData] = useState({}); // { round: { pid: value } }
   const [teeAssignmentsData, setTeeAssignmentsData] = useState({});
+  // ── Round handicap locks ── { round: lockDoc }. See src/lib/roundLocks.js.
+  // Once a round is locked, its scoring reads frozen handicaps and ignores
+  // every later edit to a player's index, override, tee, or the course.
+  const [roundLocksData, setRoundLocksData] = useState({});
+
+  // Refs mirroring the live data the auto-lock needs. The save path runs
+  // outside React's render cycle and must snapshot what is true RIGHT NOW —
+  // reading these through state would capture whatever the callback closed
+  // over, which is exactly the kind of staleness this feature exists to
+  // prevent. Refs are always current.
+  const roundLocksRef = useRef({});
+  const lockInputsRef = useRef({ players: [], tRounds: [], courses: [], hcpOverrides: {}, teeAssignments: {} });
+  const lockInFlightRef = useRef({}); // { round: true } — de-dupes concurrent auto-locks in this client
 
   // ── Pull-to-refresh ── the gesture machinery lives in the shared
   // usePullToRefresh hook (src/lib/usePullToRefresh.js); it's wired up
@@ -4725,6 +4991,12 @@ export default function App() {
       rows.forEach(r => { if (r.round_number) data[r.round_number] = r.overrides || {}; });
       setHcpOverridesData(data);
     }));
+    unsubs.push(db.subscribe(ROUND_LOCKS_COL, f, rows => {
+      const data = {};
+      rows.forEach(r => { if (r.round_number) data[r.round_number] = r; });
+      roundLocksRef.current = data;   // keep the ref hot for the save path
+      setRoundLocksData(data);
+    }));
     unsubs.push(db.subscribe("bc_courses", f, setCourses));
     unsubs.push(db.subscribe("bc_matches", f, setMatches));
     unsubs.push(db.subscribe("bc_hole_scores", f, rows => {
@@ -4752,8 +5024,83 @@ export default function App() {
     return { ...m, nassau: m.nassau || tr?.nassau || NASSAU_DEFAULT };
   }), [matches, enrichedRounds]);
 
+  // Keep the auto-lock's source data current without rebuilding onSaveHole.
+  useEffect(() => {
+    lockInputsRef.current = {
+      players: tPlayers,
+      tRounds: enrichedRounds,
+      courses,
+      hcpOverrides: hcpOverridesData,
+      teeAssignments: teeAssignmentsData,
+    };
+  }, [tPlayers, enrichedRounds, courses, hcpOverridesData, teeAssignmentsData]);
+
+  const userRef = useRef(null);
+  useEffect(() => { userRef.current = user; }, [user]);
+
+  // ── ensureRoundLock ──────────────────────────────────────────────────
+  // THE guarantee. Called before every score write: the first score in a
+  // round freezes that round's handicaps, tees, handicap mode and course
+  // tables. Nobody has to remember to press anything — by the time a hole
+  // exists, the round is already immune to later handicap edits.
+  //
+  // Three layers of protection against writing a lock twice:
+  //   1. the subscribed ref (covers the normal case),
+  //   2. an in-flight flag (covers two saves racing inside this client),
+  //   3. a read-before-write against Firestore (covers two DEVICES racing —
+  //      four players entering scores at once is the expected case here).
+  // A lock is never overwritten once it exists; that is what makes this
+  // safe to call on every single hole.
+  const ensureRoundLock = useCallback(async (rnd) => {
+    if (!rnd) return null;
+    const existing = roundLocksRef.current?.[rnd];
+    if (existing?.locked) return existing;
+    if (lockInFlightRef.current[rnd]) return null;
+    lockInFlightRef.current[rnd] = true;
+    try {
+      // Another device may have locked this round moments ago.
+      const rows = await db.get(ROUND_LOCKS_COL, [
+        { field: "tournament_id", op: "==", value: TOURNAMENT_ID },
+        { field: "round_number", op: "==", value: rnd },
+      ]);
+      const remote = rows.find(r => r.locked);
+      if (remote) {
+        roundLocksRef.current = { ...roundLocksRef.current, [rnd]: remote };
+        setRoundLocksData(prev => ({ ...prev, [rnd]: remote }));
+        return remote;
+      }
+      const { players, tRounds: rds, courses: crs, hcpOverrides, teeAssignments } = lockInputsRef.current;
+      // Nothing meaningful to freeze yet — no roster. Leave the round open
+      // so the real snapshot happens once setup exists.
+      if (!players?.length) return null;
+      const lock = buildRoundLockDoc({
+        tournamentId: TOURNAMENT_ID,
+        round: rnd,
+        players,
+        tRounds: rds,
+        courses: crs,
+        hcpOverrides,
+        teeAssignments,
+        lockedBy: userRef.current?.name || null,
+        reason: "auto",
+      });
+      await db.upsert(ROUND_LOCKS_COL, lock);
+      roundLocksRef.current = { ...roundLocksRef.current, [rnd]: lock };
+      setRoundLocksData(prev => ({ ...prev, [rnd]: lock }));
+      return lock;
+    } catch (e) {
+      console.error("ensureRoundLock", e);
+      return null;
+    } finally {
+      lockInFlightRef.current[rnd] = false;
+    }
+  }, []);
+
   const onSaveHole = useCallback(async (pid, rnd, holeIdx, score, courseId) => {
     setSyncing(true);
+    // Freeze BEFORE the score lands, so the very first hole of a round is
+    // already scoring off the snapshot.
+    await ensureRoundLock(rnd);
     const data = {
       id: `bc_hs_r${rnd}_${pid}_h${holeIdx + 1}`,
       tournament_id: TOURNAMENT_ID,
@@ -4770,7 +5117,7 @@ export default function App() {
     });
     await db.upsert("bc_hole_scores", data);
     setSyncing(false);
-  }, []);
+  }, [ensureRoundLock]);
 
   const onAddPlayer = useCallback(async (p) => { await db.upsert("bc_players", p); }, []);
   const onUpdatePlayer = useCallback(async (p) => { await db.upsert("bc_players", p); }, []);
@@ -4794,6 +5141,60 @@ export default function App() {
   const onSetMatch = useCallback(async (m) => {
     if (m._delete) { await db.delete("bc_matches", m.id); }
     else { await db.upsert("bc_matches", m); }
+  }, []);
+
+  // ── Director lock actions ────────────────────────────────────────────
+  // Deliberate counterparts to the automatic lock. `refresh` re-takes the
+  // snapshot against current values and is the ONLY way a locked round's
+  // handicaps can move; it is blocked outright on a final round.
+  const onLockRound = useCallback(async (rnd, { refresh = false } = {}) => {
+    const prev = roundLocksRef.current?.[rnd];
+    if (prev?.final && refresh) return null; // final rounds are never refreshed
+    const { players, tRounds: rds, courses: crs, hcpOverrides, teeAssignments } = lockInputsRef.current;
+    const args = {
+      tournamentId: TOURNAMENT_ID,
+      round: rnd,
+      players,
+      tRounds: rds,
+      courses: crs,
+      hcpOverrides,
+      teeAssignments,
+      lockedBy: userRef.current?.name || null,
+    };
+    const lock = refresh && prev?.locked
+      ? refreshRoundLockDoc({ ...args, previous: prev })
+      : buildRoundLockDoc({ ...args, previous: prev?.locked ? prev : null, reason: "manual" });
+    await db.upsert(ROUND_LOCKS_COL, lock);
+    roundLocksRef.current = { ...roundLocksRef.current, [rnd]: lock };
+    setRoundLocksData(p => ({ ...p, [rnd]: lock }));
+    return lock;
+  }, []);
+
+  const onFinalizeRound = useCallback(async (rnd, final) => {
+    let lock = roundLocksRef.current?.[rnd];
+    // Finalizing a round nobody locked (all scores entered elsewhere, say)
+    // still needs a snapshot — take one now rather than leaving it open.
+    if (!lock?.locked && final) lock = await onLockRound(rnd);
+    if (!lock) return null;
+    const next = final
+      ? markRoundFinal(lock, userRef.current?.name || null)
+      : unfinalizeRound(lock, userRef.current?.name || null);
+    await db.upsert(ROUND_LOCKS_COL, next);
+    roundLocksRef.current = { ...roundLocksRef.current, [rnd]: next };
+    setRoundLocksData(p => ({ ...p, [rnd]: next }));
+    return next;
+  }, [onLockRound]);
+
+  // Hand a round back to live handicaps. Only for a round locked by a stray
+  // score before the event actually started — never reachable while final.
+  const onClearRoundLock = useCallback(async (rnd) => {
+    const lock = roundLocksRef.current?.[rnd];
+    if (lock?.final) return null;
+    const cleared = clearRoundLockDoc(lock, rnd, TOURNAMENT_ID, userRef.current?.name || null);
+    await db.upsert(ROUND_LOCKS_COL, cleared);
+    roundLocksRef.current = { ...roundLocksRef.current, [rnd]: cleared };
+    setRoundLocksData(p => ({ ...p, [rnd]: cleared }));
+    return cleared;
   }, []);
 
   const availableRounds = useMemo(() => [...new Set(enrichedMatches.map(m => m.round))].sort(), [enrichedMatches]);
@@ -4894,7 +5295,19 @@ export default function App() {
 
       {/* Content */}
       <div className="bc-app-body" style={{
-        flex: 1, overflowY: "auto", overflowX: "hidden", padding: "12px 10px 80px 10px",
+        flex: 1, overflowY: "auto", overflowX: "hidden",
+        padding: "12px 10px calc(env(safe-area-inset-bottom, 0px) + 72px) 10px",
+        // Center short views vertically instead of pinning them to the top
+        // and leaving a large dead gap above the fixed nav — this affects
+        // EVERY tab, not one screen. A grid with `align-content: safe center`
+        // centers the view when it's shorter than the viewport, and the
+        // `safe` keyword makes it fall back to top alignment (start) the
+        // moment the content is taller than the viewport, so nothing ever
+        // scrolls out of reach. `minmax(0, 1fr)` keeps the single column
+        // from blowing out horizontally on wide content.
+        display: "grid",
+        gridTemplateColumns: "minmax(0, 1fr)",
+        alignContent: "safe center",
         // overscroll-behavior-y: contain blocks the browser's native
         // overscroll bounce at the boundaries of THIS scroll container.
         // Without it, iOS Safari starts a bounce animation the moment
@@ -4921,6 +5334,7 @@ export default function App() {
             teamNames={teamNames}
             hcpOverrides={hcpOverridesData}
             teeAssignments={teeAssignmentsData}
+            roundLocks={roundLocksData}
           />
         )}
         {view === "scoring" && (
@@ -4936,6 +5350,7 @@ export default function App() {
             teamNames={teamNames}
             hcpOverrides={hcpOverridesData}
             teeAssignments={teeAssignmentsData}
+            roundLocks={roundLocksData}
           />
         )}
         {view === "groups" && (
@@ -4998,6 +5413,7 @@ export default function App() {
             tPlayers={tPlayers} matches={enrichedMatches} holeData={holeData}
             tRounds={enrichedRounds} courses={courses} historicalData={historicalData} user={user}
             hcpOverrides={hcpOverridesData} teeAssignments={teeAssignmentsData}
+            roundLocks={roundLocksData}
           />
         )}
         {view === "practice" && (
@@ -5028,6 +5444,10 @@ export default function App() {
             }}
             hcpOverridesFromDb={hcpOverridesData}
             teeAssignmentsFromDb={teeAssignmentsData}
+            roundLocks={roundLocksData}
+            onLockRound={onLockRound}
+            onFinalizeRound={onFinalizeRound}
+            onClearRoundLock={onClearRoundLock}
             notify={notify}
           />
         )}

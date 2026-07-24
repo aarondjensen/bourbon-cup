@@ -86,27 +86,125 @@ export const buildStrokeMap = (ch, holeHcps) => {
   return map;
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ROUND HANDICAP LOCKS — the guarantee that completed rounds never move
+// ─────────────────────────────────────────────────────────────────────────────
+// `roundLocks` is a round-keyed map of frozen snapshots, { [round]: lockDoc },
+// written by src/lib/roundLocks.js the moment a round starts taking scores.
+// Everything below reads that snapshot in preference to live data.
+//
+// This module deliberately does NOT import lib/roundLocks (that module imports
+// this one, for the CH math). A lock is plain data, so reading its shape here
+// is enough and keeps the dependency one-directional.
+//
+// The resolution rule, applied identically by every caller:
+//
+//     round is locked AND the player is in the snapshot  →  frozen value
+//     otherwise                                          →  live value
+//
+// The second branch is not a loophole. It is how a player added AFTER the
+// lock (a late substitute) still gets a sensible handicap. Every player who
+// was on the roster when the round locked takes the first branch, always.
+
+// The snapshot for a round, or null when that round is still open.
+export const lockForRound = (roundLocks, round) => {
+  const lock = roundLocks?.[round];
+  return lock && lock.locked ? lock : null;
+};
+
+// A player's frozen row for a round, or null (round open, or late addition).
+export const lockedPlayerRow = (roundLocks, round, pid) => {
+  const lock = lockForRound(roundLocks, round);
+  if (!lock) return null;
+  const row = lock.players?.[pid];
+  return row || null;
+};
+
+// Effective Handicap Index for a player in a round.
+export const getRoundHI = ({ roundLocks, round, pid, players, hcpOverrides }) => {
+  const row = lockedPlayerRow(roundLocks, round, pid);
+  if (row && row.hi != null && Number.isFinite(Number(row.hi))) return Number(row.hi);
+  return getEffectiveHI(pid, players, hcpOverrides?.[round] || {});
+};
+
+// The tee a player played in a round (frozen when locked).
+export const getRoundTee = ({ roundLocks, round, pid, teeAssignments, roundTee }) => {
+  const row = lockedPlayerRow(roundLocks, round, pid);
+  if (row && row.tee) return row.tee;
+  return (teeAssignments?.[round] || {})[pid] || roundTee;
+};
+
+// THE resolution point for stroke allocation. Every scoring path, every
+// leaderboard, every stroke dot on every screen goes through this function —
+// which is precisely why a locked round cannot drift: there is one door and
+// it is closed.
+//
+// Note the frozen CH is stored as the ANSWER, not recomputed from frozen
+// inputs. Even a change to calcCH's rounding could not move a locked round.
+export const getRoundCH = ({
+  roundLocks, round, pid, players, course, hcpOverrides, teeAssignments, roundTee,
+}) => {
+  const row = lockedPlayerRow(roundLocks, round, pid);
+  if (row && row.ch != null && Number.isFinite(Number(row.ch))) return Number(row.ch);
+  const hi = getRoundHI({ roundLocks, round, pid, players, hcpOverrides });
+  const tee = getRoundTee({ roundLocks, round, pid, teeAssignments, roundTee });
+  return calcCHForCourse(hi, course, tee);
+};
+
+// low_man vs full re-allocates every stroke in a match, so it is frozen too.
+// Lock wins over an explicit argument on purpose: a completed round answers
+// to its snapshot and nothing else.
+export const getRoundHandicapMode = ({ roundLocks, round, tRounds, explicit }) => {
+  const lock = lockForRound(roundLocks, round);
+  if (lock?.handicap_mode) return lock.handicap_mode;
+  return explicit
+    || tRounds?.find(t => t.round_number === round)?.handicap_mode
+    || (round === 4 ? "full" : "low_man");
+};
+
+// Course + hole tables for a round. Hole handicaps decide WHICH holes get
+// strokes, so a course re-import must not be able to reshuffle a finished
+// round's stroke allocation — the frozen tables win when present.
+export const getRoundCourseCtx = ({ roundLocks, round, tRounds, courses }) => {
+  const lock = lockForRound(roundLocks, round);
+  const tr = tRounds?.find(t => t.round_number === round);
+  const courseId = lock?.course_id || tr?.course_id;
+  const course = courses?.find(c => c.id === courseId) || null;
+  return {
+    lock,
+    tr,
+    course,
+    holePars: lock?.hole_pars || course?.hole_pars || Array(18).fill(4),
+    holeHcps: lock?.hole_handicaps || course?.hole_handicaps || Array(18).fill(9),
+  };
+};
+
 // ── Match Scoring Engine ──
 // `teeAssignments` is a round-scoped map of { pid: teeName } so each player's
 // course handicap reflects the tee they actually played. Without it, every
 // player on a multi-tee round would be calculated against the course's first
 // tee, which silently mis-allocates strokes (a "Black tees" player gets the
 // same CH as a "White tees" player on the same course — they shouldn't).
-export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, format, hcpOverrides, handicapMode, teeAssignments) {
+//
+// `roundLocks` (last arg) is the frozen-snapshot map described above. When the
+// match's round is locked, handicaps, tees, handicap mode, course and hole
+// tables all come from the snapshot and live edits are ignored entirely.
+export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, format, hcpOverrides, handicapMode, teeAssignments, roundLocks) {
   // holeData: { pid_round: { holeIdx: score } }
   const rnd = match.round;
-  const tr = tRounds.find(t => t.round_number === rnd);
-  const course = courses.find(c => c.id === tr?.course_id);
-  if (!course) return { status: "AS", frontPts: 0, backPts: 0, overallPts: 0, holes: [] };
-
-  const holePars = course.hole_pars || Array(18).fill(4);
-  const holeHcps = course.hole_handicaps || Array(18).fill(9);
+  const { lock, tr, course, holePars, holeHcps } =
+    getRoundCourseCtx({ roundLocks, round: rnd, tRounds, courses });
+  // A locked round can still be scored if the course doc has since been
+  // deleted — the snapshot carries its own hole tables. Only bail when
+  // there is neither a course nor a snapshot to score against.
+  if (!course && !lock) return { status: "AS", frontPts: 0, backPts: 0, overallPts: 0, holes: [] };
 
   const getPlayerScores = (pid) => holeData[`${pid}_${rnd}`] || {};
-  const roundOverrides = hcpOverrides?.[rnd] || {};
-  const roundTees = teeAssignments?.[rnd] || {};
-  const getPlayerHI = (pid) => getEffectiveHI(pid, tPlayers, roundOverrides);
-  const getCH = (pid) => calcCHForCourse(getPlayerHI(pid), course, roundTees[pid]);
+  const roundTee = tr?.tee_box;
+  const getPlayerHI = (pid) => getRoundHI({ roundLocks, round: rnd, pid, players: tPlayers, hcpOverrides });
+  const getCH = (pid) => getRoundCH({
+    roundLocks, round: rnd, pid, players: tPlayers, course, hcpOverrides, teeAssignments, roundTee,
+  });
   const getStrokeMap = (ch) => buildStrokeMap(ch, holeHcps);
   const netScore = (gross, holeIdx, strokeMap) => gross == null ? null : gross - (strokeMap[holeIdx] || 0);
 
@@ -114,7 +212,9 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
   const teamB = match.teamB;
 
   // ── Handicap allocation ──
-  const roundHandicapMode = handicapMode || tRounds.find(t => t.round_number === rnd)?.handicap_mode || (rnd === 4 ? "full" : "low_man");
+  // Mode comes from the snapshot when the round is locked — flipping
+  // low_man/full after the fact would otherwise re-allocate every stroke.
+  const roundHandicapMode = getRoundHandicapMode({ roundLocks, round: rnd, tRounds, explicit: handicapMode });
   const allPids = [...teamA, ...teamB];
   const allCHs = allPids.map(pid => getCH(pid));
   const minCH = Math.min(...allCHs);
@@ -157,8 +257,16 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
       // Apply team handicap (avg of players / 2 for scramble)
       const aAvgHI = teamA.reduce((s,p) => s + getPlayerHI(p), 0) / teamA.length;
       const bAvgHI = teamB.reduce((s,p) => s + getPlayerHI(p), 0) / teamB.length;
-      const aTeamCH = Math.round(calcCHForCourse(aAvgHI * 0.35, course));
-      const bTeamCH = Math.round(calcCHForCourse(bAvgHI * 0.35, course));
+      // Shared-ball formats have no per-player CH to freeze, so the team CH
+      // is re-derived — but against the team's FROZEN tee spec when locked,
+      // never against a course doc that may have been re-rated since.
+      const teamCHFromHI = (hi, teamPids) => {
+        const row = lockedPlayerRow(roundLocks, rnd, teamPids[0]);
+        if (row) return calcCH(hi, row.slope ?? 113, row.rating ?? 72, row.par ?? 72);
+        return calcCHForCourse(hi, course, (teeAssignments?.[rnd] || {})[teamPids[0]] || roundTee);
+      };
+      const aTeamCH = Math.round(teamCHFromHI(aAvgHI * 0.35, teamA));
+      const bTeamCH = Math.round(teamCHFromHI(bAvgHI * 0.35, teamB));
       const aMap = getStrokeMap(aTeamCH), bMap = getStrokeMap(bTeamCH);
       aScore = aRaws.length ? netScore(Math.min(...aRaws), h, aMap) : null;
       bScore = bRaws.length ? netScore(Math.min(...bRaws), h, bMap) : null;
