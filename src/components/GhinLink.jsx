@@ -5,22 +5,25 @@
 //
 //  Exports:
 //    • GhinLinkButton — a compact chip in each player row ("+ GHIN" when
-//      unlinked, "GHIN ✓" when linked) that opens a full dialog holding
-//      the whole workflow: search → confirm → link, plus re-sync / unlink.
+//      unlinked, "GHIN ✓" when linked). Tapping it opens a FULL-SCREEN
+//      page that owns the whole workflow: search → pick → confirm → link,
+//      plus re-sync / unlink for an already-linked player.
 //    • GhinSyncButton — director batch: one call refreshes every linked
 //      player's index.
 //
-//  Mobile keyboard — the important part
-//  ────────────────────────────────────
-//  CSS viewport units (svh/dvh/vh) do NOT shrink when the on-screen
-//  keyboard opens, so a fixed dialog sized with them hides its lower half
-//  (input + results) behind the keyboard, with nothing scrollable to
-//  reveal it. Instead we size and position the dialog to the *visual
-//  viewport* (window.visualViewport), which does shrink for the keyboard.
-//  The card fills only the space above the keyboard; inside it the search
-//  input is pinned at the top, the results list scrolls, and the confirm
-//  bar is pinned at the bottom — so everything stays visible and reachable
-//  while typing. The input uses 16px text to stop iOS zoom-on-focus.
+//  Why full-screen (and how the keyboard is handled)
+//  ─────────────────────────────────────────────────
+//  On iOS the on-screen keyboard does NOT shrink CSS viewport units, and
+//  positioning a floating dialog relative to window.visualViewport.offsetTop
+//  is unreliable — the card ends up pushed out of view. The robust pattern
+//  is a full-screen opaque page (so there's no confusing see-through
+//  background) whose ONLY concession to the keyboard is bottom padding
+//  equal to the keyboard's height (window.innerHeight − visualViewport
+//  height). With that padding the whole page — pinned search field at top,
+//  scrolling results in the middle, pinned confirm bar at the bottom —
+//  lives entirely in the visible area above the keyboard. The field sits
+//  near the top, so it's always visible while typing, and the 16px font
+//  stops iOS zoom-on-focus.
 //
 //  Permission model (auth-agnostic): canEdit = director OR the signed-in
 //  player editing their own row. Firestore rules enforce the real boundary.
@@ -35,40 +38,49 @@ import { searchGhinGolfers, syncGhinNumbers, parseGhinHI, fmtHI } from "../lib/g
 const BLUE = BC.hcpBlue;
 const FONT = "'Montserrat', sans-serif";
 
-// Track the visual viewport so the dialog fits above the keyboard.
-function useVisualViewport() {
-  const [vp, setVp] = useState(() => {
-    const v = typeof window !== "undefined" ? window.visualViewport : null;
-    return { height: v?.height || null, offsetTop: v?.offsetTop || 0 };
-  });
+// Height of the on-screen keyboard, derived from the visual viewport.
+// 0 when the keyboard is closed or the API is unavailable.
+function useKeyboardInset() {
+  const read = () => {
+    if (typeof window === "undefined") return 0;
+    const v = window.visualViewport;
+    if (!v) return 0;
+    return Math.max(0, Math.round(window.innerHeight - v.height - v.offsetTop));
+  };
+  const [kb, setKb] = useState(read);
   useEffect(() => {
     const v = window.visualViewport;
-    if (!v) return;
-    const update = () => setVp({ height: v.height, offsetTop: v.offsetTop });
+    const update = () => setKb(read());
     update();
-    v.addEventListener("resize", update);
-    v.addEventListener("scroll", update);
+    if (v) {
+      v.addEventListener("resize", update);
+      v.addEventListener("scroll", update);
+    }
+    window.addEventListener("resize", update);
     return () => {
-      v.removeEventListener("resize", update);
-      v.removeEventListener("scroll", update);
+      if (v) {
+        v.removeEventListener("resize", update);
+        v.removeEventListener("scroll", update);
+      }
+      window.removeEventListener("resize", update);
     };
   }, []);
-  return vp;
+  return kb;
 }
 
 const primaryBtn = (color) => ({
-  width: "100%", boxSizing: "border-box", padding: "13px 14px", borderRadius: 10,
+  width: "100%", boxSizing: "border-box", padding: "14px 14px", borderRadius: 12,
   border: "none", background: color, color: "#0a0804", fontSize: 15, fontWeight: 800,
   cursor: "pointer", fontFamily: FONT,
 });
 const ghostBtn = {
-  width: "100%", boxSizing: "border-box", padding: "12px 14px", borderRadius: 10,
+  width: "100%", boxSizing: "border-box", padding: "13px 14px", borderRadius: 12,
   border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t2,
   fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
 };
-const muted = { fontSize: 13, color: BC.t3, padding: "12px 2px", lineHeight: 1.45 };
+const muted = { fontSize: 13, color: BC.t3, padding: "14px 4px", lineHeight: 1.5, textAlign: "center" };
 
-// ── Per-player: compact chip → dialog ───────────────────────────────
+// ── Per-player: compact chip → full-screen page ─────────────────────
 export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
   const canEdit = !!(user?.isDirector || user?.player_id === player?.player_id);
   const linked = !!player?.ghin_number;
@@ -81,9 +93,9 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState(null);
 
-  const vp = useVisualViewport();
+  const kb = useKeyboardInset();
 
-  // Lock background scroll while the dialog is open.
+  // Lock the background page while the full-screen search is open.
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -93,7 +105,7 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
 
   if (!canEdit && !linked) return null;
 
-  const openModal = () => {
+  const openPage = () => {
     setOpen(true);
     setMode(linked ? "view" : "search");
     setQ(player?.name || "");
@@ -157,24 +169,13 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
     close();
   };
 
-  // Dialog geometry: fit inside the visual viewport (above the keyboard).
-  const vpH = vp.height;
-  const panelStyle = {
-    position: "fixed", zIndex: 1001, left: "50%", transform: "translateX(-50%)",
-    width: "calc(100% - 20px)", maxWidth: 440,
-    display: "flex", flexDirection: "column",
-    background: BC.card, border: `1px solid ${BC.bdr}`, borderRadius: 16,
-    boxShadow: "0 18px 50px rgba(0,0,0,0.65)", overflow: "hidden",
-    boxSizing: "border-box", fontFamily: FONT,
-    top: vpH ? (vp.offsetTop + 10) : "calc(env(safe-area-inset-top, 0px) + 10px)",
-    height: vpH ? Math.min(vpH - 20, 620) : undefined,
-    maxHeight: vpH ? (vpH - 20) : "calc(100svh - env(safe-area-inset-top, 0px) - 28px)",
-  };
+  const title = mode === "search" ? `Link ${player.name}` : `${player.name} · GHIN`;
 
   return (
     <>
+      {/* Compact row chip */}
       <button
-        onClick={openModal}
+        onClick={openPage}
         title={linked ? `GHIN ${player.ghin_number}` : "Link a GHIN profile"}
         style={{
           flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 3,
@@ -189,141 +190,152 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
       </button>
 
       {open && (
-        <>
-          <div onClick={close} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 1000 }} />
-          <div onClick={e => e.stopPropagation()} style={panelStyle}>
-
-            {/* Header (pinned) */}
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 3000, background: BC.bg,
+            display: "flex", flexDirection: "column", boxSizing: "border-box",
+            fontFamily: FONT,
+            paddingTop: "env(safe-area-inset-top, 0px)",
+            paddingLeft: "env(safe-area-inset-left, 0px)",
+            paddingRight: "env(safe-area-inset-right, 0px)",
+            paddingBottom: kb,                 // keyboard treated as bottom padding
+            transition: "padding-bottom 0.15s ease",
+            overflow: "hidden",
+          }}
+        >
+          {/* Header */}
+          <div style={{
+            flexShrink: 0, display: "flex", alignItems: "center", gap: 10,
+            padding: "12px 14px", borderBottom: `1px solid ${BC.bdr}`,
+          }}>
+            <button onClick={close} style={{
+              flexShrink: 0, padding: "7px 12px", borderRadius: 9, cursor: "pointer",
+              border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t2,
+              fontSize: 13, fontWeight: 700, fontFamily: FONT,
+            }}>Cancel</button>
             <div style={{
-              flexShrink: 0, display: "flex", alignItems: "center", gap: 8,
-              padding: "13px 14px", borderBottom: `1px solid ${BC.bdr}`,
-            }}>
-              <div style={{
-                fontSize: 14, fontWeight: 800, color: BC.t1, flex: 1, minWidth: 0,
-                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-              }}>
-                {mode === "search" ? `Link ${player.name} to GHIN` : `${player.name} · GHIN`}
-              </div>
-              <button onClick={close} aria-label="Close" style={{
-                flexShrink: 0, width: 32, height: 32, borderRadius: 8, cursor: "pointer",
-                border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t2,
-                fontSize: 16, lineHeight: 1,
-              }}>✕</button>
-            </div>
+              flex: 1, minWidth: 0, textAlign: "center", fontSize: 15, fontWeight: 800,
+              color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+            }}>{title}</div>
+            <div style={{ width: 64, flexShrink: 0 }} />
+          </div>
 
-            {/* ── Linked summary ── */}
-            {mode === "view" && linked && (
-              <div style={{ padding: 14, overflowY: "auto", overscrollBehavior: "contain" }}>
-                <div style={{ background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 12, padding: 12, marginBottom: 14 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: BLUE, letterSpacing: 0.5 }}>GHIN #{player.ghin_number}</div>
-                  {player.ghin_name && <div style={{ fontSize: 13, fontWeight: 600, color: BC.t1, marginTop: 3 }}>{player.ghin_name}</div>}
-                  <div style={{ fontSize: 12, color: BC.t2, marginTop: 6 }}>
-                    Handicap Index <b style={{ color: BC.t1 }}>{fmtHI(player.handicap_index)}</b>
-                    {player.ghin_rev_date ? `  ·  revised ${player.ghin_rev_date}` : ""}
-                  </div>
-                  {player.ghin_synced_at && (
-                    <div style={{ fontSize: 10, color: BC.t3, marginTop: 4 }}>
-                      Last synced {new Date(player.ghin_synced_at).toLocaleDateString()}
-                    </div>
-                  )}
+          {/* ── Linked summary ── */}
+          {mode === "view" && linked && (
+            <div style={{ flex: 1, overflowY: "auto", overscrollBehavior: "contain", padding: 16 }}>
+              <div style={{ background: BC.card, border: `1px solid ${BC.bdr}`, borderRadius: 14, padding: 16, marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: BLUE, letterSpacing: 0.5 }}>GHIN #{player.ghin_number}</div>
+                {player.ghin_name && <div style={{ fontSize: 15, fontWeight: 700, color: BC.t1, marginTop: 4 }}>{player.ghin_name}</div>}
+                <div style={{ fontSize: 13, color: BC.t2, marginTop: 8 }}>
+                  Handicap Index <b style={{ color: BC.t1 }}>{fmtHI(player.handicap_index)}</b>
+                  {player.ghin_rev_date ? `  ·  revised ${player.ghin_rev_date}` : ""}
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <button disabled={busy} onClick={resync} style={primaryBtn(BC.green)}>
-                    {busy ? "Syncing…" : "↻ Re-sync handicap now"}
-                  </button>
-                  <button onClick={() => { setMode("search"); setQ(player.name || ""); setResults([]); setSearched(false); setPending(null); }} style={ghostBtn}>
-                    Change / re-link golfer
-                  </button>
-                  <button onClick={unlink} style={{ ...ghostBtn, color: BC.danger, borderColor: BC.danger + "55" }}>
-                    Unlink (keep current HI)
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* ── Search / link ── */}
-            {(mode === "search" || !linked) && (
-              <>
-                {/* Search row (pinned, always visible above keyboard) */}
-                <div style={{ flexShrink: 0, padding: 14, borderBottom: `1px solid ${BC.bdr}` }}>
-                  <input
-                    autoFocus
-                    value={q}
-                    onChange={e => setQ(e.target.value)}
-                    onKeyDown={e => { if (e.key === "Enter") doSearch(); }}
-                    placeholder="Name or GHIN number"
-                    autoCapitalize="words"
-                    autoCorrect="off"
-                    enterKeyHint="search"
-                    style={{
-                      width: "100%", boxSizing: "border-box", padding: "13px 13px",
-                      background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 10,
-                      color: BC.t1, fontSize: 16, fontWeight: 600, outline: "none", fontFamily: FONT,
-                    }}
-                  />
-                  <button disabled={busy} onClick={doSearch} style={{ ...primaryBtn(BLUE), marginTop: 8 }}>
-                    {busy ? "Searching…" : "Search GHIN"}
-                  </button>
-                </div>
-
-                {/* Results (scrollable) */}
-                <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", padding: "8px 14px 14px" }}>
-                  {busy && <div style={muted}>Searching GHIN…</div>}
-                  {!busy && searched && results.length === 0 && (
-                    <div style={muted}>No golfers found. Try a different spelling, add a last name, or use the 7-digit GHIN number.</div>
-                  )}
-                  {!busy && !searched && (
-                    <div style={muted}>Enter a name or GHIN number and tap Search. The GHIN number is the most reliable match when golfers share a name.</div>
-                  )}
-
-                  {results.map(g => {
-                    const isSel = pending?.ghin_number === g.ghin_number;
-                    return (
-                      <button
-                        key={g.ghin_number}
-                        onClick={() => setPending(g)}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 10, width: "100%",
-                          boxSizing: "border-box", textAlign: "left", cursor: "pointer",
-                          padding: "11px 12px", marginBottom: 6, borderRadius: 10,
-                          background: isSel ? BLUE + "22" : BC.inp,
-                          border: `1px solid ${isSel ? BLUE : BC.bdr}`, fontFamily: FONT,
-                        }}
-                      >
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                            {g.name || "Unknown golfer"}
-                          </div>
-                          <div style={{ fontSize: 11, color: BC.t3, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                            #{g.ghin_number}{g.club_name ? ` · ${g.club_name}` : ""}{g.state ? ` · ${g.state}` : ""}
-                          </div>
-                        </div>
-                        <div style={{ flexShrink: 0, textAlign: "right" }}>
-                          <div style={{ fontSize: 15, fontWeight: 800, color: BLUE }}>{fmtHI(parseGhinHI(g.handicap_index))}</div>
-                          <div style={{ fontSize: 8, fontWeight: 700, color: BC.t3, letterSpacing: 1 }}>INDEX</div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Confirm bar (pinned bottom, above keyboard) */}
-                {pending && (
-                  <div style={{ flexShrink: 0, padding: 12, borderTop: `1px solid ${BC.green}66`, background: BC.inp }}>
-                    <div style={{ fontSize: 12, color: BC.t2, lineHeight: 1.4 }}>
-                      Link <b style={{ color: BC.t1 }}>{player.name}</b> → <b style={{ color: BC.t1 }}>{pending.name || `GHIN ${pending.ghin_number}`}</b>
-                      {"  ·  "}HI {fmtHI(player.handicap_index)} → <b style={{ color: BC.t1 }}>{fmtHI(parseGhinHI(pending.handicap_index))}</b>
-                    </div>
-                    <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                      <button onClick={confirmLink} style={{ ...primaryBtn(BC.green), padding: "11px 12px" }}>Confirm link</button>
-                      <button onClick={() => setPending(null)} style={{ ...ghostBtn, width: "auto", padding: "11px 16px" }}>Cancel</button>
-                    </div>
+                {player.ghin_synced_at && (
+                  <div style={{ fontSize: 11, color: BC.t3, marginTop: 4 }}>
+                    Last synced {new Date(player.ghin_synced_at).toLocaleDateString()}
                   </div>
                 )}
-              </>
-            )}
-          </div>
-        </>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <button disabled={busy} onClick={resync} style={primaryBtn(BC.green)}>
+                  {busy ? "Syncing…" : "↻ Re-sync handicap now"}
+                </button>
+                <button onClick={() => { setMode("search"); setQ(player.name || ""); setResults([]); setSearched(false); setPending(null); }} style={ghostBtn}>
+                  Change / re-link golfer
+                </button>
+                <button onClick={unlink} style={{ ...ghostBtn, color: BC.danger, borderColor: BC.danger + "55" }}>
+                  Unlink (keep current HI)
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Search / link ── */}
+          {(mode === "search" || !linked) && (
+            <>
+              {/* Pinned search field — stays visible above the keyboard */}
+              <div style={{ flexShrink: 0, padding: 16, borderBottom: `1px solid ${BC.bdr}` }}>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: BC.t3, letterSpacing: 1, marginBottom: 6 }}>
+                  GOLFER NAME OR GHIN #
+                </label>
+                <input
+                  autoFocus
+                  value={q}
+                  onChange={e => setQ(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") doSearch(); }}
+                  placeholder="e.g. Aaron Jensen  or  1234567"
+                  autoCapitalize="words"
+                  autoCorrect="off"
+                  enterKeyHint="search"
+                  style={{
+                    width: "100%", boxSizing: "border-box", padding: "14px 14px",
+                    background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 12,
+                    color: BC.t1, fontSize: 16, fontWeight: 600, outline: "none", fontFamily: FONT,
+                  }}
+                />
+                <button disabled={busy} onClick={doSearch} style={{ ...primaryBtn(BLUE), marginTop: 10 }}>
+                  {busy ? "Searching…" : "Search GHIN"}
+                </button>
+              </div>
+
+              {/* Scrolling results */}
+              <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", padding: "10px 14px 20px" }}>
+                {busy && <div style={muted}>Searching GHIN…</div>}
+                {!busy && searched && results.length === 0 && (
+                  <div style={muted}>No golfers found.<br />Try a different spelling, add a last name, or use the 7-digit GHIN number.</div>
+                )}
+                {!busy && !searched && (
+                  <div style={muted}>Type a name or GHIN number above, then tap Search.<br />The GHIN number is the surest match when golfers share a name.</div>
+                )}
+
+                {results.map(g => {
+                  const isSel = pending?.ghin_number === g.ghin_number;
+                  return (
+                    <button
+                      key={g.ghin_number}
+                      onClick={() => setPending(g)}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 12, width: "100%",
+                        boxSizing: "border-box", textAlign: "left", cursor: "pointer",
+                        padding: "13px 14px", marginBottom: 8, borderRadius: 12,
+                        background: isSel ? BLUE + "22" : BC.card,
+                        border: `1px solid ${isSel ? BLUE : BC.bdr}`, fontFamily: FONT,
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {g.name || "Unknown golfer"}
+                        </div>
+                        <div style={{ fontSize: 12, color: BC.t3, marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          #{g.ghin_number}{g.club_name ? ` · ${g.club_name}` : ""}{g.state ? ` · ${g.state}` : ""}
+                        </div>
+                      </div>
+                      <div style={{ flexShrink: 0, textAlign: "right" }}>
+                        <div style={{ fontSize: 17, fontWeight: 800, color: BLUE }}>{fmtHI(parseGhinHI(g.handicap_index))}</div>
+                        <div style={{ fontSize: 8, fontWeight: 700, color: BC.t3, letterSpacing: 1 }}>INDEX</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Pinned confirm bar (appears after a golfer is tapped) */}
+              {pending && (
+                <div style={{ flexShrink: 0, padding: 14, borderTop: `1px solid ${BC.green}66`, background: BC.card }}>
+                  <div style={{ fontSize: 13, color: BC.t2, lineHeight: 1.45 }}>
+                    Link <b style={{ color: BC.t1 }}>{player.name}</b> to <b style={{ color: BC.t1 }}>{pending.name || `GHIN ${pending.ghin_number}`}</b>
+                    {pending.club_name ? ` (${pending.club_name})` : ""}.
+                    <br />Handicap Index {fmtHI(player.handicap_index)} → <b style={{ color: BC.t1 }}>{fmtHI(parseGhinHI(pending.handicap_index))}</b>
+                  </div>
+                  <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+                    <button onClick={confirmLink} style={primaryBtn(BC.green)}>Confirm link</button>
+                    <button onClick={() => setPending(null)} style={{ ...ghostBtn, width: "auto", padding: "13px 18px" }}>Back</button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       )}
     </>
   );
