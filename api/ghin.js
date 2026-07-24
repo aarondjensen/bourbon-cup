@@ -140,9 +140,65 @@ async function fetchGolfer(ghinNumber, token) {
 // search path is /api/v1/golfers/search.json. If it ever returns 4xx across
 // the board, inspect the live response shape and adjust the param names /
 // result mapping below.
-async function searchGolfers(queryStr, token) {
+// Normalize one raw GHIN golfer record into the client shape.
+function normalizeGolfer(g) {
+  const ghin_number = String(g.ghin || g.ghin_number || g.id || "").trim();
+  if (!ghin_number) return null;
+  const name =
+    [g.first_name, g.last_name].filter(Boolean).join(" ").trim() ||
+    g.player_name || g.full_name || "";
+  return {
+    ghin_number,
+    name,
+    first_name: g.first_name || null,
+    last_name: g.last_name || null,
+    club_name: g.club_name || g.primary_club_name || g.club || null,
+    state: g.state || g.club_state || null,
+    // Passed through raw (may be "12.3" or "+2.1"); the client parses it.
+    handicap_index: g.handicap_index ?? g.hi_value ?? g.hi_display ?? g.display ?? null,
+    last_revision_date:
+      g.revision_date || g.last_revision_date || g.rev_date || g.hi_date || null,
+  };
+}
+
+// Search for candidate golfers.
+//
+// Two distinct code paths, because GHIN treats them very differently:
+//
+//   • A GHIN NUMBER goes straight to the proven per-golfer endpoint
+//     (/golfers/{n}.json — the same one batch sync uses). This is the
+//     reliable path and always works given a valid token.
+//
+//   • A NAME goes to /golfers/search.json, which REQUIRES one of:
+//         last_name + state,  last_name + country,
+//         association_id,  or  club_id
+//     (a bare name returns HTTP 400). We always send last_name + a country
+//     default so the minimum combo is satisfied, and pass through an
+//     optional state when the caller provides one for tighter matching.
+//
+//   `state` is an optional 2-letter code from the caller (?state=).
+async function searchGolfers(queryStr, token, state) {
   const q = String(queryStr).trim();
   const byNumber = /^\d{6,8}$/.test(q);
+
+  // ── GHIN number → proven single-golfer lookup ──
+  if (byNumber) {
+    const g = await fetchGolfer(q, token);
+    if (g.error || g.handicap_index == null) return [];
+    return [normalizeGolfer({
+      ghin: g.ghin_number,
+      first_name: g.first_name,
+      last_name: g.last_name,
+      club_name: g.club_name,
+      handicap_index: g.handicap_index,
+      revision_date: g.last_revision_date,
+    })].filter(Boolean);
+  }
+
+  // ── Name → search.json (needs last_name + state|country) ──
+  const parts = q.split(/\s+/);
+  const last_name = parts.length > 1 ? parts[parts.length - 1] : q;
+  const first_name = parts.length > 1 ? parts.slice(0, -1).join(" ") : "";
 
   const params = new URLSearchParams({
     status: "Active",
@@ -151,22 +207,11 @@ async function searchGolfers(queryStr, token) {
     page: "1",
     sorting_criteria: "full_name",
     order: "asc",
+    country: process.env.GHIN_COUNTRY || "USA", // satisfies "last_name + country"
+    last_name,
   });
-
-  if (byNumber) {
-    params.set("golfer_id", q);
-  } else {
-    // Some GHIN deployments want first_name/last_name split; others accept
-    // a combined player_name. Send both so whichever it honors, we get a hit.
-    const parts = q.split(/\s+/);
-    if (parts.length > 1) {
-      params.set("first_name", parts.slice(0, -1).join(" "));
-      params.set("last_name", parts[parts.length - 1]);
-    } else {
-      params.set("last_name", q);
-    }
-    params.set("player_name", q);
-  }
+  if (first_name) params.set("first_name", first_name);
+  if (state && String(state).trim()) params.set("state", String(state).trim().toUpperCase());
 
   const r = await fetch(`${GHIN_BASE}/golfers/search.json?${params.toString()}`, {
     headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" },
@@ -179,28 +224,7 @@ async function searchGolfers(queryStr, token) {
 
   const data = await r.json();
   const list = data?.golfers || data?.golfer || (Array.isArray(data) ? data : []);
-
-  return list
-    .map(g => {
-      const ghin_number = String(g.ghin || g.ghin_number || g.id || "").trim();
-      if (!ghin_number) return null;
-      const name =
-        [g.first_name, g.last_name].filter(Boolean).join(" ").trim() ||
-        g.player_name || g.full_name || "";
-      return {
-        ghin_number,
-        name,
-        first_name: g.first_name || null,
-        last_name: g.last_name || null,
-        club_name: g.club_name || g.primary_club_name || g.club || null,
-        state: g.state || g.club_state || null,
-        // Passed through raw (may be "12.3" or "+2.1"); the client parses it.
-        handicap_index: g.handicap_index ?? g.hi_value ?? g.hi_display ?? g.display ?? null,
-        last_revision_date:
-          g.revision_date || g.last_revision_date || g.rev_date || g.hi_date || null,
-      };
-    })
-    .filter(Boolean);
+  return list.map(normalizeGolfer).filter(Boolean);
 }
 
 export default async function handler(req, res) {
@@ -220,7 +244,7 @@ export default async function handler(req, res) {
     }
     try {
       const token = await loginToGhin();
-      const results = await searchGolfers(search, token);
+      const results = await searchGolfers(search, token, req.query?.state);
       return res.status(200).json({ results });
     } catch (err) {
       console.error("[/api/ghin] search error:", err);
