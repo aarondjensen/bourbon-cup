@@ -42,6 +42,13 @@ import { searchGhinGolfers, syncGhinNumbers, parseGhinHI, fmtHI } from "../lib/g
 const BLUE = BC.hcpBlue;
 const FONT = "'Montserrat', sans-serif";
 
+const US_STATES = [
+  "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA",
+  "KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
+  "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT",
+  "VA","WA","WV","WI","WY","DC",
+];
+
 // The visible rectangle (above the keyboard). Falls back to the window.
 function useViewportRect() {
   const read = () => {
@@ -87,6 +94,7 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("view");     // "view" | "search"
   const [q, setQ] = useState("");
+  const [stateFilter, setStateFilter] = useState("");
   const [results, setResults] = useState([]);
   const [searched, setSearched] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -117,6 +125,7 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
     setOpen(true);
     setMode(linked ? "view" : "search");
     setQ(player?.name || "");
+    setStateFilter("");
     setResults([]); setSearched(false); setPending(null);
   };
   const close = () => setOpen(false);
@@ -124,7 +133,7 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
   const doSearch = async () => {
     if (!q.trim()) return;
     setBusy(true); setSearched(true); setPending(null);
-    try { setResults(await searchGhinGolfers(q.trim())); }
+    try { setResults(await searchGhinGolfers(q.trim(), stateFilter)); }
     catch (e) { notify?.(e.message || "GHIN search failed", "error"); }
     finally { setBusy(false); }
   };
@@ -271,6 +280,22 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
                   color: BC.t1, fontSize: 16, fontWeight: 600, outline: "none", fontFamily: FONT,
                 }}
               />
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: BC.t3, letterSpacing: 1, margin: "12px 0 6px" }}>
+                STATE FILTER (OPTIONAL)
+              </label>
+              <select
+                value={stateFilter}
+                onChange={e => setStateFilter(e.target.value)}
+                style={{
+                  width: "100%", boxSizing: "border-box", padding: "13px 14px",
+                  background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 12,
+                  color: stateFilter ? BC.t1 : BC.t3, fontSize: 16, fontWeight: 600,
+                  outline: "none", fontFamily: FONT, appearance: "none", WebkitAppearance: "none",
+                }}
+              >
+                <option value="">Any state</option>
+                {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
               <button disabled={busy} onClick={doSearch} style={{ ...primaryBtn(BLUE), marginTop: 10 }}>
                 {busy ? "Searching…" : "Search GHIN"}
               </button>
@@ -281,9 +306,6 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
               {busy && <div style={muted}>Searching GHIN…</div>}
               {!busy && searched && results.length === 0 && (
                 <div style={muted}>No golfers found.<br />Try a different spelling, add a last name, or enter the 7-digit GHIN number.</div>
-              )}
-              {!busy && !searched && (
-                <div style={muted}>Type a name or GHIN number above, then tap Search.<br />The GHIN number is the surest match when golfers share a name.</div>
               )}
 
               {results.map(g => {

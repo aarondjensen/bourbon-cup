@@ -33,8 +33,10 @@ export function fmtHI(v) {
   return n < 0 ? `+${Math.abs(n)}` : `${n}`;
 }
 
-export async function searchGhinGolfers(query) {
-  const r = await fetch(`/api/ghin?search=${encodeURIComponent(query)}`);
+export async function searchGhinGolfers(query, state) {
+  const params = new URLSearchParams({ search: query });
+  if (state && String(state).trim()) params.set("state", String(state).trim());
+  const r = await fetch(`/api/ghin?${params.toString()}`);
   if (!r.ok) {
     const body = await r.json().catch(() => ({}));
     throw new Error(body?.error || `GHIN search failed (${r.status})`);
