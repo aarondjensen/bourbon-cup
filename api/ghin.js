@@ -25,17 +25,29 @@
 // across the board, the endpoint shape probably moved — check the response
 // shape returned from the /api/v1/golfers/{n}.json call below.
 //
-// ── Request shape ──
-//   POST /api/ghin
-//   Body: { ghin_numbers: ["1234567", "8901234", ...] }
+// ── Request shapes ──
+//   POST /api/ghin                         (batch sync — existing)
+//     Body: { ghin_numbers: ["1234567", "8901234", ...] }
 //
-// ── Response shape ──
-//   200 OK
-//   { results: [
-//       { ghin_number, handicap_index, first_name, last_name, last_revision_date },
-//       { ghin_number, error: "..." },   // per-golfer failure, doesn't kill the batch
-//       ...
-//     ] }
+//   GET  /api/ghin?search=<name|number>    (search / link — added)
+//     Finds candidate golfers so a player can be matched to their GHIN
+//     number in the first place. This is the "link" half; the POST batch
+//     above is the "sync" half that runs once a number is stored.
+//
+// ── Response shapes ──
+//   POST → 200 OK
+//     { results: [
+//         { ghin_number, handicap_index, first_name, last_name, last_revision_date },
+//         { ghin_number, error: "..." },   // per-golfer failure, doesn't kill the batch
+//         ...
+//       ] }
+//
+//   GET  → 200 OK
+//     { results: [
+//         { ghin_number, name, first_name, last_name, club_name, state,
+//           handicap_index, last_revision_date },
+//         ...
+//       ] }
 
 const GHIN_BASE = "https://api2.ghin.com/api/v1";
 
@@ -120,14 +132,102 @@ async function fetchGolfer(ghinNumber, token) {
   };
 }
 
+// Golfer search — the "link" half. Given a name (or a raw GHIN number),
+// return candidate golfers so the director/player can pick the right match
+// and store the ghin_number. Uses the same login token as batch sync.
+//
+// NOTE: like the rest of this file these endpoints are unofficial. The
+// search path is /api/v1/golfers/search.json. If it ever returns 4xx across
+// the board, inspect the live response shape and adjust the param names /
+// result mapping below.
+async function searchGolfers(queryStr, token) {
+  const q = String(queryStr).trim();
+  const byNumber = /^\d{6,8}$/.test(q);
+
+  const params = new URLSearchParams({
+    status: "Active",
+    from_ghin: "true",
+    per_page: "25",
+    page: "1",
+    sorting_criteria: "full_name",
+    order: "asc",
+  });
+
+  if (byNumber) {
+    params.set("golfer_id", q);
+  } else {
+    // Some GHIN deployments want first_name/last_name split; others accept
+    // a combined player_name. Send both so whichever it honors, we get a hit.
+    const parts = q.split(/\s+/);
+    if (parts.length > 1) {
+      params.set("first_name", parts.slice(0, -1).join(" "));
+      params.set("last_name", parts[parts.length - 1]);
+    } else {
+      params.set("last_name", q);
+    }
+    params.set("player_name", q);
+  }
+
+  const r = await fetch(`${GHIN_BASE}/golfers/search.json?${params.toString()}`, {
+    headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" },
+  });
+
+  if (!r.ok) {
+    const body = await r.text();
+    throw new Error(`GHIN search failed: HTTP ${r.status} — ${body.slice(0, 200)}`);
+  }
+
+  const data = await r.json();
+  const list = data?.golfers || data?.golfer || (Array.isArray(data) ? data : []);
+
+  return list
+    .map(g => {
+      const ghin_number = String(g.ghin || g.ghin_number || g.id || "").trim();
+      if (!ghin_number) return null;
+      const name =
+        [g.first_name, g.last_name].filter(Boolean).join(" ").trim() ||
+        g.player_name || g.full_name || "";
+      return {
+        ghin_number,
+        name,
+        first_name: g.first_name || null,
+        last_name: g.last_name || null,
+        club_name: g.club_name || g.primary_club_name || g.club || null,
+        state: g.state || g.club_state || null,
+        // Passed through raw (may be "12.3" or "+2.1"); the client parses it.
+        handicap_index: g.handicap_index ?? g.hi_value ?? g.hi_display ?? g.display ?? null,
+        last_revision_date:
+          g.revision_date || g.last_revision_date || g.rev_date || g.hi_date || null,
+      };
+    })
+    .filter(Boolean);
+}
+
 export default async function handler(req, res) {
   // Allow same-origin from claude's app — Vercel auto-handles this for the
   // app's own deployment, but explicit is safer.
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
   if (req.method === "OPTIONS") return res.status(200).end();
+
+  // ── GET: golfer search (link step) ──
+  if (req.method === "GET") {
+    const search = req.query?.search;
+    if (!search || !String(search).trim()) {
+      return res.status(400).json({ error: "Provide a ?search= name or GHIN number" });
+    }
+    try {
+      const token = await loginToGhin();
+      const results = await searchGolfers(search, token);
+      return res.status(200).json({ results });
+    } catch (err) {
+      console.error("[/api/ghin] search error:", err);
+      return res.status(500).json({ error: err.message || "Unknown error" });
+    }
+  }
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
