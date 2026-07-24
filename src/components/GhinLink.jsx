@@ -9,27 +9,32 @@
 //      pick → confirm → link, plus re-sync / unlink when already linked.
 //    • GhinSyncButton — director batch: refresh every linked player at once.
 //
-//  Two things make this popup actually work on mobile
-//  ──────────────────────────────────────────────────
-//  1. PORTAL. The player row it lives in has `transform: translateX(...)`
-//     (swipe-to-delete). A transformed ancestor becomes the containing
-//     block for `position: fixed`, so a modal rendered inline gets trapped
-//     and clipped inside the ~40px row. Rendering through createPortal to
-//     document.body escapes that and makes fixed positioning viewport-
-//     relative, the way a popup expects.
-//  2. KEYBOARD AS PADDING. iOS doesn't shrink CSS viewport units for the
-//     keyboard, so we measure it (window.innerHeight − visualViewport
-//     height) and pad the overlay's bottom by that amount. The popup is
-//     then bounded to the space above the keyboard; the search field is
-//     pinned at the top (always visible), results scroll, and the confirm
-//     bar is pinned at the bottom. 16px input font avoids iOS zoom.
+//  Why this finally works on mobile (three things, all required)
+//  ────────────────────────────────────────────────────────────
+//  1. PORTAL to document.body. The player row uses `transform` (swipe-to-
+//     delete); a transformed ancestor becomes the containing block for
+//     `position: fixed`, trapping/clipping any modal rendered inline.
+//     createPortal moves the popup out to <body>, so fixed positioning is
+//     viewport-relative.
+//  2. OVERLAY SIZED TO THE VISUAL VIEWPORT, in live pixels. iOS does not
+//     shrink CSS viewport units (svh/dvh/vh) for the keyboard, and
+//     innerHeight math is unreliable in PWA / black-translucent mode. So
+//     we read window.visualViewport {offsetTop,offsetLeft,width,height} and
+//     set the overlay's top/left/width/height to exactly that rectangle,
+//     updating on every resize/scroll. The overlay is therefore ALWAYS the
+//     visible area above the keyboard — the card can't render behind the
+//     keys, and its results list scrolls entirely within view.
+//  3. DEFERRED FOCUS. We focus the field ~150ms after the popup mounts (not
+//     autoFocus), so the portal has laid out before the keyboard animates
+//     in — avoiding the jump where iOS scrolls the field out of view. 16px
+//     font stops iOS zoom-on-focus.
 //
 //  Permission: canEdit = director OR the signed-in player editing their own
 //  row. Firestore rules enforce the real boundary.
 //  Player-doc fields: ghin_number, ghin_name, handicap_index,
 //  ghin_rev_date, ghin_synced_at. db.upsert merges → unlink writes nulls.
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { BC } from "../theme";
 import { searchGhinGolfers, syncGhinNumbers, parseGhinHI, fmtHI } from "../lib/ghin";
@@ -37,25 +42,29 @@ import { searchGhinGolfers, syncGhinNumbers, parseGhinHI, fmtHI } from "../lib/g
 const BLUE = BC.hcpBlue;
 const FONT = "'Montserrat', sans-serif";
 
-// On-screen keyboard height (0 when closed / unsupported).
-function useKeyboardInset() {
+// The visible rectangle (above the keyboard). Falls back to the window.
+function useViewportRect() {
   const read = () => {
-    if (typeof window === "undefined" || !window.visualViewport) return 0;
-    return Math.max(0, Math.round(window.innerHeight - window.visualViewport.height));
+    if (typeof window === "undefined") return { top: 0, left: 0, width: 0, height: 0 };
+    const v = window.visualViewport;
+    if (v) return { top: v.offsetTop, left: v.offsetLeft, width: v.width, height: v.height };
+    return { top: 0, left: 0, width: window.innerWidth, height: window.innerHeight };
   };
-  const [kb, setKb] = useState(read);
+  const [rect, setRect] = useState(read);
   useEffect(() => {
     const v = window.visualViewport;
-    const update = () => setKb(read());
+    const update = () => setRect(read());
     update();
     if (v) { v.addEventListener("resize", update); v.addEventListener("scroll", update); }
     window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
     return () => {
       if (v) { v.removeEventListener("resize", update); v.removeEventListener("scroll", update); }
       window.removeEventListener("resize", update);
+      window.removeEventListener("orientationchange", update);
     };
   }, []);
-  return kb;
+  return rect;
 }
 
 const primaryBtn = (color) => ({
@@ -83,14 +92,24 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState(null);
 
-  const kb = useKeyboardInset();
+  const rect = useViewportRect();
+  const inputRef = useRef(null);
 
+  // Lock the background while open.
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = prev; };
   }, [open]);
+
+  // Deferred focus once the portal has laid out.
+  useEffect(() => {
+    if (open && (mode === "search" || !linked)) {
+      const t = setTimeout(() => inputRef.current?.focus(), 150);
+      return () => clearTimeout(t);
+    }
+  }, [open, mode, linked]);
 
   if (!canEdit && !linked) return null;
 
@@ -158,20 +177,19 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
     close();
   };
 
-  const title = mode === "search" ? `Link ${player.name}` : `${player.name} · GHIN`;
+  const title = mode === "search" ? `Search GHIN — ${player.name}` : `${player.name} · GHIN`;
 
   const popup = (
     <div
       onClick={close}
       style={{
-        position: "fixed", inset: 0, zIndex: 4000, background: "rgba(0,0,0,0.7)",
+        position: "fixed",
+        top: rect.top, left: rect.left, width: rect.width, height: rect.height,
+        zIndex: 4000, background: "rgba(0,0,0,0.72)",
         display: "flex", alignItems: "flex-start", justifyContent: "center",
         boxSizing: "border-box",
-        paddingTop: "calc(env(safe-area-inset-top, 0px) + 14px)",
-        paddingBottom: kb + 14,
-        paddingLeft: "calc(env(safe-area-inset-left, 0px) + 10px)",
-        paddingRight: "calc(env(safe-area-inset-right, 0px) + 10px)",
-        transition: "padding-bottom 0.15s ease",
+        padding: 12,
+        paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)",
       }}
     >
       <div
@@ -190,7 +208,7 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
           padding: "13px 14px", borderBottom: `1px solid ${BC.bdr}`,
         }}>
           <div style={{
-            flex: 1, minWidth: 0, fontSize: 15, fontWeight: 800, color: BC.t1,
+            flex: 1, minWidth: 0, fontSize: 14, fontWeight: 800, color: BC.t1,
             whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
           }}>{title}</div>
           <button onClick={close} aria-label="Close" style={{
@@ -239,7 +257,7 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
                 GOLFER NAME OR GHIN #
               </label>
               <input
-                autoFocus
+                ref={inputRef}
                 value={q}
                 onChange={e => setQ(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter") doSearch(); }}
@@ -262,7 +280,7 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
             <div style={{ flex: 1, minHeight: 60, overflowY: "auto", overscrollBehavior: "contain", padding: "10px 14px 16px" }}>
               {busy && <div style={muted}>Searching GHIN…</div>}
               {!busy && searched && results.length === 0 && (
-                <div style={muted}>No golfers found.<br />Try a different spelling, add a last name, or use the 7-digit GHIN number.</div>
+                <div style={muted}>No golfers found.<br />Try a different spelling, add a last name, or enter the 7-digit GHIN number.</div>
               )}
               {!busy && !searched && (
                 <div style={muted}>Type a name or GHIN number above, then tap Search.<br />The GHIN number is the surest match when golfers share a name.</div>
