@@ -1468,13 +1468,13 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       value={newPlayerFirst}
                       onChange={e => setNewPlayerFirst(e.target.value)}
                       placeholder="First name"
-                      style={{ flex: 1, minWidth: 0, padding: "9px 10px", background: "#1e1c18", border: `1px solid ${team.accent}55`, borderRadius: 8, color: "#ffffff", fontSize: 12, outline: "none" }}
+                      style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "9px 10px", background: "#1e1c18", border: `1px solid ${team.accent}55`, borderRadius: 8, color: "#ffffff", fontSize: 16, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
                     />
                     <input
                       value={newPlayerLast}
                       onChange={e => setNewPlayerLast(e.target.value)}
                       placeholder="Last name"
-                      style={{ flex: 1, minWidth: 0, padding: "9px 10px", background: "#1e1c18", border: `1px solid ${team.accent}55`, borderRadius: 8, color: "#ffffff", fontSize: 12, outline: "none" }}
+                      style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "9px 10px", background: "#1e1c18", border: `1px solid ${team.accent}55`, borderRadius: 8, color: "#ffffff", fontSize: 16, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
                     />
                   </div>
                   <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -1483,7 +1483,8 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       onChange={e => setNewPlayerHI(e.target.value)}
                       placeholder="HI"
                       type="number"
-                      style={{ width: 64, padding: "9px 8px", background: "#1e1c18", border: `1px solid ${team.accent}55`, borderRadius: 8, color: "#ffffff", fontSize: 12, outline: "none" }}
+                      inputMode="decimal"
+                      style={{ width: 76, flexShrink: 0, boxSizing: "border-box", padding: "9px 8px", background: "#1e1c18", border: `1px solid ${team.accent}55`, borderRadius: 8, color: "#ffffff", fontSize: 16, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
                     />
                     <span style={{ flex: 1 }} />
                     <button onClick={async () => {
@@ -1515,19 +1516,19 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     </div>
                     {/* Row */}
                     <div
-                      onTouchStart={e => { swipeStartX.current = e.touches[0].clientX; setSwipePid(p.player_id); setSwipeX(0); }}
-                      onTouchMove={e => { if (swipeStartX.current == null) return; const dx2 = e.touches[0].clientX - swipeStartX.current; setSwipeX(Math.min(0, dx2)); }}
-                      onTouchEnd={() => { if (swipeX < -80) { if (window.confirm(`Remove ${p.name}?`)) { onRemovePlayer(p.player_id); } } setSwipePid(null); setSwipeX(0); swipeStartX.current = null; }}
+                      onTouchStart={e => { if (isEditing) return; swipeStartX.current = e.touches[0].clientX; setSwipePid(p.player_id); setSwipeX(0); }}
+                      onTouchMove={e => { if (isEditing || swipeStartX.current == null) return; const dx2 = e.touches[0].clientX - swipeStartX.current; setSwipeX(Math.min(0, dx2)); }}
+                      onTouchEnd={() => { if (isEditing) return; if (swipeX < -80) { if (window.confirm(`Remove ${fullName(p)}?`)) { onRemovePlayer(p.player_id); } } setSwipePid(null); setSwipeX(0); swipeStartX.current = null; }}
                       style={{ background: BC.card, borderRadius: 6, padding: isEditing ? "8px" : "4px 8px", border: `1px solid ${BC.bdr}`, display: "flex", flexDirection: isEditing ? "column" : "row", alignItems: isEditing ? "stretch" : "center", gap: 6, boxShadow: `inset 3px 0 0 ${team.accent}55`, position: "relative", transform: `translateX(${dx}px)`, transition: isSwiping ? "none" : "transform 0.2s ease" }}>
                       {isEditing ? (
                         <>
                           <input autoFocus placeholder="First name" value={editingPlayer.first} onChange={e => setEditingPlayer(prev => ({...prev, first: e.target.value}))}
-                            style={{ fontSize: 13, fontWeight: 600, color: BC.t1, boxSizing: "border-box", background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 6, padding: "8px 10px", outline: "none", fontFamily: "'Montserrat', sans-serif" }} />
+                            style={{ fontSize: 16, fontWeight: 600, color: BC.t1, width: "100%", boxSizing: "border-box", background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 6, padding: "8px 10px", outline: "none", fontFamily: "'Montserrat', sans-serif" }} />
                           <input placeholder="Last name" value={editingPlayer.last} onChange={e => setEditingPlayer(prev => ({...prev, last: e.target.value}))}
-                            style={{ fontSize: 13, fontWeight: 600, color: BC.t1, boxSizing: "border-box", background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 6, padding: "8px 10px", outline: "none", fontFamily: "'Montserrat', sans-serif" }} />
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <input type="number" placeholder="HI" value={editingPlayer.hi} onChange={e => setEditingPlayer(prev => ({...prev, hi: e.target.value}))}
-                              style={{ fontSize: 12, color: BC.t1, width: 64, flexShrink: 0, boxSizing: "border-box", background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 6, padding: "8px 8px", outline: "none", fontFamily: "'Montserrat', sans-serif" }} />
+                            style={{ fontSize: 16, fontWeight: 600, color: BC.t1, width: "100%", boxSizing: "border-box", background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 6, padding: "8px 10px", outline: "none", fontFamily: "'Montserrat', sans-serif" }} />
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                            <input type="number" inputMode="decimal" placeholder="HI" value={editingPlayer.hi} onChange={e => setEditingPlayer(prev => ({...prev, hi: e.target.value}))}
+                              style={{ fontSize: 16, color: BC.t1, width: 76, flexShrink: 0, boxSizing: "border-box", background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 6, padding: "8px 8px", outline: "none", fontFamily: "'Montserrat', sans-serif" }} />
                             <span style={{ flex: 1 }} />
                             <button onClick={() => {
                               const first = (editingPlayer.first || "").trim(), last = (editingPlayer.last || "").trim();
@@ -5296,18 +5297,22 @@ export default function App() {
       {/* Content */}
       <div className="bc-app-body" style={{
         flex: 1, overflowY: "auto", overflowX: "hidden",
-        padding: "12px 10px calc(env(safe-area-inset-bottom, 0px) + 72px) 10px",
-        // Center short views vertically instead of pinning them to the top
-        // and leaving a large dead gap above the fixed nav — this affects
-        // EVERY tab, not one screen. A grid with `align-content: safe center`
-        // centers the view when it's shorter than the viewport, and the
-        // `safe` keyword makes it fall back to top alignment (start) the
-        // moment the content is taller than the viewport, so nothing ever
-        // scrolls out of reach. `minmax(0, 1fr)` keeps the single column
-        // from blowing out horizontally on wide content.
-        display: "grid",
-        gridTemplateColumns: "minmax(0, 1fr)",
-        alignContent: "safe center",
+        // Bottom padding clears the fixed nav exactly: the nav is
+        // minHeight 56 + its own paddingBottom (safe-area + 8) = 64 + safe.
+        // The old flat 80px both overshot on plain screens and undershot
+        // on home-indicator phones.
+        padding: "12px 10px calc(env(safe-area-inset-bottom, 0px) + 64px) 10px",
+        // Vertical centering for short views (affects EVERY tab). This was
+        // previously `display:grid; align-content:safe center`, but Safari
+        // doesn't support the `safe` overflow-alignment keyword — it drops
+        // the whole declaration, grid falls back to top alignment, and the
+        // dead gap comes back. Flexbox auto margins (on the inner wrapper
+        // below) are universally supported and are inherently overflow-safe:
+        // auto margins only consume FREE space, so when content is taller
+        // than the viewport they resolve to 0 and nothing scrolls out of
+        // reach — the exact behavior `safe center` was meant to provide.
+        display: "flex",
+        flexDirection: "column",
         // overscroll-behavior-y: contain blocks the browser's native
         // overscroll bounce at the boundaries of THIS scroll container.
         // Without it, iOS Safari starts a bounce animation the moment
@@ -5318,6 +5323,12 @@ export default function App() {
         // bounce is suppressed and our handler has full control.
         overscrollBehaviorY: "contain",
       }}>
+        {/* Auto-margin wrapper — does the vertical centering. When the view
+            is shorter than the body, the auto margins split the leftover
+            space evenly (content sits centered, no dead gap dumped at the
+            bottom). When the view is taller, auto margins compute to 0 and
+            the content starts at the top and scrolls normally. */}
+        <div style={{ width: "100%", marginTop: "auto", marginBottom: "auto" }}>
         {/* Keyed ErrorBoundary: keying on `view` remounts the boundary
             whenever the tab changes, so a crashed screen self-heals the
             moment the user navigates away instead of showing a blank
@@ -5452,6 +5463,7 @@ export default function App() {
           />
         )}
         </ErrorBoundary>
+        </div>
       </div>
 
       <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={() => setUser(null)} user={user} view={view} darkMode={darkMode} onToggleTheme={toggleTheme} />
