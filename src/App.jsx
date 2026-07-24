@@ -14,6 +14,7 @@ import {
 import { usePullToRefresh } from "./lib/usePullToRefresh";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { EditionSwitcher } from "./components/EditionSwitcher";
+import { GhinLinkButton, GhinSyncButton } from "./components/GhinLink";
 
 // First+last initials from a player's full name. "Aaron Jensen" → "AJ".
 // Single-name fallback grabs the first two letters (e.g. "Joe" → "JO") so a
@@ -1347,6 +1348,9 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
       {tab === "players" && (
         <div>
+          <div style={{ marginBottom: 12, display: "flex", justifyContent: "flex-end" }}>
+            <GhinSyncButton players={tPlayers} onUpdatePlayer={onUpdatePlayer} notify={notify} />
+          </div>
           {[TEAM_A, TEAM_B].map(team => (
             <div key={team.id} style={{ marginBottom: 10 }}>
               {/* Team header with editable name */}
@@ -1473,6 +1477,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                             fontSize: 7, padding: "1px 3px", borderRadius: 3, border: `1px solid ${p.isDirector ? BC.amber : BC.bdr}`,
                             background: p.isDirector ? BC.amber + "22" : "transparent", color: p.isDirector ? BC.amber : BC.t3, cursor: "pointer", fontWeight: 700, flexShrink: 0,
                           }}>DIR</button>
+                          <GhinLinkButton player={p} user={user} onUpdatePlayer={onUpdatePlayer} notify={notify} />
                         </>
                       )}
                     </div>
@@ -4816,7 +4821,7 @@ export default function App() {
   };
 
   return (
-    <div style={{ height: "100svh", width: "100%", background: BC.bg, display: "flex", flexDirection: "column", position: "relative", fontFamily: "'Montserrat', sans-serif", overflow: "hidden" }}>
+    <div style={{ height: "100svh", width: "100%", background: BC.bg, display: "flex", flexDirection: "column", position: "relative", fontFamily: "'Montserrat', sans-serif", overflow: "hidden", boxSizing: "border-box", paddingTop: "env(safe-area-inset-top, 0px)", paddingLeft: "env(safe-area-inset-left, 0px)", paddingRight: "env(safe-area-inset-right, 0px)" }}>
       <div style={{ maxWidth: 520, width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", height: "100%", position: "relative", padding: "0 4px" }}>
       <Notif notif={notif} />
 
