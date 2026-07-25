@@ -1481,8 +1481,14 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   return (
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
       <EditionSwitcher open={showEditions} onClose={() => setShowEditions(false)} />
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 16, background: BC.card, borderRadius: 12, padding: 4, border: `1px solid ${BC.bdr}` }}>
+      {/* Tabs — sticky to the top of the scroll area so the bar stays in the
+          SAME place on every tab, regardless of that tab's content height.
+          (Before: the body's vertical centering placed short tabs mid-screen,
+          so the bar floated to a different spot per tab.) The sticky wrapper
+          is painted in the page bg and carries the bottom gap as padding, so
+          content scrolls cleanly UNDER it with nothing peeking through. */}
+      <div style={{ position: "sticky", top: 0, zIndex: 5, background: BC.bg, paddingBottom: 12, marginBottom: 4 }}>
+      <div style={{ display: "flex", gap: 4, background: BC.card, borderRadius: 12, padding: 4, border: `1px solid ${BC.bdr}` }}>
         {[["players","Players"],["rounds","Rounds"],["matches","Matches"],["courses","Courses"],["tournament","Tournament"]].map(([k, lbl]) => (
           <button key={k} onClick={() => setTab(k)} style={{
             flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: 10, fontWeight: 700, cursor: "pointer", border: "none",
@@ -1490,6 +1496,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             color: tab === k ? "#0a0804" : BC.t3,
           }}>{lbl}</button>
         ))}
+      </div>
       </div>
 
       {tab === "players" && (
@@ -5482,7 +5489,7 @@ export default function App() {
             space evenly (content sits centered, no dead gap dumped at the
             bottom). When the view is taller, auto margins compute to 0 and
             the content starts at the top and scrolls normally. */}
-        <div style={{ width: "100%", marginTop: "auto", marginBottom: "auto" }}>
+        <div style={{ width: "100%", marginTop: view === "admin" ? 0 : "auto", marginBottom: view === "admin" ? 0 : "auto" }}>
         {/* Keyed ErrorBoundary: keying on `view` remounts the boundary
             whenever the tab changes, so a crashed screen self-heals the
             moment the user navigates away instead of showing a blank
