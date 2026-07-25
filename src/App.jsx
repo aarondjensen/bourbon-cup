@@ -26,7 +26,7 @@ import { Popup, ConfirmModal } from "./components/Popup";
 import { SegmentedToggle, Banner, Toast } from "./components/ui";
 import { useConfirm } from "./lib/useConfirm";
 import { EditionSwitcher } from "./components/EditionSwitcher";
-import { GhinLinkButton, GhinSyncButton, GhinBadge } from "./components/GhinLink";
+import { GhinLinkButton, GhinSyncButton } from "./components/GhinLink";
 
 // ── Bottom-nav safe-area cushion ──────────────────────────────────
 // Full iOS home-indicator inset (34pt on devices that have one) plus 8pt,
@@ -1510,12 +1510,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
       {tab === "players" && (
         <div>
-          <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-              <GhinBadge />
-              <span style={{ fontSize: 10, color: BC.t3, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Handicap index</span>
-            </div>
-            <span style={{ flex: 1 }} />
+          <div style={{ marginBottom: 12, display: "flex", justifyContent: "flex-end" }}>
             <GhinSyncButton players={tPlayers} onUpdatePlayer={onUpdatePlayer} notify={notify} />
           </div>
           {[teams.A, teams.B].map(team => (
@@ -1644,6 +1639,18 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                               <input type="number" inputMode="decimal" placeholder={String(p.handicap_index)} value={editingPlayer.ov} onChange={e => setEditingPlayer(prev => ({...prev, ov: e.target.value}))}
                                 style={{ fontSize: 16, color: BC.amber, width: 72, boxSizing: "border-box", background: BC.inp, border: `1px solid ${BC.amber}66`, borderRadius: 6, padding: "8px 8px", outline: "none", fontFamily: "'Montserrat', sans-serif" }} />
                             </label>
+                            {/* Director toggle lives here now (no more DIR column).
+                                A change is surfaced in the save confirmation. */}
+                            <label style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
+                              <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.5, color: BC.t3 }}>ROLE</span>
+                              <button type="button" onClick={() => setEditingPlayer(prev => ({ ...prev, dir: !prev.dir }))}
+                                style={{ fontSize: 12, fontWeight: 700, height: 35, padding: "0 10px", borderRadius: 6, cursor: "pointer", whiteSpace: "nowrap",
+                                  border: `1px solid ${editingPlayer.dir ? BC.amber : BC.bdr}`,
+                                  background: editingPlayer.dir ? BC.amber + "22" : "transparent",
+                                  color: editingPlayer.dir ? BC.amber : BC.t3 }}>
+                                {editingPlayer.dir ? "👑 Director" : "Director"}
+                              </button>
+                            </label>
                             <span style={{ flex: 1, minWidth: 8 }} />
                             <button onClick={async () => {
                               const first = (editingPlayer.first || "").trim(), last = (editingPlayer.last || "").trim();
@@ -1659,6 +1666,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                               const oldOv = (p.hi_override != null && String(p.hi_override).trim() !== "") ? (parseFloat(p.hi_override) || 0) : null;
                               const ovChanged = newOv !== oldOv;
                               if (ovChanged) changes.push(`Override: ${oldOv == null ? "—" : oldOv} → ${newOv == null ? "— (use base)" : newOv}`);
+                              // Director status — a prompt-worthy change (grants/revokes admin).
+                              const newDir = !!editingPlayer.dir;
+                              const dirChanged = newDir !== !!p.isDirector;
+                              if (dirChanged) changes.push(`Director: ${p.isDirector ? "Yes" : "No"} → ${newDir ? "Yes" : "No"}`);
                               if (changes.length === 0) { setEditingPlayer(null); return; }
                               // Effective index = override ?? base. Only warn about
                               // round impact when the EFFECTIVE index actually moves.
@@ -1666,11 +1677,12 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                               // should see that stated, not have to assume it.
                               const oldEff = oldOv != null ? oldOv : (parseFloat(p.handicap_index) || 0);
                               const newEff = newOv != null ? newOv : (parseFloat(editingPlayer.hi) || 0);
-                              const impact = oldEff !== newEff
+                              let impact = oldEff !== newEff
                                 ? "\n\n" + describeHiChangeImpact(roundLocks, [1, 2, 3, 4]).text
                                 : "";
+                              if (dirChanged && newDir) impact += "\n\nDirector access grants full admin control (setup, scoring, editions).";
                               if (await confirm({ title: "Confirm changes", message: changes.join("\n") + impact })) {
-                                onUpdatePlayer({ ...p, name: newName, first_name: first, last_name: last, handicap_index: parseFloat(editingPlayer.hi) || 0, hi_override: newOv });
+                                onUpdatePlayer({ ...p, name: newName, first_name: first, last_name: last, handicap_index: parseFloat(editingPlayer.hi) || 0, hi_override: newOv, isDirector: newDir });
                               }
                               setEditingPlayer(null);
                             }} style={{ fontSize: 12, padding: "8px 16px", borderRadius: 6, border: "none", background: team.accent, color: "#0a0804", fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Save</button>
@@ -1679,24 +1691,26 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         </>
                       ) : (
                         <>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: team.accent + "88", flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fullName(p)}</span>
+                          {/* Name + director badge sit tight on the left; the
+                              HI value sits right beside them (a small gap, not
+                              the old flex:1 gulf); a spacer pushes the Edit and
+                              GHIN controls to the right as their own group. */}
+                          <span style={{ fontSize: 12, fontWeight: 600, color: team.accent + "88", flexShrink: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fullName(p)}</span>
+                          {p.isDirector && <span title="Tournament director" style={{ fontSize: 11, flexShrink: 0, lineHeight: 1 }}>👑</span>}
                           {(() => {
                             const overridden = p.hi_override != null && String(p.hi_override).trim() !== "";
                             const effHI = overridden ? p.hi_override : p.handicap_index;
                             return (
                               <span title={overridden ? `Director override — GHIN/base index is ${p.handicap_index}` : undefined}
-                                style={{ fontSize: 11, fontWeight: overridden ? 700 : 400, color: overridden ? BC.amber : BC.t1, width: 42, flexShrink: 0, textAlign: "right" }}>
+                                style={{ fontSize: 11, fontWeight: overridden ? 700 : 400, color: overridden ? BC.amber : BC.t1, flexShrink: 0, marginLeft: 2 }}>
                                 {effHI}{overridden ? "*" : ""}
                               </span>
                             );
                           })()}
-                          <button onClick={() => setEditingPlayer({ pid: p.player_id, first: p.first_name || (p.last_name ? "" : (p.name || "")), last: p.last_name || "", hi: String(p.handicap_index), ov: (p.hi_override != null && String(p.hi_override).trim() !== "") ? String(p.hi_override) : "" })} style={{
-                            fontSize: 9, padding: "1px 5px", borderRadius: 4, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer", flexShrink: 0,
+                          <span style={{ flex: 1, minWidth: 8 }} />
+                          <button onClick={() => setEditingPlayer({ pid: p.player_id, first: p.first_name || (p.last_name ? "" : (p.name || "")), last: p.last_name || "", hi: String(p.handicap_index), ov: (p.hi_override != null && String(p.hi_override).trim() !== "") ? String(p.hi_override) : "", dir: !!p.isDirector })} style={{
+                            fontSize: 9, padding: "2px 8px", borderRadius: 4, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer", flexShrink: 0,
                           }}>Edit</button>
-                          <button onClick={() => onUpdatePlayer({ ...p, isDirector: !p.isDirector })} style={{
-                            fontSize: 7, padding: "1px 3px", borderRadius: 3, border: `1px solid ${p.isDirector ? BC.amber : BC.bdr}`,
-                            background: p.isDirector ? BC.amber + "22" : "transparent", color: p.isDirector ? BC.amber : BC.t3, cursor: "pointer", fontWeight: 700, flexShrink: 0,
-                          }}>DIR</button>
                           <GhinLinkButton player={p} user={user} onUpdatePlayer={onUpdatePlayer} notify={notify} />
                         </>
                       )}
