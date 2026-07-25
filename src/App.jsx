@@ -1388,16 +1388,6 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   return (
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
       <EditionSwitcher open={showEditions} onClose={() => setShowEditions(false)} />
-      {/* Active-edition bar — switch year or create a new edition */}
-      <button onClick={() => setShowEditions(true)} style={{
-        width: "100%", marginBottom: 12, padding: "10px 14px", borderRadius: 10,
-        background: BC.card, border: `1px solid ${BC.bdr}`, color: BC.t1,
-        fontSize: 12, fontWeight: 700, letterSpacing: 0.3, cursor: "pointer",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-      }}>
-        <span>Active edition · <span style={{ color: BC.amber }}>{TOURNAMENT_ID}</span></span>
-        <span style={{ fontSize: 11, color: BC.t3 }}>Change</span>
-      </button>
       {/* Tabs */}
       <div style={{ display: "flex", gap: 4, marginBottom: 16, background: BC.card, borderRadius: 12, padding: 4, border: `1px solid ${BC.bdr}` }}>
         {[["players","Players"],["rounds","Rounds"],["matches","Matches"],["courses","Courses"],["tournament","Tournament"]].map(([k, lbl]) => (
@@ -2400,6 +2390,18 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
       {tab === "tournament" && (
         <div>
+          {/* Active edition — switch year or create a new edition */}
+          <div style={{ fontSize: 10, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Active Edition</div>
+          <button onClick={() => setShowEditions(true)} style={{
+            width: "100%", marginBottom: 16, padding: "12px 14px", borderRadius: 10,
+            background: BC.card, border: `1px solid ${BC.bdr}`, color: BC.t1,
+            fontSize: 13, fontWeight: 700, letterSpacing: 0.3, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+          }}>
+            <span>Edition · <span style={{ color: BC.amber }}>{TOURNAMENT_ID}</span></span>
+            <span style={{ fontSize: 11, color: BC.t3 }}>Switch / new ›</span>
+          </button>
+
           {/* Tournament name */}
           <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: 14, marginBottom: 16 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Tournament Name</div>
