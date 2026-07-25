@@ -127,6 +127,29 @@ export const cloneEdition = async (sourceId, { year, name, id }, options = {}) =
   return { id: newTid, year: Number(year), name, namespaced: true, created_from: sourceId };
 };
 
+// Every tournament-scoped collection — purged when an edition is deleted.
+// bc_historical (cross-year stats) and the practice sandbox are global and
+// left alone.
+const EDITION_DATA_COLS = [
+  "bc_players", "bc_courses", "bc_settings", "bc_rounds", "bc_matches",
+  "bc_hole_scores", "bc_skins", "bc_ctp", "bc_round_locks",
+  "bc_hcp_overrides", "bc_tee_assignments", "bc_tournament_settings",
+];
+
+// Delete an edition AND all of its data. Irreversible. Refuses to delete the
+// active edition (switch away first) so the running app never loses its data
+// out from under it.
+export const deleteEdition = async (id) => {
+  if (!id || id === getActiveTournamentId()) return false;
+  const f = [{ field: "tournament_id", op: "==", value: id }];
+  for (const col of EDITION_DATA_COLS) {
+    const rows = await db.get(col, f);
+    for (const r of rows) if (r.id) await db.delete(col, r.id);
+  }
+  await db.delete(EDITIONS_COL, id);
+  return true;
+};
+
 // Flip the active pointer (with its namespacing flag), then hard-reload.
 export const switchEdition = (id, { reload = true, namespaced = false } = {}) => {
   setActiveTournamentId(id, namespaced);

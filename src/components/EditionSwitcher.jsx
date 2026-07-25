@@ -9,7 +9,7 @@ import { useState, useEffect } from "react";
 import { BC } from "../theme";
 import { Popup, ConfirmModal } from "./Popup";
 import { getActiveTournamentId } from "../firebase";
-import { loadEditions, createEdition, cloneEdition, switchEdition, ensureActiveEditionDoc } from "../lib/editions";
+import { loadEditions, createEdition, cloneEdition, deleteEdition, switchEdition, ensureActiveEditionDoc } from "../lib/editions";
 
 const fieldStyle = (w) => ({
   width: w || "100%", flex: w ? "none" : 1, padding: "9px 11px", borderRadius: 8,
@@ -36,6 +36,7 @@ export function EditionSwitcher({ open, onClose }) {
   const [cloneOpts, setCloneOpts] = useState(DEFAULT_CLONE_OPTS);
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(null);
   const activeId = getActiveTournamentId();
 
   useEffect(() => {
@@ -95,10 +96,16 @@ export function EditionSwitcher({ open, onClose }) {
                       background: BC.amber, padding: "5px 10px", borderRadius: 6,
                     }}>ACTIVE</span>
                   ) : (
-                    <button onClick={() => setPending(e)} style={{
-                      fontSize: 11, fontWeight: 800, letterSpacing: 0.5, color: BC.t2, background: BC.card,
-                      border: `1px solid ${BC.bdr}`, borderRadius: 8, padding: "7px 12px", cursor: "pointer",
-                    }}>Switch</button>
+                    <>
+                      <button onClick={() => setPending(e)} style={{
+                        fontSize: 11, fontWeight: 800, letterSpacing: 0.5, color: BC.t2, background: BC.card,
+                        border: `1px solid ${BC.bdr}`, borderRadius: 8, padding: "7px 12px", cursor: "pointer",
+                      }}>Switch</button>
+                      <button onClick={() => setPendingDelete(e)} title="Delete edition" style={{
+                        fontSize: 14, fontWeight: 700, color: BC.t3, background: "transparent",
+                        border: "none", borderRadius: 8, padding: "5px 6px", cursor: "pointer", flexShrink: 0, lineHeight: 1,
+                      }}>🗑</button>
+                    </>
                   )}
                 </div>
               );
@@ -156,6 +163,23 @@ export function EditionSwitcher({ open, onClose }) {
           confirmLabel="Switch"
           onConfirm={() => switchEdition(pending.id, { namespaced: !!pending.namespaced })}
           onCancel={() => setPending(null)}
+        />
+      )}
+
+      {pendingDelete && (
+        <ConfirmModal
+          eyebrow="Delete edition"
+          title={`Delete ${pendingDelete.name}?`}
+          message={`This permanently deletes ${pendingDelete.name} and ALL of its players, courses, settings, rounds, scores and results. This can't be undone.`}
+          confirmLabel="Delete"
+          variant="danger"
+          onConfirm={async () => {
+            const target = pendingDelete;
+            setPendingDelete(null);
+            await deleteEdition(target.id);
+            setEditions(await loadEditions());
+          }}
+          onCancel={() => setPendingDelete(null)}
         />
       )}
     </>
