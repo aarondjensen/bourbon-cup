@@ -29,23 +29,28 @@ import { EditionSwitcher } from "./components/EditionSwitcher";
 import { GhinLinkButton, GhinSyncButton } from "./components/GhinLink";
 
 // ── Bottom-nav safe-area cushion ──────────────────────────────────
-// On a device with a home indicator, env(safe-area-inset-bottom) is 34px.
-// Reserving the whole inset as padding under the nav leaves a tall band of
-// BC.card below the labels — and because card (#161618) and bg (#0a0a0b)
-// are nearly the same value in dark mode, that band reads as empty space
-// UNDER the nav rather than as part of it. (Halving the inset, the previous
-// workaround, just made the band shorter.)
+// On a device with a home indicator, env(safe-area-inset-bottom) is 34pt.
+// Reserving all of it as padding UNDER the nav leaves a tall band of
+// BC.card below the labels — and card (#161618) vs bg (#0a0a0b) are close
+// enough in dark mode that the band reads as empty space beneath the bar
+// rather than as part of it. (Halving the inset, the earlier workaround,
+// only made the band shorter.)
 //
-// The home indicator is a thin translucent overlay that content is allowed
-// to sit beneath, so we clamp the cushion to the small amount of clearance
-// the labels actually need, and — critically — apply it INSIDE the nav
-// buttons rather than as padding on the bar. The bar's background now runs
-// edge to edge and every pixel of it is tappable, so there is no dead strip
-// at any point.
+// Two changes: the cushion is clamped to the clearance the labels actually
+// need, and it lives INSIDE the nav buttons rather than as padding on the
+// bar. So the bar's background runs to the true bottom edge and every pixel
+// of the cushion is tappable — there is no inert strip anywhere.
 //
-// Single knob: raise 10px for more breathing room under the labels, or
-// swap in plain `env(safe-area-inset-bottom, 0px)` for the full iOS-style
-// inset. Everything that needs to sit on top of the nav reads this value.
+// Sizing, on an iPhone 16 Pro (874pt tall): 8pt button padding + 10pt here
+// puts the label/underline bottom at 856pt. The home indicator starts at
+// ~862pt, so the labels clear it with ~6pt to spare and nothing lands in
+// the bottom gesture area, where iOS eats taps.
+//
+// Single knob — everything that stacks on the nav reads this value:
+//   raise 10px  → more breathing room under the labels
+//   "0px"       → bar content flush to the edge (labels WILL sit under the
+//                 home indicator and taps there get unreliable)
+//   plain env() → full iOS-standard inset, and the band comes back
 const NAV_SAFE_PAD = "min(env(safe-area-inset-bottom, 0px), 10px)";
 
 // First+last initials from a player's full name. "Aaron Jensen" → "AJ".
@@ -179,7 +184,7 @@ function LoginScreen({ players, onLogin, teams, darkMode, tournamentName }) {
   );
 
   return (
-    <div style={{ height: "100%", background: BC.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 10px", fontFamily: "'Montserrat', sans-serif", position: "relative", overflow: "hidden" }}>
+    <div style={{ height: "100dvh", background: BC.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 10px", fontFamily: "'Montserrat', sans-serif", position: "relative", overflow: "hidden" }}>
       {/* Silhouette — fixed full-screen background */}
       <img src={TROPHY_SILHOUETTE} alt="" style={{
         position: "fixed", top: "50%", left: "50%",
@@ -499,7 +504,7 @@ function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds
         // body's top padding, and the fixed nav clearance.
         <div style={{
           display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          minHeight: "calc(var(--bc-app-h, 100svh) - 250px)", textAlign: "center", padding: "0 24px", gap: 10,
+          minHeight: "calc(100svh - 250px)", textAlign: "center", padding: "0 24px", gap: 10,
         }}>
           <div style={{
             width: 40, height: 40, background: BC.amber,
@@ -5310,15 +5315,15 @@ export default function App() {
     return null;
   };
 
-  // App shell — fills #root exactly. #root is sized to the MEASURED visible
-  // viewport height (--bc-app-h, see theme.js), so the shell is `height:
-  // 100%` of a known-good box rather than a fixed element betting on
-  // `bottom: 0` landing somewhere the user can actually see. That bet is
-  // what put a strip of dead space under the nav on mobile: on iOS Safari
-  // and Android Chrome a fixed element's containing block is the LARGE
-  // viewport, not the visible one.
+  // App shell — position:fixed; inset:0. The fixed containing block is the
+  // full webview, which is the ONE bottom-edge signal iOS reports honestly:
+  // in an installed home-screen app window.visualViewport.height subtracts
+  // env(safe-area-inset-top) (812 reported for a genuinely 874pt iPhone 16
+  // Pro webview), so any JS-measured height leaves a black band exactly one
+  // Dynamic Island tall under the nav. Don't reintroduce one. Safari also
+  // re-pins fixed elements above its own toolbar for free.
   return (
-    <div style={{ position: "relative", width: "100%", height: "100%", background: BC.bg, display: "flex", flexDirection: "column", fontFamily: "'Montserrat', sans-serif", overflow: "hidden", boxSizing: "border-box", paddingTop: "env(safe-area-inset-top, 0px)", paddingLeft: "env(safe-area-inset-left, 0px)", paddingRight: "env(safe-area-inset-right, 0px)" }}>
+    <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: 0, width: "100%", background: BC.bg, display: "flex", flexDirection: "column", fontFamily: "'Montserrat', sans-serif", overflow: "hidden", boxSizing: "border-box", paddingTop: "env(safe-area-inset-top, 0px)", paddingLeft: "env(safe-area-inset-left, 0px)", paddingRight: "env(safe-area-inset-right, 0px)" }}>
       <div style={{ maxWidth: 520, width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", flex: 1, minHeight: 0, position: "relative", padding: "0 4px" }}>
       <Notif notif={notif} />
 
@@ -5555,19 +5560,17 @@ export default function App() {
       </div>
 
       {/* Bottom Nav — an IN-FLOW flex child of the shell, and the LAST one.
-          The chain that guarantees it sits on the physical bottom edge:
-            #root   height = --bc-app-h (measured visible viewport, theme.js)
-            shell   height = 100% of #root, flex column
-            body    flex: 1  → absorbs all free space
-            nav     flexShrink: 0 → natural height, hard against the bottom
-          Nothing in that chain depends on `bottom: 0`, `100vh`, or on the
-          browser reporting its own viewport honestly — which is why the
-          previous fixed-shell version drifted on iOS Safari and Android
-          Chrome.
-          The bar carries NO bottom padding of its own. The home-indicator
-          cushion lives inside the buttons (NAV_SAFE_PAD), so the card
-          background runs edge to edge and the padded region is still
-          tappable — no dead strip, in either theme. */}
+          The chain that puts it on the physical bottom edge:
+            shell  position:fixed; inset:0 → bottom edge = webview bottom
+            body   flex: 1                 → absorbs all free space
+            nav    flexShrink: 0           → natural height, hard against it
+          The bar carries NO bottom padding of its own, so its background
+          runs all the way to that edge. The home-indicator cushion lives
+          INSIDE the buttons instead (NAV_SAFE_PAD) — same clearance for the
+          labels, but the cushion is part of the tappable bar rather than an
+          inert strip of BC.card sitting below it. That strip was the
+          original complaint: card (#161618) and bg (#0a0a0b) are close
+          enough in dark mode that it read as a gap. */}
       <div style={{ flexShrink: 0, width: "100%", background: BC.card, borderTop: `1px solid ${BC.bdr}` }}>
       <div style={{ maxWidth: 520, margin: "0 auto", display: "flex" }}>
         {navItems.map(item => {

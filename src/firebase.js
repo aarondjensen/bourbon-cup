@@ -103,6 +103,30 @@ export const setActiveTournamentId = (id, namespaced = false) => {
 // active edition. Prefer this over hand-writing the filter literal.
 export const tournamentFilter = () => [{ field: "tournament_id", op: "==", value: TOURNAMENT_ID }];
 
+// ── Director session ────────────────────────────────────────────────
+// Director access is unlocked by tapping a director-flagged player or by
+// entering the director code (see constants.DIRECTOR_CODE). Because
+// switching editions hard-reloads the app, that in-memory session would be
+// lost on every switch — dropping the director onto a login screen that,
+// for a brand-new empty edition, has no player to tap. Persisting a small
+// flag in sessionStorage keeps the director logged in across the reload.
+// sessionStorage (not localStorage) is deliberate: the unlock lasts for the
+// browser session only, not forever on a shared device.
+export const DIRECTOR_SESSION_KEY = "bc_director_session";
+
+export const isDirectorSession = () => {
+  try { return typeof sessionStorage !== "undefined" && sessionStorage.getItem(DIRECTOR_SESSION_KEY) === "1"; }
+  catch { return false; }
+};
+
+export const setDirectorSession = (on) => {
+  try {
+    if (typeof sessionStorage === "undefined") return;
+    if (on) sessionStorage.setItem(DIRECTOR_SESSION_KEY, "1");
+    else sessionStorage.removeItem(DIRECTOR_SESSION_KEY);
+  } catch { /* blocked storage */ }
+};
+
 const _app = initializeApp(FIREBASE_CONFIG);
 const _db = getFirestore(_app);
 

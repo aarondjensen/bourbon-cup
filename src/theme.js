@@ -168,111 +168,40 @@ export const teamColor     = (tid) => (tid === "A" ? BC.teamA     : BC.teamB);
 export const teamColorDim  = (tid) => (tid === "A" ? BC.teamADim  : BC.teamBDim);
 export const teamColorGlow = (tid) => (tid === "A" ? BC.teamAGlow : BC.teamBGlow);
 
-// ── App viewport height (--bc-app-h) ──────────────────────────────
-// Every mobile browser misreports the viewport in a slightly different way,
-// and `position: fixed; bottom: 0` inherits every one of those lies:
+// ── Why there is deliberately NO JS viewport measurement here ──────
+// The obvious "modern" fix for a bottom bar that won't sit on the bottom is
+// to measure window.visualViewport.height and size the app to it. On iOS
+// that is actively WRONG in the one place it matters most: inside an
+// INSTALLED home-screen app, visualViewport.height silently subtracts
+// env(safe-area-inset-top). Measured on an iPhone 16 Pro (402x874pt) it
+// reports 812 for a webview that is genuinely 874 — so the shell ends up
+// short by exactly the height of the Dynamic Island, and a 62pt black band
+// opens up under the nav. That was a real regression, not a theory.
 //
-//   • iOS Safari resolves a fixed element's containing block against the
-//     LARGE viewport (toolbars retracted). While the toolbar is showing,
-//     `bottom: 0` is BELOW the visible area; once it collapses, the layout
-//     is stale until something forces a reflow. Either way the bar drifts.
-//   • Android Chrome keeps the layout viewport at its large size while the
-//     URL bar is on screen, with the same net effect.
-//   • Installed (standalone) PWAs stack the home-indicator inset on top of
-//     all of that.
-//
-// So we stop trusting `bottom: 0` entirely. syncAppHeight() MEASURES the
-// visible viewport via the visualViewport API and publishes it as a CSS
-// custom property on <html>. #root is sized to exactly that height, the app
-// shell fills #root at height:100%, and the bottom nav — being the shell's
-// last flex child — is therefore flush with the real bottom edge on every
-// device, in every browser, in both browser and standalone modes.
-//
-// Keyboard guard: when the on-screen keyboard opens, visualViewport
-// collapses to a fraction of the layout viewport. We deliberately ignore
-// that case and keep the full height, so focusing a score input doesn't
-// yank the entire chrome upward mid-entry.
-export const syncAppHeight = () => {
-  if (typeof window === "undefined" || typeof document === "undefined") return;
-  const vv = window.visualViewport;
-  const inner = window.innerHeight || 0;
-  let h = vv ? vv.height : inner;
-  if (vv && inner && vv.height < inner * 0.7) h = inner;
-  if (!h) return;
-  document.documentElement.style.setProperty("--bc-app-h", `${Math.round(h)}px`);
-};
-
-if (typeof window !== "undefined") {
-  let _vpRaf = 0;
-  const _scheduleVp = () => {
-    if (_vpRaf) return;
-    _vpRaf = requestAnimationFrame(() => { _vpRaf = 0; syncAppHeight(); });
-  };
-  // Synchronous seed so the FIRST paint is already the right height — no
-  // one-frame flash of a too-tall/too-short shell.
-  syncAppHeight();
-  window.addEventListener("resize", _scheduleVp);
-  window.addEventListener("orientationchange", _scheduleVp);
-  // bfcache restores (iOS back-swipe) replay the old layout; re-measure.
-  window.addEventListener("pageshow", _scheduleVp);
-  if (window.visualViewport) {
-    // `resize` fires when the toolbar expands/collapses; `scroll` fires when
-    // the visual viewport pans (pinch-zoom, keyboard). Both change the
-    // effective bottom edge.
-    window.visualViewport.addEventListener("resize", _scheduleVp);
-    window.visualViewport.addEventListener("scroll", _scheduleVp);
-  }
-}
+// `position: fixed; inset: 0` on the app shell does NOT have that problem:
+// the fixed containing block is the full webview in standalone mode, and
+// mobile Safari re-pins fixed elements above its own toolbar for free. So
+// the shell stays fixed, html/body/#root stay a plain 100%, and nothing in
+// the layout ever asks JavaScript how tall the screen is.
 
 // ── Global stylesheet ──
 // Single source of truth for the document-level CSS. Both the initial
 // injection below and App's theme-toggle effect call this, so the two can
 // no longer drift apart (they were duplicated string literals before).
 //
-// Layout contract, top to bottom:
-//   html  — full height, no scrolling, no overscroll chaining
-//   body  — position:fixed at the TOP of the viewport with an explicit
-//           MEASURED height. Nothing here depends on `bottom: 0` resolving
-//           correctly, which is the entire point.
-//   #root — height:100% of body; the app shell fills it.
+// Layout contract: html/body/#root are a plain full-height, non-scrolling,
+// non-overscrolling backdrop painted in the theme bg. All real layout is
+// done by the app shell, which is position:fixed; inset:0 on top of them.
 export const bcGlobalCSS = (bg) => `
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-  /* Pre-JS fallback chain for --bc-app-h. syncAppHeight() overwrites this
-     with a measured pixel value as an inline style on <html>, which wins
-     over these rules. dvh where supported, plain vh everywhere else. */
-  :root { --bc-app-h: 100vh; }
-  @supports (height: 100dvh) { :root { --bc-app-h: 100dvh; } }
-
-  html {
+  html, body, #root {
     height: 100%;
     width: 100%;
     background: ${bg};
     overflow: hidden;
     overscroll-behavior: none;
-    -webkit-text-size-adjust: 100%;
   }
-
-  body {
-    margin: 0;
-    padding: 0;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    width: 100%;
-    height: var(--bc-app-h);
-    background: ${bg};
-    overflow: hidden;
-    overscroll-behavior: none;
-  }
-
-  #root {
-    width: 100%;
-    height: 100%;
-    background: ${bg};
-    overflow: hidden;
-  }
+  body { margin: 0; padding: 0; -webkit-text-size-adjust: 100%; }
 `;
 
 // ── Inject global styles ──
