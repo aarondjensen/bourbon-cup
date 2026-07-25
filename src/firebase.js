@@ -39,6 +39,7 @@ const FIREBASE_CONFIG = {
 // unchanged until an edition is chosen.
 const DEFAULT_TOURNAMENT_ID = "bc_2025";
 export const ACTIVE_EDITION_KEY = "bc_active_edition";
+export const ACTIVE_EDITION_NS_KEY = "bc_active_edition_ns";
 
 const _readInitialEdition = () => {
   try {
@@ -52,6 +53,31 @@ const _readInitialEdition = () => {
 // Live binding — reassigned by setActiveTournamentId below.
 export let TOURNAMENT_ID = _readInitialEdition();
 
+// ── Per-edition document-ID namespacing ─────────────────────────────
+// The original edition (bc_2025) stored its per-edition singleton/round docs
+// under GLOBAL doc ids ("team_names", "bc_round_1", …). That means a second
+// edition writing the same ids would overwrite the first. So editions created
+// from now on are "namespaced": their singleton/round doc ids are prefixed
+// with the edition id (`bc_2026__team_names`), making editions truly
+// independent. The original edition stays un-namespaced (bare ids) so its
+// existing data is untouched — for it, editionDocId() is an identity function
+// and every read/write path is byte-identical to before.
+//
+// The active edition's flag is cached in localStorage (written at switch
+// time) so it's known synchronously here, before any write happens.
+let _editionNamespaced = (() => {
+  try { return typeof localStorage !== "undefined" && localStorage.getItem(ACTIVE_EDITION_NS_KEY) === "true"; }
+  catch { return false; }
+})();
+
+export const isEditionNamespaced = () => _editionNamespaced;
+
+// Resolve a per-edition doc id. `bareId` is the legacy global id
+// ("team_names", `bc_round_${r}`, …). For a namespaced edition it becomes
+// `${tid}__${bareId}`; for the legacy edition it's returned unchanged.
+export const editionDocId = (bareId, tid = TOURNAMENT_ID, namespaced = _editionNamespaced) =>
+  namespaced ? `${tid}__${bareId}` : bareId;
+
 export const getActiveTournamentId = () => TOURNAMENT_ID;
 
 // The active edition's year, derived from its id (bc_2025 → 2025). Single
@@ -60,11 +86,15 @@ export const getActiveTournamentId = () => TOURNAMENT_ID;
 export const getTournamentYear = () =>
   parseInt(String(TOURNAMENT_ID).replace(/\D/g, ""), 10) || new Date().getFullYear();
 
-export const setActiveTournamentId = (id) => {
+export const setActiveTournamentId = (id, namespaced = false) => {
   if (!id) return TOURNAMENT_ID;
   TOURNAMENT_ID = id;
+  _editionNamespaced = !!namespaced;
   try {
-    if (typeof localStorage !== "undefined") localStorage.setItem(ACTIVE_EDITION_KEY, id);
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(ACTIVE_EDITION_KEY, id);
+      localStorage.setItem(ACTIVE_EDITION_NS_KEY, namespaced ? "true" : "false");
+    }
   } catch { /* ignore */ }
   return TOURNAMENT_ID;
 };

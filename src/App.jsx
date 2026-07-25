@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { BC, applyBCTheme, initialBCMode } from "./theme";
-import { db, TOURNAMENT_ID, getTournamentYear } from "./firebase";
+import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId } from "./firebase";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
   resolveTeams, DEFAULT_TEAM_NAMES, TOURNAMENT_TITLE, TOURNAMENT_LOCATION,
@@ -1237,12 +1237,12 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
     }
     // Always save handicap overrides (even if empty, to clear old values)
     const overrides = hcpOverrides[editRound] || {};
-    await db.upsert("bc_hcp_overrides", { id: `bc_hcp_r${editRound}`, tournament_id: TOURNAMENT_ID, round_number: editRound, overrides });
+    await db.upsert("bc_hcp_overrides", { id: editionDocId(`bc_hcp_r${editRound}`), tournament_id: TOURNAMENT_ID, round_number: editRound, overrides });
     // Save tee assignments
     const assignments = teeAssignments[editRound] || {};
-    await db.upsert("bc_tee_assignments", { id: `bc_tee_r${editRound}`, tournament_id: TOURNAMENT_ID, round_number: editRound, assignments });
+    await db.upsert("bc_tee_assignments", { id: editionDocId(`bc_tee_r${editRound}`), tournament_id: TOURNAMENT_ID, round_number: editRound, assignments });
     const data = {
-      id: `bc_round_${editRound}`,
+      id: editionDocId(`bc_round_${editRound}`),
       tournament_id: TOURNAMENT_ID,
       round_number: editRound,
       course_id: tr?.course_id || "",
@@ -2175,13 +2175,13 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       return (
                         <button key={r} onClick={async () => {
                           if (isAssigned) {
-                            await onSetRound({ id: `bc_round_${r}`, tournament_id: TOURNAMENT_ID, round_number: r, course_id: null, format: tr?.format || DEFAULT_FORMAT, tee_time: tr?.tee_time || "", nassau_front: tr?.nassau_front || 1, nassau_back: tr?.nassau_back || 1, nassau_overall: tr?.nassau_overall || 1 });
+                            await onSetRound({ id: editionDocId(`bc_round_${r}`), tournament_id: TOURNAMENT_ID, round_number: r, course_id: null, format: tr?.format || DEFAULT_FORMAT, tee_time: tr?.tee_time || "", nassau_front: tr?.nassau_front || 1, nassau_back: tr?.nassau_back || 1, nassau_overall: tr?.nassau_overall || 1 });
                           } else if (otherCourse) {
                             if (await confirm(`Replace ${otherCourse.name} for Rd ${r}?`)) {
-                              await onSetRound({ id: `bc_round_${r}`, tournament_id: TOURNAMENT_ID, round_number: r, course_id: c.id, format: tr?.format || DEFAULT_FORMAT, tee_time: tr?.tee_time || "", nassau_front: tr?.nassau_front || 1, nassau_back: tr?.nassau_back || 1, nassau_overall: tr?.nassau_overall || 1 });
+                              await onSetRound({ id: editionDocId(`bc_round_${r}`), tournament_id: TOURNAMENT_ID, round_number: r, course_id: c.id, format: tr?.format || DEFAULT_FORMAT, tee_time: tr?.tee_time || "", nassau_front: tr?.nassau_front || 1, nassau_back: tr?.nassau_back || 1, nassau_overall: tr?.nassau_overall || 1 });
                             }
                           } else {
-                            await onSetRound({ id: `bc_round_${r}`, tournament_id: TOURNAMENT_ID, round_number: r, course_id: c.id, format: tr?.format || DEFAULT_FORMAT, tee_time: tr?.tee_time || "", nassau_front: tr?.nassau_front || 1, nassau_back: tr?.nassau_back || 1, nassau_overall: tr?.nassau_overall || 1 });
+                            await onSetRound({ id: editionDocId(`bc_round_${r}`), tournament_id: TOURNAMENT_ID, round_number: r, course_id: c.id, format: tr?.format || DEFAULT_FORMAT, tee_time: tr?.tee_time || "", nassau_front: tr?.nassau_front || 1, nassau_back: tr?.nassau_back || 1, nassau_overall: tr?.nassau_overall || 1 });
                           }
                         }} style={{
                           padding: "3px 6px", borderRadius: 4, fontSize: 9, fontWeight: 700, cursor: "pointer", minWidth: 24, textAlign: "center",
@@ -4939,6 +4939,19 @@ export default function App() {
   // If additional top-level modals get added later, OR them in here.
   useEffect(() => { popupOpenRef.current = menuOpen; }, [menuOpen]);
 
+  // Reconcile the edition doc-id namespacing flag from the canonical edition
+  // doc, in case localStorage (which seeds it synchronously in firebase.js)
+  // was cleared. Cheap insurance so writes use the right doc-id scheme.
+  useEffect(() => {
+    (async () => {
+      try {
+        const eds = await db.get("bc_editions", []);
+        const active = eds.find(e => e.id === TOURNAMENT_ID);
+        if (active) setActiveTournamentId(TOURNAMENT_ID, !!active.namespaced);
+      } catch { /* ignore */ }
+    })();
+  }, []);
+
   // hasNewBundle — checks whether a new app build has been deployed since
   // the running client loaded. Vite produces hashed asset URLs on each
   // build, so comparing the script/stylesheet paths in a freshly-fetched
@@ -4990,13 +5003,13 @@ export default function App() {
     const f = [{ field: "tournament_id", op: "==", value: TOURNAMENT_ID }];
     unsubs.push(db.subscribe("bc_players", f, setTPlayers));
     unsubs.push(db.subscribe("bc_settings", f, rows => {
-      const tn = rows.find(r => r.id === "team_names");
+      const tn = rows.find(r => r.id === editionDocId("team_names"));
       if (tn) setTeamNames({ A: tn.teamA || DEFAULT_TEAM_NAMES.A, B: tn.teamB || DEFAULT_TEAM_NAMES.B });
-      const tourn = rows.find(r => r.id === "tournament");
+      const tourn = rows.find(r => r.id === editionDocId("tournament"));
       setTournamentName(tourn?.name?.trim() || TOURNAMENT_TITLE);
       // Branding: apply to the live BC theme immediately (using the current
       // mode via ref), then store it so a later theme toggle re-applies it.
-      const br = rows.find(r => r.id === "branding");
+      const br = rows.find(r => r.id === editionDocId("branding"));
       const b = br
         ? { teamA: br.teamA || null, teamB: br.teamB || null, tournamentAccent: br.tournamentAccent || null }
         : null;
@@ -5015,7 +5028,7 @@ export default function App() {
       setCtpData(cd);
     }));
     unsubs.push(db.subscribe("bc_tournament_settings", f, rows => {
-      const s = rows.find(r => r.id === "bc_settings_main");
+      const s = rows.find(r => r.id === editionDocId("bc_settings_main"));
       if (s?.skins_pot) setSkinsPot(s.skins_pot);
     }));
     unsubs.push(db.subscribe("bc_historical", [{ field: "type", op: "==", value: "year" }], setHistoricalData));
@@ -5163,18 +5176,18 @@ export default function App() {
   const onRemovePlayer = useCallback(async (pid) => { await db.delete("bc_players", pid); }, []);
   const onAddCourse = useCallback(async (c) => { if (c._delete) { await db.delete("bc_courses", c.id); } else { await db.upsert("bc_courses", c); } }, []);
   const onSetSkin = useCallback(async (round, hole, pid) => {
-    const id = `bc_skin_r${round}_h${hole+1}`;
+    const id = editionDocId(`bc_skin_r${round}_h${hole+1}`);
     if (pid) await db.upsert("bc_skins", { id, tournament_id: TOURNAMENT_ID, round, hole, player_id: pid });
     else await db.delete("bc_skins", id);
   }, []);
   const onSetCtp = useCallback(async (round, hole, pid) => {
-    const id = `bc_ctp_r${round}_h${hole+1}`;
+    const id = editionDocId(`bc_ctp_r${round}_h${hole+1}`);
     if (pid) await db.upsert("bc_ctp", { id, tournament_id: TOURNAMENT_ID, round, hole, player_id: pid });
     else await db.delete("bc_ctp", id);
   }, []);
   const onUpdatePot = useCallback(async (amt) => {
     setSkinsPot(amt);
-    await db.upsert("bc_tournament_settings", { id: "bc_settings_main", tournament_id: TOURNAMENT_ID, skins_pot: amt });
+    await db.upsert("bc_tournament_settings", { id: editionDocId("bc_settings_main"), tournament_id: TOURNAMENT_ID, skins_pot: amt });
   }, []);
   const onSetRound = useCallback(async (r) => { await db.upsert("bc_rounds", r); }, []);
   const onSetMatch = useCallback(async (m) => {
@@ -5481,7 +5494,7 @@ export default function App() {
             teamNames={teamNames}
             onSaveTeamNames={async (names) => {
               setTeamNames(names);
-              await db.upsert("bc_settings", { id: "team_names", tournament_id: TOURNAMENT_ID, teamA: names.A, teamB: names.B });
+              await db.upsert("bc_settings", { id: editionDocId("team_names"), tournament_id: TOURNAMENT_ID, teamA: names.A, teamB: names.B });
             }}
             brand={brand}
             onSaveBranding={async (b) => {
@@ -5490,12 +5503,12 @@ export default function App() {
               // single source of truth for team colors.
               applyBCTheme(darkMode ? "dark" : "light", b);
               setBrand(b);
-              await db.upsert("bc_settings", { id: "branding", tournament_id: TOURNAMENT_ID, teamA: b.teamA, teamB: b.teamB });
+              await db.upsert("bc_settings", { id: editionDocId("branding"), tournament_id: TOURNAMENT_ID, teamA: b.teamA, teamB: b.teamB });
             }}
             tournamentName={tournamentName}
             onSaveTournamentName={async (name) => {
               setTournamentName(name);
-              await db.upsert("bc_settings", { id: "tournament", tournament_id: TOURNAMENT_ID, name });
+              await db.upsert("bc_settings", { id: editionDocId("tournament"), tournament_id: TOURNAMENT_ID, name });
             }}
             hcpOverridesFromDb={hcpOverridesData}
             teeAssignmentsFromDb={teeAssignmentsData}

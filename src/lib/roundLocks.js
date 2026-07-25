@@ -59,9 +59,12 @@
 // it does not depend on the director remembering to press anything
 // before the group tees off.
 import { calcCH, calcCHForCourse, getEffectiveHI } from "../scoring";
+import { editionDocId } from "../firebase";
 
 export const ROUND_LOCKS_COL = "bc_round_locks";
-export const roundLockDocId = (round) => `bc_lock_r${round}`;
+// Namespaced per active edition (bare `bc_lock_r${round}` for the legacy
+// edition) so two editions' locks never share a doc id.
+export const roundLockDocId = (round) => editionDocId(`bc_lock_r${round}`);
 
 export const LOCK_OPEN = "open";
 export const LOCK_LOCKED = "locked";
