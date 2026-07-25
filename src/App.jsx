@@ -4703,7 +4703,7 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, 
         onTouchEnd={handleTouchEnd}
         style={{
           position: "fixed",
-          bottom: "calc(56px + env(safe-area-inset-bottom, 16px))",
+          bottom: "calc(62px + env(safe-area-inset-bottom, 0px) / 2)",
           right: "max(8px, calc(50vw - 252px))",
           transform: `translateY(${dragY}px)`,
           transition: dragY === 0 ? "transform 0.2s ease, opacity 0.15s ease" : "none",
@@ -4890,7 +4890,7 @@ export default function App() {
     if (styleEl) {
       styleEl.textContent = `
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body, #root { height: 100dvh; width: 100%; background: ${BC.bg}; overflow: hidden; }
+        html, body, #root { height: 100%; width: 100%; background: ${BC.bg}; overflow: hidden; }
         body { margin: 0; padding: 0; }
       `;
     }
@@ -5293,8 +5293,8 @@ export default function App() {
   };
 
   return (
-    <div style={{ height: "100dvh", width: "100%", background: BC.bg, display: "flex", flexDirection: "column", position: "relative", fontFamily: "'Montserrat', sans-serif", overflow: "hidden", boxSizing: "border-box", paddingTop: "env(safe-area-inset-top, 0px)", paddingLeft: "env(safe-area-inset-left, 0px)", paddingRight: "env(safe-area-inset-right, 0px)" }}>
-      <div style={{ maxWidth: 520, width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", height: "100%", position: "relative", padding: "0 4px" }}>
+    <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: 0, width: "100%", background: BC.bg, display: "flex", flexDirection: "column", fontFamily: "'Montserrat', sans-serif", overflow: "hidden", boxSizing: "border-box", paddingTop: "env(safe-area-inset-top, 0px)", paddingLeft: "env(safe-area-inset-left, 0px)", paddingRight: "env(safe-area-inset-right, 0px)" }}>
+      <div style={{ maxWidth: 520, width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", flex: 1, minHeight: 0, position: "relative", padding: "0 4px" }}>
       <Notif notif={notif} />
 
       {/* Pull-to-refresh indicator — circular badge with the trophy
@@ -5347,10 +5347,13 @@ export default function App() {
 
       {/* Content */}
       <div className="bc-app-body" style={{
-        flex: 1, overflowY: "auto", overflowX: "hidden",
-        // The nav is now an in-flow sibling below this scroll area, so no
-        // nav-clearance padding is needed — just normal content padding.
-        padding: "12px 10px 16px 10px",
+        flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden",
+        // No nav-clearance padding any more. The nav is an in-flow sibling
+        // below the shell rather than a fixed overlay, so it can't cover
+        // content and there's nothing to compensate for. This padding used
+        // to be `calc(env(safe-area-inset-bottom) + 64px)` and was itself a
+        // source of the trailing gap whenever it exceeded the nav's height.
+        padding: "12px 10px",
         // Vertical centering for short views (affects EVERY tab). This was
         // previously `display:grid; align-content:safe center`, but Safari
         // doesn't support the `safe` overflow-alignment keyword — it drops
@@ -5524,14 +5527,21 @@ export default function App() {
       </div>
 
       <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={() => setUser(null)} user={user} view={view} darkMode={darkMode} onToggleTheme={toggleTheme} />
+      </div>
 
-      {/* Bottom Nav — an IN-FLOW flex child at the end of the full-height
-          (100dvh) column, so it always rests on the true bottom of the
-          visible screen. (It used to be position:fixed, which on mobile
-          pinned to the small-viewport bottom and left a strip of page-bg
-          showing beneath it.) paddingBottom is JUST the home-indicator safe
-          area — 0 on non-notch devices / in-browser. */}
-      <div style={{ flexShrink: 0, background: BC.card, borderTop: `1px solid ${BC.bdr}`, zIndex: 100, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+      {/* Bottom Nav — an IN-FLOW flex child of the shell (previously
+          position:fixed). Because the shell is pinned to the viewport
+          (position:fixed; inset:0) and this is its last child, the nav's
+          bottom edge IS the viewport's bottom edge — it is structurally
+          impossible for anything to sit below it. The old approach (fixed
+          nav + a matching bottom padding on the scroll body) had to keep
+          two numbers in sync by hand, and any drift showed up as dead
+          space. Now the body just takes `flex: 1` and the nav takes its
+          natural height, so no clearance padding is needed at all.
+          paddingBottom reserves HALF the home-indicator inset rather than
+          the full 34px + 8px cushion: enough that the labels clear the
+          indicator, without the tall near-black band that read as a gap. */}
+      <div style={{ flexShrink: 0, width: "100%", background: BC.card, borderTop: `1px solid ${BC.bdr}`, paddingBottom: "calc(env(safe-area-inset-bottom, 0px) / 2)" }}>
       <div style={{ maxWidth: 520, margin: "0 auto", display: "flex" }}>
         {navItems.map(item => {
           const active = view === item.key;
@@ -5541,8 +5551,8 @@ export default function App() {
               if (item.key === "menu") { setMenuOpen(true); return; }
               setView(item.key);
             }} style={{
-              flex: 1, padding: "7px 4px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
-              background: "transparent", border: "none", cursor: "pointer", minHeight: 52,
+              flex: 1, padding: "8px 4px 8px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 3,
+              background: "transparent", border: "none", cursor: "pointer", minHeight: 54,
             }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 24 }}>
                 {renderIcon(item.icon, active)}
@@ -5552,7 +5562,6 @@ export default function App() {
             </button>
           );
         })}
-      </div>
       </div>
       </div>
     </div>
