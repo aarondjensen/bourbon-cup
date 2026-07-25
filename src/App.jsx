@@ -119,7 +119,7 @@ function Notif({ notif }) {
 }
 
 // ── Login Screen ──
-function LoginScreen({ players, onLogin, teams, darkMode }) {
+function LoginScreen({ players, onLogin, teams, darkMode, tournamentName }) {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
@@ -135,9 +135,11 @@ function LoginScreen({ players, onLogin, teams, darkMode }) {
   // outline definition against the cream paper of light mode, and the
   // on-white logo's dark elements disappear against dark-mode charcoal.
   // Shot Callers ships a single logo so it isn't theme-swapped.
-  // Names come from the resolved `teams`; the login screen additionally
-  // swaps team A's logo for the light-bg variant when in light mode.
-  const teamA = { ...teams.A, logo: darkMode ? LOGO_TEAM_A : LOGO_TEAM_A_WHITE };
+  // Names/logos come from the resolved `teams`. For team A's DEFAULT (Mash)
+  // logo we swap in the light-bg variant in light mode; an imported custom
+  // logo (a data URL) is used as-is in both modes.
+  const customLogoA = typeof teams.A.logo === "string" && teams.A.logo.startsWith("data:");
+  const teamA = { ...teams.A, logo: customLogoA ? teams.A.logo : (darkMode ? LOGO_TEAM_A : LOGO_TEAM_A_WHITE) };
   const teamB = teams.B;
 
   const teamAPlayers = players.filter(p => p.team === "A");
@@ -168,7 +170,7 @@ function LoginScreen({ players, onLogin, teams, darkMode }) {
 
       {/* Title — sits above the silhouette, outside content card */}
       <div style={{ textAlign: "center", position: "relative", zIndex: 1, marginBottom: 14 }}>
-        <div style={{ fontSize: "clamp(20px, 8vw, 28px)", fontWeight: 800, color: BC.gold, letterSpacing: 2 }}>{TOURNAMENT_TITLE.toUpperCase()}</div>
+        <div style={{ fontSize: "clamp(20px, 8vw, 28px)", fontWeight: 800, color: BC.gold, letterSpacing: 2 }}>{(tournamentName || TOURNAMENT_TITLE).toUpperCase()}</div>
         <div style={{ fontSize: "clamp(10px, 3vw, 12px)", color: BC.t3, letterSpacing: "0.3em", marginTop: 3 }}>{getTournamentYear()} {TOURNAMENT_LOCATION.toUpperCase()}</div>
       </div>
 
@@ -1086,7 +1088,7 @@ function ChDeltaBadge({ delta }) {
   );
 }
 
-function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, hcpOverridesFromDb, teeAssignmentsFromDb, notify, roundLocks, onLockRound, onFinalizeRound, onClearRoundLock }) {
+function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, onSaveTournamentName, hcpOverridesFromDb, teeAssignmentsFromDb, notify, roundLocks, onLockRound, onFinalizeRound, onClearRoundLock }) {
   const [tab, setTab] = useState("players");
   const [editTeamNames, setEditTeamNames] = useState({ A: "", B: "" });
   const [editingTeam, setEditingTeam] = useState(null);
@@ -1102,28 +1104,37 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   // Editable hex per team, seeded from the saved branding doc. Empty = fall
   // back to the constants/theme default. Uploading a logo runs the same
   // extractor the theme uses (lib/logoBrand) and drops the dominant color in.
-  const [brandEdit, setBrandEdit] = useState({ A: "", B: "" });
+  const [brandEdit, setBrandEdit] = useState({ A: "", B: "" });        // hex color per team
+  const [brandLogoEdit, setBrandLogoEdit] = useState({ A: null, B: null }); // uploaded logo data URL per team
   const [brandBusy, setBrandBusy] = useState(null); // team id mid-extraction
+  const [editTournamentName, setEditTournamentName] = useState(tournamentName || "");
+  useEffect(() => { setEditTournamentName(tournamentName || ""); }, [tournamentName]);
   useEffect(() => {
     setBrandEdit({ A: brand?.teamA?.color || "", B: brand?.teamB?.color || "" });
+    setBrandLogoEdit({ A: brand?.teamA?.logo || null, B: brand?.teamB?.logo || null });
   }, [brand]);
   const isHex = (h) => /^#[0-9a-fA-F]{6}$/.test((h || "").trim());
   const brandSwatch = (tid) => (isHex(brandEdit[tid]) ? brandEdit[tid].trim() : (tid === "A" ? BC.teamA : BC.teamB));
+  // Importing a logo both stores the (downscaled) image AND seeds the team
+  // color from its dominant hue — one upload configures both.
   const pickLogo = async (tid, file) => {
     if (!file) return;
     setBrandBusy(tid);
     try {
-      const { color } = await processLogo(file);
+      const { color, logo } = await processLogo(file);
       setBrandEdit(b => ({ ...b, [tid]: color }));
+      setBrandLogoEdit(l => ({ ...l, [tid]: logo }));
     } catch { notify?.("Could not read that image", "error"); }
     setBrandBusy(null);
   };
+  const teamBrandDoc = (tid) => {
+    const color = isHex(brandEdit[tid]) ? brandEdit[tid].trim() : null;
+    const logo = brandLogoEdit[tid] || null;
+    return (color || logo) ? { color, logo } : null;
+  };
   const saveBranding = async () => {
-    await onSaveBranding({
-      teamA: isHex(brandEdit.A) ? { color: brandEdit.A.trim() } : null,
-      teamB: isHex(brandEdit.B) ? { color: brandEdit.B.trim() } : null,
-    });
-    notify?.("Team colors saved");
+    await onSaveBranding({ teamA: teamBrandDoc("A"), teamB: teamBrandDoc("B") });
+    notify?.("Team branding saved");
   };
   const [newPlayerFirst, setNewPlayerFirst] = useState("");
   const [newPlayerLast, setNewPlayerLast] = useState("");
@@ -1389,7 +1400,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
       </button>
       {/* Tabs */}
       <div style={{ display: "flex", gap: 4, marginBottom: 16, background: BC.card, borderRadius: 12, padding: 4, border: `1px solid ${BC.bdr}` }}>
-        {[["players","Players"],["rounds","Rounds"],["matches","Matches"],["courses","Courses"]].map(([k, lbl]) => (
+        {[["players","Players"],["rounds","Rounds"],["matches","Matches"],["courses","Courses"],["tournament","Tournament"]].map(([k, lbl]) => (
           <button key={k} onClick={() => setTab(k)} style={{
             flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: 10, fontWeight: 700, cursor: "pointer", border: "none",
             background: tab === k ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
@@ -1445,24 +1456,6 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     color: newPlayerTeam === team.id ? "#0a0804" : team.accent,
                     fontSize: 16, fontWeight: 700, cursor: "pointer", lineHeight: 1, flexShrink: 0,
                   }}>+</button>
-              </div>
-
-              {/* Team brand color — single source for this team's live colors
-                  (bc_settings/branding). Swatch previews the color that will
-                  drive the theme; a hex field or an uploaded logo both set it. */}
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, padding: "0 2px" }}>
-                <div style={{ width: 22, height: 22, borderRadius: "50%", background: brandSwatch(team.id), border: `2px solid ${BC.bdr}`, flexShrink: 0 }} />
-                <input
-                  value={brandEdit[team.id]}
-                  onChange={e => setBrandEdit(b => ({ ...b, [team.id]: e.target.value }))}
-                  placeholder="#rrggbb"
-                  style={{ width: 92, boxSizing: "border-box", padding: "6px 8px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, color: BC.t1, fontSize: 12, fontWeight: 600, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
-                />
-                <label style={{ fontSize: 11, fontWeight: 700, color: BC.t2, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, padding: "6px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>
-                  {brandBusy === team.id ? "Reading…" : "From logo"}
-                  <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => { pickLogo(team.id, e.target.files?.[0]); e.target.value = ""; }} />
-                </label>
-                <button onClick={saveBranding} style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: "#0a0804", background: BC.amber, border: "none", borderRadius: 6, padding: "6px 12px", cursor: "pointer" }}>Save</button>
               </div>
 
               {/* Expandable add card */}
@@ -2402,6 +2395,77 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               </Popup>
             );
           })()}
+        </div>
+      )}
+
+      {tab === "tournament" && (
+        <div>
+          {/* Tournament name */}
+          <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: 14, marginBottom: 16 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Tournament Name</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                value={editTournamentName}
+                onChange={e => setEditTournamentName(e.target.value)}
+                placeholder={TOURNAMENT_TITLE}
+                style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: 14, fontWeight: 700, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
+              />
+              <button
+                onClick={() => onSaveTournamentName(editTournamentName.trim() || TOURNAMENT_TITLE)}
+                style={{ flexShrink: 0, fontSize: 12, fontWeight: 700, color: "#0a0804", background: BC.amber, border: "none", borderRadius: 8, padding: "0 16px", cursor: "pointer" }}
+              >Save</button>
+            </div>
+            <div style={{ fontSize: 11, color: BC.t3, marginTop: 8, lineHeight: 1.5 }}>
+              Shown on the login screen. The year and location come from the active edition.
+            </div>
+          </div>
+
+          {/* Teams — name, imported logo, brand color */}
+          <div style={{ fontSize: 10, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Teams</div>
+          {[teams.A, teams.B].map(team => {
+            const previewLogo = brandLogoEdit[team.id] || team.logo;
+            return (
+              <div key={team.id} style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: 12, marginBottom: 10 }}>
+                {/* Name row */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 8, background: brandSwatch(team.id) + "22", border: `1px solid ${brandSwatch(team.id)}55`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
+                    {previewLogo
+                      ? <img src={previewLogo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                      : <span style={{ fontSize: 14, fontWeight: 800, color: brandSwatch(team.id) }}>{team.id}</span>}
+                  </div>
+                  <input
+                    value={editTeamNames[team.id]}
+                    onChange={e => setEditTeamNames(n => ({ ...n, [team.id]: e.target.value }))}
+                    placeholder={`Team ${team.id}`}
+                    style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "9px 10px", background: BC.inp, border: `1px solid ${brandSwatch(team.id)}55`, borderRadius: 8, color: BC.t1, fontSize: 13, fontWeight: 800, letterSpacing: 0.5, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
+                  />
+                  <button
+                    onClick={() => onSaveTeamNames({ ...teamNames, [team.id]: (editTeamNames[team.id] || "").trim() || teamNames[team.id] })}
+                    style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, color: BC.t2, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, padding: "9px 12px", cursor: "pointer", whiteSpace: "nowrap" }}
+                  >Rename</button>
+                </div>
+
+                {/* Logo import + color row */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ width: 26, height: 26, borderRadius: "50%", background: brandSwatch(team.id), border: `2px solid ${BC.bdr}`, flexShrink: 0 }} />
+                  <input
+                    value={brandEdit[team.id]}
+                    onChange={e => setBrandEdit(b => ({ ...b, [team.id]: e.target.value }))}
+                    placeholder="#rrggbb"
+                    style={{ width: 100, boxSizing: "border-box", padding: "8px 8px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, color: BC.t1, fontSize: 12, fontWeight: 600, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
+                  />
+                  <label style={{ fontSize: 11, fontWeight: 700, color: BC.t2, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, padding: "8px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>
+                    {brandBusy === team.id ? "Reading…" : "Import logo"}
+                    <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => { pickLogo(team.id, e.target.files?.[0]); e.target.value = ""; }} />
+                  </label>
+                  <button onClick={saveBranding} style={{ marginLeft: "auto", flexShrink: 0, fontSize: 11, fontWeight: 700, color: "#0a0804", background: BC.amber, border: "none", borderRadius: 6, padding: "8px 14px", cursor: "pointer" }}>Save</button>
+                </div>
+                <div style={{ fontSize: 10, color: BC.t3, marginTop: 6, lineHeight: 1.4 }}>
+                  Import a logo to set the team badge and auto-fill its color, or enter a hex. Save applies it live across the app.
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
       <ConfirmModal modal={confirmModal} />
@@ -4777,6 +4841,9 @@ export default function App() {
   // The saved team-name overrides (from the bc_settings/team_names doc).
   // Defaults come from constants so the fallback names live in one place.
   const [teamNames, setTeamNames] = useState(DEFAULT_TEAM_NAMES);
+  // Director-set tournament name (bc_settings/tournament). Falls back to the
+  // TOURNAMENT_TITLE constant, so the login screen always has a name.
+  const [tournamentName, setTournamentName] = useState(TOURNAMENT_TITLE);
   // Theme state — toggled via the More menu. The actual color values live in
   // the module-level BC object (mutated by applyBCTheme); this state's only
   // job is to trigger a top-level re-render so children re-read fresh BC
@@ -4806,8 +4873,8 @@ export default function App() {
   const teams = useMemo(() => {
     const base = resolveTeams(teamNames);
     return {
-      A: { ...base.A, accent: BC.teamA, color: BC.teamADim, glow: BC.teamAGlow },
-      B: { ...base.B, accent: BC.teamB, color: BC.teamBDim, glow: BC.teamBGlow },
+      A: { ...base.A, accent: BC.teamA, color: BC.teamADim, glow: BC.teamAGlow, logo: brand?.teamA?.logo || base.A.logo },
+      B: { ...base.B, accent: BC.teamB, color: BC.teamBDim, glow: BC.teamBGlow, logo: brand?.teamB?.logo || base.B.logo },
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamNames, brand, darkMode]);
@@ -4923,6 +4990,8 @@ export default function App() {
     unsubs.push(db.subscribe("bc_settings", f, rows => {
       const tn = rows.find(r => r.id === "team_names");
       if (tn) setTeamNames({ A: tn.teamA || DEFAULT_TEAM_NAMES.A, B: tn.teamB || DEFAULT_TEAM_NAMES.B });
+      const tourn = rows.find(r => r.id === "tournament");
+      setTournamentName(tourn?.name?.trim() || TOURNAMENT_TITLE);
       // Branding: apply to the live BC theme immediately (using the current
       // mode via ref), then store it so a later theme toggle re-applies it.
       const br = rows.find(r => r.id === "branding");
@@ -5167,7 +5236,7 @@ export default function App() {
 
   const availableRounds = useMemo(() => [...new Set(enrichedMatches.map(m => m.round))].sort(), [enrichedMatches]);
 
-  if (!user) return <LoginScreen players={tPlayers} teams={teams} darkMode={darkMode} onLogin={p => { setUser({ ...p, isDirector: !!p.isDirector }); }} />;
+  if (!user) return <LoginScreen players={tPlayers} teams={teams} darkMode={darkMode} tournamentName={tournamentName} onLogin={p => { setUser({ ...p, isDirector: !!p.isDirector }); }} />;
 
   // Bottom-nav items. The Practice tab (formerly "Mash") was relocated
   // to the More menu and is gated to directors only — practice rounds
@@ -5264,11 +5333,10 @@ export default function App() {
       {/* Content */}
       <div className="bc-app-body" style={{
         flex: 1, overflowY: "auto", overflowX: "hidden",
-        // Bottom padding clears the fixed nav exactly: the nav is
-        // minHeight 56 + its own paddingBottom (safe-area + 8) = 64 + safe.
-        // The old flat 80px both overshot on plain screens and undershot
-        // on home-indicator phones.
-        padding: "12px 10px calc(env(safe-area-inset-bottom, 0px) + 64px) 10px",
+        // Bottom padding clears the fixed nav: the nav is ~55px tall (its
+        // buttons) + the home-indicator safe area. 56 + safe clears it with
+        // no dead space and no clipping of the last row.
+        padding: "12px 10px calc(env(safe-area-inset-bottom, 0px) + 56px) 10px",
         // Vertical centering for short views (affects EVERY tab). This was
         // previously `display:grid; align-content:safe center`, but Safari
         // doesn't support the `safe` overflow-alignment keyword — it drops
@@ -5423,6 +5491,11 @@ export default function App() {
               setBrand(b);
               await db.upsert("bc_settings", { id: "branding", tournament_id: TOURNAMENT_ID, teamA: b.teamA, teamB: b.teamB });
             }}
+            tournamentName={tournamentName}
+            onSaveTournamentName={async (name) => {
+              setTournamentName(name);
+              await db.upsert("bc_settings", { id: "tournament", tournament_id: TOURNAMENT_ID, name });
+            }}
             hcpOverridesFromDb={hcpOverridesData}
             teeAssignmentsFromDb={teeAssignmentsData}
             roundLocks={roundLocksData}
@@ -5438,8 +5511,11 @@ export default function App() {
 
       <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={() => setUser(null)} user={user} view={view} darkMode={darkMode} onToggleTheme={toggleTheme} />
 
-      {/* Bottom Nav */}
-      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: BC.card, borderTop: `1px solid ${BC.bdr}`, zIndex: 100, paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)" }}>
+      {/* Bottom Nav — hugs the bottom edge. paddingBottom is JUST the
+          home-indicator safe area (0 on non-notch devices / in-browser), so
+          there's no dead space beneath the labels; the 8px breathing room
+          that used to live here was redundant with the buttons' own padding. */}
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: BC.card, borderTop: `1px solid ${BC.bdr}`, zIndex: 100, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
       <div style={{ maxWidth: 520, margin: "0 auto", display: "flex" }}>
         {navItems.map(item => {
           const active = view === item.key;
@@ -5449,8 +5525,8 @@ export default function App() {
               if (item.key === "menu") { setMenuOpen(true); return; }
               setView(item.key);
             }} style={{
-              flex: 1, padding: "8px 4px 10px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 3,
-              background: "transparent", border: "none", cursor: "pointer", minHeight: 56,
+              flex: 1, padding: "7px 4px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
+              background: "transparent", border: "none", cursor: "pointer", minHeight: 52,
             }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 24 }}>
                 {renderIcon(item.icon, active)}
