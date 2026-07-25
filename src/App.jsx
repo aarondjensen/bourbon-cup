@@ -29,29 +29,13 @@ import { EditionSwitcher } from "./components/EditionSwitcher";
 import { GhinLinkButton, GhinSyncButton } from "./components/GhinLink";
 
 // ── Bottom-nav safe-area cushion ──────────────────────────────────
-// On a device with a home indicator, env(safe-area-inset-bottom) is 34pt.
-// Reserving all of it as padding UNDER the nav leaves a tall band of
-// BC.card below the labels — and card (#161618) vs bg (#0a0a0b) are close
-// enough in dark mode that the band reads as empty space beneath the bar
-// rather than as part of it. (Halving the inset, the earlier workaround,
-// only made the band shorter.)
-//
-// Two changes: the cushion is clamped to the clearance the labels actually
-// need, and it lives INSIDE the nav buttons rather than as padding on the
-// bar. So the bar's background runs to the true bottom edge and every pixel
-// of the cushion is tappable — there is no inert strip anywhere.
-//
-// Sizing, on an iPhone 16 Pro (874pt tall): 8pt button padding + 10pt here
-// puts the label/underline bottom at 856pt. The home indicator starts at
-// ~862pt, so the labels clear it with ~6pt to spare and nothing lands in
-// the bottom gesture area, where iOS eats taps.
-//
-// Single knob — everything that stacks on the nav reads this value:
-//   raise 10px  → more breathing room under the labels
-//   "0px"       → bar content flush to the edge (labels WILL sit under the
-//                 home indicator and taps there get unreliable)
-//   plain env() → full iOS-standard inset, and the band comes back
-const NAV_SAFE_PAD = "min(env(safe-area-inset-bottom, 0px), 10px)";
+// Full iOS home-indicator inset (34pt on devices that have one) plus 8pt,
+// applied as paddingBottom on the fixed nav bar so the labels clear the
+// home indicator. This is the pre-2026-07-21 value: the interim "navfix"
+// rework made the nav an in-flow flex child and clamped this to 10px, which
+// left the bar mis-seated on real devices. Restoring the fixed bar (pinned
+// to the viewport bottom) with the full inset is the known-good layout.
+const NAV_SAFE_PAD = "calc(env(safe-area-inset-bottom, 0px) + 8px)";
 
 // ── TEMPORARY viewport diagnostic ─────────────────────────────────
 // Delete VP_DEBUG, BUILD_TAG, the ViewportDebug component, navRef and the
@@ -62,7 +46,7 @@ const NAV_SAFE_PAD = "min(env(safe-area-inset-bottom, 0px), 10px)";
 // home-screen app will happily serve a cached index.html for a long time,
 // and there is no way to tell that apart from a CSS bug by looking at the
 // layout alone — which is exactly the ambiguity that cost us a round trip.
-const VP_DEBUG = true;
+const VP_DEBUG = false;
 const BUILD_TAG = "navfix-4";
 
 function ViewportDebug({ navRef }) {
@@ -5467,12 +5451,11 @@ export default function App() {
       {/* Content */}
       <div className="bc-app-body" style={{
         flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden",
-        // No nav-clearance padding any more. The nav is an in-flow sibling
-        // below the shell rather than a fixed overlay, so it can't cover
-        // content and there's nothing to compensate for. This padding used
-        // to be `calc(env(safe-area-inset-bottom) + 64px)` and was itself a
-        // source of the trailing gap whenever it exceeded the nav's height.
-        padding: "12px 10px",
+        // Bottom clearance for the FIXED nav bar (restored pre-2026-07-21
+        // layout). The nav is position:fixed over the viewport bottom, so the
+        // scroll area must reserve room or its last rows hide behind the bar.
+        // Nav height ≈ 56 (button) + 8 + safe-area-inset-bottom, so clear that.
+        padding: `12px 10px calc(64px + env(safe-area-inset-bottom, 0px)) 10px`,
         // Vertical centering for short views (affects EVERY tab). This was
         // previously `display:grid; align-content:safe center`, but Safari
         // doesn't support the `safe` overflow-alignment keyword — it drops
@@ -5648,19 +5631,16 @@ export default function App() {
       <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={() => setUser(null)} user={user} view={view} darkMode={darkMode} onToggleTheme={toggleTheme} />
       </div>
 
-      {/* Bottom Nav — an IN-FLOW flex child of the shell, and the LAST one.
-          The chain that puts it on the physical bottom edge:
-            shell  position:fixed; inset:0 → bottom edge = webview bottom
-            body   flex: 1                 → absorbs all free space
-            nav    flexShrink: 0           → natural height, hard against it
-          The bar carries NO bottom padding of its own, so its background
-          runs all the way to that edge. The home-indicator cushion lives
-          INSIDE the buttons instead (NAV_SAFE_PAD) — same clearance for the
-          labels, but the cushion is part of the tappable bar rather than an
-          inert strip of BC.card sitting below it. That strip was the
-          original complaint: card (#161618) and bg (#0a0a0b) are close
-          enough in dark mode that it read as a gap. */}
-      <div ref={navRef} style={{ flexShrink: 0, width: "100%", background: BC.card, borderTop: `1px solid ${BC.bdr}` }}>
+      {/* Bottom Nav — FIXED to the viewport bottom (restored pre-2026-07-21
+          layout). Being position:fixed, it pins to the true viewport bottom
+          regardless of how the app shell is sized — which is why this is the
+          robust approach: even if the shell's computed bottom edge is off (as
+          it was on real devices with the in-flow "navfix" version), the bar
+          still seats on the physical bottom. The full safe-area inset as
+          paddingBottom keeps the labels clear of the home indicator. The
+          scroll area reserves matching clearance so content never hides
+          behind the bar. */}
+      <div ref={navRef} style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: BC.card, borderTop: `1px solid ${BC.bdr}`, zIndex: 100, paddingBottom: NAV_SAFE_PAD }}>
       <div style={{ maxWidth: 520, margin: "0 auto", display: "flex" }}>
         {navItems.map(item => {
           const active = view === item.key;
@@ -5670,8 +5650,8 @@ export default function App() {
               if (item.key === "menu") { setMenuOpen(true); return; }
               setView(item.key);
             }} style={{
-              flex: 1, padding: `8px 4px calc(8px + ${NAV_SAFE_PAD})`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 3,
-              background: "transparent", border: "none", cursor: "pointer", minHeight: 54,
+              flex: 1, padding: "8px 4px 10px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 3,
+              background: "transparent", border: "none", cursor: "pointer", minHeight: 56,
             }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 24 }}>
                 {renderIcon(item.icon, active)}
