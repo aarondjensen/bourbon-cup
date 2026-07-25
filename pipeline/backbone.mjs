@@ -4,8 +4,14 @@
 // Match-status (hole_result/status_after, comebacks, H2H) is Phase 2 off the scorecards.
 
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { buildResolver, norm } from "./players.mjs";
+
+// Generated artifacts land in the repo's data/ dir (resolved from this
+// script's location, so it works regardless of the current directory) —
+// not a machine-specific absolute path.
+const DATA_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "data");
 
 // ── canonical identity (shared registry) ────────────────────────────────────
 const resolve = buildResolver();
@@ -153,7 +159,7 @@ for(const d of dirs){
   else console.log("   ✓ validation PASS — 18 holes/round, hole-net Σ = stated net total");
   if(softStrokes) console.log(`   · note: ${softStrokes} holes where derived stroke-alloc ≠ sheet net (expected in dots/scramble; sheet net is authoritative)`);
 }
-const outPath="/mnt/user-data/outputs/bourbon-cup-backbone.json";
+const outPath=join(DATA_DIR, "bourbon-cup-backbone.json");
 let merged=all;
 if(MERGE){
   let prior={playerHole:[],playerRound:[]};

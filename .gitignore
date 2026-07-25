@@ -24,3 +24,7 @@ dist-ssr
 *.sw?
 
 .vercel
+
+# Pipeline-generated SQLite (regenerate with pipeline/phase3.mjs; the CSV
+# sheets + *.json facts are the source of truth for historical stats)
+data/*.db

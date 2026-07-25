@@ -4,8 +4,12 @@
 //   2man_scramble                          → read cumulative status row (shared ball, blend pre-applied)
 
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { buildResolver, displayName as N } from "./players.mjs";
+
+// Repo data/ dir, resolved from this script's location (see backbone.mjs).
+const DATA_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "data");
 
 const resolve = buildResolver();
 const norm = s => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -21,7 +25,7 @@ const sign=x=>x>0?1:x<0?-1:0;
 const dir=process.argv[2];
 const APPEND=process.argv.includes("--append");
 const year=+String(dir).match(/\d{4}/)?.[0];
-const backbone=JSON.parse(readFileSync("/mnt/user-data/outputs/bourbon-cup-backbone.json","utf8"));
+const backbone=JSON.parse(readFileSync(join(DATA_DIR, "bourbon-cup-backbone.json"),"utf8"));
 const PR=backbone.playerRound, PH=backbone.playerHole;
 const roundFact=(p,r)=>PR.find(x=>x.player===p&&x.round===r&&x.year===year);
 const holes=(p,r)=>PH.filter(x=>x.player===p&&x.round===r&&x.year===year).sort((a,b)=>a.hole-b.hole);
@@ -154,11 +158,11 @@ for(const [r,f] of Object.entries(fmtByRound)){
   for(const g of ["G1","G2","G3","G4"]){ const rows=scfile(`R${r}_${g}`); if(rows) processCard(+r,f,rows); }
 }
 
-const outPath="/mnt/user-data/outputs/bourbon-cup-matchfacts.json";
+const outPath=join(DATA_DIR, "bourbon-cup-matchfacts.json");
 let prior=[];
 if(APPEND){ try{ prior=JSON.parse(readFileSync(outPath,"utf8")).matchFacts.filter(m=>m.year!==year); }catch{} }
 writeFileSync(outPath,JSON.stringify({matchFacts:[...prior,...matchFacts]},null,2));
-writeFileSync(`/mnt/user-data/outputs/bourbon-cup-${year}-full.json`,
+writeFileSync(join(DATA_DIR, `bourbon-cup-${year}-full.json`),
   JSON.stringify({playerHole:PH.filter(h=>h.year===year),playerRound:PR.filter(p=>p.year===year),matchFacts},null,2));
 
 console.log(`Phase 2 \u2014 ${year}: ${matchFacts.length} match rows`);

@@ -75,6 +75,13 @@ export const getEffectiveHI = (pid, players, overrides) => {
 // allocation. Used by both tournament and practice scoring paths so the
 // dots displayed on scoring screens always match what the leaderboard
 // math actually used.
+// Hole par / stroke-index tables with the standard fallbacks, resolved in one
+// place. A round lock's frozen tables win over the live course doc, which wins
+// over a neutral default (par 4 everywhere / a plain 1-18 stroke index). Pass
+// the lock only where one applies; most callers just have a course.
+export const resolveHolePars = (course, lock) => lock?.hole_pars || course?.hole_pars || Array(18).fill(4);
+export const resolveHoleHcps = (course, lock) => lock?.hole_handicaps || course?.hole_handicaps || Array(18).fill(9);
+
 export const buildStrokeMap = (ch, holeHcps) => {
   const sorted = holeHcps.map((h, i) => ({ idx: i, hcp: h })).sort((a, b) => a.hcp - b.hcp);
   const map = {};
@@ -174,8 +181,8 @@ export const getRoundCourseCtx = ({ roundLocks, round, tRounds, courses }) => {
     lock,
     tr,
     course,
-    holePars: lock?.hole_pars || course?.hole_pars || Array(18).fill(4),
-    holeHcps: lock?.hole_handicaps || course?.hole_handicaps || Array(18).fill(9),
+    holePars: resolveHolePars(course, lock),
+    holeHcps: resolveHoleHcps(course, lock),
   };
 };
 
@@ -377,12 +384,20 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
     else status = "AS";
   }
 
+  // Per-player adjusted stroke maps (low-man or full, per the round's mode) —
+  // the exact strokes this result was scored with. Exposed so score-entry and
+  // scorecard views render dots from the SAME allocation instead of mirroring
+  // this function's internals.
+  const strokeMaps = {};
+  allPids.forEach(pid => { strokeMaps[pid] = getAdjustedStrokeMap(pid); });
+
   return {
     holes: holeResults,
     front, back, overall,
     frontPts, backPts, overallPts,
     status,
     holesPlayed: playedHoles.length,
+    strokeMaps,
     totalPts: {
       A: (frontPts.A || 0) + (backPts.A || 0) + (overallPts.A || 0),
       B: (frontPts.B || 0) + (backPts.B || 0) + (overallPts.B || 0),
@@ -415,8 +430,7 @@ export function computePracticeMatch({ match, scores, course, players, hcpOverri
   const empty = { holes: Array(18).fill({ result: null, n1: null, n2: null }), running: Array(18).fill(0), thru: 0, matchResultText: "—", winnerTeamId: null, clinched: false, endHole: 17, holesWon1: 0, holesWon2: 0, dormie: false };
   if (!course || !match) return empty;
 
-  const holePars = course.hole_pars || Array(18).fill(4);
-  const holeHcps = course.hole_handicaps || Array(18).fill(9);
+  const holeHcps = resolveHoleHcps(course);
 
   const t1Pids = [match.team1.player1, match.team1.player2].filter(Boolean);
   const t2Pids = [match.team2.player1, match.team2.player2].filter(Boolean);
@@ -534,7 +548,7 @@ export function computePracticeSkins({ scores, players, course, hcpOverrides, te
   const result = { gross: {}, net: {}, strokeMaps: {} };
   if (!course || !players.length) return result;
 
-  const holeHcps = course.hole_handicaps || Array(18).fill(9);
+  const holeHcps = resolveHoleHcps(course);
   const getHI = (pid) => getEffectiveHI(pid, players, hcpOverrides);
   const getCH = (pid) => calcCHForCourse(getHI(pid), course, teeName);
 

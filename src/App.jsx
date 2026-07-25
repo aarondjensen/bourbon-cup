@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { BC, applyBCTheme, initialBCMode } from "./theme";
-import { db, TOURNAMENT_ID } from "./firebase";
+import { db, TOURNAMENT_ID, getTournamentYear } from "./firebase";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
-  TEAM_A, TEAM_B, getTeam, oppTeam,
-  FORMATS, NASSAU_DEFAULT, PRACTICE_TEAM_COLORS, DIRECTOR_CODE,
+  resolveTeams, DEFAULT_TEAM_NAMES, TOURNAMENT_TITLE, TOURNAMENT_LOCATION,
+  FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT, PRACTICE_TEAM_COLORS, DIRECTOR_CODE,
 } from "./constants";
 import {
   calcCH, calcCHForCourse, fmtScore,
-  getEffectiveHI, buildStrokeMap,
+  getEffectiveHI, buildStrokeMap, resolveHolePars, resolveHoleHcps,
   computeMatchResult, computePracticeMatch, computePracticeSkins,
   getRoundCH, getRoundHI, getRoundTee, getRoundHandicapMode, lockForRound,
 } from "./scoring";
@@ -20,7 +20,11 @@ import {
   LOCK_OPEN, LOCK_FINAL, LOCK_STATE_LABEL,
 } from "./lib/roundLocks";
 import { usePullToRefresh } from "./lib/usePullToRefresh";
+import { processLogo } from "./lib/logoBrand";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { Popup, ConfirmModal } from "./components/Popup";
+import { SegmentedToggle, Banner, Toast } from "./components/ui";
+import { useConfirm } from "./lib/useConfirm";
 import { EditionSwitcher } from "./components/EditionSwitcher";
 import { GhinLinkButton, GhinSyncButton } from "./components/GhinLink";
 
@@ -115,7 +119,7 @@ function Notif({ notif }) {
 }
 
 // ── Login Screen ──
-function LoginScreen({ players, onLogin, teamNames, darkMode }) {
+function LoginScreen({ players, onLogin, teams, darkMode }) {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
@@ -131,8 +135,10 @@ function LoginScreen({ players, onLogin, teamNames, darkMode }) {
   // outline definition against the cream paper of light mode, and the
   // on-white logo's dark elements disappear against dark-mode charcoal.
   // Shot Callers ships a single logo so it isn't theme-swapped.
-  const teamA = { ...TEAM_A, name: teamNames?.A || TEAM_A.name, logo: darkMode ? LOGO_TEAM_A : LOGO_TEAM_A_WHITE };
-  const teamB = { ...TEAM_B, name: teamNames?.B || TEAM_B.name };
+  // Names come from the resolved `teams`; the login screen additionally
+  // swaps team A's logo for the light-bg variant when in light mode.
+  const teamA = { ...teams.A, logo: darkMode ? LOGO_TEAM_A : LOGO_TEAM_A_WHITE };
+  const teamB = teams.B;
 
   const teamAPlayers = players.filter(p => p.team === "A");
   const teamBPlayers = players.filter(p => p.team === "B");
@@ -162,8 +168,8 @@ function LoginScreen({ players, onLogin, teamNames, darkMode }) {
 
       {/* Title — sits above the silhouette, outside content card */}
       <div style={{ textAlign: "center", position: "relative", zIndex: 1, marginBottom: 14 }}>
-        <div style={{ fontSize: "clamp(20px, 8vw, 28px)", fontWeight: 800, color: BC.gold, letterSpacing: 2 }}>THE BOURBON CUP</div>
-        <div style={{ fontSize: "clamp(10px, 3vw, 12px)", color: BC.t3, letterSpacing: "0.3em", marginTop: 3 }}>2026 GAYLORD, MI</div>
+        <div style={{ fontSize: "clamp(20px, 8vw, 28px)", fontWeight: 800, color: BC.gold, letterSpacing: 2 }}>{TOURNAMENT_TITLE.toUpperCase()}</div>
+        <div style={{ fontSize: "clamp(10px, 3vw, 12px)", color: BC.t3, letterSpacing: "0.3em", marginTop: 3 }}>{getTournamentYear()} {TOURNAMENT_LOCATION.toUpperCase()}</div>
       </div>
 
       {/* Desktop centering wrapper */}
@@ -193,7 +199,7 @@ function LoginScreen({ players, onLogin, teamNames, darkMode }) {
 
       {players.length === 0 && (
         <div style={{ textAlign: "center", color: BC.t3, padding: 16, fontSize: 12, position: "relative", zIndex: 1, marginTop: 12 }}>
-          No players yet. Type <span style={{ color: BC.amber, fontWeight: 700 }}>bcdir2025</span> to set up.
+          No players yet. Type <span style={{ color: BC.amber, fontWeight: 700 }}>{DIRECTOR_CODE}</span> to set up.
         </div>
       )}
       </div>
@@ -211,19 +217,18 @@ function LoginScreen({ players, onLogin, teamNames, darkMode }) {
 // player names, score-status pill in the middle with the green leader
 // triangle, and a two-row hole-by-hole tracker with diagonal-tied-hole
 // splits. Tap a card to expand the full scorecard.
-function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds, teamNames, hcpOverrides, teeAssignments, roundLocks }) {
+function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds, teams, hcpOverrides, teeAssignments, roundLocks }) {
   const [expandedMatch, setExpandedMatch] = useState(null);
   const [activeRound, setActiveRound] = useState(null); // null = show all rounds
 
-  const tA = { ...TEAM_A, name: teamNames?.A || TEAM_A.name };
-  const tB = { ...TEAM_B, name: teamNames?.B || TEAM_B.name };
+  const { A: tA, B: tB } = teams;
 
   // Pre-compute every match's result once so we can use it across the
   // tournament-totals banner, the per-round headers, and the per-match
   // cards without recomputing.
   const matchResults = useMemo(() => {
     return matches.map(m => {
-      const fmt = tRounds.find(t => t.round_number === m.round)?.format || "singles";
+      const fmt = tRounds.find(t => t.round_number === m.round)?.format || DEFAULT_FORMAT;
       const res = computeMatchResult(m, holeData, courses, tRounds, tPlayers, fmt, hcpOverrides, undefined, teeAssignments, roundLocks);
       return { match: m, result: res, format: fmt };
     });
@@ -270,9 +275,7 @@ function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds
           gets the deeper text color; the team behind gets a muted
           variant. The numeric to-win is always available. */}
       <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 10, overflow: "hidden" }}>
-        <div style={{ padding: "8px 14px", background: BC.amber, textAlign: "center" }}>
-          <div style={{ fontSize: 11, color: "#fff", fontWeight: 800, letterSpacing: 2 }}>TEAMS</div>
-        </div>
+        <Banner>TEAMS</Banner>
         {[
           { team: tA, pts: tourneyTotals.A },
           { team: tB, pts: tourneyTotals.B },
@@ -456,7 +459,7 @@ function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds
 
                   {isExpanded && (
                     <div style={{ padding: 10, borderTop: `1px solid ${BC.bdr}`, background: BC.bg }}>
-                      <MatchScorecard match={m} result={r} format={format} courses={courses} tRounds={tRounds} />
+                      <MatchScorecard match={m} result={r} format={format} courses={courses} tRounds={tRounds} teams={teams} />
                     </div>
                   )}
                 </div>
@@ -494,10 +497,11 @@ function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds
 
 
 // ── Match Scorecard ──
-function MatchScorecard({ match, result, format, courses, tRounds }) {
+function MatchScorecard({ match, result, format, courses, tRounds, teams }) {
+  const tA = teams.A, tB = teams.B;
   const tr = tRounds.find(t => t.round_number === match.round);
   const course = courses.find(c => c.id === tr?.course_id);
-  const holePars = course?.hole_pars || Array(18).fill(4);
+  const holePars = resolveHolePars(course);
   const holes = result.holes;
 
   const renderSegment = (start, end, label) => (
@@ -519,24 +523,24 @@ function MatchScorecard({ match, result, format, courses, tRounds }) {
         {/* Team A scores */}
         {holes.slice(start, end).map((h, i) => (
           <div key={i} style={{ textAlign: "center", fontSize: 10, fontWeight: 700,
-            color: h.winner === "A" ? TEAM_A.accent : h.winner === "B" ? BC.t3 : BC.t2,
-            background: h.winner === "A" ? TEAM_A.color + "33" : "transparent", borderRadius: 4, padding: "1px 0" }}>
+            color: h.winner === "A" ? tA.accent : h.winner === "B" ? BC.t3 : BC.t2,
+            background: h.winner === "A" ? tA.color + "33" : "transparent", borderRadius: 4, padding: "1px 0" }}>
             {h.aScore != null ? h.aScore : "·"}
           </div>
         ))}
-        <div style={{ textAlign: "center", fontSize: 10, fontWeight: 700, color: TEAM_A.accent }}>
+        <div style={{ textAlign: "center", fontSize: 10, fontWeight: 700, color: tA.accent }}>
           {holes.slice(start, end).filter(h => h.winner === "A").length}
         </div>
 
         {/* Team B scores */}
         {holes.slice(start, end).map((h, i) => (
           <div key={i} style={{ textAlign: "center", fontSize: 10, fontWeight: 700,
-            color: h.winner === "B" ? TEAM_B.accent : h.winner === "A" ? BC.t3 : BC.t2,
-            background: h.winner === "B" ? TEAM_B.color + "33" : "transparent", borderRadius: 4, padding: "1px 0" }}>
+            color: h.winner === "B" ? tB.accent : h.winner === "A" ? BC.t3 : BC.t2,
+            background: h.winner === "B" ? tB.color + "33" : "transparent", borderRadius: 4, padding: "1px 0" }}>
             {h.bScore != null ? h.bScore : "·"}
           </div>
         ))}
-        <div style={{ textAlign: "center", fontSize: 10, fontWeight: 700, color: TEAM_B.accent }}>
+        <div style={{ textAlign: "center", fontSize: 10, fontWeight: 700, color: tB.accent }}>
           {holes.slice(start, end).filter(h => h.winner === "B").length}
         </div>
       </div>
@@ -546,9 +550,9 @@ function MatchScorecard({ match, result, format, courses, tRounds }) {
   return (
     <div style={{ padding: "0 14px 14px", borderTop: `1px solid ${BC.bdr}` }}>
       <div style={{ display: "flex", gap: 4, marginBottom: 8, marginTop: 10, justifyContent: "space-between" }}>
-        <span style={{ fontSize: 9, color: TEAM_A.accent, fontWeight: 700 }}>{match.teamANames?.join(" / ")}</span>
+        <span style={{ fontSize: 9, color: tA.accent, fontWeight: 700 }}>{match.teamANames?.join(" / ")}</span>
         <span style={{ fontSize: 9, color: BC.t3 }}>vs</span>
-        <span style={{ fontSize: 9, color: TEAM_B.accent, fontWeight: 700 }}>{match.teamBNames?.join(" / ")}</span>
+        <span style={{ fontSize: 9, color: tB.accent, fontWeight: 700 }}>{match.teamBNames?.join(" / ")}</span>
       </div>
       {renderSegment(0, 9, "FRONT NINE")}
       {renderSegment(9, 18, "BACK NINE")}
@@ -567,7 +571,7 @@ function MatchScorecard({ match, result, format, courses, tRounds }) {
 // uses computeMatchResult/calcCHForCourse — but the visual presentation now
 // matches the rest of the app. Round selector at the top supports the multi-
 // round structure that the original Mash sub-app didn't have.
-function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teamNames, hcpOverrides, teeAssignments, roundLocks }) {
+function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teams, hcpOverrides, teeAssignments, roundLocks }) {
   const userPid = user.player_id;
   const myMatches = matches.filter(m => [...m.teamA, ...m.teamB].includes(userPid));
 
@@ -587,13 +591,13 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // derivation off whatever the course/handicap data says right now.
   const lock = match ? lockForRound(roundLocks, match.round) : null;
   const course = (lock || tr) ? courses.find(c => c.id === (lock?.course_id || tr?.course_id)) : null;
-  const format = tr?.format || "singles";
+  const format = tr?.format || DEFAULT_FORMAT;
   // Per-round default tee — used as a per-player fallback in stroke maps
   // below. Per-player assignments from `teeAssignments[round][pid]` take
   // precedence; this is the "everyone is on the same tee" default.
   const roundTee = tr?.tee_box;
-  const holePars = lock?.hole_pars || course?.hole_pars || Array(18).fill(4);
-  const holeHcps = lock?.hole_handicaps || course?.hole_handicaps || Array(18).fill(9);
+  const holePars = resolveHolePars(course, lock);
+  const holeHcps = resolveHoleHcps(course, lock);
   const par = holePars[activeHole];
   const hcp = holeHcps[activeHole];
 
@@ -611,30 +615,11 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     return (holeData[`${pid}_${match.round}`] || {})[h] || 0;
   };
 
-  // Per-player stroke maps for this match. Mirrors computeMatchResult's
-  // internal allocation EXACTLY (same shared helpers, same per-player tee
-  // resolution) so the dots shown on the scoring screen always match the
-  // strokes used in the leaderboard math.
-  const strokeMaps = useMemo(() => {
-    const maps = {};
-    if (!match || (!course && !lock)) return maps;
-    // Same resolvers computeMatchResult uses, so a locked round's dots can
-    // never disagree with the leaderboard — both read the frozen snapshot.
-    const holeHcpsLocal = lock?.hole_handicaps || course?.hole_handicaps || Array(18).fill(9);
-    const getCH = (pid) => getRoundCH({
-      roundLocks, round: match.round, pid, players: tPlayers,
-      course, hcpOverrides, teeAssignments, roundTee,
-    });
-    const allCHs = matchPids.map(getCH);
-    const minCH = allCHs.length ? Math.min(...allCHs) : 0;
-    const roundHandicapMode = getRoundHandicapMode({ roundLocks, round: match.round, tRounds });
-    matchPids.forEach(pid => {
-      const ch = getCH(pid);
-      const adj = roundHandicapMode === "full" ? ch : ch - minCH;
-      maps[pid] = buildStrokeMap(adj, holeHcpsLocal);
-    });
-    return maps;
-  }, [match, course, lock, tPlayers, hcpOverrides, teeAssignments, roundLocks, roundTee, tRounds, matchPids.join(",")]);
+  // Per-player stroke maps for this match come straight from the result the
+  // leaderboard is computed with (computeMatchResult now exposes them), so the
+  // dots on the scoring screen and the strokes in the leaderboard math can
+  // never diverge — one allocation, one source.
+  const strokeMaps = result?.strokeMaps || {};
 
   // ── Auto-advance state derivations ──
   const holeComplete = matchPids.length > 0 && matchPids.every(pid => getScore(pid, activeHole) > 0);
@@ -715,8 +700,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   }
   const goToHole = (h) => { setActiveHole(h); setEditing(h < liveEdge); };
 
-  const tA = { ...TEAM_A, name: teamNames?.A || TEAM_A.name };
-  const tB = { ...TEAM_B, name: teamNames?.B || TEAM_B.name };
+  const { A: tA, B: tB } = teams;
 
   const onTapScore = async (pid, score) => {
     const cur = getScore(pid, activeHole);
@@ -981,65 +965,40 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
       {/* Scorecard modal — uses the existing MatchScorecard component
           which already renders both teams and 18 holes for the main app. */}
       {showScorecard && (
-        <div onClick={() => setShowScorecard(false)} style={{
-          position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 500,
-          display: "flex", alignItems: "center", justifyContent: "center", padding: 12,
-        }}>
-          <div onClick={e => e.stopPropagation()} style={{
-            background: BC.card, borderRadius: 12, border: `1px solid ${BC.amber}44`, width: "100%",
-            maxWidth: 480, maxHeight: "calc(100vh - 48px)", overflowY: "auto",
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderBottom: `1px solid ${BC.bdr}` }}>
-              <div style={{ fontSize: 12, fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>SCORECARD — RD {match.round}</div>
-              <button onClick={() => setShowScorecard(false)} style={{
-                background: "transparent", border: "none", color: BC.t2, fontSize: 18, cursor: "pointer", padding: "0 4px",
-              }}>×</button>
-            </div>
-            <div style={{ padding: 12 }}>
-              <MatchScorecard match={match} result={result} format={format} courses={courses} tRounds={tRounds} />
-            </div>
+        <Popup onClose={() => setShowScorecard(false)} maxWidth={480} padding={0} outerPadding={12}
+          innerStyle={{ background: BC.card, border: `1px solid ${BC.amber}44`, borderRadius: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderBottom: `1px solid ${BC.bdr}` }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>SCORECARD — RD {match.round}</div>
             <button onClick={() => setShowScorecard(false)} style={{
-              display: "block", width: "calc(100% - 24px)", margin: "0 auto 12px",
-              padding: "10px 0", background: BC.inp, border: `1px solid ${BC.bdr}`,
-              borderRadius: 8, color: BC.t2, fontSize: 13, fontWeight: 600,
-              cursor: "pointer", letterSpacing: 0.4,
-            }}>
-              Close
-            </button>
+              background: "transparent", border: "none", color: BC.t2, fontSize: 18, cursor: "pointer", padding: "0 4px",
+            }}>×</button>
           </div>
-        </div>
+          <div style={{ padding: 12 }}>
+            <MatchScorecard match={match} result={result} format={format} courses={courses} tRounds={tRounds} teams={teams} />
+          </div>
+          <button onClick={() => setShowScorecard(false)} style={{
+            display: "block", width: "calc(100% - 24px)", margin: "0 auto 12px",
+            padding: "10px 0", background: BC.inp, border: `1px solid ${BC.bdr}`,
+            borderRadius: 8, color: BC.t2, fontSize: 13, fontWeight: 600,
+            cursor: "pointer", letterSpacing: 0.4,
+          }}>
+            Close
+          </button>
+        </Popup>
       )}
 
       {/* Auto-advance toast — slides down from the top during the 1.8s
           wait between "all scores in" and the screen advance. Mirrors
           the Mash toast styling for cross-app visual consistency. */}
-      {toast && (
-        <>
-          <style>{`@keyframes bcToastDown { 0% { transform: translateX(-50%) translateY(-20px); opacity: 0; } 100% { transform: translateX(-50%) translateY(0); opacity: 1; } }`}</style>
-          <div style={{
-            position: "fixed", top: 30, left: "50%", transform: "translateX(-50%)",
-            background: BC.amber, color: "#0a0804",
-            padding: "12px 32px", borderRadius: 12,
-            fontSize: 13, fontWeight: 700, zIndex: 1000,
-            whiteSpace: "nowrap", textAlign: "center",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
-            animation: "bcToastDown 0.3s ease",
-            fontFamily: "'Montserrat', sans-serif",
-          }}>
-            {toast}
-          </div>
-        </>
-      )}
+      <Toast message={toast} />
     </div>
   );
 }
 
 
 // ── Groups View ──
-function GroupsView({ matches, tRounds, tPlayers, courses, teamNames }) {
+function GroupsView({ matches, tRounds, tPlayers, courses }) {
   const rounds = [...new Set(matches.map(m => m.round))].sort();
-  const tA = { ...TEAM_A, name: teamNames?.A || TEAM_A.name };
-  const tB = { ...TEAM_B, name: teamNames?.B || TEAM_B.name };
   const [activeRound, setActiveRound] = useState(rounds[0] || 1);
   const rndMatches = matches.filter(m => m.round === activeRound);
   const tr = tRounds.find(t => t.round_number === activeRound);
@@ -1069,9 +1028,7 @@ function GroupsView({ matches, tRounds, tPlayers, courses, teamNames }) {
           with details below. Anchors the round visually in the same
           visual language as the Leaderboard's TEAMS card. */}
       <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 12, overflow: "hidden" }}>
-        <div style={{ padding: "8px 14px", background: BC.amber, textAlign: "center" }}>
-          <div style={{ fontSize: 11, color: "#fff", fontWeight: 800, letterSpacing: 2 }}>ROUND {activeRound}</div>
-        </div>
+        <Banner>ROUND {activeRound}</Banner>
         <div style={{ padding: "10px 14px" }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: BC.t1 }}>{course?.name || "Course TBD"}</div>
           {fmt && <div style={{ fontSize: 11, color: BC.t3, marginTop: 2 }}>{fmt.label}{fmt.desc ? ` · ${fmt.desc}` : ""}</div>}
@@ -1129,14 +1086,45 @@ function ChDeltaBadge({ delta }) {
   );
 }
 
-function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, teamNames, onSaveTeamNames, hcpOverridesFromDb, teeAssignmentsFromDb, notify, roundLocks, onLockRound, onFinalizeRound, onClearRoundLock }) {
+function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, hcpOverridesFromDb, teeAssignmentsFromDb, notify, roundLocks, onLockRound, onFinalizeRound, onClearRoundLock }) {
   const [tab, setTab] = useState("players");
   const [editTeamNames, setEditTeamNames] = useState({ A: "", B: "" });
   const [editingTeam, setEditingTeam] = useState(null);
+  // Themed confirmations (replaces window.confirm). Host rendered at the
+  // bottom of this view; `confirm(...)` returns a Promise<boolean>.
+  const { confirm, confirmModal } = useConfirm();
 
   useEffect(() => {
     setEditTeamNames({ A: teamNames.A, B: teamNames.B });
   }, [teamNames]);
+
+  // ── Team brand colors (bc_settings/branding) ──
+  // Editable hex per team, seeded from the saved branding doc. Empty = fall
+  // back to the constants/theme default. Uploading a logo runs the same
+  // extractor the theme uses (lib/logoBrand) and drops the dominant color in.
+  const [brandEdit, setBrandEdit] = useState({ A: "", B: "" });
+  const [brandBusy, setBrandBusy] = useState(null); // team id mid-extraction
+  useEffect(() => {
+    setBrandEdit({ A: brand?.teamA?.color || "", B: brand?.teamB?.color || "" });
+  }, [brand]);
+  const isHex = (h) => /^#[0-9a-fA-F]{6}$/.test((h || "").trim());
+  const brandSwatch = (tid) => (isHex(brandEdit[tid]) ? brandEdit[tid].trim() : (tid === "A" ? BC.teamA : BC.teamB));
+  const pickLogo = async (tid, file) => {
+    if (!file) return;
+    setBrandBusy(tid);
+    try {
+      const { color } = await processLogo(file);
+      setBrandEdit(b => ({ ...b, [tid]: color }));
+    } catch { notify?.("Could not read that image", "error"); }
+    setBrandBusy(null);
+  };
+  const saveBranding = async () => {
+    await onSaveBranding({
+      teamA: isHex(brandEdit.A) ? { color: brandEdit.A.trim() } : null,
+      teamB: isHex(brandEdit.B) ? { color: brandEdit.B.trim() } : null,
+    });
+    notify?.("Team colors saved");
+  };
   const [newPlayerFirst, setNewPlayerFirst] = useState("");
   const [newPlayerLast, setNewPlayerLast] = useState("");
 
@@ -1247,7 +1235,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
       tournament_id: TOURNAMENT_ID,
       round_number: editRound,
       course_id: tr?.course_id || "",
-      format: roundFormat || tr.format || "singles",
+      format: roundFormat || tr.format || DEFAULT_FORMAT,
       handicap_mode: handicapMode[editRound] || "low_man",
       tee_time: roundTeeTime || tr.tee_time || "",
       nassau_front: nassau.front,
@@ -1415,7 +1403,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
           <div style={{ marginBottom: 12, display: "flex", justifyContent: "flex-end" }}>
             <GhinSyncButton players={tPlayers} onUpdatePlayer={onUpdatePlayer} notify={notify} />
           </div>
-          {[TEAM_A, TEAM_B].map(team => (
+          {[teams.A, teams.B].map(team => (
             <div key={team.id} style={{ marginBottom: 10 }}>
               {/* Team header with editable name */}
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, padding: "8px 12px", background: team.color + "33", borderRadius: 10, border: `1px solid ${team.accent}44` }}>
@@ -1432,7 +1420,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       if (e.key === "Enter") {
                         const newName = editTeamNames[team.id].trim();
                         if (!newName) { setEditingTeam(null); return; }
-                        if (window.confirm(`Rename to "${newName}"?`)) {
+                        if (await confirm(`Rename to "${newName}"?`)) {
                           await onSaveTeamNames({ ...teamNames, [team.id]: newName });
                         }
                         setEditingTeam(null);
@@ -1457,6 +1445,24 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     color: newPlayerTeam === team.id ? "#0a0804" : team.accent,
                     fontSize: 16, fontWeight: 700, cursor: "pointer", lineHeight: 1, flexShrink: 0,
                   }}>+</button>
+              </div>
+
+              {/* Team brand color — single source for this team's live colors
+                  (bc_settings/branding). Swatch previews the color that will
+                  drive the theme; a hex field or an uploaded logo both set it. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, padding: "0 2px" }}>
+                <div style={{ width: 22, height: 22, borderRadius: "50%", background: brandSwatch(team.id), border: `2px solid ${BC.bdr}`, flexShrink: 0 }} />
+                <input
+                  value={brandEdit[team.id]}
+                  onChange={e => setBrandEdit(b => ({ ...b, [team.id]: e.target.value }))}
+                  placeholder="#rrggbb"
+                  style={{ width: 92, boxSizing: "border-box", padding: "6px 8px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, color: BC.t1, fontSize: 12, fontWeight: 600, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
+                />
+                <label style={{ fontSize: 11, fontWeight: 700, color: BC.t2, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, padding: "6px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>
+                  {brandBusy === team.id ? "Reading…" : "From logo"}
+                  <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => { pickLogo(team.id, e.target.files?.[0]); e.target.value = ""; }} />
+                </label>
+                <button onClick={saveBranding} style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: "#0a0804", background: BC.amber, border: "none", borderRadius: 6, padding: "6px 12px", cursor: "pointer" }}>Save</button>
               </div>
 
               {/* Expandable add card */}
@@ -1518,7 +1524,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     <div
                       onTouchStart={e => { if (isEditing) return; swipeStartX.current = e.touches[0].clientX; setSwipePid(p.player_id); setSwipeX(0); }}
                       onTouchMove={e => { if (isEditing || swipeStartX.current == null) return; const dx2 = e.touches[0].clientX - swipeStartX.current; setSwipeX(Math.min(0, dx2)); }}
-                      onTouchEnd={() => { if (isEditing) return; if (swipeX < -80) { if (window.confirm(`Remove ${fullName(p)}?`)) { onRemovePlayer(p.player_id); } } setSwipePid(null); setSwipeX(0); swipeStartX.current = null; }}
+                      onTouchEnd={async () => { if (isEditing) return; const shouldAsk = swipeX < -80; setSwipePid(null); setSwipeX(0); swipeStartX.current = null; if (shouldAsk && await confirm(`Remove ${fullName(p)}?`)) onRemovePlayer(p.player_id); }}
                       style={{ background: BC.card, borderRadius: 6, padding: isEditing ? "8px" : "4px 8px", border: `1px solid ${BC.bdr}`, display: "flex", flexDirection: isEditing ? "column" : "row", alignItems: isEditing ? "stretch" : "center", gap: 6, boxShadow: `inset 3px 0 0 ${team.accent}55`, position: "relative", transform: `translateX(${dx}px)`, transition: isSwiping ? "none" : "transform 0.2s ease" }}>
                       {isEditing ? (
                         <>
@@ -1530,7 +1536,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                             <input type="number" inputMode="decimal" placeholder="HI" value={editingPlayer.hi} onChange={e => setEditingPlayer(prev => ({...prev, hi: e.target.value}))}
                               style={{ fontSize: 16, color: BC.t1, width: 76, flexShrink: 0, boxSizing: "border-box", background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 6, padding: "8px 8px", outline: "none", fontFamily: "'Montserrat', sans-serif" }} />
                             <span style={{ flex: 1 }} />
-                            <button onClick={() => {
+                            <button onClick={async () => {
                               const first = (editingPlayer.first || "").trim(), last = (editingPlayer.last || "").trim();
                               if (!first) { notify("Enter a first name", "error"); return; }
                               const newName = toDisplayName(first, last);
@@ -1545,7 +1551,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                               const impact = hiChanged
                                 ? "\n\n" + describeHiChangeImpact(roundLocks, [1, 2, 3, 4]).text
                                 : "";
-                              if (window.confirm("Confirm changes:\n" + changes.join("\n") + impact)) {
+                              if (await confirm({ title: "Confirm changes", message: changes.join("\n") + impact })) {
                                 onUpdatePlayer({ ...p, name: newName, first_name: first, last_name: last, handicap_index: parseFloat(editingPlayer.hi) || 0 });
                               }
                               setEditingPlayer(null);
@@ -1587,7 +1593,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 setEditRound(r);
                 const tr = tRounds.find(t => t.round_number === r);
                 if (tr) {
-                  setRoundFormat(tr.format || "singles");
+                  setRoundFormat(tr.format || DEFAULT_FORMAT);
                   setRoundCourse(tr.course_id || "");
                   setRoundTeeTime(tr.tee_time || "");
                   setNassau({ front: tr.nassau_front || 1, back: tr.nassau_back || 1, overall: tr.nassau_overall || 1 });
@@ -1787,11 +1793,12 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 {/* OPEN → offer a deliberate pre-lock */}
                 {!roundIsLocked && (
                   <button onClick={async () => {
-                    if (!window.confirm(
-                      `Lock handicaps for Round ${editRound}?\n\n` +
-                      `Every player's index, override, tee and the low-man setting will be frozen for this round. ` +
-                      `Later handicap changes will apply to other rounds only.`
-                    )) return;
+                    if (!(await confirm({
+                      title: `Lock handicaps for Round ${editRound}?`,
+                      message: `Every player's index, override, tee and the low-man setting will be frozen for this round. ` +
+                        `Later handicap changes will apply to other rounds only.`,
+                      confirmLabel: "Lock",
+                    }))) return;
                     await onLockRound(editRound);
                     notify(`Round ${editRound} handicaps locked`, "success");
                   }} style={{ ...BtnStyle, padding: "7px 14px", fontSize: 11 }}>Lock handicaps now</button>
@@ -1801,12 +1808,13 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 {roundIsLocked && !roundIsFinal && (
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     <button onClick={async () => {
-                      if (!window.confirm(
-                        `Re-take the Round ${editRound} snapshot?\n\n` +
-                        `This is the ONLY thing that changes a locked round's handicaps. ` +
-                        `Every player's strokes for Round ${editRound} will be recalculated from current values. ` +
-                        `Only do this if the round has not really been played yet.`
-                      )) return;
+                      if (!(await confirm({
+                        title: `Re-take the Round ${editRound} snapshot?`,
+                        message: `This is the ONLY thing that changes a locked round's handicaps. ` +
+                          `Every player's strokes for Round ${editRound} will be recalculated from current values. ` +
+                          `Only do this if the round has not really been played yet.`,
+                        confirmLabel: "Refresh",
+                      }))) return;
                       await onLockRound(editRound, { refresh: true });
                       notify(`Round ${editRound} snapshot refreshed`, "success");
                     }} style={{
@@ -1815,19 +1823,21 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     }}>Refresh snapshot</button>
 
                     <button onClick={async () => {
-                      if (!window.confirm(
-                        `Mark Round ${editRound} final?\n\n` +
-                        `Its handicaps can no longer be refreshed. Scores stay editable.`
-                      )) return;
+                      if (!(await confirm({
+                        title: `Mark Round ${editRound} final?`,
+                        message: `Its handicaps can no longer be refreshed. Scores stay editable.`,
+                        confirmLabel: "Mark final",
+                      }))) return;
                       await onFinalizeRound(editRound, true);
                       notify(`Round ${editRound} marked final`, "success");
                     }} style={{ ...BtnStyle, padding: "6px 12px", fontSize: 10 }}>Mark round final</button>
 
                     <button onClick={async () => {
-                      if (!window.confirm(
-                        `Release the Round ${editRound} lock?\n\n` +
-                        `The round goes back to live handicaps. Use this only if the round was locked by a stray score before play began.`
-                      )) return;
+                      if (!(await confirm({
+                        title: `Release the Round ${editRound} lock?`,
+                        message: `The round goes back to live handicaps. Use this only if the round was locked by a stray score before play began.`,
+                        confirmLabel: "Release",
+                      }))) return;
                       await onClearRoundLock(editRound);
                       notify(`Round ${editRound} lock released`, "success");
                     }} style={{
@@ -1883,7 +1893,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   </div>
                   {tPlayers.map(p => {
                     const e = lockedPlayerEntry(roundLocks, editRound, p.player_id);
-                    const tm = p.team === "A" ? TEAM_A : TEAM_B;
+                    const tm = teams[p.team];
                     return (
                       <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: "1fr 42px 60px 34px", gap: 4, alignItems: "center", marginBottom: 2 }}>
                         <div style={{ fontSize: 10, color: tm.accent + "aa", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
@@ -1948,7 +1958,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   </div>
                 );
               })()}
-              {[TEAM_A, TEAM_B].map((team, teamIdx) => (
+              {[teams.A, teams.B].map((team, teamIdx) => (
                 <div key={team.id} style={{ marginBottom: 4 }}>
                   {teamIdx === 1 && <div style={{ height: 1, background: BC.bdr, margin: "6px 0 8px" }} />}
                   {tPlayers.filter(p => p.team === team.id).map(p => {
@@ -1972,7 +1982,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     };
                     return (
                       <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: `1fr 30px 58px ${tees2.map(() => "22px").join(" ")} 22px`, gap: 4, alignItems: "center", marginBottom: 3 }}>
-                        <div style={{ fontSize: 11, color: (p.team === "A" ? TEAM_A : TEAM_B).accent + "88", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
+                        <div style={{ fontSize: 11, color: teams[p.team].accent + "88", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
                         <div style={{ fontSize: 10, color: BC.t3, textAlign: "center" }}>{baseHI}</div>
                         <input
                           type="number" step="0.1"
@@ -2073,7 +2083,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
           {/* Player pool — two columns by team */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
             {[["A", teamAPlayers], ["B", teamBPlayers]].map(([tid, players]) => {
-              const team = getTeam(tid);
+              const team = teams[tid];
               const sel = tid === "A" ? matchTeamA : matchTeamB;
               const setSel = tid === "A" ? setMatchTeamA : setMatchTeamB;
               return (
@@ -2108,7 +2118,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {strokes.map(({ pid, strokes: s }) => {
                   const p = tPlayers.find(t => t.player_id === pid);
-                  const team = getTeam(p?.team);
+                  const team = teams[p?.team] || teams.B;
                   return (
                     <div key={pid} style={{ background: team.color + "33", border: `1px solid ${team.accent}44`, borderRadius: 8, padding: "5px 10px", textAlign: "center" }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: team.accent }}>{p?.name?.split(" ")[0]}</div>
@@ -2139,9 +2149,9 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 {rndM.map(m => (
                   <div key={m.id} style={{ background: BC.card, borderRadius: 10, padding: "8px 12px", marginBottom: 5, border: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", gap: 8 }}>
                     <div style={{ flex: 1, fontSize: 11 }}>
-                      <span style={{ color: TEAM_A.accent+"99", fontWeight: 600 }}>{m.teamANames?.join(" / ")}</span>
+                      <span style={{ color: teams.A.accent+"99", fontWeight: 600 }}>{m.teamANames?.join(" / ")}</span>
                       <span style={{ color: BC.t3 }}> vs </span>
-                      <span style={{ color: TEAM_B.accent+"99", fontWeight: 600 }}>{m.teamBNames?.join(" / ")}</span>
+                      <span style={{ color: teams.B.accent+"99", fontWeight: 600 }}>{m.teamBNames?.join(" / ")}</span>
                     </div>
                     <button onClick={() => onSetMatch({ ...m, _delete: true })} style={{
                       fontSize: 9, padding: "3px 7px", borderRadius: 6, border: `1px solid ${BC.danger}22`, background: "transparent", color: BC.danger, cursor: "pointer", flexShrink: 0,
@@ -2182,13 +2192,13 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       return (
                         <button key={r} onClick={async () => {
                           if (isAssigned) {
-                            await onSetRound({ id: `bc_round_${r}`, tournament_id: TOURNAMENT_ID, round_number: r, course_id: null, format: tr?.format || "singles", tee_time: tr?.tee_time || "", nassau_front: tr?.nassau_front || 1, nassau_back: tr?.nassau_back || 1, nassau_overall: tr?.nassau_overall || 1 });
+                            await onSetRound({ id: `bc_round_${r}`, tournament_id: TOURNAMENT_ID, round_number: r, course_id: null, format: tr?.format || DEFAULT_FORMAT, tee_time: tr?.tee_time || "", nassau_front: tr?.nassau_front || 1, nassau_back: tr?.nassau_back || 1, nassau_overall: tr?.nassau_overall || 1 });
                           } else if (otherCourse) {
-                            if (window.confirm(`Replace ${otherCourse.name} for Rd ${r}?`)) {
-                              await onSetRound({ id: `bc_round_${r}`, tournament_id: TOURNAMENT_ID, round_number: r, course_id: c.id, format: tr?.format || "singles", tee_time: tr?.tee_time || "", nassau_front: tr?.nassau_front || 1, nassau_back: tr?.nassau_back || 1, nassau_overall: tr?.nassau_overall || 1 });
+                            if (await confirm(`Replace ${otherCourse.name} for Rd ${r}?`)) {
+                              await onSetRound({ id: `bc_round_${r}`, tournament_id: TOURNAMENT_ID, round_number: r, course_id: c.id, format: tr?.format || DEFAULT_FORMAT, tee_time: tr?.tee_time || "", nassau_front: tr?.nassau_front || 1, nassau_back: tr?.nassau_back || 1, nassau_overall: tr?.nassau_overall || 1 });
                             }
                           } else {
-                            await onSetRound({ id: `bc_round_${r}`, tournament_id: TOURNAMENT_ID, round_number: r, course_id: c.id, format: tr?.format || "singles", tee_time: tr?.tee_time || "", nassau_front: tr?.nassau_front || 1, nassau_back: tr?.nassau_back || 1, nassau_overall: tr?.nassau_overall || 1 });
+                            await onSetRound({ id: `bc_round_${r}`, tournament_id: TOURNAMENT_ID, round_number: r, course_id: c.id, format: tr?.format || DEFAULT_FORMAT, tee_time: tr?.tee_time || "", nassau_front: tr?.nassau_front || 1, nassau_back: tr?.nassau_back || 1, nassau_overall: tr?.nassau_overall || 1 });
                           }
                         }} style={{
                           padding: "3px 6px", borderRadius: 4, fontSize: 9, fontWeight: 700, cursor: "pointer", minWidth: 24, textAlign: "center",
@@ -2199,7 +2209,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       );
                     })}
                   </div>
-                  <button onClick={() => { if (window.confirm(`Remove ${c.name}?`)) onAddCourse({ ...c, _delete: true }); }} style={{ background: "transparent", border: "none", color: BC.t3, cursor: "pointer", fontSize: 14, padding: "2px 4px" }}>✕</button>
+                  <button onClick={async () => { if (await confirm(`Remove ${c.name}?`)) onAddCourse({ ...c, _delete: true }); }} style={{ background: "transparent", border: "none", color: BC.t3, cursor: "pointer", fontSize: 14, padding: "2px 4px" }}>✕</button>
                 </div>
                 {expandedCourse === c.id && (
                   <div style={{ padding: "0 14px 12px", background: BC.amber + "06" }}>
@@ -2267,8 +2277,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             const ti = { background: BC.bg, border: `1px solid ${BC.amber}30`, borderRadius: 4, color: BC.t1, fontSize: 9, textAlign: "center", width: "100%", padding: "3px 2px", boxSizing: "border-box" };
             const tiL = { ...ti, textAlign: "left", padding: "3px 5px" };
             return (
-              <div style={{ position: "fixed", top: 0, bottom: 0, left: 0, right: 0, background: "rgba(0,0,0,0.85)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-                <div style={{ background: BC.card, borderRadius: 16, border: `1px solid ${BC.amber}44`, width: "100%", maxWidth: 420, maxHeight: "calc(100vh - 48px)", overflowY: "auto", padding: 0 }}>
+              <Popup onClose={() => setCoursePreview(null)} maxWidth={420} padding={0} innerStyle={{ background: BC.card, borderRadius: 16, border: `1px solid ${BC.amber}44` }}>
 
                   {/* Header */}
                   <div style={{ padding: "14px 16px 10px", borderBottom: `1px solid ${BC.bdr}`, position: "sticky", top: 0, background: BC.card, zIndex: 1 }}>
@@ -2390,19 +2399,19 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       }} style={{ flex: 2, padding: "10px 0", borderRadius: 8, background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`, border: "none", color: "#0a0804", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>✓ Add Course</button>
                     </div>
                   </div>
-                </div>
-              </div>
+              </Popup>
             );
           })()}
         </div>
       )}
+      <ConfirmModal modal={confirmModal} />
     </div>
   );
 }
 
 
 // ── Betting View ──
-function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData, skinsPot, onSetSkin, onSetCtp, onUpdatePot, user, enrichedRounds, roundLocks, hcpOverrides, teeAssignments }) {
+function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData, skinsPot, onSetSkin, onSetCtp, onUpdatePot, user, enrichedRounds, roundLocks, hcpOverrides, teeAssignments, teams }) {
   const [activeTab, setActiveTab] = useState("skins");
   const [activeRound, setActiveRound] = useState(1);
   const [editPot, setEditPot] = useState(false);
@@ -2411,7 +2420,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
 
   const tr = tRounds.find(t => t.round_number === activeRound);
   const course = courses.find(c => c.id === tr?.course_id);
-  const holePars = course?.hole_pars || Array(18).fill(4);
+  const holePars = resolveHolePars(course);
   const par3s = holePars.map((p, i) => ({ hole: i, par: p })).filter(h => h.par === 3);
 
   // Compute skins for a round
@@ -2422,8 +2431,8 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
     // index the next morning.
     const bLock = lockForRound(roundLocks, round);
     const course2 = courses.find(c => c.id === (bLock?.course_id || tr2?.course_id));
-    const pars = bLock?.hole_pars || course2?.hole_pars || Array(18).fill(4);
-    const hcps = bLock?.hole_handicaps || course2?.hole_handicaps || Array(18).fill(9);
+    const pars = resolveHolePars(course2, bLock);
+    const hcps = resolveHoleHcps(course2, bLock);
 
     const skins = [];
     for (let h = 0; h < 18; h++) {
@@ -2431,15 +2440,14 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
         const raw = (holeData[`${p.player_id}_${round}`] || {})[h];
         if (raw == null) return null;
         if (gross) return { pid: p.player_id, name: p.name, score: raw };
-        // Net: simple stroke index, off the frozen CH when the round is locked
+        // Net: strokes off the frozen CH when the round is locked. Uses the
+        // canonical buildStrokeMap so handicaps over 18 wrap correctly (a hole
+        // can get 2+ strokes) — the old inline lookup capped every hole at 1.
         const ch = getRoundCH({
           roundLocks, round, pid: p.player_id, players: tPlayers,
           course: course2, hcpOverrides, teeAssignments, roundTee: tr2?.tee_box,
         });
-        const sorted = hcps.map((hcp, i) => ({ idx: i, hcp })).sort((a, b) => a.hcp - b.hcp);
-        let strokes = 0;
-        let rem = Math.abs(ch);
-        for (const s of sorted) { if (rem <= 0) break; if (s.idx === h) { strokes++; break; } rem--; }
+        const strokes = buildStrokeMap(ch, hcps)[h] || 0;
         return { pid: p.player_id, name: p.name, score: raw - strokes };
       }).filter(Boolean);
 
@@ -2461,15 +2469,10 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
   return (
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
       {/* Tab toggle */}
-      <div style={{ display: "flex", background: BC.card, borderRadius: 20, padding: 3, marginBottom: 14, border: `1px solid ${BC.bdr}` }}>
-        {[["skins","🎰 Skins"],["ctp","🎯 Closest to Pin"]].map(([k,lbl]) => (
-          <button key={k} onClick={() => setActiveTab(k)} style={{
-            flex: 1, padding: "8px 0", borderRadius: 16, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "none",
-            background: activeTab === k ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
-            color: activeTab === k ? "#0a0804" : BC.t3,
-          }}>{lbl}</button>
-        ))}
-      </div>
+      <SegmentedToggle
+        options={[["skins", "🎰 Skins"], ["ctp", "🎯 Closest to Pin"]]}
+        value={activeTab} onChange={setActiveTab} style={{ marginBottom: 14 }}
+      />
 
       {activeTab === "skins" && (
         <div>
@@ -2511,7 +2514,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
               <div style={{ padding: "8px 14px", borderBottom: `1px solid ${BC.bdr}`, fontSize: 10, fontWeight: 700, color: BC.gold, letterSpacing: 1 }}>SKINS LEADERS</div>
               {Object.entries(skinCount).sort((a,b) => b[1]-a[1]).map(([pid, count]) => {
                 const p = tPlayers.find(t => t.player_id === pid);
-                const team = p ? getTeam(p.team) : null;
+                const team = p ? teams[p.team] : null;
                 return (
                   <div key={pid} style={{ display: "flex", alignItems: "center", padding: "8px 14px", borderBottom: `1px solid ${BC.bdr}10`, gap: 8 }}>
                     <div style={{ width: 8, height: 8, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
@@ -2593,7 +2596,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
 }
 
 // ── Analytics View ──
-function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historicalData, user, hcpOverrides, teeAssignments, roundLocks }) {
+function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historicalData, user, hcpOverrides, teeAssignments, roundLocks, teams }) {
   const [analyticsTab, setAnalyticsTab] = useState("current");
 
   // Compute current year player stats from match results
@@ -2602,7 +2605,7 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
     tPlayers.forEach(p => { stats[p.player_id] = { name: p.name, team: p.team, wins: 0, losses: 0, halves: 0, pts: 0, skinsWon: 0 }; });
 
     matches.forEach(m => {
-      const fmt = tRounds.find(t => t.round_number === m.round)?.format || "singles";
+      const fmt = tRounds.find(t => t.round_number === m.round)?.format || DEFAULT_FORMAT;
       const res = computeMatchResult(m, holeData, courses, tRounds, tPlayers, fmt, hcpOverrides || {}, undefined, teeAssignments, roundLocks);
       const aTotal = res.totalPts.A, bTotal = res.totalPts.B;
       [...m.teamA].forEach(pid => {
@@ -2625,15 +2628,10 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
 
   return (
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
-      <div style={{ display: "flex", background: BC.card, borderRadius: 20, padding: 3, marginBottom: 14, border: `1px solid ${BC.bdr}` }}>
-        {[["current","2026 Stats"],["history","History"]].map(([k,lbl]) => (
-          <button key={k} onClick={() => setAnalyticsTab(k)} style={{
-            flex: 1, padding: "8px 0", borderRadius: 16, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "none",
-            background: analyticsTab === k ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
-            color: analyticsTab === k ? "#0a0804" : BC.t3,
-          }}>{lbl}</button>
-        ))}
-      </div>
+      <SegmentedToggle
+        options={[["current", `${getTournamentYear()} Stats`], ["history", "History"]]}
+        value={analyticsTab} onChange={setAnalyticsTab} style={{ marginBottom: 14 }}
+      />
 
       {analyticsTab === "current" && (
         <div>
@@ -2642,12 +2640,12 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
               <div>PLAYER</div><div style={{textAlign:"center"}}>W</div><div style={{textAlign:"center"}}>L</div><div style={{textAlign:"center"}}>H</div><div style={{textAlign:"right"}}>PTS</div>
             </div>
             {playerStats.map((p, i) => {
-              const team = getTeam(p.team);
+              const team = teams[p.team];
               return (
                 <div key={p.name} style={{ display: "grid", gridTemplateColumns: "1fr 44px 44px 44px 52px", padding: "9px 12px", borderBottom: i < playerStats.length-1 ? `1px solid ${BC.bdr}10` : "none", alignItems: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <div style={{ width: 6, height: 6, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
-                    <span style={{ fontSize: 12, fontWeight: 600, color: (p.team === "A" ? TEAM_A : TEAM_B).accent + "88" }}>{p.name}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: teams[p.team].accent + "88" }}>{p.name}</span>
                   </div>
                   <div style={{ textAlign: "center", fontSize: 12, color: "#22c55e", fontWeight: 600 }}>{p.wins}</div>
                   <div style={{ textAlign: "center", fontSize: 12, color: BC.danger, fontWeight: 600 }}>{p.losses}</div>
@@ -2673,8 +2671,8 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
               <div key={yr.id} style={{ background: BC.card, borderRadius: 12, padding: 14, marginBottom: 12, border: `1px solid ${BC.bdr}` }}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: BC.gold, marginBottom: 8 }}>{yr.year} · {yr.location}</div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                  <div style={{ fontSize: 12, color: BC.t1 }}><span style={{ color: TEAM_A.accent, fontWeight: 700 }}>{yr.teamAName}</span> {yr.teamAScore}</div>
-                  <div style={{ fontSize: 12, color: BC.t1 }}><span style={{ color: TEAM_B.accent, fontWeight: 700 }}>{yr.teamBName}</span> {yr.teamBScore}</div>
+                  <div style={{ fontSize: 12, color: BC.t1 }}><span style={{ color: teams.A.accent, fontWeight: 700 }}>{yr.teamAName}</span> {yr.teamAScore}</div>
+                  <div style={{ fontSize: 12, color: BC.t1 }}><span style={{ color: teams.B.accent, fontWeight: 700 }}>{yr.teamBName}</span> {yr.teamBScore}</div>
                 </div>
                 {yr.winner && <div style={{ fontSize: 11, color: BC.amber, fontWeight: 700 }}>🏆 {yr.winner} won the Bourbon Cup</div>}
               </div>
@@ -2733,8 +2731,8 @@ function PracticeScoringTab({
   // jump feels abrupt. Mirrors MNQ's `setToast(...)` UX.
   const [toast, setToast] = useState(null);
 
-  const holePars = course?.hole_pars || Array(18).fill(4);
-  const holeHcps = course?.hole_handicaps || Array(18).fill(9);
+  const holePars = resolveHolePars(course);
+  const holeHcps = resolveHoleHcps(course);
 
   // Lock scoring to the user's own match. Switching to a different match is
   // intentionally not allowed — only players in a match should be entering its
@@ -3240,24 +3238,7 @@ function PracticeScoringTab({
         const tcB = PRACTICE_TEAM_COLORS[t2Idx];
         const matchIdx = event.matches.findIndex(m => m.id === activeMatch.id);
         return (
-          <>
-            {/* Backdrop — tap anywhere to close */}
-            <div onClick={() => setShowScorecard(false)} style={{
-              position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 400,
-            }} />
-            {/* Scrollable centering wrapper — tapping outside the card also closes */}
-            <div onClick={() => setShowScorecard(false)} style={{
-              position: "fixed", inset: 0, zIndex: 450,
-              display: "flex", alignItems: "flex-start", justifyContent: "center",
-              padding: 12, overflowY: "auto",
-            }}>
-              <div onClick={e => e.stopPropagation()} style={{
-                background: BC.bg, border: `1px solid ${BC.bdr}`, borderRadius: 14,
-                width: "100%", maxWidth: 440,
-                marginTop: 12, marginBottom: 12,
-                display: "flex", flexDirection: "column",
-                fontFamily: "'Montserrat', sans-serif",
-              }}>
+          <Popup onClose={() => setShowScorecard(false)} maxWidth={440} padding={0} outerPadding={12} innerStyle={{ display: "flex", flexDirection: "column", fontFamily: "'Montserrat', sans-serif" }}>
                 {/* Header */}
                 <div style={{ padding: "12px 14px", borderBottom: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div>
@@ -3288,9 +3269,7 @@ function PracticeScoringTab({
                 }}>
                   Close
                 </button>
-              </div>
-            </div>
-          </>
+          </Popup>
         );
       })()}
 
@@ -3299,28 +3278,12 @@ function PracticeScoringTab({
           the highest z-index so it sits above the hole nav, scorecard
           modal, and bottom nav. Mirrors MNQ's toast styling exactly so
           the two apps feel consistent for users who switch between. */}
-      {toast && (
-        <>
-          <style>{`@keyframes bcToastDown { 0% { transform: translateX(-50%) translateY(-20px); opacity: 0; } 100% { transform: translateX(-50%) translateY(0); opacity: 1; } }`}</style>
-          <div style={{
-            position: "fixed", top: 30, left: "50%", transform: "translateX(-50%)",
-            background: BC.amber, color: "#0a0804",
-            padding: "12px 32px", borderRadius: 12,
-            fontSize: 13, fontWeight: 700, zIndex: 1000,
-            whiteSpace: "nowrap", textAlign: "center",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
-            animation: "bcToastDown 0.3s ease",
-            fontFamily: "'Montserrat', sans-serif",
-          }}>
-            {toast}
-          </div>
-        </>
-      )}
+      <Toast message={toast} />
     </div>
   );
 }
 
-function PracticeView({ user, tPlayers, courses, notify }) {
+function PracticeView({ user, tPlayers, courses, notify, teams }) {
   const [event, setEvent] = useState(null);
   const [scoresMap, setScoresMap] = useState({}); // {pid_h: score}
   const [ctps, setCtps] = useState({}); // {h: pid}
@@ -3423,7 +3386,7 @@ function PracticeView({ user, tPlayers, courses, notify }) {
     const maps = {};
     if (!match || !course || !event) return maps;
     const allPids = [match.team1.player1, match.team1.player2, match.team2.player1, match.team2.player2].filter(Boolean);
-    const holeHcps = course.hole_handicaps || Array(18).fill(9);
+    const holeHcps = resolveHoleHcps(course);
     const overrides = event.hcp_overrides || {};
     const getCH = (pid) => calcCHForCourse(
       getEffectiveHI(pid, tPlayers, overrides),
@@ -3451,8 +3414,8 @@ function PracticeView({ user, tPlayers, courses, notify }) {
     const tcA = PRACTICE_TEAM_COLORS[t1Idx];
     const tcB = PRACTICE_TEAM_COLORS[t2Idx];
     const gridLine = `1px solid ${BC.bdr}25`;
-    const holePars = course.hole_pars || Array(18).fill(4);
-    const holeHcps = course.hole_handicaps || Array(18).fill(9);
+    const holePars = resolveHolePars(course);
+    const holeHcps = resolveHoleHcps(course);
     const getStrokes = (pid, h) => strokeMaps[pid]?.[h] || 0;
 
     // Per-hole running cumulative status from T1's perspective
@@ -3824,7 +3787,7 @@ function PracticeView({ user, tPlayers, courses, notify }) {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
             {sortedPlayers.map(p => {
               const isSel = selPlayers.includes(p.player_id);
-              const teamColor = p.team === "A" ? TEAM_A.accent : TEAM_B.accent;
+              const teamColor = teams[p.team].accent;
               const slotIdx = findSlotOf(p.player_id);
               return (
                 <button key={p.player_id} onClick={() => togglePlayer(p.player_id)} style={{
@@ -3962,25 +3925,16 @@ function PracticeView({ user, tPlayers, courses, notify }) {
           </button>
         )}
 
-        {showResetConfirm && (
-          <>
-            <div onClick={() => setShowResetConfirm(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 200 }} />
-            <div style={{
-              position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
-              background: BC.card, borderRadius: 12, padding: 20, border: `1px solid ${BC.danger}`,
-              maxWidth: 320, width: "90%", zIndex: 201,
-            }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: BC.t1, marginBottom: 8 }}>Reset Practice Event?</div>
-              <div style={{ fontSize: 12, color: BC.t2, marginBottom: 16, lineHeight: 1.5 }}>
-                This will delete the event, all scores, and all CTP entries. This can't be undone.
-              </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => setShowResetConfirm(false)} style={{ flex: 1, padding: "10px 0", background: BC.inp, border: `1px solid ${BC.bdr}`, color: BC.t2, borderRadius: 8, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
-                <button onClick={resetEvent} style={{ flex: 1, padding: "10px 0", background: BC.danger, border: "none", color: "#fff", borderRadius: 8, fontWeight: 700, cursor: "pointer" }}>Reset</button>
-              </div>
-            </div>
-          </>
-        )}
+        <ConfirmModal
+          modal={showResetConfirm ? {
+            title: "Reset Practice Event?",
+            message: "This will delete the event, all scores, and all CTP entries. This can't be undone.",
+            confirmLabel: "Reset",
+            destructive: true,
+            onConfirm: resetEvent,
+            onCancel: () => setShowResetConfirm(false),
+          } : null}
+        />
       </div>
     );
   };
@@ -3989,7 +3943,7 @@ function PracticeView({ user, tPlayers, courses, notify }) {
   // ── Leaderboard Sub-view ──
   const LeaderboardTab = () => {
     const [expandedMatch, setExpandedMatch] = useState(null);
-    const holePars = course?.hole_pars || Array(18).fill(4);
+    const holePars = resolveHolePars(course);
 
     // Stroke maps for each match — keyed by match.id. Each value is the same
     // shape as ScoringTab's strokeMaps (player_id → { hole: strokes }).
@@ -4044,9 +3998,7 @@ function PracticeView({ user, tPlayers, courses, notify }) {
             "TOTALS" was redundant since the to-par column already
             communicates "this is summed up"). */}
         <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 10, overflow: "hidden" }}>
-          <div style={{ padding: "8px 14px", background: BC.amber, textAlign: "center" }}>
-            <div style={{ fontSize: 11, color: "#fff", fontWeight: 800, letterSpacing: 2 }}>TEAMS</div>
-          </div>
+          <Banner>TEAMS</Banner>
           {teamTotals.map(({ team, idx, teamPids, toPar, thru }, rowIdx) => {
             const tc = PRACTICE_TEAM_COLORS[idx];
             const teamPlayers = teamPids.map(pid => tPlayers.find(p => p.player_id === pid)).filter(Boolean);
@@ -4320,7 +4272,7 @@ function PracticeView({ user, tPlayers, courses, notify }) {
     // shows both columns since its tabular layout makes the gross/net
     // distinction obvious without crowding.
     const [skinsMode, setSkinsMode] = useState("gross"); // gross | net
-    const holePars = course?.hole_pars || Array(18).fill(4);
+    const holePars = resolveHolePars(course);
     const par3Holes = holePars.map((p, i) => p === 3 ? i : -1).filter(i => i !== -1);
 
     // Skins counts — useMemo always fires, even when skins/eventPlayers
@@ -4357,16 +4309,10 @@ function PracticeView({ user, tPlayers, courses, notify }) {
             skins. The disabled state uses opacity + pointer-events
             so taps fall through harmlessly. */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-          <div style={{ flex: 1, display: "flex", background: BC.card, borderRadius: 20, padding: 3, border: `1px solid ${BC.bdr}` }}>
-            {[["skins", "Skins"], ["ctp", "CTP"]].map(([k, label]) => (
-              <button key={k} onClick={() => setTab(k)} style={{
-                flex: 1, padding: "8px 0", borderRadius: 16, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                background: tab === k ? BC.amber : "transparent",
-                color: tab === k ? "#fff" : BC.t3, border: "none",
-                letterSpacing: 0.5,
-              }}>{label}</button>
-            ))}
-          </div>
+          <SegmentedToggle
+            options={[["skins", "Skins"], ["ctp", "CTP"]]}
+            value={tab} onChange={setTab} variant="flat" letterSpacing={0.5} style={{ flex: 1 }}
+          />
           <div style={{
             display: "inline-flex", background: BC.inp, borderRadius: 10, padding: 2,
             border: `1px solid ${BC.bdr}`, flexShrink: 0,
@@ -4828,20 +4774,43 @@ export default function App() {
   const [ctpData, setCtpData] = useState({});     // { "round_hole": pid }
   const [skinsPot, setSkinsPot] = useState(0);
   const [historicalData, setHistoricalData] = useState([]);
-  const [teamNames, setTeamNames] = useState({ A: "Team Alpha", B: "Team Beta" });
-
+  // The saved team-name overrides (from the bc_settings/team_names doc).
+  // Defaults come from constants so the fallback names live in one place.
+  const [teamNames, setTeamNames] = useState(DEFAULT_TEAM_NAMES);
   // Theme state — toggled via the More menu. The actual color values live in
   // the module-level BC object (mutated by applyBCTheme); this state's only
   // job is to trigger a top-level re-render so children re-read fresh BC
   // values inline. Initial value comes from localStorage so the saved
   // preference survives reloads.
   const [darkMode, setDarkMode] = useState(initialBCMode === "dark");
+  // Branding doc (bc_settings/branding): per-edition team colors (extracted
+  // from uploaded logos) + optional tournament accent. null = use the
+  // constants/theme fallback, so the app looks identical until configured.
+  // A mode ref lets async Firestore callbacks apply the theme with the
+  // CURRENT light/dark mode without capturing a stale closure.
+  const [brand, setBrand] = useState(null);
+  const modeRef = useRef(darkMode);
+  modeRef.current = darkMode;
   const toggleTheme = useCallback(() => {
     const newMode = darkMode ? "light" : "dark";
     try { localStorage.setItem("bc_theme", newMode); } catch {}
-    applyBCTheme(newMode);
+    applyBCTheme(newMode, brand);
     setDarkMode(!darkMode);
-  }, [darkMode]);
+  }, [darkMode, brand]);
+
+  // Single resolved-teams source: fixed identity (id/short/logo) + live name
+  // (from the team_names doc) + live colors (from the active branding doc via
+  // the BC theme tokens). Every view reads its team objects from here, so
+  // team name AND color have exactly one origin. Recomputes when names,
+  // branding, or light/dark mode change (all of which move BC.teamA/teamB).
+  const teams = useMemo(() => {
+    const base = resolveTeams(teamNames);
+    return {
+      A: { ...base.A, accent: BC.teamA, color: BC.teamADim, glow: BC.teamAGlow },
+      B: { ...base.B, accent: BC.teamB, color: BC.teamBDim, glow: BC.teamBGlow },
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamNames, brand, darkMode]);
 
   // Keep the global <style> tag's body bg in sync with the active theme.
   // Without this, the html/body fill behind the React tree stays whatever
@@ -4858,16 +4827,6 @@ export default function App() {
     }
   }, [darkMode]);
 
-  // Keep TEAM_A/TEAM_B module vars in sync with state. Property-level
-  // mutation (not rebind) — TEAM_A/TEAM_B come from the constants module
-  // as imported bindings, and those bindings are read-only. Mutating a
-  // property of the underlying object is allowed and propagates to every
-  // consumer because they all hold the same object reference. Same
-  // pattern as `BC` in theme.js.
-  useEffect(() => {
-    TEAM_A.name = teamNames.A;
-    TEAM_B.name = teamNames.B;
-  }, [teamNames]);
   const [tPlayers, setTPlayers] = useState([]);
   const [tRounds, setTRounds] = useState([]);
   const [courses, setCourses] = useState([]);
@@ -4963,7 +4922,15 @@ export default function App() {
     unsubs.push(db.subscribe("bc_players", f, setTPlayers));
     unsubs.push(db.subscribe("bc_settings", f, rows => {
       const tn = rows.find(r => r.id === "team_names");
-      if (tn) setTeamNames({ A: tn.teamA || "Team Alpha", B: tn.teamB || "Team Beta" });
+      if (tn) setTeamNames({ A: tn.teamA || DEFAULT_TEAM_NAMES.A, B: tn.teamB || DEFAULT_TEAM_NAMES.B });
+      // Branding: apply to the live BC theme immediately (using the current
+      // mode via ref), then store it so a later theme toggle re-applies it.
+      const br = rows.find(r => r.id === "branding");
+      const b = br
+        ? { teamA: br.teamA || null, teamB: br.teamB || null, tournamentAccent: br.tournamentAccent || null }
+        : null;
+      applyBCTheme(modeRef.current ? "dark" : "light", b);
+      setBrand(b);
     }));
     unsubs.push(db.subscribe("bc_rounds", f, rows => setTRounds(rows)));
     unsubs.push(db.subscribe("bc_skins", f, rows => {
@@ -5200,7 +5167,7 @@ export default function App() {
 
   const availableRounds = useMemo(() => [...new Set(enrichedMatches.map(m => m.round))].sort(), [enrichedMatches]);
 
-  if (!user) return <LoginScreen players={tPlayers} teamNames={teamNames} darkMode={darkMode} onLogin={p => { setUser({ ...p, isDirector: !!p.isDirector }); }} />;
+  if (!user) return <LoginScreen players={tPlayers} teams={teams} darkMode={darkMode} onLogin={p => { setUser({ ...p, isDirector: !!p.isDirector }); }} />;
 
   // Bottom-nav items. The Practice tab (formerly "Mash") was relocated
   // to the More menu and is gated to directors only — practice rounds
@@ -5342,7 +5309,7 @@ export default function App() {
             tRounds={enrichedRounds}
             tPlayers={tPlayers}
             rounds={availableRounds.length ? availableRounds : [1,2,3,4]}
-            teamNames={teamNames}
+            teams={teams}
             hcpOverrides={hcpOverridesData}
             teeAssignments={teeAssignmentsData}
             roundLocks={roundLocksData}
@@ -5358,7 +5325,7 @@ export default function App() {
             courses={courses}
             tRounds={enrichedRounds}
             notify={notify}
-            teamNames={teamNames}
+            teams={teams}
             hcpOverrides={hcpOverridesData}
             teeAssignments={teeAssignmentsData}
             roundLocks={roundLocksData}
@@ -5370,7 +5337,6 @@ export default function App() {
             tRounds={enrichedRounds}
             tPlayers={tPlayers}
             courses={courses}
-            teamNames={teamNames}
           />
         )}
         {view === "betting" && (
@@ -5389,21 +5355,14 @@ export default function App() {
                 "this section will have these two modes" without
                 committing to data the user can't act on. */}
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, opacity: 0.5, pointerEvents: "none" }}>
-              <div style={{ flex: 1, display: "flex", background: BC.card, borderRadius: 20, padding: 3, border: `1px solid ${BC.bdr}` }}>
-                {[["skins", "Skins"], ["ctp", "CTP"]].map(([k, label]) => (
-                  <div key={k} style={{
-                    flex: 1, padding: "8px 0", borderRadius: 16, fontSize: 12, fontWeight: 700, textAlign: "center",
-                    background: k === "skins" ? BC.amber : "transparent",
-                    color: k === "skins" ? "#fff" : BC.t3, letterSpacing: 0.5,
-                  }}>{label}</div>
-                ))}
-              </div>
+              <SegmentedToggle
+                options={[["skins", "Skins"], ["ctp", "CTP"]]}
+                value="skins" variant="flat" letterSpacing={0.5} style={{ flex: 1 }}
+              />
             </div>
 
             <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
-              <div style={{ padding: "8px 14px", background: BC.amber, textAlign: "center" }}>
-                <div style={{ fontSize: 11, color: "#fff", fontWeight: 800, letterSpacing: 2 }}>SKINS</div>
-              </div>
+              <Banner>SKINS</Banner>
               <div style={{
                 display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
                 padding: "60px 20px", textAlign: "center",
@@ -5424,7 +5383,7 @@ export default function App() {
             tPlayers={tPlayers} matches={enrichedMatches} holeData={holeData}
             tRounds={enrichedRounds} courses={courses} historicalData={historicalData} user={user}
             hcpOverrides={hcpOverridesData} teeAssignments={teeAssignmentsData}
-            roundLocks={roundLocksData}
+            roundLocks={roundLocksData} teams={teams}
           />
         )}
         {view === "practice" && (
@@ -5433,6 +5392,7 @@ export default function App() {
             tPlayers={tPlayers}
             courses={courses}
             notify={notify}
+            teams={teams}
           />
         )}
         {view === "admin" && (
@@ -5448,10 +5408,20 @@ export default function App() {
             onAddCourse={onAddCourse}
             onSetRound={onSetRound}
             onSetMatch={onSetMatch}
+            teams={teams}
             teamNames={teamNames}
             onSaveTeamNames={async (names) => {
               setTeamNames(names);
               await db.upsert("bc_settings", { id: "team_names", tournament_id: TOURNAMENT_ID, teamA: names.A, teamB: names.B });
+            }}
+            brand={brand}
+            onSaveBranding={async (b) => {
+              // Optimistically apply to the live theme, then persist. The
+              // bc_settings subscription will re-apply the same doc — the
+              // single source of truth for team colors.
+              applyBCTheme(darkMode ? "dark" : "light", b);
+              setBrand(b);
+              await db.upsert("bc_settings", { id: "branding", tournament_id: TOURNAMENT_ID, teamA: b.teamA, teamB: b.teamB });
             }}
             hcpOverridesFromDb={hcpOverridesData}
             teeAssignmentsFromDb={teeAssignmentsData}

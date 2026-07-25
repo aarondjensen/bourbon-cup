@@ -28,6 +28,29 @@ export const TEAM_B = { id: "B", name: "Team Beta",  color: "#0d3235", accent: "
 export const getTeam = (tid) => tid === "A" ? TEAM_A : TEAM_B;
 export const oppTeam = (tid) => tid === "A" ? TEAM_B : TEAM_A;
 
+// ── Tournament identity ──
+// The fixed name + location shown on the login screen. The YEAR is NOT here
+// — it follows the active edition (see firebase.getTournamentYear) so the
+// displayed year and the data you're looking at can never disagree.
+export const TOURNAMENT_TITLE = "The Bourbon Cup";
+export const TOURNAMENT_LOCATION = "Gaylord, MI";
+
+// Default team-name map, derived from the TEAM_A/TEAM_B definitions above so
+// the fallback names live in exactly one place. Seed App's teamNames state
+// with this instead of re-typing the literal strings.
+export const DEFAULT_TEAM_NAMES = { A: TEAM_A.name, B: TEAM_B.name };
+
+// Single source of truth for a "resolved" team object: the fixed visual
+// identity (id, colors, glow, short, logo) from TEAM_A/TEAM_B, with the live
+// display name layered on top from the saved team_names doc. Every view that
+// needs {team + current name} should read from here (via App's `teams` memo)
+// rather than re-merging `{ ...TEAM_A, name: teamNames?.A || TEAM_A.name }`
+// inline — that merge used to be copy-pasted across five components.
+export const resolveTeams = (teamNames) => ({
+  A: { ...TEAM_A, name: teamNames?.A || TEAM_A.name },
+  B: { ...TEAM_B, name: teamNames?.B || TEAM_B.name },
+});
+
 // ── Match-play format catalog ──
 // Format dictates how holes are compared (singles = 1v1 net, best ball =
 // better-of-two net, team total = sum of nets, etc.). Point allocation is
@@ -64,6 +87,11 @@ export const FORMATS = [
 //                     halved match splits the pot ½ / ½.
 // Stored on both bc_rounds (round-level default) and bc_matches (per-match
 // override; falls back to round when absent).
+// Default match-play format id — used when a round hasn't had one set yet.
+// One constant instead of the `?.format || "singles"` literal scattered
+// across the app.
+export const DEFAULT_FORMAT = "singles";
+
 export const POINT_METHOD_NASSAU = "nassau";
 export const POINT_METHOD_TRADITIONAL = "traditional";
 export const POINT_METHODS = [

@@ -14,12 +14,17 @@
 // precomputed; every stat is a query over these atomic facts.
 
 import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { PLAYERS } from "./players.mjs";
 
-const BACKBONE   = process.argv[2] || "./bourbon-cup-backbone.json";
-const MATCHFACTS = process.argv[3] || "./bourbon-cup-matchfacts.json";
-const OUT        = process.argv[4] || "./bourbon-cup.db";
+// Default to the repo data/ dir (resolved from this script), matching where
+// backbone.mjs + phase2.mjs write. Explicit CLI args still override.
+const DATA_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "data");
+const BACKBONE   = process.argv[2] || join(DATA_DIR, "bourbon-cup-backbone.json");
+const MATCHFACTS = process.argv[3] || join(DATA_DIR, "bourbon-cup-matchfacts.json");
+const OUT        = process.argv[4] || join(DATA_DIR, "bourbon-cup.db");
 
 const backbone = JSON.parse(readFileSync(BACKBONE, "utf8"));
 const matches  = JSON.parse(readFileSync(MATCHFACTS, "utf8")).matchFacts;

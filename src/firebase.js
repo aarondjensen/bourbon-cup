@@ -54,6 +54,12 @@ export let TOURNAMENT_ID = _readInitialEdition();
 
 export const getActiveTournamentId = () => TOURNAMENT_ID;
 
+// The active edition's year, derived from its id (bc_2025 → 2025). Single
+// source for every "which year is this" label in the UI, so the displayed
+// year always matches the edition whose data is on screen.
+export const getTournamentYear = () =>
+  parseInt(String(TOURNAMENT_ID).replace(/\D/g, ""), 10) || new Date().getFullYear();
+
 export const setActiveTournamentId = (id) => {
   if (!id) return TOURNAMENT_ID;
   TOURNAMENT_ID = id;

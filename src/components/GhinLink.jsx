@@ -35,37 +35,12 @@
 //  ghin_rev_date, ghin_synced_at. db.upsert merges → unlink writes nulls.
 
 import { useState, useEffect, useRef } from "react";
-import { createPortal } from "react-dom";
 import { BC } from "../theme";
+import { Popup } from "./Popup";
 import { searchGhinGolfers, syncGhinNumbers, parseGhinHI, fmtHI } from "../lib/ghin";
 
 const BLUE = BC.hcpBlue;
 const FONT = "'Montserrat', sans-serif";
-
-// The visible rectangle (above the keyboard). Falls back to the window.
-function useViewportRect() {
-  const read = () => {
-    if (typeof window === "undefined") return { top: 0, left: 0, width: 0, height: 0 };
-    const v = window.visualViewport;
-    if (v) return { top: v.offsetTop, left: v.offsetLeft, width: v.width, height: v.height };
-    return { top: 0, left: 0, width: window.innerWidth, height: window.innerHeight };
-  };
-  const [rect, setRect] = useState(read);
-  useEffect(() => {
-    const v = window.visualViewport;
-    const update = () => setRect(read());
-    update();
-    if (v) { v.addEventListener("resize", update); v.addEventListener("scroll", update); }
-    window.addEventListener("resize", update);
-    window.addEventListener("orientationchange", update);
-    return () => {
-      if (v) { v.removeEventListener("resize", update); v.removeEventListener("scroll", update); }
-      window.removeEventListener("resize", update);
-      window.removeEventListener("orientationchange", update);
-    };
-  }, []);
-  return rect;
-}
 
 const primaryBtn = (color) => ({
   width: "100%", boxSizing: "border-box", padding: "14px 14px", borderRadius: 12,
@@ -92,7 +67,6 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState(null);
 
-  const rect = useViewportRect();
   const inputRef = useRef(null);
 
   // Lock the background while open.
@@ -180,28 +154,21 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
   const title = mode === "search" ? `Search GHIN — ${player.name}` : `${player.name} · GHIN`;
 
   const popup = (
-    <div
-      onClick={close}
-      style={{
-        position: "fixed",
-        top: rect.top, left: rect.left, width: rect.width, height: rect.height,
-        zIndex: 4000, background: "rgba(0,0,0,0.72)",
-        display: "flex", alignItems: "flex-start", justifyContent: "center",
-        boxSizing: "border-box",
-        padding: 12,
-        paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)",
+    <Popup
+      onClose={close}
+      maxWidth={460}
+      zIndex={4000}
+      portal
+      viewportFit
+      align="start"
+      padding={0}
+      outerPadding={12}
+      innerStyle={{
+        background: BC.card, borderRadius: 16,
+        boxShadow: "0 20px 60px rgba(0,0,0,0.7)", overflow: "hidden",
+        display: "flex", flexDirection: "column", fontFamily: FONT,
       }}
     >
-      <div
-        onClick={e => e.stopPropagation()}
-        style={{
-          width: "100%", maxWidth: 460, maxHeight: "100%",
-          display: "flex", flexDirection: "column",
-          background: BC.card, border: `1px solid ${BC.bdr}`, borderRadius: 16,
-          boxShadow: "0 20px 60px rgba(0,0,0,0.7)", overflow: "hidden",
-          boxSizing: "border-box", fontFamily: FONT,
-        }}
-      >
         {/* Header */}
         <div style={{
           flexShrink: 0, display: "flex", alignItems: "center", gap: 10,
@@ -333,8 +300,7 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
             )}
           </>
         )}
-      </div>
-    </div>
+    </Popup>
   );
 
   return (
@@ -354,7 +320,7 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
         {linked ? "GHIN ✓" : "+ GHIN"}
       </button>
 
-      {open && typeof document !== "undefined" && createPortal(popup, document.body)}
+      {open && popup}
     </>
   );
 }

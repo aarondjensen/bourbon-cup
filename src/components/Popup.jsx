@@ -50,11 +50,43 @@
 //    accent by default and switches to BC.danger for destructive actions.
 // ══════════════════════════════════════════════════════════════════
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { BC } from "../theme";
 
 const Z_MAP = { content: 500, modal: 900 };
 const STD_BACKDROP = "rgba(0, 0, 0, 0.65)";
+
+// The visible rectangle above the on-screen keyboard. iOS does NOT shrink CSS
+// viewport units (svh/dvh/vh) for the keyboard, so a full-viewport overlay can
+// render its card (and text field) behind the keys. Reading visualViewport and
+// sizing the overlay to exactly that rect keeps the card in view. Only active
+// when `enabled` (viewportFit modals) — otherwise it no-ops and returns a
+// window-sized rect so non-keyboard modals pay nothing.
+function useViewportRect(enabled) {
+  const read = () => {
+    if (typeof window === "undefined") return { top: 0, left: 0, width: 0, height: 0 };
+    const v = window.visualViewport;
+    if (v) return { top: v.offsetTop, left: v.offsetLeft, width: v.width, height: v.height };
+    return { top: 0, left: 0, width: window.innerWidth, height: window.innerHeight };
+  };
+  const [rect, setRect] = useState(read);
+  useEffect(() => {
+    if (!enabled) return;
+    const v = window.visualViewport;
+    const update = () => setRect(read());
+    update();
+    if (v) { v.addEventListener("resize", update); v.addEventListener("scroll", update); }
+    window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
+    return () => {
+      if (v) { v.removeEventListener("resize", update); v.removeEventListener("scroll", update); }
+      window.removeEventListener("resize", update);
+      window.removeEventListener("orientationchange", update);
+    };
+  }, [enabled]);
+  return rect;
+}
 
 export function Popup({
   onClose,
@@ -66,9 +98,20 @@ export function Popup({
   padding = 16,
   outerPadding = 16,
   innerStyle,
+  // ── Mobile-modal opt-ins (default off → identical to the classic modal) ──
+  //  portal      — render into <body> so a transformed ancestor can't trap
+  //                position:fixed (needed when opened from a swipeable row).
+  //  viewportFit — size the overlay to the visual viewport (above keyboard)
+  //                instead of inset:0; the card manages its own inner scroll.
+  //  align       — cross-axis placement: "center" (default) or "start".
+  portal = false,
+  viewportFit = false,
+  align = "center",
   children,
 }) {
   const z = typeof zIndex === "number" ? zIndex : (Z_MAP[zIndex] || 500);
+  const rect = useViewportRect(viewportFit);
+  const alignItems = align === "start" ? "flex-start" : "center";
 
   // ESC closes unless disabled. Only registers when onClose exists.
   useEffect(() => {
@@ -82,20 +125,25 @@ export function Popup({
     if (!noBackdropClose && onClose) onClose();
   };
 
-  return (
+  const node = (
     <div
       onClick={handleBackdrop}
       data-popup
       style={{
         position: "fixed",
-        inset: 0,
+        // viewportFit: pin to the live visible rect (above the keyboard).
+        // Otherwise the classic full-viewport overlay.
+        ...(viewportFit
+          ? { top: rect.top, left: rect.left, width: rect.width, height: rect.height, paddingTop: `calc(env(safe-area-inset-top, 0px) + ${outerPadding}px)` }
+          : { inset: 0 }),
         background: STD_BACKDROP,
         zIndex: z,
         display: "flex",
-        alignItems: "center",
+        alignItems,
         justifyContent: "center",
         padding: outerPadding,
-        overflowY: "auto",
+        boxSizing: "border-box",
+        overflowY: viewportFit ? "hidden" : "auto",
         overscrollBehavior: "contain",
       }}
     >
@@ -108,8 +156,9 @@ export function Popup({
           padding,
           width: "100%",
           maxWidth,
-          maxHeight: "calc(100vh - 32px)",
-          overflowY: "auto",
+          // viewportFit cards fill the rect and scroll internally.
+          maxHeight: viewportFit ? "100%" : "calc(100vh - 32px)",
+          overflowY: viewportFit ? "hidden" : "auto",
           overscrollBehavior: "contain",
           position: "relative",
           boxShadow: "0 12px 40px rgba(0, 0, 0, 0.4)",
@@ -147,6 +196,10 @@ export function Popup({
       </div>
     </div>
   );
+
+  return portal && typeof document !== "undefined"
+    ? createPortal(node, document.body)
+    : node;
 }
 
 // ──────────────────────────────────────────────────────────────────

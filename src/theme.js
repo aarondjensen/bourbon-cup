@@ -43,6 +43,8 @@
 // fully functional before anything is configured — the defaults
 // reproduce today's look (Mash green for team A, a teal for team B,
 // and the existing primary accent for chrome).
+import { TEAM_A, TEAM_B } from "./constants";
+
 const _clampC = (n) => Math.max(0, Math.min(255, Math.round(n)));
 const _hxC = (n) => _clampC(n).toString(16).padStart(2, "0");
 const _rgbC = (hex) => {
@@ -65,12 +67,20 @@ export const glowHex = (hex, a = 0.16) => {
 // tournament-accent override), then returns it.
 function withBrand(mode, brand, base) {
   const glowA = mode === "light" ? 0.14 : 0.20;
-  const defTeamA = mode === "light" ? "#009144" : "#16a34a"; // Mash green
-  const defTeamB = mode === "light" ? "#0a5f6e" : "#22a3b5"; // teal
-  const aCol = brand?.teamA?.color || defTeamA;
-  const bCol = brand?.teamB?.color || defTeamB;
-  base.teamA = aCol;  base.teamADim = dimHex(aCol);  base.teamAGlow = glowHex(aCol, glowA);
-  base.teamB = bCol;  base.teamBDim = dimHex(bCol);  base.teamBGlow = glowHex(bCol, glowA);
+  // Fallback team colors live in ONE place — the TEAM_A/TEAM_B definitions in
+  // constants.js. When a branding doc supplies a color, the dim/glow shades
+  // are derived from it; otherwise we use the exact deep-color/glow from
+  // constants so the un-branded look is pixel-identical to the original.
+  const brandA = brand?.teamA?.color;
+  const brandB = brand?.teamB?.color;
+  const aCol = brandA || TEAM_A.accent;
+  const bCol = brandB || TEAM_B.accent;
+  base.teamA = aCol;
+  base.teamADim  = brandA ? dimHex(aCol)         : TEAM_A.color;
+  base.teamAGlow = brandA ? glowHex(aCol, glowA) : TEAM_A.glow;
+  base.teamB = bCol;
+  base.teamBDim  = brandB ? dimHex(bCol)         : TEAM_B.color;
+  base.teamBGlow = brandB ? glowHex(bCol, glowA) : TEAM_B.glow;
   // Optional override of the neutral tournament accent (chrome). When
   // omitted, the existing amber/green primary accent is kept as-is, so
   // adopting this is visually a no-op until a tournament is configured.
@@ -147,6 +157,16 @@ export const applyBCTheme = (mode, brand = null) => {
   const next = getBCTheme(mode, brand);
   for (const key in next) BC[key] = next[key];
 };
+
+// ── Live per-team color accessors ──
+// Single read surface for team colors. These read the live BC tokens (which
+// applyBCTheme keeps in sync with the active branding doc), so a component
+// never has to branch on team id inline or reach back into the constants.
+// `teamColor` = the vivid accent, `teamColorDim` = the deep fill/background
+// shade, `teamColorGlow` = the low-alpha wash.
+export const teamColor     = (tid) => (tid === "A" ? BC.teamA     : BC.teamB);
+export const teamColorDim  = (tid) => (tid === "A" ? BC.teamADim  : BC.teamBDim);
+export const teamColorGlow = (tid) => (tid === "A" ? BC.teamAGlow : BC.teamBGlow);
 
 // ── Inject global styles ──
 // The body bg is set on initial load so the page paints the correct theme
