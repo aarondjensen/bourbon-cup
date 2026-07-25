@@ -63,7 +63,7 @@ const NAV_SAFE_PAD = "min(env(safe-area-inset-bottom, 0px), 10px)";
 // and there is no way to tell that apart from a CSS bug by looking at the
 // layout alone — which is exactly the ambiguity that cost us a round trip.
 const VP_DEBUG = true;
-const BUILD_TAG = "navfix-3";
+const BUILD_TAG = "navfix-4";
 
 function ViewportDebug({ navRef }) {
   const [info, setInfo] = useState(null);

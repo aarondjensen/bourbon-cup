@@ -13,13 +13,31 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
     <link rel="manifest" href="/favicon/site.webmanifest" />
 
-    <!-- iOS/PWA — let the app render fullscreen-style when added to home screen,
-         and color the status bar to match the app bg in each system theme. -->
+    <!-- iOS/PWA — added to home screen, this renders as a standalone app.
+
+         status-bar-style MUST stay "black" and NOT go back to
+         "black-translucent". With black-translucent iOS starts the page at
+         y=0 under the status bar but does NOT grow the layout viewport to
+         match — it stays screen_height minus status_bar_height. Measured on
+         an iPhone 16 Pro: screen 874pt, window.innerHeight 812pt,
+         env(safe-area-inset-top) 62pt, and 874 - 812 = 62 exactly. The page
+         gets pulled up under the status bar while keeping the short height,
+         so one status-bar's worth of dead space falls out of the BOTTOM and
+         the nav can never reach the physical edge. No amount of CSS fixes
+         it, because the viewport itself is short.
+
+         With "black", iOS places the web view BELOW the status bar
+         (y=62..874), env(safe-area-inset-top) becomes 0, and the nav's
+         bottom edge lands on the real bottom of the screen. The app bg is
+         #0a0a0b, so an opaque black status bar is visually identical.
+
+         NOTE: iOS snapshots these tags when the icon is added to the home
+         screen. Changing them requires deleting and re-adding the icon. -->
     <meta name="apple-mobile-web-app-title" content="Bourbon Cup" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="theme-color" content="#0a0804" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#0a0a0b" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#faf6ec" media="(prefers-color-scheme: light)" />
 
     <title>The Bourbon Cup</title>
