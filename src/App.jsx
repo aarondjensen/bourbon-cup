@@ -159,7 +159,7 @@ function LoginScreen({ players, onLogin, teams, darkMode, tournamentName }) {
   );
 
   return (
-    <div style={{ height: "100svh", background: BC.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 10px", fontFamily: "'Montserrat', sans-serif", position: "relative", overflow: "hidden" }}>
+    <div style={{ height: "100dvh", background: BC.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 10px", fontFamily: "'Montserrat', sans-serif", position: "relative", overflow: "hidden" }}>
       {/* Silhouette — fixed full-screen background */}
       <img src={TROPHY_SILHOUETTE} alt="" style={{
         position: "fixed", top: "50%", left: "50%",
@@ -4888,7 +4888,7 @@ export default function App() {
     if (styleEl) {
       styleEl.textContent = `
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body, #root { height: 100%; width: 100%; background: ${BC.bg}; overflow: hidden; }
+        html, body, #root { height: 100dvh; width: 100%; background: ${BC.bg}; overflow: hidden; }
         body { margin: 0; padding: 0; }
       `;
     }
@@ -5278,7 +5278,7 @@ export default function App() {
   };
 
   return (
-    <div style={{ height: "100svh", width: "100%", background: BC.bg, display: "flex", flexDirection: "column", position: "relative", fontFamily: "'Montserrat', sans-serif", overflow: "hidden", boxSizing: "border-box", paddingTop: "env(safe-area-inset-top, 0px)", paddingLeft: "env(safe-area-inset-left, 0px)", paddingRight: "env(safe-area-inset-right, 0px)" }}>
+    <div style={{ height: "100dvh", width: "100%", background: BC.bg, display: "flex", flexDirection: "column", position: "relative", fontFamily: "'Montserrat', sans-serif", overflow: "hidden", boxSizing: "border-box", paddingTop: "env(safe-area-inset-top, 0px)", paddingLeft: "env(safe-area-inset-left, 0px)", paddingRight: "env(safe-area-inset-right, 0px)" }}>
       <div style={{ maxWidth: 520, width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", height: "100%", position: "relative", padding: "0 4px" }}>
       <Notif notif={notif} />
 
@@ -5333,10 +5333,9 @@ export default function App() {
       {/* Content */}
       <div className="bc-app-body" style={{
         flex: 1, overflowY: "auto", overflowX: "hidden",
-        // Bottom padding clears the fixed nav: the nav is ~55px tall (its
-        // buttons) + the home-indicator safe area. 56 + safe clears it with
-        // no dead space and no clipping of the last row.
-        padding: "12px 10px calc(env(safe-area-inset-bottom, 0px) + 56px) 10px",
+        // The nav is now an in-flow sibling below this scroll area, so no
+        // nav-clearance padding is needed — just normal content padding.
+        padding: "12px 10px 16px 10px",
         // Vertical centering for short views (affects EVERY tab). This was
         // previously `display:grid; align-content:safe center`, but Safari
         // doesn't support the `safe` overflow-alignment keyword — it drops
@@ -5511,11 +5510,13 @@ export default function App() {
 
       <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={() => setUser(null)} user={user} view={view} darkMode={darkMode} onToggleTheme={toggleTheme} />
 
-      {/* Bottom Nav — hugs the bottom edge. paddingBottom is JUST the
-          home-indicator safe area (0 on non-notch devices / in-browser), so
-          there's no dead space beneath the labels; the 8px breathing room
-          that used to live here was redundant with the buttons' own padding. */}
-      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: BC.card, borderTop: `1px solid ${BC.bdr}`, zIndex: 100, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+      {/* Bottom Nav — an IN-FLOW flex child at the end of the full-height
+          (100dvh) column, so it always rests on the true bottom of the
+          visible screen. (It used to be position:fixed, which on mobile
+          pinned to the small-viewport bottom and left a strip of page-bg
+          showing beneath it.) paddingBottom is JUST the home-indicator safe
+          area — 0 on non-notch devices / in-browser. */}
+      <div style={{ flexShrink: 0, background: BC.card, borderTop: `1px solid ${BC.bdr}`, zIndex: 100, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
       <div style={{ maxWidth: 520, margin: "0 auto", display: "flex" }}>
         {navItems.map(item => {
           const active = view === item.key;

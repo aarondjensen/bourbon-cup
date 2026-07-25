@@ -179,7 +179,7 @@ if (typeof document !== "undefined") {
   _style.id = "bc-global-style";
   _style.textContent = `
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body, #root { height: 100%; width: 100%; background: ${BC.bg}; overflow: hidden; }
+    html, body, #root { height: 100dvh; width: 100%; background: ${BC.bg}; overflow: hidden; }
     body { margin: 0; padding: 0; }
   `;
   document.head.appendChild(_style);
