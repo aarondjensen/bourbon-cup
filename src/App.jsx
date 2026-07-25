@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { BC, applyBCTheme, initialBCMode, bcGlobalCSS } from "./theme";
-import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId } from "./firebase";
+import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, isDirectorSession, setDirectorSession } from "./firebase";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
   resolveTeams, DEFAULT_TEAM_NAMES, TOURNAMENT_TITLE, TOURNAMENT_LOCATION,
@@ -145,13 +145,20 @@ function Notif({ notif }) {
 
 // ── Login Screen ──
 function LoginScreen({ players, onLogin, teams, darkMode, tournamentName }) {
-  const [search, setSearch] = useState("");
+  // Director bootstrap. A director normally signs in by tapping their own
+  // (director-flagged) name, but a brand-new edition starts with an EMPTY
+  // roster — no name to tap — so there must be a code path to unlock setup.
+  const [code, setCode] = useState("");
 
-  useEffect(() => {
-    if (search === DIRECTOR_CODE) {
+  const submitCode = () => {
+    if (code.trim().toLowerCase() === DIRECTOR_CODE) {
       onLogin({ player_id: "bootstrap_director", name: "Director (Setup)", team: null, isDirector: true });
     }
-  }, [search]);
+  };
+  // Auto-unlock the moment the full code is typed (no Enter needed).
+  useEffect(() => {
+    if (code.trim().toLowerCase() === DIRECTOR_CODE) submitCode();
+  }, [code]);
 
   // Mash Brothers has TWO logo variants — one designed to be displayed
   // on a black background (the original, with the green flag/white
@@ -224,11 +231,30 @@ function LoginScreen({ players, onLogin, teams, darkMode, tournamentName }) {
         })}
       </div>
 
-      {players.length === 0 && (
-        <div style={{ textAlign: "center", color: BC.t3, padding: 16, fontSize: 12, position: "relative", zIndex: 1, marginTop: 12 }}>
-          No players yet. Type <span style={{ color: BC.amber, fontWeight: 700 }}>{DIRECTOR_CODE}</span> to set up.
-        </div>
-      )}
+      {/* Director bootstrap — ALWAYS visible so a director is never left
+          hunting for it (this is what was missing on mobile). Auto-unlocks
+          when the full code is typed; empty-roster editions get a prompt. */}
+      <div style={{ width: "100%", maxWidth: 280, position: "relative", zIndex: 1, marginTop: 16, display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+        {players.length === 0 && (
+          <div style={{ textAlign: "center", color: BC.t3, fontSize: 12, lineHeight: 1.4 }}>
+            No players yet. Enter the director code to set up this edition.
+          </div>
+        )}
+        <input
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") submitCode(); }}
+          type="password"
+          autoComplete="off"
+          placeholder="Director code"
+          aria-label="Director code"
+          style={{
+            width: "100%", padding: "12px 14px", textAlign: "center", letterSpacing: 1,
+            background: BC.card + "cc", border: `1px solid ${BC.amber}55`, borderRadius: 8,
+            color: BC.t1, fontSize: 16, fontWeight: 600, outline: "none",
+          }}
+        />
+      </div>
       </div>
     </div>
   );
@@ -4853,7 +4879,12 @@ const TeeCircle = ({ tee, index, size = 14, active }) => {
 
 // ── Main App ──
 export default function App() {
-  const [user, setUser] = useState(null);
+  // Rehydrate a director session that survived an edition-switch reload (or a
+  // plain refresh). Only the director flag is persisted, not a player identity.
+  const [user, setUser] = useState(() =>
+    isDirectorSession()
+      ? { player_id: "bootstrap_director", name: "Director (Setup)", team: null, isDirector: true }
+      : null);
   // Default landing view. Was "practice" while the standalone Mash tab
   // was the focus of validation; now that the Mash UI patterns power
   // the tournament tabs, Leaderboard is the right home base — the
@@ -5274,7 +5305,7 @@ export default function App() {
 
   const availableRounds = useMemo(() => [...new Set(enrichedMatches.map(m => m.round))].sort(), [enrichedMatches]);
 
-  if (!user) return <LoginScreen players={tPlayers} teams={teams} darkMode={darkMode} tournamentName={tournamentName} onLogin={p => { setUser({ ...p, isDirector: !!p.isDirector }); }} />;
+  if (!user) return <LoginScreen players={tPlayers} teams={teams} darkMode={darkMode} tournamentName={tournamentName} onLogin={p => { const u = { ...p, isDirector: !!p.isDirector }; setDirectorSession(u.isDirector); setUser(u); }} />;
 
   // Bottom-nav items. The Practice tab (formerly "Mash") was relocated
   // to the More menu and is gated to directors only — practice rounds
@@ -5556,7 +5587,7 @@ export default function App() {
         </div>
       </div>
 
-      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={() => setUser(null)} user={user} view={view} darkMode={darkMode} onToggleTheme={toggleTheme} />
+      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={() => { setDirectorSession(false); setUser(null); }} user={user} view={view} darkMode={darkMode} onToggleTheme={toggleTheme} />
       </div>
 
       {/* Bottom Nav — an IN-FLOW flex child of the shell, and the LAST one.
