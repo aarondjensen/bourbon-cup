@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { BC, applyBCTheme, initialBCMode } from "./theme";
+import { BC, applyBCTheme, initialBCMode, bcGlobalCSS } from "./theme";
 import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId } from "./firebase";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
@@ -27,6 +27,26 @@ import { SegmentedToggle, Banner, Toast } from "./components/ui";
 import { useConfirm } from "./lib/useConfirm";
 import { EditionSwitcher } from "./components/EditionSwitcher";
 import { GhinLinkButton, GhinSyncButton } from "./components/GhinLink";
+
+// ── Bottom-nav safe-area cushion ──────────────────────────────────
+// On a device with a home indicator, env(safe-area-inset-bottom) is 34px.
+// Reserving the whole inset as padding under the nav leaves a tall band of
+// BC.card below the labels — and because card (#161618) and bg (#0a0a0b)
+// are nearly the same value in dark mode, that band reads as empty space
+// UNDER the nav rather than as part of it. (Halving the inset, the previous
+// workaround, just made the band shorter.)
+//
+// The home indicator is a thin translucent overlay that content is allowed
+// to sit beneath, so we clamp the cushion to the small amount of clearance
+// the labels actually need, and — critically — apply it INSIDE the nav
+// buttons rather than as padding on the bar. The bar's background now runs
+// edge to edge and every pixel of it is tappable, so there is no dead strip
+// at any point.
+//
+// Single knob: raise 10px for more breathing room under the labels, or
+// swap in plain `env(safe-area-inset-bottom, 0px)` for the full iOS-style
+// inset. Everything that needs to sit on top of the nav reads this value.
+const NAV_SAFE_PAD = "min(env(safe-area-inset-bottom, 0px), 10px)";
 
 // First+last initials from a player's full name. "Aaron Jensen" → "AJ".
 // Single-name fallback grabs the first two letters (e.g. "Joe" → "JO") so a
@@ -159,7 +179,7 @@ function LoginScreen({ players, onLogin, teams, darkMode, tournamentName }) {
   );
 
   return (
-    <div style={{ height: "100dvh", background: BC.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 10px", fontFamily: "'Montserrat', sans-serif", position: "relative", overflow: "hidden" }}>
+    <div style={{ height: "100%", background: BC.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 10px", fontFamily: "'Montserrat', sans-serif", position: "relative", overflow: "hidden" }}>
       {/* Silhouette — fixed full-screen background */}
       <img src={TROPHY_SILHOUETTE} alt="" style={{
         position: "fixed", top: "50%", left: "50%",
@@ -479,7 +499,7 @@ function TeamLeaderboard({ matches, holeData, courses, tRounds, tPlayers, rounds
         // body's top padding, and the fixed nav clearance.
         <div style={{
           display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          minHeight: "calc(100svh - 250px)", textAlign: "center", padding: "0 24px", gap: 10,
+          minHeight: "calc(var(--bc-app-h, 100svh) - 250px)", textAlign: "center", padding: "0 24px", gap: 10,
         }}>
           <div style={{
             width: 40, height: 40, background: BC.amber,
@@ -4703,7 +4723,7 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, 
         onTouchEnd={handleTouchEnd}
         style={{
           position: "fixed",
-          bottom: "calc(62px + env(safe-area-inset-bottom, 0px) / 2)",
+          bottom: `calc(62px + ${NAV_SAFE_PAD})`,
           right: "max(8px, calc(50vw - 252px))",
           transform: `translateY(${dragY}px)`,
           transition: dragY === 0 ? "transform 0.2s ease, opacity 0.15s ease" : "none",
@@ -4887,13 +4907,11 @@ export default function App() {
   // of the old color around the safe areas / scroll bounce.
   useEffect(() => {
     const styleEl = document.getElementById("bc-global-style");
-    if (styleEl) {
-      styleEl.textContent = `
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body, #root { height: 100%; width: 100%; background: ${BC.bg}; overflow: hidden; }
-        body { margin: 0; padding: 0; }
-      `;
-    }
+    // bcGlobalCSS() is the single source of truth for the document-level
+    // rules (see theme.js). Re-emitting the whole sheet here — rather than
+    // a hand-maintained copy of it — is what keeps the app-height layout
+    // contract intact across a theme toggle.
+    if (styleEl) styleEl.textContent = bcGlobalCSS(BC.bg);
   }, [darkMode]);
 
   const [tPlayers, setTPlayers] = useState([]);
@@ -5292,8 +5310,15 @@ export default function App() {
     return null;
   };
 
+  // App shell — fills #root exactly. #root is sized to the MEASURED visible
+  // viewport height (--bc-app-h, see theme.js), so the shell is `height:
+  // 100%` of a known-good box rather than a fixed element betting on
+  // `bottom: 0` landing somewhere the user can actually see. That bet is
+  // what put a strip of dead space under the nav on mobile: on iOS Safari
+  // and Android Chrome a fixed element's containing block is the LARGE
+  // viewport, not the visible one.
   return (
-    <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: 0, width: "100%", background: BC.bg, display: "flex", flexDirection: "column", fontFamily: "'Montserrat', sans-serif", overflow: "hidden", boxSizing: "border-box", paddingTop: "env(safe-area-inset-top, 0px)", paddingLeft: "env(safe-area-inset-left, 0px)", paddingRight: "env(safe-area-inset-right, 0px)" }}>
+    <div style={{ position: "relative", width: "100%", height: "100%", background: BC.bg, display: "flex", flexDirection: "column", fontFamily: "'Montserrat', sans-serif", overflow: "hidden", boxSizing: "border-box", paddingTop: "env(safe-area-inset-top, 0px)", paddingLeft: "env(safe-area-inset-left, 0px)", paddingRight: "env(safe-area-inset-right, 0px)" }}>
       <div style={{ maxWidth: 520, width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", flex: 1, minHeight: 0, position: "relative", padding: "0 4px" }}>
       <Notif notif={notif} />
 
@@ -5529,19 +5554,21 @@ export default function App() {
       <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={() => setUser(null)} user={user} view={view} darkMode={darkMode} onToggleTheme={toggleTheme} />
       </div>
 
-      {/* Bottom Nav — an IN-FLOW flex child of the shell (previously
-          position:fixed). Because the shell is pinned to the viewport
-          (position:fixed; inset:0) and this is its last child, the nav's
-          bottom edge IS the viewport's bottom edge — it is structurally
-          impossible for anything to sit below it. The old approach (fixed
-          nav + a matching bottom padding on the scroll body) had to keep
-          two numbers in sync by hand, and any drift showed up as dead
-          space. Now the body just takes `flex: 1` and the nav takes its
-          natural height, so no clearance padding is needed at all.
-          paddingBottom reserves HALF the home-indicator inset rather than
-          the full 34px + 8px cushion: enough that the labels clear the
-          indicator, without the tall near-black band that read as a gap. */}
-      <div style={{ flexShrink: 0, width: "100%", background: BC.card, borderTop: `1px solid ${BC.bdr}`, paddingBottom: "calc(env(safe-area-inset-bottom, 0px) / 2)" }}>
+      {/* Bottom Nav — an IN-FLOW flex child of the shell, and the LAST one.
+          The chain that guarantees it sits on the physical bottom edge:
+            #root   height = --bc-app-h (measured visible viewport, theme.js)
+            shell   height = 100% of #root, flex column
+            body    flex: 1  → absorbs all free space
+            nav     flexShrink: 0 → natural height, hard against the bottom
+          Nothing in that chain depends on `bottom: 0`, `100vh`, or on the
+          browser reporting its own viewport honestly — which is why the
+          previous fixed-shell version drifted on iOS Safari and Android
+          Chrome.
+          The bar carries NO bottom padding of its own. The home-indicator
+          cushion lives inside the buttons (NAV_SAFE_PAD), so the card
+          background runs edge to edge and the padded region is still
+          tappable — no dead strip, in either theme. */}
+      <div style={{ flexShrink: 0, width: "100%", background: BC.card, borderTop: `1px solid ${BC.bdr}` }}>
       <div style={{ maxWidth: 520, margin: "0 auto", display: "flex" }}>
         {navItems.map(item => {
           const active = view === item.key;
@@ -5551,7 +5578,7 @@ export default function App() {
               if (item.key === "menu") { setMenuOpen(true); return; }
               setView(item.key);
             }} style={{
-              flex: 1, padding: "8px 4px 8px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 3,
+              flex: 1, padding: `8px 4px calc(8px + ${NAV_SAFE_PAD})`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 3,
               background: "transparent", border: "none", cursor: "pointer", minHeight: 54,
             }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 24 }}>
