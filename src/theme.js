@@ -168,6 +168,14 @@ export const teamColor     = (tid) => (tid === "A" ? BC.teamA     : BC.teamB);
 export const teamColorDim  = (tid) => (tid === "A" ? BC.teamADim  : BC.teamBDim);
 export const teamColorGlow = (tid) => (tid === "A" ? BC.teamAGlow : BC.teamBGlow);
 
+// ── Player-name text color ──
+// Single source of truth for how player names read in rosters and lists.
+// Brightening them updates every instance that routes through here. Uses the
+// bright primary text token (BC.t1) — team identity is carried by stripes,
+// grouping and team colors elsewhere, not by dimming the name itself.
+// Reads live BC so it tracks the active theme.
+export const playerNameColor = () => BC.t1;
+
 // ── Why there is deliberately NO JS viewport measurement here ──────
 // The obvious "modern" fix for a bottom bar that won't sit on the bottom is
 // to measure window.visualViewport.height and size the app to it. On iOS

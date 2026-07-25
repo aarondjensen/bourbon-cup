@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { BC, applyBCTheme, initialBCMode, bcGlobalCSS } from "./theme";
+import { BC, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor } from "./theme";
 import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId } from "./firebase";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
@@ -1691,18 +1691,19 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         </>
                       ) : (
                         <>
-                          {/* Name + director badge sit tight on the left; the
-                              HI value sits right beside them (a small gap, not
-                              the old flex:1 gulf); a spacer pushes the Edit and
-                              GHIN controls to the right as their own group. */}
-                          <span style={{ fontSize: 12, fontWeight: 600, color: team.accent + "88", flexShrink: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fullName(p)}</span>
-                          {p.isDirector && <span title="Tournament director" style={{ fontSize: 11, flexShrink: 0, lineHeight: 1 }}>👑</span>}
+                          {/* Columns: name (fixed share, so the Index lines up
+                              row-to-row as a dedicated column), the Index value,
+                              then a spacer pushing Edit + GHIN to the right. */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 5, flexBasis: "52%", flexGrow: 0, flexShrink: 1, minWidth: 0 }}>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: playerNameColor(), minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fullName(p)}</span>
+                            {p.isDirector && <span title="Tournament director" style={{ fontSize: 11, flexShrink: 0, lineHeight: 1 }}>👑</span>}
+                          </div>
                           {(() => {
                             const overridden = p.hi_override != null && String(p.hi_override).trim() !== "";
                             const effHI = overridden ? p.hi_override : p.handicap_index;
                             return (
                               <span title={overridden ? `Director override — GHIN/base index is ${p.handicap_index}` : undefined}
-                                style={{ fontSize: 11, fontWeight: overridden ? 700 : 400, color: overridden ? BC.amber : BC.t1, flexShrink: 0, marginLeft: 2 }}>
+                                style={{ fontSize: 12, fontWeight: overridden ? 700 : 500, color: overridden ? BC.amber : playerNameColor(), width: 44, flexShrink: 0, textAlign: "left" }}>
                                 {effHI}{overridden ? "*" : ""}
                               </span>
                             );
@@ -2037,7 +2038,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     const tm = teams[p.team];
                     return (
                       <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: "1fr 42px 60px 34px", gap: 4, alignItems: "center", marginBottom: 2 }}>
-                        <div style={{ fontSize: 10, color: tm.accent + "aa", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
+                        <div style={{ fontSize: 10, color: playerNameColor(), fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
                         <div style={{ fontSize: 10, color: e?.overridden ? BC.amber : BC.t2, textAlign: "center", fontWeight: e?.overridden ? 700 : 400 }}>
                           {e ? e.hi : "—"}
                         </div>
@@ -2130,7 +2131,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     };
                     return (
                       <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: `1fr 30px 58px ${tees2.map(() => "22px").join(" ")} 22px`, gap: 4, alignItems: "center", marginBottom: 3 }}>
-                        <div style={{ fontSize: 11, color: teams[p.team].accent + "88", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
+                        <div style={{ fontSize: 11, color: playerNameColor(), fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
                         <div title={hiOverridden ? `Index override (base ${p.handicap_index})` : undefined} style={{ fontSize: 10, color: hiOverridden ? BC.amber : BC.t3, fontWeight: hiOverridden ? 700 : 400, textAlign: "center" }}>{effHI}{hiOverridden ? "*" : ""}</div>
                         <input
                           type="number" step="1"
@@ -2912,7 +2913,7 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
                 <div key={p.name} style={{ display: "grid", gridTemplateColumns: "1fr 44px 44px 44px 52px", padding: "9px 12px", borderBottom: i < playerStats.length-1 ? `1px solid ${BC.bdr}10` : "none", alignItems: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <div style={{ width: 6, height: 6, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
-                    <span style={{ fontSize: 12, fontWeight: 600, color: teams[p.team].accent + "88" }}>{p.name}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: playerNameColor() }}>{p.name}</span>
                   </div>
                   <div style={{ textAlign: "center", fontSize: 12, color: "#22c55e", fontWeight: 600 }}>{p.wins}</div>
                   <div style={{ textAlign: "center", fontSize: 12, color: BC.danger, fontWeight: 600 }}>{p.losses}</div>
