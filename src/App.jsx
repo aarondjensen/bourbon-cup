@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { BC, applyBCTheme, initialBCMode, bcGlobalCSS } from "./theme";
-import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, isDirectorSession, setDirectorSession } from "./firebase";
+import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId } from "./firebase";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
   resolveTeams, DEFAULT_TEAM_NAMES, TOURNAMENT_TITLE, TOURNAMENT_LOCATION,
@@ -52,6 +52,90 @@ import { GhinLinkButton, GhinSyncButton } from "./components/GhinLink";
 //                 home indicator and taps there get unreliable)
 //   plain env() → full iOS-standard inset, and the band comes back
 const NAV_SAFE_PAD = "min(env(safe-area-inset-bottom, 0px), 10px)";
+
+// ── TEMPORARY viewport diagnostic ─────────────────────────────────
+// Delete VP_DEBUG, BUILD_TAG, the ViewportDebug component, navRef and the
+// <ViewportDebug /> mount once the bottom-nav question is closed out.
+//
+// BUILD_TAG is the important one: it prints on screen, so a screenshot
+// proves which bundle the device is actually running. An installed iOS
+// home-screen app will happily serve a cached index.html for a long time,
+// and there is no way to tell that apart from a CSS bug by looking at the
+// layout alone — which is exactly the ambiguity that cost us a round trip.
+const VP_DEBUG = true;
+const BUILD_TAG = "navfix-3";
+
+function ViewportDebug({ navRef }) {
+  const [info, setInfo] = useState(null);
+  useEffect(() => {
+    const read = () => {
+      // Probe element: the only way to read env(safe-area-inset-*) from JS
+      // is to apply it to something and ask for the computed value back.
+      const probe = document.createElement("div");
+      probe.style.cssText =
+        "position:fixed;visibility:hidden;pointer-events:none;top:0;left:0;" +
+        "padding-top:env(safe-area-inset-top,0px);" +
+        "padding-bottom:env(safe-area-inset-bottom,0px);";
+      document.body.appendChild(probe);
+      const cs = getComputedStyle(probe);
+      const safeT = cs.paddingTop, safeB = cs.paddingBottom;
+      probe.remove();
+
+      const vv = window.visualViewport;
+      const navBottom = navRef?.current
+        ? Math.round(navRef.current.getBoundingClientRect().bottom)
+        : null;
+      const modes = [];
+      if (window.navigator.standalone) modes.push("nav.standalone");
+      if (window.matchMedia("(display-mode: standalone)").matches) modes.push("dm.standalone");
+
+      setInfo({
+        build: BUILD_TAG,
+        screen: `${window.screen.width}x${window.screen.height}`,
+        inner: `${window.innerWidth}x${window.innerHeight}`,
+        clientH: document.documentElement.clientHeight,
+        vv: vv ? `${Math.round(vv.width)}x${Math.round(vv.height)} @${Math.round(vv.offsetTop)}` : "none",
+        safe: `${safeT} / ${safeB}`,
+        navBottom,
+        mode: modes.join(" ") || "browser",
+      });
+    };
+    read();
+    // Re-read once the browser has settled (toolbar animations, orientation).
+    const t = setTimeout(read, 500);
+    window.addEventListener("resize", read);
+    window.addEventListener("orientationchange", read);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("resize", read);
+      window.removeEventListener("orientationchange", read);
+    };
+  }, [navRef]);
+
+  if (!info) return null;
+  const rows = [
+    ["build", info.build],
+    ["screen", info.screen],
+    ["innerW x H", info.inner],
+    ["docEl.clientH", info.clientH],
+    ["visualViewport", info.vv],
+    ["safe top / bot", info.safe],
+    ["NAV rect.bottom", info.navBottom],
+    ["mode", info.mode],
+  ];
+  return (
+    <div style={{
+      position: "fixed", top: "calc(env(safe-area-inset-top, 0px) + 4px)", left: 6,
+      zIndex: 100000, background: "rgba(0,0,0,0.88)", border: "1px solid #e0a93c",
+      borderRadius: 6, padding: "6px 8px", pointerEvents: "none",
+      font: "600 10px/1.4 ui-monospace, Menlo, monospace", color: "#e0a93c",
+    }}>
+      {rows.map(([k, v]) => (
+        <div key={k}>{k}: <span style={{ color: "#f5f4f2" }}>{String(v)}</span></div>
+      ))}
+    </div>
+  );
+}
 
 // First+last initials from a player's full name. "Aaron Jensen" → "AJ".
 // Single-name fallback grabs the first two letters (e.g. "Joe" → "JO") so a
@@ -145,20 +229,13 @@ function Notif({ notif }) {
 
 // ── Login Screen ──
 function LoginScreen({ players, onLogin, teams, darkMode, tournamentName }) {
-  // Director bootstrap. A director normally signs in by tapping their own
-  // (director-flagged) name, but a brand-new edition starts with an EMPTY
-  // roster — no name to tap — so there must be a code path to unlock setup.
-  const [code, setCode] = useState("");
+  const [search, setSearch] = useState("");
 
-  const submitCode = () => {
-    if (code.trim().toLowerCase() === DIRECTOR_CODE) {
+  useEffect(() => {
+    if (search === DIRECTOR_CODE) {
       onLogin({ player_id: "bootstrap_director", name: "Director (Setup)", team: null, isDirector: true });
     }
-  };
-  // Auto-unlock the moment the full code is typed (no Enter needed).
-  useEffect(() => {
-    if (code.trim().toLowerCase() === DIRECTOR_CODE) submitCode();
-  }, [code]);
+  }, [search]);
 
   // Mash Brothers has TWO logo variants — one designed to be displayed
   // on a black background (the original, with the green flag/white
@@ -231,30 +308,11 @@ function LoginScreen({ players, onLogin, teams, darkMode, tournamentName }) {
         })}
       </div>
 
-      {/* Director bootstrap — ALWAYS visible so a director is never left
-          hunting for it (this is what was missing on mobile). Auto-unlocks
-          when the full code is typed; empty-roster editions get a prompt. */}
-      <div style={{ width: "100%", maxWidth: 280, position: "relative", zIndex: 1, marginTop: 16, display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-        {players.length === 0 && (
-          <div style={{ textAlign: "center", color: BC.t3, fontSize: 12, lineHeight: 1.4 }}>
-            No players yet. Enter the director code to set up this edition.
-          </div>
-        )}
-        <input
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") submitCode(); }}
-          type="password"
-          autoComplete="off"
-          placeholder="Director code"
-          aria-label="Director code"
-          style={{
-            width: "100%", padding: "12px 14px", textAlign: "center", letterSpacing: 1,
-            background: BC.card + "cc", border: `1px solid ${BC.amber}55`, borderRadius: 8,
-            color: BC.t1, fontSize: 16, fontWeight: 600, outline: "none",
-          }}
-        />
-      </div>
+      {players.length === 0 && (
+        <div style={{ textAlign: "center", color: BC.t3, padding: 16, fontSize: 12, position: "relative", zIndex: 1, marginTop: 12 }}>
+          No players yet. Type <span style={{ color: BC.amber, fontWeight: 700 }}>{DIRECTOR_CODE}</span> to set up.
+        </div>
+      )}
       </div>
     </div>
   );
@@ -4879,12 +4937,7 @@ const TeeCircle = ({ tee, index, size = 14, active }) => {
 
 // ── Main App ──
 export default function App() {
-  // Rehydrate a director session that survived an edition-switch reload (or a
-  // plain refresh). Only the director flag is persisted, not a player identity.
-  const [user, setUser] = useState(() =>
-    isDirectorSession()
-      ? { player_id: "bootstrap_director", name: "Director (Setup)", team: null, isDirector: true }
-      : null);
+  const [user, setUser] = useState(null);
   // Default landing view. Was "practice" while the standalone Mash tab
   // was the focus of validation; now that the Mash UI patterns power
   // the tournament tabs, Leaderboard is the right home base — the
@@ -4982,6 +5035,10 @@ export default function App() {
   // and are always up-to-date). Updated via the effect below whenever
   // menuOpen changes.
   const popupOpenRef = useRef(false);
+
+  // TEMPORARY — measured by ViewportDebug so we can compare the nav's real
+  // bottom edge against window.innerHeight. Remove with the debug block.
+  const navRef = useRef(null);
 
   const notify = useCallback((msg, type = "success") => {
     setNotif({ msg, type });
@@ -5305,7 +5362,7 @@ export default function App() {
 
   const availableRounds = useMemo(() => [...new Set(enrichedMatches.map(m => m.round))].sort(), [enrichedMatches]);
 
-  if (!user) return <LoginScreen players={tPlayers} teams={teams} darkMode={darkMode} tournamentName={tournamentName} onLogin={p => { const u = { ...p, isDirector: !!p.isDirector }; setDirectorSession(u.isDirector); setUser(u); }} />;
+  if (!user) return <LoginScreen players={tPlayers} teams={teams} darkMode={darkMode} tournamentName={tournamentName} onLogin={p => { setUser({ ...p, isDirector: !!p.isDirector }); }} />;
 
   // Bottom-nav items. The Practice tab (formerly "Mash") was relocated
   // to the More menu and is gated to directors only — practice rounds
@@ -5357,6 +5414,7 @@ export default function App() {
     <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: 0, width: "100%", background: BC.bg, display: "flex", flexDirection: "column", fontFamily: "'Montserrat', sans-serif", overflow: "hidden", boxSizing: "border-box", paddingTop: "env(safe-area-inset-top, 0px)", paddingLeft: "env(safe-area-inset-left, 0px)", paddingRight: "env(safe-area-inset-right, 0px)" }}>
       <div style={{ maxWidth: 520, width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", flex: 1, minHeight: 0, position: "relative", padding: "0 4px" }}>
       <Notif notif={notif} />
+      {VP_DEBUG && <ViewportDebug navRef={navRef} />}
 
       {/* Pull-to-refresh indicator — circular badge with the trophy
           silhouette inside, fixed-positioned and overlaid above the
@@ -5587,7 +5645,7 @@ export default function App() {
         </div>
       </div>
 
-      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={() => { setDirectorSession(false); setUser(null); }} user={user} view={view} darkMode={darkMode} onToggleTheme={toggleTheme} />
+      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={() => setUser(null)} user={user} view={view} darkMode={darkMode} onToggleTheme={toggleTheme} />
       </div>
 
       {/* Bottom Nav — an IN-FLOW flex child of the shell, and the LAST one.
@@ -5602,7 +5660,7 @@ export default function App() {
           inert strip of BC.card sitting below it. That strip was the
           original complaint: card (#161618) and bg (#0a0a0b) are close
           enough in dark mode that it read as a gap. */}
-      <div style={{ flexShrink: 0, width: "100%", background: BC.card, borderTop: `1px solid ${BC.bdr}` }}>
+      <div ref={navRef} style={{ flexShrink: 0, width: "100%", background: BC.card, borderTop: `1px solid ${BC.bdr}` }}>
       <div style={{ maxWidth: 520, margin: "0 auto", display: "flex" }}>
         {navItems.map(item => {
           const active = view === item.key;
