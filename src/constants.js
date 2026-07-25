@@ -132,4 +132,4 @@ export const PRACTICE_TEAM_COLORS = [
 // (Admin, Practice setup). Not real auth; the app is private-link-shared
 // among 16 players + the director, and Firebase rules can layer on top
 // later if needed.
-export const DIRECTOR_CODE = "bcdir2025";
+export const DIRECTOR_CODE = "bcdir";
