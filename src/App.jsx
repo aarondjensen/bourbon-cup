@@ -1251,6 +1251,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   const [courseStateFilter, setCourseStateFilter] = useState("MI");
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [refetchingTees, setRefetchingTees] = useState(false);
   const [coursePreview, setCoursePreview] = useState(null);
   const [expandedCourse, setExpandedCourse] = useState(null);
   const [searching, setSearching] = useState(false);
@@ -1391,15 +1392,13 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
     return <span style={{ display:"inline-block", width:size, height:size, borderRadius:3, background:color||"#888", border:`1px solid ${isLight?"#99999960":"#ffffff15"}`, flexShrink:0 }} />;
   };
 
-  const doCourseSearch = (query, stateOverride) => {
-    setCourseSearch(query);
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    if (!query.trim() || query.trim().length < 2) { setSearchResults([]); return; }
-    searchTimerRef.current = setTimeout(async () => {
-      setSearchLoading(true);
-      const stateFilter = stateOverride !== undefined ? stateOverride : courseStateFilter;
-      try {
-        const q = query.trim();
+  // Query the course APIs (RapidAPI + GolfCourseAPI) and return parsed
+  // results. No state writes — shared by the debounced search box AND the
+  // "re-fetch tees" action in the course editor.
+  const fetchCourseResults = async (query, stateFilter) => {
+    const q = (query || "").trim();
+    if (q.length < 2) return [];
+    try {
         const stateParam = stateFilter ? `&state=${encodeURIComponent(stateFilter)}` : "";
         let results = [];
         const decodeHtml = (str) => str ? str.replace(/&amp;/g,"&").replace(/&quot;/g,'"').replace(/&#39;/g,"'") : str;
@@ -1468,9 +1467,18 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
           } catch(e) {}
         }
 
-        results = results.map(c => ({ ...c, _incompleteData: !hasRealSlope(c) }));
-        setSearchResults(results);
-      } catch(err) { console.log("Search failed:", err); setSearchResults([]); }
+        return results.map(c => ({ ...c, _incompleteData: !hasRealSlope(c) }));
+      } catch(err) { console.log("Course fetch failed:", err); return []; }
+  };
+
+  const doCourseSearch = (query, stateOverride) => {
+    setCourseSearch(query);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    if (!query.trim() || query.trim().length < 2) { setSearchResults([]); return; }
+    searchTimerRef.current = setTimeout(async () => {
+      setSearchLoading(true);
+      const stateFilter = stateOverride !== undefined ? stateOverride : courseStateFilter;
+      setSearchResults(await fetchCourseResults(query, stateFilter));
       setSearchLoading(false);
     }, 400);
   };
@@ -2331,6 +2339,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       );
                     })}
                   </div>
+                  <button onClick={() => setCoursePreview(c)} title="Edit course name, tees & scorecard" style={{ background: "transparent", border: `1px solid ${BC.bdr}`, color: BC.t3, cursor: "pointer", fontSize: 9, fontWeight: 700, borderRadius: 4, padding: "3px 6px" }}>Edit</button>
                   <button onClick={async () => { if (await confirm(`Remove ${c.name}?`)) onAddCourse({ ...c, _delete: true }); }} style={{ background: "transparent", border: "none", color: BC.t3, cursor: "pointer", fontSize: 14, padding: "2px 4px" }}>✕</button>
                 </div>
                 {expandedCourse === c.id && (
@@ -2400,6 +2409,33 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             const draft = coursePreview;
             const setDraft = fn => setCoursePreview(prev => fn(prev));
             const tbs = draft.tee_boxes || [];
+            // Existing (saved) course vs a fresh API search result.
+            const isExisting = String(draft.id || "").startsWith("bc_course_");
+            // Re-fetch tee data from the golf API by course name (+ state). Use
+            // for recovery when tees were deleted/edited by mistake. Replaces the
+            // whole tee list with the API's; the director reviews and Saves.
+            const refetchTeesFromApi = async () => {
+              if (!draft.name?.trim()) { notify("Add a course name first", "error"); return; }
+              setRefetchingTees(true);
+              try {
+                const results = await fetchCourseResults(draft.name, draft.state || "");
+                const withTees = results.filter(r => (r.tee_boxes || []).length);
+                const nameLc = draft.name.trim().toLowerCase();
+                const match = withTees.find(r => r.name.toLowerCase() === nameLc)
+                  || withTees.find(r => r.name.toLowerCase().includes(nameLc.split(" ")[0]))
+                  || withTees[0];
+                if (!match) { notify("No tee data found from the golf API for this course", "error"); return; }
+                setDraft(p => ({
+                  ...p,
+                  tee_boxes: match.tee_boxes,
+                  hole_pars: (match.hole_pars?.length ? match.hole_pars : p.hole_pars),
+                  hole_handicaps: (match.hole_handicaps?.length ? match.hole_handicaps : p.hole_handicaps),
+                  _incompleteData: false,
+                }));
+                notify(`Loaded ${match.tee_boxes.length} tee${match.tee_boxes.length !== 1 ? "s" : ""} from ${match._source || "API"} — review & Save`, "success");
+              } catch { notify("Re-fetch failed", "error"); }
+              finally { setRefetchingTees(false); }
+            };
             const ti = { background: BC.bg, border: `1px solid ${BC.amber}30`, borderRadius: 4, color: BC.t1, fontSize: 9, textAlign: "center", width: "100%", padding: "3px 2px", boxSizing: "border-box" };
             const tiL = { ...ti, textAlign: "left", padding: "3px 5px" };
             return (
@@ -2433,10 +2469,18 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   <div style={{ padding: "12px 16px" }}>
                     {/* Tee Boxes */}
                     <div style={{ marginBottom: 14 }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, gap: 6 }}>
                         <div style={{ fontSize: 9, color: BC.t3, fontWeight: 700, textTransform: "uppercase" }}>Tee Boxes</div>
-                        <button onClick={() => setDraft(p => ({ ...p, tee_boxes: [...(p.tee_boxes||[]), { name: "", color: "#888888", rating: 72.0, slope: 113, par: 72, yardage: 0 }] }))}
-                          style={{ fontSize: 9, padding: "2px 7px", borderRadius: 4, background: "transparent", border: `1px solid ${BC.amber}60`, color: BC.amber, cursor: "pointer", fontWeight: 700 }}>+ Tee</button>
+                        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                          {/* Recover tee data from the golf API — e.g. after a tee
+                              was deleted by mistake. Replaces the tee list below. */}
+                          <button onClick={refetchTeesFromApi} disabled={refetchingTees} title="Re-fetch tees from the golf API by course name"
+                            style={{ fontSize: 9, padding: "2px 7px", borderRadius: 4, background: "transparent", border: `1px solid ${BC.hcpBlue}60`, color: BC.hcpBlue, cursor: refetchingTees ? "default" : "pointer", fontWeight: 700, opacity: refetchingTees ? 0.5 : 1 }}>
+                            {refetchingTees ? "Fetching…" : "⟳ Re-fetch tees"}
+                          </button>
+                          <button onClick={() => setDraft(p => ({ ...p, tee_boxes: [...(p.tee_boxes||[]), { name: "", color: "#888888", rating: 72.0, slope: 113, par: 72, yardage: 0 }] }))}
+                            style={{ fontSize: 9, padding: "2px 7px", borderRadius: 4, background: "transparent", border: `1px solid ${BC.amber}60`, color: BC.amber, cursor: "pointer", fontWeight: 700 }}>+ Tee</button>
+                        </div>
                       </div>
                       {tbs.length === 0 && <div style={{ fontSize: 10, color: BC.warn, marginBottom: 8, fontStyle: "italic" }}>⚠ No tees from API — add manually</div>}
                       <div style={{ display: "grid", gridTemplateColumns: "18px 1fr 44px 38px 30px 46px 18px", gap: "3px 4px", fontSize: 8, color: BC.t3, fontWeight: 600, marginBottom: 3 }}>
@@ -2521,8 +2565,8 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         await onAddCourse(finalCourse);
                         setCoursePreview(null);
                         setSearching(false);
-                        notify(`${finalCourse.name} added!`, "success");
-                      }} style={{ flex: 2, padding: "10px 0", borderRadius: 8, background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`, border: "none", color: "#0a0804", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>✓ Add Course</button>
+                        notify(`${finalCourse.name} ${isExisting ? "updated" : "added"}!`, "success");
+                      }} style={{ flex: 2, padding: "10px 0", borderRadius: 8, background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`, border: "none", color: "#0a0804", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{isExisting ? "✓ Save Changes" : "✓ Add Course"}</button>
                     </div>
                   </div>
               </Popup>
