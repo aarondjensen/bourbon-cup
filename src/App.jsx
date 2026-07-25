@@ -26,7 +26,7 @@ import { Popup, ConfirmModal } from "./components/Popup";
 import { SegmentedToggle, Banner, Toast } from "./components/ui";
 import { useConfirm } from "./lib/useConfirm";
 import { EditionSwitcher } from "./components/EditionSwitcher";
-import { GhinLinkButton, GhinSyncButton } from "./components/GhinLink";
+import { GhinLinkButton, GhinSyncButton, GhinBadge } from "./components/GhinLink";
 
 // ── Bottom-nav safe-area cushion ──────────────────────────────────
 // Full iOS home-indicator inset (34pt on devices that have one) plus 8pt,
@@ -963,11 +963,11 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           const strokes = strokeMaps[pid]?.[activeHole] || 0;
           // CH for display — per-player tee assignment overrides round default,
           // matching the strokeMaps memo above and computeMatchResult.
-          const hi = getRoundHI({ roundLocks, round: match.round, pid, players: tPlayers, hcpOverrides });
+          const hi = getRoundHI({ roundLocks, round: match.round, pid, players: tPlayers });
           const playerTee = getRoundTee({ roundLocks, round: match.round, pid, teeAssignments, roundTee });
           const ch = getRoundCH({
             roundLocks, round: match.round, pid, players: tPlayers,
-            course, hcpOverrides, teeAssignments, roundTee,
+            course, chOverrides: hcpOverrides, teeAssignments, roundTee,
           });
           // Running net to par for this player thru holes scored
           let netToPar = 0, thru = 0;
@@ -1328,9 +1328,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
       notify(`Round ${editRound} is final — unlock it first`, "error");
       return;
     }
-    // Always save handicap overrides (even if empty, to clear old values)
-    const overrides = hcpOverrides[editRound] || {};
-    await db.upsert("bc_hcp_overrides", { id: editionDocId(`bc_hcp_r${editRound}`), tournament_id: TOURNAMENT_ID, round_number: editRound, overrides });
+    // Always save per-round CH overrides (even if empty, to clear old values).
+    // Stored under `ch_overrides`; these are DIRECT Course-Handicap overrides.
+    const chOverrides = hcpOverrides[editRound] || {};
+    await db.upsert("bc_hcp_overrides", { id: editionDocId(`bc_hcp_r${editRound}`), tournament_id: TOURNAMENT_ID, round_number: editRound, ch_overrides: chOverrides });
     // Save tee assignments
     const assignments = teeAssignments[editRound] || {};
     await db.upsert("bc_tee_assignments", { id: editionDocId(`bc_tee_r${editRound}`), tournament_id: TOURNAMENT_ID, round_number: editRound, assignments });
@@ -1501,7 +1502,12 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
       {tab === "players" && (
         <div>
-          <div style={{ marginBottom: 12, display: "flex", justifyContent: "flex-end" }}>
+          <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+              <GhinBadge />
+              <span style={{ fontSize: 10, color: BC.t3, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Handicap index</span>
+            </div>
+            <span style={{ flex: 1 }} />
             <GhinSyncButton players={tPlayers} onUpdatePlayer={onUpdatePlayer} notify={notify} />
           </div>
           {[teams.A, teams.B].map(team => (
@@ -1615,27 +1621,48 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                             style={{ fontSize: 16, fontWeight: 600, color: BC.t1, width: "100%", boxSizing: "border-box", background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 6, padding: "8px 10px", outline: "none", fontFamily: "'Montserrat', sans-serif" }} />
                           <input placeholder="Last name" value={editingPlayer.last} onChange={e => setEditingPlayer(prev => ({...prev, last: e.target.value}))}
                             style={{ fontSize: 16, fontWeight: 600, color: BC.t1, width: "100%", boxSizing: "border-box", background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 6, padding: "8px 10px", outline: "none", fontFamily: "'Montserrat', sans-serif" }} />
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                            <input type="number" inputMode="decimal" placeholder="HI" value={editingPlayer.hi} onChange={e => setEditingPlayer(prev => ({...prev, hi: e.target.value}))}
-                              style={{ fontSize: 16, color: BC.t1, width: 76, flexShrink: 0, boxSizing: "border-box", background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 6, padding: "8px 8px", outline: "none", fontFamily: "'Montserrat', sans-serif" }} />
-                            <span style={{ flex: 1 }} />
+                          {/* Two indices, kept separate: the base INDEX (what
+                              GHIN sync writes) and the director's OVERRIDE (wins
+                              when set, and GHIN sync never touches it). Leave
+                              Override blank to fall back to the base index. */}
+                          <div style={{ display: "flex", alignItems: "flex-end", gap: 8, minWidth: 0, flexWrap: "wrap" }}>
+                            <label style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
+                              <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.5, color: BC.t3 }}>INDEX{p.ghin_number ? " · GHIN" : ""}</span>
+                              <input type="number" inputMode="decimal" placeholder="HI" value={editingPlayer.hi} onChange={e => setEditingPlayer(prev => ({...prev, hi: e.target.value}))}
+                                style={{ fontSize: 16, color: BC.t1, width: 72, boxSizing: "border-box", background: BC.inp, border: `1px solid ${team.accent}66`, borderRadius: 6, padding: "8px 8px", outline: "none", fontFamily: "'Montserrat', sans-serif" }} />
+                            </label>
+                            <label style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
+                              <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.5, color: BC.amber }}>OVERRIDE</span>
+                              <input type="number" inputMode="decimal" placeholder={String(p.handicap_index)} value={editingPlayer.ov} onChange={e => setEditingPlayer(prev => ({...prev, ov: e.target.value}))}
+                                style={{ fontSize: 16, color: BC.amber, width: 72, boxSizing: "border-box", background: BC.inp, border: `1px solid ${BC.amber}66`, borderRadius: 6, padding: "8px 8px", outline: "none", fontFamily: "'Montserrat', sans-serif" }} />
+                            </label>
+                            <span style={{ flex: 1, minWidth: 8 }} />
                             <button onClick={async () => {
                               const first = (editingPlayer.first || "").trim(), last = (editingPlayer.last || "").trim();
                               if (!first) { notify("Enter a first name", "error"); return; }
                               const newName = toDisplayName(first, last);
                               const changes = [];
                               if (newName !== p.name || first !== (p.first_name||"") || last !== (p.last_name||"")) changes.push(`Name → "${fullName({ first_name: first, last_name: last })}" (shows as "${newName}")`);
-                              const hiChanged = parseFloat(editingPlayer.hi) !== parseFloat(p.handicap_index);
-                              if (hiChanged) changes.push(`HI: ${p.handicap_index} → ${editingPlayer.hi}`);
+                              const baseChanged = parseFloat(editingPlayer.hi) !== parseFloat(p.handicap_index);
+                              if (baseChanged) changes.push(`Index (base): ${p.handicap_index} → ${editingPlayer.hi}`);
+                              // Override: blank → null (falls back to base).
+                              const ovRaw = String(editingPlayer.ov ?? "").trim();
+                              const newOv = ovRaw === "" ? null : (parseFloat(ovRaw) || 0);
+                              const oldOv = (p.hi_override != null && String(p.hi_override).trim() !== "") ? (parseFloat(p.hi_override) || 0) : null;
+                              const ovChanged = newOv !== oldOv;
+                              if (ovChanged) changes.push(`Override: ${oldOv == null ? "—" : oldOv} → ${newOv == null ? "— (use base)" : newOv}`);
                               if (changes.length === 0) { setEditingPlayer(null); return; }
-                              // Spell out the blast radius. A handicap edit mid-event
-                              // is safe by construction — locked rounds ignore it —
-                              // but the director should see that stated, not assume it.
-                              const impact = hiChanged
+                              // Effective index = override ?? base. Only warn about
+                              // round impact when the EFFECTIVE index actually moves.
+                              // Locked rounds ignore it either way; the director
+                              // should see that stated, not have to assume it.
+                              const oldEff = oldOv != null ? oldOv : (parseFloat(p.handicap_index) || 0);
+                              const newEff = newOv != null ? newOv : (parseFloat(editingPlayer.hi) || 0);
+                              const impact = oldEff !== newEff
                                 ? "\n\n" + describeHiChangeImpact(roundLocks, [1, 2, 3, 4]).text
                                 : "";
                               if (await confirm({ title: "Confirm changes", message: changes.join("\n") + impact })) {
-                                onUpdatePlayer({ ...p, name: newName, first_name: first, last_name: last, handicap_index: parseFloat(editingPlayer.hi) || 0 });
+                                onUpdatePlayer({ ...p, name: newName, first_name: first, last_name: last, handicap_index: parseFloat(editingPlayer.hi) || 0, hi_override: newOv });
                               }
                               setEditingPlayer(null);
                             }} style={{ fontSize: 12, padding: "8px 16px", borderRadius: 6, border: "none", background: team.accent, color: "#0a0804", fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Save</button>
@@ -1645,8 +1672,17 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       ) : (
                         <>
                           <span style={{ fontSize: 12, fontWeight: 600, color: team.accent + "88", flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fullName(p)}</span>
-                          <span style={{ fontSize: 11, fontWeight: 400, color: BC.t1, width: 36, flexShrink: 0, textAlign: "right" }}>{p.handicap_index}</span>
-                          <button onClick={() => setEditingPlayer({ pid: p.player_id, first: p.first_name || (p.last_name ? "" : (p.name || "")), last: p.last_name || "", hi: String(p.handicap_index) })} style={{
+                          {(() => {
+                            const overridden = p.hi_override != null && String(p.hi_override).trim() !== "";
+                            const effHI = overridden ? p.hi_override : p.handicap_index;
+                            return (
+                              <span title={overridden ? `Director override — GHIN/base index is ${p.handicap_index}` : undefined}
+                                style={{ fontSize: 11, fontWeight: overridden ? 700 : 400, color: overridden ? BC.amber : BC.t1, width: 42, flexShrink: 0, textAlign: "right" }}>
+                                {effHI}{overridden ? "*" : ""}
+                              </span>
+                            );
+                          })()}
+                          <button onClick={() => setEditingPlayer({ pid: p.player_id, first: p.first_name || (p.last_name ? "" : (p.name || "")), last: p.last_name || "", hi: String(p.handicap_index), ov: (p.hi_override != null && String(p.hi_override).trim() !== "") ? String(p.hi_override) : "" })} style={{
                             fontSize: 9, padding: "1px 5px", borderRadius: 4, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer", flexShrink: 0,
                           }}>Edit</button>
                           <button onClick={() => onUpdatePlayer({ ...p, isDirector: !p.isDirector })} style={{
@@ -2031,8 +2067,8 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   <div>
                     <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: 4, padding: "0 2px", marginBottom: 4, alignItems: "center" }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold }}>PLAYER DETAILS</div>
-                      <div style={{ fontSize: 7, color: BC.t3, fontWeight: 700, textAlign: "center", lineHeight: 1.2 }}>Init HI</div>
-                      <div style={{ fontSize: 7, color: BC.t3, fontWeight: 700, textAlign: "center" }}>Round HI</div>
+                      <div style={{ fontSize: 7, color: BC.t3, fontWeight: 700, textAlign: "center", lineHeight: 1.2 }}>HI</div>
+                      <div style={{ fontSize: 7, color: BC.t3, fontWeight: 700, textAlign: "center" }}>Round CH</div>
                       {tees2h.length > 0
                         ? <div style={{ fontSize: 7, color: BC.t3, fontWeight: 700, textAlign: "center", gridColumn: `span ${tees2h.length}` }}>Tee</div>
                         : null}
@@ -2045,20 +2081,27 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 <div key={team.id} style={{ marginBottom: 4 }}>
                   {teamIdx === 1 && <div style={{ height: 1, background: BC.bdr, margin: "6px 0 8px" }} />}
                   {tPlayers.filter(p => p.team === team.id).map(p => {
-                    const baseHI = p.handicap_index;
-                    const override = hcpOverrides[editRound]?.[p.player_id];
+                    // Effective INDEX (player-level override ?? GHIN/base). Shown
+                    // for reference; the per-round control below overrides the CH.
+                    const hiOverridden = p.hi_override != null && String(p.hi_override).trim() !== "";
+                    const effHI = hiOverridden ? p.hi_override : p.handicap_index;
+                    const override = hcpOverrides[editRound]?.[p.player_id]; // per-round CH override
                     const hasOverride = override !== undefined && override !== "";
                     const tr2 = tRounds.find(t => t.round_number === editRound);
                     const course2 = courses.find(c => c.id === tr2?.course_id);
                     const tees2 = course2?.tee_boxes || [];
                     const assignments2 = teeAssignments[editRound] || {};
                     const currentTee2 = assignments2[p.player_id] || tees2[0]?.name;
+                    // The CH the app WOULD calculate for this player/round from the
+                    // effective index + assigned tee. Used as the input placeholder
+                    // and as the baseline the override delta is measured against.
+                    const calcedCH = course2 ? calcCHForCourse(parseFloat(effHI) || 0, course2, currentTee2) : null;
                     const assignTee2 = (teeName) => {
                       const oldTee = tees2.find(t => t.name === (assignments2[p.player_id] || tees2[0]?.name));
                       const newTee = tees2.find(t => t.name === teeName);
                       if (oldTee && newTee) {
-                        const oldCH = calcCH(parseFloat(baseHI)||0, oldTee.slope||113, oldTee.rating||72, oldTee.par||72);
-                        const newCH = calcCH(parseFloat(baseHI)||0, newTee.slope||113, newTee.rating||72, newTee.par||72);
+                        const oldCH = calcCH(parseFloat(effHI)||0, oldTee.slope||113, oldTee.rating||72, oldTee.par||72);
+                        const newCH = calcCH(parseFloat(effHI)||0, newTee.slope||113, newTee.rating||72, newTee.par||72);
                         showChDelta(`tee_${editRound}_${p.player_id}`, newCH - oldCH);
                       }
                       setTeeAssignments(prev => ({ ...prev, [editRound]: { ...(prev[editRound]||{}), [p.player_id]: teeName } }));
@@ -2066,26 +2109,22 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     return (
                       <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: `1fr 30px 58px ${tees2.map(() => "22px").join(" ")} 22px`, gap: 4, alignItems: "center", marginBottom: 3 }}>
                         <div style={{ fontSize: 11, color: teams[p.team].accent + "88", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
-                        <div style={{ fontSize: 10, color: BC.t3, textAlign: "center" }}>{baseHI}</div>
+                        <div title={hiOverridden ? `Index override (base ${p.handicap_index})` : undefined} style={{ fontSize: 10, color: hiOverridden ? BC.amber : BC.t3, fontWeight: hiOverridden ? 700 : 400, textAlign: "center" }}>{effHI}{hiOverridden ? "*" : ""}</div>
                         <input
-                          type="number" step="0.1"
+                          type="number" step="1"
                           disabled={roundIsFinal}
                           value={hasOverride ? override : ""}
                           onChange={e => {
                             if (roundIsFinal) return;
                             const newVal = e.target.value;
-                            const oldHI = parseFloat(hcpOverrides[editRound]?.[p.player_id] ?? p.handicap_index) || 0;
-                            const newHI = parseFloat(newVal) || parseFloat(p.handicap_index) || 0;
-                            const trC = tRounds.find(t => t.round_number === editRound);
-                            const crs = courses.find(c => c.id === trC?.course_id);
-                            if (crs && newVal !== "") {
-                              showChDelta(`hcp_${editRound}_${p.player_id}`,
-                                calcCH(newHI, crs.slope||113, crs.rating||72, crs.par||72) -
-                                calcCH(oldHI, crs.slope||113, crs.rating||72, crs.par||72));
+                            // Delta badge measures the direct-CH override against the
+                            // CH the app would otherwise calculate for this round.
+                            if (calcedCH != null && newVal !== "") {
+                              showChDelta(`hcp_${editRound}_${p.player_id}`, (parseFloat(newVal) || 0) - calcedCH);
                             }
                             setHcpOverrides(prev => ({ ...prev, [editRound]: { ...(prev[editRound]||{}), [p.player_id]: newVal } }));
                           }}
-                          placeholder={String(baseHI)}
+                          placeholder={calcedCH != null ? String(calcedCH) : "CH"}
                           style={{ padding: "5px 8px", background: hasOverride ? BC.amber+"15" : BC.inp, border: `1px solid ${hasOverride ? BC.amber : BC.bdr}`, borderRadius: 6, color: hasOverride ? BC.amber : BC.t2, fontSize: 12, fontWeight: hasOverride ? 700 : 400, outline: "none", textAlign: "center", opacity: roundIsFinal ? 0.5 : 1, cursor: roundIsFinal ? "not-allowed" : "text" }}
                         />
                         {tees2.map((tee, ti) => {
@@ -2131,7 +2170,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
         // that would disagree with the leaderboard.
         const getPlayerCH = (pid) => getRoundCH({
           roundLocks, round: matchRound, pid, players: tPlayers,
-          course, hcpOverrides, teeAssignments, roundTee: tr?.tee_box,
+          course, chOverrides: hcpOverrides, teeAssignments, roundTee: tr?.tee_box,
         });
 
         // Stroke situation: given selected players, compute who gets strokes vs who
@@ -2611,7 +2650,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
         // can get 2+ strokes) — the old inline lookup capped every hole at 1.
         const ch = getRoundCH({
           roundLocks, round, pid: p.player_id, players: tPlayers,
-          course: course2, hcpOverrides, teeAssignments, roundTee: tr2?.tee_box,
+          course: course2, chOverrides: hcpOverrides, teeAssignments, roundTee: tr2?.tee_box,
         });
         const strokes = buildStrokeMap(ch, hcps)[h] || 0;
         return { pid: p.player_id, name: p.name, score: raw - strokes };
@@ -5142,7 +5181,10 @@ export default function App() {
     }));
     unsubs.push(db.subscribe("bc_hcp_overrides", f, rows => {
       const data = {};
-      rows.forEach(r => { if (r.round_number) data[r.round_number] = r.overrides || {}; });
+      // `ch_overrides` = per-round DIRECT Course-Handicap overrides (current
+      // model). The legacy `overrides` field held per-round HI overrides and is
+      // intentionally ignored so old values can't be misread as CH.
+      rows.forEach(r => { if (r.round_number) data[r.round_number] = r.ch_overrides || {}; });
       setHcpOverridesData(data);
     }));
     unsubs.push(db.subscribe(ROUND_LOCKS_COL, f, rows => {
@@ -5233,7 +5275,7 @@ export default function App() {
         players,
         tRounds: rds,
         courses: crs,
-        hcpOverrides,
+        chOverrides: hcpOverrides,
         teeAssignments,
         lockedBy: userRef.current?.name || null,
         reason: "auto",
@@ -5311,7 +5353,7 @@ export default function App() {
       players,
       tRounds: rds,
       courses: crs,
-      hcpOverrides,
+      chOverrides: hcpOverrides,
       teeAssignments,
       lockedBy: userRef.current?.name || null,
     };

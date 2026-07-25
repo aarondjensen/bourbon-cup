@@ -142,7 +142,7 @@ export function buildRoundLockDoc({
   players = [],
   tRounds = [],
   courses = [],
-  hcpOverrides = {},
+  chOverrides = {},
   teeAssignments = {},
   lockedBy = null,
   previous = null,
@@ -150,7 +150,10 @@ export function buildRoundLockDoc({
 }) {
   const tr = tRounds.find((t) => t.round_number === round) || {};
   const course = courses.find((c) => c.id === tr.course_id) || null;
-  const roundOverrides = hcpOverrides?.[round] || {};
+  // Per-round overrides are now DIRECT Course-Handicap overrides (not index
+  // overrides), so we freeze the overridden CH as-is; the index is the
+  // player-level effective HI (hi_override ?? handicap_index).
+  const roundChOverrides = chOverrides?.[round] || {};
   const roundTees = teeAssignments?.[round] || {};
   const now = new Date().toISOString();
 
@@ -158,21 +161,23 @@ export function buildRoundLockDoc({
   players.forEach((p) => {
     const pid = p.player_id;
     if (!pid) return;
-    const hi = getEffectiveHI(pid, players, roundOverrides);
+    const hi = getEffectiveHI(pid, players);
     const teeName = roundTees[pid] || tr.tee_box || null;
     const spec = resolveTeeSpec(course, teeName);
+    const chOv = roundChOverrides[pid];
+    const hasChOv = chOv != null && String(chOv).trim() !== "" && Number.isFinite(Number(chOv));
     snapshot[pid] = {
       name: p.name || pid,
       team: p.team || null,
       hi,
       base_hi: parseFloat(p.handicap_index) || 0,
-      overridden: roundOverrides[pid] !== undefined && roundOverrides[pid] !== "",
+      overridden: hasChOv,
       tee: spec.tee,
       slope: spec.slope,
       rating: spec.rating,
       par: spec.par,
       // The final answer, frozen. Everything above is audit detail.
-      ch: calcCHForCourse(hi, course, teeName),
+      ch: hasChOv ? Number(chOv) : calcCHForCourse(hi, course, teeName),
     };
   });
 

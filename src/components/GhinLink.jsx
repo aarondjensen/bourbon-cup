@@ -54,6 +54,26 @@ const ghostBtn = {
 };
 const muted = { fontSize: 13, color: BC.t3, padding: "16px 4px", lineHeight: 1.5, textAlign: "center" };
 
+// ── GHIN wordmark badge ─────────────────────────────────────────────
+// A small text badge in the GHIN/handicap blue. Deliberately NOT the USGA
+// app's raster logo: at column-header / inline sizes a real logo renders as
+// an illegible smudge, whereas this stays crisp at any size and matches the
+// existing "+ GHIN" / "GHIN ✓" chips. Use it to label handicap columns or
+// mark GHIN-sourced values. `size`: "xs" (headers) | "sm" (default).
+export function GhinBadge({ size = "sm", title = "Handicap Index sourced from GHIN" }) {
+  const s = size === "xs"
+    ? { fontSize: 7, padding: "1px 3px", radius: 3, letter: 0.3 }
+    : { fontSize: 9, padding: "2px 6px", radius: 4, letter: 0.5 };
+  return (
+    <span title={title} style={{
+      display: "inline-flex", alignItems: "center", boxSizing: "border-box",
+      fontSize: s.fontSize, fontWeight: 800, letterSpacing: s.letter, lineHeight: 1,
+      padding: s.padding, borderRadius: s.radius, whiteSpace: "nowrap",
+      border: `1px solid ${BLUE}66`, background: BLUE + "1f", color: BLUE, fontFamily: FONT,
+    }}>GHIN</span>
+  );
+}
+
 // ── Per-player: compact chip → portaled popup ───────────────────────
 export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
   const canEdit = !!(user?.isDirector || user?.player_id === player?.player_id);

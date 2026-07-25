@@ -65,7 +65,13 @@ export const getEffectiveHI = (pid, players, overrides) => {
     return parseFloat(overrides[pid]) || 0;
   }
   const tp = players.find(p => p.player_id === pid);
-  return parseFloat(tp?.handicap_index) || 0;
+  // Player-level HI override. Kept in its OWN field (`hi_override`) so it is
+  // never touched by GHIN sync — which only ever writes `handicap_index`.
+  // When the director sets one it wins over the GHIN-synced base; both values
+  // are stored side by side (see the Players admin tab).
+  const base = (tp?.hi_override != null && String(tp.hi_override).trim() !== "")
+    ? tp.hi_override : tp?.handicap_index;
+  return parseFloat(base) || 0;
 };
 
 // Allocate strokes across 18 holes by hole-handicap rank. The lowest-handicap
@@ -127,11 +133,14 @@ export const lockedPlayerRow = (roundLocks, round, pid) => {
   return row || null;
 };
 
-// Effective Handicap Index for a player in a round.
-export const getRoundHI = ({ roundLocks, round, pid, players, hcpOverrides }) => {
+// Effective Handicap Index for a player in a round. Per-round adjustments are
+// now made at the COURSE-HANDICAP level (see getRoundCH / chOverrides), not the
+// index level, so this resolves to the frozen HI when locked, else the
+// player-level effective index (hi_override ?? handicap_index).
+export const getRoundHI = ({ roundLocks, round, pid, players }) => {
   const row = lockedPlayerRow(roundLocks, round, pid);
   if (row && row.hi != null && Number.isFinite(Number(row.hi))) return Number(row.hi);
-  return getEffectiveHI(pid, players, hcpOverrides?.[round] || {});
+  return getEffectiveHI(pid, players);
 };
 
 // The tee a player played in a round (frozen when locked).
@@ -149,11 +158,17 @@ export const getRoundTee = ({ roundLocks, round, pid, teeAssignments, roundTee }
 // Note the frozen CH is stored as the ANSWER, not recomputed from frozen
 // inputs. Even a change to calcCH's rounding could not move a locked round.
 export const getRoundCH = ({
-  roundLocks, round, pid, players, course, hcpOverrides, teeAssignments, roundTee,
+  roundLocks, round, pid, players, course, chOverrides, teeAssignments, roundTee,
 }) => {
   const row = lockedPlayerRow(roundLocks, round, pid);
   if (row && row.ch != null && Number.isFinite(Number(row.ch))) return Number(row.ch);
-  const hi = getRoundHI({ roundLocks, round, pid, players, hcpOverrides });
+  // Director's per-round Course-Handicap override. Set DIRECTLY (not derived
+  // from the index) and wins over the calculated CH for any OPEN round. A
+  // locked round already returned its frozen `row.ch` above, so overrides can
+  // never move a completed round. `chOverrides` shape: { [round]: { [pid]: ch } }.
+  const cho = chOverrides?.[round]?.[pid];
+  if (cho != null && String(cho).trim() !== "" && Number.isFinite(Number(cho))) return Number(cho);
+  const hi = getRoundHI({ roundLocks, round, pid, players });
   const tee = getRoundTee({ roundLocks, round, pid, teeAssignments, roundTee });
   return calcCHForCourse(hi, course, tee);
 };
@@ -196,7 +211,7 @@ export const getRoundCourseCtx = ({ roundLocks, round, tRounds, courses }) => {
 // `roundLocks` (last arg) is the frozen-snapshot map described above. When the
 // match's round is locked, handicaps, tees, handicap mode, course and hole
 // tables all come from the snapshot and live edits are ignored entirely.
-export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, format, hcpOverrides, handicapMode, teeAssignments, roundLocks) {
+export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, format, chOverrides, handicapMode, teeAssignments, roundLocks) {
   // holeData: { pid_round: { holeIdx: score } }
   const rnd = match.round;
   const { lock, tr, course, holePars, holeHcps } =
@@ -208,9 +223,9 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
 
   const getPlayerScores = (pid) => holeData[`${pid}_${rnd}`] || {};
   const roundTee = tr?.tee_box;
-  const getPlayerHI = (pid) => getRoundHI({ roundLocks, round: rnd, pid, players: tPlayers, hcpOverrides });
+  const getPlayerHI = (pid) => getRoundHI({ roundLocks, round: rnd, pid, players: tPlayers });
   const getCH = (pid) => getRoundCH({
-    roundLocks, round: rnd, pid, players: tPlayers, course, hcpOverrides, teeAssignments, roundTee,
+    roundLocks, round: rnd, pid, players: tPlayers, course, chOverrides, teeAssignments, roundTee,
   });
   const getStrokeMap = (ch) => buildStrokeMap(ch, holeHcps);
   const netScore = (gross, holeIdx, strokeMap) => gross == null ? null : gross - (strokeMap[holeIdx] || 0);
