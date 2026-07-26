@@ -34,11 +34,11 @@ import { BC, ink, teamColor } from "../theme";
 import {
   FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT,
   POINT_METHOD_TRADITIONAL, TROPHY_SILHOUETTE, CUP_POINTS_TO_WIN,
-  describeAllowance,
+  describeAllowance, describeCounting,
 } from "../constants";
 import {
   computeMatchResult, getRoundCourseCtx, higherIsBetter, totalUnit,
-  segmentState, statusText, segmentLeader, getRoundAllowance,
+  segmentState, statusText, segmentLeader, getRoundAllowance, getRoundCounting,
 } from "../scoring";
 import { HoleStrip } from "./HoleStrip";
 import { isRoundFinal } from "../lib/roundLocks";
@@ -426,7 +426,7 @@ function RoundSection({
   meta, results, open, onToggle, teams, tPlayers,
   courses, tRounds, roundLocks, expandedMatch, setExpandedMatch,
 }) {
-  const { course, fmt, tee, pts, state, scoring, allowance } = meta;
+  const { course, fmt, tee, pts, state, scoring, allowance, counting } = meta;
 
   // The round header is a plain row, not a card. Four match rows plus a
   // boxed header per round was two levels of container for one level of
@@ -461,12 +461,12 @@ function RoundSection({
             plays completely differently as a match and on totals, and a round
             showing nothing about which one is in force is exactly how a Double
             Dot / Total round went on looking like match play on this screen. */}
-        {(tee || scoring || allowance) && (
+        {(tee || scoring || allowance || counting) && (
           <div style={{
             fontSize: 10, color: BC.t3, marginTop: 3, paddingLeft: 17,
             whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
           }}>
-            {[tee, scoring, allowance].filter(Boolean).join(" · ")}
+            {[tee, counting, scoring, allowance].filter(Boolean).join(" · ")}
           </div>
         )}
       </button>
@@ -574,6 +574,10 @@ export function TeamLeaderboard({
           if (!a.enabled || (!a.split && a.pct === 100)) return null;
           return `${describeAllowance(a)} hcp`;
         })(),
+        // Team Best Ball's counting scores. Null on every other format, and
+        // on this one it is not chrome: "best 6 / 7" is the whole difference
+        // between a side's eight cards and the number on the board.
+        counting: describeCounting(getRoundCounting({ roundLocks, round: rnd, tRounds })) || null,
         state: settled ? "final" : holesPlayed > 0 ? "live" : "upcoming",
       };
     });

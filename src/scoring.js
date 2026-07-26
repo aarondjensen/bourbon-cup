@@ -9,6 +9,7 @@
 // the leaderboard math.
 import {
   NASSAU_DEFAULT, POINT_METHOD_NASSAU, POINT_METHOD_TRADITIONAL, resolveAllowance,
+  resolveCounting,
 } from "./constants";
 
 // ── Course Handicap math ──
@@ -318,6 +319,27 @@ export const applyAllowance = (sides, getCH, allowance) => {
   return playing;
 };
 
+// The round's counting scores — how many of a side's nets are added up on a
+// hole. Null for every format that doesn't count scores, which is all of them
+// but Team Best Ball.
+//
+// Unlike the allowance, the LIVE value wins over the lock. That is the line
+// roundLocks.js already draws: it freezes what allocates STROKES, and leaves
+// what a match is worth editable, because a director adjusting the latter
+// means the adjustment to land. A count doesn't touch a single stroke — every
+// net in the match is identical either way — it decides how many of those
+// nets are added up. So a director who notices on the 3rd tee that the front
+// nine is counting 7 can fix it, which locking it would make impossible
+// without re-taking the round's handicaps as well. The count still rides in
+// the lock snapshot so a finished round can say what it was scored on.
+export const getRoundCounting = ({ roundLocks, round, tRounds, format, explicit }) => {
+  const lock = lockForRound(roundLocks, round);
+  const tr = tRounds?.find(t => t.round_number === round);
+  const fmt = format || lock?.format || tr?.format;
+  const saved = explicit || tr?.counting_scores || lock?.counting_scores || null;
+  return resolveCounting(fmt, saved);
+};
+
 // Course + hole tables for a round. Hole handicaps decide WHICH holes get
 // strokes, so a course re-import must not be able to reshuffle a finished
 // round's stroke allocation — the frozen tables win when present.
@@ -385,6 +407,16 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
   // already-reduced handicaps is the order the Rules of Handicapping use.
   const roundHandicapMode = getRoundHandicapMode({ roundLocks, round: rnd, tRounds, explicit: handicapMode });
   const allowance = getRoundAllowance({ roundLocks, round: rnd, tRounds, format });
+  // How many of a side's nets count on a hole (Team Best Ball only; null
+  // everywhere else). Both sides count the SAME number — the smaller of the
+  // director's figure and the smaller roster — because two sums built from
+  // different numbers of scores are not comparable, and a side short a player
+  // would otherwise never post a hole at all.
+  const counting = getRoundCounting({ roundLocks, round: rnd, tRounds, format });
+  const countFor = (h) => {
+    const want = h < 9 ? counting.front : counting.back;
+    return Math.min(want, teamA.length, teamB.length);
+  };
   const allPids = [...teamA, ...teamB];
   // Playing handicaps — the allowance-adjusted figures. A split allowance is
   // resolved per SIDE, so teamA and teamB are passed as separate groups.
@@ -432,6 +464,33 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
       const bNets = teamB.map(pid => { const m = getAdjustedStrokeMap(pid); return netScore(getPlayerScores(pid)[h], h, m); }).filter(s => s != null);
       aScore = aNets.length ? Math.min(...aNets) : null;
       bScore = bNets.length ? Math.min(...bNets) : null;
+    } else if (format === "team_best_ball") {
+      // ── Team Best Ball ──
+      // The whole side is one match, and a hole is the SUM of that side's
+      // best N net scores — not its single best ball. N is the round's
+      // counting scores, set per nine (see constants: the front has counted
+      // 6 of 8 and the back 7 of 8), which is why this can't be expressed as
+      // either a Four-Ball or a Team Total.
+      //
+      // A hole scores as soon as N of a side's players are in. That is
+      // deliberate on a format where the side is spread over four tee times:
+      // holding the hole until all eight had posted would leave the
+      // leaderboard half an hour behind the course all day. Adding a later
+      // net can only ever lower the sum (it is added only if it beats one
+      // already counted), so the number moves in one direction and settles
+      // the moment the side finishes the hole.
+      const nets = (side) => side
+        .map(pid => netScore(getPlayerScores(pid)[h], h, getAdjustedStrokeMap(pid)))
+        .filter(s => s != null)
+        .sort((a, b) => a - b);
+      const need = countFor(h);
+      const sideScore = (side) => {
+        const ns = nets(side);
+        if (!need || ns.length < need) return null;
+        return ns.slice(0, need).reduce((a, b) => a + b, 0);
+      };
+      aScore = sideScore(teamA);
+      bScore = sideScore(teamB);
     } else if (format === "aggregate" || format === "team_total") {
       // Combined team net per hole — both teammates' net scores are summed
       // and compared as a single team score. The Bourbon Cup name for this is
@@ -589,6 +648,9 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
     // allowance, pre-low-man; `teamCH` is the side's figure on a shared-ball
     // format and null on every other.
     allowance,
+    // {front, back} on Team Best Ball, null on every other format — the
+    // counts this result's hole scores were actually built from.
+    counting,
     playingCH,
     teamCH: sharedBall ? { A: aTeamCH, B: bTeamCH } : null,
     totalPts: {

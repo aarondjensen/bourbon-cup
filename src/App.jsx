@@ -6,6 +6,7 @@ import {
   resolveTeams, DEFAULT_TEAM_NAMES, TOURNAMENT_TITLE, TOURNAMENT_LOCATION,
   FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT, PRACTICE_TEAM_COLORS, DIRECTOR_CODE,
   resolveAllowance, describeAllowance, allowanceDefaultFor,
+  formatCountsScores, countingDefaultFor, resolveCounting,
 } from "./constants";
 import {
   calcCH, calcCHForCourse, fmtScore,
@@ -956,6 +957,11 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
             above is counting whichever one this says. */}
         {totalScored ? `TOTAL ${totalUnit(format).toUpperCase()}` : "MATCH PLAY"}
         {" · ROUND "}{match.round}
+        {/* On Team Best Ball the badge is incomplete without the count: this
+            hole is worth entering because it might be one of the six that
+            count, and how many that is changes at the turn. Read off the
+            result so it can't disagree with what the strip above is showing. */}
+        {result?.counting && ` · BEST ${activeHole < 9 ? result.counting.front : result.counting.back}`}
       </div>
 
       {/* Player score cards — 4 stacked, T1 above dashed divider, T2 below.
@@ -1109,6 +1115,12 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
   const tr = tRounds.find(t => t.round_number === activeRound);
   const course = courses.find(c => c.id === tr?.course_id);
   const fmt = FORMATS.find(f => f.id === tr?.format);
+  // "Best 6 on the front, 7 on the back" — Team Best Ball only, and blank on
+  // every other format (resolveCounting hands back null for them).
+  const cnt = resolveCounting(tr?.format, tr?.counting_scores);
+  const countingLine = cnt
+    ? `Best ${cnt.front} scores count on the front nine, best ${cnt.back} on the back`
+    : null;
 
   // Same fallback the admin tab uses: a 2-man format's match is its own
   // foursome, so a round nobody has grouped by hand still has tee times.
@@ -1170,6 +1182,11 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
         <div style={{ padding: "10px 14px" }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: BC.t1 }}>{course?.name || "Course TBD"}</div>
           {fmt && <div style={{ fontSize: 11, color: BC.t3, marginTop: 2 }}>{fmt.label}{fmt.desc ? ` · ${fmt.desc}` : ""}</div>}
+          {/* On Team Best Ball the format's own description can't say what the
+              round actually counts — that number is per round. Stated here so a
+              player reading the tee sheet knows whether their card has to be
+              one of six or one of seven. */}
+          {countingLine && <div style={{ fontSize: 11, color: BC.amber, marginTop: 2, fontWeight: 700 }}>{countingLine}</div>}
           {firstTee && <div style={{ fontSize: 11, color: BC.amber, marginTop: 4, fontWeight: 700 }}>First Tee: {firstTee}</div>}
         </div>
       </div>
@@ -1281,7 +1298,7 @@ const sameRoundMap = (a, b) => JSON.stringify(liveEntries(a)) === JSON.stringify
 // so a round save cannot drop it.
 const roundSettingsSignature = (r) => JSON.stringify([
   r.format, r.handicap_mode, r.tee_time, r.scoring_type,
-  r.nassau_front, r.nassau_back, r.nassau_overall, r.allowance,
+  r.nassau_front, r.nassau_back, r.nassau_overall, r.allowance, r.counting_scores,
 ]);
 
 // The handicap allowance, normalized to the shape the round's FORMAT calls
@@ -1296,6 +1313,12 @@ const roundAllowance = (format, raw) => {
     ? { enabled: true, low: a.low, high: a.high }
     : { enabled: true, pct: a.pct };
 };
+
+// Team Best Ball's counting scores, normalized the same way and for the same
+// reason: `null` on every format that doesn't count, so switching away from
+// Team Best Ball drops the counts rather than leaving them to read as an edit
+// on a format that has no use for them.
+const roundCounting = (format, raw) => resolveCounting(format || DEFAULT_FORMAT, raw);
 
 // Everything the Rounds tab owns for one round.
 const roundSignature = (r) => JSON.stringify([
@@ -1422,6 +1445,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   // touches it stores nothing, and a later change to a format's recommended
   // allowance still reaches the rounds nobody edited.
   const [allowance, setAllowance] = useState(null);
+  // Raw saved counting scores for the round being edited ({front, back}), or
+  // null to mean "the format's default". Same reasoning as the allowance
+  // above: a director who never touches it stores nothing.
+  const [counting, setCounting] = useState(null);
   // ── Handicap-lock state ──
   // Read-only here: locking is automatic on the first score of a round (see
   // ensureRoundLock in App). These flags only gate the round form's editing.
@@ -1474,6 +1501,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
       nassau_overall: tr.nassau_overall ?? 1,
       scoring_type: tr.scoring_type || "match",
       allowance: roundAllowance(tr.format || DEFAULT_FORMAT, tr.allowance),
+      counting_scores: roundCounting(tr.format || DEFAULT_FORMAT, tr.counting_scores),
       ch_overrides: hcpOverridesFromDb?.[editRound] || {},
       tee_assignments: teeAssignmentsFromDb?.[editRound] || {},
     };
@@ -1494,9 +1522,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
     // Normalized against the format the form is CURRENTLY showing, so picking
     // a new format re-shapes the allowance in the same render that changes it.
     allowance: roundAllowance(roundFormat || storedRound.format, allowance),
+    counting_scores: roundCounting(roundFormat || storedRound.format, counting),
     ch_overrides: hcpOverrides[editRound] || {},
     tee_assignments: teeAssignments[editRound] || {},
-  }), [storedRound, roundFormat, handicapMode, editRound, roundTeeTime, nassau, scoringType, allowance, hcpOverrides, teeAssignments]);
+  }), [storedRound, roundFormat, handicapMode, editRound, roundTeeTime, nassau, scoringType, allowance, counting, hcpOverrides, teeAssignments]);
 
   const storedSettingsSig = roundSettingsSignature(storedRound);
   const hcpDocSig = JSON.stringify(hcpOverridesFromDb ?? null);
@@ -1530,6 +1559,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
     setNassau({ front: storedRound.nassau_front, back: storedRound.nassau_back, overall: storedRound.nassau_overall });
     setScoringType(storedRound.scoring_type);
     setAllowance(storedRound.allowance);
+    setCounting(storedRound.counting_scores);
     setHandicapMode(prev => ({ ...prev, [editRound]: storedRound.handicap_mode }));
   }, [seed, seededRound, editRound, storedSettingsSig, storedRound]);
 
@@ -1590,6 +1620,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
         nassau_overall: payload.nassau_overall,
         scoring_type: payload.scoring_type,
         allowance: payload.allowance,
+        counting_scores: payload.counting_scores,
       });
       setAutoSave({ phase: "saved", round });
     } catch (err) {
@@ -2038,6 +2069,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   // allowance back to off, so the new format's terms are a
                   // decision rather than an inheritance.
                   setAllowance(null);
+                  // Same for the counting scores — only Team Best Ball has
+                  // them, and coming back to it should start from what the
+                  // format calls for rather than a stale pair.
+                  setCounting(null);
                 }} style={{ ...InputStyle, marginBottom: 0, fontSize: 12, padding: "8px 8px", height: 38 }}>
                   <option value="">Select...</option>
                   {FORMATS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
@@ -2119,6 +2154,78 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       />
                     </div>
                   ))}
+                </div>
+              );
+            })()}
+
+            {/* ── Counting scores ─────────────────────────────────────────
+                Team Best Ball only, and the setting that actually defines it.
+                The whole side plays one match and a hole is the SUM of that
+                side's best N nets — 8 players, best 6 on the front and best 7
+                on the back is what this tournament has run. N is per nine
+                because that is the knob the event turns: the back counting one
+                more score is what makes the closing nine both harder to carry
+                and worth more.
+
+                No off switch, unlike the allowance: a Team Best Ball round is
+                always counting some number, so the only question is which.
+                Shown only when the format asks for it (constants.FORMATS
+                carries the `counting` prefill), so every other round's form is
+                exactly as it was. */}
+            {(() => {
+              const fmtId = roundFormat || tRounds.find(t => t.round_number === editRound)?.format || DEFAULT_FORMAT;
+              if (!formatCountsScores(fmtId)) return null;
+              const prefill = countingDefaultFor(fmtId);
+              const cur = resolveCounting(fmtId, counting);
+              // How many a side actually fields, for the "of N" hint and the
+              // over-count warning. Read off the round's matches when they
+              // exist — that is the roster that will be scored — and off the
+              // smaller team otherwise, so the hint is right during setup too.
+              const rndMatches = matches.filter(m => m.round === editRound);
+              const sideSize = rndMatches.length
+                ? Math.max(...rndMatches.flatMap(m => [m.teamA?.length || 0, m.teamB?.length || 0]))
+                : Math.min(
+                    tPlayers.filter(p => p.team === "A").length,
+                    tPlayers.filter(p => p.team === "B").length,
+                  );
+              // Same as the allowance fields: read the RAW state so clearing a
+              // box leaves it empty instead of snapping back mid-keystroke. An
+              // empty box resolves to the format's prefill when saved.
+              const fieldVal = (k) => {
+                const v = counting?.[k];
+                return v === undefined || v === null ? String(prefill[k]) : String(v);
+              };
+              const setField = (k, v) => setCounting(prev => ({ ...prefill, ...(prev || {}), [k]: v }));
+              const countField = (k, lbl, hint) => (
+                <div key={k} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <span title={hint} style={{ fontSize: 9, color: BC.t3, flexShrink: 0, fontWeight: 600 }}>{lbl}</span>
+                  <input
+                    type="number" step="1" min="1" max="20"
+                    value={fieldVal(k)}
+                    onChange={e => setField(k, e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                    style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: 14, textAlign: "center", width: 44 }} />
+                </div>
+              );
+              // A count bigger than the side fields is scored at the side size
+              // (see scoring.js) rather than stalling the hole — say so here,
+              // because the number on screen would otherwise be a lie.
+              const over = sideSize > 0 && (cur.front > sideSize || cur.back > sideSize);
+              return (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>COUNTING</div>
+                    {countField("front", "F9", "How many of a side's net scores count on each front-nine hole")}
+                    {countField("back", "B9", "How many of a side's net scores count on each back-nine hole")}
+                    {sideSize > 0 && (
+                      <span style={{ fontSize: 9, color: BC.t3, fontWeight: 600 }}>of {sideSize} a side</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 9, color: over ? BC.amber : BC.t3, lineHeight: 1.5, marginTop: 5 }}>
+                    {over
+                      ? `Only ${sideSize} play${sideSize === 1 ? "s" : ""} a side, so a hole counts all ${sideSize} — a count above that scores the same as ${sideSize}.`
+                      : `Each hole is the sum of the side's best ${cur.front} nets on the front and best ${cur.back} on the back.`}
+                  </div>
                 </div>
               );
             })()}

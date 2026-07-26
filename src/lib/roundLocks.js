@@ -47,8 +47,11 @@
 //                          handicaps decide WHICH holes get strokes.
 //
 // Deliberately NOT frozen: hole scores (that IS the live data), match
-// rosters, and Nassau/point values (a director legitimately adjusts what
-// a match is worth; that never changes strokes).
+// rosters, Nassau/point values (a director legitimately adjusts what a
+// match is worth; that never changes strokes), and Team Best Ball's
+// counting scores — those decide how many of a side's nets are added on a
+// hole, which moves no strokes either. All are recorded in the snapshot
+// for the audit trail; only the stroke inputs above are read back from it.
 //
 // LIFECYCLE
 // ---------
@@ -241,6 +244,11 @@ export function buildRoundLockDoc({
     // as exactly what the director set. scoring.getRoundAllowance re-resolves
     // it against the frozen format.
     allowance: tr.allowance || null,
+    // Recorded, not enforced. Team Best Ball's counting scores decide how many
+    // of a side's nets are added on a hole; they allocate no strokes, so the
+    // live value keeps winning (see scoring.getRoundCounting). This is here so
+    // a finished round can still say what it was scored on.
+    counting_scores: tr.counting_scores || null,
     hole_pars: course?.hole_pars || null,
     hole_handicaps: course?.hole_handicaps || null,
     players: snapshot,

@@ -93,6 +93,11 @@ export const resolveTeams = (teamNames) => ({
 // `allowance` is the third setting on every round, alongside format and point
 // allocation — see the handicap-allowance block below for what the shapes mean.
 //
+// `counting` marks a format whose team score on a hole is the sum of the side's
+// best N nets rather than a fixed shape — see the counting-scores block below.
+// Only Team Best Ball has it, and its presence is what puts the F9/B9 count
+// fields on the round form.
+//
 // Format defaults are baseline only — the director can override any value
 // in the round setup form.
 export const FORMATS = [
@@ -100,7 +105,7 @@ export const FORMATS = [
   { id: "best_ball",      label: "2-Man Best Ball",    desc: "Each player plays their own ball; team uses the better net score per hole.",            nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 90 } },
   { id: "team_total",     label: "Team Total",         desc: "Combined team net per hole vs combined team net. Lower combined wins the hole.",        nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 90 } },
   { id: "pinehurst",      label: "Pinehurst",          desc: "Partners each drive, swap balls, then choose best to finish as scramble.",              nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { low: 60, high: 40 } },
-  { id: "team_best_ball", label: "Team Best Ball",     desc: "Full team format — best of all team-member nets per hole.",                             nassau: { front: 1, back: 1, overall: 2 }, perSide: null, allowance: { pct: 75 } },
+  { id: "team_best_ball", label: "Team Best Ball",     desc: "Whole side plays; each hole is the sum of the best N net scores, set per nine.",        nassau: { front: 1, back: 1, overall: 2 }, perSide: null, allowance: { pct: 75 }, counting: { front: 6, back: 7 } },
   { id: "double_dot",     label: "Double Dot",         desc: "2-man Hi/Lo. Each hole: a dot for the low ball, a dot for the high ball. Ties win nothing.", nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 90 } },
   { id: "shamble",        label: "Shamble",            desc: "All players drive, choose best drive, each plays their own ball in.",                   nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 90 } },
   { id: "scramble",       label: "2-Man Scramble",     desc: "Both hit every shot, choose best ball location, both play from there.",                 nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { low: 35, high: 15 }, sharedBall: true },
@@ -187,6 +192,63 @@ export const resolveAllowance = (formatId, saved) => {
 export const describeAllowance = (spec) => {
   if (spec && spec.enabled === false) return "none";
   return spec?.split || spec?.low != null ? `${spec.low}% / ${spec.high}%` : `${spec?.pct ?? 100}%`;
+};
+
+// ── Counting scores (Team Best Ball) ──
+// Every other format in this app has a shape fixed by its name: a Four-Ball
+// takes the better of two, a Team Total adds both. Team Best Ball doesn't —
+// it is this event's own format, and the thing that defines it is a NUMBER
+// the director sets: how many of the side's net scores count on a hole.
+//
+// Eight players a side, and on each hole the best N of those eight nets are
+// added up; that sum is the side's score for the hole and the two sums are
+// compared like any other. N is set PER NINE, because that is the knob the
+// tournament has always turned — the front has historically counted the best
+// 6 and the back the best 7, so the back nine both plays harder and carries
+// more of the field. Hence the shape:
+//
+//   { front, back }   — how many nets count on a front-nine hole, and on a
+//                       back-nine hole. Whole numbers, at least 1.
+//
+// Unlike the allowance there is no off switch: a Team Best Ball round is
+// always counting SOME number of scores, so the only question is which. The
+// values above are what a round scores with until the director changes them.
+//
+// A count larger than the side actually fields is clamped at scoring time to
+// the smaller of the two rosters (see scoring.js) — eight-man counts on a
+// six-man side would otherwise stop the hole from ever scoring, and counting
+// a different number for each side would make the two sums incomparable.
+export const COUNTING_DEFAULT = { front: 6, back: 7 };
+
+// Does this format score by counting the best N of a side's nets? Asked of a
+// format id; drives both the engine branch and whether the round form shows
+// the count fields at all.
+export const formatCountsScores = (formatId) => !!FORMATS.find(f => f.id === formatId)?.counting;
+
+// What the count fields PREFILL for a format, or null when the format doesn't
+// count scores at all.
+export const countingDefaultFor = (formatId) =>
+  FORMATS.find(f => f.id === formatId)?.counting || null;
+
+// A round's counting scores, fully resolved for scoring — or null when the
+// format doesn't count, which is how every caller asks "does this apply?".
+// A blank or nonsense field falls back to the format's prefill rather than
+// scoring off a zero, since a hole counting no scores has no score.
+export const resolveCounting = (formatId, saved) => {
+  const def = countingDefaultFor(formatId);
+  if (!def) return null;
+  const num = (v, fallback) => {
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) && n >= 1 ? n : fallback;
+  };
+  return { front: num(saved?.front, def.front), back: num(saved?.back, def.back) };
+};
+
+// Short human string — "best 6 / 7", or "best 6" when both nines match.
+// Used anywhere a round's format needs stating in full.
+export const describeCounting = (spec) => {
+  if (!spec) return "";
+  return spec.front === spec.back ? `best ${spec.front}` : `best ${spec.front} / ${spec.back}`;
 };
 
 // ── Point-allocation methods ──
