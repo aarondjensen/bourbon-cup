@@ -24,6 +24,7 @@ import {
 import { usePullToRefresh } from "./lib/usePullToRefresh";
 import { processLogo } from "./lib/logoBrand";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { AppHeader } from "./components/AppHeader";
 import { Popup, ConfirmModal } from "./components/Popup";
 import { SegmentedToggle, Banner, Toast, ScoreButtonRow } from "./components/ui";
 import { useConfirm } from "./lib/useConfirm";
@@ -5444,6 +5445,15 @@ export default function App() {
 
 
 
+      {/* App header — the cup mark over YEAR · CITY, on every tab.
+          Deliberately OUTSIDE the scroll area rather than inside each view:
+          it renders once instead of five times (five ways for one header to
+          drift), it never scrolls away, and the leaderboard's sticky cup
+          total pins directly beneath it instead of fighting it for the top
+          of the screen. flexShrink is pinned on the header itself so a tall
+          tab can't squeeze it. */}
+      <AppHeader location={tournamentLocation} />
+
       {/* Content */}
       <div className="bc-app-body" style={{
         flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden",
@@ -5504,7 +5514,6 @@ export default function App() {
             hcpOverrides={hcpOverridesData}
             teeAssignments={teeAssignmentsData}
             roundLocks={roundLocksData}
-            location={tournamentLocation}
           />
         )}
         {view === "scoring" && (

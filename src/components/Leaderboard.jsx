@@ -34,9 +34,8 @@ import { BC, ink, teamColor } from "../theme";
 import {
   FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT,
   POINT_METHOD_TRADITIONAL, TROPHY_SILHOUETTE, CUP_POINTS_TO_WIN,
-  describeAllowance, TOURNAMENT_LOCATION,
+  describeAllowance,
 } from "../constants";
-import { getTournamentYear } from "../firebase";
 import {
   computeMatchResult, getRoundCourseCtx, higherIsBetter, totalUnit,
   segmentState, statusText, segmentLeader, getRoundAllowance,
@@ -509,57 +508,11 @@ function RoundSection({
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  Board header — the cup mark over YEAR · CITY
-// ══════════════════════════════════════════════════════════════════
-//  Rides above the cup total in the pinned block, so the thing that never
-//  changes (which Cup this is) sits over the thing that changes constantly
-//  (the score).
-//
-//  Year and city sit on ONE centred caption under the mark rather than
-//  flanking it. Flanking them was centred only in the geometric sense: the
-//  mark held the middle column, but "GAYLORD, MI" carries near three times
-//  the ink of "2025", so all of that weight piled up on one side and the
-//  cluster read as leaning right. Every fix that keeps the three abreast is
-//  a balancing act against label lengths that change with the tournament —
-//  a longer city, a two-word one — so the row would need re-tuning each
-//  time it changed. Stacking is symmetric by construction: one centred
-//  mark, one centred line, nothing to balance and nothing to re-tune.
-//
-//  The year comes from the active edition, not the calendar — the same
-//  getTournamentYear() the login screen uses — so a director browsing 2024
-//  data can't be shown a header that says 2026. The location is the
-//  director's, set in Admin → Tournament and passed down; the constant is
-//  only the fallback for an edition that hasn't been through that screen.
-//
-//  The mark is drawn as a CSS mask rather than an <img> for the same reason
-//  the nav icon is: the asset is a flat PNG silhouette, so masking is the
-//  only way it takes the exact live theme accent in both light and dark.
-function BoardHeader({ location }) {
-  return (
-    <div style={{
-      display: "flex", flexDirection: "column", alignItems: "center",
-      gap: 5, padding: "0 2px 9px",
-    }}>
-      <div style={{
-        width: 30, height: 34, background: BC.amber, flexShrink: 0,
-        WebkitMask: `url(${TROPHY_SILHOUETTE}) center/contain no-repeat`,
-        mask: `url(${TROPHY_SILHOUETTE}) center/contain no-repeat`,
-      }} />
-
-      <div style={{
-        fontSize: 11, fontWeight: 800, letterSpacing: 2.4, color: BC.t2,
-        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
-      }}>{getTournamentYear()} · {(location || TOURNAMENT_LOCATION).toUpperCase()}</div>
-    </div>
-  );
-}
-
-// ══════════════════════════════════════════════════════════════════
 //  TeamLeaderboard
 // ══════════════════════════════════════════════════════════════════
 export function TeamLeaderboard({
   matches, holeData, courses, tRounds, tPlayers, rounds, teams,
-  hcpOverrides, teeAssignments, roundLocks, location,
+  hcpOverrides, teeAssignments, roundLocks,
 }) {
   const [expandedMatch, setExpandedMatch] = useState(null);
   // Round open/closed. Absent key = follow the automatic rule below;
@@ -709,13 +662,13 @@ export function TeamLeaderboard({
   return (
     <div style={{ fontFamily: FONT }}>
       {/* ── The pinned board ──
-          Header row plus the cup total, stuck to the top of the scroll
-          area. Everything below it — the rounds, every match — is detail
-          you read AGAINST the cup score, so the cup score should never be
-          the thing you have to scroll back up to find. Same technique as
-          the Admin tab bar: the sticky wrapper is painted in the page bg
-          and carries the gap below it as padding, so rounds scroll cleanly
-          under it with nothing showing through the seam. */}
+          The cup total, stuck to the top of the scroll area, directly under
+          the app header. Everything below it — the rounds, every match — is
+          detail you read AGAINST the cup score, so the cup score should
+          never be the thing you have to scroll back up to find. Same
+          technique as the Admin tab bar: the sticky wrapper is painted in
+          the page bg and carries the gap below it as padding, so rounds
+          scroll cleanly under it with nothing showing through the seam. */}
       <div style={{
         position: "sticky", top: 0, zIndex: 5,
         background: BC.bg, padding: "6px 0 12px",
@@ -732,7 +685,6 @@ export function TeamLeaderboard({
         position: "absolute", left: 0, right: 0, bottom: "100%",
         height: 40, background: BC.bg, pointerEvents: "none",
       }} />
-      <BoardHeader location={location} />
 
       {/* ── Cup total ──
           Team names, the two totals in team colors, and a single bar
