@@ -11,8 +11,9 @@ import {
   getEffectiveHI, buildStrokeMap, resolveHolePars, resolveHoleHcps,
   computeMatchResult, computePracticeMatch, computePracticeSkins,
   getRoundCH, getRoundHI, getRoundTee, getRoundHandicapMode, lockForRound,
-  higherIsBetter, totalUnit,
+  higherIsBetter, totalUnit, segmentState,
 } from "./scoring";
+import { holeFill } from "./lib/holeFill";
 import {
   ROUND_LOCKS_COL, buildRoundLockDoc, refreshRoundLockDoc,
   markRoundFinal, unfinalizeRound, clearRoundLockDoc,
@@ -453,59 +454,61 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   };
 
   // Status cell rendering — for the two-row match status bar between
-  // the front and back hole strips. From the user's team perspective:
-  // ▲N when their team is ahead, ▼N when behind, TIED when level.
+  // the front and back hole strips. Each cell says two things about its hole:
   //
-  // WHAT N counts follows the round's scoring type, because the two answer
-  // different questions:
-  //   Match → holes up, the classic running match state.
-  //   Total → the lead on the running total, which is the only thing that
-  //           decides a Total round. Net strokes for a stroke format, dots
-  //           for Double Dot, points for Stableford — `higherIsBetter` says
-  //           which way the format's per-hole number points.
-  // Before this, the strip always counted holes won, so a Total round showed
-  // a match-play state it wasn't being scored on.
+  //   the FILL BAR — who took that hole, in team colors, drawn by the shared
+  //     holeFill() the Leaderboard's hole strip uses. On Double Dot a hole
+  //     can be split, and the diagonal says how: solid for both dots, half
+  //     and half for one each, half against grey for a lone dot, grey when
+  //     both were tied away.
+  //   the GLYPH — where the match stands after that hole, from the reader's
+  //     own team's perspective: ▲N ahead, ▼N behind, TIED level.
   //
-  // Sizing and color follow MNQ's status strip: 24px cells, 14px glyphs,
-  // green for up and red for down. The earlier amber-for-up read as brand
-  // chrome rather than as a result — golfers scan green/red here, and the
-  // amber is already carrying the "current hole" job two rows above.
+  // The two are deliberately in different currencies. The bar is about one
+  // hole and belongs to a team; the glyph is about the whole match so far and
+  // belongs to you, which is why it stays green/red rather than team-colored.
+  //
+  // WHAT the glyph counts follows the round's scoring type, and comes from
+  // the same segmentState() the engine awards points from — holes up on a
+  // Match round, the lead on the running total on a Total one. It used to
+  // count holes won unconditionally, so a Total round showed a match-play
+  // state it wasn't being scored on.
   const userTeam = match.teamA.includes(userPid) ? "A" : "B";
   const totalScored = (match.scoring_type || "match") === "stroke";
-  const higherWins = higherIsBetter(format);
+  const segOpts = { total: totalScored, higherWins: higherIsBetter(format) };
   const renderStatusCell = (i) => {
-    const cellH = 24;
+    const cellH = 26;
     const colBorder = { borderRight: i % 9 === 8 ? "none" : `1px solid ${BC.bdr}33` };
-    if (!result || !result.holes[i]) {
-      return <div key={i} style={{ flex: 1, height: cellH, ...colBorder }} />;
-    }
+    const shell = (children) => (
+      <div key={i} style={{
+        flex: 1, minWidth: 0, height: cellH, ...colBorder,
+        display: "flex", flexDirection: "column", justifyContent: "center", gap: 2, padding: "0 3px",
+      }}>{children}</div>
+    );
+    if (!result || !result.holes[i]) return shell(null);
+
     const hr = result.holes[i];
-    const thruHere = result.holes.slice(0, i + 1).filter(r => r.played);
-    let aLead;   // A's advantage after this hole, in the round's own currency
-    if (totalScored) {
-      const aTot = thruHere.reduce((s, r) => s + (r.aScore ?? 0), 0);
-      const bTot = thruHere.reduce((s, r) => s + (r.bScore ?? 0), 0);
-      aLead = higherWins ? aTot - bTot : bTot - aTot;
-    } else {
-      aLead = thruHere.filter(r => r.winner === "A").length
-            - thruHere.filter(r => r.winner === "B").length;
-    }
-    const fromUserView = userTeam === "A" ? aLead : -aLead;
     // Partial-score warning for non-active past holes
     if (!hr.played) {
       const someScored = matchPids.some(pid => getScore(pid, i) > 0);
       if (someScored && i !== activeHole) {
-        return <div key={i} title="Missing score" style={{ flex: 1, textAlign: "center", fontSize: 12, opacity: 0.55, lineHeight: `${cellH}px`, ...colBorder }}>⚠️</div>;
+        return shell(<div title="Missing score" style={{ textAlign: "center", fontSize: 12, opacity: 0.55, lineHeight: 1 }}>⚠️</div>);
       }
-      return <div key={i} style={{ flex: 1, height: cellH, ...colBorder }} />;
+      return shell(null);
     }
+
+    const aLead = segmentState(result.holes.slice(0, i + 1), segOpts).margin;
+    const fromUserView = userTeam === "A" ? aLead : -aLead;
     const color = fromUserView > 0 ? BC.green : fromUserView < 0 ? BC.danger : BC.t3;
-    return (
-      <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 14, fontWeight: 800, color, lineHeight: `${cellH}px`, ...colBorder }}>
-        {fromUserView > 0 ? <>▲{fromUserView}</>
-          : fromUserView < 0 ? <>▼{Math.abs(fromUserView)}</>
-          : <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.5 }}>TIED</span>}
-      </div>
+    return shell(
+      <>
+        <div style={{ height: 5, borderRadius: 2, boxSizing: "border-box", ...holeFill(hr, format) }} />
+        <div style={{ textAlign: "center", fontSize: 13, fontWeight: 800, color, lineHeight: 1 }}>
+          {fromUserView > 0 ? <>▲{fromUserView}</>
+            : fromUserView < 0 ? <>▼{Math.abs(fromUserView)}</>
+            : <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.5 }}>TIED</span>}
+        </div>
+      </>
     );
   };
 

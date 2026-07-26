@@ -23,17 +23,23 @@
 //    3. PROGRESSIVE DETAIL. Collapsed match card = who, status, points,
 //       hole strip. Tap it and the full net scorecard unfolds.
 //
-//  Everything here is presentational. All scoring math still comes from
-//  scoring.js (computeMatchResult) — the only numbers computed locally
-//  are display margins, which mirror calcSegment exactly.
+//  Everything here is presentational. Every number comes from scoring.js —
+//  computeMatchResult for the points, segmentState/statusText for the
+//  margins. Nothing about a result is worked out locally, so this screen
+//  cannot describe a match differently from how it was scored, or from how
+//  the Scoring tab describes the same match.
 
 import { useState, useMemo } from "react";
-import { BC } from "../theme";
+import { BC, ink, teamColor } from "../theme";
 import {
   FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT,
   POINT_METHOD_TRADITIONAL, TROPHY_SILHOUETTE,
 } from "../constants";
-import { computeMatchResult, getRoundCourseCtx, higherIsBetter, totalUnit } from "../scoring";
+import {
+  computeMatchResult, getRoundCourseCtx, higherIsBetter, totalUnit,
+  segmentState, statusText, segmentLeader,
+} from "../scoring";
+import { HoleStrip } from "./HoleStrip";
 import { isRoundFinal } from "../lib/roundLocks";
 
 const FONT = "'Montserrat', sans-serif";
@@ -43,8 +49,6 @@ const ALL_ROUNDS = [1, 2, 3, 4];
 
 // Points print without a pointless ".0" — 3 → "3", 3.5 → "3.5".
 const fmtPts = (n) => (n == null ? "—" : Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10));
-
-const teamHex = (tid) => (tid === "A" ? BC.teamA : BC.teamB);
 
 // Max points on offer in a single match.
 const matchPot = (m) => {
@@ -63,16 +67,6 @@ const matchSettled = (m, r) => {
   return (!n.front || r.front.complete) && (!n.back || r.back.complete) && (!n.overall || r.overall.complete);
 };
 
-// ── Settled vs in-play ink ───────────────────────────────────────
-// A result that's still moving is drawn lighter than one that's banked.
-// That's the language the segment pills already speak (hollow and dashed
-// while live, filled once settled); this extends it to the match rows, so
-// scanning the board separates "this is decided" from "this could change"
-// before you read a single number. Appended as an alpha byte, which every
-// BC color token supports since they're all 6-digit hex.
-const LIVE_ALPHA = "99"; // 60%
-const ink = (hex, settled) => (settled ? hex : `${hex}${LIVE_ALPHA}`);
-
 // Player initials for the compact scorecard row labels ("Andy", "KJ" → "AK").
 const initialsOf = (names) => {
   const list = (names || []).filter(Boolean);
@@ -80,56 +74,14 @@ const initialsOf = (names) => {
   return list.map((n) => String(n).trim()[0]?.toUpperCase() || "?").join("");
 };
 
-// ── Segment state ────────────────────────────────────────────────
-// Display-side mirror of scoring.js's calcSegment. The engine already
-// hands us the awarded points; this only derives the human-readable
-// margin ("2 UP", "3&2", "AS") and whether the segment is settled.
-//
-// `total` segments are settled on running totals, not holes won, so the
-// margin means something different — the caller passes the flag, plus
-// `higherWins` for the formats whose per-hole number counts UP (Double
-// Dot dots, Stableford points) rather than down (net strokes). The
-// returned `unit` tells the renderer which language to speak.
-function segState(holes, total, higherWins = false) {
-  const played = holes.filter((h) => h.played);
-  if (total) {
-    const complete = holes.every((h) => h.aScore != null && h.bScore != null);
-    const aTot = played.reduce((s, h) => s + (h.aScore ?? 0), 0);
-    const bTot = played.reduce((s, h) => s + (h.bScore ?? 0), 0);
-    // > 0 → A leads, whichever direction the format's numbers run.
-    const margin = higherWins ? aTot - bTot : bTot - aTot;
-    return {
-      complete, played: played.length, total: holes.length, remaining: holes.length - played.length,
-      margin, clinched: false, unit: "total", aTot, bTot,
-      winner: complete ? (margin > 0 ? "A" : margin < 0 ? "B" : null) : null,
-    };
-  }
-  const aW = played.filter((h) => h.winner === "A").length;
-  const bW = played.filter((h) => h.winner === "B").length;
-  const margin = aW - bW;
-  const remaining = holes.length - played.length;
-  const clinched = Math.abs(margin) > remaining && played.length > 0;
-  return {
-    complete: (played.length === holes.length && played.length > 0) || clinched,
-    played: played.length, total: holes.length, remaining, margin, clinched, unit: "up",
-    winner: clinched ? (margin > 0 ? "A" : "B") : played.length === holes.length && played.length > 0 ? (margin > 0 ? "A" : margin < 0 ? "B" : null) : null,
-  };
-}
-
-// Golf-native result text. "3&2" when a match closes early, "2 UP" when
-// it goes the distance, "AS" for all square, "—" before a ball is struck.
-//
-// A Total segment isn't a match, so it doesn't get match language: there is
-// no "up" and nothing can be closed out early, only a lead on the running
-// total. 8 dots to 6 shows "+2", read against the leading team's color.
-function statusText(st) {
-  if (!st.played) return "—";
-  const m = Math.abs(st.margin);
-  if (st.unit === "total") return m === 0 ? "TIED" : `+${m}`;
-  if (st.clinched && st.remaining > 0) return `${m}&${st.remaining}`;
-  if (m === 0) return "AS";
-  return `${m} UP`;
-}
+// Segment state and its result text now come from scoring.js — the same
+// segmentState() the engine awards points from, so what this screen prints
+// and what the match banked can't disagree. `segOpts` builds the flags that
+// tell it how the round is settled.
+const segOpts = (m, format) => ({
+  total: (m.scoring_type || "match") === "stroke",
+  higherWins: higherIsBetter(format),
+});
 
 // ── Pending points ───────────────────────────────────────────────
 // What a match is currently ON COURSE to award: for every segment that has
@@ -142,11 +94,10 @@ function statusText(st) {
 // dress up "no data" as a forecast. Those points stay simply unplayed.
 function pendingPts(m, r, format) {
   const out = { A: 0, B: 0 };
-  const total = (m.scoring_type || "match") === "stroke";
-  const higherWins = higherIsBetter(format);
+  const opts = segOpts(m, format);
   const add = (holes, pot) => {
     if (!pot) return;
-    const st = segState(holes, total, higherWins);
+    const st = segmentState(holes, opts);
     if (st.complete || !st.played) return;
     if (st.margin > 0) out.A += pot;
     else if (st.margin < 0) out.B += pot;
@@ -172,7 +123,7 @@ function SegmentPill({ label, pot, st, pts }) {
   const halved = settled && !st.winner;
   const win = st.winner;
   const shown = settled ? (halved ? "½ – ½" : `${fmtPts(win === "A" ? pts.A : pts.B)}`) : statusText(st);
-  const color = win ? teamHex(win) : BC.t2;
+  const color = win ? teamColor(win) : BC.t2;
 
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
@@ -196,49 +147,6 @@ function SegmentPill({ label, pot, st, pts }) {
   );
 }
 
-// ── Hole strip ───────────────────────────────────────────────────
-// 18 cells, one per hole, colored by who won it. A visible gap splits
-// the front from the back so "thru 12" is readable without counting.
-function HoleStrip({ holes, showNumbers = false, settled = true }) {
-  const cell = (h, i) => {
-    const bg = !h.played
-      ? "transparent"
-      : h.winner === "A" ? ink(BC.teamA, settled)
-      : h.winner === "B" ? ink(BC.teamB, settled)
-      : `${BC.t3}55`;
-    return (
-      <div key={i} style={{
-        flex: 1, minWidth: 0, height: 9, borderRadius: 2, background: bg,
-        border: h.played ? "none" : `1px solid ${BC.bdr}`,
-        boxSizing: "border-box",
-      }} />
-    );
-  };
-  const nums = (start, end) => (
-    <div style={{ display: "flex", gap: 1.5, flex: 1, minWidth: 0 }}>
-      {holes.slice(start, end).map((_, i) => (
-        <div key={i} style={{ flex: 1, minWidth: 0, textAlign: "center", fontSize: 7, color: BC.t3, fontWeight: 700 }}>
-          {start + i + 1}
-        </div>
-      ))}
-    </div>
-  );
-
-  return (
-    <div>
-      {showNumbers && (
-        <div style={{ display: "flex", gap: 8, marginBottom: 2 }}>
-          {nums(0, 9)}{nums(9, 18)}
-        </div>
-      )}
-      <div style={{ display: "flex", gap: 8 }}>
-        <div style={{ display: "flex", gap: 1.5, flex: 1, minWidth: 0 }}>{holes.slice(0, 9).map(cell)}</div>
-        <div style={{ display: "flex", gap: 1.5, flex: 1, minWidth: 0 }}>{holes.slice(9, 18).map(cell)}</div>
-      </div>
-    </div>
-  );
-}
-
 // ── Pending note ─────────────────────────────────────────────────
 // The "+2" under a cup total: points that side is on course to take from
 // matches still on the course. Drawn in the team's color at in-play
@@ -250,7 +158,7 @@ function PendingNote({ tid, n, align = "left" }) {
     <div style={{
       minHeight: 12, marginTop: 2, textAlign: align,
       fontSize: 9, fontWeight: 800, letterSpacing: 0.6,
-      color: ink(teamHex(tid), false),
+      color: ink(teamColor(tid), false),
     }}>
       {n > 0 ? `+${fmtPts(n)} PENDING` : ""}
     </div>
@@ -284,7 +192,7 @@ function Chip({ text, color = BC.t3, filled = false }) {
 // stays grey. That's the whole leader signal — no tint, no pill.
 function MatchTeamColumn({ tid, names, isLeader, settled }) {
   const left = tid === "A";
-  const railColor = ink(teamHex(tid), settled);
+  const railColor = ink(teamColor(tid), settled);
   const rail = left
     ? { borderLeft: `3px solid ${railColor}`, paddingLeft: 8 }
     : { borderRight: `3px solid ${railColor}`, paddingRight: 8 };
@@ -313,8 +221,8 @@ function MatchTeamColumn({ tid, names, isLeader, settled }) {
 // can be in the books while the back is still being played, and that's
 // precisely the distinction worth drawing here.
 const nineColor = (st) => {
-  const lead = st.margin > 0 ? "A" : st.margin < 0 ? "B" : null;
-  return ink(lead ? teamHex(lead) : st.played ? BC.t2 : BC.t3, st.complete);
+  const lead = segmentLeader(st);
+  return ink(lead ? teamColor(lead) : st.played ? BC.t2 : BC.t3, st.complete);
 };
 
 // Cells of the centre cluster. minWidth on each keeps the columns from
@@ -338,23 +246,23 @@ function MatchCard({
   courses, tRounds, roundLocks, expanded, onToggle,
 }) {
   const total = (match.scoring_type || "match") === "stroke";
-  const higherWins = higherIsBetter(format);
+  const opts = segOpts(match, format);
   const traditional = (match.point_method || "") === POINT_METHOD_TRADITIONAL;
   const n = match.nassau || NASSAU_DEFAULT;
 
-  const overallSt = segState(result.holes, total, higherWins);
+  const overallSt = segmentState(result.holes, opts);
   const nameOf = (pid) => tPlayers.find((p) => p.player_id === pid)?.name || pid;
   const aNames = (match.teamA || []).map(nameOf);
   const bNames = (match.teamB || []).map(nameOf);
 
   const ptsA = result.totalPts.A, ptsB = result.totalPts.B;
-  const leader = overallSt.margin > 0 ? "A" : overallSt.margin < 0 ? "B" : null;
+  const leader = segmentLeader(overallSt);
   const done = matchSettled(match, result);
 
   // Per-nine state, computed once and shared by the collapsed row's F9/B9
   // flanks and the expanded segment pills — so the two can never disagree.
-  const frontSt = segState(result.holes.slice(0, 9), total, higherWins);
-  const backSt = segState(result.holes.slice(9, 18), total, higherWins);
+  const frontSt = segmentState(result.holes.slice(0, 9), opts);
+  const backSt = segmentState(result.holes.slice(9, 18), opts);
 
   const segments = traditional
     ? [{ key: "o", label: "MATCH", pot: match.traditional_points ?? 1, st: overallSt, pts: result.overallPts }]
@@ -378,7 +286,7 @@ function MatchCard({
   // "TIED" wording, so this only applies to match play.
   const halved = done && !total && overallSt.margin === 0;
   const statusLabel = halved ? "½" : statusText(overallSt);
-  const statusBase = leader ? teamHex(leader) : overallSt.played ? BC.t2 : BC.t3;
+  const statusBase = leader ? teamColor(leader) : overallSt.played ? BC.t2 : BC.t3;
   const statusColor = ink(statusBase, done);
   // Sub-line under the status. An unplayed match has no progress to report,
   // so it shows its tee time instead — the only thing about it that's news.
@@ -438,7 +346,7 @@ function MatchCard({
 
         {/* Hole-by-hole — the match's shape, on its own line at full width. */}
         <div style={{ marginTop: 8 }}>
-          <HoleStrip holes={result.holes} settled={done} />
+          <HoleStrip holes={result.holes} format={format} settled={done} />
         </div>
       </button>
 
@@ -737,7 +645,7 @@ export function TeamLeaderboard({
 
         <div style={{ textAlign: "center", marginTop: 7, fontSize: 9, fontWeight: 700, letterSpacing: 1, color: BC.t3 }}>
           {clincher
-            ? <span style={{ color: teamHex(clincher) }}>
+            ? <span style={{ color: teamColor(clincher) }}>
                 {(clincher === "A" ? tA.name : tB.name).toUpperCase()} WIN THE CUP
               </span>
             : inFlight
@@ -889,7 +797,9 @@ export function MatchScorecard({ match, result, format, courses, tRounds, teams,
   // Double Dot side note — how the dots have been shared out so far. The
   // cells above show a hole's dots; this says what they add up to, which is
   // the number the round is actually settled on when it's Total-scored.
-  const dd = format === "double_dot" ? segState(holes, true, true) : null;
+  const dd = format === "double_dot"
+    ? segmentState(holes, { total: true, higherWins: true })
+    : null;
 
   return (
     <div style={{ padding: "12px 12px 14px", fontFamily: FONT }}>
@@ -930,7 +840,7 @@ export function MatchScorecard({ match, result, format, courses, tRounds, teams,
               <span style={{ color: BC.teamA }}>{dd.aTot}</span>
               <span style={{ color: BC.t3 }}>{" – "}</span>
               <span style={{ color: BC.teamB }}>{dd.bTot}</span>
-              <span style={{ color: dd.margin === 0 ? BC.t3 : teamHex(dd.margin > 0 ? "A" : "B") }}>
+              <span style={{ color: dd.margin === 0 ? BC.t3 : teamColor(dd.margin > 0 ? "A" : "B") }}>
                 {dd.margin === 0 ? " · level" : ` · ${statusText(dd)}`}
               </span>
               <span style={{ color: BC.t3 }}>{dd.complete ? "" : ` thru ${dd.played}`}</span>
