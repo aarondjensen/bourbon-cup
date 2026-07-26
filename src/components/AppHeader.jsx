@@ -32,19 +32,25 @@ import { getTournamentYear } from "../firebase";
 
 export function AppHeader({ location }) {
   return (
+    // Sized for a band that is now on EVERY screen rather than one: the mark
+    // came down from 30×34 and the caption from 11px, which buys back ~12px
+    // of every tab's height. Trimmed rather than shrunk to nothing — below
+    // roughly this the trophy stops being legible as a trophy at arm's
+    // length, and the caption's tracking is what makes it read as a label
+    // instead of stray text.
     <div style={{
       display: "flex", flexDirection: "column", alignItems: "center",
-      gap: 5, padding: "6px 12px 9px", flexShrink: 0,
+      gap: 4, padding: "5px 12px 7px", flexShrink: 0,
       fontFamily: "'Montserrat', sans-serif",
     }}>
       <div style={{
-        width: 30, height: 34, background: BC.amber, flexShrink: 0,
+        width: 25, height: 28, background: BC.amber, flexShrink: 0,
         WebkitMask: `url(${TROPHY_SILHOUETTE}) center/contain no-repeat`,
         mask: `url(${TROPHY_SILHOUETTE}) center/contain no-repeat`,
       }} />
 
       <div style={{
-        fontSize: 11, fontWeight: 800, letterSpacing: 2.4, color: BC.t2,
+        fontSize: 10, fontWeight: 800, letterSpacing: 2.2, color: BC.t2,
         whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
       }}>{getTournamentYear()} · {(location || TOURNAMENT_LOCATION).toUpperCase()}</div>
     </div>
