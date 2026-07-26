@@ -11,7 +11,9 @@ import {
   getEffectiveHI, buildStrokeMap, resolveHolePars, resolveHoleHcps,
   computeMatchResult, computePracticeMatch, computePracticeSkins,
   getRoundCH, getRoundHI, getRoundTee, getRoundHandicapMode, lockForRound,
+  higherIsBetter, totalUnit, segmentState,
 } from "./scoring";
+import { holeFill } from "./lib/holeFill";
 import {
   ROUND_LOCKS_COL, buildRoundLockDoc, refreshRoundLockDoc,
   markRoundFinal, unfinalizeRound, clearRoundLockDoc,
@@ -22,7 +24,7 @@ import { usePullToRefresh } from "./lib/usePullToRefresh";
 import { processLogo } from "./lib/logoBrand";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { Popup, ConfirmModal } from "./components/Popup";
-import { SegmentedToggle, Banner, Toast } from "./components/ui";
+import { SegmentedToggle, Banner, Toast, ScoreButtonRow } from "./components/ui";
 import { useConfirm } from "./lib/useConfirm";
 import { EditionSwitcher } from "./components/EditionSwitcher";
 import { GhinLinkButton, GhinSyncButton } from "./components/GhinLink";
@@ -444,50 +446,94 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
 
   const { A: tA, B: tB } = teams;
 
+  // ScoreButtonRow hands back the new gross directly (0 = cleared, which it
+  // sends when the active button is tapped again), so no toggle logic here.
   const onTapScore = async (pid, score) => {
-    const cur = getScore(pid, activeHole);
-    const newScore = cur === score ? 0 : score; // Tapping the active button clears
-    await onSaveHole(pid, match.round, activeHole, newScore || null, tr?.course_id);
+    await onSaveHole(pid, match.round, activeHole, score || null, tr?.course_id);
   };
 
   // Status cell rendering — for the two-row match status bar between
-  // the front and back hole strips. From the user's team perspective:
-  // ▲N when their team is up, ▼N when down, "AS" tied, "X&Y" if clinched.
+  // the front and back hole strips. Each cell says two things about its hole:
+  //
+  //   the FILL BAR — who took that hole, in team colors, drawn by the shared
+  //     holeFill() the Leaderboard's hole strip uses. On Double Dot a hole
+  //     can be split, and the diagonal says how: solid for both dots, half
+  //     and half for one each, half against grey for a lone dot, grey when
+  //     both were tied away.
+  //   the GLYPH — where the match stands after that hole, from the reader's
+  //     own team's perspective: ▲N ahead, ▼N behind, TIED level.
+  //
+  // The two are deliberately in different currencies. The bar is about one
+  // hole and belongs to a team; the glyph is about the whole match so far and
+  // belongs to you, which is why it stays green/red rather than team-colored.
+  //
+  // WHAT the glyph counts follows the round's scoring type, and comes from
+  // the same segmentState() the engine awards points from — holes up on a
+  // Match round, the lead on the running total on a Total one. It used to
+  // count holes won unconditionally, so a Total round showed a match-play
+  // state it wasn't being scored on.
   const userTeam = match.teamA.includes(userPid) ? "A" : "B";
+  const totalScored = (match.scoring_type || "match") === "stroke";
+  const segOpts = { total: totalScored, higherWins: higherIsBetter(format) };
   const renderStatusCell = (i) => {
-    const cellH = 22;
+    // Same reasoning as the Leaderboard strip's cell height: the bar has to
+    // be tall enough for a split hole's diagonal to read, and it stays that
+    // height for every format so the strip never changes shape between rounds.
+    const cellH = 29, barH = 8;
     const colBorder = { borderRight: i % 9 === 8 ? "none" : `1px solid ${BC.bdr}33` };
-    if (!result || !result.holes[i]) {
-      return <div key={i} style={{ flex: 1, height: cellH, ...colBorder }} />;
-    }
+    const shell = (children) => (
+      <div key={i} style={{
+        flex: 1, minWidth: 0, height: cellH, ...colBorder,
+        display: "flex", flexDirection: "column", justifyContent: "center", gap: 2, padding: "0 3px",
+      }}>{children}</div>
+    );
+    if (!result || !result.holes[i]) return shell(null);
+
     const hr = result.holes[i];
-    const aWins = result.holes.slice(0, i + 1).filter(r => r.winner === "A").length;
-    const bWins = result.holes.slice(0, i + 1).filter(r => r.winner === "B").length;
-    const upTeam = aWins > bWins ? "A" : bWins > aWins ? "B" : null;
-    const upN = Math.abs(aWins - bWins);
-    const fromUserView = upTeam === userTeam ? upN : upTeam == null ? 0 : -upN;
     // Partial-score warning for non-active past holes
     if (!hr.played) {
       const someScored = matchPids.some(pid => getScore(pid, i) > 0);
       if (someScored && i !== activeHole) {
-        return <div key={i} title="Missing score" style={{ flex: 1, textAlign: "center", fontSize: 13, lineHeight: `${cellH}px`, ...colBorder }}>⚠️</div>;
+        return shell(<div title="Missing score" style={{ textAlign: "center", fontSize: 12, opacity: 0.55, lineHeight: 1 }}>⚠️</div>);
       }
-      return <div key={i} style={{ flex: 1, height: cellH, ...colBorder }} />;
+      return shell(null);
     }
-    let label, color;
-    if (fromUserView > 0) { label = `▲${fromUserView}`; color = BC.amber; }
-    else if (fromUserView < 0) { label = `▼${Math.abs(fromUserView)}`; color = BC.danger; }
-    else { label = "AS"; color = BC.t3; }
-    return (
-      <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 9, fontWeight: 800, color, lineHeight: `${cellH}px`, ...colBorder }}>
-        {label}
-      </div>
+
+    const aLead = segmentState(result.holes.slice(0, i + 1), segOpts).margin;
+    const fromUserView = userTeam === "A" ? aLead : -aLead;
+    const color = fromUserView > 0 ? BC.green : fromUserView < 0 ? BC.danger : BC.t3;
+    return shell(
+      <>
+        <div style={{ height: barH, borderRadius: 3, boxSizing: "border-box", ...holeFill(hr, format) }} />
+        <div style={{ textAlign: "center", fontSize: 13, fontWeight: 800, color, lineHeight: 1 }}>
+          {fromUserView > 0 ? <>▲{fromUserView}</>
+            : fromUserView < 0 ? <>▼{Math.abs(fromUserView)}</>
+            : <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.5 }}>TIED</span>}
+        </div>
+      </>
     );
   };
 
-  // Score buttons — par-relative range. par-3: 1-7, par-4/5: 2-8.
-  // Auto-shift if the saved score is outside the standard range.
-  const baseBtns = par === 3 ? [1, 2, 3, 4, 5, 6, 7] : [2, 3, 4, 5, 6, 7, 8];
+  // Hole-strip cell — geometry and states lifted from MNQ: 32px tall, the
+  // completed state a tinted chip with an accent border (not a solid fill),
+  // the current hole a solid accent chip with an outline ring. BC keeps one
+  // extra state MNQ has no need for — `partial`, for a hole where some but
+  // not all four players are in, which matters over 18 holes.
+  const renderHoleCell = (h) => {
+    const cur = h === activeHole;
+    const allScored = matchPids.every(pid => getScore(pid, h) > 0);
+    const partial = !allScored && matchPids.some(pid => getScore(pid, h) > 0);
+    return (
+      <button key={h} onClick={() => goToHole(h)} style={{
+        flex: 1, height: 32, borderRadius: allScored || cur ? 8 : 6,
+        border: allScored && !cur ? `1.5px solid ${BC.amber}50` : "none",
+        background: cur ? BC.amber : allScored ? BC.amber + "15" : partial ? BC.amber + "0a" : BC.card,
+        color: cur ? "#0a0804" : allScored ? BC.amber : BC.t3,
+        fontSize: 15, fontWeight: 700, cursor: "pointer",
+        outline: cur ? `2px solid ${BC.amber}` : "none", outlineOffset: 1,
+      }}>{h + 1}</button>
+    );
+  };
 
   return (
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
@@ -511,50 +557,32 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
         </div>
       )}
 
-      {/* Front 9 — hole strip. Three-state hierarchy: current (bright
-          green + outline), completed all-scored (deep green + white
-          text), partial (light tint), untouched (card bg). */}
+      {/* Front 9 — hole strip + status row. */}
       <div style={{ display: "flex", gap: 3, marginBottom: 2 }}>
-        {Array.from({ length: 9 }, (_, i) => {
-          const cur = i === activeHole;
-          const allScored = matchPids.every(pid => getScore(pid, i) > 0);
-          const partial = !allScored && matchPids.some(pid => getScore(pid, i) > 0);
-          return (
-            <button key={i} onClick={() => goToHole(i)} style={{
-              flex: 1, height: 28, borderRadius: cur ? 8 : 6, border: "none",
-              background: cur ? BC.amber : allScored ? BC.amberDim : partial ? BC.amber + "20" : BC.card,
-              color: cur ? "#0a0804" : allScored ? "#fff" : BC.t3,
-              fontSize: 13, fontWeight: 800, cursor: "pointer",
-              outline: cur ? `2px solid ${BC.amber}` : "none", outlineOffset: 1,
-            }}>{i + 1}</button>
-          );
-        })}
+        {Array.from({ length: 9 }, (_, i) => renderHoleCell(i))}
       </div>
-      <div style={{ display: "flex", marginBottom: 6, background: BC.card, border: `1px solid ${BC.bdr}60`, borderRadius: 8, padding: "3px 0", alignItems: "center" }}>
+      <div style={{ display: "flex", marginBottom: 4, background: BC.card, border: `1px solid ${BC.bdr}60`, borderRadius: 8, padding: "4px 0", alignItems: "center" }}>
         {Array.from({ length: 9 }, (_, i) => renderStatusCell(i))}
       </div>
 
       {/* Back 9 — hole strip + status row. */}
       <div style={{ display: "flex", gap: 3, marginBottom: 2 }}>
-        {Array.from({ length: 9 }, (_, i) => {
-          const h = i + 9;
-          const cur = h === activeHole;
-          const allScored = matchPids.every(pid => getScore(pid, h) > 0);
-          const partial = !allScored && matchPids.some(pid => getScore(pid, h) > 0);
-          return (
-            <button key={h} onClick={() => goToHole(h)} style={{
-              flex: 1, height: 28, borderRadius: cur ? 8 : 6, border: "none",
-              background: cur ? BC.amber : allScored ? BC.amberDim : partial ? BC.amber + "20" : BC.card,
-              color: cur ? "#0a0804" : allScored ? "#fff" : BC.t3,
-              fontSize: 13, fontWeight: 800, cursor: "pointer",
-              outline: cur ? `2px solid ${BC.amber}` : "none", outlineOffset: 1,
-            }}>{h + 1}</button>
-          );
-        })}
+        {Array.from({ length: 9 }, (_, i) => renderHoleCell(i + 9))}
       </div>
-      <div style={{ display: "flex", marginBottom: 6, background: BC.card, border: `1px solid ${BC.bdr}60`, borderRadius: 8, padding: "3px 0", alignItems: "center" }}>
+      <div style={{ display: "flex", marginBottom: 4, background: BC.card, border: `1px solid ${BC.bdr}60`, borderRadius: 8, padding: "4px 0", alignItems: "center" }}>
         {Array.from({ length: 9 }, (_, i) => renderStatusCell(i + 9))}
       </div>
+
+      {/* Full Scorecard — sits ABOVE the hole banner (MNQ's placement) so
+          it's reachable without scrolling past four player cards. Slim
+          bar styling keeps the vertical cost near zero. */}
+      <button onClick={() => setShowScorecard(true)} style={{
+        width: "100%", padding: "5px 0", borderRadius: 8, marginBottom: 4, cursor: "pointer",
+        background: BC.card, border: `1px solid ${BC.bdr}60`, color: BC.t2,
+        fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
+      }}>
+        Full Scorecard
+      </button>
 
       {/* Hole nav banner — deep Mash green with white text, mirroring the
           Mash design system's "established/chrome" surface. */}
@@ -594,7 +622,13 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           Tells the user what scoring format their entries are being judged
           against. Useful since this app supports multiple formats per round. */}
       <div style={{ fontSize: 9, color: BC.t3, fontWeight: 700, letterSpacing: 1, padding: "2px 4px", marginBottom: 4 }}>
-        {(FORMATS.find(f => f.id === format)?.label || "MATCH PLAY").toUpperCase()} · ROUND {match.round}
+        {(FORMATS.find(f => f.id === format)?.label || "MATCH PLAY").toUpperCase()}
+        {" · "}
+        {/* The scoring type sits next to the format because the same format
+            plays completely differently under the two — and the status strip
+            above is counting whichever one this says. */}
+        {totalScored ? `TOTAL ${totalUnit(format).toUpperCase()}` : "MATCH PLAY"}
+        {" · ROUND "}{match.round}
       </div>
 
       {/* Player score cards — 4 stacked, T1 above dashed divider, T2 below.
@@ -627,82 +661,38 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
             }
           }
 
-          // Score-button range — auto-shift if saved score is out of base range.
-          const maxBtn = baseBtns[baseBtns.length - 1];
-          const minBtn = baseBtns[0];
-          let btns = baseBtns;
-          if (cur > maxBtn) {
-            const shift = cur - maxBtn;
-            btns = baseBtns.map(b => b + shift);
-          } else if (cur > 0 && cur < minBtn) {
-            const shift = minBtn - cur;
-            btns = baseBtns.map(b => Math.max(1, b - shift));
-          }
-
           return (
             <div key={pid} style={{
               background: BC.card, borderRadius: 10, marginBottom: 4, padding: "6px 10px",
               border: `1px solid ${BC.bdr}`,
             }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5, minWidth: 0 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: BC.t1, lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>{tp?.name || pid}</span>
+              {/* Top row — name + (CH) + stroke dots clustered tight on the
+                  LEFT, so the handicap context reads as attached to the
+                  player it describes. MNQ's layout. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2, minWidth: 0 }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: BC.t1, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>{tp?.name || pid}</span>
                 <span style={{ fontSize: 11, fontWeight: 700, color: BC.hcpBlue, flexShrink: 0 }}>({ch})</span>
                 {strokes > 0 && (
                   <span style={{ color: BC.hcpBlue, fontSize: 12, letterSpacing: 1, flexShrink: 0, lineHeight: 1 }}>
                     {"●".repeat(strokes)}
                   </span>
                 )}
-                <div style={{ flex: 1 }} />
+              </div>
+              {/* Net / thru sub-line on its own row beneath the name, as in
+                  MNQ. minHeight reserves the slot before scoring starts so
+                  the card doesn't grow on the first entry. */}
+              <div style={{ fontSize: 10, color: BC.t3, marginBottom: 3, lineHeight: 1.1, minHeight: 10 }}>
                 {thru > 0 && (
-                  <span style={{ fontSize: 10, color: BC.t3, flexShrink: 0, whiteSpace: "nowrap" }}>
-                    Net: <strong style={{ color: netToPar < 0 ? BC.danger : netToPar === 0 ? BC.t3 : BC.t1 }}>
-                      {fmtScore(netToPar)}
-                    </strong> thru {thru}
-                  </span>
+                  <>Net <strong style={{ color: netToPar < 0 ? BC.danger : netToPar === 0 ? BC.t3 : BC.t1, fontWeight: 700 }}>
+                    {fmtScore(netToPar)}
+                  </strong> thru {thru}</>
                 )}
               </div>
-              <div style={{ display: "flex", gap: 3 }}>
-                {btns.map(btn => {
-                  const isCur = btn === cur;
-                  const sd = btn - par;
-                  const boxSize = 32;
-                  return (
-                    <button key={btn} onClick={() => onTapScore(pid, btn)} style={{
-                      flex: 1, height: 38, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 800, border: "none",
-                      background: isCur ? BC.amber : BC.inp, color: isCur ? "#0a0804" : BC.t2,
-                      position: "relative",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>
-                      {/* Score-shape overlays — circle for birdie, nested
-                          circle for eagle, square for bogey, nested square
-                          for double-bogey+. Mirrors ScoreCell's iconography. */}
-                      {sd === -1 && <div style={{ position: "absolute", inset: 3, border: `1.5px solid ${isCur ? "#0a0804" : BC.t2}`, borderRadius: "50%", pointerEvents: "none" }} />}
-                      {sd <= -2 && <>
-                        <div style={{ position: "absolute", inset: 3, border: `1.5px solid ${isCur ? "#0a0804" : BC.t2}`, borderRadius: "50%", pointerEvents: "none" }} />
-                        <div style={{ position: "absolute", inset: 6, border: `1.5px solid ${isCur ? "#0a0804" : BC.t2}`, borderRadius: "50%", pointerEvents: "none" }} />
-                      </>}
-                      {sd === 1 && <div style={{ position: "absolute", inset: 4, border: `1.5px solid ${isCur ? "#0a0804" : BC.t2}`, pointerEvents: "none" }} />}
-                      {sd >= 2 && <>
-                        <div style={{ position: "absolute", inset: 4, border: `1.5px solid ${isCur ? "#0a0804" : BC.t2}`, pointerEvents: "none" }} />
-                        <div style={{ position: "absolute", inset: 7, border: `1.5px solid ${isCur ? "#0a0804" : BC.t2}`, pointerEvents: "none" }} />
-                      </>}
-                      <span style={{ position: "relative", zIndex: 1 }}>{btn}</span>
-                    </button>
-                  );
-                })}
-              </div>
+              <ScoreButtonRow par={par} score={cur} onScore={(v) => onTapScore(pid, v)} />
             </div>
           );
         })}
       </div>
-
-      {/* Full Scorecard button — opens a modal showing both teams x 18 holes. */}
-      <button onClick={() => setShowScorecard(true)} style={{
-        width: "100%", marginTop: 8, padding: "10px 0", background: BC.card, border: `1px solid ${BC.bdr}`,
-        borderRadius: 10, color: BC.t2, fontSize: 12, fontWeight: 700, cursor: "pointer", letterSpacing: 0.5,
-      }}>
-        Full Scorecard
-      </button>
 
       {/* Scorecard modal — uses the existing MatchScorecard component
           which already renders both teams and 18 holes for the main app. */}
@@ -1005,8 +995,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
       teamB: matchTeamB,
       teamANames: matchTeamA.map(pid => tPlayers.find(p => p.player_id === pid)?.name || pid),
       teamBNames: matchTeamB.map(pid => tPlayers.find(p => p.player_id === pid)?.name || pid),
-      nassau: nassau,
-      scoring_type: scoringType,
+      // `nassau` and `scoring_type` are deliberately NOT written here. They
+      // belong to the round, and a copy on the match only ever goes stale the
+      // moment the director changes the round's setup. App resolves both from
+      // the round doc when it enriches matches.
     };
     await onSetMatch(data);
     setMatchTeamA([]); setMatchTeamB([]);
@@ -1524,13 +1516,16 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             })()}
 
             {/* ── Scoring ──────────────────────────────────────────────────
-                Match (win/halve holes) vs Stroke (net medal: fewest net strokes
-                wins), then Single vs Nassau. Both share the nassau
+                Match (win/halve holes) vs Total (the running total decides it:
+                fewest net strokes, or most dots on Double Dot, or most points
+                on Stableford), then Single vs Nassau. Both share the nassau
                 {front,back,overall} pots:
                   • Nassau → three segments (F9 / B9 / OVR)
                   • Single → one 18-hole pot worth `value` (overall-only)
-                `scoring_type` is saved on the round and baked into each match;
-                the stroke branch lives in scoring.js computeMatchResult. */}
+                `scoring_type` lives on the ROUND and nowhere else — App reads
+                it off the round doc when enriching matches, so changing it
+                here takes effect on every match in the round immediately.
+                The Total branch lives in scoring.js computeMatchResult. */}
             {(() => {
               const isSingle = (nassau.front || 0) === 0 && (nassau.back || 0) === 0;
               const pill = (active, disabled) => ({
@@ -1554,8 +1549,8 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>SCORING</div>
                     {/* Match / Stroke */}
                     <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}` }}>
-                      <button onClick={() => setScoringType("match")} style={pill(scoringType === "match", false)}>Match</button>
-                      <button onClick={() => setScoringType("stroke")} title="Net stroke total (medal) — fewest net strokes wins each pot" style={pill(scoringType === "stroke", false)}>Total</button>
+                      <button onClick={() => setScoringType("match")} title="Match play — the side that wins more holes takes each pot" style={pill(scoringType === "match", false)}>Match</button>
+                      <button onClick={() => setScoringType("stroke")} title={`Total ${totalUnit(roundFormat || tRounds.find(t => t.round_number === editRound)?.format || DEFAULT_FORMAT)} — the running total over each segment decides the pot, not holes won`} style={pill(scoringType === "stroke", false)}>Total</button>
                     </div>
                     {/* Low Man / All (handicap allocation) */}
                     <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}`, marginLeft: "auto" }}>
@@ -2686,11 +2681,6 @@ function PracticeScoringTab({
     return { net, gross, thru, netVsPar: net - parThru };
   };
 
-  // Score buttons: par-3 holes start at 1, par-4/5 start at 2. The displayed
-  // range shifts up or down if the saved score falls outside [min, max] so
-  // the active button is always visible without forcing the +/- adjusters.
-  const baseBtns = par === 3 ? [1, 2, 3, 4, 5, 6, 7] : [2, 3, 4, 5, 6, 7, 8];
-
   // ── MNQ-style match status bar ─────────────────────────────────────────
   // Cumulative match status per hole (1..18) from the USER'S team's
   // perspective. Positive = your team is up by N going into that hole;
@@ -2738,11 +2728,11 @@ function PracticeScoringTab({
     const st = holeStatuses[i];
     const isEndOfRow = (i + 1) % 9 === 0;
     const colBorder = !isEndOfRow ? { borderRight: `1px solid ${BC.bdr}40` } : {};
-    const cellH = 22;
+    const cellH = 24;
     // Clinch hole — show "X&Y" prominently in green (you won) or red (you lost)
     if (clinchHole !== null && i === clinchHole) {
-      const color = st > 0 ? "#22c55e" : st < 0 ? BC.danger : BC.t3;
-      return <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 11, color, fontWeight: 800, lineHeight: `${cellH}px`, ...colBorder }}>{clinchText}</div>;
+      const color = st > 0 ? BC.green : st < 0 ? BC.danger : BC.t3;
+      return <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 14, color, fontWeight: 800, lineHeight: `${cellH}px`, ...colBorder }}>{clinchText}</div>;
     }
     // Post-clinch holes don't render a status (match is mathematically over)
     if (clinchHole !== null && i > clinchHole) {
@@ -2762,7 +2752,7 @@ function PracticeScoringTab({
       const someScored = matchPids.some(pid => (scoresMap[`${pid}_${i}`] || 0) > 0);
       const isActive = i === activeHole;
       if (someScored && !isActive) {
-        return <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 13, lineHeight: `${cellH}px`, ...colBorder }} title="Missing score">⚠️</div>;
+        return <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 12, opacity: 0.55, lineHeight: `${cellH}px`, ...colBorder }} title="Missing score">⚠️</div>;
       }
       return <div key={i} style={{ flex: 1, height: cellH, ...colBorder }} />;
     }
@@ -2771,9 +2761,9 @@ function PracticeScoringTab({
       return <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 8, fontWeight: 700, color: BC.t3, lineHeight: `${cellH}px`, letterSpacing: 0.5, ...colBorder }}>TIED</div>;
     }
     // Up or down — show the lead with arrow
-    const color = st > 0 ? "#22c55e" : BC.danger;
+    const color = st > 0 ? BC.green : BC.danger;
     return (
-      <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 11, fontWeight: 800, color, lineHeight: `${cellH}px`, ...colBorder }}>
+      <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 14, fontWeight: 800, color, lineHeight: `${cellH}px`, ...colBorder }}>
         {st > 0 ? "▲" : "▼"}{Math.abs(st)}
       </div>
     );
@@ -2795,14 +2785,34 @@ function PracticeScoringTab({
     setEditing(h < liveEdge);
   };
 
+  // Hole-strip cell — same geometry as the tournament Scoring tab, which
+  // takes it from MNQ: 32px tall, completed rendered as a tinted chip with
+  // an accent border rather than a solid fill, current as a solid accent
+  // chip with an outline ring.
+  const renderHoleCell = (h) => {
+    const cur = h === activeHole;
+    const allScored = matchPids.every(pid => scoresMap[`${pid}_${h}`]);
+    const partial = !allScored && matchPids.some(pid => scoresMap[`${pid}_${h}`]);
+    return (
+      <button key={h} onClick={() => goToHole(h)} style={{
+        flex: 1, height: 32, borderRadius: allScored || cur ? 8 : 6,
+        border: allScored && !cur ? `1.5px solid ${BC.amber}50` : "none",
+        background: cur ? BC.amber : allScored ? BC.amber + "15" : partial ? BC.amber + "0a" : BC.card,
+        color: cur ? "#0a0804" : allScored ? BC.amber : BC.t3,
+        fontSize: 15, fontWeight: 700, cursor: "pointer",
+        outline: cur ? `2px solid ${BC.amber}` : "none", outlineOffset: 1,
+      }}>{h + 1}</button>
+    );
+  };
+
   return (
     <div>
       {/* Front 9 — hole strip. Three-state visual hierarchy:
-          - Current hole: bright BC.amber with dark text — "this is
+          - Current hole: solid BC.amber with dark ink — "this is
             the live one, you're entering it now"
-          - Completed hole (all 4 players have scores): deep
-            BC.amberDim with white text — "locked in, done"
-          - Partial (some players have scored): subtle amber tint
+          - Completed hole (all 4 players have scores): amber-tinted
+            chip with an amber border — "locked in, done"
+          - Partial (some players have scored): faint amber wash
           - Untouched: card background
           The deep-green-on-white "completed" state mirrors the
           gross/net toggle's deeper-green active treatment, which
@@ -2815,49 +2825,33 @@ function PracticeScoringTab({
           holes are done (solid deep green), which are in flight
           (current + bright), and which are still ahead (faint). */}
       <div style={{ display: "flex", gap: 3, marginBottom: 2 }}>
-        {Array.from({ length: 9 }, (_, i) => {
-          const cur = i === activeHole;
-          const allScored = matchPids.every(pid => scoresMap[`${pid}_${i}`]);
-          const partial = !allScored && matchPids.some(pid => scoresMap[`${pid}_${i}`]);
-          return (
-            <button key={i} onClick={() => goToHole(i)} style={{
-              flex: 1, height: 28, borderRadius: cur ? 8 : 6,
-              border: "none",
-              background: cur ? BC.amber : allScored ? BC.amberDim : partial ? BC.amber + "20" : BC.card,
-              color: cur ? "#0a0804" : allScored ? "#fff" : BC.t3,
-              fontSize: 13, fontWeight: 800, cursor: "pointer",
-              outline: cur ? `2px solid ${BC.amber}` : "none", outlineOffset: 1,
-            }}>{i + 1}</button>
-          );
-        })}
+        {Array.from({ length: 9 }, (_, i) => renderHoleCell(i))}
       </div>
       {/* Front 9 — match status row */}
-      <div style={{ display: "flex", marginBottom: 6, background: BC.card, border: `1px solid ${BC.bdr}60`, borderRadius: 8, padding: "3px 0", alignItems: "center" }}>
+      <div style={{ display: "flex", marginBottom: 4, background: BC.card, border: `1px solid ${BC.bdr}60`, borderRadius: 8, padding: "4px 0", alignItems: "center" }}>
         {Array.from({ length: 9 }, (_, i) => renderStatusCell(i))}
       </div>
       {/* Back 9 — hole strip. Same three-state hierarchy as front 9. */}
       <div style={{ display: "flex", gap: 3, marginBottom: 2 }}>
-        {Array.from({ length: 9 }, (_, i) => {
-          const h = i + 9;
-          const cur = h === activeHole;
-          const allScored = matchPids.every(pid => scoresMap[`${pid}_${h}`]);
-          const partial = !allScored && matchPids.some(pid => scoresMap[`${pid}_${h}`]);
-          return (
-            <button key={h} onClick={() => goToHole(h)} style={{
-              flex: 1, height: 28, borderRadius: cur ? 8 : 6,
-              border: "none",
-              background: cur ? BC.amber : allScored ? BC.amberDim : partial ? BC.amber + "20" : BC.card,
-              color: cur ? "#0a0804" : allScored ? "#fff" : BC.t3,
-              fontSize: 13, fontWeight: 800, cursor: "pointer",
-              outline: cur ? `2px solid ${BC.amber}` : "none", outlineOffset: 1,
-            }}>{h + 1}</button>
-          );
-        })}
+        {Array.from({ length: 9 }, (_, i) => renderHoleCell(i + 9))}
       </div>
       {/* Back 9 — match status row */}
-      <div style={{ display: "flex", marginBottom: 6, background: BC.card, border: `1px solid ${BC.bdr}60`, borderRadius: 8, padding: "3px 0", alignItems: "center" }}>
+      <div style={{ display: "flex", marginBottom: 4, background: BC.card, border: `1px solid ${BC.bdr}60`, borderRadius: 8, padding: "4px 0", alignItems: "center" }}>
         {Array.from({ length: 9 }, (_, i) => renderStatusCell(i + 9))}
       </div>
+
+      {/* Full Scorecard — opens a modal with the full hole-by-hole grid for
+          both teams plus the running match status row (front 9 and back 9
+          stacked, since 18 columns is too cramped on mobile). Sits ABOVE
+          the hole banner, MNQ's placement, so it's reachable without
+          scrolling past four player cards. */}
+      <button onClick={() => setShowScorecard(true)} style={{
+        width: "100%", padding: "5px 0", borderRadius: 8, marginBottom: 4, cursor: "pointer",
+        background: BC.card, border: `1px solid ${BC.bdr}60`,
+        color: BC.t2, fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
+      }}>
+        Full Scorecard
+      </button>
 
       {/* Hole nav banner — deep Mash green filled bar showing
           Par / Hole / HCP, with prev/next arrows. Uses BC.amberDim
@@ -2922,19 +2916,6 @@ function PracticeScoringTab({
         const ch = calcCHForCourse(hi, course, event.tee_box);
         const run = getRunning(pid);
 
-        // Shift the button range when the saved score falls outside [min, max].
-        // E.g. saved a 9 on a par-4 (max button = 8) → shift right so [3..9] shows.
-        const maxBtn = baseBtns[baseBtns.length - 1];
-        const minBtn = baseBtns[0];
-        let btns = baseBtns;
-        if (score > maxBtn) {
-          const shift = score - maxBtn;
-          btns = baseBtns.map(b => b + shift);
-        } else if (score > 0 && score < minBtn) {
-          const shift = minBtn - score;
-          btns = baseBtns.map(b => b - shift);
-        }
-
         return (
           <div key={pid}>
             {idx === 2 && <div style={{ borderTop: `1px dashed ${BC.bdr}`, margin: "6px 0" }} />}
@@ -2942,92 +2923,33 @@ function PracticeScoringTab({
               background: BC.card, borderRadius: 10, marginBottom: 4, padding: "6px 10px",
               border: `1px solid ${BC.bdr}`,
             }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5, minWidth: 0 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: BC.t1, lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>{p.name}</span>
+              {/* Top row — name + (CH) + stroke dots clustered on the LEFT,
+                  with the Net line on its own row below. MNQ's layout. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2, minWidth: 0 }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: BC.t1, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>{p.name}</span>
                 <span style={{ fontSize: 11, fontWeight: 700, color: BC.hcpBlue, flexShrink: 0 }}>({ch})</span>
                 {strokes > 0 && (
                   <span style={{ color: BC.hcpBlue, fontSize: 12, letterSpacing: 1, flexShrink: 0, lineHeight: 1 }}>
                     {"●".repeat(strokes)}
                   </span>
                 )}
-                <div style={{ flex: 1 }} />
+              </div>
+              {/* PGA-leaderboard color convention: red for under par, neutral
+                  text color for even/over par. The brand green was reading as
+                  "good news" in the wrong register — golfers scan for red.
+                  minHeight reserves the slot before scoring starts. */}
+              <div style={{ fontSize: 10, color: BC.t3, marginBottom: 3, lineHeight: 1.1, minHeight: 10 }}>
                 {run.thru > 0 && (
-                  <span style={{ fontSize: 10, color: BC.t3, flexShrink: 0, whiteSpace: "nowrap" }}>
-                    {/* PGA-leaderboard color convention: red for under par,
-                        neutral text color for even/over par. The brand
-                        green was reading as "good news" in the wrong
-                        register — golfers are trained to scan red. */}
-                    Net: <strong style={{ color: run.netVsPar < 0 ? BC.danger : run.netVsPar === 0 ? BC.t3 : BC.t1 }}>
-                      {fmtScore(run.netVsPar)}
-                    </strong> thru {run.thru}
-                  </span>
+                  <>Net <strong style={{ color: run.netVsPar < 0 ? BC.danger : run.netVsPar === 0 ? BC.t3 : BC.t1, fontWeight: 700 }}>
+                    {fmtScore(run.netVsPar)}
+                  </strong> thru {run.thru}</>
                 )}
               </div>
-              <div style={{ display: "flex", gap: 3 }}>
-                {btns.map(btn => {
-                  const isCur = btn === score;
-                  const sd = btn - par;
-                  const boxSize = 32;
-                  return (
-                    <button key={btn} onClick={() => onSavePracticeScore(pid, activeHole, isCur ? null : btn)} style={{
-                      flex: 1, height: 38, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 800, border: "none",
-                      background: isCur ? BC.amber : BC.inp, color: isCur ? "#0a0804" : BC.t2,
-                      position: "relative",
-                      // No CSS transition — when the active hole changes
-                      // (auto-advance) or a score is corrected, the four
-                      // selected buttons should swap state instantly. With
-                      // a fade transition they all cross-fade through a
-                      // half-amber state, which reads as "ghost selections
-                      // flashing" rather than a clean state change.
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>
-                      {/* Score-vs-par overlay shape: bogey = square outline, double = nested square,
-                          birdie = circle outline, eagle = nested circle. Matches MNQ visualization. */}
-                      {isCur && sd !== 0 && (
-                        <div style={{ position: "absolute", width: boxSize, height: boxSize, left: "50%", top: "50%", transform: "translate(-50%, -50%)" }}>
-                          <div style={{
-                            position: "absolute", inset: 0,
-                            borderRadius: sd < 0 ? "50%" : 3,
-                            border: `1.5px solid ${sd < 0 ? BC.danger : "#0a0804"}`,
-                          }} />
-                          {Math.abs(sd) >= 2 && (
-                            <div style={{
-                              position: "absolute", inset: 3,
-                              borderRadius: sd < 0 ? "50%" : 2,
-                              border: `1px solid ${sd < 0 ? BC.danger : "#0a0804"}`,
-                            }} />
-                          )}
-                        </div>
-                      )}
-                      <span style={{ position: "relative", zIndex: 1 }}>{btn}</span>
-                    </button>
-                  );
-                })}
-                <button onClick={() => onSavePracticeScore(pid, activeHole, Math.max(1, (score || par) - 1))} style={{
-                  width: 26, height: 38, borderRadius: 8, background: BC.inp, border: "none",
-                  color: BC.t3, fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0,
-                }}>−</button>
-                <button onClick={() => onSavePracticeScore(pid, activeHole, (score || par) + 1)} style={{
-                  width: 26, height: 38, borderRadius: 8, background: BC.inp, border: "none",
-                  color: BC.t3, fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0,
-                }}>+</button>
-              </div>
+              <ScoreButtonRow par={par} score={score} onScore={(v) => onSavePracticeScore(pid, activeHole, v)} />
             </div>
           </div>
         );
       })}
-
-      {/* Full Scorecard button — opens a modal showing the full hole-by-hole
-          grid for both teams plus the running match status row. Mirrors MNQ's
-          "Full Scorecard" button but stacks front 9 + back 9 vertically since
-          18 columns is too cramped on mobile. */}
-      <button onClick={() => setShowScorecard(true)} style={{
-        width: "100%", padding: "9px 0", borderRadius: 8, marginTop: 6, cursor: "pointer",
-        background: BC.card, border: `1px solid ${BC.bdr}60`,
-        color: BC.t2, fontSize: 12, fontWeight: 700, letterSpacing: 0.5,
-      }}>
-        Full Scorecard
-      </button>
 
       {showScorecard && (() => {
         // The body of the scorecard is rendered by the shared helper —
@@ -4813,10 +4735,24 @@ export default function App() {
     scoring_type: r.scoring_type || "match",
   })), [tRounds]);
 
-  // Enhance matches with nassau + scoring type from their round
+  // Enhance matches with nassau + scoring type from their round.
+  //
+  // The ROUND wins. These are round-level settings — the admin console only
+  // ever offers them per round, there is no per-match editor — so the round
+  // doc is their single source of truth. Older match docs have a copy baked
+  // in from whenever they were created (saveMatch used to write one), and
+  // reading that copy first is what made a round edit look like it did
+  // nothing: flip Round 1 to Double Dot / Total, and every match already
+  // carrying `scoring_type: "match"` quietly kept scoring as match play on
+  // both the Scoring tab and the Leaderboard. The stale copy is now only a
+  // fallback for a match whose round doc is missing entirely.
   const enrichedMatches = useMemo(() => matches.map(m => {
     const tr = enrichedRounds.find(t => t.round_number === m.round);
-    return { ...m, nassau: m.nassau || tr?.nassau || NASSAU_DEFAULT, scoring_type: m.scoring_type || tr?.scoring_type || "match" };
+    return {
+      ...m,
+      nassau: tr?.nassau || m.nassau || NASSAU_DEFAULT,
+      scoring_type: tr?.scoring_type || m.scoring_type || "match",
+    };
   }), [matches, enrichedRounds]);
 
   // Keep the auto-lock's source data current without rebuilding onSaveHole.

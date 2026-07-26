@@ -35,6 +35,20 @@ export const oppTeam = (tid) => tid === "A" ? TEAM_B : TEAM_A;
 export const TOURNAMENT_TITLE = "The Bourbon Cup";
 export const TOURNAMENT_LOCATION = "Gaylord, MI";
 
+// ── Points to win the cup ──
+// The leaderboard used to derive this from the matches that exist right
+// now (half the pot, plus a half). That reads correctly only once the
+// whole schedule has been entered — before then the denominator is just
+// however many matches the director has created, so the target drifts
+// upward through setup instead of standing still at the number everyone
+// already knows they're playing for.
+//
+// Stating it outright fixes that, and it also makes the clinch test agree
+// with the number on screen. EDITION-SPECIFIC: if a future year changes
+// the schedule, change this with it. Set to null to go back to deriving
+// it from the matches on the board.
+export const CUP_POINTS_TO_WIN = 42;
+
 // Default team-name map, derived from the TEAM_A/TEAM_B definitions above so
 // the fallback names live in exactly one place. Seed App's teamNames state
 // with this instead of re-typing the literal strings.
@@ -72,7 +86,7 @@ export const FORMATS = [
   { id: "team_total",     label: "Team Total",         desc: "Combined team net per hole vs combined team net. Lower combined wins the hole.",        nassau: { front: 1, back: 1, overall: 2 } },
   { id: "pinehurst",      label: "Pinehurst",          desc: "Partners each drive, swap balls, then choose best to finish as scramble.",              nassau: { front: 1, back: 1, overall: 2 } },
   { id: "team_best_ball", label: "Team Best Ball",     desc: "Full team format — best of all team-member nets per hole.",                             nassau: { front: 1, back: 1, overall: 2 } },
-  { id: "double_dot",     label: "Double Dot",         desc: "Match play with an automatic bonus point for winning the last 3 holes.",                nassau: { front: 1, back: 1, overall: 2 } },
+  { id: "double_dot",     label: "Double Dot",         desc: "2-man Hi/Lo. Each hole: a dot for the low ball, a dot for the high ball. Ties win nothing.", nassau: { front: 1, back: 1, overall: 2 } },
   { id: "shamble",        label: "Shamble",            desc: "All players drive, choose best drive, each plays their own ball in.",                   nassau: { front: 1, back: 1, overall: 2 } },
   { id: "scramble",       label: "2-Man Scramble",     desc: "Both hit every shot, choose best ball location, both play from there.",                 nassau: { front: 1, back: 1, overall: 2 } },
   { id: "tilt",           label: "2-Man Tilt",         desc: "2-man match play — net comparison per hole.",                                           nassau: { front: 1, back: 1, overall: 2 } },

@@ -88,6 +88,84 @@ export const getEffectiveHI = (pid, players, overrides) => {
 export const resolveHolePars = (course, lock) => lock?.hole_pars || course?.hole_pars || Array(18).fill(4);
 export const resolveHoleHcps = (course, lock) => lock?.hole_handicaps || course?.hole_handicaps || Array(18).fill(9);
 
+// ── Which way does a hole score run? ──
+// Most formats hand back NET STROKES per hole, where fewer is better. Two
+// hand back a per-hole POINT count instead — Stableford points and Double
+// Dot's Hi/Lo dots — where more is better. Every comparison in the engine
+// and on every screen (hole winner, segment winner, Total-scoring margin,
+// status text) has to flip direction for those two, so the question is
+// asked in exactly one place.
+export const higherIsBetter = (format) => format === "stableford" || format === "double_dot";
+
+// What a Total-scored round is actually totalling, for labels. A director who
+// set "Total" on a Double Dot round is counting dots, not strokes, and the
+// screens should say so.
+export const totalUnit = (format) =>
+  format === "double_dot" ? "dots" : format === "stableford" ? "points" : "strokes";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SEGMENT STATE — the one answer to "where does this stretch of holes stand?"
+// ─────────────────────────────────────────────────────────────────────────────
+// A "segment" is any run of holes with a result: the front nine, the back
+// nine, the whole match, or the first N holes of a live round. This is the
+// ONLY place that question is answered. computeMatchResult awards points from
+// it, the Leaderboard prints its margin, and the Scoring tab draws its status
+// strip from it — previously each of those did its own arithmetic, which is
+// how a Total round ended up showing a match-play state on two screens while
+// the engine was scoring it on totals.
+//
+//   total     — settle on the running total rather than on holes won
+//   higherWins — the format's per-hole number counts up (see higherIsBetter)
+//
+// `margin` is always from A's perspective and always points the same way:
+// positive means A is ahead, whatever the format and whichever mode.
+export function segmentState(holes, { total = false, higherWins = false } = {}) {
+  const played = holes.filter(h => h.played);
+  const aTot = played.reduce((s, h) => s + (h.aScore ?? 0), 0);
+  const bTot = played.reduce((s, h) => s + (h.bScore ?? 0), 0);
+  const aWins = played.filter(h => h.winner === "A").length;
+  const bWins = played.filter(h => h.winner === "B").length;
+  const remaining = holes.length - played.length;
+  const allIn = played.length === holes.length && played.length > 0;
+  const base = { played: played.length, total: holes.length, remaining, aTot, bTot, aWins, bWins };
+
+  if (total) {
+    // Nothing can be clinched early: every remaining hole still moves the
+    // total, so a Total segment is decided only when the last one is in.
+    const margin = higherWins ? aTot - bTot : bTot - aTot;
+    return {
+      ...base, unit: "total", margin, clinched: false, complete: allIn,
+      winner: allIn ? (margin > 0 ? "A" : margin < 0 ? "B" : null) : null,
+    };
+  }
+  // Match play: a lead bigger than the holes left can't be caught, so the
+  // segment is over before the holes run out ("3&2").
+  const margin = aWins - bWins;
+  const clinched = played.length > 0 && Math.abs(margin) > remaining;
+  return {
+    ...base, unit: "up", margin, clinched, complete: clinched || allIn,
+    winner: clinched ? (margin > 0 ? "A" : "B")
+      : allIn ? (margin > 0 ? "A" : margin < 0 ? "B" : null) : null,
+  };
+}
+
+// Golf-native result text for a segment. "3&2" when a match closes early,
+// "2 UP" when it goes the distance, "AS" for all square, "—" before a ball is
+// struck. A Total segment gets none of that language — there is no "up" and
+// nothing closes out early, only a lead on the running total, so 8 dots to 6
+// reads "+2" and the leading team is carried by color.
+export const statusText = (st) => {
+  if (!st.played) return "—";
+  const m = Math.abs(st.margin);
+  if (st.unit === "total") return m === 0 ? "TIED" : `+${m}`;
+  if (st.clinched && st.remaining > 0) return `${m}&${st.remaining}`;
+  if (m === 0) return "AS";
+  return `${m} UP`;
+};
+
+// Which side a segment's margin favours right now, or null when level.
+export const segmentLeader = (st) => (st.margin > 0 ? "A" : st.margin < 0 ? "B" : null);
+
 export const buildStrokeMap = (ch, holeHcps) => {
   const sorted = holeHcps.map((h, i) => ({ idx: i, hcp: h })).sort((a, b) => a.hcp - b.hcp);
   const map = {};
@@ -228,6 +306,9 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
     roundLocks, round: rnd, pid, players: tPlayers, course, chOverrides, teeAssignments, roundTee,
   });
   const getStrokeMap = (ch) => buildStrokeMap(ch, holeHcps);
+  // Stableford points and Double Dot dots count UP; every other format's
+  // per-hole number is net strokes and counts down.
+  const higherWins = higherIsBetter(format);
   const netScore = (gross, holeIdx, strokeMap) => gross == null ? null : gross - (strokeMap[holeIdx] || 0);
 
   const teamA = match.teamA; // array of pids
@@ -272,6 +353,33 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
       const bNets = teamB.map(pid => { const m = getAdjustedStrokeMap(pid); return netScore(getPlayerScores(pid)[h], h, m); });
       if (aNets.every(s => s != null)) aScore = aNets.reduce((a,b) => a+b, 0);
       if (bNets.every(s => s != null)) bScore = bNets.reduce((a,b) => a+b, 0);
+    } else if (format === "double_dot") {
+      // ── Double Dot (2-man Hi/Lo) ──
+      // Every hole is TWO sub-matches played at once: the two sides' LOW
+      // balls against each other, and their HIGH balls against each other.
+      // Each sub-match won is a dot; a tied sub-match awards no dot to
+      // anyone. So a hole hands out 2, 1 or 0 dots and can be split 1-1 —
+      // which is where the name comes from, and why the running total is
+      // dots rather than holes.
+      //
+      // aScore/bScore are therefore DOT COUNTS (0-2) here, not net strokes.
+      // higherIsBetter("double_dot") is what tells the rest of the engine
+      // to read them the right way round.
+      const nets = (team) => team.map(pid => {
+        const m = getAdjustedStrokeMap(pid);
+        return netScore(getPlayerScores(pid)[h], h, m);
+      });
+      const aNets = nets(teamA), bNets = nets(teamB);
+      if (aNets.length && bNets.length && aNets.every(s => s != null) && bNets.every(s => s != null)) {
+        const aLo = Math.min(...aNets), bLo = Math.min(...bNets);
+        // A one-man side has no separate high ball to contest, so only the
+        // low-ball dot is on offer. Better a half-format that scores than a
+        // side whose single ball wins both dots by itself.
+        const twoBall = aNets.length > 1 && bNets.length > 1;
+        const aHi = Math.max(...aNets), bHi = Math.max(...bNets);
+        aScore = (aLo < bLo ? 1 : 0) + (twoBall && aHi < bHi ? 1 : 0);
+        bScore = (bLo < aLo ? 1 : 0) + (twoBall && bHi < aHi ? 1 : 0);
+      }
     } else if (format === "scramble") {
       // For scramble, team shares one score — use best raw, no individual handicaps
       const aRaws = teamA.map(pid => getPlayerScores(pid)[h]).filter(s => s != null);
@@ -312,116 +420,66 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
 
     let winner = null;
     if (aScore != null && bScore != null) {
-      if (format === "stableford") winner = aScore > bScore ? "A" : aScore < bScore ? "B" : null;
+      if (higherWins) winner = aScore > bScore ? "A" : aScore < bScore ? "B" : null;
       else winner = aScore < bScore ? "A" : aScore > bScore ? "B" : null;
     }
     return { h, aScore, bScore, winner, played: aScore != null && bScore != null };
   });
 
-  // Match-play segment helper — used for both Nassau (front/back/overall)
-  // and Traditional (overall only) point allocation. Tracks winner, margin,
-  // and whether the segment is complete (either all holes played or
-  // mathematically clinched).
-  const calcSegment = (holes) => {
-    const played = holes.filter(r => r.played);
-    if (!played.length) return { winner: null, margin: 0, complete: false };
-    const aWins = played.filter(r => r.winner === "A").length;
-    const bWins = played.filter(r => r.winner === "B").length;
-    const margin = aWins - bWins;
-    const remaining = holes.filter(r => !r.played).length;
-    // Match play: can be clinched early
-    const canWin = Math.abs(margin) > remaining;
-    return {
-      winner: canWin ? (margin > 0 ? "A" : "B") : played.length === holes.length ? (margin > 0 ? "A" : margin < 0 ? "B" : null) : null,
-      margin,
-      complete: played.length === holes.length || canWin,
-      aWins, bWins, played: played.length, total: holes.length
-    };
-  };
+  // Match play (default) vs Total ("stroke"). Total reuses the same nassau
+  // {front,back,overall} pots but awards each on the side's RUNNING TOTAL
+  // over that segment (F9 / B9 / 18) rather than on holes won — fewest net
+  // strokes for a stroke format, most dots for Double Dot, most points for
+  // Stableford. "Single" (front=back=0) collapses to one 18-hole pot.
+  //
+  // The stored value is still `"stroke"`; the admin toggle labels it "Total"
+  // because for a dot format there are no strokes to count.
+  const scoringType = match.scoring_type || "match";
+  const segOpts = { total: scoringType === "stroke", higherWins };
 
-  // Always compute all three segments so the leaderboard can show
-  // front/back progress regardless of point method (the per-hole tracker
-  // and "to win" math don't care which method is in use).
-  const front = calcSegment(holeResults.slice(0, 9));
-  const back = calcSegment(holeResults.slice(9, 18));
-  const overall = calcSegment(holeResults);
+  // The three segments, from the shared segmentState — the same function the
+  // Leaderboard and the Scoring tab call, so a match can never be awarded on
+  // one reading of the holes and displayed on another. All three are computed
+  // regardless of point method: the leaderboard shows front/back progress
+  // even on a Traditional round that only pays out on the overall.
+  const front = segmentState(holeResults.slice(0, 9), segOpts);
+  const back = segmentState(holeResults.slice(9, 18), segOpts);
+  const overall = segmentState(holeResults, segOpts);
 
   // Award points based on the match's configured point_method.
   //   Traditional → single pot for the overall result; ½/½ on a halve.
   //   Nassau      → independent pots for front, back, and overall.
   // Method falls back to Nassau when absent so legacy matches saved
   // before this field existed continue to score correctly.
+  //
+  // Total rounds always pay out Nassau-style, because the "Single" case is
+  // already a Nassau with front and back set to zero.
   const pointMethod = match.point_method || POINT_METHOD_NASSAU;
-  // Match play (default) vs Stroke play (net medal). Stroke reuses the same
-  // nassau {front,back,overall} pots but awards each to the side with FEWER
-  // net strokes over that segment (F9 / B9 / 18), rather than the side that
-  // won more holes. "Single" (front=back=0) collapses to one 18-hole pot.
-  const scoringType = match.scoring_type || "match";
   const frontPts = { A: 0, B: 0 };
   const backPts = { A: 0, B: 0 };
   const overallPts = { A: 0, B: 0 };
 
-  if (scoringType === "stroke") {
-    const strokeSeg = (holes) => {
-      const complete = holes.every(r => r.aScore != null && r.bScore != null);
-      const aTot = holes.reduce((s, r) => s + (r.aScore ?? 0), 0);
-      const bTot = holes.reduce((s, r) => s + (r.bScore ?? 0), 0);
-      return { complete, winner: complete ? (aTot < bTot ? "A" : aTot > bTot ? "B" : null) : null };
-    };
-    const nassau = match.nassau || NASSAU_DEFAULT;
-    const award = (seg, pts, out) => { if (seg.complete && pts) { if (seg.winner) out[seg.winner] = pts; else { out.A = pts / 2; out.B = pts / 2; } } };
-    award(strokeSeg(holeResults.slice(0, 9)), nassau.front, frontPts);
-    award(strokeSeg(holeResults.slice(9, 18)), nassau.back, backPts);
-    award(strokeSeg(holeResults), nassau.overall, overallPts);
-  } else if (pointMethod === POINT_METHOD_TRADITIONAL) {
-    const pot = match.traditional_points ?? 1;
-    if (overall.complete) {
-      if (overall.winner) overallPts[overall.winner] = pot;
-      else { overallPts.A = pot / 2; overallPts.B = pot / 2; }
-    }
-  } else {
-    // Nassau
-    const nassau = match.nassau || NASSAU_DEFAULT;
-    if (front.complete) {
-      if (front.winner) frontPts[front.winner] = nassau.front;
-      else { frontPts.A = nassau.front / 2; frontPts.B = nassau.front / 2; }
-    }
-    if (back.complete) {
-      if (back.winner) backPts[back.winner] = nassau.back;
-      else { backPts.A = nassau.back / 2; backPts.B = nassau.back / 2; }
-    }
-    if (overall.complete) {
-      if (overall.winner) overallPts[overall.winner] = nassau.overall;
-      else { overallPts.A = nassau.overall / 2; overallPts.B = nassau.overall / 2; }
-    }
+  // One pot, one segment: the winner takes it, a halved segment splits it.
+  const award = (seg, pot, out) => {
+    if (!seg.complete || !pot) return;
+    if (seg.winner) out[seg.winner] = pot;
+    else { out.A = pot / 2; out.B = pot / 2; }
+  };
 
-    // Double dot: bonus point for winning the last 3 holes. This is
-    // conceptually a Nassau press, so it only applies in Nassau mode —
-    // in Traditional there's only a single pot, no presses to add to.
-    if (format === "double_dot") {
-      const dd = calcSegment(holeResults.slice(15, 18));
-      if (dd.complete && dd.winner) {
-        overallPts[dd.winner] = (overallPts[dd.winner] || 0) + 1;
-      }
-    }
+  if (pointMethod === POINT_METHOD_TRADITIONAL && scoringType !== "stroke") {
+    award(overall, match.traditional_points ?? 1, overallPts);
+  } else {
+    const nassau = match.nassau || NASSAU_DEFAULT;
+    award(front, nassau.front, frontPts);
+    award(back, nassau.back, backPts);
+    award(overall, nassau.overall, overallPts);
   }
 
-  // Current match status string for display
+  // Current match status string for display, in the same words the screens
+  // use — "3&2", "2 UP", "+2" — with the side it favours appended.
   const playedHoles = holeResults.filter(r => r.played);
-  let status = "AS";
-  if (scoringType === "stroke") {
-    // Net-stroke differential over the holes both sides have completed.
-    const aTot = playedHoles.reduce((s, r) => s + (r.aScore ?? 0), 0);
-    const bTot = playedHoles.reduce((s, r) => s + (r.bScore ?? 0), 0);
-    const d = aTot - bTot;
-    if (playedHoles.length > 0 && d !== 0) status = `${Math.abs(d)} (${d < 0 ? "A" : "B"})`;
-  } else {
-    const aUp = overall.aWins - overall.bWins;
-    if (playedHoles.length > 0) {
-      if (aUp > 0) status = `${aUp}UP (A)`;
-      else if (aUp < 0) status = `${Math.abs(aUp)}UP (B)`;
-    }
-  }
+  const leader = segmentLeader(overall);
+  const status = leader ? `${statusText(overall)} (${leader})` : statusText(overall);
 
   // Per-player adjusted stroke maps (low-man or full, per the round's mode) —
   // the exact strokes this result was scored with. Exposed so score-entry and
