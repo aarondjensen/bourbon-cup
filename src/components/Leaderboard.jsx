@@ -613,7 +613,10 @@ export function TeamLeaderboard({
         // gross scores from the result underneath them.
         allowance: (() => {
           const a = getRoundAllowance({ roundLocks, round: rnd, tRounds });
-          return !a.split && a.pct === 100 ? null : `${describeAllowance(a)} hcp`;
+          // Off, or on but set to a flat 100 — either way nothing is coming
+          // off anyone's handicap and there is nothing to say.
+          if (!a.enabled || (!a.split && a.pct === 100)) return null;
+          return `${describeAllowance(a)} hcp`;
         })(),
         state: settled ? "final" : holesPlayed > 0 ? "live" : "upcoming",
       };
