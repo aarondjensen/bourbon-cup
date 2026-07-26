@@ -40,6 +40,12 @@ import { TeamLeaderboard, MatchScorecard } from "./components/Leaderboard";
 // to the viewport bottom) with the full inset is the known-good layout.
 const NAV_SAFE_PAD = "calc(env(safe-area-inset-bottom, 0px) + 8px)";
 
+// Views that start at the TOP of the scroll area instead of being centred
+// in it. Both of these pin something to the top of the body (Admin's tab
+// bar, the Leaderboard's header + cup total), and a sticky element only
+// behaves if its view begins at the top — see the wrapper it's used on.
+const TOP_ALIGNED_VIEWS = new Set(["admin", "leaderboard"]);
+
 // ── TEMPORARY viewport diagnostic ─────────────────────────────────
 // Delete VP_DEBUG, BUILD_TAG, the ViewportDebug component, navRef and the
 // <ViewportDebug /> mount once the bottom-nav question is closed out.
@@ -5282,8 +5288,15 @@ export default function App() {
             is shorter than the body, the auto margins split the leftover
             space evenly (content sits centered, no dead gap dumped at the
             bottom). When the view is taller, auto margins compute to 0 and
-            the content starts at the top and scrolls normally. */}
-        <div style={{ width: "100%", marginTop: view === "admin" ? 0 : "auto", marginBottom: view === "admin" ? 0 : "auto" }}>
+            the content starts at the top and scrolls normally.
+
+            Two views opt OUT of the centering because they pin something to
+            the top of the scroll area: Admin (its tab bar) and Leaderboard
+            (its header + cup total). A pinned element that starts halfway
+            down the screen is the one thing that defeats pinning it — on a
+            short board it would sit mid-screen, then jump to the top the
+            moment the content grew past the fold. */}
+        <div style={{ width: "100%", marginTop: TOP_ALIGNED_VIEWS.has(view) ? 0 : "auto", marginBottom: TOP_ALIGNED_VIEWS.has(view) ? 0 : "auto" }}>
         {/* Keyed ErrorBoundary: keying on `view` remounts the boundary
             whenever the tab changes, so a crashed screen self-heals the
             moment the user navigates away instead of showing a blank
