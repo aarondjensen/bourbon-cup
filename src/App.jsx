@@ -18,9 +18,8 @@ import { holeFill } from "./lib/holeFill";
 import {
   ROUND_LOCKS_COL, buildRoundLockDoc, refreshRoundLockDoc,
   markRoundFinal, unfinalizeRound, clearRoundLockDoc,
-  isRoundFinal, roundLockState, describeLock,
-  describeHiChangeImpact, lockedPlayerEntry,
-  LOCK_OPEN, LOCK_FINAL, LOCK_STATE_LABEL,
+  roundLockState, describeHiChangeImpact,
+  LOCK_OPEN, LOCK_FINAL,
 } from "./lib/roundLocks";
 import { usePullToRefresh } from "./lib/usePullToRefresh";
 import { processLogo } from "./lib/logoBrand";
@@ -28,6 +27,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { Popup, ConfirmModal } from "./components/Popup";
 import { SegmentedToggle, Banner, Toast, ScoreButtonRow } from "./components/ui";
 import { useConfirm } from "./lib/useConfirm";
+import { useStableCallback } from "./lib/useStableCallback";
 import { EditionSwitcher } from "./components/EditionSwitcher";
 import { GhinLinkButton, GhinSyncButton } from "./components/GhinLink";
 import { TeamLeaderboard, MatchScorecard } from "./components/Leaderboard";
@@ -817,6 +817,64 @@ function GroupsView({ matches, tRounds, tPlayers, courses }) {
 
 // ── Admin View ──
 
+// ── Round form comparison ──────────────────────────────────────────────
+// The Rounds tab auto-saves by diffing the form against Firestore, so both
+// sides have to resolve their defaults identically or the tab would write
+// on every visit. `defaultHandicapMode` mirrors enrichedRounds: Round 4
+// plays all handicaps, everything else low man.
+const defaultHandicapMode = (round) => (round === 4 ? "full" : "low_man");
+
+// Blank entries are absences, not values: an override the director typed
+// and then cleared has to compare equal to one that was never set, or the
+// form would stay permanently "dirty" and rewrite itself forever.
+const liveEntries = (map) =>
+  Object.entries(map || {})
+    .filter(([, v]) => v !== "" && v != null)
+    .map(([k, v]) => [k, String(v)])
+    .sort(([a], [b]) => a.localeCompare(b));
+
+const sameRoundMap = (a, b) => JSON.stringify(liveEntries(a)) === JSON.stringify(liveEntries(b));
+
+// The round's own settings, flattened to a comparable string. Kept apart
+// from the two per-round maps because each lives in its own Firestore
+// document and they echo back independently. `course_id` is deliberately
+// absent — it is set in the Courses tab and only rides along on the write
+// so a round save cannot drop it.
+const roundSettingsSignature = (r) => JSON.stringify([
+  r.format, r.handicap_mode, r.tee_time, r.scoring_type,
+  r.nassau_front, r.nassau_back, r.nassau_overall, r.allowance,
+]);
+
+// The handicap allowance, normalized to the shape the round's FORMAT calls
+// for. Both sides of the diff go through this, which is what stops a stale
+// low/high pair left behind by a format change from reading as an edit — and
+// what lets a round that has never been saved compare equal to its own
+// recommended default, so merely opening a round does not write to it.
+const roundAllowance = (format, raw) => {
+  const a = resolveAllowance(format || DEFAULT_FORMAT, raw);
+  return a.split ? { low: a.low, high: a.high } : { pct: a.pct };
+};
+
+// Everything the Rounds tab owns for one round.
+const roundSignature = (r) => JSON.stringify([
+  roundSettingsSignature(r), liveEntries(r.ch_overrides), liveEntries(r.tee_assignments),
+]);
+
+// Adopt a whole per-round document map, optionally holding one round's
+// existing slice — see the hydration effects for when that applies.
+const adoptRoundMap = (incoming, holdRound) => (prev) => {
+  const next = { ...incoming };
+  if (holdRound != null && prev[holdRound] !== undefined) next[holdRound] = prev[holdRound];
+  return next;
+};
+
+// `round` when the arriving slice is exactly what our own last write sent
+// for it, otherwise null. Anything else — another director, an edition
+// switch — is a value we do not have and must adopt.
+const echoedSlice = (written, round, key, incomingSlice) =>
+  written && written.round === round && sameRoundMap(written.payload[key], incomingSlice)
+    ? round : null;
+
 // ── CH Delta Popup ── shows stroke change when tee or index changes
 function ChDeltaBadge({ delta }) {
   if (delta === undefined || delta === null || delta === 0) return null;
@@ -833,7 +891,7 @@ function ChDeltaBadge({ delta }) {
   );
 }
 
-function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, onSaveTournamentName, hcpOverridesFromDb, teeAssignmentsFromDb, notify, roundLocks, onLockRound, onFinalizeRound, onClearRoundLock }) {
+function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, onSaveTournamentName, hcpOverridesFromDb, teeAssignmentsFromDb, notify, roundLocks }) {
   const [tab, setTab] = useState("players");
   const [editTeamNames, setEditTeamNames] = useState({ A: "", B: "" });
   const [editingTeam, setEditingTeam] = useState(null);
@@ -907,46 +965,12 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
   const [editRound, setEditRound] = useState(1);
   const [roundFormat, setRoundFormat] = useState("");
-  const [roundCourse, setRoundCourse] = useState("");
   const [roundTeeTime, setRoundTeeTime] = useState("");
   const [hcpOverrides, setHcpOverrides] = useState({});
-
-  // Auto-load round settings from Firestore when tRounds first populates
-  useEffect(() => {
-    const tr = tRounds.find(t => t.round_number === editRound);
-    if (!tr) return;
-    setRoundFormat(tr.format || "");
-    setRoundTeeTime(tr.tee_time || "");
-    setNassau({ front: tr.nassau_front ?? 1, back: tr.nassau_back ?? 1, overall: tr.nassau_overall ?? 1 });
-    setScoringType(tr.scoring_type || "match");
-    setAllowance(tr.allowance || null);
-    if (tr.handicap_mode) setHandicapMode(prev => ({ ...prev, [editRound]: tr.handicap_mode }));
-  }, [tRounds]);
   const [handicapMode, setHandicapMode] = useState({ 1: "low_man", 2: "low_man", 3: "low_man", 4: "full" }); // per round
   const [chDeltas, setChDeltas] = useState({});
   const [editingPlayer, setEditingPlayer] = useState(null); // { pid, first, last, nick, hi, ov, dir }
   const [teeAssignments, setTeeAssignments] = useState({}); // { round: { pid: teeName } }
-  // ── Handicap-lock UI state ──
-  const [showLockDetail, setShowLockDetail] = useState(false);
-  const [unlockText, setUnlockText] = useState("");   // typed confirmation for un-finalizing
-  const lockState = roundLockState(roundLocks, editRound);
-  const roundIsLocked = lockState !== LOCK_OPEN;
-  const roundIsFinal = lockState === LOCK_FINAL;
-  const activeLock = roundLocks?.[editRound]?.locked ? roundLocks[editRound] : null;
-
-  const showChDelta = (key, delta) => {
-    if (!delta) return;
-    setChDeltas(prev => ({ ...prev, [key]: delta }));
-    setTimeout(() => setChDeltas(prev => { const n = {...prev}; delete n[key]; return n; }), 3500);
-  };
-  // Hydrate from Firestore once the parent's subscriptions resolve. Without
-  // these effects, the local state starts empty and a director opening the
-  // Admin tab would see "no overrides set" / "no tees assigned" for rounds
-  // that actually have data — and any save would overwrite the real values
-  // with the empty form state. Stringify-deps is a structural-equality
-  // shortcut: cheap because these maps stay small.
-  useEffect(() => { if (hcpOverridesFromDb) setHcpOverrides(hcpOverridesFromDb); }, [JSON.stringify(hcpOverridesFromDb)]);
-  useEffect(() => { if (teeAssignmentsFromDb) setTeeAssignments(teeAssignmentsFromDb); }, [JSON.stringify(teeAssignmentsFromDb)]);
   const [nassau, setNassau] = useState(NASSAU_DEFAULT);
   const [scoringType, setScoringType] = useState("match"); // "match" | "stroke"
   // Raw saved allowance for the round being edited, or null to mean "the
@@ -954,6 +978,211 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   // touches it stores nothing, and a later change to a format's recommended
   // allowance still reaches the rounds nobody edited.
   const [allowance, setAllowance] = useState(null);
+  // ── Handicap-lock state ──
+  // Read-only here: locking is automatic on the first score of a round (see
+  // ensureRoundLock in App). These flags only gate the round form's editing.
+  const lockState = roundLockState(roundLocks, editRound);
+  const roundIsLocked = lockState !== LOCK_OPEN;
+  const roundIsFinal = lockState === LOCK_FINAL;
+
+  const showChDelta = (key, delta) => {
+    if (!delta) return;
+    setChDeltas(prev => ({ ...prev, [key]: delta }));
+    setTimeout(() => setChDeltas(prev => { const n = {...prev}; delete n[key]; return n; }), 3500);
+  };
+
+  // ══ Rounds tab: auto-save ═══════════════════════════════════════════
+  // The round form has no Save button — every edit commits on its own.
+  // Three rules keep that from becoming a write storm or a data-loss bug:
+  //
+  //   • Diffed, never fired blindly. `formRound` (what the director sees)
+  //     is compared against `storedRound` (what Firestore holds) and a
+  //     write happens only when the two disagree. Hydration, switching
+  //     rounds and the echo of our own write all land on "equal" and do
+  //     nothing — which is also what stops a feedback loop.
+  //   • Debounced, and captured. A burst of typing (tee times, nassau
+  //     values) collapses into one write, and the payload is snapshotted
+  //     when the timer is armed — so leaving the round mid-burst still
+  //     writes the round that was edited, not the one now on screen.
+  //   • Hydration steps around its own echo, and nothing else. Firestore
+  //     values are adopted as they arrive — including the first time,
+  //     when an empty form legitimately differs from a document nobody
+  //     has read yet — with one exception: a document that is byte-for-
+  //     byte what we just sent is not re-applied, so it cannot snap an
+  //     input back while the director is still typing into it. Gating
+  //     hydration on "is the form dirty" instead would deadlock on that
+  //     first load and then write the empty form over real data.
+  //
+  // A final round is closed: its handicaps are frozen in the snapshot, so
+  // nothing is written and the status line says so.
+
+  // What Firestore currently holds for `editRound`, with every default
+  // resolved the same way the scoring path resolves it (see enrichedRounds).
+  const storedRound = useMemo(() => {
+    const tr = tRounds.find(t => t.round_number === editRound) || {};
+    return {
+      course_id: tr.course_id || "",
+      format: tr.format || DEFAULT_FORMAT,
+      handicap_mode: tr.handicap_mode || defaultHandicapMode(editRound),
+      tee_time: tr.tee_time || "",
+      nassau_front: tr.nassau_front ?? 1,
+      nassau_back: tr.nassau_back ?? 1,
+      nassau_overall: tr.nassau_overall ?? 1,
+      scoring_type: tr.scoring_type || "match",
+      allowance: roundAllowance(tr.format || DEFAULT_FORMAT, tr.allowance),
+      ch_overrides: hcpOverridesFromDb?.[editRound] || {},
+      tee_assignments: teeAssignmentsFromDb?.[editRound] || {},
+    };
+  }, [tRounds, editRound, hcpOverridesFromDb, teeAssignmentsFromDb]);
+
+  // The same shape, built from the form. `course_id` rides along unchanged
+  // — it belongs to the Courses tab and is only here so a round write does
+  // not drop it.
+  const formRound = useMemo(() => ({
+    course_id: storedRound.course_id,
+    format: roundFormat || storedRound.format,
+    handicap_mode: handicapMode[editRound] || defaultHandicapMode(editRound),
+    tee_time: roundTeeTime || storedRound.tee_time,
+    nassau_front: nassau.front,
+    nassau_back: nassau.back,
+    nassau_overall: nassau.overall,
+    scoring_type: scoringType,
+    // Normalized against the format the form is CURRENTLY showing, so picking
+    // a new format re-shapes the allowance in the same render that changes it.
+    allowance: roundAllowance(roundFormat || storedRound.format, allowance),
+    ch_overrides: hcpOverrides[editRound] || {},
+    tee_assignments: teeAssignments[editRound] || {},
+  }), [storedRound, roundFormat, handicapMode, editRound, roundTeeTime, nassau, scoringType, allowance, hcpOverrides, teeAssignments]);
+
+  const storedSettingsSig = roundSettingsSignature(storedRound);
+  const hcpDocSig = JSON.stringify(hcpOverridesFromDb ?? null);
+  const teeDocSig = JSON.stringify(teeAssignmentsFromDb ?? null);
+  const formSig = roundSignature(formRound);
+  const roundDirty = formSig !== roundSignature(storedRound);
+
+  const saveTimerRef = useRef(null);
+  const pendingSaveRef = useRef(null);  // { round, payload, sig } armed but not yet written
+  const lastWrittenRef = useRef(null);  // { round, payload, sig } — the write whose echo to ignore
+
+  // ── Hydration ──
+  // Each of the three documents records the version it last adopted. That
+  // is what makes "has the form caught up with Firestore?" answerable —
+  // see `formSeeded` below — and it re-seeds on a round switch, on a fresh
+  // document, and on nothing else.
+  const [seed, setSeed] = useState(null);                     // { round, sig } — round settings
+  const [mapSeed, setMapSeed] = useState({ hcp: null, tee: null });
+  const seededRound = seed?.round === editRound;
+
+  useEffect(() => {
+    if (seededRound && seed.sig === storedSettingsSig) return;
+    setSeed({ round: editRound, sig: storedSettingsSig });
+    // A queued write owns the form — re-seeding would discard the very
+    // edits it is about to send.
+    if (pendingSaveRef.current?.round === editRound) return;
+    const written = lastWrittenRef.current;
+    if (written && written.round === editRound && roundSettingsSignature(written.payload) === storedSettingsSig) return;
+    setRoundFormat(storedRound.format);
+    setRoundTeeTime(storedRound.tee_time);
+    setNassau({ front: storedRound.nassau_front, back: storedRound.nassau_back, overall: storedRound.nassau_overall });
+    setScoringType(storedRound.scoring_type);
+    setAllowance(storedRound.allowance);
+    setHandicapMode(prev => ({ ...prev, [editRound]: storedRound.handicap_mode }));
+  }, [seed, seededRound, editRound, storedSettingsSig, storedRound]);
+
+  // The two per-round maps arrive as whole documents spanning every round,
+  // so they are adopted wholesale — the Matches tab reads the other rounds'
+  // slices for its CH preview. The slice being edited is held back in two
+  // cases: the document is the echo of our own write, or a write for that
+  // round is already queued (which happens when the arriving document is
+  // the echo of an *earlier* round's write, landing while the director has
+  // moved on). Everything else is a value we do not have, so it wins.
+  useEffect(() => {
+    if (mapSeed.hcp === hcpDocSig) return;
+    setMapSeed(s => ({ ...s, hcp: hcpDocSig }));
+    if (!hcpOverridesFromDb) return;
+    const hold = pendingSaveRef.current?.round === editRound ? editRound
+      : echoedSlice(lastWrittenRef.current, editRound, "ch_overrides", hcpOverridesFromDb[editRound]);
+    setHcpOverrides(adoptRoundMap(hcpOverridesFromDb, hold));
+  }, [hcpDocSig, mapSeed.hcp, hcpOverridesFromDb, editRound]);
+  useEffect(() => {
+    if (mapSeed.tee === teeDocSig) return;
+    setMapSeed(s => ({ ...s, tee: teeDocSig }));
+    if (!teeAssignmentsFromDb) return;
+    const hold = pendingSaveRef.current?.round === editRound ? editRound
+      : echoedSlice(lastWrittenRef.current, editRound, "tee_assignments", teeAssignmentsFromDb[editRound]);
+    setTeeAssignments(adoptRoundMap(teeAssignmentsFromDb, hold));
+  }, [teeDocSig, mapSeed.tee, teeAssignmentsFromDb, editRound]);
+
+  // True once the form reflects every document currently in hand. Until it
+  // is, "form differs from Firestore" means "hydration has not landed yet",
+  // not "the director changed something" — and auto-saving on that reading
+  // would write the pre-hydration form straight over the real data.
+  const formSeeded = seededRound && seed.sig === storedSettingsSig
+    && mapSeed.hcp === hcpDocSig && mapSeed.tee === teeDocSig;
+
+  const AUTOSAVE_MS = 700;
+  // Carries the round it refers to: the status line is per-round, and a
+  // director who switches tabs should not be told the round they just
+  // opened was saved.
+  const [autoSave, setAutoSave] = useState(null); // { phase: "saving"|"saved"|"error", round }
+
+  // The three documents the Save button used to write, in the same order.
+  const writeRound = useStableCallback(async ({ round, payload, sig }) => {
+    lastWrittenRef.current = { round, payload, sig };
+    setAutoSave({ phase: "saving", round });
+    try {
+      await db.upsert("bc_hcp_overrides", { id: editionDocId(`bc_hcp_r${round}`), tournament_id: TOURNAMENT_ID, round_number: round, ch_overrides: payload.ch_overrides });
+      await db.upsert("bc_tee_assignments", { id: editionDocId(`bc_tee_r${round}`), tournament_id: TOURNAMENT_ID, round_number: round, assignments: payload.tee_assignments });
+      await onSetRound({
+        id: editionDocId(`bc_round_${round}`),
+        tournament_id: TOURNAMENT_ID,
+        round_number: round,
+        course_id: payload.course_id,
+        format: payload.format,
+        handicap_mode: payload.handicap_mode,
+        tee_time: payload.tee_time,
+        nassau_front: payload.nassau_front,
+        nassau_back: payload.nassau_back,
+        nassau_overall: payload.nassau_overall,
+        scoring_type: payload.scoring_type,
+        allowance: payload.allowance,
+      });
+      setAutoSave({ phase: "saved", round });
+    } catch (err) {
+      console.error("Round auto-save failed", err);
+      lastWrittenRef.current = null;   // let the next edit retry
+      setAutoSave({ phase: "error", round });
+      notify(`Round ${round} could not be saved`, "error");
+    }
+  });
+
+  const flushRoundSave = useStableCallback(() => {
+    if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
+    const pending = pendingSaveRef.current;
+    pendingSaveRef.current = null;
+    if (pending) writeRound(pending);
+  });
+
+  // Arm the debounce. `formRound` only gets a new identity when something
+  // it is built from actually changed, so a re-render mid-write does not
+  // re-arm the timer and duplicate the write.
+  useEffect(() => {
+    if (!formSeeded) return;
+    if (roundIsFinal || !roundDirty) { pendingSaveRef.current = null; return; }
+    // Re-sending a payload we already wrote can only mean the two sides
+    // disagree about something the diff cannot reconcile. Stop, rather
+    // than trade writes with Firestore forever.
+    const written = lastWrittenRef.current;
+    if (written && written.round === editRound && written.sig === formSig) return;
+    pendingSaveRef.current = { round: editRound, payload: formRound, sig: formSig };
+    saveTimerRef.current = setTimeout(flushRoundSave, AUTOSAVE_MS);
+    return () => { if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; } };
+  }, [formSeeded, roundDirty, roundIsFinal, formRound, formSig, editRound, flushRoundSave]);
+
+  // Leaving the round (or the console) commits whatever is still queued.
+  // Declared after the debounce effect so its cleanup runs second: the
+  // timer is cancelled first, then the captured payload is written.
+  useEffect(() => () => flushRoundSave(), [editRound, flushRoundSave]);
 
   // Match builder
   const [matchRound, setMatchRound] = useState(1);
@@ -971,47 +1200,6 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
       <div style={{ fontSize: 12, color: BC.t3, marginTop: 8 }}>Only tournament directors can manage settings.</div>
     </div>
   );
-
-  const saveRound = async () => {
-    const tr = tRounds.find(t => t.round_number === editRound) || {};
-    // A final round is closed. Its overrides, tees and handicap mode are
-    // already frozen in the snapshot, so writing them back would only
-    // create a confusing mismatch between what the form shows and what the
-    // round actually scored with. Refuse rather than pretend.
-    if (isRoundFinal(roundLocks, editRound)) {
-      notify(`Round ${editRound} is final — unlock it first`, "error");
-      return;
-    }
-    // Always save per-round CH overrides (even if empty, to clear old values).
-    // Stored under `ch_overrides`; these are DIRECT Course-Handicap overrides.
-    const chOverrides = hcpOverrides[editRound] || {};
-    await db.upsert("bc_hcp_overrides", { id: editionDocId(`bc_hcp_r${editRound}`), tournament_id: TOURNAMENT_ID, round_number: editRound, ch_overrides: chOverrides });
-    // Save tee assignments
-    const assignments = teeAssignments[editRound] || {};
-    await db.upsert("bc_tee_assignments", { id: editionDocId(`bc_tee_r${editRound}`), tournament_id: TOURNAMENT_ID, round_number: editRound, assignments });
-    const data = {
-      id: editionDocId(`bc_round_${editRound}`),
-      tournament_id: TOURNAMENT_ID,
-      round_number: editRound,
-      course_id: tr?.course_id || "",
-      format: roundFormat || tr.format || DEFAULT_FORMAT,
-      handicap_mode: handicapMode[editRound] || "low_man",
-      tee_time: roundTeeTime || tr.tee_time || "",
-      nassau_front: nassau.front,
-      nassau_back: nassau.back,
-      nassau_overall: nassau.overall,
-      scoring_type: scoringType,
-      // Written in the shape the SAVED FORMAT calls for, so a round switched
-      // from Scramble to Singles can't keep a stale low/high pair on file.
-      allowance: (() => {
-        const fmtId = roundFormat || tr.format || DEFAULT_FORMAT;
-        const a = resolveAllowance(fmtId, allowance);
-        return a.split ? { low: a.low, high: a.high } : { pct: a.pct };
-      })(),
-    };
-    await onSetRound(data);
-    notify("Round saved!", "success");
-  };
 
   const saveMatch = async () => {
     if (matchTeamA.length === 0 || matchTeamB.length === 0) { notify("Select players for both teams", "error"); return; }
@@ -1404,24 +1592,12 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
       {tab === "rounds" && (
         <div>
           <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+            {/* Switching round is all these do. The hydration effect re-seeds
+                the form from Firestore — including for a round with no
+                document yet, which the old inline loader skipped, leaving
+                the previous round's settings on screen. */}
             {[1,2,3,4].map(r => (
-              <button key={r} onClick={() => {
-                setEditRound(r);
-                const tr = tRounds.find(t => t.round_number === r);
-                if (tr) {
-                  setRoundFormat(tr.format || DEFAULT_FORMAT);
-                  setRoundCourse(tr.course_id || "");
-                  setRoundTeeTime(tr.tee_time || "");
-                  setNassau({ front: tr.nassau_front || 1, back: tr.nassau_back || 1, overall: tr.nassau_overall || 1 });
-                  setScoringType(tr.scoring_type || "match");
-                  setAllowance(tr.allowance || null);
-                } else {
-                  setAllowance(null);
-                }
-                // Load existing overrides and handicap mode for this round
-                setHcpOverrides(prev => ({ ...prev }));
-                if (tr?.handicap_mode) setHandicapMode(prev => ({ ...prev, [r]: tr.handicap_mode }));
-              }} style={{
+              <button key={r} onClick={() => setEditRound(r)} style={{
                 flex: 1, padding: "8px 4px", borderRadius: 10, fontSize: 11, fontWeight: 700, cursor: "pointer",
                 background: editRound === r ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
                 border: `1px solid ${editRound === r ? "transparent" : BC.bdr}`,
@@ -1691,182 +1867,12 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   </div>
                   {roundIsLocked && (
                     <div style={{ fontSize: 9, color: roundIsFinal ? BC.danger : BC.amber, marginTop: 4 }}>
-                      Round {editRound} is locked — its allowance is frozen until you refresh the snapshot.
+                      Round {editRound} is locked — the allowance it scored with is frozen in the snapshot, so a change here will not move it.
                     </div>
                   )}
                 </div>
               );
             })()}
-
-            {/* ── Handicap lock ──────────────────────────────────────────
-                The control surface for src/lib/roundLocks.js. A locked round
-                has frozen every input to stroke allocation — handicap index,
-                per-round override, tee, low_man/full, course and hole tables.
-                Editing a player's handicap after this point changes future
-                rounds only. */}
-            <div style={{
-              marginBottom: 12, borderRadius: 10, overflow: "hidden",
-              background: BC.bg,
-              border: `1px solid ${roundIsFinal ? BC.danger + "66" : roundIsLocked ? BC.amber + "66" : BC.bdr}`,
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px" }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, letterSpacing: 0.5 }}>HANDICAP LOCK</div>
-                <span style={{
-                  fontSize: 8, fontWeight: 800, letterSpacing: 1, padding: "2px 7px", borderRadius: 10,
-                  background: roundIsFinal ? BC.danger : roundIsLocked ? BC.amber : "transparent",
-                  color: roundIsLocked ? "#0a0804" : BC.t3,
-                  border: roundIsLocked ? "none" : `1px solid ${BC.bdr}`,
-                }}>{LOCK_STATE_LABEL[lockState]}</span>
-                <span style={{ flex: 1 }} />
-                {activeLock && (
-                  <button onClick={() => setShowLockDetail(v => !v)} style={{
-                    fontSize: 9, padding: "2px 7px", borderRadius: 5, border: `1px solid ${BC.bdr}`,
-                    background: "transparent", color: BC.t3, cursor: "pointer",
-                  }}>{showLockDetail ? "Hide" : "Frozen values"}</button>
-                )}
-              </div>
-
-              <div style={{ padding: "0 10px 10px" }}>
-                <div style={{ fontSize: 10, color: BC.t3, lineHeight: 1.55, marginBottom: 8 }}>
-                  {!roundIsLocked &&
-                    `Round ${editRound} is scoring off live handicaps. It locks by itself the moment the first score is entered, so nothing here needs remembering.`}
-                  {roundIsLocked && !roundIsFinal &&
-                    `${describeLock(activeLock)}. Handicap edits made from now on will not touch this round.`}
-                  {roundIsFinal &&
-                    `${describeLock(activeLock)}. This round is closed — nothing recalculates it.`}
-                </div>
-
-                {/* OPEN → offer a deliberate pre-lock */}
-                {!roundIsLocked && (
-                  <button onClick={async () => {
-                    if (!(await confirm({
-                      title: `Lock handicaps for Round ${editRound}?`,
-                      message: `Every player's index, override, tee and the low-man setting will be frozen for this round. ` +
-                        `Later handicap changes will apply to other rounds only.`,
-                      confirmLabel: "Lock",
-                    }))) return;
-                    await onLockRound(editRound);
-                    notify(`Round ${editRound} handicaps locked`, "success");
-                  }} style={{ ...BtnStyle, padding: "7px 14px", fontSize: 11 }}>Lock handicaps now</button>
-                )}
-
-                {/* LOCKED, not final → refresh / finalize / release */}
-                {roundIsLocked && !roundIsFinal && (
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    <button onClick={async () => {
-                      if (!(await confirm({
-                        title: `Re-take the Round ${editRound} snapshot?`,
-                        message: `This is the ONLY thing that changes a locked round's handicaps. ` +
-                          `Every player's strokes for Round ${editRound} will be recalculated from current values. ` +
-                          `Only do this if the round has not really been played yet.`,
-                        confirmLabel: "Refresh",
-                      }))) return;
-                      await onLockRound(editRound, { refresh: true });
-                      notify(`Round ${editRound} snapshot refreshed`, "success");
-                    }} style={{
-                      padding: "6px 12px", borderRadius: 8, border: `1px solid ${BC.amber}`, background: "transparent",
-                      color: BC.amber, fontSize: 10, fontWeight: 700, cursor: "pointer",
-                    }}>Refresh snapshot</button>
-
-                    <button onClick={async () => {
-                      if (!(await confirm({
-                        title: `Mark Round ${editRound} final?`,
-                        message: `Its handicaps can no longer be refreshed. Scores stay editable.`,
-                        confirmLabel: "Mark final",
-                      }))) return;
-                      await onFinalizeRound(editRound, true);
-                      notify(`Round ${editRound} marked final`, "success");
-                    }} style={{ ...BtnStyle, padding: "6px 12px", fontSize: 10 }}>Mark round final</button>
-
-                    <button onClick={async () => {
-                      if (!(await confirm({
-                        title: `Release the Round ${editRound} lock?`,
-                        message: `The round goes back to live handicaps. Use this only if the round was locked by a stray score before play began.`,
-                        confirmLabel: "Release",
-                      }))) return;
-                      await onClearRoundLock(editRound);
-                      notify(`Round ${editRound} lock released`, "success");
-                    }} style={{
-                      padding: "6px 12px", borderRadius: 8, border: `1px solid ${BC.bdr}`, background: "transparent",
-                      color: BC.t3, fontSize: 10, fontWeight: 700, cursor: "pointer",
-                    }}>Release lock</button>
-                  </div>
-                )}
-
-                {/* FINAL → typed confirmation, deliberately awkward */}
-                {roundIsFinal && (
-                  <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                    <input
-                      value={unlockText}
-                      onChange={e => setUnlockText(e.target.value)}
-                      placeholder="Type UNLOCK"
-                      style={{
-                        ...InputStyle, marginBottom: 0, width: 130, padding: "6px 8px", fontSize: 11,
-                        borderColor: unlockText === "UNLOCK" ? BC.danger : BC.bdr,
-                      }} />
-                    <button
-                      disabled={unlockText !== "UNLOCK"}
-                      onClick={async () => {
-                        await onFinalizeRound(editRound, false);
-                        setUnlockText("");
-                        notify(`Round ${editRound} reopened — snapshot still in place`, "success");
-                      }}
-                      style={{
-                        padding: "6px 12px", borderRadius: 8, border: `1px solid ${BC.danger}`,
-                        background: unlockText === "UNLOCK" ? BC.danger : "transparent",
-                        color: unlockText === "UNLOCK" ? "#fff" : BC.t3,
-                        fontSize: 10, fontWeight: 700,
-                        cursor: unlockText === "UNLOCK" ? "pointer" : "not-allowed",
-                        opacity: unlockText === "UNLOCK" ? 1 : 0.5,
-                      }}>Unlock round</button>
-                    <span style={{ fontSize: 9, color: BC.t3 }}>
-                      Reopening alone changes nothing — you would still have to refresh the snapshot.
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Frozen values — what this round is ACTUALLY scoring with */}
-              {showLockDetail && activeLock && (
-                <div style={{ borderTop: `1px solid ${BC.bdr}`, background: BC.card, padding: "8px 10px" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 42px 60px 34px", gap: 4, marginBottom: 4 }}>
-                    {["PLAYER", "HI", "TEE", "CH"].map((h, i) => (
-                      <div key={h} style={{
-                        fontSize: 7, fontWeight: 700, color: BC.t3, letterSpacing: 0.5,
-                        textAlign: i === 0 ? "left" : "center",
-                      }}>{h}</div>
-                    ))}
-                  </div>
-                  {tPlayers.map(p => {
-                    const e = lockedPlayerEntry(roundLocks, editRound, p.player_id);
-                    const tm = teams[p.team];
-                    return (
-                      <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: "1fr 42px 60px 34px", gap: 4, alignItems: "center", marginBottom: 2 }}>
-                        <div style={{ fontSize: 10, color: playerNameColor(), fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
-                        <div style={{ fontSize: 10, color: e?.overridden ? BC.amber : BC.t2, textAlign: "center", fontWeight: e?.overridden ? 700 : 400 }}>
-                          {e ? e.hi : "—"}
-                        </div>
-                        <div style={{ fontSize: 9, color: BC.t3, textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {e?.tee || "—"}
-                        </div>
-                        <div style={{ fontSize: 11, color: e ? BC.t1 : BC.t3, textAlign: "center", fontWeight: 700 }}>
-                          {e ? e.ch : "—"}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <div style={{ fontSize: 9, color: BC.t3, marginTop: 6, lineHeight: 1.5 }}>
-                    Mode: {activeLock.handicap_mode === "full" ? "All handicaps" : "Low man"} ·
-                    {" "}Course: {activeLock.course_name || "—"}
-                    {tPlayers.some(p => !lockedPlayerEntry(roundLocks, editRound, p.player_id)) && (
-                      <span style={{ color: BC.amber }}>
-                        {" "}· Players showing — joined after the lock and will use live handicaps.
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
 
             {/* Handicap Overrides */}
             <div style={{ marginBottom: 14 }}>
@@ -1879,8 +1885,8 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   border: `1px solid ${(roundIsFinal ? BC.danger : BC.amber)}33`,
                 }}>
                   {roundIsFinal
-                    ? `Round ${editRound} is final. These fields are read-only.`
-                    : `Round ${editRound} is locked. Changes here are saved for reference but will not affect its scoring until you refresh the snapshot above.`}
+                    ? `Round ${editRound} is final. These fields are read-only and nothing here is saved.`
+                    : `Round ${editRound} is locked — its handicaps are frozen. Changes here are saved for reference but will not affect its scoring.`}
                 </div>
               )}
               {tPlayers.length === 0 && <div style={{ fontSize: 11, color: BC.t3 }}>No players added yet.</div>}
@@ -1923,6 +1929,16 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     // effective index + assigned tee. Used as the input placeholder
                     // and as the baseline the override delta is measured against.
                     const calcedCH = course2 ? calcCHForCourse(parseFloat(effHI) || 0, course2, currentTee2) : null;
+                    // A manual CH is a standing condition, not an event: for as
+                    // long as one is in force, the arrow states how far the round
+                    // is being played from the calculated handicap. So it is
+                    // derived from the override itself and lives exactly as long
+                    // as the override does — including across a reload, where a
+                    // notification-style badge would have shown nothing at all.
+                    const overrideCH = hasOverride ? parseFloat(override) : NaN;
+                    const overrideDelta = (Number.isFinite(overrideCH) && calcedCH != null)
+                      ? overrideCH - calcedCH
+                      : null;
                     const assignTee2 = (teeName) => {
                       const oldTee = tees2.find(t => t.name === (assignments2[p.player_id] || tees2[0]?.name));
                       const newTee = tees2.find(t => t.name === teeName);
@@ -1943,13 +1959,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                           value={hasOverride ? override : ""}
                           onChange={e => {
                             if (roundIsFinal) return;
-                            const newVal = e.target.value;
-                            // Delta badge measures the direct-CH override against the
-                            // CH the app would otherwise calculate for this round.
-                            if (calcedCH != null && newVal !== "") {
-                              showChDelta(`hcp_${editRound}_${p.player_id}`, (parseFloat(newVal) || 0) - calcedCH);
-                            }
-                            setHcpOverrides(prev => ({ ...prev, [editRound]: { ...(prev[editRound]||{}), [p.player_id]: newVal } }));
+                            setHcpOverrides(prev => ({ ...prev, [editRound]: { ...(prev[editRound]||{}), [p.player_id]: e.target.value } }));
                           }}
                           placeholder={calcedCH != null ? String(calcedCH) : "CH"}
                           style={{ padding: "5px 8px", background: hasOverride ? BC.amber+"15" : BC.inp, border: `1px solid ${hasOverride ? BC.amber : BC.bdr}`, borderRadius: 6, color: hasOverride ? BC.amber : BC.t2, fontSize: 12, fontWeight: hasOverride ? 700 : 400, outline: "none", textAlign: "center", opacity: roundIsFinal ? 0.5 : 1, cursor: roundIsFinal ? "not-allowed" : "text" }}
@@ -1968,10 +1978,17 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                             </button>
                           );
                         })}
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          {chDeltas[`hcp_${editRound}_${p.player_id}`] !== undefined && (
-                            <ChDeltaBadge delta={chDeltas[`hcp_${editRound}_${p.player_id}`]} />
-                          )}
+                        {/* Standing override delta wins over the passing one a
+                            tee change raises — once a manual CH is set the tee
+                            no longer decides this player's strokes. */}
+                        <div
+                          title={overrideDelta != null ? `Manual CH ${overrideCH} — calculated is ${calcedCH}` : undefined}
+                          style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          {overrideDelta != null
+                            ? <ChDeltaBadge delta={overrideDelta} />
+                            : chDeltas[`tee_${editRound}_${p.player_id}`] !== undefined && (
+                                <ChDeltaBadge delta={chDeltas[`tee_${editRound}_${p.player_id}`]} />
+                              )}
                         </div>
                       </div>
                     );
@@ -1980,7 +1997,33 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               ))}
             </div>
 
-            <button onClick={saveRound} style={BtnStyle}>Save Round {editRound}</button>
+            {/* Auto-save status. Stands in for the old Save button: the
+                only thing a director still needs from it is confidence
+                that the edit landed. */}
+            {(() => {
+              const phase = autoSave?.round === editRound ? autoSave.phase : null;
+              const [text, color] = roundIsFinal
+                ? [`Round ${editRound} is final — changes are not saved`, BC.danger]
+                : phase === "error"
+                  ? [`Round ${editRound} could not be saved — retrying on your next edit`, BC.danger]
+                  : phase === "saving" || (roundDirty && formSeeded)
+                    ? ["Saving…", BC.amber]
+                    : phase === "saved"
+                      ? [`Round ${editRound} saved`, BC.t3]
+                      : ["Changes save automatically", BC.t3];
+              return (
+                <div style={{
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  padding: "8px 0 2px", fontSize: 10, fontWeight: 700, letterSpacing: 0.5, color,
+                }}>
+                  <span style={{
+                    width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                    background: color, opacity: color === BC.t3 ? 0.5 : 1,
+                  }} />
+                  {text}
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -2015,6 +2058,18 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
         const allSelected = [...matchTeamA, ...matchTeamB];
         const strokes = strokeSituation();
 
+        // Players already committed to a match in THIS round drop out of the
+        // pool — a player plays one match per round, so offering them again
+        // only invites double-booking. Derived from `matches`, so deleting a
+        // match below hands its players straight back.
+        const matchedPids = new Set(
+          matches.filter(m => m.round === matchRound).flatMap(m => [...(m.teamA || []), ...(m.teamB || [])])
+        );
+        // An in-progress selection stays visible even if somehow already
+        // matched, otherwise it could never be tapped off again.
+        const availablePlayers = (players, sel) =>
+          players.filter(p => !matchedPids.has(p.player_id) || sel.includes(p.player_id));
+
         return (
         <div>
           {/* Round tabs */}
@@ -2035,10 +2090,16 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               const team = teams[tid];
               const sel = tid === "A" ? matchTeamA : matchTeamB;
               const setSel = tid === "A" ? setMatchTeamA : setMatchTeamB;
+              const pool = availablePlayers(players, sel);
               return (
                 <div key={tid}>
                   <div style={{ fontSize: 9, fontWeight: 700, color: team.accent, letterSpacing: 1, marginBottom: 5 }}>{teamNames?.[tid]}</div>
-                  {players.map(p => {
+                  {pool.length === 0 && (
+                    <div style={{ fontSize: 10, color: BC.t3, padding: "7px 8px", borderRadius: 8, border: `1px dashed ${BC.bdr}`, textAlign: "center" }}>
+                      {players.length ? `All matched in Rd ${matchRound}` : "No players"}
+                    </div>
+                  )}
+                  {pool.map(p => {
                     const isSelected = sel.includes(p.player_id);
                     const ch = getPlayerCH(p.player_id);
                     return (
@@ -5154,6 +5215,11 @@ export default function App() {
   // Deliberate counterparts to the automatic lock. `refresh` re-takes the
   // snapshot against current values and is the ONLY way a locked round's
   // handicaps can move; it is blocked outright on a final round.
+  //
+  // No UI currently calls finalize/release — the Admin › Rounds lock card was
+  // removed. Retained as the data layer behind those actions so a future
+  // surface (or a console call) has something to hit; locking itself still
+  // happens automatically in ensureRoundLock.
   const onLockRound = useCallback(async (rnd, { refresh = false } = {}) => {
     const prev = roundLocksRef.current?.[rnd];
     if (prev?.final && refresh) return null; // final rounds are never refreshed
@@ -5177,6 +5243,7 @@ export default function App() {
     return lock;
   }, []);
 
+  // eslint-disable-next-line no-unused-vars
   const onFinalizeRound = useCallback(async (rnd, final) => {
     let lock = roundLocksRef.current?.[rnd];
     // Finalizing a round nobody locked (all scores entered elsewhere, say)
@@ -5194,6 +5261,7 @@ export default function App() {
 
   // Hand a round back to live handicaps. Only for a round locked by a stray
   // score before the event actually started — never reachable while final.
+  // eslint-disable-next-line no-unused-vars
   const onClearRoundLock = useCallback(async (rnd) => {
     const lock = roundLocksRef.current?.[rnd];
     if (lock?.final) return null;
@@ -5478,9 +5546,6 @@ export default function App() {
             hcpOverridesFromDb={hcpOverridesData}
             teeAssignmentsFromDb={teeAssignmentsData}
             roundLocks={roundLocksData}
-            onLockRound={onLockRound}
-            onFinalizeRound={onFinalizeRound}
-            onClearRoundLock={onClearRoundLock}
             notify={notify}
           />
         )}
