@@ -58,12 +58,16 @@ export function holeFill(hole, format, settled = true) {
   if (a === max) return { background: A, border: "none" };
   if (b === max) return { background: B, border: "none" };
 
-  // Split hole. Team A takes the lower-left wedge and team B the upper-right,
-  // the same left/right geometry the match rows use — so the wedge a colour
-  // sits in already tells you whose side of the card it belongs to. A side
-  // that won only one of the two dots shares the cell with halved grey.
+  // Split hole. The seam runs bottom-left to top-right, putting team A in the
+  // upper-left wedge and team B in the lower-right — the same left/right
+  // geometry the match rows use, so the wedge a colour sits in already tells
+  // you whose side of the card it belongs to. A side that won only one of the
+  // two dots shares the cell with halved grey.
+  //
+  // 135deg is the axis, not the seam: CSS measures the gradient's direction
+  // (down-right here), and the colour boundary sits perpendicular to it.
   return {
-    background: `linear-gradient(45deg, ${a ? A : HALVED} 0 50%, ${b ? B : HALVED} 50% 100%)`,
+    background: `linear-gradient(135deg, ${a ? A : HALVED} 0 50%, ${b ? B : HALVED} 50% 100%)`,
     border: "none",
   };
 }
