@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { BC, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor } from "./theme";
-import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId } from "./firebase";
+import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession } from "./firebase";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
   resolveTeams, DEFAULT_TEAM_NAMES, TOURNAMENT_TITLE, TOURNAMENT_LOCATION,
@@ -5060,7 +5060,9 @@ const TeeCircle = ({ tee, index, size = 14, active }) => {
 
 // ── Main App ──
 export default function App() {
-  const [user, setUser] = useState(null);
+  // Restore the signed-in user from sessionStorage so a reload (pull-to-refresh
+  // picking up a new bundle, or an edition switch) doesn't kick them to login.
+  const [user, setUser] = useState(() => readUserSession());
   // Default landing view. Was "practice" while the standalone Mash tab
   // was the focus of validation; now that the Mash UI patterns power
   // the tournament tabs, Leaderboard is the right home base — the
@@ -5488,7 +5490,7 @@ export default function App() {
 
   const availableRounds = useMemo(() => [...new Set(enrichedMatches.map(m => m.round))].sort(), [enrichedMatches]);
 
-  if (!user) return <LoginScreen players={tPlayers} teams={teams} darkMode={darkMode} tournamentName={tournamentName} onLogin={p => { setUser({ ...p, isDirector: !!p.isDirector }); }} />;
+  if (!user) return <LoginScreen players={tPlayers} teams={teams} darkMode={darkMode} tournamentName={tournamentName} onLogin={p => { const u = { ...p, isDirector: !!p.isDirector }; writeUserSession(u); setUser(u); }} />;
 
   // Bottom-nav items. The Practice tab (formerly "Mash") was relocated
   // to the More menu and is gated to directors only — practice rounds
@@ -5770,7 +5772,7 @@ export default function App() {
         </div>
       </div>
 
-      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={() => setUser(null)} user={user} view={view} darkMode={darkMode} onToggleTheme={toggleTheme} />
+      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={() => { writeUserSession(null); setUser(null); }} user={user} view={view} darkMode={darkMode} onToggleTheme={toggleTheme} />
       </div>
 
       {/* Bottom Nav — FIXED to the viewport bottom (restored pre-2026-07-21

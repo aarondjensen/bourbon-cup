@@ -16,7 +16,7 @@
 // hard-reloads, so every subscription and piece of state rebuilds cleanly
 // against the new tournament_id (a live db.subscribe captures its filter
 // value at creation, so a reload is the simplest correct re-init).
-import { db, getActiveTournamentId, setActiveTournamentId, editionDocId, setDirectorSession } from "../firebase";
+import { db, getActiveTournamentId, setActiveTournamentId, editionDocId, writeUserSession, BOOTSTRAP_DIRECTOR } from "../firebase";
 
 export const EDITIONS_COL = "bc_editions";
 
@@ -152,10 +152,11 @@ export const deleteEdition = async (id) => {
 
 // Flip the active pointer (with its namespacing flag), then hard-reload.
 // Switching is a director-only action (the Editions modal is director-gated),
-// so keep the director session alive across the reload — otherwise the reload
-// drops the director onto the login screen of a possibly-empty new edition.
+// so persist the generic director identity across the reload — keeps director
+// access without carrying a stale player that may not exist in the new edition,
+// and avoids dropping onto the login screen of a possibly-empty new edition.
 export const switchEdition = (id, { reload = true, namespaced = false } = {}) => {
   setActiveTournamentId(id, namespaced);
-  setDirectorSession(true);
+  writeUserSession(BOOTSTRAP_DIRECTOR);
   if (reload && typeof window !== "undefined") window.location.reload();
 };

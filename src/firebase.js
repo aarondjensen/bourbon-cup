@@ -103,27 +103,35 @@ export const setActiveTournamentId = (id, namespaced = false) => {
 // active edition. Prefer this over hand-writing the filter literal.
 export const tournamentFilter = () => [{ field: "tournament_id", op: "==", value: TOURNAMENT_ID }];
 
-// ── Director session ────────────────────────────────────────────────
-// Director access is unlocked by tapping a director-flagged player or by
-// entering the director code (see constants.DIRECTOR_CODE). Because
-// switching editions hard-reloads the app, that in-memory session would be
-// lost on every switch — dropping the director onto a login screen that,
-// for a brand-new empty edition, has no player to tap. Persisting a small
-// flag in sessionStorage keeps the director logged in across the reload.
-// sessionStorage (not localStorage) is deliberate: the unlock lasts for the
-// browser session only, not forever on a shared device.
-export const DIRECTOR_SESSION_KEY = "bc_director_session";
+// ── User session ────────────────────────────────────────────────────
+// The signed-in user (any player OR the director) is cached in sessionStorage
+// so a reload does NOT dump them back to the login / select-player screen.
+// This matters most for two reloads the app does itself:
+//   • pull-to-refresh, which hard-reloads to pick up a newly-shipped bundle,
+//   • switching editions.
+// Without this, every such reload logged everyone out. sessionStorage (not
+// localStorage) is deliberate: the session lasts for the browser tab, not
+// forever on a shared device.
+export const USER_SESSION_KEY = "bc_user";
 
-export const isDirectorSession = () => {
-  try { return typeof sessionStorage !== "undefined" && sessionStorage.getItem(DIRECTOR_SESSION_KEY) === "1"; }
-  catch { return false; }
+// Generic director identity used to BOOTSTRAP setup — an empty roster (no
+// player to tap), or after an edition switch where the prior player may not
+// exist in the new edition. Persisted in place of a stale player identity.
+export const BOOTSTRAP_DIRECTOR = { player_id: "bootstrap_director", name: "Director (Setup)", team: null, isDirector: true };
+
+export const readUserSession = () => {
+  try {
+    if (typeof sessionStorage === "undefined") return null;
+    const raw = sessionStorage.getItem(USER_SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
 };
 
-export const setDirectorSession = (on) => {
+export const writeUserSession = (user) => {
   try {
     if (typeof sessionStorage === "undefined") return;
-    if (on) sessionStorage.setItem(DIRECTOR_SESSION_KEY, "1");
-    else sessionStorage.removeItem(DIRECTOR_SESSION_KEY);
+    if (user) sessionStorage.setItem(USER_SESSION_KEY, JSON.stringify(user));
+    else sessionStorage.removeItem(USER_SESSION_KEY);
   } catch { /* blocked storage */ }
 };
 
