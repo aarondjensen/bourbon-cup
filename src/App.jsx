@@ -1801,6 +1801,16 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     // effective index + assigned tee. Used as the input placeholder
                     // and as the baseline the override delta is measured against.
                     const calcedCH = course2 ? calcCHForCourse(parseFloat(effHI) || 0, course2, currentTee2) : null;
+                    // A manual CH is a standing condition, not an event: for as
+                    // long as one is in force, the arrow states how far the round
+                    // is being played from the calculated handicap. So it is
+                    // derived from the override itself and lives exactly as long
+                    // as the override does — including across a reload, where a
+                    // notification-style badge would have shown nothing at all.
+                    const overrideCH = hasOverride ? parseFloat(override) : NaN;
+                    const overrideDelta = (Number.isFinite(overrideCH) && calcedCH != null)
+                      ? overrideCH - calcedCH
+                      : null;
                     const assignTee2 = (teeName) => {
                       const oldTee = tees2.find(t => t.name === (assignments2[p.player_id] || tees2[0]?.name));
                       const newTee = tees2.find(t => t.name === teeName);
@@ -1821,13 +1831,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                           value={hasOverride ? override : ""}
                           onChange={e => {
                             if (roundIsFinal) return;
-                            const newVal = e.target.value;
-                            // Delta badge measures the direct-CH override against the
-                            // CH the app would otherwise calculate for this round.
-                            if (calcedCH != null && newVal !== "") {
-                              showChDelta(`hcp_${editRound}_${p.player_id}`, (parseFloat(newVal) || 0) - calcedCH);
-                            }
-                            setHcpOverrides(prev => ({ ...prev, [editRound]: { ...(prev[editRound]||{}), [p.player_id]: newVal } }));
+                            setHcpOverrides(prev => ({ ...prev, [editRound]: { ...(prev[editRound]||{}), [p.player_id]: e.target.value } }));
                           }}
                           placeholder={calcedCH != null ? String(calcedCH) : "CH"}
                           style={{ padding: "5px 8px", background: hasOverride ? BC.amber+"15" : BC.inp, border: `1px solid ${hasOverride ? BC.amber : BC.bdr}`, borderRadius: 6, color: hasOverride ? BC.amber : BC.t2, fontSize: 12, fontWeight: hasOverride ? 700 : 400, outline: "none", textAlign: "center", opacity: roundIsFinal ? 0.5 : 1, cursor: roundIsFinal ? "not-allowed" : "text" }}
@@ -1846,10 +1850,17 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                             </button>
                           );
                         })}
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          {chDeltas[`hcp_${editRound}_${p.player_id}`] !== undefined && (
-                            <ChDeltaBadge delta={chDeltas[`hcp_${editRound}_${p.player_id}`]} />
-                          )}
+                        {/* Standing override delta wins over the passing one a
+                            tee change raises — once a manual CH is set the tee
+                            no longer decides this player's strokes. */}
+                        <div
+                          title={overrideDelta != null ? `Manual CH ${overrideCH} — calculated is ${calcedCH}` : undefined}
+                          style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          {overrideDelta != null
+                            ? <ChDeltaBadge delta={overrideDelta} />
+                            : chDeltas[`tee_${editRound}_${p.player_id}`] !== undefined && (
+                                <ChDeltaBadge delta={chDeltas[`tee_${editRound}_${p.player_id}`]} />
+                              )}
                         </div>
                       </div>
                     );
