@@ -172,9 +172,11 @@ export function ScoreButtonRow({ par, score, onScore }) {
               )}
               <span style={{ position: "relative", zIndex: 1 }}>{btn}</span>
             </button>
+            {/* Uppercase to match how MNQ renders these — its shell sets a
+                global text-transform, so the labels read as small caps there. */}
             <div style={{
               fontSize: 9, color: showParAnchor ? BC.t2 : BC.t3, fontWeight: showParAnchor ? 700 : 600,
-              letterSpacing: 0.4, lineHeight: 1, height: 12,
+              letterSpacing: 0.4, lineHeight: 1, height: 12, textTransform: "uppercase",
             }}>
               {showLabels ? SCORE_LABELS[idx] : ""}
             </div>
