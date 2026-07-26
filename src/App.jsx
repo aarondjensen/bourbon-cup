@@ -11,7 +11,7 @@ import {
   calcCH, calcCHForCourse, fmtScore,
   getEffectiveHI, buildStrokeMap, resolveHolePars, resolveHoleHcps,
   computeMatchResult, computePracticeMatch, computePracticeSkins,
-  getRoundCH, getRoundHI, getRoundTee, getRoundHandicapMode, lockForRound,
+  getRoundCH, getRoundHI, getRoundTee, lockForRound,
   higherIsBetter, totalUnit, segmentState,
 } from "./scoring";
 import { holeFill } from "./lib/holeFill";
@@ -31,6 +31,13 @@ import { useStableCallback } from "./lib/useStableCallback";
 import { EditionSwitcher } from "./components/EditionSwitcher";
 import { GhinLinkButton, GhinSyncButton } from "./components/GhinLink";
 import { TeamLeaderboard, MatchScorecard } from "./components/Leaderboard";
+import { MatchSetup } from "./components/MatchSetup";
+import {
+  GROUPS_COL, groupsDocId, encodeGroups, decodeGroups,
+  autoBuildGroups, expandTeeTimes, teeTimeList,
+  isFoursomeFormat, teeTimeForMatch, parseTeeTime, formatTeeTime,
+  DEFAULT_TEE_INTERVAL,
+} from "./lib/groups";
 
 // ── Bottom-nav safe-area cushion ──────────────────────────────────
 // Full iOS home-indicator inset (34pt on devices that have one) plus 8pt,
@@ -750,13 +757,49 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
 
 
 // ── Groups View ──
-function GroupsView({ matches, tRounds, tPlayers, courses }) {
+// The player-facing "Matches" tab. Answers the two questions a player
+// actually has on the morning of a round: who am I playing, and when do I
+// tee off. The second one comes from the round's playing groups (see
+// lib/groups.js) — group i goes off at slot i of the round's tee_time list.
+function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound }) {
   const rounds = [...new Set(matches.map(m => m.round))].sort();
   const [activeRound, setActiveRound] = useState(rounds[0] || 1);
   const rndMatches = matches.filter(m => m.round === activeRound);
   const tr = tRounds.find(t => t.round_number === activeRound);
   const course = courses.find(c => c.id === tr?.course_id);
   const fmt = FORMATS.find(f => f.id === tr?.format);
+
+  // Same fallback the admin tab uses: a 2-man format's match is its own
+  // foursome, so a round nobody has grouped by hand still has tee times.
+  const stored = groupsByRound?.[activeRound];
+  const groups = stored || (isFoursomeFormat(tr?.format)
+    ? autoBuildGroups({ formatId: tr?.format, matches: rndMatches })
+    : []);
+  const rawTimes = teeTimeList(tr);
+  const times = expandTeeTimes(rawTimes, Math.max(groups.length, 1))
+    .map(t => { const m = parseTeeTime(t); return m == null ? t : formatTeeTime(m, { ampm: true }); });
+  const firstTee = times[0] || "";
+
+  const nameOf = (pid) => tPlayers.find(t => t.player_id === pid)?.name || pid;
+
+  // Matches read best in the order they go off.
+  const ordered = [...rndMatches].sort((a, b) => {
+    const ta = parseTeeTime(teeTimeForMatch({ groups, times, match: a }));
+    const tb = parseTeeTime(teeTimeForMatch({ groups, times, match: b }));
+    if (ta == null && tb == null) return 0;
+    if (ta == null) return 1;
+    if (tb == null) return -1;
+    return ta - tb;
+  });
+
+  // A tee sheet only earns its space when the groups aren't just the
+  // matches over again — Singles (two matches per foursome) and the team
+  // formats (one match over several foursomes).
+  const needsTeeSheet = groups.length > 0 && rndMatches.some(m => {
+    const pids = [...m.teamA, ...m.teamB];
+    const idxs = new Set(pids.map(p => groups.findIndex(g => g.includes(p))));
+    return idxs.size > 1 || groups.some(g => g.length > pids.length && pids.every(p => g.includes(p)));
+  });
 
   return (
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
@@ -785,7 +828,7 @@ function GroupsView({ matches, tRounds, tPlayers, courses }) {
         <div style={{ padding: "10px 14px" }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: BC.t1 }}>{course?.name || "Course TBD"}</div>
           {fmt && <div style={{ fontSize: 11, color: BC.t3, marginTop: 2 }}>{fmt.label}{fmt.desc ? ` · ${fmt.desc}` : ""}</div>}
-          {tr?.tee_time && <div style={{ fontSize: 11, color: BC.amber, marginTop: 4, fontWeight: 700 }}>First Tee: {tr.tee_time}</div>}
+          {firstTee && <div style={{ fontSize: 11, color: BC.amber, marginTop: 4, fontWeight: 700 }}>First Tee: {firstTee}</div>}
         </div>
       </div>
 
@@ -794,29 +837,45 @@ function GroupsView({ matches, tRounds, tPlayers, courses }) {
       {/* Match cards — same visual identity as the Leaderboard cards
           (vertical green/brown stripes flanking each team) so the
           "this is a Match X" element is recognizable across tabs. */}
-      {rndMatches.map((m, i) => (
+      {ordered.map((m, i) => {
+        const teeTime = teeTimeForMatch({ groups, times, match: m });
+        return (
         <div key={m.id} style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: "12px 14px", marginBottom: 8 }}>
-          <div style={{ fontSize: 9, color: BC.t3, marginBottom: 8, fontWeight: 800, letterSpacing: 1 }}>MATCH {i + 1}{m.teeTime ? `  ·  ${m.teeTime}` : ""}</div>
+          <div style={{ fontSize: 9, color: BC.t3, marginBottom: 8, fontWeight: 800, letterSpacing: 1 }}>
+            MATCH {i + 1}{teeTime ? `  ·  ${teeTime}` : ""}
+          </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10 }}>
             {/* Team A — Mash green stripe LEFT */}
             <div style={{ textAlign: "left", borderLeft: `3px solid ${BC.amber}`, paddingLeft: 8 }}>
-              {m.teamA.map(pid => {
-                const tp = tPlayers.find(t => t.player_id === pid);
-                return <div key={pid} style={{ fontSize: 13, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{tp?.name || pid}</div>;
-              })}
+              {m.teamA.map(pid => (
+                <div key={pid} style={{ fontSize: 13, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{nameOf(pid)}</div>
+              ))}
             </div>
             {/* vs */}
             <div style={{ fontSize: 11, color: BC.t3, fontWeight: 700, padding: "0 4px" }}>vs</div>
             {/* Team B — bourbon brown stripe RIGHT */}
             <div style={{ textAlign: "right", borderRight: `3px solid ${BC.gold}`, paddingRight: 8 }}>
-              {m.teamB.map(pid => {
-                const tp = tPlayers.find(t => t.player_id === pid);
-                return <div key={pid} style={{ fontSize: 13, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{tp?.name || pid}</div>;
-              })}
+              {m.teamB.map(pid => (
+                <div key={pid} style={{ fontSize: 13, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{nameOf(pid)}</div>
+              ))}
             </div>
           </div>
         </div>
-      ))}
+        );
+      })}
+
+      {/* Tee sheet — who walks to the first tee together. */}
+      {needsTeeSheet && (
+        <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginTop: 14, overflow: "hidden" }}>
+          <Banner>TEE SHEET</Banner>
+          {groups.map((g, gi) => (
+            <div key={gi} style={{ padding: "9px 14px", borderTop: gi ? `1px solid ${BC.bdr}44` : "none", display: "flex", gap: 10, alignItems: "baseline" }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: BC.amber, flexShrink: 0, minWidth: 64 }}>{times[gi] || `G${gi + 1}`}</div>
+              <div style={{ fontSize: 12, color: BC.t1, lineHeight: 1.4 }}>{g.map(nameOf).join(" · ")}</div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -897,7 +956,7 @@ function ChDeltaBadge({ delta }) {
   );
 }
 
-function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, onSaveTournamentName, hcpOverridesFromDb, teeAssignmentsFromDb, notify, roundLocks }) {
+function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, onSaveTournamentName, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks }) {
   const [tab, setTab] = useState("players");
   const [editTeamNames, setEditTeamNames] = useState({ A: "", B: "" });
   const [editingTeam, setEditingTeam] = useState(null);
@@ -1190,14 +1249,11 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   // timer is cancelled first, then the captured payload is written.
   useEffect(() => () => flushRoundSave(), [editRound, flushRoundSave]);
 
-  // Match builder
+  // Which round the Matches tab is editing. The builder's own selection
+  // state lives in MatchSetup; this stays here so the chosen round survives
+  // a trip to another admin tab.
   const [matchRound, setMatchRound] = useState(1);
-  const [matchTeamA, setMatchTeamA] = useState([]);
-  const [matchTeamB, setMatchTeamB] = useState([]);
   const [showEditions, setShowEditions] = useState(false);
-
-  const teamAPlayers = tPlayers.filter(p => p.team === "A"); // used in match builder
-  const teamBPlayers = tPlayers.filter(p => p.team === "B");
 
   if (!user.isDirector) return (
     <div style={{ textAlign: "center", padding: 40 }}>
@@ -1206,28 +1262,6 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
       <div style={{ fontSize: 12, color: BC.t3, marginTop: 8 }}>Only tournament directors can manage settings.</div>
     </div>
   );
-
-  const saveMatch = async () => {
-    if (matchTeamA.length === 0 || matchTeamB.length === 0) { notify("Select players for both teams", "error"); return; }
-    const mId = `bc_match_r${matchRound}_${matchTeamA.join("_")}_vs_${matchTeamB.join("_")}`;
-    const data = {
-      id: mId,
-      tournament_id: TOURNAMENT_ID,
-      round: matchRound,
-      teamA: matchTeamA,
-      teamB: matchTeamB,
-      teamANames: matchTeamA.map(pid => tPlayers.find(p => p.player_id === pid)?.name || pid),
-      teamBNames: matchTeamB.map(pid => tPlayers.find(p => p.player_id === pid)?.name || pid),
-      // `nassau` and `scoring_type` are deliberately NOT written here. They
-      // belong to the round, and a copy on the match only ever goes stale the
-      // moment the director changes the round's setup. App resolves both from
-      // the round doc when it enriches matches.
-    };
-    await onSetMatch(data);
-    setMatchTeamA([]); setMatchTeamB([]);
-    notify("Match created!", "success");
-  };
-
 
   // ── Course Search (ported from WBC) ──
   const TEE_COLOR_MAP = {
@@ -1646,67 +1680,43 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             {/* Tee Times */}
 
             {(() => {
-              const parseTime = (str) => {
-                if (!str) return null;
-                const clean = str.trim();
-                // Check for explicit AM/PM
-                const apMatch = clean.match(/[aApP][mM]/);
-                const ap = apMatch ? apMatch[0].toLowerCase() : null;
-                const digits = clean.replace(/[^0-9]/g, "");
-                if (!digits) return null;
-                let h, min;
-                // Interpret digit sequences: 1=1:00, 12=12:00, 110=1:10, 800=8:00, 1230=12:30
-                if (digits.length <= 2) {
-                  h = parseInt(digits); min = 0;
-                } else if (digits.length === 3) {
-                  h = parseInt(digits[0]); min = parseInt(digits.slice(1));
-                } else {
-                  h = parseInt(digits.slice(0, 2)); min = parseInt(digits.slice(2, 4));
-                }
-                if (ap === "pm" && h !== 12) h += 12;
-                else if (ap === "am" && h === 12) h = 0;
-                else if (!ap) {
-                  // No AM/PM: golf is morning, assume AM for 5-11, PM for 1-4, keep 12
-                  if (h >= 1 && h <= 4) h += 12;
-                }
-                return h * 60 + min;
-              };
-              const formatTime = (mins) => {
-                if (mins == null) return "";
-                let h = Math.floor(mins / 60) % 24, m = mins % 60;
-                const ap = h >= 12 ? "PM" : "AM";
-                if (h > 12) h -= 12;
-                if (h === 0) h = 12;
-                return `${h}:${String(m).padStart(2,"0")}`;
-              };
+              // Time parsing/formatting is shared with the Matches tab (see
+              // lib/groups.js) so the two editors of this one field can never
+              // disagree about what "830" means.
               const stripAMPM = (s) => s ? s.replace(/\s*(AM|PM)/gi, "").trim() : s;
               const teeTimes = roundTeeTime ? roundTeeTime.split("|") : ["","","",""];
+              // The Matches tab can add groups beyond the four shown here.
+              // Their times live in the same list and must survive an edit.
+              const slots = Math.max(teeTimes.length, 4);
+              // The spread to keep when the FIRST tee moves, measured from the
+              // later slots. It cannot be measured from times[1] - times[0]:
+              // the box writes through on every keystroke, so by the time this
+              // runs times[0] is already the new value and that subtraction
+              // measures the edit itself. (It did — typing 7:00 over an 8:30
+              // first tee against an 8:45 second read as a 105-minute spread
+              // and laid the field out to 12:15.)
+              const laterSpread = (times) => {
+                for (let i = 1; i + 1 < times.length; i++) {
+                  const a = parseTeeTime(times[i]), b = parseTeeTime(times[i + 1]);
+                  if (a != null && b != null && b > a) return b - a;
+                }
+                return DEFAULT_TEE_INTERVAL;
+              };
               const commitTime = (idx, val) => {
                 const times = [...teeTimes];
-                // Auto-complete
-                if (val && !/[aApP][mM]/.test(val)) {
-                  const mins = parseTime(val);
-                  times[idx] = mins != null ? formatTime(mins) : val;
-                } else {
-                  times[idx] = val;
-                }
-                // Propagate from idx 0 or 1
-                if (idx === 0) {
-                  const t0 = parseTime(times[0]);
-                  if (t0 != null) {
-                    // Default 10-minute spread between groups (overridden the
-                    // moment the director edits group 2 — see the idx===1 branch).
-                    times[1] = formatTime(t0 + 10);
-                    times[2] = formatTime(t0 + 20);
-                    times[3] = formatTime(t0 + 30);
-                  }
-                } else if (idx === 1) {
-                  const t0 = parseTime(times[0]);
-                  const t1 = parseTime(times[1]);
-                  if (t0 != null && t1 != null) {
-                    const iv = t1 - t0;
-                    times[2] = formatTime(t1 + iv);
-                    times[3] = formatTime(t1 + iv * 2);
+                while (times.length < slots) times.push("");
+                const iv = laterSpread(times);
+                const mins = parseTeeTime(val);
+                times[idx] = mins != null ? formatTeeTime(mins) : val;
+                // Editing the first tee moves the whole sheet; editing the
+                // second sets the spread and re-lays everything after it.
+                const t0 = parseTeeTime(times[0]);
+                if (idx === 0 && t0 != null) {
+                  for (let i = 1; i < slots; i++) times[i] = formatTeeTime(t0 + iv * i);
+                } else if (idx === 1 && t0 != null) {
+                  const t1 = parseTeeTime(times[1]);
+                  if (t1 != null && t1 > t0) {
+                    for (let i = 2; i < slots; i++) times[i] = formatTeeTime(t0 + (t1 - t0) * i);
                   }
                 }
                 setRoundTeeTime(times.join("|"));
@@ -2118,152 +2128,27 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
         </div>
       )}
 
-      {tab === "matches" && (() => {
-        const tr = tRounds.find(t => t.round_number === matchRound);
-        const mLock = lockForRound(roundLocks, matchRound);
-        const course = courses.find(c => c.id === (mLock?.course_id || tr?.course_id));
-        const hcpMode = getRoundHandicapMode({ roundLocks, round: matchRound, tRounds });
-
-        // CH preview for the match builder. Routed through the same resolver
-        // the scoring engine uses, so once a round is locked this panel shows
-        // the strokes that will ACTUALLY be played — not a live re-derivation
-        // that would disagree with the leaderboard.
-        const getPlayerCH = (pid) => getRoundCH({
-          roundLocks, round: matchRound, pid, players: tPlayers,
-          course, chOverrides: hcpOverrides, teeAssignments, roundTee: tr?.tee_box,
-        });
-
-        // Stroke situation: given selected players, compute who gets strokes vs who
-        const strokeSituation = () => {
-          const allPids = [...matchTeamA, ...matchTeamB];
-          if (allPids.length < 2) return null;
-          const chs = allPids.map(pid => ({ pid, ch: getPlayerCH(pid) }));
-          const minCH = Math.min(...chs.map(c => c.ch));
-          if (hcpMode === "full") {
-            return chs.map(({pid, ch}) => ({ pid, strokes: ch }));
-          }
-          return chs.map(({pid, ch}) => ({ pid, strokes: ch - minCH }));
-        };
-
-        const allSelected = [...matchTeamA, ...matchTeamB];
-        const strokes = strokeSituation();
-
-        // Players already committed to a match in THIS round drop out of the
-        // pool — a player plays one match per round, so offering them again
-        // only invites double-booking. Derived from `matches`, so deleting a
-        // match below hands its players straight back.
-        const matchedPids = new Set(
-          matches.filter(m => m.round === matchRound).flatMap(m => [...(m.teamA || []), ...(m.teamB || [])])
-        );
-        // An in-progress selection stays visible even if somehow already
-        // matched, otherwise it could never be tapped off again.
-        const availablePlayers = (players, sel) =>
-          players.filter(p => !matchedPids.has(p.player_id) || sel.includes(p.player_id));
-
-        return (
-        <div>
-          {/* Round tabs */}
-          <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
-            {[1,2,3,4].map(r => (
-              <button key={r} onClick={() => { setMatchRound(r); setMatchTeamA([]); setMatchTeamB([]); }} style={{
-                flex: 1, padding: "7px 4px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
-                background: matchRound === r ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
-                border: `1px solid ${matchRound === r ? "transparent" : BC.bdr}`,
-                color: matchRound === r ? "#0a0804" : BC.t2,
-              }}>Rd {r}</button>
-            ))}
-          </div>
-
-          {/* Player pool — two columns by team */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-            {[["A", teamAPlayers], ["B", teamBPlayers]].map(([tid, players]) => {
-              const team = teams[tid];
-              const sel = tid === "A" ? matchTeamA : matchTeamB;
-              const setSel = tid === "A" ? setMatchTeamA : setMatchTeamB;
-              const pool = availablePlayers(players, sel);
-              return (
-                <div key={tid}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: team.accent, letterSpacing: 1, marginBottom: 5 }}>{teamNames?.[tid]}</div>
-                  {pool.length === 0 && (
-                    <div style={{ fontSize: 10, color: BC.t3, padding: "7px 8px", borderRadius: 8, border: `1px dashed ${BC.bdr}`, textAlign: "center" }}>
-                      {players.length ? `All matched in Rd ${matchRound}` : "No players"}
-                    </div>
-                  )}
-                  {pool.map(p => {
-                    const isSelected = sel.includes(p.player_id);
-                    const ch = getPlayerCH(p.player_id);
-                    return (
-                      <button key={p.player_id} onClick={() => setSel(prev => isSelected ? prev.filter(x => x !== p.player_id) : [...prev, p.player_id])} style={{
-                        width: "100%", padding: "7px 8px", marginBottom: 3, borderRadius: 8, cursor: "pointer", textAlign: "left",
-                        background: isSelected ? team.color + "55" : BC.inp,
-                        border: `1.5px solid ${isSelected ? team.accent : BC.bdr}`,
-                        display: "flex", alignItems: "center", justifyContent: "space-between",
-                      }}>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: isSelected ? team.accent : BC.t2 }}>{p.name}</span>
-                        <span style={{ fontSize: 10, color: BC.t3 }}>CH {ch}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Stroke situation — shown when all players selected */}
-          {strokes && allSelected.length >= 2 && (
-            <div style={{ background: BC.card, borderRadius: 10, padding: "10px 12px", marginBottom: 10, border: `1px solid ${BC.bdr}` }}>
-              <div style={{ fontSize: 9, color: BC.t3, fontWeight: 700, letterSpacing: 1, marginBottom: 8 }}>
-                STROKE SITUATION · {hcpMode === "low_man" ? "Play Off Low Man" : "Full Strokes"}
-              </div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {strokes.map(({ pid, strokes: s }) => {
-                  const p = tPlayers.find(t => t.player_id === pid);
-                  const team = teams[p?.team] || teams.B;
-                  return (
-                    <div key={pid} style={{ background: team.color + "33", border: `1px solid ${team.accent}44`, borderRadius: 8, padding: "5px 10px", textAlign: "center" }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: team.accent }}>{p?.name?.split(" ")[0]}</div>
-                      <div style={{ fontSize: 13, fontWeight: 900, color: s === 0 ? BC.gold : BC.t1 }}>{s === 0 ? "Scratch" : `+${s}`}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Create Match button */}
-          {matchTeamA.length > 0 && matchTeamB.length > 0 && (
-            <button onClick={saveMatch} style={{ ...BtnStyle, marginBottom: 14 }}>
-              Create Match — {matchTeamA.map(pid => tPlayers.find(p=>p.player_id===pid)?.name?.split(" ")[0]).join("/")} vs {matchTeamB.map(pid => tPlayers.find(p=>p.player_id===pid)?.name?.split(" ")[0]).join("/")}
-            </button>
-          )}
-
-          {/* Existing matches by round */}
-          {[1,2,3,4].map(r => {
-            const rndM = matches.filter(m => m.round === r);
-            if (!rndM.length) return null;
-            const trR = tRounds.find(t => t.round_number === r);
-            const fmt = FORMATS.find(f => f.id === trR?.format);
-            return (
-              <div key={r} style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 10, color: BC.gold, fontWeight: 700, marginBottom: 8, letterSpacing: 1 }}>ROUND {r}{fmt ? ` · ${fmt.label}` : ""}</div>
-                {rndM.map(m => (
-                  <div key={m.id} style={{ background: BC.card, borderRadius: 10, padding: "8px 12px", marginBottom: 5, border: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ flex: 1, fontSize: 11 }}>
-                      <span style={{ color: teams.A.accent+"99", fontWeight: 600 }}>{m.teamANames?.join(" / ")}</span>
-                      <span style={{ color: BC.t3 }}> vs </span>
-                      <span style={{ color: teams.B.accent+"99", fontWeight: 600 }}>{m.teamBNames?.join(" / ")}</span>
-                    </div>
-                    <button onClick={() => onSetMatch({ ...m, _delete: true })} style={{
-                      fontSize: 9, padding: "3px 7px", borderRadius: 6, border: `1px solid ${BC.danger}22`, background: "transparent", color: BC.danger, cursor: "pointer", flexShrink: 0,
-                    }}>✕</button>
-                  </div>
-                ))}
-              </div>
-            );
-          })}
-        </div>
-        );
-      })()}
+      {tab === "matches" && (
+        <MatchSetup
+          round={matchRound}
+          setRound={setMatchRound}
+          tRounds={tRounds}
+          courses={courses}
+          tPlayers={tPlayers}
+          matches={matches}
+          teams={teams}
+          teamNames={teamNames}
+          hcpOverrides={hcpOverrides}
+          teeAssignments={teeAssignments}
+          roundLocks={roundLocks}
+          storedGroups={groupsFromDb?.[matchRound] || null}
+          onSaveGroups={onSaveGroups}
+          onSetRound={onSetRound}
+          onSetMatch={onSetMatch}
+          notify={notify}
+          confirm={confirm}
+        />
+      )}
 
       {tab === "courses" && (
         <div>
@@ -4989,6 +4874,9 @@ export default function App() {
   const [syncing, setSyncing] = useState(false);
   const [hcpOverridesData, setHcpOverridesData] = useState({}); // { round: { pid: value } }
   const [teeAssignmentsData, setTeeAssignmentsData] = useState({});
+  // ── Playing groups ── { round: [ [pid, …], … ] }. Who tees off together;
+  // group i goes off at slot i of the round's tee_time list. See lib/groups.js.
+  const [groupsData, setGroupsData] = useState({});
   // ── Round handicap locks ── { round: lockDoc }. See src/lib/roundLocks.js.
   // Once a round is locked, its scoring reads frozen handicaps and ignores
   // every later edit to a player's index, override, tee, or the course.
@@ -5013,9 +4901,37 @@ export default function App() {
   // menuOpen changes.
   const popupOpenRef = useRef(false);
 
-  // TEMPORARY — measured by ViewportDebug so we can compare the nav's real
-  // bottom edge against window.innerHeight. Remove with the debug block.
+  // The bottom nav. Measured by ViewportDebug (temporary, remove with the
+  // debug block) and — permanently — by the effect below, which feeds the
+  // scroll area's bottom clearance.
   const navRef = useRef(null);
+
+  // ── Bottom clearance for the fixed nav ───────────────────────────
+  // The nav is position:fixed over the bottom of the viewport, so the
+  // scroll area has to reserve room or its last rows sit behind the bar
+  // with no way to scroll them into view. That clearance used to be the
+  // constant 64px + safe-area, which is only correct while the nav is
+  // exactly the height it is at the default text size. It is not: the
+  // labels grow with the OS text-size setting (iOS text-size-adjust scales
+  // them on a page that never opted out), and once the bar is taller than
+  // 64px the tail of every long screen becomes unreachable — the "won't
+  // scroll" report. Measuring is the only thing that stays true.
+  const [navH, setNavH] = useState(64);
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el) return;
+    const measure = () => setNavH(Math.ceil(el.getBoundingClientRect().height));
+    measure();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measure);
+      return () => window.removeEventListener("resize", measure);
+    }
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+    // `user` is in the deps because the nav only exists once past the login
+    // screen — without it the ref is null on mount and never measured.
+  }, [user]);
 
   const notify = useCallback((msg, type = "success") => {
     setNotif({ msg, type });
@@ -5133,6 +5049,11 @@ export default function App() {
       // intentionally ignored so old values can't be misread as CH.
       rows.forEach(r => { if (r.round_number) data[r.round_number] = r.ch_overrides || {}; });
       setHcpOverridesData(data);
+    }));
+    unsubs.push(db.subscribe(GROUPS_COL, f, rows => {
+      const data = {};
+      rows.forEach(r => { if (r.round_number) data[r.round_number] = decodeGroups(r.groups); });
+      setGroupsData(data);
     }));
     unsubs.push(db.subscribe(ROUND_LOCKS_COL, f, rows => {
       const data = {};
@@ -5296,6 +5217,14 @@ export default function App() {
     await db.upsert("bc_tournament_settings", { id: editionDocId("bc_settings_main"), tournament_id: TOURNAMENT_ID, skins_pot: amt });
   }, []);
   const onSetRound = useCallback(async (r) => { await db.upsert("bc_rounds", r); }, []);
+  // Groups are written whole — the document is one round's list, and a
+  // partial update of an array has no meaning here.
+  const onSaveGroups = useCallback(async (round, groups) => {
+    await db.upsert(GROUPS_COL, {
+      id: groupsDocId(round), tournament_id: TOURNAMENT_ID, round_number: round,
+      groups: encodeGroups(groups),
+    });
+  }, []);
   const onSetMatch = useCallback(async (m) => {
     if (m._delete) { await db.delete("bc_matches", m.id); }
     else { await db.upsert("bc_matches", m); }
@@ -5469,11 +5398,12 @@ export default function App() {
       {/* Content */}
       <div className="bc-app-body" style={{
         flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden",
-        // Bottom clearance for the FIXED nav bar (restored pre-2026-07-21
-        // layout). The nav is position:fixed over the viewport bottom, so the
-        // scroll area must reserve room or its last rows hide behind the bar.
-        // Nav height ≈ 56 (button) + 8 + safe-area-inset-bottom, so clear that.
-        padding: `12px 10px calc(64px + env(safe-area-inset-bottom, 0px)) 10px`,
+        // Bottom clearance for the FIXED nav bar. The nav is position:fixed
+        // over the viewport bottom, so the scroll area must reserve room or
+        // its last rows hide behind the bar with nothing left to scroll.
+        // `navH` is the bar's MEASURED height (safe-area padding included) —
+        // see the ResizeObserver above for why a constant isn't enough.
+        padding: `12px 10px ${navH + 8}px 10px`,
         // Vertical centering for short views (affects EVERY tab). This was
         // previously `display:grid; align-content:safe center`, but Safari
         // doesn't support the `safe` overflow-alignment keyword — it drops
@@ -5549,6 +5479,7 @@ export default function App() {
             tRounds={enrichedRounds}
             tPlayers={tPlayers}
             courses={courses}
+            groups={groupsData}
           />
         )}
         {view === "betting" && (
@@ -5642,6 +5573,8 @@ export default function App() {
             }}
             hcpOverridesFromDb={hcpOverridesData}
             teeAssignmentsFromDb={teeAssignmentsData}
+            groupsFromDb={groupsData}
+            onSaveGroups={onSaveGroups}
             roundLocks={roundLocksData}
             notify={notify}
           />
