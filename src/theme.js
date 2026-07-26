@@ -168,6 +168,14 @@ export const teamColor     = (tid) => (tid === "A" ? BC.teamA     : BC.teamB);
 export const teamColorDim  = (tid) => (tid === "A" ? BC.teamADim  : BC.teamBDim);
 export const teamColorGlow = (tid) => (tid === "A" ? BC.teamAGlow : BC.teamBGlow);
 
+// ── Settled vs in-play ink ──
+// A result that's still moving is drawn lighter than one that's banked, so
+// scanning a board separates "this is decided" from "this could change"
+// before you read a single number. Appended as an alpha byte, which every BC
+// color token supports since they're all 6-digit hex.
+export const LIVE_ALPHA = "99"; // 60%
+export const ink = (hex, settled) => (settled ? hex : `${hex}${LIVE_ALPHA}`);
+
 // ── Player-name text color ──
 // Single source of truth for how player names read in rosters and lists.
 // Brightening them updates every instance that routes through here. Uses the

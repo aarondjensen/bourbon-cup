@@ -93,7 +93,7 @@ export const FORMATS = [
   { id: "team_total",     label: "Team Total",         desc: "Combined team net per hole vs combined team net. Lower combined wins the hole.",        nassau: { front: 1, back: 1, overall: 2 }, perSide: 2 },
   { id: "pinehurst",      label: "Pinehurst",          desc: "Partners each drive, swap balls, then choose best to finish as scramble.",              nassau: { front: 1, back: 1, overall: 2 }, perSide: 2 },
   { id: "team_best_ball", label: "Team Best Ball",     desc: "Full team format — best of all team-member nets per hole.",                             nassau: { front: 1, back: 1, overall: 2 }, perSide: null },
-  { id: "double_dot",     label: "Double Dot",         desc: "Match play with an automatic bonus point for winning the last 3 holes.",                nassau: { front: 1, back: 1, overall: 2 }, perSide: 2 },
+  { id: "double_dot",     label: "Double Dot",         desc: "2-man Hi/Lo. Each hole: a dot for the low ball, a dot for the high ball. Ties win nothing.", nassau: { front: 1, back: 1, overall: 2 }, perSide: 2 },
   { id: "shamble",        label: "Shamble",            desc: "All players drive, choose best drive, each plays their own ball in.",                   nassau: { front: 1, back: 1, overall: 2 }, perSide: 2 },
   { id: "scramble",       label: "2-Man Scramble",     desc: "Both hit every shot, choose best ball location, both play from there.",                 nassau: { front: 1, back: 1, overall: 2 }, perSide: 2 },
   { id: "tilt",           label: "2-Man Tilt",         desc: "2-man match play — net comparison per hole.",                                           nassau: { front: 1, back: 1, overall: 2 }, perSide: 2 },
