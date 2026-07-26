@@ -509,14 +509,21 @@ function RoundSection({
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  Board header — YEAR · cup mark · CITY
+//  Board header — the cup mark over YEAR · CITY
 // ══════════════════════════════════════════════════════════════════
 //  Rides above the cup total in the pinned block, so the thing that never
 //  changes (which Cup this is) sits over the thing that changes constantly
-//  (the score). Both flanks hug the mark rather than pushing out to the
-//  card edges: the three read as one centred cluster, which is what makes
-//  the mark the anchor of the screen instead of a decoration floating
-//  between two corner labels.
+//  (the score).
+//
+//  Year and city sit on ONE centred caption under the mark rather than
+//  flanking it. Flanking them was centred only in the geometric sense: the
+//  mark held the middle column, but "GAYLORD, MI" carries near three times
+//  the ink of "2025", so all of that weight piled up on one side and the
+//  cluster read as leaning right. Every fix that keeps the three abreast is
+//  a balancing act against label lengths that change with the tournament —
+//  a longer city, a two-word one — so the row would need re-tuning each
+//  time it changed. Stacking is symmetric by construction: one centred
+//  mark, one centred line, nothing to balance and nothing to re-tune.
 //
 //  The year comes from the active edition, not the calendar — the same
 //  getTournamentYear() the login screen uses — so a director browsing 2024
@@ -529,24 +536,19 @@ function RoundSection({
 function BoardHeader() {
   return (
     <div style={{
-      display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center",
-      gap: 12, padding: "0 2px 9px",
+      display: "flex", flexDirection: "column", alignItems: "center",
+      gap: 5, padding: "0 2px 9px",
     }}>
       <div style={{
-        textAlign: "right", fontSize: 12, fontWeight: 800, letterSpacing: 2,
-        color: BC.t2, whiteSpace: "nowrap",
-      }}>{getTournamentYear()}</div>
-
-      <div style={{
-        width: 26, height: 30, background: BC.amber, flexShrink: 0,
+        width: 30, height: 34, background: BC.amber, flexShrink: 0,
         WebkitMask: `url(${TROPHY_SILHOUETTE}) center/contain no-repeat`,
         mask: `url(${TROPHY_SILHOUETTE}) center/contain no-repeat`,
       }} />
 
       <div style={{
-        textAlign: "left", fontSize: 12, fontWeight: 800, letterSpacing: 2,
-        color: BC.t2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-      }}>{TOURNAMENT_LOCATION.toUpperCase()}</div>
+        fontSize: 11, fontWeight: 800, letterSpacing: 2.4, color: BC.t2,
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
+      }}>{getTournamentYear()} · {TOURNAMENT_LOCATION.toUpperCase()}</div>
     </div>
   );
 }
