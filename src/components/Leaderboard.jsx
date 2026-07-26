@@ -312,23 +312,23 @@ function MatchTeamColumn({ tid, names, isLeader, settled }) {
 // Each nine carries its OWN settled state, not the match's — a front nine
 // can be in the books while the back is still being played, and that's
 // precisely the distinction worth drawing here.
-function NineStatus({ label, st }) {
+const nineColor = (st) => {
   const lead = st.margin > 0 ? "A" : st.margin < 0 ? "B" : null;
-  const base = lead ? teamHex(lead) : st.played ? BC.t2 : BC.t3;
-  return (
-    <div style={{ textAlign: "center", minWidth: 24, flexShrink: 0 }}>
-      <div style={{ fontSize: 8, fontWeight: 800, letterSpacing: 0.6, color: BC.t3, lineHeight: 1 }}>
-        {label}
-      </div>
-      <div style={{
-        fontSize: 11, fontWeight: 800, lineHeight: 1.2, marginTop: 3, whiteSpace: "nowrap",
-        color: ink(base, st.complete),
-      }}>
-        {statusText(st)}
-      </div>
-    </div>
-  );
-}
+  return ink(lead ? teamHex(lead) : st.played ? BC.t2 : BC.t3, st.complete);
+};
+
+// Cells of the centre cluster. minWidth on each keeps the columns from
+// jumping as the text inside changes width ("AS" → "3&2" → "—"); lineHeight
+// is pinned to 1 so the two rows sit a predictable distance apart once the
+// grid has aligned them on their baselines.
+const NINE_LABEL = {
+  fontSize: 8, fontWeight: 800, letterSpacing: 0.6, color: BC.t3,
+  lineHeight: 1, minWidth: 24, textAlign: "center",
+};
+const NINE_VALUE = {
+  fontSize: 11, fontWeight: 800, lineHeight: 1, whiteSpace: "nowrap",
+  minWidth: 24, textAlign: "center",
+};
 
 // ══════════════════════════════════════════════════════════════════
 //  Match card
@@ -400,22 +400,37 @@ function MatchCard({
             matter how long the status text gets. */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 9 }}>
           <MatchTeamColumn tid="A" names={aNames} isLeader={leader === "A"} settled={done} />
-          {/* F9 · overall · B9. The tighter internal gap groups the three
-              results as one cluster, so they read together rather than
-              drifting toward the name column each one happens to sit near. */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
-            {showFront && <NineStatus label="F9" st={frontSt} />}
-            <div style={{ textAlign: "center", minWidth: 52 }}>
-              <div style={{ fontSize: 17, fontWeight: 800, lineHeight: 1.05, color: statusColor }}>
-                {statusLabel}
-              </div>
-              {/* The chevron rides on the sub-line rather than taking a row of
-                  its own, so the expand affordance costs no vertical space. */}
-              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.9, color: BC.t3, marginTop: 2 }}>
-                {subLabel} {expanded ? "▴" : "▾"}
-              </div>
+          {/* F9 · overall · B9 as a real two-row grid rather than three
+              self-contained stacks. `alignItems: baseline` makes each row
+              sit on one shared baseline, so F9 / status / B9 line up along
+              the bottoms of their text despite the 8px-vs-17px size gap,
+              and the same for the per-nine results against THRU below.
+              Column count follows what's actually shown, so a Traditional
+              round collapses to the single centre column. The tighter
+              internal gap groups the three as one cluster, so they read
+              together rather than drifting toward whichever name column
+              each one happens to sit near. */}
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${1 + (showFront ? 1 : 0) + (showBack ? 1 : 0)}, auto)`,
+            alignItems: "baseline", justifyItems: "center",
+            columnGap: 7, rowGap: 3,
+          }}>
+            {/* Top row — the three match states. */}
+            {showFront && <div style={NINE_LABEL}>F9</div>}
+            <div style={{ fontSize: 17, fontWeight: 800, lineHeight: 1, minWidth: 52, textAlign: "center", color: statusColor }}>
+              {statusLabel}
             </div>
-            {showBack && <NineStatus label="B9" st={backSt} />}
+            {showBack && <div style={NINE_LABEL}>B9</div>}
+
+            {/* Bottom row — each one's detail, directly beneath it. The
+                chevron rides on THRU rather than taking a row of its own,
+                so the expand affordance costs no vertical space. */}
+            {showFront && <div style={{ ...NINE_VALUE, color: nineColor(frontSt) }}>{statusText(frontSt)}</div>}
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.9, lineHeight: 1, minWidth: 52, textAlign: "center", color: BC.t3 }}>
+              {subLabel} {expanded ? "▴" : "▾"}
+            </div>
+            {showBack && <div style={{ ...NINE_VALUE, color: nineColor(backSt) }}>{statusText(backSt)}</div>}
           </div>
           <MatchTeamColumn tid="B" names={bNames} isLeader={leader === "B"} settled={done} />
         </div>
