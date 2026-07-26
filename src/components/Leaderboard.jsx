@@ -34,8 +34,9 @@ import { BC, ink, teamColor } from "../theme";
 import {
   FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT,
   POINT_METHOD_TRADITIONAL, TROPHY_SILHOUETTE, CUP_POINTS_TO_WIN,
-  describeAllowance,
+  describeAllowance, TOURNAMENT_LOCATION,
 } from "../constants";
+import { getTournamentYear } from "../firebase";
 import {
   computeMatchResult, getRoundCourseCtx, higherIsBetter, totalUnit,
   segmentState, statusText, segmentLeader, getRoundAllowance,
@@ -57,6 +58,61 @@ const matchPot = (m) => {
   const n = m.nassau || NASSAU_DEFAULT;
   return (n.front || 0) + (n.back || 0) + (n.overall || 0);
 };
+
+// Same question asked of a ROUND rather than a match: what is one match in
+// this round worth? Falls back through the round's own Nassau split, then
+// the format's default, so a round saved before a field existed still
+// prices correctly.
+const roundMatchPot = (tr) => {
+  const d = FORMATS.find((f) => f.id === tr.format)?.nassau || NASSAU_DEFAULT;
+  const n = tr.nassau || {};
+  const nassauTotal =
+    (n.front ?? tr.nassau_front ?? d.front ?? 0) +
+    (n.back ?? tr.nassau_back ?? d.back ?? 0) +
+    (n.overall ?? tr.nassau_overall ?? d.overall ?? 0);
+  if ((tr.point_method || "") === POINT_METHOD_TRADITIONAL) {
+    return tr.traditional_points ?? nassauTotal;
+  }
+  return nassauTotal;
+};
+
+// How many matches a round will produce once it's built, from the format's
+// group size and the roster. A format with no group size (a full-team
+// format) is one match however many players there are.
+const roundMatchCount = (tr, playersPerSide) => {
+  if (!playersPerSide) return 0;
+  const per = FORMATS.find((f) => f.id === tr.format)?.perSide;
+  if (per == null) return 1;
+  return Math.max(1, Math.ceil(playersPerSide / per));
+};
+
+// ── Cup points on offer ──────────────────────────────────────────
+// Total points the cup is worth, taken from the SCHEDULE rather than from
+// whichever matches happen to have been created so far. That distinction is
+// the whole point: sizing the cup by created matches meant the target
+// climbed through setup — 8.5 with one round entered, higher with two —
+// when the number everyone is playing for was fixed before a ball was hit.
+//
+// A round whose matches exist is priced off those matches, since the
+// director may have built something the format's group size wouldn't
+// predict. Only a round that hasn't been built yet gets projected.
+function cupPointsOnOffer(matches, tRounds, playersPerSide) {
+  const rounds = new Set([
+    ...(tRounds || []).map((t) => t.round_number),
+    ...(matches || []).map((m) => m.round),
+  ]);
+  let total = 0;
+  rounds.forEach((rnd) => {
+    const built = (matches || []).filter((m) => m.round === rnd);
+    if (built.length) {
+      total += built.reduce((sum, m) => sum + matchPot(m), 0);
+      return;
+    }
+    const tr = (tRounds || []).find((t) => t.round_number === rnd);
+    if (tr) total += roundMatchCount(tr, playersPerSide) * roundMatchPot(tr);
+  });
+  return total;
+}
 
 // Has every point in this match been decided? A match can be "closed out"
 // (3&2) while a Nassau segment is still live, so the result being final and
@@ -453,6 +509,49 @@ function RoundSection({
 }
 
 // ══════════════════════════════════════════════════════════════════
+//  Board header — YEAR · cup mark · CITY
+// ══════════════════════════════════════════════════════════════════
+//  Rides above the cup total in the pinned block, so the thing that never
+//  changes (which Cup this is) sits over the thing that changes constantly
+//  (the score). Both flanks hug the mark rather than pushing out to the
+//  card edges: the three read as one centred cluster, which is what makes
+//  the mark the anchor of the screen instead of a decoration floating
+//  between two corner labels.
+//
+//  The year comes from the active edition, not the calendar — the same
+//  getTournamentYear() the login screen uses — so a director browsing 2024
+//  data can't be shown a header that says 2026. The city is fixed
+//  tournament identity from constants.
+//
+//  The mark is drawn as a CSS mask rather than an <img> for the same reason
+//  the nav icon is: the asset is a flat PNG silhouette, so masking is the
+//  only way it takes the exact live theme accent in both light and dark.
+function BoardHeader() {
+  return (
+    <div style={{
+      display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center",
+      gap: 12, padding: "0 2px 9px",
+    }}>
+      <div style={{
+        textAlign: "right", fontSize: 12, fontWeight: 800, letterSpacing: 2,
+        color: BC.t2, whiteSpace: "nowrap",
+      }}>{getTournamentYear()}</div>
+
+      <div style={{
+        width: 26, height: 30, background: BC.amber, flexShrink: 0,
+        WebkitMask: `url(${TROPHY_SILHOUETTE}) center/contain no-repeat`,
+        mask: `url(${TROPHY_SILHOUETTE}) center/contain no-repeat`,
+      }} />
+
+      <div style={{
+        textAlign: "left", fontSize: 12, fontWeight: 800, letterSpacing: 2,
+        color: BC.t2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+      }}>{TOURNAMENT_LOCATION.toUpperCase()}</div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
 //  TeamLeaderboard
 // ══════════════════════════════════════════════════════════════════
 export function TeamLeaderboard({
@@ -554,9 +653,18 @@ export function TeamLeaderboard({
     return t;
   }, [matchResults]);
 
+  // Roster size per side, which is what turns a format into a match count.
+  // Takes the smaller side so an in-progress roster can't inflate the cup;
+  // falls back to the larger one when only one side has been entered.
+  const playersPerSide = useMemo(() => {
+    const a = (tPlayers || []).filter((p) => p.team === "A").length;
+    const b = (tPlayers || []).filter((p) => p.team === "B").length;
+    return Math.min(a, b) || Math.max(a, b);
+  }, [tPlayers]);
+
   const totalAvail = useMemo(
-    () => Math.max(matches.reduce((s, m) => s + matchPot(m), 0), totals.A + totals.B),
-    [matches, totals]
+    () => Math.max(cupPointsOnOffer(matches, tRounds, playersPerSide), totals.A + totals.B),
+    [matches, tRounds, playersPerSide, totals]
   );
   // The configured target wins over the derived one — see CUP_POINTS_TO_WIN.
   // The fallback still applies when it's unset, and it's also what decides
@@ -594,13 +702,39 @@ export function TeamLeaderboard({
 
   return (
     <div style={{ fontFamily: FONT }}>
+      {/* ── The pinned board ──
+          Header row plus the cup total, stuck to the top of the scroll
+          area. Everything below it — the rounds, every match — is detail
+          you read AGAINST the cup score, so the cup score should never be
+          the thing you have to scroll back up to find. Same technique as
+          the Admin tab bar: the sticky wrapper is painted in the page bg
+          and carries the gap below it as padding, so rounds scroll cleanly
+          under it with nothing showing through the seam. */}
+      <div style={{
+        position: "sticky", top: 0, zIndex: 5,
+        background: BC.bg, padding: "6px 0 12px",
+      }}>
+      {/* A sticky box pins to the top of the scroll container's CONTENT
+          box, not its padding box — so the body's top padding stays a live
+          strip of scrolling content above the pinned board, and hole strips
+          slide through it. This paints that strip in the page bg. It rides
+          directly above the wrapper (bottom:100%) rather than being sized
+          to the body's padding, so it stays correct if that padding ever
+          changes; the container clips whatever hangs past the top edge.
+          The leftover band reads as the breathing room above the pin. */}
+      <div style={{
+        position: "absolute", left: 0, right: 0, bottom: "100%",
+        height: 40, background: BC.bg, pointerEvents: "none",
+      }} />
+      <BoardHeader />
+
       {/* ── Cup total ──
           Team names, the two totals in team colors, and a single bar
           that fills inward from both edges. The tick in the middle is
           the clinch line, so "who's actually winning" is one glance. */}
       <div style={{
         background: BC.card, borderRadius: 14, border: `1px solid ${BC.bdr}`,
-        padding: "13px 14px 12px", marginBottom: 12,
+        padding: "13px 14px 12px",
       }}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -675,6 +809,7 @@ export function TeamLeaderboard({
             {(clincher === "A" ? tA.name : tB.name).toUpperCase()} WIN THE CUP
           </div>
         )}
+      </div>
       </div>
 
       {/* ── Rounds ── */}
