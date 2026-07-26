@@ -222,7 +222,7 @@ function Notif({ notif }) {
 }
 
 // ── Login Screen ──
-function LoginScreen({ players, onLogin, teams, darkMode, tournamentName }) {
+function LoginScreen({ players, onLogin, teams, darkMode, tournamentName, tournamentLocation }) {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
@@ -274,7 +274,7 @@ function LoginScreen({ players, onLogin, teams, darkMode, tournamentName }) {
       {/* Title — sits above the silhouette, outside content card */}
       <div style={{ textAlign: "center", position: "relative", zIndex: 1, marginBottom: 14 }}>
         <div style={{ fontSize: "clamp(20px, 8vw, 28px)", fontWeight: 800, color: BC.gold, letterSpacing: 2 }}>{(tournamentName || TOURNAMENT_TITLE).toUpperCase()}</div>
-        <div style={{ fontSize: "clamp(10px, 3vw, 12px)", color: BC.t3, letterSpacing: "0.3em", marginTop: 3 }}>{getTournamentYear()} {TOURNAMENT_LOCATION.toUpperCase()}</div>
+        <div style={{ fontSize: "clamp(10px, 3vw, 12px)", color: BC.t3, letterSpacing: "0.3em", marginTop: 3 }}>{getTournamentYear()} {(tournamentLocation || TOURNAMENT_LOCATION).toUpperCase()}</div>
       </div>
 
       {/* Desktop centering wrapper */}
@@ -897,7 +897,7 @@ function ChDeltaBadge({ delta }) {
   );
 }
 
-function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, onSaveTournamentName, hcpOverridesFromDb, teeAssignmentsFromDb, notify, roundLocks }) {
+function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, notify, roundLocks }) {
   const [tab, setTab] = useState("players");
   const [editTeamNames, setEditTeamNames] = useState({ A: "", B: "" });
   const [editingTeam, setEditingTeam] = useState(null);
@@ -917,7 +917,9 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   const [brandLogoEdit, setBrandLogoEdit] = useState({ A: null, B: null }); // uploaded logo data URL per team
   const [brandBusy, setBrandBusy] = useState(null); // team id mid-extraction
   const [editTournamentName, setEditTournamentName] = useState(tournamentName || "");
+  const [editTournamentLocation, setEditTournamentLocation] = useState(tournamentLocation || "");
   useEffect(() => { setEditTournamentName(tournamentName || ""); }, [tournamentName]);
+  useEffect(() => { setEditTournamentLocation(tournamentLocation || ""); }, [tournamentLocation]);
   useEffect(() => {
     setBrandEdit({ A: brand?.teamA?.color || "", B: brand?.teamB?.color || "" });
     setBrandLogoEdit({ A: brand?.teamA?.logo || null, B: brand?.teamB?.logo || null });
@@ -2559,23 +2561,41 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             <span style={{ fontSize: 11, color: BC.t3 }}>Switch / new ›</span>
           </button>
 
-          {/* Tournament name */}
+          {/* Tournament identity — name and location.
+              One card and one Save for both: they're the same sentence on
+              every screen that shows them ("The Bourbon Cup · 2025 · Gaylord,
+              MI"), and a director renaming the tournament for a new venue
+              would otherwise have to remember two separate saves. An empty
+              field falls back to its constant rather than saving blank, so
+              the header can't end up with a hole in it. */}
           <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: 14, marginBottom: 16 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Tournament Name</div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input
-                value={editTournamentName}
-                onChange={e => setEditTournamentName(e.target.value)}
-                placeholder={TOURNAMENT_TITLE}
-                style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: 14, fontWeight: 700, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
-              />
+            <div style={{ fontSize: 10, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Tournament</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {[
+                { key: "name", val: editTournamentName, set: setEditTournamentName, ph: TOURNAMENT_TITLE, lbl: "Name" },
+                { key: "location", val: editTournamentLocation, set: setEditTournamentLocation, ph: TOURNAMENT_LOCATION, lbl: "Location" },
+              ].map(f => (
+                <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: BC.t3, letterSpacing: 0.5, width: 52, flexShrink: 0, textTransform: "uppercase" }}>{f.lbl}</span>
+                  <input
+                    value={f.val}
+                    onChange={e => f.set(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                    placeholder={f.ph}
+                    style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: 14, fontWeight: 700, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
+                  />
+                </div>
+              ))}
               <button
-                onClick={() => onSaveTournamentName(editTournamentName.trim() || TOURNAMENT_TITLE)}
-                style={{ flexShrink: 0, fontSize: 12, fontWeight: 700, color: "#0a0804", background: BC.amber, border: "none", borderRadius: 8, padding: "0 16px", cursor: "pointer" }}
+                onClick={() => onSaveTournament({
+                  name: editTournamentName.trim() || TOURNAMENT_TITLE,
+                  location: editTournamentLocation.trim() || TOURNAMENT_LOCATION,
+                })}
+                style={{ alignSelf: "flex-end", fontSize: 12, fontWeight: 700, color: "#0a0804", background: BC.amber, border: "none", borderRadius: 8, padding: "9px 18px", cursor: "pointer" }}
               >Save</button>
             </div>
             <div style={{ fontSize: 11, color: BC.t3, marginTop: 8, lineHeight: 1.5 }}>
-              Shown on the login screen. The year and location come from the active edition.
+              Both show on the login screen; the location also sits under the cup mark on the leaderboard. The year follows the active edition.
             </div>
           </div>
 
@@ -4929,9 +4949,13 @@ export default function App() {
   // The saved team-name overrides (from the bc_settings/team_names doc).
   // Defaults come from constants so the fallback names live in one place.
   const [teamNames, setTeamNames] = useState(DEFAULT_TEAM_NAMES);
-  // Director-set tournament name (bc_settings/tournament). Falls back to the
-  // TOURNAMENT_TITLE constant, so the login screen always has a name.
+  // Director-set tournament identity (bc_settings/tournament). Both fall back
+  // to their constants, so the login screen always has a name and a place
+  // even before an edition has been through Admin → Tournament. The YEAR is
+  // deliberately not one of these — it follows the active edition (see
+  // firebase.getTournamentYear), so it can't disagree with the data on screen.
   const [tournamentName, setTournamentName] = useState(TOURNAMENT_TITLE);
+  const [tournamentLocation, setTournamentLocation] = useState(TOURNAMENT_LOCATION);
   // Theme state — toggled via the More menu. The actual color values live in
   // the module-level BC object (mutated by applyBCTheme); this state's only
   // job is to trigger a top-level re-render so children re-read fresh BC
@@ -5095,6 +5119,7 @@ export default function App() {
       if (tn) setTeamNames({ A: tn.teamA || DEFAULT_TEAM_NAMES.A, B: tn.teamB || DEFAULT_TEAM_NAMES.B });
       const tourn = rows.find(r => r.id === editionDocId("tournament"));
       setTournamentName(tourn?.name?.trim() || TOURNAMENT_TITLE);
+      setTournamentLocation(tourn?.location?.trim() || TOURNAMENT_LOCATION);
       // Branding: apply to the live BC theme immediately (using the current
       // mode via ref), then store it so a later theme toggle re-applies it.
       const br = rows.find(r => r.id === editionDocId("branding"));
@@ -5364,7 +5389,7 @@ export default function App() {
 
   const availableRounds = useMemo(() => [...new Set(enrichedMatches.map(m => m.round))].sort(), [enrichedMatches]);
 
-  if (!user) return <LoginScreen players={tPlayers} teams={teams} darkMode={darkMode} tournamentName={tournamentName} onLogin={p => { const u = { ...p, isDirector: !!p.isDirector }; writeUserSession(u); setUser(u); }} />;
+  if (!user) return <LoginScreen players={tPlayers} teams={teams} darkMode={darkMode} tournamentName={tournamentName} tournamentLocation={tournamentLocation} onLogin={p => { const u = { ...p, isDirector: !!p.isDirector }; writeUserSession(u); setUser(u); }} />;
 
   // Bottom-nav items. The Practice tab (formerly "Mash") was relocated
   // to the More menu and is gated to directors only — practice rounds
@@ -5525,6 +5550,7 @@ export default function App() {
             hcpOverrides={hcpOverridesData}
             teeAssignments={teeAssignmentsData}
             roundLocks={roundLocksData}
+            location={tournamentLocation}
           />
         )}
         {view === "scoring" && (
@@ -5636,9 +5662,11 @@ export default function App() {
               await db.upsert("bc_settings", { id: editionDocId("branding"), tournament_id: TOURNAMENT_ID, teamA: b.teamA, teamB: b.teamB });
             }}
             tournamentName={tournamentName}
-            onSaveTournamentName={async (name) => {
+            tournamentLocation={tournamentLocation}
+            onSaveTournament={async ({ name, location }) => {
               setTournamentName(name);
-              await db.upsert("bc_settings", { id: editionDocId("tournament"), tournament_id: TOURNAMENT_ID, name });
+              setTournamentLocation(location);
+              await db.upsert("bc_settings", { id: editionDocId("tournament"), tournament_id: TOURNAMENT_ID, name, location });
             }}
             hcpOverridesFromDb={hcpOverridesData}
             teeAssignmentsFromDb={teeAssignmentsData}

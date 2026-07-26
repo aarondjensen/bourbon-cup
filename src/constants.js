@@ -32,6 +32,11 @@ export const oppTeam = (tid) => tid === "A" ? TEAM_B : TEAM_A;
 // The fixed name + location shown on the login screen. The YEAR is NOT here
 // — it follows the active edition (see firebase.getTournamentYear) so the
 // displayed year and the data you're looking at can never disagree.
+// Both are FALLBACKS, not the source of truth: the live name and location
+// are stored per edition in bc_settings/tournament and set by the director in
+// Admin → Tournament. These are what the app shows before that doc exists —
+// and what an empty field resolves back to — so a fresh edition still reads
+// like the Bourbon Cup instead of a blank header.
 export const TOURNAMENT_TITLE = "The Bourbon Cup";
 export const TOURNAMENT_LOCATION = "Gaylord, MI";
 
