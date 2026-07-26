@@ -63,6 +63,16 @@ const matchSettled = (m, r) => {
   return (!n.front || r.front.complete) && (!n.back || r.back.complete) && (!n.overall || r.overall.complete);
 };
 
+// ── Settled vs in-play ink ───────────────────────────────────────
+// A result that's still moving is drawn lighter than one that's banked.
+// That's the language the segment pills already speak (hollow and dashed
+// while live, filled once settled); this extends it to the match rows, so
+// scanning the board separates "this is decided" from "this could change"
+// before you read a single number. Appended as an alpha byte, which every
+// BC color token supports since they're all 6-digit hex.
+const LIVE_ALPHA = "99"; // 60%
+const ink = (hex, settled) => (settled ? hex : `${hex}${LIVE_ALPHA}`);
+
 // Player initials for the compact scorecard row labels ("Andy", "KJ" → "AK").
 const initialsOf = (names) => {
   const list = (names || []).filter(Boolean);
@@ -114,6 +124,41 @@ function statusText(st) {
   return `${m} UP`;
 }
 
+// ── Pending points ───────────────────────────────────────────────
+// What a match is currently ON COURSE to award: for every segment that has
+// started but hasn't settled, hand its pot to whoever leads it right now,
+// splitting it on a tie. computeMatchResult only banks a segment's points
+// once it's decided, so these are exactly the points in flight.
+//
+// A segment nobody has teed off on is deliberately NOT projected — there's
+// nothing to project from, and calling an untouched match a ½/½ split would
+// dress up "no data" as a forecast. Those points stay simply unplayed.
+//
+// The Double Dot bonus isn't projected either: it settles only once holes
+// 16-18 are all in, so it can't move until the match is essentially over.
+// Same reason matchPot treats the base pot as a floor rather than a ceiling.
+function pendingPts(m, r) {
+  const out = { A: 0, B: 0 };
+  const stroke = (m.scoring_type || "match") === "stroke";
+  const add = (holes, pot) => {
+    if (!pot) return;
+    const st = segState(holes, stroke);
+    if (st.complete || !st.played) return;
+    if (st.margin > 0) out.A += pot;
+    else if (st.margin < 0) out.B += pot;
+    else { out.A += pot / 2; out.B += pot / 2; }
+  };
+  if ((m.point_method || "") === POINT_METHOD_TRADITIONAL) {
+    add(r.holes, m.traditional_points ?? 1);
+  } else {
+    const n = m.nassau || NASSAU_DEFAULT;
+    add(r.holes.slice(0, 9), n.front);
+    add(r.holes.slice(9, 18), n.back);
+    add(r.holes, n.overall);
+  }
+  return out;
+}
+
 // ── Segment pill ─────────────────────────────────────────────────
 // One of FRONT / BACK / OVERALL (or a single MATCH pill in Traditional).
 // Settled segments fill with the winning team's color and show the points
@@ -154,12 +199,12 @@ function SegmentPill({ label, pot, st, pts, bonus }) {
 // ── Hole strip ───────────────────────────────────────────────────
 // 18 cells, one per hole, colored by who won it. A visible gap splits
 // the front from the back so "thru 12" is readable without counting.
-function HoleStrip({ holes, showNumbers = false }) {
+function HoleStrip({ holes, showNumbers = false, settled = true }) {
   const cell = (h, i) => {
     const bg = !h.played
       ? "transparent"
-      : h.winner === "A" ? BC.teamA
-      : h.winner === "B" ? BC.teamB
+      : h.winner === "A" ? ink(BC.teamA, settled)
+      : h.winner === "B" ? ink(BC.teamB, settled)
       : `${BC.t3}55`;
     return (
       <div key={i} style={{
@@ -194,6 +239,24 @@ function HoleStrip({ holes, showNumbers = false }) {
   );
 }
 
+// ── Pending note ─────────────────────────────────────────────────
+// The "+2" under a cup total: points that side is on course to take from
+// matches still on the course. Drawn in the team's color at in-play
+// strength, so it reads as the same currency as the number above it while
+// staying visibly provisional. The slot keeps its height when there's
+// nothing pending, so the two totals never sit at different heights.
+function PendingNote({ tid, n, align = "left" }) {
+  return (
+    <div style={{
+      minHeight: 12, marginTop: 2, textAlign: align,
+      fontSize: 9, fontWeight: 800, letterSpacing: 0.6,
+      color: ink(teamHex(tid), false),
+    }}>
+      {n > 0 ? `+${fmtPts(n)} PENDING` : ""}
+    </div>
+  );
+}
+
 // ── Status chip ──────────────────────────────────────────────────
 function Chip({ text, color = BC.t3, filled = false }) {
   return (
@@ -219,11 +282,12 @@ function Chip({ text, color = BC.t3, filled = false }) {
 //
 // The leading side gets the brighter, heavier treatment; the trailing side
 // stays grey. That's the whole leader signal — no tint, no pill.
-function MatchTeamColumn({ tid, names, isLeader }) {
+function MatchTeamColumn({ tid, names, isLeader, settled }) {
   const left = tid === "A";
+  const railColor = ink(teamHex(tid), settled);
   const rail = left
-    ? { borderLeft: `3px solid ${teamHex(tid)}`, paddingLeft: 8 }
-    : { borderRight: `3px solid ${teamHex(tid)}`, paddingRight: 8 };
+    ? { borderLeft: `3px solid ${railColor}`, paddingLeft: 8 }
+    : { borderRight: `3px solid ${railColor}`, paddingRight: 8 };
   return (
     <div style={{
       minWidth: 0, display: "flex", flexDirection: "column", gap: 2,
@@ -245,8 +309,12 @@ function MatchTeamColumn({ tid, names, isLeader }) {
 // the nine's name over its match state. Colored in the leading team's hue,
 // which is what ties it to a side — it sits between the two name columns,
 // so it must not be readable as belonging to whichever one it's nearer.
+// Each nine carries its OWN settled state, not the match's — a front nine
+// can be in the books while the back is still being played, and that's
+// precisely the distinction worth drawing here.
 function NineStatus({ label, st }) {
   const lead = st.margin > 0 ? "A" : st.margin < 0 ? "B" : null;
+  const base = lead ? teamHex(lead) : st.played ? BC.t2 : BC.t3;
   return (
     <div style={{ textAlign: "center", minWidth: 24, flexShrink: 0 }}>
       <div style={{ fontSize: 8, fontWeight: 800, letterSpacing: 0.6, color: BC.t3, lineHeight: 1 }}>
@@ -254,7 +322,7 @@ function NineStatus({ label, st }) {
       </div>
       <div style={{
         fontSize: 11, fontWeight: 800, lineHeight: 1.2, marginTop: 3, whiteSpace: "nowrap",
-        color: lead ? teamHex(lead) : st.played ? BC.t2 : BC.t3,
+        color: ink(base, st.complete),
       }}>
         {statusText(st)}
       </div>
@@ -309,7 +377,8 @@ function MatchCard({
   // "TIED" wording, so this only applies to match play.
   const halved = done && !stroke && overallSt.margin === 0;
   const statusLabel = halved ? "½" : statusText(overallSt);
-  const statusColor = leader ? teamHex(leader) : overallSt.played ? BC.t2 : BC.t3;
+  const statusBase = leader ? teamHex(leader) : overallSt.played ? BC.t2 : BC.t3;
+  const statusColor = ink(statusBase, done);
   // Sub-line under the status. An unplayed match has no progress to report,
   // so it shows its tee time instead — the only thing about it that's news.
   const subLabel = done ? "FINAL"
@@ -330,7 +399,7 @@ function MatchCard({
             content, so the two name columns stay equal to each other no
             matter how long the status text gets. */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 9 }}>
-          <MatchTeamColumn tid="A" names={aNames} isLeader={leader === "A"} />
+          <MatchTeamColumn tid="A" names={aNames} isLeader={leader === "A"} settled={done} />
           {/* F9 · overall · B9. The tighter internal gap groups the three
               results as one cluster, so they read together rather than
               drifting toward the name column each one happens to sit near. */}
@@ -348,12 +417,12 @@ function MatchCard({
             </div>
             {showBack && <NineStatus label="B9" st={backSt} />}
           </div>
-          <MatchTeamColumn tid="B" names={bNames} isLeader={leader === "B"} />
+          <MatchTeamColumn tid="B" names={bNames} isLeader={leader === "B"} settled={done} />
         </div>
 
         {/* Hole-by-hole — the match's shape, on its own line at full width. */}
         <div style={{ marginTop: 8 }}>
-          <HoleStrip holes={result.holes} />
+          <HoleStrip holes={result.holes} settled={done} />
         </div>
       </button>
 
@@ -530,10 +599,24 @@ export function TeamLeaderboard({
     return new Set(roundNumbers.slice(0, 1));
   }, [roundNumbers, roundMeta]);
 
-  // Cup totals.
+  // Cup totals — banked points only. A segment's points don't land here
+  // until it's decided, which is what makes the pending figure below a
+  // genuinely separate quantity rather than a restatement.
   const totals = useMemo(() => {
     const t = { A: 0, B: 0 };
     matchResults.forEach(({ result }) => { t.A += result.totalPts.A; t.B += result.totalPts.B; });
+    return t;
+  }, [matchResults]);
+
+  // Points currently in flight: every started-but-undecided segment handed
+  // to whoever leads it right now. Add these to `totals` and you have the
+  // score if every match on the course ended this second.
+  const pending = useMemo(() => {
+    const t = { A: 0, B: 0 };
+    matchResults.forEach(({ match, result }) => {
+      const p = pendingPts(match, result);
+      t.A += p.A; t.B += p.B;
+    });
     return t;
   }, [matchResults]);
 
@@ -544,6 +627,9 @@ export function TeamLeaderboard({
   const toWin = totalAvail ? totalAvail / 2 + 0.5 : 0;
   const remaining = Math.max(0, totalAvail - totals.A - totals.B);
   const clincher = totals.A >= toWin ? "A" : totals.B >= toWin ? "B" : null;
+  const inFlight = pending.A + pending.B > 0;
+  // Points that belong to no bucket yet — matches nobody has teed off on.
+  const unplayed = Math.max(0, remaining - pending.A - pending.B);
 
   const pct = (v) => (totalAvail ? Math.min(100, (v / totalAvail) * 100) : 0);
 
@@ -587,6 +673,7 @@ export function TeamLeaderboard({
             <div style={{ fontSize: 32, fontWeight: 800, color: BC.teamA, lineHeight: 1.1, marginTop: 1 }}>
               {fmtPts(totals.A)}
             </div>
+            <PendingNote tid="A" n={pending.A} />
           </div>
           <div style={{ textAlign: "center", flexShrink: 0, paddingTop: 6 }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: BC.t1, lineHeight: 1 }}>{fmtPts(toWin)}</div>
@@ -600,6 +687,7 @@ export function TeamLeaderboard({
             <div style={{ fontSize: 32, fontWeight: 800, color: BC.teamB, lineHeight: 1.1, marginTop: 1 }}>
               {fmtPts(totals.B)}
             </div>
+            <PendingNote tid="B" n={pending.B} align="right" />
           </div>
         </div>
 
@@ -607,8 +695,20 @@ export function TeamLeaderboard({
           position: "relative", height: 10, borderRadius: 5,
           background: BC.inp, overflow: "hidden", marginTop: 10,
         }}>
+          {/* Banked points fill solid from each edge; points in flight
+              continue inboard at reduced strength. Read the solid length
+              against the centre tick for "who has won it", and the solid
+              plus faded length for "who is winning it". */}
           <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct(totals.A)}%`, background: BC.teamA }} />
+          <div style={{
+            position: "absolute", left: `${pct(totals.A)}%`, top: 0, bottom: 0,
+            width: `${pct(pending.A)}%`, background: `${BC.teamA}5c`,
+          }} />
           <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: `${pct(totals.B)}%`, background: BC.teamB }} />
+          <div style={{
+            position: "absolute", right: `${pct(totals.B)}%`, top: 0, bottom: 0,
+            width: `${pct(pending.B)}%`, background: `${BC.teamB}5c`,
+          }} />
           <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 2, marginLeft: -1, background: BC.bg, opacity: 0.9 }} />
         </div>
 
@@ -617,7 +717,15 @@ export function TeamLeaderboard({
             ? <span style={{ color: teamHex(clincher) }}>
                 {(clincher === "A" ? tA.name : tB.name).toUpperCase()} WIN THE CUP
               </span>
-            : `${fmtPts(remaining)} OF ${fmtPts(totalAvail)} POINTS REMAINING`}
+            : inFlight
+              ? <>
+                  PROJECTED{" "}
+                  <span style={{ color: BC.teamA }}>{fmtPts(totals.A + pending.A)}</span>
+                  {" – "}
+                  <span style={{ color: BC.teamB }}>{fmtPts(totals.B + pending.B)}</span>
+                  {unplayed > 0 ? ` · ${fmtPts(unplayed)} NOT IN PLAY` : ""}
+                </>
+              : `${fmtPts(remaining)} OF ${fmtPts(totalAvail)} POINTS REMAINING`}
         </div>
       </div>
 
