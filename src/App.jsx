@@ -477,7 +477,10 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   const totalScored = (match.scoring_type || "match") === "stroke";
   const segOpts = { total: totalScored, higherWins: higherIsBetter(format) };
   const renderStatusCell = (i) => {
-    const cellH = 26;
+    // Same reasoning as the Leaderboard strip's cell height: the bar has to
+    // be tall enough for a split hole's diagonal to read, and it stays that
+    // height for every format so the strip never changes shape between rounds.
+    const cellH = 29, barH = 8;
     const colBorder = { borderRight: i % 9 === 8 ? "none" : `1px solid ${BC.bdr}33` };
     const shell = (children) => (
       <div key={i} style={{
@@ -502,7 +505,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     const color = fromUserView > 0 ? BC.green : fromUserView < 0 ? BC.danger : BC.t3;
     return shell(
       <>
-        <div style={{ height: 5, borderRadius: 2, boxSizing: "border-box", ...holeFill(hr, format) }} />
+        <div style={{ height: barH, borderRadius: 3, boxSizing: "border-box", ...holeFill(hr, format) }} />
         <div style={{ textAlign: "center", fontSize: 13, fontWeight: 800, color, lineHeight: 1 }}>
           {fromUserView > 0 ? <>▲{fromUserView}</>
             : fromUserView < 0 ? <>▼{Math.abs(fromUserView)}</>

@@ -11,10 +11,21 @@
 import { BC } from "../theme";
 import { holeFill } from "../lib/holeFill";
 
+// Cell height, one value for every format.
+//
+// Sized for the hardest thing a cell has to say: a Double Dot hole split
+// between the two sides, which is a diagonal and needs enough vertical room
+// to read as one. A cell is ~17px wide on a phone, so this lands it near
+// square and the seam is unmistakable. Every other format only ever fills a
+// cell solid, and would be legible at any height — but a strip that changed
+// height with the round would make two rounds of the same board incomparable
+// at a glance, which costs more than the few pixels this spends.
+const CELL_H = 14;
+
 export function HoleStrip({ holes, format, showNumbers = false, settled = true }) {
   const cell = (h, i) => (
     <div key={i} style={{
-      flex: 1, minWidth: 0, height: 9, borderRadius: 2,
+      flex: 1, minWidth: 0, height: CELL_H, borderRadius: 3,
       boxSizing: "border-box", ...holeFill(h, format, settled),
     }} />
   );
