@@ -35,7 +35,8 @@ import { MatchSetup } from "./components/MatchSetup";
 import {
   GROUPS_COL, groupsDocId, encodeGroups, decodeGroups,
   autoBuildGroups, expandTeeTimes, teeTimeList,
-  isFoursomeFormat, teeTimeForMatch, parseTeeTime, formatTeeTime, teeInterval,
+  isFoursomeFormat, teeTimeForMatch, parseTeeTime, formatTeeTime,
+  DEFAULT_TEE_INTERVAL,
 } from "./lib/groups";
 
 // ── Bottom-nav safe-area cushion ──────────────────────────────────
@@ -1687,19 +1688,31 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               // The Matches tab can add groups beyond the four shown here.
               // Their times live in the same list and must survive an edit.
               const slots = Math.max(teeTimes.length, 4);
+              // The spread to keep when the FIRST tee moves, measured from the
+              // later slots. It cannot be measured from times[1] - times[0]:
+              // the box writes through on every keystroke, so by the time this
+              // runs times[0] is already the new value and that subtraction
+              // measures the edit itself. (It did — typing 7:00 over an 8:30
+              // first tee against an 8:45 second read as a 105-minute spread
+              // and laid the field out to 12:15.)
+              const laterSpread = (times) => {
+                for (let i = 1; i + 1 < times.length; i++) {
+                  const a = parseTeeTime(times[i]), b = parseTeeTime(times[i + 1]);
+                  if (a != null && b != null && b > a) return b - a;
+                }
+                return DEFAULT_TEE_INTERVAL;
+              };
               const commitTime = (idx, val) => {
                 const times = [...teeTimes];
                 while (times.length < slots) times.push("");
-                // The spread as it stands, read before the edit lands — after
-                // it, times[0] and times[1] no longer describe the old one.
-                const prevIv = teeInterval(times);
+                const iv = laterSpread(times);
                 const mins = parseTeeTime(val);
                 times[idx] = mins != null ? formatTeeTime(mins) : val;
                 // Editing the first tee moves the whole sheet; editing the
                 // second sets the spread and re-lays everything after it.
                 const t0 = parseTeeTime(times[0]);
                 if (idx === 0 && t0 != null) {
-                  for (let i = 1; i < slots; i++) times[i] = formatTeeTime(t0 + prevIv * i);
+                  for (let i = 1; i < slots; i++) times[i] = formatTeeTime(t0 + iv * i);
                 } else if (idx === 1 && t0 != null) {
                   const t1 = parseTeeTime(times[1]);
                   if (t1 != null && t1 > t0) {
