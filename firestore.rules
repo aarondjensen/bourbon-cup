@@ -78,19 +78,23 @@ service cloud.firestore {
     match /bc_editions/{doc}           { allow read, write: if isOpen(); }
 
     // ── The archive ───────────────────────────────────────────────
-    // Ten years of finished tournaments. READ-ONLY, and deliberately the
-    // one exception on this page: the app only ever subscribes to it
-    // (App.jsx, the bc_historical listener) and has no code path that
-    // writes it, so denying writes costs nothing and takes the only
-    // irreplaceable data here out of reach of a world-writable client.
-    // Every other collection can be rebuilt from one weekend of golf;
-    // this one cannot.
+    // Past tournaments, one document per year. APPEND-ONLY: anyone may add
+    // a year, nobody may change or remove one.
     //
-    // To re-import it (a corrected past year, a fresh load from
-    // data/historical sheets), flip this to `if isOpen();`, run the
-    // import, and flip it back.
-    match /bc_historical/{doc}         { allow read: if isOpen();
-                                         allow write: if false; }
+    // The app only ever subscribes to this collection (App.jsx, the
+    // bc_historical listener) and has no code path that writes it, so the
+    // restriction costs the running app nothing. The collection is also
+    // empty today — the ten years of results live in the repo, under
+    // data/historical sheets, and have never been loaded into Firestore.
+    // That is exactly why `create` stays open: the next thing anyone does
+    // here is that import, and a blanket write:false would have rejected
+    // it. What append-only buys is that once a year IS archived, a
+    // world-writable client cannot quietly rewrite or delete it.
+    //
+    // To correct a year already loaded, allow update for the one run:
+    //   allow update: if isOpen();
+    match /bc_historical/{doc}         { allow read, create: if isOpen();
+                                         allow update, delete: if false; }
 
     // ── Live scoring ──────────────────────────────────────────────
     // Written by players from the Scoring tab, so these can never be
