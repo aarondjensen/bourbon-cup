@@ -19,6 +19,7 @@ import {
   ROUND_LOCKS_COL, buildRoundLockDoc, refreshRoundLockDoc,
   markRoundFinal, unfinalizeRound, clearRoundLockDoc,
   roundLockState, describeHiChangeImpact,
+  isRoundFinal, currentRoundNumber, nextRoundNumber, lastFinalRoundNumber,
   LOCK_OPEN, LOCK_FINAL,
 } from "./lib/roundLocks";
 import { usePullToRefresh } from "./lib/usePullToRefresh";
@@ -320,6 +321,234 @@ function LoginScreen({ players, onLogin, teams, darkMode, tournamentName, tourna
   );
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  The round gate
+// ══════════════════════════════════════════════════════════════════
+//
+// The Scoring tab accepts entries for exactly ONE round: the current one —
+// the lowest round the director has not finalized (lib/roundLocks.
+// currentRoundNumber). Every other round is visible on the tab, and closed.
+//
+// The problem is mundane and expensive. Four players stand on a tee with
+// their phones out; the tab used to open on whichever of their matches
+// sorted first and offered a Rd 1 / Rd 2 / Rd 3 selector next to it. A score
+// typed into the wrong round does not announce itself — it lands in a round
+// that finished yesterday, silently moves a hole, and the first anyone hears
+// of it is a leaderboard that no longer matches the handshake on 18.
+//
+// A round leaves the current slot when a human says it is over, and for no
+// other reason: the director finalizes it, which freezes it (roundLocks
+// `final`) and opens the next one for everybody at once. Nothing here keys
+// off the clock or off "all the scores look in" — that would put the gate
+// back at the mercy of the same accident it exists to prevent.
+//
+// This gate is the client's. The Firestore rules are open to anyone inside
+// the tournament window (see firestore.rules), so it stops accidents, not a
+// determined writer — which is exactly the threat model the director
+// described.
+
+// Round-wide score progress. Counts EVERY player in EVERY match of the
+// round, not just the reader's own match: the director deciding whether to
+// finalize needs to know who is still out, by name.
+function roundScoreProgress(matches, holeData, round) {
+  const rndMatches = round == null ? [] : matches.filter(m => m.round === round);
+  const pids = [...new Set(rndMatches.flatMap(m => [...m.teamA, ...m.teamB]))];
+  const missingBy = [];
+  let entered = 0;
+  pids.forEach(pid => {
+    const scores = holeData[`${pid}_${round}`] || {};
+    let missing = 0;
+    for (let h = 0; h < 18; h++) { if (scores[h] > 0) entered++; else missing++; }
+    if (missing) missingBy.push({ pid, missing });
+  });
+  const total = pids.length * 18;
+  return {
+    total, entered, missing: total - entered,
+    missingBy: missingBy.sort((a, b) => b.missing - a.missing),
+    // An empty round is not a finished one — a round with no matches drawn
+    // has nothing to be complete about.
+    complete: total > 0 && entered === total,
+  };
+}
+
+// ── Round strip ──
+// Every round of the tournament across the top of the Scoring tab, with only
+// the current one lit. Its job is to answer the question the gate raises
+// ("where did Round 1 go?") before a player has to ask it, so tapping a
+// closed chip says WHY it is closed rather than doing nothing at all.
+function RoundGateStrip({ rounds, currentRound, roundLocks, onExplain }) {
+  if (rounds.length < 2) return null;
+  return (
+    <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+      {rounds.map(r => {
+        const live = r === currentRound;
+        const done = isRoundFinal(roundLocks, r);
+        return (
+          <button
+            key={r}
+            onClick={() => onExplain(
+              live ? `Round ${r} is open for scoring`
+                : done ? `Round ${r} is final — see the Leaderboard`
+                : currentRound == null ? `The tournament is over — Round ${r} never opened`
+                : `Round ${r} opens when Round ${currentRound} is finalized`
+            )}
+            style={{
+              flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
+              background: live ? BC.amberDim : BC.card,
+              border: `1px solid ${live ? BC.amberDim : BC.bdr}`,
+              color: live ? "#fff" : done ? BC.t2 : BC.t3,
+              opacity: live || done ? 1 : 0.55,
+            }}
+          >
+            {done ? "✓ " : ""}Rd {r}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Finalize card ──
+// Director-only, and the other half of the gate: the gate is only tolerable
+// because there is one obvious control that moves it forward. It sits at the
+// bottom of the Scoring tab because that is where a director lands after
+// typing the round's last score.
+//
+// Finalizing with scores missing is ALLOWED, behind a confirm that names who
+// is out. A hard block reads as safer than it is — a withdrawal or a
+// conceded match leaves holes that will never be filled, and a gate with no
+// way past it strands the whole field on a round nobody is playing. The
+// director is trusted; they are just not allowed to do it by accident.
+function FinalizeRoundCard({ round, nextRound, lastFinal, progress, tPlayers, onFinalizeRound, notify }) {
+  const { confirm, confirmModal } = useConfirm();
+  const [busy, setBusy] = useState(false);
+  const nameOf = (pid) => tPlayers.find(t => t.player_id === pid)?.name || pid;
+
+  const outList = progress.missingBy
+    .slice(0, 6)
+    .map(({ pid, missing }) => `• ${nameOf(pid)} — ${missing} hole${missing === 1 ? "" : "s"}`)
+    .join("\n")
+    + (progress.missingBy.length > 6 ? `\n• …and ${progress.missingBy.length - 6} more` : "");
+
+  const doFinalize = async () => {
+    const ok = await confirm({
+      eyebrow: `Round ${round}`,
+      title: progress.complete ? `Finalize Round ${round}?` : `Finalize Round ${round} with scores missing?`,
+      message: [
+        progress.complete
+          ? `All ${progress.total} scores are in.`
+          : `${progress.missing} score${progress.missing === 1 ? " is" : "s are"} still missing:\n${outList}`,
+        "",
+        `Finalizing freezes Round ${round}'s handicaps and results, and ${nextRound ? `opens Round ${nextRound} for scoring.` : "closes out the tournament."}`,
+        "You can reopen it afterwards if you need to.",
+      ].join("\n"),
+      confirmLabel: progress.complete ? "Finalize" : "Finalize anyway",
+      destructive: !progress.complete,
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const res = await onFinalizeRound(round, true);
+      if (res) {
+        notify(nextRound
+          ? `Round ${round} is final — Round ${nextRound} is now open`
+          : `Round ${round} is final — that's the tournament`, "success");
+      } else {
+        notify("Could not finalize the round — try again", "error");
+      }
+    } catch {
+      notify("Could not finalize the round — try again", "error");
+    } finally { setBusy(false); }
+  };
+
+  const doReopen = async () => {
+    const ok = await confirm({
+      eyebrow: `Round ${lastFinal}`,
+      title: `Reopen Round ${lastFinal}?`,
+      message: [
+        `Scoring moves back to Round ${lastFinal}${round != null && round !== lastFinal ? `, and Round ${round} closes until Round ${lastFinal} is finalized again.` : "."}`,
+        "",
+        "Handicaps stay frozen exactly as they are — reopening changes what can be typed, not a stroke already allocated.",
+      ].join("\n"),
+      confirmLabel: "Reopen",
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const res = await onFinalizeRound(lastFinal, false);
+      notify(res ? `Round ${lastFinal} reopened for scoring` : "Could not reopen the round — try again", res ? "success" : "error");
+    } catch {
+      notify("Could not reopen the round — try again", "error");
+    } finally { setBusy(false); }
+  };
+
+  const pct = progress.total ? Math.round((progress.entered / progress.total) * 100) : 0;
+
+  return (
+    <div style={{
+      background: BC.card, border: `1px solid ${BC.bdr}`, borderRadius: 12,
+      padding: "10px 12px", marginTop: 12,
+    }}>
+      <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: BC.amber, marginBottom: 8 }}>
+        DIRECTOR
+      </div>
+
+      {round != null && (
+        <>
+          {/* Progress — the number that decides whether Finalize is the
+              routine end of a round or an override. */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 11, color: BC.t2, marginBottom: 4 }}>
+            <span style={{ fontWeight: 700 }}>Round {round} scores</span>
+            <span style={{ color: progress.complete ? BC.green : BC.t3, fontWeight: 700 }}>
+              {progress.entered} / {progress.total || 0}
+            </span>
+          </div>
+          <div style={{ height: 5, borderRadius: 3, background: BC.inp, overflow: "hidden", marginBottom: 6 }}>
+            <div style={{ width: `${pct}%`, height: "100%", background: progress.complete ? BC.green : BC.amber }} />
+          </div>
+          <div style={{ fontSize: 10, color: BC.t3, lineHeight: 1.35, marginBottom: 8, minHeight: 13 }}>
+            {progress.total === 0
+              ? "No matches drawn for this round yet."
+              : progress.complete
+                ? "Every score is in. Finalize to open the next round."
+                : `Still out: ${progress.missingBy.slice(0, 3).map(({ pid, missing }) => `${nameOf(pid)} (${missing})`).join(", ")}${progress.missingBy.length > 3 ? `, +${progress.missingBy.length - 3} more` : ""}`}
+          </div>
+          <button onClick={doFinalize} disabled={busy} style={{
+            width: "100%", padding: "11px 0", borderRadius: 10, cursor: busy ? "default" : "pointer",
+            border: progress.complete ? "none" : `1px solid ${BC.amber}66`,
+            background: progress.complete ? BC.amber : "transparent",
+            color: progress.complete ? "#0a0804" : BC.amber,
+            fontSize: 13, fontWeight: 800, letterSpacing: 0.5, opacity: busy ? 0.6 : 1,
+          }}>
+            {busy ? "Working…" : `Finalize Round ${round}`}
+          </button>
+        </>
+      )}
+
+      {round == null && (
+        <div style={{ fontSize: 11, color: BC.t2, lineHeight: 1.4, marginBottom: lastFinal != null ? 8 : 0 }}>
+          Every round is final. Scoring is closed for the tournament.
+        </div>
+      )}
+
+      {/* The way back. Without it, one mistimed tap locks the whole field
+          out of the round they are standing on. */}
+      {lastFinal != null && (
+        <button onClick={doReopen} disabled={busy} style={{
+          width: "100%", padding: "8px 0", marginTop: 8, borderRadius: 8,
+          background: "transparent", border: "none", color: BC.t3,
+          fontSize: 11, fontWeight: 700, cursor: busy ? "default" : "pointer",
+          textDecoration: "underline", textUnderlineOffset: 3,
+        }}>
+          Reopen Round {lastFinal}
+        </button>
+      )}
+
+      <ConfirmModal modal={confirmModal} />
+    </div>
+  );
+}
+
 // ── Score Entry ──
 // ── Score Entry — Mash-style ──
 // Rewritten to use the Mash UI patterns (hole strip, deep-green Par/Hole/HCP
@@ -329,21 +558,34 @@ function LoginScreen({ players, onLogin, teams, darkMode, tournamentName, tourna
 // multi-format data model. The legacy ScoreEntry data flow stays — this view
 // still receives `matches` (from bc_matches), `holeData` (from bc_holes), and
 // uses computeMatchResult/calcCHForCourse — but the visual presentation now
-// matches the rest of the app. Round selector at the top supports the multi-
-// round structure that the original Mash sub-app didn't have.
-function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teams, hcpOverrides, teeAssignments, roundLocks }) {
+// matches the rest of the app.
+//
+// The round selector this view used to carry is gone: entry is gated to the
+// current round (see "The round gate" above), and the strip at the top now
+// SHOWS the tournament's rounds rather than offering them.
+function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teams, hcpOverrides, teeAssignments, roundLocks, rounds, currentRound, onFinalizeRound }) {
   const userPid = user.player_id;
-  const myMatches = matches.filter(m => [...m.teamA, ...m.teamB].includes(userPid));
+  // THE GATE. Only the current round's matches exist as far as this screen
+  // is concerned — a match from a finalized round is not merely hidden, it
+  // is not reachable, so no stale selection can put a score in it.
+  const myMatches = useMemo(
+    () => matches.filter(m => m.round === currentRound && [...m.teamA, ...m.teamB].includes(userPid)),
+    [matches, currentRound, userPid]
+  );
 
   // ── Hooks (always fire, in stable order) ──
-  const [activeMatchId, setActiveMatchId] = useState(myMatches[0]?.id || null);
+  const [activeMatchId, setActiveMatchId] = useState(null);
   const [activeHole, setActiveHole] = useState(0);
   const [editing, setEditing] = useState(false);
   const [showScorecard, setShowScorecard] = useState(false);
   const [toast, setToast] = useState(null);
   const initialJump = useRef(false);
 
-  const match = activeMatchId ? matches.find(m => m.id === activeMatchId) : myMatches[0];
+  // Resolved, not stored — the selection is re-derived from the matches the
+  // gate currently allows. When a round is finalized under a player's feet,
+  // a held `activeMatchId` simply stops matching and the screen falls to the
+  // new round's match instead of scoring into the closed one.
+  const match = myMatches.find(m => m.id === activeMatchId) || myMatches[0] || null;
   const tr = match ? tRounds.find(t => t.round_number === match.round) : null;
   // Round handicap lock (src/lib/roundLocks.js). When present, the course
   // pointer and the hole tables come from the snapshot so this screen shows
@@ -415,8 +657,15 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   }, [toast]);
 
   // Initial-jump on mount per match — fast-forward to first unscored hole.
+  // The hole resets with the match, which matters most when the match
+  // changes out from under the player: finalizing a round swaps this screen
+  // to the next round's match, and a held hole 14 would otherwise carry over
+  // onto a card that hasn't teed off. A fresh round has no scores, so the
+  // fast-forward below won't move it — the reset is the only thing that does.
   useEffect(() => {
     initialJump.current = false;
+    setActiveHole(0);
+    setEditing(false);
   }, [match?.id]);
   useEffect(() => {
     if (initialJump.current) return;
@@ -438,18 +687,65 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [match?.id, holeData]);
 
+  // Whole-round progress, for the director's Finalize card. Computed over
+  // every match in the round, not the reader's own.
+  const roundProgress = useMemo(
+    () => roundScoreProgress(matches, holeData, currentRound),
+    [matches, holeData, currentRound]
+  );
+
   // No more hooks below this line.
-  if (!match) return (
-    <div style={{ textAlign: "center", padding: 40, color: BC.t3, fontFamily: "'Montserrat', sans-serif" }}>
-      <div style={{ fontSize: 32, marginBottom: 12 }}>⛳</div>
-      <div>You're not in any matches yet.</div>
+
+  // ── The gate's chrome ──
+  // Both of these belong on EVERY branch below, including the ones a player
+  // who isn't drawn in this round lands on: the strip is how anyone works out
+  // which round is live, and the Finalize card has to reach a director who
+  // is running the event without playing in it.
+  const gateStrip = (
+    <RoundGateStrip rounds={rounds} currentRound={currentRound} roundLocks={roundLocks} onExplain={setToast} />
+  );
+  const directorCard = user.isDirector && (rounds.length > 0) ? (
+    <FinalizeRoundCard
+      round={currentRound}
+      nextRound={nextRoundNumber(roundLocks, rounds)}
+      lastFinal={lastFinalRoundNumber(roundLocks, rounds)}
+      progress={roundProgress}
+      tPlayers={tPlayers}
+      onFinalizeRound={onFinalizeRound}
+      notify={notify}
+    />
+  ) : null;
+  const shell = (children) => (
+    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
+      {gateStrip}
+      {children}
+      {directorCard}
+      <Toast message={toast} />
     </div>
   );
-  if (!course) return (
-    <div style={{ textAlign: "center", padding: 40, color: BC.t3, fontFamily: "'Montserrat', sans-serif" }}>
-      Round {match.round} course not configured yet.
+  const empty = (icon, title, sub) => shell(
+    <div style={{ textAlign: "center", padding: "40px 20px", color: BC.t3 }}>
+      <div style={{ fontSize: 32, marginBottom: 12 }}>{icon}</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: BC.t2, marginBottom: 4 }}>{title}</div>
+      {sub && <div style={{ fontSize: 12, lineHeight: 1.45 }}>{sub}</div>}
     </div>
   );
+
+  // Nothing is open for scoring: either the schedule hasn't been built yet,
+  // or the director has finalized the last round and the event is over.
+  if (currentRound == null) return rounds.length === 0
+    ? empty("⛳", "No rounds set up yet", "The tournament schedule hasn't been built.")
+    : empty("🏆", "The tournament is over", "Every round is final. Head to the Leaderboard for the result.");
+
+  if (!match) return empty(
+    "⛳",
+    `You're not in a Round ${currentRound} match`,
+    myMatches.length === 0 && matches.some(m => [...m.teamA, ...m.teamB].includes(userPid))
+      ? `Scoring is open for Round ${currentRound} only. Your other rounds are on the Matches tab.`
+      : "Check the Matches tab once the draw is made."
+  );
+
+  if (!course) return empty("⛳", `Round ${match.round} course not configured yet`);
 
   // Live edge — first hole where not everyone has scored. Used to detect
   // "editing past hole" navigation so auto-advance stays suppressed
@@ -551,15 +847,14 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     );
   };
 
-  return (
-    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
-      {/* Round selector — visible only when user is in matches across
-          multiple rounds (typical mid-tournament scenario). Uses the
-          deep-green active-tab styling consistent with the Mash visual
-          language. */}
+  return shell(
+    <>
+      {/* Match selector — for the rare format that draws a player into more
+          than one match in the SAME round. It no longer crosses rounds; the
+          strip above owns that axis and only one round of it is live. */}
       {myMatches.length > 1 && (
         <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-          {myMatches.map(m => {
+          {myMatches.map((m, i) => {
             const active = m.id === match.id;
             return (
               <button key={m.id} onClick={() => { setActiveMatchId(m.id); setActiveHole(0); initialJump.current = false; }} style={{
@@ -567,7 +862,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
                 background: active ? BC.amberDim : BC.card,
                 border: `1px solid ${active ? BC.amberDim : BC.bdr}`,
                 color: active ? "#fff" : BC.t2,
-              }}>Rd {m.round}</button>
+              }}>Match {i + 1}</button>
             );
           })}
         </div>
@@ -747,13 +1042,11 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           </button>
         </Popup>
       )}
-
-      {/* Auto-advance toast — slides down from the top during the 1.8s
-          wait between "all scores in" and the screen advance. Mirrors
-          the Mash toast styling for cross-app visual consistency. */}
-      <Toast message={toast} />
-    </div>
+    </>
   );
+  // The auto-advance toast ("✓ Hole 4 saved — advancing…"), which also
+  // carries the round strip's explanations, is rendered by `shell` above so
+  // every branch of this view gets it.
 }
 
 
@@ -5349,10 +5642,10 @@ export default function App() {
   // snapshot against current values and is the ONLY way a locked round's
   // handicaps can move; it is blocked outright on a final round.
   //
-  // No UI currently calls finalize/release — the Admin › Rounds lock card was
-  // removed. Retained as the data layer behind those actions so a future
-  // surface (or a console call) has something to hit; locking itself still
-  // happens automatically in ensureRoundLock.
+  // Finalize is reachable from the Scoring tab's director card; `refresh` and
+  // release are not surfaced anywhere (the Admin › Rounds lock card was
+  // removed) and are retained as the data layer behind those actions.
+  // Locking itself still happens automatically in ensureRoundLock.
   const onLockRound = useCallback(async (rnd, { refresh = false } = {}) => {
     const prev = roundLocksRef.current?.[rnd];
     if (prev?.final && refresh) return null; // final rounds are never refreshed
@@ -5376,7 +5669,11 @@ export default function App() {
     return lock;
   }, []);
 
-  // eslint-disable-next-line no-unused-vars
+  // Finalize / un-finalize. This is what ADVANCES THE TOURNAMENT: the
+  // Scoring tab's gate reads the current round off the lock docs
+  // (currentRoundNumber = lowest non-final round), so marking round N final
+  // is the single act that closes N to entry and opens N+1, on every device
+  // at once. See "The round gate" above ScoreEntry.
   const onFinalizeRound = useCallback(async (rnd, final) => {
     let lock = roundLocksRef.current?.[rnd];
     // Finalizing a round nobody locked (all scores entered elsewhere, say)
@@ -5406,6 +5703,24 @@ export default function App() {
   }, []);
 
   const availableRounds = useMemo(() => [...new Set(enrichedMatches.map(m => m.round))].sort(), [enrichedMatches]);
+
+  // ── Tournament progression ───────────────────────────────────────────
+  // Every round the director has set up OR drawn matches for — the same
+  // union the Matches tab lists, so a round can't be live for scoring and
+  // missing from the schedule, or the other way round.
+  const tournamentRounds = useMemo(() => {
+    const seen = new Set([
+      ...tRounds.map(t => t.round_number),
+      ...enrichedMatches.map(m => m.round),
+    ]);
+    return [...seen].filter(r => r != null).sort((a, b) => a - b);
+  }, [tRounds, enrichedMatches]);
+  // The one round open for score entry. null = nothing open (no schedule
+  // yet, or the last round has been finalized).
+  const currentRound = useMemo(
+    () => currentRoundNumber(roundLocksData, tournamentRounds),
+    [roundLocksData, tournamentRounds]
+  );
 
   if (!user) return <LoginScreen players={tPlayers} teams={teams} darkMode={darkMode} tournamentName={tournamentName} tournamentLocation={tournamentLocation} onLogin={p => { const u = { ...p, isDirector: !!p.isDirector }; writeUserSession(u); setUser(u); }} />;
 
@@ -5594,6 +5909,9 @@ export default function App() {
             hcpOverrides={hcpOverridesData}
             teeAssignments={teeAssignmentsData}
             roundLocks={roundLocksData}
+            rounds={tournamentRounds}
+            currentRound={currentRound}
+            onFinalizeRound={onFinalizeRound}
           />
         )}
         {view === "groups" && (

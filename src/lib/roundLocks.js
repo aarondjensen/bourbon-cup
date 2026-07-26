@@ -102,6 +102,38 @@ export const finalRoundNumbers = (locks) =>
 export const openRoundNumbers = (locks, allRounds = [1, 2, 3, 4]) =>
   allRounds.filter((r) => !isRoundLocked(locks, r));
 
+// ── Tournament progression ──────────────────────────────────────────
+// The round the tournament is ON — and, because of the Scoring tab's gate,
+// the only round accepting score entry. It is simply the lowest round the
+// director has not finalized.
+//
+// The definition is deliberately blunt. It does NOT consult the clock, the
+// tee times, or whether the last putt dropped: a round advances because a
+// human said it was over, and for no other reason. That is what makes
+// "which round am I typing into?" a question with one answer at any moment,
+// on every device, instead of a per-phone guess.
+//
+// Returns null when every round is final — the event is over and nothing is
+// open — and also when there are no rounds at all, which reads the same way
+// to the caller: no round is taking scores.
+export const currentRoundNumber = (locks, allRounds = [1, 2, 3, 4]) =>
+  [...allRounds].sort((a, b) => a - b).find((r) => !isRoundFinal(locks, r)) ?? null;
+
+// The round that comes after the current one, or null if the current round
+// closes out the event. Used to tell the director what finalizing will open.
+export const nextRoundNumber = (locks, allRounds = [1, 2, 3, 4]) => {
+  const sorted = [...allRounds].sort((a, b) => a - b);
+  const cur = currentRoundNumber(locks, sorted);
+  return cur == null ? null : (sorted.find((r) => r > cur) ?? null);
+};
+
+// The most recently finalized round — what a director reopens after
+// finalizing one hole too early. Highest final round, or null if none.
+export const lastFinalRoundNumber = (locks, allRounds = [1, 2, 3, 4]) => {
+  const finals = [...allRounds].filter((r) => isRoundFinal(locks, r)).sort((a, b) => a - b);
+  return finals.length ? finals[finals.length - 1] : null;
+};
+
 // A single player's frozen row for a round, or null when the round is
 // unlocked OR the player was added after the lock was taken (a late sub
 // legitimately falls through to live values — see resolution in scoring.js).
