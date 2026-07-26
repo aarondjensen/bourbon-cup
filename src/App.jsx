@@ -1763,6 +1763,12 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               );
               return (
                 <div style={{ marginBottom: 12 }}>
+                  {/* How the round is settled, and into how many pots. Both are
+                      the same question asked twice, so they share a row; the
+                      pot VALUES get their own line below because they're the
+                      only thing here you type rather than tap. Low Man / All
+                      used to sit on this row — it's a handicap term, and now
+                      lives with the allowance it's applied after. */}
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>SCORING</div>
                     {/* Match / Stroke */}
@@ -1770,20 +1776,15 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       <button onClick={() => setScoringType("match")} title="Match play — the side that wins more holes takes each pot" style={pill(scoringType === "match", false)}>Match</button>
                       <button onClick={() => setScoringType("stroke")} title={`Total ${totalUnit(roundFormat || tRounds.find(t => t.round_number === editRound)?.format || DEFAULT_FORMAT)} — the running total over each segment decides the pot, not holes won`} style={pill(scoringType === "stroke", false)}>Total</button>
                     </div>
-                    {/* Low Man / All (handicap allocation) */}
-                    <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}`, marginLeft: "auto" }}>
-                      {[["low_man", "Low Man"], ["full", "All"]].map(([val, lbl]) => (
-                        <button key={val} onClick={() => setHandicapMode(prev => ({ ...prev, [editRound]: val }))}
-                          style={pill((handicapMode[editRound] || "low_man") === val, false)}>{lbl}</button>
-                      ))}
-                    </div>
-                  </div>
-                  {/* Match structure: Single vs Nassau + the value field(s) */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    {/* Single vs Nassau */}
                     <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}` }}>
                       <button onClick={() => setNassau(n => ({ front: 0, back: 0, overall: n.overall || 1 }))} style={pill(isSingle, false)}>Single</button>
                       <button onClick={() => setNassau(n => ({ front: n.front || 1, back: n.back || 1, overall: n.overall || 1 }))} style={pill(!isSingle, false)}>Nassau</button>
                     </div>
+                  </div>
+                  {/* What each pot is worth. */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>POINTS</div>
                     {isSingle
                       ? numField("overall", "Value")
                       : [["front", "F9"], ["back", "B9"], ["overall", "OVR"]].map(([k, lbl]) => numField(k, lbl))}
@@ -1792,22 +1793,28 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               );
             })()}
 
-            {/* ── Handicap allowance ─────────────────────────────────────
-                How much of each player's Course Handicap actually comes to
-                the tee. Format-driven and never assumed: a 2-Man Scramble
-                played off full handicaps is a rout, so the director is shown
-                the recommended figure the moment the format is picked and can
-                change it before a ball is struck.
+            {/* ── Handicap ───────────────────────────────────────────────
+                Every stroke in the round comes from this one row, in the
+                order it reads: the ALLOWANCE decides how much of each
+                player's Course Handicap comes to the tee at all, then LOW MAN
+                / ALL decides whether they play the difference off the lowest
+                figure in the match or the whole thing. They were split across
+                two blocks — the mode filed under SCORING, the allowance below
+                it — which put a scoring control between two halves of the
+                same decision. Both are handicap terms; they belong on one
+                line, in the order they're applied.
 
-                Two shapes, decided by the format (see constants.FORMATS):
+                Allowance has two shapes, decided by the format (see
+                constants.FORMATS):
                   • one percentage for everyone, or
                   • LOW / HIGH — the low handicap on each side plays off the
                     first, their partner off the second.
-                Stored on the round doc and frozen into the lock snapshot, so
-                it sits alongside low-man/All rather than under it. */}
+                Both are stored on the round doc and frozen into the lock
+                snapshot. The recommended figure is armed the moment a format
+                is picked, so a 2-Man Scramble can't quietly go off at full
+                handicaps, which is a rout. */}
             {(() => {
               const fmtId = roundFormat || tRounds.find(t => t.round_number === editRound)?.format || DEFAULT_FORMAT;
-              const fmt = FORMATS.find(f => f.id === fmtId);
               const def = resolveAllowance(fmtId, null);
               const cur = resolveAllowance(fmtId, allowance);
               const isDefault = cur.split
@@ -1824,6 +1831,14 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               const setField = (k, v) => setAllowance(prev => {
                 const base = cur.split ? { low: cur.low, high: cur.high } : { pct: cur.pct };
                 return { ...base, ...(prev || {}), [k]: v };
+              });
+              // Same pill as the SCORING toggles, so Low Man / All doesn't
+              // change shape by moving rows.
+              const pctPill = (active) => ({
+                padding: "4px 12px", borderRadius: 16, fontSize: 10, fontWeight: 700, border: "none",
+                cursor: "pointer",
+                background: active ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
+                color: active ? "#0a0804" : BC.t3,
               });
               const pctField = (k, lbl, hint) => (
                 <div key={k} style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -1847,7 +1862,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               return (
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>ALLOWANCE</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>HANDICAP</div>
                     {cur.split
                       ? [
                           pctField("low", "LOW", "The lower Course Handicap on each side"),
@@ -1861,15 +1876,23 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         cursor: roundIsFinal ? "not-allowed" : "pointer", opacity: roundIsFinal ? 0.5 : 1,
                       }}>Reset to {describeAllowance(def)}</button>
                     )}
-                  </div>
-                  <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
-                    {cur.shared
-                      ? `${fmt?.label || "This format"} — the side plays one ball off one team handicap: ${cur.low}% of the low man plus ${cur.high}% of their partner.`
-                      : cur.split
-                        ? `${fmt?.label || "This format"} — the low handicap on each side plays off ${cur.low}%, their partner off ${cur.high}%.`
-                        : `${fmt?.label || "This format"} — every player plays off ${cur.pct}% of their Course Handicap${cur.pct === 100 ? " (no reduction)" : ""}.`}
-                    {" "}Applied before Low Man / All.
-                    {isDefault && " Recommended figure — change it if this round is playing different terms."}
+                    {/* Low Man / All — the second half of the same decision,
+                        sitting immediately after the percentages so the row
+                        reads in the order the two are applied. Deliberately
+                        NOT pushed to the right edge: a split allowance fills
+                        the row and the toggle wraps, and a lone toggle
+                        right-aligned on its own line reads as orphaned rather
+                        than as the continuation it is. */}
+                    <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}` }}>
+                      {[["low_man", "Low Man"], ["full", "All"]].map(([val, lbl]) => (
+                        <button key={val}
+                          onClick={() => setHandicapMode(prev => ({ ...prev, [editRound]: val }))}
+                          title={val === "low_man"
+                            ? "Everyone plays the difference off the lowest Course Handicap in the match"
+                            : "Everyone plays their full Course Handicap"}
+                          style={pctPill((handicapMode[editRound] || "low_man") === val)}>{lbl}</button>
+                      ))}
+                    </div>
                   </div>
                   {roundIsLocked && (
                     <div style={{ fontSize: 9, color: roundIsFinal ? BC.danger : BC.amber, marginTop: 4 }}>
@@ -1902,6 +1925,36 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 const tees2h = course2h?.tee_boxes || [];
                 // Grid: name | init | round-input | tee-dots... | delta
                 const gridCols = `1fr 30px 58px ${tees2h.map(() => "22px").join(" ")} 22px`;
+                const assignedH = teeAssignments[editRound] || {};
+                const teeOf = (pid) => assignedH[pid] || tees2h[0]?.name;
+
+                // ── Everyone plays ──
+                // Sixteen players onto the White tees was sixteen taps, and
+                // the round-by-round reality is that a field plays one tee and
+                // a handful move off it. So the whole field is one tap and the
+                // exceptions stay individual: this writes every player, and
+                // any per-player dot below still overrides its own row after.
+                //
+                // Each player gets the same CH-delta badge a single tee tap
+                // raises — a field-wide change moves everyone's strokes, which
+                // is exactly when seeing the movement matters most.
+                const assignAllTees = (teeName) => {
+                  if (roundIsFinal) return;
+                  const newTee = tees2h.find(t => t.name === teeName);
+                  tPlayers.forEach(p => {
+                    const oldTee = tees2h.find(t => t.name === teeOf(p.player_id));
+                    if (!oldTee || !newTee || oldTee.name === newTee.name) return;
+                    const hi = getEffectiveHI(p.player_id, tPlayers);
+                    const chOf = (t) => calcCH(hi, t.slope || 113, t.rating || 72, t.par || 72);
+                    showChDelta(`tee_${editRound}_${p.player_id}`, chOf(newTee) - chOf(oldTee));
+                  });
+                  setTeeAssignments(prev => {
+                    const next = { ...(prev[editRound] || {}) };
+                    tPlayers.forEach(p => { next[p.player_id] = teeName; });
+                    return { ...prev, [editRound]: next };
+                  });
+                };
+
                 return (
                   <div>
                     <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: 4, padding: "0 2px", marginBottom: 4, alignItems: "center" }}>
@@ -1913,6 +1966,37 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         : null}
                       <div />
                     </div>
+                    {tees2h.length > 0 && (
+                      <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: 4, padding: "0 2px", marginBottom: 6, alignItems: "center" }}>
+                        <div style={{ fontSize: 9, color: BC.t3, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          Everyone plays
+                        </div>
+                        <div />
+                        <div />
+                        {tees2h.map((tee, ti) => {
+                          // Lit only when the whole field is genuinely on this
+                          // tee — so the row doubles as the answer to "is
+                          // anyone off the default?" without opening a row.
+                          const allOn = tPlayers.every(p => teeOf(p.player_id) === tee.name);
+                          return (
+                            <button key={tee.name} disabled={roundIsFinal}
+                              onClick={() => assignAllTees(tee.name)}
+                              title={`Move every player to ${tee.name}`}
+                              style={{
+                                background: "transparent", border: "none", padding: 0,
+                                cursor: roundIsFinal ? "not-allowed" : "pointer",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                opacity: roundIsFinal ? (allOn ? 0.55 : 0.2) : (allOn ? 1 : 0.35),
+                                transform: allOn ? "scale(1.15)" : "scale(0.85)",
+                                transition: "all 0.15s ease",
+                              }}>
+                              <TeeCircle tee={tee} index={ti} size={14} active={allOn} />
+                            </button>
+                          );
+                        })}
+                        <div />
+                      </div>
+                    )}
                   </div>
                 );
               })()}
