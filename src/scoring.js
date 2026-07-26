@@ -7,7 +7,9 @@
 // Both paths use the same getEffectiveHI / buildStrokeMap helpers so the
 // dots displayed on a scoring screen always reflect the strokes used in
 // the leaderboard math.
-import { NASSAU_DEFAULT, POINT_METHOD_NASSAU, POINT_METHOD_TRADITIONAL } from "./constants";
+import {
+  NASSAU_DEFAULT, POINT_METHOD_NASSAU, POINT_METHOD_TRADITIONAL, resolveAllowance,
+} from "./constants";
 
 // ── Course Handicap math ──
 // USGA Course Handicap formula:
@@ -262,6 +264,58 @@ export const getRoundHandicapMode = ({ roundLocks, round, tRounds, explicit }) =
     || (round === 4 ? "full" : "low_man");
 };
 
+// The round's handicap allowance, resolved the same way the mode is: a locked
+// round answers to its snapshot, then an explicit argument, then the round doc,
+// then the format's default. The shape always follows the FORMAT, so a round
+// whose format changed can't be scored off a stale low/high pair.
+export const getRoundAllowance = ({ roundLocks, round, tRounds, format, explicit }) => {
+  const lock = lockForRound(roundLocks, round);
+  const tr = tRounds?.find(t => t.round_number === round);
+  const fmt = format || lock?.format || tr?.format;
+  const saved = lock?.allowance || explicit || tr?.allowance || null;
+  return resolveAllowance(fmt, saved);
+};
+
+// Apply a round's allowance to a set of Course Handicaps. Returns the EXACT
+// (unrounded) figures — see applyAllowance below for the whole numbers play
+// actually happens off.
+//
+// `sides` is one array of pids per side, because a split allowance is decided
+// within a side: the lower handicap of the pair plays off `low`, their partner
+// off `high`. Ties go to the lower percentage first, which matches how a side
+// would be written on a card (low man first) and keeps the result stable
+// regardless of roster order. A one-man side plays off `low` — there is no
+// high ball to discount.
+export const allowanceHandicaps = (sides, getCH, allowance) => {
+  const exact = {};
+  const pct = (ch, p) => ch * (p / 100);
+  sides.forEach(side => {
+    if (!allowance?.split) {
+      side.forEach(pid => { exact[pid] = pct(getCH(pid), allowance?.pct ?? 100); });
+      return;
+    }
+    const ranked = side
+      .map(pid => ({ pid, ch: getCH(pid) }))
+      .sort((a, b) => a.ch - b.ch);
+    ranked.forEach(({ pid, ch }, i) => {
+      exact[pid] = pct(ch, i === 0 ? allowance.low : allowance.high);
+    });
+  });
+  return exact;
+};
+
+// The PLAYING handicaps — the numbers strokes are allocated from. Rounded per
+// player, per the USGA's convention of applying the allowance to the Course
+// Handicap and rounding to a whole number before play. A side that plays one
+// ball rounds ONCE on its total instead (see computeMatchResult), which is why
+// the exact figures are kept separately rather than summed after rounding.
+export const applyAllowance = (sides, getCH, allowance) => {
+  const exact = allowanceHandicaps(sides, getCH, allowance);
+  const playing = {};
+  Object.keys(exact).forEach(pid => { playing[pid] = Math.round(exact[pid]); });
+  return playing;
+};
+
 // Course + hole tables for a round. Hole handicaps decide WHICH holes get
 // strokes, so a course re-import must not be able to reshuffle a finished
 // round's stroke allocation — the frozen tables win when present.
@@ -301,7 +355,6 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
 
   const getPlayerScores = (pid) => holeData[`${pid}_${rnd}`] || {};
   const roundTee = tr?.tee_box;
-  const getPlayerHI = (pid) => getRoundHI({ roundLocks, round: rnd, pid, players: tPlayers });
   const getCH = (pid) => getRoundCH({
     roundLocks, round: rnd, pid, players: tPlayers, course, chOverrides, teeAssignments, roundTee,
   });
@@ -315,17 +368,49 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
   const teamB = match.teamB;
 
   // ── Handicap allocation ──
-  // Mode comes from the snapshot when the round is locked — flipping
-  // low_man/full after the fact would otherwise re-allocate every stroke.
+  // Three settings decide every stroke in the match, in this order:
+  //
+  //   1. ALLOWANCE — how much of each player's Course Handicap comes to the
+  //      tee at all (Four-Ball 90%, Scramble 35/15, …). Set per round by the
+  //      director; frozen in the snapshot once the round locks.
+  //   2. MODE      — low_man plays the difference off the lowest PLAYING
+  //      handicap in the match; full gives everyone their whole figure.
+  //   3. Stroke-index allocation, which is just arithmetic from there.
+  //
+  // Allowance comes first because it is a property of the format's fairness,
+  // and low-man is a property of the match: taking the difference of two
+  // already-reduced handicaps is the order the Rules of Handicapping use.
   const roundHandicapMode = getRoundHandicapMode({ roundLocks, round: rnd, tRounds, explicit: handicapMode });
+  const allowance = getRoundAllowance({ roundLocks, round: rnd, tRounds, format });
   const allPids = [...teamA, ...teamB];
-  const allCHs = allPids.map(pid => getCH(pid));
-  const minCH = Math.min(...allCHs);
+  // Playing handicaps — the allowance-adjusted figures. A split allowance is
+  // resolved per SIDE, so teamA and teamB are passed as separate groups.
+  const exactCH = allowanceHandicaps([teamA, teamB], getCH, allowance);
+  const playingCH = {};
+  allPids.forEach(pid => { playingCH[pid] = Math.round(exactCH[pid] ?? 0); });
+  const minCH = Math.min(...allPids.map(pid => playingCH[pid] ?? 0));
   const getAdjustedStrokeMap = (pid) => {
-    if (roundHandicapMode === "full") return getStrokeMap(getCH(pid));
+    if (roundHandicapMode === "full") return getStrokeMap(playingCH[pid] ?? 0);
     // Play off the low man: low man gets 0, others get the difference
-    const adjustedCH = getCH(pid) - minCH;
-    return getStrokeMap(adjustedCH);
+    return getStrokeMap((playingCH[pid] ?? 0) - minCH);
+  };
+
+  // ── Shared-ball team handicaps ──
+  // A side that plays ONE ball has one handicap: the sum of its players'
+  // allowance-adjusted figures (35% of the low man + 15% of the high man for
+  // a two-man scramble). Summed, not averaged — the allowance percentages are
+  // already sized on the assumption that they add up. The sum is taken on the
+  // exact figures and rounded once, so two halves make a stroke rather than
+  // rounding to nothing (or to two) on the way in.
+  const teamCH = (side) => Math.round(side.reduce((s, pid) => s + (exactCH[pid] ?? 0), 0));
+  const aTeamCH = teamCH(teamA), bTeamCH = teamCH(teamB);
+  // Low-man applies to the SIDES here rather than to individuals, for the same
+  // reason it applies to individuals elsewhere: the better side plays scratch
+  // and the other plays the difference.
+  const teamMin = roundHandicapMode === "full" ? 0 : Math.min(aTeamCH, bTeamCH);
+  const sharedStrokeMaps = {
+    A: getStrokeMap(aTeamCH - teamMin),
+    B: getStrokeMap(bTeamCH - teamMin),
   };
 
   // Compute per-hole results
@@ -381,29 +466,20 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
         bScore = (bLo < aLo ? 1 : 0) + (twoBall && bHi < aHi ? 1 : 0);
       }
     } else if (format === "scramble") {
-      // For scramble, team shares one score — use best raw, no individual handicaps
+      // The side plays one ball, so it posts one score and takes strokes off
+      // ONE team handicap (built above from the round's allowance). Both
+      // partners' cards should carry the team score; taking the lower of the
+      // two keeps the hole scoring when only one of them has been entered.
       const aRaws = teamA.map(pid => getPlayerScores(pid)[h]).filter(s => s != null);
       const bRaws = teamB.map(pid => getPlayerScores(pid)[h]).filter(s => s != null);
-      // Apply team handicap (avg of players / 2 for scramble)
-      const aAvgHI = teamA.reduce((s,p) => s + getPlayerHI(p), 0) / teamA.length;
-      const bAvgHI = teamB.reduce((s,p) => s + getPlayerHI(p), 0) / teamB.length;
-      // Shared-ball formats have no per-player CH to freeze, so the team CH
-      // is re-derived — but against the team's FROZEN tee spec when locked,
-      // never against a course doc that may have been re-rated since.
-      const teamCHFromHI = (hi, teamPids) => {
-        const row = lockedPlayerRow(roundLocks, rnd, teamPids[0]);
-        if (row) return calcCH(hi, row.slope ?? 113, row.rating ?? 72, row.par ?? 72);
-        return calcCHForCourse(hi, course, (teeAssignments?.[rnd] || {})[teamPids[0]] || roundTee);
-      };
-      const aTeamCH = Math.round(teamCHFromHI(aAvgHI * 0.35, teamA));
-      const bTeamCH = Math.round(teamCHFromHI(bAvgHI * 0.35, teamB));
-      const aMap = getStrokeMap(aTeamCH), bMap = getStrokeMap(bTeamCH);
-      aScore = aRaws.length ? netScore(Math.min(...aRaws), h, aMap) : null;
-      bScore = bRaws.length ? netScore(Math.min(...bRaws), h, bMap) : null;
+      aScore = aRaws.length ? netScore(Math.min(...aRaws), h, sharedStrokeMaps.A) : null;
+      bScore = bRaws.length ? netScore(Math.min(...bRaws), h, sharedStrokeMaps.B) : null;
     } else if (format === "stableford") {
+      // Stableford scores against PAR, not against the other side, so the
+      // full playing handicap is used — there is no low-man difference to
+      // take. The allowance still applies: it decides the handicap itself.
       const aPid = teamA[0], bPid = teamB[0];
-      const aCH = getCH(aPid), bCH = getCH(bPid);
-      const aMap = getStrokeMap(aCH), bMap = getStrokeMap(bCH);
+      const aMap = getStrokeMap(playingCH[aPid] ?? 0), bMap = getStrokeMap(playingCH[bPid] ?? 0);
       const aNet = netScore(getPlayerScores(aPid)[h], h, aMap);
       const bNet = netScore(getPlayerScores(bPid)[h], h, bMap);
       const sfPts = (net) => { if (net == null) return null; const d = net - holePars[h]; return Math.max(0, 2 - d); };
@@ -481,12 +557,22 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
   const leader = segmentLeader(overall);
   const status = leader ? `${statusText(overall)} (${leader})` : statusText(overall);
 
-  // Per-player adjusted stroke maps (low-man or full, per the round's mode) —
-  // the exact strokes this result was scored with. Exposed so score-entry and
-  // scorecard views render dots from the SAME allocation instead of mirroring
-  // this function's internals.
+  // Per-player adjusted stroke maps (allowance, then low-man or full per the
+  // round's mode) — the exact strokes this result was scored with. Exposed so
+  // score-entry and scorecard views render dots from the SAME allocation
+  // instead of mirroring this function's internals.
+  //
+  // On a shared-ball format both partners get their side's TEAM map, because
+  // that is the only allocation in play: the side has one ball and one set of
+  // strokes. Handing back individual maps here would draw dots on the scoring
+  // screen that nothing in the result was ever scored with.
   const strokeMaps = {};
-  allPids.forEach(pid => { strokeMaps[pid] = getAdjustedStrokeMap(pid); });
+  const sharedBall = !!allowance.shared;
+  allPids.forEach(pid => {
+    strokeMaps[pid] = sharedBall
+      ? sharedStrokeMaps[teamA.includes(pid) ? "A" : "B"]
+      : getAdjustedStrokeMap(pid);
+  });
 
   return {
     holes: holeResults,
@@ -495,6 +581,13 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
     status,
     holesPlayed: playedHoles.length,
     strokeMaps,
+    // The handicap terms this result was scored on, for the screens that
+    // show a player's number next to their name. `playingCH` is post-
+    // allowance, pre-low-man; `teamCH` is the side's figure on a shared-ball
+    // format and null on every other.
+    allowance,
+    playingCH,
+    teamCH: sharedBall ? { A: aTeamCH, B: bTeamCH } : null,
     totalPts: {
       A: (frontPts.A || 0) + (backPts.A || 0) + (overallPts.A || 0),
       B: (frontPts.B || 0) + (backPts.B || 0) + (overallPts.B || 0),

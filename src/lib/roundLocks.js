@@ -34,6 +34,12 @@
 //                          completed round.
 //   handicap_mode        — low_man vs full. Flipping this re-allocates
 //                          every stroke in the match, so it is frozen.
+//   allowance            — the round's handicap allowance ({pct} or
+//                          {low,high}). Sits UPSTREAM of handicap_mode: it
+//                          decides how much of each Course Handicap comes to
+//                          the tee before low-man is taken. Editing it after
+//                          the fact would move every stroke, so it freezes
+//                          with the mode it feeds.
 //   course_id            — pointing the round at a different course after
 //                          the fact would otherwise re-rate everything.
 //   hole_pars            \  frozen because a course re-import (GHIN, the
@@ -58,7 +64,7 @@
 // ensureRoundLock in App.jsx). That automation is the actual guarantee —
 // it does not depend on the director remembering to press anything
 // before the group tees off.
-import { calcCH, calcCHForCourse, getEffectiveHI } from "../scoring";
+import { calcCHForCourse, getEffectiveHI } from "../scoring";
 import { editionDocId } from "../firebase";
 
 export const ROUND_LOCKS_COL = "bc_round_locks";
@@ -199,6 +205,10 @@ export function buildRoundLockDoc({
     course_name: course?.name || null,
     handicap_mode: tr.handicap_mode || (round === 4 ? "full" : "low_man"),
     format: tr.format || null,
+    // Stored raw ({pct} or {low,high}) rather than resolved, so it reads back
+    // as exactly what the director set. scoring.getRoundAllowance re-resolves
+    // it against the frozen format.
+    allowance: tr.allowance || null,
     hole_pars: course?.hole_pars || null,
     hole_handicaps: course?.hole_handicaps || null,
     players: snapshot,
@@ -280,9 +290,3 @@ export function describeLock(lock) {
     : "";
   return `${lock.final ? "Final" : "Locked"} ${at}${who}${how}${refreshed}`;
 }
-
-// Course Handicap straight off a frozen tee spec. Used where a format
-// needs to re-derive a CH from a modified index (scramble's 35% team
-// allowance) but must still do so against the tee as it was at lock time.
-export const chFromLockedSpec = (hi, entry) =>
-  calcCH(hi, entry?.slope ?? 113, entry?.rating ?? 72, entry?.par ?? 72);

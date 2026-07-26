@@ -34,12 +34,12 @@ import { BC, ink, teamColor } from "../theme";
 import {
   FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT,
   POINT_METHOD_TRADITIONAL, TROPHY_SILHOUETTE, CUP_POINTS_TO_WIN,
-  TOURNAMENT_LOCATION,
+  describeAllowance, TOURNAMENT_LOCATION,
 } from "../constants";
 import { getTournamentYear } from "../firebase";
 import {
   computeMatchResult, getRoundCourseCtx, higherIsBetter, totalUnit,
-  segmentState, statusText, segmentLeader,
+  segmentState, statusText, segmentLeader, getRoundAllowance,
 } from "../scoring";
 import { HoleStrip } from "./HoleStrip";
 import { isRoundFinal } from "../lib/roundLocks";
@@ -427,7 +427,7 @@ function RoundSection({
   meta, results, open, onToggle, teams, tPlayers,
   courses, tRounds, roundLocks, expandedMatch, setExpandedMatch,
 }) {
-  const { course, fmt, tee, pts, state, scoring } = meta;
+  const { course, fmt, tee, pts, state, scoring, allowance } = meta;
 
   // The round header is a plain row, not a card. Four match rows plus a
   // boxed header per round was two levels of container for one level of
@@ -462,12 +462,12 @@ function RoundSection({
             plays completely differently as a match and on totals, and a round
             showing nothing about which one is in force is exactly how a Double
             Dot / Total round went on looking like match play on this screen. */}
-        {(tee || scoring) && (
+        {(tee || scoring || allowance) && (
           <div style={{
             fontSize: 10, color: BC.t3, marginTop: 3, paddingLeft: 17,
             whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
           }}>
-            {[tee, scoring].filter(Boolean).join(" · ")}
+            {[tee, scoring, allowance].filter(Boolean).join(" · ")}
           </div>
         )}
       </button>
@@ -607,6 +607,14 @@ export function TeamLeaderboard({
         // match or on total dots depending on this one setting.
         scoring: (tr?.scoring_type || "match") === "stroke"
           ? `Total ${totalUnit(tr?.format)}` : "Match play",
+        // The handicap terms, but only when they actually take something off
+        // — a round played off full handicaps has nothing to announce, while
+        // a Scramble at 35/15 is the single biggest thing separating the
+        // gross scores from the result underneath them.
+        allowance: (() => {
+          const a = getRoundAllowance({ roundLocks, round: rnd, tRounds });
+          return !a.split && a.pct === 100 ? null : `${describeAllowance(a)} hcp`;
+        })(),
         state: settled ? "final" : holesPlayed > 0 ? "live" : "upcoming",
       };
     });

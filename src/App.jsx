@@ -5,6 +5,7 @@ import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
   resolveTeams, DEFAULT_TEAM_NAMES, TOURNAMENT_TITLE, TOURNAMENT_LOCATION,
   FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT, PRACTICE_TEAM_COLORS, DIRECTOR_CODE,
+  resolveAllowance, describeAllowance,
 } from "./constants";
 import {
   calcCH, calcCHForCourse, fmtScore,
@@ -653,10 +654,21 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           // matching the strokeMaps memo above and computeMatchResult.
           const hi = getRoundHI({ roundLocks, round: match.round, pid, players: tPlayers });
           const playerTee = getRoundTee({ roundLocks, round: match.round, pid, teeAssignments, roundTee });
-          const ch = getRoundCH({
+          const fullCH = getRoundCH({
             roundLocks, round: match.round, pid, players: tPlayers,
             course, chOverrides: hcpOverrides, teeAssignments, roundTee,
           });
+          // Show the number the dots were actually allocated from. On a round
+          // with a handicap allowance that is the reduced PLAYING handicap,
+          // not the full Course Handicap — printing the full figure beside
+          // three-quarters of the dots is how a player concludes the app has
+          // shorted them. The full CH stays available on the tooltip.
+          const playingCH = result?.playingCH?.[pid];
+          const ch = playingCH ?? fullCH;
+          const reduced = playingCH != null && playingCH !== fullCH;
+          const chTitle = reduced
+            ? `Playing handicap ${ch} — ${describeAllowance(result?.allowance)} allowance off a Course Handicap of ${fullCH}`
+            : `Course Handicap ${ch}`;
           // Running net to par for this player thru holes scored
           let netToPar = 0, thru = 0;
           for (let h = 0; h < 18; h++) {
@@ -678,7 +690,9 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
                   player it describes. MNQ's layout. */}
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2, minWidth: 0 }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: BC.t1, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>{tp?.name || pid}</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: BC.hcpBlue, flexShrink: 0 }}>({ch})</span>
+                <span title={chTitle} style={{ fontSize: 11, fontWeight: 700, color: BC.hcpBlue, flexShrink: 0 }}>
+                  ({ch}{reduced ? "*" : ""})
+                </span>
                 {strokes > 0 && (
                   <span style={{ color: BC.hcpBlue, fontSize: 12, letterSpacing: 1, flexShrink: 0, lineHeight: 1 }}>
                     {"●".repeat(strokes)}
@@ -834,8 +848,18 @@ const sameRoundMap = (a, b) => JSON.stringify(liveEntries(a)) === JSON.stringify
 // so a round save cannot drop it.
 const roundSettingsSignature = (r) => JSON.stringify([
   r.format, r.handicap_mode, r.tee_time, r.scoring_type,
-  r.nassau_front, r.nassau_back, r.nassau_overall,
+  r.nassau_front, r.nassau_back, r.nassau_overall, r.allowance,
 ]);
+
+// The handicap allowance, normalized to the shape the round's FORMAT calls
+// for. Both sides of the diff go through this, which is what stops a stale
+// low/high pair left behind by a format change from reading as an edit — and
+// what lets a round that has never been saved compare equal to its own
+// recommended default, so merely opening a round does not write to it.
+const roundAllowance = (format, raw) => {
+  const a = resolveAllowance(format || DEFAULT_FORMAT, raw);
+  return a.split ? { low: a.low, high: a.high } : { pct: a.pct };
+};
 
 // Everything the Rounds tab owns for one round.
 const roundSignature = (r) => JSON.stringify([
@@ -955,6 +979,11 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   const [teeAssignments, setTeeAssignments] = useState({}); // { round: { pid: teeName } }
   const [nassau, setNassau] = useState(NASSAU_DEFAULT);
   const [scoringType, setScoringType] = useState("match"); // "match" | "stroke"
+  // Raw saved allowance for the round being edited, or null to mean "the
+  // format's default". Kept raw ({pct} / {low,high}) so a director who never
+  // touches it stores nothing, and a later change to a format's recommended
+  // allowance still reaches the rounds nobody edited.
+  const [allowance, setAllowance] = useState(null);
   // ── Handicap-lock state ──
   // Read-only here: locking is automatic on the first score of a round (see
   // ensureRoundLock in App). These flags only gate the round form's editing.
@@ -1006,6 +1035,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
       nassau_back: tr.nassau_back ?? 1,
       nassau_overall: tr.nassau_overall ?? 1,
       scoring_type: tr.scoring_type || "match",
+      allowance: roundAllowance(tr.format || DEFAULT_FORMAT, tr.allowance),
       ch_overrides: hcpOverridesFromDb?.[editRound] || {},
       tee_assignments: teeAssignmentsFromDb?.[editRound] || {},
     };
@@ -1023,9 +1053,12 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
     nassau_back: nassau.back,
     nassau_overall: nassau.overall,
     scoring_type: scoringType,
+    // Normalized against the format the form is CURRENTLY showing, so picking
+    // a new format re-shapes the allowance in the same render that changes it.
+    allowance: roundAllowance(roundFormat || storedRound.format, allowance),
     ch_overrides: hcpOverrides[editRound] || {},
     tee_assignments: teeAssignments[editRound] || {},
-  }), [storedRound, roundFormat, handicapMode, editRound, roundTeeTime, nassau, scoringType, hcpOverrides, teeAssignments]);
+  }), [storedRound, roundFormat, handicapMode, editRound, roundTeeTime, nassau, scoringType, allowance, hcpOverrides, teeAssignments]);
 
   const storedSettingsSig = roundSettingsSignature(storedRound);
   const hcpDocSig = JSON.stringify(hcpOverridesFromDb ?? null);
@@ -1058,6 +1091,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
     setRoundTeeTime(storedRound.tee_time);
     setNassau({ front: storedRound.nassau_front, back: storedRound.nassau_back, overall: storedRound.nassau_overall });
     setScoringType(storedRound.scoring_type);
+    setAllowance(storedRound.allowance);
     setHandicapMode(prev => ({ ...prev, [editRound]: storedRound.handicap_mode }));
   }, [seed, seededRound, editRound, storedSettingsSig, storedRound]);
 
@@ -1117,6 +1151,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
         nassau_back: payload.nassau_back,
         nassau_overall: payload.nassau_overall,
         scoring_type: payload.scoring_type,
+        allowance: payload.allowance,
       });
       setAutoSave({ phase: "saved", round });
     } catch (err) {
@@ -1585,6 +1620,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   const fmt = FORMATS.find(f => f.id === e.target.value);
                   setRoundFormat(e.target.value);
                   if (fmt?.nassau) setNassau(fmt.nassau);
+                  // Allowances are format-specific — a Scramble's 35/15 means
+                  // nothing on a Singles round. Dropping back to null re-arms
+                  // the new format's recommended figure below.
+                  setAllowance(null);
                 }} style={{ ...InputStyle, marginBottom: 0, fontSize: 12, padding: "8px 8px", height: 38 }}>
                   <option value="">Select...</option>
                   {FORMATS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
@@ -1749,6 +1788,94 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       ? numField("overall", "Value")
                       : [["front", "F9"], ["back", "B9"], ["overall", "OVR"]].map(([k, lbl]) => numField(k, lbl))}
                   </div>
+                </div>
+              );
+            })()}
+
+            {/* ── Handicap allowance ─────────────────────────────────────
+                How much of each player's Course Handicap actually comes to
+                the tee. Format-driven and never assumed: a 2-Man Scramble
+                played off full handicaps is a rout, so the director is shown
+                the recommended figure the moment the format is picked and can
+                change it before a ball is struck.
+
+                Two shapes, decided by the format (see constants.FORMATS):
+                  • one percentage for everyone, or
+                  • LOW / HIGH — the low handicap on each side plays off the
+                    first, their partner off the second.
+                Stored on the round doc and frozen into the lock snapshot, so
+                it sits alongside low-man/All rather than under it. */}
+            {(() => {
+              const fmtId = roundFormat || tRounds.find(t => t.round_number === editRound)?.format || DEFAULT_FORMAT;
+              const fmt = FORMATS.find(f => f.id === fmtId);
+              const def = resolveAllowance(fmtId, null);
+              const cur = resolveAllowance(fmtId, allowance);
+              const isDefault = cur.split
+                ? (cur.low === def.low && cur.high === def.high)
+                : cur.pct === def.pct;
+              // Field values read from the RAW state when the director has
+              // typed something, so clearing a box leaves it empty instead of
+              // snapping back to the default mid-keystroke. An empty box
+              // resolves to the default on save.
+              const fieldVal = (k) => {
+                const v = allowance?.[k];
+                return v === undefined || v === null ? String(def[k]) : String(v);
+              };
+              const setField = (k, v) => setAllowance(prev => {
+                const base = cur.split ? { low: cur.low, high: cur.high } : { pct: cur.pct };
+                return { ...base, ...(prev || {}), [k]: v };
+              });
+              const pctField = (k, lbl, hint) => (
+                <div key={k} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <span title={hint} style={{ fontSize: 9, color: BC.t3, flexShrink: 0, fontWeight: 600 }}>{lbl}</span>
+                  <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                    <input
+                      type="number" step="5" min="0" max="150"
+                      disabled={roundIsFinal}
+                      value={fieldVal(k)}
+                      onChange={e => setField(k, e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                      style={{
+                        ...InputStyle, marginBottom: 0, padding: "4px 16px 4px 6px", fontSize: 14,
+                        textAlign: "center", width: 58,
+                        opacity: roundIsFinal ? 0.5 : 1, cursor: roundIsFinal ? "not-allowed" : "text",
+                      }} />
+                    <span style={{ position: "absolute", right: 6, fontSize: 10, color: BC.t3, pointerEvents: "none" }}>%</span>
+                  </div>
+                </div>
+              );
+              return (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>ALLOWANCE</div>
+                    {cur.split
+                      ? [
+                          pctField("low", "LOW", "The lower Course Handicap on each side"),
+                          pctField("high", "HIGH", "The higher Course Handicap on each side"),
+                        ]
+                      : pctField("pct", "ALL", "Applied to every player's Course Handicap")}
+                    {!isDefault && (
+                      <button onClick={() => setAllowance(null)} disabled={roundIsFinal} style={{
+                        padding: "3px 8px", borderRadius: 12, border: `1px solid ${BC.bdr}`,
+                        background: "transparent", color: BC.t3, fontSize: 9, fontWeight: 700,
+                        cursor: roundIsFinal ? "not-allowed" : "pointer", opacity: roundIsFinal ? 0.5 : 1,
+                      }}>Reset to {describeAllowance(def)}</button>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
+                    {cur.shared
+                      ? `${fmt?.label || "This format"} — the side plays one ball off one team handicap: ${cur.low}% of the low man plus ${cur.high}% of their partner.`
+                      : cur.split
+                        ? `${fmt?.label || "This format"} — the low handicap on each side plays off ${cur.low}%, their partner off ${cur.high}%.`
+                        : `${fmt?.label || "This format"} — every player plays off ${cur.pct}% of their Course Handicap${cur.pct === 100 ? " (no reduction)" : ""}.`}
+                    {" "}Applied before Low Man / All.
+                    {isDefault && " Recommended figure — change it if this round is playing different terms."}
+                  </div>
+                  {roundIsLocked && (
+                    <div style={{ fontSize: 9, color: roundIsFinal ? BC.danger : BC.amber, marginTop: 4 }}>
+                      Round {editRound} is locked — the allowance it scored with is frozen in the snapshot, so a change here will not move it.
+                    </div>
+                  )}
                 </div>
               );
             })()}

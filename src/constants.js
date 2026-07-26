@@ -85,20 +85,85 @@ export const resolveTeams = (teamNames) => ({
 // `null` means the whole side plays as a single match. Only used for that
 // projection — once a round's matches exist, they're counted directly.
 //
+// `allowance` is the third setting on every round, alongside format and point
+// allocation — see the handicap-allowance block below for what the shapes mean.
+//
 // Format defaults are baseline only — the director can override any value
 // in the round setup form.
 export const FORMATS = [
-  { id: "singles",        label: "Singles",            desc: "Match play, 1v1 net comparison per hole.",                                              nassau: { front: 1, back: 1, overall: 1 }, perSide: 1 },
-  { id: "best_ball",      label: "2-Man Best Ball",    desc: "Each player plays their own ball; team uses the better net score per hole.",            nassau: { front: 1, back: 1, overall: 2 }, perSide: 2 },
-  { id: "team_total",     label: "Team Total",         desc: "Combined team net per hole vs combined team net. Lower combined wins the hole.",        nassau: { front: 1, back: 1, overall: 2 }, perSide: 2 },
-  { id: "pinehurst",      label: "Pinehurst",          desc: "Partners each drive, swap balls, then choose best to finish as scramble.",              nassau: { front: 1, back: 1, overall: 2 }, perSide: 2 },
-  { id: "team_best_ball", label: "Team Best Ball",     desc: "Full team format — best of all team-member nets per hole.",                             nassau: { front: 1, back: 1, overall: 2 }, perSide: null },
-  { id: "double_dot",     label: "Double Dot",         desc: "2-man Hi/Lo. Each hole: a dot for the low ball, a dot for the high ball. Ties win nothing.", nassau: { front: 1, back: 1, overall: 2 }, perSide: 2 },
-  { id: "shamble",        label: "Shamble",            desc: "All players drive, choose best drive, each plays their own ball in.",                   nassau: { front: 1, back: 1, overall: 2 }, perSide: 2 },
-  { id: "scramble",       label: "2-Man Scramble",     desc: "Both hit every shot, choose best ball location, both play from there.",                 nassau: { front: 1, back: 1, overall: 2 }, perSide: 2 },
-  { id: "tilt",           label: "2-Man Tilt",         desc: "2-man match play — net comparison per hole.",                                           nassau: { front: 1, back: 1, overall: 2 }, perSide: 2 },
-  { id: "stableford",     label: "2-Man Stableford",   desc: "Points per hole: eagle=4, birdie=3, par=2, bogey=1. Higher segment points wins.",       nassau: { front: 1, back: 1, overall: 2 }, perSide: 2 },
+  { id: "singles",        label: "Singles",            desc: "Match play, 1v1 net comparison per hole.",                                              nassau: { front: 1, back: 1, overall: 1 }, perSide: 1, allowance: { pct: 100 } },
+  { id: "best_ball",      label: "2-Man Best Ball",    desc: "Each player plays their own ball; team uses the better net score per hole.",            nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 90 } },
+  { id: "team_total",     label: "Team Total",         desc: "Combined team net per hole vs combined team net. Lower combined wins the hole.",        nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 90 } },
+  { id: "pinehurst",      label: "Pinehurst",          desc: "Partners each drive, swap balls, then choose best to finish as scramble.",              nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { low: 60, high: 40 } },
+  { id: "team_best_ball", label: "Team Best Ball",     desc: "Full team format — best of all team-member nets per hole.",                             nassau: { front: 1, back: 1, overall: 2 }, perSide: null, allowance: { pct: 75 } },
+  { id: "double_dot",     label: "Double Dot",         desc: "2-man Hi/Lo. Each hole: a dot for the low ball, a dot for the high ball. Ties win nothing.", nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 90 } },
+  { id: "shamble",        label: "Shamble",            desc: "All players drive, choose best drive, each plays their own ball in.",                   nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 90 } },
+  { id: "scramble",       label: "2-Man Scramble",     desc: "Both hit every shot, choose best ball location, both play from there.",                 nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { low: 35, high: 15 }, sharedBall: true },
+  { id: "tilt",           label: "2-Man Tilt",         desc: "2-man match play — net comparison per hole.",                                           nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 90 } },
+  { id: "stableford",     label: "2-Man Stableford",   desc: "Points per hole: eagle=4, birdie=3, par=2, bogey=1. Higher segment points wins.",       nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 85 } },
 ];
+
+// ── Handicap allowances ──
+// The format decides how many balls a side plays. The ALLOWANCE decides how
+// much of each player's Course Handicap actually comes to the tee, and it is
+// a separate knob: a Four-Ball at 90% and the same Four-Ball at 100% are the
+// same format scored two different ways, and the gap between them is whole
+// matches. Two-man Scramble is the extreme case — a side playing one ball off
+// both partners' full handicaps is unbeatable, which is why the recommended
+// team allowance is 35% of the low man plus 15% of the high man.
+//
+// Two shapes cover everything golf actually uses:
+//
+//   { pct }        — every player plays off the same percentage of their CH.
+//   { low, high }  — the LOW handicap on each side plays off `low`, their
+//                    partner off `high`. This is the shape for the formats
+//                    where a side effectively plays one ball.
+//
+// `sharedBall: true` marks a format where the side really does play a single
+// ball, so the two allowance-adjusted handicaps SUM into one team handicap
+// instead of each player carrying their own stroke map (see scoring.js).
+//
+// The numbers above are the USGA's recommended allowances (Rules of
+// Handicapping, Appendix C) and are DEFAULTS ONLY — every round's real
+// allowance is set by the director in Admin → Rounds and stored on the round
+// doc, and once a round locks its allowance is frozen with everything else
+// that feeds stroke allocation.
+export const ALLOWANCE_DEFAULT = { pct: 100 };
+
+export const allowanceDefaultFor = (formatId) =>
+  FORMATS.find(f => f.id === formatId)?.allowance || ALLOWANCE_DEFAULT;
+
+// A split allowance is one that treats the low and high handicap on a side
+// differently. Asked of a spec (default or saved), never of a format id, so
+// the same test works on both.
+export const isSplitAllowance = (spec) => !!spec && spec.low != null;
+
+// Does a side play one ball between them? Drives both the team-handicap math
+// in the engine and the wording of the admin prompt.
+export const formatIsSharedBall = (formatId) =>
+  !!FORMATS.find(f => f.id === formatId)?.sharedBall;
+
+// Merge a round's saved allowance over its format's defaults and hand back a
+// fully-resolved spec. Shape always follows the FORMAT, not what happens to be
+// stored: a round switched from Scramble to Singles drops the stale low/high
+// pair rather than trying to honour it.
+export const resolveAllowance = (formatId, saved) => {
+  const def = allowanceDefaultFor(formatId);
+  const num = (v, fallback) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) && n >= 0 ? n : fallback;
+  };
+  const shared = formatIsSharedBall(formatId);
+  if (isSplitAllowance(def)) {
+    return { split: true, shared, low: num(saved?.low, def.low), high: num(saved?.high, def.high) };
+  }
+  return { split: false, shared, pct: num(saved?.pct, def.pct) };
+};
+
+// Short human string — "90%" or "35% / 15%". Used on the admin prompt and
+// anywhere a round's handicap terms are summarised.
+export const describeAllowance = (spec) =>
+  spec?.split || spec?.low != null ? `${spec.low}% / ${spec.high}%` : `${spec?.pct ?? 100}%`;
 
 // ── Point-allocation methods ──
 // Two ways to convert hole-by-hole results into match points:
