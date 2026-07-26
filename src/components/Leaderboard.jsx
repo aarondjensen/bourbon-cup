@@ -240,6 +240,28 @@ function MatchTeamColumn({ tid, names, isLeader }) {
   );
 }
 
+// ── Per-nine result, flanking the overall on a Nassau round ──
+// Two lines so it sits on the same rhythm as the centre column it flanks:
+// the nine's name over its match state. Colored in the leading team's hue,
+// which is what ties it to a side — it sits between the two name columns,
+// so it must not be readable as belonging to whichever one it's nearer.
+function NineStatus({ label, st }) {
+  const lead = st.margin > 0 ? "A" : st.margin < 0 ? "B" : null;
+  return (
+    <div style={{ textAlign: "center", minWidth: 24, flexShrink: 0 }}>
+      <div style={{ fontSize: 8, fontWeight: 800, letterSpacing: 0.6, color: BC.t3, lineHeight: 1 }}>
+        {label}
+      </div>
+      <div style={{
+        fontSize: 11, fontWeight: 800, lineHeight: 1.2, marginTop: 3, whiteSpace: "nowrap",
+        color: lead ? teamHex(lead) : st.played ? BC.t2 : BC.t3,
+      }}>
+        {statusText(st)}
+      </div>
+    </div>
+  );
+}
+
 // ══════════════════════════════════════════════════════════════════
 //  Match card
 // ══════════════════════════════════════════════════════════════════
@@ -260,13 +282,26 @@ function MatchCard({
   const leader = overallSt.margin > 0 ? "A" : overallSt.margin < 0 ? "B" : null;
   const done = matchSettled(match, result);
 
+  // Per-nine state, computed once and shared by the collapsed row's F9/B9
+  // flanks and the expanded segment pills — so the two can never disagree.
+  const frontSt = segState(result.holes.slice(0, 9), stroke);
+  const backSt = segState(result.holes.slice(9, 18), stroke);
+
   const segments = traditional
     ? [{ key: "o", label: "MATCH", pot: match.traditional_points ?? 1, st: overallSt, pts: result.overallPts }]
     : [
-        n.front ? { key: "f", label: "FRONT", pot: n.front, st: segState(result.holes.slice(0, 9), stroke), pts: result.frontPts } : null,
-        n.back ? { key: "b", label: "BACK", pot: n.back, st: segState(result.holes.slice(9, 18), stroke), pts: result.backPts } : null,
+        n.front ? { key: "f", label: "FRONT", pot: n.front, st: frontSt, pts: result.frontPts } : null,
+        n.back ? { key: "b", label: "BACK", pot: n.back, st: backSt, pts: result.backPts } : null,
         n.overall ? { key: "o", label: "OVERALL", pot: n.overall, st: overallSt, pts: result.overallPts, bonus: format === "double_dot" } : null,
       ].filter(Boolean);
+
+  // In a Nassau round the front and back nines are matches in their own
+  // right, each carrying its own point, so the collapsed row shows all
+  // three results: F9 to the left of the overall, B9 to the right. A nine
+  // with no point on it isn't being played as a match and stays hidden, and
+  // a Traditional round has only the single pot — so neither flank appears.
+  const showFront = !traditional && n.front > 0;
+  const showBack = !traditional && n.back > 0;
 
   // A completed match that finished level is a HALVE, worth a half point to
   // each side. statusText would call that "AS", which reads as a live state —
@@ -296,15 +331,22 @@ function MatchCard({
             matter how long the status text gets. */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 9 }}>
           <MatchTeamColumn tid="A" names={aNames} isLeader={leader === "A"} />
-          <div style={{ textAlign: "center", minWidth: 58 }}>
-            <div style={{ fontSize: 17, fontWeight: 800, lineHeight: 1.05, color: statusColor }}>
-              {statusLabel}
+          {/* F9 · overall · B9. The tighter internal gap groups the three
+              results as one cluster, so they read together rather than
+              drifting toward the name column each one happens to sit near. */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+            {showFront && <NineStatus label="F9" st={frontSt} />}
+            <div style={{ textAlign: "center", minWidth: 52 }}>
+              <div style={{ fontSize: 17, fontWeight: 800, lineHeight: 1.05, color: statusColor }}>
+                {statusLabel}
+              </div>
+              {/* The chevron rides on the sub-line rather than taking a row of
+                  its own, so the expand affordance costs no vertical space. */}
+              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.9, color: BC.t3, marginTop: 2 }}>
+                {subLabel} {expanded ? "▴" : "▾"}
+              </div>
             </div>
-            {/* The chevron rides on the sub-line rather than taking a row of
-                its own, so the expand affordance costs no vertical space. */}
-            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.9, color: BC.t3, marginTop: 2 }}>
-              {subLabel} {expanded ? "▴" : "▾"}
-            </div>
+            {showBack && <NineStatus label="B9" st={backSt} />}
           </div>
           <MatchTeamColumn tid="B" names={bNames} isLeader={leader === "B"} />
         </div>
