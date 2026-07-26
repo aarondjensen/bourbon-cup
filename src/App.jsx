@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { BC, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor } from "./theme";
+import { BC, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor } from "./theme";
 import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession } from "./firebase";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
@@ -758,13 +758,44 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
 
 
 // ── Groups View ──
+// The team name over each side of a match card. Small caps in the team's own
+// color; `color` is supplied per side by the caller.
+const teamTagStyle = {
+  fontSize: 8, fontWeight: 800, letterSpacing: 0.8, marginBottom: 3,
+  textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden",
+  textOverflow: "ellipsis",
+};
+
 // The player-facing "Matches" tab. Answers the two questions a player
 // actually has on the morning of a round: who am I playing, and when do I
 // tee off. The second one comes from the round's playing groups (see
 // lib/groups.js) — group i goes off at slot i of the round's tee_time list.
-function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound }) {
-  const rounds = [...new Set(matches.map(m => m.round))].sort();
-  const [activeRound, setActiveRound] = useState(rounds[0] || 1);
+function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound, teams }) {
+  // Every round the director set up in Admin belongs on this tab, drawn or
+  // not. Listing only the rounds that already have pairings made a round
+  // vanish between "the schedule is set" and "the draw is made", which is
+  // exactly the window in which a player goes looking for it — "Round 3,
+  // no pairings yet" is an answer; a missing tab is not. A round carrying
+  // matches without a round document still shows, so a pairing can never
+  // fall off the schedule either.
+  const rounds = useMemo(() => {
+    const seen = new Set([
+      ...tRounds.map(t => t.round_number),
+      ...matches.map(m => m.round),
+    ]);
+    return [...seen].filter(r => r != null).sort((a, b) => a - b);
+  }, [tRounds, matches]);
+
+  // The selection is RESOLVED rather than stored: the rounds arrive from
+  // Firestore after the first render, so a `useState(rounds[0])` seed pins
+  // the tab to whatever was known at mount — Round 1 on an empty cache,
+  // even for a tournament whose schedule starts somewhere else. Holding the
+  // director's tap and falling back to the first live round also survives a
+  // round being deleted while it is on screen.
+  const [pickedRound, setPickedRound] = useState(null);
+  const activeRound = pickedRound != null && rounds.includes(pickedRound)
+    ? pickedRound
+    : (rounds[0] ?? 1);
   const rndMatches = matches.filter(m => m.round === activeRound);
   const tr = tRounds.find(t => t.round_number === activeRound);
   const course = courses.find(c => c.id === tr?.course_id);
@@ -782,6 +813,7 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
   const firstTee = times[0] || "";
 
   const nameOf = (pid) => tPlayers.find(t => t.player_id === pid)?.name || pid;
+  const teamOf = (pid) => tPlayers.find(t => t.player_id === pid)?.team || null;
 
   // Matches read best in the order they go off.
   const ordered = [...rndMatches].sort((a, b) => {
@@ -810,7 +842,7 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
         {rounds.map(r => {
           const active = r === activeRound;
           return (
-            <button key={r} onClick={() => setActiveRound(r)} style={{
+            <button key={r} onClick={() => setPickedRound(r)} style={{
               flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
               background: active ? BC.amberDim : BC.card,
               border: `1px solid ${active ? BC.amberDim : BC.bdr}`,
@@ -833,11 +865,25 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
         </div>
       </div>
 
-      {rndMatches.length === 0 && <div style={{ textAlign: "center", color: BC.t3, padding: 32, fontSize: 12 }}>No matches scheduled.</div>}
+      {/* A set-up round with no draw yet. The round's own card above still
+          shows the course, format and first tee — the only thing missing is
+          who plays who, so that is the only thing this says. */}
+      {rndMatches.length === 0 && (
+        <div style={{
+          background: BC.card, borderRadius: 12, border: `1px dashed ${BC.bdr}`,
+          padding: "28px 20px", textAlign: "center",
+          fontSize: 12, fontWeight: 700, letterSpacing: 0.4, color: BC.t3,
+        }}>
+          No pairings yet
+        </div>
+      )}
 
-      {/* Match cards — same visual identity as the Leaderboard cards
-          (vertical green/brown stripes flanking each team) so the
-          "this is a Match X" element is recognizable across tabs. */}
+      {/* Match cards — same visual identity as the Leaderboard cards: team A
+          always the left column behind its own color rail, team B always the
+          right. The rails and the team labels are the TEAM colors (which
+          follow each team's logo — see theme.js `withBrand`), not the
+          tournament chrome, so a player finds their side by color here the
+          same way they do on the board. */}
       {ordered.map((m, i) => {
         const teeTime = teeTimeForMatch({ groups, times, match: m });
         return (
@@ -846,16 +892,18 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
             MATCH {i + 1}{teeTime ? `  ·  ${teeTime}` : ""}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10 }}>
-            {/* Team A — Mash green stripe LEFT */}
-            <div style={{ textAlign: "left", borderLeft: `3px solid ${BC.amber}`, paddingLeft: 8 }}>
+            {/* Team A — its color rail LEFT */}
+            <div style={{ minWidth: 0, textAlign: "left", borderLeft: `3px solid ${teamColor("A")}`, paddingLeft: 8 }}>
+              <div style={{ ...teamTagStyle, color: teamColor("A") }}>{teams?.A?.name || "Team A"}</div>
               {m.teamA.map(pid => (
                 <div key={pid} style={{ fontSize: 13, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{nameOf(pid)}</div>
               ))}
             </div>
             {/* vs */}
             <div style={{ fontSize: 11, color: BC.t3, fontWeight: 700, padding: "0 4px" }}>vs</div>
-            {/* Team B — bourbon brown stripe RIGHT */}
-            <div style={{ textAlign: "right", borderRight: `3px solid ${BC.gold}`, paddingRight: 8 }}>
+            {/* Team B — its color rail RIGHT */}
+            <div style={{ minWidth: 0, textAlign: "right", borderRight: `3px solid ${teamColor("B")}`, paddingRight: 8 }}>
+              <div style={{ ...teamTagStyle, color: teamColor("B") }}>{teams?.B?.name || "Team B"}</div>
               {m.teamB.map(pid => (
                 <div key={pid} style={{ fontSize: 13, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{nameOf(pid)}</div>
               ))}
@@ -872,7 +920,23 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
           {groups.map((g, gi) => (
             <div key={gi} style={{ padding: "9px 14px", borderTop: gi ? `1px solid ${BC.bdr}44` : "none", display: "flex", gap: 10, alignItems: "baseline" }}>
               <div style={{ fontSize: 11, fontWeight: 800, color: BC.amber, flexShrink: 0, minWidth: 64 }}>{times[gi] || `G${gi + 1}`}</div>
-              <div style={{ fontSize: 12, color: BC.t1, lineHeight: 1.4 }}>{g.map(nameOf).join(" · ")}</div>
+              {/* A group mixes the two sides, so the names carry their own
+                  team color as a dot rather than the row carrying one. Reads
+                  the 2v2 split of a foursome at a glance. */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "3px 10px", fontSize: 12, color: BC.t1, lineHeight: 1.4 }}>
+                {g.map(pid => {
+                  const tid = teamOf(pid);
+                  return (
+                    <span key={pid} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      <span style={{
+                        width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                        background: tid ? teamColor(tid) : BC.t3,
+                      }} />
+                      {nameOf(pid)}
+                    </span>
+                  );
+                })}
+              </div>
             </div>
           ))}
         </div>
@@ -5539,6 +5603,7 @@ export default function App() {
             tPlayers={tPlayers}
             courses={courses}
             groups={groupsData}
+            teams={teams}
           />
         )}
         {view === "betting" && (
