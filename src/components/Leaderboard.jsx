@@ -527,13 +527,14 @@ function RoundSection({
 //
 //  The year comes from the active edition, not the calendar — the same
 //  getTournamentYear() the login screen uses — so a director browsing 2024
-//  data can't be shown a header that says 2026. The city is fixed
-//  tournament identity from constants.
+//  data can't be shown a header that says 2026. The location is the
+//  director's, set in Admin → Tournament and passed down; the constant is
+//  only the fallback for an edition that hasn't been through that screen.
 //
 //  The mark is drawn as a CSS mask rather than an <img> for the same reason
 //  the nav icon is: the asset is a flat PNG silhouette, so masking is the
 //  only way it takes the exact live theme accent in both light and dark.
-function BoardHeader() {
+function BoardHeader({ location }) {
   return (
     <div style={{
       display: "flex", flexDirection: "column", alignItems: "center",
@@ -548,7 +549,7 @@ function BoardHeader() {
       <div style={{
         fontSize: 11, fontWeight: 800, letterSpacing: 2.4, color: BC.t2,
         whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
-      }}>{getTournamentYear()} · {TOURNAMENT_LOCATION.toUpperCase()}</div>
+      }}>{getTournamentYear()} · {(location || TOURNAMENT_LOCATION).toUpperCase()}</div>
     </div>
   );
 }
@@ -558,7 +559,7 @@ function BoardHeader() {
 // ══════════════════════════════════════════════════════════════════
 export function TeamLeaderboard({
   matches, holeData, courses, tRounds, tPlayers, rounds, teams,
-  hcpOverrides, teeAssignments, roundLocks,
+  hcpOverrides, teeAssignments, roundLocks, location,
 }) {
   const [expandedMatch, setExpandedMatch] = useState(null);
   // Round open/closed. Absent key = follow the automatic rule below;
@@ -728,7 +729,7 @@ export function TeamLeaderboard({
         position: "absolute", left: 0, right: 0, bottom: "100%",
         height: 40, background: BC.bg, pointerEvents: "none",
       }} />
-      <BoardHeader />
+      <BoardHeader location={location} />
 
       {/* ── Cup total ──
           Team names, the two totals in team colors, and a single bar
