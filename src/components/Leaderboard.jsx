@@ -31,7 +31,7 @@ import { useState, useMemo } from "react";
 import { BC } from "../theme";
 import {
   FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT,
-  POINT_METHOD_TRADITIONAL, TROPHY_SILHOUETTE,
+  POINT_METHOD_TRADITIONAL, TROPHY_SILHOUETTE, CUP_POINTS_TO_WIN,
 } from "../constants";
 import { computeMatchResult, getRoundCourseCtx } from "../scoring";
 import { isRoundFinal } from "../lib/roundLocks";
@@ -239,37 +239,11 @@ function HoleStrip({ holes, showNumbers = false, settled = true }) {
   );
 }
 
-// ── Pending note ─────────────────────────────────────────────────
-// The "+2" under a cup total: points that side is on course to take from
-// matches still on the course. Drawn in the team's color at in-play
-// strength, so it reads as the same currency as the number above it while
-// staying visibly provisional. The slot keeps its height when there's
-// nothing pending, so the two totals never sit at different heights.
-function PendingNote({ tid, n, align = "left" }) {
-  return (
-    <div style={{
-      minHeight: 12, marginTop: 2, textAlign: align,
-      fontSize: 9, fontWeight: 800, letterSpacing: 0.6,
-      color: ink(teamHex(tid), false),
-    }}>
-      {n > 0 ? `+${fmtPts(n)} PENDING` : ""}
-    </div>
-  );
-}
-
-// ── Status chip ──────────────────────────────────────────────────
-function Chip({ text, color = BC.t3, filled = false }) {
-  return (
-    <span style={{
-      fontSize: 8, fontWeight: 800, letterSpacing: 1, padding: "2px 6px",
-      borderRadius: 4, whiteSpace: "nowrap",
-      background: filled ? color : `${color}1f`,
-      color: filled ? "#0a0804" : color,
-    }}>
-      {text}
-    </span>
-  );
-}
+// ── Pending marker position ──────────────────────────────────────
+// Where the "+N" sits: the midpoint of that side's faded bar segment,
+// measured from its own edge of the bar. Clamped so a very small segment
+// (or one starting near the far end) still keeps its label on the card.
+const markerPct = (offset, width) => Math.min(94, Math.max(6, offset + width / 2));
 
 // ── One team's column in a collapsed match row ──
 // The pair's names stack vertically on their own side of the row, with the
@@ -475,14 +449,10 @@ function MatchCard({
 //  Round section
 // ══════════════════════════════════════════════════════════════════
 function RoundSection({
-  round, meta, results, open, onToggle, teams, tPlayers,
+  meta, results, open, onToggle, teams, tPlayers,
   courses, tRounds, roundLocks, expandedMatch, setExpandedMatch,
 }) {
-  const { course, fmt, tee, pts, avail, state } = meta;
-  const stateChip =
-    state === "live" ? <Chip text="LIVE" color={BC.amber} filled />
-    : state === "final" ? <Chip text="FINAL" color={BC.t2} />
-    : <Chip text="UPCOMING" color={BC.t3} />;
+  const { course, fmt, tee, pts, state } = meta;
 
   // The round header is a plain row, not a card. Four match rows plus a
   // boxed header per round was two levels of container for one level of
@@ -494,22 +464,32 @@ function RoundSection({
         width: "100%", padding: "2px 2px 0", background: "transparent",
         border: "none", cursor: "pointer", textAlign: "left", display: "block", fontFamily: FONT,
       }}>
+        {/* The round is named by where and what it is, not by its number —
+            "Treetops · 2-Man Best Ball" tells a player which round this is
+            far more directly than "ROUND 3" does. The live/final chip is
+            gone with it: every match row already carries its own THRU or
+            FINAL, so a round-level repeat was chrome. */}
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
           <span style={{ fontSize: 10, color: BC.t3, width: 10, flexShrink: 0 }}>{open ? "▾" : "▸"}</span>
-          <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.2, color: BC.t1 }}>ROUND {round}</span>
-          {stateChip}
-          <span style={{ flex: 1 }} />
-          <span style={{ fontSize: 15, fontWeight: 800, color: pts.A >= pts.B ? BC.teamA : `${BC.teamA}99` }}>{fmtPts(pts.A)}</span>
-          <span style={{ fontSize: 11, color: BC.t3 }}>–</span>
-          <span style={{ fontSize: 15, fontWeight: 800, color: pts.B >= pts.A ? BC.teamB : `${BC.teamB}99` }}>{fmtPts(pts.B)}</span>
+          <span style={{
+            fontSize: 12, fontWeight: 800, letterSpacing: 1.2, color: BC.t1,
+            minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          }}>
+            {[course?.name || "Course TBD", fmt?.label].filter(Boolean).join(" · ").toUpperCase()}
+          </span>
+          <span style={{ flex: 1, minWidth: 6 }} />
+          <span style={{ fontSize: 15, fontWeight: 800, flexShrink: 0, color: pts.A >= pts.B ? BC.teamA : `${BC.teamA}99` }}>{fmtPts(pts.A)}</span>
+          <span style={{ fontSize: 11, color: BC.t3, flexShrink: 0 }}>–</span>
+          <span style={{ fontSize: 15, fontWeight: 800, flexShrink: 0, color: pts.B >= pts.A ? BC.teamB : `${BC.teamB}99` }}>{fmtPts(pts.B)}</span>
         </div>
-        <div style={{
-          fontSize: 10, color: BC.t3, marginTop: 3, paddingLeft: 17,
-          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-        }}>
-          {[course?.name || "Course TBD", tee, fmt?.label].filter(Boolean).join(" · ")}
-          {avail ? ` · ${fmtPts(avail - pts.A - pts.B)} pts left` : ""}
-        </div>
+        {tee && (
+          <div style={{
+            fontSize: 10, color: BC.t3, marginTop: 3, paddingLeft: 17,
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          }}>
+            {tee}
+          </div>
+        )}
       </button>
 
       {open && (
@@ -639,14 +619,18 @@ export function TeamLeaderboard({
     () => Math.max(matches.reduce((s, m) => s + matchPot(m), 0), totals.A + totals.B),
     [matches, totals]
   );
-  const toWin = totalAvail ? totalAvail / 2 + 0.5 : 0;
-  const remaining = Math.max(0, totalAvail - totals.A - totals.B);
+  // The configured target wins over the derived one — see CUP_POINTS_TO_WIN.
+  // The fallback still applies when it's unset, and it's also what decides
+  // a clinch below, so the bar and the number can't tell different stories.
+  const toWin = CUP_POINTS_TO_WIN ?? (totalAvail ? totalAvail / 2 + 0.5 : 0);
   const clincher = totals.A >= toWin ? "A" : totals.B >= toWin ? "B" : null;
-  const inFlight = pending.A + pending.B > 0;
-  // Points that belong to no bucket yet — matches nobody has teed off on.
-  const unplayed = Math.max(0, remaining - pending.A - pending.B);
 
-  const pct = (v) => (totalAvail ? Math.min(100, (v / totalAvail) * 100) : 0);
+  // The bar has to be scaled to the same cup the "to win" number describes,
+  // or its centre tick stops meaning the clinch line. A configured target
+  // implies a total of twice-the-target-minus-the-half, and the real pot
+  // still wins if the schedule turns out bigger than that.
+  const barScale = Math.max(totalAvail, CUP_POINTS_TO_WIN ? toWin * 2 - 1 : 0);
+  const pct = (v) => (barScale ? Math.min(100, (v / barScale) * 100) : 0);
 
   if (roundNumbers.length === 0) {
     return (
@@ -688,7 +672,6 @@ export function TeamLeaderboard({
             <div style={{ fontSize: 32, fontWeight: 800, color: BC.teamA, lineHeight: 1.1, marginTop: 1 }}>
               {fmtPts(totals.A)}
             </div>
-            <PendingNote tid="A" n={pending.A} />
           </div>
           <div style={{ textAlign: "center", flexShrink: 0, paddingTop: 6 }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: BC.t1, lineHeight: 1 }}>{fmtPts(toWin)}</div>
@@ -702,13 +685,35 @@ export function TeamLeaderboard({
             <div style={{ fontSize: 32, fontWeight: 800, color: BC.teamB, lineHeight: 1.1, marginTop: 1 }}>
               {fmtPts(totals.B)}
             </div>
-            <PendingNote tid="B" n={pending.B} align="right" />
           </div>
+        </div>
+
+        {/* Pending markers — each sits centred over its own faded bar
+            segment, so the number and the length it describes are the same
+            object rather than two things to correlate. Clamped away from
+            the ends so a tiny segment's label can't overhang the card. */}
+        <div style={{ position: "relative", height: 11, marginTop: 8 }}>
+          {pending.A > 0 && (
+            <span style={{
+              position: "absolute", left: `${markerPct(pct(totals.A), pct(pending.A))}%`,
+              transform: "translateX(-50%)", whiteSpace: "nowrap",
+              fontSize: 9, fontWeight: 800, letterSpacing: 0.3, lineHeight: 1,
+              color: ink(BC.teamA, false),
+            }}>+{fmtPts(pending.A)}</span>
+          )}
+          {pending.B > 0 && (
+            <span style={{
+              position: "absolute", right: `${markerPct(pct(totals.B), pct(pending.B))}%`,
+              transform: "translateX(50%)", whiteSpace: "nowrap",
+              fontSize: 9, fontWeight: 800, letterSpacing: 0.3, lineHeight: 1,
+              color: ink(BC.teamB, false),
+            }}>+{fmtPts(pending.B)}</span>
+          )}
         </div>
 
         <div style={{
           position: "relative", height: 10, borderRadius: 5,
-          background: BC.inp, overflow: "hidden", marginTop: 10,
+          background: BC.inp, overflow: "hidden",
         }}>
           {/* Banked points fill solid from each edge; points in flight
               continue inboard at reduced strength. Read the solid length
@@ -727,21 +732,11 @@ export function TeamLeaderboard({
           <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 2, marginLeft: -1, background: BC.bg, opacity: 0.9 }} />
         </div>
 
-        <div style={{ textAlign: "center", marginTop: 7, fontSize: 9, fontWeight: 700, letterSpacing: 1, color: BC.t3 }}>
-          {clincher
-            ? <span style={{ color: teamHex(clincher) }}>
-                {(clincher === "A" ? tA.name : tB.name).toUpperCase()} WIN THE CUP
-              </span>
-            : inFlight
-              ? <>
-                  PROJECTED{" "}
-                  <span style={{ color: BC.teamA }}>{fmtPts(totals.A + pending.A)}</span>
-                  {" – "}
-                  <span style={{ color: BC.teamB }}>{fmtPts(totals.B + pending.B)}</span>
-                  {unplayed > 0 ? ` · ${fmtPts(unplayed)} NOT IN PLAY` : ""}
-                </>
-              : `${fmtPts(remaining)} OF ${fmtPts(totalAvail)} POINTS REMAINING`}
-        </div>
+        {clincher && (
+          <div style={{ textAlign: "center", marginTop: 7, fontSize: 9, fontWeight: 700, letterSpacing: 1, color: teamHex(clincher) }}>
+            {(clincher === "A" ? tA.name : tB.name).toUpperCase()} WIN THE CUP
+          </div>
+        )}
       </div>
 
       {/* ── Rounds ── */}

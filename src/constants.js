@@ -35,6 +35,20 @@ export const oppTeam = (tid) => tid === "A" ? TEAM_B : TEAM_A;
 export const TOURNAMENT_TITLE = "The Bourbon Cup";
 export const TOURNAMENT_LOCATION = "Gaylord, MI";
 
+// ── Points to win the cup ──
+// The leaderboard used to derive this from the matches that exist right
+// now (half the pot, plus a half). That reads correctly only once the
+// whole schedule has been entered — before then the denominator is just
+// however many matches the director has created, so the target drifts
+// upward through setup instead of standing still at the number everyone
+// already knows they're playing for.
+//
+// Stating it outright fixes that, and it also makes the clinch test agree
+// with the number on screen. EDITION-SPECIFIC: if a future year changes
+// the schedule, change this with it. Set to null to go back to deriving
+// it from the matches on the board.
+export const CUP_POINTS_TO_WIN = 42;
+
 // Default team-name map, derived from the TEAM_A/TEAM_B definitions above so
 // the fallback names live in exactly one place. Seed App's teamNames state
 // with this instead of re-typing the literal strings.
