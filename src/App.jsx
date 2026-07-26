@@ -1274,10 +1274,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   }, [tRounds]);
   const [handicapMode, setHandicapMode] = useState({ 1: "low_man", 2: "low_man", 3: "low_man", 4: "full" }); // per round
   const [chDeltas, setChDeltas] = useState({});
-  const [editingPlayer, setEditingPlayer] = useState(null); // { pid, name, hi }
-  const [swipePid, setSwipePid] = useState(null);
-  const [swipeX, setSwipeX] = useState(0);
-  const swipeStartX = useRef(null);
+  const [editingPlayer, setEditingPlayer] = useState(null); // { pid, first, last, nick, hi, ov, dir }
   const [teeAssignments, setTeeAssignments] = useState({}); // { round: { pid: teeName } }
   // ── Handicap-lock UI state ──
   const [showLockDetail, setShowLockDetail] = useState(false);
@@ -1609,54 +1606,28 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
               {/* Player list */}
               {tPlayers.filter(p => p.team === team.id).map(p => {
-                const isEditing = editingPlayer?.pid === p.player_id;
-                const isSwiping = swipePid === p.player_id;
-                const dx = isSwiping ? swipeX : 0;
-                const showDelete = dx < -60;
+                const overridden = p.hi_override != null && String(p.hi_override).trim() !== "";
+                const effHI = overridden ? p.hi_override : p.handicap_index;
+                const synced = !overridden && !!p.ghin_number;
                 return (
-                  <div key={p.player_id} style={{ position: "relative", marginBottom: 2, borderRadius: 6, overflow: "hidden" }}>
-                    {/* Swipe-to-delete red background */}
-                    <div style={{ position: "absolute", inset: 0, background: BC.danger, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "flex-end", paddingRight: 16 }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>Delete</span>
+                  <div key={p.player_id} style={{ background: BC.card, borderRadius: 6, padding: "4px 8px", border: `1px solid ${BC.bdr}`, display: "flex", flexDirection: "row", alignItems: "center", gap: 6, boxShadow: `inset 3px 0 0 ${team.accent}55`, marginBottom: 2 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, flexBasis: "52%", flexGrow: 0, flexShrink: 1, minWidth: 0 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: playerNameColor(), minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fullName(p)}</span>
+                      {p.isDirector && <span title="Tournament director" style={{ fontSize: 11, flexShrink: 0, lineHeight: 1 }}>👑</span>}
                     </div>
-                    {/* Row */}
-                    <div
-                      onTouchStart={e => { if (isEditing) return; swipeStartX.current = e.touches[0].clientX; setSwipePid(p.player_id); setSwipeX(0); }}
-                      onTouchMove={e => { if (isEditing || swipeStartX.current == null) return; const dx2 = e.touches[0].clientX - swipeStartX.current; setSwipeX(Math.min(0, dx2)); }}
-                      onTouchEnd={async () => { if (isEditing) return; const shouldAsk = swipeX < -80; setSwipePid(null); setSwipeX(0); swipeStartX.current = null; if (shouldAsk && await confirm(`Remove ${fullName(p)}?`)) onRemovePlayer(p.player_id); }}
-                      style={{ background: BC.card, borderRadius: 6, padding: "4px 8px", border: `1px solid ${BC.bdr}`, display: "flex", flexDirection: "row", alignItems: "center", gap: 6, boxShadow: `inset 3px 0 0 ${team.accent}55`, position: "relative", transform: `translateX(${dx}px)`, transition: isSwiping ? "none" : "transform 0.2s ease" }}>
-                      <>
-                          {/* Columns: name (fixed share, so the Index lines up
-                              row-to-row as a dedicated column), the Index value,
-                              then a spacer pushing Edit + GHIN to the right. */}
-                          <div style={{ display: "flex", alignItems: "center", gap: 5, flexBasis: "52%", flexGrow: 0, flexShrink: 1, minWidth: 0 }}>
-                            <span style={{ fontSize: 12, fontWeight: 600, color: playerNameColor(), minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fullName(p)}</span>
-                            {p.isDirector && <span title="Tournament director" style={{ fontSize: 11, flexShrink: 0, lineHeight: 1 }}>👑</span>}
-                          </div>
-                          {/* Index column doubles as the sync-status glyph:
-                              amber *  = director override (wins over GHIN/base)
-                              blue  G  = synced from GHIN
-                              plain    = manual. GHIN itself is managed in Edit. */}
-                          {(() => {
-                            const overridden = p.hi_override != null && String(p.hi_override).trim() !== "";
-                            const effHI = overridden ? p.hi_override : p.handicap_index;
-                            const synced = !overridden && !!p.ghin_number;
-                            return (
-                              <span title={overridden ? `Director override — GHIN/base index is ${p.handicap_index}` : (synced ? "Synced from GHIN" : "Manual index")}
-                                style={{ display: "inline-flex", alignItems: "center", gap: 4, width: 56, flexShrink: 0 }}>
-                                <span style={{ fontSize: 12, fontWeight: overridden ? 700 : 500, color: overridden ? BC.amber : playerNameColor() }}>
-                                  {effHI}{overridden ? "*" : ""}
-                                </span>
-                                {synced && <span style={{ fontSize: 7, fontWeight: 800, letterSpacing: 0.2, color: BC.hcpBlue, border: `1px solid ${BC.hcpBlue}66`, background: BC.hcpBlue + "1f", borderRadius: 3, padding: "1px 3px", lineHeight: 1 }}>G</span>}
-                              </span>
-                            );
-                          })()}
-                          <span style={{ flex: 1, minWidth: 8 }} />
-                          <button onClick={() => setEditingPlayer({ pid: p.player_id, first: p.first_name || (p.last_name ? "" : (p.name || "")), last: p.last_name || "", nick: p.name || "", hi: String(p.handicap_index), ov: (p.hi_override != null && String(p.hi_override).trim() !== "") ? String(p.hi_override) : "", dir: !!p.isDirector })} style={{
-                            fontSize: 9, padding: "2px 8px", borderRadius: 4, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer", flexShrink: 0,
-                          }}>Edit</button>
-                        </>
-                    </div>
+                    {/* Index column doubles as the sync-status glyph: amber * =
+                        override, blue G = synced from GHIN, plain = manual. */}
+                    <span title={overridden ? `Director override — GHIN/base index is ${p.handicap_index}` : (synced ? "Synced from GHIN" : "Manual index")}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 4, width: 56, flexShrink: 0 }}>
+                      <span style={{ fontSize: 12, fontWeight: overridden ? 700 : 500, color: overridden ? BC.amber : playerNameColor() }}>
+                        {effHI}{overridden ? "*" : ""}
+                      </span>
+                      {synced && <span style={{ fontSize: 7, fontWeight: 800, letterSpacing: 0.2, color: BC.hcpBlue, border: `1px solid ${BC.hcpBlue}66`, background: BC.hcpBlue + "1f", borderRadius: 3, padding: "1px 3px", lineHeight: 1 }}>G</span>}
+                    </span>
+                    <span style={{ flex: 1, minWidth: 8 }} />
+                    <button onClick={() => setEditingPlayer({ pid: p.player_id, first: p.first_name || (p.last_name ? "" : (p.name || "")), last: p.last_name || "", nick: p.name || "", hi: String(p.handicap_index), ov: (p.hi_override != null && String(p.hi_override).trim() !== "") ? String(p.hi_override) : "", dir: !!p.isDirector })} style={{
+                      fontSize: 9, padding: "2px 8px", borderRadius: 4, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer", flexShrink: 0,
+                    }}>Edit</button>
                   </div>
                 );
               })}
@@ -1677,9 +1648,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             const linked = !!p.ghin_number;
             const close = () => setEditingPlayer(null);
             const set = (patch) => setEditingPlayer(prev => prev ? { ...prev, ...patch } : prev);
-            const lbl = { fontSize: 9, fontWeight: 800, letterSpacing: 0.6, color: BC.t3, textTransform: "uppercase", marginBottom: 5, display: "block" };
-            const inp = { fontSize: 16, fontWeight: 600, color: BC.t1, width: "100%", boxSizing: "border-box", background: BC.inp, border: `1px solid ${acc}55`, borderRadius: 8, padding: "10px 12px", outline: "none", fontFamily: "'Montserrat', sans-serif" };
-            const help = { fontSize: 10, color: BC.t3, marginTop: 5, lineHeight: 1.45 };
+            const lbl = { fontSize: 8, fontWeight: 800, letterSpacing: 0.5, color: BC.t3, textTransform: "uppercase", marginBottom: 3, display: "block" };
+            // Input font stays 16px on purpose — anything smaller makes iOS
+            // Safari zoom the page on focus. Height is condensed via padding.
+            const inp = { fontSize: 16, fontWeight: 600, color: BC.t1, width: "100%", boxSizing: "border-box", background: BC.inp, border: `1px solid ${acc}55`, borderRadius: 8, padding: "7px 10px", outline: "none", fontFamily: "'Montserrat', sans-serif" };
             // Mirror any GHIN-driven index change back into the form so Save
             // can't overwrite a freshly-synced value with the stale field.
             const ghinWrap = async (updated) => {
@@ -1721,22 +1693,27 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   <div style={{ flex: 1, fontSize: 14, fontWeight: 800, color: BC.t1 }}>Edit Player</div>
                   <button onClick={close} aria-label="Close" style={{ width: 32, height: 32, borderRadius: 9, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t2, fontSize: 16, cursor: "pointer", lineHeight: 1 }}>✕</button>
                 </div>
-                <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
+                <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", padding: 14, display: "flex", flexDirection: "column", gap: 11 }}>
                   <div style={{ display: "flex", gap: 8 }}>
                     <label style={{ flex: 1, minWidth: 0 }}><span style={lbl}>First name</span>
                       <input autoFocus value={editingPlayer.first} onChange={e => set({ first: e.target.value })} style={inp} /></label>
                     <label style={{ flex: 1, minWidth: 0 }}><span style={lbl}>Last name</span>
                       <input value={editingPlayer.last} onChange={e => set({ last: e.target.value })} style={inp} /></label>
                   </div>
-                  <label style={{ display: "block" }}>
-                    <span style={lbl}>Nickname</span>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <input value={editingPlayer.nick} placeholder={defaultNick} onChange={e => set({ nick: e.target.value })} style={{ ...inp, flex: 1 }} />
-                      <button type="button" title="Reset to default (First + last initial)" onClick={() => set({ nick: toDisplayName(editingPlayer.first, editingPlayer.last) })}
-                        style={{ flexShrink: 0, padding: "0 13px", borderRadius: 8, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t2, fontSize: 15, cursor: "pointer" }}>↺</button>
+                  {/* Nickname + Director paired on one row, like First/Last. */}
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <label style={{ flex: 1, minWidth: 0 }}><span style={lbl}>Nickname</span>
+                      <input value={editingPlayer.nick} placeholder={defaultNick} onChange={e => set({ nick: e.target.value })} style={inp} /></label>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span style={lbl}>Director</span>
+                      <button type="button" onClick={() => set({ dir: !editingPlayer.dir })}
+                        style={{ fontSize: 14, fontWeight: 700, padding: "7px 10px", borderRadius: 8, cursor: "pointer", width: "100%", boxSizing: "border-box", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                          border: `1px solid ${editingPlayer.dir ? BC.amber : BC.bdr}`, background: editingPlayer.dir ? BC.amber + "18" : "transparent", color: editingPlayer.dir ? BC.amber : BC.t2 }}>
+                        {editingPlayer.dir ? "👑 Director" : "Player"}
+                      </button>
                     </div>
-                    <div style={help}>Shown on scoreboards &amp; scorecards. Defaults to <b style={{ color: BC.t2 }}>{defaultNick || "—"}</b> — leave blank to use it.</div>
-                  </label>
+                  </div>
+                  {/* Handicap Index merged with the GHIN link/sync button. */}
                   <div>
                     <span style={lbl}>Handicap Index</span>
                     <div style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
@@ -1745,30 +1722,19 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         <GhinLinkButton player={p} user={user} notify={notify} onUpdatePlayer={ghinWrap} />
                       </div>
                     </div>
-                    <div style={help}>
-                      {linked
-                        ? <>Synced from <b style={{ color: BC.hcpBlue }}>GHIN #{p.ghin_number}</b>{p.ghin_synced_at ? ` · ${new Date(p.ghin_synced_at).toLocaleDateString()}` : ""}. Tap <b>GHIN&nbsp;✓</b> to re-sync or unlink.</>
-                        : <>Type it manually, or tap <b style={{ color: BC.hcpBlue }}>+&nbsp;GHIN</b> to link a golfer and pull it automatically.</>}
-                    </div>
                   </div>
                   <label style={{ display: "block" }}>
-                    <span style={{ ...lbl, color: BC.amber }}>Director override · optional</span>
-                    <input type="number" inputMode="decimal" value={editingPlayer.ov} placeholder={`${p.handicap_index} — using index above`} onChange={e => set({ ov: e.target.value })}
+                    <span style={{ ...lbl, color: BC.amber }}>Override · optional</span>
+                    <input type="number" inputMode="decimal" value={editingPlayer.ov} placeholder={String(p.handicap_index)} onChange={e => set({ ov: e.target.value })}
                       style={{ ...inp, border: `1px solid ${BC.amber}66`, color: BC.amber }} />
-                    <div style={help}>Wins over the index (and GHIN) when scoring; GHIN sync never touches it. Leave blank to use the index above.</div>
                   </label>
-                  <div>
-                    <span style={lbl}>Role</span>
-                    <button type="button" onClick={() => set({ dir: !editingPlayer.dir })}
-                      style={{ fontSize: 13, fontWeight: 700, padding: "11px 14px", borderRadius: 8, cursor: "pointer", width: "100%", textAlign: "left",
-                        border: `1px solid ${editingPlayer.dir ? BC.amber : BC.bdr}`, background: editingPlayer.dir ? BC.amber + "18" : "transparent", color: editingPlayer.dir ? BC.amber : BC.t2 }}>
-                      {editingPlayer.dir ? "👑 Director — full admin access" : "Make tournament director"}
-                    </button>
-                  </div>
                 </div>
-                <div style={{ flexShrink: 0, display: "flex", gap: 8, padding: "12px 16px", borderTop: `1px solid ${BC.bdr}` }}>
-                  <button onClick={close} style={{ flex: 1, padding: 12, borderRadius: 10, background: BC.inp, border: `1px solid ${BC.bdr}`, color: BC.t2, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
-                  <button onClick={doSave} style={{ flex: 2, padding: 12, borderRadius: 10, background: acc, border: "none", color: "#0a0804", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>Save changes</button>
+                <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderTop: `1px solid ${BC.bdr}` }}>
+                  <button onClick={async () => { if (await confirm({ title: `Remove ${fullName(p)}?`, message: "This deletes the player from this edition.", confirmLabel: "Delete", destructive: true })) { onRemovePlayer(p.player_id); close(); } }}
+                    title="Delete player" style={{ flexShrink: 0, padding: "9px 11px", borderRadius: 10, background: "transparent", border: `1px solid ${BC.danger}55`, color: BC.danger, fontSize: 14, fontWeight: 700, cursor: "pointer", lineHeight: 1 }}>🗑</button>
+                  <span style={{ flex: 1 }} />
+                  <button onClick={close} style={{ padding: "10px 16px", borderRadius: 10, background: BC.inp, border: `1px solid ${BC.bdr}`, color: BC.t2, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+                  <button onClick={doSave} style={{ padding: "10px 20px", borderRadius: 10, background: acc, border: "none", color: "#0a0804", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>Save</button>
                 </div>
               </Popup>
             );
