@@ -26,6 +26,7 @@ import {
   autoBuildGroups, expandTeeTimes, teeTimeList, joinTeeTimes, teeInterval,
   parseTeeTime, formatTeeTime, matchPlayers, formatPerSide, isFoursomeFormat,
   teeTimeForMatch, groupIssues, hasGroupIssues,
+  orderMatchesForRound, canonicalMatchOrder,
 } from "../lib/groups";
 
 const ROUNDS = [1, 2, 3, 4];
@@ -91,6 +92,13 @@ export function MatchSetup({
   const issues = groupIssues({ groups, matches: rndMatches });
   const flagged = hasGroupIssues(issues);
 
+  // The round's matches in the order they go off, which is the order their
+  // tournament-wide numbers run in. Only the LISTING is reordered:
+  // `rndMatches` keeps its arrival order everywhere else, because derived
+  // groups follow the match order and tee times follow the groups — sorting
+  // by tee time upstream of that would feed the order back into itself.
+  const orderedMatches = orderMatchesForRound({ matches: rndMatches, groups, times });
+
   const nameOf = (pid) => tPlayers.find(p => p.player_id === pid)?.name || pid;
   const shortOf = (pid) => nameOf(pid).split(" ")[0] || pid;
   const teamOf = (pid) => tPlayers.find(p => p.player_id === pid)?.team;
@@ -144,7 +152,9 @@ export function MatchSetup({
       message: "This replaces the current groups for this round. Tee times are kept.",
       confirmLabel: "Rebuild",
     }))) return;
-    const built = autoBuildGroups({ formatId: tr?.format, matches: rndMatches });
+    // Canonical match order, so the groups this WRITES are the same ones the
+    // tab was already showing when they were only implied (roundPlaySetup).
+    const built = autoBuildGroups({ formatId: tr?.format, matches: canonicalMatchOrder(rndMatches) });
     saveGroups(built);
     notify(`Built ${built.length} group${built.length !== 1 ? "s" : ""}`, "success");
   };
@@ -351,7 +361,7 @@ export function MatchSetup({
           No matches yet for Rd {round}
         </div>
       )}
-      {rndMatches.map(m => {
+      {orderedMatches.map(m => {
         const t = teeTimeForMatch({ groups, times, match: m });
         const pids = matchPlayers(m);
         // Three ways to have no single tee time, and they need different
@@ -367,6 +377,13 @@ export function MatchSetup({
           : "NO TEE TIME — NOT GROUPED";
         return (
           <div key={m.id} style={{ ...cardStyle, borderRadius: 10, padding: "8px 12px", marginBottom: 5, display: "flex", alignItems: "center", gap: 8 }}>
+            {/* The match's number in the TOURNAMENT, counted across every
+                round (Round 2's opener is M5 when Round 1 had four matches).
+                Same gold-chip idiom as the G1 label on the groups below,
+                since it is doing the same job for matches. */}
+            <span style={{ fontSize: 10, fontWeight: 800, color: BC.gold, letterSpacing: 0.5, flexShrink: 0, minWidth: 20 }}>
+              M{m.matchNumber ?? "?"}
+            </span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 11 }}>
                 <span style={{ color: teams.A.accent + "99", fontWeight: 600 }}>{m.teamANames?.join(" / ")}</span>

@@ -35,9 +35,8 @@ import { TeamLeaderboard, MatchScorecard } from "./components/Leaderboard";
 import { MatchSetup } from "./components/MatchSetup";
 import {
   GROUPS_COL, groupsDocId, encodeGroups, decodeGroups,
-  autoBuildGroups, expandTeeTimes, teeTimeList,
-  isFoursomeFormat, teeTimeForMatch, parseTeeTime, formatTeeTime,
-  DEFAULT_TEE_INTERVAL,
+  teeTimeForMatch, parseTeeTime, formatTeeTime, DEFAULT_TEE_INTERVAL,
+  roundPlaySetup, orderMatchesForRound, numberMatches,
 } from "./lib/groups";
 
 // ── Bottom-nav safe-area cushion ──────────────────────────────────
@@ -645,6 +644,10 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
             above is counting whichever one this says. */}
         {totalScored ? `TOTAL ${totalUnit(format).toUpperCase()}` : "MATCH PLAY"}
         {" · ROUND "}{match.round}
+        {/* Which match of the week this is. Numbered across the whole
+            schedule, so it is the one label that identifies this match
+            without naming the players. */}
+        {match.matchNumber ? ` · MATCH ${match.matchNumber}` : ""}
       </div>
 
       {/* Player score cards — 4 stacked, T1 above dashed divider, T2 below.
@@ -729,7 +732,9 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
         <Popup onClose={() => setShowScorecard(false)} maxWidth={480} padding={0} outerPadding={12}
           innerStyle={{ background: BC.card, border: `1px solid ${BC.amber}44`, borderRadius: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderBottom: `1px solid ${BC.bdr}` }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>SCORECARD — RD {match.round}</div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>
+              SCORECARD — RD {match.round}{match.matchNumber ? ` · MATCH ${match.matchNumber}` : ""}
+            </div>
             <button onClick={() => setShowScorecard(false)} style={{
               background: "transparent", border: "none", color: BC.t2, fontSize: 18, cursor: "pointer", padding: "0 4px",
             }}>×</button>
@@ -803,27 +808,19 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
 
   // Same fallback the admin tab uses: a 2-man format's match is its own
   // foursome, so a round nobody has grouped by hand still has tee times.
-  const stored = groupsByRound?.[activeRound];
-  const groups = stored || (isFoursomeFormat(tr?.format)
-    ? autoBuildGroups({ formatId: tr?.format, matches: rndMatches })
-    : []);
-  const rawTimes = teeTimeList(tr);
-  const times = expandTeeTimes(rawTimes, Math.max(groups.length, 1))
+  const { groups, times: rawSlots } = roundPlaySetup({
+    tr, matches: rndMatches, storedGroups: groupsByRound?.[activeRound],
+  });
+  const times = rawSlots
     .map(t => { const m = parseTeeTime(t); return m == null ? t : formatTeeTime(m, { ampm: true }); });
   const firstTee = times[0] || "";
 
   const nameOf = (pid) => tPlayers.find(t => t.player_id === pid)?.name || pid;
   const teamOf = (pid) => tPlayers.find(t => t.player_id === pid)?.team || null;
 
-  // Matches read best in the order they go off.
-  const ordered = [...rndMatches].sort((a, b) => {
-    const ta = parseTeeTime(teeTimeForMatch({ groups, times, match: a }));
-    const tb = parseTeeTime(teeTimeForMatch({ groups, times, match: b }));
-    if (ta == null && tb == null) return 0;
-    if (ta == null) return 1;
-    if (tb == null) return -1;
-    return ta - tb;
-  });
+  // Matches read best in the order they go off — which is also the order
+  // their numbers were handed out in, so the cards below count up.
+  const ordered = orderMatchesForRound({ matches: rndMatches, groups, times });
 
   // A tee sheet only earns its space when the groups aren't just the
   // matches over again — Singles (two matches per foursome) and the team
@@ -889,7 +886,7 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
         return (
         <div key={m.id} style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: "12px 14px", marginBottom: 8 }}>
           <div style={{ fontSize: 9, color: BC.t3, marginBottom: 8, fontWeight: 800, letterSpacing: 1 }}>
-            MATCH {i + 1}{teeTime ? `  ·  ${teeTime}` : ""}
+            MATCH {m.matchNumber ?? i + 1}{teeTime ? `  ·  ${teeTime}` : ""}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10 }}>
             {/* Team A — its color rail LEFT */}
@@ -5208,14 +5205,26 @@ export default function App() {
   // carrying `scoring_type: "match"` quietly kept scoring as match play on
   // both the Scoring tab and the Leaderboard. The stale copy is now only a
   // fallback for a match whose round doc is missing entirely.
+  //
+  // `matchNumber` rides along for the same reason: a match's number counts
+  // every match played before it (see numberMatches), so it can only be
+  // worked out with the WHOLE schedule in hand — here, not inside any one
+  // view. Every surface then reads the one number instead of numbering the
+  // matches it happens to be showing, which is what let the Matches tab and
+  // the Leaderboard call the same match by two different names.
+  const matchNumbers = useMemo(
+    () => numberMatches({ matches, tRounds: enrichedRounds, groupsByRound: groupsData }),
+    [matches, enrichedRounds, groupsData]
+  );
   const enrichedMatches = useMemo(() => matches.map(m => {
     const tr = enrichedRounds.find(t => t.round_number === m.round);
     return {
       ...m,
       nassau: tr?.nassau || m.nassau || NASSAU_DEFAULT,
       scoring_type: tr?.scoring_type || m.scoring_type || "match",
+      matchNumber: matchNumbers[m.id] ?? null,
     };
-  }), [matches, enrichedRounds]);
+  }), [matches, enrichedRounds, matchNumbers]);
 
   // Keep the auto-lock's source data current without rebuilding onSaveHole.
   useEffect(() => {

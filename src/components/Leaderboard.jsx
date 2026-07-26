@@ -397,7 +397,11 @@ function MatchCard({
           <div style={{ padding: "10px 12px 0" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
               <span style={{ flex: 1, fontSize: 9, fontWeight: 800, letterSpacing: 1, color: BC.t3 }}>
-                MATCH {index + 1}{match.teeTime ? ` · ${match.teeTime}` : ""}
+                {/* The match's number in the tournament, not its position in
+                    this round — Round 2's opener is Match 5 when Round 1 had
+                    four. Falls back to the row index only for a match the
+                    numbering never reached. */}
+                MATCH {match.matchNumber ?? index + 1}{match.teeTime ? ` · ${match.teeTime}` : ""}
               </span>
               <span style={{ fontSize: 15, fontWeight: 800, color: BC.teamA }}>{fmtPts(ptsA)}</span>
               <span style={{ fontSize: 11, color: BC.t3 }}>–</span>
@@ -538,7 +542,12 @@ export function TeamLeaderboard({
   const roundMeta = useMemo(() => {
     const out = {};
     roundNumbers.forEach((rnd) => {
-      const results = matchResults.filter((mr) => mr.match.round === rnd);
+      // Numbered order, which is the order they go off — so the rows count
+      // up rather than following whatever order Firestore delivered. A round
+      // whose matches carry no numbers keeps its arrival order (stable sort).
+      const results = matchResults
+        .filter((mr) => mr.match.round === rnd)
+        .sort((a, b) => (a.match.matchNumber ?? 0) - (b.match.matchNumber ?? 0));
       const pts = { A: 0, B: 0 };
       let avail = 0, holesPlayed = 0;
       results.forEach(({ match: m, result: r }) => {
