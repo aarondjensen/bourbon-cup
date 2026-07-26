@@ -33,7 +33,8 @@ import { GhinLinkButton, GhinSyncButton } from "./components/GhinLink";
 import { TeamLeaderboard, MatchScorecard } from "./components/Leaderboard";
 import { MatchSetup } from "./components/MatchSetup";
 import {
-  GROUPS_COL, groupsDocId, autoBuildGroups, expandTeeTimes, teeTimeList,
+  GROUPS_COL, groupsDocId, encodeGroups, decodeGroups,
+  autoBuildGroups, expandTeeTimes, teeTimeList,
   isFoursomeFormat, teeTimeForMatch, parseTeeTime, formatTeeTime, teeInterval,
 } from "./lib/groups";
 
@@ -4954,7 +4955,7 @@ export default function App() {
     }));
     unsubs.push(db.subscribe(GROUPS_COL, f, rows => {
       const data = {};
-      rows.forEach(r => { if (r.round_number) data[r.round_number] = r.groups || []; });
+      rows.forEach(r => { if (r.round_number) data[r.round_number] = decodeGroups(r.groups); });
       setGroupsData(data);
     }));
     unsubs.push(db.subscribe(ROUND_LOCKS_COL, f, rows => {
@@ -5123,7 +5124,8 @@ export default function App() {
   // partial update of an array has no meaning here.
   const onSaveGroups = useCallback(async (round, groups) => {
     await db.upsert(GROUPS_COL, {
-      id: groupsDocId(round), tournament_id: TOURNAMENT_ID, round_number: round, groups,
+      id: groupsDocId(round), tournament_id: TOURNAMENT_ID, round_number: round,
+      groups: encodeGroups(groups),
     });
   }, []);
   const onSetMatch = useCallback(async (m) => {

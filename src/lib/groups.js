@@ -20,20 +20,35 @@
 // One document per round in `bc_groups`, following the same shape as the
 // other per-round documents (bc_hcp_overrides, bc_tee_assignments):
 //
-//   { id, tournament_id, round_number, groups: [ ["a1","b1","a2","b2"], … ] }
+//   { id, tournament_id, round_number,
+//     groups: [ { players: ["a1","b1","a2","b2"] }, … ] }
 //
-// A group is just its ordered player ids. Tee times are deliberately NOT
-// stored here — they already live on the round document as `tee_time`, a
-// pipe-delimited list ("8:30|8:40|8:50") that the Rounds tab has always
-// written. Group i goes off at time i. Keeping one source of truth means
-// the Rounds tab and the Matches tab can both edit tee times without
-// either one being able to contradict the other.
+// A group is just its ordered player ids, so the natural encoding would be
+// an array of arrays — but Firestore does not support nested arrays, and a
+// write of one fails with invalid-argument. Each group is therefore wrapped
+// in a one-field map on the way out and unwrapped on the way in
+// (encodeGroups / decodeGroups below); everything above the persistence
+// boundary works with plain string[][].
+//
+// Tee times are deliberately NOT stored here — they already live on the
+// round document as `tee_time`, a pipe-delimited list ("8:30|8:40|8:50")
+// that the Rounds tab has always written. Group i goes off at time i.
+// Keeping one source of truth means the Rounds tab and the Matches tab can
+// both edit tee times without either one being able to contradict the other.
 
 import { editionDocId } from "../firebase";
 import { FORMATS } from "../constants";
 
 export const GROUPS_COL = "bc_groups";
 export const groupsDocId = (round) => editionDocId(`bc_groups_r${round}`);
+
+// Persistence boundary. See the storage note above for why the wrapper map
+// exists. decodeGroups also accepts a bare array so a hand-edited document
+// (or a future shape that no longer needs the wrapper) still reads.
+export const encodeGroups = (groups) => (groups || []).map(players => ({ players }));
+export const decodeGroups = (raw) => (raw || [])
+  .map(g => (Array.isArray(g) ? g : (g?.players || [])))
+  .filter(Array.isArray);
 
 // A foursome is the target; a fivesome is tolerated (courses allow them,
 // and an odd roster sometimes forces one). Past that it isn't a group.
