@@ -133,7 +133,8 @@ export const cloneEdition = async (sourceId, { year, name, id }, options = {}) =
 const EDITION_DATA_COLS = [
   "bc_players", "bc_courses", "bc_settings", "bc_rounds", "bc_matches",
   "bc_hole_scores", "bc_skins", "bc_ctp", "bc_round_locks",
-  "bc_hcp_overrides", "bc_tee_assignments", "bc_tournament_settings",
+  "bc_hcp_overrides", "bc_tee_assignments", "bc_groups",
+  "bc_tournament_settings",
 ];
 
 // Delete an edition AND all of its data. Irreversible. Refuses to delete the
