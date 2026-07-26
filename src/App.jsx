@@ -15,7 +15,8 @@ import {
 } from "./scoring";
 import { holeFill } from "./lib/holeFill";
 import {
-  ROUND_LOCKS_COL, buildRoundLockDoc,
+  ROUND_LOCKS_COL, buildRoundLockDoc, refreshRoundLockDoc,
+  markRoundFinal, unfinalizeRound, clearRoundLockDoc,
   roundLockState, describeHiChangeImpact,
   LOCK_OPEN, LOCK_FINAL,
 } from "./lib/roundLocks";
@@ -948,9 +949,9 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   const [teeAssignments, setTeeAssignments] = useState({}); // { round: { pid: teeName } }
   const [nassau, setNassau] = useState(NASSAU_DEFAULT);
   const [scoringType, setScoringType] = useState("match"); // "match" | "stroke"
-  // Lock state is read-only here now: a round locks itself the moment its
-  // first score is entered (App.ensureRoundLock). The Rounds tab only needs
-  // to know whether the round is closed to editing.
+  // ── Handicap-lock state ──
+  // Read-only here: locking is automatic on the first score of a round (see
+  // ensureRoundLock in App). These flags only gate the round form's editing.
   const lockState = roundLockState(roundLocks, editRound);
   const roundIsLocked = lockState !== LOCK_OPEN;
   const roundIsFinal = lockState === LOCK_FINAL;
@@ -1758,7 +1759,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 }}>
                   {roundIsFinal
                     ? `Round ${editRound} is final. These fields are read-only and nothing here is saved.`
-                    : `Round ${editRound} froze its handicaps when its first score was entered. Changes here are saved, but this round keeps scoring off the frozen values.`}
+                    : `Round ${editRound} is locked — its handicaps are frozen. Changes here are saved for reference but will not affect its scoring.`}
                 </div>
               )}
               {tPlayers.length === 0 && <div style={{ fontSize: 11, color: BC.t3 }}>No players added yet.</div>}
@@ -1930,6 +1931,18 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
         const allSelected = [...matchTeamA, ...matchTeamB];
         const strokes = strokeSituation();
 
+        // Players already committed to a match in THIS round drop out of the
+        // pool — a player plays one match per round, so offering them again
+        // only invites double-booking. Derived from `matches`, so deleting a
+        // match below hands its players straight back.
+        const matchedPids = new Set(
+          matches.filter(m => m.round === matchRound).flatMap(m => [...(m.teamA || []), ...(m.teamB || [])])
+        );
+        // An in-progress selection stays visible even if somehow already
+        // matched, otherwise it could never be tapped off again.
+        const availablePlayers = (players, sel) =>
+          players.filter(p => !matchedPids.has(p.player_id) || sel.includes(p.player_id));
+
         return (
         <div>
           {/* Round tabs */}
@@ -1950,10 +1963,16 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               const team = teams[tid];
               const sel = tid === "A" ? matchTeamA : matchTeamB;
               const setSel = tid === "A" ? setMatchTeamA : setMatchTeamB;
+              const pool = availablePlayers(players, sel);
               return (
                 <div key={tid}>
                   <div style={{ fontSize: 9, fontWeight: 700, color: team.accent, letterSpacing: 1, marginBottom: 5 }}>{teamNames?.[tid]}</div>
-                  {players.map(p => {
+                  {pool.length === 0 && (
+                    <div style={{ fontSize: 10, color: BC.t3, padding: "7px 8px", borderRadius: 8, border: `1px dashed ${BC.bdr}`, textAlign: "center" }}>
+                      {players.length ? `All matched in Rd ${matchRound}` : "No players"}
+                    </div>
+                  )}
+                  {pool.map(p => {
                     const isSelected = sel.includes(p.player_id);
                     const ch = getPlayerCH(p.player_id);
                     return (
@@ -5065,10 +5084,66 @@ export default function App() {
     else { await db.upsert("bc_matches", m); }
   }, []);
 
-  // The deliberate lock/finalize/unlock actions that used to back the
-  // Rounds tab's handicap-lock card are gone with it. Rounds still lock
-  // themselves on their first score (ensureRoundLock above) — that
-  // guarantee never depended on the console.
+  // ── Director lock actions ────────────────────────────────────────────
+  // Deliberate counterparts to the automatic lock. `refresh` re-takes the
+  // snapshot against current values and is the ONLY way a locked round's
+  // handicaps can move; it is blocked outright on a final round.
+  //
+  // No UI currently calls finalize/release — the Admin › Rounds lock card was
+  // removed. Retained as the data layer behind those actions so a future
+  // surface (or a console call) has something to hit; locking itself still
+  // happens automatically in ensureRoundLock.
+  const onLockRound = useCallback(async (rnd, { refresh = false } = {}) => {
+    const prev = roundLocksRef.current?.[rnd];
+    if (prev?.final && refresh) return null; // final rounds are never refreshed
+    const { players, tRounds: rds, courses: crs, hcpOverrides, teeAssignments } = lockInputsRef.current;
+    const args = {
+      tournamentId: TOURNAMENT_ID,
+      round: rnd,
+      players,
+      tRounds: rds,
+      courses: crs,
+      chOverrides: hcpOverrides,
+      teeAssignments,
+      lockedBy: userRef.current?.name || null,
+    };
+    const lock = refresh && prev?.locked
+      ? refreshRoundLockDoc({ ...args, previous: prev })
+      : buildRoundLockDoc({ ...args, previous: prev?.locked ? prev : null, reason: "manual" });
+    await db.upsert(ROUND_LOCKS_COL, lock);
+    roundLocksRef.current = { ...roundLocksRef.current, [rnd]: lock };
+    setRoundLocksData(p => ({ ...p, [rnd]: lock }));
+    return lock;
+  }, []);
+
+  // eslint-disable-next-line no-unused-vars
+  const onFinalizeRound = useCallback(async (rnd, final) => {
+    let lock = roundLocksRef.current?.[rnd];
+    // Finalizing a round nobody locked (all scores entered elsewhere, say)
+    // still needs a snapshot — take one now rather than leaving it open.
+    if (!lock?.locked && final) lock = await onLockRound(rnd);
+    if (!lock) return null;
+    const next = final
+      ? markRoundFinal(lock, userRef.current?.name || null)
+      : unfinalizeRound(lock, userRef.current?.name || null);
+    await db.upsert(ROUND_LOCKS_COL, next);
+    roundLocksRef.current = { ...roundLocksRef.current, [rnd]: next };
+    setRoundLocksData(p => ({ ...p, [rnd]: next }));
+    return next;
+  }, [onLockRound]);
+
+  // Hand a round back to live handicaps. Only for a round locked by a stray
+  // score before the event actually started — never reachable while final.
+  // eslint-disable-next-line no-unused-vars
+  const onClearRoundLock = useCallback(async (rnd) => {
+    const lock = roundLocksRef.current?.[rnd];
+    if (lock?.final) return null;
+    const cleared = clearRoundLockDoc(lock, rnd, TOURNAMENT_ID, userRef.current?.name || null);
+    await db.upsert(ROUND_LOCKS_COL, cleared);
+    roundLocksRef.current = { ...roundLocksRef.current, [rnd]: cleared };
+    setRoundLocksData(p => ({ ...p, [rnd]: cleared }));
+    return cleared;
+  }, []);
 
   const availableRounds = useMemo(() => [...new Set(enrichedMatches.map(m => m.round))].sort(), [enrichedMatches]);
 
