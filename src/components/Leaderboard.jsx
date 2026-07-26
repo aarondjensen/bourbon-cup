@@ -53,6 +53,61 @@ const matchPot = (m) => {
   return (n.front || 0) + (n.back || 0) + (n.overall || 0);
 };
 
+// Same question asked of a ROUND rather than a match: what is one match in
+// this round worth? Falls back through the round's own Nassau split, then
+// the format's default, so a round saved before a field existed still
+// prices correctly.
+const roundMatchPot = (tr) => {
+  const d = FORMATS.find((f) => f.id === tr.format)?.nassau || NASSAU_DEFAULT;
+  const n = tr.nassau || {};
+  const nassauTotal =
+    (n.front ?? tr.nassau_front ?? d.front ?? 0) +
+    (n.back ?? tr.nassau_back ?? d.back ?? 0) +
+    (n.overall ?? tr.nassau_overall ?? d.overall ?? 0);
+  if ((tr.point_method || "") === POINT_METHOD_TRADITIONAL) {
+    return tr.traditional_points ?? nassauTotal;
+  }
+  return nassauTotal;
+};
+
+// How many matches a round will produce once it's built, from the format's
+// group size and the roster. A format with no group size (a full-team
+// format) is one match however many players there are.
+const roundMatchCount = (tr, playersPerSide) => {
+  if (!playersPerSide) return 0;
+  const per = FORMATS.find((f) => f.id === tr.format)?.perSide;
+  if (per == null) return 1;
+  return Math.max(1, Math.ceil(playersPerSide / per));
+};
+
+// ── Cup points on offer ──────────────────────────────────────────
+// Total points the cup is worth, taken from the SCHEDULE rather than from
+// whichever matches happen to have been created so far. That distinction is
+// the whole point: sizing the cup by created matches meant the target
+// climbed through setup — 8.5 with one round entered, higher with two —
+// when the number everyone is playing for was fixed before a ball was hit.
+//
+// A round whose matches exist is priced off those matches, since the
+// director may have built something the format's group size wouldn't
+// predict. Only a round that hasn't been built yet gets projected.
+function cupPointsOnOffer(matches, tRounds, playersPerSide) {
+  const rounds = new Set([
+    ...(tRounds || []).map((t) => t.round_number),
+    ...(matches || []).map((m) => m.round),
+  ]);
+  let total = 0;
+  rounds.forEach((rnd) => {
+    const built = (matches || []).filter((m) => m.round === rnd);
+    if (built.length) {
+      total += built.reduce((sum, m) => sum + matchPot(m), 0);
+      return;
+    }
+    const tr = (tRounds || []).find((t) => t.round_number === rnd);
+    if (tr) total += roundMatchCount(tr, playersPerSide) * roundMatchPot(tr);
+  });
+  return total;
+}
+
 // Has every point in this match been decided? A match can be "closed out"
 // (3&2) while a Nassau segment is still live, so the result being final and
 // the POINTS being final are two different questions — this asks the second.
@@ -615,9 +670,18 @@ export function TeamLeaderboard({
     return t;
   }, [matchResults]);
 
+  // Roster size per side, which is what turns a format into a match count.
+  // Takes the smaller side so an in-progress roster can't inflate the cup;
+  // falls back to the larger one when only one side has been entered.
+  const playersPerSide = useMemo(() => {
+    const a = (tPlayers || []).filter((p) => p.team === "A").length;
+    const b = (tPlayers || []).filter((p) => p.team === "B").length;
+    return Math.min(a, b) || Math.max(a, b);
+  }, [tPlayers]);
+
   const totalAvail = useMemo(
-    () => Math.max(matches.reduce((s, m) => s + matchPot(m), 0), totals.A + totals.B),
-    [matches, totals]
+    () => Math.max(cupPointsOnOffer(matches, tRounds, playersPerSide), totals.A + totals.B),
+    [matches, tRounds, playersPerSide, totals]
   );
   // The configured target wins over the derived one — see CUP_POINTS_TO_WIN.
   // The fallback still applies when it's unset, and it's also what decides

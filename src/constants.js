@@ -36,18 +36,18 @@ export const TOURNAMENT_TITLE = "The Bourbon Cup";
 export const TOURNAMENT_LOCATION = "Gaylord, MI";
 
 // ── Points to win the cup ──
-// The leaderboard used to derive this from the matches that exist right
-// now (half the pot, plus a half). That reads correctly only once the
-// whole schedule has been entered — before then the denominator is just
-// however many matches the director has created, so the target drifts
-// upward through setup instead of standing still at the number everyone
-// already knows they're playing for.
+// Normally null: the leaderboard works the target out from the schedule —
+// each round's format gives a match count against the roster, each round's
+// Nassau split gives what a match is worth, and half of that total plus a
+// half is what wins the cup. Rounds whose matches already exist are priced
+// off those matches instead, so a hand-built draw is always counted as
+// built rather than as predicted.
 //
-// Stating it outright fixes that, and it also makes the clinch test agree
-// with the number on screen. EDITION-SPECIFIC: if a future year changes
-// the schedule, change this with it. Set to null to go back to deriving
-// it from the matches on the board.
-export const CUP_POINTS_TO_WIN = 42;
+// Set a number here only to override that derivation — a cup with a rule
+// the schedule can't express, or a year where the setup isn't fully
+// entered and you want the real target showing anyway. Whatever is set
+// here also decides the clinch, so the bar and the number stay in step.
+export const CUP_POINTS_TO_WIN = null;
 
 // Default team-name map, derived from the TEAM_A/TEAM_B definitions above so
 // the fallback names live in exactly one place. Seed App's teamNames state
@@ -78,19 +78,26 @@ export const resolveTeams = (teamNames) => ({
 // the sum of those three (singles → 3, all others → 4) so a director who
 // flips a Nassau round to Traditional gets the same total points at stake.
 //
+// `perSide` is how many players from each team make up one match. It exists
+// so the leaderboard can work out how many matches a round WILL produce
+// before the director has created them, which is what lets the cup target
+// stand still through setup instead of climbing as matches get entered.
+// `null` means the whole side plays as a single match. Only used for that
+// projection — once a round's matches exist, they're counted directly.
+//
 // Format defaults are baseline only — the director can override any value
 // in the round setup form.
 export const FORMATS = [
-  { id: "singles",        label: "Singles",            desc: "Match play, 1v1 net comparison per hole.",                                              nassau: { front: 1, back: 1, overall: 1 } },
-  { id: "best_ball",      label: "2-Man Best Ball",    desc: "Each player plays their own ball; team uses the better net score per hole.",            nassau: { front: 1, back: 1, overall: 2 } },
-  { id: "team_total",     label: "Team Total",         desc: "Combined team net per hole vs combined team net. Lower combined wins the hole.",        nassau: { front: 1, back: 1, overall: 2 } },
-  { id: "pinehurst",      label: "Pinehurst",          desc: "Partners each drive, swap balls, then choose best to finish as scramble.",              nassau: { front: 1, back: 1, overall: 2 } },
-  { id: "team_best_ball", label: "Team Best Ball",     desc: "Full team format — best of all team-member nets per hole.",                             nassau: { front: 1, back: 1, overall: 2 } },
-  { id: "double_dot",     label: "Double Dot",         desc: "Match play with an automatic bonus point for winning the last 3 holes.",                nassau: { front: 1, back: 1, overall: 2 } },
-  { id: "shamble",        label: "Shamble",            desc: "All players drive, choose best drive, each plays their own ball in.",                   nassau: { front: 1, back: 1, overall: 2 } },
-  { id: "scramble",       label: "2-Man Scramble",     desc: "Both hit every shot, choose best ball location, both play from there.",                 nassau: { front: 1, back: 1, overall: 2 } },
-  { id: "tilt",           label: "2-Man Tilt",         desc: "2-man match play — net comparison per hole.",                                           nassau: { front: 1, back: 1, overall: 2 } },
-  { id: "stableford",     label: "2-Man Stableford",   desc: "Points per hole: eagle=4, birdie=3, par=2, bogey=1. Higher segment points wins.",       nassau: { front: 1, back: 1, overall: 2 } },
+  { id: "singles",        label: "Singles",            desc: "Match play, 1v1 net comparison per hole.",                                              nassau: { front: 1, back: 1, overall: 1 }, perSide: 1 },
+  { id: "best_ball",      label: "2-Man Best Ball",    desc: "Each player plays their own ball; team uses the better net score per hole.",            nassau: { front: 1, back: 1, overall: 2 }, perSide: 2 },
+  { id: "team_total",     label: "Team Total",         desc: "Combined team net per hole vs combined team net. Lower combined wins the hole.",        nassau: { front: 1, back: 1, overall: 2 }, perSide: 2 },
+  { id: "pinehurst",      label: "Pinehurst",          desc: "Partners each drive, swap balls, then choose best to finish as scramble.",              nassau: { front: 1, back: 1, overall: 2 }, perSide: 2 },
+  { id: "team_best_ball", label: "Team Best Ball",     desc: "Full team format — best of all team-member nets per hole.",                             nassau: { front: 1, back: 1, overall: 2 }, perSide: null },
+  { id: "double_dot",     label: "Double Dot",         desc: "Match play with an automatic bonus point for winning the last 3 holes.",                nassau: { front: 1, back: 1, overall: 2 }, perSide: 2 },
+  { id: "shamble",        label: "Shamble",            desc: "All players drive, choose best drive, each plays their own ball in.",                   nassau: { front: 1, back: 1, overall: 2 }, perSide: 2 },
+  { id: "scramble",       label: "2-Man Scramble",     desc: "Both hit every shot, choose best ball location, both play from there.",                 nassau: { front: 1, back: 1, overall: 2 }, perSide: 2 },
+  { id: "tilt",           label: "2-Man Tilt",         desc: "2-man match play — net comparison per hole.",                                           nassau: { front: 1, back: 1, overall: 2 }, perSide: 2 },
+  { id: "stableford",     label: "2-Man Stableford",   desc: "Points per hole: eagle=4, birdie=3, par=2, bogey=1. Higher segment points wins.",       nassau: { front: 1, back: 1, overall: 2 }, perSide: 2 },
 ];
 
 // ── Point-allocation methods ──
