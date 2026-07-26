@@ -1503,15 +1503,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
       {tab === "players" && (
         <div>
-          {/* Column headers — the name label lines up with the 52% name
-              column below; "Handicap Index" sits over the Index column, with
-              the batch GHIN re-sync (prompt-gated) right beside it. */}
-          <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "0 9px", marginBottom: 8 }}>
-            <div style={{ flexBasis: "52%", flexGrow: 0, flexShrink: 1, minWidth: 0, fontSize: 9, fontWeight: 800, letterSpacing: 0.6, color: BC.t3, textTransform: "uppercase" }}>Player Name</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
-              <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.6, color: BC.t3, textTransform: "uppercase", whiteSpace: "nowrap" }}>Handicap Index</span>
-              <GhinSyncButton players={tPlayers} onUpdatePlayer={onUpdatePlayer} notify={notify} confirm={confirm} compact />
-            </div>
+          {/* Right-aligned batch GHIN re-sync (prompt-gated). */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, padding: "0 9px", marginBottom: 8 }}>
+            <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.6, color: BC.t3, textTransform: "uppercase", whiteSpace: "nowrap" }}>GHIN sync</span>
+            <GhinSyncButton players={tPlayers} onUpdatePlayer={onUpdatePlayer} notify={notify} confirm={confirm} compact />
           </div>
           {[teams.A, teams.B].map(team => (
             <div key={team.id} style={{ marginBottom: 10 }}>
@@ -1838,9 +1833,11 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 if (idx === 0) {
                   const t0 = parseTime(times[0]);
                   if (t0 != null) {
-                    times[1] = formatTime(t0 + 8);
-                    times[2] = formatTime(t0 + 16);
-                    times[3] = formatTime(t0 + 24);
+                    // Default 10-minute spread between groups (overridden the
+                    // moment the director edits group 2 — see the idx===1 branch).
+                    times[1] = formatTime(t0 + 10);
+                    times[2] = formatTime(t0 + 20);
+                    times[3] = formatTime(t0 + 30);
                   }
                 } else if (idx === 1) {
                   const t0 = parseTime(times[0]);
@@ -1875,32 +1872,60 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               );
             })()}
 
-            {/* Scoring + Low Man toggle on same line */}
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>SCORING</div>
-              {[["front", "F9"], ["back", "B9"], ["overall", "OVR"]].map(([k, lbl]) => (
+            {/* ── Scoring ──────────────────────────────────────────────────
+                Match vs Stroke, then (for Match) Single vs Nassau. The whole
+                thing writes the existing nassau {front,back,overall} points:
+                  • Nassau  → three separate matches (F9 / B9 / OVR)
+                  • Single  → one match worth `value` (stored as overall-only)
+                so no scoring-engine change is needed. Stroke play would need a
+                different scoring model in scoring.js and is not wired yet. */}
+            {(() => {
+              const isSingle = (nassau.front || 0) === 0 && (nassau.back || 0) === 0;
+              const pill = (active, disabled) => ({
+                padding: "4px 12px", borderRadius: 16, fontSize: 10, fontWeight: 700, border: "none",
+                cursor: disabled ? "not-allowed" : "pointer",
+                background: active ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
+                color: active ? "#0a0804" : (disabled ? BC.t3 + "66" : BC.t3),
+              });
+              const numField = (k, lbl) => (
                 <div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}>
                   <span style={{ fontSize: 9, color: BC.t3, flexShrink: 0 }}>{lbl}</span>
                   <input type="number" step="0.5" min="0" value={nassau[k]}
                     onChange={e => setNassau(n => ({ ...n, [k]: parseFloat(e.target.value) || 0 }))}
                     onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
-                    style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: 11, textAlign: "center", width: 38 }} />
+                    style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: 14, textAlign: "center", width: 44 }} />
                 </div>
-              ))}
-              {/* Low Man / All toggle inline */}
-              <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}`, marginLeft: "auto" }}>
-                {[["low_man", "Low Man"], ["full", "All"]].map(([val, lbl]) => {
-                  const active = (handicapMode[editRound] || "low_man") === val;
-                  return (
-                    <button key={val} onClick={() => setHandicapMode(prev => ({ ...prev, [editRound]: val }))} style={{
-                      padding: "3px 8px", borderRadius: 16, fontSize: 9, fontWeight: 700, border: "none", cursor: "pointer",
-                      background: active ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
-                      color: active ? "#0a0804" : BC.t3,
-                    }}>{lbl}</button>
-                  );
-                })}
-              </div>
-            </div>
+              );
+              return (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>SCORING</div>
+                    {/* Match / Stroke */}
+                    <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}` }}>
+                      <button style={pill(true, false)}>Match</button>
+                      <button disabled title="Stroke-play scoring isn't available yet" style={pill(false, true)}>Stroke</button>
+                    </div>
+                    {/* Low Man / All (handicap allocation) */}
+                    <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}`, marginLeft: "auto" }}>
+                      {[["low_man", "Low Man"], ["full", "All"]].map(([val, lbl]) => (
+                        <button key={val} onClick={() => setHandicapMode(prev => ({ ...prev, [editRound]: val }))}
+                          style={pill((handicapMode[editRound] || "low_man") === val, false)}>{lbl}</button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Match structure: Single vs Nassau + the value field(s) */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}` }}>
+                      <button onClick={() => setNassau(n => ({ front: 0, back: 0, overall: n.overall || 1 }))} style={pill(isSingle, false)}>Single</button>
+                      <button onClick={() => setNassau(n => ({ front: n.front || 1, back: n.back || 1, overall: n.overall || 1 }))} style={pill(!isSingle, false)}>Nassau</button>
+                    </div>
+                    {isSingle
+                      ? numField("overall", "Value")
+                      : [["front", "F9"], ["back", "B9"], ["overall", "OVR"]].map(([k, lbl]) => numField(k, lbl))}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* ── Handicap lock ──────────────────────────────────────────
                 The control surface for src/lib/roundLocks.js. A locked round

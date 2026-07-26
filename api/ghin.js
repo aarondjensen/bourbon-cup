@@ -115,19 +115,27 @@ async function fetchGolfer(ghinNumber, token) {
   // which version of the endpoint we hit. Normalize.
   const g = data?.golfer || data?.golfers?.[0] || data;
 
-  if (!g || g.handicap_index == null) {
+  // The single-golfer endpoint returns the index under one of SEVERAL field
+  // names depending on endpoint version (handicap_index / hi_value /
+  // hi_display / display). Only reading `handicap_index` made batch sync
+  // report every golfer as "failed" even though the data was present. Read
+  // the alternates too, exactly like the search path's normalizeGolfer().
+  const hiRaw =
+    g?.handicap_index ?? g?.hi_value ?? g?.hi_display ?? g?.display ?? g?.handicap ?? null;
+
+  if (!g || hiRaw == null) {
     return { ghin_number: String(ghinNumber), error: "No handicap data in response" };
   }
 
   return {
     ghin_number: String(ghinNumber),
-    handicap_index: g.handicap_index,
-    first_name: g.first_name || null,
-    last_name: g.last_name || null,
-    club_name: g.club_name || null,
+    handicap_index: hiRaw,
+    first_name: g.first_name || g.player_first_name || null,
+    last_name: g.last_name || g.player_last_name || null,
+    club_name: g.club_name || g.primary_club_name || g.club || null,
     // GHIN returns this under different names in different responses.
     last_revision_date:
-      g.revision_date || g.last_revision_date || g.handicap_revision_date || null,
+      g.revision_date || g.last_revision_date || g.handicap_revision_date || g.hi_date || null,
     low_hi: g.low_hi || g.low_handicap_index || null,
   };
 }
