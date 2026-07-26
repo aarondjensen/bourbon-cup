@@ -33,7 +33,7 @@ import {
   FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT,
   POINT_METHOD_TRADITIONAL, TROPHY_SILHOUETTE,
 } from "../constants";
-import { computeMatchResult, getRoundCourseCtx } from "../scoring";
+import { computeMatchResult, getRoundCourseCtx, higherIsBetter, totalUnit } from "../scoring";
 import { isRoundFinal } from "../lib/roundLocks";
 
 const FONT = "'Montserrat', sans-serif";
@@ -85,19 +85,22 @@ const initialsOf = (names) => {
 // hands us the awarded points; this only derives the human-readable
 // margin ("2 UP", "3&2", "AS") and whether the segment is settled.
 //
-// `stroke` matches are settled on net stroke totals, not holes won, so
-// the margin means something different — the caller passes the flag and
-// the returned `unit` tells the renderer which noun to use.
-function segState(holes, stroke) {
+// `total` segments are settled on running totals, not holes won, so the
+// margin means something different — the caller passes the flag, plus
+// `higherWins` for the formats whose per-hole number counts UP (Double
+// Dot dots, Stableford points) rather than down (net strokes). The
+// returned `unit` tells the renderer which language to speak.
+function segState(holes, total, higherWins = false) {
   const played = holes.filter((h) => h.played);
-  if (stroke) {
+  if (total) {
     const complete = holes.every((h) => h.aScore != null && h.bScore != null);
     const aTot = played.reduce((s, h) => s + (h.aScore ?? 0), 0);
     const bTot = played.reduce((s, h) => s + (h.bScore ?? 0), 0);
-    const margin = bTot - aTot; // > 0 → A has fewer strokes → A leads
+    // > 0 → A leads, whichever direction the format's numbers run.
+    const margin = higherWins ? aTot - bTot : bTot - aTot;
     return {
       complete, played: played.length, total: holes.length, remaining: holes.length - played.length,
-      margin, clinched: false, unit: "stk",
+      margin, clinched: false, unit: "total", aTot, bTot,
       winner: complete ? (margin > 0 ? "A" : margin < 0 ? "B" : null) : null,
     };
   }
@@ -115,10 +118,14 @@ function segState(holes, stroke) {
 
 // Golf-native result text. "3&2" when a match closes early, "2 UP" when
 // it goes the distance, "AS" for all square, "—" before a ball is struck.
+//
+// A Total segment isn't a match, so it doesn't get match language: there is
+// no "up" and nothing can be closed out early, only a lead on the running
+// total. 8 dots to 6 shows "+2", read against the leading team's color.
 function statusText(st) {
   if (!st.played) return "—";
   const m = Math.abs(st.margin);
-  if (st.unit === "stk") return m === 0 ? "TIED" : `${m} STK`;
+  if (st.unit === "total") return m === 0 ? "TIED" : `+${m}`;
   if (st.clinched && st.remaining > 0) return `${m}&${st.remaining}`;
   if (m === 0) return "AS";
   return `${m} UP`;
@@ -133,16 +140,13 @@ function statusText(st) {
 // A segment nobody has teed off on is deliberately NOT projected — there's
 // nothing to project from, and calling an untouched match a ½/½ split would
 // dress up "no data" as a forecast. Those points stay simply unplayed.
-//
-// The Double Dot bonus isn't projected either: it settles only once holes
-// 16-18 are all in, so it can't move until the match is essentially over.
-// Same reason matchPot treats the base pot as a floor rather than a ceiling.
-function pendingPts(m, r) {
+function pendingPts(m, r, format) {
   const out = { A: 0, B: 0 };
-  const stroke = (m.scoring_type || "match") === "stroke";
+  const total = (m.scoring_type || "match") === "stroke";
+  const higherWins = higherIsBetter(format);
   const add = (holes, pot) => {
     if (!pot) return;
-    const st = segState(holes, stroke);
+    const st = segState(holes, total, higherWins);
     if (st.complete || !st.played) return;
     if (st.margin > 0) out.A += pot;
     else if (st.margin < 0) out.B += pot;
@@ -163,11 +167,10 @@ function pendingPts(m, r) {
 // One of FRONT / BACK / OVERALL (or a single MATCH pill in Traditional).
 // Settled segments fill with the winning team's color and show the points
 // won; live segments stay hollow and show the running margin.
-function SegmentPill({ label, pot, st, pts, bonus }) {
+function SegmentPill({ label, pot, st, pts }) {
   const settled = st.complete;
   const halved = settled && !st.winner;
   const win = st.winner;
-  const awarded = (pts?.A || 0) + (pts?.B || 0);
   const shown = settled ? (halved ? "½ – ½" : `${fmtPts(win === "A" ? pts.A : pts.B)}`) : statusText(st);
   const color = win ? teamHex(win) : BC.t2;
 
@@ -188,9 +191,6 @@ function SegmentPill({ label, pot, st, pts, bonus }) {
         whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
       }}>
         {shown}
-        {bonus && settled && awarded > pot && (
-          <span style={{ fontSize: 8, marginLeft: 3, color: BC.amber, letterSpacing: 0.5 }}>+DD</span>
-        )}
       </div>
     </div>
   );
@@ -337,11 +337,12 @@ function MatchCard({
   index, first, match, result, format, teams, tPlayers,
   courses, tRounds, roundLocks, expanded, onToggle,
 }) {
-  const stroke = (match.scoring_type || "match") === "stroke";
+  const total = (match.scoring_type || "match") === "stroke";
+  const higherWins = higherIsBetter(format);
   const traditional = (match.point_method || "") === POINT_METHOD_TRADITIONAL;
   const n = match.nassau || NASSAU_DEFAULT;
 
-  const overallSt = segState(result.holes, stroke);
+  const overallSt = segState(result.holes, total, higherWins);
   const nameOf = (pid) => tPlayers.find((p) => p.player_id === pid)?.name || pid;
   const aNames = (match.teamA || []).map(nameOf);
   const bNames = (match.teamB || []).map(nameOf);
@@ -352,15 +353,15 @@ function MatchCard({
 
   // Per-nine state, computed once and shared by the collapsed row's F9/B9
   // flanks and the expanded segment pills — so the two can never disagree.
-  const frontSt = segState(result.holes.slice(0, 9), stroke);
-  const backSt = segState(result.holes.slice(9, 18), stroke);
+  const frontSt = segState(result.holes.slice(0, 9), total, higherWins);
+  const backSt = segState(result.holes.slice(9, 18), total, higherWins);
 
   const segments = traditional
     ? [{ key: "o", label: "MATCH", pot: match.traditional_points ?? 1, st: overallSt, pts: result.overallPts }]
     : [
         n.front ? { key: "f", label: "FRONT", pot: n.front, st: frontSt, pts: result.frontPts } : null,
         n.back ? { key: "b", label: "BACK", pot: n.back, st: backSt, pts: result.backPts } : null,
-        n.overall ? { key: "o", label: "OVERALL", pot: n.overall, st: overallSt, pts: result.overallPts, bonus: format === "double_dot" } : null,
+        n.overall ? { key: "o", label: "OVERALL", pot: n.overall, st: overallSt, pts: result.overallPts } : null,
       ].filter(Boolean);
 
   // In a Nassau round the front and back nines are matches in their own
@@ -373,9 +374,9 @@ function MatchCard({
 
   // A completed match that finished level is a HALVE, worth a half point to
   // each side. statusText would call that "AS", which reads as a live state —
-  // "½" says it's over and how it was settled. Stroke matches keep their own
+  // "½" says it's over and how it was settled. Total matches keep their own
   // "TIED" wording, so this only applies to match play.
-  const halved = done && !stroke && overallSt.margin === 0;
+  const halved = done && !total && overallSt.margin === 0;
   const statusLabel = halved ? "½" : statusText(overallSt);
   const statusBase = leader ? teamHex(leader) : overallSt.played ? BC.t2 : BC.t3;
   const statusColor = ink(statusBase, done);
@@ -457,7 +458,7 @@ function MatchCard({
             </div>
             <div style={{ display: "flex", gap: 6 }}>
               {segments.map((s) => (
-                <SegmentPill key={s.key} label={s.label} pot={s.pot} st={s.st} pts={s.pts} bonus={s.bonus} />
+                <SegmentPill key={s.key} label={s.label} pot={s.pot} st={s.st} pts={s.pts} />
               ))}
             </div>
           </div>
@@ -478,7 +479,7 @@ function RoundSection({
   round, meta, results, open, onToggle, teams, tPlayers,
   courses, tRounds, roundLocks, expandedMatch, setExpandedMatch,
 }) {
-  const { course, fmt, tee, pts, avail, state } = meta;
+  const { course, fmt, tee, pts, avail, state, scoring } = meta;
   const stateChip =
     state === "live" ? <Chip text="LIVE" color={BC.amber} filled />
     : state === "final" ? <Chip text="FINAL" color={BC.t2} />
@@ -507,7 +508,7 @@ function RoundSection({
           fontSize: 10, color: BC.t3, marginTop: 3, paddingLeft: 17,
           whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
         }}>
-          {[course?.name || "Course TBD", tee, fmt?.label].filter(Boolean).join(" · ")}
+          {[course?.name || "Course TBD", tee, fmt?.label, scoring].filter(Boolean).join(" · ")}
           {avail ? ` · ${fmtPts(avail - pts.A - pts.B)} pts left` : ""}
         </div>
       </button>
@@ -587,8 +588,10 @@ export function TeamLeaderboard({
         avail += matchPot(m);
         holesPlayed += r.holesPlayed;
       });
-      // Double Dot bonuses can push awarded past the base pot — the pot
-      // is a floor, never a ceiling.
+      // Treat the pot as a floor rather than a ceiling: a legacy match that
+      // banked more than its round's current pot (an older point setup, or a
+      // format bonus that has since been retired) must never render as
+      // "-0.5 pts left".
       avail = Math.max(avail, pts.A + pts.B);
       const { tr, course } = getRoundCourseCtx({ roundLocks, round: rnd, tRounds, courses });
       const settled = results.length > 0
@@ -597,6 +600,11 @@ export function TeamLeaderboard({
         results, pts, avail, holesPlayed, course,
         tee: tr?.tee_box || null,
         fmt: FORMATS.find((f) => f.id === tr?.format) || null,
+        // Spelled out on the round bar because format alone doesn't tell you
+        // how the round is settled — the same Double Dot round plays as a
+        // match or on total dots depending on this one setting.
+        scoring: (tr?.scoring_type || "match") === "stroke"
+          ? `Total ${totalUnit(tr?.format)}` : "Match play",
         state: settled ? "final" : holesPlayed > 0 ? "live" : "upcoming",
       };
     });
@@ -628,8 +636,8 @@ export function TeamLeaderboard({
   // score if every match on the course ended this second.
   const pending = useMemo(() => {
     const t = { A: 0, B: 0 };
-    matchResults.forEach(({ match, result }) => {
-      const p = pendingPts(match, result);
+    matchResults.forEach(({ match, result, format }) => {
+      const p = pendingPts(match, result, format);
       t.A += p.A; t.B += p.B;
     });
     return t;
@@ -773,12 +781,16 @@ export function TeamLeaderboard({
 //  so it stays self-sufficient: it re-resolves its own course context
 //  (honouring a round lock's frozen hole tables when one exists).
 //
-//  Rows per nine: HOLE / PAR / team A net / team B net / running match
-//  state. Net scores are what the match was actually decided on, so
-//  those are what get shown — the winning side's cell is tinted.
+//  Rows per nine: HOLE / PAR / team A / team B / running state. The team
+//  rows carry whatever the match was actually decided on — net scores for
+//  most formats, dots for Double Dot — and the winning side's cell is
+//  tinted. The last row is the running match state on a Match round, and
+//  the running lead on a Total one.
 export function MatchScorecard({ match, result, format, courses, tRounds, teams, roundLocks }) {
   const { course, holePars } = getRoundCourseCtx({ roundLocks, round: match.round, tRounds, courses });
-  const stroke = (match.scoring_type || "match") === "stroke";
+  const total = (match.scoring_type || "match") === "stroke";
+  const higherWins = higherIsBetter(format);
+  const unit = totalUnit(format);
   const holes = result.holes;
 
   const aLabel = initialsOf(match.teamANames) || teams.A.short || "A";
@@ -792,11 +804,16 @@ export function MatchScorecard({ match, result, format, courses, tRounds, teams,
     const aWon = slice.filter((h) => h.winner === "A").length;
     const bWon = slice.filter((h) => h.winner === "B").length;
 
-    // Running margin from A's perspective, cumulative from hole 1.
+    // Running margin from A's perspective, cumulative from hole 1 — holes up
+    // on a Match round, lead on the running total on a Total one.
     const running = [];
-    let m = 0;
+    let m = 0, ra = 0, rb = 0;
     holes.forEach((h, i) => {
-      if (h.winner === "A") m += 1; else if (h.winner === "B") m -= 1;
+      if (total) {
+        ra += h.aScore ?? 0; rb += h.bScore ?? 0;
+        m = higherWins ? ra - rb : rb - ra;
+      } else if (h.winner === "A") m += 1;
+      else if (h.winner === "B") m -= 1;
       running[i] = h.played ? m : null;
     });
 
@@ -835,7 +852,7 @@ export function MatchScorecard({ match, result, format, courses, tRounds, teams,
               background: h.winner === "A" ? `${BC.teamA}26` : "transparent",
             }}>{h.aScore ?? "·"}</div>
           ))}
-          <div style={{ ...cellBase, color: BC.teamA }}>{stroke ? aTot || "·" : aWon}</div>
+          <div style={{ ...cellBase, color: BC.teamA }}>{total ? aTot || "·" : aWon}</div>
 
           {/* Team B nets */}
           <div style={{ ...lab, color: BC.teamB }}>{bLabel}</div>
@@ -846,27 +863,33 @@ export function MatchScorecard({ match, result, format, courses, tRounds, teams,
               background: h.winner === "B" ? `${BC.teamB}26` : "transparent",
             }}>{h.bScore ?? "·"}</div>
           ))}
-          <div style={{ ...cellBase, color: BC.teamB }}>{stroke ? bTot || "·" : bWon}</div>
+          <div style={{ ...cellBase, color: BC.teamB }}>{total ? bTot || "·" : bWon}</div>
 
-          {/* Running match state */}
-          {!stroke && <div style={lab}>MTCH</div>}
-          {!stroke && slice.map((h, i) => {
+          {/* Running state — holes up on a Match round, the leader's margin
+              on the running total on a Total one. Both are colored by who
+              holds the lead, so the row reads the same way either way. */}
+          <div style={lab}>{total ? "LEAD" : "MTCH"}</div>
+          {slice.map((h, i) => {
             const v = running[start + i];
             return (
               <div key={`m${i}`} style={{
                 ...cellBase, fontSize: 8, fontWeight: 800,
                 color: v == null ? BC.t3 : v > 0 ? BC.teamA : v < 0 ? BC.teamB : BC.t3,
-              }}>{v == null ? "" : v === 0 ? "AS" : Math.abs(v)}</div>
+              }}>
+                {v == null ? "" : v === 0 ? (total ? "—" : "AS") : `${total ? "+" : ""}${Math.abs(v)}`}
+              </div>
             );
           })}
-          {!stroke && <div />}
+          <div />
         </div>
       </div>
     );
   };
 
-  // Double Dot side note — the bonus point for the last three holes.
-  const dd = format === "double_dot" ? segState(holes.slice(15, 18), false) : null;
+  // Double Dot side note — how the dots have been shared out so far. The
+  // cells above show a hole's dots; this says what they add up to, which is
+  // the number the round is actually settled on when it's Total-scored.
+  const dd = format === "double_dot" ? segState(holes, true, true) : null;
 
   return (
     <div style={{ padding: "12px 12px 14px", fontFamily: FONT }}>
@@ -881,7 +904,12 @@ export function MatchScorecard({ match, result, format, courses, tRounds, teams,
       </div>
 
       <div style={{ fontSize: 9, color: BC.t3, marginBottom: 10 }}>
-        {[course?.name, FORMATS.find((f) => f.id === format)?.label, "net scores"].filter(Boolean).join(" · ")}
+        {[
+          course?.name,
+          FORMATS.find((f) => f.id === format)?.label,
+          higherWins ? unit : "net scores",
+          total ? `total ${unit}` : "match play",
+        ].filter(Boolean).join(" · ")}
       </div>
 
       {nine(0, 9, "FRONT NINE")}
@@ -893,14 +921,21 @@ export function MatchScorecard({ match, result, format, courses, tRounds, teams,
           background: `${BC.amber}14`, border: `1px solid ${BC.amber}33`,
           fontSize: 10, color: BC.t2, display: "flex", alignItems: "center", gap: 6,
         }}>
-          <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: 1, color: BC.amber }}>DOUBLE DOT</span>
+          <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: 1, color: BC.amber }}>DOTS</span>
           <span style={{ flex: 1 }} />
-          <span style={{ fontWeight: 700, color: dd.winner ? teamHex(dd.winner) : BC.t3 }}>
-            {!dd.played ? "holes 16–18 to play"
-              : !dd.complete ? `${statusText(dd)} thru ${15 + dd.played}`
-              : dd.winner ? `+1 pt · ${dd.winner === "A" ? teams.A.name : teams.B.name}`
-              : "halved · no bonus"}
-          </span>
+          {!dd.played ? (
+            <span style={{ fontWeight: 700, color: BC.t3 }}>low ball + high ball, 2 per hole</span>
+          ) : (
+            <span style={{ fontWeight: 700 }}>
+              <span style={{ color: BC.teamA }}>{dd.aTot}</span>
+              <span style={{ color: BC.t3 }}>{" – "}</span>
+              <span style={{ color: BC.teamB }}>{dd.bTot}</span>
+              <span style={{ color: dd.margin === 0 ? BC.t3 : teamHex(dd.margin > 0 ? "A" : "B") }}>
+                {dd.margin === 0 ? " · level" : ` · ${statusText(dd)}`}
+              </span>
+              <span style={{ color: BC.t3 }}>{dd.complete ? "" : ` thru ${dd.played}`}</span>
+            </span>
+          )}
         </div>
       )}
     </div>

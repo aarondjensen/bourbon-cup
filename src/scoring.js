@@ -88,6 +88,21 @@ export const getEffectiveHI = (pid, players, overrides) => {
 export const resolveHolePars = (course, lock) => lock?.hole_pars || course?.hole_pars || Array(18).fill(4);
 export const resolveHoleHcps = (course, lock) => lock?.hole_handicaps || course?.hole_handicaps || Array(18).fill(9);
 
+// ── Which way does a hole score run? ──
+// Most formats hand back NET STROKES per hole, where fewer is better. Two
+// hand back a per-hole POINT count instead — Stableford points and Double
+// Dot's Hi/Lo dots — where more is better. Every comparison in the engine
+// and on every screen (hole winner, segment winner, Total-scoring margin,
+// status text) has to flip direction for those two, so the question is
+// asked in exactly one place.
+export const higherIsBetter = (format) => format === "stableford" || format === "double_dot";
+
+// What a Total-scored round is actually totalling, for labels. A director who
+// set "Total" on a Double Dot round is counting dots, not strokes, and the
+// screens should say so.
+export const totalUnit = (format) =>
+  format === "double_dot" ? "dots" : format === "stableford" ? "points" : "strokes";
+
 export const buildStrokeMap = (ch, holeHcps) => {
   const sorted = holeHcps.map((h, i) => ({ idx: i, hcp: h })).sort((a, b) => a.hcp - b.hcp);
   const map = {};
@@ -228,6 +243,9 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
     roundLocks, round: rnd, pid, players: tPlayers, course, chOverrides, teeAssignments, roundTee,
   });
   const getStrokeMap = (ch) => buildStrokeMap(ch, holeHcps);
+  // Stableford points and Double Dot dots count UP; every other format's
+  // per-hole number is net strokes and counts down.
+  const higherWins = higherIsBetter(format);
   const netScore = (gross, holeIdx, strokeMap) => gross == null ? null : gross - (strokeMap[holeIdx] || 0);
 
   const teamA = match.teamA; // array of pids
@@ -272,6 +290,33 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
       const bNets = teamB.map(pid => { const m = getAdjustedStrokeMap(pid); return netScore(getPlayerScores(pid)[h], h, m); });
       if (aNets.every(s => s != null)) aScore = aNets.reduce((a,b) => a+b, 0);
       if (bNets.every(s => s != null)) bScore = bNets.reduce((a,b) => a+b, 0);
+    } else if (format === "double_dot") {
+      // ── Double Dot (2-man Hi/Lo) ──
+      // Every hole is TWO sub-matches played at once: the two sides' LOW
+      // balls against each other, and their HIGH balls against each other.
+      // Each sub-match won is a dot; a tied sub-match awards no dot to
+      // anyone. So a hole hands out 2, 1 or 0 dots and can be split 1-1 —
+      // which is where the name comes from, and why the running total is
+      // dots rather than holes.
+      //
+      // aScore/bScore are therefore DOT COUNTS (0-2) here, not net strokes.
+      // higherIsBetter("double_dot") is what tells the rest of the engine
+      // to read them the right way round.
+      const nets = (team) => team.map(pid => {
+        const m = getAdjustedStrokeMap(pid);
+        return netScore(getPlayerScores(pid)[h], h, m);
+      });
+      const aNets = nets(teamA), bNets = nets(teamB);
+      if (aNets.length && bNets.length && aNets.every(s => s != null) && bNets.every(s => s != null)) {
+        const aLo = Math.min(...aNets), bLo = Math.min(...bNets);
+        // A one-man side has no separate high ball to contest, so only the
+        // low-ball dot is on offer. Better a half-format that scores than a
+        // side whose single ball wins both dots by itself.
+        const twoBall = aNets.length > 1 && bNets.length > 1;
+        const aHi = Math.max(...aNets), bHi = Math.max(...bNets);
+        aScore = (aLo < bLo ? 1 : 0) + (twoBall && aHi < bHi ? 1 : 0);
+        bScore = (bLo < aLo ? 1 : 0) + (twoBall && bHi < aHi ? 1 : 0);
+      }
     } else if (format === "scramble") {
       // For scramble, team shares one score — use best raw, no individual handicaps
       const aRaws = teamA.map(pid => getPlayerScores(pid)[h]).filter(s => s != null);
@@ -312,7 +357,7 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
 
     let winner = null;
     if (aScore != null && bScore != null) {
-      if (format === "stableford") winner = aScore > bScore ? "A" : aScore < bScore ? "B" : null;
+      if (higherWins) winner = aScore > bScore ? "A" : aScore < bScore ? "B" : null;
       else winner = aScore < bScore ? "A" : aScore > bScore ? "B" : null;
     }
     return { h, aScore, bScore, winner, played: aScore != null && bScore != null };
@@ -352,10 +397,14 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
   // Method falls back to Nassau when absent so legacy matches saved
   // before this field existed continue to score correctly.
   const pointMethod = match.point_method || POINT_METHOD_NASSAU;
-  // Match play (default) vs Stroke play (net medal). Stroke reuses the same
-  // nassau {front,back,overall} pots but awards each to the side with FEWER
-  // net strokes over that segment (F9 / B9 / 18), rather than the side that
-  // won more holes. "Single" (front=back=0) collapses to one 18-hole pot.
+  // Match play (default) vs Total ("stroke"). Total reuses the same nassau
+  // {front,back,overall} pots but awards each on the side's RUNNING TOTAL
+  // over that segment (F9 / B9 / 18) rather than on holes won — fewest net
+  // strokes for a stroke format, most dots for Double Dot, most points for
+  // Stableford. "Single" (front=back=0) collapses to one 18-hole pot.
+  //
+  // The stored value is still `"stroke"`; the admin toggle labels it "Total"
+  // because for a dot format there are no strokes to count.
   const scoringType = match.scoring_type || "match";
   const frontPts = { A: 0, B: 0 };
   const backPts = { A: 0, B: 0 };
@@ -366,7 +415,10 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
       const complete = holes.every(r => r.aScore != null && r.bScore != null);
       const aTot = holes.reduce((s, r) => s + (r.aScore ?? 0), 0);
       const bTot = holes.reduce((s, r) => s + (r.bScore ?? 0), 0);
-      return { complete, winner: complete ? (aTot < bTot ? "A" : aTot > bTot ? "B" : null) : null };
+      // Lead from A's perspective, already pointing the right way for the
+      // format: net strokes count down, dots and Stableford points count up.
+      const lead = higherWins ? aTot - bTot : bTot - aTot;
+      return { complete, winner: complete ? (lead > 0 ? "A" : lead < 0 ? "B" : null) : null };
     };
     const nassau = match.nassau || NASSAU_DEFAULT;
     const award = (seg, pts, out) => { if (seg.complete && pts) { if (seg.winner) out[seg.winner] = pts; else { out.A = pts / 2; out.B = pts / 2; } } };
@@ -394,27 +446,19 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
       if (overall.winner) overallPts[overall.winner] = nassau.overall;
       else { overallPts.A = nassau.overall / 2; overallPts.B = nassau.overall / 2; }
     }
-
-    // Double dot: bonus point for winning the last 3 holes. This is
-    // conceptually a Nassau press, so it only applies in Nassau mode —
-    // in Traditional there's only a single pot, no presses to add to.
-    if (format === "double_dot") {
-      const dd = calcSegment(holeResults.slice(15, 18));
-      if (dd.complete && dd.winner) {
-        overallPts[dd.winner] = (overallPts[dd.winner] || 0) + 1;
-      }
-    }
   }
 
   // Current match status string for display
   const playedHoles = holeResults.filter(r => r.played);
   let status = "AS";
   if (scoringType === "stroke") {
-    // Net-stroke differential over the holes both sides have completed.
+    // Total scoring has no "up" — it has a lead. Report it as the margin the
+    // leading side holds over the holes both sides have completed: 8 dots to
+    // 6 reads "+2 (A)", not "2UP (A)".
     const aTot = playedHoles.reduce((s, r) => s + (r.aScore ?? 0), 0);
     const bTot = playedHoles.reduce((s, r) => s + (r.bScore ?? 0), 0);
-    const d = aTot - bTot;
-    if (playedHoles.length > 0 && d !== 0) status = `${Math.abs(d)} (${d < 0 ? "A" : "B"})`;
+    const lead = higherWins ? aTot - bTot : bTot - aTot;
+    if (playedHoles.length > 0 && lead !== 0) status = `+${Math.abs(lead)} (${lead > 0 ? "A" : "B"})`;
   } else {
     const aUp = overall.aWins - overall.bWins;
     if (playedHoles.length > 0) {
