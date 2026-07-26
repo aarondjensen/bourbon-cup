@@ -346,12 +346,24 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
 }
 
 // ── Director batch sync ─────────────────────────────────────────────
-export function GhinSyncButton({ players, onUpdatePlayer, notify }) {
+// `confirm` (optional): a promise-based confirmation (useConfirm's) shown
+// before syncing, so the director sees exactly what will happen. `compact`
+// renders just an emoji button (for placing beside a column header).
+export function GhinSyncButton({ players, onUpdatePlayer, notify, confirm, compact }) {
   const [busy, setBusy] = useState(false);
   const linked = (players || []).filter(p => p?.ghin_number);
 
   const syncAll = async () => {
     if (!linked.length) { notify?.("No players linked to GHIN yet", "error"); return; }
+    if (confirm) {
+      const n = linked.length;
+      const ok = await confirm({
+        title: "Re-sync handicaps from GHIN",
+        message: `This pulls the current Handicap Index for all ${n} GHIN-linked player${n !== 1 ? "s" : ""} from the USGA GHIN database and overwrites their stored index.\n\n• Director overrides are kept (they still win).\n• Manual (non-linked) players are untouched.`,
+        confirmLabel: `Re-sync ${n}`,
+      });
+      if (!ok) return;
+    }
     setBusy(true);
     try {
       const map = await syncGhinNumbers(linked.map(p => p.ghin_number));
@@ -376,6 +388,25 @@ export function GhinSyncButton({ players, onUpdatePlayer, notify }) {
       notify?.(e.message || "GHIN sync failed", "error");
     } finally { setBusy(false); }
   };
+
+  if (compact) {
+    return (
+      <button
+        disabled={busy || !linked.length}
+        onClick={syncAll}
+        title={linked.length ? `Re-sync ${linked.length} GHIN-linked player${linked.length !== 1 ? "s" : ""}` : "No GHIN-linked players yet"}
+        style={{
+          boxSizing: "border-box", display: "inline-flex", alignItems: "center", justifyContent: "center",
+          width: 24, height: 24, padding: 0, borderRadius: 6, lineHeight: 1,
+          cursor: linked.length ? "pointer" : "default",
+          border: `1px solid ${BC.green}66`, background: BC.green + "18",
+          fontSize: 12, flexShrink: 0, opacity: linked.length ? 1 : 0.4, fontFamily: FONT,
+        }}
+      >
+        {busy ? "⏳" : "🔄"}
+      </button>
+    );
+  }
 
   return (
     <button

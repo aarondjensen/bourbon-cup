@@ -1510,8 +1510,15 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
       {tab === "players" && (
         <div>
-          <div style={{ marginBottom: 12, display: "flex", justifyContent: "flex-end" }}>
-            <GhinSyncButton players={tPlayers} onUpdatePlayer={onUpdatePlayer} notify={notify} />
+          {/* Column headers — the name label lines up with the 52% name
+              column below; "Handicap Index" sits over the Index column, with
+              the batch GHIN re-sync (prompt-gated) right beside it. */}
+          <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "0 9px", marginBottom: 8 }}>
+            <div style={{ flexBasis: "52%", flexGrow: 0, flexShrink: 1, minWidth: 0, fontSize: 9, fontWeight: 800, letterSpacing: 0.6, color: BC.t3, textTransform: "uppercase" }}>Player Name</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
+              <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.6, color: BC.t3, textTransform: "uppercase", whiteSpace: "nowrap" }}>Handicap Index</span>
+              <GhinSyncButton players={tPlayers} onUpdatePlayer={onUpdatePlayer} notify={notify} confirm={confirm} compact />
+            </div>
           </div>
           {[teams.A, teams.B].map(team => (
             <div key={team.id} style={{ marginBottom: 10 }}>
