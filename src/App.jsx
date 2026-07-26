@@ -23,7 +23,7 @@ import { usePullToRefresh } from "./lib/usePullToRefresh";
 import { processLogo } from "./lib/logoBrand";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { Popup, ConfirmModal } from "./components/Popup";
-import { SegmentedToggle, Banner, Toast } from "./components/ui";
+import { SegmentedToggle, Banner, Toast, ScoreButtonRow } from "./components/ui";
 import { useConfirm } from "./lib/useConfirm";
 import { EditionSwitcher } from "./components/EditionSwitcher";
 import { GhinLinkButton, GhinSyncButton } from "./components/GhinLink";
@@ -445,10 +445,10 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
 
   const { A: tA, B: tB } = teams;
 
+  // ScoreButtonRow hands back the new gross directly (0 = cleared, which it
+  // sends when the active button is tapped again), so no toggle logic here.
   const onTapScore = async (pid, score) => {
-    const cur = getScore(pid, activeHole);
-    const newScore = cur === score ? 0 : score; // Tapping the active button clears
-    await onSaveHole(pid, match.round, activeHole, newScore || null, tr?.course_id);
+    await onSaveHole(pid, match.round, activeHole, score || null, tr?.course_id);
   };
 
   // Status cell rendering — for the two-row match status bar between
@@ -485,10 +485,6 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
       </div>
     );
   };
-
-  // Score buttons — par-relative range. par-3: 1-7, par-4/5: 2-8.
-  // Auto-shift if the saved score is outside the standard range.
-  const baseBtns = par === 3 ? [1, 2, 3, 4, 5, 6, 7] : [2, 3, 4, 5, 6, 7, 8];
 
   return (
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
@@ -628,18 +624,6 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
             }
           }
 
-          // Score-button range — auto-shift if saved score is out of base range.
-          const maxBtn = baseBtns[baseBtns.length - 1];
-          const minBtn = baseBtns[0];
-          let btns = baseBtns;
-          if (cur > maxBtn) {
-            const shift = cur - maxBtn;
-            btns = baseBtns.map(b => b + shift);
-          } else if (cur > 0 && cur < minBtn) {
-            const shift = minBtn - cur;
-            btns = baseBtns.map(b => Math.max(1, b - shift));
-          }
-
           return (
             <div key={pid} style={{
               background: BC.card, borderRadius: 10, marginBottom: 4, padding: "6px 10px",
@@ -662,36 +646,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
                   </span>
                 )}
               </div>
-              <div style={{ display: "flex", gap: 3 }}>
-                {btns.map(btn => {
-                  const isCur = btn === cur;
-                  const sd = btn - par;
-                  const boxSize = 32;
-                  return (
-                    <button key={btn} onClick={() => onTapScore(pid, btn)} style={{
-                      flex: 1, height: 38, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 800, border: "none",
-                      background: isCur ? BC.amber : BC.inp, color: isCur ? "#0a0804" : BC.t2,
-                      position: "relative",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>
-                      {/* Score-shape overlays — circle for birdie, nested
-                          circle for eagle, square for bogey, nested square
-                          for double-bogey+. Mirrors ScoreCell's iconography. */}
-                      {sd === -1 && <div style={{ position: "absolute", inset: 3, border: `1.5px solid ${isCur ? "#0a0804" : BC.t2}`, borderRadius: "50%", pointerEvents: "none" }} />}
-                      {sd <= -2 && <>
-                        <div style={{ position: "absolute", inset: 3, border: `1.5px solid ${isCur ? "#0a0804" : BC.t2}`, borderRadius: "50%", pointerEvents: "none" }} />
-                        <div style={{ position: "absolute", inset: 6, border: `1.5px solid ${isCur ? "#0a0804" : BC.t2}`, borderRadius: "50%", pointerEvents: "none" }} />
-                      </>}
-                      {sd === 1 && <div style={{ position: "absolute", inset: 4, border: `1.5px solid ${isCur ? "#0a0804" : BC.t2}`, pointerEvents: "none" }} />}
-                      {sd >= 2 && <>
-                        <div style={{ position: "absolute", inset: 4, border: `1.5px solid ${isCur ? "#0a0804" : BC.t2}`, pointerEvents: "none" }} />
-                        <div style={{ position: "absolute", inset: 7, border: `1.5px solid ${isCur ? "#0a0804" : BC.t2}`, pointerEvents: "none" }} />
-                      </>}
-                      <span style={{ position: "relative", zIndex: 1 }}>{btn}</span>
-                    </button>
-                  );
-                })}
-              </div>
+              <ScoreButtonRow par={par} score={cur} onScore={(v) => onTapScore(pid, v)} />
             </div>
           );
         })}
@@ -2840,11 +2795,6 @@ function PracticeScoringTab({
     return { net, gross, thru, netVsPar: net - parThru };
   };
 
-  // Score buttons: par-3 holes start at 1, par-4/5 start at 2. The displayed
-  // range shifts up or down if the saved score falls outside [min, max] so
-  // the active button is always visible without forcing the +/- adjusters.
-  const baseBtns = par === 3 ? [1, 2, 3, 4, 5, 6, 7] : [2, 3, 4, 5, 6, 7, 8];
-
   // ── MNQ-style match status bar ─────────────────────────────────────────
   // Cumulative match status per hole (1..18) from the USER'S team's
   // perspective. Positive = your team is up by N going into that hole;
@@ -3076,19 +3026,6 @@ function PracticeScoringTab({
         const ch = calcCHForCourse(hi, course, event.tee_box);
         const run = getRunning(pid);
 
-        // Shift the button range when the saved score falls outside [min, max].
-        // E.g. saved a 9 on a par-4 (max button = 8) → shift right so [3..9] shows.
-        const maxBtn = baseBtns[baseBtns.length - 1];
-        const minBtn = baseBtns[0];
-        let btns = baseBtns;
-        if (score > maxBtn) {
-          const shift = score - maxBtn;
-          btns = baseBtns.map(b => b + shift);
-        } else if (score > 0 && score < minBtn) {
-          const shift = minBtn - score;
-          btns = baseBtns.map(b => b - shift);
-        }
-
         return (
           <div key={pid}>
             {idx === 2 && <div style={{ borderTop: `1px dashed ${BC.bdr}`, margin: "6px 0" }} />}
@@ -3117,55 +3054,7 @@ function PracticeScoringTab({
                   </span>
                 )}
               </div>
-              <div style={{ display: "flex", gap: 3 }}>
-                {btns.map(btn => {
-                  const isCur = btn === score;
-                  const sd = btn - par;
-                  const boxSize = 32;
-                  return (
-                    <button key={btn} onClick={() => onSavePracticeScore(pid, activeHole, isCur ? null : btn)} style={{
-                      flex: 1, height: 38, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 800, border: "none",
-                      background: isCur ? BC.amber : BC.inp, color: isCur ? "#0a0804" : BC.t2,
-                      position: "relative",
-                      // No CSS transition — when the active hole changes
-                      // (auto-advance) or a score is corrected, the four
-                      // selected buttons should swap state instantly. With
-                      // a fade transition they all cross-fade through a
-                      // half-amber state, which reads as "ghost selections
-                      // flashing" rather than a clean state change.
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>
-                      {/* Score-vs-par overlay shape: bogey = square outline, double = nested square,
-                          birdie = circle outline, eagle = nested circle. Matches MNQ visualization. */}
-                      {isCur && sd !== 0 && (
-                        <div style={{ position: "absolute", width: boxSize, height: boxSize, left: "50%", top: "50%", transform: "translate(-50%, -50%)" }}>
-                          <div style={{
-                            position: "absolute", inset: 0,
-                            borderRadius: sd < 0 ? "50%" : 3,
-                            border: `1.5px solid ${sd < 0 ? BC.danger : "#0a0804"}`,
-                          }} />
-                          {Math.abs(sd) >= 2 && (
-                            <div style={{
-                              position: "absolute", inset: 3,
-                              borderRadius: sd < 0 ? "50%" : 2,
-                              border: `1px solid ${sd < 0 ? BC.danger : "#0a0804"}`,
-                            }} />
-                          )}
-                        </div>
-                      )}
-                      <span style={{ position: "relative", zIndex: 1 }}>{btn}</span>
-                    </button>
-                  );
-                })}
-                <button onClick={() => onSavePracticeScore(pid, activeHole, Math.max(1, (score || par) - 1))} style={{
-                  width: 26, height: 38, borderRadius: 8, background: BC.inp, border: "none",
-                  color: BC.t3, fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0,
-                }}>−</button>
-                <button onClick={() => onSavePracticeScore(pid, activeHole, (score || par) + 1)} style={{
-                  width: 26, height: 38, borderRadius: 8, background: BC.inp, border: "none",
-                  color: BC.t3, fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0,
-                }}>+</button>
-              </div>
+              <ScoreButtonRow par={par} score={score} onScore={(v) => onSavePracticeScore(pid, activeHole, v)} />
             </div>
           </div>
         );
