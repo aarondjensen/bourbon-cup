@@ -1651,6 +1651,22 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                                 {editingPlayer.dir ? "👑 Director" : "Director"}
                               </button>
                             </label>
+                            {/* GHIN link/sync now lives in the edit window (no row chip).
+                                The onUpdatePlayer wrapper mirrors any GHIN-driven index
+                                change back into the open form so Save can't overwrite a
+                                freshly-synced value with the stale INDEX field. */}
+                            <label style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
+                              <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.5, color: BC.t3 }}>GHIN</span>
+                              <div style={{ height: 35, display: "flex", alignItems: "center" }}>
+                                <GhinLinkButton player={p} user={user} notify={notify}
+                                  onUpdatePlayer={async (updated) => {
+                                    await onUpdatePlayer(updated);
+                                    if (Object.prototype.hasOwnProperty.call(updated, "handicap_index")) {
+                                      setEditingPlayer(prev => (prev && prev.pid === p.player_id) ? { ...prev, hi: String(updated.handicap_index ?? "") } : prev);
+                                    }
+                                  }} />
+                              </div>
+                            </label>
                             <span style={{ flex: 1, minWidth: 8 }} />
                             <button onClick={async () => {
                               const first = (editingPlayer.first || "").trim(), last = (editingPlayer.last || "").trim();
@@ -1698,13 +1714,21 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                             <span style={{ fontSize: 12, fontWeight: 600, color: playerNameColor(), minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fullName(p)}</span>
                             {p.isDirector && <span title="Tournament director" style={{ fontSize: 11, flexShrink: 0, lineHeight: 1 }}>👑</span>}
                           </div>
+                          {/* Index column doubles as the sync-status glyph:
+                              amber *  = director override (wins over GHIN/base)
+                              blue  G  = synced from GHIN
+                              plain    = manual. GHIN itself is managed in Edit. */}
                           {(() => {
                             const overridden = p.hi_override != null && String(p.hi_override).trim() !== "";
                             const effHI = overridden ? p.hi_override : p.handicap_index;
+                            const synced = !overridden && !!p.ghin_number;
                             return (
-                              <span title={overridden ? `Director override — GHIN/base index is ${p.handicap_index}` : undefined}
-                                style={{ fontSize: 12, fontWeight: overridden ? 700 : 500, color: overridden ? BC.amber : playerNameColor(), width: 44, flexShrink: 0, textAlign: "left" }}>
-                                {effHI}{overridden ? "*" : ""}
+                              <span title={overridden ? `Director override — GHIN/base index is ${p.handicap_index}` : (synced ? "Synced from GHIN" : "Manual index")}
+                                style={{ display: "inline-flex", alignItems: "center", gap: 4, width: 56, flexShrink: 0 }}>
+                                <span style={{ fontSize: 12, fontWeight: overridden ? 700 : 500, color: overridden ? BC.amber : playerNameColor() }}>
+                                  {effHI}{overridden ? "*" : ""}
+                                </span>
+                                {synced && <span style={{ fontSize: 7, fontWeight: 800, letterSpacing: 0.2, color: BC.hcpBlue, border: `1px solid ${BC.hcpBlue}66`, background: BC.hcpBlue + "1f", borderRadius: 3, padding: "1px 3px", lineHeight: 1 }}>G</span>}
                               </span>
                             );
                           })()}
@@ -1712,7 +1736,6 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                           <button onClick={() => setEditingPlayer({ pid: p.player_id, first: p.first_name || (p.last_name ? "" : (p.name || "")), last: p.last_name || "", hi: String(p.handicap_index), ov: (p.hi_override != null && String(p.hi_override).trim() !== "") ? String(p.hi_override) : "", dir: !!p.isDirector })} style={{
                             fontSize: 9, padding: "2px 8px", borderRadius: 4, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer", flexShrink: 0,
                           }}>Edit</button>
-                          <GhinLinkButton player={p} user={user} onUpdatePlayer={onUpdatePlayer} notify={notify} />
                         </>
                       )}
                     </div>
