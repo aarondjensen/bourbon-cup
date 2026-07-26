@@ -148,10 +148,19 @@ function SegmentPill({ label, pot, st, pts }) {
 }
 
 // ── Pending marker position ──────────────────────────────────────
-// Where the "+N" sits: the midpoint of that side's faded bar segment,
-// measured from its own edge of the bar. Clamped so a very small segment
-// (or one starting near the far end) still keeps its label on the card.
-const markerPct = (offset, width) => Math.min(94, Math.max(6, offset + width / 2));
+// Where the "+N" sits: the exact midpoint of that side's faded bar segment,
+// measured from its own edge of the bar. The label is centred on this point,
+// so it lines up with the shading it describes and nothing else.
+//
+// This used to be clamped to [6%, 94%] to keep a label from overhanging the
+// card. The clamp was the one thing stopping it from lining up: it only
+// binds when a side's banked total is under ~6% of the bar — which is
+// exactly the start of the cup, when everything IS pending — and there it
+// pushed the label 14-18px off its shading. It also wasn't buying anything.
+// A segment's midpoint is at least half its own width from the edge, so a
+// wide label implies a wide segment to sit over; the card's 14px of side
+// padding absorbs the rest, and this row doesn't clip.
+const markerPct = (offset, width) => offset + width / 2;
 
 // ── One team's column in a collapsed match row ──
 // The pair's names stack vertically on their own side of the row, with the
@@ -611,8 +620,7 @@ export function TeamLeaderboard({
 
         {/* Pending markers — each sits centred over its own faded bar
             segment, so the number and the length it describes are the same
-            object rather than two things to correlate. Clamped away from
-            the ends so a tiny segment's label can't overhang the card. */}
+            object rather than two things to correlate. */}
         <div style={{ position: "relative", height: 11, marginTop: 8 }}>
           {pending.A > 0 && (
             <span style={{
