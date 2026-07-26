@@ -29,12 +29,18 @@ rules_version = '2';
 // collections) and split the list into read-mostly and director-only
 // halves. The collection list is already grouped that way below.
 //
-// ── Keeping this file honest ──────────────────────────────────────
-// This file was added after the fact, from the collections the client
-// actually touches (`db.subscribe` / `db.get` / `db.upsert` / `db.delete`
-// in src/firebase.js and its callers). If the console holds rules for a
-// collection that is not listed here, deploying this file will start
-// denying it — check the console before the first deploy.
+// ── What this replaces ────────────────────────────────────────────
+// Until this file, the deployed rules were a single blanket grant:
+//
+//   match /{document=**} { allow read, write: if true; }
+//
+// So the enumeration below IS the change. It cannot break the running app:
+// the list was taken from the collections the client actually touches
+// (`db.subscribe` / `db.get` / `db.upsert` / `db.delete` in
+// src/firebase.js, which is the only Firestore entry point in the repo —
+// pipeline/ and api/ never reach Firestore), so anything newly denied is
+// by construction something no code path here reads or writes. Data in
+// such a collection is untouched, just unreachable until a line is added.
 //
 // Deploy with:  firebase deploy --only firestore:rules
 //
@@ -70,7 +76,21 @@ service cloud.firestore {
     match /bc_settings/{doc}           { allow read, write: if isOpen(); }
     match /bc_tournament_settings/{doc} { allow read, write: if isOpen(); }
     match /bc_editions/{doc}           { allow read, write: if isOpen(); }
-    match /bc_historical/{doc}         { allow read, write: if isOpen(); }
+
+    // ── The archive ───────────────────────────────────────────────
+    // Ten years of finished tournaments. READ-ONLY, and deliberately the
+    // one exception on this page: the app only ever subscribes to it
+    // (App.jsx, the bc_historical listener) and has no code path that
+    // writes it, so denying writes costs nothing and takes the only
+    // irreplaceable data here out of reach of a world-writable client.
+    // Every other collection can be rebuilt from one weekend of golf;
+    // this one cannot.
+    //
+    // To re-import it (a corrected past year, a fresh load from
+    // data/historical sheets), flip this to `if isOpen();`, run the
+    // import, and flip it back.
+    match /bc_historical/{doc}         { allow read: if isOpen();
+                                         allow write: if false; }
 
     // ── Live scoring ──────────────────────────────────────────────
     // Written by players from the Scoring tab, so these can never be
