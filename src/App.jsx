@@ -1266,6 +1266,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
     setRoundFormat(tr.format || "");
     setRoundTeeTime(tr.tee_time || "");
     setNassau({ front: tr.nassau_front ?? 1, back: tr.nassau_back ?? 1, overall: tr.nassau_overall ?? 1 });
+    setScoringType(tr.scoring_type || "match");
     if (tr.handicap_mode) setHandicapMode(prev => ({ ...prev, [editRound]: tr.handicap_mode }));
   }, [tRounds]);
   const [handicapMode, setHandicapMode] = useState({ 1: "low_man", 2: "low_man", 3: "low_man", 4: "full" }); // per round
@@ -1294,6 +1295,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   useEffect(() => { if (hcpOverridesFromDb) setHcpOverrides(hcpOverridesFromDb); }, [JSON.stringify(hcpOverridesFromDb)]);
   useEffect(() => { if (teeAssignmentsFromDb) setTeeAssignments(teeAssignmentsFromDb); }, [JSON.stringify(teeAssignmentsFromDb)]);
   const [nassau, setNassau] = useState(NASSAU_DEFAULT);
+  const [scoringType, setScoringType] = useState("match"); // "match" | "stroke"
 
   // Match builder
   const [matchRound, setMatchRound] = useState(1);
@@ -1340,6 +1342,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
       nassau_front: nassau.front,
       nassau_back: nassau.back,
       nassau_overall: nassau.overall,
+      scoring_type: scoringType,
     };
     await onSetRound(data);
     notify("Round saved!", "success");
@@ -1357,6 +1360,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
       teamANames: matchTeamA.map(pid => tPlayers.find(p => p.player_id === pid)?.name || pid),
       teamBNames: matchTeamB.map(pid => tPlayers.find(p => p.player_id === pid)?.name || pid),
       nassau: nassau,
+      scoring_type: scoringType,
     };
     await onSetMatch(data);
     setMatchTeamA([]); setMatchTeamB([]);
@@ -1742,6 +1746,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   setRoundCourse(tr.course_id || "");
                   setRoundTeeTime(tr.tee_time || "");
                   setNassau({ front: tr.nassau_front || 1, back: tr.nassau_back || 1, overall: tr.nassau_overall || 1 });
+                  setScoringType(tr.scoring_type || "match");
                 }
                 // Load existing overrides and handicap mode for this round
                 setHcpOverrides(prev => ({ ...prev }));
@@ -1873,12 +1878,13 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             })()}
 
             {/* ── Scoring ──────────────────────────────────────────────────
-                Match vs Stroke, then (for Match) Single vs Nassau. The whole
-                thing writes the existing nassau {front,back,overall} points:
-                  • Nassau  → three separate matches (F9 / B9 / OVR)
-                  • Single  → one match worth `value` (stored as overall-only)
-                so no scoring-engine change is needed. Stroke play would need a
-                different scoring model in scoring.js and is not wired yet. */}
+                Match (win/halve holes) vs Stroke (net medal: fewest net strokes
+                wins), then Single vs Nassau. Both share the nassau
+                {front,back,overall} pots:
+                  • Nassau → three segments (F9 / B9 / OVR)
+                  • Single → one 18-hole pot worth `value` (overall-only)
+                `scoring_type` is saved on the round and baked into each match;
+                the stroke branch lives in scoring.js computeMatchResult. */}
             {(() => {
               const isSingle = (nassau.front || 0) === 0 && (nassau.back || 0) === 0;
               const pill = (active, disabled) => ({
@@ -1902,8 +1908,8 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>SCORING</div>
                     {/* Match / Stroke */}
                     <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}` }}>
-                      <button style={pill(true, false)}>Match</button>
-                      <button disabled title="Stroke-play scoring isn't available yet" style={pill(false, true)}>Stroke</button>
+                      <button onClick={() => setScoringType("match")} style={pill(scoringType === "match", false)}>Match</button>
+                      <button onClick={() => setScoringType("stroke")} title="Net stroke total (medal) — fewest net strokes wins each pot" style={pill(scoringType === "stroke", false)}>Stroke</button>
                     </div>
                     {/* Low Man / All (handicap allocation) */}
                     <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}`, marginLeft: "auto" }}>
@@ -5310,12 +5316,13 @@ export default function App() {
     ...r,
     nassau: { front: r.nassau_front ?? 1, back: r.nassau_back ?? 1, overall: r.nassau_overall ?? 1 },
     handicap_mode: r.handicap_mode || (r.round_number === 4 ? 'full' : 'low_man'),
+    scoring_type: r.scoring_type || "match",
   })), [tRounds]);
 
-  // Enhance matches with nassau from round
+  // Enhance matches with nassau + scoring type from their round
   const enrichedMatches = useMemo(() => matches.map(m => {
     const tr = enrichedRounds.find(t => t.round_number === m.round);
-    return { ...m, nassau: m.nassau || tr?.nassau || NASSAU_DEFAULT };
+    return { ...m, nassau: m.nassau || tr?.nassau || NASSAU_DEFAULT, scoring_type: m.scoring_type || tr?.scoring_type || "match" };
   }), [matches, enrichedRounds]);
 
   // Keep the auto-lock's source data current without rebuilding onSaveHole.

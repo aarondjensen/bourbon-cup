@@ -352,11 +352,28 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
   // Method falls back to Nassau when absent so legacy matches saved
   // before this field existed continue to score correctly.
   const pointMethod = match.point_method || POINT_METHOD_NASSAU;
+  // Match play (default) vs Stroke play (net medal). Stroke reuses the same
+  // nassau {front,back,overall} pots but awards each to the side with FEWER
+  // net strokes over that segment (F9 / B9 / 18), rather than the side that
+  // won more holes. "Single" (front=back=0) collapses to one 18-hole pot.
+  const scoringType = match.scoring_type || "match";
   const frontPts = { A: 0, B: 0 };
   const backPts = { A: 0, B: 0 };
   const overallPts = { A: 0, B: 0 };
 
-  if (pointMethod === POINT_METHOD_TRADITIONAL) {
+  if (scoringType === "stroke") {
+    const strokeSeg = (holes) => {
+      const complete = holes.every(r => r.aScore != null && r.bScore != null);
+      const aTot = holes.reduce((s, r) => s + (r.aScore ?? 0), 0);
+      const bTot = holes.reduce((s, r) => s + (r.bScore ?? 0), 0);
+      return { complete, winner: complete ? (aTot < bTot ? "A" : aTot > bTot ? "B" : null) : null };
+    };
+    const nassau = match.nassau || NASSAU_DEFAULT;
+    const award = (seg, pts, out) => { if (seg.complete && pts) { if (seg.winner) out[seg.winner] = pts; else { out.A = pts / 2; out.B = pts / 2; } } };
+    award(strokeSeg(holeResults.slice(0, 9)), nassau.front, frontPts);
+    award(strokeSeg(holeResults.slice(9, 18)), nassau.back, backPts);
+    award(strokeSeg(holeResults), nassau.overall, overallPts);
+  } else if (pointMethod === POINT_METHOD_TRADITIONAL) {
     const pot = match.traditional_points ?? 1;
     if (overall.complete) {
       if (overall.winner) overallPts[overall.winner] = pot;
@@ -391,12 +408,19 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
 
   // Current match status string for display
   const playedHoles = holeResults.filter(r => r.played);
-  const aUp = overall.aWins - overall.bWins;
   let status = "AS";
-  if (playedHoles.length > 0) {
-    if (aUp > 0) status = `${aUp}UP (A)`;
-    else if (aUp < 0) status = `${Math.abs(aUp)}UP (B)`;
-    else status = "AS";
+  if (scoringType === "stroke") {
+    // Net-stroke differential over the holes both sides have completed.
+    const aTot = playedHoles.reduce((s, r) => s + (r.aScore ?? 0), 0);
+    const bTot = playedHoles.reduce((s, r) => s + (r.bScore ?? 0), 0);
+    const d = aTot - bTot;
+    if (playedHoles.length > 0 && d !== 0) status = `${Math.abs(d)} (${d < 0 ? "A" : "B"})`;
+  } else {
+    const aUp = overall.aWins - overall.bWins;
+    if (playedHoles.length > 0) {
+      if (aUp > 0) status = `${aUp}UP (A)`;
+      else if (aUp < 0) status = `${Math.abs(aUp)}UP (B)`;
+    }
   }
 
   // Per-player adjusted stroke maps (low-man or full, per the round's mode) —
