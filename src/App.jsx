@@ -11,7 +11,9 @@ import {
   getEffectiveHI, buildStrokeMap, resolveHolePars, resolveHoleHcps,
   computeMatchResult, computePracticeMatch, computePracticeSkins,
   getRoundCH, getRoundHI, getRoundTee, getRoundHandicapMode, lockForRound,
+  higherIsBetter, totalUnit, segmentState,
 } from "./scoring";
+import { holeFill } from "./lib/holeFill";
 import {
   ROUND_LOCKS_COL, buildRoundLockDoc, refreshRoundLockDoc,
   markRoundFinal, unfinalizeRound, clearRoundLockDoc,
@@ -452,41 +454,64 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   };
 
   // Status cell rendering — for the two-row match status bar between
-  // the front and back hole strips. From the user's team perspective:
-  // ▲N when their team is up, ▼N when down, TIED when level.
+  // the front and back hole strips. Each cell says two things about its hole:
   //
-  // Sizing and color follow MNQ's status strip: 24px cells, 14px glyphs,
-  // green for up and red for down. The earlier amber-for-up read as brand
-  // chrome rather than as a result — golfers scan green/red here, and the
-  // amber is already carrying the "current hole" job two rows above.
+  //   the FILL BAR — who took that hole, in team colors, drawn by the shared
+  //     holeFill() the Leaderboard's hole strip uses. On Double Dot a hole
+  //     can be split, and the diagonal says how: solid for both dots, half
+  //     and half for one each, half against grey for a lone dot, grey when
+  //     both were tied away.
+  //   the GLYPH — where the match stands after that hole, from the reader's
+  //     own team's perspective: ▲N ahead, ▼N behind, TIED level.
+  //
+  // The two are deliberately in different currencies. The bar is about one
+  // hole and belongs to a team; the glyph is about the whole match so far and
+  // belongs to you, which is why it stays green/red rather than team-colored.
+  //
+  // WHAT the glyph counts follows the round's scoring type, and comes from
+  // the same segmentState() the engine awards points from — holes up on a
+  // Match round, the lead on the running total on a Total one. It used to
+  // count holes won unconditionally, so a Total round showed a match-play
+  // state it wasn't being scored on.
   const userTeam = match.teamA.includes(userPid) ? "A" : "B";
+  const totalScored = (match.scoring_type || "match") === "stroke";
+  const segOpts = { total: totalScored, higherWins: higherIsBetter(format) };
   const renderStatusCell = (i) => {
-    const cellH = 24;
+    // Same reasoning as the Leaderboard strip's cell height: the bar has to
+    // be tall enough for a split hole's diagonal to read, and it stays that
+    // height for every format so the strip never changes shape between rounds.
+    const cellH = 29, barH = 8;
     const colBorder = { borderRight: i % 9 === 8 ? "none" : `1px solid ${BC.bdr}33` };
-    if (!result || !result.holes[i]) {
-      return <div key={i} style={{ flex: 1, height: cellH, ...colBorder }} />;
-    }
+    const shell = (children) => (
+      <div key={i} style={{
+        flex: 1, minWidth: 0, height: cellH, ...colBorder,
+        display: "flex", flexDirection: "column", justifyContent: "center", gap: 2, padding: "0 3px",
+      }}>{children}</div>
+    );
+    if (!result || !result.holes[i]) return shell(null);
+
     const hr = result.holes[i];
-    const aWins = result.holes.slice(0, i + 1).filter(r => r.winner === "A").length;
-    const bWins = result.holes.slice(0, i + 1).filter(r => r.winner === "B").length;
-    const upTeam = aWins > bWins ? "A" : bWins > aWins ? "B" : null;
-    const upN = Math.abs(aWins - bWins);
-    const fromUserView = upTeam === userTeam ? upN : upTeam == null ? 0 : -upN;
     // Partial-score warning for non-active past holes
     if (!hr.played) {
       const someScored = matchPids.some(pid => getScore(pid, i) > 0);
       if (someScored && i !== activeHole) {
-        return <div key={i} title="Missing score" style={{ flex: 1, textAlign: "center", fontSize: 12, opacity: 0.55, lineHeight: `${cellH}px`, ...colBorder }}>⚠️</div>;
+        return shell(<div title="Missing score" style={{ textAlign: "center", fontSize: 12, opacity: 0.55, lineHeight: 1 }}>⚠️</div>);
       }
-      return <div key={i} style={{ flex: 1, height: cellH, ...colBorder }} />;
+      return shell(null);
     }
+
+    const aLead = segmentState(result.holes.slice(0, i + 1), segOpts).margin;
+    const fromUserView = userTeam === "A" ? aLead : -aLead;
     const color = fromUserView > 0 ? BC.green : fromUserView < 0 ? BC.danger : BC.t3;
-    return (
-      <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 14, fontWeight: 800, color, lineHeight: `${cellH}px`, ...colBorder }}>
-        {fromUserView > 0 ? <>▲{fromUserView}</>
-          : fromUserView < 0 ? <>▼{Math.abs(fromUserView)}</>
-          : <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.5 }}>TIED</span>}
-      </div>
+    return shell(
+      <>
+        <div style={{ height: barH, borderRadius: 3, boxSizing: "border-box", ...holeFill(hr, format) }} />
+        <div style={{ textAlign: "center", fontSize: 13, fontWeight: 800, color, lineHeight: 1 }}>
+          {fromUserView > 0 ? <>▲{fromUserView}</>
+            : fromUserView < 0 ? <>▼{Math.abs(fromUserView)}</>
+            : <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.5 }}>TIED</span>}
+        </div>
+      </>
     );
   };
 
@@ -598,7 +623,13 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           Tells the user what scoring format their entries are being judged
           against. Useful since this app supports multiple formats per round. */}
       <div style={{ fontSize: 9, color: BC.t3, fontWeight: 700, letterSpacing: 1, padding: "2px 4px", marginBottom: 4 }}>
-        {(FORMATS.find(f => f.id === format)?.label || "MATCH PLAY").toUpperCase()} · ROUND {match.round}
+        {(FORMATS.find(f => f.id === format)?.label || "MATCH PLAY").toUpperCase()}
+        {" · "}
+        {/* The scoring type sits next to the format because the same format
+            plays completely differently under the two — and the status strip
+            above is counting whichever one this says. */}
+        {totalScored ? `TOTAL ${totalUnit(format).toUpperCase()}` : "MATCH PLAY"}
+        {" · ROUND "}{match.round}
       </div>
 
       {/* Player score cards — 4 stacked, T1 above dashed divider, T2 below.
@@ -966,8 +997,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
       teamB: matchTeamB,
       teamANames: matchTeamA.map(pid => tPlayers.find(p => p.player_id === pid)?.name || pid),
       teamBNames: matchTeamB.map(pid => tPlayers.find(p => p.player_id === pid)?.name || pid),
-      nassau: nassau,
-      scoring_type: scoringType,
+      // `nassau` and `scoring_type` are deliberately NOT written here. They
+      // belong to the round, and a copy on the match only ever goes stale the
+      // moment the director changes the round's setup. App resolves both from
+      // the round doc when it enriches matches.
     };
     await onSetMatch(data);
     setMatchTeamA([]); setMatchTeamB([]);
@@ -1485,13 +1518,16 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             })()}
 
             {/* ── Scoring ──────────────────────────────────────────────────
-                Match (win/halve holes) vs Stroke (net medal: fewest net strokes
-                wins), then Single vs Nassau. Both share the nassau
+                Match (win/halve holes) vs Total (the running total decides it:
+                fewest net strokes, or most dots on Double Dot, or most points
+                on Stableford), then Single vs Nassau. Both share the nassau
                 {front,back,overall} pots:
                   • Nassau → three segments (F9 / B9 / OVR)
                   • Single → one 18-hole pot worth `value` (overall-only)
-                `scoring_type` is saved on the round and baked into each match;
-                the stroke branch lives in scoring.js computeMatchResult. */}
+                `scoring_type` lives on the ROUND and nowhere else — App reads
+                it off the round doc when enriching matches, so changing it
+                here takes effect on every match in the round immediately.
+                The Total branch lives in scoring.js computeMatchResult. */}
             {(() => {
               const isSingle = (nassau.front || 0) === 0 && (nassau.back || 0) === 0;
               const pill = (active, disabled) => ({
@@ -1515,8 +1551,8 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>SCORING</div>
                     {/* Match / Stroke */}
                     <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}` }}>
-                      <button onClick={() => setScoringType("match")} style={pill(scoringType === "match", false)}>Match</button>
-                      <button onClick={() => setScoringType("stroke")} title="Net stroke total (medal) — fewest net strokes wins each pot" style={pill(scoringType === "stroke", false)}>Total</button>
+                      <button onClick={() => setScoringType("match")} title="Match play — the side that wins more holes takes each pot" style={pill(scoringType === "match", false)}>Match</button>
+                      <button onClick={() => setScoringType("stroke")} title={`Total ${totalUnit(roundFormat || tRounds.find(t => t.round_number === editRound)?.format || DEFAULT_FORMAT)} — the running total over each segment decides the pot, not holes won`} style={pill(scoringType === "stroke", false)}>Total</button>
                     </div>
                     {/* Low Man / All (handicap allocation) */}
                     <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}`, marginLeft: "auto" }}>
@@ -4853,10 +4889,24 @@ export default function App() {
     scoring_type: r.scoring_type || "match",
   })), [tRounds]);
 
-  // Enhance matches with nassau + scoring type from their round
+  // Enhance matches with nassau + scoring type from their round.
+  //
+  // The ROUND wins. These are round-level settings — the admin console only
+  // ever offers them per round, there is no per-match editor — so the round
+  // doc is their single source of truth. Older match docs have a copy baked
+  // in from whenever they were created (saveMatch used to write one), and
+  // reading that copy first is what made a round edit look like it did
+  // nothing: flip Round 1 to Double Dot / Total, and every match already
+  // carrying `scoring_type: "match"` quietly kept scoring as match play on
+  // both the Scoring tab and the Leaderboard. The stale copy is now only a
+  // fallback for a match whose round doc is missing entirely.
   const enrichedMatches = useMemo(() => matches.map(m => {
     const tr = enrichedRounds.find(t => t.round_number === m.round);
-    return { ...m, nassau: m.nassau || tr?.nassau || NASSAU_DEFAULT, scoring_type: m.scoring_type || tr?.scoring_type || "match" };
+    return {
+      ...m,
+      nassau: tr?.nassau || m.nassau || NASSAU_DEFAULT,
+      scoring_type: tr?.scoring_type || m.scoring_type || "match",
+    };
   }), [matches, enrichedRounds]);
 
   // Keep the auto-lock's source data current without rebuilding onSaveHole.
