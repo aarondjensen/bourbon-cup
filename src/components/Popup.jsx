@@ -156,6 +156,11 @@ export function Popup({
           background: BC.bg,
           border: `1px solid ${BC.bdr}`,
           borderRadius: 14,
+          // The app's font is set inline on each view root, not globally, so
+          // a portaled popup (a direct <body> child) would otherwise fall
+          // back to the browser default. Declare it here so every popup
+          // matches the app no matter where it's mounted.
+          fontFamily: "'Montserrat', sans-serif",
           padding,
           width: "100%",
           maxWidth,

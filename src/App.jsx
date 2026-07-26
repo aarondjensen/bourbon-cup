@@ -5,7 +5,7 @@ import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
   resolveTeams, DEFAULT_TEAM_NAMES, TOURNAMENT_TITLE, TOURNAMENT_LOCATION,
   FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT, PRACTICE_TEAM_COLORS, DIRECTOR_CODE,
-  resolveAllowance, describeAllowance,
+  resolveAllowance, describeAllowance, allowanceDefaultFor,
 } from "./constants";
 import {
   calcCH, calcCHForCourse, fmtScore,
@@ -229,7 +229,7 @@ function Notif({ notif }) {
 }
 
 // ── Login Screen ──
-function LoginScreen({ players, onLogin, teams, darkMode, tournamentName }) {
+function LoginScreen({ players, onLogin, teams, darkMode, tournamentName, tournamentLocation }) {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
@@ -281,7 +281,7 @@ function LoginScreen({ players, onLogin, teams, darkMode, tournamentName }) {
       {/* Title — sits above the silhouette, outside content card */}
       <div style={{ textAlign: "center", position: "relative", zIndex: 1, marginBottom: 14 }}>
         <div style={{ fontSize: "clamp(20px, 8vw, 28px)", fontWeight: 800, color: BC.gold, letterSpacing: 2 }}>{(tournamentName || TOURNAMENT_TITLE).toUpperCase()}</div>
-        <div style={{ fontSize: "clamp(10px, 3vw, 12px)", color: BC.t3, letterSpacing: "0.3em", marginTop: 3 }}>{getTournamentYear()} {TOURNAMENT_LOCATION.toUpperCase()}</div>
+        <div style={{ fontSize: "clamp(10px, 3vw, 12px)", color: BC.t3, letterSpacing: "0.3em", marginTop: 3 }}>{getTournamentYear()} {(tournamentLocation || TOURNAMENT_LOCATION).toUpperCase()}</div>
       </div>
 
       {/* Desktop centering wrapper */}
@@ -917,7 +917,10 @@ const roundSettingsSignature = (r) => JSON.stringify([
 // recommended default, so merely opening a round does not write to it.
 const roundAllowance = (format, raw) => {
   const a = resolveAllowance(format || DEFAULT_FORMAT, raw);
-  return a.split ? { low: a.low, high: a.high } : { pct: a.pct };
+  if (!a.enabled) return { enabled: false };
+  return a.split
+    ? { enabled: true, low: a.low, high: a.high }
+    : { enabled: true, pct: a.pct };
 };
 
 // Everything the Rounds tab owns for one round.
@@ -956,7 +959,7 @@ function ChDeltaBadge({ delta }) {
   );
 }
 
-function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, onSaveTournamentName, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks }) {
+function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks }) {
   const [tab, setTab] = useState("players");
   const [editTeamNames, setEditTeamNames] = useState({ A: "", B: "" });
   const [editingTeam, setEditingTeam] = useState(null);
@@ -976,7 +979,9 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   const [brandLogoEdit, setBrandLogoEdit] = useState({ A: null, B: null }); // uploaded logo data URL per team
   const [brandBusy, setBrandBusy] = useState(null); // team id mid-extraction
   const [editTournamentName, setEditTournamentName] = useState(tournamentName || "");
+  const [editTournamentLocation, setEditTournamentLocation] = useState(tournamentLocation || "");
   useEffect(() => { setEditTournamentName(tournamentName || ""); }, [tournamentName]);
+  useEffect(() => { setEditTournamentLocation(tournamentLocation || ""); }, [tournamentLocation]);
   useEffect(() => {
     setBrandEdit({ A: brand?.teamA?.color || "", B: brand?.teamB?.color || "" });
     setBrandLogoEdit({ A: brand?.teamA?.logo || null, B: brand?.teamB?.logo || null });
@@ -1655,8 +1660,9 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   setRoundFormat(e.target.value);
                   if (fmt?.nassau) setNassau(fmt.nassau);
                   // Allowances are format-specific — a Scramble's 35/15 means
-                  // nothing on a Singles round. Dropping back to null re-arms
-                  // the new format's recommended figure below.
+                  // nothing on a Singles round. Changing format puts the
+                  // allowance back to off, so the new format's terms are a
+                  // decision rather than an inheritance.
                   setAllowance(null);
                 }} style={{ ...InputStyle, marginBottom: 0, fontSize: 12, padding: "8px 8px", height: 38 }}>
                   <option value="">Select...</option>
@@ -1808,45 +1814,43 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 order it reads: the ALLOWANCE decides how much of each
                 player's Course Handicap comes to the tee at all, then LOW MAN
                 / ALL decides whether they play the difference off the lowest
-                figure in the match or the whole thing. They were split across
-                two blocks — the mode filed under SCORING, the allowance below
-                it — which put a scoring control between two halves of the
-                same decision. Both are handicap terms; they belong on one
-                line, in the order they're applied.
+                figure in the match or the whole thing. Both are handicap
+                terms; they belong on one line, in the order they're applied.
 
-                Allowance has two shapes, decided by the format (see
-                constants.FORMATS):
-                  • one percentage for everyone, or
+                The allowance is OFF until the director turns it on — one that
+                switched itself on would be taking strokes off a round nobody
+                configured, and the director would have no reason to go
+                looking for it. Off means 100%: full handicaps, as before
+                allowances existed.
+
+                ON prefills what the FORMAT calls for, and the format decides
+                what it even asks (see constants.FORMATS):
+                  • ALL — one percentage, every player.
                   • LOW / HIGH — the low handicap on each side plays off the
-                    first, their partner off the second.
-                Both are stored on the round doc and frozen into the lock
-                snapshot. The recommended figure is armed the moment a format
-                is picked, so a 2-Man Scramble can't quietly go off at full
-                handicaps, which is a rout. */}
+                    first, their partner off the second. This is the shape for
+                    the formats where a side effectively plays one ball.
+                Both settings are stored on the round doc and frozen into the
+                lock snapshot. */}
             {(() => {
               const fmtId = roundFormat || tRounds.find(t => t.round_number === editRound)?.format || DEFAULT_FORMAT;
-              const def = resolveAllowance(fmtId, null);
-              const cur = resolveAllowance(fmtId, allowance);
-              const isDefault = cur.split
-                ? (cur.low === def.low && cur.high === def.high)
-                : cur.pct === def.pct;
+              const fmt = FORMATS.find(f => f.id === fmtId);
+              const prefill = allowanceDefaultFor(fmtId);       // what ON starts at
+              const cur = resolveAllowance(fmtId, allowance);   // what the round scores with
+              const on = cur.enabled;
               // Field values read from the RAW state when the director has
               // typed something, so clearing a box leaves it empty instead of
-              // snapping back to the default mid-keystroke. An empty box
-              // resolves to the default on save.
+              // snapping back mid-keystroke. An empty box resolves to the
+              // format's prefill when the round is saved.
               const fieldVal = (k) => {
                 const v = allowance?.[k];
-                return v === undefined || v === null ? String(def[k]) : String(v);
+                return v === undefined || v === null ? String(prefill[k]) : String(v);
               };
-              const setField = (k, v) => setAllowance(prev => {
-                const base = cur.split ? { low: cur.low, high: cur.high } : { pct: cur.pct };
-                return { ...base, ...(prev || {}), [k]: v };
-              });
-              // Same pill as the SCORING toggles, so Low Man / All doesn't
-              // change shape by moving rows.
-              const pctPill = (active) => ({
+              const setField = (k, v) => setAllowance(prev => ({ ...prefill, ...(prev || {}), enabled: true, [k]: v }));
+              // Same pill as the SCORING toggles, so neither toggle on this
+              // row changes shape by moving rows.
+              const pctPill = (active, disabled = false) => ({
                 padding: "4px 12px", borderRadius: 16, fontSize: 10, fontWeight: 700, border: "none",
-                cursor: "pointer",
+                cursor: disabled ? "not-allowed" : "pointer",
                 background: active ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
                 color: active ? "#0a0804" : BC.t3,
               });
@@ -1869,23 +1873,35 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   </div>
                 </div>
               );
+              // ON adopts the format's recommended figures rather than an
+              // empty form — a director who wants the standard terms is one
+              // tap away, and one who doesn't has somewhere to type over.
+              const setOn = (next) => {
+                if (roundIsFinal) return;
+                setAllowance(next ? { enabled: true, ...prefill } : { enabled: false });
+              };
               return (
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>HANDICAP</div>
-                    {cur.split
+                    {/* Allowance off/on. First on the row because it decides
+                        whether the percentages beside it exist at all. */}
+                    <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}` }}>
+                      <button onClick={() => setOn(false)}
+                        title={cur.shared
+                          ? `No allowance — the side plays one ball off both partners' full Course Handicaps added together`
+                          : "No allowance — every player plays their full Course Handicap"}
+                        style={pctPill(!on, roundIsFinal)}>Off</button>
+                      <button onClick={() => setOn(true)}
+                        title={`Reduce handicaps — ${fmt?.label || "this format"} plays off ${describeAllowance(resolveAllowance(fmtId, { enabled: true, ...prefill }))}`}
+                        style={pctPill(on, roundIsFinal)}>On</button>
+                    </div>
+                    {on && (cur.split
                       ? [
                           pctField("low", "LOW", "The lower Course Handicap on each side"),
                           pctField("high", "HIGH", "The higher Course Handicap on each side"),
                         ]
-                      : pctField("pct", "ALL", "Applied to every player's Course Handicap")}
-                    {!isDefault && (
-                      <button onClick={() => setAllowance(null)} disabled={roundIsFinal} style={{
-                        padding: "3px 8px", borderRadius: 12, border: `1px solid ${BC.bdr}`,
-                        background: "transparent", color: BC.t3, fontSize: 9, fontWeight: 700,
-                        cursor: roundIsFinal ? "not-allowed" : "pointer", opacity: roundIsFinal ? 0.5 : 1,
-                      }}>Reset to {describeAllowance(def)}</button>
-                    )}
+                      : pctField("pct", "ALL", "Applied to every player's Course Handicap"))}
                     {/* Low Man / All — the second half of the same decision,
                         sitting immediately after the percentages so the row
                         reads in the order the two are applied. Deliberately
@@ -1904,6 +1920,16 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       ))}
                     </div>
                   </div>
+                  {/* The one case the tooltips can't carry on their own: a
+                      side that plays ONE ball has a team handicap of its
+                      partners added together, so leaving the allowance off
+                      hands out a number nobody would have chosen. Said only
+                      where it applies, and only while it applies. */}
+                  {!on && cur.shared && (
+                    <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
+                      {fmt?.label || "This format"} plays one ball per side, so with no allowance the side's team handicap is both partners' full handicaps added together.
+                    </div>
+                  )}
                   {roundIsLocked && (
                     <div style={{ fontSize: 9, color: roundIsFinal ? BC.danger : BC.amber, marginTop: 4 }}>
                       Round {editRound} is locked — the allowance it scored with is frozen in the snapshot, so a change here will not move it.
@@ -2444,23 +2470,41 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             <span style={{ fontSize: 11, color: BC.t3 }}>Switch / new ›</span>
           </button>
 
-          {/* Tournament name */}
+          {/* Tournament identity — name and location.
+              One card and one Save for both: they're the same sentence on
+              every screen that shows them ("The Bourbon Cup · 2025 · Gaylord,
+              MI"), and a director renaming the tournament for a new venue
+              would otherwise have to remember two separate saves. An empty
+              field falls back to its constant rather than saving blank, so
+              the header can't end up with a hole in it. */}
           <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: 14, marginBottom: 16 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Tournament Name</div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input
-                value={editTournamentName}
-                onChange={e => setEditTournamentName(e.target.value)}
-                placeholder={TOURNAMENT_TITLE}
-                style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: 14, fontWeight: 700, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
-              />
+            <div style={{ fontSize: 10, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Tournament</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {[
+                { key: "name", val: editTournamentName, set: setEditTournamentName, ph: TOURNAMENT_TITLE, lbl: "Name" },
+                { key: "location", val: editTournamentLocation, set: setEditTournamentLocation, ph: TOURNAMENT_LOCATION, lbl: "Location" },
+              ].map(f => (
+                <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: BC.t3, letterSpacing: 0.5, width: 52, flexShrink: 0, textTransform: "uppercase" }}>{f.lbl}</span>
+                  <input
+                    value={f.val}
+                    onChange={e => f.set(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                    placeholder={f.ph}
+                    style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: 14, fontWeight: 700, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
+                  />
+                </div>
+              ))}
               <button
-                onClick={() => onSaveTournamentName(editTournamentName.trim() || TOURNAMENT_TITLE)}
-                style={{ flexShrink: 0, fontSize: 12, fontWeight: 700, color: "#0a0804", background: BC.amber, border: "none", borderRadius: 8, padding: "0 16px", cursor: "pointer" }}
+                onClick={() => onSaveTournament({
+                  name: editTournamentName.trim() || TOURNAMENT_TITLE,
+                  location: editTournamentLocation.trim() || TOURNAMENT_LOCATION,
+                })}
+                style={{ alignSelf: "flex-end", fontSize: 12, fontWeight: 700, color: "#0a0804", background: BC.amber, border: "none", borderRadius: 8, padding: "9px 18px", cursor: "pointer" }}
               >Save</button>
             </div>
             <div style={{ fontSize: 11, color: BC.t3, marginTop: 8, lineHeight: 1.5 }}>
-              Shown on the login screen. The year and location come from the active edition.
+              Both show on the login screen; the location also sits under the cup mark on the leaderboard. The year follows the active edition.
             </div>
           </div>
 
@@ -4814,9 +4858,13 @@ export default function App() {
   // The saved team-name overrides (from the bc_settings/team_names doc).
   // Defaults come from constants so the fallback names live in one place.
   const [teamNames, setTeamNames] = useState(DEFAULT_TEAM_NAMES);
-  // Director-set tournament name (bc_settings/tournament). Falls back to the
-  // TOURNAMENT_TITLE constant, so the login screen always has a name.
+  // Director-set tournament identity (bc_settings/tournament). Both fall back
+  // to their constants, so the login screen always has a name and a place
+  // even before an edition has been through Admin → Tournament. The YEAR is
+  // deliberately not one of these — it follows the active edition (see
+  // firebase.getTournamentYear), so it can't disagree with the data on screen.
   const [tournamentName, setTournamentName] = useState(TOURNAMENT_TITLE);
+  const [tournamentLocation, setTournamentLocation] = useState(TOURNAMENT_LOCATION);
   // Theme state — toggled via the More menu. The actual color values live in
   // the module-level BC object (mutated by applyBCTheme); this state's only
   // job is to trigger a top-level re-render so children re-read fresh BC
@@ -5011,6 +5059,7 @@ export default function App() {
       if (tn) setTeamNames({ A: tn.teamA || DEFAULT_TEAM_NAMES.A, B: tn.teamB || DEFAULT_TEAM_NAMES.B });
       const tourn = rows.find(r => r.id === editionDocId("tournament"));
       setTournamentName(tourn?.name?.trim() || TOURNAMENT_TITLE);
+      setTournamentLocation(tourn?.location?.trim() || TOURNAMENT_LOCATION);
       // Branding: apply to the live BC theme immediately (using the current
       // mode via ref), then store it so a later theme toggle re-applies it.
       const br = rows.find(r => r.id === editionDocId("branding"));
@@ -5293,7 +5342,7 @@ export default function App() {
 
   const availableRounds = useMemo(() => [...new Set(enrichedMatches.map(m => m.round))].sort(), [enrichedMatches]);
 
-  if (!user) return <LoginScreen players={tPlayers} teams={teams} darkMode={darkMode} tournamentName={tournamentName} onLogin={p => { const u = { ...p, isDirector: !!p.isDirector }; writeUserSession(u); setUser(u); }} />;
+  if (!user) return <LoginScreen players={tPlayers} teams={teams} darkMode={darkMode} tournamentName={tournamentName} tournamentLocation={tournamentLocation} onLogin={p => { const u = { ...p, isDirector: !!p.isDirector }; writeUserSession(u); setUser(u); }} />;
 
   // Bottom-nav items. The Practice tab (formerly "Mash") was relocated
   // to the More menu and is gated to directors only — practice rounds
@@ -5455,6 +5504,7 @@ export default function App() {
             hcpOverrides={hcpOverridesData}
             teeAssignments={teeAssignmentsData}
             roundLocks={roundLocksData}
+            location={tournamentLocation}
           />
         )}
         {view === "scoring" && (
@@ -5567,9 +5617,11 @@ export default function App() {
               await db.upsert("bc_settings", { id: editionDocId("branding"), tournament_id: TOURNAMENT_ID, teamA: b.teamA, teamB: b.teamB });
             }}
             tournamentName={tournamentName}
-            onSaveTournamentName={async (name) => {
+            tournamentLocation={tournamentLocation}
+            onSaveTournament={async ({ name, location }) => {
               setTournamentName(name);
-              await db.upsert("bc_settings", { id: editionDocId("tournament"), tournament_id: TOURNAMENT_ID, name });
+              setTournamentLocation(location);
+              await db.upsert("bc_settings", { id: editionDocId("tournament"), tournament_id: TOURNAMENT_ID, name, location });
             }}
             hcpOverridesFromDb={hcpOverridesData}
             teeAssignmentsFromDb={teeAssignmentsData}

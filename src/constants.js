@@ -32,6 +32,11 @@ export const oppTeam = (tid) => tid === "A" ? TEAM_B : TEAM_A;
 // The fixed name + location shown on the login screen. The YEAR is NOT here
 // — it follows the active edition (see firebase.getTournamentYear) so the
 // displayed year and the data you're looking at can never disagree.
+// Both are FALLBACKS, not the source of truth: the live name and location
+// are stored per edition in bc_settings/tournament and set by the director in
+// Admin → Tournament. These are what the app shows before that doc exists —
+// and what an empty field resolves back to — so a fresh edition still reads
+// like the Bourbon Cup instead of a blank header.
 export const TOURNAMENT_TITLE = "The Bourbon Cup";
 export const TOURNAMENT_LOCATION = "Gaylord, MI";
 
@@ -123,13 +128,21 @@ export const FORMATS = [
 // ball, so the two allowance-adjusted handicaps SUM into one team handicap
 // instead of each player carrying their own stroke map (see scoring.js).
 //
-// The numbers above are the USGA's recommended allowances (Rules of
-// Handicapping, Appendix C) and are DEFAULTS ONLY — every round's real
-// allowance is set by the director in Admin → Rounds and stored on the round
-// doc, and once a round locks its allowance is frozen with everything else
-// that feeds stroke allocation.
+// ── Off by default ──
+// An allowance applies only when the director turns it ON for the round
+// (`enabled: true` on the round doc). Off means 100% — everyone plays their
+// whole Course Handicap, which is what the app did before allowances existed.
+// Nothing is inferred from the format alone: the numbers above are what the
+// prompt PREFILLS when the toggle is flipped, not what a round quietly scores
+// with because nobody looked at it. Once a round locks, whatever was in force
+// freezes with everything else that feeds stroke allocation.
+//
+// The prefills are the USGA's recommended allowances (Rules of Handicapping,
+// Appendix C).
 export const ALLOWANCE_DEFAULT = { pct: 100 };
 
+// What the ON position prefills for a format — never what an untouched round
+// scores with. See resolveAllowance for that.
 export const allowanceDefaultFor = (formatId) =>
   FORMATS.find(f => f.id === formatId)?.allowance || ALLOWANCE_DEFAULT;
 
@@ -143,27 +156,38 @@ export const isSplitAllowance = (spec) => !!spec && spec.low != null;
 export const formatIsSharedBall = (formatId) =>
   !!FORMATS.find(f => f.id === formatId)?.sharedBall;
 
-// Merge a round's saved allowance over its format's defaults and hand back a
-// fully-resolved spec. Shape always follows the FORMAT, not what happens to be
-// stored: a round switched from Scramble to Singles drops the stale low/high
-// pair rather than trying to honour it.
+// A round's allowance, fully resolved for scoring.
+//
+// `enabled` must be explicitly true — an absent or half-written value is OFF,
+// which resolves to a flat 100%. That is deliberate: the one thing an
+// allowance must never do is quietly take strokes off a round nobody
+// configured.
+//
+// When it IS on, the shape follows the FORMAT rather than what happens to be
+// stored, so a round switched from Scramble to Singles drops the stale
+// low/high pair instead of trying to honour it, and a field left blank falls
+// back to that format's prefill.
 export const resolveAllowance = (formatId, saved) => {
+  const shared = formatIsSharedBall(formatId);
+  if (!saved?.enabled) return { enabled: false, split: false, shared, pct: 100 };
+
   const def = allowanceDefaultFor(formatId);
   const num = (v, fallback) => {
     const n = parseFloat(v);
     return Number.isFinite(n) && n >= 0 ? n : fallback;
   };
-  const shared = formatIsSharedBall(formatId);
   if (isSplitAllowance(def)) {
-    return { split: true, shared, low: num(saved?.low, def.low), high: num(saved?.high, def.high) };
+    return { enabled: true, split: true, shared, low: num(saved.low, def.low), high: num(saved.high, def.high) };
   }
-  return { split: false, shared, pct: num(saved?.pct, def.pct) };
+  return { enabled: true, split: false, shared, pct: num(saved.pct, def.pct) };
 };
 
-// Short human string — "90%" or "35% / 15%". Used on the admin prompt and
-// anywhere a round's handicap terms are summarised.
-export const describeAllowance = (spec) =>
-  spec?.split || spec?.low != null ? `${spec.low}% / ${spec.high}%` : `${spec?.pct ?? 100}%`;
+// Short human string — "90%" or "35% / 15%". Used anywhere a round's handicap
+// terms are summarised. An off allowance has no terms to state, hence "none".
+export const describeAllowance = (spec) => {
+  if (spec && spec.enabled === false) return "none";
+  return spec?.split || spec?.low != null ? `${spec.low}% / ${spec.high}%` : `${spec?.pct ?? 100}%`;
+};
 
 // ── Point-allocation methods ──
 // Two ways to convert hole-by-hole results into match points:

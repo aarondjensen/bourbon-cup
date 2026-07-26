@@ -265,9 +265,11 @@ export const getRoundHandicapMode = ({ roundLocks, round, tRounds, explicit }) =
 };
 
 // The round's handicap allowance, resolved the same way the mode is: a locked
-// round answers to its snapshot, then an explicit argument, then the round doc,
-// then the format's default. The shape always follows the FORMAT, so a round
-// whose format changed can't be scored off a stale low/high pair.
+// round answers to its snapshot, then an explicit argument, then the round doc.
+// A round that names none is OFF — full handicaps — never the format's
+// recommendation, which is a prefill for the admin prompt and nothing more.
+// The shape always follows the FORMAT, so a round whose format changed can't be
+// scored off a stale low/high pair.
 export const getRoundAllowance = ({ roundLocks, round, tRounds, format, explicit }) => {
   const lock = lockForRound(roundLocks, round);
   const tr = tRounds?.find(t => t.round_number === round);
@@ -371,8 +373,9 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
   // Three settings decide every stroke in the match, in this order:
   //
   //   1. ALLOWANCE — how much of each player's Course Handicap comes to the
-  //      tee at all (Four-Ball 90%, Scramble 35/15, …). Set per round by the
-  //      director; frozen in the snapshot once the round locks.
+  //      tee at all (Four-Ball 90%, Scramble 35/15, …). Off unless the
+  //      director turned it on for the round, in which case it is a flat
+  //      100% and this step changes nothing. Frozen once the round locks.
   //   2. MODE      — low_man plays the difference off the lowest PLAYING
   //      handicap in the match; full gives everyone their whole figure.
   //   3. Stroke-index allocation, which is just arithmetic from there.
