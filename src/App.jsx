@@ -15,9 +15,8 @@ import {
 import {
   ROUND_LOCKS_COL, buildRoundLockDoc, refreshRoundLockDoc,
   markRoundFinal, unfinalizeRound, clearRoundLockDoc,
-  isRoundFinal, roundLockState, describeLock,
-  describeHiChangeImpact, lockedPlayerEntry,
-  LOCK_OPEN, LOCK_FINAL, LOCK_STATE_LABEL,
+  isRoundFinal, roundLockState, describeHiChangeImpact,
+  LOCK_OPEN, LOCK_FINAL,
 } from "./lib/roundLocks";
 import { usePullToRefresh } from "./lib/usePullToRefresh";
 import { processLogo } from "./lib/logoBrand";
@@ -829,7 +828,7 @@ function ChDeltaBadge({ delta }) {
   );
 }
 
-function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, onSaveTournamentName, hcpOverridesFromDb, teeAssignmentsFromDb, notify, roundLocks, onLockRound, onFinalizeRound, onClearRoundLock }) {
+function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, onSaveTournamentName, hcpOverridesFromDb, teeAssignmentsFromDb, notify, roundLocks }) {
   const [tab, setTab] = useState("players");
   const [editTeamNames, setEditTeamNames] = useState({ A: "", B: "" });
   const [editingTeam, setEditingTeam] = useState(null);
@@ -921,13 +920,12 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   const [chDeltas, setChDeltas] = useState({});
   const [editingPlayer, setEditingPlayer] = useState(null); // { pid, first, last, nick, hi, ov, dir }
   const [teeAssignments, setTeeAssignments] = useState({}); // { round: { pid: teeName } }
-  // ── Handicap-lock UI state ──
-  const [showLockDetail, setShowLockDetail] = useState(false);
-  const [unlockText, setUnlockText] = useState("");   // typed confirmation for un-finalizing
+  // ── Handicap-lock state ──
+  // Read-only here: locking is automatic on the first score of a round (see
+  // ensureRoundLock in App). These flags only gate the round form's editing.
   const lockState = roundLockState(roundLocks, editRound);
   const roundIsLocked = lockState !== LOCK_OPEN;
   const roundIsFinal = lockState === LOCK_FINAL;
-  const activeLock = roundLocks?.[editRound]?.locked ? roundLocks[editRound] : null;
 
   const showChDelta = (key, delta) => {
     if (!delta) return;
@@ -1581,176 +1579,6 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               );
             })()}
 
-            {/* ── Handicap lock ──────────────────────────────────────────
-                The control surface for src/lib/roundLocks.js. A locked round
-                has frozen every input to stroke allocation — handicap index,
-                per-round override, tee, low_man/full, course and hole tables.
-                Editing a player's handicap after this point changes future
-                rounds only. */}
-            <div style={{
-              marginBottom: 12, borderRadius: 10, overflow: "hidden",
-              background: BC.bg,
-              border: `1px solid ${roundIsFinal ? BC.danger + "66" : roundIsLocked ? BC.amber + "66" : BC.bdr}`,
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px" }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, letterSpacing: 0.5 }}>HANDICAP LOCK</div>
-                <span style={{
-                  fontSize: 8, fontWeight: 800, letterSpacing: 1, padding: "2px 7px", borderRadius: 10,
-                  background: roundIsFinal ? BC.danger : roundIsLocked ? BC.amber : "transparent",
-                  color: roundIsLocked ? "#0a0804" : BC.t3,
-                  border: roundIsLocked ? "none" : `1px solid ${BC.bdr}`,
-                }}>{LOCK_STATE_LABEL[lockState]}</span>
-                <span style={{ flex: 1 }} />
-                {activeLock && (
-                  <button onClick={() => setShowLockDetail(v => !v)} style={{
-                    fontSize: 9, padding: "2px 7px", borderRadius: 5, border: `1px solid ${BC.bdr}`,
-                    background: "transparent", color: BC.t3, cursor: "pointer",
-                  }}>{showLockDetail ? "Hide" : "Frozen values"}</button>
-                )}
-              </div>
-
-              <div style={{ padding: "0 10px 10px" }}>
-                <div style={{ fontSize: 10, color: BC.t3, lineHeight: 1.55, marginBottom: 8 }}>
-                  {!roundIsLocked &&
-                    `Round ${editRound} is scoring off live handicaps. It locks by itself the moment the first score is entered, so nothing here needs remembering.`}
-                  {roundIsLocked && !roundIsFinal &&
-                    `${describeLock(activeLock)}. Handicap edits made from now on will not touch this round.`}
-                  {roundIsFinal &&
-                    `${describeLock(activeLock)}. This round is closed — nothing recalculates it.`}
-                </div>
-
-                {/* OPEN → offer a deliberate pre-lock */}
-                {!roundIsLocked && (
-                  <button onClick={async () => {
-                    if (!(await confirm({
-                      title: `Lock handicaps for Round ${editRound}?`,
-                      message: `Every player's index, override, tee and the low-man setting will be frozen for this round. ` +
-                        `Later handicap changes will apply to other rounds only.`,
-                      confirmLabel: "Lock",
-                    }))) return;
-                    await onLockRound(editRound);
-                    notify(`Round ${editRound} handicaps locked`, "success");
-                  }} style={{ ...BtnStyle, padding: "7px 14px", fontSize: 11 }}>Lock handicaps now</button>
-                )}
-
-                {/* LOCKED, not final → refresh / finalize / release */}
-                {roundIsLocked && !roundIsFinal && (
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    <button onClick={async () => {
-                      if (!(await confirm({
-                        title: `Re-take the Round ${editRound} snapshot?`,
-                        message: `This is the ONLY thing that changes a locked round's handicaps. ` +
-                          `Every player's strokes for Round ${editRound} will be recalculated from current values. ` +
-                          `Only do this if the round has not really been played yet.`,
-                        confirmLabel: "Refresh",
-                      }))) return;
-                      await onLockRound(editRound, { refresh: true });
-                      notify(`Round ${editRound} snapshot refreshed`, "success");
-                    }} style={{
-                      padding: "6px 12px", borderRadius: 8, border: `1px solid ${BC.amber}`, background: "transparent",
-                      color: BC.amber, fontSize: 10, fontWeight: 700, cursor: "pointer",
-                    }}>Refresh snapshot</button>
-
-                    <button onClick={async () => {
-                      if (!(await confirm({
-                        title: `Mark Round ${editRound} final?`,
-                        message: `Its handicaps can no longer be refreshed. Scores stay editable.`,
-                        confirmLabel: "Mark final",
-                      }))) return;
-                      await onFinalizeRound(editRound, true);
-                      notify(`Round ${editRound} marked final`, "success");
-                    }} style={{ ...BtnStyle, padding: "6px 12px", fontSize: 10 }}>Mark round final</button>
-
-                    <button onClick={async () => {
-                      if (!(await confirm({
-                        title: `Release the Round ${editRound} lock?`,
-                        message: `The round goes back to live handicaps. Use this only if the round was locked by a stray score before play began.`,
-                        confirmLabel: "Release",
-                      }))) return;
-                      await onClearRoundLock(editRound);
-                      notify(`Round ${editRound} lock released`, "success");
-                    }} style={{
-                      padding: "6px 12px", borderRadius: 8, border: `1px solid ${BC.bdr}`, background: "transparent",
-                      color: BC.t3, fontSize: 10, fontWeight: 700, cursor: "pointer",
-                    }}>Release lock</button>
-                  </div>
-                )}
-
-                {/* FINAL → typed confirmation, deliberately awkward */}
-                {roundIsFinal && (
-                  <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                    <input
-                      value={unlockText}
-                      onChange={e => setUnlockText(e.target.value)}
-                      placeholder="Type UNLOCK"
-                      style={{
-                        ...InputStyle, marginBottom: 0, width: 130, padding: "6px 8px", fontSize: 11,
-                        borderColor: unlockText === "UNLOCK" ? BC.danger : BC.bdr,
-                      }} />
-                    <button
-                      disabled={unlockText !== "UNLOCK"}
-                      onClick={async () => {
-                        await onFinalizeRound(editRound, false);
-                        setUnlockText("");
-                        notify(`Round ${editRound} reopened — snapshot still in place`, "success");
-                      }}
-                      style={{
-                        padding: "6px 12px", borderRadius: 8, border: `1px solid ${BC.danger}`,
-                        background: unlockText === "UNLOCK" ? BC.danger : "transparent",
-                        color: unlockText === "UNLOCK" ? "#fff" : BC.t3,
-                        fontSize: 10, fontWeight: 700,
-                        cursor: unlockText === "UNLOCK" ? "pointer" : "not-allowed",
-                        opacity: unlockText === "UNLOCK" ? 1 : 0.5,
-                      }}>Unlock round</button>
-                    <span style={{ fontSize: 9, color: BC.t3 }}>
-                      Reopening alone changes nothing — you would still have to refresh the snapshot.
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Frozen values — what this round is ACTUALLY scoring with */}
-              {showLockDetail && activeLock && (
-                <div style={{ borderTop: `1px solid ${BC.bdr}`, background: BC.card, padding: "8px 10px" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 42px 60px 34px", gap: 4, marginBottom: 4 }}>
-                    {["PLAYER", "HI", "TEE", "CH"].map((h, i) => (
-                      <div key={h} style={{
-                        fontSize: 7, fontWeight: 700, color: BC.t3, letterSpacing: 0.5,
-                        textAlign: i === 0 ? "left" : "center",
-                      }}>{h}</div>
-                    ))}
-                  </div>
-                  {tPlayers.map(p => {
-                    const e = lockedPlayerEntry(roundLocks, editRound, p.player_id);
-                    const tm = teams[p.team];
-                    return (
-                      <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: "1fr 42px 60px 34px", gap: 4, alignItems: "center", marginBottom: 2 }}>
-                        <div style={{ fontSize: 10, color: playerNameColor(), fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
-                        <div style={{ fontSize: 10, color: e?.overridden ? BC.amber : BC.t2, textAlign: "center", fontWeight: e?.overridden ? 700 : 400 }}>
-                          {e ? e.hi : "—"}
-                        </div>
-                        <div style={{ fontSize: 9, color: BC.t3, textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {e?.tee || "—"}
-                        </div>
-                        <div style={{ fontSize: 11, color: e ? BC.t1 : BC.t3, textAlign: "center", fontWeight: 700 }}>
-                          {e ? e.ch : "—"}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <div style={{ fontSize: 9, color: BC.t3, marginTop: 6, lineHeight: 1.5 }}>
-                    Mode: {activeLock.handicap_mode === "full" ? "All handicaps" : "Low man"} ·
-                    {" "}Course: {activeLock.course_name || "—"}
-                    {tPlayers.some(p => !lockedPlayerEntry(roundLocks, editRound, p.player_id)) && (
-                      <span style={{ color: BC.amber }}>
-                        {" "}· Players showing — joined after the lock and will use live handicaps.
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
             {/* Handicap Overrides */}
             <div style={{ marginBottom: 14 }}>
               {/* PLAYER DETAILS header already in column headers */}
@@ -1763,7 +1591,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 }}>
                   {roundIsFinal
                     ? `Round ${editRound} is final. These fields are read-only.`
-                    : `Round ${editRound} is locked. Changes here are saved for reference but will not affect its scoring until you refresh the snapshot above.`}
+                    : `Round ${editRound} is locked — its handicaps are frozen. Changes here are saved for reference but will not affect its scoring.`}
                 </div>
               )}
               {tPlayers.length === 0 && <div style={{ fontSize: 11, color: BC.t3 }}>No players added yet.</div>}
@@ -1898,6 +1726,18 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
         const allSelected = [...matchTeamA, ...matchTeamB];
         const strokes = strokeSituation();
 
+        // Players already committed to a match in THIS round drop out of the
+        // pool — a player plays one match per round, so offering them again
+        // only invites double-booking. Derived from `matches`, so deleting a
+        // match below hands its players straight back.
+        const matchedPids = new Set(
+          matches.filter(m => m.round === matchRound).flatMap(m => [...(m.teamA || []), ...(m.teamB || [])])
+        );
+        // An in-progress selection stays visible even if somehow already
+        // matched, otherwise it could never be tapped off again.
+        const availablePlayers = (players, sel) =>
+          players.filter(p => !matchedPids.has(p.player_id) || sel.includes(p.player_id));
+
         return (
         <div>
           {/* Round tabs */}
@@ -1918,10 +1758,16 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               const team = teams[tid];
               const sel = tid === "A" ? matchTeamA : matchTeamB;
               const setSel = tid === "A" ? setMatchTeamA : setMatchTeamB;
+              const pool = availablePlayers(players, sel);
               return (
                 <div key={tid}>
                   <div style={{ fontSize: 9, fontWeight: 700, color: team.accent, letterSpacing: 1, marginBottom: 5 }}>{teamNames?.[tid]}</div>
-                  {players.map(p => {
+                  {pool.length === 0 && (
+                    <div style={{ fontSize: 10, color: BC.t3, padding: "7px 8px", borderRadius: 8, border: `1px dashed ${BC.bdr}`, textAlign: "center" }}>
+                      {players.length ? `All matched in Rd ${matchRound}` : "No players"}
+                    </div>
+                  )}
+                  {pool.map(p => {
                     const isSelected = sel.includes(p.player_id);
                     const ch = getPlayerCH(p.player_id);
                     return (
@@ -5096,6 +4942,11 @@ export default function App() {
   // Deliberate counterparts to the automatic lock. `refresh` re-takes the
   // snapshot against current values and is the ONLY way a locked round's
   // handicaps can move; it is blocked outright on a final round.
+  //
+  // No UI currently calls finalize/release — the Admin › Rounds lock card was
+  // removed. Retained as the data layer behind those actions so a future
+  // surface (or a console call) has something to hit; locking itself still
+  // happens automatically in ensureRoundLock.
   const onLockRound = useCallback(async (rnd, { refresh = false } = {}) => {
     const prev = roundLocksRef.current?.[rnd];
     if (prev?.final && refresh) return null; // final rounds are never refreshed
@@ -5119,6 +4970,7 @@ export default function App() {
     return lock;
   }, []);
 
+  // eslint-disable-next-line no-unused-vars
   const onFinalizeRound = useCallback(async (rnd, final) => {
     let lock = roundLocksRef.current?.[rnd];
     // Finalizing a round nobody locked (all scores entered elsewhere, say)
@@ -5136,6 +4988,7 @@ export default function App() {
 
   // Hand a round back to live handicaps. Only for a round locked by a stray
   // score before the event actually started — never reachable while final.
+  // eslint-disable-next-line no-unused-vars
   const onClearRoundLock = useCallback(async (rnd) => {
     const lock = roundLocksRef.current?.[rnd];
     if (lock?.final) return null;
@@ -5420,9 +5273,6 @@ export default function App() {
             hcpOverridesFromDb={hcpOverridesData}
             teeAssignmentsFromDb={teeAssignmentsData}
             roundLocks={roundLocksData}
-            onLockRound={onLockRound}
-            onFinalizeRound={onFinalizeRound}
-            onClearRoundLock={onClearRoundLock}
             notify={notify}
           />
         )}
