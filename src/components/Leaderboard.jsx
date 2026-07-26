@@ -208,32 +208,34 @@ function Chip({ text, color = BC.t3, filled = false }) {
   );
 }
 
-// ── One side of a match ──
-// Colored rail, the player name(s), and the points that side has banked.
-// The leading side gets the brighter, heavier name treatment.
-function MatchSide({ tid, names, pts, align, isLeader }) {
-  const color = teamHex(tid);
+// ── One team's column in a collapsed match row ──
+// The pair's names stack vertically on their own side of the row, with the
+// team's color as a rail on the OUTER edge — so the two rails bracket the
+// score sitting between them. That's deliberately the same left/right
+// geometry as the cup total card at the top of the board: team A is always
+// the left column, team B always the right, in every match of every round.
+// A player is therefore always found on their own team's side of the screen,
+// and "which side am I reading?" never has to be re-answered per row.
+//
+// The leading side gets the brighter, heavier treatment; the trailing side
+// stays grey. That's the whole leader signal — no tint, no pill.
+function MatchTeamColumn({ tid, names, isLeader }) {
+  const left = tid === "A";
+  const rail = left
+    ? { borderLeft: `3px solid ${teamHex(tid)}`, paddingLeft: 8 }
+    : { borderRight: `3px solid ${teamHex(tid)}`, paddingRight: 8 };
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: 8,
-      flexDirection: align === "right" ? "row-reverse" : "row",
-      flex: 1, minWidth: 0,
+      minWidth: 0, display: "flex", flexDirection: "column", gap: 2,
+      textAlign: left ? "left" : "right", ...rail,
     }}>
-      <div style={{ width: 3, alignSelf: "stretch", borderRadius: 2, background: color, flexShrink: 0 }} />
-      <div style={{ flex: 1, minWidth: 0, textAlign: align }}>
-        {names.map((nm, i) => (
-          <div key={i} style={{
-            fontSize: 13, fontWeight: isLeader ? 800 : 600,
-            color: isLeader ? BC.t1 : BC.t2, lineHeight: 1.35,
-            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-          }}>{nm}</div>
-        ))}
-      </div>
-      <div style={{ flexShrink: 0, textAlign: align, minWidth: 26 }}>
-        <div style={{ fontSize: 16, fontWeight: 800, color: pts > 0 ? color : BC.t3, lineHeight: 1 }}>
-          {fmtPts(pts)}
-        </div>
-      </div>
+      {names.map((nm, i) => (
+        <div key={i} style={{
+          fontSize: 13, fontWeight: isLeader ? 700 : 600,
+          color: isLeader ? BC.t1 : BC.t2, lineHeight: 1.3,
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        }}>{nm}</div>
+      ))}
     </div>
   );
 }
@@ -242,7 +244,7 @@ function MatchSide({ tid, names, pts, align, isLeader }) {
 //  Match card
 // ══════════════════════════════════════════════════════════════════
 function MatchCard({
-  index, match, result, format, teams, tPlayers,
+  index, first, match, result, format, teams, tPlayers,
   courses, tRounds, roundLocks, expanded, onToggle,
 }) {
   const stroke = (match.scoring_type || "match") === "stroke";
@@ -266,63 +268,73 @@ function MatchCard({
         n.overall ? { key: "o", label: "OVERALL", pot: n.overall, st: overallSt, pts: result.overallPts, bonus: format === "double_dot" } : null,
       ].filter(Boolean);
 
+  // A completed match that finished level is a HALVE, worth a half point to
+  // each side. statusText would call that "AS", which reads as a live state —
+  // "½" says it's over and how it was settled. Stroke matches keep their own
+  // "TIED" wording, so this only applies to match play.
+  const halved = done && !stroke && overallSt.margin === 0;
+  const statusLabel = halved ? "½" : statusText(overallSt);
+  const statusColor = leader ? teamHex(leader) : overallSt.played ? BC.t2 : BC.t3;
+  // Sub-line under the status. An unplayed match has no progress to report,
+  // so it shows its tee time instead — the only thing about it that's news.
+  const subLabel = done ? "FINAL"
+    : result.holesPlayed ? `THRU ${result.holesPlayed}`
+    : match.teeTime || "—";
+
   return (
     <div style={{
-      background: BC.card, borderRadius: 12, marginBottom: 8, overflow: "hidden",
-      border: `1px solid ${expanded ? `${BC.amber}55` : BC.bdr}`,
+      borderTop: first ? "none" : `1px solid ${BC.bdr}66`,
+      background: expanded ? `${BC.amber}0a` : "transparent",
     }}>
       <button onClick={onToggle} style={{
-        width: "100%", padding: "10px 12px", background: "transparent",
+        width: "100%", padding: "9px 12px 10px", background: "transparent",
         border: "none", cursor: "pointer", textAlign: "left", display: "block", fontFamily: FONT,
       }}>
-        {/* Header line — match number, format note, progress */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-          <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1, color: BC.t3 }}>
-            MATCH {index + 1}
-          </span>
-          {match.teeTime && <span style={{ fontSize: 9, color: BC.t3 }}>· {match.teeTime}</span>}
-          <span style={{ flex: 1 }} />
-          {done
-            ? <Chip text="FINAL" color={BC.t2} />
-            : <span style={{ fontSize: 9, fontWeight: 700, color: BC.t3, letterSpacing: 0.5 }}>
-                {result.holesPlayed ? `THRU ${result.holesPlayed}` : "NOT STARTED"}
-              </span>}
-          <span style={{ fontSize: 10, color: BC.t3, marginLeft: 2 }}>{expanded ? "▴" : "▾"}</span>
-        </div>
-
-        {/* Names + status */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <MatchSide tid="A" names={aNames} pts={ptsA} align="left" isLeader={leader === "A"} />
-          <div style={{
-            flexShrink: 0, minWidth: 58, textAlign: "center", padding: "5px 6px",
-            borderRadius: 8, background: leader ? `${teamHex(leader)}1f` : BC.inp,
-            border: `1px solid ${leader ? `${teamHex(leader)}55` : BC.bdr}`,
-          }}>
-            <div style={{
-              fontSize: 13, fontWeight: 800, lineHeight: 1.1,
-              color: leader ? teamHex(leader) : BC.t2,
-            }}>
-              {statusText(overallSt)}
+        {/* Team A | status | team B — the cup card's geometry, one row down.
+            `1fr auto 1fr` keeps the centre column exactly as wide as its
+            content, so the two name columns stay equal to each other no
+            matter how long the status text gets. */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 9 }}>
+          <MatchTeamColumn tid="A" names={aNames} isLeader={leader === "A"} />
+          <div style={{ textAlign: "center", minWidth: 58 }}>
+            <div style={{ fontSize: 17, fontWeight: 800, lineHeight: 1.05, color: statusColor }}>
+              {statusLabel}
+            </div>
+            {/* The chevron rides on the sub-line rather than taking a row of
+                its own, so the expand affordance costs no vertical space. */}
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.9, color: BC.t3, marginTop: 2 }}>
+              {subLabel} {expanded ? "▴" : "▾"}
             </div>
           </div>
-          <MatchSide tid="B" names={bNames} pts={ptsB} align="right" isLeader={leader === "B"} />
+          <MatchTeamColumn tid="B" names={bNames} isLeader={leader === "B"} />
         </div>
 
-        {/* Front / Back / Overall */}
-        <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
-          {segments.map((s) => (
-            <SegmentPill key={s.key} label={s.label} pot={s.pot} st={s.st} pts={s.pts} bonus={s.bonus} />
-          ))}
-        </div>
-
-        {/* Hole-by-hole */}
-        <div style={{ marginTop: 9 }}>
+        {/* Hole-by-hole — the match's shape, on its own line at full width. */}
+        <div style={{ marginTop: 8 }}>
           <HoleStrip holes={result.holes} />
         </div>
       </button>
 
       {expanded && (
         <div style={{ borderTop: `1px solid ${BC.bdr}`, background: BC.bg }}>
+          {/* Points detail lives here rather than in the collapsed row: the
+              banked total per side and the Front / Back / Overall split are
+              what you open a match to find, not what you scan a board for. */}
+          <div style={{ padding: "10px 12px 0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <span style={{ flex: 1, fontSize: 9, fontWeight: 800, letterSpacing: 1, color: BC.t3 }}>
+                MATCH {index + 1}{match.teeTime ? ` · ${match.teeTime}` : ""}
+              </span>
+              <span style={{ fontSize: 15, fontWeight: 800, color: BC.teamA }}>{fmtPts(ptsA)}</span>
+              <span style={{ fontSize: 11, color: BC.t3 }}>–</span>
+              <span style={{ fontSize: 15, fontWeight: 800, color: BC.teamB }}>{fmtPts(ptsB)}</span>
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              {segments.map((s) => (
+                <SegmentPill key={s.key} label={s.label} pot={s.pot} st={s.st} pts={s.pts} bonus={s.bonus} />
+              ))}
+            </div>
+          </div>
           <MatchScorecard
             match={match} result={result} format={format}
             courses={courses} tRounds={tRounds} teams={teams} roundLocks={roundLocks}
@@ -346,13 +358,14 @@ function RoundSection({
     : state === "final" ? <Chip text="FINAL" color={BC.t2} />
     : <Chip text="UPCOMING" color={BC.t3} />;
 
+  // The round header is a plain row, not a card. Four match rows plus a
+  // boxed header per round was two levels of container for one level of
+  // information; dropping the wrapper is most of what buys the room for
+  // the hole strips below.
   return (
-    <div style={{
-      background: BC.card, borderRadius: 12, marginBottom: 10, overflow: "hidden",
-      border: `1px solid ${state === "live" ? `${BC.amber}44` : BC.bdr}`,
-    }}>
+    <div style={{ marginBottom: 12 }}>
       <button onClick={onToggle} style={{
-        width: "100%", padding: "11px 12px", background: state === "live" ? `${BC.amber}0f` : "transparent",
+        width: "100%", padding: "2px 2px 0", background: "transparent",
         border: "none", cursor: "pointer", textAlign: "left", display: "block", fontFamily: FONT,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
@@ -374,28 +387,36 @@ function RoundSection({
       </button>
 
       {open && (
-        <div style={{ padding: "0 8px 8px" }}>
-          {results.length === 0 ? (
-            <div style={{ padding: "16px 0", textAlign: "center", color: BC.t3, fontSize: 11 }}>
-              No matches set up for this round.
-            </div>
-          ) : results.map(({ match: m, result: r, format }, i) => (
-            <MatchCard
-              key={m.id}
-              index={i}
-              match={m}
-              result={r}
-              format={format}
-              teams={teams}
-              tPlayers={tPlayers}
-              courses={courses}
-              tRounds={tRounds}
-              roundLocks={roundLocks}
-              expanded={expandedMatch === m.id}
-              onToggle={() => setExpandedMatch(expandedMatch === m.id ? null : m.id)}
-            />
-          ))}
-        </div>
+        results.length === 0 ? (
+          <div style={{ padding: "16px 0", textAlign: "center", color: BC.t3, fontSize: 11 }}>
+            No matches set up for this round.
+          </div>
+        ) : (
+          /* One container per round, matches separated by hairlines — so the
+             round reads as a single scoreboard rather than a stack of cards. */
+          <div style={{
+            marginTop: 8, background: BC.card, borderRadius: 12, overflow: "hidden",
+            border: `1px solid ${state === "live" ? `${BC.amber}44` : BC.bdr}`,
+          }}>
+            {results.map(({ match: m, result: r, format }, i) => (
+              <MatchCard
+                key={m.id}
+                index={i}
+                first={i === 0}
+                match={m}
+                result={r}
+                format={format}
+                teams={teams}
+                tPlayers={tPlayers}
+                courses={courses}
+                tRounds={tRounds}
+                roundLocks={roundLocks}
+                expanded={expandedMatch === m.id}
+                onToggle={() => setExpandedMatch(expandedMatch === m.id ? null : m.id)}
+              />
+            ))}
+          </div>
+        )
       )}
     </div>
   );
