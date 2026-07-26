@@ -2153,15 +2153,20 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             </button>
           )}
 
-          {/* Existing matches by round */}
-          {[1,2,3,4].map(r => {
-            const rndM = matches.filter(m => m.round === r);
-            if (!rndM.length) return null;
-            const trR = tRounds.find(t => t.round_number === r);
-            const fmt = FORMATS.find(f => f.id === trR?.format);
+          {/* Existing matches — only the round selected in the tabs above.
+              The other rounds are one tap away, so listing them all here just
+              buried the round being worked on. */}
+          {(() => {
+            const rndM = matches.filter(m => m.round === matchRound);
+            const fmt = FORMATS.find(f => f.id === tr?.format);
             return (
-              <div key={r} style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 10, color: BC.gold, fontWeight: 700, marginBottom: 8, letterSpacing: 1 }}>ROUND {r}{fmt ? ` · ${fmt.label}` : ""}</div>
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 10, color: BC.gold, fontWeight: 700, marginBottom: 8, letterSpacing: 1 }}>ROUND {matchRound}{fmt ? ` · ${fmt.label}` : ""}</div>
+                {rndM.length === 0 && (
+                  <div style={{ fontSize: 10, color: BC.t3, padding: "10px 12px", borderRadius: 10, border: `1px dashed ${BC.bdr}`, textAlign: "center" }}>
+                    No matches yet for Rd {matchRound}
+                  </div>
+                )}
                 {rndM.map(m => (
                   <div key={m.id} style={{ background: BC.card, borderRadius: 10, padding: "8px 12px", marginBottom: 5, border: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", gap: 8 }}>
                     <div style={{ flex: 1, fontSize: 11 }}>
@@ -2176,7 +2181,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 ))}
               </div>
             );
-          })}
+          })()}
         </div>
         );
       })()}
