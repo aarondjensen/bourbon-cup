@@ -1909,7 +1909,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     {/* Match / Stroke */}
                     <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}` }}>
                       <button onClick={() => setScoringType("match")} style={pill(scoringType === "match", false)}>Match</button>
-                      <button onClick={() => setScoringType("stroke")} title="Net stroke total (medal) — fewest net strokes wins each pot" style={pill(scoringType === "stroke", false)}>Stroke</button>
+                      <button onClick={() => setScoringType("stroke")} title="Net stroke total (medal) — fewest net strokes wins each pot" style={pill(scoringType === "stroke", false)}>Total</button>
                     </div>
                     {/* Low Man / All (handicap allocation) */}
                     <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}`, marginLeft: "auto" }}>

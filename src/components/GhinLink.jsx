@@ -41,6 +41,7 @@ import { searchGhinGolfers, syncGhinNumbers, parseGhinHI, fmtHI } from "../lib/g
 
 const BLUE = BC.hcpBlue;
 const FONT = "'Montserrat', sans-serif";
+const US_STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"];
 
 const primaryBtn = (color) => ({
   width: "100%", boxSizing: "border-box", padding: "14px 14px", borderRadius: 12,
@@ -82,6 +83,7 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("view");     // "view" | "search"
   const [q, setQ] = useState("");
+  const [state, setState] = useState("");        // optional 2-letter state filter
   const [results, setResults] = useState([]);
   const [searched, setSearched] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -118,7 +120,7 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
   const doSearch = async () => {
     if (!q.trim()) return;
     setBusy(true); setSearched(true); setPending(null);
-    try { setResults(await searchGhinGolfers(q.trim())); }
+    try { setResults(await searchGhinGolfers(q.trim(), state)); }
     catch (e) { notify?.(e.message || "GHIN search failed", "error"); }
     finally { setBusy(false); }
   };
@@ -258,9 +260,20 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
                   color: BC.t1, fontSize: 16, fontWeight: 600, outline: "none", fontFamily: FONT,
                 }}
               />
-              <button disabled={busy} onClick={doSearch} style={{ ...primaryBtn(BLUE), marginTop: 10 }}>
-                {busy ? "Searching…" : "Search GHIN"}
-              </button>
+              {/* Optional state filter — narrows a name search (a bare name
+                  can return golfers nationwide). Ignored for a GHIN #. */}
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <select value={state} onChange={e => setState(e.target.value)} aria-label="State filter"
+                  style={{ flexShrink: 0, width: 108, boxSizing: "border-box", padding: "0 10px",
+                    background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 12,
+                    color: BC.t1, fontSize: 16, fontWeight: 600, outline: "none", fontFamily: FONT, cursor: "pointer" }}>
+                  <option value="">All states</option>
+                  {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <button disabled={busy} onClick={doSearch} style={{ ...primaryBtn(BLUE), flex: 1 }}>
+                  {busy ? "Searching…" : "Search GHIN"}
+                </button>
+              </div>
             </div>
 
             {/* Scrolling results */}
