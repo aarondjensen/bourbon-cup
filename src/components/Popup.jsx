@@ -16,6 +16,9 @@
 //    • modal   →  900  (confirm-on-top-of-content)
 //    Toasts/overlays should live at 1000+ so they stack above modals.
 //    Pass a number to override, or the strings "content" / "modal".
+//    The ladder only works when the rungs share a stacking context —
+//    ConfirmModal therefore always portals to <body>, so it wins over
+//    portaled content popups regardless of where it's rendered from.
 //
 //  Migration cheat-sheet (replaces BC's bespoke inline modals)
 //  ───────────────────────────────────────────────────────────
@@ -233,7 +236,12 @@ export function ConfirmModal(props) {
   const handleCancel = m.onCancel || (() => {});
 
   return (
-    <Popup onClose={handleCancel} maxWidth={340} zIndex="modal" padding={20}>
+    // Always portaled: a confirm is by definition the topmost layer, and the
+    // z ladder (modal 900 over content 500) only holds when both live in the
+    // root stacking context. Rendered inline, an app ancestor's transform /
+    // filter / opacity traps the confirm's z-index inside that context, and a
+    // portaled content popup (e.g. the player editor) paints over it.
+    <Popup onClose={handleCancel} maxWidth={340} zIndex="modal" padding={20} portal>
       {m.eyebrow && (
         <div style={{
           fontSize: 11, fontWeight: 700, color: BC.amber,
