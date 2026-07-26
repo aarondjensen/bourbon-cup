@@ -229,6 +229,23 @@ export function ConfirmModal(props) {
   const m = "modal" in props ? props.modal : props;
   if (!m) return null;
   if (!m.title && !m.message) return null;
+  return <ConfirmModalInner m={m} />;
+}
+
+// Split so the mount effect below can use hooks past ConfirmModal's
+// nullable-state early returns.
+function ConfirmModalInner({ m }) {
+  // Drop the on-screen keyboard the moment a confirm opens. A confirm is
+  // routinely raised while a text field still has focus (e.g. typing a
+  // handicap override, then tapping Save) and iOS does NOT shrink the
+  // layout viewport for the keyboard — so this full-viewport-centered card
+  // could sit hidden under the keys while the keyboard-aware (viewportFit)
+  // popup beneath stays visible, reading as "the confirm is behind".
+  // Blurring closes the keyboard and restores the full visible viewport.
+  useEffect(() => {
+    const el = document.activeElement;
+    if (el && el !== document.body && typeof el.blur === "function") el.blur();
+  }, []);
 
   const isDanger = m.destructive === true || m.variant === "danger";
   const confirmBg = isDanger ? BC.danger : BC.amber;
