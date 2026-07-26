@@ -1229,8 +1229,6 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
     await onSaveBranding({ teamA: teamBrandDoc("A"), teamB: teamBrandDoc("B") });
     notify?.("Team branding saved");
   };
-  const [newPlayerFirst, setNewPlayerFirst] = useState("");
-  const [newPlayerLast, setNewPlayerLast] = useState("");
 
   // Every place outside this console shows "First LastInitial" (e.g. "Kevin J").
   // We persist that as the player's `name` so all existing display code keeps
@@ -1245,8 +1243,6 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
     (p.first_name || p.last_name)
       ? [p.first_name, p.last_name].filter(Boolean).join(" ").trim()
       : (p.name || "");
-  const [newPlayerTeam, setNewPlayerTeam] = useState(null);
-  const [newPlayerHI, setNewPlayerHI] = useState("");
   const [courseSearch, setCourseSearch] = useState("");
   const [courseStateFilter, setCourseStateFilter] = useState("MI");
   const [searchResults, setSearchResults] = useState([]);
@@ -1552,57 +1548,14 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 )}
                 {/* + Add button inline with team name */}
                 <button
-                  onClick={() => setNewPlayerTeam(prev => prev === team.id ? null : team.id)}
+                  onClick={() => setEditingPlayer({ isNew: true, team: team.id, first: "", last: "", nick: "", hi: "", ov: "", dir: false })}
+                  title="Add player"
                   style={{
                     padding: "3px 10px", borderRadius: 8, border: `1px solid ${team.accent}66`,
-                    background: newPlayerTeam === team.id ? team.accent : "transparent",
-                    color: newPlayerTeam === team.id ? "#0a0804" : team.accent,
+                    background: "transparent", color: team.accent,
                     fontSize: 16, fontWeight: 700, cursor: "pointer", lineHeight: 1, flexShrink: 0,
                   }}>+</button>
               </div>
-
-              {/* Expandable add card */}
-              {newPlayerTeam === team.id && (
-                <div style={{ background: BC.inp, borderRadius: 10, padding: 10, marginBottom: 10, border: `1px solid ${team.accent}44` }}>
-                  <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
-                    <input
-                      autoFocus
-                      value={newPlayerFirst}
-                      onChange={e => setNewPlayerFirst(e.target.value)}
-                      placeholder="First name"
-                      style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "9px 10px", background: "#1e1c18", border: `1px solid ${team.accent}55`, borderRadius: 8, color: "#ffffff", fontSize: 16, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
-                    />
-                    <input
-                      value={newPlayerLast}
-                      onChange={e => setNewPlayerLast(e.target.value)}
-                      placeholder="Last name"
-                      style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "9px 10px", background: "#1e1c18", border: `1px solid ${team.accent}55`, borderRadius: 8, color: "#ffffff", fontSize: 16, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
-                    />
-                  </div>
-                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    <input
-                      value={newPlayerHI}
-                      onChange={e => setNewPlayerHI(e.target.value)}
-                      placeholder="HI"
-                      type="number"
-                      inputMode="decimal"
-                      style={{ width: 76, flexShrink: 0, boxSizing: "border-box", padding: "9px 8px", background: "#1e1c18", border: `1px solid ${team.accent}55`, borderRadius: 8, color: "#ffffff", fontSize: 16, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
-                    />
-                    <span style={{ flex: 1 }} />
-                    <button onClick={async () => {
-                      const first = newPlayerFirst.trim(), last = newPlayerLast.trim();
-                      if (!first) { notify("Enter a first name", "error"); return; }
-                      const pid = `bc_player_${Date.now()}`;
-                      await onAddPlayer({ id: pid, player_id: pid, tournament_id: TOURNAMENT_ID, name: toDisplayName(first, last), first_name: first, last_name: last, team: team.id, handicap_index: parseFloat(newPlayerHI) || 0 });
-                      setNewPlayerFirst(""); setNewPlayerLast(""); setNewPlayerHI(""); setNewPlayerTeam(null);
-                      notify(`Added!`, "success");
-                    }} style={{ padding: "9px 16px", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer", background: team.color, border: `1px solid ${team.accent}`, color: team.accent, flexShrink: 0 }}>Add</button>
-                    <button onClick={() => { setNewPlayerTeam(null); setNewPlayerFirst(""); setNewPlayerLast(""); setNewPlayerHI(""); }} style={{
-                      padding: "9px 12px", borderRadius: 8, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, fontSize: 12, cursor: "pointer", flexShrink: 0,
-                    }}>✕</button>
-                  </div>
-                </div>
-              )}
 
               {/* Player list */}
               {tPlayers.filter(p => p.team === team.id).map(p => {
@@ -1641,48 +1594,81 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               transform can't trap it). One place edits name, nickname, the
               handicap (index merged with the GHIN link), override and role. */}
           {editingPlayer && (() => {
-            const p = tPlayers.find(x => x.player_id === editingPlayer.pid);
-            if (!p) return null;
-            const acc = (teams[p.team] || teams.A).accent;
+            const isNew = !!editingPlayer.isNew;
+            const p = isNew ? null : tPlayers.find(x => x.player_id === editingPlayer.pid);
+            if (!isNew && !p) return null;
+            const acc = ((isNew ? teams[editingPlayer.team] : teams[p.team]) || teams.A).accent;
             const defaultNick = toDisplayName(editingPlayer.first, editingPlayer.last);
-            const linked = !!p.ghin_number;
+            const linked = !!editingPlayer.ghin_number;
             const close = () => setEditingPlayer(null);
             const set = (patch) => setEditingPlayer(prev => prev ? { ...prev, ...patch } : prev);
             const lbl = { fontSize: 8, fontWeight: 800, letterSpacing: 0.5, color: BC.t3, textTransform: "uppercase", marginBottom: 3, display: "block" };
             // Input font stays 16px on purpose — anything smaller makes iOS
             // Safari zoom the page on focus. Height is condensed via padding.
             const inp = { fontSize: 16, fontWeight: 600, color: BC.t1, width: "100%", boxSizing: "border-box", background: BC.inp, border: `1px solid ${acc}55`, borderRadius: 8, padding: "7px 10px", outline: "none", fontFamily: "'Montserrat', sans-serif" };
-            // Mirror any GHIN-driven index change back into the form so Save
-            // can't overwrite a freshly-synced value with the stale field.
+            // GHIN link/sync/unlink writes ONLY into the form here (never the db
+            // directly) — the whole modal commits on Save, so add & edit behave
+            // identically and Cancel truly discards. `formPlayer` gives
+            // GhinLinkButton the shape it expects, built from live form state.
+            const formPlayer = {
+              player_id: editingPlayer.pid || "new",
+              name: (editingPlayer.nick || "").trim() || defaultNick,
+              first_name: editingPlayer.first, last_name: editingPlayer.last,
+              handicap_index: parseFloat(editingPlayer.hi) || 0,
+              ghin_number: editingPlayer.ghin_number || null,
+              ghin_name: editingPlayer.ghin_name || null,
+              ghin_rev_date: editingPlayer.ghin_rev_date || null,
+              ghin_synced_at: editingPlayer.ghin_synced_at || null,
+            };
             const ghinWrap = async (updated) => {
-              await onUpdatePlayer(updated);
-              if (Object.prototype.hasOwnProperty.call(updated, "handicap_index")) {
-                setEditingPlayer(prev => (prev && prev.pid === p.player_id) ? { ...prev, hi: String(updated.handicap_index ?? "") } : prev);
-              }
+              set({
+                ...(Object.prototype.hasOwnProperty.call(updated, "handicap_index") ? { hi: String(updated.handicap_index ?? "") } : {}),
+                ghin_number: updated.ghin_number ?? null,
+                ghin_name: updated.ghin_name ?? null,
+                ghin_rev_date: updated.ghin_rev_date ?? null,
+                ghin_synced_at: updated.ghin_synced_at ?? null,
+              });
             };
             const doSave = async () => {
               const first = (editingPlayer.first || "").trim(), last = (editingPlayer.last || "").trim();
               if (!first) { notify("Enter a first name", "error"); return; }
               const newName = (editingPlayer.nick || "").trim() || toDisplayName(first, last);
+              const ovRaw = String(editingPlayer.ov ?? "").trim();
+              const newOv = ovRaw === "" ? null : (parseFloat(ovRaw) || 0);
+              const newDir = !!editingPlayer.dir;
+              const ghinFields = {
+                ghin_number: editingPlayer.ghin_number || null,
+                ghin_name: editingPlayer.ghin_name || null,
+                ghin_rev_date: editingPlayer.ghin_rev_date || null,
+                ghin_synced_at: editingPlayer.ghin_synced_at || null,
+              };
+              if (isNew) {
+                const pid = `bc_player_${Date.now()}`;
+                await onAddPlayer({ id: pid, player_id: pid, tournament_id: TOURNAMENT_ID, team: editingPlayer.team,
+                  name: newName, first_name: first, last_name: last,
+                  handicap_index: parseFloat(editingPlayer.hi) || 0, hi_override: newOv, isDirector: newDir, ...ghinFields });
+                notify(`Added ${newName}`, "success");
+                close();
+                return;
+              }
               const changes = [];
               if (first !== (p.first_name||"") || last !== (p.last_name||"") || newName !== p.name)
                 changes.push(`Name → ${fullName({ first_name: first, last_name: last })} (shows as "${newName}")`);
               const baseChanged = parseFloat(editingPlayer.hi) !== parseFloat(p.handicap_index);
               if (baseChanged) changes.push(`Index: ${p.handicap_index} → ${editingPlayer.hi}`);
-              const ovRaw = String(editingPlayer.ov ?? "").trim();
-              const newOv = ovRaw === "" ? null : (parseFloat(ovRaw) || 0);
               const oldOv = (p.hi_override != null && String(p.hi_override).trim() !== "") ? (parseFloat(p.hi_override) || 0) : null;
               if (newOv !== oldOv) changes.push(`Override: ${oldOv == null ? "—" : oldOv} → ${newOv == null ? "— (use index)" : newOv}`);
-              const newDir = !!editingPlayer.dir;
               const dirChanged = newDir !== !!p.isDirector;
               if (dirChanged) changes.push(`Director: ${p.isDirector ? "Yes" : "No"} → ${newDir ? "Yes" : "No"}`);
+              if ((editingPlayer.ghin_number || null) !== (p.ghin_number || null))
+                changes.push(editingPlayer.ghin_number ? `GHIN: linked #${editingPlayer.ghin_number}` : "GHIN: unlinked");
               if (changes.length === 0) { close(); return; }
               const oldEff = oldOv != null ? oldOv : (parseFloat(p.handicap_index) || 0);
               const newEff = newOv != null ? newOv : (parseFloat(editingPlayer.hi) || 0);
               let impact = oldEff !== newEff ? "\n\n" + describeHiChangeImpact(roundLocks, [1,2,3,4]).text : "";
               if (dirChanged && newDir) impact += "\n\nDirector access grants full admin control (setup, scoring, editions).";
               if (await confirm({ title: "Confirm changes", message: changes.join("\n") + impact })) {
-                onUpdatePlayer({ ...p, name: newName, first_name: first, last_name: last, handicap_index: parseFloat(editingPlayer.hi) || 0, hi_override: newOv, isDirector: newDir });
+                onUpdatePlayer({ ...p, name: newName, first_name: first, last_name: last, handicap_index: parseFloat(editingPlayer.hi) || 0, hi_override: newOv, isDirector: newDir, ...ghinFields });
               }
               close();
             };
@@ -1690,7 +1676,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               <Popup onClose={close} portal viewportFit align="start" maxWidth={420} padding={0} outerPadding={12}
                 innerStyle={{ background: BC.card, borderRadius: 16, display: "flex", flexDirection: "column", fontFamily: "'Montserrat', sans-serif" }}>
                 <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 10, padding: "13px 16px", borderBottom: `1px solid ${BC.bdr}` }}>
-                  <div style={{ flex: 1, fontSize: 14, fontWeight: 800, color: BC.t1 }}>Edit Player</div>
+                  <div style={{ flex: 1, fontSize: 14, fontWeight: 800, color: BC.t1 }}>{isNew ? "Add Player" : "Edit Player"}</div>
                   <button onClick={close} aria-label="Close" style={{ width: 32, height: 32, borderRadius: 9, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t2, fontSize: 16, cursor: "pointer", lineHeight: 1 }}>✕</button>
                 </div>
                 <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", padding: 14, display: "flex", flexDirection: "column", gap: 11 }}>
@@ -1713,28 +1699,35 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       </button>
                     </div>
                   </div>
-                  {/* Handicap Index merged with the GHIN link/sync button. */}
-                  <div>
-                    <span style={lbl}>Handicap Index</span>
-                    <div style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
-                      <input type="number" inputMode="decimal" value={editingPlayer.hi} placeholder="—" onChange={e => set({ hi: e.target.value })} style={{ ...inp, flex: 1 }} />
-                      <div style={{ flexShrink: 0, display: "flex", alignItems: "center", padding: "0 10px", borderRadius: 8, border: `1px solid ${(linked ? BC.green : BC.hcpBlue)}44`, background: (linked ? BC.green : BC.hcpBlue) + "12" }}>
-                        <GhinLinkButton player={p} user={user} notify={notify} onUpdatePlayer={ghinWrap} />
+                  {/* Index, the GHIN link, and Override on one row — all
+                      handicap-related. GHIN fills/syncs the Index; Override
+                      (amber) wins over both when set. */}
+                  <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span style={lbl}>Index</span>
+                      <input type="number" inputMode="decimal" value={editingPlayer.hi} placeholder="—" onChange={e => set({ hi: e.target.value })} style={inp} />
+                    </div>
+                    <div style={{ flexShrink: 0 }}>
+                      <span style={lbl}>GHIN</span>
+                      <div style={{ height: 35, display: "flex", alignItems: "center", padding: "0 9px", borderRadius: 8, border: `1px solid ${(linked ? BC.green : BC.hcpBlue)}44`, background: (linked ? BC.green : BC.hcpBlue) + "12" }}>
+                        <GhinLinkButton player={formPlayer} user={user} notify={notify} onUpdatePlayer={ghinWrap} />
                       </div>
                     </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ ...lbl, color: BC.amber }}>Override</span>
+                      <input type="number" inputMode="decimal" value={editingPlayer.ov} placeholder={String(p ? p.handicap_index : (editingPlayer.hi || ""))} onChange={e => set({ ov: e.target.value })}
+                        style={{ ...inp, border: `1px solid ${BC.amber}66`, color: BC.amber }} />
+                    </div>
                   </div>
-                  <label style={{ display: "block" }}>
-                    <span style={{ ...lbl, color: BC.amber }}>Override · optional</span>
-                    <input type="number" inputMode="decimal" value={editingPlayer.ov} placeholder={String(p.handicap_index)} onChange={e => set({ ov: e.target.value })}
-                      style={{ ...inp, border: `1px solid ${BC.amber}66`, color: BC.amber }} />
-                  </label>
                 </div>
                 <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderTop: `1px solid ${BC.bdr}` }}>
-                  <button onClick={async () => { if (await confirm({ title: `Remove ${fullName(p)}?`, message: "This deletes the player from this edition.", confirmLabel: "Delete", destructive: true })) { onRemovePlayer(p.player_id); close(); } }}
-                    title="Delete player" style={{ flexShrink: 0, padding: "9px 11px", borderRadius: 10, background: "transparent", border: `1px solid ${BC.danger}55`, color: BC.danger, fontSize: 14, fontWeight: 700, cursor: "pointer", lineHeight: 1 }}>🗑</button>
+                  {!isNew && (
+                    <button onClick={async () => { if (await confirm({ title: `Remove ${fullName(p)}?`, message: "This deletes the player from this edition.", confirmLabel: "Delete", destructive: true })) { onRemovePlayer(p.player_id); close(); } }}
+                      title="Delete player" style={{ flexShrink: 0, padding: "9px 11px", borderRadius: 10, background: "transparent", border: `1px solid ${BC.danger}55`, color: BC.danger, fontSize: 14, fontWeight: 700, cursor: "pointer", lineHeight: 1 }}>🗑</button>
+                  )}
                   <span style={{ flex: 1 }} />
                   <button onClick={close} style={{ padding: "10px 16px", borderRadius: 10, background: BC.inp, border: `1px solid ${BC.bdr}`, color: BC.t2, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
-                  <button onClick={doSave} style={{ padding: "10px 20px", borderRadius: 10, background: acc, border: "none", color: "#0a0804", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>Save</button>
+                  <button onClick={doSave} style={{ padding: "10px 20px", borderRadius: 10, background: acc, border: "none", color: "#0a0804", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>{isNew ? "Add" : "Save"}</button>
                 </div>
               </Popup>
             );
