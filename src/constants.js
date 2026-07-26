@@ -202,17 +202,23 @@ export const describeAllowance = (spec) => {
 //
 // Eight players a side, and on each hole the best N of those eight nets are
 // added up; that sum is the side's score for the hole and the two sums are
-// compared like any other. N is set PER NINE, because that is the knob the
-// tournament has always turned — the front has historically counted the best
-// 6 and the back the best 7, so the back nine both plays harder and carries
-// more of the field. Hence the shape:
+// compared like any other.
 //
-//   { front, back }   — how many nets count on a front-nine hole, and on a
-//                       back-nine hole. Whole numbers, at least 1.
+// N IS PER HOLE, not per nine. The tournament has moved this number around for
+// years — the front has run 5 and 6, the back 6 and 7 — and the old scoring
+// sheets did not hold one figure across a nine either: they walked it up
+// inside the nine (4,4,4,4,4,4,5,5,5 on the front; 5,5,5,6,6,6,6,6,6 on the
+// back), so more of the side has to show up as the nine goes on. A per-nine
+// pair could not express that, so the stored shape is one count per hole:
+//
+//   { holes: [n, n, … ] }   — 18 whole numbers, at least 1 each.
+//
+// The round form still leads with a per-nine box, because "the front counts 6"
+// is how a director thinks and setting nine holes at once is one keystroke;
+// the per-hole grid underneath is there for the years that ramp.
 //
 // Unlike the allowance there is no off switch: a Team Best Ball round is
-// always counting SOME number of scores, so the only question is which. The
-// values above are what a round scores with until the director changes them.
+// always counting SOME number of scores, so the only question is which.
 //
 // A count larger than the side actually fields is clamped at scoring time to
 // the smaller of the two rosters (see scoring.js) — eight-man counts on a
@@ -225,15 +231,18 @@ export const COUNTING_DEFAULT = { front: 6, back: 7 };
 // the count fields at all.
 export const formatCountsScores = (formatId) => !!FORMATS.find(f => f.id === formatId)?.counting;
 
-// What the count fields PREFILL for a format, or null when the format doesn't
-// count scores at all.
+// What the count fields PREFILL for a format ({front, back}), or null when the
+// format doesn't count scores at all.
 export const countingDefaultFor = (formatId) =>
   FORMATS.find(f => f.id === formatId)?.counting || null;
 
-// A round's counting scores, fully resolved for scoring — or null when the
-// format doesn't count, which is how every caller asks "does this apply?".
-// A blank or nonsense field falls back to the format's prefill rather than
-// scoring off a zero, since a hole counting no scores has no score.
+// A round's counting scores as 18 per-hole numbers — or null when the format
+// doesn't count, which is how every caller asks "does this apply?".
+//
+// Reads three shapes so no round has to be migrated: the per-hole array, the
+// per-nine {front, back} pair the field was first stored as, and nothing at
+// all (the format's prefill). A blank or nonsense entry falls back rather than
+// counting zero scores, since a hole counting nothing has no score.
 export const resolveCounting = (formatId, saved) => {
   const def = countingDefaultFor(formatId);
   if (!def) return null;
@@ -241,14 +250,83 @@ export const resolveCounting = (formatId, saved) => {
     const n = parseInt(v, 10);
     return Number.isFinite(n) && n >= 1 ? n : fallback;
   };
-  return { front: num(saved?.front, def.front), back: num(saved?.back, def.back) };
+  const nine = (h) => num(h < 9 ? saved?.front : saved?.back, h < 9 ? def.front : def.back);
+  const holes = Array.isArray(saved?.holes) ? saved.holes : null;
+  return Array.from({ length: 18 }, (_, h) => num(holes?.[h], nine(h)));
+};
+
+// The one count a nine is played off, or null when it isn't uniform. Lets the
+// per-nine box show a real value on the ordinary case and stand back on the
+// ramped one.
+export const countingNine = (counts, back = false) => {
+  if (!counts) return null;
+  const slice = back ? counts.slice(9, 18) : counts.slice(0, 9);
+  return slice.every(n => n === slice[0]) ? slice[0] : null;
+};
+
+// What a nine reads as: "6" when it's flat, "5–6" when it ramps.
+const nineText = (counts, back) => {
+  const flat = countingNine(counts, back);
+  if (flat != null) return String(flat);
+  const slice = back ? counts.slice(9, 18) : counts.slice(0, 9);
+  return `${Math.min(...slice)}–${Math.max(...slice)}`;
 };
 
 // Short human string — "best 6 / 7", or "best 6" when both nines match.
 // Used anywhere a round's format needs stating in full.
-export const describeCounting = (spec) => {
-  if (!spec) return "";
-  return spec.front === spec.back ? `best ${spec.front}` : `best ${spec.front} / ${spec.back}`;
+export const describeCounting = (counts) => {
+  if (!counts) return "";
+  const f = nineText(counts, false), b = nineText(counts, true);
+  return f === b ? `best ${f}` : `best ${f} / ${b}`;
+};
+
+// ── Per-hole points ──
+// A third way to settle a round, alongside Match and Total. Every HOLE is its
+// own pot: win it and you bank its value, halve it and the two sides split it.
+// Nothing waits for a segment to close, because there is no segment — 18 holes
+// are 18 settlements.
+//
+// This is how the Bourbon Cup's final round has always actually worked, and no
+// amount of Nassau expresses it: the front nine's holes are worth 1 point each
+// and the back nine's are worth 2, so the closing nine is worth double and a
+// side four down at the turn is still very much alive. A round at these
+// defaults is worth 27 points — 9 + 18.
+//
+//   { front, back }   — what one hole is worth on each nine. Halves and
+//                       decimals are allowed; a hole worth 0 is simply not
+//                       being played for points.
+export const HOLE_POINTS_DEFAULT = { front: 1, back: 2 };
+
+export const SCORING_TYPE_MATCH = "match";
+export const SCORING_TYPE_TOTAL = "stroke";     // stored value predates the "Total" label
+export const SCORING_TYPE_POINTS = "points";
+
+export const isPointsPerHole = (scoringType) => scoringType === SCORING_TYPE_POINTS;
+
+// A round's hole values, resolved for scoring. Zero is a legitimate answer
+// here (unlike a counting score), so only a missing or unreadable field falls
+// back to the default.
+export const resolveHolePoints = (saved) => {
+  const num = (v, fallback) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) && n >= 0 ? n : fallback;
+  };
+  return {
+    front: num(saved?.front, HOLE_POINTS_DEFAULT.front),
+    back: num(saved?.back, HOLE_POINTS_DEFAULT.back),
+  };
+};
+
+// What the whole round is worth: every hole's value added up.
+export const holePointsTotal = (spec) => {
+  const hp = resolveHolePoints(spec);
+  return hp.front * 9 + hp.back * 9;
+};
+
+// Short human string — "1 / 2 per hole", or "1 per hole" when the nines agree.
+export const describeHolePoints = (spec) => {
+  const hp = resolveHolePoints(spec);
+  return hp.front === hp.back ? `${hp.front} per hole` : `${hp.front} / ${hp.back} per hole`;
 };
 
 // ── Point-allocation methods ──

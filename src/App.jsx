@@ -6,14 +6,16 @@ import {
   resolveTeams, DEFAULT_TEAM_NAMES, TOURNAMENT_TITLE, TOURNAMENT_LOCATION,
   FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT, PRACTICE_TEAM_COLORS, DIRECTOR_CODE,
   resolveAllowance, describeAllowance, allowanceDefaultFor,
-  formatCountsScores, countingDefaultFor, resolveCounting,
+  formatCountsScores, countingDefaultFor, resolveCounting, countingNine,
+  resolveHolePoints, isPointsPerHole, holePointsTotal,
+  SCORING_TYPE_MATCH, SCORING_TYPE_TOTAL, SCORING_TYPE_POINTS,
 } from "./constants";
 import {
   calcCH, calcCHForCourse, fmtScore,
   getEffectiveHI, buildStrokeMap, resolveHolePars, resolveHoleHcps,
   computeMatchResult, computePracticeMatch, computePracticeSkins,
   getRoundCH, getRoundHI, getRoundTee, lockForRound,
-  higherIsBetter, totalUnit, segmentState,
+  totalUnit, segmentState, segmentOptsFor,
 } from "./scoring";
 import { holeFill } from "./lib/holeFill";
 import {
@@ -803,7 +805,10 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // state it wasn't being scored on.
   const userTeam = match.teamA.includes(userPid) ? "A" : "B";
   const totalScored = (match.scoring_type || "match") === "stroke";
-  const segOpts = { total: totalScored, higherWins: higherIsBetter(format) };
+  const perHoleScored = isPointsPerHole(match.scoring_type);
+  // The same flags the engine scored with, from the same helper — the status
+  // strip below counts whatever the round is actually settled on.
+  const segOpts = segmentOptsFor({ ...match, hole_points: result?.holePoints }, format);
   const renderStatusCell = (i) => {
     // Same reasoning as the Leaderboard strip's cell height: the bar has to
     // be tall enough for a split hole's diagonal to read, and it stays that
@@ -955,13 +960,14 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
         {/* The scoring type sits next to the format because the same format
             plays completely differently under the two — and the status strip
             above is counting whichever one this says. */}
-        {totalScored ? `TOTAL ${totalUnit(format).toUpperCase()}` : "MATCH PLAY"}
+        {perHoleScored ? `${result?.holePoints ? (activeHole < 9 ? result.holePoints.front : result.holePoints.back) : "?"} PT HOLE`
+          : totalScored ? `TOTAL ${totalUnit(format).toUpperCase()}` : "MATCH PLAY"}
         {" · ROUND "}{match.round}
         {/* On Team Best Ball the badge is incomplete without the count: this
-            hole is worth entering because it might be one of the six that
-            count, and how many that is changes at the turn. Read off the
+            card is worth posting because it might be one of the six that
+            count, and how many that is can change hole to hole. Read off the
             result so it can't disagree with what the strip above is showing. */}
-        {result?.counting && ` · BEST ${activeHole < 9 ? result.counting.front : result.counting.back}`}
+        {result?.counting && ` · BEST ${result.counting[activeHole]}`}
       </div>
 
       {/* Player score cards — 4 stacked, T1 above dashed divider, T2 below.
@@ -1118,8 +1124,23 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
   // "Best 6 on the front, 7 on the back" — Team Best Ball only, and blank on
   // every other format (resolveCounting hands back null for them).
   const cnt = resolveCounting(tr?.format, tr?.counting_scores);
+  // "Best 6 count on the front, 7 on the back" — and when a nine ramps, the
+  // per-hole numbers spelled out, because on those years "how many count" is
+  // a different answer on the 1st than on the 9th.
+  const nineWords = (back) => {
+    const flat = countingNine(cnt, back);
+    const slice = back ? cnt.slice(9, 18) : cnt.slice(0, 9);
+    return flat != null ? `best ${flat}` : `best ${slice.join("/")}`;
+  };
   const countingLine = cnt
-    ? `Best ${cnt.front} scores count on the front nine, best ${cnt.back} on the back`
+    ? `Scores that count — front nine: ${nineWords(false)} · back nine: ${nineWords(true)}`
+    : null;
+  // What a hole is worth, on a round settled hole by hole.
+  const holePointsLine = isPointsPerHole(tr?.scoring_type)
+    ? (() => {
+        const hp = resolveHolePoints(tr?.hole_points);
+        return `Every hole is a point — ${hp.front} on the front, ${hp.back} on the back · ${holePointsTotal(hp)} on the round`;
+      })()
     : null;
 
   // Same fallback the admin tab uses: a 2-man format's match is its own
@@ -1187,6 +1208,7 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
               player reading the tee sheet knows whether their card has to be
               one of six or one of seven. */}
           {countingLine && <div style={{ fontSize: 11, color: BC.amber, marginTop: 2, fontWeight: 700 }}>{countingLine}</div>}
+          {holePointsLine && <div style={{ fontSize: 11, color: BC.amber, marginTop: 2, fontWeight: 700 }}>{holePointsLine}</div>}
           {firstTee && <div style={{ fontSize: 11, color: BC.amber, marginTop: 4, fontWeight: 700 }}>First Tee: {firstTee}</div>}
         </div>
       </div>
@@ -1299,6 +1321,7 @@ const sameRoundMap = (a, b) => JSON.stringify(liveEntries(a)) === JSON.stringify
 const roundSettingsSignature = (r) => JSON.stringify([
   r.format, r.handicap_mode, r.tee_time, r.scoring_type,
   r.nassau_front, r.nassau_back, r.nassau_overall, r.allowance, r.counting_scores,
+  r.hole_points,
 ]);
 
 // The handicap allowance, normalized to the shape the round's FORMAT calls
@@ -1318,7 +1341,19 @@ const roundAllowance = (format, raw) => {
 // reason: `null` on every format that doesn't count, so switching away from
 // Team Best Ball drops the counts rather than leaving them to read as an edit
 // on a format that has no use for them.
-const roundCounting = (format, raw) => resolveCounting(format || DEFAULT_FORMAT, raw);
+// Stored as the 18-hole array the engine reads, wrapped in the `holes` key the
+// document uses. Null on a format that doesn't count, so switching away from
+// Team Best Ball drops the counts instead of leaving them to read as an edit
+// on a format with no use for them.
+const roundCounting = (format, raw) => {
+  const counts = resolveCounting(format || DEFAULT_FORMAT, raw);
+  return counts ? { holes: counts } : null;
+};
+
+// Hole values, normalized the same way, and only on a round that is actually
+// settled hole by hole — a Match or Total round has no hole values to store.
+const roundHolePoints = (scoringType, raw) =>
+  isPointsPerHole(scoringType) ? resolveHolePoints(raw) : null;
 
 // Everything the Rounds tab owns for one round.
 const roundSignature = (r) => JSON.stringify([
@@ -1449,6 +1484,9 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   // null to mean "the format's default". Same reasoning as the allowance
   // above: a director who never touches it stores nothing.
   const [counting, setCounting] = useState(null);
+  // What one hole is worth on each nine, when the round is settled hole by
+  // hole. Null means "the default", same as the two above.
+  const [holePoints, setHolePoints] = useState(null);
   // ── Handicap-lock state ──
   // Read-only here: locking is automatic on the first score of a round (see
   // ensureRoundLock in App). These flags only gate the round form's editing.
@@ -1502,6 +1540,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
       scoring_type: tr.scoring_type || "match",
       allowance: roundAllowance(tr.format || DEFAULT_FORMAT, tr.allowance),
       counting_scores: roundCounting(tr.format || DEFAULT_FORMAT, tr.counting_scores),
+      hole_points: roundHolePoints(tr.scoring_type || "match", tr.hole_points),
       ch_overrides: hcpOverridesFromDb?.[editRound] || {},
       tee_assignments: teeAssignmentsFromDb?.[editRound] || {},
     };
@@ -1523,9 +1562,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
     // a new format re-shapes the allowance in the same render that changes it.
     allowance: roundAllowance(roundFormat || storedRound.format, allowance),
     counting_scores: roundCounting(roundFormat || storedRound.format, counting),
+    hole_points: roundHolePoints(scoringType, holePoints),
     ch_overrides: hcpOverrides[editRound] || {},
     tee_assignments: teeAssignments[editRound] || {},
-  }), [storedRound, roundFormat, handicapMode, editRound, roundTeeTime, nassau, scoringType, allowance, counting, hcpOverrides, teeAssignments]);
+  }), [storedRound, roundFormat, handicapMode, editRound, roundTeeTime, nassau, scoringType, allowance, counting, holePoints, hcpOverrides, teeAssignments]);
 
   const storedSettingsSig = roundSettingsSignature(storedRound);
   const hcpDocSig = JSON.stringify(hcpOverridesFromDb ?? null);
@@ -1560,6 +1600,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
     setScoringType(storedRound.scoring_type);
     setAllowance(storedRound.allowance);
     setCounting(storedRound.counting_scores);
+    setHolePoints(storedRound.hole_points);
     setHandicapMode(prev => ({ ...prev, [editRound]: storedRound.handicap_mode }));
   }, [seed, seededRound, editRound, storedSettingsSig, storedRound]);
 
@@ -1621,6 +1662,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
         scoring_type: payload.scoring_type,
         allowance: payload.allowance,
         counting_scores: payload.counting_scores,
+        hole_points: payload.hole_points,
       });
       setAutoSave({ phase: "saved", round });
     } catch (err) {
@@ -2161,11 +2203,13 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             {/* ── Counting scores ─────────────────────────────────────────
                 Team Best Ball only, and the setting that actually defines it.
                 The whole side plays one match and a hole is the SUM of that
-                side's best N nets — 8 players, best 6 on the front and best 7
-                on the back is what this tournament has run. N is per nine
-                because that is the knob the event turns: the back counting one
-                more score is what makes the closing nine both harder to carry
-                and worth more.
+                side's best N nets.
+
+                N is PER HOLE. The count has moved around for years — the front
+                has run 5 and 6, the back 6 and 7 — and the old sheets ramped it
+                up inside each nine rather than holding one figure across it. So
+                the nine box is the shortcut (type once, set all nine) and the
+                18-hole grid underneath is the truth.
 
                 No off switch, unlike the allowance: a Team Best Ball round is
                 always counting some number, so the only question is which.
@@ -2176,7 +2220,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               const fmtId = roundFormat || tRounds.find(t => t.round_number === editRound)?.format || DEFAULT_FORMAT;
               if (!formatCountsScores(fmtId)) return null;
               const prefill = countingDefaultFor(fmtId);
-              const cur = resolveCounting(fmtId, counting);
+              const cur = resolveCounting(fmtId, counting);   // 18 numbers, always
               // How many a side actually fields, for the "of N" hint and the
               // over-count warning. Read off the round's matches when they
               // exist — that is the roster that will be scored — and off the
@@ -2188,61 +2232,115 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     tPlayers.filter(p => p.team === "A").length,
                     tPlayers.filter(p => p.team === "B").length,
                   );
-              // Same as the allowance fields: read the RAW state so clearing a
-              // box leaves it empty instead of snapping back mid-keystroke. An
-              // empty box resolves to the format's prefill when saved.
-              const fieldVal = (k) => {
-                const v = counting?.[k];
-                return v === undefined || v === null ? String(prefill[k]) : String(v);
+              const writeHoles = (holes) => setCounting({ holes });
+              const setHole = (h, v) => {
+                const n = parseInt(v, 10);
+                const next = [...cur];
+                next[h] = Number.isFinite(n) && n >= 1 ? n : prefill[h < 9 ? "front" : "back"];
+                writeHoles(next);
               };
-              const setField = (k, v) => setCounting(prev => ({ ...prefill, ...(prev || {}), [k]: v }));
-              const countField = (k, lbl, hint) => (
-                <div key={k} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  <span title={hint} style={{ fontSize: 9, color: BC.t3, flexShrink: 0, fontWeight: 600 }}>{lbl}</span>
-                  <input
-                    type="number" step="1" min="1" max="20"
-                    value={fieldVal(k)}
-                    onChange={e => setField(k, e.target.value)}
-                    onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
-                    style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: 14, textAlign: "center", width: 44 }} />
+              // The nine box sets all nine of its holes at once. It shows the
+              // shared count when the nine is flat and blanks (placeholder
+              // "mixed") when it ramps, so it never claims a single figure the
+              // holes below disagree with.
+              const setNine = (back, v) => {
+                const n = parseInt(v, 10);
+                if (!Number.isFinite(n) || n < 1) return;
+                const next = [...cur];
+                for (let h = back ? 9 : 0; h < (back ? 18 : 9); h++) next[h] = n;
+                writeHoles(next);
+              };
+              const nineBox = (back, lbl, hint) => {
+                const flat = countingNine(cur, back);
+                return (
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <span title={hint} style={{ fontSize: 9, color: BC.t3, flexShrink: 0, fontWeight: 600 }}>{lbl}</span>
+                    <input
+                      type="number" step="1" min="1" max="20"
+                      value={flat == null ? "" : String(flat)}
+                      placeholder="—"
+                      onChange={e => setNine(back, e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                      style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: 14, textAlign: "center", width: 44 }} />
+                  </div>
+                );
+              };
+              // Two rows of nine, on the same geometry as the hole strips
+              // everywhere else in the app, so hole 1 is where hole 1 always is.
+              const holeRow = (back) => (
+                <div style={{ display: "flex", gap: 2, marginTop: 4 }}>
+                  {Array.from({ length: 9 }, (_, i) => {
+                    const h = back ? i + 9 : i;
+                    const capped = sideSize > 0 && cur[h] > sideSize;
+                    return (
+                      <div key={h} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
+                        <span style={{ fontSize: 8, color: BC.t3, fontWeight: 700 }}>{h + 1}</span>
+                        <input
+                          type="number" step="1" min="1" max="20"
+                          value={String(cur[h])}
+                          onChange={e => setHole(h, e.target.value)}
+                          onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                          style={{
+                            ...InputStyle, marginBottom: 0, padding: "3px 0", fontSize: 13,
+                            textAlign: "center", width: "100%", minWidth: 0,
+                            color: capped ? BC.amber : undefined,
+                            border: `1px solid ${capped ? BC.amber + "66" : BC.bdr}`,
+                          }} />
+                      </div>
+                    );
+                  })}
                 </div>
               );
               // A count bigger than the side fields is scored at the side size
               // (see scoring.js) rather than stalling the hole — say so here,
-              // because the number on screen would otherwise be a lie.
-              const over = sideSize > 0 && (cur.front > sideSize || cur.back > sideSize);
+              // because the numbers on screen would otherwise be a lie.
+              const over = sideSize > 0 && cur.some(n => n > sideSize);
               return (
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>COUNTING</div>
-                    {countField("front", "F9", "How many of a side's net scores count on each front-nine hole")}
-                    {countField("back", "B9", "How many of a side's net scores count on each back-nine hole")}
+                    {nineBox(false, "F9", "Set every front-nine hole at once")}
+                    {nineBox(true, "B9", "Set every back-nine hole at once")}
                     {sideSize > 0 && (
                       <span style={{ fontSize: 9, color: BC.t3, fontWeight: 600 }}>of {sideSize} a side</span>
                     )}
                   </div>
+                  {holeRow(false)}
+                  {holeRow(true)}
                   <div style={{ fontSize: 9, color: over ? BC.amber : BC.t3, lineHeight: 1.5, marginTop: 5 }}>
                     {over
-                      ? `Only ${sideSize} play${sideSize === 1 ? "s" : ""} a side, so a hole counts all ${sideSize} — a count above that scores the same as ${sideSize}.`
-                      : `Each hole is the sum of the side's best ${cur.front} nets on the front and best ${cur.back} on the back.`}
+                      ? `Only ${sideSize} play${sideSize === 1 ? "s" : ""} a side — the holes above ${sideSize} score as all ${sideSize}.`
+                      : "Each hole is the sum of the side's best N nets, where N is that hole's count."}
                   </div>
                 </div>
               );
             })()}
 
             {/* ── Scoring ──────────────────────────────────────────────────
-                Match (win/halve holes) vs Total (the running total decides it:
-                fewest net strokes, or most dots on Double Dot, or most points
-                on Stableford), then Single vs Nassau. Both share the nassau
-                {front,back,overall} pots:
+                Three ways to settle a round:
+                  • Match  — the side that wins more holes takes each pot.
+                  • Total  — the running total over each segment takes it:
+                             fewest net strokes, most dots on Double Dot, most
+                             points on Stableford.
+                  • Points — every HOLE is its own pot. No segments, no pots to
+                             wait on; a hole pays the moment it's played.
+
+                Match and Total then split into Single vs Nassau and share the
+                nassau {front,back,overall} pots:
                   • Nassau → three segments (F9 / B9 / OVR)
                   • Single → one 18-hole pot worth `value` (overall-only)
+                Points has neither — its POINTS row asks what a hole is worth on
+                each nine instead, which is the Bourbon Cup's final round: 1 a
+                hole out, 2 a hole in, 27 on the round.
+
                 `scoring_type` lives on the ROUND and nowhere else — App reads
                 it off the round doc when enriching matches, so changing it
                 here takes effect on every match in the round immediately.
-                The Total branch lives in scoring.js computeMatchResult. */}
+                All three branches live in scoring.js computeMatchResult. */}
             {(() => {
               const isSingle = (nassau.front || 0) === 0 && (nassau.back || 0) === 0;
+              const perHole = isPointsPerHole(scoringType);
+              const hp = resolveHolePoints(holePoints);
               const pill = (active, disabled) => ({
                 padding: "4px 12px", borderRadius: 16, fontSize: 10, fontWeight: 700, border: "none",
                 cursor: disabled ? "not-allowed" : "pointer",
@@ -2258,6 +2356,16 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: 14, textAlign: "center", width: 44 }} />
                 </div>
               );
+              // Same box, pointed at the hole values instead of the pots.
+              const holeField = (k, lbl, hint) => (
+                <div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                  <span title={hint} style={{ fontSize: 9, color: BC.t3, flexShrink: 0 }}>{lbl}</span>
+                  <input type="number" step="0.5" min="0" value={String(hp[k])}
+                    onChange={e => setHolePoints({ ...hp, [k]: e.target.value })}
+                    onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                    style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: 14, textAlign: "center", width: 44 }} />
+                </div>
+              );
               return (
                 <div style={{ marginBottom: 12 }}>
                   {/* How the round is settled, and into how many pots. Both are
@@ -2268,23 +2376,37 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       lives with the allowance it's applied after. */}
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>SCORING</div>
-                    {/* Match / Stroke */}
+                    {/* Match / Total / Points */}
                     <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}` }}>
-                      <button onClick={() => setScoringType("match")} title="Match play — the side that wins more holes takes each pot" style={pill(scoringType === "match", false)}>Match</button>
-                      <button onClick={() => setScoringType("stroke")} title={`Total ${totalUnit(roundFormat || tRounds.find(t => t.round_number === editRound)?.format || DEFAULT_FORMAT)} — the running total over each segment decides the pot, not holes won`} style={pill(scoringType === "stroke", false)}>Total</button>
+                      <button onClick={() => setScoringType(SCORING_TYPE_MATCH)} title="Match play — the side that wins more holes takes each pot" style={pill(scoringType === SCORING_TYPE_MATCH, false)}>Match</button>
+                      <button onClick={() => setScoringType(SCORING_TYPE_TOTAL)} title={`Total ${totalUnit(roundFormat || tRounds.find(t => t.round_number === editRound)?.format || DEFAULT_FORMAT)} — the running total over each segment decides the pot, not holes won`} style={pill(scoringType === SCORING_TYPE_TOTAL, false)}>Total</button>
+                      <button onClick={() => setScoringType(SCORING_TYPE_POINTS)} title="Points per hole — every hole is its own pot, worth what its nine is worth. Winner takes it, a halved hole splits it." style={pill(perHole, false)}>Points</button>
                     </div>
-                    {/* Single vs Nassau */}
-                    <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}` }}>
-                      <button onClick={() => setNassau(n => ({ front: 0, back: 0, overall: n.overall || 1 }))} style={pill(isSingle, false)}>Single</button>
-                      <button onClick={() => setNassau(n => ({ front: n.front || 1, back: n.back || 1, overall: n.overall || 1 }))} style={pill(!isSingle, false)}>Nassau</button>
-                    </div>
+                    {/* Single vs Nassau — pots only, so a Points round has no
+                        use for it and it stands down rather than sitting there
+                        offering a choice that changes nothing. */}
+                    {!perHole && (
+                      <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}` }}>
+                        <button onClick={() => setNassau(n => ({ front: 0, back: 0, overall: n.overall || 1 }))} style={pill(isSingle, false)}>Single</button>
+                        <button onClick={() => setNassau(n => ({ front: n.front || 1, back: n.back || 1, overall: n.overall || 1 }))} style={pill(!isSingle, false)}>Nassau</button>
+                      </div>
+                    )}
                   </div>
-                  {/* What each pot is worth. */}
+                  {/* What each pot is worth — or, on a Points round, what one
+                      hole on each nine is worth. */}
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>POINTS</div>
-                    {isSingle
-                      ? numField("overall", "Value")
-                      : [["front", "F9"], ["back", "B9"], ["overall", "OVR"]].map(([k, lbl]) => numField(k, lbl))}
+                    {perHole
+                      ? [
+                          holeField("front", "F9", "What one front-nine hole is worth"),
+                          holeField("back", "B9", "What one back-nine hole is worth"),
+                          <span key="tot" style={{ fontSize: 9, color: BC.t3, fontWeight: 600 }}>
+                            a hole · {holePointsTotal(hp)} on the round
+                          </span>,
+                        ]
+                      : isSingle
+                        ? numField("overall", "Value")
+                        : [["front", "F9"], ["back", "B9"], ["overall", "OVR"]].map(([k, lbl]) => numField(k, lbl))}
                   </div>
                 </div>
               );
@@ -5646,6 +5768,10 @@ export default function App() {
       ...m,
       nassau: tr?.nassau || m.nassau || NASSAU_DEFAULT,
       scoring_type: tr?.scoring_type || m.scoring_type || "match",
+      // Rides along for the same reason the Nassau pots do: the Leaderboard
+      // prices a match off the match object, and on a points round the price
+      // is the hole values rather than any pot.
+      hole_points: tr?.hole_points || m.hole_points || null,
     };
   }), [matches, enrichedRounds]);
 

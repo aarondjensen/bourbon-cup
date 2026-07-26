@@ -9,7 +9,7 @@
 // the leaderboard math.
 import {
   NASSAU_DEFAULT, POINT_METHOD_NASSAU, POINT_METHOD_TRADITIONAL, resolveAllowance,
-  resolveCounting,
+  resolveCounting, resolveHolePoints, isPointsPerHole,
 } from "./constants";
 
 // ── Course Handicap math ──
@@ -119,18 +119,44 @@ export const totalUnit = (format) =>
 //
 //   total     — settle on the running total rather than on holes won
 //   higherWins — the format's per-hole number counts up (see higherIsBetter)
+//   holeValue — (holeIdx) => points that hole is worth. Present only on a
+//               points-per-hole round; see the block below.
 //
 // `margin` is always from A's perspective and always points the same way:
 // positive means A is ahead, whatever the format and whichever mode.
-export function segmentState(holes, { total = false, higherWins = false } = {}) {
+export function segmentState(holes, { total = false, higherWins = false, holeValue = null } = {}) {
   const played = holes.filter(h => h.played);
   const aTot = played.reduce((s, h) => s + (h.aScore ?? 0), 0);
   const bTot = played.reduce((s, h) => s + (h.bScore ?? 0), 0);
-  const aWins = played.filter(h => h.winner === "A").length;
-  const bWins = played.filter(h => h.winner === "B").length;
-  const remaining = holes.length - played.length;
+  // ── Weighted holes ──
+  // Match play is the special case where every hole is worth exactly 1, so
+  // counting holes won and counting points won are the same arithmetic. On a
+  // points round they come apart — a back nine hole is worth two of a front
+  // nine one — and every question this function answers (who leads, by how
+  // much, can it still be caught) has to be asked in points instead. Passing
+  // a hole's value through one function keeps both readings on one code path
+  // rather than forking the whole of segmentState.
+  const val = (h) => (holeValue ? holeValue(h.h) : 1);
+  const aWins = played.filter(h => h.winner === "A").reduce((s, h) => s + val(h), 0);
+  const bWins = played.filter(h => h.winner === "B").reduce((s, h) => s + val(h), 0);
+  // What is still on offer — holes left on match play, points left when the
+  // holes carry different values. This is what a lead has to beat to be safe.
+  const remaining = holes.filter(h => !h.played).reduce((s, h) => s + val(h), 0);
   const allIn = played.length === holes.length && played.length > 0;
   const base = { played: played.length, total: holes.length, remaining, aTot, bTot, aWins, bWins };
+
+  if (holeValue) {
+    // Points are banked hole by hole as they are won, so nothing here is
+    // pending and nothing is awarded late. `complete` still reports when the
+    // segment can no longer change hands, which is what the screens use to
+    // stop calling a decided round live.
+    const margin = aWins - bWins;
+    const clinched = played.length > 0 && Math.abs(margin) > remaining;
+    return {
+      ...base, unit: "points", margin, clinched, complete: clinched || allIn,
+      winner: clinched || allIn ? (margin > 0 ? "A" : margin < 0 ? "B" : null) : null,
+    };
+  }
 
   if (total) {
     // Nothing can be clinched early: every remaining hole still moves the
@@ -160,6 +186,11 @@ export function segmentState(holes, { total = false, higherWins = false } = {}) 
 export const statusText = (st) => {
   if (!st.played) return "—";
   const m = Math.abs(st.margin);
+  // A points segment gets the same treatment as a total: there is no "up" in
+  // a currency where one hole is worth two of another, and "5&4" would be a
+  // flat lie about how much is left. The lead, and the color, is the whole
+  // story. Halves print as halves — a split hole is worth 0.5 on the front.
+  if (st.unit === "points") return m === 0 ? "TIED" : `+${m % 1 ? m.toFixed(1) : m}`;
   if (st.unit === "total") return m === 0 ? "TIED" : `+${m}`;
   if (st.clinched && st.remaining > 0) return `${m}&${st.remaining}`;
   if (m === 0) return "AS";
@@ -168,6 +199,21 @@ export const statusText = (st) => {
 
 // Which side a segment's margin favours right now, or null when level.
 export const segmentLeader = (st) => (st.margin > 0 ? "A" : st.margin < 0 ? "B" : null);
+
+// ── How a match reads its holes ──
+// THE answer to "what flags does segmentState need for this match?", asked
+// once here so the engine, the Leaderboard and the Scoring tab cannot answer
+// it three ways. That divergence is not hypothetical: it is exactly how a
+// Total round ended up displaying a match-play state on two screens while the
+// engine scored it on totals.
+export const segmentOptsFor = (match, format) => {
+  const higherWins = higherIsBetter(format);
+  if (isPointsPerHole(match?.scoring_type)) {
+    const hp = resolveHolePoints(match?.hole_points);
+    return { higherWins, holeValue: (h) => (h < 9 ? hp.front : hp.back) };
+  }
+  return { total: (match?.scoring_type || "match") === "stroke", higherWins };
+};
 
 export const buildStrokeMap = (ch, holeHcps) => {
   const sorted = holeHcps.map((h, i) => ({ idx: i, hcp: h })).sort((a, b) => a.hcp - b.hcp);
@@ -340,6 +386,15 @@ export const getRoundCounting = ({ roundLocks, round, tRounds, format, explicit 
   return resolveCounting(fmt, saved);
 };
 
+// What one hole is worth on each nine, for a points-per-hole round. Same
+// resolution order and the same reasoning as the counting scores: it awards
+// points, not strokes, so a director fixing it mid-round means the fix.
+export const getRoundHolePoints = ({ roundLocks, round, tRounds, explicit }) => {
+  const lock = lockForRound(roundLocks, round);
+  const tr = tRounds?.find(t => t.round_number === round);
+  return resolveHolePoints(explicit || tr?.hole_points || lock?.hole_points || null);
+};
+
 // Course + hole tables for a round. Hole handicaps decide WHICH holes get
 // strokes, so a course re-import must not be able to reshuffle a finished
 // round's stroke allocation — the frozen tables win when present.
@@ -413,10 +468,7 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
   // different numbers of scores are not comparable, and a side short a player
   // would otherwise never post a hole at all.
   const counting = getRoundCounting({ roundLocks, round: rnd, tRounds, format });
-  const countFor = (h) => {
-    const want = h < 9 ? counting.front : counting.back;
-    return Math.min(want, teamA.length, teamB.length);
-  };
+  const countFor = (h) => Math.min(counting[h], teamA.length, teamB.length);
   const allPids = [...teamA, ...teamB];
   // Playing handicaps — the allowance-adjusted figures. A split allowance is
   // resolved per SIDE, so teamA and teamB are passed as separate groups.
@@ -468,8 +520,8 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
       // ── Team Best Ball ──
       // The whole side is one match, and a hole is the SUM of that side's
       // best N net scores — not its single best ball. N is the round's
-      // counting scores, set per nine (see constants: the front has counted
-      // 6 of 8 and the back 7 of 8), which is why this can't be expressed as
+      // counting score for THAT hole (see constants: the front has counted
+      // 5-6 of 8 and the back 6-7), which is why this can't be expressed as
       // either a Four-Ball or a Team Total.
       //
       // A hole scores as soon as N of a side's players are in. That is
@@ -564,16 +616,23 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
     return { h, aScore, bScore, winner, played: aScore != null && bScore != null };
   });
 
-  // Match play (default) vs Total ("stroke"). Total reuses the same nassau
-  // {front,back,overall} pots but awards each on the side's RUNNING TOTAL
-  // over that segment (F9 / B9 / 18) rather than on holes won — fewest net
-  // strokes for a stroke format, most dots for Double Dot, most points for
-  // Stableford. "Single" (front=back=0) collapses to one 18-hole pot.
+  // Three ways to settle a round.
   //
-  // The stored value is still `"stroke"`; the admin toggle labels it "Total"
-  // because for a dot format there are no strokes to count.
+  //   Match  — holes won take the nassau {front, back, overall} pots.
+  //   Total  — the same pots, but awarded on the side's RUNNING TOTAL over
+  //            each segment rather than on holes won: fewest net strokes for
+  //            a stroke format, most dots for Double Dot, most points for
+  //            Stableford. "Single" (front=back=0) collapses to one 18-hole
+  //            pot. The stored value is still `"stroke"`; the admin toggle
+  //            says "Total" because a dot format has no strokes to count.
+  //   Points — every HOLE is its own pot, worth what its nine is worth. No
+  //            pots, no segments to settle, nothing awarded late.
   const scoringType = match.scoring_type || "match";
-  const segOpts = { total: scoringType === "stroke", higherWins };
+  const pointsPerHole = isPointsPerHole(scoringType);
+  const holePoints = pointsPerHole
+    ? getRoundHolePoints({ roundLocks, round: rnd, tRounds })
+    : null;
+  const segOpts = segmentOptsFor({ ...match, hole_points: holePoints }, format);
 
   // The three segments, from the shared segmentState — the same function the
   // Leaderboard and the Scoring tab call, so a match can never be awarded on
@@ -604,7 +663,22 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
     else { out.A = pot / 2; out.B = pot / 2; }
   };
 
-  if (pointMethod === POINT_METHOD_TRADITIONAL && scoringType !== "stroke") {
+  if (pointsPerHole) {
+    // 18 settlements, not three. Each hole pays its own value out the moment
+    // it is played — winner takes it, a halved hole splits it — so the front
+    // and back totals here are running tallies rather than pots waiting on a
+    // segment to close. `overallPts` stays empty on purpose: the two nines
+    // already account for every point in the round, and adding an overall pot
+    // on top would pay for the same 18 holes twice.
+    holeResults.forEach((hr) => {
+      if (!hr.played) return;
+      const pot = hr.h < 9 ? holePoints.front : holePoints.back;
+      if (!pot) return;
+      const out = hr.h < 9 ? frontPts : backPts;
+      if (hr.winner) out[hr.winner] += pot;
+      else { out.A += pot / 2; out.B += pot / 2; }
+    });
+  } else if (pointMethod === POINT_METHOD_TRADITIONAL && scoringType !== "stroke") {
     award(overall, match.traditional_points ?? 1, overallPts);
   } else {
     const nassau = match.nassau || NASSAU_DEFAULT;
@@ -648,9 +722,12 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
     // allowance, pre-low-man; `teamCH` is the side's figure on a shared-ball
     // format and null on every other.
     allowance,
-    // {front, back} on Team Best Ball, null on every other format — the
+    // 18 per-hole counts on Team Best Ball, null on every other format — the
     // counts this result's hole scores were actually built from.
     counting,
+    // {front, back} on a points-per-hole round, null otherwise: what one hole
+    // was worth on each nine.
+    holePoints,
     playingCH,
     teamCH: sharedBall ? { A: aTeamCH, B: bTeamCH } : null,
     totalPts: {
