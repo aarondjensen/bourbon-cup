@@ -877,7 +877,10 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
                 background: active ? BC.amberDim : BC.card,
                 border: `1px solid ${active ? BC.amberDim : BC.bdr}`,
                 color: active ? "#fff" : BC.t2,
-              }}>Match {i + 1}</button>
+                // The cup's number for the match, not its position in this
+                // player's own list — two players in the same match have to
+                // be looking at the same name for it.
+              }}>Match {m.matchNumber ?? i + 1}</button>
             );
           })}
         </div>
