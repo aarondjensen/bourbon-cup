@@ -1,34 +1,49 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { BC, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor } from "./theme";
+import { BC, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor } from "./theme";
 import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession } from "./firebase";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
   resolveTeams, DEFAULT_TEAM_NAMES, TOURNAMENT_TITLE, TOURNAMENT_LOCATION,
   FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT, PRACTICE_TEAM_COLORS, DIRECTOR_CODE,
+  resolveAllowance, describeAllowance, allowanceDefaultFor,
+  formatCountsScores, countingDefaultFor, resolveCounting, countingNine,
+  resolveHolePoints, isPointsPerHole, holePointsTotal,
+  SCORING_TYPE_MATCH, SCORING_TYPE_TOTAL, SCORING_TYPE_TEAM,
 } from "./constants";
 import {
   calcCH, calcCHForCourse, fmtScore,
   getEffectiveHI, buildStrokeMap, resolveHolePars, resolveHoleHcps,
   computeMatchResult, computePracticeMatch, computePracticeSkins,
-  getRoundCH, getRoundHI, getRoundTee, getRoundHandicapMode, lockForRound,
-  higherIsBetter, totalUnit, segmentState, effectiveHoleFormat,
+  getRoundCH, getRoundHI, getRoundTee, lockForRound,
+  totalUnit, segmentState, segmentOptsFor,
 } from "./scoring";
 import { holeFill } from "./lib/holeFill";
 import {
   ROUND_LOCKS_COL, buildRoundLockDoc, refreshRoundLockDoc,
   markRoundFinal, unfinalizeRound, clearRoundLockDoc,
-  isRoundFinal, roundLockState, describeHiChangeImpact,
+  roundLockState, describeHiChangeImpact,
+  currentRoundNumber, nextRoundNumber, lastFinalRoundNumber,
   LOCK_OPEN, LOCK_FINAL,
 } from "./lib/roundLocks";
 import { usePullToRefresh } from "./lib/usePullToRefresh";
 import { processLogo } from "./lib/logoBrand";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { AppHeader } from "./components/AppHeader";
 import { Popup, ConfirmModal } from "./components/Popup";
-import { SegmentedToggle, Banner, Toast, ScoreButtonRow } from "./components/ui";
+import { CtpPrompt } from "./components/CtpPrompt";
+import { SegmentedToggle, StickyTop, Banner, Toast, ScoreButtonRow } from "./components/ui";
 import { useConfirm } from "./lib/useConfirm";
+import { useStableCallback } from "./lib/useStableCallback";
 import { EditionSwitcher } from "./components/EditionSwitcher";
 import { GhinLinkButton, GhinSyncButton } from "./components/GhinLink";
 import { TeamLeaderboard, MatchScorecard } from "./components/Leaderboard";
+import { MatchSetup } from "./components/MatchSetup";
+import {
+  GROUPS_COL, groupsDocId, encodeGroups, decodeGroups,
+  teeTimeForMatch, parseTeeTime, formatTeeTime, DEFAULT_TEE_INTERVAL,
+  roundPlaySetup, orderMatchesForRound, numberMatches,
+} from "./lib/groups";
+import { holesEntered } from "./lib/scoreGuard";
 
 // ── Bottom-nav safe-area cushion ──────────────────────────────────
 // Full iOS home-indicator inset (34pt on devices that have one) plus 8pt,
@@ -214,7 +229,7 @@ function Notif({ notif }) {
 }
 
 // ── Login Screen ──
-function LoginScreen({ players, onLogin, teams, darkMode, tournamentName }) {
+function LoginScreen({ players, onLogin, teams, darkMode, tournamentName, tournamentLocation }) {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
@@ -266,7 +281,7 @@ function LoginScreen({ players, onLogin, teams, darkMode, tournamentName }) {
       {/* Title — sits above the silhouette, outside content card */}
       <div style={{ textAlign: "center", position: "relative", zIndex: 1, marginBottom: 14 }}>
         <div style={{ fontSize: "clamp(20px, 8vw, 28px)", fontWeight: 800, color: BC.gold, letterSpacing: 2 }}>{(tournamentName || TOURNAMENT_TITLE).toUpperCase()}</div>
-        <div style={{ fontSize: "clamp(10px, 3vw, 12px)", color: BC.t3, letterSpacing: "0.3em", marginTop: 3 }}>{getTournamentYear()} {TOURNAMENT_LOCATION.toUpperCase()}</div>
+        <div style={{ fontSize: "clamp(10px, 3vw, 12px)", color: BC.t3, letterSpacing: "0.3em", marginTop: 3 }}>{getTournamentYear()} {(tournamentLocation || TOURNAMENT_LOCATION).toUpperCase()}</div>
       </div>
 
       {/* Desktop centering wrapper */}
@@ -304,6 +319,226 @@ function LoginScreen({ players, onLogin, teams, darkMode, tournamentName }) {
   );
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  The round gate
+// ══════════════════════════════════════════════════════════════════
+//
+// The Scoring tab accepts entries for exactly ONE round: the current one —
+// the lowest round the director has not finalized (lib/roundLocks.
+// currentRoundNumber). Every other round is closed, and the tab does not
+// show them at all: a strip of chips that only ever answered a tap with a
+// toast cost a row of vertical space on the screen where space is scarcest.
+// The empty states below name the live round instead, which is the only
+// part of that strip anybody needed.
+//
+// The problem is mundane and expensive. Four players stand on a tee with
+// their phones out; the tab used to open on whichever of their matches
+// sorted first and offered a Rd 1 / Rd 2 / Rd 3 selector next to it. A score
+// typed into the wrong round does not announce itself — it lands in a round
+// that finished yesterday, silently moves a hole, and the first anyone hears
+// of it is a leaderboard that no longer matches the handshake on 18.
+//
+// A round leaves the current slot when a human says it is over, and for no
+// other reason: the director finalizes it, which freezes it (roundLocks
+// `final`) and opens the next one for everybody at once. Nothing here keys
+// off the clock or off "all the scores look in" — that would put the gate
+// back at the mercy of the same accident it exists to prevent.
+//
+// This gate is the client's. The Firestore rules are open to anyone inside
+// the tournament window (see firestore.rules), so it stops accidents, not a
+// determined writer — which is exactly the threat model the director
+// described.
+
+// Round-wide score progress. Counts EVERY player in EVERY match of the
+// round, not just the reader's own match: the director deciding whether to
+// finalize needs to know who is still out, by name.
+function roundScoreProgress(matches, holeData, round) {
+  const rndMatches = round == null ? [] : matches.filter(m => m.round === round);
+  const pids = [...new Set(rndMatches.flatMap(m => [...m.teamA, ...m.teamB]))];
+  const missingBy = [];
+  let entered = 0;
+  pids.forEach(pid => {
+    const scores = holeData[`${pid}_${round}`] || {};
+    let missing = 0;
+    for (let h = 0; h < 18; h++) { if (scores[h] > 0) entered++; else missing++; }
+    if (missing) missingBy.push({ pid, missing });
+  });
+  const total = pids.length * 18;
+  return {
+    total, entered, missing: total - entered,
+    missingBy: missingBy.sort((a, b) => b.missing - a.missing),
+    // An empty round is not a finished one — a round with no matches drawn
+    // has nothing to be complete about.
+    complete: total > 0 && entered === total,
+  };
+}
+
+// ── Finalize card ──
+// Director-only, and the other half of the gate: the gate is only tolerable
+// because there is one obvious control that moves it forward. It sits at the
+// bottom of the Scoring tab because that is where a director lands after
+// typing the round's last score.
+//
+// Finalizing with scores missing is ALLOWED, behind a confirm that names who
+// is out. A hard block reads as safer than it is — a withdrawal or a
+// conceded match leaves holes that will never be filled, and a gate with no
+// way past it strands the whole field on a round nobody is playing. The
+// director is trusted; they are just not allowed to do it by accident.
+function FinalizeRoundCard({ round, nextRound, lastFinal, progress, tPlayers, onFinalizeRound, notify }) {
+  const { confirm, confirmModal } = useConfirm();
+  const [busy, setBusy] = useState(false);
+  const nameOf = (pid) => tPlayers.find(t => t.player_id === pid)?.name || pid;
+
+  const outList = progress.missingBy
+    .slice(0, 6)
+    .map(({ pid, missing }) => `• ${nameOf(pid)} — ${missing} hole${missing === 1 ? "" : "s"}`)
+    .join("\n")
+    + (progress.missingBy.length > 6 ? `\n• …and ${progress.missingBy.length - 6} more` : "");
+
+  const doFinalize = async () => {
+    const ok = await confirm({
+      eyebrow: `Round ${round}`,
+      title: progress.complete ? `Finalize Round ${round}?` : `Finalize Round ${round} with scores missing?`,
+      message: [
+        progress.complete
+          ? `All ${progress.total} scores are in.`
+          : `${progress.missing} score${progress.missing === 1 ? " is" : "s are"} still missing:\n${outList}`,
+        "",
+        `Finalizing freezes Round ${round}'s handicaps and results, and ${nextRound ? `opens Round ${nextRound} for scoring.` : "closes out the tournament."}`,
+        "You can reopen it afterwards if you need to.",
+      ].join("\n"),
+      confirmLabel: progress.complete ? "Finalize" : "Finalize anyway",
+      destructive: !progress.complete,
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const res = await onFinalizeRound(round, true);
+      if (res) {
+        notify(nextRound
+          ? `Round ${round} is final — Round ${nextRound} is now open`
+          : `Round ${round} is final — that's the tournament`, "success");
+      } else {
+        notify("Could not finalize the round — try again", "error");
+      }
+    } catch {
+      notify("Could not finalize the round — try again", "error");
+    } finally { setBusy(false); }
+  };
+
+  const doReopen = async () => {
+    const ok = await confirm({
+      eyebrow: `Round ${lastFinal}`,
+      title: `Reopen Round ${lastFinal}?`,
+      message: [
+        `Scoring moves back to Round ${lastFinal}${round != null && round !== lastFinal ? `, and Round ${round} closes until Round ${lastFinal} is finalized again.` : "."}`,
+        "",
+        "Handicaps stay frozen exactly as they are — reopening changes what can be typed, not a stroke already allocated.",
+      ].join("\n"),
+      confirmLabel: "Reopen",
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const res = await onFinalizeRound(lastFinal, false);
+      notify(res ? `Round ${lastFinal} reopened for scoring` : "Could not reopen the round — try again", res ? "success" : "error");
+    } catch {
+      notify("Could not reopen the round — try again", "error");
+    } finally { setBusy(false); }
+  };
+
+  const pct = progress.total ? Math.round((progress.entered / progress.total) * 100) : 0;
+
+  return (
+    <div style={{
+      background: BC.card, border: `1px solid ${BC.bdr}`, borderRadius: 12,
+      padding: "10px 12px", marginTop: 12,
+    }}>
+      <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: BC.amber, marginBottom: 8 }}>
+        DIRECTOR
+      </div>
+
+      {round != null && (
+        <>
+          {/* Progress — the number that decides whether Finalize is the
+              routine end of a round or an override. */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 11, color: BC.t2, marginBottom: 4 }}>
+            <span style={{ fontWeight: 700 }}>Round {round} scores</span>
+            <span style={{ color: progress.complete ? BC.green : BC.t3, fontWeight: 700 }}>
+              {progress.entered} / {progress.total || 0}
+            </span>
+          </div>
+          <div style={{ height: 5, borderRadius: 3, background: BC.inp, overflow: "hidden", marginBottom: 6 }}>
+            <div style={{ width: `${pct}%`, height: "100%", background: progress.complete ? BC.green : BC.amber }} />
+          </div>
+          <div style={{ fontSize: 10, color: BC.t3, lineHeight: 1.35, marginBottom: 8, minHeight: 13 }}>
+            {progress.total === 0
+              ? "No matches drawn for this round yet."
+              : progress.complete
+                ? "Every score is in. Finalize to open the next round."
+                : `Still out: ${progress.missingBy.slice(0, 3).map(({ pid, missing }) => `${nameOf(pid)} (${missing})`).join(", ")}${progress.missingBy.length > 3 ? `, +${progress.missingBy.length - 3} more` : ""}`}
+          </div>
+          <button onClick={doFinalize} disabled={busy} style={{
+            width: "100%", padding: "11px 0", borderRadius: 10, cursor: busy ? "default" : "pointer",
+            border: progress.complete ? "none" : `1px solid ${BC.amber}66`,
+            background: progress.complete ? BC.amber : "transparent",
+            color: progress.complete ? "#0a0804" : BC.amber,
+            fontSize: 13, fontWeight: 800, letterSpacing: 0.5, opacity: busy ? 0.6 : 1,
+          }}>
+            {busy ? "Working…" : `Finalize Round ${round}`}
+          </button>
+        </>
+      )}
+
+      {round == null && (
+        <div style={{ fontSize: 11, color: BC.t2, lineHeight: 1.4, marginBottom: lastFinal != null ? 8 : 0 }}>
+          Every round is final. Scoring is closed for the tournament.
+        </div>
+      )}
+
+      {/* The way back. Without it, one mistimed tap locks the whole field
+          out of the round they are standing on. */}
+      {lastFinal != null && (
+        <button onClick={doReopen} disabled={busy} style={{
+          width: "100%", padding: "8px 0", marginTop: 8, borderRadius: 8,
+          background: "transparent", border: "none", color: BC.t3,
+          fontSize: 11, fontWeight: 700, cursor: busy ? "default" : "pointer",
+          textDecoration: "underline", textUnderlineOffset: 3,
+        }}>
+          Reopen Round {lastFinal}
+        </button>
+      )}
+
+      <ConfirmModal modal={confirmModal} />
+    </div>
+  );
+}
+
+// The hole a scoring view should OPEN on for a given match — the live edge,
+// i.e. the first hole not everyone has scored yet. Returns 0 (hole 1) when
+// nothing has been scored, when the round is finished, or when there is no
+// match, which is the right place to open in all three cases.
+//
+// `score(pid, hole)` is supplied by the caller because the two scoring views
+// key their score data differently (`pid_round` -> {hole} vs `pid_hole`).
+//
+// This is deliberately a plain function rather than an effect: both views are
+// unmounted when the user leaves their tab and remount with the hole reset, so
+// the opening hole has to be resolved during the FIRST render. Computing it in
+// a deferred effect is what made the screen show hole 1 and then flash forward.
+function openingHole(pids, score) {
+  if (pids.length === 0) return 0;
+  const hasAny = pids.some(pid => {
+    for (let h = 0; h < 18; h++) if (score(pid, h) > 0) return true;
+    return false;
+  });
+  if (!hasAny) return 0;
+  for (let h = 0; h < 18; h++) {
+    if (!pids.every(pid => score(pid, h) > 0)) return h;
+  }
+  return 0; // every hole complete — nothing to fast-forward to
+}
+
 // ── Score Entry ──
 // ── Score Entry — Mash-style ──
 // Rewritten to use the Mash UI patterns (hole strip, deep-green Par/Hole/HCP
@@ -313,21 +548,71 @@ function LoginScreen({ players, onLogin, teams, darkMode, tournamentName }) {
 // multi-format data model. The legacy ScoreEntry data flow stays — this view
 // still receives `matches` (from bc_matches), `holeData` (from bc_holes), and
 // uses computeMatchResult/calcCHForCourse — but the visual presentation now
-// matches the rest of the app. Round selector at the top supports the multi-
-// round structure that the original Mash sub-app didn't have.
-function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teams, hcpOverrides, teeAssignments, roundLocks }) {
+// matches the rest of the app.
+//
+// The round selector this view used to carry is gone: entry is gated to the
+// current round (see "The round gate" above), so there is nothing left to
+// select between and no strip of rounds at the top either.
+function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teams, hcpOverrides, teeAssignments, roundLocks, rounds, currentRound, onFinalizeRound, ctpData, onSetCtp }) {
   const userPid = user.player_id;
-  const myMatches = matches.filter(m => [...m.teamA, ...m.teamB].includes(userPid));
+  // THE GATE. Only the current round's matches exist as far as this screen
+  // is concerned — a match from a finalized round is not merely hidden, it
+  // is not reachable, so no stale selection can put a score in it.
+  const myMatches = useMemo(
+    () => matches.filter(m => m.round === currentRound && [...m.teamA, ...m.teamB].includes(userPid)),
+    [matches, currentRound, userPid]
+  );
 
   // ── Hooks (always fire, in stable order) ──
-  const [activeMatchId, setActiveMatchId] = useState(myMatches[0]?.id || null);
-  const [activeHole, setActiveHole] = useState(0);
+  const [activeMatchId, setActiveMatchId] = useState(null);
+  // Open on the live edge, resolved synchronously from the holeData we
+  // already have. Leaving the Scoring tab unmounts this view, so returning
+  // mid-round used to render hole 1 and jump forward 400ms later — a visible
+  // flash on every single return. The deferred effect below still covers the
+  // cold-load case, where holeData hasn't arrived yet on the first render.
+  const [activeHole, setActiveHole] = useState(() => {
+    const m = myMatches[0];
+    if (!m) return 0;
+    return openingHole([...m.teamA, ...m.teamB],
+      (pid, h) => (holeData[`${pid}_${m.round}`] || {})[h] || 0);
+  });
   const [editing, setEditing] = useState(false);
   const [showScorecard, setShowScorecard] = useState(false);
   const [toast, setToast] = useState(null);
-  const initialJump = useRef(false);
+  // Which match id the opening hole has already been resolved for. Seeded with
+  // the match we positioned above so the effects below stay idle when there is
+  // nothing left to do; a different id — the round gate swapping the match, or
+  // matches that only load after mount — re-arms them.
+  const positionedFor = useRef(activeHole > 0 ? myMatches[0]?.id : null);
+  // Auto-advance arming, keyed `matchId:hole`. A hole is armed only once we
+  // have seen it INCOMPLETE while mounted — see the auto-advance effect.
+  const advanceArmed = useRef({});
+  // Closest-to-the-pin prompt — the 0-based index of the par 3 it is asking
+  // about, or null. `promptedCtp` is the session guard that keeps it to ONE
+  // automatic appearance per round+hole (see maybePromptCtp); tapping the
+  // par-3 CTP chip re-opens it deliberately and ignores the guard.
+  const [ctpPrompt, setCtpPrompt] = useState(null);
+  const promptedCtp = useRef({});
 
-  const match = activeMatchId ? matches.find(m => m.id === activeMatchId) : myMatches[0];
+  // Put the screen on a match's live edge in a SINGLE render — shared by the
+  // match selector and the match-change effect below, so neither of them ever
+  // paints the outgoing hole before correcting it.
+  const positionOn = (m) => {
+    const edge = m ? openingHole([...m.teamA, ...m.teamB],
+      (pid, h) => (holeData[`${pid}_${m.round}`] || {})[h] || 0) : 0;
+    // Only claim the match as positioned when there was real data to position
+    // FROM. Landing on hole 1 because nothing has loaded yet is not an answer,
+    // and must leave the deferred jump below armed.
+    positionedFor.current = edge > 0 ? m.id : null;
+    setActiveHole(edge);
+    setEditing(false);
+  };
+
+  // Resolved, not stored — the selection is re-derived from the matches the
+  // gate currently allows. When a round is finalized under a player's feet,
+  // a held `activeMatchId` simply stops matching and the screen falls to the
+  // new round's match instead of scoring into the closed one.
+  const match = myMatches.find(m => m.id === activeMatchId) || myMatches[0] || null;
   const tr = match ? tRounds.find(t => t.round_number === match.round) : null;
   // Round handicap lock (src/lib/roundLocks.js). When present, the course
   // pointer and the hole tables come from the snapshot so this screen shows
@@ -372,13 +657,34 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     return true;
   });
   const curHoleScoreSig = matchPids.map(pid => getScore(pid, activeHole)).join(",");
+  // Whether this match has ANY score yet. Gates arming below: on a cold load
+  // holeData is empty for the first few frames, and a hole that only looks
+  // incomplete because nothing has loaded must not arm the auto-advance —
+  // otherwise the arriving snapshot "completes" hole 1 and fires the toast.
+  const anyScores = matchPids.some(pid => {
+    for (let h = 0; h < 18; h++) if (getScore(pid, h) > 0) return true;
+    return false;
+  });
 
   // Auto-advance — when all 4 players have scored the active hole, after
   // 1.8s show toast and jump to next unscored hole. Clean-up cancels on
   // edit/navigation. Same pattern as Mash PracticeScoringTab.
+  //
+  // The arming gate exists because this view is unmounted when the user
+  // leaves the Scoring tab and remounts with activeHole back at 0. Come back
+  // mid-round and hole 1 has long since been completed, so without the gate
+  // the effect fired on the first render and flashed "Hole 1 saved —
+  // advancing..." every single time. Arming a hole only after we have seen it
+  // incomplete means the toast marks a hole we actually watched get finished,
+  // never one that was already full when we arrived.
   useEffect(() => {
     if (!match) return;
-    if (!holeComplete || activeHole >= 17 || editing || allComplete) return;
+    const armKey = `${match.id}:${activeHole}`;
+    // Arm before the suppression checks — a hole the user is mid-edit on
+    // still needs to arm so finishing it advances as usual.
+    if (!holeComplete) { if (anyScores) advanceArmed.current[armKey] = true; return; }
+    if (activeHole >= 17 || editing || allComplete) return;
+    if (!advanceArmed.current[armKey]) return;
     setToast(`✓ Hole ${activeHole + 1} saved — advancing...`);
     const timer = setTimeout(() => {
       setToast(null);
@@ -389,7 +695,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     }, 1800);
     return () => { clearTimeout(timer); setToast(null); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [holeComplete, activeHole, editing, allComplete, curHoleScoreSig, match?.id]);
+  }, [holeComplete, activeHole, editing, allComplete, anyScores, curHoleScoreSig, match?.id]);
 
   // Safety net — clear toast after 3s in case the cleanup misses an edge case.
   useEffect(() => {
@@ -398,42 +704,92 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     return () => clearTimeout(t);
   }, [toast]);
 
-  // Initial-jump on mount per match — fast-forward to first unscored hole.
+  // Reposition when the match changes out from under the player: finalizing
+  // a round swaps this screen to the next round's match, and a held hole 14
+  // would otherwise carry over onto a card that hasn't teed off. Lands on the
+  // new match's live edge, which for a freshly-opened round is hole 1.
+  //
+  // The `positionedFor` guard makes this skip the mount pass, where the hole
+  // was already resolved synchronously above — running it on mount would put
+  // the screen back on hole 1 and reintroduce the flash it exists to avoid.
   useEffect(() => {
-    initialJump.current = false;
+    if (positionedFor.current === (match?.id ?? null)) return;
+    positionOn(match);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [match?.id]);
+
+  // Deferred opening-hole jump — the cold-load safety net. When the app is
+  // opened straight onto the Scoring tab, holeData is still empty during the
+  // first render, so the synchronous positioning above has nothing to work
+  // with; this waits for Firestore's cached snapshot to land and then jumps.
+  // On a tab return (holeData already present) `positionedFor` is pre-seeded
+  // and this does nothing at all, which is what keeps the screen still.
   useEffect(() => {
-    if (initialJump.current) return;
-    if (!match) return;
+    if (!match || positionedFor.current === match.id) return;
     const t = setTimeout(() => {
-      if (initialJump.current) return;
-      initialJump.current = true;
-      let edge = 18;
-      for (let h = 0; h < 18; h++) {
-        if (!matchPids.every(pid => getScore(pid, h) > 0)) { edge = h; break; }
-      }
-      const hasAny = matchPids.some(pid => {
-        for (let h = 0; h < 18; h++) if (getScore(pid, h) > 0) return true;
-        return false;
-      });
-      if (hasAny && edge > 0 && edge < 18) setActiveHole(edge);
+      if (positionedFor.current === match.id) return;
+      positionedFor.current = match.id;
+      const edge = openingHole(matchPids, getScore);
+      if (edge > 0) setActiveHole(edge);
     }, 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [match?.id, holeData]);
 
+  // Whole-round progress, for the director's Finalize card. Computed over
+  // every match in the round, not the reader's own.
+  const roundProgress = useMemo(
+    () => roundScoreProgress(matches, holeData, currentRound),
+    [matches, holeData, currentRound]
+  );
+
   // No more hooks below this line.
-  if (!match) return (
-    <div style={{ textAlign: "center", padding: 40, color: BC.t3, fontFamily: "'Montserrat', sans-serif" }}>
-      <div style={{ fontSize: 32, marginBottom: 12 }}>⛳</div>
-      <div>You're not in any matches yet.</div>
+
+  // ── The gate's chrome ──
+  // This belongs on EVERY branch below, including the ones a player who isn't
+  // drawn in this round lands on: the Finalize card has to reach a director
+  // who is running the event without playing in it.
+  const directorCard = user.isDirector && (rounds.length > 0) ? (
+    <FinalizeRoundCard
+      round={currentRound}
+      nextRound={nextRoundNumber(roundLocks, rounds)}
+      lastFinal={lastFinalRoundNumber(roundLocks, rounds)}
+      progress={roundProgress}
+      tPlayers={tPlayers}
+      onFinalizeRound={onFinalizeRound}
+      notify={notify}
+    />
+  ) : null;
+  const shell = (children) => (
+    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
+      {children}
+      {directorCard}
+      <Toast message={toast} />
     </div>
   );
-  if (!course) return (
-    <div style={{ textAlign: "center", padding: 40, color: BC.t3, fontFamily: "'Montserrat', sans-serif" }}>
-      Round {match.round} course not configured yet.
+  const empty = (icon, title, sub) => shell(
+    <div style={{ textAlign: "center", padding: "40px 20px", color: BC.t3 }}>
+      <div style={{ fontSize: 32, marginBottom: 12 }}>{icon}</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: BC.t2, marginBottom: 4 }}>{title}</div>
+      {sub && <div style={{ fontSize: 12, lineHeight: 1.45 }}>{sub}</div>}
     </div>
   );
+
+  // Nothing is open for scoring: either the schedule hasn't been built yet,
+  // or the director has finalized the last round and the event is over.
+  if (currentRound == null) return rounds.length === 0
+    ? empty("⛳", "No rounds set up yet", "The tournament schedule hasn't been built.")
+    : empty("🏆", "The tournament is over", "Every round is final. Head to the Leaderboard for the result.");
+
+  if (!match) return empty(
+    "⛳",
+    `You're not in a Round ${currentRound} match`,
+    myMatches.length === 0 && matches.some(m => [...m.teamA, ...m.teamB].includes(userPid))
+      ? `Scoring is open for Round ${currentRound} only. Your other rounds are on the Matches tab.`
+      : "Check the Matches tab once the draw is made."
+  );
+
+  if (!course) return empty("⛳", `Round ${match.round} course not configured yet`);
 
   // Live edge — first hole where not everyone has scored. Used to detect
   // "editing past hole" navigation so auto-advance stays suppressed
@@ -446,10 +802,58 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
 
   const { A: tA, B: tB } = teams;
 
+  // ── Closest-to-the-pin ───────────────────────────────────────────────
+  // The hole's standing tag, live from Firestore. `null` until some group
+  // has claimed it.
+  const ctpFor = (h) => ctpData?.[`${match.round}_${h}`] || null;
+
+  // Ported from MNQ: when the score just entered completes a par 3 for THIS
+  // group, pop the tag popup on the device that entered it. Every group gets
+  // the prompt as they walk off the green — an earlier group's tag shows in
+  // the popup as the number to beat, so a group either claims the hole or
+  // dismisses with "our group wasn't closer" and leaves it standing.
+  //
+  // Guards, in the order they matter:
+  //   • a real score on a par 3 — clearing a score never opens it
+  //   • the write must be the incomplete→complete TRANSITION: the tapping
+  //     player had nothing on the hole yet, and everyone else already did.
+  //     Without this, every later correction on a finished par 3 re-prompts.
+  //   • once per round+hole per session, so a cleared-and-re-entered score
+  //     doesn't ask twice
+  //   • never once the director has settled the hole (approved) — that tag
+  //     is the result, not a running claim
+  const maybePromptCtp = (pid, h, score, priorScore) => {
+    if (score <= 0) return;
+    if ((holePars[h] || 4) !== 3) return;
+    if (priorScore > 0) return;
+    const key = `${match.round}_${h}`;
+    if (promptedCtp.current[key]) return;
+    if (ctpFor(h)?.approved) return;
+    if (!matchPids.every(p => p === pid || getScore(p, h) > 0)) return;
+    promptedCtp.current[key] = true;
+    setCtpPrompt(h);
+  };
+
+  // Provisional by definition — `approved: false`. The director settles the
+  // hole from Betting → CTP, and only that write freezes it.
+  const saveCtp = async (winnerPid, feet) => {
+    const h = ctpPrompt;
+    setCtpPrompt(null);
+    await onSetCtp(match.round, h, winnerPid, { distanceFt: feet, approved: false, taggedBy: userPid });
+    const nm = tPlayers.find(p => p.player_id === winnerPid)?.name || "";
+    setToast(`🎯 CTP tagged — hole ${h + 1} · ${nm} ${feet} ft`);
+  };
+
   // ScoreButtonRow hands back the new gross directly (0 = cleared, which it
   // sends when the active button is tapped again), so no toggle logic here.
   const onTapScore = async (pid, score) => {
-    await onSaveHole(pid, match.round, activeHole, score || null, tr?.course_id);
+    // Read the hole and the player's existing score BEFORE the write —
+    // the CTP trigger below needs to know this was a first entry, and
+    // auto-advance can move activeHole while the save is in flight.
+    const h = activeHole;
+    const prior = getScore(pid, h);
+    await onSaveHole(pid, match.round, h, score || null, tr?.course_id);
+    maybePromptCtp(pid, h, score || 0, prior);
   };
 
   // Status cell rendering — for the two-row match status bar between
@@ -475,7 +879,10 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   const userTeam = match.teamA.includes(userPid) ? "A" : "B";
   const totalScored = (match.scoring_type || "match") === "stroke";
   const teamScored = (match.scoring_type || "match") === "team";
-  const segOpts = { total: totalScored, higherWins: higherIsBetter(effectiveHoleFormat(match.scoring_type, format)) };
+  const perHoleScored = isPointsPerHole(match.scoring_type);
+  // The same flags the engine scored with, from the same helper — the status
+  // strip below counts whatever the round is actually settled on.
+  const segOpts = segmentOptsFor({ ...match, hole_points: result?.holePoints }, format);
   const renderStatusCell = (i) => {
     // Same reasoning as the Leaderboard strip's cell height: the bar has to
     // be tall enough for a split hole's diagonal to read, and it stays that
@@ -536,23 +943,28 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     );
   };
 
-  return (
-    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
-      {/* Round selector — visible only when user is in matches across
-          multiple rounds (typical mid-tournament scenario). Uses the
-          deep-green active-tab styling consistent with the Mash visual
-          language. */}
+  return shell(
+    <>
+      {/* Match selector — for the rare format that draws a player into more
+          than one match in the SAME round. It no longer crosses rounds; the
+          strip above owns that axis and only one round of it is live. */}
       {myMatches.length > 1 && (
         <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-          {myMatches.map(m => {
+          {myMatches.map((m, i) => {
             const active = m.id === match.id;
             return (
-              <button key={m.id} onClick={() => { setActiveMatchId(m.id); setActiveHole(0); initialJump.current = false; }} style={{
+              // Position the incoming match in the same render as the switch —
+              // leaving it to the effect below would paint the outgoing hole
+              // for a frame first, the same flash returning to the tab had.
+              <button key={m.id} onClick={() => { setActiveMatchId(m.id); positionOn(m); }} style={{
                 flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
                 background: active ? BC.amberDim : BC.card,
                 border: `1px solid ${active ? BC.amberDim : BC.bdr}`,
                 color: active ? "#fff" : BC.t2,
-              }}>Rd {m.round}</button>
+                // The cup's number for the match, not its position in this
+                // player's own list — two players in the same match have to
+                // be looking at the same name for it.
+              }}>Match {m.matchNumber ?? i + 1}</button>
             );
           })}
         </div>
@@ -628,13 +1040,50 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
         {/* The scoring type sits next to the format because the same format
             plays completely differently under the two — and the status strip
             above is counting whichever one this says. */}
-        {totalScored ? `TOTAL ${totalUnit(format).toUpperCase()}` : teamScored ? "TEAM BEST BALL" : "MATCH PLAY"}
+        {perHoleScored ? `${result?.holePoints ? (activeHole < 9 ? result.holePoints.front : result.holePoints.back) : "?"} PT HOLE`
+          : totalScored ? `MEDAL ${totalUnit(format).toUpperCase()}`
+          : teamScored ? "TEAM BEST BALL" : "MATCH PLAY"}
         {" · ROUND "}{match.round}
+        {/* Which match of the week this is. Numbered across the whole
+            schedule, so it is the one label that identifies this match
+            without naming the players. */}
+        {match.matchNumber ? ` · MATCH ${match.matchNumber}` : ""}
+        {/* On Team Best Ball the badge is incomplete without the count: this
+            card is worth posting because it might be one of the six that
+            count, and how many that is can change hole to hole. Read off the
+            result so it can't disagree with what the strip above is showing. */}
+        {result?.counting && ` · BEST ${result.counting[activeHole]}`}
       </div>
 
+      {/* Par-3 CTP chip — the standing closest-to-the-pin for this hole,
+          and the way back into the tag popup. The automatic prompt fires
+          once per hole per session, so without this a group that dismissed
+          it (or measured a second ball after) would have no way to claim
+          the hole. Reads as a plain badge, not a control, once the
+          director has settled the hole. */}
+      {par === 3 && (() => {
+        const rec = ctpFor(activeHole);
+        const nm = rec?.player_id ? (tPlayers.find(p => p.player_id === rec.player_id)?.name || "—") : null;
+        const settled = rec?.approved === true;
+        const label = nm
+          ? `🎯 CTP — ${nm}${rec.distance_ft ? ` · ${rec.distance_ft} ft` : ""}${settled ? "" : " · tap to beat it"}`
+          : "🎯 Tag closest to the pin";
+        const style = {
+          width: "100%", padding: "6px 10px", borderRadius: 8, marginBottom: 4, textAlign: "left",
+          background: nm ? BC.amberGlow : BC.card,
+          border: `1px solid ${nm ? BC.amber + "55" : BC.bdr}60`,
+          color: nm ? BC.amber : BC.t3,
+          fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+        };
+        return settled
+          ? <div style={style}>{label}</div>
+          : <button onClick={() => setCtpPrompt(activeHole)} style={{ ...style, cursor: "pointer" }}>{label}</button>;
+      })()}
+
       {/* Player score cards — 4 stacked, T1 above dashed divider, T2 below.
-          Each shows: name, (CH), stroke dots, "Net: ±X thru N", then a row
-          of par-relative score buttons. Tap a saved score again to clear. */}
+          Each shows one header row — name, (CH), stroke dots on the left,
+          "Net ±X thru N" right-aligned — then a row of par-relative score
+          buttons. Tap a saved score again to clear. */}
       <div>
         {[...match.teamA, "DIVIDER", ...match.teamB].map((pid, idx) => {
           if (pid === "DIVIDER") return <div key="div" style={{ borderTop: `1px dashed ${BC.bdr}`, margin: "8px 0" }} />;
@@ -647,10 +1096,21 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           // matching the strokeMaps memo above and computeMatchResult.
           const hi = getRoundHI({ roundLocks, round: match.round, pid, players: tPlayers });
           const playerTee = getRoundTee({ roundLocks, round: match.round, pid, teeAssignments, roundTee });
-          const ch = getRoundCH({
+          const fullCH = getRoundCH({
             roundLocks, round: match.round, pid, players: tPlayers,
             course, chOverrides: hcpOverrides, teeAssignments, roundTee,
           });
+          // Show the number the dots were actually allocated from. On a round
+          // with a handicap allowance that is the reduced PLAYING handicap,
+          // not the full Course Handicap — printing the full figure beside
+          // three-quarters of the dots is how a player concludes the app has
+          // shorted them. The full CH stays available on the tooltip.
+          const playingCH = result?.playingCH?.[pid];
+          const ch = playingCH ?? fullCH;
+          const reduced = playingCH != null && playingCH !== fullCH;
+          const chTitle = reduced
+            ? `Playing handicap ${ch} — ${describeAllowance(result?.allowance)} allowance off a Course Handicap of ${fullCH}`
+            : `Course Handicap ${ch}`;
           // Running net to par for this player thru holes scored
           let netToPar = 0, thru = 0;
           for (let h = 0; h < 18; h++) {
@@ -667,26 +1127,29 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
               background: BC.card, borderRadius: 10, marginBottom: 4, padding: "6px 10px",
               border: `1px solid ${BC.bdr}`,
             }}>
-              {/* Top row — name + (CH) + stroke dots clustered tight on the
-                  LEFT, so the handicap context reads as attached to the
-                  player it describes. MNQ's layout. */}
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2, minWidth: 0 }}>
+              {/* Header row — name + (CH) + stroke dots clustered tight on
+                  the LEFT, so the handicap context reads as attached to the
+                  player it describes, and the running Net pushed to the far
+                  RIGHT of the same row. The Net used to sit on a line of its
+                  own beneath; folding it up here buys back a row per card,
+                  which over four cards is most of the difference between the
+                  scoring screen fitting a phone and having to be scrolled. */}
+              <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 4, minWidth: 0 }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: BC.t1, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>{tp?.name || pid}</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: BC.hcpBlue, flexShrink: 0 }}>({ch})</span>
+                <span title={chTitle} style={{ fontSize: 11, fontWeight: 700, color: BC.hcpBlue, flexShrink: 0 }}>
+                  ({ch}{reduced ? "*" : ""})
+                </span>
                 {strokes > 0 && (
                   <span style={{ color: BC.hcpBlue, fontSize: 12, letterSpacing: 1, flexShrink: 0, lineHeight: 1 }}>
                     {"●".repeat(strokes)}
                   </span>
                 )}
-              </div>
-              {/* Net / thru sub-line on its own row beneath the name, as in
-                  MNQ. minHeight reserves the slot before scoring starts so
-                  the card doesn't grow on the first entry. */}
-              <div style={{ fontSize: 10, color: BC.t3, marginBottom: 3, lineHeight: 1.1, minHeight: 10 }}>
                 {thru > 0 && (
-                  <>Net <strong style={{ color: netToPar < 0 ? BC.danger : netToPar === 0 ? BC.t3 : BC.t1, fontWeight: 700 }}>
-                    {fmtScore(netToPar)}
-                  </strong> thru {thru}</>
+                  <span style={{ marginLeft: "auto", paddingLeft: 8, fontSize: 10, color: BC.t3, lineHeight: 1.1, whiteSpace: "nowrap", flexShrink: 0 }}>
+                    Net <strong style={{ color: netToPar < 0 ? BC.danger : netToPar === 0 ? BC.t3 : BC.t1, fontWeight: 700 }}>
+                      {fmtScore(netToPar)}
+                    </strong> thru {thru}
+                  </span>
                 )}
               </div>
               <ScoreButtonRow par={par} score={cur} onScore={(v) => onTapScore(pid, v)} />
@@ -701,7 +1164,9 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
         <Popup onClose={() => setShowScorecard(false)} maxWidth={480} padding={0} outerPadding={12}
           innerStyle={{ background: BC.card, border: `1px solid ${BC.amber}44`, borderRadius: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderBottom: `1px solid ${BC.bdr}` }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>SCORECARD — RD {match.round}</div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>
+              SCORECARD — RD {match.round}{match.matchNumber ? ` · MATCH ${match.matchNumber}` : ""}
+            </div>
             <button onClick={() => setShowScorecard(false)} style={{
               background: "transparent", border: "none", color: BC.t2, fontSize: 18, cursor: "pointer", padding: "0 4px",
             }}>×</button>
@@ -720,41 +1185,145 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
         </Popup>
       )}
 
-      {/* Auto-advance toast — slides down from the top during the 1.8s
-          wait between "all scores in" and the screen advance. Mirrors
-          the Mash toast styling for cross-app visual consistency. */}
-      <Toast message={toast} />
-    </div>
+      {/* Closest-to-the-pin — opens itself when this group finishes a par 3
+          (see maybePromptCtp) and on demand from the chip above. The four
+          names offered are this match's players; a group can only ever tag
+          one of its own. */}
+      {ctpPrompt != null && (() => {
+        const rec = ctpFor(ctpPrompt);
+        return (
+          <CtpPrompt
+            holeNumber={ctpPrompt + 1}
+            players={matchPids.map(pid => tPlayers.find(p => p.player_id === pid) || { player_id: pid, name: pid })}
+            teams={teams}
+            leader={rec}
+            leaderName={rec?.player_id ? (tPlayers.find(p => p.player_id === rec.player_id)?.name || "") : ""}
+            onSave={saveCtp}
+            onClose={() => setCtpPrompt(null)}
+          />
+        );
+      })()}
+    </>
   );
+  // The auto-advance toast ("✓ Hole 4 saved — advancing…"), which also
+  // carries the round strip's explanations, is rendered by `shell` above so
+  // every branch of this view gets it.
 }
 
 
 // ── Groups View ──
-function GroupsView({ matches, tRounds, tPlayers, courses }) {
-  const rounds = [...new Set(matches.map(m => m.round))].sort();
-  const [activeRound, setActiveRound] = useState(rounds[0] || 1);
+// The team name over each side of a match card. Small caps in the team's own
+// color; `color` is supplied per side by the caller.
+const teamTagStyle = {
+  fontSize: 8, fontWeight: 800, letterSpacing: 0.8, marginBottom: 3,
+  textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden",
+  textOverflow: "ellipsis",
+};
+
+// The player-facing "Matches" tab. Answers the two questions a player
+// actually has on the morning of a round: who am I playing, and when do I
+// tee off. The second one comes from the round's playing groups (see
+// lib/groups.js) — group i goes off at slot i of the round's tee_time list.
+function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound, teams }) {
+  // Every round the director set up in Admin belongs on this tab, drawn or
+  // not. Listing only the rounds that already have pairings made a round
+  // vanish between "the schedule is set" and "the draw is made", which is
+  // exactly the window in which a player goes looking for it — "Round 3,
+  // no pairings yet" is an answer; a missing tab is not. A round carrying
+  // matches without a round document still shows, so a pairing can never
+  // fall off the schedule either.
+  const rounds = useMemo(() => {
+    const seen = new Set([
+      ...tRounds.map(t => t.round_number),
+      ...matches.map(m => m.round),
+    ]);
+    return [...seen].filter(r => r != null).sort((a, b) => a - b);
+  }, [tRounds, matches]);
+
+  // The selection is RESOLVED rather than stored: the rounds arrive from
+  // Firestore after the first render, so a `useState(rounds[0])` seed pins
+  // the tab to whatever was known at mount — Round 1 on an empty cache,
+  // even for a tournament whose schedule starts somewhere else. Holding the
+  // director's tap and falling back to the first live round also survives a
+  // round being deleted while it is on screen.
+  const [pickedRound, setPickedRound] = useState(null);
+  const activeRound = pickedRound != null && rounds.includes(pickedRound)
+    ? pickedRound
+    : (rounds[0] ?? 1);
   const rndMatches = matches.filter(m => m.round === activeRound);
   const tr = tRounds.find(t => t.round_number === activeRound);
   const course = courses.find(c => c.id === tr?.course_id);
   const fmt = FORMATS.find(f => f.id === tr?.format);
+  // "Best 6 on the front, 7 on the back" — Team Best Ball only, and blank on
+  // every other format (resolveCounting hands back null for them).
+  const cnt = resolveCounting(tr?.format, tr?.counting_scores);
+  // "Best 6 count on the front, 7 on the back" — and when a nine ramps, the
+  // per-hole numbers spelled out, because on those years "how many count" is
+  // a different answer on the 1st than on the 9th.
+  const nineWords = (back) => {
+    const flat = countingNine(cnt, back);
+    const slice = back ? cnt.slice(9, 18) : cnt.slice(0, 9);
+    return flat != null ? `best ${flat}` : `best ${slice.join("/")}`;
+  };
+  const countingLine = cnt
+    ? `Scores that count — front nine: ${nineWords(false)} · back nine: ${nineWords(true)}`
+    : null;
+  // What a hole is worth, on a round settled hole by hole.
+  const holePointsLine = isPointsPerHole(tr?.scoring_type)
+    ? (() => {
+        const hp = resolveHolePoints(tr?.hole_points);
+        return `Every hole is a point — ${hp.front} on the front, ${hp.back} on the back · ${holePointsTotal(hp)} on the round`;
+      })()
+    : null;
+
+  // Same fallback the admin tab uses: a 2-man format's match is its own
+  // foursome, so a round nobody has grouped by hand still has tee times.
+  const { groups, times: rawSlots } = roundPlaySetup({
+    tr, matches: rndMatches, storedGroups: groupsByRound?.[activeRound],
+  });
+  const times = rawSlots
+    .map(t => { const m = parseTeeTime(t); return m == null ? t : formatTeeTime(m, { ampm: true }); });
+  const firstTee = times[0] || "";
+
+  const nameOf = (pid) => tPlayers.find(t => t.player_id === pid)?.name || pid;
+  const teamOf = (pid) => tPlayers.find(t => t.player_id === pid)?.team || null;
+
+  // Matches read best in the order they go off — which is also the order
+  // their numbers were handed out in, so the cards below count up.
+  const ordered = orderMatchesForRound({ matches: rndMatches, groups, times });
+
+  // A tee sheet only earns its space when the groups aren't just the
+  // matches over again — Singles (two matches per foursome) and the team
+  // formats (one match over several foursomes).
+  const needsTeeSheet = groups.length > 0 && rndMatches.some(m => {
+    const pids = [...m.teamA, ...m.teamB];
+    const idxs = new Set(pids.map(p => groups.findIndex(g => g.includes(p))));
+    return idxs.size > 1 || groups.some(g => g.length > pids.length && pids.every(p => g.includes(p)));
+  });
 
   return (
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
       {/* Round selector — pill toggle, deep Mash green for active state.
-          Mirrors the Mash visual language used on Scoring + Leaderboard. */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-        {rounds.map(r => {
-          const active = r === activeRound;
-          return (
-            <button key={r} onClick={() => setActiveRound(r)} style={{
-              flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
-              background: active ? BC.amberDim : BC.card,
-              border: `1px solid ${active ? BC.amberDim : BC.bdr}`,
-              color: active ? "#fff" : BC.t2,
-            }}>Rd {r}</button>
-          );
-        })}
-      </div>
+          Mirrors the Mash visual language used on Scoring + Leaderboard.
+          Pinned: this is the control the whole tab is steered from, and a
+          reader scrolled deep into Round 2's tee sheet should be able to
+          jump to Round 3 without scrolling back for the pills. Lands in the
+          same spot as the Leaderboard's cup total and the Admin tab bar. */}
+      <StickyTop>
+        <div style={{ display: "flex", gap: 6 }}>
+          {rounds.map(r => {
+            const active = r === activeRound;
+            return (
+              <button key={r} onClick={() => setPickedRound(r)} style={{
+                flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                background: active ? BC.amberDim : BC.card,
+                border: `1px solid ${active ? BC.amberDim : BC.bdr}`,
+                color: active ? "#fff" : BC.t2,
+              }}>Rd {r}</button>
+            );
+          })}
+        </div>
+      </StickyTop>
 
       {/* Course / format / tee-time banner — uses the TEAMS-banner style
           (Mash green fill, white centered text) for the section header,
@@ -765,43 +1334,177 @@ function GroupsView({ matches, tRounds, tPlayers, courses }) {
         <div style={{ padding: "10px 14px" }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: BC.t1 }}>{course?.name || "Course TBD"}</div>
           {fmt && <div style={{ fontSize: 11, color: BC.t3, marginTop: 2 }}>{fmt.label}{fmt.desc ? ` · ${fmt.desc}` : ""}</div>}
-          {tr?.tee_time && <div style={{ fontSize: 11, color: BC.amber, marginTop: 4, fontWeight: 700 }}>First Tee: {tr.tee_time}</div>}
+          {/* On Team Best Ball the format's own description can't say what the
+              round actually counts — that number is per round. Stated here so a
+              player reading the tee sheet knows whether their card has to be
+              one of six or one of seven. */}
+          {countingLine && <div style={{ fontSize: 11, color: BC.amber, marginTop: 2, fontWeight: 700 }}>{countingLine}</div>}
+          {holePointsLine && <div style={{ fontSize: 11, color: BC.amber, marginTop: 2, fontWeight: 700 }}>{holePointsLine}</div>}
+          {firstTee && <div style={{ fontSize: 11, color: BC.amber, marginTop: 4, fontWeight: 700 }}>First Tee: {firstTee}</div>}
         </div>
       </div>
 
-      {rndMatches.length === 0 && <div style={{ textAlign: "center", color: BC.t3, padding: 32, fontSize: 12 }}>No matches scheduled.</div>}
+      {/* A set-up round with no draw yet. The round's own card above still
+          shows the course, format and first tee — the only thing missing is
+          who plays who, so that is the only thing this says. */}
+      {rndMatches.length === 0 && (
+        <div style={{
+          background: BC.card, borderRadius: 12, border: `1px dashed ${BC.bdr}`,
+          padding: "28px 20px", textAlign: "center",
+          fontSize: 12, fontWeight: 700, letterSpacing: 0.4, color: BC.t3,
+        }}>
+          No pairings yet
+        </div>
+      )}
 
-      {/* Match cards — same visual identity as the Leaderboard cards
-          (vertical green/brown stripes flanking each team) so the
-          "this is a Match X" element is recognizable across tabs. */}
-      {rndMatches.map((m, i) => (
+      {/* Match cards — same visual identity as the Leaderboard cards: team A
+          always the left column behind its own color rail, team B always the
+          right. The rails and the team labels are the TEAM colors (which
+          follow each team's logo — see theme.js `withBrand`), not the
+          tournament chrome, so a player finds their side by color here the
+          same way they do on the board. */}
+      {ordered.map((m, i) => {
+        const teeTime = teeTimeForMatch({ groups, times, match: m });
+        return (
         <div key={m.id} style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: "12px 14px", marginBottom: 8 }}>
-          <div style={{ fontSize: 9, color: BC.t3, marginBottom: 8, fontWeight: 800, letterSpacing: 1 }}>MATCH {i + 1}{m.teeTime ? `  ·  ${m.teeTime}` : ""}</div>
+          <div style={{ fontSize: 9, color: BC.t3, marginBottom: 8, fontWeight: 800, letterSpacing: 1 }}>
+            MATCH {m.matchNumber ?? i + 1}{teeTime ? `  ·  ${teeTime}` : ""}
+          </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10 }}>
-            {/* Team A — Mash green stripe LEFT */}
-            <div style={{ textAlign: "left", borderLeft: `3px solid ${BC.amber}`, paddingLeft: 8 }}>
-              {m.teamA.map(pid => {
-                const tp = tPlayers.find(t => t.player_id === pid);
-                return <div key={pid} style={{ fontSize: 13, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{tp?.name || pid}</div>;
-              })}
+            {/* Team A — its color rail LEFT */}
+            <div style={{ minWidth: 0, textAlign: "left", borderLeft: `3px solid ${teamColor("A")}`, paddingLeft: 8 }}>
+              <div style={{ ...teamTagStyle, color: teamColor("A") }}>{teams?.A?.name || "Team A"}</div>
+              {m.teamA.map(pid => (
+                <div key={pid} style={{ fontSize: 13, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{nameOf(pid)}</div>
+              ))}
             </div>
             {/* vs */}
             <div style={{ fontSize: 11, color: BC.t3, fontWeight: 700, padding: "0 4px" }}>vs</div>
-            {/* Team B — bourbon brown stripe RIGHT */}
-            <div style={{ textAlign: "right", borderRight: `3px solid ${BC.gold}`, paddingRight: 8 }}>
-              {m.teamB.map(pid => {
-                const tp = tPlayers.find(t => t.player_id === pid);
-                return <div key={pid} style={{ fontSize: 13, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{tp?.name || pid}</div>;
-              })}
+            {/* Team B — its color rail RIGHT */}
+            <div style={{ minWidth: 0, textAlign: "right", borderRight: `3px solid ${teamColor("B")}`, paddingRight: 8 }}>
+              <div style={{ ...teamTagStyle, color: teamColor("B") }}>{teams?.B?.name || "Team B"}</div>
+              {m.teamB.map(pid => (
+                <div key={pid} style={{ fontSize: 13, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{nameOf(pid)}</div>
+              ))}
             </div>
           </div>
         </div>
-      ))}
+        );
+      })}
+
+      {/* Tee sheet — who walks to the first tee together. */}
+      {needsTeeSheet && (
+        <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginTop: 14, overflow: "hidden" }}>
+          <Banner>TEE SHEET</Banner>
+          {groups.map((g, gi) => (
+            <div key={gi} style={{ padding: "9px 14px", borderTop: gi ? `1px solid ${BC.bdr}44` : "none", display: "flex", gap: 10, alignItems: "baseline" }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: BC.amber, flexShrink: 0, minWidth: 64 }}>{times[gi] || `G${gi + 1}`}</div>
+              {/* A group mixes the two sides, so the names carry their own
+                  team color as a dot rather than the row carrying one. Reads
+                  the 2v2 split of a foursome at a glance. */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "3px 10px", fontSize: 12, color: BC.t1, lineHeight: 1.4 }}>
+                {g.map(pid => {
+                  const tid = teamOf(pid);
+                  return (
+                    <span key={pid} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      <span style={{
+                        width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                        background: tid ? teamColor(tid) : BC.t3,
+                      }} />
+                      {nameOf(pid)}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 // ── Admin View ──
+
+// ── Round form comparison ──────────────────────────────────────────────
+// The Rounds tab auto-saves by diffing the form against Firestore, so both
+// sides have to resolve their defaults identically or the tab would write
+// on every visit. `defaultHandicapMode` mirrors enrichedRounds: Round 4
+// plays all handicaps, everything else low man.
+const defaultHandicapMode = (round) => (round === 4 ? "full" : "low_man");
+
+// Blank entries are absences, not values: an override the director typed
+// and then cleared has to compare equal to one that was never set, or the
+// form would stay permanently "dirty" and rewrite itself forever.
+const liveEntries = (map) =>
+  Object.entries(map || {})
+    .filter(([, v]) => v !== "" && v != null)
+    .map(([k, v]) => [k, String(v)])
+    .sort(([a], [b]) => a.localeCompare(b));
+
+const sameRoundMap = (a, b) => JSON.stringify(liveEntries(a)) === JSON.stringify(liveEntries(b));
+
+// The round's own settings, flattened to a comparable string. Kept apart
+// from the two per-round maps because each lives in its own Firestore
+// document and they echo back independently. `course_id` is deliberately
+// absent — it is set in the Courses tab and only rides along on the write
+// so a round save cannot drop it.
+const roundSettingsSignature = (r) => JSON.stringify([
+  r.format, r.handicap_mode, r.tee_time, r.scoring_type,
+  r.nassau_front, r.nassau_back, r.nassau_overall, r.allowance, r.counting_scores,
+  r.hole_points,
+]);
+
+// The handicap allowance, normalized to the shape the round's FORMAT calls
+// for. Both sides of the diff go through this, which is what stops a stale
+// low/high pair left behind by a format change from reading as an edit — and
+// what lets a round that has never been saved compare equal to its own
+// recommended default, so merely opening a round does not write to it.
+const roundAllowance = (format, raw) => {
+  const a = resolveAllowance(format || DEFAULT_FORMAT, raw);
+  if (!a.enabled) return { enabled: false };
+  return a.split
+    ? { enabled: true, low: a.low, high: a.high }
+    : { enabled: true, pct: a.pct };
+};
+
+// Team Best Ball's counting scores, normalized the same way and for the same
+// reason: `null` on every format that doesn't count, so switching away from
+// Team Best Ball drops the counts rather than leaving them to read as an edit
+// on a format that has no use for them.
+// Stored as the 18-hole array the engine reads, wrapped in the `holes` key the
+// document uses. Null on a format that doesn't count, so switching away from
+// Team Best Ball drops the counts instead of leaving them to read as an edit
+// on a format with no use for them.
+const roundCounting = (format, raw) => {
+  const counts = resolveCounting(format || DEFAULT_FORMAT, raw);
+  return counts ? { holes: counts } : null;
+};
+
+// Hole values, normalized the same way, and only on a round that is actually
+// settled hole by hole — a Match or Total round has no hole values to store.
+const roundHolePoints = (scoringType, raw) =>
+  isPointsPerHole(scoringType) ? resolveHolePoints(raw) : null;
+
+// Everything the Rounds tab owns for one round.
+const roundSignature = (r) => JSON.stringify([
+  roundSettingsSignature(r), liveEntries(r.ch_overrides), liveEntries(r.tee_assignments),
+]);
+
+// Adopt a whole per-round document map, optionally holding one round's
+// existing slice — see the hydration effects for when that applies.
+const adoptRoundMap = (incoming, holdRound) => (prev) => {
+  const next = { ...incoming };
+  if (holdRound != null && prev[holdRound] !== undefined) next[holdRound] = prev[holdRound];
+  return next;
+};
+
+// `round` when the arriving slice is exactly what our own last write sent
+// for it, otherwise null. Anything else — another director, an edition
+// switch — is a value we do not have and must adopt.
+const echoedSlice = (written, round, key, incomingSlice) =>
+  written && written.round === round && sameRoundMap(written.payload[key], incomingSlice)
+    ? round : null;
 
 // ── CH Delta Popup ── shows stroke change when tee or index changes
 function ChDeltaBadge({ delta }) {
@@ -819,7 +1522,7 @@ function ChDeltaBadge({ delta }) {
   );
 }
 
-function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, onSaveTournamentName, hcpOverridesFromDb, teeAssignmentsFromDb, notify, roundLocks }) {
+function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks }) {
   const [tab, setTab] = useState("players");
   const [editTeamNames, setEditTeamNames] = useState({ A: "", B: "" });
   const [editingTeam, setEditingTeam] = useState(null);
@@ -839,7 +1542,9 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   const [brandLogoEdit, setBrandLogoEdit] = useState({ A: null, B: null }); // uploaded logo data URL per team
   const [brandBusy, setBrandBusy] = useState(null); // team id mid-extraction
   const [editTournamentName, setEditTournamentName] = useState(tournamentName || "");
+  const [editTournamentLocation, setEditTournamentLocation] = useState(tournamentLocation || "");
   useEffect(() => { setEditTournamentName(tournamentName || ""); }, [tournamentName]);
+  useEffect(() => { setEditTournamentLocation(tournamentLocation || ""); }, [tournamentLocation]);
   useEffect(() => {
     setBrandEdit({ A: brand?.teamA?.color || "", B: brand?.teamB?.color || "" });
     setBrandLogoEdit({ A: brand?.teamA?.logo || null, B: brand?.teamB?.logo || null });
@@ -893,24 +1598,26 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
   const [editRound, setEditRound] = useState(1);
   const [roundFormat, setRoundFormat] = useState("");
-  const [roundCourse, setRoundCourse] = useState("");
   const [roundTeeTime, setRoundTeeTime] = useState("");
   const [hcpOverrides, setHcpOverrides] = useState({});
-
-  // Auto-load round settings from Firestore when tRounds first populates
-  useEffect(() => {
-    const tr = tRounds.find(t => t.round_number === editRound);
-    if (!tr) return;
-    setRoundFormat(tr.format || "");
-    setRoundTeeTime(tr.tee_time || "");
-    setNassau({ front: tr.nassau_front ?? 1, back: tr.nassau_back ?? 1, overall: tr.nassau_overall ?? 1 });
-    setScoringType(tr.scoring_type || "match");
-    if (tr.handicap_mode) setHandicapMode(prev => ({ ...prev, [editRound]: tr.handicap_mode }));
-  }, [tRounds]);
   const [handicapMode, setHandicapMode] = useState({ 1: "low_man", 2: "low_man", 3: "low_man", 4: "full" }); // per round
   const [chDeltas, setChDeltas] = useState({});
   const [editingPlayer, setEditingPlayer] = useState(null); // { pid, first, last, nick, hi, ov, dir }
   const [teeAssignments, setTeeAssignments] = useState({}); // { round: { pid: teeName } }
+  const [nassau, setNassau] = useState(NASSAU_DEFAULT);
+  const [scoringType, setScoringType] = useState("match"); // "match" | "stroke"
+  // Raw saved allowance for the round being edited, or null to mean "the
+  // format's default". Kept raw ({pct} / {low,high}) so a director who never
+  // touches it stores nothing, and a later change to a format's recommended
+  // allowance still reaches the rounds nobody edited.
+  const [allowance, setAllowance] = useState(null);
+  // Raw saved counting scores for the round being edited ({front, back}), or
+  // null to mean "the format's default". Same reasoning as the allowance
+  // above: a director who never touches it stores nothing.
+  const [counting, setCounting] = useState(null);
+  // What one hole is worth on each nine, when the round is settled hole by
+  // hole. Null means "the default", same as the two above.
+  const [holePoints, setHolePoints] = useState(null);
   // ── Handicap-lock state ──
   // Read-only here: locking is automatic on the first score of a round (see
   // ensureRoundLock in App). These flags only gate the round form's editing.
@@ -948,25 +1655,213 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
     setChDeltas(prev => ({ ...prev, [key]: delta }));
     setTimeout(() => setChDeltas(prev => { const n = {...prev}; delete n[key]; return n; }), 3500);
   };
-  // Hydrate from Firestore once the parent's subscriptions resolve. Without
-  // these effects, the local state starts empty and a director opening the
-  // Admin tab would see "no overrides set" / "no tees assigned" for rounds
-  // that actually have data — and any save would overwrite the real values
-  // with the empty form state. Stringify-deps is a structural-equality
-  // shortcut: cheap because these maps stay small.
-  useEffect(() => { if (hcpOverridesFromDb) setHcpOverrides(hcpOverridesFromDb); }, [JSON.stringify(hcpOverridesFromDb)]);
-  useEffect(() => { if (teeAssignmentsFromDb) setTeeAssignments(teeAssignmentsFromDb); }, [JSON.stringify(teeAssignmentsFromDb)]);
-  const [nassau, setNassau] = useState(NASSAU_DEFAULT);
-  const [scoringType, setScoringType] = useState("match"); // "match" | "stroke" (Medal) | "team" (best ball)
 
-  // Match builder
+  // ══ Rounds tab: auto-save ═══════════════════════════════════════════
+  // The round form has no Save button — every edit commits on its own.
+  // Three rules keep that from becoming a write storm or a data-loss bug:
+  //
+  //   • Diffed, never fired blindly. `formRound` (what the director sees)
+  //     is compared against `storedRound` (what Firestore holds) and a
+  //     write happens only when the two disagree. Hydration, switching
+  //     rounds and the echo of our own write all land on "equal" and do
+  //     nothing — which is also what stops a feedback loop.
+  //   • Debounced, and captured. A burst of typing (tee times, nassau
+  //     values) collapses into one write, and the payload is snapshotted
+  //     when the timer is armed — so leaving the round mid-burst still
+  //     writes the round that was edited, not the one now on screen.
+  //   • Hydration steps around its own echo, and nothing else. Firestore
+  //     values are adopted as they arrive — including the first time,
+  //     when an empty form legitimately differs from a document nobody
+  //     has read yet — with one exception: a document that is byte-for-
+  //     byte what we just sent is not re-applied, so it cannot snap an
+  //     input back while the director is still typing into it. Gating
+  //     hydration on "is the form dirty" instead would deadlock on that
+  //     first load and then write the empty form over real data.
+  //
+  // A final round is closed: its handicaps are frozen in the snapshot, so
+  // nothing is written and the status line says so.
+
+  // What Firestore currently holds for `editRound`, with every default
+  // resolved the same way the scoring path resolves it (see enrichedRounds).
+  const storedRound = useMemo(() => {
+    const tr = tRounds.find(t => t.round_number === editRound) || {};
+    return {
+      course_id: tr.course_id || "",
+      format: tr.format || DEFAULT_FORMAT,
+      handicap_mode: tr.handicap_mode || defaultHandicapMode(editRound),
+      tee_time: tr.tee_time || "",
+      nassau_front: tr.nassau_front ?? 1,
+      nassau_back: tr.nassau_back ?? 1,
+      nassau_overall: tr.nassau_overall ?? 1,
+      scoring_type: tr.scoring_type || "match",
+      allowance: roundAllowance(tr.format || DEFAULT_FORMAT, tr.allowance),
+      counting_scores: roundCounting(tr.format || DEFAULT_FORMAT, tr.counting_scores),
+      hole_points: roundHolePoints(tr.scoring_type || "match", tr.hole_points),
+      ch_overrides: hcpOverridesFromDb?.[editRound] || {},
+      tee_assignments: teeAssignmentsFromDb?.[editRound] || {},
+    };
+  }, [tRounds, editRound, hcpOverridesFromDb, teeAssignmentsFromDb]);
+
+  // The same shape, built from the form. `course_id` rides along unchanged
+  // — it belongs to the Courses tab and is only here so a round write does
+  // not drop it.
+  const formRound = useMemo(() => ({
+    course_id: storedRound.course_id,
+    format: roundFormat || storedRound.format,
+    handicap_mode: handicapMode[editRound] || defaultHandicapMode(editRound),
+    tee_time: roundTeeTime || storedRound.tee_time,
+    nassau_front: nassau.front,
+    nassau_back: nassau.back,
+    nassau_overall: nassau.overall,
+    scoring_type: scoringType,
+    // Normalized against the format the form is CURRENTLY showing, so picking
+    // a new format re-shapes the allowance in the same render that changes it.
+    allowance: roundAllowance(roundFormat || storedRound.format, allowance),
+    counting_scores: roundCounting(roundFormat || storedRound.format, counting),
+    hole_points: roundHolePoints(scoringType, holePoints),
+    ch_overrides: hcpOverrides[editRound] || {},
+    tee_assignments: teeAssignments[editRound] || {},
+  }), [storedRound, roundFormat, handicapMode, editRound, roundTeeTime, nassau, scoringType, allowance, counting, holePoints, hcpOverrides, teeAssignments]);
+
+  const storedSettingsSig = roundSettingsSignature(storedRound);
+  const hcpDocSig = JSON.stringify(hcpOverridesFromDb ?? null);
+  const teeDocSig = JSON.stringify(teeAssignmentsFromDb ?? null);
+  const formSig = roundSignature(formRound);
+  const roundDirty = formSig !== roundSignature(storedRound);
+
+  const saveTimerRef = useRef(null);
+  const pendingSaveRef = useRef(null);  // { round, payload, sig } armed but not yet written
+  const lastWrittenRef = useRef(null);  // { round, payload, sig } — the write whose echo to ignore
+
+  // ── Hydration ──
+  // Each of the three documents records the version it last adopted. That
+  // is what makes "has the form caught up with Firestore?" answerable —
+  // see `formSeeded` below — and it re-seeds on a round switch, on a fresh
+  // document, and on nothing else.
+  const [seed, setSeed] = useState(null);                     // { round, sig } — round settings
+  const [mapSeed, setMapSeed] = useState({ hcp: null, tee: null });
+  const seededRound = seed?.round === editRound;
+
+  useEffect(() => {
+    if (seededRound && seed.sig === storedSettingsSig) return;
+    setSeed({ round: editRound, sig: storedSettingsSig });
+    // A queued write owns the form — re-seeding would discard the very
+    // edits it is about to send.
+    if (pendingSaveRef.current?.round === editRound) return;
+    const written = lastWrittenRef.current;
+    if (written && written.round === editRound && roundSettingsSignature(written.payload) === storedSettingsSig) return;
+    setRoundFormat(storedRound.format);
+    setRoundTeeTime(storedRound.tee_time);
+    setNassau({ front: storedRound.nassau_front, back: storedRound.nassau_back, overall: storedRound.nassau_overall });
+    setScoringType(storedRound.scoring_type);
+    setAllowance(storedRound.allowance);
+    setCounting(storedRound.counting_scores);
+    setHolePoints(storedRound.hole_points);
+    setHandicapMode(prev => ({ ...prev, [editRound]: storedRound.handicap_mode }));
+  }, [seed, seededRound, editRound, storedSettingsSig, storedRound]);
+
+  // The two per-round maps arrive as whole documents spanning every round,
+  // so they are adopted wholesale — the Matches tab reads the other rounds'
+  // slices for its CH preview. The slice being edited is held back in two
+  // cases: the document is the echo of our own write, or a write for that
+  // round is already queued (which happens when the arriving document is
+  // the echo of an *earlier* round's write, landing while the director has
+  // moved on). Everything else is a value we do not have, so it wins.
+  useEffect(() => {
+    if (mapSeed.hcp === hcpDocSig) return;
+    setMapSeed(s => ({ ...s, hcp: hcpDocSig }));
+    if (!hcpOverridesFromDb) return;
+    const hold = pendingSaveRef.current?.round === editRound ? editRound
+      : echoedSlice(lastWrittenRef.current, editRound, "ch_overrides", hcpOverridesFromDb[editRound]);
+    setHcpOverrides(adoptRoundMap(hcpOverridesFromDb, hold));
+  }, [hcpDocSig, mapSeed.hcp, hcpOverridesFromDb, editRound]);
+  useEffect(() => {
+    if (mapSeed.tee === teeDocSig) return;
+    setMapSeed(s => ({ ...s, tee: teeDocSig }));
+    if (!teeAssignmentsFromDb) return;
+    const hold = pendingSaveRef.current?.round === editRound ? editRound
+      : echoedSlice(lastWrittenRef.current, editRound, "tee_assignments", teeAssignmentsFromDb[editRound]);
+    setTeeAssignments(adoptRoundMap(teeAssignmentsFromDb, hold));
+  }, [teeDocSig, mapSeed.tee, teeAssignmentsFromDb, editRound]);
+
+  // True once the form reflects every document currently in hand. Until it
+  // is, "form differs from Firestore" means "hydration has not landed yet",
+  // not "the director changed something" — and auto-saving on that reading
+  // would write the pre-hydration form straight over the real data.
+  const formSeeded = seededRound && seed.sig === storedSettingsSig
+    && mapSeed.hcp === hcpDocSig && mapSeed.tee === teeDocSig;
+
+  const AUTOSAVE_MS = 700;
+  // Carries the round it refers to: the status line is per-round, and a
+  // director who switches tabs should not be told the round they just
+  // opened was saved.
+  const [autoSave, setAutoSave] = useState(null); // { phase: "saving"|"saved"|"error", round }
+
+  // The three documents the Save button used to write, in the same order.
+  const writeRound = useStableCallback(async ({ round, payload, sig }) => {
+    lastWrittenRef.current = { round, payload, sig };
+    setAutoSave({ phase: "saving", round });
+    try {
+      await db.upsert("bc_hcp_overrides", { id: editionDocId(`bc_hcp_r${round}`), tournament_id: TOURNAMENT_ID, round_number: round, ch_overrides: payload.ch_overrides });
+      await db.upsert("bc_tee_assignments", { id: editionDocId(`bc_tee_r${round}`), tournament_id: TOURNAMENT_ID, round_number: round, assignments: payload.tee_assignments });
+      await onSetRound({
+        id: editionDocId(`bc_round_${round}`),
+        tournament_id: TOURNAMENT_ID,
+        round_number: round,
+        course_id: payload.course_id,
+        format: payload.format,
+        handicap_mode: payload.handicap_mode,
+        tee_time: payload.tee_time,
+        nassau_front: payload.nassau_front,
+        nassau_back: payload.nassau_back,
+        nassau_overall: payload.nassau_overall,
+        scoring_type: payload.scoring_type,
+        allowance: payload.allowance,
+        counting_scores: payload.counting_scores,
+        hole_points: payload.hole_points,
+      });
+      setAutoSave({ phase: "saved", round });
+    } catch (err) {
+      console.error("Round auto-save failed", err);
+      lastWrittenRef.current = null;   // let the next edit retry
+      setAutoSave({ phase: "error", round });
+      notify(`Round ${round} could not be saved`, "error");
+    }
+  });
+
+  const flushRoundSave = useStableCallback(() => {
+    if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
+    const pending = pendingSaveRef.current;
+    pendingSaveRef.current = null;
+    if (pending) writeRound(pending);
+  });
+
+  // Arm the debounce. `formRound` only gets a new identity when something
+  // it is built from actually changed, so a re-render mid-write does not
+  // re-arm the timer and duplicate the write.
+  useEffect(() => {
+    if (!formSeeded) return;
+    if (roundIsFinal || !roundDirty) { pendingSaveRef.current = null; return; }
+    // Re-sending a payload we already wrote can only mean the two sides
+    // disagree about something the diff cannot reconcile. Stop, rather
+    // than trade writes with Firestore forever.
+    const written = lastWrittenRef.current;
+    if (written && written.round === editRound && written.sig === formSig) return;
+    pendingSaveRef.current = { round: editRound, payload: formRound, sig: formSig };
+    saveTimerRef.current = setTimeout(flushRoundSave, AUTOSAVE_MS);
+    return () => { if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; } };
+  }, [formSeeded, roundDirty, roundIsFinal, formRound, formSig, editRound, flushRoundSave]);
+
+  // Leaving the round (or the console) commits whatever is still queued.
+  // Declared after the debounce effect so its cleanup runs second: the
+  // timer is cancelled first, then the captured payload is written.
+  useEffect(() => () => flushRoundSave(), [editRound, flushRoundSave]);
+
+  // Which round the Matches tab is editing. The builder's own selection
+  // state lives in MatchSetup; this stays here so the chosen round survives
+  // a trip to another admin tab.
   const [matchRound, setMatchRound] = useState(1);
-  const [matchTeamA, setMatchTeamA] = useState([]);
-  const [matchTeamB, setMatchTeamB] = useState([]);
   const [showEditions, setShowEditions] = useState(false);
-
-  const teamAPlayers = tPlayers.filter(p => p.team === "A"); // used in match builder
-  const teamBPlayers = tPlayers.filter(p => p.team === "B");
 
   if (!user.isDirector) return (
     <div style={{ textAlign: "center", padding: 40 }}>
@@ -975,62 +1870,6 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
       <div style={{ fontSize: 12, color: BC.t3, marginTop: 8 }}>Only tournament directors can manage settings.</div>
     </div>
   );
-
-  const saveRound = async () => {
-    const tr = tRounds.find(t => t.round_number === editRound) || {};
-    // A final round is closed. Its overrides, tees and handicap mode are
-    // already frozen in the snapshot, so writing them back would only
-    // create a confusing mismatch between what the form shows and what the
-    // round actually scored with. Refuse rather than pretend.
-    if (isRoundFinal(roundLocks, editRound)) {
-      notify(`Round ${editRound} is final — unlock it first`, "error");
-      return;
-    }
-    // Always save per-round CH overrides (even if empty, to clear old values).
-    // Stored under `ch_overrides`; these are DIRECT Course-Handicap overrides.
-    const chOverrides = hcpOverrides[editRound] || {};
-    await db.upsert("bc_hcp_overrides", { id: editionDocId(`bc_hcp_r${editRound}`), tournament_id: TOURNAMENT_ID, round_number: editRound, ch_overrides: chOverrides });
-    // Save tee assignments
-    const assignments = teeAssignments[editRound] || {};
-    await db.upsert("bc_tee_assignments", { id: editionDocId(`bc_tee_r${editRound}`), tournament_id: TOURNAMENT_ID, round_number: editRound, assignments });
-    const data = {
-      id: editionDocId(`bc_round_${editRound}`),
-      tournament_id: TOURNAMENT_ID,
-      round_number: editRound,
-      course_id: tr?.course_id || "",
-      format: roundFormat || tr.format || DEFAULT_FORMAT,
-      handicap_mode: handicapMode[editRound] || "low_man",
-      tee_time: roundTeeTime || tr.tee_time || "",
-      nassau_front: nassau.front,
-      nassau_back: nassau.back,
-      nassau_overall: nassau.overall,
-      scoring_type: scoringType,
-    };
-    await onSetRound(data);
-    notify("Round saved!", "success");
-  };
-
-  const saveMatch = async () => {
-    if (matchTeamA.length === 0 || matchTeamB.length === 0) { notify("Select players for both teams", "error"); return; }
-    const mId = `bc_match_r${matchRound}_${matchTeamA.join("_")}_vs_${matchTeamB.join("_")}`;
-    const data = {
-      id: mId,
-      tournament_id: TOURNAMENT_ID,
-      round: matchRound,
-      teamA: matchTeamA,
-      teamB: matchTeamB,
-      teamANames: matchTeamA.map(pid => tPlayers.find(p => p.player_id === pid)?.name || pid),
-      teamBNames: matchTeamB.map(pid => tPlayers.find(p => p.player_id === pid)?.name || pid),
-      // `nassau` and `scoring_type` are deliberately NOT written here. They
-      // belong to the round, and a copy on the match only ever goes stale the
-      // moment the director changes the round's setup. App resolves both from
-      // the round doc when it enriches matches.
-    };
-    await onSetMatch(data);
-    setMatchTeamA([]); setMatchTeamB([]);
-    notify("Match created!", "success");
-  };
-
 
   // ── Course Search (ported from WBC) ──
   const TEE_COLOR_MAP = {
@@ -1151,13 +1990,11 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   return (
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
       <EditionSwitcher open={showEditions} onClose={() => setShowEditions(false)} />
-      {/* Tabs — sticky to the top of the scroll area so the bar stays in the
-          SAME place on every tab, regardless of that tab's content height.
-          (Before: the body's vertical centering placed short tabs mid-screen,
-          so the bar floated to a different spot per tab.) The sticky wrapper
-          is painted in the page bg and carries the bottom gap as padding, so
-          content scrolls cleanly UNDER it with nothing peeking through. */}
-      <div style={{ position: "sticky", top: 0, zIndex: 5, background: BC.bg, paddingBottom: 12, marginBottom: 4 }}>
+      {/* Tabs — pinned to the top of the scroll area so the bar stays in the
+          SAME place on every sub-tab, regardless of that tab's content
+          height, and in the same place the other views pin their own lead
+          control. See StickyTop for how the seam is painted. */}
+      <StickyTop style={{ marginBottom: 4 }}>
       <div style={{ display: "flex", gap: 4, background: BC.card, borderRadius: 12, padding: 4, border: `1px solid ${BC.bdr}` }}>
         {[["players","Players"],["rounds","Rounds"],["matches","Matches"],["courses","Courses"],["tournament","Tournament"]].map(([k, lbl]) => (
           <button key={k} onClick={() => setTab(k)} style={{
@@ -1167,7 +2004,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
           }}>{lbl}</button>
         ))}
       </div>
-      </div>
+      </StickyTop>
 
       {tab === "players" && (
         <div>
@@ -1385,7 +2222,25 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 </div>
                 <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderTop: `1px solid ${BC.bdr}` }}>
                   {!isNew && (
-                    <button onClick={async () => { if (await confirm({ title: `Remove ${fullName(p)}?`, message: "This deletes the player from this edition.", confirmLabel: "Delete", destructive: true })) { onRemovePlayer(p.player_id); close(); } }}
+                    <button onClick={async () => {
+                      // Same cascade as deleting a match, from the other end.
+                      // The player document goes; their matches and their
+                      // posted holes do not. A match keeps the name it was
+                      // built with, but the roster row that carried the
+                      // handicap is gone — so in any round not yet locked
+                      // they'd be re-derived at scratch.
+                      const inMatches = matches.filter(m => [...(m.teamA || []), ...(m.teamB || [])].includes(p.player_id));
+                      const scored = [1, 2, 3, 4]
+                        .map(r => ({ r, holes: holesEntered(holeData, p.player_id, r) }))
+                        .filter(x => x.holes > 0);
+                      const msg = ["This deletes the player from this edition."];
+                      if (inMatches.length) {
+                        msg.push("", `Still drawn into ${inMatches.length} match${inMatches.length === 1 ? "" : "es"} (${inMatches.map(m => `M${m.matchNumber ?? "?"}`).join(", ")}). Those matches keep the name but lose the handicap behind it — any round not yet locked would re-derive them at scratch. Delete or re-draw the matches too.`);
+                      }
+                      if (scored.length) {
+                        msg.push("", `${scored.reduce((n, s) => n + s.holes, 0)} scored hole${scored.reduce((n, s) => n + s.holes, 0) === 1 ? "" : "s"} stay in the database (${scored.map(s => `Rd ${s.r}: ${s.holes}`).join(", ")}).`);
+                      }
+                      if (await confirm({ title: `Remove ${fullName(p)}?`, message: msg.join("\n"), confirmLabel: "Delete", destructive: true })) { onRemovePlayer(p.player_id); close(); } }}
                       title="Delete player" style={{ flexShrink: 0, padding: "9px 11px", borderRadius: 10, background: "transparent", border: `1px solid ${BC.danger}55`, color: BC.danger, fontSize: 14, fontWeight: 700, cursor: "pointer", lineHeight: 1 }}>🗑</button>
                   )}
                   <span style={{ flex: 1 }} />
@@ -1401,21 +2256,12 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
       {tab === "rounds" && (
         <div>
           <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+            {/* Switching round is all these do. The hydration effect re-seeds
+                the form from Firestore — including for a round with no
+                document yet, which the old inline loader skipped, leaving
+                the previous round's settings on screen. */}
             {[1,2,3,4].map(r => (
-              <button key={r} onClick={() => {
-                setEditRound(r);
-                const tr = tRounds.find(t => t.round_number === r);
-                if (tr) {
-                  setRoundFormat(tr.format || DEFAULT_FORMAT);
-                  setRoundCourse(tr.course_id || "");
-                  setRoundTeeTime(tr.tee_time || "");
-                  setNassau({ front: tr.nassau_front || 1, back: tr.nassau_back || 1, overall: tr.nassau_overall || 1 });
-                  setScoringType(tr.scoring_type || "match");
-                }
-                // Load existing overrides and handicap mode for this round
-                setHcpOverrides(prev => ({ ...prev }));
-                if (tr?.handicap_mode) setHandicapMode(prev => ({ ...prev, [r]: tr.handicap_mode }));
-              }} style={{
+              <button key={r} onClick={() => setEditRound(r)} style={{
                 flex: 1, padding: "8px 4px", borderRadius: 10, fontSize: 11, fontWeight: 700, cursor: "pointer",
                 background: editRound === r ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
                 border: `1px solid ${editRound === r ? "transparent" : BC.bdr}`,
@@ -1432,6 +2278,15 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   const fmt = FORMATS.find(f => f.id === e.target.value);
                   setRoundFormat(e.target.value);
                   if (fmt?.nassau) setNassau(fmt.nassau);
+                  // Allowances are format-specific — a Scramble's 35/15 means
+                  // nothing on a Singles round. Changing format puts the
+                  // allowance back to off, so the new format's terms are a
+                  // decision rather than an inheritance.
+                  setAllowance(null);
+                  // Same for the counting scores — only Team Best Ball has
+                  // them, and coming back to it should start from what the
+                  // format calls for rather than a stale pair.
+                  setCounting(null);
                 }} style={{ ...InputStyle, marginBottom: 0, fontSize: 12, padding: "8px 8px", height: 38 }}>
                   <option value="">Select...</option>
                   {FORMATS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
@@ -1454,67 +2309,43 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             {/* Tee Times */}
 
             {(() => {
-              const parseTime = (str) => {
-                if (!str) return null;
-                const clean = str.trim();
-                // Check for explicit AM/PM
-                const apMatch = clean.match(/[aApP][mM]/);
-                const ap = apMatch ? apMatch[0].toLowerCase() : null;
-                const digits = clean.replace(/[^0-9]/g, "");
-                if (!digits) return null;
-                let h, min;
-                // Interpret digit sequences: 1=1:00, 12=12:00, 110=1:10, 800=8:00, 1230=12:30
-                if (digits.length <= 2) {
-                  h = parseInt(digits); min = 0;
-                } else if (digits.length === 3) {
-                  h = parseInt(digits[0]); min = parseInt(digits.slice(1));
-                } else {
-                  h = parseInt(digits.slice(0, 2)); min = parseInt(digits.slice(2, 4));
-                }
-                if (ap === "pm" && h !== 12) h += 12;
-                else if (ap === "am" && h === 12) h = 0;
-                else if (!ap) {
-                  // No AM/PM: golf is morning, assume AM for 5-11, PM for 1-4, keep 12
-                  if (h >= 1 && h <= 4) h += 12;
-                }
-                return h * 60 + min;
-              };
-              const formatTime = (mins) => {
-                if (mins == null) return "";
-                let h = Math.floor(mins / 60) % 24, m = mins % 60;
-                const ap = h >= 12 ? "PM" : "AM";
-                if (h > 12) h -= 12;
-                if (h === 0) h = 12;
-                return `${h}:${String(m).padStart(2,"0")}`;
-              };
+              // Time parsing/formatting is shared with the Matches tab (see
+              // lib/groups.js) so the two editors of this one field can never
+              // disagree about what "830" means.
               const stripAMPM = (s) => s ? s.replace(/\s*(AM|PM)/gi, "").trim() : s;
               const teeTimes = roundTeeTime ? roundTeeTime.split("|") : ["","","",""];
+              // The Matches tab can add groups beyond the four shown here.
+              // Their times live in the same list and must survive an edit.
+              const slots = Math.max(teeTimes.length, 4);
+              // The spread to keep when the FIRST tee moves, measured from the
+              // later slots. It cannot be measured from times[1] - times[0]:
+              // the box writes through on every keystroke, so by the time this
+              // runs times[0] is already the new value and that subtraction
+              // measures the edit itself. (It did — typing 7:00 over an 8:30
+              // first tee against an 8:45 second read as a 105-minute spread
+              // and laid the field out to 12:15.)
+              const laterSpread = (times) => {
+                for (let i = 1; i + 1 < times.length; i++) {
+                  const a = parseTeeTime(times[i]), b = parseTeeTime(times[i + 1]);
+                  if (a != null && b != null && b > a) return b - a;
+                }
+                return DEFAULT_TEE_INTERVAL;
+              };
               const commitTime = (idx, val) => {
                 const times = [...teeTimes];
-                // Auto-complete
-                if (val && !/[aApP][mM]/.test(val)) {
-                  const mins = parseTime(val);
-                  times[idx] = mins != null ? formatTime(mins) : val;
-                } else {
-                  times[idx] = val;
-                }
-                // Propagate from idx 0 or 1
-                if (idx === 0) {
-                  const t0 = parseTime(times[0]);
-                  if (t0 != null) {
-                    // Default 10-minute spread between groups (overridden the
-                    // moment the director edits group 2 — see the idx===1 branch).
-                    times[1] = formatTime(t0 + 10);
-                    times[2] = formatTime(t0 + 20);
-                    times[3] = formatTime(t0 + 30);
-                  }
-                } else if (idx === 1) {
-                  const t0 = parseTime(times[0]);
-                  const t1 = parseTime(times[1]);
-                  if (t0 != null && t1 != null) {
-                    const iv = t1 - t0;
-                    times[2] = formatTime(t1 + iv);
-                    times[3] = formatTime(t1 + iv * 2);
+                while (times.length < slots) times.push("");
+                const iv = laterSpread(times);
+                const mins = parseTeeTime(val);
+                times[idx] = mins != null ? formatTeeTime(mins) : val;
+                // Editing the first tee moves the whole sheet; editing the
+                // second sets the spread and re-lays everything after it.
+                const t0 = parseTeeTime(times[0]);
+                if (idx === 0 && t0 != null) {
+                  for (let i = 1; i < slots; i++) times[i] = formatTeeTime(t0 + iv * i);
+                } else if (idx === 1 && t0 != null) {
+                  const t1 = parseTeeTime(times[1]);
+                  if (t1 != null && t1 > t0) {
+                    for (let i = 2; i < slots; i++) times[i] = formatTeeTime(t0 + (t1 - t0) * i);
                   }
                 }
                 setRoundTeeTime(times.join("|"));
@@ -1541,21 +2372,151 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               );
             })()}
 
+            {/* ── Counting scores ─────────────────────────────────────────
+                Team Best Ball only, and the setting that actually defines it.
+                The whole side plays one match and a hole is the SUM of that
+                side's best N nets.
+
+                N is PER HOLE. The count has moved around for years — the front
+                has run 5 and 6, the back 6 and 7 — and the old sheets ramped it
+                up inside each nine rather than holding one figure across it. So
+                the nine box is the shortcut (type once, set all nine) and the
+                18-hole grid underneath is the truth.
+
+                No off switch, unlike the allowance: a Team Best Ball round is
+                always counting some number, so the only question is which.
+                Shown only when the format asks for it (constants.FORMATS
+                carries the `counting` prefill), so every other round's form is
+                exactly as it was. */}
+            {(() => {
+              const fmtId = roundFormat || tRounds.find(t => t.round_number === editRound)?.format || DEFAULT_FORMAT;
+              if (!formatCountsScores(fmtId)) return null;
+              const prefill = countingDefaultFor(fmtId);
+              const cur = resolveCounting(fmtId, counting);   // 18 numbers, always
+              // How many a side actually fields, for the "of N" hint and the
+              // over-count warning. Read off the round's matches when they
+              // exist — that is the roster that will be scored — and off the
+              // smaller team otherwise, so the hint is right during setup too.
+              const rndMatches = matches.filter(m => m.round === editRound);
+              const sideSize = rndMatches.length
+                ? Math.max(...rndMatches.flatMap(m => [m.teamA?.length || 0, m.teamB?.length || 0]))
+                : Math.min(
+                    tPlayers.filter(p => p.team === "A").length,
+                    tPlayers.filter(p => p.team === "B").length,
+                  );
+              const writeHoles = (holes) => setCounting({ holes });
+              const setHole = (h, v) => {
+                const n = parseInt(v, 10);
+                const next = [...cur];
+                next[h] = Number.isFinite(n) && n >= 1 ? n : prefill[h < 9 ? "front" : "back"];
+                writeHoles(next);
+              };
+              // The nine box sets all nine of its holes at once. It shows the
+              // shared count when the nine is flat and blanks (placeholder
+              // "mixed") when it ramps, so it never claims a single figure the
+              // holes below disagree with.
+              const setNine = (back, v) => {
+                const n = parseInt(v, 10);
+                if (!Number.isFinite(n) || n < 1) return;
+                const next = [...cur];
+                for (let h = back ? 9 : 0; h < (back ? 18 : 9); h++) next[h] = n;
+                writeHoles(next);
+              };
+              const nineBox = (back, lbl, hint) => {
+                const flat = countingNine(cur, back);
+                return (
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <span title={hint} style={{ fontSize: 9, color: BC.t3, flexShrink: 0, fontWeight: 600 }}>{lbl}</span>
+                    <input
+                      type="number" step="1" min="1" max="20"
+                      value={flat == null ? "" : String(flat)}
+                      placeholder="—"
+                      onChange={e => setNine(back, e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                      style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: 14, textAlign: "center", width: 44 }} />
+                  </div>
+                );
+              };
+              // Two rows of nine, on the same geometry as the hole strips
+              // everywhere else in the app, so hole 1 is where hole 1 always is.
+              const holeRow = (back) => (
+                <div style={{ display: "flex", gap: 2, marginTop: 4 }}>
+                  {Array.from({ length: 9 }, (_, i) => {
+                    const h = back ? i + 9 : i;
+                    const capped = sideSize > 0 && cur[h] > sideSize;
+                    return (
+                      <div key={h} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
+                        <span style={{ fontSize: 8, color: BC.t3, fontWeight: 700 }}>{h + 1}</span>
+                        <input
+                          type="number" step="1" min="1" max="20"
+                          value={String(cur[h])}
+                          onChange={e => setHole(h, e.target.value)}
+                          onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                          style={{
+                            ...InputStyle, marginBottom: 0, padding: "3px 0", fontSize: 13,
+                            textAlign: "center", width: "100%", minWidth: 0,
+                            color: capped ? BC.amber : undefined,
+                            border: `1px solid ${capped ? BC.amber + "66" : BC.bdr}`,
+                          }} />
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+              // A count bigger than the side fields is scored at the side size
+              // (see scoring.js) rather than stalling the hole — say so here,
+              // because the numbers on screen would otherwise be a lie.
+              const over = sideSize > 0 && cur.some(n => n > sideSize);
+              return (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>COUNTING</div>
+                    {nineBox(false, "F9", "Set every front-nine hole at once")}
+                    {nineBox(true, "B9", "Set every back-nine hole at once")}
+                    {sideSize > 0 && (
+                      <span style={{ fontSize: 9, color: BC.t3, fontWeight: 600 }}>of {sideSize} a side</span>
+                    )}
+                  </div>
+                  {holeRow(false)}
+                  {holeRow(true)}
+                  <div style={{ fontSize: 9, color: over ? BC.amber : BC.t3, lineHeight: 1.5, marginTop: 5 }}>
+                    {over
+                      ? `Only ${sideSize} play${sideSize === 1 ? "s" : ""} a side — the holes above ${sideSize} score as all ${sideSize}.`
+                      : "Each hole is the sum of the side's best N nets, where N is that hole's count."}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* ── Scoring ──────────────────────────────────────────────────
-                Match (win/halve holes) vs Medal (the running total decides
-                it: fewest net strokes, or most dots on Double Dot, or most
-                points on Stableford; stored as "stroke") vs Team (team best
-                ball — best net per side per hole, scored as match play),
-                then Single vs Nassau. All share the nassau
-                {front,back,overall} pots:
+                Three ways to settle a round:
+                  • Match — the side that wins more holes takes each pot.
+                  • Medal — the running total over each segment takes it:
+                            fewest net strokes, most dots on Double Dot, most
+                            points on Stableford. Stored as "stroke".
+                  • Team  — team best ball: each side's hole score is its
+                            best individual net, settled on holes won like
+                            Match, whatever the round format's own per-hole
+                            method would be.
+
+                All three split into Single vs Nassau and share the nassau
+                {front,back,overall} pots. (A fourth stored value, "points" —
+                every hole its own pot — remains scoreable for rounds saved
+                while the toggle offered it, but is no longer offered.)
                   • Nassau → three segments (F9 / B9 / OVR)
                   • Single → one 18-hole pot worth `value` (overall-only)
+                Points has neither — its POINTS row asks what a hole is worth on
+                each nine instead, which is the Bourbon Cup's final round: 1 a
+                hole out, 2 a hole in, 27 on the round.
+
                 `scoring_type` lives on the ROUND and nowhere else — App reads
                 it off the round doc when enriching matches, so changing it
                 here takes effect on every match in the round immediately.
-                The Total branch lives in scoring.js computeMatchResult. */}
+                All three branches live in scoring.js computeMatchResult. */}
             {(() => {
               const isSingle = (nassau.front || 0) === 0 && (nassau.back || 0) === 0;
+              const perHole = isPointsPerHole(scoringType);
+              const hp = resolveHolePoints(holePoints);
               const pill = (active, disabled) => ({
                 padding: "4px 12px", borderRadius: 16, fontSize: 10, fontWeight: 700, border: "none",
                 cursor: disabled ? "not-allowed" : "pointer",
@@ -1571,34 +2532,188 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: 14, textAlign: "center", width: 44 }} />
                 </div>
               );
+              // Same box, pointed at the hole values instead of the pots.
+              const holeField = (k, lbl, hint) => (
+                <div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                  <span title={hint} style={{ fontSize: 9, color: BC.t3, flexShrink: 0 }}>{lbl}</span>
+                  <input type="number" step="0.5" min="0" value={String(hp[k])}
+                    onChange={e => setHolePoints({ ...hp, [k]: e.target.value })}
+                    onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                    style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: 14, textAlign: "center", width: 44 }} />
+                </div>
+              );
               return (
                 <div style={{ marginBottom: 12 }}>
+                  {/* How the round is settled, and into how many pots. Both are
+                      the same question asked twice, so they share a row; the
+                      pot VALUES get their own line below because they're the
+                      only thing here you type rather than tap. Low Man / All
+                      used to sit on this row — it's a handicap term, and now
+                      lives with the allowance it's applied after. */}
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>SCORING</div>
                     {/* Match / Medal / Team */}
                     <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}` }}>
-                      <button onClick={() => setScoringType("match")} title="Match play — the side that wins more holes takes each pot" style={pill(scoringType === "match", false)}>Match</button>
-                      <button onClick={() => setScoringType("stroke")} title={`Medal — the running total of ${totalUnit(roundFormat || tRounds.find(t => t.round_number === editRound)?.format || DEFAULT_FORMAT)} over each segment decides the pot, not holes won`} style={pill(scoringType === "stroke", false)}>Medal</button>
-                      <button onClick={() => setScoringType("team")} title="Team best ball — each side counts its best net ball per hole, scored as match play" style={pill(scoringType === "team", false)}>Team</button>
+                      <button onClick={() => setScoringType(SCORING_TYPE_MATCH)} title="Match play — the side that wins more holes takes each pot" style={pill(scoringType === SCORING_TYPE_MATCH, false)}>Match</button>
+                      <button onClick={() => setScoringType(SCORING_TYPE_TOTAL)} title={`Medal — the running total of ${totalUnit(roundFormat || tRounds.find(t => t.round_number === editRound)?.format || DEFAULT_FORMAT)} over each segment decides the pot, not holes won`} style={pill(scoringType === SCORING_TYPE_TOTAL, false)}>Medal</button>
+                      <button onClick={() => setScoringType(SCORING_TYPE_TEAM)} title="Team best ball — each side counts its best net ball per hole, scored as match play" style={pill(scoringType === SCORING_TYPE_TEAM, false)}>Team</button>
                     </div>
-                    {/* Low Man / All (handicap allocation) */}
-                    <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}`, marginLeft: "auto" }}>
+                    {/* Single vs Nassau — pots only, so a Points round has no
+                        use for it and it stands down rather than sitting there
+                        offering a choice that changes nothing. */}
+                    {!perHole && (
+                      <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}` }}>
+                        <button onClick={() => setNassau(n => ({ front: 0, back: 0, overall: n.overall || 1 }))} style={pill(isSingle, false)}>Single</button>
+                        <button onClick={() => setNassau(n => ({ front: n.front || 1, back: n.back || 1, overall: n.overall || 1 }))} style={pill(!isSingle, false)}>Nassau</button>
+                      </div>
+                    )}
+                  </div>
+                  {/* What each pot is worth — or, on a Points round, what one
+                      hole on each nine is worth. */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>POINTS</div>
+                    {perHole
+                      ? [
+                          holeField("front", "F9", "What one front-nine hole is worth"),
+                          holeField("back", "B9", "What one back-nine hole is worth"),
+                          <span key="tot" style={{ fontSize: 9, color: BC.t3, fontWeight: 600 }}>
+                            a hole · {holePointsTotal(hp)} on the round
+                          </span>,
+                        ]
+                      : isSingle
+                        ? numField("overall", "Value")
+                        : [["front", "F9"], ["back", "B9"], ["overall", "OVR"]].map(([k, lbl]) => numField(k, lbl))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── Handicap ───────────────────────────────────────────────
+                Every stroke in the round comes from this one row, in the
+                order it reads: the ALLOWANCE decides how much of each
+                player's Course Handicap comes to the tee at all, then LOW MAN
+                / ALL decides whether they play the difference off the lowest
+                figure in the match or the whole thing. Both are handicap
+                terms; they belong on one line, in the order they're applied.
+
+                The allowance is OFF until the director turns it on — one that
+                switched itself on would be taking strokes off a round nobody
+                configured, and the director would have no reason to go
+                looking for it. Off means 100%: full handicaps, as before
+                allowances existed.
+
+                ON prefills what the FORMAT calls for, and the format decides
+                what it even asks (see constants.FORMATS):
+                  • ALL — one percentage, every player.
+                  • LOW / HIGH — the low handicap on each side plays off the
+                    first, their partner off the second. This is the shape for
+                    the formats where a side effectively plays one ball.
+                Both settings are stored on the round doc and frozen into the
+                lock snapshot. */}
+            {(() => {
+              const fmtId = roundFormat || tRounds.find(t => t.round_number === editRound)?.format || DEFAULT_FORMAT;
+              const fmt = FORMATS.find(f => f.id === fmtId);
+              const prefill = allowanceDefaultFor(fmtId);       // what ON starts at
+              const cur = resolveAllowance(fmtId, allowance);   // what the round scores with
+              const on = cur.enabled;
+              // Field values read from the RAW state when the director has
+              // typed something, so clearing a box leaves it empty instead of
+              // snapping back mid-keystroke. An empty box resolves to the
+              // format's prefill when the round is saved.
+              const fieldVal = (k) => {
+                const v = allowance?.[k];
+                return v === undefined || v === null ? String(prefill[k]) : String(v);
+              };
+              const setField = (k, v) => setAllowance(prev => ({ ...prefill, ...(prev || {}), enabled: true, [k]: v }));
+              // Same pill as the SCORING toggles, so neither toggle on this
+              // row changes shape by moving rows.
+              const pctPill = (active, disabled = false) => ({
+                padding: "4px 12px", borderRadius: 16, fontSize: 10, fontWeight: 700, border: "none",
+                cursor: disabled ? "not-allowed" : "pointer",
+                background: active ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
+                color: active ? "#0a0804" : BC.t3,
+              });
+              const pctField = (k, lbl, hint) => (
+                <div key={k} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <span title={hint} style={{ fontSize: 9, color: BC.t3, flexShrink: 0, fontWeight: 600 }}>{lbl}</span>
+                  <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                    <input
+                      type="number" step="5" min="0" max="150"
+                      disabled={roundIsFinal}
+                      value={fieldVal(k)}
+                      onChange={e => setField(k, e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                      style={{
+                        ...InputStyle, marginBottom: 0, padding: "4px 16px 4px 6px", fontSize: 14,
+                        textAlign: "center", width: 58,
+                        opacity: roundIsFinal ? 0.5 : 1, cursor: roundIsFinal ? "not-allowed" : "text",
+                      }} />
+                    <span style={{ position: "absolute", right: 6, fontSize: 10, color: BC.t3, pointerEvents: "none" }}>%</span>
+                  </div>
+                </div>
+              );
+              // ON adopts the format's recommended figures rather than an
+              // empty form — a director who wants the standard terms is one
+              // tap away, and one who doesn't has somewhere to type over.
+              const setOn = (next) => {
+                if (roundIsFinal) return;
+                setAllowance(next ? { enabled: true, ...prefill } : { enabled: false });
+              };
+              return (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>HANDICAP</div>
+                    {/* Allowance off/on. First on the row because it decides
+                        whether the percentages beside it exist at all. */}
+                    <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}` }}>
+                      <button onClick={() => setOn(false)}
+                        title={cur.shared
+                          ? `No allowance — the side plays one ball off both partners' full Course Handicaps added together`
+                          : "No allowance — every player plays their full Course Handicap"}
+                        style={pctPill(!on, roundIsFinal)}>Off</button>
+                      <button onClick={() => setOn(true)}
+                        title={`Reduce handicaps — ${fmt?.label || "this format"} plays off ${describeAllowance(resolveAllowance(fmtId, { enabled: true, ...prefill }))}`}
+                        style={pctPill(on, roundIsFinal)}>On</button>
+                    </div>
+                    {on && (cur.split
+                      ? [
+                          pctField("low", "LOW", "The lower Course Handicap on each side"),
+                          pctField("high", "HIGH", "The higher Course Handicap on each side"),
+                        ]
+                      : pctField("pct", "ALL", "Applied to every player's Course Handicap"))}
+                    {/* Low Man / All — the second half of the same decision,
+                        sitting immediately after the percentages so the row
+                        reads in the order the two are applied. Deliberately
+                        NOT pushed to the right edge: a split allowance fills
+                        the row and the toggle wraps, and a lone toggle
+                        right-aligned on its own line reads as orphaned rather
+                        than as the continuation it is. */}
+                    <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}` }}>
                       {[["low_man", "Low Man"], ["full", "All"]].map(([val, lbl]) => (
-                        <button key={val} onClick={() => setHandicapMode(prev => ({ ...prev, [editRound]: val }))}
-                          style={pill((handicapMode[editRound] || "low_man") === val, false)}>{lbl}</button>
+                        <button key={val}
+                          onClick={() => setHandicapMode(prev => ({ ...prev, [editRound]: val }))}
+                          title={val === "low_man"
+                            ? "Everyone plays the difference off the lowest Course Handicap in the match"
+                            : "Everyone plays their full Course Handicap"}
+                          style={pctPill((handicapMode[editRound] || "low_man") === val)}>{lbl}</button>
                       ))}
                     </div>
                   </div>
-                  {/* Match structure: Single vs Nassau + the value field(s) */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                    <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}` }}>
-                      <button onClick={() => setNassau(n => ({ front: 0, back: 0, overall: n.overall || 1 }))} style={pill(isSingle, false)}>Single</button>
-                      <button onClick={() => setNassau(n => ({ front: n.front || 1, back: n.back || 1, overall: n.overall || 1 }))} style={pill(!isSingle, false)}>Nassau</button>
+                  {/* The one case the tooltips can't carry on their own: a
+                      side that plays ONE ball has a team handicap of its
+                      partners added together, so leaving the allowance off
+                      hands out a number nobody would have chosen. Said only
+                      where it applies, and only while it applies. */}
+                  {!on && cur.shared && (
+                    <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
+                      {fmt?.label || "This format"} plays one ball per side, so with no allowance the side's team handicap is both partners' full handicaps added together.
                     </div>
-                    {isSingle
-                      ? numField("overall", "Value")
-                      : [["front", "F9"], ["back", "B9"], ["overall", "OVR"]].map(([k, lbl]) => numField(k, lbl))}
-                  </div>
+                  )}
+                  {roundIsLocked && (
+                    <div style={{ fontSize: 9, color: roundIsFinal ? BC.danger : BC.amber, marginTop: 4 }}>
+                      Round {editRound} is locked — the allowance it scored with is frozen in the snapshot, so a change here will not move it.
+                    </div>
+                  )}
                 </div>
               );
             })()}
@@ -1615,6 +2730,36 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 const tees2h = course2h?.tee_boxes || [];
                 // Grid: name | init | round-input | tee-dots... | delta
                 const gridCols = `1fr 30px 58px ${tees2h.map(() => "22px").join(" ")} 22px`;
+                const assignedH = teeAssignments[editRound] || {};
+                const teeOf = (pid) => assignedH[pid] || tees2h[0]?.name;
+
+                // ── Everyone plays ──
+                // Sixteen players onto the White tees was sixteen taps, and
+                // the round-by-round reality is that a field plays one tee and
+                // a handful move off it. So the whole field is one tap and the
+                // exceptions stay individual: this writes every player, and
+                // any per-player dot below still overrides its own row after.
+                //
+                // Each player gets the same CH-delta badge a single tee tap
+                // raises — a field-wide change moves everyone's strokes, which
+                // is exactly when seeing the movement matters most.
+                const assignAllTees = (teeName) => {
+                  if (roundIsFinal) return;
+                  const newTee = tees2h.find(t => t.name === teeName);
+                  tPlayers.forEach(p => {
+                    const oldTee = tees2h.find(t => t.name === teeOf(p.player_id));
+                    if (!oldTee || !newTee || oldTee.name === newTee.name) return;
+                    const hi = getEffectiveHI(p.player_id, tPlayers);
+                    const chOf = (t) => calcCH(hi, t.slope || 113, t.rating || 72, t.par || 72);
+                    showChDelta(`tee_${editRound}_${p.player_id}`, chOf(newTee) - chOf(oldTee));
+                  });
+                  setTeeAssignments(prev => {
+                    const next = { ...(prev[editRound] || {}) };
+                    tPlayers.forEach(p => { next[p.player_id] = teeName; });
+                    return { ...prev, [editRound]: next };
+                  });
+                };
+
                 return (
                   <div>
                     <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: 4, padding: "0 2px", marginBottom: 4, alignItems: "center" }}>
@@ -1626,6 +2771,37 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         : null}
                       <div />
                     </div>
+                    {tees2h.length > 0 && (
+                      <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: 4, padding: "0 2px", marginBottom: 6, alignItems: "center" }}>
+                        <div style={{ fontSize: 9, color: BC.t3, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          Everyone plays
+                        </div>
+                        <div />
+                        <div />
+                        {tees2h.map((tee, ti) => {
+                          // Lit only when the whole field is genuinely on this
+                          // tee — so the row doubles as the answer to "is
+                          // anyone off the default?" without opening a row.
+                          const allOn = tPlayers.every(p => teeOf(p.player_id) === tee.name);
+                          return (
+                            <button key={tee.name} disabled={roundIsFinal}
+                              onClick={() => assignAllTees(tee.name)}
+                              title={`Move every player to ${tee.name}`}
+                              style={{
+                                background: "transparent", border: "none", padding: 0,
+                                cursor: roundIsFinal ? "not-allowed" : "pointer",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                opacity: roundIsFinal ? (allOn ? 0.55 : 0.2) : (allOn ? 1 : 0.35),
+                                transform: allOn ? "scale(1.15)" : "scale(0.85)",
+                                transition: "all 0.15s ease",
+                              }}>
+                              <TeeCircle tee={tee} index={ti} size={14} active={allOn} />
+                            </button>
+                          );
+                        })}
+                        <div />
+                      </div>
+                    )}
                   </div>
                 );
               })()}
@@ -1648,6 +2824,16 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     // effective index + assigned tee. Used as the input placeholder
                     // and as the baseline the override delta is measured against.
                     const calcedCH = course2 ? calcCHForCourse(parseFloat(effHI) || 0, course2, currentTee2) : null;
+                    // A manual CH is a standing condition, not an event: for as
+                    // long as one is in force, the arrow states how far the round
+                    // is being played from the calculated handicap. So it is
+                    // derived from the override itself and lives exactly as long
+                    // as the override does — including across a reload, where a
+                    // notification-style badge would have shown nothing at all.
+                    const overrideCH = hasOverride ? parseFloat(override) : NaN;
+                    const overrideDelta = (Number.isFinite(overrideCH) && calcedCH != null)
+                      ? overrideCH - calcedCH
+                      : null;
                     const assignTee2 = (teeName) => {
                       const oldTee = tees2.find(t => t.name === (assignments2[p.player_id] || tees2[0]?.name));
                       const newTee = tees2.find(t => t.name === teeName);
@@ -1671,13 +2857,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                           value={hasOverride ? override : ""}
                           onChange={e => {
                             if (roundIsFinal) return;
-                            const newVal = e.target.value;
-                            // Delta badge measures the direct-CH override against the
-                            // CH the app would otherwise calculate for this round.
-                            if (calcedCH != null && newVal !== "") {
-                              showChDelta(`hcp_${editRound}_${p.player_id}`, (parseFloat(newVal) || 0) - calcedCH);
-                            }
-                            setHcpOverrides(prev => ({ ...prev, [editRound]: { ...(prev[editRound]||{}), [p.player_id]: newVal } }));
+                            setHcpOverrides(prev => ({ ...prev, [editRound]: { ...(prev[editRound]||{}), [p.player_id]: e.target.value } }));
                           }}
                           placeholder={calcedCH != null ? String(calcedCH) : "CH"}
                           style={{ padding: "5px 8px", background: hasOverride ? BC.amber+"15" : BC.inp, border: `1px solid ${hasOverride ? BC.amber : BC.bdr}`, borderRadius: 6, color: hasOverride ? BC.amber : BC.t2, fontSize: 12, fontWeight: hasOverride ? 700 : 400, outline: "none", textAlign: "center", opacity: roundIsFinal ? 0.5 : 1, cursor: roundIsFinal ? "not-allowed" : "text" }}
@@ -1698,10 +2878,17 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                             </button>
                           );
                         })}
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          {chDeltas[`hcp_${editRound}_${p.player_id}`] !== undefined && (
-                            <ChDeltaBadge delta={chDeltas[`hcp_${editRound}_${p.player_id}`]} />
-                          )}
+                        {/* Standing override delta wins over the passing one a
+                            tee change raises — once a manual CH is set the tee
+                            no longer decides this player's strokes. */}
+                        <div
+                          title={overrideDelta != null ? `Manual CH ${overrideCH} — calculated is ${calcedCH}` : undefined}
+                          style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          {overrideDelta != null
+                            ? <ChDeltaBadge delta={overrideDelta} />
+                            : chDeltas[`tee_${editRound}_${p.player_id}`] !== undefined && (
+                                <ChDeltaBadge delta={chDeltas[`tee_${editRound}_${p.player_id}`]} />
+                              )}
                         </div>
                       </div>
                     );
@@ -1710,157 +2897,60 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               ))}
             </div>
 
-            <button onClick={saveRound} style={BtnStyle}>Save Round {editRound}</button>
+            {/* Auto-save status. Stands in for the old Save button: the
+                only thing a director still needs from it is confidence
+                that the edit landed. */}
+            {(() => {
+              const phase = autoSave?.round === editRound ? autoSave.phase : null;
+              const [text, color] = roundIsFinal
+                ? [`Round ${editRound} is final — changes are not saved`, BC.danger]
+                : phase === "error"
+                  ? [`Round ${editRound} could not be saved — retrying on your next edit`, BC.danger]
+                  : phase === "saving" || (roundDirty && formSeeded)
+                    ? ["Saving…", BC.amber]
+                    : phase === "saved"
+                      ? [`Round ${editRound} saved`, BC.t3]
+                      : ["Changes save automatically", BC.t3];
+              return (
+                <div style={{
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  padding: "8px 0 2px", fontSize: 10, fontWeight: 700, letterSpacing: 0.5, color,
+                }}>
+                  <span style={{
+                    width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                    background: color, opacity: color === BC.t3 ? 0.5 : 1,
+                  }} />
+                  {text}
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
 
-      {tab === "matches" && (() => {
-        const tr = tRounds.find(t => t.round_number === matchRound);
-        const mLock = lockForRound(roundLocks, matchRound);
-        const course = courses.find(c => c.id === (mLock?.course_id || tr?.course_id));
-        const hcpMode = getRoundHandicapMode({ roundLocks, round: matchRound, tRounds });
-
-        // CH preview for the match builder. Routed through the same resolver
-        // the scoring engine uses, so once a round is locked this panel shows
-        // the strokes that will ACTUALLY be played — not a live re-derivation
-        // that would disagree with the leaderboard.
-        const getPlayerCH = (pid) => getRoundCH({
-          roundLocks, round: matchRound, pid, players: tPlayers,
-          course, chOverrides: hcpOverrides, teeAssignments, roundTee: tr?.tee_box,
-        });
-
-        // Stroke situation: given selected players, compute who gets strokes vs who
-        const strokeSituation = () => {
-          const allPids = [...matchTeamA, ...matchTeamB];
-          if (allPids.length < 2) return null;
-          const chs = allPids.map(pid => ({ pid, ch: getPlayerCH(pid) }));
-          const minCH = Math.min(...chs.map(c => c.ch));
-          if (hcpMode === "full") {
-            return chs.map(({pid, ch}) => ({ pid, strokes: ch }));
-          }
-          return chs.map(({pid, ch}) => ({ pid, strokes: ch - minCH }));
-        };
-
-        const allSelected = [...matchTeamA, ...matchTeamB];
-        const strokes = strokeSituation();
-
-        // Players already committed to a match in THIS round drop out of the
-        // pool — a player plays one match per round, so offering them again
-        // only invites double-booking. Derived from `matches`, so deleting a
-        // match below hands its players straight back.
-        const matchedPids = new Set(
-          matches.filter(m => m.round === matchRound).flatMap(m => [...(m.teamA || []), ...(m.teamB || [])])
-        );
-        // An in-progress selection stays visible even if somehow already
-        // matched, otherwise it could never be tapped off again.
-        const availablePlayers = (players, sel) =>
-          players.filter(p => !matchedPids.has(p.player_id) || sel.includes(p.player_id));
-
-        return (
-        <div>
-          {/* Round tabs */}
-          <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
-            {[1,2,3,4].map(r => (
-              <button key={r} onClick={() => { setMatchRound(r); setMatchTeamA([]); setMatchTeamB([]); }} style={{
-                flex: 1, padding: "7px 4px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
-                background: matchRound === r ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
-                border: `1px solid ${matchRound === r ? "transparent" : BC.bdr}`,
-                color: matchRound === r ? "#0a0804" : BC.t2,
-              }}>Rd {r}</button>
-            ))}
-          </div>
-
-          {/* Player pool — two columns by team */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-            {[["A", teamAPlayers], ["B", teamBPlayers]].map(([tid, players]) => {
-              const team = teams[tid];
-              const sel = tid === "A" ? matchTeamA : matchTeamB;
-              const setSel = tid === "A" ? setMatchTeamA : setMatchTeamB;
-              const pool = availablePlayers(players, sel);
-              return (
-                <div key={tid}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: team.accent, letterSpacing: 1, marginBottom: 5 }}>{teamNames?.[tid]}</div>
-                  {pool.length === 0 && (
-                    <div style={{ fontSize: 10, color: BC.t3, padding: "7px 8px", borderRadius: 8, border: `1px dashed ${BC.bdr}`, textAlign: "center" }}>
-                      {players.length ? `All matched in Rd ${matchRound}` : "No players"}
-                    </div>
-                  )}
-                  {pool.map(p => {
-                    const isSelected = sel.includes(p.player_id);
-                    const ch = getPlayerCH(p.player_id);
-                    return (
-                      <button key={p.player_id} onClick={() => setSel(prev => isSelected ? prev.filter(x => x !== p.player_id) : [...prev, p.player_id])} style={{
-                        width: "100%", padding: "7px 8px", marginBottom: 3, borderRadius: 8, cursor: "pointer", textAlign: "left",
-                        background: isSelected ? team.color + "55" : BC.inp,
-                        border: `1.5px solid ${isSelected ? team.accent : BC.bdr}`,
-                        display: "flex", alignItems: "center", justifyContent: "space-between",
-                      }}>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: isSelected ? team.accent : BC.t2 }}>{p.name}</span>
-                        <span style={{ fontSize: 10, color: BC.t3 }}>CH {ch}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Stroke situation — shown when all players selected */}
-          {strokes && allSelected.length >= 2 && (
-            <div style={{ background: BC.card, borderRadius: 10, padding: "10px 12px", marginBottom: 10, border: `1px solid ${BC.bdr}` }}>
-              <div style={{ fontSize: 9, color: BC.t3, fontWeight: 700, letterSpacing: 1, marginBottom: 8 }}>
-                STROKE SITUATION · {hcpMode === "low_man" ? "Play Off Low Man" : "Full Strokes"}
-              </div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {strokes.map(({ pid, strokes: s }) => {
-                  const p = tPlayers.find(t => t.player_id === pid);
-                  const team = teams[p?.team] || teams.B;
-                  return (
-                    <div key={pid} style={{ background: team.color + "33", border: `1px solid ${team.accent}44`, borderRadius: 8, padding: "5px 10px", textAlign: "center" }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: team.accent }}>{p?.name?.split(" ")[0]}</div>
-                      <div style={{ fontSize: 13, fontWeight: 900, color: s === 0 ? BC.gold : BC.t1 }}>{s === 0 ? "Scratch" : `+${s}`}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Create Match button */}
-          {matchTeamA.length > 0 && matchTeamB.length > 0 && (
-            <button onClick={saveMatch} style={{ ...BtnStyle, marginBottom: 14 }}>
-              Create Match — {matchTeamA.map(pid => tPlayers.find(p=>p.player_id===pid)?.name?.split(" ")[0]).join("/")} vs {matchTeamB.map(pid => tPlayers.find(p=>p.player_id===pid)?.name?.split(" ")[0]).join("/")}
-            </button>
-          )}
-
-          {/* Existing matches by round */}
-          {[1,2,3,4].map(r => {
-            const rndM = matches.filter(m => m.round === r);
-            if (!rndM.length) return null;
-            const trR = tRounds.find(t => t.round_number === r);
-            const fmt = FORMATS.find(f => f.id === trR?.format);
-            return (
-              <div key={r} style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 10, color: BC.gold, fontWeight: 700, marginBottom: 8, letterSpacing: 1 }}>ROUND {r}{fmt ? ` · ${fmt.label}` : ""}</div>
-                {rndM.map(m => (
-                  <div key={m.id} style={{ background: BC.card, borderRadius: 10, padding: "8px 12px", marginBottom: 5, border: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ flex: 1, fontSize: 11 }}>
-                      <span style={{ color: teams.A.accent+"99", fontWeight: 600 }}>{m.teamANames?.join(" / ")}</span>
-                      <span style={{ color: BC.t3 }}> vs </span>
-                      <span style={{ color: teams.B.accent+"99", fontWeight: 600 }}>{m.teamBNames?.join(" / ")}</span>
-                    </div>
-                    <button onClick={() => onSetMatch({ ...m, _delete: true })} style={{
-                      fontSize: 9, padding: "3px 7px", borderRadius: 6, border: `1px solid ${BC.danger}22`, background: "transparent", color: BC.danger, cursor: "pointer", flexShrink: 0,
-                    }}>✕</button>
-                  </div>
-                ))}
-              </div>
-            );
-          })}
-        </div>
-        );
-      })()}
+      {tab === "matches" && (
+        <MatchSetup
+          round={matchRound}
+          setRound={setMatchRound}
+          tRounds={tRounds}
+          courses={courses}
+          tPlayers={tPlayers}
+          matches={matches}
+          teams={teams}
+          teamNames={teamNames}
+          hcpOverrides={hcpOverrides}
+          teeAssignments={teeAssignments}
+          roundLocks={roundLocks}
+          storedGroups={groupsFromDb?.[matchRound] || null}
+          onSaveGroups={onSaveGroups}
+          onSetRound={onSetRound}
+          onSetMatch={onSetMatch}
+          notify={notify}
+          confirm={confirm}
+          holeData={holeData}
+          onDiscardRoundScores={onDiscardRoundScores}
+        />
+      )}
 
       {tab === "courses" && (
         <div>
@@ -2156,23 +3246,41 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             <span style={{ fontSize: 11, color: BC.t3 }}>Switch / new ›</span>
           </button>
 
-          {/* Tournament name */}
+          {/* Tournament identity — name and location.
+              One card and one Save for both: they're the same sentence on
+              every screen that shows them ("The Bourbon Cup · 2025 · Gaylord,
+              MI"), and a director renaming the tournament for a new venue
+              would otherwise have to remember two separate saves. An empty
+              field falls back to its constant rather than saving blank, so
+              the header can't end up with a hole in it. */}
           <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: 14, marginBottom: 16 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Tournament Name</div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input
-                value={editTournamentName}
-                onChange={e => setEditTournamentName(e.target.value)}
-                placeholder={TOURNAMENT_TITLE}
-                style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: 14, fontWeight: 700, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
-              />
+            <div style={{ fontSize: 10, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Tournament</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {[
+                { key: "name", val: editTournamentName, set: setEditTournamentName, ph: TOURNAMENT_TITLE, lbl: "Name" },
+                { key: "location", val: editTournamentLocation, set: setEditTournamentLocation, ph: TOURNAMENT_LOCATION, lbl: "Location" },
+              ].map(f => (
+                <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: BC.t3, letterSpacing: 0.5, width: 52, flexShrink: 0, textTransform: "uppercase" }}>{f.lbl}</span>
+                  <input
+                    value={f.val}
+                    onChange={e => f.set(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                    placeholder={f.ph}
+                    style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: 14, fontWeight: 700, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
+                  />
+                </div>
+              ))}
               <button
-                onClick={() => onSaveTournamentName(editTournamentName.trim() || TOURNAMENT_TITLE)}
-                style={{ flexShrink: 0, fontSize: 12, fontWeight: 700, color: "#0a0804", background: BC.amber, border: "none", borderRadius: 8, padding: "0 16px", cursor: "pointer" }}
+                onClick={() => onSaveTournament({
+                  name: editTournamentName.trim() || TOURNAMENT_TITLE,
+                  location: editTournamentLocation.trim() || TOURNAMENT_LOCATION,
+                })}
+                style={{ alignSelf: "flex-end", fontSize: 12, fontWeight: 700, color: "#0a0804", background: BC.amber, border: "none", borderRadius: 8, padding: "9px 18px", cursor: "pointer" }}
               >Save</button>
             </div>
             <div style={{ fontSize: 11, color: BC.t3, marginTop: 8, lineHeight: 1.5 }}>
-              Shown on the login screen. The year and location come from the active edition.
+              Both show on the login screen; the location also sits under the cup mark on the leaderboard. The year follows the active edition.
             </div>
           </div>
 
@@ -2375,7 +3483,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
 
       {activeTab === "ctp" && (
         <div>
-          <div style={{ fontSize: 11, color: BC.t3, marginBottom: 12 }}>Closest to the pin on all par 3s — director assigns winner per hole per round.</div>
+          <div style={{ fontSize: 11, color: BC.t3, marginBottom: 12 }}>Closest to the pin on all par 3s — groups tag their own on the Scoring tab as they play; the director settles the hole here.</div>
 
           {[1,2,3,4].map(r => {
             const tr2 = tRounds.find(t => t.round_number === r);
@@ -2388,13 +3496,19 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
                 <div style={{ fontSize: 10, fontWeight: 700, color: BC.gold, letterSpacing: 1, marginBottom: 8 }}>ROUND {r} — {course2?.name || "TBD"}</div>
                 {par3holes.map(({ hole }) => {
                   const key = `${r}_${hole}`;
-                  const winnerId = ctpData[key];
+                  const rec = ctpData[key];
+                  const winnerId = rec?.player_id || null;
                   const winner = tPlayers.find(p => p.player_id === winnerId);
+                  // A tag a group entered on the course is provisional until
+                  // the director touches it here — picking a name from the
+                  // dropdown (even re-picking the same one) is the approval.
+                  const pending = !!winnerId && rec?.approved !== true;
                   return (
                     <div key={hole} style={{ background: BC.card, borderRadius: 8, padding: "8px 12px", marginBottom: 4, border: `1px solid ${winner ? BC.amber + "44" : BC.bdr}`, display: "flex", alignItems: "center", gap: 8 }}>
                       <span style={{ fontSize: 11, fontWeight: 700, color: BC.t3, width: 44, flexShrink: 0 }}>Hole {hole + 1}</span>
                       {user?.isDirector ? (
-                        <select value={winnerId || ""} onChange={e => onSetCtp(r, hole, e.target.value || null)}
+                        <select value={winnerId || ""}
+                          onChange={e => onSetCtp(r, hole, e.target.value || null, { distanceFt: e.target.value === winnerId ? rec?.distance_ft ?? null : null, approved: true })}
                           style={{ flex: 1, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, color: BC.t1, fontSize: 11, padding: "4px 6px", fontFamily: "'Montserrat', sans-serif" }}>
                           <option value="">-- Not set --</option>
                           {tPlayers.map(p => <option key={p.player_id} value={p.player_id}>{p.name}</option>)}
@@ -2402,6 +3516,8 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
                       ) : (
                         <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: winner ? BC.amber : BC.t3 }}>{winner ? winner.name : "Not set"}</span>
                       )}
+                      {rec?.distance_ft ? <span style={{ fontSize: 10, fontWeight: 700, color: BC.amber, flexShrink: 0 }}>{rec.distance_ft} ft</span> : null}
+                      {pending && <span title="Tagged on the course — not settled yet" style={{ fontSize: 9, fontWeight: 700, color: BC.t3, border: `1px solid ${BC.bdr}`, borderRadius: 4, padding: "1px 4px", flexShrink: 0 }}>Pending</span>}
                       {winner && <span style={{ fontSize: 10, color: BC.amber }}>📍</span>}
                     </div>
                   );
@@ -2448,10 +3564,14 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
 
   return (
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
-      <SegmentedToggle
-        options={[["current", `${getTournamentYear()} Stats`], ["history", "History"]]}
-        value={analyticsTab} onChange={setAnalyticsTab} style={{ marginBottom: 14 }}
-      />
+      {/* Stats / History switch — pinned, same as every other tab's lead
+          control, so it sits where the eye already expects a tab switcher. */}
+      <StickyTop padBottom={14}>
+        <SegmentedToggle
+          options={[["current", `${getTournamentYear()} Stats`], ["history", "History"]]}
+          value={analyticsTab} onChange={setAnalyticsTab}
+        />
+      </StickyTop>
 
       {analyticsTab === "current" && (
         <div>
@@ -2530,21 +3650,45 @@ function PracticeScoringTab({
   onSavePracticeScore, getStrokeMapsForMatch,
   renderMatchScorecardBody, tPlayers,
 }) {
+  // Lock scoring to the user's own match. Switching to a different match is
+  // intentionally not allowed — only players in a match should be entering its
+  // scores. If the user isn't on any team in this event (e.g. a director who
+  // didn't include themselves), we render an empty state below. Derived ahead
+  // of the hooks (it's a plain lookup, not a hook) so the opening hole can be
+  // resolved during the first render.
+  const activeMatch = event?.matches?.find(m =>
+    [m.team1.player1, m.team1.player2, m.team2.player1, m.team2.player2].includes(user?.player_id)
+  );
+  const matchPids = activeMatch ? [
+    activeMatch.team1.player1, activeMatch.team1.player2,
+    activeMatch.team2.player1, activeMatch.team2.player2,
+  ].filter(Boolean) : [];
+
   // Hooks first — must fire unconditionally on every render. Even when
   // event/course aren't loaded yet, we still call them so React's hook
   // counter stays consistent across renders.
-  const [activeHole, setActiveHole] = useState(0);
+  // Open on the live edge, resolved synchronously from the scoresMap we
+  // already have — a user joining mid-round shouldn't have to flip through
+  // holes 1..N to reach the action, and switching sub-tabs unmounts this
+  // view, so doing it in a deferred effect meant rendering hole 1 and then
+  // flashing forward on every return. The deferred effect below still covers
+  // the cold-load case, where scoresMap is empty on the first render.
+  const [activeHole, setActiveHole] = useState(
+    () => openingHole(matchPids, (pid, h) => scoresMap[`${pid}_${h}`] || 0)
+  );
   const [showScorecard, setShowScorecard] = useState(false);
   // `editing` = true when the user has navigated BACK to a previously-
   // completed hole to fix a score. While editing, auto-advance is
   // suppressed so a corrective tap doesn't jump the screen away. Reset
   // to false whenever they reach the live edge (first unscored hole).
   const [editing, setEditing] = useState(false);
-  // Initial-jump bookkeeping. On first arrival at the scoring view (after
-  // Firestore scores load), we jump activeHole forward to the first
-  // unscored hole — so a user joining mid-round doesn't have to flip
-  // through holes 1..N to reach the action. Only fires once per mount.
-  const initialJump = useRef(false);
+  // Which match id the opening-hole jump has already been resolved for.
+  // Seeded with the match we positioned above so the deferred effect stays
+  // idle when it has nothing left to do; a null seed re-arms it.
+  const positionedFor = useRef(activeHole > 0 ? activeMatch?.id : null);
+  // Auto-advance arming, keyed `matchId:hole`. A hole is armed only once we
+  // have seen it INCOMPLETE while mounted — see the auto-advance effect.
+  const advanceArmed = useRef({});
   // Auto-advance toast — surfaced as a fixed-position banner during the
   // 1.8s pause between "all scores in for this hole" and the screen
   // jump. Without this, the wait feels like dead time and the eventual
@@ -2553,18 +3697,6 @@ function PracticeScoringTab({
 
   const holePars = resolveHolePars(course);
   const holeHcps = resolveHoleHcps(course);
-
-  // Lock scoring to the user's own match. Switching to a different match is
-  // intentionally not allowed — only players in a match should be entering its
-  // scores. If the user isn't on any team in this event (e.g. a director who
-  // didn't include themselves), we render an empty state below.
-  const activeMatch = event?.matches?.find(m =>
-    [m.team1.player1, m.team1.player2, m.team2.player1, m.team2.player2].includes(user?.player_id)
-  );
-  const matchPids = activeMatch ? [
-    activeMatch.team1.player1, activeMatch.team1.player2,
-    activeMatch.team2.player1, activeMatch.team2.player2,
-  ].filter(Boolean) : [];
 
   const par = holePars[activeHole];
   const hcp = holeHcps[activeHole];
@@ -2597,6 +3729,14 @@ function PracticeScoringTab({
   // within the 1.8s auto-advance window restarts the timer rather than
   // letting it lock in at the moment of first completion.
   const curHoleScoreSig = matchPids.map(pid => scoresMap[`${pid}_${activeHole}`] || 0).join(",");
+  // Whether this match has ANY score yet. Gates arming below: on a cold load
+  // scoresMap is empty for the first few frames, and a hole that only looks
+  // incomplete because nothing has loaded must not arm the auto-advance —
+  // otherwise the arriving snapshot "completes" hole 1 and fires the toast.
+  const anyScores = matchPids.some(pid => {
+    for (let h = 0; h < 18; h++) if ((scoresMap[`${pid}_${h}`] || 0) > 0) return true;
+    return false;
+  });
 
   // Auto-advance effect — fires the timer when the active hole becomes
   // fully scored. Surfaces a toast during the 1.8s wait so the screen
@@ -2604,9 +3744,22 @@ function PracticeScoringTab({
   // timer AND the toast if the hole changes, the user starts editing,
   // or scores are edited again before the timer fires. Always called
   // (even when match is missing) to keep hook ordering consistent.
+  //
+  // The arming gate exists because this tab is unmounted when the user
+  // switches sub-tabs and remounts with activeHole back at 0. Return to
+  // scoring mid-round and hole 1 has long since been completed, so without
+  // the gate the effect fired on the first render and flashed "Hole 1 saved —
+  // advancing..." every single time. Arming a hole only after we have seen it
+  // incomplete means the toast marks a hole we actually watched get finished,
+  // never one that was already full when we arrived.
   useEffect(() => {
     if (!activeMatch) return;
-    if (!holeComplete || activeHole >= 17 || editing || allComplete) return;
+    const armKey = `${activeMatch.id}:${activeHole}`;
+    // Arm before the suppression checks — a hole the user is mid-edit on
+    // still needs to arm so finishing it advances as usual.
+    if (!holeComplete) { if (anyScores) advanceArmed.current[armKey] = true; return; }
+    if (activeHole >= 17 || editing || allComplete) return;
+    if (!advanceArmed.current[armKey]) return;
     // Fire the toast immediately so users see "saving — advancing..."
     // throughout the wait, not just after the jump.
     setToast(`✓ Hole ${activeHole + 1} saved — advancing...`);
@@ -2629,7 +3782,7 @@ function PracticeScoringTab({
       setToast(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [holeComplete, activeHole, editing, allComplete, curHoleScoreSig, activeMatch]);
+  }, [holeComplete, activeHole, editing, allComplete, anyScores, curHoleScoreSig, activeMatch]);
 
   // Safety net — always clear the toast after 3s even if some edge case
   // misses cleanup. Mirrors MNQ's safety useEffect.
@@ -2639,37 +3792,30 @@ function PracticeScoringTab({
     return () => clearTimeout(t);
   }, [toast]);
 
-  // Initial-jump effect — runs once on mount per match. Waits a brief
-  // moment for Firestore's cached snapshot to land, then reads the latest
-  // scoresMap via a ref and jumps activeHole forward to the live edge if
-  // there's pre-existing data. The previous version listened on
-  // [activeMatch, scoresMap] and re-fired each time scoresMap changed —
-  // which meant the user's FIRST score (a scoresMap change with
-  // hasAnyScores newly true) triggered a same-frame jump that raced with
-  // the auto-advance effect and pre-empted the 1.8s toast wait. Listening
-  // only on activeMatch.id and reading scoresMap via a ref makes this
-  // strictly a "joining mid-round" UX feature; live scoring is left to
-  // the auto-advance effect.
+  // Deferred opening-hole jump — the cold-load safety net for the case the
+  // synchronous positioning above can't cover: the app opened straight onto
+  // this tab with scoresMap still empty on the first render. Waits for
+  // Firestore's cached snapshot to land, then jumps to the live edge.
+  //
+  // It reads scoresMap through a ref and depends only on activeMatch.id, not
+  // on scoresMap itself. Depending on scoresMap made it re-fire on the user's
+  // FIRST score, and that same-frame jump raced with the auto-advance effect
+  // and pre-empted its 1.8s toast wait. This stays strictly a "joining
+  // mid-round" feature; live scoring belongs to the auto-advance effect.
+  //
+  // On a sub-tab return (scoresMap already present) `positionedFor` is pre-seeded
+  // and this does nothing at all, which is what keeps the screen still.
   const scoresMapRef = useRef(scoresMap);
   scoresMapRef.current = scoresMap;
   useEffect(() => {
-    if (initialJump.current) return;
-    if (!activeMatch) return;
+    if (!activeMatch || positionedFor.current === activeMatch.id) return;
     const t = setTimeout(() => {
-      if (initialJump.current) return;
-      initialJump.current = true; // lock regardless of outcome
+      if (positionedFor.current === activeMatch.id) return;
+      positionedFor.current = activeMatch.id; // lock regardless of outcome
       const sMap = scoresMapRef.current;
       const pids = [activeMatch.team1.player1, activeMatch.team1.player2, activeMatch.team2.player1, activeMatch.team2.player2].filter(Boolean);
-      if (pids.length === 0) return;
-      let edge = 18;
-      for (let h = 0; h < 18; h++) {
-        if (!pids.every(pid => (sMap[`${pid}_${h}`] || 0) > 0)) { edge = h; break; }
-      }
-      const hasAnyScores = pids.some(pid => {
-        for (let h = 0; h < 18; h++) if ((sMap[`${pid}_${h}`] || 0) > 0) return true;
-        return false;
-      });
-      if (hasAnyScores && edge > 0 && edge < 18) setActiveHole(edge);
+      const edge = openingHole(pids, (pid, h) => sMap[`${pid}_${h}`] || 0);
+      if (edge > 0) setActiveHole(edge);
     }, 400);
     return () => clearTimeout(t);
   }, [activeMatch?.id]);
@@ -4304,22 +5450,26 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
         </div>
       </div>
 
-      {/* Sub-tabs — MNQ-style pill toggle. Active tab fills with amber, others transparent. */}
-      <div style={{ display: "flex", background: BC.inp, borderRadius: 20, border: `1px solid ${BC.bdr}`, padding: 3, marginBottom: 12 }}>
-        {subTabs.map(t => {
-          const isAct = subView === t.k;
-          return (
-            <button key={t.k} onClick={() => { if (!isAct) setSubView(t.k); }} style={{
-              flex: 1, padding: "7px 8px", borderRadius: 17,
-              fontSize: 11, fontWeight: 700, border: "none",
-              background: isAct ? BC.amber : "transparent",
-              color: isAct ? "#0a0804" : BC.t3,
-              cursor: isAct ? "default" : "pointer",
-              transition: "all .2s",
-            }}>{t.label}</button>
-          );
-        })}
-      </div>
+      {/* Sub-tabs — MNQ-style pill toggle. Active tab fills with amber, others
+          transparent. Pinned like the Admin tab bar it plays the same role as;
+          the MASH ROUND header above scrolls away under it. */}
+      <StickyTop>
+        <div style={{ display: "flex", background: BC.inp, borderRadius: 20, border: `1px solid ${BC.bdr}`, padding: 3 }}>
+          {subTabs.map(t => {
+            const isAct = subView === t.k;
+            return (
+              <button key={t.k} onClick={() => { if (!isAct) setSubView(t.k); }} style={{
+                flex: 1, padding: "7px 8px", borderRadius: 17,
+                fontSize: 11, fontWeight: 700, border: "none",
+                background: isAct ? BC.amber : "transparent",
+                color: isAct ? "#0a0804" : BC.t3,
+                cursor: isAct ? "default" : "pointer",
+                transition: "all .2s",
+              }}>{t.label}</button>
+            );
+          })}
+        </div>
+      </StickyTop>
 
       {subView === "setup" && isDirector && <SetupTab />}
       {subView === "scoring" && (
@@ -4526,9 +5676,13 @@ export default function App() {
   // The saved team-name overrides (from the bc_settings/team_names doc).
   // Defaults come from constants so the fallback names live in one place.
   const [teamNames, setTeamNames] = useState(DEFAULT_TEAM_NAMES);
-  // Director-set tournament name (bc_settings/tournament). Falls back to the
-  // TOURNAMENT_TITLE constant, so the login screen always has a name.
+  // Director-set tournament identity (bc_settings/tournament). Both fall back
+  // to their constants, so the login screen always has a name and a place
+  // even before an edition has been through Admin → Tournament. The YEAR is
+  // deliberately not one of these — it follows the active edition (see
+  // firebase.getTournamentYear), so it can't disagree with the data on screen.
   const [tournamentName, setTournamentName] = useState(TOURNAMENT_TITLE);
+  const [tournamentLocation, setTournamentLocation] = useState(TOURNAMENT_LOCATION);
   // Theme state — toggled via the More menu. The actual color values live in
   // the module-level BC object (mutated by applyBCTheme); this state's only
   // job is to trigger a top-level re-render so children re-read fresh BC
@@ -4586,6 +5740,9 @@ export default function App() {
   const [syncing, setSyncing] = useState(false);
   const [hcpOverridesData, setHcpOverridesData] = useState({}); // { round: { pid: value } }
   const [teeAssignmentsData, setTeeAssignmentsData] = useState({});
+  // ── Playing groups ── { round: [ [pid, …], … ] }. Who tees off together;
+  // group i goes off at slot i of the round's tee_time list. See lib/groups.js.
+  const [groupsData, setGroupsData] = useState({});
   // ── Round handicap locks ── { round: lockDoc }. See src/lib/roundLocks.js.
   // Once a round is locked, its scoring reads frozen handicaps and ignores
   // every later edit to a player's index, override, tee, or the course.
@@ -4610,9 +5767,37 @@ export default function App() {
   // menuOpen changes.
   const popupOpenRef = useRef(false);
 
-  // TEMPORARY — measured by ViewportDebug so we can compare the nav's real
-  // bottom edge against window.innerHeight. Remove with the debug block.
+  // The bottom nav. Measured by ViewportDebug (temporary, remove with the
+  // debug block) and — permanently — by the effect below, which feeds the
+  // scroll area's bottom clearance.
   const navRef = useRef(null);
+
+  // ── Bottom clearance for the fixed nav ───────────────────────────
+  // The nav is position:fixed over the bottom of the viewport, so the
+  // scroll area has to reserve room or its last rows sit behind the bar
+  // with no way to scroll them into view. That clearance used to be the
+  // constant 64px + safe-area, which is only correct while the nav is
+  // exactly the height it is at the default text size. It is not: the
+  // labels grow with the OS text-size setting (iOS text-size-adjust scales
+  // them on a page that never opted out), and once the bar is taller than
+  // 64px the tail of every long screen becomes unreachable — the "won't
+  // scroll" report. Measuring is the only thing that stays true.
+  const [navH, setNavH] = useState(64);
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el) return;
+    const measure = () => setNavH(Math.ceil(el.getBoundingClientRect().height));
+    measure();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measure);
+      return () => window.removeEventListener("resize", measure);
+    }
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+    // `user` is in the deps because the nav only exists once past the login
+    // screen — without it the ref is null on mount and never measured.
+  }, [user]);
 
   const notify = useCallback((msg, type = "success") => {
     setNotif({ msg, type });
@@ -4692,6 +5877,7 @@ export default function App() {
       if (tn) setTeamNames({ A: tn.teamA || DEFAULT_TEAM_NAMES.A, B: tn.teamB || DEFAULT_TEAM_NAMES.B });
       const tourn = rows.find(r => r.id === editionDocId("tournament"));
       setTournamentName(tourn?.name?.trim() || TOURNAMENT_TITLE);
+      setTournamentLocation(tourn?.location?.trim() || TOURNAMENT_LOCATION);
       // Branding: apply to the live BC theme immediately (using the current
       // mode via ref), then store it so a later theme toggle re-applies it.
       const br = rows.find(r => r.id === editionDocId("branding"));
@@ -4709,7 +5895,19 @@ export default function App() {
     }));
     unsubs.push(db.subscribe("bc_ctp", f, rows => {
       const cd = {};
-      rows.forEach(r => { cd[`${r.round}_${r.hole}`] = r.player_id; });
+      // The value is the RECORD, not just the winner's id: the scoring
+      // tab's par-3 prompt needs the standing distance to show the group
+      // the number to beat, and whether the director has already settled
+      // the hole (`approved`), which stops the prompt from re-opening.
+      // Legacy docs predate both fields and simply read as undefined.
+      rows.forEach(r => {
+        cd[`${r.round}_${r.hole}`] = {
+          player_id: r.player_id || null,
+          distance_ft: r.distance_ft ?? null,
+          approved: r.approved === true,
+          tagged_by: r.tagged_by || null,
+        };
+      });
       setCtpData(cd);
     }));
     unsubs.push(db.subscribe("bc_tournament_settings", f, rows => {
@@ -4730,6 +5928,11 @@ export default function App() {
       // intentionally ignored so old values can't be misread as CH.
       rows.forEach(r => { if (r.round_number) data[r.round_number] = r.ch_overrides || {}; });
       setHcpOverridesData(data);
+    }));
+    unsubs.push(db.subscribe(GROUPS_COL, f, rows => {
+      const data = {};
+      rows.forEach(r => { if (r.round_number) data[r.round_number] = decodeGroups(r.groups); });
+      setGroupsData(data);
     }));
     unsubs.push(db.subscribe(ROUND_LOCKS_COL, f, rows => {
       const data = {};
@@ -4770,14 +5973,30 @@ export default function App() {
   // carrying `scoring_type: "match"` quietly kept scoring as match play on
   // both the Scoring tab and the Leaderboard. The stale copy is now only a
   // fallback for a match whose round doc is missing entirely.
+  //
+  // `matchNumber` rides along for the same reason: a match's number counts
+  // every match played before it (see numberMatches), so it can only be
+  // worked out with the WHOLE schedule in hand — here, not inside any one
+  // view. Every surface then reads the one number instead of numbering the
+  // matches it happens to be showing, which is what let the Matches tab and
+  // the Leaderboard call the same match by two different names.
+  const matchNumbers = useMemo(
+    () => numberMatches({ matches, tRounds: enrichedRounds, groupsByRound: groupsData }),
+    [matches, enrichedRounds, groupsData]
+  );
   const enrichedMatches = useMemo(() => matches.map(m => {
     const tr = enrichedRounds.find(t => t.round_number === m.round);
     return {
       ...m,
       nassau: tr?.nassau || m.nassau || NASSAU_DEFAULT,
       scoring_type: tr?.scoring_type || m.scoring_type || "match",
+      matchNumber: matchNumbers[m.id] ?? null,
+      // Rides along for the same reason the Nassau pots do: the Leaderboard
+      // prices a match off the match object, and on a points round the price
+      // is the hole values rather than any pot.
+      hole_points: tr?.hole_points || m.hole_points || null,
     };
-  }), [matches, enrichedRounds]);
+  }), [matches, enrichedRounds, matchNumbers]);
 
   // Keep the auto-lock's source data current without rebuilding onSaveHole.
   useEffect(() => {
@@ -4883,19 +6102,69 @@ export default function App() {
     if (pid) await db.upsert("bc_skins", { id, tournament_id: TOURNAMENT_ID, round, hole, player_id: pid });
     else await db.delete("bc_skins", id);
   }, []);
-  const onSetCtp = useCallback(async (round, hole, pid) => {
+  // One document per round+hole — the hole's STANDING closest-to-the-pin.
+  // A later group that gets inside the current tag overwrites it, which is
+  // the whole point: the doc is the current answer, not a log of attempts.
+  //
+  // `approved` is the director's settle flag. Players tagging from the
+  // Scoring tab write false (provisional); the Betting → CTP grid, which
+  // only the director can operate, writes true and freezes the hole.
+  // Every field is written on every call because db.upsert merges — a
+  // director reassignment that omitted distance_ft would otherwise leave
+  // the previous group's measurement attached to a different player.
+  const onSetCtp = useCallback(async (round, hole, pid, opts = {}) => {
+    const { distanceFt = null, approved = true, taggedBy = null } = opts;
     const id = editionDocId(`bc_ctp_r${round}_h${hole+1}`);
-    if (pid) await db.upsert("bc_ctp", { id, tournament_id: TOURNAMENT_ID, round, hole, player_id: pid });
-    else await db.delete("bc_ctp", id);
+    if (pid) {
+      await db.upsert("bc_ctp", {
+        id, tournament_id: TOURNAMENT_ID, round, hole, player_id: pid,
+        distance_ft: distanceFt, approved, tagged_by: taggedBy,
+      });
+    } else {
+      await db.delete("bc_ctp", id);
+    }
   }, []);
   const onUpdatePot = useCallback(async (amt) => {
     setSkinsPot(amt);
     await db.upsert("bc_tournament_settings", { id: editionDocId("bc_settings_main"), tournament_id: TOURNAMENT_ID, skins_pot: amt });
   }, []);
   const onSetRound = useCallback(async (r) => { await db.upsert("bc_rounds", r); }, []);
+  // Groups are written whole — the document is one round's list, and a
+  // partial update of an array has no meaning here.
+  const onSaveGroups = useCallback(async (round, groups) => {
+    await db.upsert(GROUPS_COL, {
+      id: groupsDocId(round), tournament_id: TOURNAMENT_ID, round_number: round,
+      groups: encodeGroups(groups),
+    });
+  }, []);
   const onSetMatch = useCallback(async (m) => {
     if (m._delete) { await db.delete("bc_matches", m.id); }
     else { await db.upsert("bc_matches", m); }
+  }, []);
+
+  // Erase one player's card for one round, and the only call in the app that
+  // destroys a posted score. It is the counterpart to deleting a match:
+  // because scores are keyed by player+round rather than by match (see
+  // lib/scoreGuard), deleting a match only HIDES them, and without a way to
+  // take a stale card out of a round the only route back from a bad draw is a
+  // new pairing that silently inherits somebody else's holes.
+  //
+  // Queried rather than rebuilt from the id scheme so it clears whatever is
+  // actually stored, with the reconstructed id as the fallback for any
+  // document written without its own `id` field.
+  const onDiscardRoundScores = useCallback(async (round, pid) => {
+    const rows = await db.get("bc_hole_scores", [
+      { field: "tournament_id", op: "==", value: TOURNAMENT_ID },
+      { field: "player_id", op: "==", value: pid },
+      { field: "round_number", op: "==", value: round },
+    ]);
+    for (const r of rows) {
+      await db.delete("bc_hole_scores", r.id || `bc_hs_r${round}_${pid}_h${r.hole_number}`);
+    }
+    // The subscription will say the same thing a moment later; this keeps the
+    // panel that raised the action from re-rendering with the stale card.
+    setHoleData(prev => { const n = { ...prev }; delete n[`${pid}_${round}`]; return n; });
+    return rows.length;
   }, []);
 
   // ── Director lock actions ────────────────────────────────────────────
@@ -4903,10 +6172,10 @@ export default function App() {
   // snapshot against current values and is the ONLY way a locked round's
   // handicaps can move; it is blocked outright on a final round.
   //
-  // No UI currently calls finalize/release — the Admin › Rounds lock card was
-  // removed. Retained as the data layer behind those actions so a future
-  // surface (or a console call) has something to hit; locking itself still
-  // happens automatically in ensureRoundLock.
+  // Finalize is reachable from the Scoring tab's director card; `refresh` and
+  // release are not surfaced anywhere (the Admin › Rounds lock card was
+  // removed) and are retained as the data layer behind those actions.
+  // Locking itself still happens automatically in ensureRoundLock.
   const onLockRound = useCallback(async (rnd, { refresh = false } = {}) => {
     const prev = roundLocksRef.current?.[rnd];
     if (prev?.final && refresh) return null; // final rounds are never refreshed
@@ -4930,7 +6199,11 @@ export default function App() {
     return lock;
   }, []);
 
-  // eslint-disable-next-line no-unused-vars
+  // Finalize / un-finalize. This is what ADVANCES THE TOURNAMENT: the
+  // Scoring tab's gate reads the current round off the lock docs
+  // (currentRoundNumber = lowest non-final round), so marking round N final
+  // is the single act that closes N to entry and opens N+1, on every device
+  // at once. See "The round gate" above ScoreEntry.
   const onFinalizeRound = useCallback(async (rnd, final) => {
     let lock = roundLocksRef.current?.[rnd];
     // Finalizing a round nobody locked (all scores entered elsewhere, say)
@@ -4961,7 +6234,36 @@ export default function App() {
 
   const availableRounds = useMemo(() => [...new Set(enrichedMatches.map(m => m.round))].sort(), [enrichedMatches]);
 
-  if (!user) return <LoginScreen players={tPlayers} teams={teams} darkMode={darkMode} tournamentName={tournamentName} onLogin={p => { const u = { ...p, isDirector: !!p.isDirector }; writeUserSession(u); setUser(u); }} />;
+  // ── Tournament progression ───────────────────────────────────────────
+  // Every round the director has set up OR drawn matches for — the same
+  // union the Matches tab lists, so a round can't be live for scoring and
+  // missing from the schedule, or the other way round.
+  //
+  // Plus every round that has ever been LOCKED, which is the load-bearing
+  // one. A lock is written by the first score of a round, so a locked round
+  // is a round somebody has played. Without that term a round defined only
+  // by its matches — no bc_rounds document — disappeared from the schedule
+  // the moment its last match was deleted, and since currentRound is the
+  // lowest non-final round in this list, the whole field was silently moved
+  // on to the next round while scores sat in the one they were standing on.
+  // A round with scores in it stays on the schedule until somebody finalizes
+  // it, which is the only way out that anybody chose.
+  const tournamentRounds = useMemo(() => {
+    const seen = new Set([
+      ...tRounds.map(t => t.round_number),
+      ...enrichedMatches.map(m => m.round),
+      ...Object.keys(roundLocksData).filter(r => roundLocksData[r]?.locked).map(Number),
+    ]);
+    return [...seen].filter(r => r != null && !Number.isNaN(r)).sort((a, b) => a - b);
+  }, [tRounds, enrichedMatches, roundLocksData]);
+  // The one round open for score entry. null = nothing open (no schedule
+  // yet, or the last round has been finalized).
+  const currentRound = useMemo(
+    () => currentRoundNumber(roundLocksData, tournamentRounds),
+    [roundLocksData, tournamentRounds]
+  );
+
+  if (!user) return <LoginScreen players={tPlayers} teams={teams} darkMode={darkMode} tournamentName={tournamentName} tournamentLocation={tournamentLocation} onLogin={p => { const u = { ...p, isDirector: !!p.isDirector }; writeUserSession(u); setUser(u); }} />;
 
   // Bottom-nav items. The Practice tab (formerly "Mash") was relocated
   // to the More menu and is gated to directors only — practice rounds
@@ -5063,23 +6365,32 @@ export default function App() {
 
 
 
+      {/* App header — the cup mark over YEAR · CITY, on every tab.
+          Deliberately OUTSIDE the scroll area rather than inside each view:
+          it renders once instead of five times (five ways for one header to
+          drift), it never scrolls away, and the leaderboard's sticky cup
+          total pins directly beneath it instead of fighting it for the top
+          of the screen. flexShrink is pinned on the header itself so a tall
+          tab can't squeeze it. */}
+      <AppHeader location={tournamentLocation} />
+
       {/* Content */}
       <div className="bc-app-body" style={{
         flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden",
-        // Bottom clearance for the FIXED nav bar (restored pre-2026-07-21
-        // layout). The nav is position:fixed over the viewport bottom, so the
-        // scroll area must reserve room or its last rows hide behind the bar.
-        // Nav height ≈ 56 (button) + 8 + safe-area-inset-bottom, so clear that.
-        padding: `12px 10px calc(64px + env(safe-area-inset-bottom, 0px)) 10px`,
-        // Vertical centering for short views (affects EVERY tab). This was
-        // previously `display:grid; align-content:safe center`, but Safari
-        // doesn't support the `safe` overflow-alignment keyword — it drops
-        // the whole declaration, grid falls back to top alignment, and the
-        // dead gap comes back. Flexbox auto margins (on the inner wrapper
-        // below) are universally supported and are inherently overflow-safe:
-        // auto margins only consume FREE space, so when content is taller
-        // than the viewport they resolve to 0 and nothing scrolls out of
-        // reach — the exact behavior `safe center` was meant to provide.
+        // Bottom clearance for the FIXED nav bar. The nav is position:fixed
+        // over the viewport bottom, so the scroll area must reserve room or
+        // its last rows hide behind the bar with nothing left to scroll.
+        // `navH` is the bar's MEASURED height (safe-area padding included) —
+        // see the ResizeObserver above for why a constant isn't enough.
+        padding: `12px 10px ${navH + 8}px 10px`,
+        // Every view starts at the TOP of the scroll area. Short views used
+        // to be centred vertically here (flexbox auto margins on the inner
+        // wrapper), with Admin and Leaderboard opting out because they pin a
+        // control to the top — but that is exactly the inconsistency: the
+        // same round pills sat mid-screen on a thin round and at the top on
+        // a full one, and no two tabs agreed on where their content began.
+        // Top alignment is also the only thing a sticky lead control can
+        // hold against (see StickyTop), and every tab now has one.
         display: "flex",
         flexDirection: "column",
         // overscroll-behavior-y: contain blocks the browser's native
@@ -5092,12 +6403,14 @@ export default function App() {
         // bounce is suppressed and our handler has full control.
         overscrollBehaviorY: "contain",
       }}>
-        {/* Auto-margin wrapper — does the vertical centering. When the view
-            is shorter than the body, the auto margins split the leftover
-            space evenly (content sits centered, no dead gap dumped at the
-            bottom). When the view is taller, auto margins compute to 0 and
-            the content starts at the top and scrolls normally. */}
-        <div style={{ width: "100%", marginTop: view === "admin" ? 0 : "auto", marginBottom: view === "admin" ? 0 : "auto" }}>
+        {/* View wrapper. Full width, no vertical margins: the content of
+            every tab begins immediately under the app header, so the round
+            pills / tab bar / mode toggle each tab leads with land on the
+            same line as each other. A pinned element that starts halfway
+            down the screen is the one thing that defeats pinning it — it
+            would sit mid-screen on a thin round, then jump to the top the
+            moment the content grew past the fold. */}
+        <div style={{ width: "100%" }}>
         {/* Keyed ErrorBoundary: keying on `view` remounts the boundary
             whenever the tab changes, so a crashed screen self-heals the
             moment the user navigates away instead of showing a blank
@@ -5131,6 +6444,11 @@ export default function App() {
             hcpOverrides={hcpOverridesData}
             teeAssignments={teeAssignmentsData}
             roundLocks={roundLocksData}
+            rounds={tournamentRounds}
+            currentRound={currentRound}
+            onFinalizeRound={onFinalizeRound}
+            ctpData={ctpData}
+            onSetCtp={onSetCtp}
           />
         )}
         {view === "groups" && (
@@ -5139,6 +6457,8 @@ export default function App() {
             tRounds={enrichedRounds}
             tPlayers={tPlayers}
             courses={courses}
+            groups={groupsData}
+            teams={teams}
           />
         )}
         {view === "betting" && (
@@ -5155,13 +6475,18 @@ export default function App() {
             {/* Skins/CTP toggle scaffold — disabled visual, identical
                 shape to the working Practice Round version. Communicates
                 "this section will have these two modes" without
-                committing to data the user can't act on. */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, opacity: 0.5, pointerEvents: "none" }}>
-              <SegmentedToggle
-                options={[["skins", "Skins"], ["ctp", "CTP"]]}
-                value="skins" variant="flat" letterSpacing={0.5} style={{ flex: 1 }}
-              />
-            </div>
+                committing to data the user can't act on. Pinned so this
+                tab's lead control sits exactly where every other tab's
+                does, and so the real skins grid can grow underneath it
+                without the toggle scrolling away. */}
+            <StickyTop>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, opacity: 0.5, pointerEvents: "none" }}>
+                <SegmentedToggle
+                  options={[["skins", "Skins"], ["ctp", "CTP"]]}
+                  value="skins" variant="flat" letterSpacing={0.5} style={{ flex: 1 }}
+                />
+              </div>
+            </StickyTop>
 
             <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
               <Banner>SKINS</Banner>
@@ -5210,6 +6535,8 @@ export default function App() {
             onAddCourse={onAddCourse}
             onSetRound={onSetRound}
             onSetMatch={onSetMatch}
+            holeData={holeData}
+            onDiscardRoundScores={onDiscardRoundScores}
             teams={teams}
             teamNames={teamNames}
             onSaveTeamNames={async (names) => {
@@ -5226,12 +6553,16 @@ export default function App() {
               await db.upsert("bc_settings", { id: editionDocId("branding"), tournament_id: TOURNAMENT_ID, teamA: b.teamA, teamB: b.teamB });
             }}
             tournamentName={tournamentName}
-            onSaveTournamentName={async (name) => {
+            tournamentLocation={tournamentLocation}
+            onSaveTournament={async ({ name, location }) => {
               setTournamentName(name);
-              await db.upsert("bc_settings", { id: editionDocId("tournament"), tournament_id: TOURNAMENT_ID, name });
+              setTournamentLocation(location);
+              await db.upsert("bc_settings", { id: editionDocId("tournament"), tournament_id: TOURNAMENT_ID, name, location });
             }}
             hcpOverridesFromDb={hcpOverridesData}
             teeAssignmentsFromDb={teeAssignmentsData}
+            groupsFromDb={groupsData}
+            onSaveGroups={onSaveGroups}
             roundLocks={roundLocksData}
             notify={notify}
           />

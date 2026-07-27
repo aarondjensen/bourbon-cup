@@ -34,6 +34,12 @@
 //                          completed round.
 //   handicap_mode        — low_man vs full. Flipping this re-allocates
 //                          every stroke in the match, so it is frozen.
+//   allowance            — the round's handicap allowance ({pct} or
+//                          {low,high}). Sits UPSTREAM of handicap_mode: it
+//                          decides how much of each Course Handicap comes to
+//                          the tee before low-man is taken. Editing it after
+//                          the fact would move every stroke, so it freezes
+//                          with the mode it feeds.
 //   course_id            — pointing the round at a different course after
 //                          the fact would otherwise re-rate everything.
 //   hole_pars            \  frozen because a course re-import (GHIN, the
@@ -41,8 +47,11 @@
 //                          handicaps decide WHICH holes get strokes.
 //
 // Deliberately NOT frozen: hole scores (that IS the live data), match
-// rosters, and Nassau/point values (a director legitimately adjusts what
-// a match is worth; that never changes strokes).
+// rosters, Nassau/point values (a director legitimately adjusts what a
+// match is worth; that never changes strokes), and Team Best Ball's
+// counting scores — those decide how many of a side's nets are added on a
+// hole, which moves no strokes either. All are recorded in the snapshot
+// for the audit trail; only the stroke inputs above are read back from it.
 //
 // LIFECYCLE
 // ---------
@@ -58,7 +67,7 @@
 // ensureRoundLock in App.jsx). That automation is the actual guarantee —
 // it does not depend on the director remembering to press anything
 // before the group tees off.
-import { calcCH, calcCHForCourse, getEffectiveHI } from "../scoring";
+import { calcCHForCourse, getEffectiveHI } from "../scoring";
 import { editionDocId } from "../firebase";
 
 export const ROUND_LOCKS_COL = "bc_round_locks";
@@ -95,6 +104,38 @@ export const finalRoundNumbers = (locks) =>
 
 export const openRoundNumbers = (locks, allRounds = [1, 2, 3, 4]) =>
   allRounds.filter((r) => !isRoundLocked(locks, r));
+
+// ── Tournament progression ──────────────────────────────────────────
+// The round the tournament is ON — and, because of the Scoring tab's gate,
+// the only round accepting score entry. It is simply the lowest round the
+// director has not finalized.
+//
+// The definition is deliberately blunt. It does NOT consult the clock, the
+// tee times, or whether the last putt dropped: a round advances because a
+// human said it was over, and for no other reason. That is what makes
+// "which round am I typing into?" a question with one answer at any moment,
+// on every device, instead of a per-phone guess.
+//
+// Returns null when every round is final — the event is over and nothing is
+// open — and also when there are no rounds at all, which reads the same way
+// to the caller: no round is taking scores.
+export const currentRoundNumber = (locks, allRounds = [1, 2, 3, 4]) =>
+  [...allRounds].sort((a, b) => a - b).find((r) => !isRoundFinal(locks, r)) ?? null;
+
+// The round that comes after the current one, or null if the current round
+// closes out the event. Used to tell the director what finalizing will open.
+export const nextRoundNumber = (locks, allRounds = [1, 2, 3, 4]) => {
+  const sorted = [...allRounds].sort((a, b) => a - b);
+  const cur = currentRoundNumber(locks, sorted);
+  return cur == null ? null : (sorted.find((r) => r > cur) ?? null);
+};
+
+// The most recently finalized round — what a director reopens after
+// finalizing one hole too early. Highest final round, or null if none.
+export const lastFinalRoundNumber = (locks, allRounds = [1, 2, 3, 4]) => {
+  const finals = [...allRounds].filter((r) => isRoundFinal(locks, r)).sort((a, b) => a - b);
+  return finals.length ? finals[finals.length - 1] : null;
+};
 
 // A single player's frozen row for a round, or null when the round is
 // unlocked OR the player was added after the lock was taken (a late sub
@@ -199,6 +240,15 @@ export function buildRoundLockDoc({
     course_name: course?.name || null,
     handicap_mode: tr.handicap_mode || (round === 4 ? "full" : "low_man"),
     format: tr.format || null,
+    // Stored raw ({pct} or {low,high}) rather than resolved, so it reads back
+    // as exactly what the director set. scoring.getRoundAllowance re-resolves
+    // it against the frozen format.
+    allowance: tr.allowance || null,
+    // Recorded, not enforced. Team Best Ball's counting scores decide how many
+    // of a side's nets are added on a hole; they allocate no strokes, so the
+    // live value keeps winning (see scoring.getRoundCounting). This is here so
+    // a finished round can still say what it was scored on.
+    counting_scores: tr.counting_scores || null,
     hole_pars: course?.hole_pars || null,
     hole_handicaps: course?.hole_handicaps || null,
     players: snapshot,
@@ -280,9 +330,3 @@ export function describeLock(lock) {
     : "";
   return `${lock.final ? "Final" : "Locked"} ${at}${who}${how}${refreshed}`;
 }
-
-// Course Handicap straight off a frozen tee spec. Used where a format
-// needs to re-derive a CH from a modified index (scramble's 35% team
-// allowance) but must still do so against the tee as it was at lock time.
-export const chFromLockedSpec = (hi, entry) =>
-  calcCH(hi, entry?.slope ?? 113, entry?.rating ?? 72, entry?.par ?? 72);

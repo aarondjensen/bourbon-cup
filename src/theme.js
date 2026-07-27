@@ -57,6 +57,16 @@ export const dimHex = (hex, f = 0.62) => {
   const [r, g, b] = _rgbC(hex);
   return `#${_hxC(r * f)}${_hxC(g * f)}${_hxC(b * f)}`;
 };
+// Brighter variant — the inverse of dimHex, same multiply-the-channels math,
+// so hue and saturation are preserved and only the value moves. This is the
+// ONE knob for "how bright is the palette": team accents, their dim shades
+// (derived from the lifted accent, so they track it) and the neutral grays
+// all run through the same factor, which is why they stay in step with each
+// other when it changes.
+export const liftHex = (hex, f = 1.2) => {
+  const [r, g, b] = _rgbC(hex);
+  return `#${_hxC(r * f)}${_hxC(g * f)}${_hxC(b * f)}`;
+};
 // Low-alpha wash for glows / tinted backgrounds.
 export const glowHex = (hex, a = 0.16) => {
   const [r, g, b] = _rgbC(hex);
@@ -73,8 +83,13 @@ function withBrand(mode, brand, base) {
   // constants so the un-branded look is pixel-identical to the original.
   const brandA = brand?.teamA?.color;
   const brandB = brand?.teamB?.color;
-  const aCol = brandA || TEAM_A.accent;
-  const bCol = brandB || TEAM_B.accent;
+  // A brand-supplied color is lifted here rather than at extraction time so
+  // the stored branding doc keeps the logo's true color and only the DISPLAY
+  // is brightened. The defaults are already lifted in constants.js (they have
+  // to be — components read TEAM_A.accent directly), so they must not be run
+  // through liftHex a second time here.
+  const aCol = brandA ? liftHex(brandA) : TEAM_A.accent;
+  const bCol = brandB ? liftHex(brandB) : TEAM_B.accent;
   base.teamA = aCol;
   base.teamADim  = brandA ? dimHex(aCol)         : TEAM_A.color;
   base.teamAGlow = brandA ? glowHex(aCol, glowA) : TEAM_A.glow;
@@ -125,8 +140,14 @@ export const getBCTheme = (mode, brand = null) => {
     hover: "#26262a",
     bdr: "#2a2a2e",         // neutral border
     t1: "#f5f4f2",          // crisp off-white
-    t2: "#a0a0a6",          // neutral medium gray
-    t3: "#6a6a70",          // muted neutral gray
+    // t2/t3 are the app's "primary gray" — the app-header caption, the
+    // inactive bottom-nav tabs, the trailing side's player names on the
+    // leaderboard. Lifted by the same 1.2 the team colors are (was #a0a0a6 /
+    // #6a6a70) so the chrome brightened in step with the accents instead of
+    // receding behind them. t1 is deliberately NOT lifted: at #f5f4f2 the
+    // same factor just clamps to pure white and loses the off-white warmth.
+    t2: "#c0c0c7",          // neutral medium gray
+    t3: "#7f7f86",          // muted neutral gray
     amber: "#e0a93c",       // PRIMARY ACCENT — sharp gold-amber for dark
     amberGlow: "rgba(224,169,60,0.20)",
     amberDim: "#b8801a",
@@ -218,6 +239,16 @@ export const bcGlobalCSS = (bg) => `
     overscroll-behavior: none;
   }
   body { margin: 0; padding: 0; -webkit-text-size-adjust: 100%; }
+  /* ── All-caps, app-wide ──
+     One inherited rule on the mount point instead of a textTransform on every
+     style object — the app is styled inline, so per-component opt-in would be
+     hundreds of edits and every new component a chance to forget. Form
+     controls are named explicitly because a UA stylesheet is the one place
+     that can interrupt inheritance on them; this is display-only, so what
+     lands in Firestore is still exactly what the director typed. */
+  #root, #root input, #root textarea, #root select, #root button {
+    text-transform: uppercase;
+  }
 `;
 
 // ── Inject global styles ──

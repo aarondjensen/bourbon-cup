@@ -21,7 +21,7 @@ const fieldStyle = (w) => ({
 const CLONE_ITEMS = [
   { key: "players", label: "Players (roster)" },
   { key: "teams", label: "Team names, logos & colors" },
-  { key: "tournamentName", label: "Tournament name" },
+  { key: "tournamentName", label: "Tournament name & location" },
   { key: "courses", label: "Courses" },
   { key: "rounds", label: "Round setup (formats, Nassau)" },
 ];
