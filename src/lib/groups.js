@@ -152,6 +152,11 @@ function interleave(a = [], b = []) {
   return out;
 }
 
+// A match's players in the order they should ride: opponents alternating.
+// Everything that puts a match INTO a group goes through this, so a group
+// built by hand reads the same way as one the auto-builder made.
+export const matchSeq = (m) => interleave(m?.teamA, m?.teamB);
+
 // ── Auto-build ─────────────────────────────────────────────────────
 // Groups the round's matches into foursomes the obvious way for the round's
 // format. The director can then adjust — this is a starting point, not a
@@ -163,17 +168,17 @@ export function autoBuildGroups({ formatId, matches }) {
 
   if (perSide === 2) {
     // One match = one foursome. Nothing to decide.
-    matches.forEach(m => out.push(interleave(m.teamA, m.teamB)));
+    matches.forEach(m => out.push(matchSeq(m)));
   } else if (perSide === 1) {
     // Singles: two matches ride together.
     for (let i = 0; i < matches.length; i += 2) {
-      out.push(matches.slice(i, i + 2).flatMap(m => interleave(m.teamA, m.teamB)));
+      out.push(matches.slice(i, i + 2).flatMap(matchSeq));
     }
   } else {
     // Team / variable-size formats: one match can hold the whole field, so
     // slice it into foursomes, keeping the sides alternating.
     matches.forEach(m => {
-      const seq = interleave(m.teamA, m.teamB);
+      const seq = matchSeq(m);
       for (let i = 0; i < seq.length; i += GROUP_TARGET) out.push(seq.slice(i, i + GROUP_TARGET));
     });
   }
@@ -184,18 +189,52 @@ export function autoBuildGroups({ formatId, matches }) {
 export const groupIndexForPlayer = (groups, pid) =>
   groups.findIndex(g => g.includes(pid));
 
+// The one group a match rides in, or -1 when there is no single answer:
+// nobody grouped yet, or the match spread over several groups (a team match
+// legitimately, a small one by mistake).
+export function groupIndexForMatch({ groups, match }) {
+  const pids = matchPlayers(match);
+  if (!pids.length) return -1;
+  const idxs = new Set(pids.map(p => groupIndexForPlayer(groups, p)));
+  if (idxs.size !== 1) return -1;
+  const [i] = [...idxs];
+  return i;
+}
+
 // The time a match goes off. A match whose players sit in one group has
 // that group's time; one spread over several has none of its own (the
 // group cards carry the times in that case), and an ungrouped match has
 // nothing yet.
 export function teeTimeForMatch({ groups, times, match }) {
-  const pids = matchPlayers(match);
-  if (!pids.length) return "";
-  const idxs = new Set(pids.map(p => groupIndexForPlayer(groups, p)));
-  if (idxs.size !== 1) return "";
-  const [i] = [...idxs];
+  const i = groupIndexForMatch({ groups, match });
   return i < 0 ? "" : (times[i] || "");
 }
+
+// ── Assignment ─────────────────────────────────────────────────────
+// Put a whole match in one group, in one move. Grouping is decided by the
+// MATCH — "these two singles ride together off 8:40" — not player by
+// player, so the match list is where it should be settled; lifting chips
+// one at a time is the fallback for the odd case, not the main road.
+//
+// The match's players come out of wherever they were first, so this is also
+// how a match MOVES between groups. `gi < 0` ungroups them. A gi past the
+// end opens the groups up to it, which is how "+ New group" adds one — and
+// because a group's tee time is its position in the round's time list, the
+// new group lands on the next tee slot without anything else being touched.
+export function assignMatchToGroup({ groups, match, gi }) {
+  const seq = matchSeq(match);
+  const moving = new Set(seq);
+  const next = (groups || []).map(g => g.filter(p => !moving.has(p)));
+  if (gi < 0) return next;
+  while (next.length <= gi) next.push([]);
+  next[gi] = [...next[gi], ...seq];
+  return next;
+}
+
+// The matches riding in a group, in the order given. Lets a group card name
+// what is actually playing in it rather than only who is sitting in it.
+export const matchesInGroup = ({ group, matches }) =>
+  (matches || []).filter(m => matchPlayers(m).some(p => group.includes(p)));
 
 // ── Play order ─────────────────────────────────────────────────────
 // Matches in a stable, device-independent order — by document id, which is

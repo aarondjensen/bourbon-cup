@@ -15,6 +15,13 @@
 // and the spread, group i goes off at slot i, and every match inherits the
 // time of the group its players ride in. A match with no group has no tee
 // time, and this tab says so rather than letting it ship silently.
+//
+// Which is also where the grouping is done. When a match fits in one group,
+// its row in the match list carries a picker — pick the group and the match
+// takes that group's tee time, with "+ New group" opening the next tee slot.
+// That is the way a Singles draw is actually made ("M3 and M4 ride together
+// off 8:40"), so it lives on the matches. Moving individual players between
+// groups is the fix-up underneath it, not the main road.
 
 import { useState } from "react";
 import { BC } from "../theme";
@@ -24,8 +31,9 @@ import { getRoundCH, getRoundHandicapMode, lockForRound } from "../scoring";
 import {
   GROUP_TARGET, GROUP_MAX,
   autoBuildGroups, expandTeeTimes, teeTimeList, joinTeeTimes, teeInterval,
-  parseTeeTime, formatTeeTime, matchPlayers, formatPerSide, isFoursomeFormat,
-  teeTimeForMatch, groupIssues, hasGroupIssues,
+  parseTeeTime, formatTeeTime, matchPlayers, matchSeq, formatPerSide, isFoursomeFormat,
+  teeTimeForMatch, groupIndexForMatch, assignMatchToGroup, matchesInGroup,
+  groupIssues, hasGroupIssues,
   orderMatchesForRound, canonicalMatchOrder,
 } from "../lib/groups";
 
@@ -49,6 +57,20 @@ const xBtn = {
   fontSize: 9, padding: "3px 7px", borderRadius: 6, border: `1px solid ${BC.danger}22`,
   background: "transparent", color: BC.danger, cursor: "pointer", flexShrink: 0, fontFamily: FONT,
 };
+
+// The group picker on a match row. A native select, because on a phone that
+// is a proper wheel picker rather than a menu to aim at. fontSize must be 16
+// or iOS Safari zooms the page in on focus and never zooms back, so it is
+// drawn at 16 and scaled down to the row's size — the same trick the
+// tee-time boxes use, with the negative margin taking back the width the
+// transform leaves behind (200 × 0.25).
+const groupSelect = (ok) => ({
+  width: 200, marginRight: -50, transform: "scale(0.75)", transformOrigin: "left center",
+  padding: "4px 5px", borderRadius: 7, background: BC.inp, boxSizing: "border-box",
+  border: `1px solid ${ok ? BC.amber + "55" : BC.danger + "66"}`,
+  color: ok ? BC.amber : BC.danger,
+  fontSize: 16, fontWeight: 700, fontFamily: FONT, outline: "none", cursor: "pointer",
+});
 
 export function MatchSetup({
   round, setRound,
@@ -91,6 +113,13 @@ export function MatchSetup({
 
   const issues = groupIssues({ groups, matches: rndMatches });
   const flagged = hasGroupIssues(issues);
+
+  // A match that fits inside one group is grouped from its own row in the
+  // match list — pick the group, take that group's tee time. A 2-man format
+  // has nothing to pick (the match is the foursome) and a match too big for
+  // one group genuinely spans several, so both are grouped player by player.
+  const canPickGroup = (m) => !autoFoursomes && matchPlayers(m).length <= GROUP_MAX;
+  const anyPickable = rndMatches.some(canPickGroup);
 
   // The round's matches in the order they go off, which is the order their
   // tournament-wide numbers run in. Only the LISTING is reordered:
@@ -170,6 +199,13 @@ export function MatchSetup({
 
   const addGroup = () => saveGroups([...groups.map(g => [...g]), []]);
 
+  // Send a whole match off with one group, from the match list. This is the
+  // way a Singles or team round actually gets drawn — the decision is "these
+  // two matches ride together", not "these four players do" — so it happens
+  // where the matches are, and lifting chips stays for the odd fix-up.
+  // gi === groups.length is the picker's "+ New group" option.
+  const setMatchGroup = (m, gi) => saveGroups(assignMatchToGroup({ groups, match: m, gi }));
+
   const removeGroup = async (gi) => {
     if (groups[gi].length && !(await confirm({
       title: `Remove Group ${gi + 1}?`,
@@ -197,12 +233,7 @@ export function MatchSetup({
     // saved groups a new match brings one with it instead of landing in the
     // unassigned pool for no reason.
     if (autoFoursomes && storedGroups) {
-      const seq = [];
-      for (let i = 0; i < Math.max(teamASel.length, teamBSel.length); i++) {
-        if (teamASel[i]) seq.push(teamASel[i]);
-        if (teamBSel[i]) seq.push(teamBSel[i]);
-      }
-      saveGroups([...storedGroups, seq]);
+      saveGroups([...storedGroups, matchSeq({ teamA: teamASel, teamB: teamBSel })]);
     }
     setTeamASel([]); setTeamBSel([]);
     notify("Match created!", "success");
@@ -375,6 +406,15 @@ export function MatchSetup({
           : spans ? "ACROSS SEVERAL GROUPS — SEE BELOW"
           : grouped ? "SPLIT ACROSS GROUPS — OPPONENTS MUST RIDE TOGETHER"
           : "NO TEE TIME — NOT GROUPED";
+        // Where a match can be picked into a group, the picker REPLACES the
+        // status line — choosing the group is choosing the tee time, so the
+        // control says everything the line used to.
+        const canPick = canPickGroup(m);
+        const gi = groupIndexForMatch({ groups, match: m });
+        const pickNote = t ? ""
+          : gi >= 0 ? "NO TEE TIME SET"
+          : grouped ? "OPPONENTS SPLIT UP"
+          : "NEEDS A GROUP";
         return (
           <div key={m.id} style={{ ...cardStyle, borderRadius: 10, padding: "8px 12px", marginBottom: 5, display: "flex", alignItems: "center", gap: 8 }}>
             {/* The match's number in the TOURNAMENT, counted across every
@@ -390,9 +430,34 @@ export function MatchSetup({
                 <span style={{ color: BC.t3 }}> vs </span>
                 <span style={{ color: teams.B.accent + "99", fontWeight: 600 }}>{m.teamBNames?.join(" / ")}</span>
               </div>
-              <div style={{ fontSize: 9, marginTop: 3, fontWeight: 700, letterSpacing: 0.5, color: t ? BC.amber : spans ? BC.t3 : BC.danger }}>
-                {status}
-              </div>
+              {canPick ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
+                  <select
+                    value={gi >= 0 ? String(gi) : ""}
+                    onChange={e => setMatchGroup(m, e.target.value === "" ? -1 : parseInt(e.target.value, 10))}
+                    aria-label={`Group for match ${m.matchNumber ?? ""}`}
+                    style={groupSelect(!!t)}
+                  >
+                    <option value="">— No group</option>
+                    {groups.map((g, i) => (
+                      <option key={i} value={i}>
+                        G{i + 1}{times[i] ? ` · ${stripAMPM(times[i])}` : ""} · {g.length}/{GROUP_TARGET}
+                      </option>
+                    ))}
+                    <option value={groups.length}>+ New group</option>
+                  </select>
+                  {pickNote && (
+                    <span style={{
+                      fontSize: 9, fontWeight: 700, letterSpacing: 0.5, color: BC.danger,
+                      minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}>{pickNote}</span>
+                  )}
+                </div>
+              ) : (
+                <div style={{ fontSize: 9, marginTop: 3, fontWeight: 700, letterSpacing: 0.5, color: t ? BC.amber : spans ? BC.t3 : BC.danger }}>
+                  {status}
+                </div>
+              )}
             </div>
             <button onClick={() => deleteMatch(m)} style={xBtn}>✕</button>
           </div>
@@ -411,7 +476,7 @@ export function MatchSetup({
       <div style={{ fontSize: 10, color: BC.t3, marginBottom: 8, lineHeight: 1.45 }}>
         {autoFoursomes
           ? `A ${fmt?.label} match is a foursome, so groups follow the matches. Times run off the first tee (${firstTee || "unset"}), ${interval} min apart.`
-          : `${fmt?.label || "This format"} is not a foursome on its own — set who goes off together. Tap a player to lift them, then tap a group to drop them in.`}
+          : `${fmt?.label || "This format"} is not a foursome on its own — set who goes off together. ${anyPickable ? "Send a whole match off with a group from the list above, or tap" : "Tap"} a player here to lift them${anyPickable ? " and" : ", then"} tap a group to drop them in.`}
       </div>
 
       {isDerived && groups.length > 0 && (
@@ -422,12 +487,20 @@ export function MatchSetup({
 
       {groups.length === 0 && (
         <div style={{ fontSize: 10, color: BC.t3, padding: 12, borderRadius: 10, border: `1px dashed ${BC.bdr}`, textAlign: "center", marginBottom: 8 }}>
-          No groups yet. {rndMatches.length ? "Auto-build to start from the matches." : "Create matches first."}
+          No groups yet. {!rndMatches.length ? "Create matches first."
+            : anyPickable ? "Auto-build to start from the matches, or send one off with “+ New group” above."
+            : "Auto-build to start from the matches."}
         </div>
       )}
 
       {groups.map((g, gi) => {
         const over = g.length > GROUP_MAX;
+        // Which matches ride here. In Singles a foursome is two matches, so
+        // naming them is how this card reads back what the pickers above set
+        // — the player count alone can't tell a proper pairing from four
+        // players who happen to share a tee time.
+        const rides = matchesInGroup({ group: g, matches: orderedMatches })
+          .map(m => `M${m.matchNumber ?? "?"}`).join(" · ");
         return (
           <div key={gi} style={{
             ...cardStyle, padding: "9px 11px", marginBottom: 6,
@@ -454,8 +527,11 @@ export function MatchSetup({
                   transform: "scale(0.8)", transformOrigin: "left center", marginRight: -14,
                 }}
               />
-              <span style={{ fontSize: 9, color: over ? BC.danger : BC.t3, fontWeight: 700, flex: 1, minWidth: 0 }}>
-                {g.length} player{g.length !== 1 ? "s" : ""}{over ? " · too many" : ""}
+              <span style={{
+                fontSize: 9, color: over ? BC.danger : BC.t3, fontWeight: 700, flex: 1, minWidth: 0,
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>
+                {rides || `${g.length} player${g.length !== 1 ? "s" : ""}`}{over ? " · too many" : ""}
               </span>
               {held
                 ? <button onClick={() => moveHeldTo(gi)} style={{ ...miniBtn, padding: "4px 8px" }}>Move {shortOf(held)} here</button>
