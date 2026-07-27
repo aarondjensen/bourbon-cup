@@ -36,6 +36,9 @@ import {
   groupIssues, hasGroupIssues,
   orderMatchesForRound, canonicalMatchOrder,
 } from "../lib/groups";
+import {
+  matchScoreImpact, orphanedScores, incomingScores, describeScored,
+} from "../lib/scoreGuard";
 
 const ROUNDS = [1, 2, 3, 4];
 const FONT = "'Montserrat', sans-serif";
@@ -78,6 +81,11 @@ export function MatchSetup({
   hcpOverrides, teeAssignments, roundLocks,
   storedGroups, onSaveGroups,
   onSetRound, onSetMatch, notify, confirm,
+  // The round's posted scores, and the way to erase a stale card. Both are
+  // here for one reason: scores are keyed by player+round, not by match (see
+  // lib/scoreGuard), so this tab is the one place a director can destroy a
+  // morning's work without the app ever mentioning scores. It mentions them.
+  holeData = {}, onDiscardRoundScores,
 }) {
   const [teamASel, setTeamASel] = useState([]);
   const [teamBSel, setTeamBSel] = useState([]);
@@ -113,6 +121,16 @@ export function MatchSetup({
 
   const issues = groupIssues({ groups, matches: rndMatches });
   const flagged = hasGroupIssues(issues);
+
+  // ── The score guard ──────────────────────────────────────────────
+  // A finalized round's draw IS part of the result, so it is not edited from
+  // here at all — the way back is the Scoring tab's Reopen, which is a
+  // deliberate act with its own confirmation rather than a side effect of
+  // tidying up the matches list.
+  const roundFinal = !!mLock?.final;
+  // Scores posted in this round that no match accounts for. Invisible
+  // everywhere else in the app — that is exactly why they are shown here.
+  const orphans = orphanedScores({ holeData, matches, round, players: tPlayers });
 
   // A match that fits inside one group is grouped from its own row in the
   // match list — pick the group, take that group's tee time. A 2-man format
@@ -217,6 +235,25 @@ export function MatchSetup({
 
   const createMatch = async () => {
     if (!teamASel.length || !teamBSel.length) { notify("Select players for both teams", "error"); return; }
+    if (roundFinal) { notify(`Round ${round} is final — reopen it on Scoring to change the draw`, "error"); return; }
+    // The mirror of the delete hazard. A player's holes live on the player
+    // and the round, so a new match does not start empty when its players
+    // have already posted — it opens with those holes on its card. Re-drawing
+    // a match you just deleted is exactly when you want that; pairing someone
+    // differently is exactly when you don't.
+    const carried = incomingScores({ holeData, round, pids: [...teamASel, ...teamBSel] });
+    if (carried.length && !(await confirm({
+      eyebrow: `Round ${round}`,
+      title: "These players already have scores this round",
+      message: [
+        `${describeScored(carried, nameOf)} — holes already posted in Round ${round}.`,
+        "",
+        "Scores belong to the player and the round, not to the match, so this match opens with those holes already on it.",
+        "",
+        "That is what you want re-drawing a match you deleted. If this is a different pairing, discard the stale card first — see “Scores with no match” below.",
+      ].join("\n"),
+      confirmLabel: "Create anyway",
+    }))) return;
     await onSetMatch({
       id: `bc_match_r${round}_${teamASel.join("_")}_vs_${teamBSel.join("_")}`,
       tournament_id: TOURNAMENT_ID,
@@ -239,13 +276,75 @@ export function MatchSetup({
     notify("Match created!", "success");
   };
 
+  // Deleting a match used to be the only unconfirmed destructive control in
+  // the admin console — one tap on a ✕ the size of a fingernail, sitting in a
+  // list you scroll past to get to the groups. It is also the one with the
+  // longest tail (scores hidden, tournament-wide match numbers renumbered,
+  // the round's progress count reset to zero), so it now always asks, and
+  // asks LOUDER when there are scores behind it.
   const deleteMatch = async (m) => {
+    if (roundFinal) {
+      notify(`Round ${round} is final — reopen it on Scoring to change the draw`, "error");
+      return;
+    }
+    const impact = matchScoreImpact({ match: m, holeData });
+    const label = `M${m.matchNumber ?? "?"}`;
+    const vs = `${m.teamANames?.join(" / ")} vs ${m.teamBNames?.join(" / ")}`;
+    const ok = await confirm(impact.hasScores ? {
+      eyebrow: `${label} · Round ${round}`,
+      title: `Delete a match with ${impact.holes} hole${impact.holes === 1 ? "" : "s"} scored?`,
+      message: [
+        `${vs}`,
+        `Scored: ${describeScored(impact.scored, nameOf)}.`,
+        "",
+        "The scores are NOT erased — they are keyed to the player and the round, not to this match. Deleting hides them from the leaderboard, the cards and the round's progress while leaving every one of them in place.",
+        "",
+        "Re-draw the same pairing and they all come back. Re-draw these players differently and the holes follow them into whatever match they land in.",
+      ].join("\n"),
+      confirmLabel: "Delete anyway",
+      destructive: true,
+    } : {
+      eyebrow: `${label} · Round ${round}`,
+      title: "Delete this match?",
+      message: `${vs}\n\nNo scores are attached. Later matches renumber to close the gap.`,
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
     await onSetMatch({ ...m, _delete: true });
     // Players of a deleted match have nothing left to tee off for.
     if (storedGroups) {
       const gone = new Set(matchPlayers(m));
       saveGroups(storedGroups.map(g => g.filter(p => !gone.has(p))));
     }
+    if (impact.hasScores) {
+      notify(`${label} deleted — ${impact.holes} scored hole${impact.holes === 1 ? "" : "s"} kept, see below`, "error");
+    }
+  };
+
+  // The one way to actually erase scores, and the only irreversible button on
+  // this tab. It exists because the delete above is deliberately NOT
+  // destructive: without a way to take a stale card out of a round, the only
+  // route back from a bad draw is a pairing that silently inherits somebody
+  // else's morning.
+  const discardOrphan = async (pid, holes) => {
+    if (roundFinal) {
+      notify(`Round ${round} is final — reopen it on Scoring first`, "error");
+      return;
+    }
+    if (!(await confirm({
+      eyebrow: `Round ${round}`,
+      title: `Erase ${nameOf(pid)}'s ${holes} hole${holes === 1 ? "" : "s"}?`,
+      message: [
+        `This deletes the scores themselves.`,
+        "",
+        "Unlike deleting a match, it cannot be undone by re-drawing — the holes would have to be typed in again.",
+      ].join("\n"),
+      confirmLabel: "Erase scores",
+      destructive: true,
+    }))) return;
+    const n = await onDiscardRoundScores(round, pid);
+    notify(`Erased ${n} hole${n === 1 ? "" : "s"} for ${nameOf(pid)}`, "success");
   };
 
   // ── Pools ────────────────────────────────────────────────────────
@@ -313,6 +412,18 @@ export function MatchSetup({
           {fmt?.label || "Format TBD"} · {sizeHint}{autoFoursomes ? " · each match is a foursome" : ""}
         </div>
       </div>
+
+      {/* A final round's draw is part of its result. Say so where the draw is
+          edited, so a blocked ✕ reads as a rule rather than a bug. */}
+      {roundFinal && (
+        <div style={{
+          ...cardStyle, padding: "9px 12px", marginBottom: 10,
+          border: `1px solid ${BC.amber}55`, fontSize: 10, color: BC.t2, lineHeight: 1.45,
+        }}>
+          <span style={{ fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>ROUND {round} IS FINAL. </span>
+          Its draw is locked to its result. Reopen the round on the Scoring tab to change matches.
+        </div>
+      )}
 
       {/* ── Match builder ── */}
       <div style={sectionLabel}>BUILD A MATCH</div>
@@ -411,6 +522,10 @@ export function MatchSetup({
         // control says everything the line used to.
         const canPick = canPickGroup(m);
         const gi = groupIndexForMatch({ groups, match: m });
+        // What is riding on this row. Shown before the ✕ rather than only in
+        // the confirmation, so a director scanning the list can see which
+        // matches are already being played without tapping anything.
+        const impact = matchScoreImpact({ match: m, holeData });
         const pickNote = t ? ""
           : gi >= 0 ? "NO TEE TIME SET"
           : grouped ? "OPPONENTS SPLIT UP"
@@ -459,10 +574,49 @@ export function MatchSetup({
                 </div>
               )}
             </div>
+            {impact.hasScores && (
+              <span title={`${impact.holes} holes scored`} style={{
+                flexShrink: 0, fontSize: 8, fontWeight: 800, letterSpacing: 0.5,
+                padding: "3px 6px", borderRadius: 6, whiteSpace: "nowrap",
+                color: BC.green, border: `1px solid ${BC.green}55`, background: `${BC.green}14`,
+              }}>{impact.holes} SCORED</span>
+            )}
             <button onClick={() => deleteMatch(m)} style={xBtn}>✕</button>
           </div>
         );
       })}
+
+      {/* ── Scores with no match ──
+          The consequence of the delete made visible. These holes are live in
+          the database and counted by nothing: not the leaderboard, not the
+          round's progress, not the finalize card. Without this panel the only
+          symptom is a round that looks emptier than the morning actually was. */}
+      {orphans.length > 0 && (
+        <div style={{ ...cardStyle, padding: "10px 12px", marginBottom: 14, border: `1px solid ${BC.danger}66` }}>
+          <div style={{ fontSize: 9, fontWeight: 800, color: BC.danger, letterSpacing: 1, marginBottom: 6 }}>
+            SCORES WITH NO MATCH · ROUND {round}
+          </div>
+          <div style={{ fontSize: 10, color: BC.t2, lineHeight: 1.45, marginBottom: 9 }}>
+            Posted in Round {round}, but no match this round accounts for them — so nothing counts them.
+            Draw these players back into a match and their holes come back with them. Erase only if the round is genuinely being re-played.
+          </div>
+          {orphans.map(({ pid, holes }) => (
+            <div key={pid} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: BC.t1, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {nameOf(pid)}
+              </span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: BC.t3, flexShrink: 0 }}>
+                {holes} hole{holes === 1 ? "" : "s"}
+              </span>
+              {onDiscardRoundScores && (
+                <button onClick={() => discardOrphan(pid, holes)} style={{ ...miniBtn, borderColor: `${BC.danger}66`, color: BC.danger }}>
+                  Erase
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── Groups & tee times ── */}
       <div style={{ ...sectionLabel, marginTop: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>

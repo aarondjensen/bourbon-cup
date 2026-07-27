@@ -30,6 +30,7 @@ import { processLogo } from "./lib/logoBrand";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { AppHeader } from "./components/AppHeader";
 import { Popup, ConfirmModal } from "./components/Popup";
+import { CtpPrompt } from "./components/CtpPrompt";
 import { SegmentedToggle, StickyTop, Banner, Toast, ScoreButtonRow } from "./components/ui";
 import { useConfirm } from "./lib/useConfirm";
 import { useStableCallback } from "./lib/useStableCallback";
@@ -42,6 +43,7 @@ import {
   teeTimeForMatch, parseTeeTime, formatTeeTime, DEFAULT_TEE_INTERVAL,
   roundPlaySetup, orderMatchesForRound, numberMatches,
 } from "./lib/groups";
+import { holesEntered } from "./lib/scoreGuard";
 
 // ── Bottom-nav safe-area cushion ──────────────────────────────────
 // Full iOS home-indicator inset (34pt on devices that have one) plus 8pt,
@@ -551,7 +553,7 @@ function openingHole(pids, score) {
 // The round selector this view used to carry is gone: entry is gated to the
 // current round (see "The round gate" above), so there is nothing left to
 // select between and no strip of rounds at the top either.
-function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teams, hcpOverrides, teeAssignments, roundLocks, rounds, currentRound, onFinalizeRound }) {
+function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teams, hcpOverrides, teeAssignments, roundLocks, rounds, currentRound, onFinalizeRound, ctpData, onSetCtp }) {
   const userPid = user.player_id;
   // THE GATE. Only the current round's matches exist as far as this screen
   // is concerned — a match from a finalized round is not merely hidden, it
@@ -585,6 +587,12 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // Auto-advance arming, keyed `matchId:hole`. A hole is armed only once we
   // have seen it INCOMPLETE while mounted — see the auto-advance effect.
   const advanceArmed = useRef({});
+  // Closest-to-the-pin prompt — the 0-based index of the par 3 it is asking
+  // about, or null. `promptedCtp` is the session guard that keeps it to ONE
+  // automatic appearance per round+hole (see maybePromptCtp); tapping the
+  // par-3 CTP chip re-opens it deliberately and ignores the guard.
+  const [ctpPrompt, setCtpPrompt] = useState(null);
+  const promptedCtp = useRef({});
 
   // Put the screen on a match's live edge in a SINGLE render — shared by the
   // match selector and the match-change effect below, so neither of them ever
@@ -794,10 +802,58 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
 
   const { A: tA, B: tB } = teams;
 
+  // ── Closest-to-the-pin ───────────────────────────────────────────────
+  // The hole's standing tag, live from Firestore. `null` until some group
+  // has claimed it.
+  const ctpFor = (h) => ctpData?.[`${match.round}_${h}`] || null;
+
+  // Ported from MNQ: when the score just entered completes a par 3 for THIS
+  // group, pop the tag popup on the device that entered it. Every group gets
+  // the prompt as they walk off the green — an earlier group's tag shows in
+  // the popup as the number to beat, so a group either claims the hole or
+  // dismisses with "our group wasn't closer" and leaves it standing.
+  //
+  // Guards, in the order they matter:
+  //   • a real score on a par 3 — clearing a score never opens it
+  //   • the write must be the incomplete→complete TRANSITION: the tapping
+  //     player had nothing on the hole yet, and everyone else already did.
+  //     Without this, every later correction on a finished par 3 re-prompts.
+  //   • once per round+hole per session, so a cleared-and-re-entered score
+  //     doesn't ask twice
+  //   • never once the director has settled the hole (approved) — that tag
+  //     is the result, not a running claim
+  const maybePromptCtp = (pid, h, score, priorScore) => {
+    if (score <= 0) return;
+    if ((holePars[h] || 4) !== 3) return;
+    if (priorScore > 0) return;
+    const key = `${match.round}_${h}`;
+    if (promptedCtp.current[key]) return;
+    if (ctpFor(h)?.approved) return;
+    if (!matchPids.every(p => p === pid || getScore(p, h) > 0)) return;
+    promptedCtp.current[key] = true;
+    setCtpPrompt(h);
+  };
+
+  // Provisional by definition — `approved: false`. The director settles the
+  // hole from Betting → CTP, and only that write freezes it.
+  const saveCtp = async (winnerPid, feet) => {
+    const h = ctpPrompt;
+    setCtpPrompt(null);
+    await onSetCtp(match.round, h, winnerPid, { distanceFt: feet, approved: false, taggedBy: userPid });
+    const nm = tPlayers.find(p => p.player_id === winnerPid)?.name || "";
+    setToast(`🎯 CTP tagged — hole ${h + 1} · ${nm} ${feet} ft`);
+  };
+
   // ScoreButtonRow hands back the new gross directly (0 = cleared, which it
   // sends when the active button is tapped again), so no toggle logic here.
   const onTapScore = async (pid, score) => {
-    await onSaveHole(pid, match.round, activeHole, score || null, tr?.course_id);
+    // Read the hole and the player's existing score BEFORE the write —
+    // the CTP trigger below needs to know this was a first entry, and
+    // auto-advance can move activeHole while the save is in flight.
+    const h = activeHole;
+    const prior = getScore(pid, h);
+    await onSaveHole(pid, match.round, h, score || null, tr?.course_id);
+    maybePromptCtp(pid, h, score || 0, prior);
   };
 
   // Status cell rendering — for the two-row match status bar between
@@ -997,6 +1053,31 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
         {result?.counting && ` · BEST ${result.counting[activeHole]}`}
       </div>
 
+      {/* Par-3 CTP chip — the standing closest-to-the-pin for this hole,
+          and the way back into the tag popup. The automatic prompt fires
+          once per hole per session, so without this a group that dismissed
+          it (or measured a second ball after) would have no way to claim
+          the hole. Reads as a plain badge, not a control, once the
+          director has settled the hole. */}
+      {par === 3 && (() => {
+        const rec = ctpFor(activeHole);
+        const nm = rec?.player_id ? (tPlayers.find(p => p.player_id === rec.player_id)?.name || "—") : null;
+        const settled = rec?.approved === true;
+        const label = nm
+          ? `🎯 CTP — ${nm}${rec.distance_ft ? ` · ${rec.distance_ft} ft` : ""}${settled ? "" : " · tap to beat it"}`
+          : "🎯 Tag closest to the pin";
+        const style = {
+          width: "100%", padding: "6px 10px", borderRadius: 8, marginBottom: 4, textAlign: "left",
+          background: nm ? BC.amberGlow : BC.card,
+          border: `1px solid ${nm ? BC.amber + "55" : BC.bdr}60`,
+          color: nm ? BC.amber : BC.t3,
+          fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+        };
+        return settled
+          ? <div style={style}>{label}</div>
+          : <button onClick={() => setCtpPrompt(activeHole)} style={{ ...style, cursor: "pointer" }}>{label}</button>;
+      })()}
+
       {/* Player score cards — 4 stacked, T1 above dashed divider, T2 below.
           Each shows one header row — name, (CH), stroke dots on the left,
           "Net ±X thru N" right-aligned — then a row of par-relative score
@@ -1101,6 +1182,25 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           </button>
         </Popup>
       )}
+
+      {/* Closest-to-the-pin — opens itself when this group finishes a par 3
+          (see maybePromptCtp) and on demand from the chip above. The four
+          names offered are this match's players; a group can only ever tag
+          one of its own. */}
+      {ctpPrompt != null && (() => {
+        const rec = ctpFor(ctpPrompt);
+        return (
+          <CtpPrompt
+            holeNumber={ctpPrompt + 1}
+            players={matchPids.map(pid => tPlayers.find(p => p.player_id === pid) || { player_id: pid, name: pid })}
+            teams={teams}
+            leader={rec}
+            leaderName={rec?.player_id ? (tPlayers.find(p => p.player_id === rec.player_id)?.name || "") : ""}
+            onSave={saveCtp}
+            onClose={() => setCtpPrompt(null)}
+          />
+        );
+      })()}
     </>
   );
   // The auto-advance toast ("✓ Hole 4 saved — advancing…"), which also
@@ -1420,7 +1520,7 @@ function ChDeltaBadge({ delta }) {
   );
 }
 
-function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks }) {
+function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks }) {
   const [tab, setTab] = useState("players");
   const [editTeamNames, setEditTeamNames] = useState({ A: "", B: "" });
   const [editingTeam, setEditingTeam] = useState(null);
@@ -2095,7 +2195,25 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 </div>
                 <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderTop: `1px solid ${BC.bdr}` }}>
                   {!isNew && (
-                    <button onClick={async () => { if (await confirm({ title: `Remove ${fullName(p)}?`, message: "This deletes the player from this edition.", confirmLabel: "Delete", destructive: true })) { onRemovePlayer(p.player_id); close(); } }}
+                    <button onClick={async () => {
+                      // Same cascade as deleting a match, from the other end.
+                      // The player document goes; their matches and their
+                      // posted holes do not. A match keeps the name it was
+                      // built with, but the roster row that carried the
+                      // handicap is gone — so in any round not yet locked
+                      // they'd be re-derived at scratch.
+                      const inMatches = matches.filter(m => [...(m.teamA || []), ...(m.teamB || [])].includes(p.player_id));
+                      const scored = [1, 2, 3, 4]
+                        .map(r => ({ r, holes: holesEntered(holeData, p.player_id, r) }))
+                        .filter(x => x.holes > 0);
+                      const msg = ["This deletes the player from this edition."];
+                      if (inMatches.length) {
+                        msg.push("", `Still drawn into ${inMatches.length} match${inMatches.length === 1 ? "" : "es"} (${inMatches.map(m => `M${m.matchNumber ?? "?"}`).join(", ")}). Those matches keep the name but lose the handicap behind it — any round not yet locked would re-derive them at scratch. Delete or re-draw the matches too.`);
+                      }
+                      if (scored.length) {
+                        msg.push("", `${scored.reduce((n, s) => n + s.holes, 0)} scored hole${scored.reduce((n, s) => n + s.holes, 0) === 1 ? "" : "s"} stay in the database (${scored.map(s => `Rd ${s.r}: ${s.holes}`).join(", ")}).`);
+                      }
+                      if (await confirm({ title: `Remove ${fullName(p)}?`, message: msg.join("\n"), confirmLabel: "Delete", destructive: true })) { onRemovePlayer(p.player_id); close(); } }}
                       title="Delete player" style={{ flexShrink: 0, padding: "9px 11px", borderRadius: 10, background: "transparent", border: `1px solid ${BC.danger}55`, color: BC.danger, fontSize: 14, fontWeight: 700, cursor: "pointer", lineHeight: 1 }}>🗑</button>
                   )}
                   <span style={{ flex: 1 }} />
@@ -2803,6 +2921,8 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
           onSetMatch={onSetMatch}
           notify={notify}
           confirm={confirm}
+          holeData={holeData}
+          onDiscardRoundScores={onDiscardRoundScores}
         />
       )}
 
@@ -3337,7 +3457,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
 
       {activeTab === "ctp" && (
         <div>
-          <div style={{ fontSize: 11, color: BC.t3, marginBottom: 12 }}>Closest to the pin on all par 3s — director assigns winner per hole per round.</div>
+          <div style={{ fontSize: 11, color: BC.t3, marginBottom: 12 }}>Closest to the pin on all par 3s — groups tag their own on the Scoring tab as they play; the director settles the hole here.</div>
 
           {[1,2,3,4].map(r => {
             const tr2 = tRounds.find(t => t.round_number === r);
@@ -3350,13 +3470,19 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
                 <div style={{ fontSize: 10, fontWeight: 700, color: BC.gold, letterSpacing: 1, marginBottom: 8 }}>ROUND {r} — {course2?.name || "TBD"}</div>
                 {par3holes.map(({ hole }) => {
                   const key = `${r}_${hole}`;
-                  const winnerId = ctpData[key];
+                  const rec = ctpData[key];
+                  const winnerId = rec?.player_id || null;
                   const winner = tPlayers.find(p => p.player_id === winnerId);
+                  // A tag a group entered on the course is provisional until
+                  // the director touches it here — picking a name from the
+                  // dropdown (even re-picking the same one) is the approval.
+                  const pending = !!winnerId && rec?.approved !== true;
                   return (
                     <div key={hole} style={{ background: BC.card, borderRadius: 8, padding: "8px 12px", marginBottom: 4, border: `1px solid ${winner ? BC.amber + "44" : BC.bdr}`, display: "flex", alignItems: "center", gap: 8 }}>
                       <span style={{ fontSize: 11, fontWeight: 700, color: BC.t3, width: 44, flexShrink: 0 }}>Hole {hole + 1}</span>
                       {user?.isDirector ? (
-                        <select value={winnerId || ""} onChange={e => onSetCtp(r, hole, e.target.value || null)}
+                        <select value={winnerId || ""}
+                          onChange={e => onSetCtp(r, hole, e.target.value || null, { distanceFt: e.target.value === winnerId ? rec?.distance_ft ?? null : null, approved: true })}
                           style={{ flex: 1, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, color: BC.t1, fontSize: 11, padding: "4px 6px", fontFamily: "'Montserrat', sans-serif" }}>
                           <option value="">-- Not set --</option>
                           {tPlayers.map(p => <option key={p.player_id} value={p.player_id}>{p.name}</option>)}
@@ -3364,6 +3490,8 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
                       ) : (
                         <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: winner ? BC.amber : BC.t3 }}>{winner ? winner.name : "Not set"}</span>
                       )}
+                      {rec?.distance_ft ? <span style={{ fontSize: 10, fontWeight: 700, color: BC.amber, flexShrink: 0 }}>{rec.distance_ft} ft</span> : null}
+                      {pending && <span title="Tagged on the course — not settled yet" style={{ fontSize: 9, fontWeight: 700, color: BC.t3, border: `1px solid ${BC.bdr}`, borderRadius: 4, padding: "1px 4px", flexShrink: 0 }}>Pending</span>}
                       {winner && <span style={{ fontSize: 10, color: BC.amber }}>📍</span>}
                     </div>
                   );
@@ -5741,7 +5869,19 @@ export default function App() {
     }));
     unsubs.push(db.subscribe("bc_ctp", f, rows => {
       const cd = {};
-      rows.forEach(r => { cd[`${r.round}_${r.hole}`] = r.player_id; });
+      // The value is the RECORD, not just the winner's id: the scoring
+      // tab's par-3 prompt needs the standing distance to show the group
+      // the number to beat, and whether the director has already settled
+      // the hole (`approved`), which stops the prompt from re-opening.
+      // Legacy docs predate both fields and simply read as undefined.
+      rows.forEach(r => {
+        cd[`${r.round}_${r.hole}`] = {
+          player_id: r.player_id || null,
+          distance_ft: r.distance_ft ?? null,
+          approved: r.approved === true,
+          tagged_by: r.tagged_by || null,
+        };
+      });
       setCtpData(cd);
     }));
     unsubs.push(db.subscribe("bc_tournament_settings", f, rows => {
@@ -5936,10 +6076,27 @@ export default function App() {
     if (pid) await db.upsert("bc_skins", { id, tournament_id: TOURNAMENT_ID, round, hole, player_id: pid });
     else await db.delete("bc_skins", id);
   }, []);
-  const onSetCtp = useCallback(async (round, hole, pid) => {
+  // One document per round+hole — the hole's STANDING closest-to-the-pin.
+  // A later group that gets inside the current tag overwrites it, which is
+  // the whole point: the doc is the current answer, not a log of attempts.
+  //
+  // `approved` is the director's settle flag. Players tagging from the
+  // Scoring tab write false (provisional); the Betting → CTP grid, which
+  // only the director can operate, writes true and freezes the hole.
+  // Every field is written on every call because db.upsert merges — a
+  // director reassignment that omitted distance_ft would otherwise leave
+  // the previous group's measurement attached to a different player.
+  const onSetCtp = useCallback(async (round, hole, pid, opts = {}) => {
+    const { distanceFt = null, approved = true, taggedBy = null } = opts;
     const id = editionDocId(`bc_ctp_r${round}_h${hole+1}`);
-    if (pid) await db.upsert("bc_ctp", { id, tournament_id: TOURNAMENT_ID, round, hole, player_id: pid });
-    else await db.delete("bc_ctp", id);
+    if (pid) {
+      await db.upsert("bc_ctp", {
+        id, tournament_id: TOURNAMENT_ID, round, hole, player_id: pid,
+        distance_ft: distanceFt, approved, tagged_by: taggedBy,
+      });
+    } else {
+      await db.delete("bc_ctp", id);
+    }
   }, []);
   const onUpdatePot = useCallback(async (amt) => {
     setSkinsPot(amt);
@@ -5957,6 +6114,31 @@ export default function App() {
   const onSetMatch = useCallback(async (m) => {
     if (m._delete) { await db.delete("bc_matches", m.id); }
     else { await db.upsert("bc_matches", m); }
+  }, []);
+
+  // Erase one player's card for one round, and the only call in the app that
+  // destroys a posted score. It is the counterpart to deleting a match:
+  // because scores are keyed by player+round rather than by match (see
+  // lib/scoreGuard), deleting a match only HIDES them, and without a way to
+  // take a stale card out of a round the only route back from a bad draw is a
+  // new pairing that silently inherits somebody else's holes.
+  //
+  // Queried rather than rebuilt from the id scheme so it clears whatever is
+  // actually stored, with the reconstructed id as the fallback for any
+  // document written without its own `id` field.
+  const onDiscardRoundScores = useCallback(async (round, pid) => {
+    const rows = await db.get("bc_hole_scores", [
+      { field: "tournament_id", op: "==", value: TOURNAMENT_ID },
+      { field: "player_id", op: "==", value: pid },
+      { field: "round_number", op: "==", value: round },
+    ]);
+    for (const r of rows) {
+      await db.delete("bc_hole_scores", r.id || `bc_hs_r${round}_${pid}_h${r.hole_number}`);
+    }
+    // The subscription will say the same thing a moment later; this keeps the
+    // panel that raised the action from re-rendering with the stale card.
+    setHoleData(prev => { const n = { ...prev }; delete n[`${pid}_${round}`]; return n; });
+    return rows.length;
   }, []);
 
   // ── Director lock actions ────────────────────────────────────────────
@@ -6030,13 +6212,24 @@ export default function App() {
   // Every round the director has set up OR drawn matches for — the same
   // union the Matches tab lists, so a round can't be live for scoring and
   // missing from the schedule, or the other way round.
+  //
+  // Plus every round that has ever been LOCKED, which is the load-bearing
+  // one. A lock is written by the first score of a round, so a locked round
+  // is a round somebody has played. Without that term a round defined only
+  // by its matches — no bc_rounds document — disappeared from the schedule
+  // the moment its last match was deleted, and since currentRound is the
+  // lowest non-final round in this list, the whole field was silently moved
+  // on to the next round while scores sat in the one they were standing on.
+  // A round with scores in it stays on the schedule until somebody finalizes
+  // it, which is the only way out that anybody chose.
   const tournamentRounds = useMemo(() => {
     const seen = new Set([
       ...tRounds.map(t => t.round_number),
       ...enrichedMatches.map(m => m.round),
+      ...Object.keys(roundLocksData).filter(r => roundLocksData[r]?.locked).map(Number),
     ]);
-    return [...seen].filter(r => r != null).sort((a, b) => a - b);
-  }, [tRounds, enrichedMatches]);
+    return [...seen].filter(r => r != null && !Number.isNaN(r)).sort((a, b) => a - b);
+  }, [tRounds, enrichedMatches, roundLocksData]);
   // The one round open for score entry. null = nothing open (no schedule
   // yet, or the last round has been finalized).
   const currentRound = useMemo(
@@ -6228,6 +6421,8 @@ export default function App() {
             rounds={tournamentRounds}
             currentRound={currentRound}
             onFinalizeRound={onFinalizeRound}
+            ctpData={ctpData}
+            onSetCtp={onSetCtp}
           />
         )}
         {view === "groups" && (
@@ -6314,6 +6509,8 @@ export default function App() {
             onAddCourse={onAddCourse}
             onSetRound={onSetRound}
             onSetMatch={onSetMatch}
+            holeData={holeData}
+            onDiscardRoundScores={onDiscardRoundScores}
             teams={teams}
             teamNames={teamNames}
             onSaveTeamNames={async (names) => {
