@@ -282,17 +282,21 @@ function ConfirmModalInner({ m }) {
         }}>{m.message}</div>
       )}
       <div style={{ display: "flex", gap: 8 }}>
-        <button
-          onClick={handleCancel}
-          style={{
-            flex: 1, padding: 12, borderRadius: 10,
-            background: BC.inp, border: `1px solid ${BC.bdr}`,
-            color: BC.t2, fontSize: 14, fontWeight: 700,
-            cursor: "pointer",
-          }}
-        >
-          {m.cancelLabel || "Cancel"}
-        </button>
+        {/* alert=true → informational notice: one OK button, no choice to
+            make. Backdrop/ESC still settle it via onCancel. */}
+        {!m.alert && (
+          <button
+            onClick={handleCancel}
+            style={{
+              flex: 1, padding: 12, borderRadius: 10,
+              background: BC.inp, border: `1px solid ${BC.bdr}`,
+              color: BC.t2, fontSize: 14, fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            {m.cancelLabel || "Cancel"}
+          </button>
+        )}
         <button
           onClick={m.onConfirm}
           style={{
@@ -302,7 +306,7 @@ function ConfirmModalInner({ m }) {
             cursor: "pointer",
           }}
         >
-          {m.confirmLabel || "Confirm"}
+          {m.confirmLabel || (m.alert ? "OK" : "Confirm")}
         </button>
       </div>
     </Popup>

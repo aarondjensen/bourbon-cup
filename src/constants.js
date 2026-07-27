@@ -305,8 +305,9 @@ export const describeCounting = (counts) => {
 export const HOLE_POINTS_DEFAULT = { front: 1, back: 2 };
 
 export const SCORING_TYPE_MATCH = "match";
-export const SCORING_TYPE_TOTAL = "stroke";     // stored value predates the "Total" label
-export const SCORING_TYPE_POINTS = "points";
+export const SCORING_TYPE_TOTAL = "stroke";     // stored value predates the "Medal" label
+export const SCORING_TYPE_POINTS = "points";    // scoreable but no longer offered in admin
+export const SCORING_TYPE_TEAM = "team";        // team best ball, settled as match play
 
 export const isPointsPerHole = (scoringType) => scoringType === SCORING_TYPE_POINTS;
 

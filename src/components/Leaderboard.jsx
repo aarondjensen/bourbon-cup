@@ -38,7 +38,7 @@ import {
   isPointsPerHole, holePointsTotal,
 } from "../constants";
 import {
-  computeMatchResult, getRoundCourseCtx, higherIsBetter, totalUnit,
+  computeMatchResult, getRoundCourseCtx, higherIsBetter, totalUnit, effectiveHoleFormat,
   segmentState, statusText, segmentLeader,
   segmentOptsFor,
 } from "../scoring";
@@ -808,7 +808,7 @@ export function MatchScorecard({ match, result, format, courses, tRounds, teams,
   const total = (match.scoring_type || "match") === "stroke";
   const perHole = isPointsPerHole(match.scoring_type);
   const hp = result.holePoints || { front: 1, back: 1 };
-  const higherWins = higherIsBetter(format);
+  const higherWins = higherIsBetter(effectiveHoleFormat(match.scoring_type, format));
   const unit = totalUnit(format);
   const holes = result.holes;
 

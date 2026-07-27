@@ -46,6 +46,7 @@ export function useConfirm() {
     cancelLabel: opts.cancelLabel,
     destructive: opts.destructive,
     eyebrow: opts.eyebrow,
+    alert: opts.alert,
     onConfirm: () => settle(true),
     onCancel: () => settle(false),
   };
