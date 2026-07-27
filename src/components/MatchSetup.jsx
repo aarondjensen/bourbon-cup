@@ -23,7 +23,7 @@
 // off 8:40"), so it lives on the matches. Moving individual players between
 // groups is the fix-up underneath it, not the main road.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { BC } from "../theme";
 import { FORMATS } from "../constants";
 import { TOURNAMENT_ID, editionDocId } from "../firebase";
@@ -96,6 +96,13 @@ export function MatchSetup({
   // Tee-time boxes are edited locally and committed on blur. Writing per
   // keystroke would put a Firestore round-document write behind every digit.
   const [timeDraft, setTimeDraft] = useState({});
+  // The match row being dragged up or down the draw: { id, from, to }, all
+  // indices into `orderedMatches`. Committed on pointerup — nothing is
+  // written to Firestore while a finger is still down.
+  const [drag, setDrag] = useState(null);
+  // Live row rects, read during a drag to work out where the finger is. Kept
+  // in a ref rather than state so measuring never triggers a render.
+  const rowRefs = useRef({});
 
   const tr = tRounds.find(t => t.round_number === round);
   const mLock = lockForRound(roundLocks, round);
@@ -112,7 +119,10 @@ export function MatchSetup({
   // foursomes and still gets tee times — that is the whole point of calling
   // those formats obvious. The first edit materializes them.
   const isDerived = !storedGroups && autoFoursomes;
-  const groups = storedGroups || (isDerived ? autoBuildGroups({ formatId: tr?.format, matches: rndMatches }) : []);
+  // canonicalMatchOrder, not arrival order: roundPlaySetup derives the same
+  // implied foursomes that way for every other surface, and a reorder here
+  // WRITES these groups — so the two have to agree before that happens.
+  const groups = storedGroups || (isDerived ? autoBuildGroups({ formatId: tr?.format, matches: canonicalMatchOrder(rndMatches) }) : []);
 
   const rawTimes = teeTimeList(tr);
   const times = expandTeeTimes(rawTimes, Math.max(groups.length, MIN_TIME_SLOTS));
@@ -223,6 +233,76 @@ export function MatchSetup({
   // where the matches are, and lifting chips stays for the odd fix-up.
   // gi === groups.length is the picker's "+ New group" option.
   const setMatchGroup = (m, gi) => saveGroups(assignMatchToGroup({ groups, match: m, gi }));
+
+  // ── Reordering the draw ──────────────────────────────────────────
+  // Play order is not a field on a match. It falls out of the tee times,
+  // which fall out of each GROUP's position in the round's time list, and the
+  // tournament-wide match numbers fall out of that (see lib/groups). So
+  // dragging a match down the list permutes the GROUPS, and the times, the
+  // listing and the numbers all follow on their own. Who plays whom and who
+  // rides with whom are never touched — only which slot each group goes off
+  // in — which is why this is safe to do to a round that is already grouped.
+  //
+  // Groups no match sits in keep their exact slot: they are left out of the
+  // permutation entirely, so an empty group the director added can never be
+  // silently retimed by someone reordering the matches above it.
+  const giOf = (m) => groupIndexForMatch({ groups, match: m });
+  // Two matches in the SAME group tee off together, so there is no order to
+  // change between them. Reordering is only offered when the round's matches
+  // actually occupy more than one group.
+  const reorderable = !roundFinal
+    && new Set(rndMatches.map(giOf).filter(i => i >= 0)).size > 1;
+  // A match with no group of its own has no slot to trade, so it gets no
+  // handle — the fix for it is the group picker sitting right beside it.
+  const canDragRow = (m) => reorderable && !!m && giOf(m) >= 0;
+
+  const reorderMatch = (from, to) => {
+    if (from === to || from < 0 || to < 0) return;
+    const next = [...orderedMatches];
+    next.splice(to, 0, ...next.splice(from, 1));
+
+    // Group slots in the order the new listing reaches them...
+    const desired = [];
+    next.forEach(m => { const gi = giOf(m); if (gi >= 0 && !desired.includes(gi)) desired.push(gi); });
+    // ...redealt into the same slots those groups already occupied.
+    const slots = [...desired].sort((a, b) => a - b);
+    if (slots.every((slot, k) => slot === desired[k])) return;   // nothing moved
+
+    const nextGroups = groups.map(g => [...g]);
+    slots.forEach((slot, k) => { nextGroups[slot] = [...groups[desired[k]]]; });
+    saveGroups(nextGroups);
+  };
+
+  // Pointer events, not HTML5 drag-and-drop: this console is used on a phone
+  // at the first tee, and dragstart/drop never fire for touch. `touchAction:
+  // none` on the handle is what stops the page scrolling under the finger.
+  const startDrag = (e, from) => {
+    if (!canDragRow(orderedMatches[from])) return;
+    // Capture keeps the moves coming to the handle once the finger slides off
+    // it, which it does immediately. It throws for a pointer that is no longer
+    // active; the drag still works off the handle's own events without it.
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+    setDrag({ id: orderedMatches[from]?.id, from, to: from });
+  };
+  const moveDrag = (e) => {
+    if (!drag) return;
+    // Rows do not move while dragging, so their midpoints stay a stable ruler
+    // to measure the finger against — a list that reshuffles live measures
+    // itself and oscillates on the boundary.
+    let slot = 0;
+    orderedMatches.forEach(m => {
+      const r = rowRefs.current[m.id]?.getBoundingClientRect();
+      if (r && e.clientY > r.top + r.height / 2) slot++;
+    });
+    const to = slot > drag.from ? slot - 1 : slot;
+    if (to !== drag.to) setDrag(d => (d ? { ...d, to } : d));
+  };
+  const endDrag = () => {
+    if (!drag) return;
+    const { from, to } = drag;
+    setDrag(null);
+    reorderMatch(from, to);
+  };
 
   const removeGroup = async (gi) => {
     if (groups[gi].length && !(await confirm({
@@ -366,7 +446,7 @@ export function MatchSetup({
     if (all.length < 2) return null;
     const chs = all.map(pid => ({ pid, ch: getPlayerCH(pid) }));
     const minCH = Math.min(...chs.map(c => c.ch));
-    return chs.map(({ pid, ch }) => ({ pid, strokes: hcpMode === "full" ? ch : ch - minCH }));
+    return chs.map(({ pid, ch }) => ({ pid, ch, strokes: hcpMode === "full" ? ch : ch - minCH }));
   })();
 
   const sizeHint = perSide ? `${perSide} per side` : "any number per side";
@@ -475,15 +555,23 @@ export function MatchSetup({
       {strokes && (
         <div style={{ ...cardStyle, padding: "10px 12px", marginBottom: 10 }}>
           <div style={{ fontSize: 9, color: BC.t3, fontWeight: 700, letterSpacing: 1, marginBottom: 8 }}>
-            STROKE SITUATION · {hcpMode === "low_man" ? "Play Off Low Man" : "Full Strokes"}
+            {hcpMode === "low_man" ? "PLAY OFF LOW MAN" : "FULL STROKES"}
           </div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {strokes.map(({ pid, strokes: s }) => {
+          {/* Equal-width cards. A flex row sized each card to its own label, so
+              "Low (14)" next to "+3" read as different kinds of thing; a grid
+              makes them uniform. auto-fit drops the empty tracks, so a
+              two-player match splits the row instead of hugging the left. */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))", gap: 6 }}>
+            {strokes.map(({ pid, ch, strokes: s }) => {
               const team = teams[teamOf(pid)] || teams.B;
+              // Off low man, a zero means "this is the man everyone plays off",
+              // not "this player is scratch" — so name him and show the
+              // handicap the others are being measured against.
+              const label = s > 0 ? `+${s}` : hcpMode === "low_man" ? `Low (${ch})` : "Scratch";
               return (
-                <div key={pid} style={{ background: team.color + "33", border: `1px solid ${team.accent}44`, borderRadius: 8, padding: "5px 10px", textAlign: "center" }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: team.accent }}>{shortOf(pid)}</div>
-                  <div style={{ fontSize: 13, fontWeight: 900, color: s === 0 ? BC.gold : BC.t1 }}>{s === 0 ? "Scratch" : `+${s}`}</div>
+                <div key={pid} style={{ background: team.color + "33", border: `1px solid ${team.accent}44`, borderRadius: 8, padding: "5px 10px", textAlign: "center", minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: team.accent, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{shortOf(pid)}</div>
+                  <div style={{ fontSize: 13, fontWeight: 900, color: s === 0 ? BC.gold : BC.t1 }}>{label}</div>
                 </div>
               );
             })}
@@ -508,7 +596,7 @@ export function MatchSetup({
           No matches yet for Rd {round}
         </div>
       )}
-      {orderedMatches.map(m => {
+      {orderedMatches.map((m, idx) => {
         const t = teeTimeForMatch({ groups, times, match: m });
         const pids = matchPlayers(m);
         // Three ways to have no single tee time, and they need different
@@ -518,8 +606,10 @@ export function MatchSetup({
         // grouped simply has no time yet.
         const spans = pids.length > GROUP_TARGET;
         const grouped = pids.filter(p => groups.some(g => g.includes(p))).length;
-        const status = t ? `TEES OFF ${t}`
-          : spans ? "ACROSS SEVERAL GROUPS — SEE BELOW"
+        // Only the PROBLEMS get a line of their own now — a match that has a
+        // tee time says so under its number, where the number it teed off in
+        // is already being read, rather than in a row of its own.
+        const status = spans ? "ACROSS SEVERAL GROUPS — SEE BELOW"
           : grouped ? "SPLIT ACROSS GROUPS — OPPONENTS MUST RIDE TOGETHER"
           : "NO TEE TIME — NOT GROUPED";
         // Where a match can be picked into a group, the picker REPLACES the
@@ -535,20 +625,64 @@ export function MatchSetup({
           : gi >= 0 ? "NO TEE TIME SET"
           : grouped ? "OPPONENTS SPLIT UP"
           : "NEEDS A GROUP";
+        // Dragging changes which SLOT the match goes off in, and both the
+        // number and the tee time belong to the slot rather than to the match
+        // — so the chip previews what this match is about to become while the
+        // finger is still down, instead of only after letting go.
+        const dragging = drag?.id === m.id;
+        const target = dragging && drag.to !== drag.from ? orderedMatches[drag.to] : null;
+        const previewNo = target?.matchNumber ?? null;
+        const shownTime = target ? teeTimeForMatch({ groups, times, match: target }) : t;
+        // Where the dragged row would land, as a gap between rows.
+        const insertAt = drag ? (drag.to <= drag.from ? drag.to : drag.to + 1) : -1;
         return (
-          <div key={m.id} style={{ ...cardStyle, borderRadius: 10, padding: "8px 12px", marginBottom: 5, display: "flex", alignItems: "center", gap: 8 }}>
+          <div key={m.id}>
+            {insertAt === idx && drag.to !== drag.from && (
+              <div style={{ height: 2, borderRadius: 2, background: BC.amber, margin: "2px 0 3px" }} />
+            )}
+          <div ref={el => { rowRefs.current[m.id] = el; }} style={{
+            ...cardStyle, borderRadius: 10, padding: "8px 12px", marginBottom: 5,
+            display: "flex", alignItems: "center", gap: 8,
+            border: `1px solid ${dragging ? BC.amber : BC.bdr}`,
+            opacity: drag && !dragging ? 0.55 : 1,
+          }}>
             {/* The match's number in the TOURNAMENT, counted across every
-                round (Round 2's opener is M5 when Round 1 had four matches).
-                Same gold-chip idiom as the G1 label on the groups below,
-                since it is doing the same job for matches. */}
-            <span style={{ fontSize: 10, fontWeight: 800, color: BC.gold, letterSpacing: 0.5, flexShrink: 0, minWidth: 20 }}>
-              M{m.matchNumber ?? "?"}
-            </span>
+                round (Round 2's opener is M5 when Round 1 had four matches),
+                with the time it goes off beneath it. Same gold-chip idiom as
+                the G1 label on the groups below, since it is doing the same
+                job for matches — and doubling as the drag handle, because the
+                number and the tee time are exactly what a reorder changes. */}
+            <div
+              onPointerDown={e => startDrag(e, idx)}
+              onPointerMove={moveDrag}
+              onPointerUp={endDrag}
+              onPointerCancel={endDrag}
+              // Releasing outside the handle is the normal case, not the odd
+              // one — without this a drag that ends off-target would leave the
+              // list stuck in its dragging state.
+              onLostPointerCapture={endDrag}
+              style={{
+                display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
+                touchAction: "none", cursor: canDragRow(m) ? (dragging ? "grabbing" : "grab") : "default",
+              }}
+            >
+              {canDragRow(m) && <span aria-hidden style={{ fontSize: 12, lineHeight: 1, color: dragging ? BC.amber : BC.t3 }}>⠿</span>}
+              <div style={{ minWidth: 24 }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: previewNo ? BC.amber : BC.gold, letterSpacing: 0.5, lineHeight: 1.2 }}>
+                  M{previewNo ?? m.matchNumber ?? "?"}
+                </div>
+                {shownTime && (
+                  <div style={{ fontSize: 9, fontWeight: 700, color: BC.amber, letterSpacing: 0.3, lineHeight: 1.2, whiteSpace: "nowrap" }}>
+                    {stripAMPM(shownTime)}
+                  </div>
+                )}
+              </div>
+            </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 11 }}>
-                <span style={{ color: teams.A.accent + "99", fontWeight: 600 }}>{m.teamANames?.join(" / ")}</span>
+                <span style={{ color: teams.A.accent, fontWeight: 600 }}>{m.teamANames?.join(" / ")}</span>
                 <span style={{ color: BC.t3 }}> vs </span>
-                <span style={{ color: teams.B.accent + "99", fontWeight: 600 }}>{m.teamBNames?.join(" / ")}</span>
+                <span style={{ color: teams.B.accent, fontWeight: 600 }}>{m.teamBNames?.join(" / ")}</span>
               </div>
               {canPick ? (
                 <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
@@ -573,8 +707,8 @@ export function MatchSetup({
                     }}>{pickNote}</span>
                   )}
                 </div>
-              ) : (
-                <div style={{ fontSize: 9, marginTop: 3, fontWeight: 700, letterSpacing: 0.5, color: t ? BC.amber : spans ? BC.t3 : BC.danger }}>
+              ) : !t && (
+                <div style={{ fontSize: 9, marginTop: 3, fontWeight: 700, letterSpacing: 0.5, color: spans ? BC.t3 : BC.danger }}>
                   {status}
                 </div>
               )}
@@ -588,8 +722,17 @@ export function MatchSetup({
             )}
             <button onClick={() => deleteMatch(m)} style={xBtn}>✕</button>
           </div>
+            {insertAt === orderedMatches.length && idx === orderedMatches.length - 1 && (
+              <div style={{ height: 2, borderRadius: 2, background: BC.amber, margin: "2px 0 3px" }} />
+            )}
+          </div>
         );
       })}
+      {reorderable && (
+        <div style={{ fontSize: 9, color: BC.t3, marginBottom: 14, marginTop: -1 }}>
+          Drag ⠿ to reorder — a match takes the tee time, and the number, of the slot it lands in.
+        </div>
+      )}
 
       {/* ── Scores with no match ──
           The consequence of the delete made visible. These holes are live in
