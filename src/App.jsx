@@ -1598,14 +1598,37 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
     } catch { notify?.("Could not read that image", "error"); }
     setBrandBusy(null);
   };
+  const brandKey = (tid) => (tid === "A" ? "teamA" : "teamB");
+  const savedBrand = (tid) => brand?.[brandKey(tid)] || null;
   const teamBrandDoc = (tid) => {
     const color = isHex(brandEdit[tid]) ? brandEdit[tid].trim() : null;
     const logo = brandLogoEdit[tid] || null;
     return (color || logo) ? { color, logo } : null;
   };
-  const saveBranding = async () => {
-    await onSaveBranding({ teamA: teamBrandDoc("A"), teamB: teamBrandDoc("B") });
-    notify?.("Team branding saved");
+  // The name a card would save: blank falls back to the current name rather
+  // than wiping it, so an emptied box is not a change.
+  const pendingTeamName = (tid) => (editTeamNames[tid] || "").trim() || teamNames[tid];
+  // One Save per card, lit only when that card holds something unsaved. The
+  // comparison is against the documents, not against the last save, so a
+  // director who types and then undoes it by hand sees the light go out.
+  const teamDirty = (tid) => (
+    pendingTeamName(tid) !== teamNames[tid]
+    || (brandEdit[tid] || "") !== (savedBrand(tid)?.color || "")
+    || (brandLogoEdit[tid] || null) !== (savedBrand(tid)?.logo || null)
+  );
+  // Both teams share one branding document, so the other half is written back
+  // from what is already saved rather than from its edit state — otherwise
+  // saving one card would quietly commit the other card's pending edits and
+  // put out its Save light.
+  const saveTeam = async (tid) => {
+    const name = pendingTeamName(tid);
+    if (name !== teamNames[tid]) await onSaveTeamNames({ ...teamNames, [tid]: name });
+    const other = tid === "A" ? "B" : "A";
+    await onSaveBranding({
+      [brandKey(tid)]: teamBrandDoc(tid),
+      [brandKey(other)]: savedBrand(other),
+    });
+    notify?.(`${name} saved`);
   };
 
   // Every place outside this console shows "First LastInitial" (e.g. "Kevin J").
@@ -3409,9 +3432,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
           <div style={{ fontSize: 10, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Teams</div>
           {[teams.A, teams.B].map(team => {
             const previewLogo = brandLogoEdit[team.id] || team.logo;
+            const dirty = teamDirty(team.id);
             return (
               <div key={team.id} style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: 12, marginBottom: 10 }}>
-                {/* Name row */}
+                {/* Name row — the card's header, with its Save on the right */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                   <div style={{ width: 34, height: 34, borderRadius: 8, background: brandSwatch(team.id) + "22", border: `1px solid ${brandSwatch(team.id)}55`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
                     {previewLogo
@@ -3421,13 +3445,21 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   <input
                     value={editTeamNames[team.id]}
                     onChange={e => setEditTeamNames(n => ({ ...n, [team.id]: e.target.value }))}
+                    onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
                     placeholder={`Team ${team.id}`}
                     style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "9px 10px", background: BC.inp, border: `1px solid ${brandSwatch(team.id)}55`, borderRadius: 8, color: BC.t1, fontSize: 13, fontWeight: 800, letterSpacing: 0.5, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
                   />
                   <button
-                    onClick={() => onSaveTeamNames({ ...teamNames, [team.id]: (editTeamNames[team.id] || "").trim() || teamNames[team.id] })}
-                    style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, color: BC.t2, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, padding: "9px 12px", cursor: "pointer", whiteSpace: "nowrap" }}
-                  >Rename</button>
+                    onClick={() => saveTeam(team.id)}
+                    disabled={!dirty}
+                    style={{
+                      flexShrink: 0, fontSize: 11, fontWeight: 700, borderRadius: 6, padding: "8px 14px", whiteSpace: "nowrap",
+                      color: dirty ? "#0a0804" : BC.t3,
+                      background: dirty ? BC.amber : BC.inp,
+                      border: dirty ? "none" : `1px solid ${BC.bdr}`,
+                      cursor: dirty ? "pointer" : "default",
+                    }}
+                  >Save</button>
                 </div>
 
                 {/* Logo import + color row */}
@@ -3439,14 +3471,13 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     placeholder="#rrggbb"
                     style={{ width: 100, boxSizing: "border-box", padding: "8px 8px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, color: BC.t1, fontSize: 12, fontWeight: 600, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
                   />
-                  <label style={{ fontSize: 11, fontWeight: 700, color: BC.t2, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, padding: "8px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>
+                  <label style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: BC.t2, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, padding: "8px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>
                     {brandBusy === team.id ? "Reading…" : "Import logo"}
                     <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => { pickLogo(team.id, e.target.files?.[0]); e.target.value = ""; }} />
                   </label>
-                  <button onClick={saveBranding} style={{ marginLeft: "auto", flexShrink: 0, fontSize: 11, fontWeight: 700, color: "#0a0804", background: BC.amber, border: "none", borderRadius: 6, padding: "8px 14px", cursor: "pointer" }}>Save</button>
                 </div>
                 <div style={{ fontSize: 10, color: BC.t3, marginTop: 6, lineHeight: 1.4 }}>
-                  Import a logo to set the team badge and auto-fill its color, or enter a hex. Save applies it live across the app.
+                  Import a logo to set the team badge and auto-fill its color, or enter a hex. Save applies the name and branding live across the app.
                 </div>
               </div>
             );
