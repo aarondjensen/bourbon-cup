@@ -580,6 +580,9 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   const [showScorecard, setShowScorecard] = useState(false);
   const [toast, setToast] = useState(null);
   const initialJump = useRef(false);
+  // Auto-advance arming, keyed `matchId:hole`. A hole is armed only once we
+  // have seen it INCOMPLETE while mounted — see the auto-advance effect.
+  const advanceArmed = useRef({});
 
   // Resolved, not stored — the selection is re-derived from the matches the
   // gate currently allows. When a round is finalized under a player's feet,
@@ -634,9 +637,22 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // Auto-advance — when all 4 players have scored the active hole, after
   // 1.8s show toast and jump to next unscored hole. Clean-up cancels on
   // edit/navigation. Same pattern as Mash PracticeScoringTab.
+  //
+  // The arming gate exists because this view is unmounted when the user
+  // leaves the Scoring tab and remounts with activeHole back at 0. Come back
+  // mid-round and hole 1 has long since been completed, so without the gate
+  // the effect fired on the first render and flashed "Hole 1 saved —
+  // advancing..." every single time. Arming a hole only after we have seen it
+  // incomplete means the toast marks a hole we actually watched get finished,
+  // never one that was already full when we arrived.
   useEffect(() => {
     if (!match) return;
-    if (!holeComplete || activeHole >= 17 || editing || allComplete) return;
+    const armKey = `${match.id}:${activeHole}`;
+    // Arm before the suppression checks — a hole the user is mid-edit on
+    // still needs to arm so finishing it advances as usual.
+    if (!holeComplete) { advanceArmed.current[armKey] = true; return; }
+    if (activeHole >= 17 || editing || allComplete) return;
+    if (!advanceArmed.current[armKey]) return;
     setToast(`✓ Hole ${activeHole + 1} saved — advancing...`);
     const timer = setTimeout(() => {
       setToast(null);
@@ -3235,6 +3251,9 @@ function PracticeScoringTab({
   // unscored hole — so a user joining mid-round doesn't have to flip
   // through holes 1..N to reach the action. Only fires once per mount.
   const initialJump = useRef(false);
+  // Auto-advance arming, keyed `matchId:hole`. A hole is armed only once we
+  // have seen it INCOMPLETE while mounted — see the auto-advance effect.
+  const advanceArmed = useRef({});
   // Auto-advance toast — surfaced as a fixed-position banner during the
   // 1.8s pause between "all scores in for this hole" and the screen
   // jump. Without this, the wait feels like dead time and the eventual
@@ -3294,9 +3313,22 @@ function PracticeScoringTab({
   // timer AND the toast if the hole changes, the user starts editing,
   // or scores are edited again before the timer fires. Always called
   // (even when match is missing) to keep hook ordering consistent.
+  //
+  // The arming gate exists because this tab is unmounted when the user
+  // switches sub-tabs and remounts with activeHole back at 0. Return to
+  // scoring mid-round and hole 1 has long since been completed, so without
+  // the gate the effect fired on the first render and flashed "Hole 1 saved —
+  // advancing..." every single time. Arming a hole only after we have seen it
+  // incomplete means the toast marks a hole we actually watched get finished,
+  // never one that was already full when we arrived.
   useEffect(() => {
     if (!activeMatch) return;
-    if (!holeComplete || activeHole >= 17 || editing || allComplete) return;
+    const armKey = `${activeMatch.id}:${activeHole}`;
+    // Arm before the suppression checks — a hole the user is mid-edit on
+    // still needs to arm so finishing it advances as usual.
+    if (!holeComplete) { advanceArmed.current[armKey] = true; return; }
+    if (activeHole >= 17 || editing || allComplete) return;
+    if (!advanceArmed.current[armKey]) return;
     // Fire the toast immediately so users see "saving — advancing..."
     // throughout the wait, not just after the jump.
     setToast(`✓ Hole ${activeHole + 1} saved — advancing...`);
