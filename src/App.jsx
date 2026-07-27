@@ -3376,7 +3376,16 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               field falls back to its constant rather than saving blank, so
               the header can't end up with a hole in it. */}
           <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: 14, marginBottom: 16 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Tournament</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase" }}>Tournament</div>
+              <button
+                onClick={() => onSaveTournament({
+                  name: editTournamentName.trim() || TOURNAMENT_TITLE,
+                  location: editTournamentLocation.trim() || TOURNAMENT_LOCATION,
+                })}
+                style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, color: "#0a0804", background: BC.amber, border: "none", borderRadius: 6, padding: "8px 14px", cursor: "pointer" }}
+              >Save</button>
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {[
                 { key: "name", val: editTournamentName, set: setEditTournamentName, ph: TOURNAMENT_TITLE, lbl: "Name" },
@@ -3393,16 +3402,6 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   />
                 </div>
               ))}
-              <button
-                onClick={() => onSaveTournament({
-                  name: editTournamentName.trim() || TOURNAMENT_TITLE,
-                  location: editTournamentLocation.trim() || TOURNAMENT_LOCATION,
-                })}
-                style={{ alignSelf: "flex-end", fontSize: 12, fontWeight: 700, color: "#0a0804", background: BC.amber, border: "none", borderRadius: 8, padding: "9px 18px", cursor: "pointer" }}
-              >Save</button>
-            </div>
-            <div style={{ fontSize: 11, color: BC.t3, marginTop: 8, lineHeight: 1.5 }}>
-              Both show on the login screen; the location also sits under the cup mark on the leaderboard. The year follows the active edition.
             </div>
           </div>
 
