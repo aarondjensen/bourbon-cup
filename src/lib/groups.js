@@ -218,6 +218,13 @@ export function autoBuildGroups({ formatId, matches }) {
   return out.filter(g => g.length);
 }
 
+// The first tee time with room for a match of `need` players, or -1 when the
+// sheet is full. This is what makes the draw make itself: the groups already
+// exist, so a new pairing goes off the first one that will hold it and the
+// sheet packs from the first tee down without anyone assigning anything.
+export const firstOpenGroup = ({ groups, need, target = GROUP_TARGET }) =>
+  (groups || []).findIndex(g => g.length + need <= target);
+
 // ── Lookups ────────────────────────────────────────────────────────
 export const groupIndexForPlayer = (groups, pid) =>
   groups.findIndex(g => g.includes(pid));
