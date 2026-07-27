@@ -493,11 +493,10 @@ function RoundSection({
           <span style={{ fontSize: 11, color: BC.t3, flexShrink: 0 }}>–</span>
           <span style={{ fontSize: 15, fontWeight: 800, flexShrink: 0, color: pts.B >= pts.A ? BC.teamB : `${BC.teamB}99` }}>{fmtPts(pts.B)}</span>
         </div>
-        {/* The tee, and how the round is settled. The scoring type earns its
-            place on a header otherwise stripped to essentials: the same format
-            plays completely differently as a match and on totals, and a round
-            showing nothing about which one is in force is exactly how a Double
-            Dot / Total round went on looking like match play on this screen. */}
+        {/* The tee, the counting rule and the handicap terms. "Match play" /
+            "Total dots" used to ride along here too, but under a header that
+            already reads DOUBLE DOT it was restating the format to players who
+            know it — and every match row carries its own result anyway. */}
         {(tee || scoring || allowance || counting) && (
           <div style={{
             fontSize: 10, color: BC.t3, marginTop: 3, paddingLeft: 17,
@@ -600,13 +599,13 @@ export function TeamLeaderboard({
         results, pts, avail, holesPlayed, course,
         tee: tr?.tee_box || null,
         fmt: FORMATS.find((f) => f.id === tr?.format) || null,
-        // Spelled out on the round bar because format alone doesn't tell you
-        // how the round is settled — the same Double Dot round plays as a
-        // match or on total dots depending on this one setting.
+        // Only the points-per-hole payout, which nothing else on the screen
+        // says. "Match play" / "Total dots" used to sit here too and no longer
+        // do — the header above already names the format, and players know how
+        // their own formats settle.
         scoring: isPointsPerHole(tr?.scoring_type)
           ? `${describeHolePoints(tr?.hole_points)}`
-          : (tr?.scoring_type || "match") === "stroke"
-            ? `Total ${totalUnit(tr?.format)}` : "Match play",
+          : null,
         // The handicap terms, but only when they actually take something off
         // — a round played off full handicaps has nothing to announce, while
         // a Scramble at 35/15 is the single biggest thing separating the
