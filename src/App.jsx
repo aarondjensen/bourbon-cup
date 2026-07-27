@@ -8,7 +8,7 @@ import {
   resolveAllowance, describeAllowance, allowanceDefaultFor,
   formatCountsScores, countingDefaultFor, resolveCounting, countingNine,
   resolveHolePoints, isPointsPerHole, holePointsTotal,
-  SCORING_TYPE_MATCH, SCORING_TYPE_TOTAL, SCORING_TYPE_TEAM,
+  SCORING_TYPE_MATCH, SCORING_TYPE_TOTAL, SCORING_TYPE_TEAM, SCORING_TYPE_POINTS,
 } from "./constants";
 import {
   calcCH, calcCHForCourse, fmtScore,
@@ -2489,20 +2489,23 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             })()}
 
             {/* ── Scoring ──────────────────────────────────────────────────
-                Three ways to settle a round:
-                  • Match — the side that wins more holes takes each pot.
-                  • Medal — the running total over each segment takes it:
-                            fewest net strokes, most dots on Double Dot, most
-                            points on Stableford. Stored as "stroke".
-                  • Team  — team best ball: each side's hole score is its
-                            best individual net, settled on holes won like
-                            Match, whatever the round format's own per-hole
-                            method would be.
+                Four ways to settle a round:
+                  • Match  — the side that wins more holes takes each pot.
+                  • Medal  — the running total over each segment takes it:
+                             fewest net strokes, most dots on Double Dot, most
+                             points on Stableford. Stored as "stroke".
+                  • Team   — team best ball: each side's hole score is its
+                             best individual net, settled on holes won like
+                             Match, whatever the round format's own per-hole
+                             method would be. The one format it leaves alone is
+                             Team Best Ball, which already sums the side's best
+                             N nets — see effectiveHoleFormat.
+                  • Points — every HOLE is its own pot, worth what its nine is
+                             worth. No segments and no pots to wait on; a hole
+                             pays the moment it's played.
 
-                All three split into Single vs Nassau and share the nassau
-                {front,back,overall} pots. (A fourth stored value, "points" —
-                every hole its own pot — remains scoreable for rounds saved
-                while the toggle offered it, but is no longer offered.)
+                The first three split into Single vs Nassau and share the nassau
+                {front,back,overall} pots:
                   • Nassau → three segments (F9 / B9 / OVR)
                   • Single → one 18-hole pot worth `value` (overall-only)
                 Points has neither — its POINTS row asks what a hole is worth on
@@ -2512,7 +2515,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 `scoring_type` lives on the ROUND and nowhere else — App reads
                 it off the round doc when enriching matches, so changing it
                 here takes effect on every match in the round immediately.
-                All three branches live in scoring.js computeMatchResult. */}
+                All four branches live in scoring.js computeMatchResult. */}
             {(() => {
               const isSingle = (nassau.front || 0) === 0 && (nassau.back || 0) === 0;
               const perHole = isPointsPerHole(scoringType);
@@ -2552,11 +2555,12 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       lives with the allowance it's applied after. */}
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>SCORING</div>
-                    {/* Match / Medal / Team */}
+                    {/* Match / Medal / Team / Points */}
                     <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}` }}>
                       <button onClick={() => setScoringType(SCORING_TYPE_MATCH)} title="Match play — the side that wins more holes takes each pot" style={pill(scoringType === SCORING_TYPE_MATCH, false)}>Match</button>
                       <button onClick={() => setScoringType(SCORING_TYPE_TOTAL)} title={`Medal — the running total of ${totalUnit(roundFormat || tRounds.find(t => t.round_number === editRound)?.format || DEFAULT_FORMAT)} over each segment decides the pot, not holes won`} style={pill(scoringType === SCORING_TYPE_TOTAL, false)}>Medal</button>
                       <button onClick={() => setScoringType(SCORING_TYPE_TEAM)} title="Team best ball — each side counts its best net ball per hole, scored as match play" style={pill(scoringType === SCORING_TYPE_TEAM, false)}>Team</button>
+                      <button onClick={() => setScoringType(SCORING_TYPE_POINTS)} title="Points per hole — every hole is its own pot, worth what its nine is worth. Winner takes it, a halved hole splits it." style={pill(perHole, false)}>Points</button>
                     </div>
                     {/* Single vs Nassau — pots only, so a Points round has no
                         use for it and it stands down rather than sitting there

@@ -111,8 +111,14 @@ export const totalUnit = (format) =>
 // format, so any consumer deriving direction (higherIsBetter) from the
 // format must ask through here — reading the raw format on a Team round
 // would flip the margin on a dots/points format.
+//
+// The ONE format it does not override is team_best_ball, which is already a
+// team best ball — a richer one, summing the side's best N nets rather than
+// taking its single best ball. Rewriting it to plain best_ball would silently
+// throw the round's counting scores away and score a hole off one player, so
+// the format wins and the two features stop fighting over the same name.
 export const effectiveHoleFormat = (scoringType, format) =>
-  scoringType === SCORING_TYPE_TEAM ? "best_ball" : format;
+  (scoringType === SCORING_TYPE_TEAM && format !== "team_best_ball") ? "best_ball" : format;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SEGMENT STATE — the one answer to "where does this stretch of holes stand?"

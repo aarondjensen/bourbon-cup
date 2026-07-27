@@ -304,9 +304,14 @@ export const describeCounting = (counts) => {
 //                       being played for points.
 export const HOLE_POINTS_DEFAULT = { front: 1, back: 2 };
 
+// The four settlement modes. Note these are not quite one axis: the first
+// three decide how POINTS are awarded, while `team` overrides how a HOLE is
+// scored (best net ball) and then settles as match play. They share a field
+// because they share a toggle; see effectiveHoleFormat in scoring.js for the
+// half that is really about holes.
 export const SCORING_TYPE_MATCH = "match";
 export const SCORING_TYPE_TOTAL = "stroke";     // stored value predates the "Medal" label
-export const SCORING_TYPE_POINTS = "points";    // scoreable but no longer offered in admin
+export const SCORING_TYPE_POINTS = "points";    // every hole its own pot
 export const SCORING_TYPE_TEAM = "team";        // team best ball, settled as match play
 
 export const isPointsPerHole = (scoringType) => scoringType === SCORING_TYPE_POINTS;
