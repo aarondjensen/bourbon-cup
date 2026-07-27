@@ -10,6 +10,7 @@ import {
   resolveHolePoints, isPointsPerHole, holePointsTotal,
   SCORING_TYPE_MATCH, SCORING_TYPE_TOTAL, SCORING_TYPE_POINTS,
   FORMS_OF_PLAY, HOLE_SCORING_FORMAT, HOLE_SCORING_BEST_BALL, resolveScoring,
+  holeRuleFor, describeHoleScore, HOLE_RULE_COUNTING, HOLE_RULE_FIXED,
 } from "./constants";
 import {
   calcCH, calcCHForCourse, fmtScore,
@@ -1532,6 +1533,15 @@ const echoedSlice = (written, round, key, incomingSlice) =>
 //
 // `hint` carries the one-line "what does this section decide?" so the controls
 // underneath don't each have to re-explain themselves.
+//
+// The six headings are the same six on every format — a form whose shape moves
+// with the format cannot be learned — but what sits UNDER them follows from the
+// format, and a section with nothing left to ask states its answer instead of
+// going blank. That is the rule the sections are written to: never ask a
+// question the format has already answered (Double Dot was being asked whether
+// it was a Best Ball round), and never leave one answered off-screen (Medal's
+// unit, and the format's recommended allowance, both lived in `title`
+// tooltips — which a phone never shows).
 function RoundSectionHeading({ children, hint, first }) {
   return (
     <div style={{
@@ -2385,6 +2395,18 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               </div>
             </div>
 
+            {/* What the format IS, in its own words. The select shows a name
+                and nothing else, so the game itself was the one thing the
+                round form never said — and every section below is a
+                consequence of it. FORMATS carries the sentence. */}
+            {(() => {
+              const fmt = FORMATS.find(f => f.id === formRound.format);
+              if (!fmt) return null;
+              return (
+                <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5, marginBottom: 10 }}>{fmt.desc}</div>
+              );
+            })()}
+
             {/* Tee Times */}
 
             {(() => {
@@ -2453,30 +2475,54 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
             {/* ══ HOLE SCORING ══════════════════════════════════════════
                 The first of the two scoring axes: how a side's single number
-                for a hole is arrived at. Normally the format answers this and
-                there is nothing to decide — a Four-Ball takes the better ball,
-                a Team Total adds both — so the section shows only what the
-                round actually has a choice about:
+                for a hole is arrived at. The FORMAT usually answers it outright
+                — a Four-Ball takes the better ball, a Team Total adds both —
+                so the section asks only where something is genuinely open, and
+                otherwise STATES the rule rather than leaving the director to
+                infer it. Three shapes, chosen by constants.holeRuleFor:
 
-                  • Team Best Ball → the COUNTING grid. Best ball is a given
-                    here; the open question is how many balls count.
-                  • every other format → the BEST BALL override, which throws
-                    the format's own per-hole method away and takes each side's
-                    best net ball instead.
+                  • COUNTING (Team Best Ball) → the count grid below. Best ball
+                    is a given; the open question is how many balls count.
+                  • CHOICE → the best-ball override, which throws the format's
+                    own per-hole method away and takes each side's best net
+                    ball instead.
+                  • FIXED → one line of prose, no control.
 
-                These are mutually exclusive by construction, which is the
-                point: offering "best ball" on a format that already sums the
-                best N would silently discard the counts (it did). */}
+                The override used to be offered on every format but Team Best
+                Ball, which is how a Double Dot round came to be asked whether
+                it was a Best Ball round — a question its own name answers, and
+                whose "yes" silently discards the Hi/Lo dots and re-scores the
+                round in net strokes. Same class of bug as offering it on a
+                format that already sums the best N (which discarded the
+                counts); the fix is the same one, applied to all of them. */}
             <RoundSectionHeading hint="How each side's number for a hole is arrived at.">
               HOLE SCORING
             </RoundSectionHeading>
             {(() => {
-              const fmtId = roundFormat || tRounds.find(t => t.round_number === editRound)?.format || DEFAULT_FORMAT;
+              const fmtId = formRound.format;
               // Team Best Ball answers this section with its counting grid
               // below, so the override would be both redundant and dangerous.
-              if (formatCountsScores(fmtId)) return null;
+              if (holeRuleFor(fmtId) === HOLE_RULE_COUNTING) return null;
               const fmt = FORMATS.find(f => f.id === fmtId);
               const on = holeScoring === HOLE_SCORING_BEST_BALL;
+              const fixed = holeRuleFor(fmtId) === HOLE_RULE_FIXED;
+              const lbl = <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>HOLE SCORE</div>;
+              // A fixed format states its rule and asks nothing.
+              //
+              // Unless the round is ALREADY overridden — which a document
+              // stored with the pre-split `scoring_type: "team"` is, since
+              // resolveScoring reads it as best-ball holes. Hiding the control
+              // there would leave a setting that is actively scoring the round
+              // with no way to see or clear it, so the toggle stays and says
+              // so in amber. Every other fixed round never sees it.
+              if (fixed && !on) {
+                return (
+                  <div style={{ marginBottom: 12, display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                    {lbl}
+                    <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5 }}>{describeHoleScore(fmtId)}</div>
+                  </div>
+                );
+              }
               const bbPill = (active) => ({
                 padding: "4px 12px", borderRadius: 16, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                 background: active ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
@@ -2485,20 +2531,25 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               return (
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>BEST BALL</div>
+                    {lbl}
+                    {/* The two pills name the two ways a hole could score,
+                        rather than Off/On against a control labelled with a
+                        format's name — "Best Ball: Off" read as a claim about
+                        what the round IS, not as a choice between methods. */}
                     <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}` }}>
                       <button onClick={() => setHoleScoring(HOLE_SCORING_FORMAT)}
-                        title={`Score each hole the way ${fmt?.label || "the format"} says`}
-                        style={bbPill(!on)}>Off</button>
+                        title={describeHoleScore(fmtId)}
+                        style={bbPill(!on)}>{fmt?.label || "Format"}</button>
                       <button onClick={() => setHoleScoring(HOLE_SCORING_BEST_BALL)}
                         title="Each side's hole score is its best net ball, whatever the format's own method would be"
-                        style={bbPill(on)}>On</button>
+                        style={bbPill(on)}>Best Ball</button>
                     </div>
                   </div>
-                  <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
-                    {on
-                      ? `Each side's hole score is its best net ball — ${fmt?.label || "the format"}'s own per-hole method is overridden.`
-                      : `Holes score the way ${fmt?.label || "the format"} says.`}
+                  <div style={{ fontSize: 9, color: on && fixed ? BC.amber : BC.t3, lineHeight: 1.5, marginTop: 5 }}>
+                    {!on ? describeHoleScore(fmtId)
+                      : fixed
+                        ? `This round is overriding ${fmt?.label || "the format"} and scoring each hole as the side's best net ball. Pick ${fmt?.label || "the format"} to score it as its own name says.`
+                        : "Each side's hole score is its best net ball."}
                   </div>
                 </div>
               );
@@ -2521,7 +2572,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 carries the `counting` prefill), so every other round's form is
                 exactly as it was. */}
             {(() => {
-              const fmtId = roundFormat || tRounds.find(t => t.round_number === editRound)?.format || DEFAULT_FORMAT;
+              const fmtId = formRound.format;
               if (!formatCountsScores(fmtId)) return null;
               const prefill = countingDefaultFor(fmtId);
               const cur = resolveCounting(fmtId, counting);   // 18 numbers, always
@@ -2680,21 +2731,29 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: 14, textAlign: "center", width: 44 }} />
                 </div>
               );
-              const medalUnit = totalUnit(roundFormat || tRounds.find(t => t.round_number === editRound)?.format || DEFAULT_FORMAT);
-              const formTitle = (id) => id === SCORING_TYPE_TOTAL
-                ? `Medal — the running total of ${medalUnit} over each segment decides the pot, not holes won`
+              // What each form of play MEANS on this round's format. Only
+              // Medal actually changes with the format — "the running total"
+              // is strokes on most, dots on Double Dot, points on Stableford —
+              // and a director who reads "total" on a Double Dot round has
+              // every reason to think it means strokes. The unit is not
+              // optional detail, so it is on the page rather than in a
+              // tooltip no touch device will ever show.
+              const medalUnit = totalUnit(formRound.format);
+              const formDesc = (id) => id === SCORING_TYPE_TOTAL
+                ? `The running total of ${medalUnit} over each segment takes the pot, not holes won.`
                 : FORMS_OF_PLAY.find(f => f.id === id)?.desc;
               return (
                 <>
                   <RoundSectionHeading hint="How those hole scores turn into points.">
                     FORM OF PLAY
                   </RoundSectionHeading>
-                  <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}`, alignSelf: "flex-start", width: "fit-content", marginBottom: 12 }}>
+                  <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}`, alignSelf: "flex-start", width: "fit-content", marginBottom: 5 }}>
                     {FORMS_OF_PLAY.map(f => (
-                      <button key={f.id} onClick={() => setScoringType(f.id)} title={formTitle(f.id)}
+                      <button key={f.id} onClick={() => setScoringType(f.id)} title={formDesc(f.id)}
                         style={pill(scoringType === f.id, false)}>{f.label}</button>
                     ))}
                   </div>
+                  <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5, marginBottom: 12 }}>{formDesc(scoringType)}</div>
 
                   <RoundSectionHeading hint={perHole
                     ? "What one hole is worth on each nine."
@@ -2724,6 +2783,18 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                           ? numField("overall", "Value")
                           : [["front", "F9"], ["back", "B9"], ["overall", "OVR"]].map(([k, lbl]) => numField(k, lbl))}
                     </div>
+                    {/* What the boxes above add up to. A Points round already
+                        prints its round total beside the fields; the pots did
+                        not, so the one number a director actually checks — what
+                        this round is worth to the cup — had to be added up by
+                        hand from two or three boxes. */}
+                    {!perHole && (
+                      <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
+                        {isSingle
+                          ? `One pot for the 18-hole result. ${nassau.overall || 0} on the round.`
+                          : `Three pots — front nine, back nine and the overall. ${(nassau.front || 0) + (nassau.back || 0) + (nassau.overall || 0)} on the round.`}
+                      </div>
+                    )}
                   </div>
                 </>
               );
@@ -2755,7 +2826,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               HANDICAPS
             </RoundSectionHeading>
             {(() => {
-              const fmtId = roundFormat || tRounds.find(t => t.round_number === editRound)?.format || DEFAULT_FORMAT;
+              const fmtId = formRound.format;
               const fmt = FORMATS.find(f => f.id === fmtId);
               const prefill = allowanceDefaultFor(fmtId);       // what ON starts at
               const cur = resolveAllowance(fmtId, allowance);   // what the round scores with
@@ -2855,6 +2926,19 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   {!on && cur.shared && (
                     <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
                       {fmt?.label || "This format"} plays one ball per side, so with no allowance the side's team handicap is both partners' full handicaps added together.
+                    </div>
+                  )}
+                  {/* The format's recommended terms, on the page. Off is a
+                      legitimate choice, but it was one made against a
+                      recommendation that only existed inside the On button's
+                      tooltip — invisible on every phone the director actually
+                      sets a round up on. Silent where the recommendation is
+                      100% (Singles), since "plays off 100%" is what Off
+                      already means, and where the shared-ball line above is
+                      already saying something stronger. */}
+                  {!on && !cur.shared && describeAllowance(resolveAllowance(fmtId, { enabled: true, ...prefill })) !== "100%" && (
+                    <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
+                      Full Course Handicaps. {fmt?.label || "This format"} is normally played off {describeAllowance(resolveAllowance(fmtId, { enabled: true, ...prefill }))}.
                     </div>
                   )}
                   {roundIsLocked && (

@@ -51,6 +51,19 @@ eventually editing while the other is running a round.
   `.claude/settings.local.json` are gitignored; the secrets in `api/*.js` are
   set in Vercel, not in the repo.
 
+## The api/ handlers during local dev
+
+`api/*.js` are Vercel serverless functions and do not run under `npm run dev`.
+`vite.config.js` proxies `/api` to the deployed site so GHIN and course lookups
+work locally with no credentials on the machine — the deployed function holds
+them. Two consequences:
+
+- A local `/api` call exercises the DEPLOYED handler, not your edits to it.
+  Changing `api/ghin.js` itself needs `vercel dev` plus real credentials; point
+  `VITE_API_PROXY` at that instead.
+- These are live third-party calls against the real GHIN account. Fine for
+  lookups, but don't loop them.
+
 ## Verifying UI changes
 
 Screenshots beat assertions for anything visual. The pattern that works here:

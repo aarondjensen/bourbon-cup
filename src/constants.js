@@ -105,19 +105,26 @@ export const resolveTeams = (teamNames) => ({
 // Only Team Best Ball has it, and its presence is what puts the F9/B9 count
 // fields on the round form.
 //
+// `hole` is one line saying how a side's number for a hole is ACTUALLY made —
+// what the engine does, not what the rules of the game are called (`desc` is
+// that). The round form prints it so the director can read the rule instead of
+// being asked to guess at it. `holeChoice` marks the formats where that is
+// still an OPEN question the director gets to answer; see the hole-scoring
+// axis below for why the other eight are not asked.
+//
 // Format defaults are baseline only — the director can override any value
 // in the round setup form.
 export const FORMATS = [
-  { id: "singles",        label: "Singles",            desc: "Match play, 1v1 net comparison per hole.",                                              nassau: { front: 1, back: 1, overall: 1 }, perSide: 1, allowance: { pct: 100 } },
-  { id: "best_ball",      label: "2-Man Best Ball",    desc: "Each player plays their own ball; team uses the better net score per hole.",            nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 90 } },
-  { id: "team_total",     label: "Team Total",         desc: "Combined team net per hole vs combined team net. Lower combined wins the hole.",        nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 90 } },
-  { id: "pinehurst",      label: "Pinehurst",          desc: "Partners each drive, swap balls, then choose best to finish as scramble.",              nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { low: 60, high: 40 } },
-  { id: "team_best_ball", label: "Team Best Ball",     desc: "Whole side plays; each hole is the sum of the best N net scores, set per nine.",        nassau: { front: 1, back: 1, overall: 2 }, perSide: null, allowance: { pct: 75 }, counting: { front: 6, back: 7 } },
-  { id: "double_dot",     label: "Double Dot",         desc: "2-man Hi/Lo. Each hole: a dot for the low ball, a dot for the high ball. Ties win nothing.", nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 90 } },
-  { id: "shamble",        label: "Shamble",            desc: "All players drive, choose best drive, each plays their own ball in.",                   nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 90 } },
-  { id: "scramble",       label: "2-Man Scramble",     desc: "Both hit every shot, choose best ball location, both play from there.",                 nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { low: 35, high: 15 }, sharedBall: true },
-  { id: "tilt",           label: "2-Man Tilt",         desc: "2-man match play — net comparison per hole.",                                           nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 90 } },
-  { id: "stableford",     label: "2-Man Stableford",   desc: "Points per hole: eagle=4, birdie=3, par=2, bogey=1. Higher segment points wins.",       nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 85 } },
+  { id: "singles",        label: "Singles",            desc: "Match play, 1v1 net comparison per hole.",                                              nassau: { front: 1, back: 1, overall: 1 }, perSide: 1, allowance: { pct: 100 }, hole: "One ball a side — the player's own net score." },
+  { id: "best_ball",      label: "2-Man Best Ball",    desc: "Each player plays their own ball; team uses the better net score per hole.",            nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 90 }, hole: "The better of the side's two net balls." },
+  { id: "team_total",     label: "Team Total",         desc: "Combined team net per hole vs combined team net. Lower combined wins the hole.",        nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 90 }, hole: "Both partners' nets added together.", holeChoice: true },
+  { id: "pinehurst",      label: "Pinehurst",          desc: "Partners each drive, swap balls, then choose best to finish as scramble.",              nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { low: 60, high: 40 }, hole: "The side's one ball, played net." },
+  { id: "team_best_ball", label: "Team Best Ball",     desc: "Whole side plays; each hole is the sum of the best N net scores, set per nine.",        nassau: { front: 1, back: 1, overall: 2 }, perSide: null, allowance: { pct: 75 }, counting: { front: 6, back: 7 }, hole: "The sum of the side's best N nets." },
+  { id: "double_dot",     label: "Double Dot",         desc: "2-man Hi/Lo. Each hole: a dot for the low ball, a dot for the high ball. Ties win nothing.", nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 90 }, hole: "Two dots a hole — one for the low ball, one for the high. A tied ball wins nothing." },
+  { id: "shamble",        label: "Shamble",            desc: "All players drive, choose best drive, each plays their own ball in.",                   nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 90 }, hole: "One net score a side, off the first card entered.", holeChoice: true },
+  { id: "scramble",       label: "2-Man Scramble",     desc: "Both hit every shot, choose best ball location, both play from there.",                 nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { low: 35, high: 15 }, sharedBall: true, hole: "The side's one ball, net off the team handicap." },
+  { id: "tilt",           label: "2-Man Tilt",         desc: "2-man match play — net comparison per hole.",                                           nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 90 }, hole: "One net score a side, off the first card entered.", holeChoice: true },
+  { id: "stableford",     label: "2-Man Stableford",   desc: "Points per hole: eagle=4, birdie=3, par=2, bogey=1. Higher segment points wins.",       nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 85 }, hole: "Points against par — eagle 4, birdie 3, par 2, bogey 1." },
 ];
 
 // ── Handicap allowances ──
@@ -334,6 +341,40 @@ export const FORMS_OF_PLAY = [
 // ── Hole scoring (how a side's hole number is made) ──
 export const HOLE_SCORING_FORMAT = "format";        // whatever the format says
 export const HOLE_SCORING_BEST_BALL = "best_ball";  // best net ball, format overridden
+
+// What the round form has to ASK about a hole, given the format. The override
+// used to be offered on all nine non-counting formats, which is how a Double
+// Dot round came to be asked whether it was a Best Ball round — a question its
+// own name had already answered, and one whose "yes" throws the Hi/Lo dots
+// away and re-scores the round in net strokes.
+//
+// Three answers, and the format picks its own:
+//
+//   COUNTING — Team Best Ball. Best ball is a given; the open question is how
+//              many balls count, which the F9/B9 grid asks.
+//   CHOICE   — the format leaves a side's hole number genuinely undecided, so
+//              the override is a real question. Team Total (sums both nets, so
+//              "better ball instead" is a coherent alternative), plus Shamble
+//              and 2-Man Tilt, which have no team rule in the engine at all
+//              and score off one card until told otherwise.
+//   FIXED    — the format's name already answers it. Singles and Scramble play
+//              one ball, Best Ball is a best ball, Pinehurst posts one score,
+//              and Double Dot and Stableford count something other than net
+//              strokes. The form STATES the rule instead of asking.
+export const HOLE_RULE_COUNTING = "counting";
+export const HOLE_RULE_CHOICE = "choice";
+export const HOLE_RULE_FIXED = "fixed";
+
+export const holeRuleFor = (formatId) => {
+  const f = FORMATS.find(x => x.id === formatId);
+  if (f?.counting) return HOLE_RULE_COUNTING;
+  return f?.holeChoice ? HOLE_RULE_CHOICE : HOLE_RULE_FIXED;
+};
+
+// How a hole scores under a format, in one line. Empty for an unknown id so a
+// caller can render nothing rather than a sentence about nothing.
+export const describeHoleScore = (formatId) =>
+  FORMATS.find(f => f.id === formatId)?.hole || "";
 
 // The legacy value. `scoring_type: "team"` meant BOTH halves at once — score
 // every hole as best ball, then settle as match play — so it splits into one
