@@ -22,8 +22,15 @@ export const TROPHY_SILHOUETTE  = "/trophy_logo_silhouette.png";
 //
 // Same pattern as `BC` in theme.js: the import gives you a stable handle
 // to a mutable object; React re-renders propagate the visual change.
-export const TEAM_A = { id: "A", name: "Team Alpha", color: "#004d24", accent: "#009144", glow: "rgba(0,145,68,0.2)", short: "α", logo: LOGO_TEAM_A };
-export const TEAM_B = { id: "B", name: "Team Beta",  color: "#0d3235", accent: "#3A96A0", glow: "rgba(58,150,160,0.2)", short: "β", logo: LOGO_TEAM_B };
+// Each team carries TWO shades: `accent` is the vivid one (text, rails,
+// borders) and `color` is the deep fill behind it. Both — plus the glow,
+// which is the accent at 20% — were brightened by theme.js's liftHex factor
+// (RGB x 1.2). Pre-lift values were accent #009144 / color #004d24 for A and
+// accent #3A96A0 / color #0d3235 for B. Lifting the literals here rather
+// than at read time is required: components read `team.accent` straight off
+// these objects, so a runtime-only lift would leave those uses behind.
+export const TEAM_A = { id: "A", name: "Team Alpha", color: "#005c2b", accent: "#00ae52", glow: "rgba(0,174,82,0.2)", short: "α", logo: LOGO_TEAM_A };
+export const TEAM_B = { id: "B", name: "Team Beta",  color: "#103c40", accent: "#46b4c0", glow: "rgba(70,180,192,0.2)", short: "β", logo: LOGO_TEAM_B };
 
 export const getTeam = (tid) => tid === "A" ? TEAM_A : TEAM_B;
 export const oppTeam = (tid) => tid === "A" ? TEAM_B : TEAM_A;
