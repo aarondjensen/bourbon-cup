@@ -6075,8 +6075,26 @@ export default function App() {
     // Freeze BEFORE the score lands, so the very first hole of a round is
     // already scoring off the snapshot.
     await ensureRoundLock(rnd);
+    // ── Edition scoping ──
+    // Scores and matches were the last two collections still building their
+    // document ids by hand instead of through editionDocId. Nothing has
+    // actually collided, and the reason is luck rather than design: both ids
+    // embed player ids, and player ids are minted from a clock
+    // (`bc_player_<ms>`, or `p_<stamp>_<i>` for a cloned roster), so no two
+    // editions have ever generated the same one. Any edition seeded from a
+    // backup, a hand-written fixture, or a future id scheme that isn't
+    // clock-based would put two editions' scores on ONE document — and since
+    // db.upsert merges, the second edition's write would take the first
+    // edition's document over, tournament_id and all. Every other collection
+    // is already scoped this way; these two now are too.
+    //
+    // For the original (un-namespaced) edition editionDocId is the identity
+    // function, so this is byte-identical to the old id and nothing stored
+    // today moves.
+    const bareId = `bc_hs_r${rnd}_${pid}_h${holeIdx + 1}`;
+    const id = editionDocId(bareId);
     const data = {
-      id: `bc_hs_r${rnd}_${pid}_h${holeIdx + 1}`,
+      id,
       tournament_id: TOURNAMENT_ID,
       player_id: pid,
       round_number: rnd,
@@ -6089,6 +6107,15 @@ export default function App() {
       const key = `${pid}_${rnd}`;
       return { ...prev, [key]: { ...prev[key], [holeIdx]: score } };
     });
+    // A namespaced edition that already has scores has them under the OLD
+    // bare id, and this writer rebuilds the id from scratch every save rather
+    // than reusing the stored one — so without this the same hole would exist
+    // as two documents, and the subscription (which maps both onto
+    // `${pid}_${round}`) would show whichever Firestore happened to hand back
+    // last. Dropping the superseded document first means there is never a
+    // moment where both exist. Safe against other editions because the id
+    // embeds this edition's player id, which no other edition uses.
+    if (id !== bareId) await db.delete("bc_hole_scores", bareId);
     await db.upsert("bc_hole_scores", data);
     setSyncing(false);
   }, [ensureRoundLock]);
@@ -6159,7 +6186,9 @@ export default function App() {
       { field: "round_number", op: "==", value: round },
     ]);
     for (const r of rows) {
-      await db.delete("bc_hole_scores", r.id || `bc_hs_r${round}_${pid}_h${r.hole_number}`);
+      // The stored id first, so this clears whatever scheme the document was
+      // actually written under — bare or edition-prefixed (see onSaveHole).
+      await db.delete("bc_hole_scores", r.id || editionDocId(`bc_hs_r${round}_${pid}_h${r.hole_number}`));
     }
     // The subscription will say the same thing a moment later; this keeps the
     // panel that raised the action from re-rendering with the stale card.

@@ -255,7 +255,12 @@ export function MatchSetup({
       confirmLabel: "Create anyway",
     }))) return;
     await onSetMatch({
-      id: `bc_match_r${round}_${teamASel.join("_")}_vs_${teamBSel.join("_")}`,
+      // Edition-scoped like every other document the app writes — see the
+      // note in App.onSaveHole for why these two collections were the last
+      // ones building their ids by hand. Existing matches keep the id they
+      // were stored with (edits and deletes go through `m.id`), so this only
+      // ever applies to a match being created now.
+      id: editionDocId(`bc_match_r${round}_${teamASel.join("_")}_vs_${teamBSel.join("_")}`),
       tournament_id: TOURNAMENT_ID,
       round,
       teamA: teamASel,
