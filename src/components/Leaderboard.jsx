@@ -36,7 +36,7 @@ import {
   POINT_METHOD_TRADITIONAL, TROPHY_SILHOUETTE, CUP_POINTS_TO_WIN,
 } from "../constants";
 import {
-  computeMatchResult, getRoundCourseCtx, higherIsBetter, totalUnit,
+  computeMatchResult, getRoundCourseCtx, higherIsBetter, totalUnit, effectiveHoleFormat,
   segmentState, statusText, segmentLeader,
 } from "../scoring";
 import { HoleStrip } from "./HoleStrip";
@@ -80,7 +80,10 @@ const initialsOf = (names) => {
 // tell it how the round is settled.
 const segOpts = (m, format) => ({
   total: (m.scoring_type || "match") === "stroke",
-  higherWins: higherIsBetter(format),
+  // Through effectiveHoleFormat: a Team-scored round's holes are best-ball
+  // nets whatever the format says, so direction must not come from a
+  // dots/points format's higher-is-better.
+  higherWins: higherIsBetter(effectiveHoleFormat(m.scoring_type, format)),
 });
 
 // ── Pending points ───────────────────────────────────────────────
@@ -506,7 +509,8 @@ export function TeamLeaderboard({
         // how the round is settled — the same Double Dot round plays as a
         // match or on total dots depending on this one setting.
         scoring: (tr?.scoring_type || "match") === "stroke"
-          ? `Total ${totalUnit(tr?.format)}` : "Match play",
+          ? `Medal ${totalUnit(tr?.format)}`
+          : (tr?.scoring_type || "match") === "team" ? "Team best ball" : "Match play",
         state: settled ? "final" : holesPlayed > 0 ? "live" : "upcoming",
       };
     });
@@ -705,7 +709,7 @@ export function TeamLeaderboard({
 export function MatchScorecard({ match, result, format, courses, tRounds, teams, roundLocks }) {
   const { course, holePars } = getRoundCourseCtx({ roundLocks, round: match.round, tRounds, courses });
   const total = (match.scoring_type || "match") === "stroke";
-  const higherWins = higherIsBetter(format);
+  const higherWins = higherIsBetter(effectiveHoleFormat(match.scoring_type, format));
   const unit = totalUnit(format);
   const holes = result.holes;
 

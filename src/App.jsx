@@ -11,7 +11,7 @@ import {
   getEffectiveHI, buildStrokeMap, resolveHolePars, resolveHoleHcps,
   computeMatchResult, computePracticeMatch, computePracticeSkins,
   getRoundCH, getRoundHI, getRoundTee, getRoundHandicapMode, lockForRound,
-  higherIsBetter, totalUnit, segmentState,
+  higherIsBetter, totalUnit, segmentState, effectiveHoleFormat,
 } from "./scoring";
 import { holeFill } from "./lib/holeFill";
 import {
@@ -474,7 +474,8 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // state it wasn't being scored on.
   const userTeam = match.teamA.includes(userPid) ? "A" : "B";
   const totalScored = (match.scoring_type || "match") === "stroke";
-  const segOpts = { total: totalScored, higherWins: higherIsBetter(format) };
+  const teamScored = (match.scoring_type || "match") === "team";
+  const segOpts = { total: totalScored, higherWins: higherIsBetter(effectiveHoleFormat(match.scoring_type, format)) };
   const renderStatusCell = (i) => {
     // Same reasoning as the Leaderboard strip's cell height: the bar has to
     // be tall enough for a split hole's diagonal to read, and it stays that
@@ -627,7 +628,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
         {/* The scoring type sits next to the format because the same format
             plays completely differently under the two — and the status strip
             above is counting whichever one this says. */}
-        {totalScored ? `TOTAL ${totalUnit(format).toUpperCase()}` : "MATCH PLAY"}
+        {totalScored ? `TOTAL ${totalUnit(format).toUpperCase()}` : teamScored ? "TEAM BEST BALL" : "MATCH PLAY"}
         {" · ROUND "}{match.round}
       </div>
 
@@ -916,6 +917,31 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   const lockState = roundLockState(roundLocks, editRound);
   const roundIsLocked = lockState !== LOCK_OPEN;
   const roundIsFinal = lockState === LOCK_FINAL;
+  // Popup replacement for the old always-visible lock banner: raised when a
+  // control in the handicap section is touched on a locked/final round.
+  // FINAL blocks the change and warns on every attempt; merely LOCKED lets
+  // the change through (it's saved for reference, scoring stays on the
+  // snapshot) and warns once per round per visit rather than on every tap.
+  const lockWarnedRef = useRef({});
+  const warnRoundLocked = () => {
+    if (roundIsFinal) {
+      confirm({
+        title: `Round ${editRound} is final`,
+        message: "These fields are read-only. Nothing recalculates a final round.",
+        alert: true,
+      });
+      return true; // block the change
+    }
+    if (roundIsLocked && !lockWarnedRef.current[editRound]) {
+      lockWarnedRef.current[editRound] = true;
+      confirm({
+        title: `Round ${editRound} is locked`,
+        message: "Its handicaps are frozen. Changes here are saved for reference but will not affect its scoring.",
+        alert: true,
+      });
+    }
+    return false; // allow the change
+  };
 
   const showChDelta = (key, delta) => {
     if (!delta) return;
@@ -931,7 +957,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   useEffect(() => { if (hcpOverridesFromDb) setHcpOverrides(hcpOverridesFromDb); }, [JSON.stringify(hcpOverridesFromDb)]);
   useEffect(() => { if (teeAssignmentsFromDb) setTeeAssignments(teeAssignmentsFromDb); }, [JSON.stringify(teeAssignmentsFromDb)]);
   const [nassau, setNassau] = useState(NASSAU_DEFAULT);
-  const [scoringType, setScoringType] = useState("match"); // "match" | "stroke"
+  const [scoringType, setScoringType] = useState("match"); // "match" | "stroke" (Medal) | "team" (best ball)
 
   // Match builder
   const [matchRound, setMatchRound] = useState(1);
@@ -1516,9 +1542,11 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             })()}
 
             {/* ── Scoring ──────────────────────────────────────────────────
-                Match (win/halve holes) vs Total (the running total decides it:
-                fewest net strokes, or most dots on Double Dot, or most points
-                on Stableford), then Single vs Nassau. Both share the nassau
+                Match (win/halve holes) vs Medal (the running total decides
+                it: fewest net strokes, or most dots on Double Dot, or most
+                points on Stableford; stored as "stroke") vs Team (team best
+                ball — best net per side per hole, scored as match play),
+                then Single vs Nassau. All share the nassau
                 {front,back,overall} pots:
                   • Nassau → three segments (F9 / B9 / OVR)
                   • Single → one 18-hole pot worth `value` (overall-only)
@@ -1547,10 +1575,11 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>SCORING</div>
-                    {/* Match / Stroke */}
+                    {/* Match / Medal / Team */}
                     <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}` }}>
                       <button onClick={() => setScoringType("match")} title="Match play — the side that wins more holes takes each pot" style={pill(scoringType === "match", false)}>Match</button>
-                      <button onClick={() => setScoringType("stroke")} title={`Total ${totalUnit(roundFormat || tRounds.find(t => t.round_number === editRound)?.format || DEFAULT_FORMAT)} — the running total over each segment decides the pot, not holes won`} style={pill(scoringType === "stroke", false)}>Total</button>
+                      <button onClick={() => setScoringType("stroke")} title={`Medal — the running total of ${totalUnit(roundFormat || tRounds.find(t => t.round_number === editRound)?.format || DEFAULT_FORMAT)} over each segment decides the pot, not holes won`} style={pill(scoringType === "stroke", false)}>Medal</button>
+                      <button onClick={() => setScoringType("team")} title="Team best ball — each side counts its best net ball per hole, scored as match play" style={pill(scoringType === "team", false)}>Team</button>
                     </div>
                     {/* Low Man / All (handicap allocation) */}
                     <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}`, marginLeft: "auto" }}>
@@ -1576,19 +1605,9 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
             {/* Handicap Overrides */}
             <div style={{ marginBottom: 14 }}>
-              {/* PLAYER DETAILS header already in column headers */}
-              {roundIsLocked && (
-                <div style={{
-                  fontSize: 9, color: roundIsFinal ? BC.danger : BC.amber, lineHeight: 1.5,
-                  marginBottom: 6, padding: "5px 7px", borderRadius: 6,
-                  background: (roundIsFinal ? BC.danger : BC.amber) + "12",
-                  border: `1px solid ${(roundIsFinal ? BC.danger : BC.amber)}33`,
-                }}>
-                  {roundIsFinal
-                    ? `Round ${editRound} is final. These fields are read-only.`
-                    : `Round ${editRound} is locked — its handicaps are frozen. Changes here are saved for reference but will not affect its scoring.`}
-                </div>
-              )}
+              {/* PLAYER DETAILS header already in column headers.
+                  No lock banner here — touching a control on a locked/final
+                  round raises warnRoundLocked's popup instead. */}
               {tPlayers.length === 0 && <div style={{ fontSize: 11, color: BC.t3 }}>No players added yet.</div>}
               {tPlayers.length > 0 && (() => {
                 const tr2h = tRounds.find(t => t.round_number === editRound);
@@ -1645,7 +1664,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         <div title={hiOverridden ? `Index override (base ${p.handicap_index})` : undefined} style={{ fontSize: 10, color: hiOverridden ? BC.amber : BC.t3, fontWeight: hiOverridden ? 700 : 400, textAlign: "center" }}>{effHI}{hiOverridden ? "*" : ""}</div>
                         <input
                           type="number" step="1"
-                          disabled={roundIsFinal}
+                          // readOnly (not disabled) when final so the tap still
+                          // fires onFocus and the popup can explain the block.
+                          readOnly={roundIsFinal}
+                          onFocus={() => warnRoundLocked()}
                           value={hasOverride ? override : ""}
                           onChange={e => {
                             if (roundIsFinal) return;
@@ -1662,8 +1684,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         />
                         {tees2.map((tee, ti) => {
                           const isAct = currentTee2 === tee.name;
+                          // Not `disabled` when final — the tap must still land
+                          // so warnRoundLocked can explain WHY nothing changes.
                           return (
-                            <button key={tee.name} disabled={roundIsFinal} onClick={() => { if (roundIsFinal) return; assignTee2(tee.name); }} title={tee.name} style={{
+                            <button key={tee.name} onClick={() => { if (warnRoundLocked()) return; assignTee2(tee.name); }} title={tee.name} style={{
                               background: "transparent", border: "none", cursor: roundIsFinal ? "not-allowed" : "pointer", padding: 0,
                               display: "flex", alignItems: "center", justifyContent: "center",
                               opacity: roundIsFinal ? (isAct ? 0.55 : 0.2) : (isAct ? 1 : 0.35),
