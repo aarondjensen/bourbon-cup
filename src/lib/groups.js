@@ -33,8 +33,12 @@
 // Tee times are deliberately NOT stored here — they already live on the
 // round document as `tee_time`, a pipe-delimited list ("8:30|8:40|8:50")
 // that the Rounds tab has always written. Group i goes off at time i.
-// Keeping one source of truth means the Rounds tab and the Matches tab can
-// both edit tee times without either one being able to contradict the other.
+//
+// Which makes the tee-time list the group list. The Rounds tab writes one
+// box per group, labelled G1–G4, so by the time a director reaches the
+// Matches tab the round's groups already exist — there is nothing to create,
+// only matches to drop into them. This document holds who rides in each,
+// never how many there are or when they go off.
 
 import { editionDocId } from "../firebase";
 import { FORMATS } from "../constants";
@@ -58,6 +62,11 @@ export const GROUP_MAX = 5;
 // Minutes between consecutive groups when the round setup doesn't imply
 // one. Matches the spread the Rounds tab has always auto-filled.
 export const DEFAULT_TEE_INTERVAL = 10;
+
+// How many tee times the Rounds tab always writes (G1–G4). A sixteen-player
+// field is four foursomes, so this is the whole tee sheet in the normal case
+// and the floor in every other.
+export const TEE_SLOTS = 4;
 
 // ── Time parsing ───────────────────────────────────────────────────
 // Accepts what a director actually types into a tee-time box: "8:30",
@@ -132,6 +141,30 @@ export function expandTeeTimes(times, count) {
     return first == null ? "" : formatTeeTime(first + iv * i);
   });
 }
+
+// ── Slots ──────────────────────────────────────────────────────────
+// A group's identity is its POSITION in the round's tee-time list, so a
+// trailing empty group says nothing — it is only the tee sheet running out.
+// Trimmed on the way to Firestore, which is what lets a round shrink: empty
+// the last group and the round is back to however many tee times it has,
+// with no "remove group" button needed to say so.
+export const trimGroups = (groups) => {
+  const out = [...(groups || [])];
+  while (out.length && !out[out.length - 1].length) out.pop();
+  return out;
+};
+
+// How many groups a round has: one per tee time the Rounds tab set, never
+// fewer than the four it always writes, and never fewer than are already
+// occupied (an eighteen-player field needs a fifth, and its players must not
+// vanish because the tee sheet only lists four).
+export const teeSlotCount = ({ tr, groups }) =>
+  Math.max(teeTimeList(tr).length, trimGroups(groups).length, TEE_SLOTS);
+
+// Those groups laid out against their slots — the ones with players in them,
+// plus an empty group for every tee time nobody is riding yet.
+export const padGroups = (groups, n) =>
+  Array.from({ length: Math.max(n, (groups || []).length) }, (_, i) => groups?.[i] || []);
 
 // ── Format shape ───────────────────────────────────────────────────
 export const matchPlayers = (m) => [...(m?.teamA || []), ...(m?.teamB || [])];
@@ -217,10 +250,11 @@ export function teeTimeForMatch({ groups, times, match }) {
 // one at a time is the fallback for the odd case, not the main road.
 //
 // The match's players come out of wherever they were first, so this is also
-// how a match MOVES between groups. `gi < 0` ungroups them. A gi past the
-// end opens the groups up to it, which is how "+ New group" adds one — and
-// because a group's tee time is its position in the round's time list, the
-// new group lands on the next tee slot without anything else being touched.
+// how a match MOVES between groups. `gi < 0` ungroups them. A gi past the end
+// of the stored list opens the groups up to it, which is what happens the
+// first time a match is sent off a later tee time — the round has that group
+// already (the tee time is what makes it one); this document just hadn't had
+// occasion to mention it yet.
 export function assignMatchToGroup({ groups, match, gi }) {
   const seq = matchSeq(match);
   const moving = new Set(seq);
