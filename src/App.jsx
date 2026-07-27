@@ -46,7 +46,7 @@ import { TeamLeaderboard, MatchScorecard } from "./components/Leaderboard";
 import { MatchSetup } from "./components/MatchSetup";
 import {
   GROUPS_COL, groupsDocId, encodeGroups, decodeGroups,
-  teeTimeForMatch, parseTeeTime, formatTeeTime, DEFAULT_TEE_INTERVAL,
+  teeTimeForMatch, parseTeeTime, formatTeeTime, DEFAULT_TEE_INTERVAL, TEE_SLOTS,
   roundPlaySetup, orderMatchesForRound, numberMatches,
 } from "./lib/groups";
 import { holesEntered } from "./lib/scoreGuard";
@@ -2478,9 +2478,12 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               // disagree about what "830" means.
               const stripAMPM = (s) => s ? s.replace(/\s*(AM|PM)/gi, "").trim() : s;
               const teeTimes = roundTeeTime ? roundTeeTime.split("|") : ["","","",""];
-              // The Matches tab can add groups beyond the four shown here.
-              // Their times live in the same list and must survive an edit.
-              const slots = Math.max(teeTimes.length, 4);
+              // These boxes ARE the round's groups — G1 is who goes off first,
+              // and the Matches tab fills them rather than inventing groups of
+              // its own (see lib/groups.js). Four covers a sixteen-player
+              // field; a round that already carries more keeps every one of
+              // them, and gets a box for each.
+              const slots = Math.max(teeTimes.length, TEE_SLOTS);
               // The spread to keep when the FIRST tee moves, measured from the
               // later slots. It cannot be measured from times[1] - times[0]:
               // the box writes through on every keystroke, so by the time this
@@ -2518,9 +2521,9 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               return (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>TEE TIMES</div>
-                  {["G1","G2","G3","G4"].map((lbl, i) => (
+                  {Array.from({ length: slots }, (_, i) => (
                     <div key={i} style={{ flex: 1, display: "flex", alignItems: "center", gap: 3 }}>
-                      <span style={{ fontSize: 9, color: BC.t3, flexShrink: 0, fontWeight: 600 }}>{lbl}</span>
+                      <span style={{ fontSize: 9, color: BC.t3, flexShrink: 0, fontWeight: 600 }}>G{i + 1}</span>
                       <input
                         value={stripAMPM(tt[i] || "")}
                         onChange={e => { const times = [...tt]; times[i] = e.target.value; setRoundTeeTime(times.join("|")); }}
@@ -3305,7 +3308,6 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
           roundLocks={roundLocks}
           storedGroups={groupsFromDb?.[matchRound] || null}
           onSaveGroups={onSaveGroups}
-          onSetRound={onSetRound}
           onSetMatch={onSetMatch}
           notify={notify}
           confirm={confirm}

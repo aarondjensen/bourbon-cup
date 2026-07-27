@@ -11,17 +11,18 @@
 //             director never has to look at it. In Singles or a team
 //             format it is a real decision, so it gets a real editor.
 //
-// Tee times are the thread between them: the Rounds tab sets the first tee
-// and the spread, group i goes off at slot i, and every match inherits the
-// time of the group its players ride in. A match with no group has no tee
-// time, and this tab says so rather than letting it ship silently.
+// Tee times are the thread between them, and they belong to the ROUND: the
+// Rounds tab writes one box per group (G1–G4), group i goes off at slot i,
+// and every match inherits the time of the group its players ride in. So the
+// round's tee sheet IS its group list — this tab never creates a group, adds
+// one, or removes one, because a group is a tee time and tee times are set on
+// the Rounds tab. It only says which match rides in which.
 //
-// Which is also where the grouping is done. When a match fits in one group,
-// its row in the match list carries a picker — pick the group and the match
-// takes that group's tee time, with "+ New group" opening the next tee slot.
-// That is the way a Singles draw is actually made ("M3 and M4 ride together
-// off 8:40"), so it lives on the matches. Moving individual players between
-// groups is the fix-up underneath it, not the main road.
+// Which is what the picker on each match row does. Pick the group and the
+// match takes that group's tee time. That is the way a Singles draw is
+// actually made ("M3 and M4 ride together off 8:40"), so it lives on the
+// matches. Moving individual players between groups is the fix-up underneath
+// it, not the main road.
 
 import { useRef, useState } from "react";
 import { BC } from "../theme";
@@ -29,10 +30,11 @@ import { FORMATS } from "../constants";
 import { TOURNAMENT_ID, editionDocId } from "../firebase";
 import { getRoundCH, getRoundHandicapMode, lockForRound } from "../scoring";
 import {
-  GROUP_TARGET, GROUP_MAX,
-  autoBuildGroups, expandTeeTimes, teeTimeList, joinTeeTimes, teeInterval,
-  parseTeeTime, formatTeeTime, matchPlayers, matchSeq, formatPerSide, isFoursomeFormat,
-  teeTimeForMatch, groupIndexForMatch, assignMatchToGroup, matchesInGroup,
+  GROUP_TARGET, GROUP_MAX, TEE_SLOTS,
+  autoBuildGroups, expandTeeTimes, teeTimeList, teeInterval,
+  teeSlotCount, padGroups, trimGroups, firstOpenGroup,
+  matchPlayers, matchSeq, formatPerSide, isFoursomeFormat,
+  groupIndexForMatch, assignMatchToGroup,
   groupIssues, hasGroupIssues,
   orderMatchesForRound, canonicalMatchOrder,
 } from "../lib/groups";
@@ -42,9 +44,6 @@ import {
 
 const ROUNDS = [1, 2, 3, 4];
 const FONT = "'Montserrat', sans-serif";
-// The Rounds tab renders four tee-time boxes, so the round document always
-// carries at least four slots. Never write back fewer or those boxes empty.
-const MIN_TIME_SLOTS = 4;
 
 const cardStyle = { background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}` };
 const sectionLabel = { fontSize: 10, color: BC.gold, fontWeight: 700, letterSpacing: 1, marginBottom: 8 };
@@ -61,26 +60,12 @@ const xBtn = {
   background: "transparent", color: BC.danger, cursor: "pointer", flexShrink: 0, fontFamily: FONT,
 };
 
-// The group picker on a match row. A native select, because on a phone that
-// is a proper wheel picker rather than a menu to aim at. fontSize must be 16
-// or iOS Safari zooms the page in on focus and never zooms back, so it is
-// drawn at 16 and scaled down to the row's size — the same trick the
-// tee-time boxes use, with the negative margin taking back the width the
-// transform leaves behind (200 × 0.25).
-const groupSelect = (ok) => ({
-  width: 200, marginRight: -50, transform: "scale(0.75)", transformOrigin: "left center",
-  padding: "4px 5px", borderRadius: 7, background: BC.inp, boxSizing: "border-box",
-  border: `1px solid ${ok ? BC.amber + "55" : BC.danger + "66"}`,
-  color: ok ? BC.amber : BC.danger,
-  fontSize: 16, fontWeight: 700, fontFamily: FONT, outline: "none", cursor: "pointer",
-});
-
 export function MatchSetup({
   round, setRound,
   tRounds, courses, tPlayers, matches, teams, teamNames,
   hcpOverrides, teeAssignments, roundLocks,
   storedGroups, onSaveGroups,
-  onSetRound, onSetMatch, notify, confirm,
+  onSetMatch, notify, confirm,
   // The round's posted scores, and the way to erase a stale card. Both are
   // here for one reason: scores are keyed by player+round, not by match (see
   // lib/scoreGuard), so this tab is the one place a director can destroy a
@@ -93,16 +78,14 @@ export function MatchSetup({
   // drop. Two taps beats drag-and-drop on a phone, and it is reversible —
   // tapping the lifted chip again puts them back down.
   const [held, setHeld] = useState(null);
-  // Tee-time boxes are edited locally and committed on blur. Writing per
-  // keystroke would put a Firestore round-document write behind every digit.
-  const [timeDraft, setTimeDraft] = useState({});
-  // The match row being dragged up or down the draw: { id, from, to }, all
-  // indices into `orderedMatches`. Committed on pointerup — nothing is
+  // The match being dragged to another tee time: { id, over }, where `over` is
+  // the group slot under the finger. Committed on pointerup — nothing is
   // written to Firestore while a finger is still down.
   const [drag, setDrag] = useState(null);
-  // Live row rects, read during a drag to work out where the finger is. Kept
-  // in a ref rather than state so measuring never triggers a render.
-  const rowRefs = useRef({});
+  // Live tee-time section rects, read during a drag to work out which one the
+  // finger is over. Kept in a ref rather than state so measuring never
+  // triggers a render.
+  const sectionRefs = useRef({});
 
   const tr = tRounds.find(t => t.round_number === round);
   const mLock = lockForRound(roundLocks, round);
@@ -118,14 +101,19 @@ export function MatchSetup({
   // implies. A 2v2 round that has never been touched here still shows its
   // foursomes and still gets tee times — that is the whole point of calling
   // those formats obvious. The first edit materializes them.
-  const isDerived = !storedGroups && autoFoursomes;
+  //
   // canonicalMatchOrder, not arrival order: roundPlaySetup derives the same
-  // implied foursomes that way for every other surface, and a reorder here
-  // WRITES these groups — so the two have to agree before that happens.
-  const groups = storedGroups || (isDerived ? autoBuildGroups({ formatId: tr?.format, matches: canonicalMatchOrder(rndMatches) }) : []);
+  // implied foursomes that way for every other surface, and this tab WRITES
+  // these groups — so the two have to agree before that happens.
+  const base = storedGroups
+    || (autoFoursomes ? autoBuildGroups({ formatId: tr?.format, matches: canonicalMatchOrder(rndMatches) }) : []);
+  // The round's TEE TIMES are the groups, so the slots are there from the
+  // moment the Rounds tab is filled in — four of them, empty and waiting.
+  // Nothing on this tab adds one.
+  const groups = padGroups(base, teeSlotCount({ tr, groups: base }));
 
   const rawTimes = teeTimeList(tr);
-  const times = expandTeeTimes(rawTimes, Math.max(groups.length, MIN_TIME_SLOTS));
+  const times = expandTeeTimes(rawTimes, Math.max(groups.length, TEE_SLOTS));
   const interval = teeInterval(rawTimes);
   const firstTee = (rawTimes[0] || "").trim();
 
@@ -142,12 +130,12 @@ export function MatchSetup({
   // everywhere else in the app — that is exactly why they are shown here.
   const orphans = orphanedScores({ holeData, matches, round, players: tPlayers });
 
-  // A match that fits inside one group is grouped from its own row in the
-  // match list — pick the group, take that group's tee time. A 2-man format
-  // has nothing to pick (the match is the foursome) and a match too big for
-  // one group genuinely spans several, so both are grouped player by player.
-  const canPickGroup = (m) => !autoFoursomes && matchPlayers(m).length <= GROUP_MAX;
-  const anyPickable = rndMatches.some(canPickGroup);
+  // A format whose match fits inside one foursome — Singles at one player a
+  // side, everything 2-man at two — is listed AS the tee sheet: matches sit
+  // under the time they go off and are dragged from one time to another. A
+  // team format's match holds more players than a group does, so it genuinely
+  // spans several and is still split player by player.
+  const matchFitsGroup = perSide != null;
 
   // The round's matches in the order they go off, which is the order their
   // tournament-wide numbers run in. Only the LISTING is reordered:
@@ -155,6 +143,16 @@ export function MatchSetup({
   // groups follow the match order and tee times follow the groups — sorting
   // by tee time upstream of that would feed the order back into itself.
   const orderedMatches = orderMatchesForRound({ matches: rndMatches, groups, times });
+
+  // Each tee time's matches, and the ones that have not landed on a time yet.
+  // Membership is the WHOLE match being in one group, so a match split across
+  // two lands in `loose` and is visibly off the sheet rather than listed twice.
+  const byGroup = groups.map(() => []);
+  const loose = [];
+  orderedMatches.forEach(m => {
+    const gi = groupIndexForMatch({ groups, match: m });
+    if (gi >= 0 && gi < byGroup.length) byGroup[gi].push(m); else loose.push(m);
+  });
 
   const nameOf = (pid) => tPlayers.find(p => p.player_id === pid)?.name || pid;
   const shortOf = (pid) => nameOf(pid).split(" ")[0] || pid;
@@ -170,37 +168,12 @@ export function MatchSetup({
   });
 
   // ── Writes ───────────────────────────────────────────────────────
-  // Empty groups are kept, not pruned: a group's tee time is its POSITION in
-  // the round's time list, so silently dropping one would shift every later
-  // group onto the wrong time. Removing a group is an explicit action.
-  const saveGroups = (next) => onSaveGroups(round, next);
-
-  // Tee times live on the round document as a pipe-delimited list. db.upsert
-  // merges, so this touches that one field and nothing else.
-  const saveTimes = (next) => onSetRound({
-    id: editionDocId(`bc_round_${round}`),
-    tournament_id: TOURNAMENT_ID,
-    round_number: round,
-    tee_time: joinTeeTimes(next.slice(0, Math.max(groups.length, MIN_TIME_SLOTS))),
-  });
-
-  const commitGroupTime = (i, value) => {
-    setTimeDraft(d => { const n = { ...d }; delete n[i]; return n; });
-    const mins = parseTeeTime(value);
-    const next = [...times];
-    next[i] = mins == null ? value.trim() : formatTeeTime(mins);
-    saveTimes(next);
-  };
-
-  // Re-space every group off the first tee — the one-tap fix after adding,
-  // deleting, or reordering groups.
-  const respace = () => {
-    const first = parseTeeTime(firstTee);
-    if (first == null) { notify("Set a first tee time on the Rounds tab", "error"); return; }
-    saveTimes(Array.from({ length: Math.max(groups.length, MIN_TIME_SLOTS) },
-      (_, i) => formatTeeTime(first + interval * i)));
-    notify(`Tee times re-spaced ${interval} min apart`, "success");
-  };
+  // A group's tee time is its POSITION in the round's time list, so an empty
+  // group in the MIDDLE is load-bearing and is kept — dropping it would shift
+  // every later group onto the wrong time. Trailing empties are not: they are
+  // only the tee sheet running out, and trimming them is what lets a round
+  // shrink back to its tee times without a "remove group" button.
+  const saveGroups = (next) => onSaveGroups(round, trimGroups(next));
 
   const buildGroups = async () => {
     if (!rndMatches.length) { notify("Create the round's matches first", "error"); return; }
@@ -225,92 +198,63 @@ export function MatchSetup({
     setHeld(null);
   };
 
-  const addGroup = () => saveGroups([...groups.map(g => [...g]), []]);
-
   // Send a whole match off with one group, from the match list. This is the
   // way a Singles or team round actually gets drawn — the decision is "these
   // two matches ride together", not "these four players do" — so it happens
   // where the matches are, and lifting chips stays for the odd fix-up.
-  // gi === groups.length is the picker's "+ New group" option.
   const setMatchGroup = (m, gi) => saveGroups(assignMatchToGroup({ groups, match: m, gi }));
 
-  // ── Reordering the draw ──────────────────────────────────────────
-  // Play order is not a field on a match. It falls out of the tee times,
-  // which fall out of each GROUP's position in the round's time list, and the
-  // tournament-wide match numbers fall out of that (see lib/groups). So
-  // dragging a match down the list permutes the GROUPS, and the times, the
-  // listing and the numbers all follow on their own. Who plays whom and who
-  // rides with whom are never touched — only which slot each group goes off
-  // in — which is why this is safe to do to a round that is already grouped.
+  // ── Moving a match between tee times ─────────────────────────────
+  // Everyone in a group tees off together, so there is no order WITHIN one —
+  // which means a drag has nothing to insert between. It only has a tee time
+  // to land on. So the drop target is the whole section under the finger, and
+  // the match's tee time, and its tournament-wide number, follow from that.
   //
-  // Groups no match sits in keep their exact slot: they are left out of the
-  // permutation entirely, so an empty group the director added can never be
-  // silently retimed by someone reordering the matches above it.
-  const giOf = (m) => groupIndexForMatch({ groups, match: m });
-  // Two matches in the SAME group tee off together, so there is no order to
-  // change between them. Reordering is only offered when the round's matches
-  // actually occupy more than one group.
-  const reorderable = !roundFinal
-    && new Set(rndMatches.map(giOf).filter(i => i >= 0)).size > 1;
-  // A match with no group of its own has no slot to trade, so it gets no
-  // handle — the fix for it is the group picker sitting right beside it.
-  const canDragRow = (m) => reorderable && !!m && giOf(m) >= 0;
-
-  const reorderMatch = (from, to) => {
-    if (from === to || from < 0 || to < 0) return;
-    const next = [...orderedMatches];
-    next.splice(to, 0, ...next.splice(from, 1));
-
-    // Group slots in the order the new listing reaches them...
-    const desired = [];
-    next.forEach(m => { const gi = giOf(m); if (gi >= 0 && !desired.includes(gi)) desired.push(gi); });
-    // ...redealt into the same slots those groups already occupied.
-    const slots = [...desired].sort((a, b) => a - b);
-    if (slots.every((slot, k) => slot === desired[k])) return;   // nothing moved
-
-    const nextGroups = groups.map(g => [...g]);
-    slots.forEach((slot, k) => { nextGroups[slot] = [...groups[desired[k]]]; });
-    saveGroups(nextGroups);
-  };
-
   // Pointer events, not HTML5 drag-and-drop: this console is used on a phone
   // at the first tee, and dragstart/drop never fire for touch. `touchAction:
   // none` on the handle is what stops the page scrolling under the finger.
-  const startDrag = (e, from) => {
-    if (!canDragRow(orderedMatches[from])) return;
+  const canDragRow = (m) => matchFitsGroup && !roundFinal && !!m;
+
+  const startDrag = (e, m) => {
+    if (!canDragRow(m)) return;
     // Capture keeps the moves coming to the handle once the finger slides off
     // it, which it does immediately. It throws for a pointer that is no longer
     // active; the drag still works off the handle's own events without it.
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
-    setDrag({ id: orderedMatches[from]?.id, from, to: from });
+    setDrag({ id: m.id, over: groupIndexForMatch({ groups, match: m }) });
   };
   const moveDrag = (e) => {
     if (!drag) return;
-    // Rows do not move while dragging, so their midpoints stay a stable ruler
-    // to measure the finger against — a list that reshuffles live measures
-    // itself and oscillates on the boundary.
-    let slot = 0;
-    orderedMatches.forEach(m => {
-      const r = rowRefs.current[m.id]?.getBoundingClientRect();
-      if (r && e.clientY > r.top + r.height / 2) slot++;
+    // Sections do not move while dragging, so their rects stay a stable ruler
+    // to measure the finger against.
+    let over = -1;
+    Object.entries(sectionRefs.current).forEach(([gi, el]) => {
+      const r = el?.getBoundingClientRect();
+      if (r && e.clientY >= r.top && e.clientY <= r.bottom) over = Number(gi);
     });
-    const to = slot > drag.from ? slot - 1 : slot;
-    if (to !== drag.to) setDrag(d => (d ? { ...d, to } : d));
+    if (over !== drag.over) setDrag(d => (d ? { ...d, over } : d));
   };
   const endDrag = () => {
     if (!drag) return;
-    const { from, to } = drag;
+    const { id, over } = drag;
     setDrag(null);
-    reorderMatch(from, to);
+    // Released off every section: nothing to land on, so nothing happens. A
+    // match is never dropped OUT of the draw by letting go in the wrong place.
+    if (over < 0) return;
+    const m = rndMatches.find(x => x.id === id);
+    if (m && groupIndexForMatch({ groups, match: m }) !== over) setMatchGroup(m, over);
   };
 
-  const removeGroup = async (gi) => {
-    if (groups[gi].length && !(await confirm({
-      title: `Remove Group ${gi + 1}?`,
-      message: "Its players go back to the unassigned pool. Later groups move up a tee time.",
-      confirmLabel: "Remove", destructive: true,
+  // Empty a tee slot without touching the ones after it. The slot stays —
+  // it is a tee time, and the round still has that tee time — so this is the
+  // one-tap way back from a group drawn wrong, not a deletion.
+  const clearGroup = async (gi) => {
+    if (!(await confirm({
+      title: `Clear the ${times[gi] ? stripAMPM(times[gi]) : `G${gi + 1}`} group?`,
+      message: "Its players go back to the unassigned pool. Every other tee time is left alone.",
+      confirmLabel: "Clear", destructive: true,
     }))) return;
-    saveGroups(groups.filter((_, i) => i !== gi));
+    saveGroups(groups.map((g, i) => (i === gi ? [] : g)));
   };
 
   const createMatch = async () => {
@@ -351,14 +295,15 @@ export function MatchSetup({
       // belong to the round, and a copy on the match only ever goes stale the
       // moment the director changes the round's setup.
     });
-    // A 2-man format's match is its own foursome, so once this round has
-    // saved groups a new match brings one with it instead of landing in the
-    // unassigned pool for no reason.
-    if (autoFoursomes && storedGroups) {
-      saveGroups([...storedGroups, matchSeq({ teamA: teamASel, teamB: teamBSel })]);
-    }
+    // The draw makes itself. The tee times already exist, a new pairing goes
+    // off the first one with room for it, and the sheet fills from the first
+    // tee down — so a Singles round is drawn by building eight matches and
+    // nothing else. Dragging is for changing your mind, not for making it up.
+    const pairing = { teamA: teamASel, teamB: teamBSel };
+    const gi = firstOpenGroup({ groups, need: matchSeq(pairing).length });
+    if (gi >= 0) saveGroups(assignMatchToGroup({ groups, match: pairing, gi }));
     setTeamASel([]); setTeamBSel([]);
-    notify("Match created!", "success");
+    notify(gi >= 0 && times[gi] ? `Match created — off ${stripAMPM(times[gi])}` : "Match created!", "success");
   };
 
   // Deleting a match used to be the only unconfirmed destructive control in
@@ -467,12 +412,66 @@ export function MatchSetup({
     );
   };
 
+  // One match, as it appears under its tee time. The ⠿ handle carries the
+  // drag; the M-number beside it is what the drag changes, since both the
+  // number and the time belong to the slot rather than to the match.
+  const matchRow = (m) => {
+    const dragging = drag?.id === m.id;
+    const draggable = canDragRow(m);
+    // What is riding on this row. Shown before the ✕ rather than only in the
+    // confirmation, so a director scanning the draw can see which matches are
+    // already being played without tapping anything.
+    const impact = matchScoreImpact({ match: m, holeData });
+    return (
+      <div key={m.id} style={{
+        display: "flex", alignItems: "center", gap: 8, padding: "4px 0",
+        opacity: drag && !dragging ? 0.5 : 1,
+      }}>
+        <div
+          onPointerDown={e => startDrag(e, m)}
+          onPointerMove={moveDrag}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          // Releasing outside the handle is the normal case, not the odd one —
+          // without this a drag that ends off-target would leave the list
+          // stuck in its dragging state.
+          onLostPointerCapture={endDrag}
+          style={{
+            display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
+            touchAction: "none", cursor: draggable ? (dragging ? "grabbing" : "grab") : "default",
+            // Without this a drag that starts on the number selects it, and
+            // the row ends up with a blue text highlight stuck under it.
+            userSelect: "none", WebkitUserSelect: "none",
+          }}
+        >
+          {draggable && <span aria-hidden style={{ fontSize: 12, lineHeight: 1, color: dragging ? BC.amber : BC.t3 }}>⠿</span>}
+          <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.5, minWidth: 22, color: dragging ? BC.amber : BC.gold }}>
+            M{m.matchNumber ?? "?"}
+          </span>
+        </div>
+        <div style={{ flex: 1, minWidth: 0, fontSize: 11 }}>
+          <span style={{ color: teams.A.accent, fontWeight: 600 }}>{m.teamANames?.join(" / ")}</span>
+          <span style={{ color: BC.t3 }}> vs </span>
+          <span style={{ color: teams.B.accent, fontWeight: 600 }}>{m.teamBNames?.join(" / ")}</span>
+        </div>
+        {impact.hasScores && (
+          <span title={`${impact.holes} holes scored`} style={{
+            flexShrink: 0, fontSize: 8, fontWeight: 800, letterSpacing: 0.5,
+            padding: "3px 6px", borderRadius: 6, whiteSpace: "nowrap",
+            color: BC.green, border: `1px solid ${BC.green}55`, background: `${BC.green}14`,
+          }}>{impact.holes} SCORED</span>
+        )}
+        <button onClick={() => deleteMatch(m)} style={xBtn}>✕</button>
+      </div>
+    );
+  };
+
   return (
     <div style={{ fontFamily: FONT }}>
       {/* Round tabs */}
       <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
         {ROUNDS.map(r => (
-          <button key={r} onClick={() => { setRound(r); setTeamASel([]); setTeamBSel([]); setHeld(null); setTimeDraft({}); }} style={{
+          <button key={r} onClick={() => { setRound(r); setTeamASel([]); setTeamBSel([]); setHeld(null); }} style={{
             flex: 1, padding: "7px 4px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
             background: round === r ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
             border: `1px solid ${round === r ? "transparent" : BC.bdr}`,
@@ -589,148 +588,86 @@ export function MatchSetup({
         </button>
       )}
 
-      {/* ── This round's matches ── */}
-      <div style={sectionLabel}>ROUND {round} MATCHES{fmt ? ` · ${fmt.label}` : ""}</div>
+      {/* ── This round's draw ──
+          The match list IS the tee sheet. A match sits under the time it goes
+          off, a new one lands on the first time with room, and dragging it to
+          another time is the only grouping control there is. */}
+      <div style={{ ...sectionLabel, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <span>ROUND {round} DRAW{fmt ? ` · ${fmt.label}` : ""}</span>
+        {/* Only when something is off the sheet — which after a create never
+            happens, so this is the one-tap fix for a round drawn before the
+            times were the groups, and it vanishes the moment it has worked. */}
+        {matchFitsGroup && loose.length > 0 && !roundFinal && (
+          <button onClick={buildGroups} style={miniBtn}>Auto-build</button>
+        )}
+      </div>
       {rndMatches.length === 0 && (
-        <div style={{ fontSize: 10, color: BC.t3, padding: "10px 12px", borderRadius: 10, border: `1px dashed ${BC.bdr}`, textAlign: "center", marginBottom: 14 }}>
-          No matches yet for Rd {round}
+        <div style={{ fontSize: 10, color: BC.t3, padding: "10px 12px", borderRadius: 10, border: `1px dashed ${BC.bdr}`, textAlign: "center", marginBottom: 10 }}>
+          No matches yet for Rd {round} — build one above and it goes off {firstTee || "the first tee"}.
         </div>
       )}
-      {orderedMatches.map((m, idx) => {
-        const t = teeTimeForMatch({ groups, times, match: m });
-        const pids = matchPlayers(m);
-        // Three ways to have no single tee time, and they need different
-        // things done about them: a match bigger than a foursome legitimately
-        // spans groups (that's a team match, not a problem), a small one that
-        // spans them has its opponents playing apart, and one nobody has
-        // grouped simply has no time yet.
-        const spans = pids.length > GROUP_TARGET;
-        const grouped = pids.filter(p => groups.some(g => g.includes(p))).length;
-        // Only the PROBLEMS get a line of their own now — a match that has a
-        // tee time says so under its number, where the number it teed off in
-        // is already being read, rather than in a row of its own.
-        const status = spans ? "ACROSS SEVERAL GROUPS — SEE BELOW"
-          : grouped ? "SPLIT ACROSS GROUPS — OPPONENTS MUST RIDE TOGETHER"
-          : "NO TEE TIME — NOT GROUPED";
-        // Where a match can be picked into a group, the picker REPLACES the
-        // status line — choosing the group is choosing the tee time, so the
-        // control says everything the line used to.
-        const canPick = canPickGroup(m);
-        const gi = groupIndexForMatch({ groups, match: m });
-        // What is riding on this row. Shown before the ✕ rather than only in
-        // the confirmation, so a director scanning the list can see which
-        // matches are already being played without tapping anything.
-        const impact = matchScoreImpact({ match: m, holeData });
-        const pickNote = t ? ""
-          : gi >= 0 ? "NO TEE TIME SET"
-          : grouped ? "OPPONENTS SPLIT UP"
-          : "NEEDS A GROUP";
-        // Dragging changes which SLOT the match goes off in, and both the
-        // number and the tee time belong to the slot rather than to the match
-        // — so the chip previews what this match is about to become while the
-        // finger is still down, instead of only after letting go.
-        const dragging = drag?.id === m.id;
-        const target = dragging && drag.to !== drag.from ? orderedMatches[drag.to] : null;
-        const previewNo = target?.matchNumber ?? null;
-        const shownTime = target ? teeTimeForMatch({ groups, times, match: target }) : t;
-        // Where the dragged row would land, as a gap between rows.
-        const insertAt = drag ? (drag.to <= drag.from ? drag.to : drag.to + 1) : -1;
+
+      {/* One section per tee time, each a drop target. Sections are only the
+          draw's shape where a match fits in one group; a team format's match
+          spans them all, so it is listed flat and split by the chip editor
+          further down. */}
+      {matchFitsGroup && groups.map((g, gi) => {
+        const rows = byGroup[gi];
+        const over = drag?.over === gi;
+        const tooMany = g.length > GROUP_MAX;
         return (
-          <div key={m.id}>
-            {insertAt === idx && drag.to !== drag.from && (
-              <div style={{ height: 2, borderRadius: 2, background: BC.amber, margin: "2px 0 3px" }} />
-            )}
-          <div ref={el => { rowRefs.current[m.id] = el; }} style={{
-            ...cardStyle, borderRadius: 10, padding: "8px 12px", marginBottom: 5,
-            display: "flex", alignItems: "center", gap: 8,
-            border: `1px solid ${dragging ? BC.amber : BC.bdr}`,
-            opacity: drag && !dragging ? 0.55 : 1,
-          }}>
-            {/* The match's number in the TOURNAMENT, counted across every
-                round (Round 2's opener is M5 when Round 1 had four matches),
-                with the time it goes off beneath it. Same gold-chip idiom as
-                the G1 label on the groups below, since it is doing the same
-                job for matches — and doubling as the drag handle, because the
-                number and the tee time are exactly what a reorder changes. */}
-            <div
-              onPointerDown={e => startDrag(e, idx)}
-              onPointerMove={moveDrag}
-              onPointerUp={endDrag}
-              onPointerCancel={endDrag}
-              // Releasing outside the handle is the normal case, not the odd
-              // one — without this a drag that ends off-target would leave the
-              // list stuck in its dragging state.
-              onLostPointerCapture={endDrag}
-              style={{
-                display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
-                touchAction: "none", cursor: canDragRow(m) ? (dragging ? "grabbing" : "grab") : "default",
-              }}
-            >
-              {canDragRow(m) && <span aria-hidden style={{ fontSize: 12, lineHeight: 1, color: dragging ? BC.amber : BC.t3 }}>⠿</span>}
-              <div style={{ minWidth: 24 }}>
-                <div style={{ fontSize: 10, fontWeight: 800, color: previewNo ? BC.amber : BC.gold, letterSpacing: 0.5, lineHeight: 1.2 }}>
-                  M{previewNo ?? m.matchNumber ?? "?"}
-                </div>
-                {shownTime && (
-                  <div style={{ fontSize: 9, fontWeight: 700, color: BC.amber, letterSpacing: 0.3, lineHeight: 1.2, whiteSpace: "nowrap" }}>
-                    {stripAMPM(shownTime)}
-                  </div>
-                )}
-              </div>
+          <div
+            key={gi}
+            ref={el => { sectionRefs.current[gi] = el; }}
+            style={{
+              ...cardStyle, padding: "8px 10px", marginBottom: 6,
+              border: `1px solid ${over ? BC.amber : tooMany ? BC.danger + "66" : BC.bdr}`,
+              background: over ? `${BC.amber}14` : BC.card,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: rows.length ? 7 : 0 }}>
+              <span style={{ fontSize: 10, fontWeight: 800, color: BC.gold, letterSpacing: 1, flexShrink: 0 }}>G{gi + 1}</span>
+              <span style={{ fontSize: 13, fontWeight: 800, flexShrink: 0, color: times[gi] ? BC.t1 : BC.t3 }}>
+                {times[gi] ? stripAMPM(times[gi]) : "—"}
+              </span>
+              <span style={{
+                fontSize: 9, fontWeight: 700, flex: 1, textAlign: "right",
+                color: tooMany ? BC.danger : BC.t3,
+              }}>
+                {g.length}/{GROUP_TARGET}{tooMany ? " · too many" : ""}
+              </span>
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 11 }}>
-                <span style={{ color: teams.A.accent, fontWeight: 600 }}>{m.teamANames?.join(" / ")}</span>
-                <span style={{ color: BC.t3 }}> vs </span>
-                <span style={{ color: teams.B.accent, fontWeight: 600 }}>{m.teamBNames?.join(" / ")}</span>
+            {rows.length === 0 && (
+              <div style={{ fontSize: 9, color: over ? BC.amber : BC.t3, fontWeight: 700, letterSpacing: 0.5, padding: "2px 0" }}>
+                {over ? "DROP HERE" : "OPEN"}
               </div>
-              {canPick ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
-                  <select
-                    value={gi >= 0 ? String(gi) : ""}
-                    onChange={e => setMatchGroup(m, e.target.value === "" ? -1 : parseInt(e.target.value, 10))}
-                    aria-label={`Group for match ${m.matchNumber ?? ""}`}
-                    style={groupSelect(!!t)}
-                  >
-                    <option value="">— No group</option>
-                    {groups.map((g, i) => (
-                      <option key={i} value={i}>
-                        G{i + 1}{times[i] ? ` · ${stripAMPM(times[i])}` : ""} · {g.length}/{GROUP_TARGET}
-                      </option>
-                    ))}
-                    <option value={groups.length}>+ New group</option>
-                  </select>
-                  {pickNote && (
-                    <span style={{
-                      fontSize: 9, fontWeight: 700, letterSpacing: 0.5, color: BC.danger,
-                      minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    }}>{pickNote}</span>
-                  )}
-                </div>
-              ) : !t && (
-                <div style={{ fontSize: 9, marginTop: 3, fontWeight: 700, letterSpacing: 0.5, color: spans ? BC.t3 : BC.danger }}>
-                  {status}
-                </div>
-              )}
-            </div>
-            {impact.hasScores && (
-              <span title={`${impact.holes} holes scored`} style={{
-                flexShrink: 0, fontSize: 8, fontWeight: 800, letterSpacing: 0.5,
-                padding: "3px 6px", borderRadius: 6, whiteSpace: "nowrap",
-                color: BC.green, border: `1px solid ${BC.green}55`, background: `${BC.green}14`,
-              }}>{impact.holes} SCORED</span>
             )}
-            <button onClick={() => deleteMatch(m)} style={xBtn}>✕</button>
-          </div>
-            {insertAt === orderedMatches.length && idx === orderedMatches.length - 1 && (
-              <div style={{ height: 2, borderRadius: 2, background: BC.amber, margin: "2px 0 3px" }} />
-            )}
+            {rows.map(m => matchRow(m))}
           </div>
         );
       })}
-      {reorderable && (
+
+      {/* Matches with no time of their own: a team format's (every one of
+          them, legitimately), or one whose opponents ended up in different
+          groups. Not a drop target — a match leaves here by being dragged
+          onto a time, never by being dropped back out of the draw. */}
+      {loose.length > 0 && (
+        <div style={{
+          ...cardStyle, padding: "8px 10px", marginBottom: 6,
+          border: `1px solid ${matchFitsGroup ? BC.danger + "55" : BC.bdr}`,
+        }}>
+          {matchFitsGroup && (
+            <div style={{ fontSize: 9, fontWeight: 800, color: BC.danger, letterSpacing: 1, marginBottom: 7 }}>
+              NO TEE TIME
+            </div>
+          )}
+          {loose.map(m => matchRow(m))}
+        </div>
+      )}
+
+      {matchFitsGroup && rndMatches.length > 0 && !roundFinal && (
         <div style={{ fontSize: 9, color: BC.t3, marginBottom: 14, marginTop: -1 }}>
-          Drag ⠿ to reorder — a match takes the tee time, and the number, of the slot it lands in.
+          Drag ⠿ onto another tee time to move a match — it takes that time, and that number.
         </div>
       )}
 
@@ -766,111 +703,80 @@ export function MatchSetup({
         </div>
       )}
 
-      {/* ── Groups & tee times ── */}
-      <div style={{ ...sectionLabel, marginTop: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <span>GROUPS &amp; TEE TIMES</span>
-        <span style={{ display: "flex", gap: 5, flexShrink: 0 }}>
-          <button onClick={buildGroups} style={miniBtn}>Auto-build</button>
-          {groups.length > 0 && <button onClick={respace} style={miniBtn}>Re-space</button>}
-        </span>
-      </div>
+      {/* ── Splitting a team match across the tee sheet ──
+          Only reached by the formats whose match is bigger than a foursome.
+          Everything else is already grouped by the draw above — its matches
+          ARE its groups — so there is nothing here for it to do. */}
+      {!matchFitsGroup && (
+        <>
+          <div style={{ ...sectionLabel, marginTop: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <span>TEE SHEET</span>
+            <button onClick={buildGroups} style={miniBtn}>Auto-build</button>
+          </div>
 
-      <div style={{ fontSize: 10, color: BC.t3, marginBottom: 8, lineHeight: 1.45 }}>
-        {autoFoursomes
-          ? `A ${fmt?.label} match is a foursome, so groups follow the matches. Times run off the first tee (${firstTee || "unset"}), ${interval} min apart.`
-          : `${fmt?.label || "This format"} is not a foursome on its own — set who goes off together. ${anyPickable ? "Send a whole match off with a group from the list above, or tap" : "Tap"} a player here to lift them${anyPickable ? " and" : ", then"} tap a group to drop them in.`}
-      </div>
+          <div style={{ fontSize: 10, color: BC.t3, marginBottom: 8, lineHeight: 1.45 }}>
+            A {fmt?.label || "team"} match holds more players than one group, so it goes off over
+            several. Times run off the first tee ({firstTee || "unset"}), {interval} min apart — tap
+            a player to lift them, then tap a time to drop them in.
+          </div>
 
-      {isDerived && groups.length > 0 && (
-        <div style={{ fontSize: 9, color: BC.t3, marginBottom: 6, fontStyle: "italic" }}>
-          Following the matches automatically — edit anything below to take over.
-        </div>
-      )}
-
-      {groups.length === 0 && (
-        <div style={{ fontSize: 10, color: BC.t3, padding: 12, borderRadius: 10, border: `1px dashed ${BC.bdr}`, textAlign: "center", marginBottom: 8 }}>
-          No groups yet. {!rndMatches.length ? "Create matches first."
-            : anyPickable ? "Auto-build to start from the matches, or send one off with “+ New group” above."
-            : "Auto-build to start from the matches."}
-        </div>
-      )}
-
-      {groups.map((g, gi) => {
-        const over = g.length > GROUP_MAX;
-        // Which matches ride here. In Singles a foursome is two matches, so
-        // naming them is how this card reads back what the pickers above set
-        // — the player count alone can't tell a proper pairing from four
-        // players who happen to share a tee time.
-        const rides = matchesInGroup({ group: g, matches: orderedMatches })
-          .map(m => `M${m.matchNumber ?? "?"}`).join(" · ");
-        return (
-          <div key={gi} style={{
-            ...cardStyle, padding: "9px 11px", marginBottom: 6,
-            border: `1px solid ${held ? BC.amber + "88" : over ? BC.danger + "66" : BC.bdr}`,
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: g.length ? 7 : 0 }}>
-              <span style={{ fontSize: 10, fontWeight: 800, color: BC.gold, letterSpacing: 1, flexShrink: 0 }}>G{gi + 1}</span>
-              <input
-                value={timeDraft[gi] ?? stripAMPM(times[gi]) ?? ""}
-                onChange={e => setTimeDraft(d => ({ ...d, [gi]: e.target.value }))}
-                onBlur={e => commitGroupTime(gi, e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
-                placeholder="—"
-                inputMode="numeric"
-                aria-label={`Group ${gi + 1} tee time`}
-                // fontSize must be 16 or iOS Safari zooms the whole page in on
-                // focus and never zooms back; the transform scales it back to
-                // the size the rest of the row is drawn at. Same trick the
-                // Rounds tab's tee-time boxes use.
-                style={{
-                  width: 76, padding: "5px 6px", background: BC.inp, border: `1px solid ${BC.bdr}`,
-                  borderRadius: 7, color: BC.t1, fontSize: 16, textAlign: "center",
-                  outline: "none", fontFamily: FONT, flexShrink: 0, boxSizing: "border-box",
-                  transform: "scale(0.8)", transformOrigin: "left center", marginRight: -14,
-                }}
-              />
-              <span style={{
-                fontSize: 9, color: over ? BC.danger : BC.t3, fontWeight: 700, flex: 1, minWidth: 0,
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          {groups.map((g, gi) => {
+            const over = g.length > GROUP_MAX;
+            return (
+              <div key={gi} style={{
+                ...cardStyle, padding: "9px 11px", marginBottom: 6,
+                border: `1px solid ${held ? BC.amber + "88" : over ? BC.danger + "66" : BC.bdr}`,
               }}>
-                {rides || `${g.length} player${g.length !== 1 ? "s" : ""}`}{over ? " · too many" : ""}
-              </span>
-              {held
-                ? <button onClick={() => moveHeldTo(gi)} style={{ ...miniBtn, padding: "4px 8px" }}>Move {shortOf(held)} here</button>
-                : <button onClick={() => removeGroup(gi)} style={xBtn}>✕</button>}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: g.length ? 7 : 0 }}>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: BC.gold, letterSpacing: 1, flexShrink: 0 }}>G{gi + 1}</span>
+                  {/* The time this group goes off, read off the round. Not an
+                      input: the Rounds tab's G-boxes are the one place tee
+                      times are typed, and editing them there re-spaces the
+                      whole sheet instead of leaving one slot out of step. */}
+                  <span style={{
+                    fontSize: 12, fontWeight: 800, flexShrink: 0, minWidth: 46,
+                    color: times[gi] ? BC.t1 : BC.t3,
+                  }}>{times[gi] ? stripAMPM(times[gi]) : "—"}</span>
+                  <span style={{
+                    fontSize: 9, color: over ? BC.danger : BC.t3, fontWeight: 700, flex: 1, minWidth: 0,
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>
+                    {g.length} player{g.length !== 1 ? "s" : ""}{over ? " · too many" : ""}
+                  </span>
+                  {held
+                    ? <button onClick={() => moveHeldTo(gi)} style={{ ...miniBtn, padding: "4px 8px" }}>Move {shortOf(held)} here</button>
+                    : g.length > 0 && <button onClick={() => clearGroup(gi)} style={xBtn}>✕</button>}
+                </div>
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                  {g.map(pid => playerChip(pid))}
+                </div>
+              </div>
+            );
+          })}
+
+          {held && (
+            <>
+              <button onClick={() => moveHeldTo(-1)} style={{ ...miniBtn, width: "100%", padding: "8px 10px", marginBottom: 8, borderColor: `${BC.danger}66`, color: BC.danger }}>
+                Ungroup {shortOf(held)}
+              </button>
+              <div style={{ fontSize: 10, color: BC.t3, textAlign: "center", marginBottom: 8 }}>
+                {nameOf(held)} lifted — tap a group to drop them in, or tap them again to cancel.
+              </div>
+            </>
+          )}
+
+          {/* Players with a match but nowhere to tee off. */}
+          {issues.unassigned.length > 0 && (
+            <div style={{ ...cardStyle, padding: "9px 11px", marginBottom: 8, border: `1px solid ${BC.danger}55` }}>
+              <div style={{ fontSize: 9, fontWeight: 800, color: BC.danger, letterSpacing: 1, marginBottom: 7 }}>
+                NOT IN A GROUP — NO TEE TIME
+              </div>
+              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                {issues.unassigned.map(pid => playerChip(pid, { dim: true }))}
+              </div>
             </div>
-            <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-              {g.map(pid => playerChip(pid))}
-            </div>
-          </div>
-        );
-      })}
-
-      <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-        <button onClick={addGroup} style={{ ...miniBtn, flex: 1, padding: "8px 10px" }}>+ Add group</button>
-        {held && (
-          <button onClick={() => moveHeldTo(-1)} style={{ ...miniBtn, flex: 1, padding: "8px 10px", borderColor: `${BC.danger}66`, color: BC.danger }}>
-            Ungroup {shortOf(held)}
-          </button>
-        )}
-      </div>
-
-      {held && (
-        <div style={{ fontSize: 10, color: BC.t3, textAlign: "center", marginBottom: 8 }}>
-          {nameOf(held)} lifted — tap a group to drop them in, or tap them again to cancel.
-        </div>
-      )}
-
-      {/* Players with a match but nowhere to tee off. */}
-      {issues.unassigned.length > 0 && (
-        <div style={{ ...cardStyle, padding: "9px 11px", marginBottom: 8, border: `1px solid ${BC.danger}55` }}>
-          <div style={{ fontSize: 9, fontWeight: 800, color: BC.danger, letterSpacing: 1, marginBottom: 7 }}>
-            NOT IN A GROUP — NO TEE TIME
-          </div>
-          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-            {issues.unassigned.map(pid => playerChip(pid, { dim: true }))}
-          </div>
-        </div>
+          )}
+        </>
       )}
 
       {/* Everything else worth saying about the draw, in one place. */}
