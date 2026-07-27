@@ -518,6 +518,31 @@ function FinalizeRoundCard({ round, nextRound, lastFinal, progress, tPlayers, on
   );
 }
 
+// The hole a scoring view should OPEN on for a given match — the live edge,
+// i.e. the first hole not everyone has scored yet. Returns 0 (hole 1) when
+// nothing has been scored, when the round is finished, or when there is no
+// match, which is the right place to open in all three cases.
+//
+// `score(pid, hole)` is supplied by the caller because the two scoring views
+// key their score data differently (`pid_round` -> {hole} vs `pid_hole`).
+//
+// This is deliberately a plain function rather than an effect: both views are
+// unmounted when the user leaves their tab and remount with the hole reset, so
+// the opening hole has to be resolved during the FIRST render. Computing it in
+// a deferred effect is what made the screen show hole 1 and then flash forward.
+function openingHole(pids, score) {
+  if (pids.length === 0) return 0;
+  const hasAny = pids.some(pid => {
+    for (let h = 0; h < 18; h++) if (score(pid, h) > 0) return true;
+    return false;
+  });
+  if (!hasAny) return 0;
+  for (let h = 0; h < 18; h++) {
+    if (!pids.every(pid => score(pid, h) > 0)) return h;
+  }
+  return 0; // every hole complete — nothing to fast-forward to
+}
+
 // ── Score Entry ──
 // ── Score Entry — Mash-style ──
 // Rewritten to use the Mash UI patterns (hole strip, deep-green Par/Hole/HCP
@@ -544,14 +569,42 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
 
   // ── Hooks (always fire, in stable order) ──
   const [activeMatchId, setActiveMatchId] = useState(null);
-  const [activeHole, setActiveHole] = useState(0);
+  // Open on the live edge, resolved synchronously from the holeData we
+  // already have. Leaving the Scoring tab unmounts this view, so returning
+  // mid-round used to render hole 1 and jump forward 400ms later — a visible
+  // flash on every single return. The deferred effect below still covers the
+  // cold-load case, where holeData hasn't arrived yet on the first render.
+  const [activeHole, setActiveHole] = useState(() => {
+    const m = myMatches[0];
+    if (!m) return 0;
+    return openingHole([...m.teamA, ...m.teamB],
+      (pid, h) => (holeData[`${pid}_${m.round}`] || {})[h] || 0);
+  });
   const [editing, setEditing] = useState(false);
   const [showScorecard, setShowScorecard] = useState(false);
   const [toast, setToast] = useState(null);
-  const initialJump = useRef(false);
+  // Which match id the opening hole has already been resolved for. Seeded with
+  // the match we positioned above so the effects below stay idle when there is
+  // nothing left to do; a different id — the round gate swapping the match, or
+  // matches that only load after mount — re-arms them.
+  const positionedFor = useRef(activeHole > 0 ? myMatches[0]?.id : null);
   // Auto-advance arming, keyed `matchId:hole`. A hole is armed only once we
   // have seen it INCOMPLETE while mounted — see the auto-advance effect.
   const advanceArmed = useRef({});
+
+  // Put the screen on a match's live edge in a SINGLE render — shared by the
+  // match selector and the match-change effect below, so neither of them ever
+  // paints the outgoing hole before correcting it.
+  const positionOn = (m) => {
+    const edge = m ? openingHole([...m.teamA, ...m.teamB],
+      (pid, h) => (holeData[`${pid}_${m.round}`] || {})[h] || 0) : 0;
+    // Only claim the match as positioned when there was real data to position
+    // FROM. Landing on hole 1 because nothing has loaded yet is not an answer,
+    // and must leave the deferred jump below armed.
+    positionedFor.current = edge > 0 ? m.id : null;
+    setActiveHole(edge);
+    setEditing(false);
+  };
 
   // Resolved, not stored — the selection is re-derived from the matches the
   // gate currently allows. When a round is finalized under a player's feet,
@@ -602,6 +655,14 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     return true;
   });
   const curHoleScoreSig = matchPids.map(pid => getScore(pid, activeHole)).join(",");
+  // Whether this match has ANY score yet. Gates arming below: on a cold load
+  // holeData is empty for the first few frames, and a hole that only looks
+  // incomplete because nothing has loaded must not arm the auto-advance —
+  // otherwise the arriving snapshot "completes" hole 1 and fires the toast.
+  const anyScores = matchPids.some(pid => {
+    for (let h = 0; h < 18; h++) if (getScore(pid, h) > 0) return true;
+    return false;
+  });
 
   // Auto-advance — when all 4 players have scored the active hole, after
   // 1.8s show toast and jump to next unscored hole. Clean-up cancels on
@@ -619,7 +680,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     const armKey = `${match.id}:${activeHole}`;
     // Arm before the suppression checks — a hole the user is mid-edit on
     // still needs to arm so finishing it advances as usual.
-    if (!holeComplete) { advanceArmed.current[armKey] = true; return; }
+    if (!holeComplete) { if (anyScores) advanceArmed.current[armKey] = true; return; }
     if (activeHole >= 17 || editing || allComplete) return;
     if (!advanceArmed.current[armKey]) return;
     setToast(`✓ Hole ${activeHole + 1} saved — advancing...`);
@@ -632,7 +693,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     }, 1800);
     return () => { clearTimeout(timer); setToast(null); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [holeComplete, activeHole, editing, allComplete, curHoleScoreSig, match?.id]);
+  }, [holeComplete, activeHole, editing, allComplete, anyScores, curHoleScoreSig, match?.id]);
 
   // Safety net — clear toast after 3s in case the cleanup misses an edge case.
   useEffect(() => {
@@ -641,32 +702,33 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     return () => clearTimeout(t);
   }, [toast]);
 
-  // Initial-jump on mount per match — fast-forward to first unscored hole.
-  // The hole resets with the match, which matters most when the match
-  // changes out from under the player: finalizing a round swaps this screen
-  // to the next round's match, and a held hole 14 would otherwise carry over
-  // onto a card that hasn't teed off. A fresh round has no scores, so the
-  // fast-forward below won't move it — the reset is the only thing that does.
+  // Reposition when the match changes out from under the player: finalizing
+  // a round swaps this screen to the next round's match, and a held hole 14
+  // would otherwise carry over onto a card that hasn't teed off. Lands on the
+  // new match's live edge, which for a freshly-opened round is hole 1.
+  //
+  // The `positionedFor` guard makes this skip the mount pass, where the hole
+  // was already resolved synchronously above — running it on mount would put
+  // the screen back on hole 1 and reintroduce the flash it exists to avoid.
   useEffect(() => {
-    initialJump.current = false;
-    setActiveHole(0);
-    setEditing(false);
+    if (positionedFor.current === (match?.id ?? null)) return;
+    positionOn(match);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [match?.id]);
+
+  // Deferred opening-hole jump — the cold-load safety net. When the app is
+  // opened straight onto the Scoring tab, holeData is still empty during the
+  // first render, so the synchronous positioning above has nothing to work
+  // with; this waits for Firestore's cached snapshot to land and then jumps.
+  // On a tab return (holeData already present) `positionedFor` is pre-seeded
+  // and this does nothing at all, which is what keeps the screen still.
   useEffect(() => {
-    if (initialJump.current) return;
-    if (!match) return;
+    if (!match || positionedFor.current === match.id) return;
     const t = setTimeout(() => {
-      if (initialJump.current) return;
-      initialJump.current = true;
-      let edge = 18;
-      for (let h = 0; h < 18; h++) {
-        if (!matchPids.every(pid => getScore(pid, h) > 0)) { edge = h; break; }
-      }
-      const hasAny = matchPids.some(pid => {
-        for (let h = 0; h < 18; h++) if (getScore(pid, h) > 0) return true;
-        return false;
-      });
-      if (hasAny && edge > 0 && edge < 18) setActiveHole(edge);
+      if (positionedFor.current === match.id) return;
+      positionedFor.current = match.id;
+      const edge = openingHole(matchPids, getScore);
+      if (edge > 0) setActiveHole(edge);
     }, 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -840,7 +902,10 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           {myMatches.map((m, i) => {
             const active = m.id === match.id;
             return (
-              <button key={m.id} onClick={() => { setActiveMatchId(m.id); setActiveHole(0); initialJump.current = false; }} style={{
+              // Position the incoming match in the same render as the switch —
+              // leaving it to the effect below would paint the outgoing hole
+              // for a frame first, the same flash returning to the tab had.
+              <button key={m.id} onClick={() => { setActiveMatchId(m.id); positionOn(m); }} style={{
                 flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
                 background: active ? BC.amberDim : BC.card,
                 border: `1px solid ${active ? BC.amberDim : BC.bdr}`,
@@ -3429,21 +3494,42 @@ function PracticeScoringTab({
   onSavePracticeScore, getStrokeMapsForMatch,
   renderMatchScorecardBody, tPlayers,
 }) {
+  // Lock scoring to the user's own match. Switching to a different match is
+  // intentionally not allowed — only players in a match should be entering its
+  // scores. If the user isn't on any team in this event (e.g. a director who
+  // didn't include themselves), we render an empty state below. Derived ahead
+  // of the hooks (it's a plain lookup, not a hook) so the opening hole can be
+  // resolved during the first render.
+  const activeMatch = event?.matches?.find(m =>
+    [m.team1.player1, m.team1.player2, m.team2.player1, m.team2.player2].includes(user?.player_id)
+  );
+  const matchPids = activeMatch ? [
+    activeMatch.team1.player1, activeMatch.team1.player2,
+    activeMatch.team2.player1, activeMatch.team2.player2,
+  ].filter(Boolean) : [];
+
   // Hooks first — must fire unconditionally on every render. Even when
   // event/course aren't loaded yet, we still call them so React's hook
   // counter stays consistent across renders.
-  const [activeHole, setActiveHole] = useState(0);
+  // Open on the live edge, resolved synchronously from the scoresMap we
+  // already have — a user joining mid-round shouldn't have to flip through
+  // holes 1..N to reach the action, and switching sub-tabs unmounts this
+  // view, so doing it in a deferred effect meant rendering hole 1 and then
+  // flashing forward on every return. The deferred effect below still covers
+  // the cold-load case, where scoresMap is empty on the first render.
+  const [activeHole, setActiveHole] = useState(
+    () => openingHole(matchPids, (pid, h) => scoresMap[`${pid}_${h}`] || 0)
+  );
   const [showScorecard, setShowScorecard] = useState(false);
   // `editing` = true when the user has navigated BACK to a previously-
   // completed hole to fix a score. While editing, auto-advance is
   // suppressed so a corrective tap doesn't jump the screen away. Reset
   // to false whenever they reach the live edge (first unscored hole).
   const [editing, setEditing] = useState(false);
-  // Initial-jump bookkeeping. On first arrival at the scoring view (after
-  // Firestore scores load), we jump activeHole forward to the first
-  // unscored hole — so a user joining mid-round doesn't have to flip
-  // through holes 1..N to reach the action. Only fires once per mount.
-  const initialJump = useRef(false);
+  // Which match id the opening-hole jump has already been resolved for.
+  // Seeded with the match we positioned above so the deferred effect stays
+  // idle when it has nothing left to do; a null seed re-arms it.
+  const positionedFor = useRef(activeHole > 0 ? activeMatch?.id : null);
   // Auto-advance arming, keyed `matchId:hole`. A hole is armed only once we
   // have seen it INCOMPLETE while mounted — see the auto-advance effect.
   const advanceArmed = useRef({});
@@ -3455,18 +3541,6 @@ function PracticeScoringTab({
 
   const holePars = resolveHolePars(course);
   const holeHcps = resolveHoleHcps(course);
-
-  // Lock scoring to the user's own match. Switching to a different match is
-  // intentionally not allowed — only players in a match should be entering its
-  // scores. If the user isn't on any team in this event (e.g. a director who
-  // didn't include themselves), we render an empty state below.
-  const activeMatch = event?.matches?.find(m =>
-    [m.team1.player1, m.team1.player2, m.team2.player1, m.team2.player2].includes(user?.player_id)
-  );
-  const matchPids = activeMatch ? [
-    activeMatch.team1.player1, activeMatch.team1.player2,
-    activeMatch.team2.player1, activeMatch.team2.player2,
-  ].filter(Boolean) : [];
 
   const par = holePars[activeHole];
   const hcp = holeHcps[activeHole];
@@ -3499,6 +3573,14 @@ function PracticeScoringTab({
   // within the 1.8s auto-advance window restarts the timer rather than
   // letting it lock in at the moment of first completion.
   const curHoleScoreSig = matchPids.map(pid => scoresMap[`${pid}_${activeHole}`] || 0).join(",");
+  // Whether this match has ANY score yet. Gates arming below: on a cold load
+  // scoresMap is empty for the first few frames, and a hole that only looks
+  // incomplete because nothing has loaded must not arm the auto-advance —
+  // otherwise the arriving snapshot "completes" hole 1 and fires the toast.
+  const anyScores = matchPids.some(pid => {
+    for (let h = 0; h < 18; h++) if ((scoresMap[`${pid}_${h}`] || 0) > 0) return true;
+    return false;
+  });
 
   // Auto-advance effect — fires the timer when the active hole becomes
   // fully scored. Surfaces a toast during the 1.8s wait so the screen
@@ -3519,7 +3601,7 @@ function PracticeScoringTab({
     const armKey = `${activeMatch.id}:${activeHole}`;
     // Arm before the suppression checks — a hole the user is mid-edit on
     // still needs to arm so finishing it advances as usual.
-    if (!holeComplete) { advanceArmed.current[armKey] = true; return; }
+    if (!holeComplete) { if (anyScores) advanceArmed.current[armKey] = true; return; }
     if (activeHole >= 17 || editing || allComplete) return;
     if (!advanceArmed.current[armKey]) return;
     // Fire the toast immediately so users see "saving — advancing..."
@@ -3544,7 +3626,7 @@ function PracticeScoringTab({
       setToast(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [holeComplete, activeHole, editing, allComplete, curHoleScoreSig, activeMatch]);
+  }, [holeComplete, activeHole, editing, allComplete, anyScores, curHoleScoreSig, activeMatch]);
 
   // Safety net — always clear the toast after 3s even if some edge case
   // misses cleanup. Mirrors MNQ's safety useEffect.
@@ -3554,37 +3636,30 @@ function PracticeScoringTab({
     return () => clearTimeout(t);
   }, [toast]);
 
-  // Initial-jump effect — runs once on mount per match. Waits a brief
-  // moment for Firestore's cached snapshot to land, then reads the latest
-  // scoresMap via a ref and jumps activeHole forward to the live edge if
-  // there's pre-existing data. The previous version listened on
-  // [activeMatch, scoresMap] and re-fired each time scoresMap changed —
-  // which meant the user's FIRST score (a scoresMap change with
-  // hasAnyScores newly true) triggered a same-frame jump that raced with
-  // the auto-advance effect and pre-empted the 1.8s toast wait. Listening
-  // only on activeMatch.id and reading scoresMap via a ref makes this
-  // strictly a "joining mid-round" UX feature; live scoring is left to
-  // the auto-advance effect.
+  // Deferred opening-hole jump — the cold-load safety net for the case the
+  // synchronous positioning above can't cover: the app opened straight onto
+  // this tab with scoresMap still empty on the first render. Waits for
+  // Firestore's cached snapshot to land, then jumps to the live edge.
+  //
+  // It reads scoresMap through a ref and depends only on activeMatch.id, not
+  // on scoresMap itself. Depending on scoresMap made it re-fire on the user's
+  // FIRST score, and that same-frame jump raced with the auto-advance effect
+  // and pre-empted its 1.8s toast wait. This stays strictly a "joining
+  // mid-round" feature; live scoring belongs to the auto-advance effect.
+  //
+  // On a sub-tab return (scoresMap already present) `positionedFor` is pre-seeded
+  // and this does nothing at all, which is what keeps the screen still.
   const scoresMapRef = useRef(scoresMap);
   scoresMapRef.current = scoresMap;
   useEffect(() => {
-    if (initialJump.current) return;
-    if (!activeMatch) return;
+    if (!activeMatch || positionedFor.current === activeMatch.id) return;
     const t = setTimeout(() => {
-      if (initialJump.current) return;
-      initialJump.current = true; // lock regardless of outcome
+      if (positionedFor.current === activeMatch.id) return;
+      positionedFor.current = activeMatch.id; // lock regardless of outcome
       const sMap = scoresMapRef.current;
       const pids = [activeMatch.team1.player1, activeMatch.team1.player2, activeMatch.team2.player1, activeMatch.team2.player2].filter(Boolean);
-      if (pids.length === 0) return;
-      let edge = 18;
-      for (let h = 0; h < 18; h++) {
-        if (!pids.every(pid => (sMap[`${pid}_${h}`] || 0) > 0)) { edge = h; break; }
-      }
-      const hasAnyScores = pids.some(pid => {
-        for (let h = 0; h < 18; h++) if ((sMap[`${pid}_${h}`] || 0) > 0) return true;
-        return false;
-      });
-      if (hasAnyScores && edge > 0 && edge < 18) setActiveHole(edge);
+      const edge = openingHole(pids, (pid, h) => sMap[`${pid}_${h}`] || 0);
+      if (edge > 0) setActiveHole(edge);
     }, 400);
     return () => clearTimeout(t);
   }, [activeMatch?.id]);
