@@ -13,7 +13,10 @@ import {
   query, where, onSnapshot, deleteDoc,
 } from "firebase/firestore";
 
-const FIREBASE_CONFIG = {
+// The PRODUCTION project — the live tournament. It stays inline as the default
+// so a build with no env configured behaves exactly as it always has, and so
+// deploys need no new Vercel settings.
+const PROD_FIREBASE_CONFIG = {
   apiKey: "AIzaSyCvR8I_5N0tXIXaPRkvsvBMzKfUY1_KzA0",
   authDomain: "the-bourbon-cup.firebaseapp.com",
   projectId: "the-bourbon-cup",
@@ -21,6 +24,56 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "957218531964",
   appId: "1:957218531964:web:753b42a551463fd50537f9",
 };
+
+// ── Pointing a dev server at a different project ────────────────────
+// `AdminView` auto-saves to Firestore on edit, so with more than one person
+// working, a stray click on a local dev server mutates a real round. Copy
+// .env.example to .env.local and fill in every VITE_FIREBASE_* var to aim that
+// machine at a scratch Firebase project instead.
+//
+// The override is deliberately all-or-nothing: a partial set throws at startup
+// rather than silently pairing a dev project id with the prod API key, which
+// would look like it worked and write to production anyway.
+const FIREBASE_ENV_KEYS = {
+  apiKey: "VITE_FIREBASE_API_KEY",
+  authDomain: "VITE_FIREBASE_AUTH_DOMAIN",
+  projectId: "VITE_FIREBASE_PROJECT_ID",
+  storageBucket: "VITE_FIREBASE_STORAGE_BUCKET",
+  messagingSenderId: "VITE_FIREBASE_MESSAGING_SENDER_ID",
+  appId: "VITE_FIREBASE_APP_ID",
+};
+
+const _resolveFirebaseConfig = () => {
+  const env = import.meta.env || {};
+  const entries = Object.entries(FIREBASE_ENV_KEYS);
+  const missing = entries.filter(([, key]) => !env[key]).map(([, key]) => key);
+
+  if (missing.length === entries.length) {
+    if (env.DEV) {
+      console.warn(
+        `[firebase] No VITE_FIREBASE_* override — this dev server is on the LIVE ` +
+        `project "${PROD_FIREBASE_CONFIG.projectId}". Edits reach real tournament ` +
+        `data. See .env.example to point at a scratch project.`
+      );
+    }
+    return PROD_FIREBASE_CONFIG;
+  }
+  if (missing.length) {
+    // Logged as well as thrown: this throws during module evaluation, before
+    // React (and ErrorBoundary) exist, so the only symptom is a blank page.
+    const msg =
+      `[firebase] Partial VITE_FIREBASE_* override — also set: ${missing.join(", ")}. ` +
+      `Unset them all to use the production project. See .env.example.`;
+    console.error(msg);
+    throw new Error(msg);
+  }
+
+  const cfg = Object.fromEntries(entries.map(([field, key]) => [field, env[key]]));
+  console.info(`[firebase] Using project "${cfg.projectId}" from env.`);
+  return cfg;
+};
+
+const FIREBASE_CONFIG = _resolveFirebaseConfig();
 
 // ── Active edition pointer ──────────────────────────────────────────
 // Every query and write is namespaced by `tournament_id` so multiple

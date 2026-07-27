@@ -28,3 +28,11 @@ dist-ssr
 # Pipeline-generated SQLite (regenerate with pipeline/phase3.mjs; the CSV
 # sheets + *.json facts are the source of truth for historical stats)
 data/*.db
+
+# Local Firebase project override (see .env.example). `*.local` above already
+# covers .env.local; this catches a bare .env too.
+.env
+
+# Claude Code: settings.json and launch.json are shared so both developers'
+# agents behave the same way. Personal permission grants stay out.
+.claude/settings.local.json

@@ -26,4 +26,10 @@ export default defineConfig([
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
     },
   },
+  {
+    // Runs in Node, not the browser: the Vite config and the Vercel
+    // serverless handlers, which read secrets off `process.env`.
+    files: ['vite.config.js', 'api/**/*.js'],
+    languageOptions: { globals: globals.node },
+  },
 ])

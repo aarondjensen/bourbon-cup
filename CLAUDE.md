@@ -2,22 +2,54 @@
 
 ## Git
 
-**Commit directly to `main`. Do not create feature branches, and do not open
-pull requests unless explicitly asked for one.**
+This is a two-developer project, so the old "always commit straight to `main`,
+never branch" rule no longer applies. `App.jsx` is ~6k lines and is the file
+both developers will reach for; unsynchronized pushes to `main` turn that into
+hand-merged conflicts.
 
-This is a single-maintainer project and branches here cost more than they buy:
-this environment's git proxy refuses ref deletions (`403` on
-`git push --delete`, and the GitHub REST API is gated at the proxy too), so
-every branch created has to be deleted by hand in the GitHub UI afterwards.
-Committing straight to `main` is the preferred workflow.
+**Default to a short-lived branch and a PR** for anything beyond a one-file
+tweak. Branch from an up-to-date `main`, keep the branch alive for hours not
+days, and squash-merge.
 
-Still expected on every commit:
+Branch cleanup used to be the reason to avoid this: some environments' git
+proxy refuses ref deletions (`403` on `git push --delete`, and the GitHub REST
+API is gated there too), so branches had to be deleted by hand in the GitHub
+UI. The fix is *Settings → General → Automatically delete head branches* on the
+repo, which removes merged branches server-side. **Never attempt to delete a
+remote branch yourself** — it will fail in some environments; let the merge do
+it, or leave it for a human.
+
+Committing directly to `main` is still fine for small, self-contained changes
+when you know the other developer isn't mid-change in the same files. When you
+do, always `git pull --rebase` before pushing.
+
+Still expected on every commit, branch or not:
 
 - Build before committing — `npm run build` must pass.
 - Lint with `npx eslint <changed files>` and compare the error count against
   the same files before the change. The repo carries pre-existing errors; the
   bar is not adding new ones, not a clean sheet.
-- Push to `origin main` when the work is done.
+- Push when the work is done (`origin main`, or the branch + PR).
+
+## Firestore is shared and live
+
+There is one Firebase project behind the app and it holds the real tournament.
+`AdminView` auto-saves on edit, so a dev server aimed at production can corrupt
+a live round with one stray click — and with two people working, one of you is
+eventually editing while the other is running a round.
+
+- To aim a machine at a scratch Firebase project, copy `.env.example` to
+  `.env.local` and set every `VITE_FIREBASE_*` var. Partial overrides throw at
+  startup on purpose. Unset them all to use production.
+- With no override, `src/firebase.js` logs a dev-mode warning naming the live
+  project. If you see that warning, assume every write is real.
+- A weaker but zero-setup alternative is working inside a throwaway *edition*
+  (`bc_dev_<name>`). Editions created now namespace their doc ids, so they're
+  isolated from `bc_2025` — but they still live in the production project, so a
+  bad delete can still reach real data.
+- Never commit Firebase overrides or API secrets. `.env`, `*.local`, and
+  `.claude/settings.local.json` are gitignored; the secrets in `api/*.js` are
+  set in Vercel, not in the repo.
 
 ## Verifying UI changes
 
