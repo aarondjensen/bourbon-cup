@@ -197,6 +197,87 @@ export function teeTimeForMatch({ groups, times, match }) {
   return i < 0 ? "" : (times[i] || "");
 }
 
+// ── Play order ─────────────────────────────────────────────────────
+// Matches in a stable, device-independent order — by document id, which is
+// the order Firestore hands them back in anyway when a query names no sort.
+// Anything ORDER-DEPENDENT derived from a round's matches starts here,
+// because that derivation runs on every phone at once: derived groups follow
+// the match order, tee times follow the groups, and match numbers follow the
+// tee times, so a client that received the documents in some other order
+// would otherwise number the same draw differently from everyone else.
+export const canonicalMatchOrder = (matches) =>
+  [...(matches || [])].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+
+// The groups and tee times a round actually plays off, resolved the one way
+// every surface resolves them: the groups the director saved, or the
+// foursomes a 2-man format implies, timed off the round's tee-time list.
+// `minSlots` is how many time boxes the caller wants back regardless of the
+// group count (the admin tab always draws four).
+export function roundPlaySetup({ tr, matches, storedGroups, minSlots = 1 }) {
+  const groups = storedGroups || (isFoursomeFormat(tr?.format)
+    ? autoBuildGroups({ formatId: tr?.format, matches: canonicalMatchOrder(matches) })
+    : []);
+  const times = expandTeeTimes(teeTimeList(tr), Math.max(groups.length, minSlots));
+  return { groups, times };
+}
+
+// One round's matches in the order they go off: by tee time, anything
+// untimed last, and the match id as the final tiebreak so every device
+// agrees on the order no matter what sequence Firestore delivered the
+// documents in.
+//
+// Pass the round's matches as they arrive, never this function's own output:
+// derived groups follow the match order and tee times follow the groups, so
+// feeding a tee-time sort back into that chain would let the order chase its
+// own tail.
+export function orderMatchesForRound({ matches, groups = [], times = [] }) {
+  const at = (m) => parseTeeTime(teeTimeForMatch({ groups, times, match: m }));
+  return [...(matches || [])].sort((a, b) => {
+    const ta = at(a), tb = at(b);
+    if (ta !== tb) {
+      if (ta == null) return 1;
+      if (tb == null) return -1;
+      return ta - tb;
+    }
+    return String(a.id).localeCompare(String(b.id));
+  });
+}
+
+// ── Match numbers ──────────────────────────────────────────────────
+// Every match carries ONE number and the numbers run straight through the
+// schedule: Round 1's first match is Match 1, and each match after it is
+// the match before it plus one. Four matches in Round 1 therefore makes
+// Round 2's first match Match 5 — nothing restarts per round, so "Match 5"
+// names exactly one match of the week rather than one per round.
+//
+// Derived on read, never written to the match document. A deleted match
+// closes the gap it leaves behind and a retimed one takes its new place in
+// the order, neither of which a number stamped on at creation time could
+// do. Returns { [matchId]: number }.
+export function numberMatches({ matches, tRounds, groupsByRound }) {
+  // A match with no round still gets a number: it sorts to the end rather
+  // than falling out of the count.
+  const byRound = new Map();
+  (matches || []).forEach(m => {
+    const key = m.round == null ? Infinity : m.round;
+    if (!byRound.has(key)) byRound.set(key, []);
+    byRound.get(key).push(m);
+  });
+
+  const out = {};
+  let n = 0;
+  [...byRound.keys()].sort((a, b) => a - b).forEach(rnd => {
+    const rndMatches = byRound.get(rnd);
+    const tr = (tRounds || []).find(t => t.round_number === rnd);
+    const { groups, times } = roundPlaySetup({
+      tr, matches: rndMatches, storedGroups: groupsByRound?.[rnd],
+    });
+    orderMatchesForRound({ matches: rndMatches, groups, times })
+      .forEach(m => { out[m.id] = ++n; });
+  });
+  return out;
+}
+
 // ── Validation ─────────────────────────────────────────────────────
 // Everything the director needs told about a round's grouping. Each entry
 // is a plain list so the caller can render whichever ones it cares about.
