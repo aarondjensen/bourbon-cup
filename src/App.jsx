@@ -22,7 +22,7 @@ import {
   ROUND_LOCKS_COL, buildRoundLockDoc, refreshRoundLockDoc,
   markRoundFinal, unfinalizeRound, clearRoundLockDoc,
   roundLockState, describeHiChangeImpact,
-  isRoundFinal, currentRoundNumber, nextRoundNumber, lastFinalRoundNumber,
+  currentRoundNumber, nextRoundNumber, lastFinalRoundNumber,
   LOCK_OPEN, LOCK_FINAL,
 } from "./lib/roundLocks";
 import { usePullToRefresh } from "./lib/usePullToRefresh";
@@ -329,7 +329,11 @@ function LoginScreen({ players, onLogin, teams, darkMode, tournamentName, tourna
 //
 // The Scoring tab accepts entries for exactly ONE round: the current one —
 // the lowest round the director has not finalized (lib/roundLocks.
-// currentRoundNumber). Every other round is visible on the tab, and closed.
+// currentRoundNumber). Every other round is closed, and the tab does not
+// show them at all: a strip of chips that only ever answered a tap with a
+// toast cost a row of vertical space on the screen where space is scarcest.
+// The empty states below name the live round instead, which is the only
+// part of that strip anybody needed.
 //
 // The problem is mundane and expensive. Four players stand on a tee with
 // their phones out; the tab used to open on whichever of their matches
@@ -371,43 +375,6 @@ function roundScoreProgress(matches, holeData, round) {
     // has nothing to be complete about.
     complete: total > 0 && entered === total,
   };
-}
-
-// ── Round strip ──
-// Every round of the tournament across the top of the Scoring tab, with only
-// the current one lit. Its job is to answer the question the gate raises
-// ("where did Round 1 go?") before a player has to ask it, so tapping a
-// closed chip says WHY it is closed rather than doing nothing at all.
-function RoundGateStrip({ rounds, currentRound, roundLocks, onExplain }) {
-  if (rounds.length < 2) return null;
-  return (
-    <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-      {rounds.map(r => {
-        const live = r === currentRound;
-        const done = isRoundFinal(roundLocks, r);
-        return (
-          <button
-            key={r}
-            onClick={() => onExplain(
-              live ? `Round ${r} is open for scoring`
-                : done ? `Round ${r} is final — see the Leaderboard`
-                : currentRound == null ? `The tournament is over — Round ${r} never opened`
-                : `Round ${r} opens when Round ${currentRound} is finalized`
-            )}
-            style={{
-              flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
-              background: live ? BC.amberDim : BC.card,
-              border: `1px solid ${live ? BC.amberDim : BC.bdr}`,
-              color: live ? "#fff" : done ? BC.t2 : BC.t3,
-              opacity: live || done ? 1 : 0.55,
-            }}
-          >
-            {done ? "✓ " : ""}Rd {r}
-          </button>
-        );
-      })}
-    </div>
-  );
 }
 
 // ── Finalize card ──
@@ -563,8 +530,8 @@ function FinalizeRoundCard({ round, nextRound, lastFinal, progress, tPlayers, on
 // matches the rest of the app.
 //
 // The round selector this view used to carry is gone: entry is gated to the
-// current round (see "The round gate" above), and the strip at the top now
-// SHOWS the tournament's rounds rather than offering them.
+// current round (see "The round gate" above), so there is nothing left to
+// select between and no strip of rounds at the top either.
 function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teams, hcpOverrides, teeAssignments, roundLocks, rounds, currentRound, onFinalizeRound }) {
   const userPid = user.player_id;
   // THE GATE. Only the current round's matches exist as far as this screen
@@ -715,13 +682,9 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // No more hooks below this line.
 
   // ── The gate's chrome ──
-  // Both of these belong on EVERY branch below, including the ones a player
-  // who isn't drawn in this round lands on: the strip is how anyone works out
-  // which round is live, and the Finalize card has to reach a director who
-  // is running the event without playing in it.
-  const gateStrip = (
-    <RoundGateStrip rounds={rounds} currentRound={currentRound} roundLocks={roundLocks} onExplain={setToast} />
-  );
+  // This belongs on EVERY branch below, including the ones a player who isn't
+  // drawn in this round lands on: the Finalize card has to reach a director
+  // who is running the event without playing in it.
   const directorCard = user.isDirector && (rounds.length > 0) ? (
     <FinalizeRoundCard
       round={currentRound}
@@ -735,7 +698,6 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   ) : null;
   const shell = (children) => (
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
-      {gateStrip}
       {children}
       {directorCard}
       <Toast message={toast} />
@@ -977,8 +939,9 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
       </div>
 
       {/* Player score cards — 4 stacked, T1 above dashed divider, T2 below.
-          Each shows: name, (CH), stroke dots, "Net: ±X thru N", then a row
-          of par-relative score buttons. Tap a saved score again to clear. */}
+          Each shows one header row — name, (CH), stroke dots on the left,
+          "Net ±X thru N" right-aligned — then a row of par-relative score
+          buttons. Tap a saved score again to clear. */}
       <div>
         {[...match.teamA, "DIVIDER", ...match.teamB].map((pid, idx) => {
           if (pid === "DIVIDER") return <div key="div" style={{ borderTop: `1px dashed ${BC.bdr}`, margin: "8px 0" }} />;
@@ -1022,10 +985,14 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
               background: BC.card, borderRadius: 10, marginBottom: 4, padding: "6px 10px",
               border: `1px solid ${BC.bdr}`,
             }}>
-              {/* Top row — name + (CH) + stroke dots clustered tight on the
-                  LEFT, so the handicap context reads as attached to the
-                  player it describes. MNQ's layout. */}
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2, minWidth: 0 }}>
+              {/* Header row — name + (CH) + stroke dots clustered tight on
+                  the LEFT, so the handicap context reads as attached to the
+                  player it describes, and the running Net pushed to the far
+                  RIGHT of the same row. The Net used to sit on a line of its
+                  own beneath; folding it up here buys back a row per card,
+                  which over four cards is most of the difference between the
+                  scoring screen fitting a phone and having to be scrolled. */}
+              <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 4, minWidth: 0 }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: BC.t1, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>{tp?.name || pid}</span>
                 <span title={chTitle} style={{ fontSize: 11, fontWeight: 700, color: BC.hcpBlue, flexShrink: 0 }}>
                   ({ch}{reduced ? "*" : ""})
@@ -1035,15 +1002,12 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
                     {"●".repeat(strokes)}
                   </span>
                 )}
-              </div>
-              {/* Net / thru sub-line on its own row beneath the name, as in
-                  MNQ. minHeight reserves the slot before scoring starts so
-                  the card doesn't grow on the first entry. */}
-              <div style={{ fontSize: 10, color: BC.t3, marginBottom: 3, lineHeight: 1.1, minHeight: 10 }}>
                 {thru > 0 && (
-                  <>Net <strong style={{ color: netToPar < 0 ? BC.danger : netToPar === 0 ? BC.t3 : BC.t1, fontWeight: 700 }}>
-                    {fmtScore(netToPar)}
-                  </strong> thru {thru}</>
+                  <span style={{ marginLeft: "auto", paddingLeft: 8, fontSize: 10, color: BC.t3, lineHeight: 1.1, whiteSpace: "nowrap", flexShrink: 0 }}>
+                    Net <strong style={{ color: netToPar < 0 ? BC.danger : netToPar === 0 ? BC.t3 : BC.t1, fontWeight: 700 }}>
+                      {fmtScore(netToPar)}
+                    </strong> thru {thru}
+                  </span>
                 )}
               </div>
               <ScoreButtonRow par={par} score={cur} onScore={(v) => onTapScore(pid, v)} />
