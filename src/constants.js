@@ -77,6 +77,35 @@ export const resolveTeams = (teamNames) => ({
   B: { ...TEAM_B, name: teamNames?.B || TEAM_B.name },
 });
 
+// ── The vocabulary a format is described in ─────────────────────────
+// These sit above FORMATS because every entry in the catalog is written in
+// their terms. They used to live beside the scoring-axis notes further down,
+// which put them in the temporal dead zone for the catalog itself.
+
+// FORM OF PLAY — how hole numbers turn into points.
+export const SCORING_TYPE_MATCH = "match";
+export const SCORING_TYPE_TOTAL = "stroke";     // stored value predates the label
+export const SCORING_TYPE_POINTS = "points";    // every hole its own pot
+
+// HOLE SCORING — how a side's number for a hole is made. `format` is the
+// legacy "whatever this format's own rule is"; the other two name a concrete
+// method that a format may offer as a genuine choice between them.
+export const HOLE_SCORING_FORMAT = "format";
+export const HOLE_SCORING_BEST_BALL = "best_ball";
+export const HOLE_SCORING_TEAM_TOTAL = "team_total";
+
+// What a format's per-hole number actually COUNTS. Decides which direction a
+// comparison runs and what every screen calls the running total. Strokes count
+// down; dots and points count up.
+export const UNIT_STROKES = "strokes";
+export const UNIT_DOTS = "dots";
+export const UNIT_POINTS = "points";
+
+// Whether the field plays the difference off the lowest handicap in the match
+// or each plays their own whole figure.
+export const HANDICAP_MODE_LOW_MAN = "low_man";
+export const HANDICAP_MODE_FULL = "full";
+
 // ── Match-play format catalog ──
 // Format dictates how holes are compared (singles = 1v1 net, best ball =
 // better-of-two net, team total = sum of nets, etc.). Point allocation is
@@ -108,23 +137,129 @@ export const resolveTeams = (teamNames) => ({
 // `hole` is one line saying how a side's number for a hole is ACTUALLY made —
 // what the engine does, not what the rules of the game are called (`desc` is
 // that). The round form prints it so the director can read the rule instead of
-// being asked to guess at it. `holeChoice` marks the formats where that is
-// still an OPEN question the director gets to answer; see the hole-scoring
-// axis below for why the other eight are not asked.
+// being asked to guess at it.
+//
+// `holeOptions` is the exception: the formats where that is genuinely still
+// open, listed as the concrete methods on offer, FIRST ONE BEING THE DEFAULT.
+// Two formats have it, and they offer the same pair in opposite orders — a
+// Shamble is normally the better ball and a Team Total is normally the sum,
+// but either can be played the other way.
+//
+// `forms` is which of Match / Total / Points the format offers and
+// `formDefault` is where it opens. Points-per-hole is Team Best Ball's alone —
+// it is how this event's closing round has always worked and it makes no sense
+// anywhere else.
+//
+// `unit` is what the per-hole number counts, which decides both the direction
+// of every comparison and what the screens call a running total ("Stroke" when
+// it is strokes, "Total" when it is dots or points).
+//
+// `handicapMode` is where the Low Man / All toggle opens. The toggle is always
+// OFFERED — even on the against-par formats where the engine ignores it — but
+// those open on All, because a low-man difference means nothing when you are
+// playing the course rather than the other side.
+//
+// `allowanceOn` marks the one format whose allowance the form seeds ON: a
+// scramble side playing one ball off two full handicaps is unbeatable, so
+// 35/15 is the round, not an adjustment to it.
 //
 // Format defaults are baseline only — the director can override any value
 // in the round setup form.
 export const FORMATS = [
-  { id: "singles",        label: "Singles",            desc: "Match play, 1v1 net comparison per hole.",                                              nassau: { front: 1, back: 1, overall: 1 }, perSide: 1, allowance: { pct: 100 }, hole: "One ball a side — the player's own net score." },
-  { id: "best_ball",      label: "2-Man Best Ball",    desc: "Each player plays their own ball; team uses the better net score per hole.",            nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 90 }, hole: "The better of the side's two net balls." },
-  { id: "team_total",     label: "Team Total",         desc: "Combined team net per hole vs combined team net. Lower combined wins the hole.",        nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 90 }, hole: "Both partners' nets added together.", holeChoice: true },
-  { id: "pinehurst",      label: "Pinehurst",          desc: "Partners each drive, swap balls, then choose best to finish as scramble.",              nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { low: 60, high: 40 }, hole: "The side's one ball, played net." },
-  { id: "team_best_ball", label: "Team Best Ball",     desc: "Whole side plays; each hole is the sum of the best N net scores, set per nine.",        nassau: { front: 1, back: 1, overall: 2 }, perSide: null, allowance: { pct: 75 }, counting: { front: 6, back: 7 }, hole: "The sum of the side's best N nets." },
-  { id: "double_dot",     label: "Double Dot",         desc: "2-man Hi/Lo. Each hole: a dot for the low ball, a dot for the high ball. Ties win nothing.", nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 90 }, hole: "Two dots a hole — one for the low ball, one for the high. A tied ball wins nothing." },
-  { id: "shamble",        label: "Shamble",            desc: "All players drive, choose best drive, each plays their own ball in.",                   nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 90 }, hole: "One net score a side, off the first card entered.", holeChoice: true },
-  { id: "scramble",       label: "2-Man Scramble",     desc: "Both hit every shot, choose best ball location, both play from there.",                 nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { low: 35, high: 15 }, sharedBall: true, hole: "The side's one ball, net off the team handicap." },
-  { id: "tilt",           label: "2-Man Tilt",         desc: "2-man match play — net comparison per hole.",                                           nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 90 }, hole: "One net score a side, off the first card entered.", holeChoice: true },
-  { id: "stableford",     label: "2-Man Stableford",   desc: "Points per hole: eagle=4, birdie=3, par=2, bogey=1. Higher segment points wins.",       nassau: { front: 1, back: 1, overall: 2 }, perSide: 2, allowance: { pct: 85 }, hole: "Points against par — eagle 4, birdie 3, par 2, bogey 1." },
+  {
+    id: "singles", label: "Singles",
+    desc: "Match play, 1v1 net comparison per hole.",
+    hole: "One ball a side — the player's own net score.",
+    unit: UNIT_STROKES, perSide: 1,
+    forms: [SCORING_TYPE_MATCH, SCORING_TYPE_TOTAL], formDefault: SCORING_TYPE_MATCH,
+    nassau: { front: 1, back: 1, overall: 1 },
+    allowance: { pct: 100 }, handicapMode: HANDICAP_MODE_LOW_MAN,
+  },
+  {
+    id: "best_ball", label: "2-Man Best Ball",
+    desc: "Each player plays their own ball; team uses the better net score per hole.",
+    hole: "The better of the side's two net balls.",
+    unit: UNIT_STROKES, perSide: 2,
+    forms: [SCORING_TYPE_MATCH, SCORING_TYPE_TOTAL], formDefault: SCORING_TYPE_MATCH,
+    nassau: { front: 1, back: 1, overall: 2 },
+    allowance: { pct: 90 }, handicapMode: HANDICAP_MODE_LOW_MAN,
+  },
+  {
+    id: "team_total", label: "Team Total",
+    // Also known as 2-Man Aggregate, which is the name the engine's legacy
+    // `"aggregate"` format id came from.
+    desc: "Also called 2-Man Aggregate. Combined team net per hole vs combined team net. Lower combined wins the hole.",
+    hole: "Both partners' nets added together.",
+    holeOptions: [HOLE_SCORING_TEAM_TOTAL, HOLE_SCORING_BEST_BALL],
+    unit: UNIT_STROKES, perSide: 2,
+    forms: [SCORING_TYPE_MATCH, SCORING_TYPE_TOTAL], formDefault: SCORING_TYPE_MATCH,
+    nassau: { front: 1, back: 1, overall: 2 },
+    allowance: { pct: 90 }, handicapMode: HANDICAP_MODE_LOW_MAN,
+  },
+  {
+    id: "pinehurst", label: "Pinehurst",
+    desc: "Partners each drive, swap balls, then choose best to finish as scramble.",
+    hole: "The side's one ball, net off the team handicap.",
+    unit: UNIT_STROKES, perSide: 2, sharedBall: true,
+    forms: [SCORING_TYPE_MATCH, SCORING_TYPE_TOTAL], formDefault: SCORING_TYPE_MATCH,
+    nassau: { front: 1, back: 1, overall: 2 },
+    allowance: { low: 60, high: 40 }, handicapMode: HANDICAP_MODE_LOW_MAN,
+  },
+  {
+    id: "team_best_ball", label: "Team Best Ball",
+    desc: "Whole side plays; each hole is the sum of the best N net scores, set per nine.",
+    hole: "The sum of the side's best N nets.",
+    unit: UNIT_STROKES, perSide: null, counting: { front: 6, back: 7 },
+    forms: [SCORING_TYPE_MATCH, SCORING_TYPE_TOTAL, SCORING_TYPE_POINTS], formDefault: SCORING_TYPE_POINTS,
+    nassau: { front: 1, back: 1, overall: 2 },
+    allowance: { pct: 75 }, handicapMode: HANDICAP_MODE_FULL,
+  },
+  {
+    id: "double_dot", label: "Double Dot",
+    desc: "2-man Hi/Lo. Each hole: a dot for the low ball, a dot for the high ball. Ties win nothing.",
+    hole: "Two dots a hole — one for the low ball, one for the high. A tied ball wins nothing.",
+    unit: UNIT_DOTS, perSide: 2,
+    forms: [SCORING_TYPE_MATCH, SCORING_TYPE_TOTAL], formDefault: SCORING_TYPE_MATCH,
+    nassau: { front: 1, back: 1, overall: 2 },
+    allowance: { pct: 90 }, handicapMode: HANDICAP_MODE_LOW_MAN,
+  },
+  {
+    id: "shamble", label: "Shamble",
+    desc: "All players drive, choose best drive, each plays their own ball in.",
+    hole: "The better of the side's two net balls.",
+    holeOptions: [HOLE_SCORING_BEST_BALL, HOLE_SCORING_TEAM_TOTAL],
+    unit: UNIT_STROKES, perSide: 2,
+    forms: [SCORING_TYPE_MATCH, SCORING_TYPE_TOTAL], formDefault: SCORING_TYPE_MATCH,
+    nassau: { front: 1, back: 1, overall: 2 },
+    allowance: { pct: 90 }, handicapMode: HANDICAP_MODE_LOW_MAN,
+  },
+  {
+    id: "scramble", label: "2-Man Scramble",
+    desc: "Both hit every shot, choose best ball location, both play from there.",
+    hole: "The side's one ball, net off the team handicap.",
+    unit: UNIT_STROKES, perSide: 2, sharedBall: true,
+    forms: [SCORING_TYPE_MATCH, SCORING_TYPE_TOTAL], formDefault: SCORING_TYPE_TOTAL,
+    nassau: { front: 1, back: 1, overall: 2 },
+    allowance: { low: 35, high: 15 }, allowanceOn: true, handicapMode: HANDICAP_MODE_LOW_MAN,
+  },
+  {
+    id: "tilt", label: "2-Man Tilt",
+    desc: "Net points against par, doubled and redoubled while you keep making birdies.",
+    hole: "Both partners' Tilt points added together.",
+    unit: UNIT_POINTS, perSide: 2,
+    forms: [SCORING_TYPE_MATCH, SCORING_TYPE_TOTAL], formDefault: SCORING_TYPE_TOTAL,
+    nassau: { front: 1, back: 1, overall: 2 },
+    allowance: { pct: 90 }, handicapMode: HANDICAP_MODE_FULL,
+  },
+  {
+    id: "stableford", label: "2-Man Stableford",
+    desc: "Net points against par. Higher segment points wins.",
+    hole: "Both partners' Stableford points added together.",
+    unit: UNIT_POINTS, perSide: 2,
+    forms: [SCORING_TYPE_MATCH, SCORING_TYPE_TOTAL], formDefault: SCORING_TYPE_TOTAL,
+    nassau: { front: 1, back: 1, overall: 2 },
+    allowance: { pct: 85 }, handicapMode: HANDICAP_MODE_FULL,
+  },
 ];
 
 // ── Handicap allowances ──
@@ -328,53 +463,116 @@ export const HOLE_POINTS_DEFAULT = { front: 1, back: 2 };
 // express either.
 
 // ── Form of play (how points are awarded) ──
-export const SCORING_TYPE_MATCH = "match";
-export const SCORING_TYPE_TOTAL = "stroke";     // stored value predates the "Medal" label
-export const SCORING_TYPE_POINTS = "points";    // every hole its own pot
+// The catalog. Which of these a round may actually pick is the FORMAT's call
+// (`forms`), and Points is Team Best Ball's alone.
+//
+// The TOTAL label is deliberately absent here: it depends on what the format
+// counts, so it is asked of formOfPlayLabel() rather than baked in. "Medal" is
+// retired — it named the axis in nobody's vocabulary but golf's oldest.
+export const FORMS_OF_PLAY = [SCORING_TYPE_MATCH, SCORING_TYPE_TOTAL, SCORING_TYPE_POINTS];
 
-export const FORMS_OF_PLAY = [
-  { id: SCORING_TYPE_MATCH,  label: "Match",  desc: "The side that wins more holes takes each pot." },
-  { id: SCORING_TYPE_TOTAL,  label: "Medal",  desc: "The running total over each segment takes the pot, not holes won." },
-  { id: SCORING_TYPE_POINTS, label: "Points", desc: "Every hole is its own pot. Winner takes it, a halved hole splits it." },
-];
+// What a format counts per hole, and therefore what a running total of it is
+// called. Strokes count down and are a "Stroke" total; dots and points count
+// up and are just a "Total".
+export const formatUnit = (formatId) =>
+  FORMATS.find(f => f.id === formatId)?.unit || UNIT_STROKES;
+
+export const formOfPlayLabel = (id, formatId) => {
+  if (id === SCORING_TYPE_MATCH) return "Match";
+  if (id === SCORING_TYPE_POINTS) return "Points";
+  return formatUnit(formatId) === UNIT_STROKES ? "Stroke" : "Total";
+};
+
+export const describeFormOfPlay = (id, formatId) => {
+  if (id === SCORING_TYPE_MATCH) return "Each hole is won, lost or tied; the side that wins more holes takes each pot.";
+  if (id === SCORING_TYPE_POINTS) return "Every hole is its own pot. Winner takes it, a halved hole splits it.";
+  return `Each side accrues ${formatUnit(formatId)} through the match, compared when it ends — or at each Nassau segment.`;
+};
+
+// Which forms a format offers, and where it opens.
+export const formsFor = (formatId) =>
+  FORMATS.find(f => f.id === formatId)?.forms || [SCORING_TYPE_MATCH, SCORING_TYPE_TOTAL];
+
+export const formDefaultFor = (formatId) =>
+  FORMATS.find(f => f.id === formatId)?.formDefault || SCORING_TYPE_MATCH;
+
+// A round's form of play, constrained to what its format actually offers — a
+// round switched off Team Best Ball must not stay on Points, which only that
+// format can score.
+export const resolveFormOfPlay = (formatId, stored) =>
+  formsFor(formatId).includes(stored) ? stored : formDefaultFor(formatId);
 
 // ── Hole scoring (how a side's hole number is made) ──
-export const HOLE_SCORING_FORMAT = "format";        // whatever the format says
-export const HOLE_SCORING_BEST_BALL = "best_ball";  // best net ball, format overridden
-
-// What the round form has to ASK about a hole, given the format. The override
-// used to be offered on all nine non-counting formats, which is how a Double
-// Dot round came to be asked whether it was a Best Ball round — a question its
-// own name had already answered, and one whose "yes" throws the Hi/Lo dots
-// away and re-scores the round in net strokes.
+// What the round form has to ASK about a hole, given the format. The best-ball
+// override used to be offered on all nine non-counting formats, which is how a
+// Double Dot round came to be asked whether it was a Best Ball round — a
+// question its own name had already answered, and one whose "yes" throws the
+// Hi/Lo dots away and re-scores the round in net strokes.
 //
 // Three answers, and the format picks its own:
 //
 //   COUNTING — Team Best Ball. Best ball is a given; the open question is how
 //              many balls count, which the F9/B9 grid asks.
-//   CHOICE   — the format leaves a side's hole number genuinely undecided, so
-//              the override is a real question. Team Total (sums both nets, so
-//              "better ball instead" is a coherent alternative), plus Shamble
-//              and 2-Man Tilt, which have no team rule in the engine at all
-//              and score off one card until told otherwise.
-//   FIXED    — the format's name already answers it. Singles and Scramble play
-//              one ball, Best Ball is a best ball, Pinehurst posts one score,
-//              and Double Dot and Stableford count something other than net
-//              strokes. The form STATES the rule instead of asking.
+//   CHOICE   — the format genuinely leaves it open, and `holeOptions` names the
+//              methods on offer. Two formats do: a Shamble is normally the
+//              better ball and a Team Total normally the sum, but either side
+//              can agree to play it the other way.
+//   FIXED    — the format's name already answers it. The form STATES the rule
+//              instead of asking.
 export const HOLE_RULE_COUNTING = "counting";
 export const HOLE_RULE_CHOICE = "choice";
 export const HOLE_RULE_FIXED = "fixed";
 
+export const holeOptionsFor = (formatId) =>
+  FORMATS.find(f => f.id === formatId)?.holeOptions || null;
+
 export const holeRuleFor = (formatId) => {
   const f = FORMATS.find(x => x.id === formatId);
   if (f?.counting) return HOLE_RULE_COUNTING;
-  return f?.holeChoice ? HOLE_RULE_CHOICE : HOLE_RULE_FIXED;
+  return f?.holeOptions?.length > 1 ? HOLE_RULE_CHOICE : HOLE_RULE_FIXED;
 };
 
-// How a hole scores under a format, in one line. Empty for an unknown id so a
+// The concrete method a round scores holes by, or null on a format that has no
+// choice to make. `"format"` is the legacy way of saying "this format's own
+// rule", so it lands on the first option — which is that rule.
+export const resolveHoleMethod = (formatId, stored) => {
+  const opts = holeOptionsFor(formatId);
+  if (!opts) return null;
+  return opts.includes(stored) ? stored : opts[0];
+};
+
+// What each named method is called on a pill, and what it does in a sentence.
+export const HOLE_METHOD_LABELS = {
+  [HOLE_SCORING_BEST_BALL]: "Best Ball",
+  [HOLE_SCORING_TEAM_TOTAL]: "Team Total",
+};
+export const HOLE_METHOD_DESCRIPTIONS = {
+  [HOLE_SCORING_BEST_BALL]: "The better of the side's two net balls.",
+  [HOLE_SCORING_TEAM_TOTAL]: "Both partners' nets added together.",
+};
+
+// How a hole scores under a format, in one line. On a format that offers a
+// choice this follows the METHOD rather than the format, since the method is
+// what the round will actually be scored by. Empty for an unknown id so a
 // caller can render nothing rather than a sentence about nothing.
-export const describeHoleScore = (formatId) =>
-  FORMATS.find(f => f.id === formatId)?.hole || "";
+export const describeHoleScore = (formatId, storedHoleScoring) => {
+  const method = resolveHoleMethod(formatId, storedHoleScoring);
+  if (method) return HOLE_METHOD_DESCRIPTIONS[method] || "";
+  return FORMATS.find(f => f.id === formatId)?.hole || "";
+};
+
+// ── Handicap mode ──
+// Where the Low Man / All toggle opens. Always offered, but the against-par
+// formats open on All: a low-man difference is a match-play idea, and Tilt and
+// Stableford are played against the course.
+export const handicapModeFor = (formatId) =>
+  FORMATS.find(f => f.id === formatId)?.handicapMode || HANDICAP_MODE_LOW_MAN;
+
+// Does the form seed this format's allowance ON? Only the scramble, where a
+// side playing one ball off two full handicaps is not a round anyone would
+// choose. This is a FORM seed, never a scoring default — see resolveAllowance.
+export const allowanceStartsOn = (formatId) =>
+  !!FORMATS.find(f => f.id === formatId)?.allowanceOn;
 
 // The legacy value. `scoring_type: "team"` meant BOTH halves at once — score
 // every hole as best ball, then settle as match play — so it splits into one
@@ -389,10 +587,13 @@ export const resolveScoring = (doc) => {
   if (stored === LEGACY_SCORING_TYPE_TEAM) {
     return { formOfPlay: SCORING_TYPE_MATCH, holeScoring: HOLE_SCORING_BEST_BALL };
   }
+  const hs = doc?.hole_scoring;
   return {
     formOfPlay: stored,
-    holeScoring: doc?.hole_scoring === HOLE_SCORING_BEST_BALL
-      ? HOLE_SCORING_BEST_BALL : HOLE_SCORING_FORMAT,
+    // Anything that isn't a method this app knows reads as "the format's own
+    // rule", which is what an absent field has always meant.
+    holeScoring: (hs === HOLE_SCORING_BEST_BALL || hs === HOLE_SCORING_TEAM_TOTAL)
+      ? hs : HOLE_SCORING_FORMAT,
   };
 };
 
@@ -424,6 +625,80 @@ export const describeHolePoints = (spec) => {
   const hp = resolveHolePoints(spec);
   return hp.front === hp.back ? `${hp.front} per hole` : `${hp.front} / ${hp.back} per hole`;
 };
+
+// ── Points against par ──
+// Two formats score a hole by what it was against PAR rather than against the
+// other side: Stableford and Tilt. They share one ladder of results and differ
+// only in what each rung pays — and in Tilt's case, in the multiplier that
+// rides on top of it.
+//
+// The rungs run best-first so a table renders in the order a golfer thinks.
+// `double` is "double bogey or worse": there is no rung below it, because
+// every format that uses this ladder stops counting down at some point.
+export const PAR_RESULTS = ["albatross", "eagle", "birdie", "par", "bogey", "double"];
+
+export const PAR_RESULT_LABELS = {
+  albatross: "Albatross", eagle: "Eagle", birdie: "Birdie",
+  par: "Par", bogey: "Bogey", double: "Double +",
+};
+
+// Which rung a hole landed on, from its net score's difference to par.
+export const parResultFor = (netVsPar) =>
+  netVsPar <= -3 ? "albatross"
+    : netVsPar === -2 ? "eagle"
+      : netVsPar === -1 ? "birdie"
+        : netVsPar === 0 ? "par"
+          : netVsPar === 1 ? "bogey"
+            : "double";
+
+// ── Stableford ──
+// The defaults reproduce exactly what the engine computed before the table was
+// editable (`max(0, 2 - d)`), so no stored round changes by gaining a table it
+// never had. A director can rewrite any rung; negatives are allowed, since a
+// table that only ever pays is a table with no downside.
+export const STABLEFORD_POINTS_DEFAULT = {
+  albatross: 5, eagle: 4, birdie: 3, par: 2, bogey: 1, double: 0,
+};
+
+export const resolveStablefordPoints = (saved) => {
+  const num = (v, fallback) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : fallback;
+  };
+  const out = {};
+  PAR_RESULTS.forEach(k => { out[k] = num(saved?.[k], STABLEFORD_POINTS_DEFAULT[k]); });
+  return out;
+};
+
+// ── Tilt ──
+// A harsher ladder than Stableford's — a double bogey actively costs you — with
+// a multiplier that rides on birdies. See nolayingup.com/blog/tilt.
+//
+//   • a net birdie puts you on Tilt: the NEXT hole is worth double
+//   • a second birdie in a row makes it triple, and it keeps climbing from
+//     there — there is no cap
+//   • an eagle counts as two birdies, so it jumps straight to triple, or
+//     escalates a multiplier you were already carrying
+//   • a net PAR OR WORSE takes you off Tilt entirely, back to face value
+//   • the multiplier applies to negative scores too: a double bogey while on
+//     triple is -12, which is what makes the format worth playing
+//   • it rides through the turn — the nines are a scoring boundary, not a
+//     reset, so a birdie on 9 doubles the 10th
+//
+// The hole that EARNS a multiplier does not get it; "the subsequent hole" does.
+// The table is fixed: unlike Stableford, these numbers are the game.
+export const TILT_POINTS = {
+  albatross: 16, eagle: 8, birdie: 4, par: 2, bogey: 0, double: -4,
+};
+
+// How many birdies a result is worth toward the multiplier. Everything from a
+// par down takes you off Tilt and is therefore worth none.
+export const tiltBirdieValue = (result) =>
+  result === "birdie" ? 1 : result === "eagle" ? 2 : result === "albatross" ? 3 : 0;
+
+// The multiplier a hole is scored at, from the streak of birdies carried into
+// it. One birdie doubles, two triples, and it keeps going — `streak + 1`.
+export const tiltMultiplier = (streak) => (streak > 0 ? streak + 1 : 1);
 
 // ── Point-allocation methods ──
 // Two ways to convert hole-by-hole results into match points:

@@ -9,8 +9,12 @@ import {
   formatCountsScores, countingDefaultFor, resolveCounting, countingNine,
   resolveHolePoints, isPointsPerHole, holePointsTotal,
   SCORING_TYPE_MATCH, SCORING_TYPE_TOTAL, SCORING_TYPE_POINTS,
-  FORMS_OF_PLAY, HOLE_SCORING_FORMAT, HOLE_SCORING_BEST_BALL, resolveScoring,
+  HOLE_SCORING_FORMAT, HOLE_SCORING_BEST_BALL, resolveScoring,
   holeRuleFor, describeHoleScore, HOLE_RULE_COUNTING, HOLE_RULE_FIXED,
+  holeOptionsFor, resolveHoleMethod, HOLE_METHOD_LABELS, HOLE_METHOD_DESCRIPTIONS,
+  formsFor, formDefaultFor, resolveFormOfPlay, formOfPlayLabel, describeFormOfPlay,
+  handicapModeFor, allowanceStartsOn,
+  resolveStablefordPoints, STABLEFORD_POINTS_DEFAULT, PAR_RESULTS, PAR_RESULT_LABELS, TILT_POINTS,
 } from "./constants";
 import {
   calcCH, calcCHForCourse, fmtScore,
@@ -879,9 +883,12 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // count holes won unconditionally, so a Total round showed a match-play
   // state it wasn't being scored on.
   const userTeam = match.teamA.includes(userPid) ? "A" : "B";
-  const { formOfPlay, holeScoring } = resolveScoring(match);
+  // The hole-scoring axis is read off `scoredFormat` below rather than from a
+  // flag here: the badge names the METHOD a hole was scored by, and since a
+  // format can now offer more than one, "was it best ball" is no longer the
+  // question — "which of its methods" is.
+  const { formOfPlay } = resolveScoring(match);
   const totalScored = formOfPlay === SCORING_TYPE_TOTAL;
-  const bestBallScored = holeScoring === HOLE_SCORING_BEST_BALL;
   const perHoleScored = formOfPlay === SCORING_TYPE_POINTS;
   // The format the holes in `result` were ACTUALLY scored under. Anything that
   // reads a hole's numbers has to ask for this rather than the round format: a
@@ -1050,9 +1057,10 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
             named FIRST when it applies — the row then reads in the order the
             round is actually scored: how a hole is made, then how it settles.
             The status strip above is counting whichever this says. */}
-        {bestBallScored ? "BEST BALL · " : ""}
+        {scoredFormat !== format && HOLE_METHOD_LABELS[scoredFormat]
+          ? `${HOLE_METHOD_LABELS[scoredFormat].toUpperCase()} · ` : ""}
         {perHoleScored ? `${result?.holePoints ? (activeHole < 9 ? result.holePoints.front : result.holePoints.back) : "?"} PT HOLE`
-          : totalScored ? `MEDAL ${totalUnit(scoredFormat).toUpperCase()}`
+          : totalScored ? `TOTAL ${totalUnit(scoredFormat).toUpperCase()}`
           : "MATCH PLAY"}
         {" · ROUND "}{match.round}
         {/* Which match of the week this is. Numbered across the whole
@@ -1440,9 +1448,11 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
 // ── Round form comparison ──────────────────────────────────────────────
 // The Rounds tab auto-saves by diffing the form against Firestore, so both
 // sides have to resolve their defaults identically or the tab would write
-// on every visit. `defaultHandicapMode` mirrors enrichedRounds: Round 4
-// plays all handicaps, everything else low man.
-const defaultHandicapMode = (round) => (round === 4 ? "full" : "low_man");
+// on every visit. This mirrors scoring.getRoundHandicapMode, which reads the
+// same default off the FORMAT — it used to be `round === 4 ? "full"`, a
+// stand-in for "round 4 is the Team Best Ball round" that stopped being true
+// the moment a director moved the format somewhere else.
+const defaultHandicapMode = (format) => handicapModeFor(format);
 
 // Blank entries are absences, not values: an override the director typed
 // and then cleared has to compare equal to one that was never set, or the
@@ -1463,7 +1473,7 @@ const sameRoundMap = (a, b) => JSON.stringify(liveEntries(a)) === JSON.stringify
 const roundSettingsSignature = (r) => JSON.stringify([
   r.format, r.handicap_mode, r.tee_time, r.scoring_type, r.hole_scoring,
   r.nassau_front, r.nassau_back, r.nassau_overall, r.allowance, r.counting_scores,
-  r.hole_points,
+  r.hole_points, r.stableford_points,
 ]);
 
 // The handicap allowance, normalized to the shape the round's FORMAT calls
@@ -1496,6 +1506,27 @@ const roundCounting = (format, raw) => {
 // settled hole by hole — a Match or Total round has no hole values to store.
 const roundHolePoints = (scoringType, raw) =>
   isPointsPerHole(scoringType) ? resolveHolePoints(raw) : null;
+
+// The Stableford table, on the one format that has one. Null everywhere else,
+// for the same reason the counts are: a table left behind by a format change
+// would read as an edit on a format with no use for it.
+const roundStablefordPoints = (format, raw) =>
+  format === "stableford" ? resolveStablefordPoints(raw) : null;
+
+// The round's hole-scoring method, normalized against what its format actually
+// offers, so switching away from a format that HAD a menu cannot leave a
+// concrete method behind to read as an edit on one that doesn't.
+//
+// A format with no menu normally stores the legacy "format" — "its own rule" —
+// with ONE exception: a best-ball override that arrived on such a format is
+// kept verbatim. That is what a pre-split `scoring_type: "team"` document
+// resolves to, and it is actively scoring the round; normalizing it away would
+// silently re-score a stored round the moment a director looked at it.
+const roundHoleScoring = (format, raw) => {
+  const chosen = resolveHoleMethod(format || DEFAULT_FORMAT, raw);
+  if (chosen) return chosen;
+  return raw === HOLE_SCORING_BEST_BALL ? HOLE_SCORING_BEST_BALL : HOLE_SCORING_FORMAT;
+};
 
 // Everything the Rounds tab owns for one round.
 const roundSignature = (r) => JSON.stringify([
@@ -1681,7 +1712,8 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   const [nassau, setNassau] = useState(NASSAU_DEFAULT);
   const [scoringType, setScoringType] = useState(SCORING_TYPE_MATCH);
   // The other scoring axis: how a side's number for a hole is made. "format"
-  // (the format decides) or "best_ball" (override it).
+  // on the formats that answer it themselves, otherwise the concrete method
+  // the director picked off that format's menu ("best_ball", "team_total").
   const [holeScoring, setHoleScoring] = useState(HOLE_SCORING_FORMAT);
   // Raw saved allowance for the round being edited, or null to mean "the
   // format's default". Kept raw ({pct} / {low,high}) so a director who never
@@ -1695,6 +1727,9 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   // What one hole is worth on each nine, when the round is settled hole by
   // hole. Null means "the default", same as the two above.
   const [holePoints, setHolePoints] = useState(null);
+  // What each result against par pays, on the one format whose table is the
+  // director's to set. Null means "the default", same as the three above.
+  const [stablefordPoints, setStablefordPoints] = useState(null);
   // ── Handicap-lock state ──
   // Read-only here: locking is automatic on the first score of a round (see
   // ensureRoundLock in App). These flags only gate the round form's editing.
@@ -1762,24 +1797,34 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   // resolved the same way the scoring path resolves it (see enrichedRounds).
   const storedRound = useMemo(() => {
     const tr = tRounds.find(t => t.round_number === editRound) || {};
+    const fmt = tr.format || DEFAULT_FORMAT;
+    // Both scoring axes read through resolveScoring, so a round still stored
+    // with the pre-split `scoring_type: "team"` seeds the form as Match +
+    // Best Ball, and rewrites itself into the two fields on the next save.
+    // Reading `tr.scoring_type` raw here left "team" in the form, where no
+    // Form of Play pill matched it and the Best Ball toggle read Off.
+    //
+    // A round that names no form of play takes its FORMAT's, which is the
+    // whole point of having one — a scramble opens on Total, a Team Best Ball
+    // on Points. A round that names one keeps it, unless its format cannot
+    // score it (Points off Team Best Ball), in which case the format wins.
+    const form = tr.scoring_type
+      ? resolveFormOfPlay(fmt, resolveScoring(tr).formOfPlay)
+      : formDefaultFor(fmt);
     return {
       course_id: tr.course_id || "",
-      format: tr.format || DEFAULT_FORMAT,
-      handicap_mode: tr.handicap_mode || defaultHandicapMode(editRound),
+      format: fmt,
+      handicap_mode: tr.handicap_mode || defaultHandicapMode(fmt),
       tee_time: tr.tee_time || "",
       nassau_front: tr.nassau_front ?? 1,
       nassau_back: tr.nassau_back ?? 1,
       nassau_overall: tr.nassau_overall ?? 1,
-      // Both scoring axes read through resolveScoring, so a round still stored
-      // with the pre-split `scoring_type: "team"` seeds the form as Match +
-      // Best Ball On, and rewrites itself into the two fields on the next save.
-      // Reading `tr.scoring_type` raw here left "team" in the form, where no
-      // Form of Play pill matched it and the Best Ball toggle read Off.
-      scoring_type: resolveScoring(tr).formOfPlay,
-      hole_scoring: resolveScoring(tr).holeScoring,
-      allowance: roundAllowance(tr.format || DEFAULT_FORMAT, tr.allowance),
-      counting_scores: roundCounting(tr.format || DEFAULT_FORMAT, tr.counting_scores),
-      hole_points: roundHolePoints(resolveScoring(tr).formOfPlay, tr.hole_points),
+      scoring_type: form,
+      hole_scoring: roundHoleScoring(fmt, resolveScoring(tr).holeScoring),
+      allowance: roundAllowance(fmt, tr.allowance),
+      counting_scores: roundCounting(fmt, tr.counting_scores),
+      hole_points: roundHolePoints(form, tr.hole_points),
+      stableford_points: roundStablefordPoints(fmt, tr.stableford_points),
       ch_overrides: hcpOverridesFromDb?.[editRound] || {},
       tee_assignments: teeAssignmentsFromDb?.[editRound] || {},
     };
@@ -1788,24 +1833,31 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   // The same shape, built from the form. `course_id` rides along unchanged
   // — it belongs to the Courses tab and is only here so a round write does
   // not drop it.
-  const formRound = useMemo(() => ({
-    course_id: storedRound.course_id,
-    format: roundFormat || storedRound.format,
-    handicap_mode: handicapMode[editRound] || defaultHandicapMode(editRound),
-    tee_time: roundTeeTime || storedRound.tee_time,
-    nassau_front: nassau.front,
-    nassau_back: nassau.back,
-    nassau_overall: nassau.overall,
-    scoring_type: scoringType,
-    hole_scoring: holeScoring,
-    // Normalized against the format the form is CURRENTLY showing, so picking
-    // a new format re-shapes the allowance in the same render that changes it.
-    allowance: roundAllowance(roundFormat || storedRound.format, allowance),
-    counting_scores: roundCounting(roundFormat || storedRound.format, counting),
-    hole_points: roundHolePoints(scoringType, holePoints),
-    ch_overrides: hcpOverrides[editRound] || {},
-    tee_assignments: teeAssignments[editRound] || {},
-  }), [storedRound, roundFormat, handicapMode, editRound, roundTeeTime, nassau, scoringType, holeScoring, allowance, counting, holePoints, hcpOverrides, teeAssignments]);
+  const formRound = useMemo(() => {
+    // Every derived field is normalized against the format the form is
+    // CURRENTLY showing, so picking a new format re-shapes the allowance, the
+    // counts, the hole-scoring method and the form of play in the same render
+    // that changes it — rather than leaving a stale value to read as an edit.
+    const fmt = roundFormat || storedRound.format;
+    const form = resolveFormOfPlay(fmt, scoringType);
+    return {
+      course_id: storedRound.course_id,
+      format: fmt,
+      handicap_mode: handicapMode[editRound] || defaultHandicapMode(fmt),
+      tee_time: roundTeeTime || storedRound.tee_time,
+      nassau_front: nassau.front,
+      nassau_back: nassau.back,
+      nassau_overall: nassau.overall,
+      scoring_type: form,
+      hole_scoring: roundHoleScoring(fmt, holeScoring),
+      allowance: roundAllowance(fmt, allowance),
+      counting_scores: roundCounting(fmt, counting),
+      hole_points: roundHolePoints(form, holePoints),
+      stableford_points: roundStablefordPoints(fmt, stablefordPoints),
+      ch_overrides: hcpOverrides[editRound] || {},
+      tee_assignments: teeAssignments[editRound] || {},
+    };
+  }, [storedRound, roundFormat, handicapMode, editRound, roundTeeTime, nassau, scoringType, holeScoring, allowance, counting, holePoints, stablefordPoints, hcpOverrides, teeAssignments]);
 
   const storedSettingsSig = roundSettingsSignature(storedRound);
   const hcpDocSig = JSON.stringify(hcpOverridesFromDb ?? null);
@@ -1842,6 +1894,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
     setAllowance(storedRound.allowance);
     setCounting(storedRound.counting_scores);
     setHolePoints(storedRound.hole_points);
+    setStablefordPoints(storedRound.stableford_points);
     setHandicapMode(prev => ({ ...prev, [editRound]: storedRound.handicap_mode }));
   }, [seed, seededRound, editRound, storedSettingsSig, storedRound]);
 
@@ -1905,6 +1958,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
         allowance: payload.allowance,
         counting_scores: payload.counting_scores,
         hole_points: payload.hole_points,
+        stableford_points: payload.stableford_points,
       });
       setAutoSave({ phase: "saved", round });
     } catch (err) {
@@ -2364,18 +2418,27 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               <div>
                 <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, marginBottom: 6 }}>FORMAT</div>
                 <select value={roundFormat} onChange={e => {
-                  const fmt = FORMATS.find(f => f.id === e.target.value);
-                  setRoundFormat(e.target.value);
+                  // Picking a format re-seeds every decision that follows from
+                  // it. Nothing survives the change that the new format would
+                  // not have chosen for itself — a Scramble's 35/15 means
+                  // nothing on a Singles round, Points means nothing off Team
+                  // Best Ball, and a Team Total's counts mean nothing anywhere.
+                  const id = e.target.value;
+                  const fmt = FORMATS.find(f => f.id === id);
+                  setRoundFormat(id);
                   if (fmt?.nassau) setNassau(fmt.nassau);
-                  // Allowances are format-specific — a Scramble's 35/15 means
-                  // nothing on a Singles round. Changing format puts the
-                  // allowance back to off, so the new format's terms are a
-                  // decision rather than an inheritance.
-                  setAllowance(null);
-                  // Same for the counting scores — only Team Best Ball has
-                  // them, and coming back to it should start from what the
-                  // format calls for rather than a stale pair.
+                  setScoringType(formDefaultFor(id));
+                  // The first option is the format's own rule; on a format with
+                  // no menu this resolves to "format" and the section states it.
+                  setHoleScoring(resolveHoleMethod(id, null) || HOLE_SCORING_FORMAT);
+                  setHandicapMode(prev => ({ ...prev, [editRound]: handicapModeFor(id) }));
+                  // Off unless the format is one that is not worth playing
+                  // without its allowance — see FORMATS.allowanceOn. Either way
+                  // it is the NEW format's answer, never the old one's.
+                  setAllowance(allowanceStartsOn(id) ? { enabled: true, ...allowanceDefaultFor(id) } : null);
                   setCounting(null);
+                  setHolePoints(null);
+                  setStablefordPoints(null);
                 }} style={{ ...InputStyle, marginBottom: 0, fontSize: 12, padding: "8px 8px", height: 38 }}>
                   <option value="">Select...</option>
                   {FORMATS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
@@ -2504,25 +2567,35 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               // below, so the override would be both redundant and dangerous.
               if (holeRuleFor(fmtId) === HOLE_RULE_COUNTING) return null;
               const fmt = FORMATS.find(f => f.id === fmtId);
-              const on = holeScoring === HOLE_SCORING_BEST_BALL;
+              const options = holeOptionsFor(fmtId);
               const fixed = holeRuleFor(fmtId) === HOLE_RULE_FIXED;
+              // The legacy override: a pre-split `scoring_type: "team"` document
+              // resolves to best-ball holes, and it can land on a format that
+              // has no menu to show it in.
+              const stray = fixed && holeScoring === HOLE_SCORING_BEST_BALL;
               const lbl = <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>HOLE SCORE</div>;
-              // A fixed format states its rule and asks nothing.
-              //
-              // Unless the round is ALREADY overridden — which a document
-              // stored with the pre-split `scoring_type: "team"` is, since
-              // resolveScoring reads it as best-ball holes. Hiding the control
-              // there would leave a setting that is actively scoring the round
-              // with no way to see or clear it, so the toggle stays and says
-              // so in amber. Every other fixed round never sees it.
-              if (fixed && !on) {
+              // A fixed format states its rule and asks nothing — unless the
+              // round arrived already overridden. Hiding the control there
+              // would leave a setting that is actively scoring the round with
+              // no way to see or clear it, so it stays, in amber, with a way
+              // back. Every other fixed round never sees a control at all.
+              if (fixed && !stray) {
                 return (
                   <div style={{ marginBottom: 12, display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
                     {lbl}
-                    <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5 }}>{describeHoleScore(fmtId)}</div>
+                    <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5 }}>{describeHoleScore(fmtId, holeScoring)}</div>
                   </div>
                 );
               }
+              // Pills name the METHODS on offer, not Off/On against a control
+              // labelled with a format's name — "Best Ball: Off" read as a
+              // claim about what the round IS, rather than as a choice between
+              // two ways to score a hole.
+              const pills = stray
+                ? [{ id: fmtId, label: fmt?.label || "Format", value: HOLE_SCORING_FORMAT },
+                   { id: HOLE_SCORING_BEST_BALL, label: "Best Ball", value: HOLE_SCORING_BEST_BALL }]
+                : options.map(m => ({ id: m, label: HOLE_METHOD_LABELS[m] || m, value: m }));
+              const current = stray ? HOLE_SCORING_BEST_BALL : resolveHoleMethod(fmtId, holeScoring);
               const bbPill = (active) => ({
                 padding: "4px 12px", borderRadius: 16, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
                 background: active ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
@@ -2532,24 +2605,18 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                     {lbl}
-                    {/* The two pills name the two ways a hole could score,
-                        rather than Off/On against a control labelled with a
-                        format's name — "Best Ball: Off" read as a claim about
-                        what the round IS, not as a choice between methods. */}
                     <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}` }}>
-                      <button onClick={() => setHoleScoring(HOLE_SCORING_FORMAT)}
-                        title={describeHoleScore(fmtId)}
-                        style={bbPill(!on)}>{fmt?.label || "Format"}</button>
-                      <button onClick={() => setHoleScoring(HOLE_SCORING_BEST_BALL)}
-                        title="Each side's hole score is its best net ball, whatever the format's own method would be"
-                        style={bbPill(on)}>Best Ball</button>
+                      {pills.map(p => (
+                        <button key={p.id} onClick={() => setHoleScoring(p.value)}
+                          title={HOLE_METHOD_DESCRIPTIONS[p.value] || describeHoleScore(fmtId, p.value)}
+                          style={bbPill(current === p.value)}>{p.label}</button>
+                      ))}
                     </div>
                   </div>
-                  <div style={{ fontSize: 9, color: on && fixed ? BC.amber : BC.t3, lineHeight: 1.5, marginTop: 5 }}>
-                    {!on ? describeHoleScore(fmtId)
-                      : fixed
-                        ? `This round is overriding ${fmt?.label || "the format"} and scoring each hole as the side's best net ball. Pick ${fmt?.label || "the format"} to score it as its own name says.`
-                        : "Each side's hole score is its best net ball."}
+                  <div style={{ fontSize: 9, color: stray ? BC.amber : BC.t3, lineHeight: 1.5, marginTop: 5 }}>
+                    {stray
+                      ? `This round is overriding ${fmt?.label || "the format"} and scoring each hole as the side's best net ball. Pick ${fmt?.label || "the format"} to score it as its own name says.`
+                      : describeHoleScore(fmtId, holeScoring)}
                   </div>
                 </div>
               );
@@ -2671,6 +2738,67 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               );
             })()}
 
+            {/* ── Points against par ──────────────────────────────────────
+                The two formats that score a hole by what it was against PAR
+                rather than against the other side. Both sit under HOLE SCORING
+                because that is the decision they make: the table IS how a
+                hole's number is arrived at.
+
+                Stableford's is the director's to set — the defaults reproduce
+                exactly what the engine computed before the table existed, so a
+                stored round does not move by gaining one. Tilt's is fixed:
+                those numbers, and the multiplier that rides on them, are the
+                game rather than a setting, so the section states them. */}
+            {(() => {
+              const fmtId = formRound.format;
+              if (fmtId !== "stableford" && fmtId !== "tilt") return null;
+              const rowLabel = (text) => (
+                <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>{text}</div>
+              );
+              if (fmtId === "tilt") {
+                return (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                      {rowLabel("POINTS")}
+                      <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5 }}>
+                        {PAR_RESULTS.map(k => `${PAR_RESULT_LABELS[k]} ${TILT_POINTS[k]}`).join(" · ")}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
+                      A net birdie doubles your next hole, a second in a row triples it, and it keeps climbing — a par or worse drops you back to face value. The multiplier runs through the turn and applies to minus scores too.
+                    </div>
+                  </div>
+                );
+              }
+              // Raw-backed like the allowance: clearing a box leaves it empty
+              // rather than snapping back mid-keystroke, and an empty box
+              // resolves to the default when the round is saved.
+              const raw = stablefordPoints || {};
+              const val = (k) => (raw[k] === undefined || raw[k] === null ? String(STABLEFORD_POINTS_DEFAULT[k]) : String(raw[k]));
+              const setRung = (k, v) => setStablefordPoints(prev => ({ ...(prev || {}), [k]: v }));
+              return (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    {rowLabel("POINTS")}
+                    {PAR_RESULTS.map(k => (
+                      <div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                        <span style={{ fontSize: 9, color: BC.t3, fontWeight: 600 }}>{PAR_RESULT_LABELS[k]}</span>
+                        <input
+                          type="number" step="1"
+                          value={val(k)}
+                          onChange={e => setRung(k, e.target.value)}
+                          onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                          style={{ ...InputStyle, marginBottom: 0, padding: "4px 3px", fontSize: 14, textAlign: "center", width: 40 }} />
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
+                    What each result against par pays. Both partners' points are added together for the side's score on the hole.
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* ══ FORM OF PLAY + POINTS AT STAKE ════════════════════════
                 The second scoring axis: how the hole numbers settled above
                 turn into points. Three ways, and golf has names for all of
@@ -2731,29 +2859,28 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: 14, textAlign: "center", width: 44 }} />
                 </div>
               );
-              // What each form of play MEANS on this round's format. Only
-              // Medal actually changes with the format — "the running total"
-              // is strokes on most, dots on Double Dot, points on Stableford —
-              // and a director who reads "total" on a Double Dot round has
-              // every reason to think it means strokes. The unit is not
-              // optional detail, so it is on the page rather than in a
-              // tooltip no touch device will ever show.
-              const medalUnit = totalUnit(formRound.format);
-              const formDesc = (id) => id === SCORING_TYPE_TOTAL
-                ? `The running total of ${medalUnit} over each segment takes the pot, not holes won.`
-                : FORMS_OF_PLAY.find(f => f.id === id)?.desc;
+              // Which forms this format offers, and what each MEANS on it.
+              // Only the accrual axis changes with the format — its running
+              // total is strokes on most, dots on Double Dot, points on
+              // Stableford and Tilt — so the pill is called "Stroke" only where
+              // that is what it counts, and "Total" everywhere else. A director
+              // who read "Medal" on a Double Dot round had every reason to
+              // think it meant strokes. None of that is optional detail, so it
+              // is on the page rather than in a tooltip a phone never shows.
+              const offered = formsFor(formRound.format);
+              const current = resolveFormOfPlay(formRound.format, scoringType);
               return (
                 <>
                   <RoundSectionHeading hint="How those hole scores turn into points.">
                     FORM OF PLAY
                   </RoundSectionHeading>
                   <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}`, alignSelf: "flex-start", width: "fit-content", marginBottom: 5 }}>
-                    {FORMS_OF_PLAY.map(f => (
-                      <button key={f.id} onClick={() => setScoringType(f.id)} title={formDesc(f.id)}
-                        style={pill(scoringType === f.id, false)}>{f.label}</button>
+                    {offered.map(f => (
+                      <button key={f} onClick={() => setScoringType(f)} title={describeFormOfPlay(f, formRound.format)}
+                        style={pill(current === f, false)}>{formOfPlayLabel(f, formRound.format)}</button>
                     ))}
                   </div>
-                  <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5, marginBottom: 12 }}>{formDesc(scoringType)}</div>
+                  <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5, marginBottom: 12 }}>{describeFormOfPlay(current, formRound.format)}</div>
 
                   <RoundSectionHeading hint={perHole
                     ? "What one hole is worth on each nine."

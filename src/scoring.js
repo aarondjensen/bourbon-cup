@@ -11,6 +11,8 @@ import {
   NASSAU_DEFAULT, POINT_METHOD_NASSAU, POINT_METHOD_TRADITIONAL, resolveAllowance,
   resolveCounting, resolveHolePoints, resolveScoring,
   HOLE_SCORING_BEST_BALL, SCORING_TYPE_POINTS, SCORING_TYPE_TOTAL,
+  formatUnit, UNIT_STROKES, handicapModeFor, resolveHoleMethod,
+  resolveStablefordPoints, parResultFor, TILT_POINTS, tiltBirdieValue, tiltMultiplier,
 } from "./constants";
 
 // ── Course Handicap math ──
@@ -99,13 +101,15 @@ export const resolveHoleHcps = (course, lock) => lock?.hole_handicaps || course?
 // and on every screen (hole winner, segment winner, Total-scoring margin,
 // status text) has to flip direction for those two, so the question is
 // asked in exactly one place.
-export const higherIsBetter = (format) => format === "stableford" || format === "double_dot";
+// Asked of the format's UNIT rather than of a list of format ids, so a new
+// dots-or-points format can never be added without the comparisons following
+// it. Strokes count down; everything else counts up.
+export const higherIsBetter = (format) => formatUnit(format) !== UNIT_STROKES;
 
 // What a Total-scored round is actually totalling, for labels. A director who
 // set "Total" on a Double Dot round is counting dots, not strokes, and the
-// screens should say so.
-export const totalUnit = (format) =>
-  format === "double_dot" ? "dots" : format === "stableford" ? "points" : "strokes";
+// screens should say so. Same single source as the direction above.
+export const totalUnit = (format) => formatUnit(format);
 
 // The format a match's HOLE SCORES are actually computed under. A round whose
 // HOLE SCORING axis is set to best_ball re-scores every hole as best net ball
@@ -124,6 +128,15 @@ export const totalUnit = (format) =>
 // pass the pre-split `scoring_type` and get the wrong axis.
 export const holeFormatFor = (doc, format) => {
   const { holeScoring } = resolveScoring(doc);
+  // A format that offers a menu is scored by whichever method the round picked
+  // — and those method ids ARE the engine's branch names, so the choice needs
+  // no translating. `resolveHoleMethod` hands back the format's own default
+  // (the first option) for anything it doesn't recognise, including the legacy
+  // "format" value.
+  const chosen = resolveHoleMethod(format, holeScoring);
+  if (chosen) return chosen;
+  // No menu: the format's own rule stands, except for the legacy best-ball
+  // override a pre-split `scoring_type: "team"` document still carries.
   return (holeScoring === HOLE_SCORING_BEST_BALL && format !== "team_best_ball")
     ? "best_ball" : format;
 };
@@ -329,12 +342,17 @@ export const getRoundCH = ({
 // low_man vs full re-allocates every stroke in a match, so it is frozen too.
 // Lock wins over an explicit argument on purpose: a completed round answers
 // to its snapshot and nothing else.
+// The final fallback is the FORMAT's, not the round number's. It used to read
+// `round === 4 ? "full" : "low_man"` — which was only ever a stand-in for
+// "round 4 is the Team Best Ball round", and silently wrong the moment a
+// director moved the format to a different round.
 export const getRoundHandicapMode = ({ roundLocks, round, tRounds, explicit }) => {
   const lock = lockForRound(roundLocks, round);
   if (lock?.handicap_mode) return lock.handicap_mode;
+  const tr = tRounds?.find(t => t.round_number === round);
   return explicit
-    || tRounds?.find(t => t.round_number === round)?.handicap_mode
-    || (round === 4 ? "full" : "low_man");
+    || tr?.handicap_mode
+    || handicapModeFor(lock?.format || tr?.format);
 };
 
 // The round's handicap allowance, resolved the same way the mode is: a locked
@@ -419,6 +437,15 @@ export const getRoundHolePoints = ({ roundLocks, round, tRounds, explicit }) => 
   const lock = lockForRound(roundLocks, round);
   const tr = tRounds?.find(t => t.round_number === round);
   return resolveHolePoints(explicit || tr?.hole_points || lock?.hole_points || null);
+};
+
+// What each result against par pays on a Stableford round. Same resolution
+// order and the same reasoning again: it decides points, not strokes, so the
+// live value wins over the lock and a mid-round correction lands.
+export const getRoundStablefordPoints = ({ roundLocks, round, tRounds, explicit }) => {
+  const lock = lockForRound(roundLocks, round);
+  const tr = tRounds?.find(t => t.round_number === round);
+  return resolveStablefordPoints(explicit || tr?.stableford_points || lock?.stableford_points || null);
 };
 
 // Course + hole tables for a round. Hole handicaps decide WHICH holes get
@@ -535,6 +562,55 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
     B: getStrokeMap(bTeamCH - teamMin),
   };
 
+  // ── Against-par formats ──
+  // Stableford and Tilt score a hole by what it was against PAR, not against
+  // the other side, so there is no low-man difference to take: the full playing
+  // handicap is used and the round's MODE does not enter into it. The allowance
+  // still applies — it decided the playing handicap itself.
+  const parStrokeMap = (pid) => getStrokeMap(playingCH[pid] ?? 0);
+  const parResult = (pid, h) => {
+    const net = netScore(getPlayerScores(pid)[h], h, parStrokeMap(pid));
+    return net == null ? null : parResultFor(net - holePars[h]);
+  };
+  const stablefordPoints = getRoundStablefordPoints({ roundLocks, round: rnd, tRounds });
+
+  // ── Tilt, walked in order ──
+  // The only format in this app whose holes are NOT independent. A birdie puts
+  // a player on Tilt and the hole AFTER it is worth double; a second birdie in
+  // a row triples it, and it keeps climbing with no cap. A par or worse drops
+  // you back to face value. The multiplier rides through the turn — the nines
+  // are a scoring boundary, not a reset — which is exactly why this cannot be
+  // computed hole-by-hole inside the map below.
+  //
+  // So the whole card is walked once per player up front, and the map only ever
+  // reads the answer. The hole that EARNS a multiplier does not get it: the
+  // score is taken at the multiplier carried IN, and the streak is updated
+  // after. An unplayed hole is an absence rather than a result — it neither
+  // scores nor breaks a streak.
+  const tiltPoints = {};
+  if (holeFormat === "tilt") {
+    allPids.forEach(pid => {
+      let streak = 0;
+      tiltPoints[pid] = Array.from({ length: 18 }, (_, h) => {
+        const result = parResult(pid, h);
+        if (result == null) return null;
+        const pts = TILT_POINTS[result] * tiltMultiplier(streak);
+        const birdies = tiltBirdieValue(result);
+        streak = birdies > 0 ? streak + birdies : 0;
+        return pts;
+      });
+    });
+  }
+
+  // A side's number on an against-par hole is its partners' points ADDED. Every
+  // partner has to have posted: a sum missing a card is not a smaller sum, it
+  // is an unfinished hole, and comparing it would hand the other side a lead
+  // that a single unentered score created.
+  const sumSide = (team, valueFor) => {
+    const vals = team.map(valueFor);
+    return vals.every(v => v != null) ? vals.reduce((a, b) => a + b, 0) : null;
+  };
+
   // Compute per-hole results
   const holeResults = Array(18).fill(null).map((_, h) => {
     let aScore = null, bScore = null;
@@ -614,26 +690,38 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
         aScore = (aLo < bLo ? 1 : 0) + (twoBall && aHi < bHi ? 1 : 0);
         bScore = (bLo < aLo ? 1 : 0) + (twoBall && bHi < aHi ? 1 : 0);
       }
-    } else if (holeFormat === "scramble") {
+    } else if (holeFormat === "scramble" || holeFormat === "pinehurst") {
       // The side plays one ball, so it posts one score and takes strokes off
       // ONE team handicap (built above from the round's allowance). Both
       // partners' cards should carry the team score; taking the lower of the
       // two keeps the hole scoring when only one of them has been entered.
+      //
+      // Pinehurst shares this branch because it shares the shape: partners swap
+      // drives and then play a single ball in, so from the third shot there is
+      // one score and one handicap. It used to fall through to the default and
+      // score the first player's card off that player's own handicap, which
+      // meant its 60/40 allowance computed a figure for the high man and then
+      // discarded it.
       const aRaws = teamA.map(pid => getPlayerScores(pid)[h]).filter(s => s != null);
       const bRaws = teamB.map(pid => getPlayerScores(pid)[h]).filter(s => s != null);
       aScore = aRaws.length ? netScore(Math.min(...aRaws), h, sharedStrokeMaps.A) : null;
       bScore = bRaws.length ? netScore(Math.min(...bRaws), h, sharedStrokeMaps.B) : null;
     } else if (holeFormat === "stableford") {
-      // Stableford scores against PAR, not against the other side, so the
-      // full playing handicap is used — there is no low-man difference to
-      // take. The allowance still applies: it decides the handicap itself.
-      const aPid = teamA[0], bPid = teamB[0];
-      const aMap = getStrokeMap(playingCH[aPid] ?? 0), bMap = getStrokeMap(playingCH[bPid] ?? 0);
-      const aNet = netScore(getPlayerScores(aPid)[h], h, aMap);
-      const bNet = netScore(getPlayerScores(bPid)[h], h, bMap);
-      const sfPts = (net) => { if (net == null) return null; const d = net - holePars[h]; return Math.max(0, 2 - d); };
-      aScore = sfPts(aNet);
-      bScore = sfPts(bNet);
+      // Points against par, both partners added together. It scored only
+      // teamA[0] and teamB[0] until the "2-Man" in the name was made true.
+      // The table is the round's (see getRoundStablefordPoints) rather than a
+      // formula, so a director can rewrite what a birdie is worth.
+      const pts = (pid) => {
+        const result = parResult(pid, h);
+        return result == null ? null : stablefordPoints[result];
+      };
+      aScore = sumSide(teamA, pts);
+      bScore = sumSide(teamB, pts);
+    } else if (holeFormat === "tilt") {
+      // Both partners' Tilt points added together, each already multiplied by
+      // whatever streak that player carried into the hole (computed above).
+      aScore = sumSide(teamA, pid => tiltPoints[pid]?.[h] ?? null);
+      bScore = sumSide(teamB, pid => tiltPoints[pid]?.[h] ?? null);
     } else {
       // Default: match play net
       const aPid = teamA[0], bPid = teamB[0];

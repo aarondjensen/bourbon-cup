@@ -36,6 +36,7 @@ import {
   POINT_METHOD_TRADITIONAL, TROPHY_SILHOUETTE, CUP_POINTS_TO_WIN,
   describeHolePoints,
   isPointsPerHole, holePointsTotal, resolveScoring, SCORING_TYPE_TOTAL,
+  HOLE_METHOD_LABELS,
 } from "../constants";
 import {
   computeMatchResult, getRoundCourseCtx, higherIsBetter, totalUnit, holeFormatFor,
@@ -817,7 +818,10 @@ export function MatchScorecard({ match, result, format, courses, tRounds, teams,
   // were SCORED under, not the round's. A best-ball override makes them net
   // strokes whatever the round is called.
   const scoredFormat = holeFormatFor(match, format);
-  const bestBall = scoredFormat !== format;
+  // Named only when the method differs from the format's own rule — a Shamble
+  // scored as a best ball is a best ball, but so is a 2-Man Best Ball, and
+  // saying so there would be noise.
+  const methodNamed = scoredFormat !== format ? (HOLE_METHOD_LABELS[scoredFormat] || null) : null;
   const higherWins = higherIsBetter(scoredFormat);
   const unit = totalUnit(scoredFormat);
   const holes = result.holes;
@@ -959,7 +963,7 @@ export function MatchScorecard({ match, result, format, courses, tRounds, teams,
           // Named where the format's name would otherwise mislead: a Double Dot
           // round with the override on shows net balls in the rows below, not
           // dots, and the header is the only place that can say so.
-          bestBall ? "best ball" : null,
+          methodNamed ? methodNamed.toLowerCase() : null,
           higherWins ? unit : "net scores",
           perHole ? describeHolePoints(hp) : total ? `total ${unit}` : "match play",
         ].filter(Boolean).join(" · ")}
