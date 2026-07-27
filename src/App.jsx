@@ -16,7 +16,7 @@ import {
   getEffectiveHI, buildStrokeMap, resolveHolePars, resolveHoleHcps,
   computeMatchResult, computePracticeMatch, computePracticeSkins,
   getRoundCH, getRoundHI, getRoundTee, lockForRound,
-  totalUnit, segmentState, segmentOptsFor,
+  totalUnit, segmentState, segmentOptsFor, holeFormatFor,
 } from "./scoring";
 import { holeFill } from "./lib/holeFill";
 import {
@@ -882,6 +882,12 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   const totalScored = formOfPlay === SCORING_TYPE_TOTAL;
   const bestBallScored = holeScoring === HOLE_SCORING_BEST_BALL;
   const perHoleScored = formOfPlay === SCORING_TYPE_POINTS;
+  // The format the holes in `result` were ACTUALLY scored under. Anything that
+  // reads a hole's numbers has to ask for this rather than the round format: a
+  // best-ball override hands back net strokes whatever the format says, and
+  // holeFill would read a Double Dot round's net 4 and 5 as "one dot each" —
+  // painting every played hole as a split when nothing was split at all.
+  const scoredFormat = holeFormatFor(match, format);
   // The same flags the engine scored with, from the same helper — the status
   // strip below counts whatever the round is actually settled on.
   const segOpts = segmentOptsFor({ ...match, hole_points: result?.holePoints }, format);
@@ -914,7 +920,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     const color = fromUserView > 0 ? BC.green : fromUserView < 0 ? BC.danger : BC.t3;
     return shell(
       <>
-        <div style={{ height: barH, borderRadius: 3, boxSizing: "border-box", ...holeFill(hr, format) }} />
+        <div style={{ height: barH, borderRadius: 3, boxSizing: "border-box", ...holeFill(hr, scoredFormat) }} />
         <div style={{ textAlign: "center", fontSize: 13, fontWeight: 800, color, lineHeight: 1 }}>
           {fromUserView > 0 ? <>▲{fromUserView}</>
             : fromUserView < 0 ? <>▼{Math.abs(fromUserView)}</>
@@ -1045,7 +1051,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
             The status strip above is counting whichever this says. */}
         {bestBallScored ? "BEST BALL · " : ""}
         {perHoleScored ? `${result?.holePoints ? (activeHole < 9 ? result.holePoints.front : result.holePoints.back) : "?"} PT HOLE`
-          : totalScored ? `MEDAL ${totalUnit(format).toUpperCase()}`
+          : totalScored ? `MEDAL ${totalUnit(scoredFormat).toUpperCase()}`
           : "MATCH PLAY"}
         {" · ROUND "}{match.round}
         {/* Which match of the week this is. Numbered across the whole

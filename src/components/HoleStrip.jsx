@@ -6,7 +6,8 @@
 //
 //  What a cell looks like is decided by lib/holeFill — shared with the
 //  Scoring tab's status bar, which lays its cells out differently but
-//  speaks the same colour vocabulary.
+//  speaks the same colour vocabulary. `format` is the one holeFill wants:
+//  the format the holes were SCORED under, not the round's own.
 
 import { BC } from "../theme";
 import { holeFill } from "../lib/holeFill";

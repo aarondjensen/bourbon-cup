@@ -307,6 +307,10 @@ function MatchCard({
 }) {
   const total = resolveScoring(match).formOfPlay === SCORING_TYPE_TOTAL;
   const opts = segOpts(match, format);
+  // What the holes were actually scored as — see the note on holeFormatFor. The
+  // strip below paints a hole from its two numbers, and on a best-ball override
+  // those are net strokes, not the round format's own units.
+  const scoredFormat = holeFormatFor(match, format);
   const traditional = (match.point_method || "") === POINT_METHOD_TRADITIONAL;
   const n = match.nassau || NASSAU_DEFAULT;
 
@@ -419,7 +423,7 @@ function MatchCard({
 
         {/* Hole-by-hole — the match's shape, on its own line at full width. */}
         <div style={{ marginTop: 8 }}>
-          <HoleStrip holes={result.holes} format={format} settled={done} />
+          <HoleStrip holes={result.holes} format={scoredFormat} settled={done} />
         </div>
       </button>
 
@@ -808,8 +812,14 @@ export function MatchScorecard({ match, result, format, courses, tRounds, teams,
   const total = resolveScoring(match).formOfPlay === SCORING_TYPE_TOTAL;
   const perHole = isPointsPerHole(match.scoring_type);
   const hp = result.holePoints || { front: 1, back: 1 };
-  const higherWins = higherIsBetter(holeFormatFor(match, format));
-  const unit = totalUnit(format);
+  // Every reading of the cells below — which way they run, what they are
+  // counted in, whether they are dots at all — comes from the format the holes
+  // were SCORED under, not the round's. A best-ball override makes them net
+  // strokes whatever the round is called.
+  const scoredFormat = holeFormatFor(match, format);
+  const bestBall = scoredFormat !== format;
+  const higherWins = higherIsBetter(scoredFormat);
+  const unit = totalUnit(scoredFormat);
   const holes = result.holes;
 
   const aLabel = initialsOf(match.teamANames) || teams.A.short || "A";
@@ -926,7 +936,7 @@ export function MatchScorecard({ match, result, format, courses, tRounds, teams,
   // Double Dot side note — how the dots have been shared out so far. The
   // cells above show a hole's dots; this says what they add up to, which is
   // the number the round is actually settled on when it's Total-scored.
-  const dd = format === "double_dot"
+  const dd = scoredFormat === "double_dot"
     ? segmentState(holes, { total: true, higherWins: true })
     : null;
 
@@ -946,6 +956,10 @@ export function MatchScorecard({ match, result, format, courses, tRounds, teams,
         {[
           course?.name,
           FORMATS.find((f) => f.id === format)?.label,
+          // Named where the format's name would otherwise mislead: a Double Dot
+          // round with the override on shows net balls in the rows below, not
+          // dots, and the header is the only place that can say so.
+          bestBall ? "best ball" : null,
           higherWins ? unit : "net scores",
           perHole ? describeHolePoints(hp) : total ? `total ${unit}` : "match play",
         ].filter(Boolean).join(" · ")}

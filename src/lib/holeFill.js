@@ -16,6 +16,13 @@
 //
 // A format that only hands out one unit per hole can only ever produce the
 // first and last of those, so it renders precisely as it always did.
+//
+// ── The format to pass ─────────────────────────────────────────────
+// `format` here is the format the hole was SCORED under — scoring.js's
+// holeFormatFor(match, format) — NEVER the round's format on its own. A round
+// whose HOLE SCORING axis is set to best_ball hands back net strokes no matter
+// what format it is called, and reading a Double Dot round's net 4 and 5 as
+// "one dot each" paints every played hole as a split when nothing was split.
 import { BC, ink, teamColor } from "../theme";
 
 // Formats where a hole is worth two units instead of one. A set rather than a
