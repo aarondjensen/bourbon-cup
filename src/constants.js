@@ -304,17 +304,59 @@ export const describeCounting = (counts) => {
 //                       being played for points.
 export const HOLE_POINTS_DEFAULT = { front: 1, back: 2 };
 
-// The four settlement modes. Note these are not quite one axis: the first
-// three decide how POINTS are awarded, while `team` overrides how a HOLE is
-// scored (best net ball) and then settles as match play. They share a field
-// because they share a toggle; see effectiveHoleFormat in scoring.js for the
-// half that is really about holes.
+// ── The two axes of a round's scoring ──
+// A round answers two independent questions, and for a while they shared one
+// field — which is how selecting "Team" on a Team Best Ball round silently
+// threw its counting scores away and scored each hole off one player.
+//
+//   HOLE SCORING — how a side's number for a hole is arrived at. Normally the
+//                  format decides (a Four-Ball takes the better ball, a Team
+//                  Total adds both). `best_ball` overrides that: whatever the
+//                  format, a side's hole score is its best net ball.
+//   FORM OF PLAY — how those hole numbers turn into points. Match on holes
+//                  won, Medal on the running total, Points per hole.
+//
+// They are genuinely independent: best-ball holes settled on medal totals is a
+// coherent round, and so is a Double Dot settled per hole. One field could not
+// express either.
+
+// ── Form of play (how points are awarded) ──
 export const SCORING_TYPE_MATCH = "match";
 export const SCORING_TYPE_TOTAL = "stroke";     // stored value predates the "Medal" label
 export const SCORING_TYPE_POINTS = "points";    // every hole its own pot
-export const SCORING_TYPE_TEAM = "team";        // team best ball, settled as match play
 
-export const isPointsPerHole = (scoringType) => scoringType === SCORING_TYPE_POINTS;
+export const FORMS_OF_PLAY = [
+  { id: SCORING_TYPE_MATCH,  label: "Match",  desc: "The side that wins more holes takes each pot." },
+  { id: SCORING_TYPE_TOTAL,  label: "Medal",  desc: "The running total over each segment takes the pot, not holes won." },
+  { id: SCORING_TYPE_POINTS, label: "Points", desc: "Every hole is its own pot. Winner takes it, a halved hole splits it." },
+];
+
+// ── Hole scoring (how a side's hole number is made) ──
+export const HOLE_SCORING_FORMAT = "format";        // whatever the format says
+export const HOLE_SCORING_BEST_BALL = "best_ball";  // best net ball, format overridden
+
+// The legacy value. `scoring_type: "team"` meant BOTH halves at once — score
+// every hole as best ball, then settle as match play — so it splits into one
+// value on each axis. Kept only as a thing to read, never to write.
+export const LEGACY_SCORING_TYPE_TEAM = "team";
+
+// Both axes for a round or match, resolved from a document that may predate
+// the split. Every consumer asks through here, so a round saved as "team"
+// scores exactly as it always did without anything being migrated in place.
+export const resolveScoring = (doc) => {
+  const stored = doc?.scoring_type || SCORING_TYPE_MATCH;
+  if (stored === LEGACY_SCORING_TYPE_TEAM) {
+    return { formOfPlay: SCORING_TYPE_MATCH, holeScoring: HOLE_SCORING_BEST_BALL };
+  }
+  return {
+    formOfPlay: stored,
+    holeScoring: doc?.hole_scoring === HOLE_SCORING_BEST_BALL
+      ? HOLE_SCORING_BEST_BALL : HOLE_SCORING_FORMAT,
+  };
+};
+
+export const isPointsPerHole = (scoringType) =>
+  resolveScoring({ scoring_type: scoringType }).formOfPlay === SCORING_TYPE_POINTS;
 
 // A round's hole values, resolved for scoring. Zero is a legitimate answer
 // here (unlike a counting score), so only a missing or unreadable field falls

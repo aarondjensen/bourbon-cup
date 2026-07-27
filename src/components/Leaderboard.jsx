@@ -35,10 +35,10 @@ import {
   FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT,
   POINT_METHOD_TRADITIONAL, TROPHY_SILHOUETTE, CUP_POINTS_TO_WIN,
   describeHolePoints,
-  isPointsPerHole, holePointsTotal,
+  isPointsPerHole, holePointsTotal, resolveScoring, SCORING_TYPE_TOTAL,
 } from "../constants";
 import {
-  computeMatchResult, getRoundCourseCtx, higherIsBetter, totalUnit, effectiveHoleFormat,
+  computeMatchResult, getRoundCourseCtx, higherIsBetter, totalUnit, holeFormatFor,
   segmentState, statusText, segmentLeader,
   segmentOptsFor,
 } from "../scoring";
@@ -128,7 +128,7 @@ const matchSettled = (m, r) => {
   // undecided is a hole nobody has played. A clinched lead does NOT settle it:
   // the remaining holes still pay out even once the round can't change hands.
   if (isPointsPerHole(m.scoring_type)) return r.holesPlayed === 18;
-  if ((m.scoring_type || "match") === "stroke") return r.holesPlayed === 18;
+  if (resolveScoring(m).formOfPlay === SCORING_TYPE_TOTAL) return r.holesPlayed === 18;
   if ((m.point_method || "") === POINT_METHOD_TRADITIONAL) return r.overall.complete;
   const n = m.nassau || NASSAU_DEFAULT;
   return (!n.front || r.front.complete) && (!n.back || r.back.complete) && (!n.overall || r.overall.complete);
@@ -305,7 +305,7 @@ function MatchCard({
   index, first, match, result, format, teams, tPlayers,
   courses, tRounds, roundLocks, expanded, onToggle,
 }) {
-  const total = (match.scoring_type || "match") === "stroke";
+  const total = resolveScoring(match).formOfPlay === SCORING_TYPE_TOTAL;
   const opts = segOpts(match, format);
   const traditional = (match.point_method || "") === POINT_METHOD_TRADITIONAL;
   const n = match.nassau || NASSAU_DEFAULT;
@@ -805,10 +805,10 @@ export function TeamLeaderboard({
 //  the running lead on a Total one.
 export function MatchScorecard({ match, result, format, courses, tRounds, teams, roundLocks }) {
   const { course, holePars } = getRoundCourseCtx({ roundLocks, round: match.round, tRounds, courses });
-  const total = (match.scoring_type || "match") === "stroke";
+  const total = resolveScoring(match).formOfPlay === SCORING_TYPE_TOTAL;
   const perHole = isPointsPerHole(match.scoring_type);
   const hp = result.holePoints || { front: 1, back: 1 };
-  const higherWins = higherIsBetter(effectiveHoleFormat(match.scoring_type, format));
+  const higherWins = higherIsBetter(holeFormatFor(match, format));
   const unit = totalUnit(format);
   const holes = result.holes;
 

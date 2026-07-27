@@ -9,7 +9,8 @@
 // the leaderboard math.
 import {
   NASSAU_DEFAULT, POINT_METHOD_NASSAU, POINT_METHOD_TRADITIONAL, resolveAllowance,
-  resolveCounting, resolveHolePoints, isPointsPerHole, SCORING_TYPE_TEAM,
+  resolveCounting, resolveHolePoints, resolveScoring,
+  HOLE_SCORING_BEST_BALL, SCORING_TYPE_POINTS, SCORING_TYPE_TOTAL,
 } from "./constants";
 
 // ── Course Handicap math ──
@@ -106,19 +107,26 @@ export const higherIsBetter = (format) => format === "stableford" || format === 
 export const totalUnit = (format) =>
   format === "double_dot" ? "dots" : format === "stableford" ? "points" : "strokes";
 
-// The format a match's HOLE SCORES are actually computed under. Team scoring
-// ("team") re-scores every hole as team best ball regardless of the round's
-// format, so any consumer deriving direction (higherIsBetter) from the
-// format must ask through here — reading the raw format on a Team round
-// would flip the margin on a dots/points format.
+// The format a match's HOLE SCORES are actually computed under. A round whose
+// HOLE SCORING axis is set to best_ball re-scores every hole as best net ball
+// regardless of the round's format, so any consumer deriving direction
+// (higherIsBetter) from the format must ask through here — reading the raw
+// format would flip the margin on a dots/points format.
 //
 // The ONE format it does not override is team_best_ball, which is already a
-// team best ball — a richer one, summing the side's best N nets rather than
-// taking its single best ball. Rewriting it to plain best_ball would silently
-// throw the round's counting scores away and score a hole off one player, so
-// the format wins and the two features stop fighting over the same name.
-export const effectiveHoleFormat = (scoringType, format) =>
-  (scoringType === SCORING_TYPE_TEAM && format !== "team_best_ball") ? "best_ball" : format;
+// best ball — a richer one, summing the side's best N nets rather than taking
+// its single best ball. Rewriting it would throw the round's counting scores
+// away and score a hole off one player. The admin form doesn't offer the
+// override there for the same reason; this guard is what makes the rule hold
+// for a document that says otherwise.
+//
+// Takes the whole doc rather than a bare value so callers can't accidentally
+// pass the pre-split `scoring_type` and get the wrong axis.
+export const holeFormatFor = (doc, format) => {
+  const { holeScoring } = resolveScoring(doc);
+  return (holeScoring === HOLE_SCORING_BEST_BALL && format !== "team_best_ball")
+    ? "best_ball" : format;
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SEGMENT STATE — the one answer to "where does this stretch of holes stand?"
@@ -221,15 +229,16 @@ export const segmentLeader = (st) => (st.margin > 0 ? "A" : st.margin < 0 ? "B" 
 // Total round ended up displaying a match-play state on two screens while the
 // engine scored it on totals.
 export const segmentOptsFor = (match, format) => {
-  // Direction comes from the format the holes were ACTUALLY scored under —
-  // a Team round's holes are best-ball nets whatever the round format says,
-  // so a dots/points format must not flip the margin (see effectiveHoleFormat).
-  const higherWins = higherIsBetter(effectiveHoleFormat(match?.scoring_type, format));
-  if (isPointsPerHole(match?.scoring_type)) {
+  // Direction comes from the format the holes were ACTUALLY scored under — a
+  // best-ball-override round's holes are best-ball nets whatever the round
+  // format says, so a dots/points format must not flip the margin.
+  const higherWins = higherIsBetter(holeFormatFor(match, format));
+  const { formOfPlay } = resolveScoring(match);
+  if (formOfPlay === SCORING_TYPE_POINTS) {
     const hp = resolveHolePoints(match?.hole_points);
     return { higherWins, holeValue: (h) => (h < 9 ? hp.front : hp.back) };
   }
-  return { total: (match?.scoring_type || "match") === "stroke", higherWins };
+  return { total: formOfPlay === SCORING_TYPE_TOTAL, higherWins };
 };
 
 export const buildStrokeMap = (ch, holeHcps) => {
@@ -455,15 +464,15 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
     roundLocks, round: rnd, pid, players: tPlayers, course, chOverrides, teeAssignments, roundTee,
   });
   const getStrokeMap = (ch) => buildStrokeMap(ch, holeHcps);
-  // Scoring type: how each pot is awarded — and, for "team", how holes are
-  // scored. Match (default) plays hole-by-hole under the round's format;
-  // "stroke" (labelled Medal) awards each segment on the running total;
-  // "team" is team best ball — each side's hole score is its best individual
-  // net, scored as match play, whatever the format's own per-hole method
-  // would be. Team routes through the existing best_ball branch below so the
-  // engine keeps exactly one definition of "best ball".
-  const scoringType = match.scoring_type || "match";
-  const holeFormat = effectiveHoleFormat(scoringType, format);
+  // The round's two scoring axes, resolved together (see constants):
+  //   holeScoring — how a side's number for a hole is made. Normally the
+  //     format decides; the best_ball override re-scores every hole as best
+  //     net ball, routed through the existing best_ball branch below so the
+  //     engine keeps exactly one definition of "best ball".
+  //   formOfPlay  — how those numbers become points. Resolved further down,
+  //     where the pots are awarded.
+  const { formOfPlay } = resolveScoring(match);
+  const holeFormat = holeFormatFor(match, format);
   // Stableford points and Double Dot dots count UP; every other format's
   // per-hole number is net strokes and counts down.
   const higherWins = higherIsBetter(holeFormat);
@@ -642,7 +651,7 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
     return { h, aScore, bScore, winner, played: aScore != null && bScore != null };
   });
 
-  // How the round settles, given scoringType (resolved at the top).
+  // How the round settles, given formOfPlay (resolved at the top).
   //
   //   Match  — holes won take the nassau {front, back, overall} pots.
   //   Medal  — the same pots, but awarded on the side's RUNNING TOTAL over
@@ -651,14 +660,12 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
   //            Stableford. "Single" (front=back=0) collapses to one 18-hole
   //            pot. The stored value is still `"stroke"` — it predates the
   //            Medal label.
-  //   Team   — team best ball: the holes were re-scored above as each side's
-  //            best individual net, and settle on holes won, exactly like
-  //            Match.
   //   Points — every HOLE is its own pot, worth what its nine is worth. No
-  //            pots, no segments to settle, nothing awarded late. Kept in
-  //            the engine for rounds saved while it was offered, though the
-  //            admin toggle no longer exposes it.
-  const pointsPerHole = isPointsPerHole(scoringType);
+  //            pots, no segments to settle, nothing awarded late.
+  //
+  // Note this axis says nothing about how the holes above were SCORED — that
+  // was `holeScoring`, settled before a single pot was considered.
+  const pointsPerHole = formOfPlay === SCORING_TYPE_POINTS;
   const holePoints = pointsPerHole
     ? getRoundHolePoints({ roundLocks, round: rnd, tRounds })
     : null;
@@ -708,7 +715,7 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
       if (hr.winner) out[hr.winner] += pot;
       else { out.A += pot / 2; out.B += pot / 2; }
     });
-  } else if (pointMethod === POINT_METHOD_TRADITIONAL && scoringType !== "stroke") {
+  } else if (pointMethod === POINT_METHOD_TRADITIONAL && formOfPlay !== SCORING_TYPE_TOTAL) {
     award(overall, match.traditional_points ?? 1, overallPts);
   } else {
     const nassau = match.nassau || NASSAU_DEFAULT;
