@@ -43,6 +43,7 @@ import {
   segmentOptsFor,
 } from "../scoring";
 import { HoleStrip } from "./HoleStrip";
+import { StickyTop } from "./ui";
 import { isRoundFinal } from "../lib/roundLocks";
 
 const FONT = "'Montserrat', sans-serif";
@@ -682,26 +683,8 @@ export function TeamLeaderboard({
           the app header. Everything below it — the rounds, every match — is
           detail you read AGAINST the cup score, so the cup score should
           never be the thing you have to scroll back up to find. Same
-          technique as the Admin tab bar: the sticky wrapper is painted in
-          the page bg and carries the gap below it as padding, so rounds
-          scroll cleanly under it with nothing showing through the seam. */}
-      <div style={{
-        position: "sticky", top: 0, zIndex: 5,
-        background: BC.bg, padding: "6px 0 12px",
-      }}>
-      {/* A sticky box pins to the top of the scroll container's CONTENT
-          box, not its padding box — so the body's top padding stays a live
-          strip of scrolling content above the pinned board, and hole strips
-          slide through it. This paints that strip in the page bg. It rides
-          directly above the wrapper (bottom:100%) rather than being sized
-          to the body's padding, so it stays correct if that padding ever
-          changes; the container clips whatever hangs past the top edge.
-          The leftover band reads as the breathing room above the pin. */}
-      <div style={{
-        position: "absolute", left: 0, right: 0, bottom: "100%",
-        height: 40, background: BC.bg, pointerEvents: "none",
-      }} />
-
+          StickyTop every other tab pins its lead control with. */}
+      <StickyTop padTop={6}>
       {/* ── Cup total ──
           Team names, the two totals in team colors, and a single bar
           that fills inward from both edges. The tick in the middle is
@@ -784,7 +767,7 @@ export function TeamLeaderboard({
           </div>
         )}
       </div>
-      </div>
+      </StickyTop>
 
       {/* ── Rounds ── */}
       {roundNumbers.map((rnd) => (

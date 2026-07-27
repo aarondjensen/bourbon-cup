@@ -4,6 +4,7 @@
 //  One home for the chrome that was previously copy-pasted inline across
 //  App.jsx. All colors come from the live BC theme.
 //    • SegmentedToggle — the rounded pill tab switcher.
+//    • StickyTop       — the pinned control strip at the top of a tab.
 //    • Banner          — the amber section header strip.
 //    • Toast           — the transient "slides down from the top" toast.
 //    • ScoreButtonRow  — the tappable par-relative score entry row.
@@ -42,6 +43,39 @@ export function SegmentedToggle({ options, value, onChange, variant = "gradient"
           </button>
         );
       })}
+    </div>
+  );
+}
+
+// ── StickyTop ──
+// The pinned control strip at the top of a tab. Every tab leads with the one
+// control the whole view is steered from — the Leaderboard's cup total, the
+// Admin tab bar, the Matches round pills, the Betting mode toggle — and each
+// of them pins here, so that control lands in the SAME place on every tab
+// instead of wherever that tab's content height happens to put it.
+//
+// Two details are what make it hold:
+//   • The wrapper is painted in the page bg and carries the gap BELOW it as
+//     padding, so content scrolls under it with nothing showing through.
+//   • A sticky box pins to the scroll container's CONTENT box, not its
+//     padding box, so the body's top padding stays a live strip of scrolling
+//     content ABOVE the pin — hole strips and cards slide through it. The
+//     absolute cover (bottom:100%) paints that strip in the page bg. It rides
+//     directly above the wrapper rather than being sized to the body's
+//     padding, so it stays correct if that padding ever changes; the scroll
+//     container clips whatever hangs past its top edge.
+export function StickyTop({ children, padTop = 0, padBottom = 12, style }) {
+  return (
+    <div style={{
+      position: "sticky", top: 0, zIndex: 5,
+      background: BC.bg, paddingTop: padTop, paddingBottom: padBottom,
+      ...style,
+    }}>
+      <div style={{
+        position: "absolute", left: 0, right: 0, bottom: "100%",
+        height: 40, background: BC.bg, pointerEvents: "none",
+      }} />
+      {children}
     </div>
   );
 }

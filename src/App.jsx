@@ -30,7 +30,7 @@ import { processLogo } from "./lib/logoBrand";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { AppHeader } from "./components/AppHeader";
 import { Popup, ConfirmModal } from "./components/Popup";
-import { SegmentedToggle, Banner, Toast, ScoreButtonRow } from "./components/ui";
+import { SegmentedToggle, StickyTop, Banner, Toast, ScoreButtonRow } from "./components/ui";
 import { useConfirm } from "./lib/useConfirm";
 import { useStableCallback } from "./lib/useStableCallback";
 import { EditionSwitcher } from "./components/EditionSwitcher";
@@ -51,12 +51,6 @@ import {
 // left the bar mis-seated on real devices. Restoring the fixed bar (pinned
 // to the viewport bottom) with the full inset is the known-good layout.
 const NAV_SAFE_PAD = "calc(env(safe-area-inset-bottom, 0px) + 8px)";
-
-// Views that start at the TOP of the scroll area instead of being centred
-// in it. Both of these pin something to the top of the body (Admin's tab
-// bar, the Leaderboard's header + cup total), and a sticky element only
-// behaves if its view begins at the top — see the wrapper it's used on.
-const TOP_ALIGNED_VIEWS = new Set(["admin", "leaderboard"]);
 
 // ── TEMPORARY viewport diagnostic ─────────────────────────────────
 // Delete VP_DEBUG, BUILD_TAG, the ViewportDebug component, navRef and the
@@ -1208,20 +1202,26 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
   return (
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
       {/* Round selector — pill toggle, deep Mash green for active state.
-          Mirrors the Mash visual language used on Scoring + Leaderboard. */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-        {rounds.map(r => {
-          const active = r === activeRound;
-          return (
-            <button key={r} onClick={() => setPickedRound(r)} style={{
-              flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
-              background: active ? BC.amberDim : BC.card,
-              border: `1px solid ${active ? BC.amberDim : BC.bdr}`,
-              color: active ? "#fff" : BC.t2,
-            }}>Rd {r}</button>
-          );
-        })}
-      </div>
+          Mirrors the Mash visual language used on Scoring + Leaderboard.
+          Pinned: this is the control the whole tab is steered from, and a
+          reader scrolled deep into Round 2's tee sheet should be able to
+          jump to Round 3 without scrolling back for the pills. Lands in the
+          same spot as the Leaderboard's cup total and the Admin tab bar. */}
+      <StickyTop>
+        <div style={{ display: "flex", gap: 6 }}>
+          {rounds.map(r => {
+            const active = r === activeRound;
+            return (
+              <button key={r} onClick={() => setPickedRound(r)} style={{
+                flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                background: active ? BC.amberDim : BC.card,
+                border: `1px solid ${active ? BC.amberDim : BC.bdr}`,
+                color: active ? "#fff" : BC.t2,
+              }}>Rd {r}</button>
+            );
+          })}
+        </div>
+      </StickyTop>
 
       {/* Course / format / tee-time banner — uses the TEAMS-banner style
           (Mash green fill, white centered text) for the section header,
@@ -1863,13 +1863,11 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   return (
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
       <EditionSwitcher open={showEditions} onClose={() => setShowEditions(false)} />
-      {/* Tabs — sticky to the top of the scroll area so the bar stays in the
-          SAME place on every tab, regardless of that tab's content height.
-          (Before: the body's vertical centering placed short tabs mid-screen,
-          so the bar floated to a different spot per tab.) The sticky wrapper
-          is painted in the page bg and carries the bottom gap as padding, so
-          content scrolls cleanly UNDER it with nothing peeking through. */}
-      <div style={{ position: "sticky", top: 0, zIndex: 5, background: BC.bg, paddingBottom: 12, marginBottom: 4 }}>
+      {/* Tabs — pinned to the top of the scroll area so the bar stays in the
+          SAME place on every sub-tab, regardless of that tab's content
+          height, and in the same place the other views pin their own lead
+          control. See StickyTop for how the seam is painted. */}
+      <StickyTop style={{ marginBottom: 4 }}>
       <div style={{ display: "flex", gap: 4, background: BC.card, borderRadius: 12, padding: 4, border: `1px solid ${BC.bdr}` }}>
         {[["players","Players"],["rounds","Rounds"],["matches","Matches"],["courses","Courses"],["tournament","Tournament"]].map(([k, lbl]) => (
           <button key={k} onClick={() => setTab(k)} style={{
@@ -1879,7 +1877,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
           }}>{lbl}</button>
         ))}
       </div>
-      </div>
+      </StickyTop>
 
       {tab === "players" && (
         <div>
@@ -3412,10 +3410,14 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
 
   return (
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
-      <SegmentedToggle
-        options={[["current", `${getTournamentYear()} Stats`], ["history", "History"]]}
-        value={analyticsTab} onChange={setAnalyticsTab} style={{ marginBottom: 14 }}
-      />
+      {/* Stats / History switch — pinned, same as every other tab's lead
+          control, so it sits where the eye already expects a tab switcher. */}
+      <StickyTop padBottom={14}>
+        <SegmentedToggle
+          options={[["current", `${getTournamentYear()} Stats`], ["history", "History"]]}
+          value={analyticsTab} onChange={setAnalyticsTab}
+        />
+      </StickyTop>
 
       {analyticsTab === "current" && (
         <div>
@@ -5294,22 +5296,26 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
         </div>
       </div>
 
-      {/* Sub-tabs — MNQ-style pill toggle. Active tab fills with amber, others transparent. */}
-      <div style={{ display: "flex", background: BC.inp, borderRadius: 20, border: `1px solid ${BC.bdr}`, padding: 3, marginBottom: 12 }}>
-        {subTabs.map(t => {
-          const isAct = subView === t.k;
-          return (
-            <button key={t.k} onClick={() => { if (!isAct) setSubView(t.k); }} style={{
-              flex: 1, padding: "7px 8px", borderRadius: 17,
-              fontSize: 11, fontWeight: 700, border: "none",
-              background: isAct ? BC.amber : "transparent",
-              color: isAct ? "#0a0804" : BC.t3,
-              cursor: isAct ? "default" : "pointer",
-              transition: "all .2s",
-            }}>{t.label}</button>
-          );
-        })}
-      </div>
+      {/* Sub-tabs — MNQ-style pill toggle. Active tab fills with amber, others
+          transparent. Pinned like the Admin tab bar it plays the same role as;
+          the MASH ROUND header above scrolls away under it. */}
+      <StickyTop>
+        <div style={{ display: "flex", background: BC.inp, borderRadius: 20, border: `1px solid ${BC.bdr}`, padding: 3 }}>
+          {subTabs.map(t => {
+            const isAct = subView === t.k;
+            return (
+              <button key={t.k} onClick={() => { if (!isAct) setSubView(t.k); }} style={{
+                flex: 1, padding: "7px 8px", borderRadius: 17,
+                fontSize: 11, fontWeight: 700, border: "none",
+                background: isAct ? BC.amber : "transparent",
+                color: isAct ? "#0a0804" : BC.t3,
+                cursor: isAct ? "default" : "pointer",
+                transition: "all .2s",
+              }}>{t.label}</button>
+            );
+          })}
+        </div>
+      </StickyTop>
 
       {subView === "setup" && isDirector && <SetupTab />}
       {subView === "scoring" && (
@@ -6158,15 +6164,14 @@ export default function App() {
         // `navH` is the bar's MEASURED height (safe-area padding included) —
         // see the ResizeObserver above for why a constant isn't enough.
         padding: `12px 10px ${navH + 8}px 10px`,
-        // Vertical centering for short views (affects EVERY tab). This was
-        // previously `display:grid; align-content:safe center`, but Safari
-        // doesn't support the `safe` overflow-alignment keyword — it drops
-        // the whole declaration, grid falls back to top alignment, and the
-        // dead gap comes back. Flexbox auto margins (on the inner wrapper
-        // below) are universally supported and are inherently overflow-safe:
-        // auto margins only consume FREE space, so when content is taller
-        // than the viewport they resolve to 0 and nothing scrolls out of
-        // reach — the exact behavior `safe center` was meant to provide.
+        // Every view starts at the TOP of the scroll area. Short views used
+        // to be centred vertically here (flexbox auto margins on the inner
+        // wrapper), with Admin and Leaderboard opting out because they pin a
+        // control to the top — but that is exactly the inconsistency: the
+        // same round pills sat mid-screen on a thin round and at the top on
+        // a full one, and no two tabs agreed on where their content began.
+        // Top alignment is also the only thing a sticky lead control can
+        // hold against (see StickyTop), and every tab now has one.
         display: "flex",
         flexDirection: "column",
         // overscroll-behavior-y: contain blocks the browser's native
@@ -6179,19 +6184,14 @@ export default function App() {
         // bounce is suppressed and our handler has full control.
         overscrollBehaviorY: "contain",
       }}>
-        {/* Auto-margin wrapper — does the vertical centering. When the view
-            is shorter than the body, the auto margins split the leftover
-            space evenly (content sits centered, no dead gap dumped at the
-            bottom). When the view is taller, auto margins compute to 0 and
-            the content starts at the top and scrolls normally.
-
-            Two views opt OUT of the centering because they pin something to
-            the top of the scroll area: Admin (its tab bar) and Leaderboard
-            (its header + cup total). A pinned element that starts halfway
-            down the screen is the one thing that defeats pinning it — on a
-            short board it would sit mid-screen, then jump to the top the
+        {/* View wrapper. Full width, no vertical margins: the content of
+            every tab begins immediately under the app header, so the round
+            pills / tab bar / mode toggle each tab leads with land on the
+            same line as each other. A pinned element that starts halfway
+            down the screen is the one thing that defeats pinning it — it
+            would sit mid-screen on a thin round, then jump to the top the
             moment the content grew past the fold. */}
-        <div style={{ width: "100%", marginTop: TOP_ALIGNED_VIEWS.has(view) ? 0 : "auto", marginBottom: TOP_ALIGNED_VIEWS.has(view) ? 0 : "auto" }}>
+        <div style={{ width: "100%" }}>
         {/* Keyed ErrorBoundary: keying on `view` remounts the boundary
             whenever the tab changes, so a crashed screen self-heals the
             moment the user navigates away instead of showing a blank
@@ -6254,13 +6254,18 @@ export default function App() {
             {/* Skins/CTP toggle scaffold — disabled visual, identical
                 shape to the working Practice Round version. Communicates
                 "this section will have these two modes" without
-                committing to data the user can't act on. */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, opacity: 0.5, pointerEvents: "none" }}>
-              <SegmentedToggle
-                options={[["skins", "Skins"], ["ctp", "CTP"]]}
-                value="skins" variant="flat" letterSpacing={0.5} style={{ flex: 1 }}
-              />
-            </div>
+                committing to data the user can't act on. Pinned so this
+                tab's lead control sits exactly where every other tab's
+                does, and so the real skins grid can grow underneath it
+                without the toggle scrolling away. */}
+            <StickyTop>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, opacity: 0.5, pointerEvents: "none" }}>
+                <SegmentedToggle
+                  options={[["skins", "Skins"], ["ctp", "CTP"]]}
+                  value="skins" variant="flat" letterSpacing={0.5} style={{ flex: 1 }}
+                />
+              </div>
+            </StickyTop>
 
             <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
               <Banner>SKINS</Banner>
