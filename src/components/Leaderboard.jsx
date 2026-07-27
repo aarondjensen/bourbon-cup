@@ -34,12 +34,12 @@ import { BC, ink, teamColor } from "../theme";
 import {
   FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT,
   POINT_METHOD_TRADITIONAL, TROPHY_SILHOUETTE, CUP_POINTS_TO_WIN,
-  describeAllowance, describeCounting, describeHolePoints,
+  describeCounting, describeHolePoints,
   isPointsPerHole, holePointsTotal,
 } from "../constants";
 import {
   computeMatchResult, getRoundCourseCtx, higherIsBetter, totalUnit,
-  segmentState, statusText, segmentLeader, getRoundAllowance, getRoundCounting,
+  segmentState, statusText, segmentLeader, getRoundCounting,
   segmentOptsFor,
 } from "../scoring";
 import { HoleStrip } from "./HoleStrip";
@@ -463,7 +463,7 @@ function RoundSection({
   meta, results, open, onToggle, teams, tPlayers,
   courses, tRounds, roundLocks, expandedMatch, setExpandedMatch,
 }) {
-  const { course, fmt, tee, pts, state, scoring, allowance, counting } = meta;
+  const { course, fmt, pts, state, scoring, counting } = meta;
 
   // The round header is a plain row, not a card. Four match rows plus a
   // boxed header per round was two levels of container for one level of
@@ -493,16 +493,16 @@ function RoundSection({
           <span style={{ fontSize: 11, color: BC.t3, flexShrink: 0 }}>–</span>
           <span style={{ fontSize: 15, fontWeight: 800, flexShrink: 0, color: pts.B >= pts.A ? BC.teamB : `${BC.teamB}99` }}>{fmtPts(pts.B)}</span>
         </div>
-        {/* The tee, the counting rule and the handicap terms. "Match play" /
-            "Total dots" used to ride along here too, but under a header that
-            already reads DOUBLE DOT it was restating the format to players who
-            know it — and every match row carries its own result anyway. */}
-        {(tee || scoring || allowance || counting) && (
+        {/* Only what the header above cannot already tell you: the counting
+            rule, and a points-per-hole payout. The tee, the handicap terms and
+            the scoring type all used to ride along here and are gone — three
+            lines of setup detail on a board players read for the score. */}
+        {(scoring || counting) && (
           <div style={{
             fontSize: 10, color: BC.t3, marginTop: 3, paddingLeft: 17,
             whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
           }}>
-            {[tee, counting, scoring, allowance].filter(Boolean).join(" · ")}
+            {[counting, scoring].filter(Boolean).join(" · ")}
           </div>
         )}
       </button>
@@ -597,7 +597,6 @@ export function TeamLeaderboard({
         && (isRoundFinal(roundLocks, rnd) || results.every(({ match: m, result: r }) => matchSettled(m, r)));
       out[rnd] = {
         results, pts, avail, holesPlayed, course,
-        tee: tr?.tee_box || null,
         fmt: FORMATS.find((f) => f.id === tr?.format) || null,
         // Only the points-per-hole payout, which nothing else on the screen
         // says. "Match play" / "Total dots" used to sit here too and no longer
@@ -606,17 +605,6 @@ export function TeamLeaderboard({
         scoring: isPointsPerHole(tr?.scoring_type)
           ? `${describeHolePoints(tr?.hole_points)}`
           : null,
-        // The handicap terms, but only when they actually take something off
-        // — a round played off full handicaps has nothing to announce, while
-        // a Scramble at 35/15 is the single biggest thing separating the
-        // gross scores from the result underneath them.
-        allowance: (() => {
-          const a = getRoundAllowance({ roundLocks, round: rnd, tRounds });
-          // Off, or on but set to a flat 100 — either way nothing is coming
-          // off anyone's handicap and there is nothing to say.
-          if (!a.enabled || (!a.split && a.pct === 100)) return null;
-          return `${describeAllowance(a)} hcp`;
-        })(),
         // Team Best Ball's counting scores. Null on every other format, and
         // on this one it is not chrome: "best 6 / 7" is the whole difference
         // between a side's eight cards and the number on the board.
