@@ -34,12 +34,12 @@ import { BC, ink, teamColor } from "../theme";
 import {
   FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT,
   POINT_METHOD_TRADITIONAL, TROPHY_SILHOUETTE, CUP_POINTS_TO_WIN,
-  describeCounting, describeHolePoints,
+  describeHolePoints,
   isPointsPerHole, holePointsTotal,
 } from "../constants";
 import {
   computeMatchResult, getRoundCourseCtx, higherIsBetter, totalUnit,
-  segmentState, statusText, segmentLeader, getRoundCounting,
+  segmentState, statusText, segmentLeader,
   segmentOptsFor,
 } from "../scoring";
 import { HoleStrip } from "./HoleStrip";
@@ -463,7 +463,7 @@ function RoundSection({
   meta, results, open, onToggle, teams, tPlayers,
   courses, tRounds, roundLocks, expandedMatch, setExpandedMatch,
 }) {
-  const { course, fmt, pts, state, scoring, counting } = meta;
+  const { course, fmt, pts, state } = meta;
 
   // The round header is a plain row, not a card. Four match rows plus a
   // boxed header per round was two levels of container for one level of
@@ -493,18 +493,10 @@ function RoundSection({
           <span style={{ fontSize: 11, color: BC.t3, flexShrink: 0 }}>–</span>
           <span style={{ fontSize: 15, fontWeight: 800, flexShrink: 0, color: pts.B >= pts.A ? BC.teamB : `${BC.teamB}99` }}>{fmtPts(pts.B)}</span>
         </div>
-        {/* Only what the header above cannot already tell you: the counting
-            rule, and a points-per-hole payout. The tee, the handicap terms and
-            the scoring type all used to ride along here and are gone — three
-            lines of setup detail on a board players read for the score. */}
-        {(scoring || counting) && (
-          <div style={{
-            fontSize: 10, color: BC.t3, marginTop: 3, paddingLeft: 17,
-            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-          }}>
-            {[counting, scoring].filter(Boolean).join(" · ")}
-          </div>
-        )}
+        {/* Nothing under the header. The tee, the handicap terms, the scoring
+            type and the counting rule all used to sit here; all of it is setup
+            detail, and this is a board players read for the score. The Rounds
+            tab is where a round's terms belong. */}
       </button>
 
       {open && (
@@ -598,17 +590,6 @@ export function TeamLeaderboard({
       out[rnd] = {
         results, pts, avail, holesPlayed, course,
         fmt: FORMATS.find((f) => f.id === tr?.format) || null,
-        // Only the points-per-hole payout, which nothing else on the screen
-        // says. "Match play" / "Total dots" used to sit here too and no longer
-        // do — the header above already names the format, and players know how
-        // their own formats settle.
-        scoring: isPointsPerHole(tr?.scoring_type)
-          ? `${describeHolePoints(tr?.hole_points)}`
-          : null,
-        // Team Best Ball's counting scores. Null on every other format, and
-        // on this one it is not chrome: "best 6 / 7" is the whole difference
-        // between a side's eight cards and the number on the board.
-        counting: describeCounting(getRoundCounting({ roundLocks, round: rnd, tRounds })) || null,
         state: settled ? "final" : holesPlayed > 0 ? "live" : "upcoming",
       };
     });
