@@ -45,7 +45,8 @@ import { useConfirm } from "./lib/useConfirm";
 import { useStableCallback } from "./lib/useStableCallback";
 import { EditionSwitcher } from "./components/EditionSwitcher";
 import { GhinLinkButton, GhinSyncButton } from "./components/GhinLink";
-import { TeamLeaderboard, MatchScorecard } from "./components/Leaderboard";
+import { TeamLeaderboard } from "./components/Leaderboard";
+import { FullScorecard } from "./components/FullScorecard";
 import { MatchSetup } from "./components/MatchSetup";
 import {
   GROUPS_COL, groupsDocId, encodeGroups, decodeGroups,
@@ -757,8 +758,11 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
         })}
       </div>
 
-      {/* Scorecard modal — uses the existing MatchScorecard component
-          which already renders both teams and 18 holes for the main app. */}
+      {/* Scorecard modal — the MNQ-framed card (components/FullScorecard),
+          not the Leaderboard's team-only grid: this one is opened by a
+          player mid-round, so it shows the four GROSS lines in golf
+          notation with their stroke dots, then how the side's number was
+          made from them. */}
       {showScorecard && (
         <Popup onClose={() => setShowScorecard(false)} maxWidth={480} padding={0} outerPadding={12}
           innerStyle={{ background: BC.card, border: `1px solid ${BC.amber}${ALPHA.line}`, borderRadius: 12 }}>
@@ -771,7 +775,12 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
             }}>×</button>
           </div>
           <div style={{ padding: 12 }}>
-            <MatchScorecard match={match} result={result} format={format} courses={courses} tRounds={tRounds} teams={teams} roundLocks={roundLocks} />
+            <FullScorecard
+              match={match} result={result} format={format}
+              holePars={holePars} holeHcps={holeHcps} course={course}
+              teams={teams} tPlayers={tPlayers} getScore={getScore}
+              viewer={userTeam}
+            />
           </div>
           <button onClick={() => setShowScorecard(false)} style={{
             display: "block", width: "calc(100% - 24px)", margin: "0 auto 12px",

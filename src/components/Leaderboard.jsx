@@ -799,9 +799,12 @@ export function TeamLeaderboard({
 // ══════════════════════════════════════════════════════════════════
 //  MatchScorecard — the expanded detail
 // ══════════════════════════════════════════════════════════════════
-//  Also mounted standalone from the Score Entry "Full Scorecard" modal,
-//  so it stays self-sufficient: it re-resolves its own course context
-//  (honouring a round lock's frozen hole tables when one exists).
+//  Self-sufficient by design: it re-resolves its own course context
+//  (honouring a round lock's frozen hole tables when one exists) rather
+//  than taking one, so a card row can mount it with nothing but the
+//  match and its result. The Score Entry "Full Scorecard" modal used to
+//  mount it too; that surface now has its own, per-player card — see
+//  components/FullScorecard.jsx for why the two differ.
 //
 //  Rows per nine: HOLE / PAR / team A / team B / running state. The team
 //  rows carry whatever the match was actually decided on — net scores for
