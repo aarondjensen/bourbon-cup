@@ -103,12 +103,6 @@ service cloud.firestore {
     match /bc_skins/{doc}              { allow read, write: if isOpen(); }
     match /bc_ctp/{doc}                { allow read, write: if isOpen(); }
 
-    // ── Practice rounds ───────────────────────────────────────────
-    // The internal team-rehearsal sub-app behind the More menu.
-    match /bc_practice_event/{doc}     { allow read, write: if isOpen(); }
-    match /bc_practice_scores/{doc}    { allow read, write: if isOpen(); }
-    match /bc_practice_ctp/{doc}       { allow read, write: if isOpen(); }
-
     // ── Everything else ───────────────────────────────────────────
     // Default deny. Adding a collection to the app means adding it here.
     match /{document=**} {

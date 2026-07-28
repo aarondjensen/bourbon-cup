@@ -1,12 +1,9 @@
 // ── Scoring engine ──
 // All pure scoring math lives here — no React, no Firestore, no UI.
-// Two scoring paths share these utilities:
-//   - Tournament play (computeMatchResult)        — multi-format Nassau
-//   - Practice play   (computePracticeMatch /
-//                      computePracticeSkins)      — fixed Team Total + skins
-// Both paths use the same getEffectiveHI / buildStrokeMap helpers so the
-// dots displayed on a scoring screen always reflect the strokes used in
-// the leaderboard math.
+// computeMatchResult is the entry point — multi-format Nassau over a
+// tournament round. It and the scoring screens share the same
+// getEffectiveHI / buildStrokeMap helpers so the dots displayed on a
+// scoring screen always reflect the strokes used in the leaderboard math.
 import {
   NASSAU_DEFAULT, POINT_METHOD_NASSAU, POINT_METHOD_TRADITIONAL, resolveAllowance,
   resolveCounting, resolveHolePoints, resolveScoring,
@@ -63,8 +60,8 @@ export const fmtScore = (n) => n == null ? "—" : n === 0 ? "E" : n > 0 ? `+${n
 
 // ── Shared scoring helpers ──
 // Get a player's effective Handicap Index, applying any per-round override.
-// Used by every scoring path (tournament + practice) so override semantics
-// stay identical everywhere. `overrides` is the round-scoped map
+// Used by every scoring path so override semantics stay identical
+// everywhere. `overrides` is the round-scoped map
 // (e.g. hcpOverrides[match.round]), NOT the full per-round dictionary.
 export const getEffectiveHI = (pid, players, overrides) => {
   if (overrides && overrides[pid] !== undefined && overrides[pid] !== "") {
@@ -84,9 +81,8 @@ export const getEffectiveHI = (pid, players, overrides) => {
 // hole (hardest) gets stroke 1, then 2, etc., wrapping for handicaps > 18
 // (capped at 3 wraps = 54 strokes). Negative ch produces "negative strokes"
 // (rare — used for plus handicaps in low-man adjustments) by signing the
-// allocation. Used by both tournament and practice scoring paths so the
-// dots displayed on scoring screens always match what the leaderboard
-// math actually used.
+// allocation. Shared by the scoring screens and the leaderboard math so the
+// dots displayed always match what the math actually used.
 // Hole par / stroke-index tables with the standard fallbacks, resolved in one
 // place. A round lock's frozen tables win over the live course doc, which wins
 // over a neutral default (par 4 everywhere / a plain 1-18 stroke index). Pass
@@ -865,185 +861,4 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
       B: (frontPts.B || 0) + (backPts.B || 0) + (overallPts.B || 0),
     }
   };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PRACTICE / TEST EVENT MODE
-// ─────────────────────────────────────────────────────────────────────────────
-// Self-contained "practice round" feature — separate from main tournament data.
-// 8 players → 4 teams of 2 → 2 head-to-head Team Total match-play matches.
-//
-// Storage:
-//   bc_practice_event   — single doc { id: 'current', course_id, hcp_mode,
-//                         hcp_overrides, teams: [{id,name,p1,p2}],
-//                         matches: [{id,team1,team2}] }
-//   bc_practice_scores  — { id, player_id, hole_number (1-18), score }
-//   bc_practice_ctp     — { id, hole, player_id }
-// (Skins are auto-computed from scores, no Firestore needed.)
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Team Total match-play calculation (18 holes)
-// ─────────────────────────────────────────────────────────────────────────────
-// Per hole: sum each team's net scores. Lower combined net wins the hole.
-// Walk all 18; track running cumulative (T1 holes − T2 holes).
-// matchResultText: "AS" | "1UP" | "5&4" | "3&2"
-// Returns a thru count so the leaderboard knows how far along the match is.
-export function computePracticeMatch({ match, scores, course, players, hcpOverrides, hcpMode, teeName }) {
-  const empty = { holes: Array(18).fill({ result: null, n1: null, n2: null }), running: Array(18).fill(0), thru: 0, matchResultText: "—", winnerTeamId: null, clinched: false, endHole: 17, holesWon1: 0, holesWon2: 0, dormie: false };
-  if (!course || !match) return empty;
-
-  const holeHcps = resolveHoleHcps(course);
-
-  const t1Pids = [match.team1.player1, match.team1.player2].filter(Boolean);
-  const t2Pids = [match.team2.player1, match.team2.player2].filter(Boolean);
-  const allPids = [...t1Pids, ...t2Pids];
-  if (allPids.length < 4) return empty;
-
-  // HI lookup with per-event override support — delegates to the shared
-  // helper so override semantics stay identical to tournament scoring.
-  const getHI = (pid) => getEffectiveHI(pid, players, hcpOverrides);
-  const getCH = (pid) => calcCHForCourse(getHI(pid), course, teeName);
-
-  // Low-man adjustment: low CH plays scratch, others get diff
-  const allCHs = allPids.map(getCH);
-  const minCH = Math.min(...allCHs);
-  const adjustedCH = (pid) => hcpMode === "full" ? getCH(pid) : (getCH(pid) - minCH);
-
-  // Stroke map across 18 holes (shared helper allocates strokes to
-  // lowest-hcp holes first; up to 3 wraps for handicaps > 18).
-  const strokeMaps = {};
-  allPids.forEach(pid => { strokeMaps[pid] = buildStrokeMap(adjustedCH(pid), holeHcps); });
-
-  // Per-hole combined team net
-  const holes = [];
-  for (let h = 0; h < 18; h++) {
-    let n1 = 0, n2 = 0, ok1 = true, ok2 = true;
-    for (const pid of t1Pids) {
-      const raw = scores[`${pid}_${h}`];
-      if (raw == null || raw === 0) { ok1 = false; }
-      else { n1 += raw - (strokeMaps[pid][h] || 0); }
-    }
-    for (const pid of t2Pids) {
-      const raw = scores[`${pid}_${h}`];
-      if (raw == null || raw === 0) { ok2 = false; }
-      else { n2 += raw - (strokeMaps[pid][h] || 0); }
-    }
-    let result = null;
-    if (ok1 && ok2) {
-      if (n1 < n2) result = 1;
-      else if (n2 < n1) result = -1;
-      else result = 0;
-    }
-    holes.push({ result, n1: ok1 ? n1 : null, n2: ok2 ? n2 : null });
-  }
-
-  // Running cumulative; null holes don't change cumulative
-  const running = [];
-  let cum = 0;
-  holes.forEach(hole => {
-    if (hole.result !== null) cum += hole.result;
-    running.push(cum);
-  });
-
-  // Find clinch hole (lead > remaining holes). Only valid BEFORE hole 18 — if
-  // a match goes all 18 it's a "XUP" finish, not a clinched "X&0".
-  let endHole = 17;
-  let margin = Math.abs(running[17]);
-  let clinched = false;
-  for (let h = 0; h < 18; h++) {
-    if (holes[h].result === null) continue;  // can't clinch on unscored hole
-    const lead = Math.abs(running[h]);
-    const remaining = 17 - h;
-    if (remaining > 0 && lead > remaining) { endHole = h; margin = lead; clinched = true; break; }
-  }
-
-  // Last completed hole
-  let lastCompleted = -1;
-  for (let h = 17; h >= 0; h--) {
-    if (holes[h].result !== null) { lastCompleted = h; break; }
-  }
-  const thru = lastCompleted + 1;
-
-  let matchResultText = "—";
-  let winnerTeamId = null;
-  if (lastCompleted < 0) {
-    matchResultText = "—";
-  } else if (clinched) {
-    const remaining = 17 - endHole;
-    matchResultText = `${margin}&${remaining}`;
-    winnerTeamId = running[endHole] > 0 ? match.team1.id : match.team2.id;
-  } else if (lastCompleted === 17) {
-    const final = running[17];
-    if (final === 0) matchResultText = "AS";
-    else { matchResultText = `${Math.abs(final)}UP`; winnerTeamId = final > 0 ? match.team1.id : match.team2.id; }
-  } else {
-    // In progress
-    const cur = running[lastCompleted];
-    const remaining = 17 - lastCompleted;
-    if (cur === 0) matchResultText = "AS";
-    else if (Math.abs(cur) === remaining) matchResultText = `${Math.abs(cur)}UP (Dormie)`;
-    else matchResultText = `${Math.abs(cur)}UP`;
-  }
-
-  const dormie = !clinched && lastCompleted >= 0 && lastCompleted < 17 && Math.abs(running[lastCompleted]) === (17 - lastCompleted);
-
-  return {
-    holes,
-    running,
-    thru,
-    matchResultText,
-    winnerTeamId,
-    clinched,
-    endHole,
-    holesWon1: holes.filter(h => h.result === 1).length,
-    holesWon2: holes.filter(h => h.result === -1).length,
-    dormie,
-  };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Skins — auto-computed from scores (gross + net)
-// ─────────────────────────────────────────────────────────────────────────────
-// For each hole: lowest gross unique → gross skin; lowest net unique → net skin.
-// Tie = no skin on that hole. Returns { gross: {h: pid|null}, net: {h: pid|null} }.
-export function computePracticeSkins({ scores, players, course, hcpOverrides, teeName }) {
-  const result = { gross: {}, net: {}, strokeMaps: {} };
-  if (!course || !players.length) return result;
-
-  const holeHcps = resolveHoleHcps(course);
-  const getHI = (pid) => getEffectiveHI(pid, players, hcpOverrides);
-  const getCH = (pid) => calcCHForCourse(getHI(pid), course, teeName);
-
-  // Each player gets their FULL course handicap for skins (not low-man adjusted —
-  // skins are an individual side game, not match play). Standard practice.
-  const strokeMaps = {};
-  players.forEach(p => { strokeMaps[p.player_id] = buildStrokeMap(getCH(p.player_id), holeHcps); });
-
-  for (let h = 0; h < 18; h++) {
-    const grossEntries = [];
-    const netEntries = [];
-    for (const p of players) {
-      const raw = scores[`${p.player_id}_${h}`];
-      if (raw == null || raw === 0) continue;
-      grossEntries.push({ pid: p.player_id, score: raw });
-      netEntries.push({ pid: p.player_id, score: raw - (strokeMaps[p.player_id][h] || 0) });
-    }
-    if (grossEntries.length < 2) { result.gross[h] = null; result.net[h] = null; continue; }
-
-    // Gross skin
-    grossEntries.sort((a, b) => a.score - b.score);
-    if (grossEntries[0].score < grossEntries[1].score) result.gross[h] = grossEntries[0].pid;
-    else result.gross[h] = null;
-
-    // Net skin
-    netEntries.sort((a, b) => a.score - b.score);
-    if (netEntries[0].score < netEntries[1].score) result.net[h] = netEntries[0].pid;
-    else result.net[h] = null;
-  }
-  // Expose the per-player stroke maps so the UI can render stroke
-  // dots and net scores per hole. The maps are already computed for
-  // skin determination; surfacing them avoids re-computing the same
-  // thing in the betting view.
-  result.strokeMaps = strokeMaps;
-  return result;
 }

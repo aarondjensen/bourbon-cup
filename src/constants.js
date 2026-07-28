@@ -1,5 +1,5 @@
 // ── App-wide constants ──
-// Paths, team definitions, format catalog, and practice-event color palette.
+// Paths, team definitions, and the format catalog.
 // Kept separate from theme.js (which holds light/dark color tokens) because
 // these values are tournament-identity, not visual chrome — they don't
 // change between light and dark modes.
@@ -744,25 +744,9 @@ export const traditionalDefaultFor = (formatId) => {
   return (n.front || 0) + (n.back || 0) + (n.overall || 0);
 };
 
-// ── Practice event colors ──
-// 4 shades of green for the practice mode teams. All within the Mash Brothers
-// identity. Avoiding teal (cyan-leaning greens) — every accent here reads as
-// a true green. Differentiated by hue lean (yellow/pure/cool) AND by
-// lightness so the four teams are easy to tell apart at a glance even
-// when shown next to each other in a list.
-//
-// Team 1 = the actual Mash Brothers brand color, deliberately. Anchors the
-// palette and keeps the tournament identity present even in practice events.
-export const PRACTICE_TEAM_COLORS = [
-  { color: "#004d24", accent: "#009144", glow: "rgba(0,145,68,0.2)" },     // brand green (Mash Brothers)
-  { color: "#3a5b08", accent: "#65a30d", glow: "rgba(101,163,13,0.2)" },   // lime / chartreuse (yellow-green)
-  { color: "#054a35", accent: "#15803d", glow: "rgba(21,128,61,0.2)" },    // forest (deep, darker than brand)
-  { color: "#3f4a2a", accent: "#7a9d4e", glow: "rgba(122,157,78,0.2)" },   // sage (muted, lighter, dustier)
-];
-
 // ── Director auth ──
 // Shared secret entered on the login screen to unlock director-only views
-// (Admin, Practice setup). Not real auth; the app is private-link-shared
+// (Admin). Not real auth; the app is private-link-shared
 // among 16 players + the director, and Firebase rules can layer on top
 // later if needed.
 export const DIRECTOR_CODE = "bcdir";

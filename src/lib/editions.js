@@ -128,8 +128,7 @@ export const cloneEdition = async (sourceId, { year, name, id }, options = {}) =
 };
 
 // Every tournament-scoped collection — purged when an edition is deleted.
-// bc_historical (cross-year stats) and the practice sandbox are global and
-// left alone.
+// bc_historical (cross-year stats) is global and left alone.
 const EDITION_DATA_COLS = [
   "bc_players", "bc_courses", "bc_settings", "bc_rounds", "bc_matches",
   "bc_hole_scores", "bc_skins", "bc_ctp", "bc_round_locks",

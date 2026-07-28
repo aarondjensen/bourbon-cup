@@ -3,16 +3,15 @@
 //  moves on by itself.
 // ══════════════════════════════════════════════════════════════════
 //
-// The app has two scoring screens — the tournament's Scoring tab and the
-// practice Mash round — and they ran identical copies of this state machine:
-// the same arming rule, the same 1.8s pause, the same edge-skipping, the same
-// cold-load safety net, down to the wording of the comments. Two copies of
-// timing logic is the kind of duplication that does not stay identical, and
-// this pair had already come apart in one place (see the deferred jump below).
+// This state machine was once copied verbatim into every scoring screen the
+// app had: the same arming rule, the same 1.8s pause, the same edge-skipping,
+// the same cold-load safety net, down to the wording of the comments. Two
+// copies of timing logic is the kind of duplication that does not stay
+// identical, and that pair had already come apart in one place (see the
+// deferred jump below).
 //
-// The screens differ in where a score lives — holeData keyed `pid_round` on
-// one, a flat scoresMap on the other — so that is the whole seam: hand it the
-// match's id, its players, and a way to read one score.
+// A caller's scores can live in any shape it likes — the seam is narrow on
+// purpose: hand it the match's id, its players, and a way to read one score.
 //
 //     const { activeHole, goToHole, editing, toast } =
 //       useHoleAdvance({ matchId: match?.id, pids, getScore });
@@ -38,7 +37,7 @@ export function openingHole(pids, score) {
 
 export function useHoleAdvance({ matchId, pids, getScore }) {
   // Open on the live edge, resolved synchronously from the scores we already
-  // have. Leaving either screen unmounts it, so returning mid-round used to
+  // have. Leaving the screen unmounts it, so returning mid-round used to
   // render hole 1 and jump forward 400ms later — a visible flash on every
   // single return. The deferred effect below still covers the cold-load case,
   // where nothing has arrived yet on the first render.

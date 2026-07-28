@@ -14,7 +14,7 @@
 // with the same warm-brown family, which read as muddy/monochromatic. The
 // revised approach: keep the chrome NEUTRAL (warm-cream paper in light,
 // cool slate in dark) and reserve bourbon amber for the actual accents —
-// active buttons, MASH ROUND header, score-button selection, toast,
+// active buttons, section headers, score-button selection, toast,
 // triangle indicators. Result: amber stops blending into its surroundings
 // and starts reading as the brand signature it's meant to be.
 //
