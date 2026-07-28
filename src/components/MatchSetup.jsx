@@ -415,6 +415,22 @@ export function MatchSetup({
   // One match, as it appears under its tee time. The ⠿ handle carries the
   // drag; the M-number beside it is what the drag changes, since both the
   // number and the time belong to the slot rather than to the match.
+  // A side's players, one per line — the same stack MatchTeamColumn draws on
+  // the leaderboard, and set at the same 13/600. Joined with " / " on one line
+  // instead, a 2-man pairing had to wrap, and it wrapped wherever the width ran
+  // out: "AARON J / PETE" over "C". A name is the unit that breaks, not a
+  // character in it.
+  const nameStack = (names, color, align) => (
+    <div style={{ display: "flex", flexDirection: "column", minWidth: 0, textAlign: align }}>
+      {(names || []).map((nm, i) => (
+        <span key={i} style={{
+          fontSize: 13, fontWeight: 600, lineHeight: 1.3, color,
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        }}>{nm}</span>
+      ))}
+    </div>
+  );
+
   // No "n SCORED" badge here. What is already being played matters at the one
   // moment it can be lost — deleting the match — and deleteMatch says it
   // there, in full, with the hole count and the players named. A badge on
@@ -423,43 +439,51 @@ export function MatchSetup({
     const dragging = drag?.id === m.id;
     const draggable = canDragRow(m);
     return (
+      // The same three-track grid the card's title uses, for the same reason:
+      // matched 1fr flanks put the middle column dead centre on the CARD, so
+      // every row's "vs" stacks on one axis and lands under the tee time above
+      // it. Laid out inline, the "vs" sat wherever the names happened to end
+      // and wandered a few pixels per row all the way down the draw.
       <div key={m.id} style={{
-        display: "flex", alignItems: "center", gap: 8, padding: "4px 0",
-        opacity: drag && !dragging ? 0.5 : 1,
+        display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center",
+        gap: 8, padding: "4px 0", opacity: drag && !dragging ? 0.5 : 1,
       }}>
-        <div
-          onPointerDown={e => startDrag(e, m)}
-          onPointerMove={moveDrag}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
-          // Releasing outside the handle is the normal case, not the odd one —
-          // without this a drag that ends off-target would leave the list
-          // stuck in its dragging state.
-          onLostPointerCapture={endDrag}
-          style={{
-            display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
-            touchAction: "none", cursor: draggable ? (dragging ? "grabbing" : "grab") : "default",
-            // Without this a drag that starts on the number selects it, and
-            // the row ends up with a blue text highlight stuck under it.
-            userSelect: "none", WebkitUserSelect: "none",
-          }}
-        >
-          {draggable && <span aria-hidden style={{ fontSize: 12, lineHeight: 1, color: dragging ? BC.amber : BC.t3 }}>⠿</span>}
-          <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.5, minWidth: 22, color: dragging ? BC.amber : BC.gold }}>
-            M{m.matchNumber ?? "?"}
-          </span>
+        {/* Left track: the handle, then team A. 13/600 is what MatchTeamColumn
+            gives a player name on the leaderboard — same names, same weight of
+            thing to read, so they are set the same size in both places. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <div
+            onPointerDown={e => startDrag(e, m)}
+            onPointerMove={moveDrag}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
+            // Releasing outside the handle is the normal case, not the odd one
+            // — without this a drag that ends off-target would leave the list
+            // stuck in its dragging state.
+            onLostPointerCapture={endDrag}
+            style={{
+              display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
+              touchAction: "none", cursor: draggable ? (dragging ? "grabbing" : "grab") : "default",
+              // Without this a drag that starts on the number selects it, and
+              // the row ends up with a blue text highlight stuck under it.
+              userSelect: "none", WebkitUserSelect: "none",
+            }}
+          >
+            {draggable && <span aria-hidden style={{ fontSize: 12, lineHeight: 1, color: dragging ? BC.amber : BC.t3 }}>⠿</span>}
+            <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.5, minWidth: 22, color: dragging ? BC.amber : BC.gold }}>
+              M{m.matchNumber ?? "?"}
+            </span>
+          </div>
+          {nameStack(m.teamANames, teams.A.accent, "left")}
         </div>
-        {/* 13/600, which is what MatchTeamColumn gives a player name on the
-            leaderboard. Same names, same weight of thing to read, so they are
-            set the same size in both places rather than each screen picking
-            its own. The "vs" stays a size down — it is punctuation between
-            the names, not one of them. */}
-        <div style={{ flex: 1, minWidth: 0, fontSize: 13, lineHeight: 1.3 }}>
-          <span style={{ color: teams.A.accent, fontWeight: 600 }}>{m.teamANames?.join(" / ")}</span>
-          <span style={{ color: BC.t3, fontSize: 11 }}> vs </span>
-          <span style={{ color: teams.B.accent, fontWeight: 600 }}>{m.teamBNames?.join(" / ")}</span>
+        {/* A size down, and grey: punctuation between the names, not one of
+            them. It is also the row's axis, so it never moves. */}
+        <span style={{ fontSize: 11, color: BC.t3 }}>vs</span>
+        {/* Right track, mirrored: team B reading toward the axis, then the ✕. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, justifyContent: "flex-end" }}>
+          {nameStack(m.teamBNames, teams.B.accent, "right")}
+          <button onClick={() => deleteMatch(m)} style={xBtn}>✕</button>
         </div>
-        <button onClick={() => deleteMatch(m)} style={xBtn}>✕</button>
       </div>
     );
   };
