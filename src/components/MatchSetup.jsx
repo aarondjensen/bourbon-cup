@@ -258,8 +258,6 @@ export function MatchSetup({
 
   const startDrag = (e, m) => {
     if (!canDragRow(m)) return;
-    // The ✕ lives in this row. Starting a drag from it would fight the tap.
-    if (e.target?.closest?.("button")) return;
     // Capture keeps the moves coming to the row once the finger slides off it,
     // which it does immediately. It throws for a pointer that is no longer
     // active; the drag still works off the row's own events without it.
@@ -511,11 +509,8 @@ export function MatchSetup({
   // changes, since both the number and the time belong to the slot rather than
   // to the match.
   //
-  // The WHOLE row is the handle, not just the ⠿. A finger at the first tee is
-  // about 9mm wide and the glyph was 12px of it; the row is the thing being
-  // moved, so the row is what you grab. The ⠿ stays as the affordance that
-  // says so, and the ✕ inside is excluded in startDrag so tapping it still
-  // deletes rather than starting a drag nobody asked for.
+  // The drag lives on the GRIP, not the whole row — see the note on it below
+  // for why that is load-bearing rather than cosmetic.
   //
   // No "n SCORED" badge here. What is already being played matters at the one
   // moment it can be lost — deleting the match — and deleteMatch says it
@@ -536,19 +531,9 @@ export function MatchSetup({
       <div
         key={m.id}
         ref={el => { rowRefs.current[m.id] = el; }}
-        onPointerDown={e => startDrag(e, m)}
-        onPointerMove={moveDrag}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-        // Releasing outside the row is the normal case, not the odd one —
-        // without this a drag that ends off-target would leave the list stuck
-        // in its dragging state.
-        onLostPointerCapture={endDrag}
         style={{
           display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center",
           gap: 8, padding: "4px 6px", margin: "0 -6px", borderRadius: 8,
-          touchAction: draggable ? "none" : "auto",
-          cursor: draggable ? (dragging ? "grabbing" : "grab") : "default",
           // Without this a drag that starts on a name selects it, and the row
           // ends up with a blue text highlight stuck under it.
           userSelect: "none", WebkitUserSelect: "none",
@@ -572,9 +557,36 @@ export function MatchSetup({
           boxShadow: dragging ? `0 4px 14px #0009` : "none",
         }}
       >
-        {/* Left track: the grip, then team A. */}
+        {/* Left track: the grip, then team A.
+
+            The grip is the ONLY thing carrying `touch-action: none`, and that
+            is not a style choice — it is the whole reason the tab scrolls. A
+            finger that lands on a `touch-action: none` box cannot pan the page
+            underneath it, so when the whole row was the handle, a swipe
+            anywhere over the draw did nothing, and a swipe that travelled far
+            enough re-timed a match instead. The grip is padded out to a real
+            touch target (44px, Apple's minimum) so it stays easy to hit while
+            every other pixel of the row is left to the scroller.
+
+            The ⠿ and the M-number sit inside it together: the number is what
+            the drag changes, so it belongs to the thing you drag. */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
+          <div
+            onPointerDown={e => startDrag(e, m)}
+            onPointerMove={moveDrag}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
+            // Releasing outside the grip is the normal case, not the odd one —
+            // without this a drag that ends off-target would leave the list
+            // stuck in its dragging state.
+            onLostPointerCapture={endDrag}
+            style={{
+              display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
+              minHeight: 44, minWidth: 44, padding: "0 6px", margin: "-8px 0 -8px -6px",
+              touchAction: draggable ? "none" : "auto",
+              cursor: draggable ? (dragging ? "grabbing" : "grab") : "default",
+            }}
+          >
             {draggable && <span aria-hidden style={{ fontSize: FS.small, lineHeight: 1, color: dragging ? BC.amber : BC.t3 }}>⠿</span>}
             <span style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 0.5, minWidth: 22, color: dragging ? BC.amber : BC.gold }}>
               M{m.matchNumber ?? "?"}
@@ -625,9 +637,19 @@ export function MatchSetup({
       <div style={{
         ...cardStyle, padding: "9px 12px", marginBottom: 10,
         fontSize: FS.small, fontWeight: 700, color: BC.t1,
-        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        // The dot on the card's centre line, the same axis the tee times and
+        // every "vs" below it sit on. Course reads into it from the left,
+        // format out of it to the right — matched 1fr flanks are what pin the
+        // separator rather than letting it drift with the course's length.
+        display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "baseline", gap: 6,
       }}>
-        {course?.name || "Course TBD"} · {fmt?.label || "Format TBD"}
+        <span style={{ textAlign: "right", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {course?.name || "Course TBD"}
+        </span>
+        <span style={{ color: BC.t3 }}>·</span>
+        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {fmt?.label || "Format TBD"}
+        </span>
       </div>
 
       {/* A final round's draw is part of its result. Say so where the draw is
