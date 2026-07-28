@@ -152,6 +152,54 @@ export function Toast({ message, type = "success", top = 30 }) {
   );
 }
 
+// ── HoleNavigator ──
+// The banner over every scoring screen: ‹ prev, then Par / HOLE n / HCP, then
+// next ›. Both scoring screens carried a verbatim copy of it — thirty-one
+// lines, identical down to the 0.75 opacity on the three little captions.
+export function HoleNavigator({ hole, par, hcp, onGo }) {
+  const arrow = (dir) => {
+    const at = dir < 0 ? hole === 0 : hole === 17;
+    return (
+      <button
+        onClick={() => onGo(Math.max(0, Math.min(17, hole + dir)))}
+        disabled={at}
+        style={{
+          width: 28, height: 36, borderRadius: 8, background: "none", border: "none",
+          cursor: at ? "default" : "pointer",
+          color: at ? `${ON_ACCENT}${ALPHA.line}` : ON_ACCENT,
+          fontSize: FS.title, fontWeight: 700,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}
+      >{dir < 0 ? "\u2039" : "\u203a"}</button>
+    );
+  };
+  const cap = { fontSize: FS.micro, color: ON_ACCENT, fontWeight: 600, opacity: 0.75 };
+  const val = { fontSize: FS.lead, fontWeight: 800, color: ON_ACCENT };
+  return (
+    <div style={{
+      background: BC.amberDim, borderRadius: 10, padding: "4px 8px", marginBottom: 6,
+      display: "flex", alignItems: "center",
+    }}>
+      {arrow(-1)}
+      <div style={{ flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 8px" }}>
+        <div style={{ textAlign: "center", minWidth: 32 }}>
+          <div style={cap}>Par</div>
+          <div style={val}>{par}</div>
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ ...cap, textTransform: "uppercase", letterSpacing: 1 }}>Hole</div>
+          <div style={{ fontSize: FS.hero, fontWeight: 800, color: ON_ACCENT, lineHeight: 1 }}>{hole + 1}</div>
+        </div>
+        <div style={{ textAlign: "center", minWidth: 32 }}>
+          <div style={cap}>HCP</div>
+          <div style={val}>{hcp}</div>
+        </div>
+      </div>
+      {arrow(1)}
+    </div>
+  );
+}
+
 // ── ScoreButtonRow ──
 // The tappable score-entry row used on every scoring screen. Ported from
 // MNQ's PlayerScoreCard so the two apps present score entry identically —

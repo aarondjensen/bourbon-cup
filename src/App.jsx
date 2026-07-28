@@ -38,7 +38,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { AppHeader } from "./components/AppHeader";
 import { Popup, ConfirmModal } from "./components/Popup";
 import { CtpPrompt } from "./components/CtpPrompt";
-import { SegmentedToggle, StickyTop, Banner, Toast, ScoreButtonRow } from "./components/ui";
+import { SegmentedToggle, StickyTop, Banner, Toast, HoleNavigator, ScoreButtonRow } from "./components/ui";
 import { useConfirm } from "./lib/useConfirm";
 import { useStableCallback } from "./lib/useStableCallback";
 import { EditionSwitcher } from "./components/EditionSwitcher";
@@ -52,6 +52,7 @@ import {
   stripAMPM,
 } from "./lib/groups";
 import { holesEntered } from "./lib/scoreGuard";
+import { useHoleAdvance } from "./lib/useHoleAdvance";
 
 // ── Bottom-nav safe-area cushion ──────────────────────────────────
 // Full iOS home-indicator inset (34pt on devices that have one) plus 8pt,
@@ -425,30 +426,6 @@ function FinalizeRoundCard({ round, nextRound, lastFinal, progress, tPlayers, on
   );
 }
 
-// The hole a scoring view should OPEN on for a given match — the live edge,
-// i.e. the first hole not everyone has scored yet. Returns 0 (hole 1) when
-// nothing has been scored, when the round is finished, or when there is no
-// match, which is the right place to open in all three cases.
-//
-// `score(pid, hole)` is supplied by the caller because the two scoring views
-// key their score data differently (`pid_round` -> {hole} vs `pid_hole`).
-//
-// This is deliberately a plain function rather than an effect: both views are
-// unmounted when the user leaves their tab and remount with the hole reset, so
-// the opening hole has to be resolved during the FIRST render. Computing it in
-// a deferred effect is what made the screen show hole 1 and then flash forward.
-function openingHole(pids, score) {
-  if (pids.length === 0) return 0;
-  const hasAny = pids.some(pid => {
-    for (let h = 0; h < 18; h++) if (score(pid, h) > 0) return true;
-    return false;
-  });
-  if (!hasAny) return 0;
-  for (let h = 0; h < 18; h++) {
-    if (!pids.every(pid => score(pid, h) > 0)) return h;
-  }
-  return 0; // every hole complete — nothing to fast-forward to
-}
 
 // ── Score Entry ──
 // ── Score Entry — Mash-style ──
@@ -476,48 +453,13 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
 
   // ── Hooks (always fire, in stable order) ──
   const [activeMatchId, setActiveMatchId] = useState(null);
-  // Open on the live edge, resolved synchronously from the holeData we
-  // already have. Leaving the Scoring tab unmounts this view, so returning
-  // mid-round used to render hole 1 and jump forward 400ms later — a visible
-  // flash on every single return. The deferred effect below still covers the
-  // cold-load case, where holeData hasn't arrived yet on the first render.
-  const [activeHole, setActiveHole] = useState(() => {
-    const m = myMatches[0];
-    if (!m) return 0;
-    return openingHole([...m.teamA, ...m.teamB],
-      (pid, h) => (holeData[`${pid}_${m.round}`] || {})[h] || 0);
-  });
-  const [editing, setEditing] = useState(false);
   const [showScorecard, setShowScorecard] = useState(false);
-  const [toast, setToast] = useState(null);
-  // Which match id the opening hole has already been resolved for. Seeded with
-  // the match we positioned above so the effects below stay idle when there is
-  // nothing left to do; a different id — the round gate swapping the match, or
-  // matches that only load after mount — re-arms them.
-  const positionedFor = useRef(activeHole > 0 ? myMatches[0]?.id : null);
-  // Auto-advance arming, keyed `matchId:hole`. A hole is armed only once we
-  // have seen it INCOMPLETE while mounted — see the auto-advance effect.
-  const advanceArmed = useRef({});
   // Closest-to-the-pin prompt — the 0-based index of the par 3 it is asking
   // about, or null. `promptedCtp` is the session guard that keeps it to ONE
   // automatic appearance per round+hole (see maybePromptCtp); tapping the
   // par-3 CTP chip re-opens it deliberately and ignores the guard.
   const [ctpPrompt, setCtpPrompt] = useState(null);
   const promptedCtp = useRef({});
-
-  // Put the screen on a match's live edge in a SINGLE render — shared by the
-  // match selector and the match-change effect below, so neither of them ever
-  // paints the outgoing hole before correcting it.
-  const positionOn = (m) => {
-    const edge = m ? openingHole([...m.teamA, ...m.teamB],
-      (pid, h) => (holeData[`${pid}_${m.round}`] || {})[h] || 0) : 0;
-    // Only claim the match as positioned when there was real data to position
-    // FROM. Landing on hole 1 because nothing has loaded yet is not an answer,
-    // and must leave the deferred jump below armed.
-    positionedFor.current = edge > 0 ? m.id : null;
-    setActiveHole(edge);
-    setEditing(false);
-  };
 
   // Resolved, not stored — the selection is re-derived from the matches the
   // gate currently allows. When a round is finalized under a player's feet,
@@ -538,114 +480,38 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   const roundTee = tr?.tee_box;
   const holePars = resolveHolePars(course, lock);
   const holeHcps = resolveHoleHcps(course, lock);
-  const par = holePars[activeHole];
-  const hcp = holeHcps[activeHole];
 
-  const matchPids = match ? [...match.teamA, ...match.teamB] : [];
-
+  // The seam useHoleAdvance is built around. This screen keeps scores in
+  // holeData under `pid_round`; the practice screen keeps a flat map. Both
+  // shapes reduce to "give me one player's gross on one hole", which is the
+  // only thing the hole machinery ever needed to know about either.
   const result = useMemo(
     () => match ? computeMatchResult(match, holeData, courses, tRounds, tPlayers, format, hcpOverrides, undefined, teeAssignments, roundLocks) : null,
     [match, holeData, courses, tRounds, tPlayers, format, hcpOverrides, teeAssignments, roundLocks]
   );
 
-  // Read a player's gross score for the active hole. holeData is keyed
-  // \\`pid_round\\` and inner-keyed by hole index.
-  const getScore = (pid, h = activeHole) => {
-    if (!match) return 0;
-    return (holeData[`${pid}_${match.round}`] || {})[h] || 0;
-  };
+  // scoresAt takes the ROUND, not the match: the reader it returns is handed
+  // to useHoleAdvance and kept in a ref there, and a closure over the whole
+  // match object is enough for React Compiler to give up memoizing this
+  // component. A round number cannot be mutated behind its back.
+  const pidsOf = (m) => (m ? [...m.teamA, ...m.teamB] : []);
+  const scoresAt = (rnd) => (pid, h) => (rnd == null ? 0 : (holeData[`${pid}_${rnd}`] || {})[h] || 0);
+  const matchPids = pidsOf(match);
+  const getScore = scoresAt(match?.round ?? null);
+
+  // Which hole is showing, when it moves on by itself, and the toast during
+  // the wait. Shared with the practice scoring screen — see lib/useHoleAdvance.
+  const { activeHole, goToHole, toast, positionOn } =
+    useHoleAdvance({ matchId: match?.id ?? null, pids: matchPids, getScore });
+
+  const par = holePars[activeHole];
+  const hcp = holeHcps[activeHole];
 
   // Per-player stroke maps for this match come straight from the result the
   // leaderboard is computed with (computeMatchResult now exposes them), so the
   // dots on the scoring screen and the strokes in the leaderboard math can
   // never diverge — one allocation, one source.
   const strokeMaps = result?.strokeMaps || {};
-
-  // ── Auto-advance state derivations ──
-  const holeComplete = matchPids.length > 0 && matchPids.every(pid => getScore(pid, activeHole) > 0);
-  const allComplete = matchPids.length > 0 && matchPids.every(pid => {
-    for (let h = 0; h < 18; h++) if (!(getScore(pid, h) > 0)) return false;
-    return true;
-  });
-  const curHoleScoreSig = matchPids.map(pid => getScore(pid, activeHole)).join(",");
-  // Whether this match has ANY score yet. Gates arming below: on a cold load
-  // holeData is empty for the first few frames, and a hole that only looks
-  // incomplete because nothing has loaded must not arm the auto-advance —
-  // otherwise the arriving snapshot "completes" hole 1 and fires the toast.
-  const anyScores = matchPids.some(pid => {
-    for (let h = 0; h < 18; h++) if (getScore(pid, h) > 0) return true;
-    return false;
-  });
-
-  // Auto-advance — when all 4 players have scored the active hole, after
-  // 1.8s show toast and jump to next unscored hole. Clean-up cancels on
-  // edit/navigation. Same pattern as Mash PracticeScoringTab.
-  //
-  // The arming gate exists because this view is unmounted when the user
-  // leaves the Scoring tab and remounts with activeHole back at 0. Come back
-  // mid-round and hole 1 has long since been completed, so without the gate
-  // the effect fired on the first render and flashed "Hole 1 saved —
-  // advancing..." every single time. Arming a hole only after we have seen it
-  // incomplete means the toast marks a hole we actually watched get finished,
-  // never one that was already full when we arrived.
-  useEffect(() => {
-    if (!match) return;
-    const armKey = `${match.id}:${activeHole}`;
-    // Arm before the suppression checks — a hole the user is mid-edit on
-    // still needs to arm so finishing it advances as usual.
-    if (!holeComplete) { if (anyScores) advanceArmed.current[armKey] = true; return; }
-    if (activeHole >= 17 || editing || allComplete) return;
-    if (!advanceArmed.current[armKey]) return;
-    setToast(`✓ Hole ${activeHole + 1} saved — advancing...`);
-    const timer = setTimeout(() => {
-      setToast(null);
-      let next = activeHole + 1;
-      while (next < 17 && matchPids.every(pid => getScore(pid, next) > 0)) next++;
-      setActiveHole(next);
-      setEditing(false);
-    }, 1800);
-    return () => { clearTimeout(timer); setToast(null); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [holeComplete, activeHole, editing, allComplete, anyScores, curHoleScoreSig, match?.id]);
-
-  // Safety net — clear toast after 3s in case the cleanup misses an edge case.
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 3000);
-    return () => clearTimeout(t);
-  }, [toast]);
-
-  // Reposition when the match changes out from under the player: finalizing
-  // a round swaps this screen to the next round's match, and a held hole 14
-  // would otherwise carry over onto a card that hasn't teed off. Lands on the
-  // new match's live edge, which for a freshly-opened round is hole 1.
-  //
-  // The `positionedFor` guard makes this skip the mount pass, where the hole
-  // was already resolved synchronously above — running it on mount would put
-  // the screen back on hole 1 and reintroduce the flash it exists to avoid.
-  useEffect(() => {
-    if (positionedFor.current === (match?.id ?? null)) return;
-    positionOn(match);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [match?.id]);
-
-  // Deferred opening-hole jump — the cold-load safety net. When the app is
-  // opened straight onto the Scoring tab, holeData is still empty during the
-  // first render, so the synchronous positioning above has nothing to work
-  // with; this waits for Firestore's cached snapshot to land and then jumps.
-  // On a tab return (holeData already present) `positionedFor` is pre-seeded
-  // and this does nothing at all, which is what keeps the screen still.
-  useEffect(() => {
-    if (!match || positionedFor.current === match.id) return;
-    const t = setTimeout(() => {
-      if (positionedFor.current === match.id) return;
-      positionedFor.current = match.id;
-      const edge = openingHole(matchPids, getScore);
-      if (edge > 0) setActiveHole(edge);
-    }, 400);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [match?.id, holeData]);
 
   // Whole-round progress, for the director's Finalize card. Computed over
   // every match in the round, not the reader's own.
@@ -702,15 +568,6 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
 
   if (!course) return empty("⛳", `Round ${match.round} course not configured yet`);
 
-  // Live edge — first hole where not everyone has scored. Used to detect
-  // "editing past hole" navigation so auto-advance stays suppressed
-  // while the user fixes a missed score.
-  let liveEdge = 17;
-  for (let h = 0; h < 18; h++) {
-    if (!matchPids.every(pid => getScore(pid, h) > 0)) { liveEdge = h; break; }
-  }
-  const goToHole = (h) => { setActiveHole(h); setEditing(h < liveEdge); };
-
   const { A: tA, B: tB } = teams;
 
   // ── Closest-to-the-pin ───────────────────────────────────────────────
@@ -752,7 +609,9 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     setCtpPrompt(null);
     await onSetCtp(match.round, h, winnerPid, { distanceFt: feet, approved: false, taggedBy: userPid });
     const nm = tPlayers.find(p => p.player_id === winnerPid)?.name || "";
-    setToast(`🎯 CTP tagged — hole ${h + 1} · ${nm} ${feet} ft`);
+    // Through notify(), not the hole-advance toast: tagging a CTP is ordinary
+    // app feedback, not part of the "this hole is done" sequence.
+    notify(`🎯 CTP tagged — hole ${h + 1} · ${nm} ${feet} ft`);
   };
 
   // ScoreButtonRow hands back the new gross directly (0 = cleared, which it
@@ -884,7 +743,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           onChange={(id) => {
             const m = myMatches.find(x => x.id === id);
             setActiveMatchId(id);
-            if (m) positionOn(m);
+            if (m) positionOn(id, pidsOf(m), scoresAt(m.round));
           }}
         />
       )}
@@ -916,39 +775,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
         Full Scorecard
       </button>
 
-      {/* Hole nav banner — deep Mash green with white text, mirroring the
-          Mash design system's "established/chrome" surface. */}
-      <div style={{
-        background: BC.amberDim, borderRadius: 10, padding: "4px 8px", marginBottom: 6,
-        display: "flex", alignItems: "center",
-      }}>
-        <button onClick={() => goToHole(Math.max(0, activeHole - 1))} disabled={activeHole === 0} style={{
-          width: 28, height: 36, borderRadius: 8, background: "none", border: "none",
-          cursor: activeHole === 0 ? "default" : "pointer",
-          color: activeHole === 0 ? `${ON_ACCENT}${ALPHA.line}` : ON_ACCENT, fontSize: FS.title, fontWeight: 700,
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>‹</button>
-        <div style={{ flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 8px" }}>
-          <div style={{ textAlign: "center", minWidth: 32 }}>
-            <div style={{ fontSize: FS.micro, color: ON_ACCENT, fontWeight: 600, opacity: 0.75 }}>Par</div>
-            <div style={{ fontSize: FS.lead, fontWeight: 800, color: ON_ACCENT }}>{par}</div>
-          </div>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: FS.micro, color: ON_ACCENT, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, opacity: 0.75 }}>Hole</div>
-            <div style={{ fontSize: FS.hero, fontWeight: 800, color: ON_ACCENT, lineHeight: 1 }}>{activeHole + 1}</div>
-          </div>
-          <div style={{ textAlign: "center", minWidth: 32 }}>
-            <div style={{ fontSize: FS.micro, color: ON_ACCENT, fontWeight: 600, opacity: 0.75 }}>HCP</div>
-            <div style={{ fontSize: FS.lead, fontWeight: 800, color: ON_ACCENT }}>{hcp}</div>
-          </div>
-        </div>
-        <button onClick={() => goToHole(Math.min(17, activeHole + 1))} disabled={activeHole === 17} style={{
-          width: 28, height: 36, borderRadius: 8, background: "none", border: "none",
-          cursor: activeHole === 17 ? "default" : "pointer",
-          color: activeHole === 17 ? `${ON_ACCENT}${ALPHA.line}` : ON_ACCENT, fontSize: FS.title, fontWeight: 700,
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>›</button>
-      </div>
+      <HoleNavigator hole={activeHole} par={par} hcp={hcp} onGo={goToHole} />
 
       {/* Format / round badge — small sticker between banner and player cards.
           Tells the user what scoring format their entries are being judged
@@ -3909,36 +3736,14 @@ function PracticeScoringTab({
     activeMatch.team2.player1, activeMatch.team2.player2,
   ].filter(Boolean) : [];
 
-  // Hooks first — must fire unconditionally on every render. Even when
-  // event/course aren't loaded yet, we still call them so React's hook
-  // counter stays consistent across renders.
-  // Open on the live edge, resolved synchronously from the scoresMap we
-  // already have — a user joining mid-round shouldn't have to flip through
-  // holes 1..N to reach the action, and switching sub-tabs unmounts this
-  // view, so doing it in a deferred effect meant rendering hole 1 and then
-  // flashing forward on every return. The deferred effect below still covers
-  // the cold-load case, where scoresMap is empty on the first render.
-  const [activeHole, setActiveHole] = useState(
-    () => openingHole(matchPids, (pid, h) => scoresMap[`${pid}_${h}`] || 0)
-  );
+  // Hooks first — must fire unconditionally on every render, so they come
+  // before the early returns below even when event/course aren't loaded yet.
+  const getScore = (pid, h) => scoresMap[`${pid}_${h}`] || 0;
+  // Which hole is showing, when it moves on by itself, and the toast during
+  // the wait. Shared with the tournament Scoring tab — see lib/useHoleAdvance.
+  const { activeHole, goToHole, toast } =
+    useHoleAdvance({ matchId: activeMatch?.id ?? null, pids: matchPids, getScore });
   const [showScorecard, setShowScorecard] = useState(false);
-  // `editing` = true when the user has navigated BACK to a previously-
-  // completed hole to fix a score. While editing, auto-advance is
-  // suppressed so a corrective tap doesn't jump the screen away. Reset
-  // to false whenever they reach the live edge (first unscored hole).
-  const [editing, setEditing] = useState(false);
-  // Which match id the opening-hole jump has already been resolved for.
-  // Seeded with the match we positioned above so the deferred effect stays
-  // idle when it has nothing left to do; a null seed re-arms it.
-  const positionedFor = useRef(activeHole > 0 ? activeMatch?.id : null);
-  // Auto-advance arming, keyed `matchId:hole`. A hole is armed only once we
-  // have seen it INCOMPLETE while mounted — see the auto-advance effect.
-  const advanceArmed = useRef({});
-  // Auto-advance toast — surfaced as a fixed-position banner during the
-  // 1.8s pause between "all scores in for this hole" and the screen
-  // jump. Without this, the wait feels like dead time and the eventual
-  // jump feels abrupt. Mirrors MNQ's `setToast(...)` UX.
-  const [toast, setToast] = useState(null);
 
   const holePars = resolveHolePars(course);
   const holeHcps = resolveHoleHcps(course);
@@ -3954,116 +3759,6 @@ function PracticeScoringTab({
   const strokeMaps = useMemo(() => {
     return getStrokeMapsForMatch(activeMatch);
   }, [activeMatch, event, course]);
-
-  // ── Auto-advance derivations ────────────────────────────────────────────
-  // Whether every player in the match has a score on the active hole.
-  // When this flips true (after the 4th player's score is entered), we
-  // start a timer to jump to the next unscored hole.
-  const holeComplete = matchPids.length > 0 && matchPids.every(pid => (scoresMap[`${pid}_${activeHole}`] || 0) > 0);
-  // Whether every player has scores on every hole — if so, the round is
-  // done and we shouldn't auto-advance off the last hole.
-  const allComplete = matchPids.length > 0 && matchPids.every(pid => {
-    for (let h = 0; h < 18; h++) {
-      if (!(scoresMap[`${pid}_${h}`] > 0)) return false;
-    }
-    return true;
-  });
-  // Signature of the current hole's scores — flips whenever ANY score on
-  // this hole changes, even if the hole stays "complete" through the edit
-  // (e.g. correcting a 5 to a 4). Used as a useEffect dep so editing
-  // within the 1.8s auto-advance window restarts the timer rather than
-  // letting it lock in at the moment of first completion.
-  const curHoleScoreSig = matchPids.map(pid => scoresMap[`${pid}_${activeHole}`] || 0).join(",");
-  // Whether this match has ANY score yet. Gates arming below: on a cold load
-  // scoresMap is empty for the first few frames, and a hole that only looks
-  // incomplete because nothing has loaded must not arm the auto-advance —
-  // otherwise the arriving snapshot "completes" hole 1 and fires the toast.
-  const anyScores = matchPids.some(pid => {
-    for (let h = 0; h < 18; h++) if ((scoresMap[`${pid}_${h}`] || 0) > 0) return true;
-    return false;
-  });
-
-  // Auto-advance effect — fires the timer when the active hole becomes
-  // fully scored. Surfaces a toast during the 1.8s wait so the screen
-  // jump feels intentional, not abrupt. Cleanup clears the pending
-  // timer AND the toast if the hole changes, the user starts editing,
-  // or scores are edited again before the timer fires. Always called
-  // (even when match is missing) to keep hook ordering consistent.
-  //
-  // The arming gate exists because this tab is unmounted when the user
-  // switches sub-tabs and remounts with activeHole back at 0. Return to
-  // scoring mid-round and hole 1 has long since been completed, so without
-  // the gate the effect fired on the first render and flashed "Hole 1 saved —
-  // advancing..." every single time. Arming a hole only after we have seen it
-  // incomplete means the toast marks a hole we actually watched get finished,
-  // never one that was already full when we arrived.
-  useEffect(() => {
-    if (!activeMatch) return;
-    const armKey = `${activeMatch.id}:${activeHole}`;
-    // Arm before the suppression checks — a hole the user is mid-edit on
-    // still needs to arm so finishing it advances as usual.
-    if (!holeComplete) { if (anyScores) advanceArmed.current[armKey] = true; return; }
-    if (activeHole >= 17 || editing || allComplete) return;
-    if (!advanceArmed.current[armKey]) return;
-    // Fire the toast immediately so users see "saving — advancing..."
-    // throughout the wait, not just after the jump.
-    setToast(`✓ Hole ${activeHole + 1} saved — advancing...`);
-    const timer = setTimeout(() => {
-      setToast(null);
-      // Skip past any holes that are already fully scored (e.g. user
-      // back-filled a missing hole and the live edge has now leapfrogged
-      // forward). Land on the first hole that still needs entry.
-      let next = activeHole + 1;
-      while (next < 17 && matchPids.every(pid => (scoresMap[`${pid}_${next}`] || 0) > 0)) next++;
-      setActiveHole(next);
-      setEditing(false);
-    }, 1800);
-    return () => {
-      clearTimeout(timer);
-      // If the effect re-runs because the user edited a score within the
-      // window, the next pass will set the toast again. If the effect
-      // re-runs because the user navigated away from the completed hole,
-      // we want the toast cleared — which this catch-all handles.
-      setToast(null);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [holeComplete, activeHole, editing, allComplete, anyScores, curHoleScoreSig, activeMatch]);
-
-  // Safety net — always clear the toast after 3s even if some edge case
-  // misses cleanup. Mirrors MNQ's safety useEffect.
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 3000);
-    return () => clearTimeout(t);
-  }, [toast]);
-
-  // Deferred opening-hole jump — the cold-load safety net for the case the
-  // synchronous positioning above can't cover: the app opened straight onto
-  // this tab with scoresMap still empty on the first render. Waits for
-  // Firestore's cached snapshot to land, then jumps to the live edge.
-  //
-  // It reads scoresMap through a ref and depends only on activeMatch.id, not
-  // on scoresMap itself. Depending on scoresMap made it re-fire on the user's
-  // FIRST score, and that same-frame jump raced with the auto-advance effect
-  // and pre-empted its 1.8s toast wait. This stays strictly a "joining
-  // mid-round" feature; live scoring belongs to the auto-advance effect.
-  //
-  // On a sub-tab return (scoresMap already present) `positionedFor` is pre-seeded
-  // and this does nothing at all, which is what keeps the screen still.
-  const scoresMapRef = useRef(scoresMap);
-  scoresMapRef.current = scoresMap;
-  useEffect(() => {
-    if (!activeMatch || positionedFor.current === activeMatch.id) return;
-    const t = setTimeout(() => {
-      if (positionedFor.current === activeMatch.id) return;
-      positionedFor.current = activeMatch.id; // lock regardless of outcome
-      const sMap = scoresMapRef.current;
-      const pids = [activeMatch.team1.player1, activeMatch.team1.player2, activeMatch.team2.player1, activeMatch.team2.player2].filter(Boolean);
-      const edge = openingHole(pids, (pid, h) => sMap[`${pid}_${h}`] || 0);
-      if (edge > 0) setActiveHole(edge);
-    }, 400);
-    return () => clearTimeout(t);
-  }, [activeMatch?.id]);
 
   // ── No more hooks below this line — early returns are safe ─────────────
   if (!event || !course) {
@@ -4187,18 +3882,6 @@ function PracticeScoringTab({
   // "Live edge" — first hole where not all players have scored yet. Anything
   // earlier than this is a past hole the user might be editing. Used to
   // suppress auto-advance when the user has navigated back to fix a score.
-  let liveEdge = 17;
-  for (let h = 0; h < 18; h++) {
-    if (!matchPids.every(pid => (scoresMap[`${pid}_${h}`] || 0) > 0)) { liveEdge = h; break; }
-  }
-  // Centralizes the "set hole + flip editing flag" pattern. Direct calls to
-  // setActiveHole alone would leak stale editing state — e.g. user fixes
-  // hole 3, then taps hole 5 (the live edge) but editing stays true and
-  // auto-advance never fires when they finish hole 5.
-  const goToHole = (h) => {
-    setActiveHole(h);
-    setEditing(h < liveEdge);
-  };
 
   // Hole-strip cell — same geometry as the tournament Scoring tab, which
   // takes it from MNQ: 32px tall, completed rendered as a tinted chip with
@@ -4268,51 +3951,7 @@ function PracticeScoringTab({
         Full Scorecard
       </button>
 
-      {/* Hole nav banner — deep Mash green filled bar showing
-          Par / Hole / HCP, with prev/next arrows. Uses BC.amberDim
-          (the deep brand-green) with white text — the SAME treatment
-          as the betting Gross/Net toggle's active state, the
-          completed hole-strip cells above, and any other "this is
-          the firm/established surface" element across the Mash UI.
-          Bright BC.amber stays reserved for "currently active /
-          interactive" surfaces (active sub-tabs, the active hole on
-          the strip, score-button selection, etc.); deep BC.amberDim
-          is for the chrome and reference surfaces.
-          The banner is the most prominent always-visible element on
-          the scoring screen, so this color treatment immediately
-          signals the visual hierarchy of the Mash design system to
-          anyone landing on this view. */}
-      <div style={{
-        background: BC.amberDim, borderRadius: 10, padding: "4px 8px", marginBottom: 6,
-        display: "flex", alignItems: "center",
-      }}>
-        <button onClick={() => goToHole(Math.max(0, activeHole - 1))} disabled={activeHole === 0} style={{
-          width: 28, height: 36, borderRadius: 8, background: "none", border: "none",
-          cursor: activeHole === 0 ? "default" : "pointer",
-          color: activeHole === 0 ? `${ON_ACCENT}${ALPHA.line}` : ON_ACCENT, fontSize: FS.title, fontWeight: 700,
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>‹</button>
-        <div style={{ flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 8px" }}>
-          <div style={{ textAlign: "center", minWidth: 32 }}>
-            <div style={{ fontSize: FS.micro, color: ON_ACCENT, fontWeight: 600, opacity: 0.75 }}>Par</div>
-            <div style={{ fontSize: FS.lead, fontWeight: 800, color: ON_ACCENT }}>{par}</div>
-          </div>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: FS.micro, color: ON_ACCENT, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, opacity: 0.75 }}>Hole</div>
-            <div style={{ fontSize: FS.hero, fontWeight: 800, color: ON_ACCENT, lineHeight: 1 }}>{activeHole + 1}</div>
-          </div>
-          <div style={{ textAlign: "center", minWidth: 32 }}>
-            <div style={{ fontSize: FS.micro, color: ON_ACCENT, fontWeight: 600, opacity: 0.75 }}>HCP</div>
-            <div style={{ fontSize: FS.lead, fontWeight: 800, color: ON_ACCENT }}>{hcp}</div>
-          </div>
-        </div>
-        <button onClick={() => goToHole(Math.min(17, activeHole + 1))} disabled={activeHole === 17} style={{
-          width: 28, height: 36, borderRadius: 8, background: "none", border: "none",
-          cursor: activeHole === 17 ? "default" : "pointer",
-          color: activeHole === 17 ? `${ON_ACCENT}${ALPHA.line}` : ON_ACCENT, fontSize: FS.title, fontWeight: 700,
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>›</button>
-      </div>
+      <HoleNavigator hole={activeHole} par={par} hcp={hcp} onGo={goToHole} />
 
       {/* Player score cards — 4 in match, T1 (rows 0-1) on top, T2 (rows 2-3) below a divider.
           Each card shows: initials badge, name, (CH), stroke dots, "Net: ±X thru N",
