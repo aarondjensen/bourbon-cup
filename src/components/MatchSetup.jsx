@@ -25,7 +25,7 @@
 // it, not the main road.
 
 import { useLayoutEffect, useRef, useState } from "react";
-import { BC, ALPHA, ON_AMBER, FS } from "../theme";
+import { BC, SCRIM, ALPHA, ON_AMBER, FS } from "../theme";
 import { FORMATS } from "../constants";
 import { TOURNAMENT_ID, editionDocId } from "../firebase";
 import { getRoundCH, getRoundHandicapMode, lockForRound } from "../scoring";
@@ -560,7 +560,7 @@ export function MatchSetup({
           // fight the keyframes and drag the slide out to its own duration.
           transition: "opacity 120ms ease, box-shadow 120ms ease, background 400ms ease",
           background: dragging ? BC.inp : justSwapped ? `${BC.amber}${ALPHA.tint}` : "transparent",
-          boxShadow: dragging ? `0 4px 14px #0009` : "none",
+          boxShadow: dragging ? `0 4px 14px ${SCRIM}` : "none",
         }}
       >
         {/* Left track: the grip, then team A.

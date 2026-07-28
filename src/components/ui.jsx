@@ -9,7 +9,7 @@
 //    • Toast           — the transient "slides down from the top" toast.
 //    • ScoreButtonRow  — the tappable par-relative score entry row.
 
-import { BC, ON_AMBER, FS } from "../theme";
+import { BC, ON_ACCENT, SHADOW, ON_AMBER, FS } from "../theme";
 
 const FONT = "'Montserrat', sans-serif";
 
@@ -22,7 +22,7 @@ export function SegmentedToggle({ options, value, onChange, variant = "gradient"
   const activeBg = variant === "flat"
     ? BC.amber
     : `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`;
-  const activeFg = variant === "flat" ? "#fff" : ON_AMBER;
+  const activeFg = variant === "flat" ? ON_ACCENT : ON_AMBER;
   return (
     <div style={{ display: "flex", background: BC.card, borderRadius: 20, padding: 3, border: `1px solid ${BC.bdr}`, ...style }}>
       {options.map(([k, label]) => {
@@ -82,7 +82,7 @@ export function StickyTop({ children, padTop = 0, padBottom = 12, style }) {
 
 // ── Banner ──
 // The amber section-header strip (e.g. TEAMS / ROUND 2 / SKINS).
-export function Banner({ children, background = BC.amber, color = "#fff" }) {
+export function Banner({ children, background = BC.amber, color = ON_ACCENT }) {
   return (
     <div style={{ padding: "8px 14px", background, textAlign: "center" }}>
       <div style={{ fontSize: FS.small, color, fontWeight: 800, letterSpacing: 2 }}>{children}</div>
@@ -104,7 +104,7 @@ export function Toast({ message, top = 30 }) {
         padding: "12px 32px", borderRadius: 12,
         fontSize: FS.body, fontWeight: 700, zIndex: 1000,
         whiteSpace: "nowrap", textAlign: "center",
-        boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+        boxShadow: `0 8px 32px ${SHADOW}`,
         animation: "bcToastDown 0.3s ease",
         fontFamily: FONT,
       }}>

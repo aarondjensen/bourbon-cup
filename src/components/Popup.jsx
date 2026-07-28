@@ -55,10 +55,10 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { BC, FS } from "../theme";
+import { BC, ON_ACCENT, SHADOW, SCRIM, FS } from "../theme";
 
 const Z_MAP = { content: 500, modal: 900 };
-const STD_BACKDROP = "rgba(0, 0, 0, 0.65)";
+const STD_BACKDROP = SCRIM;
 
 // The visible rectangle above the on-screen keyboard. iOS does NOT shrink CSS
 // viewport units (svh/dvh/vh) for the keyboard, so a full-viewport overlay can
@@ -169,7 +169,7 @@ export function Popup({
           overflowY: viewportFit ? "hidden" : "auto",
           overscrollBehavior: "contain",
           position: "relative",
-          boxShadow: "0 12px 40px rgba(0, 0, 0, 0.4)",
+          boxShadow: `0 12px 40px ${SHADOW}`,
           ...innerStyle,
         }}
       >
@@ -254,7 +254,7 @@ function ConfirmModalInner({ m }) {
 
   const isDanger = m.destructive === true || m.variant === "danger";
   const confirmBg = isDanger ? BC.danger : BC.amber;
-  const confirmFg = isDanger ? "#fff" : BC.bg;
+  const confirmFg = isDanger ? ON_ACCENT : BC.bg;
   const handleCancel = m.onCancel || (() => {});
 
   return (

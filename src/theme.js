@@ -192,6 +192,17 @@ export const applyBCTheme = (mode, brand = null) => {
 // ink, that surface is not amber and this is the wrong token.
 export const ON_AMBER = "#0a0804";
 
+// ── Ink on everything else saturated ──
+// ON_AMBER's sibling, and the one that never got a name: white, for ink that
+// sits on a fill too dark or too saturated to take the near-black — the
+// team-coloured hole navigator, an active tab, a skin-winning cell, the
+// danger button. It was "#fff" at two dozen call sites.
+//
+// Neither of these flips with the mode, and for the same reason: the surface
+// under them doesn't either. Which of the two you want is decided by the FILL,
+// never by the theme.
+export const ON_ACCENT = "#ffffff";
+
 // ── Type scale ──
 // The app is styled entirely with inline objects, so before this existed
 // every `fontSize:` was a hand-picked number. That produced seventeen
@@ -261,6 +272,15 @@ export const ALPHA = {
   panel: "88", // 53% — a translucent surface that still reads as a surface
   held:  "99", // 60% — ink pulled back on purpose (see `ink` below)
 };
+
+// ── Black, for the two things black is for ──
+// Drop shadows and modal backdrops were nine different rgba(0,0,0,…) values
+// for ten uses — including 0.4 and 0.3 each spelled two ways, and one "#0009".
+// They are black at an alpha, which is what the ladder above is for, so they
+// use it: SHADOW under anything that floats, SCRIM behind anything modal.
+// Neither is a theme colour — a shadow is the absence of light in both modes.
+export const SHADOW = `#000000${ALPHA.line}`;  // 33%
+export const SCRIM  = `#000000${ALPHA.held}`;  // 60%
 
 // ── Settled vs in-play ink ──
 // A result that's still moving is drawn lighter than one that's banked, so

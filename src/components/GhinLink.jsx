@@ -36,7 +36,7 @@
 //  ghin_rev_date, ghin_synced_at. db.upsert merges → unlink writes nulls.
 
 import { useState, useEffect, useRef } from "react";
-import { BC, ALPHA, ON_AMBER, FS } from "../theme";
+import { BC, SCRIM, ALPHA, ON_AMBER, FS } from "../theme";
 import { Popup } from "./Popup";
 import { searchGhinGolfers, syncGhinNumbers, parseGhinHI, fmtHI } from "../lib/ghin";
 
@@ -188,7 +188,7 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
       outerPadding={12}
       innerStyle={{
         background: BC.card, borderRadius: 16,
-        boxShadow: "0 20px 60px rgba(0,0,0,0.7)", overflow: "hidden",
+        boxShadow: `0 20px 60px ${SCRIM}`, overflow: "hidden",
         display: "flex", flexDirection: "column", fontFamily: FONT,
       }}
     >

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { BC, ALPHA, ON_AMBER, FS, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor } from "./theme";
+import { BC, ON_ACCENT, dimHex, SHADOW, SCRIM, ALPHA, ON_AMBER, FS, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor } from "./theme";
 import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession } from "./firebase";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
@@ -59,90 +59,6 @@ import { holesEntered } from "./lib/scoreGuard";
 // left the bar mis-seated on real devices. Restoring the fixed bar (pinned
 // to the viewport bottom) with the full inset is the known-good layout.
 const NAV_SAFE_PAD = "calc(env(safe-area-inset-bottom, 0px) + 8px)";
-
-// ── TEMPORARY viewport diagnostic ─────────────────────────────────
-// Delete VP_DEBUG, BUILD_TAG, the ViewportDebug component, navRef and the
-// <ViewportDebug /> mount once the bottom-nav question is closed out.
-//
-// BUILD_TAG is the important one: it prints on screen, so a screenshot
-// proves which bundle the device is actually running. An installed iOS
-// home-screen app will happily serve a cached index.html for a long time,
-// and there is no way to tell that apart from a CSS bug by looking at the
-// layout alone — which is exactly the ambiguity that cost us a round trip.
-const VP_DEBUG = false;
-const BUILD_TAG = "navfix-4";
-
-function ViewportDebug({ navRef }) {
-  const [info, setInfo] = useState(null);
-  useEffect(() => {
-    const read = () => {
-      // Probe element: the only way to read env(safe-area-inset-*) from JS
-      // is to apply it to something and ask for the computed value back.
-      const probe = document.createElement("div");
-      probe.style.cssText =
-        "position:fixed;visibility:hidden;pointer-events:none;top:0;left:0;" +
-        "padding-top:env(safe-area-inset-top,0px);" +
-        "padding-bottom:env(safe-area-inset-bottom,0px);";
-      document.body.appendChild(probe);
-      const cs = getComputedStyle(probe);
-      const safeT = cs.paddingTop, safeB = cs.paddingBottom;
-      probe.remove();
-
-      const vv = window.visualViewport;
-      const navBottom = navRef?.current
-        ? Math.round(navRef.current.getBoundingClientRect().bottom)
-        : null;
-      const modes = [];
-      if (window.navigator.standalone) modes.push("nav.standalone");
-      if (window.matchMedia("(display-mode: standalone)").matches) modes.push("dm.standalone");
-
-      setInfo({
-        build: BUILD_TAG,
-        screen: `${window.screen.width}x${window.screen.height}`,
-        inner: `${window.innerWidth}x${window.innerHeight}`,
-        clientH: document.documentElement.clientHeight,
-        vv: vv ? `${Math.round(vv.width)}x${Math.round(vv.height)} @${Math.round(vv.offsetTop)}` : "none",
-        safe: `${safeT} / ${safeB}`,
-        navBottom,
-        mode: modes.join(" ") || "browser",
-      });
-    };
-    read();
-    // Re-read once the browser has settled (toolbar animations, orientation).
-    const t = setTimeout(read, 500);
-    window.addEventListener("resize", read);
-    window.addEventListener("orientationchange", read);
-    return () => {
-      clearTimeout(t);
-      window.removeEventListener("resize", read);
-      window.removeEventListener("orientationchange", read);
-    };
-  }, [navRef]);
-
-  if (!info) return null;
-  const rows = [
-    ["build", info.build],
-    ["screen", info.screen],
-    ["innerW x H", info.inner],
-    ["docEl.clientH", info.clientH],
-    ["visualViewport", info.vv],
-    ["safe top / bot", info.safe],
-    ["NAV rect.bottom", info.navBottom],
-    ["mode", info.mode],
-  ];
-  return (
-    <div style={{
-      position: "fixed", top: "calc(env(safe-area-inset-top, 0px) + 4px)", left: 6,
-      zIndex: 100000, background: "rgba(0,0,0,0.88)", border: "1px solid #e0a93c",
-      borderRadius: 6, padding: "6px 8px", pointerEvents: "none",
-      font: "600 10px/1.4 ui-monospace, Menlo, monospace", color: "#e0a93c",
-    }}>
-      {rows.map(([k, v]) => (
-        <div key={k}>{k}: <span style={{ color: "#f5f4f2" }}>{String(v)}</span></div>
-      ))}
-    </div>
-  );
-}
 
 // First+last initials from a player's full name. "Aaron Jensen" → "AJ".
 // Single-name fallback grabs the first two letters (e.g. "Joe" → "JO") so a
@@ -222,13 +138,19 @@ const ScoreCell = ({ score, par, strokes, size = FS.body, colorOverride }) => {
 
 
 // ── Notification Toast ──
+// Deliberately dark in both modes: it floats over whatever screen you were
+// on, so it cannot borrow that screen's surface without sometimes vanishing
+// into it. It used to spell that out with three colours of its own — a red,
+// a green and a cream. It is the round's accent dimmed instead, so the pair
+// tracks BC.danger / BC.green rather than drifting from them.
 function Notif({ notif }) {
   if (!notif) return null;
+  const accent = notif.type === "error" ? BC.danger : BC.green;
   return (
     <div style={{ position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)", zIndex: 9999,
-      background: notif.type === "error" ? "#7f1d1d" : "#1a2d1a", border: `1px solid ${notif.type === "error" ? "#ef4444" : "#22c55e"}`,
-      borderRadius: 10, padding: "10px 18px", fontSize: FS.body, fontWeight: 600, color: "#f0e8d8",
-      boxShadow: "0 4px 24px rgba(0,0,0,0.6)", maxWidth: "80vw", textAlign: "center" }}>
+      background: dimHex(accent, 0.42), border: `1px solid ${accent}`,
+      borderRadius: 10, padding: "10px 18px", fontSize: FS.body, fontWeight: 600, color: ON_ACCENT,
+      boxShadow: `0 4px 24px ${SCRIM}`, maxWidth: "80vw", textAlign: "center" }}>
       {notif.msg}
     </div>
   );
@@ -976,7 +898,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
                 flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: FS.small, fontWeight: 700, cursor: "pointer",
                 background: active ? BC.amberDim : BC.card,
                 border: `1px solid ${active ? BC.amberDim : BC.bdr}`,
-                color: active ? "#fff" : BC.t2,
+                color: active ? ON_ACCENT : BC.t2,
                 // The cup's number for the match, not its position in this
                 // player's own list — two players in the same match have to
                 // be looking at the same name for it.
@@ -1022,27 +944,27 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
         <button onClick={() => goToHole(Math.max(0, activeHole - 1))} disabled={activeHole === 0} style={{
           width: 28, height: 36, borderRadius: 8, background: "none", border: "none",
           cursor: activeHole === 0 ? "default" : "pointer",
-          color: activeHole === 0 ? "rgba(255,255,255,0.35)" : "#fff", fontSize: FS.title, fontWeight: 700,
+          color: activeHole === 0 ? `${ON_ACCENT}${ALPHA.line}` : ON_ACCENT, fontSize: FS.title, fontWeight: 700,
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>‹</button>
         <div style={{ flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 8px" }}>
           <div style={{ textAlign: "center", minWidth: 32 }}>
-            <div style={{ fontSize: FS.micro, color: "#fff", fontWeight: 600, opacity: 0.75 }}>Par</div>
-            <div style={{ fontSize: FS.lead, fontWeight: 800, color: "#fff" }}>{par}</div>
+            <div style={{ fontSize: FS.micro, color: ON_ACCENT, fontWeight: 600, opacity: 0.75 }}>Par</div>
+            <div style={{ fontSize: FS.lead, fontWeight: 800, color: ON_ACCENT }}>{par}</div>
           </div>
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: FS.micro, color: "#fff", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, opacity: 0.75 }}>Hole</div>
-            <div style={{ fontSize: FS.hero, fontWeight: 800, color: "#fff", lineHeight: 1 }}>{activeHole + 1}</div>
+            <div style={{ fontSize: FS.micro, color: ON_ACCENT, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, opacity: 0.75 }}>Hole</div>
+            <div style={{ fontSize: FS.hero, fontWeight: 800, color: ON_ACCENT, lineHeight: 1 }}>{activeHole + 1}</div>
           </div>
           <div style={{ textAlign: "center", minWidth: 32 }}>
-            <div style={{ fontSize: FS.micro, color: "#fff", fontWeight: 600, opacity: 0.75 }}>HCP</div>
-            <div style={{ fontSize: FS.lead, fontWeight: 800, color: "#fff" }}>{hcp}</div>
+            <div style={{ fontSize: FS.micro, color: ON_ACCENT, fontWeight: 600, opacity: 0.75 }}>HCP</div>
+            <div style={{ fontSize: FS.lead, fontWeight: 800, color: ON_ACCENT }}>{hcp}</div>
           </div>
         </div>
         <button onClick={() => goToHole(Math.min(17, activeHole + 1))} disabled={activeHole === 17} style={{
           width: 28, height: 36, borderRadius: 8, background: "none", border: "none",
           cursor: activeHole === 17 ? "default" : "pointer",
-          color: activeHole === 17 ? "rgba(255,255,255,0.35)" : "#fff", fontSize: FS.title, fontWeight: 700,
+          color: activeHole === 17 ? `${ON_ACCENT}${ALPHA.line}` : ON_ACCENT, fontSize: FS.title, fontWeight: 700,
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>›</button>
       </div>
@@ -1341,7 +1263,7 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
                 flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: FS.small, fontWeight: 700, cursor: "pointer",
                 background: active ? BC.amberDim : BC.card,
                 border: `1px solid ${active ? BC.amberDim : BC.bdr}`,
-                color: active ? "#fff" : BC.t2,
+                color: active ? ON_ACCENT : BC.t2,
               }}>Rd {r}</button>
             );
           })}
@@ -1600,7 +1522,7 @@ function ChDeltaBadge({ delta }) {
     <span style={{
       display: "inline-flex", alignItems: "center", gap: 1,
       fontSize: FS.label, fontWeight: 800,
-      color: up ? "#22c55e" : "#ef4444",
+      color: up ? BC.green : BC.danger,
       animation: "fadeIn 0.2s ease",
     }}>
       {up ? "▲" : "▼"}{Math.abs(delta)}
@@ -3398,7 +3320,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     <div>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         <span style={{ fontWeight: 600, fontSize: FS.body }}>{c.name}</span>
-                        {c._incompleteData && <span style={{ fontSize: FS.micro, background: "#ef444420", border: "1px solid #ef444440", color: "#ef4444", borderRadius: 4, padding: "1px 5px", fontWeight: 700 }}>⚠ incomplete</span>}
+                        {c._incompleteData && <span style={{ fontSize: FS.micro, background: `${BC.danger}${ALPHA.tint}`, border: `1px solid ${BC.danger}${ALPHA.hair}`, color: BC.danger, borderRadius: 4, padding: "1px 5px", fontWeight: 700 }}>⚠ incomplete</span>}
                         {c._source && <span style={{ fontSize: FS.micro, background: `${BC.amber}${ALPHA.wash}`, border: `1px solid ${BC.amber}${ALPHA.hair}`, color: BC.amber, borderRadius: 4, padding: "1px 5px", fontWeight: 600 }}>{c._source}</span>}
                       </div>
                       <div style={{ fontSize: FS.label, color: BC.t3 }}>{[c.city, c.state].filter(Boolean).join(", ")}{c.par ? ` · Par ${c.par}` : ""}{c.slope && c.slope !== 113 ? ` · Slope ${c.slope}` : ""}</div>
@@ -3469,7 +3391,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       <button onClick={() => setCoursePreview(null)} style={{ background: "transparent", border: "none", color: BC.t3, fontSize: FS.title, cursor: "pointer", lineHeight: 1 }}>✕</button>
                     </div>
                     {draft._incompleteData && (
-                      <div style={{ marginTop: 8, padding: "7px 10px", background: "#ef444410", border: "1px solid #ef444440", borderRadius: 8, fontSize: FS.label, color: "#ef4444" }}>
+                      <div style={{ marginTop: 8, padding: "7px 10px", background: `${BC.danger}${ALPHA.wash}`, border: `1px solid ${BC.danger}${ALPHA.hair}`, borderRadius: 8, fontSize: FS.label, color: BC.danger }}>
                         ⚠ Incomplete data — slope, rating, or tee boxes may be missing. Edit manually below.
                       </div>
                     )}
@@ -3949,7 +3871,7 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
                     <div style={{ width: 6, height: 6, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
                     <span style={{ fontSize: FS.small, fontWeight: 600, color: playerNameColor() }}>{p.name}</span>
                   </div>
-                  <div style={{ textAlign: "center", fontSize: FS.small, color: "#22c55e", fontWeight: 600 }}>{p.wins}</div>
+                  <div style={{ textAlign: "center", fontSize: FS.small, color: BC.green, fontWeight: 600 }}>{p.wins}</div>
                   <div style={{ textAlign: "center", fontSize: FS.small, color: BC.danger, fontWeight: 600 }}>{p.losses}</div>
                   <div style={{ textAlign: "center", fontSize: FS.small, color: BC.t3 }}>{p.halves}</div>
                   <div style={{ textAlign: "right", fontSize: FS.small, fontWeight: 700, color: BC.amber }}>{p.pts.toFixed(1)}</div>
@@ -4406,27 +4328,27 @@ function PracticeScoringTab({
         <button onClick={() => goToHole(Math.max(0, activeHole - 1))} disabled={activeHole === 0} style={{
           width: 28, height: 36, borderRadius: 8, background: "none", border: "none",
           cursor: activeHole === 0 ? "default" : "pointer",
-          color: activeHole === 0 ? "rgba(255,255,255,0.35)" : "#fff", fontSize: FS.title, fontWeight: 700,
+          color: activeHole === 0 ? `${ON_ACCENT}${ALPHA.line}` : ON_ACCENT, fontSize: FS.title, fontWeight: 700,
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>‹</button>
         <div style={{ flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 8px" }}>
           <div style={{ textAlign: "center", minWidth: 32 }}>
-            <div style={{ fontSize: FS.micro, color: "#fff", fontWeight: 600, opacity: 0.75 }}>Par</div>
-            <div style={{ fontSize: FS.lead, fontWeight: 800, color: "#fff" }}>{par}</div>
+            <div style={{ fontSize: FS.micro, color: ON_ACCENT, fontWeight: 600, opacity: 0.75 }}>Par</div>
+            <div style={{ fontSize: FS.lead, fontWeight: 800, color: ON_ACCENT }}>{par}</div>
           </div>
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: FS.micro, color: "#fff", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, opacity: 0.75 }}>Hole</div>
-            <div style={{ fontSize: FS.hero, fontWeight: 800, color: "#fff", lineHeight: 1 }}>{activeHole + 1}</div>
+            <div style={{ fontSize: FS.micro, color: ON_ACCENT, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, opacity: 0.75 }}>Hole</div>
+            <div style={{ fontSize: FS.hero, fontWeight: 800, color: ON_ACCENT, lineHeight: 1 }}>{activeHole + 1}</div>
           </div>
           <div style={{ textAlign: "center", minWidth: 32 }}>
-            <div style={{ fontSize: FS.micro, color: "#fff", fontWeight: 600, opacity: 0.75 }}>HCP</div>
-            <div style={{ fontSize: FS.lead, fontWeight: 800, color: "#fff" }}>{hcp}</div>
+            <div style={{ fontSize: FS.micro, color: ON_ACCENT, fontWeight: 600, opacity: 0.75 }}>HCP</div>
+            <div style={{ fontSize: FS.lead, fontWeight: 800, color: ON_ACCENT }}>{hcp}</div>
           </div>
         </div>
         <button onClick={() => goToHole(Math.min(17, activeHole + 1))} disabled={activeHole === 17} style={{
           width: 28, height: 36, borderRadius: 8, background: "none", border: "none",
           cursor: activeHole === 17 ? "default" : "pointer",
-          color: activeHole === 17 ? "rgba(255,255,255,0.35)" : "#fff", fontSize: FS.title, fontWeight: 700,
+          color: activeHole === 17 ? `${ON_ACCENT}${ALPHA.line}` : ON_ACCENT, fontSize: FS.title, fontWeight: 700,
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>›</button>
       </div>
@@ -4789,7 +4711,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
             const st = t1Statuses[h];
             const colBdr = i < 8 ? { borderRight: gridLine } : {};
             if (t1ClinchHole !== null && h === t1ClinchHole) {
-              const color = st > 0 ? "#22c55e" : st < 0 ? BC.danger : BC.t3;
+              const color = st > 0 ? BC.green : st < 0 ? BC.danger : BC.t3;
               return (
                 <div key={i} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", height: 28, ...colBdr }}>
                   <div style={{ border: `1.5px solid ${color}`, borderRadius: 4, padding: "0 4px", lineHeight: "20px" }}>
@@ -4804,7 +4726,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
             if (st === null) {
               return <div key={i} style={{ flex: 1, height: 28, ...colBdr }} />;
             }
-            const color = st > 0 ? "#22c55e" : st < 0 ? BC.danger : BC.t3;
+            const color = st > 0 ? BC.green : st < 0 ? BC.danger : BC.t3;
             return (
               <div key={i} style={{ flex: 1, textAlign: "center", fontSize: FS.small, fontWeight: 800, color, lineHeight: "28px", ...colBdr }}>
                 {st > 0 ? <><span style={{ fontSize: FS.small }}>▲</span>{st}</> : st < 0 ? <><span style={{ fontSize: FS.small }}>▼</span>{Math.abs(st)}</> : <span style={{ fontSize: FS.micro, fontWeight: 700, letterSpacing: 0.5 }}>TIED</span>}
@@ -5315,8 +5237,8 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
             <svg width={11} height={14} viewBox="0 0 11 14" style={{ display: "block" }}>
               <polygon
                 points={direction === "left" ? "1,7 10,1.5 10,12.5" : "10,7 1,1.5 1,12.5"}
-                fill={isFinal ? "#22c55e" : "transparent"}
-                stroke="#22c55e"
+                fill={isFinal ? BC.green : "transparent"}
+                stroke={BC.green}
                 strokeWidth={1.5}
                 strokeLinejoin="round"
               />
@@ -5579,7 +5501,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
               <button key={k} onClick={() => setSkinsMode(k)} style={{
                 padding: "5px 10px", borderRadius: 8, fontSize: FS.label, fontWeight: 700, cursor: "pointer",
                 background: skinsMode === k ? BC.amberDim : "transparent",
-                color: skinsMode === k ? "#fff" : BC.t3, border: "none",
+                color: skinsMode === k ? ON_ACCENT : BC.t3, border: "none",
                 letterSpacing: 0.4,
               }}>{label}</button>
             ))}
@@ -5644,14 +5566,14 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                         const netScore = score ? score - strokes : null;
                         const skinWin = skins[skinsMode]?.[h] === p.player_id;
                         const cellBG = skinWin ? BC.amber : "transparent";
-                        const cellColor = skinWin ? "#fff" : score ? BC.t1 : BC.t3;
+                        const cellColor = skinWin ? ON_ACCENT : score ? BC.t1 : BC.t3;
                         const cellBorder = skinWin ? "1px solid transparent" : `1px solid ${BC.bdr}${ALPHA.hair}`;
                         // Stroke-dot color follows the cell-state contrast:
                         // standard blue on neutral cells (matches the
                         // scorecard treatment used in ScoreCell elsewhere),
                         // white on green skin-winning cells so dots stay
                         // visible against the saturated fill.
-                        const dotColor = skinWin ? "#fff" : BC.hcpBlue;
+                        const dotColor = skinWin ? ON_ACCENT : BC.hcpBlue;
                         // Mode-specific layout — but cell DIMENSIONS are
                         // identical between modes. Both modes reserve
                         // the same minHeight and the same 8px dot row;
@@ -5803,8 +5725,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
           tournament banner for this view. Reads from BC.amber (the
           primary brand accent, currently Mash green per the active
           palette) so it tunes automatically between light and dark
-          modes — full brand green #009144 on white in light, brightened
-          #16a34a for visibility on the dark green-tinted bg. */}
+          modes, without either side of that naming a hex here. */}
       <div style={{ marginBottom: 12, padding: "10px 14px", background: BC.card, borderRadius: 10, border: `1px solid ${BC.amber}${ALPHA.hair}`, textAlign: "center" }}>
         <div style={{ fontSize: FS.body, fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>MASH ROUND</div>
         <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 2 }}>
@@ -5904,7 +5825,7 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, 
           background: BC.card,
           borderRadius: 12,
           border: `1px solid ${BC.bdr}`,
-          boxShadow: "0 -4px 24px rgba(0,0,0,0.4)",
+          boxShadow: `0 -4px 24px ${SHADOW}`,
           zIndex: 201,
           overflow: "hidden",
         }}>
@@ -5958,7 +5879,7 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, 
                 width: 16, height: 16, borderRadius: "50%",
                 background: darkMode ? ON_AMBER : BC.card,
                 transition: "left 0.2s ease",
-                boxShadow: "0 1px 2px rgba(0,0,0,0.3)",
+                boxShadow: `0 1px 2px ${SHADOW}`,
               }} />
             </span>
           </button>
@@ -6028,7 +5949,7 @@ const isPaleTee = (hex) => {
 // fails pull opposite ways: a white or silver tee dissolves into light mode,
 // a black one into dark. So the ring runs against the fill's own luminance.
 // `active` overrides both with the theme's brightest ink — which is why it is
-// BC.t1 and not "#fff": on the light card a white ring is no ring.
+// BC.t1 and not ON_ACCENT: on the light card a white ring is no ring.
 const teeRing = (color, active) =>
   active ? BC.t1 : isPaleTee(color) ? `#000000${ALPHA.hair}` : `#ffffff${ALPHA.line}`;
 // `round` is the tee PICKER's affordance (a ball you tap); square is the
@@ -6155,9 +6076,8 @@ export default function App() {
   // menuOpen changes.
   const popupOpenRef = useRef(false);
 
-  // The bottom nav. Measured by ViewportDebug (temporary, remove with the
-  // debug block) and — permanently — by the effect below, which feeds the
-  // scroll area's bottom clearance.
+  // The bottom nav, measured by the effect below, which feeds the scroll
+  // area's bottom clearance.
   const navRef = useRef(null);
 
   // ── Bottom clearance for the fixed nav ───────────────────────────
@@ -6736,7 +6656,6 @@ export default function App() {
     <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: 0, width: "100%", background: BC.bg, display: "flex", flexDirection: "column", fontFamily: "'Montserrat', sans-serif", overflow: "hidden", boxSizing: "border-box", paddingTop: "env(safe-area-inset-top, 0px)", paddingLeft: "env(safe-area-inset-left, 0px)", paddingRight: "env(safe-area-inset-right, 0px)" }}>
       <div style={{ maxWidth: 520, width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", flex: 1, minHeight: 0, position: "relative", padding: "0 4px" }}>
       <Notif notif={notif} />
-      {VP_DEBUG && <ViewportDebug navRef={navRef} />}
 
       {/* Pull-to-refresh indicator — circular badge with the trophy
           silhouette inside, fixed-positioned and overlaid above the
@@ -6763,7 +6682,7 @@ export default function App() {
             width: 44, height: 44, borderRadius: "50%", background: BC.card,
             border: `2.5px solid ${pullY >= PULL_THRESHOLD ? BC.amber : BC.bdr}`,
             display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: pullY >= PULL_THRESHOLD ? `0 0 12px ${BC.amber}${ALPHA.line}` : "0 2px 12px rgba(0,0,0,.3)",
+            boxShadow: pullY >= PULL_THRESHOLD ? `0 0 12px ${BC.amber}${ALPHA.line}` : `0 2px 12px ${SHADOW}`,
             transition: "border-color .2s, box-shadow .3s", overflow: "hidden",
             animation: refreshing ? "bcPullGlow 1s ease-in-out infinite" : "none",
           }}>
