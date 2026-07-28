@@ -55,7 +55,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { BC } from "../theme";
+import { BC, FS } from "../theme";
 
 const Z_MAP = { content: 500, modal: 900 };
 const STD_BACKDROP = "rgba(0, 0, 0, 0.65)";
@@ -187,7 +187,7 @@ export function Popup({
               background: "transparent",
               border: "none",
               color: BC.t3,
-              fontSize: 17,
+              fontSize: FS.lead,
               fontWeight: 600,
               cursor: "pointer",
               display: "flex",
@@ -266,18 +266,18 @@ function ConfirmModalInner({ m }) {
     <Popup onClose={handleCancel} maxWidth={340} zIndex="modal" padding={20} portal>
       {m.eyebrow && (
         <div style={{
-          fontSize: 11, fontWeight: 700, color: BC.amber,
+          fontSize: FS.small, fontWeight: 700, color: BC.amber,
           letterSpacing: 1.5, textTransform: "uppercase",
           marginBottom: 10,
         }}>{m.eyebrow}</div>
       )}
       <div style={{
-        fontSize: 14, fontWeight: 700, color: BC.t1,
+        fontSize: FS.body, fontWeight: 700, color: BC.t1,
         marginBottom: m.message ? 6 : 16,
       }}>{m.title}</div>
       {m.message && (
         <div style={{
-          fontSize: 13, color: BC.t2, lineHeight: 1.5,
+          fontSize: FS.body, color: BC.t2, lineHeight: 1.5,
           marginBottom: 16, whiteSpace: "pre-line",
         }}>{m.message}</div>
       )}
@@ -290,7 +290,7 @@ function ConfirmModalInner({ m }) {
             style={{
               flex: 1, padding: 12, borderRadius: 10,
               background: BC.inp, border: `1px solid ${BC.bdr}`,
-              color: BC.t2, fontSize: 14, fontWeight: 700,
+              color: BC.t2, fontSize: FS.body, fontWeight: 700,
               cursor: "pointer",
             }}
           >
@@ -302,7 +302,7 @@ function ConfirmModalInner({ m }) {
           style={{
             flex: 1, padding: 12, borderRadius: 10,
             background: confirmBg, border: "none",
-            color: confirmFg, fontSize: 14, fontWeight: 700,
+            color: confirmFg, fontSize: FS.body, fontWeight: 700,
             cursor: "pointer",
           }}
         >

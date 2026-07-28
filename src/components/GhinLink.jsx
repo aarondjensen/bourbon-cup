@@ -26,8 +26,9 @@
 //     keys, and its results list scrolls entirely within view.
 //  3. DEFERRED FOCUS. We focus the field ~150ms after the popup mounts (not
 //     autoFocus), so the portal has laid out before the keyboard animates
-//     in — avoiding the jump where iOS scrolls the field out of view. 16px
-//     font stops iOS zoom-on-focus.
+//     in — avoiding the jump where iOS scrolls the field out of view. The
+//     field is set at FS.lead (16px), which is what stops iOS
+//     zoom-on-focus — do not drop it a rung to save height.
 //
 //  Permission: canEdit = director OR the signed-in player editing their own
 //  row. Firestore rules enforce the real boundary.
@@ -35,7 +36,7 @@
 //  ghin_rev_date, ghin_synced_at. db.upsert merges → unlink writes nulls.
 
 import { useState, useEffect, useRef } from "react";
-import { BC } from "../theme";
+import { BC, FS } from "../theme";
 import { Popup } from "./Popup";
 import { searchGhinGolfers, syncGhinNumbers, parseGhinHI, fmtHI } from "../lib/ghin";
 
@@ -45,15 +46,15 @@ const US_STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","
 
 const primaryBtn = (color) => ({
   width: "100%", boxSizing: "border-box", padding: "14px 14px", borderRadius: 12,
-  border: "none", background: color, color: "#0a0804", fontSize: 15, fontWeight: 800,
+  border: "none", background: color, color: "#0a0804", fontSize: FS.lead, fontWeight: 800,
   cursor: "pointer", fontFamily: FONT,
 });
 const ghostBtn = {
   width: "100%", boxSizing: "border-box", padding: "13px 14px", borderRadius: 12,
   border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t2,
-  fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
+  fontSize: FS.body, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
 };
-const muted = { fontSize: 13, color: BC.t3, padding: "16px 4px", lineHeight: 1.5, textAlign: "center" };
+const muted = { fontSize: FS.body, color: BC.t3, padding: "16px 4px", lineHeight: 1.5, textAlign: "center" };
 
 // ── GHIN wordmark badge ─────────────────────────────────────────────
 // A small text badge in the GHIN/handicap blue. Deliberately NOT the USGA
@@ -63,8 +64,8 @@ const muted = { fontSize: 13, color: BC.t3, padding: "16px 4px", lineHeight: 1.5
 // mark GHIN-sourced values. `size`: "xs" (headers) | "sm" (default).
 export function GhinBadge({ size = "sm", title = "Handicap Index sourced from GHIN" }) {
   const s = size === "xs"
-    ? { fontSize: 7, padding: "1px 3px", radius: 3, letter: 0.3 }
-    : { fontSize: 9, padding: "2px 6px", radius: 4, letter: 0.5 };
+    ? { fontSize: FS.micro, padding: "1px 3px", radius: 3, letter: 0.3 }
+    : { fontSize: FS.label, padding: "2px 6px", radius: 4, letter: 0.5 };
   return (
     <span title={title} style={{
       display: "inline-flex", alignItems: "center", boxSizing: "border-box",
@@ -197,13 +198,13 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
           padding: "13px 14px", borderBottom: `1px solid ${BC.bdr}`,
         }}>
           <div style={{
-            flex: 1, minWidth: 0, fontSize: 14, fontWeight: 800, color: BC.t1,
+            flex: 1, minWidth: 0, fontSize: FS.body, fontWeight: 800, color: BC.t1,
             whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
           }}>{title}</div>
           <button onClick={close} aria-label="Close" style={{
             flexShrink: 0, width: 32, height: 32, borderRadius: 9, cursor: "pointer",
             border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t2,
-            fontSize: 16, lineHeight: 1,
+            fontSize: FS.lead, lineHeight: 1,
           }}>✕</button>
         </div>
 
@@ -211,14 +212,14 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
         {mode === "view" && linked && (
           <div style={{ overflowY: "auto", overscrollBehavior: "contain", padding: 16 }}>
             <div style={{ background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 14, padding: 14, marginBottom: 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: BLUE, letterSpacing: 0.5 }}>GHIN #{player.ghin_number}</div>
-              {player.ghin_name && <div style={{ fontSize: 15, fontWeight: 700, color: BC.t1, marginTop: 4 }}>{player.ghin_name}</div>}
-              <div style={{ fontSize: 13, color: BC.t2, marginTop: 8 }}>
+              <div style={{ fontSize: FS.small, fontWeight: 700, color: BLUE, letterSpacing: 0.5 }}>GHIN #{player.ghin_number}</div>
+              {player.ghin_name && <div style={{ fontSize: FS.lead, fontWeight: 700, color: BC.t1, marginTop: 4 }}>{player.ghin_name}</div>}
+              <div style={{ fontSize: FS.body, color: BC.t2, marginTop: 8 }}>
                 Handicap Index <b style={{ color: BC.t1 }}>{fmtHI(player.handicap_index)}</b>
                 {player.ghin_rev_date ? `  ·  revised ${player.ghin_rev_date}` : ""}
               </div>
               {player.ghin_synced_at && (
-                <div style={{ fontSize: 11, color: BC.t3, marginTop: 4 }}>
+                <div style={{ fontSize: FS.small, color: BC.t3, marginTop: 4 }}>
                   Last synced {new Date(player.ghin_synced_at).toLocaleDateString()}
                 </div>
               )}
@@ -242,7 +243,7 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
           <>
             {/* Pinned search field */}
             <div style={{ flexShrink: 0, padding: 14, borderBottom: `1px solid ${BC.bdr}` }}>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: BC.t3, letterSpacing: 1, marginBottom: 6 }}>
+              <label style={{ display: "block", fontSize: FS.small, fontWeight: 700, color: BC.t3, letterSpacing: 1, marginBottom: 6 }}>
                 GOLFER NAME OR GHIN #
               </label>
               <input
@@ -257,7 +258,7 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
                 style={{
                   width: "100%", boxSizing: "border-box", padding: "14px 14px",
                   background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 12,
-                  color: BC.t1, fontSize: 16, fontWeight: 600, outline: "none", fontFamily: FONT,
+                  color: BC.t1, fontSize: FS.lead, fontWeight: 600, outline: "none", fontFamily: FONT,
                 }}
               />
               {/* Optional state filter — narrows a name search (a bare name
@@ -266,7 +267,7 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
                 <select value={state} onChange={e => setState(e.target.value)} aria-label="State filter"
                   style={{ flexShrink: 0, width: 108, boxSizing: "border-box", padding: "0 10px",
                     background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 12,
-                    color: BC.t1, fontSize: 16, fontWeight: 600, outline: "none", fontFamily: FONT, cursor: "pointer" }}>
+                    color: BC.t1, fontSize: FS.lead, fontWeight: 600, outline: "none", fontFamily: FONT, cursor: "pointer" }}>
                   <option value="">All states</option>
                   {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
@@ -301,16 +302,16 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
                     }}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      <div style={{ fontSize: FS.lead, fontWeight: 700, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {g.name || "Unknown golfer"}
                       </div>
-                      <div style={{ fontSize: 12, color: BC.t3, marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      <div style={{ fontSize: FS.small, color: BC.t3, marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         #{g.ghin_number}{g.club_name ? ` · ${g.club_name}` : ""}{g.state ? ` · ${g.state}` : ""}
                       </div>
                     </div>
                     <div style={{ flexShrink: 0, textAlign: "right" }}>
-                      <div style={{ fontSize: 17, fontWeight: 800, color: BLUE }}>{fmtHI(parseGhinHI(g.handicap_index))}</div>
-                      <div style={{ fontSize: 8, fontWeight: 700, color: BC.t3, letterSpacing: 1 }}>INDEX</div>
+                      <div style={{ fontSize: FS.lead, fontWeight: 800, color: BLUE }}>{fmtHI(parseGhinHI(g.handicap_index))}</div>
+                      <div style={{ fontSize: FS.micro, fontWeight: 700, color: BC.t3, letterSpacing: 1 }}>INDEX</div>
                     </div>
                   </button>
                 );
@@ -320,7 +321,7 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
             {/* Pinned confirm bar */}
             {pending && (
               <div style={{ flexShrink: 0, padding: 14, borderTop: `1px solid ${BC.green}66`, background: BC.inp }}>
-                <div style={{ fontSize: 13, color: BC.t2, lineHeight: 1.45 }}>
+                <div style={{ fontSize: FS.body, color: BC.t2, lineHeight: 1.45 }}>
                   Link <b style={{ color: BC.t1 }}>{player.name}</b> to <b style={{ color: BC.t1 }}>{pending.name || `GHIN ${pending.ghin_number}`}</b>
                   {pending.club_name ? ` (${pending.club_name})` : ""}.
                   <br />Handicap Index {fmtHI(player.handicap_index)} → <b style={{ color: BC.t1 }}>{fmtHI(parseGhinHI(pending.handicap_index))}</b>
@@ -344,7 +345,7 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
         style={{
           flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 3,
           boxSizing: "border-box", padding: "3px 7px", borderRadius: 5, cursor: "pointer",
-          fontSize: 9, fontWeight: 800, letterSpacing: 0.2, fontFamily: FONT,
+          fontSize: FS.label, fontWeight: 800, letterSpacing: 0.2, fontFamily: FONT,
           border: `1px solid ${(linked ? BC.green : BLUE)}66`,
           background: (linked ? BC.green : BLUE) + "1f",
           color: linked ? BC.green : BLUE, whiteSpace: "nowrap",
@@ -413,7 +414,7 @@ export function GhinSyncButton({ players, onUpdatePlayer, notify, confirm, compa
           width: 24, height: 24, padding: 0, borderRadius: 6, lineHeight: 1,
           cursor: linked.length ? "pointer" : "default",
           border: `1px solid ${BC.green}66`, background: BC.green + "18",
-          fontSize: 12, flexShrink: 0, opacity: linked.length ? 1 : 0.4, fontFamily: FONT,
+          fontSize: FS.small, flexShrink: 0, opacity: linked.length ? 1 : 0.4, fontFamily: FONT,
         }}
       >
         {busy ? "⏳" : "🔄"}
@@ -430,7 +431,7 @@ export function GhinSyncButton({ players, onUpdatePlayer, notify, confirm, compa
         boxSizing: "border-box", maxWidth: "100%", padding: "8px 12px", borderRadius: 10,
         cursor: linked.length ? "pointer" : "default", whiteSpace: "nowrap",
         border: `1px solid ${BC.green}66`, background: BC.green + "18", color: BC.green,
-        fontSize: 12, fontWeight: 700, flexShrink: 0, opacity: linked.length ? 1 : 0.5,
+        fontSize: FS.small, fontWeight: 700, flexShrink: 0, opacity: linked.length ? 1 : 0.5,
         fontFamily: FONT,
       }}
     >

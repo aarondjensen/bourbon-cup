@@ -25,7 +25,7 @@
 // it, not the main road.
 
 import { useRef, useState } from "react";
-import { BC } from "../theme";
+import { BC, FS } from "../theme";
 import { FORMATS } from "../constants";
 import { TOURNAMENT_ID, editionDocId } from "../firebase";
 import { getRoundCH, getRoundHandicapMode, lockForRound } from "../scoring";
@@ -46,9 +46,9 @@ const ROUNDS = [1, 2, 3, 4];
 const FONT = "'Montserrat', sans-serif";
 
 const cardStyle = { background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}` };
-const sectionLabel = { fontSize: 10, color: BC.gold, fontWeight: 700, letterSpacing: 1, marginBottom: 8 };
+const sectionLabel = { fontSize: FS.label, color: BC.gold, fontWeight: 700, letterSpacing: 1, marginBottom: 8 };
 const miniBtn = {
-  padding: "5px 10px", borderRadius: 8, fontSize: 10, fontWeight: 700, cursor: "pointer",
+  padding: "5px 10px", borderRadius: 8, fontSize: FS.label, fontWeight: 700, cursor: "pointer",
   background: "transparent", border: `1px solid ${BC.amber}66`, color: BC.amber, fontFamily: FONT,
 };
 // Times are stored bare ("8:30") but older documents may carry a suffix;
@@ -56,7 +56,7 @@ const miniBtn = {
 const stripAMPM = (s) => (s ? String(s).replace(/\s*(AM|PM)/gi, "").trim() : s);
 
 const xBtn = {
-  fontSize: 9, padding: "3px 7px", borderRadius: 6, border: `1px solid ${BC.danger}22`,
+  fontSize: FS.label, padding: "3px 7px", borderRadius: 6, border: `1px solid ${BC.danger}22`,
   background: "transparent", color: BC.danger, cursor: "pointer", flexShrink: 0, fontFamily: FONT,
 };
 
@@ -404,7 +404,7 @@ export function MatchSetup({
     return (
       <button key={pid} onClick={() => setHeld(lifted ? null : pid)} style={{
         padding: "5px 9px", borderRadius: 8, cursor: "pointer", fontFamily: FONT,
-        fontSize: 11, fontWeight: 700, textAlign: "left",
+        fontSize: FS.small, fontWeight: 700, textAlign: "left",
         background: lifted ? BC.amber : team.color + (dim ? "22" : "44"),
         border: `1.5px solid ${lifted ? BC.amber : team.accent + "55"}`,
         color: lifted ? "#0a0804" : team.accent,
@@ -444,19 +444,19 @@ export function MatchSetup({
             userSelect: "none", WebkitUserSelect: "none",
           }}
         >
-          {draggable && <span aria-hidden style={{ fontSize: 12, lineHeight: 1, color: dragging ? BC.amber : BC.t3 }}>⠿</span>}
-          <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.5, minWidth: 22, color: dragging ? BC.amber : BC.gold }}>
+          {draggable && <span aria-hidden style={{ fontSize: FS.small, lineHeight: 1, color: dragging ? BC.amber : BC.t3 }}>⠿</span>}
+          <span style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 0.5, minWidth: 22, color: dragging ? BC.amber : BC.gold }}>
             M{m.matchNumber ?? "?"}
           </span>
         </div>
-        {/* 13/600, which is what MatchTeamColumn gives a player name on the
-            leaderboard. Same names, same weight of thing to read, so they are
-            set the same size in both places rather than each screen picking
-            its own. The "vs" stays a size down — it is punctuation between
-            the names, not one of them. */}
-        <div style={{ flex: 1, minWidth: 0, fontSize: 13, lineHeight: 1.3 }}>
+        {/* FS.body/600, which is what MatchTeamColumn gives a player name on
+            the leaderboard. Same names, same weight of thing to read, so they
+            are set the same size in both places rather than each screen
+            picking its own. The "vs" stays one rung down — it is punctuation
+            between the names, not one of them. */}
+        <div style={{ flex: 1, minWidth: 0, fontSize: FS.body, lineHeight: 1.3 }}>
           <span style={{ color: teams.A.accent, fontWeight: 600 }}>{m.teamANames?.join(" / ")}</span>
-          <span style={{ color: BC.t3, fontSize: 11 }}> vs </span>
+          <span style={{ color: BC.t3, fontSize: FS.small }}> vs </span>
           <span style={{ color: teams.B.accent, fontWeight: 600 }}>{m.teamBNames?.join(" / ")}</span>
         </div>
         <button onClick={() => deleteMatch(m)} style={xBtn}>✕</button>
@@ -470,7 +470,7 @@ export function MatchSetup({
       <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
         {ROUNDS.map(r => (
           <button key={r} onClick={() => { setRound(r); setTeamASel([]); setTeamBSel([]); setHeld(null); }} style={{
-            flex: 1, padding: "7px 4px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
+            flex: 1, padding: "7px 4px", borderRadius: 8, fontSize: FS.small, fontWeight: 700, cursor: "pointer",
             background: round === r ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
             border: `1px solid ${round === r ? "transparent" : BC.bdr}`,
             color: round === r ? "#0a0804" : BC.t2, fontFamily: FONT,
@@ -483,14 +483,14 @@ export function MatchSetup({
           in front of you. */}
       <div style={{ ...cardStyle, padding: "9px 12px", marginBottom: 10 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: BC.t1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.t1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {course?.name || "Course TBD"}
           </div>
-          <div style={{ fontSize: 10, color: firstTee ? BC.amber : BC.danger, fontWeight: 700, flexShrink: 0 }}>
+          <div style={{ fontSize: FS.label, color: firstTee ? BC.amber : BC.danger, fontWeight: 700, flexShrink: 0 }}>
             {firstTee ? `1st tee ${firstTee}` : "No tee time set"}
           </div>
         </div>
-        <div style={{ fontSize: 10, color: BC.t3, marginTop: 3 }}>
+        <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 3 }}>
           {fmt?.label || "Format TBD"} · {sizeHint}{autoFoursomes ? " · each match is a foursome" : ""}
         </div>
       </div>
@@ -500,7 +500,7 @@ export function MatchSetup({
       {roundFinal && (
         <div style={{
           ...cardStyle, padding: "9px 12px", marginBottom: 10,
-          border: `1px solid ${BC.amber}55`, fontSize: 10, color: BC.t2, lineHeight: 1.45,
+          border: `1px solid ${BC.amber}55`, fontSize: FS.label, color: BC.t2, lineHeight: 1.45,
         }}>
           <span style={{ fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>ROUND {round} IS FINAL. </span>
           Its draw is locked to its result. Reopen the round on the Scoring tab to change matches.
@@ -518,11 +518,11 @@ export function MatchSetup({
           const pool = poolFor(tid, sel);
           return (
             <div key={tid}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: team.accent, letterSpacing: 1, marginBottom: 5 }}>
+              <div style={{ fontSize: FS.label, fontWeight: 700, color: team.accent, letterSpacing: 1, marginBottom: 5 }}>
                 {teamNames?.[tid]}{perSide ? ` · ${sel.length}/${perSide}` : ""}
               </div>
               {pool.length === 0 && (
-                <div style={{ fontSize: 10, color: BC.t3, padding: "7px 8px", borderRadius: 8, border: `1px dashed ${BC.bdr}`, textAlign: "center" }}>
+                <div style={{ fontSize: FS.label, color: BC.t3, padding: "7px 8px", borderRadius: 8, border: `1px dashed ${BC.bdr}`, textAlign: "center" }}>
                   {roster.length ? `All matched in Rd ${round}` : "No players"}
                 </div>
               )}
@@ -535,12 +535,12 @@ export function MatchSetup({
                     border: `1.5px solid ${on ? team.accent : BC.bdr}`,
                     display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, fontFamily: FONT,
                   }}>
-                    {/* 13, the size a player's name is set at on the
+                    {/* FS.body, the size a player's name is set at on the
                         leaderboard and in the match rows below. The CH stays
                         small beside it — it labels the name rather than
                         competing with it. */}
-                    <span style={{ fontSize: 13, fontWeight: 600, color: on ? team.accent : BC.t2, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
-                    <span style={{ fontSize: 10, color: BC.t3, flexShrink: 0 }}>CH {getPlayerCH(p.player_id)}</span>
+                    <span style={{ fontSize: FS.body, fontWeight: 600, color: on ? team.accent : BC.t2, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
+                    <span style={{ fontSize: FS.label, color: BC.t3, flexShrink: 0 }}>CH {getPlayerCH(p.player_id)}</span>
                   </button>
                 );
               })}
@@ -550,14 +550,14 @@ export function MatchSetup({
       </div>
 
       {sizeOff && (
-        <div style={{ fontSize: 10, color: BC.danger, marginBottom: 8, textAlign: "center" }}>
+        <div style={{ fontSize: FS.label, color: BC.danger, marginBottom: 8, textAlign: "center" }}>
           {fmt?.label} is {sizeHint} — check the selection.
         </div>
       )}
 
       {strokes && (
         <div style={{ ...cardStyle, padding: "10px 12px", marginBottom: 10 }}>
-          <div style={{ fontSize: 9, color: BC.t3, fontWeight: 700, letterSpacing: 1, marginBottom: 8 }}>
+          <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1, marginBottom: 8 }}>
             {hcpMode === "low_man" ? "PLAY OFF LOW MAN" : "FULL STROKES"}
           </div>
           {/* Equal-width cards. A flex row sized each card to its own label, so
@@ -573,8 +573,8 @@ export function MatchSetup({
               const label = s > 0 ? `+${s}` : hcpMode === "low_man" ? `Low (${ch})` : "Scratch";
               return (
                 <div key={pid} style={{ background: team.color + "33", border: `1px solid ${team.accent}44`, borderRadius: 8, padding: "5px 10px", textAlign: "center", minWidth: 0 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: team.accent, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{shortOf(pid)}</div>
-                  <div style={{ fontSize: 13, fontWeight: 900, color: s === 0 ? BC.gold : BC.t1 }}>{label}</div>
+                  <div style={{ fontSize: FS.small, fontWeight: 700, color: team.accent, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{shortOf(pid)}</div>
+                  <div style={{ fontSize: FS.body, fontWeight: 900, color: s === 0 ? BC.gold : BC.t1 }}>{label}</div>
                 </div>
               );
             })}
@@ -584,7 +584,7 @@ export function MatchSetup({
 
       {teamASel.length > 0 && teamBSel.length > 0 && (
         <button onClick={createMatch} style={{
-          width: "100%", padding: "10px 20px", borderRadius: 10, border: "none", fontSize: 13, fontWeight: 700,
+          width: "100%", padding: "10px 20px", borderRadius: 10, border: "none", fontSize: FS.body, fontWeight: 700,
           cursor: "pointer", background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`,
           color: "#0a0804", marginBottom: 14, fontFamily: FONT,
         }}>
@@ -608,7 +608,7 @@ export function MatchSetup({
         </div>
       )}
       {rndMatches.length === 0 && (
-        <div style={{ fontSize: 10, color: BC.t3, padding: "10px 12px", borderRadius: 10, border: `1px dashed ${BC.bdr}`, textAlign: "center", marginBottom: 10 }}>
+        <div style={{ fontSize: FS.label, color: BC.t3, padding: "10px 12px", borderRadius: 10, border: `1px dashed ${BC.bdr}`, textAlign: "center", marginBottom: 10 }}>
           No matches yet for Rd {round} — build one above and it goes off {firstTee || "the first tee"}.
         </div>
       )}
@@ -643,13 +643,13 @@ export function MatchSetup({
             }}>
               <span />
               <span style={{ display: "flex", alignItems: "baseline", gap: 8, justifySelf: "center" }}>
-                <span style={{ fontSize: 10, fontWeight: 800, color: BC.gold, letterSpacing: 1 }}>G{gi + 1}</span>
-                <span style={{ fontSize: 13, fontWeight: 800, color: times[gi] ? BC.t1 : BC.t3 }}>
+                <span style={{ fontSize: FS.label, fontWeight: 800, color: BC.gold, letterSpacing: 1 }}>G{gi + 1}</span>
+                <span style={{ fontSize: FS.body, fontWeight: 800, color: times[gi] ? BC.t1 : BC.t3 }}>
                   {times[gi] ? stripAMPM(times[gi]) : "—"}
                 </span>
               </span>
               <span style={{
-                fontSize: 9, fontWeight: 700, textAlign: "right", minWidth: 0,
+                fontSize: FS.label, fontWeight: 700, textAlign: "right", minWidth: 0,
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 color: tooMany ? BC.danger : BC.t3,
               }}>
@@ -657,7 +657,7 @@ export function MatchSetup({
               </span>
             </div>
             {rows.length === 0 && (
-              <div style={{ fontSize: 9, color: over ? BC.amber : BC.t3, fontWeight: 700, letterSpacing: 0.5, padding: "2px 0" }}>
+              <div style={{ fontSize: FS.label, color: over ? BC.amber : BC.t3, fontWeight: 700, letterSpacing: 0.5, padding: "2px 0" }}>
                 {over ? "DROP HERE" : "OPEN"}
               </div>
             )}
@@ -676,7 +676,7 @@ export function MatchSetup({
           border: `1px solid ${matchFitsGroup ? BC.danger + "55" : BC.bdr}`,
         }}>
           {matchFitsGroup && (
-            <div style={{ fontSize: 9, fontWeight: 800, color: BC.danger, letterSpacing: 1, marginBottom: 7 }}>
+            <div style={{ fontSize: FS.label, fontWeight: 800, color: BC.danger, letterSpacing: 1, marginBottom: 7 }}>
               NO TEE TIME
             </div>
           )}
@@ -685,7 +685,7 @@ export function MatchSetup({
       )}
 
       {matchFitsGroup && rndMatches.length > 0 && !roundFinal && (
-        <div style={{ fontSize: 9, color: BC.t3, marginBottom: 14, marginTop: -1 }}>
+        <div style={{ fontSize: FS.label, color: BC.t3, marginBottom: 14, marginTop: -1 }}>
           Drag ⠿ onto another tee time to move a match — it takes that time, and that number.
         </div>
       )}
@@ -697,19 +697,19 @@ export function MatchSetup({
           symptom is a round that looks emptier than the morning actually was. */}
       {orphans.length > 0 && (
         <div style={{ ...cardStyle, padding: "10px 12px", marginBottom: 14, border: `1px solid ${BC.danger}66` }}>
-          <div style={{ fontSize: 9, fontWeight: 800, color: BC.danger, letterSpacing: 1, marginBottom: 6 }}>
+          <div style={{ fontSize: FS.label, fontWeight: 800, color: BC.danger, letterSpacing: 1, marginBottom: 6 }}>
             SCORES WITH NO MATCH · ROUND {round}
           </div>
-          <div style={{ fontSize: 10, color: BC.t2, lineHeight: 1.45, marginBottom: 9 }}>
+          <div style={{ fontSize: FS.label, color: BC.t2, lineHeight: 1.45, marginBottom: 9 }}>
             Posted in Round {round}, but no match this round accounts for them — so nothing counts them.
             Draw these players back into a match and their holes come back with them. Erase only if the round is genuinely being re-played.
           </div>
           {orphans.map(({ pid, holes }) => (
             <div key={pid} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: BC.t1, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <span style={{ fontSize: FS.small, fontWeight: 700, color: BC.t1, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {nameOf(pid)}
               </span>
-              <span style={{ fontSize: 10, fontWeight: 700, color: BC.t3, flexShrink: 0 }}>
+              <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, flexShrink: 0 }}>
                 {holes} hole{holes === 1 ? "" : "s"}
               </span>
               {onDiscardRoundScores && (
@@ -733,7 +733,7 @@ export function MatchSetup({
             <button onClick={buildGroups} style={miniBtn}>Auto-build</button>
           </div>
 
-          <div style={{ fontSize: 10, color: BC.t3, marginBottom: 8, lineHeight: 1.45 }}>
+          <div style={{ fontSize: FS.label, color: BC.t3, marginBottom: 8, lineHeight: 1.45 }}>
             A {fmt?.label || "team"} match holds more players than one group, so it goes off over
             several. Times run off the first tee ({firstTee || "unset"}), {interval} min apart — tap
             a player to lift them, then tap a time to drop them in.
@@ -747,17 +747,17 @@ export function MatchSetup({
                 border: `1px solid ${held ? BC.amber + "88" : over ? BC.danger + "66" : BC.bdr}`,
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: g.length ? 7 : 0 }}>
-                  <span style={{ fontSize: 10, fontWeight: 800, color: BC.gold, letterSpacing: 1, flexShrink: 0 }}>G{gi + 1}</span>
+                  <span style={{ fontSize: FS.label, fontWeight: 800, color: BC.gold, letterSpacing: 1, flexShrink: 0 }}>G{gi + 1}</span>
                   {/* The time this group goes off, read off the round. Not an
                       input: the Rounds tab's G-boxes are the one place tee
                       times are typed, and editing them there re-spaces the
                       whole sheet instead of leaving one slot out of step. */}
                   <span style={{
-                    fontSize: 12, fontWeight: 800, flexShrink: 0, minWidth: 46,
+                    fontSize: FS.small, fontWeight: 800, flexShrink: 0, minWidth: 46,
                     color: times[gi] ? BC.t1 : BC.t3,
                   }}>{times[gi] ? stripAMPM(times[gi]) : "—"}</span>
                   <span style={{
-                    fontSize: 9, color: over ? BC.danger : BC.t3, fontWeight: 700, flex: 1, minWidth: 0,
+                    fontSize: FS.label, color: over ? BC.danger : BC.t3, fontWeight: 700, flex: 1, minWidth: 0,
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   }}>
                     {g.length} player{g.length !== 1 ? "s" : ""}{over ? " · too many" : ""}
@@ -778,7 +778,7 @@ export function MatchSetup({
               <button onClick={() => moveHeldTo(-1)} style={{ ...miniBtn, width: "100%", padding: "8px 10px", marginBottom: 8, borderColor: `${BC.danger}66`, color: BC.danger }}>
                 Ungroup {shortOf(held)}
               </button>
-              <div style={{ fontSize: 10, color: BC.t3, textAlign: "center", marginBottom: 8 }}>
+              <div style={{ fontSize: FS.label, color: BC.t3, textAlign: "center", marginBottom: 8 }}>
                 {nameOf(held)} lifted — tap a group to drop them in, or tap them again to cancel.
               </div>
             </>
@@ -787,7 +787,7 @@ export function MatchSetup({
           {/* Players with a match but nowhere to tee off. */}
           {issues.unassigned.length > 0 && (
             <div style={{ ...cardStyle, padding: "9px 11px", marginBottom: 8, border: `1px solid ${BC.danger}55` }}>
-              <div style={{ fontSize: 9, fontWeight: 800, color: BC.danger, letterSpacing: 1, marginBottom: 7 }}>
+              <div style={{ fontSize: FS.label, fontWeight: 800, color: BC.danger, letterSpacing: 1, marginBottom: 7 }}>
                 NOT IN A GROUP — NO TEE TIME
               </div>
               <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
@@ -801,23 +801,23 @@ export function MatchSetup({
       {/* Everything else worth saying about the draw, in one place. */}
       {flagged && (
         <div style={{ ...cardStyle, padding: "9px 11px", marginBottom: 8, border: `1px solid ${BC.amber}44` }}>
-          <div style={{ fontSize: 9, fontWeight: 800, color: BC.amber, letterSpacing: 1, marginBottom: 6 }}>CHECK</div>
+          <div style={{ fontSize: FS.label, fontWeight: 800, color: BC.amber, letterSpacing: 1, marginBottom: 6 }}>CHECK</div>
           {issues.split.map(m => (
-            <div key={m.id} style={{ fontSize: 10, color: BC.t2, marginBottom: 3 }}>
+            <div key={m.id} style={{ fontSize: FS.label, color: BC.t2, marginBottom: 3 }}>
               · {m.teamANames?.join("/")} vs {m.teamBNames?.join("/")} is split across groups — opponents tee off together.
             </div>
           ))}
           {issues.duplicated.map(pid => (
-            <div key={pid} style={{ fontSize: 10, color: BC.t2, marginBottom: 3 }}>· {nameOf(pid)} is in more than one group.</div>
+            <div key={pid} style={{ fontSize: FS.label, color: BC.t2, marginBottom: 3 }}>· {nameOf(pid)} is in more than one group.</div>
           ))}
           {issues.unmatched.map(pid => (
-            <div key={pid} style={{ fontSize: 10, color: BC.t2, marginBottom: 3 }}>· {nameOf(pid)} is grouped but has no match this round.</div>
+            <div key={pid} style={{ fontSize: FS.label, color: BC.t2, marginBottom: 3 }}>· {nameOf(pid)} is grouped but has no match this round.</div>
           ))}
           {issues.oversized.map(({ i, n }) => (
-            <div key={i} style={{ fontSize: 10, color: BC.t2, marginBottom: 3 }}>· Group {i + 1} has {n} players.</div>
+            <div key={i} style={{ fontSize: FS.label, color: BC.t2, marginBottom: 3 }}>· Group {i + 1} has {n} players.</div>
           ))}
           {issues.unassigned.length > 0 && (
-            <div style={{ fontSize: 10, color: BC.t2 }}>
+            <div style={{ fontSize: FS.label, color: BC.t2 }}>
               · {issues.unassigned.length} player{issues.unassigned.length !== 1 ? "s" : ""} without a tee time.
             </div>
           )}
@@ -825,7 +825,7 @@ export function MatchSetup({
       )}
 
       {!flagged && groups.length > 0 && rndMatches.length > 0 && (
-        <div style={{ fontSize: 10, color: BC.amber, textAlign: "center", marginBottom: 8, fontWeight: 700 }}>
+        <div style={{ fontSize: FS.label, color: BC.amber, textAlign: "center", marginBottom: 8, fontWeight: 700 }}>
           ✓ Every player has a group and a tee time.
         </div>
       )}

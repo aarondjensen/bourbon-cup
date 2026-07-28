@@ -9,7 +9,7 @@
 //    • Toast           — the transient "slides down from the top" toast.
 //    • ScoreButtonRow  — the tappable par-relative score entry row.
 
-import { BC } from "../theme";
+import { BC, FS } from "../theme";
 
 const FONT = "'Montserrat', sans-serif";
 
@@ -32,7 +32,7 @@ export function SegmentedToggle({ options, value, onChange, variant = "gradient"
             key={k}
             onClick={onChange ? () => onChange(k) : undefined}
             style={{
-              flex: 1, padding: "8px 0", borderRadius: 16, fontSize: 12, fontWeight: 700,
+              flex: 1, padding: "8px 0", borderRadius: 16, fontSize: FS.small, fontWeight: 700,
               cursor: "pointer", border: "none",
               background: on ? activeBg : "transparent",
               color: on ? activeFg : BC.t3,
@@ -85,7 +85,7 @@ export function StickyTop({ children, padTop = 0, padBottom = 12, style }) {
 export function Banner({ children, background = BC.amber, color = "#fff" }) {
   return (
     <div style={{ padding: "8px 14px", background, textAlign: "center" }}>
-      <div style={{ fontSize: 11, color, fontWeight: 800, letterSpacing: 2 }}>{children}</div>
+      <div style={{ fontSize: FS.small, color, fontWeight: 800, letterSpacing: 2 }}>{children}</div>
     </div>
   );
 }
@@ -102,7 +102,7 @@ export function Toast({ message, top = 30 }) {
         position: "fixed", top, left: "50%", transform: "translateX(-50%)",
         background: BC.amber, color: "#0a0804",
         padding: "12px 32px", borderRadius: 12,
-        fontSize: 13, fontWeight: 700, zIndex: 1000,
+        fontSize: FS.body, fontWeight: 700, zIndex: 1000,
         whiteSpace: "nowrap", textAlign: "center",
         boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
         animation: "bcToastDown 0.3s ease",
@@ -154,7 +154,7 @@ export function ScoreButtonRow({ par, score, onScore }) {
 
   const nudge = {
     width: 30, height: 44, borderRadius: 8, background: BC.inp, border: "none",
-    color: BC.t3, fontSize: 14, fontWeight: 700, cursor: "pointer", flexShrink: 0,
+    color: BC.t3, fontSize: FS.body, fontWeight: 700, cursor: "pointer", flexShrink: 0,
   };
 
   return (
@@ -175,7 +175,7 @@ export function ScoreButtonRow({ par, score, onScore }) {
         return (
           <div key={btn} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 0 }}>
             <button onClick={() => onScore(isCur ? 0 : btn)} style={{
-              width: "100%", height: 44, borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 800,
+              width: "100%", height: 44, borderRadius: 8, cursor: "pointer", fontSize: FS.lead, fontWeight: 800,
               border: "none", background: isCur ? BC.amber : BC.inp, color: isCur ? ON_AMBER : BC.t2,
               position: "relative", display: "flex", alignItems: "center", justifyContent: "center",
               // No CSS transition: when the hole auto-advances, all four
@@ -209,7 +209,7 @@ export function ScoreButtonRow({ par, score, onScore }) {
             {/* Uppercase to match how MNQ renders these — its shell sets a
                 global text-transform, so the labels read as small caps there. */}
             <div style={{
-              fontSize: 9, color: showParAnchor ? BC.t2 : BC.t3, fontWeight: showParAnchor ? 700 : 600,
+              fontSize: FS.label, color: showParAnchor ? BC.t2 : BC.t3, fontWeight: showParAnchor ? 700 : 600,
               letterSpacing: 0.4, lineHeight: 1, height: 12, textTransform: "uppercase",
             }}>
               {showLabels ? SCORE_LABELS[idx] : ""}
