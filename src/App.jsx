@@ -2016,34 +2016,8 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   );
 
   // ── Course Search (ported from WBC) ──
-  const TEE_COLOR_MAP = {
-    black:"#2c2c2c",blue:"#2d8fd4",white:"#e8e8e8",gold:"#d4a843",red:"#9b2335",
-    green:"#2d8a4e",silver:"#a8b2bd",yellow:"#e6c619",orange:"#e67e22",purple:"#7b2d8b",
-    maroon:"#6b1c2a",navy:"#1b2a4a",teal:"#1a8a7a",tan:"#c4a86b",platinum:"#c0c0c0",
-  };
-  const resolveTeeColor = (tee, index) => {
-    const key = (tee.name || "").toLowerCase().trim();
-    if (TEE_COLOR_MAP[key]) return TEE_COLOR_MAP[key];
-    for (const [word, clr] of Object.entries(TEE_COLOR_MAP)) { if (key.includes(word)) return clr; }
-    const c = tee.color || "";
-    // Black tees: use white text/border so it's visible on dark background
-    if (!c || c === "#000" || c === "#000000" || c === "black") return "#ffffff";
-    if (c && tee.color !== "#000" && tee.color !== "#000000") return tee.color;
-    return ["#60a5fa","#f59e0b","#a78bfa","#34d399","#fb923c"][index % 5];
-  };
-  // The colour of a tee whose colour nobody has set. A neutral mid-grey, so
-  // it reads as "unset" rather than as some fifteenth tee colour.
-  const TEE_COLOR_UNSET = "#888888";
-  // A swatch has to stay visible against BOTH the card it sits on and its own
-  // fill, and the two failure cases pull opposite ways: a white/silver tee
-  // disappears into light mode, a black tee into dark. So the ring is drawn in
-  // the opposite direction for pale fills. This is the only place that rule
-  // lives — every swatch in the console renders through this component, at
-  // whatever `size` its row calls for.
-  const TeeColorSwatch = ({ color, name, size = 12 }) => {
-    const isLight = ["#e8e8e8","#a8b2bd","#c0c0c0","#f7e7ce"].includes((color||"").toLowerCase());
-    return <span title={name} style={{ display:"inline-block", width:size, height:size, borderRadius:3, background:color||TEE_COLOR_UNSET, border:`1px solid ${isLight?"#00000033":"#ffffff26"}`, flexShrink:0 }} />;
-  };
+  // Tee colours (TEE_COLORS / resolveTeeColor / TeeSwatch) are module-level,
+  // shared with the tee pickers on the Rounds tab.
 
   // Query the course APIs (RapidAPI + GolfCourseAPI) and return parsed
   // results. No state writes — shared by the debounced search box AND the
@@ -3174,7 +3148,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                                 transform: allOn ? "scale(1.15)" : "scale(0.85)",
                                 transition: "all 0.15s ease",
                               }}>
-                              <TeeCircle tee={tee} index={ti} size={14} active={allOn} />
+                              <TeeSwatch tee={tee} index={ti} size={14} round active={allOn} />
                             </button>
                           );
                         })}
@@ -3253,7 +3227,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                               transform: isAct ? "scale(1.3)" : "scale(1)",
                               transition: "all 0.15s ease",
                             }}>
-                              <TeeCircle tee={tee} index={ti} size={14} active={isAct} />
+                              <TeeSwatch tee={tee} index={ti} size={14} round active={isAct} />
                             </button>
                           );
                         })}
@@ -3381,7 +3355,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   <div style={{ padding: "0 14px 12px", background: BC.amber + ALPHA.wash }}>
                     {(c.tee_boxes || []).sort((a,b) => (parseFloat(b.slope)||0) - (parseFloat(a.slope)||0)).map((tb, tbi) => (
                       <div key={tbi} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 3, fontSize: FS.label }}>
-                        <TeeColorSwatch color={tb.color} name={tb.name} size={10} />
+                        <TeeSwatch tee={tb} index={tbi} size={10} />
                         <span style={{ color: BC.t2, fontWeight: 600, width: 50 }}>{tb.name}</span>
                         <span style={{ color: BC.t3 }}>Rating {tb.rating} · Slope {tb.slope} · Par {tb.par}</span>
                       </div>
@@ -3513,7 +3487,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                             style={{ fontSize: FS.label, padding: "2px 7px", borderRadius: 4, background: "transparent", border: `1px solid ${BC.hcpBlue}${ALPHA.line}`, color: BC.hcpBlue, cursor: refetchingTees ? "default" : "pointer", fontWeight: 700, opacity: refetchingTees ? 0.5 : 1 }}>
                             {refetchingTees ? "Fetching…" : "⟳ Re-fetch tees"}
                           </button>
-                          <button onClick={() => setDraft(p => ({ ...p, tee_boxes: [...(p.tee_boxes||[]), { name: "", color: TEE_COLOR_UNSET, rating: 72.0, slope: 113, par: 72, yardage: 0 }] }))}
+                          <button onClick={() => setDraft(p => ({ ...p, tee_boxes: [...(p.tee_boxes||[]), { name: "", color: TEE_UNSET, rating: 72.0, slope: 113, par: 72, yardage: 0 }] }))}
                             style={{ fontSize: FS.label, padding: "2px 7px", borderRadius: 4, background: "transparent", border: `1px solid ${BC.amber}${ALPHA.line}`, color: BC.amber, cursor: "pointer", fontWeight: 700 }}>+ Tee</button>
                         </div>
                       </div>
@@ -3523,7 +3497,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       </div>
                       {tbs.map((tb, i) => (
                         <div key={i} style={{ display: "grid", gridTemplateColumns: "18px 1fr 44px 38px 30px 46px 18px", gap: "3px 4px", marginBottom: 4, alignItems: "center" }}>
-                          <TeeColorSwatch color={tb.color} name={tb.name} size={18} />
+                          <TeeSwatch tee={tb} index={i} size={18} />
                           <input value={tb.name} onChange={e => setDraft(p => { const t=[...p.tee_boxes]; t[i]={...t[i],name:e.target.value}; return {...p,tee_boxes:t}; })} style={{...tiL}} placeholder="Name" />
                           <input value={tb.rating} onChange={e => setDraft(p => { const t=[...p.tee_boxes]; t[i]={...t[i],rating:e.target.value}; return {...p,tee_boxes:t}; })} style={ti} />
                           <input value={tb.slope} onChange={e => setDraft(p => { const t=[...p.tee_boxes]; t[i]={...t[i],slope:e.target.value}; return {...p,tee_boxes:t}; })} style={ti} />
@@ -6010,8 +5984,17 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, 
 }
 
 
-// ── Tee color helpers (from WBC) ──
-const TEE_COLOR_MAP = {
+// ── Tee colours ───────────────────────────────────────────────────
+// One map, one resolver, one ring rule, one component. There used to be two
+// of each: this set, and a second copy inside AdminView with a shorter map
+// and a differently-worded resolver. Both rendered on the same screen, so a
+// "Championship" tee was navy in the tee picker and grey in the list of tee
+// boxes three inches below it — the pickers knew seventeen names the list
+// did not.
+//
+// Keys are matched whole first, then as substrings, so "Back Tees" finds
+// `back` and "Blue/White" finds `blue`.
+const TEE_COLORS = {
   black: "#2c2c2c", blue: "#2d8fd4", white: "#e8e8e8", gold: "#d4a843", red: "#9b2335",
   green: "#2d8a4e", silver: "#a8b2bd", yellow: "#e6c619", orange: "#e67e22", purple: "#7b2d8b",
   maroon: "#6b1c2a", navy: "#1b2a4a", teal: "#1a8a7a", tan: "#c4a86b", copper: "#b87333",
@@ -6020,28 +6003,45 @@ const TEE_COLOR_MAP = {
   tournament: "#1a1a2e", championship: "#1a1a2e", tips: "#1a1a2e", pro: "#2d8fd4",
   ladies: "#c0392b", senior: "#d4a843", forward: "#d4a843", back: "#1a1a2e", middle: "#e8e8e8",
 };
-const resolveTeeColor = (tee, index) => {
-  const key = (tee.name || "").toLowerCase().trim();
-  if (TEE_COLOR_MAP[key]) return TEE_COLOR_MAP[key];
-  for (const [word, clr] of Object.entries(TEE_COLOR_MAP)) { if (key.includes(word)) return clr; }
-  if (tee.color && tee.color !== "#000" && tee.color !== "#000000") return tee.color;
-  return ["#5b8fb9","#8b5e3c","#6b7b3a","#8e44ad","#2e86ab","#a84632"][index % 6];
+// The colour of a tee nobody has named or coloured. A neutral mid-grey, so it
+// reads as "unset" rather than as a thirty-third tee colour.
+const TEE_UNSET = "#888888";
+const resolveTeeColor = (tee, index = 0) => {
+  const key = (tee?.name || "").toLowerCase().trim();
+  if (TEE_COLORS[key]) return TEE_COLORS[key];
+  for (const [word, clr] of Object.entries(TEE_COLORS)) if (key.includes(word)) return clr;
+  const c = tee?.color || "";
+  if (c && c !== "#000" && c !== "#000000" && c !== "black") return c;
+  return key || c ? ["#5b8fb9","#8b5e3c","#6b7b3a","#8e44ad","#2e86ab","#a84632"][index % 6] : TEE_UNSET;
 };
-const isLightTeeBC = (clr) => ["#e8e8e8","#a8b2bd","#c0c0c0","#f7e7ce","#c2b280","#c4a86b","#8e8e8e"].includes((clr||"").toLowerCase());
-const isDarkTeeBC = (clr) => ["#1a1a2e","#000000","#111111","#0a0a0a","#1a1a1a","#222222","#2c2c2c","#2d2d2d","#0d0d0d","black"].includes((clr||"").toLowerCase());
-const TeeCircle = ({ tee, index, size = 14, active }) => {
-  const color = resolveTeeColor(tee, index || 0);
-  const isDark = isDarkTeeBC(color);
-  const isLight = isLightTeeBC(color);
-  if (isDark) {
-    return (
-      <span style={{ width: size, height: size, borderRadius: "50%", background: "#a8b2bd", border: `2px solid ${active ? "#fff" : "#88888860"}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-        <span style={{ width: size * 0.45, height: size * 0.45, borderRadius: "50%", background: "#111", display: "block" }} />
-      </span>
-    );
-  }
+// Computed, not listed. The old code carried two hand-maintained arrays of
+// "which hexes count as pale" and "which count as dark" — seventeen literals
+// that silently failed on any colour a director picked themselves. Perceived
+// luminance answers the same question for every colour there is.
+const isPaleTee = (hex) => {
+  const h = String(hex).replace("#", "");
+  if (h.length < 6) return false;
+  const [r, g, b] = [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16));
+  return 0.299 * r + 0.587 * g + 0.114 * b > 150;
+};
+// A swatch has to separate from the card behind it, and the two ways that
+// fails pull opposite ways: a white or silver tee dissolves into light mode,
+// a black one into dark. So the ring runs against the fill's own luminance.
+// `active` overrides both with the theme's brightest ink — which is why it is
+// BC.t1 and not "#fff": on the light card a white ring is no ring.
+const teeRing = (color, active) =>
+  active ? BC.t1 : isPaleTee(color) ? `#000000${ALPHA.hair}` : `#ffffff${ALPHA.line}`;
+// `round` is the tee PICKER's affordance (a ball you tap); square is the
+// swatch that labels a row. Same colour, same ring, different silhouette.
+const TeeSwatch = ({ tee, index = 0, size = 12, round = false, active = false }) => {
+  const color = resolveTeeColor(tee, index);
   return (
-    <span style={{ width: size, height: size, borderRadius: "50%", background: color, border: `2px solid ${active ? "#fff" : (isLight ? "#99999960" : "#ffffff25")}`, display: "inline-block", flexShrink: 0 }} />
+    <span title={tee?.name || undefined} style={{
+      display: "inline-block", width: size, height: size, flexShrink: 0,
+      borderRadius: round ? "50%" : 3, background: color,
+      border: `${round ? 2 : 1}px solid ${teeRing(color, active)}`,
+      boxSizing: "border-box",
+    }} />
   );
 };
 
