@@ -39,6 +39,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { AppHeader } from "./components/AppHeader";
 import { Popup, ConfirmModal } from "./components/Popup";
 import { CtpPrompt } from "./components/CtpPrompt";
+import { DirectorFinalizeAlert, FinalizeRoundSheet } from "./components/FinalizeRound";
 import { SegmentedToggle, StickyTop, Banner, Toast, HoleNavigator, ScoreButtonRow } from "./components/ui";
 import { useConfirm } from "./lib/useConfirm";
 import { useStableCallback } from "./lib/useStableCallback";
@@ -52,7 +53,7 @@ import {
   roundPlaySetup, orderMatchesForRound, numberMatches,
   stripAMPM,
 } from "./lib/groups";
-import { holesEntered } from "./lib/scoreGuard";
+import { holesEntered, roundScoreProgress } from "./lib/scoreGuard";
 import { useHoleAdvance } from "./lib/useHoleAdvance";
 
 // ── Bottom-nav safe-area cushion ──────────────────────────────────
@@ -63,6 +64,11 @@ import { useHoleAdvance } from "./lib/useHoleAdvance";
 // left the bar mis-seated on real devices. Restoring the fixed bar (pinned
 // to the viewport bottom) with the full inset is the known-good layout.
 const NAV_SAFE_PAD = "calc(env(safe-area-inset-bottom, 0px) + 8px)";
+
+// Where a dismissed "ready to finalize" notification is remembered, per
+// edition — TOURNAMENT_ID is a live binding (firebase.js reassigns it when
+// the edition changes), so this is read at call time, never captured once.
+const finalizeSnoozeKey = () => `bc_finalize_snooze_${TOURNAMENT_ID}`;
 
 // First+last initials from a player's full name. "Aaron Jensen" → "AJ".
 // Single-name fallback grabs the first two letters (e.g. "Joe" → "JO") so a
@@ -262,170 +268,10 @@ function LoginScreen({ players, onLogin, teams, darkMode, tournamentName, tourna
 // determined writer — which is exactly the threat model the director
 // described.
 
-// Round-wide score progress. Counts EVERY player in EVERY match of the
-// round, not just the reader's own match: the director deciding whether to
-// finalize needs to know who is still out, by name.
-function roundScoreProgress(matches, holeData, round) {
-  const rndMatches = round == null ? [] : matches.filter(m => m.round === round);
-  const pids = [...new Set(rndMatches.flatMap(m => [...m.teamA, ...m.teamB]))];
-  const missingBy = [];
-  let entered = 0;
-  pids.forEach(pid => {
-    const scores = holeData[`${pid}_${round}`] || {};
-    let missing = 0;
-    for (let h = 0; h < 18; h++) { if (scores[h] > 0) entered++; else missing++; }
-    if (missing) missingBy.push({ pid, missing });
-  });
-  const total = pids.length * 18;
-  return {
-    total, entered, missing: total - entered,
-    missingBy: missingBy.sort((a, b) => b.missing - a.missing),
-    // An empty round is not a finished one — a round with no matches drawn
-    // has nothing to be complete about.
-    complete: total > 0 && entered === total,
-  };
-}
-
-// ── Finalize card ──
-// Director-only, and the other half of the gate: the gate is only tolerable
-// because there is one obvious control that moves it forward. It sits at the
-// bottom of the Scoring tab because that is where a director lands after
-// typing the round's last score.
-//
-// Finalizing with scores missing is ALLOWED, behind a confirm that names who
-// is out. A hard block reads as safer than it is — a withdrawal or a
-// conceded match leaves holes that will never be filled, and a gate with no
-// way past it strands the whole field on a round nobody is playing. The
-// director is trusted; they are just not allowed to do it by accident.
-function FinalizeRoundCard({ round, nextRound, lastFinal, progress, tPlayers, onFinalizeRound, notify }) {
-  const { confirm, confirmModal } = useConfirm();
-  const [busy, setBusy] = useState(false);
-  const { nameOf } = playerLookup(tPlayers);
-
-  const outList = progress.missingBy
-    .slice(0, 6)
-    .map(({ pid, missing }) => `• ${nameOf(pid)} — ${missing} hole${missing === 1 ? "" : "s"}`)
-    .join("\n")
-    + (progress.missingBy.length > 6 ? `\n• …and ${progress.missingBy.length - 6} more` : "");
-
-  const doFinalize = async () => {
-    const ok = await confirm({
-      eyebrow: `Round ${round}`,
-      title: progress.complete ? `Finalize Round ${round}?` : `Finalize Round ${round} with scores missing?`,
-      message: [
-        progress.complete
-          ? `All ${progress.total} scores are in.`
-          : `${progress.missing} score${progress.missing === 1 ? " is" : "s are"} still missing:\n${outList}`,
-        "",
-        `Finalizing freezes Round ${round}'s handicaps and results, and ${nextRound ? `opens Round ${nextRound} for scoring.` : "closes out the tournament."}`,
-        "You can reopen it afterwards if you need to.",
-      ].join("\n"),
-      confirmLabel: progress.complete ? "Finalize" : "Finalize anyway",
-      destructive: !progress.complete,
-    });
-    if (!ok) return;
-    setBusy(true);
-    try {
-      const res = await onFinalizeRound(round, true);
-      if (res) {
-        notify(nextRound
-          ? `Round ${round} is final — Round ${nextRound} is now open`
-          : `Round ${round} is final — that's the tournament`, "success");
-      } else {
-        notify("Could not finalize the round — try again", "error");
-      }
-    } catch {
-      notify("Could not finalize the round — try again", "error");
-    } finally { setBusy(false); }
-  };
-
-  const doReopen = async () => {
-    const ok = await confirm({
-      eyebrow: `Round ${lastFinal}`,
-      title: `Reopen Round ${lastFinal}?`,
-      message: [
-        `Scoring moves back to Round ${lastFinal}${round != null && round !== lastFinal ? `, and Round ${round} closes until Round ${lastFinal} is finalized again.` : "."}`,
-        "",
-        "Handicaps stay frozen exactly as they are — reopening changes what can be typed, not a stroke already allocated.",
-      ].join("\n"),
-      confirmLabel: "Reopen",
-    });
-    if (!ok) return;
-    setBusy(true);
-    try {
-      const res = await onFinalizeRound(lastFinal, false);
-      notify(res ? `Round ${lastFinal} reopened for scoring` : "Could not reopen the round — try again", res ? "success" : "error");
-    } catch {
-      notify("Could not reopen the round — try again", "error");
-    } finally { setBusy(false); }
-  };
-
-  const pct = progress.total ? Math.round((progress.entered / progress.total) * 100) : 0;
-
-  return (
-    <div style={{
-      background: BC.card, border: `1px solid ${BC.bdr}`, borderRadius: 12,
-      padding: "10px 12px", marginTop: 12,
-    }}>
-      <div style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 1.5, color: BC.amber, marginBottom: 8 }}>
-        DIRECTOR
-      </div>
-
-      {round != null && (
-        <>
-          {/* Progress — the number that decides whether Finalize is the
-              routine end of a round or an override. */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: FS.small, color: BC.t2, marginBottom: 4 }}>
-            <span style={{ fontWeight: 700 }}>Round {round} scores</span>
-            <span style={{ color: progress.complete ? BC.green : BC.t3, fontWeight: 700 }}>
-              {progress.entered} / {progress.total || 0}
-            </span>
-          </div>
-          <div style={{ height: 5, borderRadius: 3, background: BC.inp, overflow: "hidden", marginBottom: 6 }}>
-            <div style={{ width: `${pct}%`, height: "100%", background: progress.complete ? BC.green : BC.amber }} />
-          </div>
-          <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.35, marginBottom: 8, minHeight: 13 }}>
-            {progress.total === 0
-              ? "No matches drawn for this round yet."
-              : progress.complete
-                ? "Every score is in. Finalize to open the next round."
-                : `Still out: ${progress.missingBy.slice(0, 3).map(({ pid, missing }) => `${nameOf(pid)} (${missing})`).join(", ")}${progress.missingBy.length > 3 ? `, +${progress.missingBy.length - 3} more` : ""}`}
-          </div>
-          <button onClick={doFinalize} disabled={busy} style={{
-            width: "100%", padding: "11px 0", borderRadius: 10, cursor: busy ? "default" : "pointer",
-            border: progress.complete ? "none" : `1px solid ${BC.amber}${ALPHA.line}`,
-            background: progress.complete ? BC.amber : "transparent",
-            color: progress.complete ? ON_AMBER : BC.amber,
-            fontSize: FS.body, fontWeight: 800, letterSpacing: 0.5, opacity: busy ? 0.6 : 1,
-          }}>
-            {busy ? "Working…" : `Finalize Round ${round}`}
-          </button>
-        </>
-      )}
-
-      {round == null && (
-        <div style={{ fontSize: FS.small, color: BC.t2, lineHeight: 1.4, marginBottom: lastFinal != null ? 8 : 0 }}>
-          Every round is final. Scoring is closed for the tournament.
-        </div>
-      )}
-
-      {/* The way back. Without it, one mistimed tap locks the whole field
-          out of the round they are standing on. */}
-      {lastFinal != null && (
-        <button onClick={doReopen} disabled={busy} style={{
-          width: "100%", padding: "8px 0", marginTop: 8, borderRadius: 8,
-          background: "transparent", border: "none", color: BC.t3,
-          fontSize: FS.small, fontWeight: 700, cursor: busy ? "default" : "pointer",
-          textDecoration: "underline", textUnderlineOffset: 3,
-        }}>
-          Reopen Round {lastFinal}
-        </button>
-      )}
-
-      <ConfirmModal modal={confirmModal} />
-    </div>
-  );
-}
+// The Finalize control is NOT on this screen. It used to be a card pinned
+// under the player cards for the whole round; it now lives in an app-level
+// notification plus a modal sheet — see components/FinalizeRound.jsx for
+// what was wrong with the card and what replaced it.
 
 
 // ── Score Entry ──
@@ -440,7 +286,7 @@ function FinalizeRoundCard({ round, nextRound, lastFinal, progress, tPlayers, on
 // The round selector this view used to carry is gone: entry is gated to the
 // current round (see "The round gate" above), so there is nothing left to
 // select between and no strip of rounds at the top either.
-function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teams, hcpOverrides, teeAssignments, roundLocks, rounds, currentRound, onFinalizeRound, ctpData, onSetCtp }) {
+function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teams, hcpOverrides, teeAssignments, roundLocks, rounds, currentRound, ctpData, onSetCtp }) {
   const userPid = user.player_id;
   // This screen is worked from, not read down — four players' scores have to
   // be reachable without scrolling to the one at the bottom. It measures the
@@ -517,41 +363,21 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // never diverge — one allocation, one source.
   const strokeMaps = result?.strokeMaps || {};
 
-  // Whole-round progress, for the director's Finalize card. Computed over
-  // every match in the round, not the reader's own.
-  const roundProgress = useMemo(
-    () => roundScoreProgress(matches, holeData, currentRound),
-    [matches, holeData, currentRound]
-  );
-
   // No more hooks below this line.
 
-  // ── The gate's chrome ──
-  // This belongs on EVERY branch below, including the ones a player who isn't
-  // drawn in this round lands on: the Finalize card has to reach a director
-  // who is running the event without playing in it.
-  const directorCard = user.isDirector && (rounds.length > 0) ? (
-    <FinalizeRoundCard
-      round={currentRound}
-      nextRound={nextRoundNumber(roundLocks, rounds)}
-      lastFinal={lastFinalRoundNumber(roundLocks, rounds)}
-      progress={roundProgress}
-      tPlayers={tPlayers}
-      onFinalizeRound={onFinalizeRound}
-      notify={notify}
-    />
-  ) : null;
   // `1 0 auto` — grow to fill the view, never shrink below content. The
   // screen therefore fills a tall phone and, if even the tight density can't
   // fit a short one, spills into a normal scroll rather than clipping a
   // player card off the bottom.
+  //
+  // Nothing director-only hangs off the bottom of this any more: the whole
+  // height belongs to the four player cards. See the note above ScoreEntry.
   const shell = (children) => (
     <div ref={fitRef} style={{
       fontFamily: FONT,
       display: "flex", flexDirection: "column", flex: "1 0 auto", minHeight: 0,
     }}>
       {children}
-      {directorCard}
       <Toast message={toast} />
     </div>
   );
@@ -3708,7 +3534,12 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
 }
 
 // ── Slide-up Menu ──
-function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, onToggleTheme }) {
+// `finalize` is the director's always-available route to the Finalize sheet:
+// { label, ready, onOpen }, or null for a player / an event with no rounds.
+// The notification only fires on a COMPLETE round, so this is the path to
+// finalizing early — a withdrawal or a conceded match leaves holes the
+// notification would wait forever for.
+function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, onToggleTheme, finalize }) {
   const dragRef = useRef(null);
   const startYRef = useRef(null);
   const [dragY, setDragY] = useState(0);
@@ -3727,6 +3558,10 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, 
 
   if (!open) return null;
   const items = [
+    // Finalize leads: it is the only item here that is an ACTION on the live
+    // tournament rather than a place to go, and the only one that is ever
+    // time-critical.
+    ...(finalize ? [{ key: "finalize", label: finalize.label, icon: "🏁", action: finalize.onOpen, flag: finalize.ready }] : []),
     { key: "analytics", label: "Player Analytics", icon: "📊" },
     { key: "history",   label: "Historical Data",  icon: "📅" },
     { key: "photos",    label: "Photo Library",     icon: "📸", external: true },
@@ -3761,6 +3596,9 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, 
           const isActive = item.key === view;
           return (
             <button key={item.key} onClick={() => {
+              // An action item settles here and never navigates — there is no
+              // `finalize` view to route to, only a sheet to raise.
+              if (item.action) { item.action(); onClose(); return; }
               if (item.external) { window.open("https://thebourboncup.com/photos", "_blank"); onClose(); return; }
               onNavigate(item.key); onClose();
             }} style={{
@@ -3768,13 +3606,13 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, 
               background: isActive ? BC.amber + ALPHA.wash : "transparent",
               borderTop: idx === 0 ? "none" : `1px solid ${BC.bdr}${ALPHA.hair}`,
               borderLeft: "none", borderRight: "none", borderBottom: "none",
-              color: isActive ? BC.amber : BC.t1,
-              fontSize: FS.body, fontWeight: isActive ? 700 : 500,
+              color: isActive || item.flag ? BC.amber : BC.t1,
+              fontSize: FS.body, fontWeight: isActive || item.flag ? 700 : 500,
               cursor: "pointer", textAlign: "left",
               display: "flex", alignItems: "center", justifyContent: "space-between",
             }}>
               <span>{item.label}</span>
-              {isActive && <span style={{ width: 6, height: 6, borderRadius: "50%", background: BC.amber, flexShrink: 0 }} />}
+              {(isActive || item.flag) && <span style={{ width: 6, height: 6, borderRadius: "50%", background: BC.amber, flexShrink: 0 }} />}
             </button>
           );
         })}
@@ -3981,6 +3819,29 @@ export default function App() {
   // every later edit to a player's index, override, tee, or the course.
   const [roundLocksData, setRoundLocksData] = useState({});
 
+  // ── Finalize: the sheet, and the notification's snooze ────────────
+  // `finalizeOpen` raises components/FinalizeRound's sheet. `finalizeSnoozed`
+  // is the round whose ready-to-finalize notification the director has
+  // dismissed — a round number, not a boolean, so the next round's
+  // notification is a NEW one and shows on its own merits.
+  //
+  // Persisted, because the alternative is nagging: the director who taps ✕
+  // has decided to finalize later, and a refresh (or the pull-to-refresh
+  // this app encourages, or an iOS PWA reloading itself in the background)
+  // would otherwise put the bar straight back. The dot on More survives the
+  // dismissal, so nothing is actually lost by remembering it.
+  const [finalizeOpen, setFinalizeOpen] = useState(false);
+  const [finalizeSnoozed, setFinalizeSnoozed] = useState(() => {
+    try {
+      const v = localStorage.getItem(finalizeSnoozeKey());
+      return v == null ? null : Number(v);
+    } catch { return null; }
+  });
+  const snoozeFinalizeAlert = useCallback((rnd) => {
+    setFinalizeSnoozed(rnd);
+    try { localStorage.setItem(finalizeSnoozeKey(), String(rnd)); } catch { /* private mode */ }
+  }, []);
+
   // Refs mirroring the live data the auto-lock needs. The save path runs
   // outside React's render cycle and must snapshot what is true RIGHT NOW —
   // reading these through state would capture whatever the callback closed
@@ -4039,7 +3900,7 @@ export default function App() {
   // Keep popupOpenRef in sync with menuOpen so touch handlers see
   // "popup is open" without having to participate in React's render cycle.
   // If additional top-level modals get added later, OR them in here.
-  useEffect(() => { popupOpenRef.current = menuOpen; }, [menuOpen]);
+  useEffect(() => { popupOpenRef.current = menuOpen || finalizeOpen; }, [menuOpen, finalizeOpen]);
 
   // Reconcile the edition doc-id namespacing flag from the canonical edition
   // doc, in case localStorage (which seeds it synchronously in firebase.js)
@@ -4528,7 +4389,42 @@ export default function App() {
     [roundLocksData, tournamentRounds]
   );
 
+  // ── Ready to finalize ────────────────────────────────────────────────
+  // Lives at the app level, not inside a tab, because that is the whole
+  // point of the change: the director learns the round is done wherever
+  // they happen to be standing. Computed over EVERY match in the round —
+  // see components/FinalizeRound's roundScoreProgress.
+  const roundProgress = useMemo(
+    () => roundScoreProgress(enrichedMatches, holeData, currentRound),
+    [enrichedMatches, holeData, currentRound]
+  );
+  const isDirector = !!user?.isDirector;
+  // "Ready" is the blunt, complete-round definition, and deliberately so: a
+  // notification that fired on a guess ("looks about done") would be the
+  // same accident the round gate exists to prevent, pointed at the one
+  // action that moves the whole field. Everything else goes through More.
+  const finalizeReady = isDirector && currentRound != null && roundProgress.complete;
+  const finalizeNextRound = useMemo(
+    () => nextRoundNumber(roundLocksData, tournamentRounds),
+    [roundLocksData, tournamentRounds]
+  );
+  const finalizeLastFinal = useMemo(
+    () => lastFinalRoundNumber(roundLocksData, tournamentRounds),
+    [roundLocksData, tournamentRounds]
+  );
+
   if (!user) return <LoginScreen players={tPlayers} teams={teams} darkMode={darkMode} tournamentName={tournamentName} tournamentLocation={tournamentLocation} onLogin={p => { const u = { ...p, isDirector: !!p.isDirector }; writeUserSession(u); setUser(u); }} />;
+
+  // The director's always-available route to the sheet, surfaced in More.
+  // Null for a player, and for an event with no rounds to finalize.
+  const finalizeMenu = isDirector && tournamentRounds.length > 0 ? {
+    label: currentRound != null ? `Finalize Round ${currentRound}` : "Reopen last round",
+    ready: finalizeReady,
+    onOpen: () => setFinalizeOpen(true),
+  } : null;
+  // The notification itself: only when the round is genuinely ready, and
+  // only until the director puts it away for that round.
+  const showFinalizeAlert = finalizeReady && finalizeSnoozed !== currentRound;
 
   // Bottom-nav items.
   const navItems = [
@@ -4635,6 +4531,22 @@ export default function App() {
           tab can't squeeze it. */}
       <AppHeader location={tournamentLocation} />
 
+      {/* Ready-to-finalize notification — app chrome, like the header above
+          it, so it reaches the director on whichever tab they are on rather
+          than only at the bottom of Scoring. Outside the scroll area for the
+          same reason the header is: it must not scroll away, and it must not
+          be a fifth copy of itself inside five views. Costs nothing at all
+          when there is nothing to act on. */}
+      {showFinalizeAlert && (
+        <DirectorFinalizeAlert
+          round={currentRound}
+          nextRound={finalizeNextRound}
+          progress={roundProgress}
+          onOpen={() => setFinalizeOpen(true)}
+          onDismiss={() => snoozeFinalizeAlert(currentRound)}
+        />
+      )}
+
       {/* Content */}
       <div className="bc-app-body" style={{
         flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden",
@@ -4713,7 +4625,6 @@ export default function App() {
             roundLocks={roundLocksData}
             rounds={tournamentRounds}
             currentRound={currentRound}
-            onFinalizeRound={onFinalizeRound}
             ctpData={ctpData}
             onSetCtp={onSetCtp}
           />
@@ -4826,7 +4737,22 @@ export default function App() {
         </div>
       </div>
 
-      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={() => { writeUserSession(null); setUser(null); }} user={user} view={view} darkMode={darkMode} onToggleTheme={toggleTheme} />
+      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={() => { writeUserSession(null); setUser(null); }} user={user} view={view} darkMode={darkMode} onToggleTheme={toggleTheme} finalize={finalizeMenu} />
+
+      {/* The Finalize sheet — everything the removed Scoring card held, at
+          zero cost until it is opened. */}
+      {finalizeOpen && finalizeMenu && (
+        <FinalizeRoundSheet
+          round={currentRound}
+          nextRound={finalizeNextRound}
+          lastFinal={finalizeLastFinal}
+          progress={roundProgress}
+          tPlayers={tPlayers}
+          onFinalizeRound={onFinalizeRound}
+          notify={notify}
+          onClose={() => setFinalizeOpen(false)}
+        />
+      )}
       </div>
 
       {/* Bottom Nav — FIXED to the viewport bottom (restored pre-2026-07-21
@@ -4843,6 +4769,11 @@ export default function App() {
         {navItems.map(item => {
           const active = view === item.key;
           const clr = active ? BC.amber : BC.t3;
+          // The notification's persistent half. The bar above can be
+          // dismissed; this dot cannot, and it stays lit until the round is
+          // actually finalized — pointing at More, which is where the sheet
+          // is. Dismissing a reminder should quiet it, not delete the fact.
+          const badge = item.key === "menu" && finalizeReady;
           return (
             <button key={item.key} onClick={() => {
               if (item.key === "menu") { setMenuOpen(true); return; }
@@ -4851,8 +4782,13 @@ export default function App() {
               flex: 1, padding: "8px 4px 10px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 3,
               background: "transparent", border: "none", cursor: "pointer", minHeight: 56,
             }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 24 }}>
+              <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", height: 24 }}>
                 {renderIcon(item.icon, active)}
+                {badge && <span style={{
+                  position: "absolute", top: 1, right: "50%", marginRight: -14,
+                  width: 8, height: 8, borderRadius: "50%", background: BC.amber,
+                  border: `1.5px solid ${BC.card}`, boxSizing: "content-box",
+                }} />}
               </div>
               <span style={{ fontSize: FS.label, fontWeight: active ? 700 : 500, color: clr, lineHeight: 1 }}>{item.label}</span>
               {active && <div style={{ width: 16, height: 2, borderRadius: 1, background: BC.amber, marginTop: 2 }} />}

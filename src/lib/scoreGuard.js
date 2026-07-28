@@ -24,14 +24,46 @@
 // Everything here is pure and reads the in-memory `holeData` map the app
 // already subscribes to: holeData[`${pid}_${round}`][holeIdx] = gross.
 // A cleared score writes a 0 rather than removing the document, so "has a
-// score" is `> 0` everywhere — the same test roundScoreProgress uses, so
-// these counts and the finalize card's can never disagree.
+// score" is `> 0` everywhere — including in roundScoreProgress below, so
+// these counts and the finalize sheet's can never disagree.
 
 import { matchPlayers } from "./groups";
 
 // How many holes this player has actually posted in this round.
 export const holesEntered = (holeData, pid, round) =>
   Object.values(holeData?.[`${pid}_${round}`] || {}).filter(s => s > 0).length;
+
+// ── Whole-round progress ────────────────────────────────────────────
+// Counts EVERY player in EVERY match of the round, not one reader's own
+// match: this is what tells the director the round is finished, and what
+// the ready-to-finalize notification fires on (components/FinalizeRound).
+//
+// It lives here rather than beside that component because a lib module can
+// be imported by anything without dragging a React tree behind it — and
+// because it is the same "> 0 means posted" reading of holeData as
+// everything else in this file.
+export function roundScoreProgress(matches, holeData, round) {
+  const rndMatches = round == null ? [] : (matches || []).filter(m => m.round === round);
+  const pids = [...new Set(rndMatches.flatMap(matchPlayers))];
+  const missingBy = [];
+  let entered = 0;
+  pids.forEach(pid => {
+    // Clamped at the 18 a round has: `entered` is compared against a total
+    // of pids × 18, so a stray key outside 0–17 must not be able to push a
+    // partial round past "complete".
+    const posted = Math.min(18, holesEntered(holeData, pid, round));
+    entered += posted;
+    if (posted < 18) missingBy.push({ pid, missing: 18 - posted });
+  });
+  const total = pids.length * 18;
+  return {
+    total, entered, missing: total - entered,
+    missingBy: missingBy.sort((a, b) => b.missing - a.missing),
+    // An empty round is not a finished one — a round with no matches drawn
+    // has nothing to be complete about.
+    complete: total > 0 && entered === total,
+  };
+}
 
 // [{ pid, holes }] for the given players, heaviest card first, silent players
 // dropped. The order matters: when this list is read out in a confirmation
