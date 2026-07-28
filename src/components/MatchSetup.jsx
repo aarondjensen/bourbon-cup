@@ -501,20 +501,22 @@ export function MatchSetup({
         ))}
       </div>
 
-      {/* Round context — course, format, first tee. All set on other tabs;
-          repeated here because you cannot sensibly build a draw without it
-          in front of you. */}
+      {/* Round context — the course and the format, both set on other tabs and
+          repeated here because you cannot sensibly build a draw without them
+          in front of you.
+
+          The first tee used to sit beside them, and the format line used to
+          carry "2 per side · each match is a foursome". Both are said better
+          by the draw itself a few inches below: G1 is stamped with the time it
+          goes off, and how many players a match holds is plain from the rows
+          in it. The size hint survives where it can still tell you something
+          you don't already see — over an over-filled selection. */}
       <div style={{ ...cardStyle, padding: "9px 12px", marginBottom: 10 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-          <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.t1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {course?.name || "Course TBD"}
-          </div>
-          <div style={{ fontSize: FS.label, color: firstTee ? BC.amber : BC.danger, fontWeight: 700, flexShrink: 0 }}>
-            {firstTee ? `1st tee ${firstTee}` : "No tee time set"}
-          </div>
+        <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.t1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {course?.name || "Course TBD"}
         </div>
         <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 3 }}>
-          {fmt?.label || "Format TBD"} · {sizeHint}{autoFoursomes ? " · each match is a foursome" : ""}
+          {fmt?.label || "Format TBD"}
         </div>
       </div>
 
@@ -541,8 +543,11 @@ export function MatchSetup({
           const pool = poolFor(tid, sel);
           return (
             <div key={tid}>
+              {/* Just the team's name. The "0/1" counter that used to follow
+                  it was counting the taps you had already made, in a column
+                  where the ones you made are the lit rows. */}
               <div style={{ fontSize: FS.label, fontWeight: 700, color: team.accent, letterSpacing: 1, marginBottom: 5 }}>
-                {teamNames?.[tid]}{perSide ? ` · ${sel.length}/${perSide}` : ""}
+                {teamNames?.[tid]}
               </div>
               {pool.length === 0 && (
                 <div style={{ fontSize: FS.label, color: BC.t3, padding: "7px 8px", borderRadius: 8, border: `1px dashed ${BC.bdr}`, textAlign: "center" }}>
@@ -630,11 +635,9 @@ export function MatchSetup({
           <button onClick={buildGroups} style={miniBtn}>Auto-build</button>
         </div>
       )}
-      {rndMatches.length === 0 && (
-        <div style={{ fontSize: FS.label, color: BC.t3, padding: "10px 12px", borderRadius: 10, border: `1px dashed ${BC.bdr}`, textAlign: "center", marginBottom: 10 }}>
-          No matches yet for Rd {round} — build one above and it goes off {firstTee || "the first tee"}.
-        </div>
-      )}
+      {/* No "no matches yet" placeholder. An undrawn round already shows four
+          tee times reading OPEN, which says the same thing in the place the
+          matches are about to appear. */}
 
       {/* One section per tee time, each a drop target. Sections are only the
           draw's shape where a match fits in one group; a team format's match
