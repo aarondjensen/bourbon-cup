@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { BC, FS, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor } from "./theme";
+import { BC, ON_AMBER, FS, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor } from "./theme";
 import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession } from "./firebase";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
@@ -488,7 +488,7 @@ function FinalizeRoundCard({ round, nextRound, lastFinal, progress, tPlayers, on
             width: "100%", padding: "11px 0", borderRadius: 10, cursor: busy ? "default" : "pointer",
             border: progress.complete ? "none" : `1px solid ${BC.amber}66`,
             background: progress.complete ? BC.amber : "transparent",
-            color: progress.complete ? "#0a0804" : BC.amber,
+            color: progress.complete ? ON_AMBER : BC.amber,
             fontSize: FS.body, fontWeight: 800, letterSpacing: 0.5, opacity: busy ? 0.6 : 1,
           }}>
             {busy ? "Working…" : `Finalize Round ${round}`}
@@ -952,7 +952,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
         flex: 1, height: 32, borderRadius: allScored || cur ? 8 : 6,
         border: allScored && !cur ? `1.5px solid ${BC.amber}50` : "none",
         background: cur ? BC.amber : allScored ? BC.amber + "15" : partial ? BC.amber + "0a" : BC.card,
-        color: cur ? "#0a0804" : allScored ? BC.amber : BC.t3,
+        color: cur ? ON_AMBER : allScored ? BC.amber : BC.t3,
         fontSize: FS.lead, fontWeight: 700, cursor: "pointer",
         outline: cur ? `2px solid ${BC.amber}` : "none", outlineOffset: 1,
       }}>{h + 1}</button>
@@ -2027,9 +2027,18 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
     if (c && tee.color !== "#000" && tee.color !== "#000000") return tee.color;
     return ["#60a5fa","#f59e0b","#a78bfa","#34d399","#fb923c"][index % 5];
   };
+  // The colour of a tee whose colour nobody has set. A neutral mid-grey, so
+  // it reads as "unset" rather than as some fifteenth tee colour.
+  const TEE_COLOR_UNSET = "#888888";
+  // A swatch has to stay visible against BOTH the card it sits on and its own
+  // fill, and the two failure cases pull opposite ways: a white/silver tee
+  // disappears into light mode, a black tee into dark. So the ring is drawn in
+  // the opposite direction for pale fills. This is the only place that rule
+  // lives — every swatch in the console renders through this component, at
+  // whatever `size` its row calls for.
   const TeeColorSwatch = ({ color, name, size = 12 }) => {
     const isLight = ["#e8e8e8","#a8b2bd","#c0c0c0","#f7e7ce"].includes((color||"").toLowerCase());
-    return <span style={{ display:"inline-block", width:size, height:size, borderRadius:3, background:color||"#888", border:`1px solid ${isLight?"#99999960":"#ffffff15"}`, flexShrink:0 }} />;
+    return <span title={name} style={{ display:"inline-block", width:size, height:size, borderRadius:3, background:color||TEE_COLOR_UNSET, border:`1px solid ${isLight?"#00000033":"#ffffff26"}`, flexShrink:0 }} />;
   };
 
   // Query the course APIs (RapidAPI + GolfCourseAPI) and return parsed
@@ -2125,7 +2134,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
   const InputStyle = { width: "100%", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.body, boxSizing: "border-box", outline: "none", fontFamily: "'Montserrat', sans-serif" };
   const LabelStyle = { fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1, marginBottom: 4, display: "block" };
-  const BtnStyle = { padding: "10px 20px", borderRadius: 10, border: "none", fontSize: FS.body, fontWeight: 700, cursor: "pointer", background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`, color: "#0a0804" };
+  const BtnStyle = { padding: "10px 20px", borderRadius: 10, border: "none", fontSize: FS.body, fontWeight: 700, cursor: "pointer", background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`, color: ON_AMBER };
 
   return (
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
@@ -2140,7 +2149,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
           <button key={k} onClick={() => setTab(k)} style={{
             flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: FS.label, fontWeight: 700, cursor: "pointer", border: "none",
             background: tab === k ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
-            color: tab === k ? "#0a0804" : BC.t3,
+            color: tab === k ? ON_AMBER : BC.t3,
           }}>{lbl}</button>
         ))}
       </div>
@@ -2386,7 +2395,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   )}
                   <span style={{ flex: 1 }} />
                   <button onClick={close} style={{ padding: "10px 16px", borderRadius: 10, background: BC.inp, border: `1px solid ${BC.bdr}`, color: BC.t2, fontSize: FS.body, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
-                  <button onClick={doSave} style={{ padding: "10px 20px", borderRadius: 10, background: acc, border: "none", color: "#0a0804", fontSize: FS.body, fontWeight: 800, cursor: "pointer" }}>{isNew ? "Add" : "Save"}</button>
+                  <button onClick={doSave} style={{ padding: "10px 20px", borderRadius: 10, background: acc, border: "none", color: ON_AMBER, fontSize: FS.body, fontWeight: 800, cursor: "pointer" }}>{isNew ? "Add" : "Save"}</button>
                 </div>
               </Popup>
             );
@@ -2406,7 +2415,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 flex: 1, padding: "8px 4px", borderRadius: 10, fontSize: FS.small, fontWeight: 700, cursor: "pointer",
                 background: editRound === r ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
                 border: `1px solid ${editRound === r ? "transparent" : BC.bdr}`,
-                color: editRound === r ? "#0a0804" : BC.t2,
+                color: editRound === r ? ON_AMBER : BC.t2,
               }}>Rd {r}</button>
             ))}
           </div>
@@ -2603,7 +2612,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               const bbPill = (active) => ({
                 padding: "4px 12px", borderRadius: 16, fontSize: FS.label, fontWeight: 700, border: "none", cursor: "pointer",
                 background: active ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
-                color: active ? "#0a0804" : BC.t3,
+                color: active ? ON_AMBER : BC.t3,
               });
               return (
                 <div style={{ marginBottom: 12 }}>
@@ -2842,7 +2851,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 padding: "4px 12px", borderRadius: 16, fontSize: FS.label, fontWeight: 700, border: "none",
                 cursor: disabled ? "not-allowed" : "pointer",
                 background: active ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
-                color: active ? "#0a0804" : (disabled ? BC.t3 + "66" : BC.t3),
+                color: active ? ON_AMBER : (disabled ? BC.t3 + "66" : BC.t3),
               });
               const numField = (k, lbl) => (
                 <div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}>
@@ -2977,7 +2986,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 padding: "4px 12px", borderRadius: 16, fontSize: FS.label, fontWeight: 700, border: "none",
                 cursor: disabled ? "not-allowed" : "pointer",
                 background: active ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
-                color: active ? "#0a0804" : BC.t3,
+                color: active ? ON_AMBER : BC.t3,
               });
               const pctField = (k, lbl, hint) => (
                 <div key={k} style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -3355,7 +3364,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         }} style={{
                           padding: "3px 6px", borderRadius: 4, fontSize: FS.label, fontWeight: 700, cursor: "pointer", minWidth: 24, textAlign: "center",
                           background: isAssigned ? BC.amber : "transparent",
-                          color: isAssigned ? "#0a0804" : BC.t3,
+                          color: isAssigned ? ON_AMBER : BC.t3,
                           border: `1px solid ${isAssigned ? BC.amber : BC.bdr}`,
                         }}>R{r}</button>
                       );
@@ -3368,7 +3377,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   <div style={{ padding: "0 14px 12px", background: BC.amber + "06" }}>
                     {(c.tee_boxes || []).sort((a,b) => (parseFloat(b.slope)||0) - (parseFloat(a.slope)||0)).map((tb, tbi) => (
                       <div key={tbi} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 3, fontSize: FS.label }}>
-                        <span style={{ display:"inline-block", width:10, height:10, borderRadius:2, background:tb.color||"#888", flexShrink:0 }} />
+                        <TeeColorSwatch color={tb.color} name={tb.name} size={10} />
                         <span style={{ color: BC.t2, fontWeight: 600, width: 50 }}>{tb.name}</span>
                         <span style={{ color: BC.t3 }}>Rating {tb.rating} · Slope {tb.slope} · Par {tb.par}</span>
                       </div>
@@ -3500,7 +3509,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                             style={{ fontSize: FS.label, padding: "2px 7px", borderRadius: 4, background: "transparent", border: `1px solid ${BC.hcpBlue}60`, color: BC.hcpBlue, cursor: refetchingTees ? "default" : "pointer", fontWeight: 700, opacity: refetchingTees ? 0.5 : 1 }}>
                             {refetchingTees ? "Fetching…" : "⟳ Re-fetch tees"}
                           </button>
-                          <button onClick={() => setDraft(p => ({ ...p, tee_boxes: [...(p.tee_boxes||[]), { name: "", color: "#888888", rating: 72.0, slope: 113, par: 72, yardage: 0 }] }))}
+                          <button onClick={() => setDraft(p => ({ ...p, tee_boxes: [...(p.tee_boxes||[]), { name: "", color: TEE_COLOR_UNSET, rating: 72.0, slope: 113, par: 72, yardage: 0 }] }))}
                             style={{ fontSize: FS.label, padding: "2px 7px", borderRadius: 4, background: "transparent", border: `1px solid ${BC.amber}60`, color: BC.amber, cursor: "pointer", fontWeight: 700 }}>+ Tee</button>
                         </div>
                       </div>
@@ -3510,7 +3519,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       </div>
                       {tbs.map((tb, i) => (
                         <div key={i} style={{ display: "grid", gridTemplateColumns: "18px 1fr 44px 38px 30px 46px 18px", gap: "3px 4px", marginBottom: 4, alignItems: "center" }}>
-                          <span style={{ display:"inline-block", width:18, height:18, borderRadius:3, background:tb.color||"#888", border:"1px solid #ffffff20", flexShrink:0 }} />
+                          <TeeColorSwatch color={tb.color} name={tb.name} size={18} />
                           <input value={tb.name} onChange={e => setDraft(p => { const t=[...p.tee_boxes]; t[i]={...t[i],name:e.target.value}; return {...p,tee_boxes:t}; })} style={{...tiL}} placeholder="Name" />
                           <input value={tb.rating} onChange={e => setDraft(p => { const t=[...p.tee_boxes]; t[i]={...t[i],rating:e.target.value}; return {...p,tee_boxes:t}; })} style={ti} />
                           <input value={tb.slope} onChange={e => setDraft(p => { const t=[...p.tee_boxes]; t[i]={...t[i],slope:e.target.value}; return {...p,tee_boxes:t}; })} style={ti} />
@@ -3588,7 +3597,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         setCoursePreview(null);
                         setSearching(false);
                         notify(`${finalCourse.name} ${isExisting ? "updated" : "added"}!`, "success");
-                      }} style={{ flex: 2, padding: "10px 0", borderRadius: 8, background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`, border: "none", color: "#0a0804", fontSize: FS.body, fontWeight: 700, cursor: "pointer" }}>{isExisting ? "✓ Save Changes" : "✓ Add Course"}</button>
+                      }} style={{ flex: 2, padding: "10px 0", borderRadius: 8, background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`, border: "none", color: ON_AMBER, fontSize: FS.body, fontWeight: 700, cursor: "pointer" }}>{isExisting ? "✓ Save Changes" : "✓ Add Course"}</button>
                     </div>
                   </div>
               </Popup>
@@ -3626,7 +3635,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   name: editTournamentName.trim() || TOURNAMENT_TITLE,
                   location: editTournamentLocation.trim() || TOURNAMENT_LOCATION,
                 })}
-                style={{ flexShrink: 0, fontSize: FS.small, fontWeight: 700, color: "#0a0804", background: BC.amber, border: "none", borderRadius: 6, padding: "8px 14px", cursor: "pointer" }}
+                style={{ flexShrink: 0, fontSize: FS.small, fontWeight: 700, color: ON_AMBER, background: BC.amber, border: "none", borderRadius: 6, padding: "8px 14px", cursor: "pointer" }}
               >Save</button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -3677,7 +3686,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     disabled={!dirty}
                     style={{
                       flexShrink: 0, fontSize: FS.small, fontWeight: 700, borderRadius: 6, padding: "8px 14px", whiteSpace: "nowrap",
-                      color: dirty ? "#0a0804" : BC.t3,
+                      color: dirty ? ON_AMBER : BC.t3,
                       background: dirty ? BC.amber : BC.inp,
                       border: dirty ? "none" : `1px solid ${BC.bdr}`,
                       cursor: dirty ? "pointer" : "default",
@@ -3806,7 +3815,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
               <button key={lbl} onClick={() => setGrossMode(val)} style={{
                 flex: 1, padding: "5px 0", borderRadius: 12, fontSize: FS.label, fontWeight: 700, cursor: "pointer", border: "none",
                 background: grossMode === val ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
-                color: grossMode === val ? "#0a0804" : BC.t3,
+                color: grossMode === val ? ON_AMBER : BC.t3,
               }}>{lbl}</button>
             ))}
           </div>
@@ -3837,7 +3846,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
                 flex: 1, padding: "7px 4px", borderRadius: 8, fontSize: FS.small, fontWeight: 700, cursor: "pointer",
                 background: activeRound === r ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
                 border: `1px solid ${activeRound === r ? "transparent" : BC.bdr}`,
-                color: activeRound === r ? "#0a0804" : BC.t2,
+                color: activeRound === r ? ON_AMBER : BC.t2,
               }}>Rd {r}</button>
             ))}
           </div>
@@ -4343,7 +4352,7 @@ function PracticeScoringTab({
         flex: 1, height: 32, borderRadius: allScored || cur ? 8 : 6,
         border: allScored && !cur ? `1.5px solid ${BC.amber}50` : "none",
         background: cur ? BC.amber : allScored ? BC.amber + "15" : partial ? BC.amber + "0a" : BC.card,
-        color: cur ? "#0a0804" : allScored ? BC.amber : BC.t3,
+        color: cur ? ON_AMBER : allScored ? BC.amber : BC.t3,
         fontSize: FS.lead, fontWeight: 700, cursor: "pointer",
         outline: cur ? `2px solid ${BC.amber}` : "none", outlineOffset: 1,
       }}>{h + 1}</button>
@@ -4831,16 +4840,16 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
       return (
         <div style={{ marginBottom: 10, border: `1px solid ${BC.bdr}`, borderRadius: 10, overflow: "hidden" }}>
           <div style={{ display: "flex", background: BC.amber }}>
-            <div style={{ ...lblBase, height: 26, color: "#0a0804", opacity: 0.85, borderRight: "none", fontWeight: 800, fontSize: FS.label }}>
+            <div style={{ ...lblBase, height: 26, color: ON_AMBER, opacity: 0.85, borderRight: "none", fontWeight: 800, fontSize: FS.label }}>
               {offset === 0 ? "FRONT" : "BACK"}
             </div>
             {Array.from({ length: 9 }, (_, i) => (
               <div key={i} style={{ flex: 1, height: 26, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <span style={{ fontSize: FS.small, fontWeight: 800, color: "#0a0804" }}>{i + offset + 1}</span>
+                <span style={{ fontSize: FS.small, fontWeight: 800, color: ON_AMBER }}>{i + offset + 1}</span>
               </div>
             ))}
             <div style={{ ...totBase, height: 26, borderLeft: "none" }}>
-              <span style={{ fontSize: FS.label, fontWeight: 800, color: "#0a0804" }}>TOT</span>
+              <span style={{ fontSize: FS.label, fontWeight: 800, color: ON_AMBER }}>TOT</span>
             </div>
           </div>
           <div style={{ display: "flex", borderBottom: gridLine, background: BC.amber + "18" }}>
@@ -5176,7 +5185,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
           width: "100%", padding: "12px 0", borderRadius: 10,
           background: allTeamsComplete && selCourse ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.inp,
           border: `1px solid ${allTeamsComplete && selCourse ? BC.amber : BC.bdr}`,
-          color: allTeamsComplete && selCourse ? "#0a0804" : BC.t3,
+          color: allTeamsComplete && selCourse ? ON_AMBER : BC.t3,
           fontSize: FS.body, fontWeight: 800, cursor: allTeamsComplete && selCourse ? "pointer" : "not-allowed",
           letterSpacing: 1, marginBottom: 10,
         }}>
@@ -5837,7 +5846,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                 flex: 1, padding: "7px 8px", borderRadius: 17,
                 fontSize: FS.small, fontWeight: 700, border: "none",
                 background: isAct ? BC.amber : "transparent",
-                color: isAct ? "#0a0804" : BC.t3,
+                color: isAct ? ON_AMBER : BC.t3,
                 cursor: isAct ? "default" : "pointer",
                 transition: "all .2s",
               }}>{t.label}</button>
@@ -5969,7 +5978,7 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, 
               <span style={{
                 position: "absolute", top: 2, left: darkMode ? 18 : 2,
                 width: 16, height: 16, borderRadius: "50%",
-                background: darkMode ? "#0a0804" : BC.card,
+                background: darkMode ? ON_AMBER : BC.card,
                 transition: "left 0.2s ease",
                 boxShadow: "0 1px 2px rgba(0,0,0,0.3)",
               }} />

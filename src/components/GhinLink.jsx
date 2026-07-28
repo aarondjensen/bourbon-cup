@@ -36,7 +36,7 @@
 //  ghin_rev_date, ghin_synced_at. db.upsert merges → unlink writes nulls.
 
 import { useState, useEffect, useRef } from "react";
-import { BC, FS } from "../theme";
+import { BC, ON_AMBER, FS } from "../theme";
 import { Popup } from "./Popup";
 import { searchGhinGolfers, syncGhinNumbers, parseGhinHI, fmtHI } from "../lib/ghin";
 
@@ -46,7 +46,7 @@ const US_STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","
 
 const primaryBtn = (color) => ({
   width: "100%", boxSizing: "border-box", padding: "14px 14px", borderRadius: 12,
-  border: "none", background: color, color: "#0a0804", fontSize: FS.lead, fontWeight: 800,
+  border: "none", background: color, color: ON_AMBER, fontSize: FS.lead, fontWeight: 800,
   cursor: "pointer", fontFamily: FONT,
 });
 const ghostBtn = {

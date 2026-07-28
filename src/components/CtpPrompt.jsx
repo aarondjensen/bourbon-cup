@@ -25,7 +25,7 @@
 
 import { useState } from "react";
 import { Popup } from "./Popup";
-import { BC, FS } from "../theme";
+import { BC, ON_AMBER, FS } from "../theme";
 
 // Wheel geometry. WHEEL_H must leave a whole number of item slots above
 // and below the selection band, hence the (WHEEL_H - WHEEL_ITEM) / 2
@@ -162,7 +162,7 @@ export function CtpPrompt({ holeNumber, players, teams, leader, leaderName, onSa
           width: "100%", padding: 13, borderRadius: 10,
           background: pid ? BC.amber : BC.inp,
           border: pid ? "none" : `1px solid ${BC.bdr}`,
-          color: pid ? "#0a0804" : BC.t3,
+          color: pid ? ON_AMBER : BC.t3,
           fontSize: FS.body, fontWeight: 800, letterSpacing: 0.8,
           cursor: pid && !saving ? "pointer" : "default",
           opacity: saving ? 0.7 : 1,

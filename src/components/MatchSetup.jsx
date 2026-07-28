@@ -25,7 +25,7 @@
 // it, not the main road.
 
 import { useLayoutEffect, useRef, useState } from "react";
-import { BC, FS } from "../theme";
+import { BC, ON_AMBER, FS } from "../theme";
 import { FORMATS } from "../constants";
 import { TOURNAMENT_ID, editionDocId } from "../firebase";
 import { getRoundCH, getRoundHandicapMode, lockForRound } from "../scoring";
@@ -484,7 +484,7 @@ export function MatchSetup({
         fontSize: FS.small, fontWeight: 700, textAlign: "left",
         background: lifted ? BC.amber : team.color + (dim ? "22" : "44"),
         border: `1.5px solid ${lifted ? BC.amber : team.accent + "55"}`,
-        color: lifted ? "#0a0804" : team.accent,
+        color: lifted ? ON_AMBER : team.accent,
       }}>{shortOf(pid)}</button>
     );
   };
@@ -615,7 +615,7 @@ export function MatchSetup({
             flex: 1, padding: "7px 4px", borderRadius: 8, fontSize: FS.small, fontWeight: 700, cursor: "pointer",
             background: round === r ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
             border: `1px solid ${round === r ? "transparent" : BC.bdr}`,
-            color: round === r ? "#0a0804" : BC.t2, fontFamily: FONT,
+            color: round === r ? ON_AMBER : BC.t2, fontFamily: FONT,
           }}>Rd {r}</button>
         ))}
       </div>
@@ -748,7 +748,7 @@ export function MatchSetup({
         <button onClick={createMatch} style={{
           width: "100%", padding: "10px 20px", borderRadius: 10, border: "none", fontSize: FS.body, fontWeight: 700,
           cursor: "pointer", background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`,
-          color: "#0a0804", marginBottom: 14, fontFamily: FONT,
+          color: ON_AMBER, marginBottom: 14, fontFamily: FONT,
         }}>
           Create Match — {teamASel.map(shortOf).join("/")} vs {teamBSel.map(shortOf).join("/")}
         </button>

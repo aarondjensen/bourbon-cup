@@ -179,6 +179,19 @@ export const applyBCTheme = (mode, brand = null) => {
   for (const key in next) BC[key] = next[key];
 };
 
+// ── Ink on amber ──
+// The one text/fill color that sits ON the amber and gold accents — active
+// segmented tabs, primary buttons, the FRONT/BACK scorecard band, the
+// theme-toggle knob. It is NOT a neutral rung: it does not flip with the
+// mode, because the surface it sits on does not flip either. Amber is amber
+// in light and dark, so its ink is this warm near-black in both.
+//
+// It lived as a private const in ui.jsx and as a bare "#0a0804" at thirty
+// other call sites, which is the same thing as not having a name at all.
+// Reach for this instead of typing the hex; if a surface needs different
+// ink, that surface is not amber and this is the wrong token.
+export const ON_AMBER = "#0a0804";
+
 // ── Type scale ──
 // The app is styled entirely with inline objects, so before this existed
 // every `fontSize:` was a hand-picked number. That produced seventeen

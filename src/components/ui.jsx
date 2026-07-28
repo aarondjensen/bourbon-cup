@@ -9,7 +9,7 @@
 //    • Toast           — the transient "slides down from the top" toast.
 //    • ScoreButtonRow  — the tappable par-relative score entry row.
 
-import { BC, FS } from "../theme";
+import { BC, ON_AMBER, FS } from "../theme";
 
 const FONT = "'Montserrat', sans-serif";
 
@@ -22,7 +22,7 @@ export function SegmentedToggle({ options, value, onChange, variant = "gradient"
   const activeBg = variant === "flat"
     ? BC.amber
     : `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`;
-  const activeFg = variant === "flat" ? "#fff" : "#0a0804";
+  const activeFg = variant === "flat" ? "#fff" : ON_AMBER;
   return (
     <div style={{ display: "flex", background: BC.card, borderRadius: 20, padding: 3, border: `1px solid ${BC.bdr}`, ...style }}>
       {options.map(([k, label]) => {
@@ -100,7 +100,7 @@ export function Toast({ message, top = 30 }) {
       <style>{`@keyframes bcToastDown { 0% { transform: translateX(-50%) translateY(-20px); opacity: 0; } 100% { transform: translateX(-50%) translateY(0); opacity: 1; } }`}</style>
       <div style={{
         position: "fixed", top, left: "50%", transform: "translateX(-50%)",
-        background: BC.amber, color: "#0a0804",
+        background: BC.amber, color: ON_AMBER,
         padding: "12px 32px", borderRadius: 12,
         fontSize: FS.body, fontWeight: 700, zIndex: 1000,
         whiteSpace: "nowrap", textAlign: "center",
@@ -129,10 +129,6 @@ export function Toast({ message, top = 30 }) {
 // called with the new gross; 0 means "clear" (tapping the active button
 // again). `par` drives both the window and the score-shape iconography.
 const SCORE_LABELS = ["Birdie", "Par", "Bogey", "Double", "Triple"];
-
-// Ink used on top of the amber selected-state fill. Matches the value the
-// rest of the app uses for text-on-amber.
-const ON_AMBER = "#0a0804";
 
 export function ScoreButtonRow({ par, score, onScore }) {
   // Recenter — when the saved score falls outside [par-1, par+3] (an ace on
