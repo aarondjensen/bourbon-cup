@@ -36,7 +36,7 @@
 //  ghin_rev_date, ghin_synced_at. db.upsert merges → unlink writes nulls.
 
 import { useState, useEffect, useRef } from "react";
-import { BC, ON_AMBER, FS } from "../theme";
+import { BC, ALPHA, ON_AMBER, FS } from "../theme";
 import { Popup } from "./Popup";
 import { searchGhinGolfers, syncGhinNumbers, parseGhinHI, fmtHI } from "../lib/ghin";
 
@@ -71,7 +71,7 @@ export function GhinBadge({ size = "sm", title = "Handicap Index sourced from GH
       display: "inline-flex", alignItems: "center", boxSizing: "border-box",
       fontSize: s.fontSize, fontWeight: 800, letterSpacing: s.letter, lineHeight: 1,
       padding: s.padding, borderRadius: s.radius, whiteSpace: "nowrap",
-      border: `1px solid ${BLUE}66`, background: BLUE + "1f", color: BLUE, fontFamily: FONT,
+      border: `1px solid ${BLUE}${ALPHA.line}`, background: BLUE + "1f", color: BLUE, fontFamily: FONT,
     }}>GHIN</span>
   );
 }
@@ -231,7 +231,7 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
               <button onClick={() => { setMode("search"); setQ(player.name || ""); setResults([]); setSearched(false); setPending(null); }} style={ghostBtn}>
                 Change / re-link golfer
               </button>
-              <button onClick={unlink} style={{ ...ghostBtn, color: BC.danger, borderColor: BC.danger + "55" }}>
+              <button onClick={unlink} style={{ ...ghostBtn, color: BC.danger, borderColor: BC.danger + ALPHA.line }}>
                 Unlink (keep current HI)
               </button>
             </div>
@@ -320,7 +320,7 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
 
             {/* Pinned confirm bar */}
             {pending && (
-              <div style={{ flexShrink: 0, padding: 14, borderTop: `1px solid ${BC.green}66`, background: BC.inp }}>
+              <div style={{ flexShrink: 0, padding: 14, borderTop: `1px solid ${BC.green}${ALPHA.line}`, background: BC.inp }}>
                 <div style={{ fontSize: FS.body, color: BC.t2, lineHeight: 1.45 }}>
                   Link <b style={{ color: BC.t1 }}>{player.name}</b> to <b style={{ color: BC.t1 }}>{pending.name || `GHIN ${pending.ghin_number}`}</b>
                   {pending.club_name ? ` (${pending.club_name})` : ""}.
@@ -346,7 +346,7 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
           flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 3,
           boxSizing: "border-box", padding: "3px 7px", borderRadius: 5, cursor: "pointer",
           fontSize: FS.label, fontWeight: 800, letterSpacing: 0.2, fontFamily: FONT,
-          border: `1px solid ${(linked ? BC.green : BLUE)}66`,
+          border: `1px solid ${(linked ? BC.green : BLUE)}${ALPHA.line}`,
           background: (linked ? BC.green : BLUE) + "1f",
           color: linked ? BC.green : BLUE, whiteSpace: "nowrap",
         }}
@@ -413,7 +413,7 @@ export function GhinSyncButton({ players, onUpdatePlayer, notify, confirm, compa
           boxSizing: "border-box", display: "inline-flex", alignItems: "center", justifyContent: "center",
           width: 24, height: 24, padding: 0, borderRadius: 6, lineHeight: 1,
           cursor: linked.length ? "pointer" : "default",
-          border: `1px solid ${BC.green}66`, background: BC.green + "18",
+          border: `1px solid ${BC.green}${ALPHA.line}`, background: BC.green + ALPHA.wash,
           fontSize: FS.small, flexShrink: 0, opacity: linked.length ? 1 : 0.4, fontFamily: FONT,
         }}
       >
@@ -430,7 +430,7 @@ export function GhinSyncButton({ players, onUpdatePlayer, notify, confirm, compa
       style={{
         boxSizing: "border-box", maxWidth: "100%", padding: "8px 12px", borderRadius: 10,
         cursor: linked.length ? "pointer" : "default", whiteSpace: "nowrap",
-        border: `1px solid ${BC.green}66`, background: BC.green + "18", color: BC.green,
+        border: `1px solid ${BC.green}${ALPHA.line}`, background: BC.green + ALPHA.wash, color: BC.green,
         fontSize: FS.small, fontWeight: 700, flexShrink: 0, opacity: linked.length ? 1 : 0.5,
         fontFamily: FONT,
       }}

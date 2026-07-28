@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { BC, ON_AMBER, FS, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor } from "./theme";
+import { BC, ALPHA, ON_AMBER, FS, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor } from "./theme";
 import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession } from "./firebase";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
@@ -181,7 +181,7 @@ const ScoreCell = ({ score, par, strokes, size = FS.body, colorOverride }) => {
           {strokes > 0 && <span style={{ color: colorOverride || BC.hcpBlue, fontSize: FS.label, fontWeight: 900, letterSpacing: 1, lineHeight: 1 }}>{"•".repeat(strokes)}</span>}
         </div>
         <div style={{ width: sh, height: sh, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <span style={{ color: BC.t3 + "30", fontSize: size, lineHeight: 1 }}>·</span>
+          <span style={{ color: BC.t3 + ALPHA.hair, fontSize: size, lineHeight: 1 }}>·</span>
         </div>
       </div>
     );
@@ -265,8 +265,8 @@ function LoginScreen({ players, onLogin, teams, darkMode, tournamentName, tourna
 
   const PlayerBtn = ({ p, team }) => (
     <button onClick={() => onLogin(p)} style={{
-      width: "100%", padding: "clamp(8px, 2.5vw, 12px) clamp(10px, 3vw, 14px)", background: team.color + "22",
-      border: `1px solid ${team.accent}33`, borderRadius: 6,
+      width: "100%", padding: "clamp(8px, 2.5vw, 12px) clamp(10px, 3vw, 14px)", background: team.color + ALPHA.tint,
+      border: `1px solid ${team.accent}${ALPHA.hair}`, borderRadius: 6,
       color: BC.t2, fontSize: `clamp(${FS.small}px, 3.8vw, ${FS.body}px)`, fontWeight: 600, cursor: "pointer", textAlign: "center",
       display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
     }}>
@@ -304,7 +304,7 @@ function LoginScreen({ players, onLogin, teams, darkMode, tournamentName, tourna
               {/* Logo centered above column */}
               <img src={team.logo} alt={team.name} style={{ width: "clamp(60px, 32vw, 90px)", height: "clamp(44px, 22vw, 64px)", objectFit: "contain", marginBottom: 6 }} />
               {/* Player list */}
-              <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "clamp(3px, 1vw, 6px)", background: BC.card + "88", border: `1px solid ${team.accent}44`, borderTop: `2px solid ${team.accent}`, borderRadius: 10, padding: "clamp(4px, 1.5vw, 8px)" }}>
+              <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "clamp(3px, 1vw, 6px)", background: BC.card + ALPHA.panel, border: `1px solid ${team.accent}${ALPHA.line}`, borderTop: `2px solid ${team.accent}`, borderRadius: 10, padding: "clamp(4px, 1.5vw, 8px)" }}>
                 {teamPlayers.length === 0
                   ? <div style={{ textAlign: "center", color: BC.t3, fontSize: FS.small, padding: "12px 4px" }}>No players</div>
                   : teamPlayers.map(p => <PlayerBtn key={p.player_id} p={p} team={team} />)
@@ -486,7 +486,7 @@ function FinalizeRoundCard({ round, nextRound, lastFinal, progress, tPlayers, on
           </div>
           <button onClick={doFinalize} disabled={busy} style={{
             width: "100%", padding: "11px 0", borderRadius: 10, cursor: busy ? "default" : "pointer",
-            border: progress.complete ? "none" : `1px solid ${BC.amber}66`,
+            border: progress.complete ? "none" : `1px solid ${BC.amber}${ALPHA.line}`,
             background: progress.complete ? BC.amber : "transparent",
             color: progress.complete ? ON_AMBER : BC.amber,
             fontSize: FS.body, fontWeight: 800, letterSpacing: 0.5, opacity: busy ? 0.6 : 1,
@@ -904,7 +904,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     // be tall enough for a split hole's diagonal to read, and it stays that
     // height for every format so the strip never changes shape between rounds.
     const cellH = 29, barH = 8;
-    const colBorder = { borderRight: i % 9 === 8 ? "none" : `1px solid ${BC.bdr}33` };
+    const colBorder = { borderRight: i % 9 === 8 ? "none" : `1px solid ${BC.bdr}${ALPHA.hair}` };
     const shell = (children) => (
       <div key={i} style={{
         flex: 1, minWidth: 0, height: cellH, ...colBorder,
@@ -950,8 +950,8 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     return (
       <button key={h} onClick={() => goToHole(h)} style={{
         flex: 1, height: 32, borderRadius: allScored || cur ? 8 : 6,
-        border: allScored && !cur ? `1.5px solid ${BC.amber}50` : "none",
-        background: cur ? BC.amber : allScored ? BC.amber + "15" : partial ? BC.amber + "0a" : BC.card,
+        border: allScored && !cur ? `1.5px solid ${BC.amber}${ALPHA.line}` : "none",
+        background: cur ? BC.amber : allScored ? BC.amber + ALPHA.wash : partial ? BC.amber + ALPHA.wash : BC.card,
         color: cur ? ON_AMBER : allScored ? BC.amber : BC.t3,
         fontSize: FS.lead, fontWeight: 700, cursor: "pointer",
         outline: cur ? `2px solid ${BC.amber}` : "none", outlineOffset: 1,
@@ -990,7 +990,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
       <div style={{ display: "flex", gap: 3, marginBottom: 2 }}>
         {Array.from({ length: 9 }, (_, i) => renderHoleCell(i))}
       </div>
-      <div style={{ display: "flex", marginBottom: 4, background: BC.card, border: `1px solid ${BC.bdr}60`, borderRadius: 8, padding: "4px 0", alignItems: "center" }}>
+      <div style={{ display: "flex", marginBottom: 4, background: BC.card, border: `1px solid ${BC.bdr}${ALPHA.line}`, borderRadius: 8, padding: "4px 0", alignItems: "center" }}>
         {Array.from({ length: 9 }, (_, i) => renderStatusCell(i))}
       </div>
 
@@ -998,7 +998,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
       <div style={{ display: "flex", gap: 3, marginBottom: 2 }}>
         {Array.from({ length: 9 }, (_, i) => renderHoleCell(i + 9))}
       </div>
-      <div style={{ display: "flex", marginBottom: 4, background: BC.card, border: `1px solid ${BC.bdr}60`, borderRadius: 8, padding: "4px 0", alignItems: "center" }}>
+      <div style={{ display: "flex", marginBottom: 4, background: BC.card, border: `1px solid ${BC.bdr}${ALPHA.line}`, borderRadius: 8, padding: "4px 0", alignItems: "center" }}>
         {Array.from({ length: 9 }, (_, i) => renderStatusCell(i + 9))}
       </div>
 
@@ -1007,7 +1007,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           bar styling keeps the vertical cost near zero. */}
       <button onClick={() => setShowScorecard(true)} style={{
         width: "100%", padding: "5px 0", borderRadius: 8, marginBottom: 4, cursor: "pointer",
-        background: BC.card, border: `1px solid ${BC.bdr}60`, color: BC.t2,
+        background: BC.card, border: `1px solid ${BC.bdr}${ALPHA.line}`, color: BC.t2,
         fontSize: FS.small, fontWeight: 700, letterSpacing: 0.5,
       }}>
         Full Scorecard
@@ -1090,7 +1090,11 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
         const style = {
           width: "100%", padding: "6px 10px", borderRadius: 8, marginBottom: 4, textAlign: "left",
           background: nm ? BC.amberGlow : BC.card,
-          border: `1px solid ${nm ? BC.amber + "55" : BC.bdr}60`,
+          // One alpha, applied once. This used to read `${nm ? BC.amber +
+          // "55" : BC.bdr}60`, which on the tagged branch concatenated both
+          // bytes into a ten-character hex — not a colour, so that border
+          // silently did not render at all.
+          border: `1px solid ${nm ? BC.amber : BC.bdr}${ALPHA.line}`,
           color: nm ? BC.amber : BC.t3,
           fontSize: FS.label, fontWeight: 700, letterSpacing: 0.5,
         };
@@ -1181,7 +1185,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           which already renders both teams and 18 holes for the main app. */}
       {showScorecard && (
         <Popup onClose={() => setShowScorecard(false)} maxWidth={480} padding={0} outerPadding={12}
-          innerStyle={{ background: BC.card, border: `1px solid ${BC.amber}44`, borderRadius: 12 }}>
+          innerStyle={{ background: BC.card, border: `1px solid ${BC.amber}${ALPHA.line}`, borderRadius: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderBottom: `1px solid ${BC.bdr}` }}>
             <div style={{ fontSize: FS.small, fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>
               SCORECARD — RD {match.round}{match.matchNumber ? ` · MATCH ${match.matchNumber}` : ""}
@@ -1416,7 +1420,7 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
         <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginTop: 14, overflow: "hidden" }}>
           <Banner>TEE SHEET</Banner>
           {groups.map((g, gi) => (
-            <div key={gi} style={{ padding: "9px 14px", borderTop: gi ? `1px solid ${BC.bdr}44` : "none", display: "flex", gap: 10, alignItems: "baseline" }}>
+            <div key={gi} style={{ padding: "9px 14px", borderTop: gi ? `1px solid ${BC.bdr}${ALPHA.line}` : "none", display: "flex", gap: 10, alignItems: "baseline" }}>
               <div style={{ fontSize: FS.small, fontWeight: 800, color: BC.amber, flexShrink: 0, minWidth: 64 }}>{times[gi] || `G${gi + 1}`}</div>
               {/* A group mixes the two sides, so the names carry their own
                   team color as a dot rather than the row carrying one. Reads
@@ -2165,7 +2169,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
           {[teams.A, teams.B].map(team => (
             <div key={team.id} style={{ marginBottom: 10 }}>
               {/* Team header with editable name */}
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, padding: "8px 12px", background: team.color + "33", borderRadius: 10, border: `1px solid ${team.accent}44` }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, padding: "8px 12px", background: team.color + ALPHA.tint, borderRadius: 10, border: `1px solid ${team.accent}${ALPHA.line}` }}>
                 {team.logo && !editingTeam && (
                   <img src={team.logo} alt={team.name} style={{ width: 28, height: 28, objectFit: "contain", flexShrink: 0 }} />
                 )}
@@ -2200,7 +2204,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   onClick={() => setEditingPlayer({ isNew: true, team: team.id, first: "", last: "", nick: "", hi: "", ov: "", dir: false })}
                   title="Add player"
                   style={{
-                    padding: "3px 10px", borderRadius: 8, border: `1px solid ${team.accent}66`,
+                    padding: "3px 10px", borderRadius: 8, border: `1px solid ${team.accent}${ALPHA.line}`,
                     background: "transparent", color: team.accent,
                     fontSize: FS.lead, fontWeight: 700, cursor: "pointer", lineHeight: 1, flexShrink: 0,
                   }}>+</button>
@@ -2212,7 +2216,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 const effHI = overridden ? p.hi_override : p.handicap_index;
                 const synced = !overridden && !!p.ghin_number;
                 return (
-                  <div key={p.player_id} style={{ background: BC.card, borderRadius: 6, padding: "4px 8px", border: `1px solid ${BC.bdr}`, display: "flex", flexDirection: "row", alignItems: "center", gap: 6, boxShadow: `inset 3px 0 0 ${team.accent}55`, marginBottom: 2 }}>
+                  <div key={p.player_id} style={{ background: BC.card, borderRadius: 6, padding: "4px 8px", border: `1px solid ${BC.bdr}`, display: "flex", flexDirection: "row", alignItems: "center", gap: 6, boxShadow: `inset 3px 0 0 ${team.accent}${ALPHA.line}`, marginBottom: 2 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 5, flexBasis: "52%", flexGrow: 0, flexShrink: 1, minWidth: 0 }}>
                       <span style={{ fontSize: FS.small, fontWeight: 600, color: playerNameColor(), minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fullName(p)}</span>
                       {p.isDirector && <span title="Tournament director" style={{ fontSize: FS.small, flexShrink: 0, lineHeight: 1 }}>👑</span>}
@@ -2224,7 +2228,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       <span style={{ fontSize: FS.small, fontWeight: overridden ? 700 : 500, color: overridden ? BC.amber : playerNameColor() }}>
                         {effHI}{overridden ? "*" : ""}
                       </span>
-                      {synced && <span style={{ fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.2, color: BC.hcpBlue, border: `1px solid ${BC.hcpBlue}66`, background: BC.hcpBlue + "1f", borderRadius: 3, padding: "1px 3px", lineHeight: 1 }}>G</span>}
+                      {synced && <span style={{ fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.2, color: BC.hcpBlue, border: `1px solid ${BC.hcpBlue}${ALPHA.line}`, background: BC.hcpBlue + ALPHA.tint, borderRadius: 3, padding: "1px 3px", lineHeight: 1 }}>G</span>}
                     </span>
                     <span style={{ flex: 1, minWidth: 8 }} />
                     <button onClick={() => setEditingPlayer({ pid: p.player_id, first: p.first_name || (p.last_name ? "" : (p.name || "")), last: p.last_name || "", nick: p.name || "", hi: String(p.handicap_index), ov: (p.hi_override != null && String(p.hi_override).trim() !== "") ? String(p.hi_override) : "", dir: !!p.isDirector })} style={{
@@ -2255,7 +2259,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             // Input font stays at FS.lead (16px) on purpose — anything
             // smaller makes iOS Safari zoom the page on focus. Height is
             // condensed via padding, not by dropping a rung.
-            const inp = { fontSize: FS.lead, fontWeight: 600, color: BC.t1, width: "100%", boxSizing: "border-box", background: BC.inp, border: `1px solid ${acc}55`, borderRadius: 8, padding: "7px 10px", outline: "none", fontFamily: "'Montserrat', sans-serif" };
+            const inp = { fontSize: FS.lead, fontWeight: 600, color: BC.t1, width: "100%", boxSizing: "border-box", background: BC.inp, border: `1px solid ${acc}${ALPHA.line}`, borderRadius: 8, padding: "7px 10px", outline: "none", fontFamily: "'Montserrat', sans-serif" };
             // GHIN link/sync/unlink writes ONLY into the form here (never the db
             // directly) — the whole modal commits on Save, so add & edit behave
             // identically and Cancel truly discards. `formPlayer` gives
@@ -2344,7 +2348,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       <span style={lbl}>Director</span>
                       <button type="button" onClick={() => set({ dir: !editingPlayer.dir })}
                         style={{ fontSize: FS.body, fontWeight: 700, padding: "7px 10px", borderRadius: 8, cursor: "pointer", width: "100%", boxSizing: "border-box", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                          border: `1px solid ${editingPlayer.dir ? BC.amber : BC.bdr}`, background: editingPlayer.dir ? BC.amber + "18" : "transparent", color: editingPlayer.dir ? BC.amber : BC.t2 }}>
+                          border: `1px solid ${editingPlayer.dir ? BC.amber : BC.bdr}`, background: editingPlayer.dir ? BC.amber + ALPHA.wash : "transparent", color: editingPlayer.dir ? BC.amber : BC.t2 }}>
                         {editingPlayer.dir ? "👑 Director" : "Player"}
                       </button>
                     </div>
@@ -2359,14 +2363,14 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     </div>
                     <div style={{ flexShrink: 0 }}>
                       <span style={lbl}>GHIN</span>
-                      <div style={{ height: 35, display: "flex", alignItems: "center", padding: "0 9px", borderRadius: 8, border: `1px solid ${(linked ? BC.green : BC.hcpBlue)}44`, background: (linked ? BC.green : BC.hcpBlue) + "12" }}>
+                      <div style={{ height: 35, display: "flex", alignItems: "center", padding: "0 9px", borderRadius: 8, border: `1px solid ${(linked ? BC.green : BC.hcpBlue)}${ALPHA.line}`, background: (linked ? BC.green : BC.hcpBlue) + "12" }}>
                         <GhinLinkButton player={formPlayer} user={user} notify={notify} onUpdatePlayer={ghinWrap} />
                       </div>
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <span style={{ ...lbl, color: BC.amber }}>Override</span>
                       <input type="number" inputMode="decimal" value={editingPlayer.ov} placeholder={String(p ? p.handicap_index : (editingPlayer.hi || ""))} onChange={e => set({ ov: e.target.value })}
-                        style={{ ...inp, border: `1px solid ${BC.amber}66`, color: BC.amber }} />
+                        style={{ ...inp, border: `1px solid ${BC.amber}${ALPHA.line}`, color: BC.amber }} />
                     </div>
                   </div>
                 </div>
@@ -2391,7 +2395,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         msg.push("", `${scored.reduce((n, s) => n + s.holes, 0)} scored hole${scored.reduce((n, s) => n + s.holes, 0) === 1 ? "" : "s"} stay in the database (${scored.map(s => `Rd ${s.r}: ${s.holes}`).join(", ")}).`);
                       }
                       if (await confirm({ title: `Remove ${fullName(p)}?`, message: msg.join("\n"), confirmLabel: "Delete", destructive: true })) { onRemovePlayer(p.player_id); close(); } }}
-                      title="Delete player" style={{ flexShrink: 0, padding: "9px 11px", borderRadius: 10, background: "transparent", border: `1px solid ${BC.danger}55`, color: BC.danger, fontSize: FS.body, fontWeight: 700, cursor: "pointer", lineHeight: 1 }}>🗑</button>
+                      title="Delete player" style={{ flexShrink: 0, padding: "9px 11px", borderRadius: 10, background: "transparent", border: `1px solid ${BC.danger}${ALPHA.line}`, color: BC.danger, fontSize: FS.body, fontWeight: 700, cursor: "pointer", lineHeight: 1 }}>🗑</button>
                   )}
                   <span style={{ flex: 1 }} />
                   <button onClick={close} style={{ padding: "10px 16px", borderRadius: 10, background: BC.inp, border: `1px solid ${BC.bdr}`, color: BC.t2, fontSize: FS.body, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
@@ -2719,7 +2723,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                             ...InputStyle, marginBottom: 0, padding: "3px 0", fontSize: FS.body,
                             textAlign: "center", width: "100%", minWidth: 0,
                             color: capped ? BC.amber : undefined,
-                            border: `1px solid ${capped ? BC.amber + "66" : BC.bdr}`,
+                            border: `1px solid ${capped ? BC.amber + ALPHA.line : BC.bdr}`,
                           }} />
                       </div>
                     );
@@ -2851,7 +2855,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 padding: "4px 12px", borderRadius: 16, fontSize: FS.label, fontWeight: 700, border: "none",
                 cursor: disabled ? "not-allowed" : "pointer",
                 background: active ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
-                color: active ? ON_AMBER : (disabled ? BC.t3 + "66" : BC.t3),
+                color: active ? ON_AMBER : (disabled ? BC.t3 + ALPHA.line : BC.t3),
               });
               const numField = (k, lbl) => (
                 <div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}>
@@ -3235,7 +3239,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                             setHcpOverrides(prev => ({ ...prev, [editRound]: { ...(prev[editRound]||{}), [p.player_id]: e.target.value } }));
                           }}
                           placeholder={calcedCH != null ? String(calcedCH) : "CH"}
-                          style={{ padding: "5px 8px", background: hasOverride ? BC.amber+"15" : BC.inp, border: `1px solid ${hasOverride ? BC.amber : BC.bdr}`, borderRadius: 6, color: hasOverride ? BC.amber : BC.t2, fontSize: FS.small, fontWeight: hasOverride ? 700 : 400, outline: "none", textAlign: "center", opacity: roundIsFinal ? 0.5 : 1, cursor: roundIsFinal ? "not-allowed" : "text" }}
+                          style={{ padding: "5px 8px", background: hasOverride ? BC.amber + ALPHA.wash : BC.inp, border: `1px solid ${hasOverride ? BC.amber : BC.bdr}`, borderRadius: 6, color: hasOverride ? BC.amber : BC.t2, fontSize: FS.small, fontWeight: hasOverride ? 700 : 400, outline: "none", textAlign: "center", opacity: roundIsFinal ? 0.5 : 1, cursor: roundIsFinal ? "not-allowed" : "text" }}
                         />
                         {tees2.map((tee, ti) => {
                           const isAct = currentTee2 === tee.name;
@@ -3332,13 +3336,13 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
           <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 14, overflow: "hidden" }}>
             <div style={{ padding: "9px 14px", borderBottom: `1px solid ${BC.bdr}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontSize: FS.small, fontWeight: 700, color: BC.gold }}>{courses.length} COURSE{courses.length !== 1 ? "S" : ""}</span>
-              <button onClick={() => { setSearching(!searching); setCourseSearch(""); setSearchResults([]); }} style={{ padding: "4px 10px", borderRadius: 6, background: "transparent", border: `1px solid ${BC.amber}66`, color: BC.amber, fontSize: FS.label, fontWeight: 700, cursor: "pointer" }}>
+              <button onClick={() => { setSearching(!searching); setCourseSearch(""); setSearchResults([]); }} style={{ padding: "4px 10px", borderRadius: 6, background: "transparent", border: `1px solid ${BC.amber}${ALPHA.line}`, color: BC.amber, fontSize: FS.label, fontWeight: 700, cursor: "pointer" }}>
                 {searching ? "Close" : "+ Add Course"}
               </button>
             </div>
 
             {courses.map((c, i) => (
-              <div key={c.id} style={{ borderBottom: i < courses.length - 1 ? `1px solid ${BC.bdr}22` : "none" }}>
+              <div key={c.id} style={{ borderBottom: i < courses.length - 1 ? `1px solid ${BC.bdr}${ALPHA.hair}` : "none" }}>
                 <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 8 }}>
                   <button onClick={() => setExpandedCourse(expandedCourse === c.id ? null : c.id)} style={{ flex: 1, background: "transparent", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}>
                     <div style={{ fontWeight: 600, fontSize: FS.body, color: BC.t1 }}>{c.name}</div>
@@ -3374,7 +3378,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   <button onClick={async () => { if (await confirm(`Remove ${c.name}?`)) onAddCourse({ ...c, _delete: true }); }} style={{ background: "transparent", border: "none", color: BC.t3, cursor: "pointer", fontSize: FS.body, padding: "2px 4px" }}>✕</button>
                 </div>
                 {expandedCourse === c.id && (
-                  <div style={{ padding: "0 14px 12px", background: BC.amber + "06" }}>
+                  <div style={{ padding: "0 14px 12px", background: BC.amber + ALPHA.wash }}>
                     {(c.tee_boxes || []).sort((a,b) => (parseFloat(b.slope)||0) - (parseFloat(a.slope)||0)).map((tb, tbi) => (
                       <div key={tbi} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 3, fontSize: FS.label }}>
                         <TeeColorSwatch color={tb.color} name={tb.name} size={10} />
@@ -3399,12 +3403,12 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     doesn't zoom back). The search input is autoFocused, so a
                     smaller size zoomed the view the instant the panel opened. */}
                 <select value={courseStateFilter} onChange={e => { setCourseStateFilter(e.target.value); if (courseSearch.trim().length >= 2) doCourseSearch(courseSearch, e.target.value); }}
-                  style={{ width: 64, padding: "9px 6px", background: BC.inp, border: `1px solid ${BC.amber}44`, borderRadius: 8, color: BC.t1, fontSize: FS.lead, flexShrink: 0 }}>
+                  style={{ width: 64, padding: "9px 6px", background: BC.inp, border: `1px solid ${BC.amber}${ALPHA.line}`, borderRadius: 8, color: BC.t1, fontSize: FS.lead, flexShrink: 0 }}>
                   <option value="">All</option>
                   {["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"].map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
                 <input value={courseSearch} onChange={e => doCourseSearch(e.target.value)} placeholder="Search by course or city..." autoFocus
-                  style={{ flex: 1, padding: "9px 12px", background: BC.inp, border: `1px solid ${BC.amber}44`, borderRadius: 8, color: BC.t1, fontSize: FS.lead, outline: "none" }} />
+                  style={{ flex: 1, padding: "9px 12px", background: BC.inp, border: `1px solid ${BC.amber}${ALPHA.line}`, borderRadius: 8, color: BC.t1, fontSize: FS.lead, outline: "none" }} />
               </div>
 
               {searchLoading && <div style={{ textAlign: "center", padding: 12, color: BC.t3, fontSize: FS.small }}>Searching GolfCourseAPI...</div>}
@@ -3421,7 +3425,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         <span style={{ fontWeight: 600, fontSize: FS.body }}>{c.name}</span>
                         {c._incompleteData && <span style={{ fontSize: FS.micro, background: "#ef444420", border: "1px solid #ef444440", color: "#ef4444", borderRadius: 4, padding: "1px 5px", fontWeight: 700 }}>⚠ incomplete</span>}
-                        {c._source && <span style={{ fontSize: FS.micro, background: `${BC.amber}15`, border: `1px solid ${BC.amber}30`, color: BC.amber, borderRadius: 4, padding: "1px 5px", fontWeight: 600 }}>{c._source}</span>}
+                        {c._source && <span style={{ fontSize: FS.micro, background: `${BC.amber}${ALPHA.wash}`, border: `1px solid ${BC.amber}${ALPHA.hair}`, color: BC.amber, borderRadius: 4, padding: "1px 5px", fontWeight: 600 }}>{c._source}</span>}
                       </div>
                       <div style={{ fontSize: FS.label, color: BC.t3 }}>{[c.city, c.state].filter(Boolean).join(", ")}{c.par ? ` · Par ${c.par}` : ""}{c.slope && c.slope !== 113 ? ` · Slope ${c.slope}` : ""}</div>
                     </div>
@@ -3467,17 +3471,17 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               } catch { notify("Re-fetch failed", "error"); }
               finally { setRefetchingTees(false); }
             };
-            const ti = { background: BC.bg, border: `1px solid ${BC.amber}30`, borderRadius: 4, color: BC.t1, fontSize: FS.label, textAlign: "center", width: "100%", padding: "3px 2px", boxSizing: "border-box" };
+            const ti = { background: BC.bg, border: `1px solid ${BC.amber}${ALPHA.hair}`, borderRadius: 4, color: BC.t1, fontSize: FS.label, textAlign: "center", width: "100%", padding: "3px 2px", boxSizing: "border-box" };
             const tiL = { ...ti, textAlign: "left", padding: "3px 5px" };
             return (
-              <Popup onClose={() => setCoursePreview(null)} maxWidth={420} padding={0} innerStyle={{ background: BC.card, borderRadius: 16, border: `1px solid ${BC.amber}44` }}>
+              <Popup onClose={() => setCoursePreview(null)} maxWidth={420} padding={0} innerStyle={{ background: BC.card, borderRadius: 16, border: `1px solid ${BC.amber}${ALPHA.line}` }}>
 
                   {/* Header */}
                   <div style={{ padding: "14px 16px 10px", borderBottom: `1px solid ${BC.bdr}`, position: "sticky", top: 0, background: BC.card, zIndex: 1 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                       <div style={{ flex: 1, marginRight: 8 }}>
                         <input value={draft.name} onChange={e => setDraft(p => ({...p, name: e.target.value}))}
-                          style={{ background: "transparent", border: "none", borderBottom: `1px solid ${BC.amber}44`, color: BC.t1, fontSize: FS.lead, fontWeight: 800, width: "100%", padding: "2px 0", outline: "none" }} />
+                          style={{ background: "transparent", border: "none", borderBottom: `1px solid ${BC.amber}${ALPHA.line}`, color: BC.t1, fontSize: FS.lead, fontWeight: 800, width: "100%", padding: "2px 0", outline: "none" }} />
                         <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
                           <input value={draft.city||""} onChange={e => setDraft(p => ({...p, city: e.target.value}))} placeholder="City"
                             style={{ ...tiL, fontSize: FS.label, flex: 1 }} />
@@ -3506,11 +3510,11 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                           {/* Recover tee data from the golf API — e.g. after a tee
                               was deleted by mistake. Replaces the tee list below. */}
                           <button onClick={refetchTeesFromApi} disabled={refetchingTees} title="Re-fetch tees from the golf API by course name"
-                            style={{ fontSize: FS.label, padding: "2px 7px", borderRadius: 4, background: "transparent", border: `1px solid ${BC.hcpBlue}60`, color: BC.hcpBlue, cursor: refetchingTees ? "default" : "pointer", fontWeight: 700, opacity: refetchingTees ? 0.5 : 1 }}>
+                            style={{ fontSize: FS.label, padding: "2px 7px", borderRadius: 4, background: "transparent", border: `1px solid ${BC.hcpBlue}${ALPHA.line}`, color: BC.hcpBlue, cursor: refetchingTees ? "default" : "pointer", fontWeight: 700, opacity: refetchingTees ? 0.5 : 1 }}>
                             {refetchingTees ? "Fetching…" : "⟳ Re-fetch tees"}
                           </button>
                           <button onClick={() => setDraft(p => ({ ...p, tee_boxes: [...(p.tee_boxes||[]), { name: "", color: TEE_COLOR_UNSET, rating: 72.0, slope: 113, par: 72, yardage: 0 }] }))}
-                            style={{ fontSize: FS.label, padding: "2px 7px", borderRadius: 4, background: "transparent", border: `1px solid ${BC.amber}60`, color: BC.amber, cursor: "pointer", fontWeight: 700 }}>+ Tee</button>
+                            style={{ fontSize: FS.label, padding: "2px 7px", borderRadius: 4, background: "transparent", border: `1px solid ${BC.amber}${ALPHA.line}`, color: BC.amber, cursor: "pointer", fontWeight: 700 }}>+ Tee</button>
                         </div>
                       </div>
                       {tbs.length === 0 && <div style={{ fontSize: FS.label, color: BC.warn, marginBottom: 8, fontStyle: "italic" }}>⚠ No tees from API — add manually</div>}
@@ -3669,7 +3673,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               <div key={team.id} style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: 12, marginBottom: 10 }}>
                 {/* Name row — the card's header, with its Save on the right */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                  <div style={{ width: 34, height: 34, borderRadius: 8, background: brandSwatch(team.id) + "22", border: `1px solid ${brandSwatch(team.id)}55`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 8, background: brandSwatch(team.id) + "22", border: `1px solid ${brandSwatch(team.id)}${ALPHA.line}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
                     {previewLogo
                       ? <img src={previewLogo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
                       : <span style={{ fontSize: FS.body, fontWeight: 800, color: brandSwatch(team.id) }}>{team.id}</span>}
@@ -3679,7 +3683,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     onChange={e => setEditTeamNames(n => ({ ...n, [team.id]: e.target.value }))}
                     onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
                     placeholder={`Team ${team.id}`}
-                    style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "9px 10px", background: BC.inp, border: `1px solid ${brandSwatch(team.id)}55`, borderRadius: 8, color: BC.t1, fontSize: FS.body, fontWeight: 800, letterSpacing: 0.5, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
+                    style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "9px 10px", background: BC.inp, border: `1px solid ${brandSwatch(team.id)}${ALPHA.line}`, borderRadius: 8, color: BC.t1, fontSize: FS.body, fontWeight: 800, letterSpacing: 0.5, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
                   />
                   <button
                     onClick={() => saveTeam(team.id)}
@@ -3828,7 +3832,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
                 const p = tPlayers.find(t => t.player_id === pid);
                 const team = p ? teams[p.team] : null;
                 return (
-                  <div key={pid} style={{ display: "flex", alignItems: "center", padding: "8px 14px", borderBottom: `1px solid ${BC.bdr}10`, gap: 8 }}>
+                  <div key={pid} style={{ display: "flex", alignItems: "center", padding: "8px 14px", borderBottom: `1px solid ${BC.bdr}${ALPHA.hair}`, gap: 8 }}>
                     <div style={{ width: 8, height: 8, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
                     <span style={{ flex: 1, fontSize: FS.body, fontWeight: 600, color: BC.t1 }}>{p?.name || pid}</span>
                     <span style={{ fontSize: FS.body, fontWeight: 700, color: BC.amber }}>{count} skin{count !== 1 ? "s" : ""}</span>
@@ -3853,7 +3857,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
 
           {/* Hole-by-hole skins for active round */}
           {computeSkins(activeRound, grossMode).map(s => (
-            <div key={s.hole} style={{ display: "flex", alignItems: "center", padding: "7px 12px", background: BC.card, borderRadius: 8, marginBottom: 4, border: `1px solid ${s.winner ? BC.amber + "44" : s.tied ? BC.bdr : BC.bdr}` }}>
+            <div key={s.hole} style={{ display: "flex", alignItems: "center", padding: "7px 12px", background: BC.card, borderRadius: 8, marginBottom: 4, border: `1px solid ${s.winner ? BC.amber + ALPHA.line : s.tied ? BC.bdr : BC.bdr}` }}>
               <span style={{ fontSize: FS.small, fontWeight: 700, color: BC.t3, width: 40 }}>Hole {s.hole + 1}</span>
               <span style={{ fontSize: FS.label, color: BC.t3, width: 30 }}>Par {holePars[s.hole]}</span>
               <span style={{ flex: 1, fontSize: FS.small, fontWeight: 600, color: s.winner ? BC.amber : s.tied ? BC.t3 : BC.t3 }}>
@@ -3888,7 +3892,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
                   // dropdown (even re-picking the same one) is the approval.
                   const pending = !!winnerId && rec?.approved !== true;
                   return (
-                    <div key={hole} style={{ background: BC.card, borderRadius: 8, padding: "8px 12px", marginBottom: 4, border: `1px solid ${winner ? BC.amber + "44" : BC.bdr}`, display: "flex", alignItems: "center", gap: 8 }}>
+                    <div key={hole} style={{ background: BC.card, borderRadius: 8, padding: "8px 12px", marginBottom: 4, border: `1px solid ${winner ? BC.amber + ALPHA.line : BC.bdr}`, display: "flex", alignItems: "center", gap: 8 }}>
                       <span style={{ fontSize: FS.small, fontWeight: 700, color: BC.t3, width: 44, flexShrink: 0 }}>Hole {hole + 1}</span>
                       {user?.isDirector ? (
                         <select value={winnerId || ""}
@@ -3966,7 +3970,7 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
             {playerStats.map((p, i) => {
               const team = teams[p.team];
               return (
-                <div key={p.name} style={{ display: "grid", gridTemplateColumns: "1fr 44px 44px 44px 52px", padding: "9px 12px", borderBottom: i < playerStats.length-1 ? `1px solid ${BC.bdr}10` : "none", alignItems: "center" }}>
+                <div key={p.name} style={{ display: "grid", gridTemplateColumns: "1fr 44px 44px 44px 52px", padding: "9px 12px", borderBottom: i < playerStats.length-1 ? `1px solid ${BC.bdr}${ALPHA.hair}` : "none", alignItems: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <div style={{ width: 6, height: 6, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
                     <span style={{ fontSize: FS.small, fontWeight: 600, color: playerNameColor() }}>{p.name}</span>
@@ -4281,7 +4285,7 @@ function PracticeScoringTab({
   const renderStatusCell = (i) => {
     const st = holeStatuses[i];
     const isEndOfRow = (i + 1) % 9 === 0;
-    const colBorder = !isEndOfRow ? { borderRight: `1px solid ${BC.bdr}40` } : {};
+    const colBorder = !isEndOfRow ? { borderRight: `1px solid ${BC.bdr}${ALPHA.hair}` } : {};
     const cellH = 24;
     // Clinch hole — show "X&Y" prominently in green (you won) or red (you lost)
     if (clinchHole !== null && i === clinchHole) {
@@ -4350,8 +4354,8 @@ function PracticeScoringTab({
     return (
       <button key={h} onClick={() => goToHole(h)} style={{
         flex: 1, height: 32, borderRadius: allScored || cur ? 8 : 6,
-        border: allScored && !cur ? `1.5px solid ${BC.amber}50` : "none",
-        background: cur ? BC.amber : allScored ? BC.amber + "15" : partial ? BC.amber + "0a" : BC.card,
+        border: allScored && !cur ? `1.5px solid ${BC.amber}${ALPHA.line}` : "none",
+        background: cur ? BC.amber : allScored ? BC.amber + ALPHA.wash : partial ? BC.amber + ALPHA.wash : BC.card,
         color: cur ? ON_AMBER : allScored ? BC.amber : BC.t3,
         fontSize: FS.lead, fontWeight: 700, cursor: "pointer",
         outline: cur ? `2px solid ${BC.amber}` : "none", outlineOffset: 1,
@@ -4382,7 +4386,7 @@ function PracticeScoringTab({
         {Array.from({ length: 9 }, (_, i) => renderHoleCell(i))}
       </div>
       {/* Front 9 — match status row */}
-      <div style={{ display: "flex", marginBottom: 4, background: BC.card, border: `1px solid ${BC.bdr}60`, borderRadius: 8, padding: "4px 0", alignItems: "center" }}>
+      <div style={{ display: "flex", marginBottom: 4, background: BC.card, border: `1px solid ${BC.bdr}${ALPHA.line}`, borderRadius: 8, padding: "4px 0", alignItems: "center" }}>
         {Array.from({ length: 9 }, (_, i) => renderStatusCell(i))}
       </div>
       {/* Back 9 — hole strip. Same three-state hierarchy as front 9. */}
@@ -4390,7 +4394,7 @@ function PracticeScoringTab({
         {Array.from({ length: 9 }, (_, i) => renderHoleCell(i + 9))}
       </div>
       {/* Back 9 — match status row */}
-      <div style={{ display: "flex", marginBottom: 4, background: BC.card, border: `1px solid ${BC.bdr}60`, borderRadius: 8, padding: "4px 0", alignItems: "center" }}>
+      <div style={{ display: "flex", marginBottom: 4, background: BC.card, border: `1px solid ${BC.bdr}${ALPHA.line}`, borderRadius: 8, padding: "4px 0", alignItems: "center" }}>
         {Array.from({ length: 9 }, (_, i) => renderStatusCell(i + 9))}
       </div>
 
@@ -4401,7 +4405,7 @@ function PracticeScoringTab({
           scrolling past four player cards. */}
       <button onClick={() => setShowScorecard(true)} style={{
         width: "100%", padding: "5px 0", borderRadius: 8, marginBottom: 4, cursor: "pointer",
-        background: BC.card, border: `1px solid ${BC.bdr}60`,
+        background: BC.card, border: `1px solid ${BC.bdr}${ALPHA.line}`,
         color: BC.t2, fontSize: FS.small, fontWeight: 700, letterSpacing: 0.5,
       }}>
         Full Scorecard
@@ -4690,7 +4694,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
     const t2Idx = event.teams.findIndex(t => t.id === match.team2.id);
     const tcA = PRACTICE_TEAM_COLORS[t1Idx];
     const tcB = PRACTICE_TEAM_COLORS[t2Idx];
-    const gridLine = `1px solid ${BC.bdr}25`;
+    const gridLine = `1px solid ${BC.bdr}${ALPHA.hair}`;
     const holePars = resolveHolePars(course);
     const holeHcps = resolveHoleHcps(course);
     const getStrokes = (pid, h) => strokeMaps[pid]?.[h] || 0;
@@ -4772,7 +4776,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
         let netTot = 0;
         const tc = isT1Side ? tcA : tcB;
         return (
-          <div style={{ display: "flex", alignItems: "center", borderBottom: gridLine, background: tc.color + "15" }}>
+          <div style={{ display: "flex", alignItems: "center", borderBottom: gridLine, background: tc.color + ALPHA.wash }}>
             <div style={{ ...lblBase, height: 32, fontSize: FS.label, fontWeight: 800, color: tc.accent }}>NET</div>
             {Array.from({ length: 9 }, (_, i) => {
               const h = i + offset;
@@ -4787,11 +4791,11 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
               return (
                 <div key={i} style={{ flex: 1, height: 32, display: "flex", alignItems: "center", justifyContent: "center", borderRight: i < 8 ? gridLine : "none" }}>
                   {won ? (
-                    <div style={{ width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 4, border: `1.5px solid ${tc.accent}`, background: tc.accent + "20" }}>
+                    <div style={{ width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 4, border: `1.5px solid ${tc.accent}`, background: tc.accent + ALPHA.tint }}>
                       <span style={{ fontSize: FS.body, fontWeight: 800, color: BC.t1 }}>{ok ? tNet : "·"}</span>
                     </div>
                   ) : (
-                    <span style={{ fontSize: FS.body, fontWeight: 800, color: ok ? BC.t1 : BC.t3 + "40" }}>{ok ? tNet : "·"}</span>
+                    <span style={{ fontSize: FS.body, fontWeight: 800, color: ok ? BC.t1 : BC.t3 + ALPHA.hair }}>{ok ? tNet : "·"}</span>
                   )}
                 </div>
               );
@@ -4804,7 +4808,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
       };
 
       const renderMatchRow = () => (
-        <div style={{ display: "flex", alignItems: "center", background: BC.amber + "12", borderBottom: gridLine }}>
+        <div style={{ display: "flex", alignItems: "center", background: BC.amber + ALPHA.wash, borderBottom: gridLine }}>
           <div style={{ ...lblBase, height: 28, color: BC.amber, fontWeight: 800, fontSize: FS.label }}>MATCH</div>
           {Array.from({ length: 9 }, (_, i) => {
             const h = i + offset;
@@ -4852,7 +4856,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
               <span style={{ fontSize: FS.label, fontWeight: 800, color: ON_AMBER }}>TOT</span>
             </div>
           </div>
-          <div style={{ display: "flex", borderBottom: gridLine, background: BC.amber + "18" }}>
+          <div style={{ display: "flex", borderBottom: gridLine, background: BC.amber + ALPHA.wash }}>
             <div style={{ ...lblBase, height: 22 }}>PAR</div>
             {sectionPars.map((p, i) => (
               <div key={i} style={{ flex: 1, textAlign: "center", fontSize: FS.label, color: BC.t2, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", height: 22, borderRight: i < 8 ? gridLine : "none" }}>{p}</div>
@@ -5047,7 +5051,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
             {[["low_man", "Low Man"], ["full", "Full Strokes"]].map(([k, label]) => (
               <button key={k} onClick={() => setHcpMode(k)} style={{
                 flex: 1, padding: "8px 0", borderRadius: 8, fontSize: FS.small, fontWeight: 700, cursor: "pointer",
-                background: hcpMode === k ? BC.amber + "22" : BC.inp,
+                background: hcpMode === k ? BC.amber + ALPHA.tint : BC.inp,
                 border: `1px solid ${hcpMode === k ? BC.amber : BC.bdr}`,
                 color: hcpMode === k ? BC.amber : BC.t2,
               }}>{label}</button>
@@ -5078,7 +5082,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                   <span style={{ width: 6, height: 6, borderRadius: "50%", background: teamColor, flexShrink: 0 }} />
                   <span style={{
                     fontSize: FS.label, fontWeight: 800, color: isSel ? BC.t1 : BC.t3, letterSpacing: 0.5,
-                    background: isSel ? teamColor + "44" : BC.bdr + "60",
+                    background: isSel ? teamColor + "44" : BC.bdr + ALPHA.line,
                     padding: "2px 5px", borderRadius: 4, flexShrink: 0,
                   }}>{getInitials(p.name)}</span>
                   <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
@@ -5108,8 +5112,8 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                 return (
                   <button key={i} onClick={() => setActiveSlot(i)} style={{
                     padding: "10px 12px", borderRadius: 10,
-                    background: isActive ? tc.color + "55" : (filled ? tc.color + "20" : BC.inp),
-                    border: `2px solid ${isActive ? tc.accent : (filled ? tc.accent + "55" : BC.bdr)}`,
+                    background: isActive ? tc.color + ALPHA.line : (filled ? tc.color + ALPHA.tint : BC.inp),
+                    border: `2px solid ${isActive ? tc.accent : (filled ? tc.accent + ALPHA.line : BC.bdr)}`,
                     color: BC.t1, fontSize: FS.small, fontWeight: 700, cursor: "pointer", textAlign: "left",
                     minHeight: 70,
                   }}>
@@ -5125,7 +5129,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                           style={{ fontSize: FS.small, fontWeight: 600, color: BC.t1, marginBottom: 2, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
                           <span style={{
                             fontSize: FS.label, fontWeight: 800, color: tc.accent, letterSpacing: 0.5,
-                            background: tc.color + "55", padding: "2px 4px", borderRadius: 3, flexShrink: 0,
+                            background: tc.color + ALPHA.line, padding: "2px 4px", borderRadius: 3, flexShrink: 0,
                           }}>{getInitials(p?.name)}</span>
                           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p?.name || pid}</span>
                         </div>
@@ -5150,8 +5154,8 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                   return (
                     <button key={pid} onClick={() => assignToSlot(pid)} style={{
                       padding: "6px 10px", borderRadius: 14,
-                      background: inActive ? tc.accent + "33" : inOther ? BC.inp : BC.hover,
-                      border: `1px solid ${inActive ? tc.accent : inOther ? tc.accent + "44" : BC.bdr}`,
+                      background: inActive ? tc.accent + ALPHA.tint : inOther ? BC.inp : BC.hover,
+                      border: `1px solid ${inActive ? tc.accent : inOther ? tc.accent + ALPHA.line : BC.bdr}`,
                       color: inOther ? BC.t3 : BC.t1, fontSize: FS.small, fontWeight: 700, cursor: "pointer",
                       opacity: inOther && !inActive ? 0.55 : 1, letterSpacing: 0.5,
                     }}>
@@ -5165,7 +5169,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
 
             {/* Match preview */}
             {allTeamsComplete && (
-              <div style={{ marginTop: 12, padding: 10, background: BC.amber + "10", borderRadius: 8, border: `1px solid ${BC.amber}33` }}>
+              <div style={{ marginTop: 12, padding: 10, background: BC.amber + ALPHA.wash, borderRadius: 8, border: `1px solid ${BC.amber}${ALPHA.hair}` }}>
                 <div style={{ fontSize: FS.label, color: BC.amber, fontWeight: 800, letterSpacing: 1, marginBottom: 6 }}>MATCHUPS</div>
                 {[[0, 1], [2, 3]].map(([a, b], mi) => (
                   <div key={mi} style={{ fontSize: FS.small, color: BC.t1, marginBottom: 4, display: "flex", gap: 4 }}>
@@ -5196,7 +5200,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
         {event && (
           <button onClick={() => setShowResetConfirm(true)} style={{
             width: "100%", padding: "8px 0", borderRadius: 8, background: "transparent",
-            border: `1px solid ${BC.danger}55`, color: BC.danger, fontSize: FS.small, fontWeight: 700, cursor: "pointer",
+            border: `1px solid ${BC.danger}${ALPHA.line}`, color: BC.danger, fontSize: FS.small, fontWeight: 700, cursor: "pointer",
           }}>
             Reset Event (clear scores)
           </button>
@@ -5289,7 +5293,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
             return (
               <div key={team.id} style={{
                 display: "flex", alignItems: "center", padding: "10px 14px",
-                borderBottom: rowIdx < teamTotals.length - 1 ? `1px solid ${BC.bdr}40` : "none",
+                borderBottom: rowIdx < teamTotals.length - 1 ? `1px solid ${BC.bdr}${ALPHA.hair}` : "none",
                 gap: 10,
               }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -5486,8 +5490,8 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                         const tied = h.result === 0;
                         const unscored = h.result == null;
                         // Tied holes render in a LIGHT version of this
-                        // row's team color (BC.amber + "40" = ~25% alpha
-                        // green for T1, BC.gold + "40" for T2). Each row
+                        // row's team color (BC.amber at ALPHA.line for T1,
+                        // BC.gold at ALPHA.line for T2). Each row
                         // continues to "speak its own language" so the
                         // tracker reads vertically per team — green-ish
                         // on top whenever T1 has any presence in a hole
@@ -5499,8 +5503,8 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                         // and from "lost" cells (BC.inp neutral fill).
                         return <div key={hi} style={{
                           flex: 1, height: 10, borderRadius: 2,
-                          background: won ? BC.amber : tied ? BC.amber + "40" : unscored ? "transparent" : BC.inp,
-                          border: unscored ? `1px solid ${BC.bdr}80` : "none",
+                          background: won ? BC.amber : tied ? BC.amber + ALPHA.line : unscored ? "transparent" : BC.inp,
+                          border: unscored ? `1px solid ${BC.bdr}${ALPHA.line}` : "none",
                           boxSizing: "border-box",
                         }} />;
                       })}
@@ -5513,8 +5517,8 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                         const unscored = h.result == null;
                         return <div key={hi} style={{
                           flex: 1, height: 10, borderRadius: 2,
-                          background: won ? BC.gold : tied ? BC.gold + "40" : unscored ? "transparent" : BC.inp,
-                          border: unscored ? `1px solid ${BC.bdr}80` : "none",
+                          background: won ? BC.gold : tied ? BC.gold + ALPHA.line : unscored ? "transparent" : BC.inp,
+                          border: unscored ? `1px solid ${BC.bdr}${ALPHA.line}` : "none",
                           boxSizing: "border-box",
                         }} />;
                       })}
@@ -5667,7 +5671,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                         const skinWin = skins[skinsMode]?.[h] === p.player_id;
                         const cellBG = skinWin ? BC.amber : "transparent";
                         const cellColor = skinWin ? "#fff" : score ? BC.t1 : BC.t3;
-                        const cellBorder = skinWin ? "1px solid transparent" : `1px solid ${BC.bdr}40`;
+                        const cellBorder = skinWin ? "1px solid transparent" : `1px solid ${BC.bdr}${ALPHA.hair}`;
                         // Stroke-dot color follows the cell-state contrast:
                         // standard blue on neutral cells (matches the
                         // scorecard treatment used in ScoreCell elsewhere),
@@ -5723,7 +5727,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                 if (c.gross === 0 && c.net === 0) return null;
                 const tc = renderPlayerTeamColor(p.player_id);
                 return (
-                  <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 6, padding: "4px 0", borderTop: `1px solid ${BC.bdr}33`, fontSize: FS.small }}>
+                  <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 6, padding: "4px 0", borderTop: `1px solid ${BC.bdr}${ALPHA.hair}`, fontSize: FS.small }}>
                     <div style={{ color: BC.t1, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
                       <span style={{ width: 4, height: 4, borderRadius: "50%", background: tc?.accent || BC.t3 }} />
                       {p.name}
@@ -5748,12 +5752,12 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
             {par3Holes.map(h => {
               const winner = ctps[h];
               return (
-                <div key={h} style={{ marginBottom: 14, paddingBottom: 10, borderBottom: `1px solid ${BC.bdr}33` }}>
+                <div key={h} style={{ marginBottom: 14, paddingBottom: 10, borderBottom: `1px solid ${BC.bdr}${ALPHA.hair}` }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                     <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.gold }}>Hole {h + 1}</div>
                     {winner && (
                       <button onClick={() => onSetCtp(h, null)} style={{
-                        background: "transparent", border: `1px solid ${BC.danger}55`, color: BC.danger,
+                        background: "transparent", border: `1px solid ${BC.danger}${ALPHA.line}`, color: BC.danger,
                         borderRadius: 4, padding: "2px 8px", fontSize: FS.label, fontWeight: 600, cursor: "pointer",
                       }}>Clear</button>
                     )}
@@ -5766,7 +5770,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                       return (
                         <button key={pid} onClick={() => onSetCtp(h, pid)} style={{
                           padding: "6px 8px", borderRadius: 6,
-                          background: isW ? tc.color + "55" : BC.inp,
+                          background: isW ? tc.color + ALPHA.line : BC.inp,
                           border: `1px solid ${isW ? tc.accent : BC.bdr}`,
                           color: isW ? BC.t1 : BC.t2, fontSize: FS.small, fontWeight: 600, cursor: "pointer", textAlign: "left",
                           display: "flex", alignItems: "center", gap: 4,
@@ -5827,7 +5831,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
           palette) so it tunes automatically between light and dark
           modes — full brand green #009144 on white in light, brightened
           #16a34a for visibility on the dark green-tinted bg. */}
-      <div style={{ marginBottom: 12, padding: "10px 14px", background: BC.card, borderRadius: 10, border: `1px solid ${BC.amber}33`, textAlign: "center" }}>
+      <div style={{ marginBottom: 12, padding: "10px 14px", background: BC.card, borderRadius: 10, border: `1px solid ${BC.amber}${ALPHA.hair}`, textAlign: "center" }}>
         <div style={{ fontSize: FS.body, fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>MASH ROUND</div>
         <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 2 }}>
           {event ? `${course?.name || "Course TBD"} · ${event.player_ids?.length || 0} players · ${event.matches?.length || 0} matches` : "No event configured"}
@@ -5940,8 +5944,8 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, 
               onNavigate(item.key); onClose();
             }} style={{
               width: "100%", padding: "12px 16px",
-              background: isActive ? BC.amber + "15" : "transparent",
-              borderTop: idx === 0 ? "none" : `1px solid ${BC.bdr}22`,
+              background: isActive ? BC.amber + ALPHA.wash : "transparent",
+              borderTop: idx === 0 ? "none" : `1px solid ${BC.bdr}${ALPHA.hair}`,
               borderLeft: "none", borderRight: "none", borderBottom: "none",
               color: isActive ? BC.amber : BC.t1,
               fontSize: FS.body, fontWeight: isActive ? 700 : 500,
@@ -5954,7 +5958,7 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, 
           );
         })}
 
-        <div style={{ height: 1, background: BC.bdr + "55" }} />
+        <div style={{ height: 1, background: BC.bdr + ALPHA.hair }} />
 
         {/* Theme toggle — pill-style switch. Labelled "Dark Mode" because that's
             what the toggle controls; thumb-on-right = dark active, thumb-on-left
@@ -5963,7 +5967,7 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, 
           <button onClick={(e) => { e.stopPropagation(); onToggleTheme(); }} style={{
             width: "100%", padding: "12px 16px",
             background: "transparent",
-            border: "none", borderTop: `1px solid ${BC.bdr}22`,
+            border: "none", borderTop: `1px solid ${BC.bdr}${ALPHA.hair}`,
             color: BC.t1, fontSize: FS.body, fontWeight: 500,
             cursor: "pointer", textAlign: "left",
             display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
@@ -5986,7 +5990,7 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, 
           </button>
         )}
 
-        <div style={{ height: 1, background: BC.bdr + "55" }} />
+        <div style={{ height: 1, background: BC.bdr + ALPHA.hair }} />
 
         {/* Logout */}
         {items.filter(i => i.key === "logout").map(item => (
@@ -6716,7 +6720,7 @@ export default function App() {
     if (icon === "betting") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v4c0 1.66 3.58 3 8 3s8-1.34 8-3V6"/><path d="M4 10v4c0 1.66 3.58 3 8 3s8-1.34 8-3v-4"/></svg>;
     if (icon === "menu") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>;
     // Mash — flag on a pole, evoking the Mash Brothers logo without competing with their marks
-    if (icon === "mash") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="22" x2="5" y2="3"/><path d="M5 4 C 10 2, 14 6, 20 4 L 20 13 C 14 15, 10 11, 5 13 Z" fill={active ? BC.amber + "55" : BC.t3 + "33"}/></svg>;
+    if (icon === "mash") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="22" x2="5" y2="3"/><path d="M5 4 C 10 2, 14 6, 20 4 L 20 13 C 14 15, 10 11, 5 13 Z" fill={active ? BC.amber + ALPHA.line : BC.t3 + ALPHA.hair}/></svg>;
     if (icon === "admin") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>;
     return null;
   };
@@ -6753,13 +6757,13 @@ export default function App() {
         }}>
           <style>{`
             @keyframes bcPullSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-            @keyframes bcPullGlow { 0%,100% { box-shadow: 0 0 8px ${BC.amber}40; } 50% { box-shadow: 0 0 18px ${BC.amber}80; } }
+            @keyframes bcPullGlow { 0%,100% { box-shadow: 0 0 8px ${BC.amber}${ALPHA.line}; } 50% { box-shadow: 0 0 18px ${BC.amber}${ALPHA.panel}; } }
           `}</style>
           <div style={{
             width: 44, height: 44, borderRadius: "50%", background: BC.card,
             border: `2.5px solid ${pullY >= PULL_THRESHOLD ? BC.amber : BC.bdr}`,
             display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: pullY >= PULL_THRESHOLD ? `0 0 12px ${BC.amber}50` : "0 2px 12px rgba(0,0,0,.3)",
+            boxShadow: pullY >= PULL_THRESHOLD ? `0 0 12px ${BC.amber}${ALPHA.line}` : "0 2px 12px rgba(0,0,0,.3)",
             transition: "border-color .2s, box-shadow .3s", overflow: "hidden",
             animation: refreshing ? "bcPullGlow 1s ease-in-out infinite" : "none",
           }}>

@@ -240,12 +240,34 @@ export const teamColor     = (tid) => (tid === "A" ? BC.teamA     : BC.teamB);
 export const teamColorDim  = (tid) => (tid === "A" ? BC.teamADim  : BC.teamBDim);
 export const teamColorGlow = (tid) => (tid === "A" ? BC.teamAGlow : BC.teamBGlow);
 
+// ── Alpha ladder ──
+// Every BC token is 6-digit hex, so a wash is made by appending two more
+// characters: `BC.amber + ALPHA.wash`. That freedom is why there were
+// twenty-four different alpha levels in the app — eighteen on BC.amber
+// alone — with no way to tell a considered value from a typo. 27% and 33%
+// borders sat on adjacent elements; the same list used 6%, 13% and 20%
+// dividers on different rows.
+//
+// Six rungs, each roughly 1.5–2× the last, which is about the smallest step
+// that survives being painted over a card at 1px. The names describe
+// STRENGTH; the roles listed are what each one is usually for, not a fence.
+// A wash that has to be "between hair and line" is a wash that should pick
+// one of them.
+export const ALPHA = {
+  wash:  "14", //  8% — an accent breathed onto a surface; content reads on top
+  tint:  "26", // 15% — that surface switched on: selected row, active chip
+  hair:  "33", // 20% — a divider inside one list; a placeholder mark
+  line:  "55", // 33% — the edge of a thing: card, chip, input, button, bar
+  panel: "88", // 53% — a translucent surface that still reads as a surface
+  held:  "99", // 60% — ink pulled back on purpose (see `ink` below)
+};
+
 // ── Settled vs in-play ink ──
 // A result that's still moving is drawn lighter than one that's banked, so
 // scanning a board separates "this is decided" from "this could change"
 // before you read a single number. Appended as an alpha byte, which every BC
 // color token supports since they're all 6-digit hex.
-export const LIVE_ALPHA = "99"; // 60%
+export const LIVE_ALPHA = ALPHA.held;
 export const ink = (hex, settled) => (settled ? hex : `${hex}${LIVE_ALPHA}`);
 
 // ── Player-name text color ──

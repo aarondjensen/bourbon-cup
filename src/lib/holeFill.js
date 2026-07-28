@@ -23,7 +23,7 @@
 // whose HOLE SCORING axis is set to best_ball hands back net strokes no matter
 // what format it is called, and reading a Double Dot round's net 4 and 5 as
 // "one dot each" paints every played hole as a split when nothing was split.
-import { BC, ink, teamColor } from "../theme";
+import { BC, ALPHA, ink, teamColor } from "../theme";
 
 // Formats where a hole is worth two units instead of one. A set rather than a
 // boolean so a second dot format costs one line.
@@ -57,7 +57,7 @@ export function holeFill(hole, format, settled = true) {
   const { played, a, b, max } = holeUnits(hole, format);
   if (!played) return { background: "transparent", border: `1px solid ${BC.bdr}` };
 
-  const HALVED = `${BC.t3}55`;
+  const HALVED = `${BC.t3}${ALPHA.line}`;
   if (!a && !b) return { background: HALVED, border: "none" };
 
   const A = ink(teamColor("A"), settled);

@@ -30,7 +30,7 @@
 //  the Scoring tab describes the same match.
 
 import { useState, useMemo } from "react";
-import { BC, FS, ink, teamColor } from "../theme";
+import { BC, ALPHA, FS, ink, teamColor } from "../theme";
 import {
   FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT,
   POINT_METHOD_TRADITIONAL, TROPHY_SILHOUETTE, CUP_POINTS_TO_WIN,
@@ -214,8 +214,8 @@ function SegmentPill({ label, pot, st, pts }) {
       <div style={{
         textAlign: "center", padding: "5px 2px", borderRadius: 7,
         fontSize: FS.small, fontWeight: 800, lineHeight: 1.1,
-        background: settled && win ? `${color}26` : "transparent",
-        border: `1px ${settled ? "solid" : "dashed"} ${settled ? (win ? `${color}66` : BC.bdr) : `${BC.bdr}`}`,
+        background: settled && win ? `${color}${ALPHA.tint}` : "transparent",
+        border: `1px ${settled ? "solid" : "dashed"} ${settled ? (win ? `${color}${ALPHA.line}` : BC.bdr) : `${BC.bdr}`}`,
         color: settled ? (halved ? BC.t2 : color) : st.played ? color : BC.t3,
         whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
       }}>
@@ -374,8 +374,8 @@ function MatchCard({
 
   return (
     <div style={{
-      borderTop: first ? "none" : `1px solid ${BC.bdr}66`,
-      background: expanded ? `${BC.amber}0a` : "transparent",
+      borderTop: first ? "none" : `1px solid ${BC.bdr}${ALPHA.line}`,
+      background: expanded ? `${BC.amber}${ALPHA.wash}` : "transparent",
     }}>
       <button onClick={onToggle} style={{
         width: "100%", padding: "9px 12px 10px", background: "transparent",
@@ -495,9 +495,9 @@ function RoundSection({
             {[course?.name || "Course TBD", fmt?.label].filter(Boolean).join(" · ").toUpperCase()}
           </span>
           <span style={{ flex: 1, minWidth: 6 }} />
-          <span style={{ fontSize: FS.lead, fontWeight: 800, flexShrink: 0, color: pts.A >= pts.B ? BC.teamA : `${BC.teamA}99` }}>{fmtPts(pts.A)}</span>
+          <span style={{ fontSize: FS.lead, fontWeight: 800, flexShrink: 0, color: pts.A >= pts.B ? BC.teamA : `${BC.teamA}${ALPHA.held}` }}>{fmtPts(pts.A)}</span>
           <span style={{ fontSize: FS.small, color: BC.t3, flexShrink: 0 }}>–</span>
-          <span style={{ fontSize: FS.lead, fontWeight: 800, flexShrink: 0, color: pts.B >= pts.A ? BC.teamB : `${BC.teamB}99` }}>{fmtPts(pts.B)}</span>
+          <span style={{ fontSize: FS.lead, fontWeight: 800, flexShrink: 0, color: pts.B >= pts.A ? BC.teamB : `${BC.teamB}${ALPHA.held}` }}>{fmtPts(pts.B)}</span>
         </div>
         {/* Nothing under the header. The tee, the handicap terms, the scoring
             type and the counting rule all used to sit here; all of it is setup
@@ -515,7 +515,7 @@ function RoundSection({
              round reads as a single scoreboard rather than a stack of cards. */
           <div style={{
             marginTop: 8, background: BC.card, borderRadius: 12, overflow: "hidden",
-            border: `1px solid ${state === "live" ? `${BC.amber}44` : BC.bdr}`,
+            border: `1px solid ${state === "live" ? `${BC.amber}${ALPHA.line}` : BC.bdr}`,
           }}>
             {results.map(({ match: m, result: r, format }, i) => (
               <MatchCard
@@ -756,12 +756,12 @@ export function TeamLeaderboard({
           <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct(totals.A)}%`, background: BC.teamA }} />
           <div style={{
             position: "absolute", left: `${pct(totals.A)}%`, top: 0, bottom: 0,
-            width: `${pct(pending.A)}%`, background: `${BC.teamA}5c`,
+            width: `${pct(pending.A)}%`, background: `${BC.teamA}${ALPHA.line}`,
           }} />
           <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: `${pct(totals.B)}%`, background: BC.teamB }} />
           <div style={{
             position: "absolute", right: `${pct(totals.B)}%`, top: 0, bottom: 0,
-            width: `${pct(pending.B)}%`, background: `${BC.teamB}5c`,
+            width: `${pct(pending.B)}%`, background: `${BC.teamB}${ALPHA.line}`,
           }} />
           <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 2, marginLeft: -1, background: BC.bg, opacity: 0.9 }} />
         </div>
@@ -898,7 +898,7 @@ export function MatchScorecard({ match, result, format, courses, tRounds, teams,
             <div key={`a${i}`} style={{
               ...cellBase,
               color: h.winner === "A" ? BC.teamA : h.aScore == null ? BC.t3 : BC.t2,
-              background: h.winner === "A" ? `${BC.teamA}26` : "transparent",
+              background: h.winner === "A" ? `${BC.teamA}${ALPHA.tint}` : "transparent",
             }}>{h.aScore ?? "·"}</div>
           ))}
           <div style={{ ...cellBase, color: BC.teamA }}>{total ? aTot || "·" : aWon}</div>
@@ -909,7 +909,7 @@ export function MatchScorecard({ match, result, format, courses, tRounds, teams,
             <div key={`b${i}`} style={{
               ...cellBase,
               color: h.winner === "B" ? BC.teamB : h.bScore == null ? BC.t3 : BC.t2,
-              background: h.winner === "B" ? `${BC.teamB}26` : "transparent",
+              background: h.winner === "B" ? `${BC.teamB}${ALPHA.tint}` : "transparent",
             }}>{h.bScore ?? "·"}</div>
           ))}
           <div style={{ ...cellBase, color: BC.teamB }}>{total ? bTot || "·" : bWon}</div>
@@ -975,7 +975,7 @@ export function MatchScorecard({ match, result, format, courses, tRounds, teams,
       {dd && (
         <div style={{
           marginTop: 2, padding: "7px 10px", borderRadius: 8,
-          background: `${BC.amber}14`, border: `1px solid ${BC.amber}33`,
+          background: `${BC.amber}${ALPHA.wash}`, border: `1px solid ${BC.amber}${ALPHA.hair}`,
           fontSize: FS.label, color: BC.t2, display: "flex", alignItems: "center", gap: 6,
         }}>
           <span style={{ fontSize: FS.micro, fontWeight: 800, letterSpacing: 1, color: BC.amber }}>DOTS</span>
