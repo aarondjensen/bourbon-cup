@@ -36,12 +36,11 @@
 //  ghin_rev_date, ghin_synced_at. db.upsert merges → unlink writes nulls.
 
 import { useState, useEffect, useRef } from "react";
-import { BC, SCRIM, ALPHA, ON_AMBER, FS } from "../theme";
+import { BC, FONT, SCRIM, ALPHA, ON_AMBER, FS } from "../theme";
 import { Popup } from "./Popup";
 import { searchGhinGolfers, syncGhinNumbers, parseGhinHI, fmtHI } from "../lib/ghin";
 
 const BLUE = BC.hcpBlue;
-const FONT = "'Montserrat', sans-serif";
 const US_STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"];
 
 const primaryBtn = (color) => ({

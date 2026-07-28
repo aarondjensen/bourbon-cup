@@ -9,9 +9,8 @@
 //    • Toast           — the transient "slides down from the top" toast.
 //    • ScoreButtonRow  — the tappable par-relative score entry row.
 
-import { BC, ON_ACCENT, SHADOW, ON_AMBER, FS } from "../theme";
+import { BC, FONT, ON_ACCENT, SHADOW, ON_AMBER, FS } from "../theme";
 
-const FONT = "'Montserrat', sans-serif";
 
 // ── SegmentedToggle ──
 // options: array of [key, label]. `value` is the active key; `onChange(key)`

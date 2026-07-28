@@ -179,6 +179,13 @@ export const applyBCTheme = (mode, brand = null) => {
   for (const key in next) BC[key] = next[key];
 };
 
+// ── The typeface ──
+// theme.js loads Montserrat (see the <link> injection at the bottom), so it
+// owns the family string too. It was declared as a `const FONT` in four
+// component files and typed out inline twenty-four more times, which is a lot
+// of places to edit the day the tournament changes its type.
+export const FONT = "'Montserrat', sans-serif";
+
 // ── Ink on amber ──
 // The one text/fill color that sits ON the amber and gold accents — active
 // segmented tabs, primary buttons, the FRONT/BACK scorecard band, the

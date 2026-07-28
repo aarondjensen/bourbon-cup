@@ -30,7 +30,8 @@
 //  the Scoring tab describes the same match.
 
 import { useState, useMemo } from "react";
-import { BC, ALPHA, FS, ink, teamColor } from "../theme";
+import { BC, FONT, ALPHA, FS, ink, teamColor } from "../theme";
+import { playerLookup } from "../lib/players";
 import {
   FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT,
   POINT_METHOD_TRADITIONAL, TROPHY_SILHOUETTE, CUP_POINTS_TO_WIN,
@@ -47,7 +48,6 @@ import { HoleStrip } from "./HoleStrip";
 import { StickyTop } from "./ui";
 import { isRoundFinal } from "../lib/roundLocks";
 
-const FONT = "'Montserrat', sans-serif";
 const ALL_ROUNDS = [1, 2, 3, 4];
 
 // ── Small helpers ────────────────────────────────────────────────
@@ -316,7 +316,7 @@ function MatchCard({
   const n = match.nassau || NASSAU_DEFAULT;
 
   const overallSt = segmentState(result.holes, opts);
-  const nameOf = (pid) => tPlayers.find((p) => p.player_id === pid)?.name || pid;
+  const { nameOf } = playerLookup(tPlayers);
   const aNames = (match.teamA || []).map(nameOf);
   const bNames = (match.teamB || []).map(nameOf);
 

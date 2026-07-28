@@ -114,6 +114,11 @@ export function formatTeeTime(mins, { ampm = false } = {}) {
 
 // The round document's pipe-delimited tee-time list, as an array. Empty
 // slots are preserved — index position is what ties a time to a group.
+// Times are stored bare ("8:30") but older documents may carry a suffix; the
+// boxes read cleaner without it and parseTeeTime doesn't need it. String() so
+// a document holding a number instead of a string cannot take the screen down.
+export const stripAMPM = (s) => (s ? String(s).replace(/\s*(AM|PM)/gi, "").trim() : s);
+
 export const teeTimeList = (tr) =>
   (tr?.tee_time ? String(tr.tee_time).split("|") : []).map(s => s.trim());
 

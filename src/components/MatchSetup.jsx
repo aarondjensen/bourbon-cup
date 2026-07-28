@@ -25,14 +25,15 @@
 // it, not the main road.
 
 import { useLayoutEffect, useRef, useState } from "react";
-import { BC, SCRIM, ALPHA, ON_AMBER, FS } from "../theme";
+import { BC, FONT, SCRIM, ALPHA, ON_AMBER, FS } from "../theme";
+import { playerLookup } from "../lib/players";
 import { FORMATS } from "../constants";
 import { TOURNAMENT_ID, editionDocId } from "../firebase";
 import { getRoundCH, getRoundHandicapMode, lockForRound } from "../scoring";
 import {
   GROUP_TARGET, GROUP_MAX, TEE_SLOTS,
   autoBuildGroups, expandTeeTimes, teeTimeList,
-  teeSlotCount, padGroups, trimGroups, firstOpenGroup, groupHasRoom,
+  stripAMPM, teeSlotCount, padGroups, trimGroups, firstOpenGroup, groupHasRoom,
   matchPlayers, matchSeq, formatPerSide, isFoursomeFormat,
   groupIndexForMatch, assignMatchToGroup, swapMatchIntoGroup,
   groupIssues, hasGroupIssues,
@@ -43,17 +44,12 @@ import {
 } from "../lib/scoreGuard";
 
 const ROUNDS = [1, 2, 3, 4];
-const FONT = "'Montserrat', sans-serif";
 
 const cardStyle = { background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}` };
 const miniBtn = {
   padding: "5px 10px", borderRadius: 8, fontSize: FS.label, fontWeight: 700, cursor: "pointer",
   background: "transparent", border: `1px solid ${BC.amber}${ALPHA.line}`, color: BC.amber, fontFamily: FONT,
 };
-// Times are stored bare ("8:30") but older documents may carry a suffix;
-// the boxes read cleaner without it and parseTeeTime doesn't need it.
-const stripAMPM = (s) => (s ? String(s).replace(/\s*(AM|PM)/gi, "").trim() : s);
-
 const xBtn = {
   fontSize: FS.label, padding: "3px 7px", borderRadius: 6, border: `1px solid ${BC.danger}${ALPHA.hair}`,
   background: "transparent", color: BC.danger, cursor: "pointer", flexShrink: 0, fontFamily: FONT,
@@ -201,9 +197,7 @@ export function MatchSetup({
   // the slot's position for a round whose times are not set yet.
   const slotName = (gi) => (times[gi] ? stripAMPM(times[gi]) : `tee time ${gi + 1}`);
 
-  const nameOf = (pid) => tPlayers.find(p => p.player_id === pid)?.name || pid;
-  const shortOf = (pid) => nameOf(pid).split(" ")[0] || pid;
-  const teamOf = (pid) => tPlayers.find(p => p.player_id === pid)?.team;
+  const { nameOf, shortOf, teamOf } = playerLookup(tPlayers);
 
   // CH preview, routed through the same resolver the scoring engine uses so
   // that once a round is locked this panel shows the strokes that will

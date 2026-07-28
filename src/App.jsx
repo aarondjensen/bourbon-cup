@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { BC, ON_ACCENT, dimHex, SHADOW, SCRIM, ALPHA, ON_AMBER, FS, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor } from "./theme";
+import { BC, FONT, ON_ACCENT, dimHex, SHADOW, SCRIM, ALPHA, ON_AMBER, FS, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor } from "./theme";
+import { playerLookup } from "./lib/players";
 import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession } from "./firebase";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
@@ -48,6 +49,7 @@ import {
   GROUPS_COL, groupsDocId, encodeGroups, decodeGroups,
   teeTimeForMatch, parseTeeTime, formatTeeTime, DEFAULT_TEE_INTERVAL, TEE_SLOTS,
   roundPlaySetup, orderMatchesForRound, numberMatches,
+  stripAMPM,
 } from "./lib/groups";
 import { holesEntered } from "./lib/scoreGuard";
 
@@ -197,7 +199,7 @@ function LoginScreen({ players, onLogin, teams, darkMode, tournamentName, tourna
   );
 
   return (
-    <div style={{ height: "100dvh", background: BC.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 10px", fontFamily: "'Montserrat', sans-serif", position: "relative", overflow: "hidden" }}>
+    <div style={{ height: "100dvh", background: BC.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 10px", fontFamily: FONT, position: "relative", overflow: "hidden" }}>
       {/* Silhouette — fixed full-screen background */}
       <img src={TROPHY_SILHOUETTE} alt="" style={{
         position: "fixed", top: "50%", left: "50%",
@@ -315,7 +317,7 @@ function roundScoreProgress(matches, holeData, round) {
 function FinalizeRoundCard({ round, nextRound, lastFinal, progress, tPlayers, onFinalizeRound, notify }) {
   const { confirm, confirmModal } = useConfirm();
   const [busy, setBusy] = useState(false);
-  const nameOf = (pid) => tPlayers.find(t => t.player_id === pid)?.name || pid;
+  const { nameOf } = playerLookup(tPlayers);
 
   const outList = progress.missingBy
     .slice(0, 6)
@@ -689,7 +691,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     />
   ) : null;
   const shell = (children) => (
-    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
+    <div style={{ fontFamily: FONT }}>
       {children}
       {directorCard}
       <Toast message={toast} />
@@ -1230,8 +1232,7 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
     .map(t => { const m = parseTeeTime(t); return m == null ? t : formatTeeTime(m, { ampm: true }); });
   const firstTee = times[0] || "";
 
-  const nameOf = (pid) => tPlayers.find(t => t.player_id === pid)?.name || pid;
-  const teamOf = (pid) => tPlayers.find(t => t.player_id === pid)?.team || null;
+  const { nameOf, teamOf } = playerLookup(tPlayers);
 
   // Matches read best in the order they go off — which is also the order
   // their numbers were handed out in, so the cards below count up.
@@ -1247,7 +1248,7 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
   });
 
   return (
-    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
+    <div style={{ fontFamily: FONT }}>
       {/* Round selector — pill toggle, deep Mash green for active state.
           Mirrors the Mash visual language used on Scoring + Leaderboard.
           Pinned: this is the control the whole tab is steered from, and a
@@ -2032,12 +2033,12 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
     }, 400);
   };
 
-  const InputStyle = { width: "100%", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.body, boxSizing: "border-box", outline: "none", fontFamily: "'Montserrat', sans-serif" };
+  const InputStyle = { width: "100%", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.body, boxSizing: "border-box", outline: "none", fontFamily: FONT };
   const LabelStyle = { fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1, marginBottom: 4, display: "block" };
   const BtnStyle = { padding: "10px 20px", borderRadius: 10, border: "none", fontSize: FS.body, fontWeight: 700, cursor: "pointer", background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`, color: ON_AMBER };
 
   return (
-    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
+    <div style={{ fontFamily: FONT }}>
       <EditionSwitcher open={showEditions} onClose={() => setShowEditions(false)} />
       {/* Tabs — pinned to the top of the scroll area so the bar stays in the
           SAME place on every sub-tab, regardless of that tab's content
@@ -2155,7 +2156,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             // Input font stays at FS.lead (16px) on purpose — anything
             // smaller makes iOS Safari zoom the page on focus. Height is
             // condensed via padding, not by dropping a rung.
-            const inp = { fontSize: FS.lead, fontWeight: 600, color: BC.t1, width: "100%", boxSizing: "border-box", background: BC.inp, border: `1px solid ${acc}${ALPHA.line}`, borderRadius: 8, padding: "7px 10px", outline: "none", fontFamily: "'Montserrat', sans-serif" };
+            const inp = { fontSize: FS.lead, fontWeight: 600, color: BC.t1, width: "100%", boxSizing: "border-box", background: BC.inp, border: `1px solid ${acc}${ALPHA.line}`, borderRadius: 8, padding: "7px 10px", outline: "none", fontFamily: FONT };
             // GHIN link/sync/unlink writes ONLY into the form here (never the db
             // directly) — the whole modal commits on Save, so add & edit behave
             // identically and Cancel truly discards. `formPlayer` gives
@@ -2224,7 +2225,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             };
             return (
               <Popup onClose={close} portal viewportFit align="start" maxWidth={420} padding={0} outerPadding={12}
-                innerStyle={{ background: BC.card, borderRadius: 16, display: "flex", flexDirection: "column", fontFamily: "'Montserrat', sans-serif" }}>
+                innerStyle={{ background: BC.card, borderRadius: 16, display: "flex", flexDirection: "column", fontFamily: FONT }}>
                 <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 10, padding: "13px 16px", borderBottom: `1px solid ${BC.bdr}` }}>
                   <div style={{ flex: 1, fontSize: FS.body, fontWeight: 800, color: BC.t1 }}>{isNew ? "Add Player" : "Edit Player"}</div>
                   <button onClick={close} aria-label="Close" style={{ width: 32, height: 32, borderRadius: 9, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t2, fontSize: FS.lead, cursor: "pointer", lineHeight: 1 }}>✕</button>
@@ -2386,7 +2387,6 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               // Time parsing/formatting is shared with the Matches tab (see
               // lib/groups.js) so the two editors of this one field can never
               // disagree about what "830" means.
-              const stripAMPM = (s) => s ? s.replace(/\s*(AM|PM)/gi, "").trim() : s;
               const teeTimes = roundTeeTime ? roundTeeTime.split("|") : ["","","",""];
               // These boxes ARE the round's groups — G1 is who goes off first,
               // and the Matches tab fills them rather than inventing groups of
@@ -3553,7 +3553,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     onChange={e => f.set(e.target.value)}
                     onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
                     placeholder={f.ph}
-                    style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.body, fontWeight: 700, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
+                    style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.body, fontWeight: 700, outline: "none", fontFamily: FONT }}
                   />
                 </div>
               ))}
@@ -3579,7 +3579,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     onChange={e => setEditTeamNames(n => ({ ...n, [team.id]: e.target.value }))}
                     onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
                     placeholder={`Team ${team.id}`}
-                    style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "9px 10px", background: BC.inp, border: `1px solid ${brandSwatch(team.id)}${ALPHA.line}`, borderRadius: 8, color: BC.t1, fontSize: FS.body, fontWeight: 800, letterSpacing: 0.5, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
+                    style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "9px 10px", background: BC.inp, border: `1px solid ${brandSwatch(team.id)}${ALPHA.line}`, borderRadius: 8, color: BC.t1, fontSize: FS.body, fontWeight: 800, letterSpacing: 0.5, outline: "none", fontFamily: FONT }}
                   />
                   <button
                     onClick={() => saveTeam(team.id)}
@@ -3601,7 +3601,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     value={brandEdit[team.id]}
                     onChange={e => setBrandEdit(b => ({ ...b, [team.id]: e.target.value }))}
                     placeholder="#rrggbb"
-                    style={{ width: 100, boxSizing: "border-box", padding: "8px 8px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, color: BC.t1, fontSize: FS.small, fontWeight: 600, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
+                    style={{ width: 100, boxSizing: "border-box", padding: "8px 8px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, color: BC.t1, fontSize: FS.small, fontWeight: 600, outline: "none", fontFamily: FONT }}
                   />
                   <label style={{ marginLeft: "auto", fontSize: FS.small, fontWeight: 700, color: BC.t2, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, padding: "8px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>
                     {brandBusy === team.id ? "Reading…" : "Import logo"}
@@ -3679,7 +3679,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
   const perSkin = totalSkins > 0 ? (skinsPot / totalSkins).toFixed(2) : "0.00";
 
   return (
-    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
+    <div style={{ fontFamily: FONT }}>
       {/* Tab toggle */}
       <SegmentedToggle
         options={[["skins", "🎰 Skins"], ["ctp", "🎯 Closest to Pin"]]}
@@ -3696,7 +3696,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
                 <input autoFocus type="number" value={potInput} onChange={e => setPotInput(e.target.value)}
                   onBlur={() => { onUpdatePot(parseFloat(potInput)||0); setEditPot(false); }}
                   onKeyDown={e => { if (e.key === "Enter") { onUpdatePot(parseFloat(potInput)||0); setEditPot(false); }}}
-                  style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold, background: "transparent", border: "none", borderBottom: `1px solid ${BC.amber}`, outline: "none", width: 100, fontFamily: "'Montserrat', sans-serif" }} />
+                  style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold, background: "transparent", border: "none", borderBottom: `1px solid ${BC.amber}`, outline: "none", width: 100, fontFamily: FONT }} />
               ) : (
                 <div onClick={() => user?.isDirector && setEditPot(true)} style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold, cursor: user?.isDirector ? "pointer" : "default" }}>
                   ${skinsPot.toFixed(2)}
@@ -3793,7 +3793,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
                       {user?.isDirector ? (
                         <select value={winnerId || ""}
                           onChange={e => onSetCtp(r, hole, e.target.value || null, { distanceFt: e.target.value === winnerId ? rec?.distance_ft ?? null : null, approved: true })}
-                          style={{ flex: 1, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, color: BC.t1, fontSize: FS.small, padding: "4px 6px", fontFamily: "'Montserrat', sans-serif" }}>
+                          style={{ flex: 1, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, color: BC.t1, fontSize: FS.small, padding: "4px 6px", fontFamily: FONT }}>
                           <option value="">-- Not set --</option>
                           {tPlayers.map(p => <option key={p.player_id} value={p.player_id}>{p.name}</option>)}
                         </select>
@@ -3847,7 +3847,7 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
   }, [tPlayers, matches, holeData, tRounds, courses, hcpOverrides, teeAssignments, roundLocks]);
 
   return (
-    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
+    <div style={{ fontFamily: FONT }}>
       {/* Stats / History switch — pinned, same as every other tab's lead
           control, so it sits where the eye already expects a tab switcher. */}
       <StickyTop padBottom={14}>
@@ -4415,7 +4415,7 @@ function PracticeScoringTab({
         const tcB = PRACTICE_TEAM_COLORS[t2Idx];
         const matchIdx = event.matches.findIndex(m => m.id === activeMatch.id);
         return (
-          <Popup onClose={() => setShowScorecard(false)} maxWidth={440} padding={0} outerPadding={12} innerStyle={{ display: "flex", flexDirection: "column", fontFamily: "'Montserrat', sans-serif" }}>
+          <Popup onClose={() => setShowScorecard(false)} maxWidth={440} padding={0} outerPadding={12} innerStyle={{ display: "flex", flexDirection: "column", fontFamily: FONT }}>
                 {/* Header */}
                 <div style={{ padding: "12px 14px", borderBottom: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div>
@@ -5720,7 +5720,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
   }, [event, isDirector, subView]);
 
   return (
-    <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
+    <div style={{ fontFamily: FONT }}>
       {/* Header — centered. The MASH ROUND mark functions as the
           tournament banner for this view. Reads from BC.amber (the
           primary brand accent, currently Mash green per the active
@@ -6653,7 +6653,7 @@ export default function App() {
   // Dynamic Island tall under the nav. Don't reintroduce one. Safari also
   // re-pins fixed elements above its own toolbar for free.
   return (
-    <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: 0, width: "100%", background: BC.bg, display: "flex", flexDirection: "column", fontFamily: "'Montserrat', sans-serif", overflow: "hidden", boxSizing: "border-box", paddingTop: "env(safe-area-inset-top, 0px)", paddingLeft: "env(safe-area-inset-left, 0px)", paddingRight: "env(safe-area-inset-right, 0px)" }}>
+    <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: 0, width: "100%", background: BC.bg, display: "flex", flexDirection: "column", fontFamily: FONT, overflow: "hidden", boxSizing: "border-box", paddingTop: "env(safe-area-inset-top, 0px)", paddingLeft: "env(safe-area-inset-left, 0px)", paddingRight: "env(safe-area-inset-right, 0px)" }}>
       <div style={{ maxWidth: 520, width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", flex: 1, minHeight: 0, position: "relative", padding: "0 4px" }}>
       <Notif notif={notif} />
 
@@ -6811,7 +6811,7 @@ export default function App() {
           // (TEAMS-banner-style header, neutral "no data" body) so when
           // real betting data lands, the visual scaffold is already
           // consistent with the rest of the app.
-          <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
+          <div style={{ fontFamily: FONT }}>
             {/* Skins/CTP toggle scaffold — disabled visual, identical
                 shape to the working Practice Round version. Communicates
                 "this section will have these two modes" without

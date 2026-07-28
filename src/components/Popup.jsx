@@ -55,7 +55,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { BC, ON_ACCENT, SHADOW, SCRIM, FS } from "../theme";
+import { BC, FONT, ON_ACCENT, SHADOW, SCRIM, FS } from "../theme";
 
 const Z_MAP = { content: 500, modal: 900 };
 const STD_BACKDROP = SCRIM;
@@ -160,7 +160,7 @@ export function Popup({
           // a portaled popup (a direct <body> child) would otherwise fall
           // back to the browser default. Declare it here so every popup
           // matches the app no matter where it's mounted.
-          fontFamily: "'Montserrat', sans-serif",
+          fontFamily: FONT,
           padding,
           width: "100%",
           maxWidth,
