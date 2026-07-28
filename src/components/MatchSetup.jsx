@@ -818,9 +818,25 @@ export function MatchSetup({
                 The three-track grid stays even though only the middle is
                 filled. It is what centres the time on the CARD, and the right
                 track is where the drag's answer lands. */}
+            {/* Given its own band so it reads as the card's header rather than
+                a first row: BC.inp is the sunken surface one step off BC.card,
+                which separates them in both themes without introducing a
+                colour. Bled out to the card's edges by the negative margins —
+                a band that stops short of them reads as a box inside a box —
+                and the top corners are rounded to 11 (the card's 12 less its
+                1px border) so it sits inside the rounding rather than
+                squaring it off.
+
+                When the card is a drop target the band takes the amber a rung
+                stronger than the body wash, so the target reads from its
+                header down. */}
             <div style={{
               display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "baseline",
-              marginBottom: rows.length ? 7 : 0,
+              margin: "-8px -10px 7px", padding: "6px 10px",
+              background: over ? `${wouldRefuse ? BC.danger : BC.amber}${ALPHA.tint}` : BC.inp,
+              borderBottom: `1px solid ${over ? edge : BC.bdr}`,
+              borderRadius: "11px 11px 0 0",
+              transition: "background 120ms ease, border-color 120ms ease",
             }}>
               <span />
               <span style={{ fontSize: FS.body, fontWeight: 800, justifySelf: "center", color: times[gi] ? BC.t1 : BC.t3 }}>
