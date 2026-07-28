@@ -542,7 +542,11 @@ export function MatchSetup({
                     border: `1.5px solid ${on ? team.accent : BC.bdr}`,
                     display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, fontFamily: FONT,
                   }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: on ? team.accent : BC.t2, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
+                    {/* 13, the size a player's name is set at on the
+                        leaderboard and in the match rows below. The CH stays
+                        small beside it — it labels the name rather than
+                        competing with it. */}
+                    <span style={{ fontSize: 13, fontWeight: 600, color: on ? team.accent : BC.t2, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
                     <span style={{ fontSize: 10, color: BC.t3, flexShrink: 0 }}>CH {getPlayerCH(p.player_id)}</span>
                   </button>
                 );
