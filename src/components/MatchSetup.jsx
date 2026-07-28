@@ -31,7 +31,7 @@ import { TOURNAMENT_ID, editionDocId } from "../firebase";
 import { getRoundCH, getRoundHandicapMode, lockForRound } from "../scoring";
 import {
   GROUP_TARGET, GROUP_MAX, TEE_SLOTS,
-  autoBuildGroups, expandTeeTimes, teeTimeList, teeInterval,
+  autoBuildGroups, expandTeeTimes, teeTimeList,
   teeSlotCount, padGroups, trimGroups, firstOpenGroup, groupHasRoom,
   matchPlayers, matchSeq, formatPerSide, isFoursomeFormat,
   groupIndexForMatch, assignMatchToGroup, swapMatchIntoGroup,
@@ -46,7 +46,6 @@ const ROUNDS = [1, 2, 3, 4];
 const FONT = "'Montserrat', sans-serif";
 
 const cardStyle = { background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}` };
-const sectionLabel = { fontSize: FS.label, color: BC.gold, fontWeight: 700, letterSpacing: 1, marginBottom: 8 };
 const miniBtn = {
   padding: "5px 10px", borderRadius: 8, fontSize: FS.label, fontWeight: 700, cursor: "pointer",
   background: "transparent", border: `1px solid ${BC.amber}66`, color: BC.amber, fontFamily: FONT,
@@ -154,9 +153,10 @@ export function MatchSetup({
   });
 
   const rawTimes = teeTimeList(tr);
+  // The tee times themselves are all this tab needs now: the first tee and the
+  // spread were only ever read out in prose that no longer exists, and they
+  // live on the Rounds tab, which is where they are set.
   const times = expandTeeTimes(rawTimes, Math.max(groups.length, TEE_SLOTS));
-  const interval = teeInterval(rawTimes);
-  const firstTee = (rawTimes[0] || "").trim();
 
   const issues = groupIssues({ groups, matches: rndMatches });
   const flagged = hasGroupIssues(issues);
@@ -618,20 +618,16 @@ export function MatchSetup({
           goes off, and how many players a match holds is plain from the rows
           in it. The size hint survives where it can still tell you something
           you don't already see — over an over-filled selection. */}
+      {/* One line, one voice: same size, same colour, joined by a dot. Set at
+          different weights and greys they read as a title with a caption under
+          it, when they are two halves of the same sentence — "this round is
+          this format at this course". */}
       <div style={{
         ...cardStyle, padding: "9px 12px", marginBottom: 10,
-        display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10,
+        fontSize: FS.small, fontWeight: 700, color: BC.t1,
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
       }}>
-        {/* One row, not two: between them they are a single line of context,
-            and stacked they read as two facts to check rather than one. The
-            course takes the ellipsis because the format is the shorter and
-            the more fixed of the two. */}
-        <span style={{ fontSize: FS.small, fontWeight: 700, color: BC.t1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {course?.name || "Course TBD"}
-        </span>
-        <span style={{ fontSize: FS.label, color: BC.t3, flexShrink: 0 }}>
-          {fmt?.label || "Format TBD"}
-        </span>
+        {course?.name || "Course TBD"} · {fmt?.label || "Format TBD"}
       </div>
 
       {/* A final round's draw is part of its result. Say so where the draw is
@@ -657,10 +653,12 @@ export function MatchSetup({
           const pool = poolFor(tid, sel);
           return (
             <div key={tid}>
-              {/* Just the team's name. The "0/1" counter that used to follow
-                  it was counting the taps you had already made, in a column
-                  where the ones you made are the lit rows. */}
-              <div style={{ fontSize: FS.label, fontWeight: 700, color: team.accent, letterSpacing: 1, marginBottom: 5 }}>
+              {/* Just the team's name, centred over its column — it is the
+                  column's heading, and left-aligned it read as the first item
+                  in the list rather than the label for it. The "0/1" counter
+                  that used to follow it was counting the taps you had already
+                  made, in a column where the ones you made are the lit rows. */}
+              <div style={{ fontSize: FS.label, fontWeight: 700, color: team.accent, letterSpacing: 1, marginBottom: 5, textAlign: "center" }}>
                 {teamNames?.[tid]}
               </div>
               {pool.length === 0 && (
@@ -886,15 +884,14 @@ export function MatchSetup({
           ARE its groups — so there is nothing here for it to do. */}
       {!matchFitsGroup && (
         <>
-          <div style={{ ...sectionLabel, marginTop: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-            <span>TEE SHEET</span>
+          {/* No heading and no explanation. The G1–G4 cards below are visibly
+              a tee sheet, and how a team match gets split across them is what
+              the chips do when you tap them, not something to read first.
+              Auto-build keeps its button — for these formats it is the only
+              way to fill the sheet in one move, since a match spanning several
+              groups has no single time to be dropped onto. */}
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16, marginBottom: 8 }}>
             <button onClick={buildGroups} style={miniBtn}>Auto-build</button>
-          </div>
-
-          <div style={{ fontSize: FS.label, color: BC.t3, marginBottom: 8, lineHeight: 1.45 }}>
-            A {fmt?.label || "team"} match holds more players than one group, so it goes off over
-            several. Times run off the first tee ({firstTee || "unset"}), {interval} min apart — tap
-            a player to lift them, then tap a time to drop them in.
           </div>
 
           {groups.map((g, gi) => {
