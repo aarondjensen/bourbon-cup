@@ -15,7 +15,7 @@ import {
   holeOptionsFor, resolveHoleMethod, HOLE_METHOD_LABELS, HOLE_METHOD_DESCRIPTIONS,
   formsFor, formDefaultFor, resolveFormOfPlay, formOfPlayLabel, describeFormOfPlay,
   handicapModeFor, allowanceStartsOn,
-  resolveStablefordPoints, STABLEFORD_POINTS_DEFAULT, PAR_RESULTS, PAR_RESULT_LABELS, TILT_POINTS,
+  resolveParPoints, parPointsDefaultFor, formatUsesParPoints, PAR_RESULTS, PAR_RESULT_LABELS,
 } from "./constants";
 import {
   calcCH, calcCHForCourse, fmtScore,
@@ -1199,7 +1199,7 @@ const sameRoundMap = (a, b) => JSON.stringify(liveEntries(a)) === JSON.stringify
 const roundSettingsSignature = (r) => JSON.stringify([
   r.format, r.handicap_mode, r.tee_time, r.scoring_type, r.hole_scoring,
   r.nassau_front, r.nassau_back, r.nassau_overall, r.allowance, r.counting_scores,
-  r.hole_points, r.stableford_points,
+  r.hole_points, r.par_points,
 ]);
 
 // The handicap allowance, normalized to the shape the round's FORMAT calls
@@ -1233,11 +1233,12 @@ const roundCounting = (format, raw) => {
 const roundHolePoints = (scoringType, raw) =>
   isPointsPerHole(scoringType) ? resolveHolePoints(raw) : null;
 
-// The Stableford table, on the one format that has one. Null everywhere else,
-// for the same reason the counts are: a table left behind by a format change
-// would read as an edit on a format with no use for it.
-const roundStablefordPoints = (format, raw) =>
-  format === "stableford" ? resolveStablefordPoints(raw) : null;
+// The points-against-par table, on the two formats that have one. Null
+// everywhere else, for the same reason the counts are: a table left behind by
+// a format change would read as an edit on a format with no use for it — and
+// Stableford's rungs are not Tilt's, so carrying one into the other would be
+// worse than useless.
+const roundParPoints = (format, raw) => resolveParPoints(format, raw);
 
 // The round's hole-scoring method, normalized against what its format actually
 // offers, so switching away from a format that HAD a menu cannot leave a
@@ -1455,7 +1456,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   const [holePoints, setHolePoints] = useState(null);
   // What each result against par pays, on the one format whose table is the
   // director's to set. Null means "the default", same as the three above.
-  const [stablefordPoints, setStablefordPoints] = useState(null);
+  const [parPoints, setParPoints] = useState(null);
   // ── Handicap-lock state ──
   // Read-only here: locking is automatic on the first score of a round (see
   // ensureRoundLock in App). These flags only gate the round form's editing.
@@ -1550,7 +1551,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
       allowance: roundAllowance(fmt, tr.allowance),
       counting_scores: roundCounting(fmt, tr.counting_scores),
       hole_points: roundHolePoints(form, tr.hole_points),
-      stableford_points: roundStablefordPoints(fmt, tr.stableford_points),
+      par_points: roundParPoints(fmt, tr.par_points),
       ch_overrides: hcpOverridesFromDb?.[editRound] || {},
       tee_assignments: teeAssignmentsFromDb?.[editRound] || {},
     };
@@ -1579,11 +1580,11 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
       allowance: roundAllowance(fmt, allowance),
       counting_scores: roundCounting(fmt, counting),
       hole_points: roundHolePoints(form, holePoints),
-      stableford_points: roundStablefordPoints(fmt, stablefordPoints),
+      par_points: roundParPoints(fmt, parPoints),
       ch_overrides: hcpOverrides[editRound] || {},
       tee_assignments: teeAssignments[editRound] || {},
     };
-  }, [storedRound, roundFormat, handicapMode, editRound, roundTeeTime, nassau, scoringType, holeScoring, allowance, counting, holePoints, stablefordPoints, hcpOverrides, teeAssignments]);
+  }, [storedRound, roundFormat, handicapMode, editRound, roundTeeTime, nassau, scoringType, holeScoring, allowance, counting, holePoints, parPoints, hcpOverrides, teeAssignments]);
 
   const storedSettingsSig = roundSettingsSignature(storedRound);
   const hcpDocSig = JSON.stringify(hcpOverridesFromDb ?? null);
@@ -1620,7 +1621,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
     setAllowance(storedRound.allowance);
     setCounting(storedRound.counting_scores);
     setHolePoints(storedRound.hole_points);
-    setStablefordPoints(storedRound.stableford_points);
+    setParPoints(storedRound.par_points);
     setHandicapMode(prev => ({ ...prev, [editRound]: storedRound.handicap_mode }));
   }, [seed, seededRound, editRound, storedSettingsSig, storedRound]);
 
@@ -1684,7 +1685,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
         allowance: payload.allowance,
         counting_scores: payload.counting_scores,
         hole_points: payload.hole_points,
-        stableford_points: payload.stableford_points,
+        par_points: payload.par_points,
       });
       setAutoSave({ phase: "saved", round });
     } catch (err) {
@@ -2143,7 +2144,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   setAllowance(allowanceStartsOn(id) ? { enabled: true, ...allowanceDefaultFor(id) } : null);
                   setCounting(null);
                   setHolePoints(null);
-                  setStablefordPoints(null);
+                  setParPoints(null);
                 }} style={{ ...InputStyle, marginBottom: 0, fontSize: FS.small, padding: "8px 8px", height: 38 }}>
                   <option value="">Select...</option>
                   {FORMATS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
@@ -2451,42 +2452,26 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 because that is the decision they make: the table IS how a
                 hole's number is arrived at.
 
-                Stableford's is the director's to set — the defaults reproduce
-                exactly what the engine computed before the table existed, so a
-                stored round does not move by gaining one. Tilt's is fixed:
-                those numbers, and the multiplier that rides on them, are the
-                game rather than a setting, so the section states them. */}
+                Both tables are the director's to set, and they are different
+                games: Stableford's defaults reproduce exactly what the engine
+                computed before the table existed, Tilt's are the harsher ladder
+                the format is named for. What Tilt's table cannot express — the
+                multiplier that rides on a birdie streak — is stated underneath,
+                because those rules are the game rather than a setting. */}
             {(() => {
               const fmtId = formRound.format;
-              if (fmtId !== "stableford" && fmtId !== "tilt") return null;
-              const rowLabel = (text) => (
-                <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>{text}</div>
-              );
-              if (fmtId === "tilt") {
-                return (
-                  <div style={{ marginBottom: 12 }}>
-                    <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-                      {rowLabel("POINTS")}
-                      <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5 }}>
-                        {PAR_RESULTS.map(k => `${PAR_RESULT_LABELS[k]} ${TILT_POINTS[k]}`).join(" · ")}
-                      </div>
-                    </div>
-                    <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
-                      A net birdie doubles your next hole, a second in a row triples it, and it keeps climbing — a par or worse drops you back to face value. The multiplier runs through the turn and applies to minus scores too.
-                    </div>
-                  </div>
-                );
-              }
+              if (!formatUsesParPoints(fmtId)) return null;
               // Raw-backed like the allowance: clearing a box leaves it empty
               // rather than snapping back mid-keystroke, and an empty box
-              // resolves to the default when the round is saved.
-              const raw = stablefordPoints || {};
-              const val = (k) => (raw[k] === undefined || raw[k] === null ? String(STABLEFORD_POINTS_DEFAULT[k]) : String(raw[k]));
-              const setRung = (k, v) => setStablefordPoints(prev => ({ ...(prev || {}), [k]: v }));
+              // resolves to the format's default when the round is saved.
+              const raw = parPoints || {};
+              const prefill = parPointsDefaultFor(fmtId);
+              const val = (k) => (raw[k] === undefined || raw[k] === null ? String(prefill[k]) : String(raw[k]));
+              const setRung = (k, v) => setParPoints(prev => ({ ...(prev || {}), [k]: v }));
               return (
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    {rowLabel("POINTS")}
+                    <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>POINTS</div>
                     {PAR_RESULTS.map(k => (
                       <div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}>
                         <span style={{ fontSize: FS.label, color: BC.t3, fontWeight: 600 }}>{PAR_RESULT_LABELS[k]}</span>
@@ -2501,6 +2486,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   </div>
                   <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
                     What each result against par pays. Both partners' points are added together for the side's score on the hole.
+                    {fmtId === "tilt" && " A net birdie then doubles your next hole, a second in a row triples it, and it keeps climbing — a par or worse drops you back to face value. The multiplier runs through the turn and applies to minus scores too."}
                   </div>
                 </div>
               );

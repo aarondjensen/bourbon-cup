@@ -651,28 +651,43 @@ export const parResultFor = (netVsPar) =>
           : netVsPar === 1 ? "bogey"
             : "double";
 
-// ── Stableford ──
-// The defaults reproduce exactly what the engine computed before the table was
+// Each format's table, and the default a director starts from.
+//
+// Stableford's reproduce exactly what the engine computed before the table was
 // editable (`max(0, 2 - d)`), so no stored round changes by gaining a table it
-// never had. A director can rewrite any rung; negatives are allowed, since a
-// table that only ever pays is a table with no downside.
-export const STABLEFORD_POINTS_DEFAULT = {
-  albatross: 5, eagle: 4, birdie: 3, par: 2, bogey: 1, double: 0,
+// never had. Tilt's are the game's own — a harsher ladder where a double bogey
+// actively costs you.
+//
+// Every rung on both is editable, negatives included: a table that can only
+// ever pay is a table with no downside, which is the whole point of Tilt's.
+export const PAR_POINTS_DEFAULTS = {
+  stableford: { albatross: 5, eagle: 4, birdie: 3, par: 2, bogey: 1, double: 0 },
+  tilt: { albatross: 16, eagle: 8, birdie: 4, par: 2, bogey: 0, double: -4 },
 };
 
-export const resolveStablefordPoints = (saved) => {
+export const formatUsesParPoints = (formatId) => !!PAR_POINTS_DEFAULTS[formatId];
+
+export const parPointsDefaultFor = (formatId) => PAR_POINTS_DEFAULTS[formatId] || null;
+
+// A round's table, resolved for scoring — null on a format that doesn't score
+// against par, which is how every caller asks "does this apply?". A blank rung
+// falls back to that format's default rather than to zero: an empty box is a
+// box nobody filled in, not a rung worth nothing.
+export const resolveParPoints = (formatId, saved) => {
+  const def = parPointsDefaultFor(formatId);
+  if (!def) return null;
   const num = (v, fallback) => {
     const n = parseFloat(v);
     return Number.isFinite(n) ? n : fallback;
   };
   const out = {};
-  PAR_RESULTS.forEach(k => { out[k] = num(saved?.[k], STABLEFORD_POINTS_DEFAULT[k]); });
+  PAR_RESULTS.forEach(k => { out[k] = num(saved?.[k], def[k]); });
   return out;
 };
 
-// ── Tilt ──
-// A harsher ladder than Stableford's — a double bogey actively costs you — with
-// a multiplier that rides on birdies. See nolayingup.com/blog/tilt.
+// ── Tilt's multiplier ──
+// What the table alone cannot express, and the reason Tilt is the one format
+// whose holes are not independent. See nolayingup.com/blog/tilt.
 //
 //   • a net birdie puts you on Tilt: the NEXT hole is worth double
 //   • a second birdie in a row makes it triple, and it keeps climbing from
@@ -680,16 +695,13 @@ export const resolveStablefordPoints = (saved) => {
 //   • an eagle counts as two birdies, so it jumps straight to triple, or
 //     escalates a multiplier you were already carrying
 //   • a net PAR OR WORSE takes you off Tilt entirely, back to face value
-//   • the multiplier applies to negative scores too: a double bogey while on
-//     triple is -12, which is what makes the format worth playing
+//   • it applies to negative scores too: a double bogey while on triple is
+//     three times whatever the table says a double bogey costs
 //   • it rides through the turn — the nines are a scoring boundary, not a
 //     reset, so a birdie on 9 doubles the 10th
 //
 // The hole that EARNS a multiplier does not get it; "the subsequent hole" does.
-// The table is fixed: unlike Stableford, these numbers are the game.
-export const TILT_POINTS = {
-  albatross: 16, eagle: 8, birdie: 4, par: 2, bogey: 0, double: -4,
-};
+// The rungs are the director's to set; these rules are not.
 
 // How many birdies a result is worth toward the multiplier. Everything from a
 // par down takes you off Tilt and is therefore worth none.

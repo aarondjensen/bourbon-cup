@@ -12,7 +12,7 @@ import {
   resolveCounting, resolveHolePoints, resolveScoring,
   HOLE_SCORING_BEST_BALL, SCORING_TYPE_POINTS, SCORING_TYPE_TOTAL,
   formatUnit, UNIT_STROKES, handicapModeFor, resolveHoleMethod,
-  resolveStablefordPoints, parResultFor, TILT_POINTS, tiltBirdieValue, tiltMultiplier,
+  resolveParPoints, parResultFor, tiltBirdieValue, tiltMultiplier,
 } from "./constants";
 
 // ── Course Handicap math ──
@@ -439,13 +439,16 @@ export const getRoundHolePoints = ({ roundLocks, round, tRounds, explicit }) => 
   return resolveHolePoints(explicit || tr?.hole_points || lock?.hole_points || null);
 };
 
-// What each result against par pays on a Stableford round. Same resolution
-// order and the same reasoning again: it decides points, not strokes, so the
-// live value wins over the lock and a mid-round correction lands.
-export const getRoundStablefordPoints = ({ roundLocks, round, tRounds, explicit }) => {
+// What each result against par pays, on the two formats scored against it.
+// Same resolution order and the same reasoning again: it decides points, not
+// strokes, so the live value wins over the lock and a mid-round correction
+// lands. Null on every other format, which is how callers ask whether it
+// applies at all.
+export const getRoundParPoints = ({ roundLocks, round, tRounds, format, explicit }) => {
   const lock = lockForRound(roundLocks, round);
   const tr = tRounds?.find(t => t.round_number === round);
-  return resolveStablefordPoints(explicit || tr?.stableford_points || lock?.stableford_points || null);
+  const fmt = format || lock?.format || tr?.format;
+  return resolveParPoints(fmt, explicit || tr?.par_points || lock?.par_points || null);
 };
 
 // Course + hole tables for a round. Hole handicaps decide WHICH holes get
@@ -572,7 +575,9 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
     const net = netScore(getPlayerScores(pid)[h], h, parStrokeMap(pid));
     return net == null ? null : parResultFor(net - holePars[h]);
   };
-  const stablefordPoints = getRoundStablefordPoints({ roundLocks, round: rnd, tRounds });
+  // Asked of the format the HOLES are being scored under, so the table always
+  // matches the branch that reads it.
+  const parPoints = getRoundParPoints({ roundLocks, round: rnd, tRounds, format: holeFormat });
 
   // ── Tilt, walked in order ──
   // The only format in this app whose holes are NOT independent. A birdie puts
@@ -594,7 +599,7 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
       tiltPoints[pid] = Array.from({ length: 18 }, (_, h) => {
         const result = parResult(pid, h);
         if (result == null) return null;
-        const pts = TILT_POINTS[result] * tiltMultiplier(streak);
+        const pts = parPoints[result] * tiltMultiplier(streak);
         const birdies = tiltBirdieValue(result);
         streak = birdies > 0 ? streak + birdies : 0;
         return pts;
@@ -713,7 +718,7 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
       // formula, so a director can rewrite what a birdie is worth.
       const pts = (pid) => {
         const result = parResult(pid, h);
-        return result == null ? null : stablefordPoints[result];
+        return result == null ? null : parPoints[result];
       };
       aScore = sumSide(teamA, pts);
       bScore = sumSide(teamB, pts);
