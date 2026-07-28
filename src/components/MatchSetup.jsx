@@ -32,9 +32,9 @@ import { getRoundCH, getRoundHandicapMode, lockForRound } from "../scoring";
 import {
   GROUP_TARGET, GROUP_MAX, TEE_SLOTS,
   autoBuildGroups, expandTeeTimes, teeTimeList, teeInterval,
-  teeSlotCount, padGroups, trimGroups, firstOpenGroup,
+  teeSlotCount, padGroups, trimGroups, firstOpenGroup, groupHasRoom,
   matchPlayers, matchSeq, formatPerSide, isFoursomeFormat,
-  groupIndexForMatch, assignMatchToGroup,
+  groupIndexForMatch, assignMatchToGroup, swapMatchIntoGroup,
   groupIssues, hasGroupIssues,
   orderMatchesForRound, canonicalMatchOrder,
 } from "../lib/groups";
@@ -198,12 +198,6 @@ export function MatchSetup({
     setHeld(null);
   };
 
-  // Send a whole match off with one group, from the match list. This is the
-  // way a Singles or team round actually gets drawn — the decision is "these
-  // two matches ride together", not "these four players do" — so it happens
-  // where the matches are, and lifting chips stays for the odd fix-up.
-  const setMatchGroup = (m, gi) => saveGroups(assignMatchToGroup({ groups, match: m, gi }));
-
   // ── Moving a match between tee times ─────────────────────────────
   // Everyone in a group tees off together, so there is no order WITHIN one —
   // which means a drag has nothing to insert between. It only has a tee time
@@ -212,15 +206,24 @@ export function MatchSetup({
   //
   // Pointer events, not HTML5 drag-and-drop: this console is used on a phone
   // at the first tee, and dragstart/drop never fire for touch. `touchAction:
-  // none` on the handle is what stops the page scrolling under the finger.
+  // none` on the row is what stops the page scrolling under the finger.
   const canDragRow = (m) => matchFitsGroup && !roundFinal && !!m;
+
+  // The one buzz this can actually make. Android fires it; iOS Safari has no
+  // Vibration API at all, so on the phone this console mostly runs on it is a
+  // no-op — which is why the drag also lifts, shadows and re-labels its target
+  // rather than leaning on haptics to say what is happening.
+  const buzz = (ms) => { try { navigator.vibrate?.(ms); } catch { /* unsupported */ } };
 
   const startDrag = (e, m) => {
     if (!canDragRow(m)) return;
-    // Capture keeps the moves coming to the handle once the finger slides off
-    // it, which it does immediately. It throws for a pointer that is no longer
-    // active; the drag still works off the handle's own events without it.
+    // The ✕ lives in this row. Starting a drag from it would fight the tap.
+    if (e.target?.closest?.("button")) return;
+    // Capture keeps the moves coming to the row once the finger slides off it,
+    // which it does immediately. It throws for a pointer that is no longer
+    // active; the drag still works off the row's own events without it.
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+    buzz(12);
     setDrag({ id: m.id, over: groupIndexForMatch({ groups, match: m }) });
   };
   const moveDrag = (e) => {
@@ -232,6 +235,9 @@ export function MatchSetup({
       const r = el?.getBoundingClientRect();
       if (r && e.clientY >= r.top && e.clientY <= r.bottom) over = Number(gi);
     });
+    // A pulse as the target changes — the moment the drop would land somewhere
+    // new is the one worth feeling, not every pixel of travel.
+    if (over !== drag.over && over >= 0) buzz(8);
     if (over !== drag.over) setDrag(d => (d ? { ...d, over } : d));
   };
   const endDrag = () => {
@@ -242,7 +248,25 @@ export function MatchSetup({
     // match is never dropped OUT of the draw by letting go in the wrong place.
     if (over < 0) return;
     const m = rndMatches.find(x => x.id === id);
-    if (m && groupIndexForMatch({ groups, match: m }) !== over) setMatchGroup(m, over);
+    if (!m) return;
+    const from = groupIndexForMatch({ groups, match: m });
+    if (from === over) return;
+    // A full tee time cannot absorb another match — four players go off at a
+    // time. Dropping on one trades places instead of stacking up an eightsome.
+    // An ungrouped match has nowhere to send the occupants, so it is turned
+    // away rather than quietly evicting them.
+    if (from < 0 && !groupHasRoom({ group: groups[over], need: matchPlayers(m).length })) {
+      notify(`${times[over] ? stripAMPM(times[over]) : `G${over + 1}`} is full — drop it on an open time`, "error");
+      return;
+    }
+    const { groups: next, displaced } = swapMatchIntoGroup({
+      groups, match: m, gi: over, matches: rndMatches,
+    });
+    saveGroups(next);
+    buzz(displaced.length ? [10, 40, 10] : 15);
+    if (displaced.length) {
+      notify(`M${m.matchNumber ?? "?"} and ${displaced.map(d => `M${d.matchNumber ?? "?"}`).join(", ")} swapped tee times`, "success");
+    }
   };
 
   // Empty a tee slot without touching the ones after it. The slot stays —
@@ -428,9 +452,15 @@ export function MatchSetup({
     </div>
   );
 
-  // One match, as it appears under its tee time. The ⠿ handle carries the
-  // drag; the M-number beside it is what the drag changes, since both the
-  // number and the time belong to the slot rather than to the match.
+  // One match, as it appears under its tee time. The M-number is what a drag
+  // changes, since both the number and the time belong to the slot rather than
+  // to the match.
+  //
+  // The WHOLE row is the handle, not just the ⠿. A finger at the first tee is
+  // about 9mm wide and the glyph was 12px of it; the row is the thing being
+  // moved, so the row is what you grab. The ⠿ stays as the affordance that
+  // says so, and the ✕ inside is excluded in startDrag so tapping it still
+  // deletes rather than starting a drag nobody asked for.
   //
   // No "n SCORED" badge here. What is already being played matters at the one
   // moment it can be lost — deleting the match — and deleteMatch says it
@@ -445,29 +475,44 @@ export function MatchSetup({
       // every row's "vs" stacks on one axis and lands under the tee time above
       // it. Laid out inline, the "vs" sat wherever the names happened to end
       // and wandered a few pixels per row all the way down the draw.
-      <div key={m.id} style={{
-        display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center",
-        gap: 8, padding: "4px 0", opacity: drag && !dragging ? 0.5 : 1,
-      }}>
-        {/* Left track: the handle, then team A. */}
+      <div
+        key={m.id}
+        onPointerDown={e => startDrag(e, m)}
+        onPointerMove={moveDrag}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        // Releasing outside the row is the normal case, not the odd one —
+        // without this a drag that ends off-target would leave the list stuck
+        // in its dragging state.
+        onLostPointerCapture={endDrag}
+        style={{
+          display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center",
+          gap: 8, padding: "4px 6px", margin: "0 -6px", borderRadius: 8,
+          touchAction: draggable ? "none" : "auto",
+          cursor: draggable ? (dragging ? "grabbing" : "grab") : "default",
+          // Without this a drag that starts on a name selects it, and the row
+          // ends up with a blue text highlight stuck under it.
+          userSelect: "none", WebkitUserSelect: "none",
+          // Lifted where it sits, NOT dragged under the finger. A floating row
+          // is full-width, so it covered the target card's SWAP/MOVE HERE
+          // label — the one thing worth reading mid-drag — and the finger was
+          // already on top of the row anyway. So the row says "I am the one
+          // moving" (raised, tinted, its M-number lit) and the target card
+          // says what will happen to it.
+          //
+          // Transform and opacity only: dragging must never reflow the list,
+          // because moveDrag measures the SECTION rects against the finger and
+          // a list that shifts under its own measurement oscillates.
+          opacity: drag && !dragging ? 0.4 : 1,
+          transform: dragging ? "scale(1.02)" : "none",
+          transition: "opacity 120ms ease, transform 120ms ease, box-shadow 120ms ease",
+          background: dragging ? BC.inp : "transparent",
+          boxShadow: dragging ? `0 4px 14px #0009` : "none",
+        }}
+      >
+        {/* Left track: the grip, then team A. */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          <div
-            onPointerDown={e => startDrag(e, m)}
-            onPointerMove={moveDrag}
-            onPointerUp={endDrag}
-            onPointerCancel={endDrag}
-            // Releasing outside the handle is the normal case, not the odd one
-            // — without this a drag that ends off-target would leave the list
-            // stuck in its dragging state.
-            onLostPointerCapture={endDrag}
-            style={{
-              display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
-              touchAction: "none", cursor: draggable ? (dragging ? "grabbing" : "grab") : "default",
-              // Without this a drag that starts on the number selects it, and
-              // the row ends up with a blue text highlight stuck under it.
-              userSelect: "none", WebkitUserSelect: "none",
-            }}
-          >
+          <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
             {draggable && <span aria-hidden style={{ fontSize: FS.small, lineHeight: 1, color: dragging ? BC.amber : BC.t3 }}>⠿</span>}
             <span style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 0.5, minWidth: 22, color: dragging ? BC.amber : BC.gold }}>
               M{m.matchNumber ?? "?"}
@@ -647,14 +692,26 @@ export function MatchSetup({
         const rows = byGroup[gi];
         const over = drag?.over === gi;
         const tooMany = g.length > GROUP_MAX;
+        // What letting go here would do, worked out while the finger is still
+        // down. A full tee time trades places rather than stacking up, and
+        // saying SWAP on the card before the drop is what makes that the
+        // obvious outcome instead of a surprise after it.
+        const dragged = drag ? rndMatches.find(x => x.id === drag.id) : null;
+        const draggedFrom = dragged ? groupIndexForMatch({ groups, match: dragged }) : -1;
+        const wouldSwap = over && dragged && draggedFrom !== gi
+          && !groupHasRoom({ group: g, need: matchPlayers(dragged).length });
+        // Nowhere to send this one's occupants — see endDrag.
+        const wouldRefuse = wouldSwap && draggedFrom < 0;
+        const edge = over ? (wouldRefuse ? BC.danger : BC.amber) : tooMany ? BC.danger + "66" : BC.bdr;
         return (
           <div
             key={gi}
             ref={el => { sectionRefs.current[gi] = el; }}
             style={{
               ...cardStyle, padding: "8px 10px", marginBottom: 6,
-              border: `1px solid ${over ? BC.amber : tooMany ? BC.danger + "66" : BC.bdr}`,
-              background: over ? `${BC.amber}14` : BC.card,
+              border: `1px solid ${edge}`,
+              background: over ? `${wouldRefuse ? BC.danger : BC.amber}14` : BC.card,
+              transition: "border-color 120ms ease, background 120ms ease",
             }}
           >
             {/* The group and its time centred over the matches riding in it,
@@ -674,17 +731,23 @@ export function MatchSetup({
                   {times[gi] ? stripAMPM(times[gi]) : "—"}
                 </span>
               </span>
+              {/* While a drag is over this card the count gives way to what
+                  the drop would do — the count is the reason for the answer,
+                  and the answer is the useful half. */}
               <span style={{
                 fontSize: FS.label, fontWeight: 700, textAlign: "right", minWidth: 0,
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                color: tooMany ? BC.danger : BC.t3,
+                color: wouldRefuse ? BC.danger : over ? BC.amber : tooMany ? BC.danger : BC.t3,
               }}>
-                {g.length}/{GROUP_TARGET}{tooMany ? " · too many" : ""}
+                {wouldRefuse ? "FULL"
+                  : wouldSwap ? "SWAP"
+                  : over && draggedFrom !== gi ? "MOVE HERE"
+                  : `${g.length}/${GROUP_TARGET}${tooMany ? " · too many" : ""}`}
               </span>
             </div>
             {rows.length === 0 && (
               <div style={{ fontSize: FS.label, color: over ? BC.amber : BC.t3, fontWeight: 700, letterSpacing: 0.5, padding: "2px 0" }}>
-                {over ? "DROP HERE" : "OPEN"}
+                {over && draggedFrom !== gi ? "DROP HERE" : "OPEN"}
               </div>
             )}
             {rows.map(m => matchRow(m))}

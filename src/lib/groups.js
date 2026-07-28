@@ -277,6 +277,57 @@ export function assignMatchToGroup({ groups, match, gi }) {
 export const matchesInGroup = ({ group, matches }) =>
   (matches || []).filter(m => matchPlayers(m).some(p => group.includes(p)));
 
+// Whether a group has room for `need` more players without going over a
+// foursome. `firstOpenGroup` is the same question asked of the whole sheet.
+export const groupHasRoom = ({ group, need, target = GROUP_TARGET }) =>
+  (group?.length || 0) + need <= target;
+
+// ── Dragging a match onto a tee time ───────────────────────────────
+// A tee sheet has fixed capacity: four players go off at a time. So dropping
+// a match on a FULL tee time cannot mean "add it" — a scramble foursome
+// dropped on another foursome would make an eightsome, which is not a thing
+// the starter can send off. It means the two are trading times.
+//
+// So this displaces whatever it has to. Matches are lifted out of the target
+// in the order given until the dragged one fits, and each lands in the group
+// the dragged match came from. For every 2-man format that is a clean 1-for-1
+// swap of two foursomes; in Singles, where a group holds two matches, it
+// swaps the dragged match with as many as it needs (one, normally) and leaves
+// the rest of both groups alone.
+//
+// Requires a source group to displace INTO, so the caller must not offer this
+// for an ungrouped match — there is nowhere for the occupants to go, and
+// silently ungrouping them to make space would be a worse surprise than the
+// eightsome this exists to prevent.
+export function swapMatchIntoGroup({ groups, match, gi, matches, target = GROUP_TARGET }) {
+  const from = groupIndexForMatch({ groups, match });
+  const seq = matchSeq(match);
+  if (from < 0 || gi < 0 || from === gi) {
+    return { groups: assignMatchToGroup({ groups, match, gi }), displaced: [] };
+  }
+
+  const next = (groups || []).map(g => [...g]);
+  while (next.length <= gi) next.push([]);
+  const moving = new Set(seq);
+  for (let i = 0; i < next.length; i++) next[i] = next[i].filter(p => !moving.has(p));
+
+  // Read the occupants off the ORIGINAL groups: `next` is already mid-edit.
+  const occupants = (matches || []).filter(m =>
+    m.id !== match.id && groupIndexForMatch({ groups, match: m }) === gi);
+
+  const displaced = [];
+  for (const occ of occupants) {
+    if (groupHasRoom({ group: next[gi], need: seq.length, target })) break;
+    const out = new Set(matchSeq(occ));
+    next[gi] = next[gi].filter(p => !out.has(p));
+    displaced.push(occ);
+  }
+
+  next[gi] = [...next[gi], ...seq];
+  displaced.forEach(occ => { next[from] = [...next[from], ...matchSeq(occ)]; });
+  return { groups: next, displaced };
+}
+
 // ── Play order ─────────────────────────────────────────────────────
 // Matches in a stable, device-independent order — by document id, which is
 // the order Firestore hands them back in anyway when a query names no sort.
