@@ -24,7 +24,7 @@
 // matches. Moving individual players between groups is the fix-up underneath
 // it, not the main road.
 
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { BC, FS } from "../theme";
 import { FORMATS } from "../constants";
 import { TOURNAMENT_ID, editionDocId } from "../firebase";
@@ -86,6 +86,26 @@ export function MatchSetup({
   // finger is over. Kept in a ref rather than state so measuring never
   // triggers a render.
   const sectionRefs = useRef({});
+  // ── Swapping, animated ───────────────────────────────────────────
+  // A swap rewrites two tee times at once, and without an animation the whole
+  // draw just blinks into a new arrangement — you are left checking the M
+  // numbers to work out whether the thing you meant to happen happened.
+  //
+  // So the rows FLIP: their positions are recorded before the write, and on
+  // the render that lands the new groups each one is put back where it was and
+  // released, which reads as the two rows trading places.
+  //
+  // offsetTop, not getBoundingClientRect: the dragged row is still carrying
+  // its scale(1.02) when the snapshot is taken, and a transformed rect would
+  // start the animation a few pixels out. Rows are full width in every card,
+  // so vertical is the only axis that moves anyway.
+  const rowRefs = useRef({});
+  // { tops, key } — `key` is the groups arrangement this snapshot is waiting
+  // for, so an unrelated re-render in between (clearing the drag, a Firestore
+  // echo) cannot spend it on the wrong frame.
+  const pendingFlip = useRef(null);
+  // Rows to pulse once they land, so the eye is told WHICH two traded.
+  const [swapped, setSwapped] = useState(null);
 
   const tr = tRounds.find(t => t.round_number === round);
   const mLock = lockForRound(roundLocks, round);
@@ -111,6 +131,27 @@ export function MatchSetup({
   // moment the Rounds tab is filled in — four of them, empty and waiting.
   // Nothing on this tab adds one.
   const groups = padGroups(base, teeSlotCount({ tr, groups: base }));
+
+  // The second half of the FLIP (see the refs above). Runs on the render that
+  // brings in the arrangement the snapshot was taken for, puts each row back
+  // where it was and lets go — which reads as the two rows trading places.
+  // Layout effect, not an effect: it has to run before the browser paints, or
+  // the rows are seen in their new slots for a frame first.
+  useLayoutEffect(() => {
+    const flip = pendingFlip.current;
+    if (!flip || flip.key !== JSON.stringify(trimGroups(groups))) return;
+    pendingFlip.current = null;
+    Object.entries(rowRefs.current).forEach(([id, el]) => {
+      const was = flip.tops[id];
+      if (!el || was == null) return;
+      const dy = was - el.offsetTop;
+      if (!dy) return;
+      el.animate(
+        [{ transform: `translateY(${dy}px)` }, { transform: "none" }],
+        { duration: 280, easing: "cubic-bezier(.2,.7,.3,1)" },
+      );
+    });
+  });
 
   const rawTimes = teeTimeList(tr);
   const times = expandTeeTimes(rawTimes, Math.max(groups.length, TEE_SLOTS));
@@ -262,9 +303,23 @@ export function MatchSetup({
     const { groups: next, displaced } = swapMatchIntoGroup({
       groups, match: m, gi: over, matches: rndMatches,
     });
+
+    // Where every row is standing NOW, and which arrangement to spend it on.
+    // Taken before the write, because after it the old positions are gone.
+    const tops = {};
+    Object.entries(rowRefs.current).forEach(([id, el]) => { if (el) tops[id] = el.offsetTop; });
+    pendingFlip.current = { tops, key: JSON.stringify(trimGroups(next)) };
+
     saveGroups(next);
-    buzz(displaced.length ? [10, 40, 10] : 15);
+    // Two pulses for a trade, one for a plain move — the only part of this the
+    // phone can feel, and only on Android (see buzz).
+    buzz(displaced.length ? [12, 45, 12] : 15);
     if (displaced.length) {
+      const ids = [m.id, ...displaced.map(d => d.id)];
+      setSwapped(new Set(ids));
+      // Long enough to read after the 280ms slide, short enough not to linger
+      // as if it were state rather than an event.
+      setTimeout(() => setSwapped(s => (s && ids.every(i => s.has(i)) ? null : s)), 900);
       notify(`M${m.matchNumber ?? "?"} and ${displaced.map(d => `M${d.matchNumber ?? "?"}`).join(", ")} swapped tee times`, "success");
     }
   };
@@ -469,6 +524,9 @@ export function MatchSetup({
   const matchRow = (m) => {
     const dragging = drag?.id === m.id;
     const draggable = canDragRow(m);
+    // Held amber for a beat after it lands, so the two that traded are named
+    // by the screen and not only by the toast.
+    const justSwapped = swapped?.has(m.id);
     return (
       // The same three-track grid the card's title uses, for the same reason:
       // matched 1fr flanks put the middle column dead centre on the CARD, so
@@ -477,6 +535,7 @@ export function MatchSetup({
       // and wandered a few pixels per row all the way down the draw.
       <div
         key={m.id}
+        ref={el => { rowRefs.current[m.id] = el; }}
         onPointerDown={e => startDrag(e, m)}
         onPointerMove={moveDrag}
         onPointerUp={endDrag}
@@ -505,8 +564,11 @@ export function MatchSetup({
           // a list that shifts under its own measurement oscillates.
           opacity: drag && !dragging ? 0.4 : 1,
           transform: dragging ? "scale(1.02)" : "none",
-          transition: "opacity 120ms ease, transform 120ms ease, box-shadow 120ms ease",
-          background: dragging ? BC.inp : "transparent",
+          // No transition on transform: the FLIP drives it with the Web
+          // Animations API, and a CSS transition on the same property would
+          // fight the keyframes and drag the slide out to its own duration.
+          transition: "opacity 120ms ease, box-shadow 120ms ease, background 400ms ease",
+          background: dragging ? BC.inp : justSwapped ? `${BC.amber}2e` : "transparent",
           boxShadow: dragging ? `0 4px 14px #0009` : "none",
         }}
       >
@@ -556,13 +618,20 @@ export function MatchSetup({
           goes off, and how many players a match holds is plain from the rows
           in it. The size hint survives where it can still tell you something
           you don't already see — over an over-filled selection. */}
-      <div style={{ ...cardStyle, padding: "9px 12px", marginBottom: 10 }}>
-        <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.t1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      <div style={{
+        ...cardStyle, padding: "9px 12px", marginBottom: 10,
+        display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10,
+      }}>
+        {/* One row, not two: between them they are a single line of context,
+            and stacked they read as two facts to check rather than one. The
+            course takes the ellipsis because the format is the shorter and
+            the more fixed of the two. */}
+        <span style={{ fontSize: FS.small, fontWeight: 700, color: BC.t1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {course?.name || "Course TBD"}
-        </div>
-        <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 3 }}>
+        </span>
+        <span style={{ fontSize: FS.label, color: BC.t3, flexShrink: 0 }}>
           {fmt?.label || "Format TBD"}
-        </div>
+        </span>
       </div>
 
       {/* A final round's draw is part of its result. Say so where the draw is
@@ -773,11 +842,11 @@ export function MatchSetup({
         </div>
       )}
 
-      {matchFitsGroup && rndMatches.length > 0 && !roundFinal && (
-        <div style={{ fontSize: FS.label, color: BC.t3, marginBottom: 14, marginTop: -1 }}>
-          Drag ⠿ onto another tee time to move a match — it takes that time, and that number.
-        </div>
-      )}
+      {/* No "drag ⠿ to move a match" instruction. The ⠿ on every row is the
+          affordance, and the drag now narrates itself while it is happening —
+          the target card says SWAP, MOVE HERE or FULL under the finger, and
+          the rows slide into their new times when it lands. */}
+      {matchFitsGroup && <div style={{ marginBottom: 14 }} />}
 
       {/* ── Scores with no match ──
           The consequence of the delete made visible. These holes are live in
