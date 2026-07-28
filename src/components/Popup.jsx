@@ -55,7 +55,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { BC, FONT, ON_ACCENT, SHADOW, SCRIM, FS } from "../theme";
+import { BC, FONT, ON_ACCENT, SHADOW, SCRIM, FS, VP_DROP_BOTTOM } from "../theme";
 
 const Z_MAP = { content: 500, modal: 900 };
 const STD_BACKDROP = SCRIM;
@@ -138,7 +138,11 @@ export function Popup({
         // Otherwise the classic full-viewport overlay.
         ...(viewportFit
           ? { top: rect.top, left: rect.left, width: rect.width, height: rect.height, paddingTop: `calc(env(safe-area-inset-top, 0px) + ${outerPadding}px)` }
-          : { inset: 0 }),
+          // The backdrop covers the app, and the app can reach below the
+          // layout viewport (VP_DROP, see theme.js) — 0px everywhere but an
+          // old iOS home-screen icon, where inset:0 would leave an undimmed
+          // strip under it.
+          : { top: 0, left: 0, right: 0, bottom: VP_DROP_BOTTOM }),
         background: STD_BACKDROP,
         zIndex: z,
         display: "flex",

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, FS, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor } from "./theme";
+import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, FS, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor, VP_DROP, VP_DROP_BOTTOM } from "./theme";
 import { playerLookup } from "./lib/players";
 import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession } from "./firebase";
 import {
@@ -3548,7 +3548,13 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
 // The notification only fires on a COMPLETE round, so this is the path to
 // finalizing early — a withdrawal or a conceded match leaves holes the
 // notification would wait forever for.
-function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, onToggleTheme, finalize }) {
+// `navH` is the bottom nav's MEASURED height — the menu seats itself on the
+// bar, and the bar is not a constant: its labels grow with the OS text-size
+// setting, and its padding grows with the home-indicator inset. The 62px
+// that used to be hardcoded here was only ever right at the default text
+// size on a phone whose nav was exactly that tall; anywhere else the menu
+// sank into the bar or floated off it.
+function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, onToggleTheme, finalize, navH }) {
   const dragRef = useRef(null);
   const startYRef = useRef(null);
   const [dragY, setDragY] = useState(0);
@@ -3587,7 +3593,11 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, 
         onTouchEnd={handleTouchEnd}
         style={{
           position: "fixed",
-          bottom: `calc(62px + ${NAV_SAFE_PAD})`,
+          // Flush with the top of the bar: -1px so the menu's bottom border
+          // and the bar's top border stay the single hairline they are now.
+          // VP_DROP is the band an old home-screen icon leaves below the
+          // layout viewport — the bar drops into it, so the menu does too.
+          bottom: `calc(${navH - 1}px - ${VP_DROP})`,
           right: "max(8px, calc(50vw - 252px))",
           transform: `translateY(${dragY}px)`,
           transition: dragY === 0 ? "transform 0.2s ease, opacity 0.15s ease" : "none",
@@ -4475,15 +4485,21 @@ export default function App() {
     return null;
   };
 
-  // App shell — position:fixed; inset:0. The fixed containing block is the
-  // full webview, which is the ONE bottom-edge signal iOS reports honestly:
+  // App shell — position:fixed, pinned to all four edges. The fixed
+  // containing block is the ONE bottom-edge signal iOS reports honestly:
   // in an installed home-screen app window.visualViewport.height subtracts
   // env(safe-area-inset-top) (812 reported for a genuinely 874pt iPhone 16
   // Pro webview), so any JS-measured height leaves a black band exactly one
   // Dynamic Island tall under the nav. Don't reintroduce one. Safari also
   // re-pins fixed elements above its own toolbar for free.
+  //
+  // The bottom is VP_DROP_BOTTOM rather than 0 because that containing block
+  // is honest in every case but one: a home-screen icon installed before the
+  // status-bar meta was fixed still gets a viewport one status bar short of
+  // the screen. VP_DROP is 0px everywhere else, so this reads as bottom: 0
+  // on every other device. See theme.js.
   return (
-    <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: 0, width: "100%", background: BC.bg, display: "flex", flexDirection: "column", fontFamily: FONT, overflow: "hidden", boxSizing: "border-box", paddingTop: "env(safe-area-inset-top, 0px)", paddingLeft: "env(safe-area-inset-left, 0px)", paddingRight: "env(safe-area-inset-right, 0px)" }}>
+    <div style={{ position: "fixed", top: 0, right: 0, bottom: VP_DROP_BOTTOM, left: 0, width: "100%", background: BC.bg, display: "flex", flexDirection: "column", fontFamily: FONT, overflow: "hidden", boxSizing: "border-box", paddingTop: "env(safe-area-inset-top, 0px)", paddingLeft: "env(safe-area-inset-left, 0px)", paddingRight: "env(safe-area-inset-right, 0px)" }}>
       <div style={{ maxWidth: 520, width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", flex: 1, minHeight: 0, position: "relative", padding: "0 4px" }}>
       {/* Top-level feedback from notify(). The scoring screens render
           their own <Toast> lower down for the auto-advance message —
@@ -4754,7 +4770,7 @@ export default function App() {
         </div>
       </div>
 
-      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={() => { writeUserSession(null); setUser(null); }} user={user} view={view} darkMode={darkMode} onToggleTheme={toggleTheme} finalize={finalizeMenu} />
+      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={() => { writeUserSession(null); setUser(null); }} user={user} view={view} darkMode={darkMode} onToggleTheme={toggleTheme} finalize={finalizeMenu} navH={navH} />
 
       {/* The Finalize sheet — everything the removed Scoring card held, at
           zero cost until it is opened. */}
@@ -4781,7 +4797,7 @@ export default function App() {
           paddingBottom keeps the labels clear of the home indicator. The
           scroll area reserves matching clearance so content never hides
           behind the bar. */}
-      <div ref={navRef} style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: BC.card, borderTop: `1px solid ${BC.bdr}`, zIndex: 100, paddingBottom: NAV_SAFE_PAD }}>
+      <div ref={navRef} style={{ position: "fixed", bottom: VP_DROP_BOTTOM, left: 0, right: 0, background: BC.card, borderTop: `1px solid ${BC.bdr}`, zIndex: 100, paddingBottom: NAV_SAFE_PAD }}>
       <div style={{ maxWidth: 520, margin: "0 auto", display: "flex" }}>
         {navItems.map(item => {
           const active = view === item.key;

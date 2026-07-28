@@ -320,6 +320,61 @@ export const playerNameColor = () => BC.t1;
 // mobile Safari re-pins fixed elements above its own toolbar for free. So
 // the shell stays fixed, html/body/#root stay a plain 100%, and nothing in
 // the layout ever asks JavaScript how tall the screen is.
+//
+// ── The one exception: the band an old home-screen icon leaves ─────
+// index.html pins apple-mobile-web-app-status-bar-style to "black" so the
+// webview starts BELOW the status bar and its bottom edge is the physical
+// bottom of the screen. But iOS SNAPSHOTS that meta when the icon is added
+// to the home screen, so an icon installed before that fix still runs the
+// old "black-translucent" behaviour, and no redeploy can reach it — only
+// deleting and re-adding the icon can. In that mode the page is pulled up
+// to y=0 while the layout viewport keeps the SHORT height, so
+// `position: fixed; bottom: 0` lands one status bar ABOVE the glass.
+//
+// Reported on an iPhone 17e (390x844pt, 47pt notch inset): the bottom nav —
+// and the slide-up menu that sits on it — floated 47pt up, over a band of
+// bare page background. (The band is painted at all because the root
+// background propagates to the whole canvas, not just the layout viewport.)
+//
+// The two states tell themselves apart, no sniffing required: once iOS has
+// reserved the status bar the top inset is 0, and when it hasn't the inset
+// is exactly the height that fell off the bottom.
+//
+//     drop = min(screen.height - innerHeight, safe-area-inset-top)
+//
+// This is not the banned measurement above. Nothing here asks how tall the
+// app is: it reads ONE offset, clamped to a status bar's height, which is
+// 0px for a correctly installed icon, 0px in a browser tab, and 0px on
+// anything that isn't a standalone iOS webview. Consumers use it through a
+// CSS variable whose fallback is 0px, so if this never runs the layout is
+// exactly what it was before.
+export const VP_DROP = "var(--bc-vp-drop, 0px)";
+// Bottom-anchored fixed elements reach past the short viewport with this.
+export const VP_DROP_BOTTOM = `calc(-1 * ${VP_DROP})`;
+
+const measureVpDrop = () => {
+  if (typeof window === "undefined" || typeof document === "undefined") return 0;
+  const standalone = window.navigator?.standalone === true
+    || window.matchMedia?.("(display-mode: standalone)").matches === true;
+  if (!standalone) return 0;
+  // env() is only readable off a laid-out box — getComputedStyle hands back
+  // the unresolved token stream for a custom property holding it.
+  const probe = document.createElement("div");
+  probe.style.cssText = "position:fixed;top:0;left:0;width:0;visibility:hidden;pointer-events:none;height:env(safe-area-inset-top, 0px)";
+  (document.body || document.documentElement).appendChild(probe);
+  const insetTop = probe.getBoundingClientRect().height;
+  probe.remove();
+  if (insetTop <= 0) return 0;
+  const short = (window.screen?.height || 0) - window.innerHeight;
+  return short > 0 ? Math.min(short, insetTop) : 0;
+};
+
+export const syncVpDrop = () => {
+  if (typeof document === "undefined") return 0;
+  const drop = measureVpDrop();
+  document.documentElement.style.setProperty("--bc-vp-drop", `${drop}px`);
+  return drop;
+};
 
 // ── Global stylesheet ──
 // Single source of truth for the document-level CSS. Both the initial
@@ -368,4 +423,12 @@ if (typeof document !== "undefined") {
   _link.rel = "stylesheet";
   _link.href = "https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap";
   document.head.appendChild(_link);
+
+  // ── Seat the bottom edge (see VP_DROP above) ──
+  // Measured before React mounts so the nav never paints in the wrong place,
+  // and re-measured on the events that can change it. Both listeners are for
+  // the lifetime of the document, so there is nothing to tear down.
+  syncVpDrop();
+  window.addEventListener("resize", syncVpDrop);
+  window.addEventListener("orientationchange", syncVpDrop);
 }
