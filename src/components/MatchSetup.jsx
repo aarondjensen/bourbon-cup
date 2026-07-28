@@ -449,9 +449,14 @@ export function MatchSetup({
             M{m.matchNumber ?? "?"}
           </span>
         </div>
-        <div style={{ flex: 1, minWidth: 0, fontSize: 11 }}>
+        {/* 13/600, which is what MatchTeamColumn gives a player name on the
+            leaderboard. Same names, same weight of thing to read, so they are
+            set the same size in both places rather than each screen picking
+            its own. The "vs" stays a size down — it is punctuation between
+            the names, not one of them. */}
+        <div style={{ flex: 1, minWidth: 0, fontSize: 13, lineHeight: 1.3 }}>
           <span style={{ color: teams.A.accent, fontWeight: 600 }}>{m.teamANames?.join(" / ")}</span>
-          <span style={{ color: BC.t3 }}> vs </span>
+          <span style={{ color: BC.t3, fontSize: 11 }}> vs </span>
           <span style={{ color: teams.B.accent, fontWeight: 600 }}>{m.teamBNames?.join(" / ")}</span>
         </div>
         {impact.hasScores && (
