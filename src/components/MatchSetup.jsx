@@ -195,6 +195,12 @@ export function MatchSetup({
     if (gi >= 0 && gi < byGroup.length) byGroup[gi].push(m); else loose.push(m);
   });
 
+  // What to call a group in prose. Its tee time, because that is now the only
+  // name it carries on screen — the G-numbers are gone, so a message that said
+  // "G3" would be pointing at a label the director cannot see. Falls back to
+  // the slot's position for a round whose times are not set yet.
+  const slotName = (gi) => (times[gi] ? stripAMPM(times[gi]) : `tee time ${gi + 1}`);
+
   const nameOf = (pid) => tPlayers.find(p => p.player_id === pid)?.name || pid;
   const shortOf = (pid) => nameOf(pid).split(" ")[0] || pid;
   const teamOf = (pid) => tPlayers.find(p => p.player_id === pid)?.team;
@@ -295,7 +301,7 @@ export function MatchSetup({
     // An ungrouped match has nowhere to send the occupants, so it is turned
     // away rather than quietly evicting them.
     if (from < 0 && !groupHasRoom({ group: groups[over], need: matchPlayers(m).length })) {
-      notify(`${times[over] ? stripAMPM(times[over]) : `G${over + 1}`} is full — drop it on an open time`, "error");
+      notify(`${slotName(over)} is full — drop it on an open time`, "error");
       return;
     }
     const { groups: next, displaced } = swapMatchIntoGroup({
@@ -327,7 +333,7 @@ export function MatchSetup({
   // one-tap way back from a group drawn wrong, not a deletion.
   const clearGroup = async (gi) => {
     if (!(await confirm({
-      title: `Clear the ${times[gi] ? stripAMPM(times[gi]) : `G${gi + 1}`} group?`,
+      title: `Clear the ${slotName(gi)} group?`,
       message: "Its players go back to the unassigned pool. Every other tee time is left alone.",
       confirmLabel: "Clear", destructive: true,
     }))) return;
@@ -803,35 +809,34 @@ export function MatchSetup({
               transition: "border-color 120ms ease, background 120ms ease",
             }}
           >
-            {/* The group and its time centred over the matches riding in it,
-                because that pair is the card's title rather than one more
-                thing in a row. A three-track grid with matched 1fr flanks is
-                what centres it on the CARD — with the count simply floated
-                right, the title would be centred on whatever space the count
-                left over, and would drift as "4/4" grew to "6/4 · too many". */}
+            {/* The tee time alone, centred over the matches riding in it.
+                No "G1" beside it — the time IS the group's name, and the
+                G-number was a second label for one thing. No "4/4" counter
+                either: you can see how many matches are in the card, and a
+                card that is over its four turns red and gets named in CHECK.
+
+                The three-track grid stays even though only the middle is
+                filled. It is what centres the time on the CARD, and the right
+                track is where the drag's answer lands. */}
             <div style={{
               display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "baseline",
               marginBottom: rows.length ? 7 : 0,
             }}>
               <span />
-              <span style={{ display: "flex", alignItems: "baseline", gap: 8, justifySelf: "center" }}>
-                <span style={{ fontSize: FS.label, fontWeight: 800, color: BC.gold, letterSpacing: 1 }}>G{gi + 1}</span>
-                <span style={{ fontSize: FS.body, fontWeight: 800, color: times[gi] ? BC.t1 : BC.t3 }}>
-                  {times[gi] ? stripAMPM(times[gi]) : "—"}
-                </span>
+              <span style={{ fontSize: FS.body, fontWeight: 800, justifySelf: "center", color: times[gi] ? BC.t1 : BC.t3 }}>
+                {times[gi] ? stripAMPM(times[gi]) : "—"}
               </span>
-              {/* While a drag is over this card the count gives way to what
-                  the drop would do — the count is the reason for the answer,
-                  and the answer is the useful half. */}
+              {/* Only while a drag is over this card: what letting go would do.
+                  Empty the rest of the time, which is most of the time. */}
               <span style={{
                 fontSize: FS.label, fontWeight: 700, textAlign: "right", minWidth: 0,
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                color: wouldRefuse ? BC.danger : over ? BC.amber : tooMany ? BC.danger : BC.t3,
+                color: wouldRefuse ? BC.danger : BC.amber,
               }}>
                 {wouldRefuse ? "FULL"
                   : wouldSwap ? "SWAP"
                   : over && draggedFrom !== gi ? "MOVE HERE"
-                  : `${g.length}/${GROUP_TARGET}${tooMany ? " · too many" : ""}`}
+                  : ""}
               </span>
             </div>
             {rows.length === 0 && (
@@ -924,11 +929,13 @@ export function MatchSetup({
                 border: `1px solid ${held ? BC.amber + ALPHA.line : over ? BC.danger + ALPHA.line : BC.bdr}`,
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: g.length ? 7 : 0 }}>
-                  <span style={{ fontSize: FS.label, fontWeight: 800, color: BC.gold, letterSpacing: 1, flexShrink: 0 }}>G{gi + 1}</span>
-                  {/* The time this group goes off, read off the round. Not an
-                      input: the Rounds tab's G-boxes are the one place tee
-                      times are typed, and editing them there re-spaces the
-                      whole sheet instead of leaving one slot out of step. */}
+                  {/* The time this group goes off, read off the round, and the
+                      only name it needs. Not an input: the Rounds tab's boxes
+                      are the one place tee times are typed, and editing them
+                      there re-spaces the whole sheet instead of leaving one
+                      slot out of step. The player count stays here — this is
+                      the editor where players are placed one at a time, so
+                      "how many are in this one" is the thing being watched. */}
                   <span style={{
                     fontSize: FS.small, fontWeight: 800, flexShrink: 0, minWidth: 46,
                     color: times[gi] ? BC.t1 : BC.t3,
@@ -991,7 +998,7 @@ export function MatchSetup({
             <div key={pid} style={{ fontSize: FS.label, color: BC.t2, marginBottom: 3 }}>· {nameOf(pid)} is grouped but has no match this round.</div>
           ))}
           {issues.oversized.map(({ i, n }) => (
-            <div key={i} style={{ fontSize: FS.label, color: BC.t2, marginBottom: 3 }}>· Group {i + 1} has {n} players.</div>
+            <div key={i} style={{ fontSize: FS.label, color: BC.t2, marginBottom: 3 }}>· The {slotName(i)} group has {n} players.</div>
           ))}
           {issues.unassigned.length > 0 && (
             <div style={{ fontSize: FS.label, color: BC.t2 }}>
