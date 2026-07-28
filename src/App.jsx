@@ -4424,6 +4424,13 @@ export default function App() {
 
   if (!user) return <LoginScreen players={tPlayers} teams={teams} darkMode={darkMode} tournamentName={tournamentName} tournamentLocation={tournamentLocation} onLogin={p => { const u = { ...p, isDirector: !!p.isDirector }; writeUserSession(u); setUser(u); }} />;
 
+  // Which side of the cup the reader is on. This is a two-team event, so a
+  // player belongs to one team for its whole length and the answer holds for
+  // every match on every screen — which is what lets a scorecard's running
+  // MATCH row read ▲ / ▼ from the reader's own side. Taken from the live
+  // roster rather than the stored session, which predates any team change.
+  const viewerTeam = tPlayers.find(p => p.player_id === user.player_id)?.team || user.team || "A";
+
   // The director's always-available route to the sheet, surfaced in More.
   // Null for a player, and for an event with no rounds to finalize.
   const finalizeMenu = isDirector && tournamentRounds.length > 0 ? {
@@ -4616,6 +4623,7 @@ export default function App() {
             hcpOverrides={hcpOverridesData}
             teeAssignments={teeAssignmentsData}
             roundLocks={roundLocksData}
+            viewer={viewerTeam}
           />
         )}
         {view === "scoring" && (

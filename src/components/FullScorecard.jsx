@@ -200,9 +200,17 @@ export function ScoreCell({ score, par, strokes = 0, size = CELL, color }) {
 //    viewer                 — "A" | "B", the side the reader is on. Only
 //                             the running MATCH row uses it; omitting it
 //                             leaves that row on Team A's perspective.
+//    showHeader             — the names-and-status line. On by default: in
+//                             the Scoring popup it is the only place the
+//                             four players are spelled out, so the initials
+//                             in the rows below have nothing else to read
+//                             against. The Leaderboard turns it off — its
+//                             match row names the pair and states the match
+//                             directly above this, and its segment pills
+//                             say it a third time.
 export function FullScorecard({
   match, result, format, holePars, holeHcps, course, teams, tPlayers, getScore,
-  viewer = "A",
+  viewer = "A", showHeader = true,
 }) {
   if (!result) return null;
 
@@ -505,7 +513,7 @@ export function FullScorecard({
           its own at the end of its MATCH row. */}
       {/* Wraps rather than truncates: a half-printed name is no legend at
           all, and this is the only place the four are spelled out. */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+      {showHeader && <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
         <span style={{ flex: 1, minWidth: 0, fontSize: FS.label, fontWeight: 800, lineHeight: 1.3, color: BC.teamA }}>
           {(match.teamANames || []).join(" / ")}
         </span>
@@ -516,7 +524,7 @@ export function FullScorecard({
         <span style={{ flex: 1, minWidth: 0, fontSize: FS.label, fontWeight: 800, lineHeight: 1.3, color: BC.teamB, textAlign: "right" }}>
           {(match.teamBNames || []).join(" / ")}
         </span>
-      </div>
+      </div>}
 
       {/* The terms, in the order the round is scored: where, what the
           format is, how a hole is made, how the holes settle. */}

@@ -21,7 +21,10 @@
 //       each match card.
 //
 //    3. PROGRESSIVE DETAIL. Collapsed match card = who, status, points,
-//       hole strip. Tap it and the full net scorecard unfolds.
+//       hole strip. Tap it and the full scorecard unfolds — the same
+//       per-player card the Scoring tab's Full Scorecard button opens
+//       (components/FullScorecard.jsx), so a match reads identically
+//       whichever screen you came at it from.
 //
 //  Everything here is presentational. Every number comes from scoring.js —
 //  computeMatchResult for the points, segmentState/statusText for the
@@ -35,16 +38,15 @@ import { playerLookup } from "../lib/players";
 import {
   FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT,
   POINT_METHOD_TRADITIONAL, TROPHY_SILHOUETTE, CUP_POINTS_TO_WIN,
-  describeHolePoints,
   isPointsPerHole, holePointsTotal, resolveScoring, SCORING_TYPE_TOTAL,
-  HOLE_METHOD_LABELS,
 } from "../constants";
 import {
-  computeMatchResult, getRoundCourseCtx, higherIsBetter, totalUnit, holeFormatFor,
+  computeMatchResult, getRoundCourseCtx, holeFormatFor,
   segmentState, statusText, segmentLeader,
   segmentOptsFor,
 } from "../scoring";
 import { HoleStrip } from "./HoleStrip";
+import { FullScorecard } from "./FullScorecard";
 import { StickyTop } from "./ui";
 import { isRoundFinal } from "../lib/roundLocks";
 
@@ -133,13 +135,6 @@ const matchSettled = (m, r) => {
   if ((m.point_method || "") === POINT_METHOD_TRADITIONAL) return r.overall.complete;
   const n = m.nassau || NASSAU_DEFAULT;
   return (!n.front || r.front.complete) && (!n.back || r.back.complete) && (!n.overall || r.overall.complete);
-};
-
-// Player initials for the compact scorecard row labels ("Andy", "KJ" → "AK").
-const initialsOf = (names) => {
-  const list = (names || []).filter(Boolean);
-  if (!list.length) return null;
-  return list.map((n) => String(n).trim()[0]?.toUpperCase() || "?").join("");
 };
 
 // Segment state and its result text now come from scoring.js — the same
@@ -304,7 +299,7 @@ const NINE_VALUE = {
 // ══════════════════════════════════════════════════════════════════
 function MatchCard({
   index, first, match, result, format, teams, tPlayers,
-  courses, tRounds, roundLocks, expanded, onToggle,
+  courses, tRounds, roundLocks, holeData, viewer, expanded, onToggle,
 }) {
   const total = resolveScoring(match).formOfPlay === SCORING_TYPE_TOTAL;
   const opts = segOpts(match, format);
@@ -314,6 +309,12 @@ function MatchCard({
   const scoredFormat = holeFormatFor(match, format);
   const traditional = (match.point_method || "") === POINT_METHOD_TRADITIONAL;
   const n = match.nassau || NASSAU_DEFAULT;
+  // Course context and gross-score reader for the expanded scorecard. Cheap
+  // enough to resolve on every row — both are lookups, not scoring — and
+  // keeping them out of the `expanded` branch keeps the hooks-free component
+  // readable. `holeData` is keyed `pid_round`, the shape bc_holes stores.
+  const cardCtx = getRoundCourseCtx({ roundLocks, round: match.round, tRounds, courses });
+  const getScore = (pid, h) => (holeData?.[`${pid}_${match.round}`] || {})[h] || 0;
 
   const overallSt = segmentState(result.holes, opts);
   const { nameOf } = playerLookup(tPlayers);
@@ -452,10 +453,18 @@ function MatchCard({
               ))}
             </div>
           </div>
-          <MatchScorecard
-            match={match} result={result} format={format}
-            courses={courses} tRounds={tRounds} teams={teams} roundLocks={roundLocks}
-          />
+          {/* The same card the Scoring tab's Full Scorecard opens. It needs
+              the round's course context and a reader for the gross scores,
+              neither of which it re-derives — resolved here off the same
+              lock-aware helper computeMatchResult scored the match with. */}
+          <div style={{ padding: "12px 12px 14px" }}>
+            <FullScorecard
+              match={match} result={result} format={format}
+              holePars={cardCtx.holePars} holeHcps={cardCtx.holeHcps} course={cardCtx.course}
+              teams={teams} tPlayers={tPlayers} getScore={getScore} viewer={viewer}
+              showHeader={false}
+            />
+          </div>
         </div>
       )}
     </div>
@@ -467,7 +476,7 @@ function MatchCard({
 // ══════════════════════════════════════════════════════════════════
 function RoundSection({
   meta, results, open, onToggle, teams, tPlayers,
-  courses, tRounds, roundLocks, expandedMatch, setExpandedMatch,
+  courses, tRounds, roundLocks, holeData, viewer, expandedMatch, setExpandedMatch,
 }) {
   const { course, fmt, pts, state } = meta;
 
@@ -530,6 +539,8 @@ function RoundSection({
                 courses={courses}
                 tRounds={tRounds}
                 roundLocks={roundLocks}
+                holeData={holeData}
+                viewer={viewer}
                 expanded={expandedMatch === m.id}
                 onToggle={() => setExpandedMatch(expandedMatch === m.id ? null : m.id)}
               />
@@ -544,9 +555,14 @@ function RoundSection({
 // ══════════════════════════════════════════════════════════════════
 //  TeamLeaderboard
 // ══════════════════════════════════════════════════════════════════
+// `viewer` is the side of the cup the reader is on ("A" | "B"). Every player
+// belongs to one team for the whole tournament, so it is defined on every
+// match on this board — which is what lets an expanded scorecard's running
+// MATCH row read ▲ / ▼ from the reader's own side rather than an arbitrary
+// one. See components/FullScorecard.jsx on the two currencies of color.
 export function TeamLeaderboard({
   matches, holeData, courses, tRounds, tPlayers, rounds, teams,
-  hcpOverrides, teeAssignments, roundLocks,
+  hcpOverrides, teeAssignments, roundLocks, viewer,
 }) {
   const [expandedMatch, setExpandedMatch] = useState(null);
   // Round open/closed. Absent key = follow the automatic rule below;
@@ -788,216 +804,12 @@ export function TeamLeaderboard({
           courses={courses}
           tRounds={tRounds}
           roundLocks={roundLocks}
+          holeData={holeData}
+          viewer={viewer}
           expandedMatch={expandedMatch}
           setExpandedMatch={setExpandedMatch}
         />
       ))}
-    </div>
-  );
-}
-
-// ══════════════════════════════════════════════════════════════════
-//  MatchScorecard — the expanded detail
-// ══════════════════════════════════════════════════════════════════
-//  Self-sufficient by design: it re-resolves its own course context
-//  (honouring a round lock's frozen hole tables when one exists) rather
-//  than taking one, so a card row can mount it with nothing but the
-//  match and its result. The Score Entry "Full Scorecard" modal used to
-//  mount it too; that surface now has its own, per-player card — see
-//  components/FullScorecard.jsx for why the two differ.
-//
-//  Rows per nine: HOLE / PAR / team A / team B / running state. The team
-//  rows carry whatever the match was actually decided on — net scores for
-//  most formats, dots for Double Dot — and the winning side's cell is
-//  tinted. The last row is the running match state on a Match round, and
-//  the running lead on a Total one.
-export function MatchScorecard({ match, result, format, courses, tRounds, teams, roundLocks }) {
-  const { course, holePars } = getRoundCourseCtx({ roundLocks, round: match.round, tRounds, courses });
-  const total = resolveScoring(match).formOfPlay === SCORING_TYPE_TOTAL;
-  const perHole = isPointsPerHole(match.scoring_type);
-  const hp = result.holePoints || { front: 1, back: 1 };
-  // Every reading of the cells below — which way they run, what they are
-  // counted in, whether they are dots at all — comes from the format the holes
-  // were SCORED under, not the round's. A best-ball override makes them net
-  // strokes whatever the round is called.
-  const scoredFormat = holeFormatFor(match, format);
-  // Named only when the method differs from the format's own rule — a Shamble
-  // scored as a best ball is a best ball, but so is a 2-Man Best Ball, and
-  // saying so there would be noise.
-  const methodNamed = scoredFormat !== format ? (HOLE_METHOD_LABELS[scoredFormat] || null) : null;
-  const higherWins = higherIsBetter(scoredFormat);
-  const unit = totalUnit(scoredFormat);
-  const holes = result.holes;
-
-  const aLabel = initialsOf(match.teamANames) || teams.A.short || "A";
-  const bLabel = initialsOf(match.teamBNames) || teams.B.short || "B";
-
-  const nine = (start, end, label) => {
-    const slice = holes.slice(start, end);
-    const parTotal = holePars.slice(start, end).reduce((a, b) => a + b, 0);
-    const aTot = slice.reduce((s, h) => s + (h.aScore ?? 0), 0);
-    const bTot = slice.reduce((s, h) => s + (h.bScore ?? 0), 0);
-    // The nine's summary cell. On a Match round that's holes won; on a Points
-    // round it's points banked, halves included — a nine where every hole was
-    // halved is worth half of it to each side, and "0 holes won" would be a
-    // strange way to report that.
-    const nineVal = (h) => (perHole ? (h.h < 9 ? hp.front : hp.back) : 1);
-    const bankedBy = (tid) => slice.reduce((s, h) => {
-      if (!h.played) return s;
-      if (h.winner === tid) return s + nineVal(h);
-      return h.winner ? s : s + nineVal(h) / 2;
-    }, 0);
-    const aWon = perHole ? bankedBy("A") : slice.filter((h) => h.winner === "A").length;
-    const bWon = perHole ? bankedBy("B") : slice.filter((h) => h.winner === "B").length;
-
-    // Running margin from A's perspective, cumulative from hole 1 — holes up
-    // on a Match round, lead on the running total on a Total one, and the
-    // points lead on a Points round, where a back-nine hole moves the line by
-    // two. Whatever the last row counts, it counts the same thing the round is
-    // actually being settled on.
-    const running = [];
-    let m = 0, ra = 0, rb = 0;
-    holes.forEach((h, i) => {
-      if (total) {
-        ra += h.aScore ?? 0; rb += h.bScore ?? 0;
-        m = higherWins ? ra - rb : rb - ra;
-      } else {
-        const v = perHole ? (h.h < 9 ? hp.front : hp.back) : 1;
-        if (h.winner === "A") m += v;
-        else if (h.winner === "B") m -= v;
-      }
-      running[i] = h.played ? m : null;
-    });
-
-    const cellBase = {
-      textAlign: "center", fontSize: FS.label, fontWeight: 700, padding: "3px 0",
-      borderRadius: 4, lineHeight: 1.2,
-    };
-    const lab = { fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.5, color: BC.t3, display: "flex", alignItems: "center" };
-
-    return (
-      <div style={{ marginBottom: 10 }}>
-        <div style={{
-          fontSize: FS.micro, fontWeight: 800, letterSpacing: 1.4, color: BC.t3, marginBottom: 4,
-        }}>{label}</div>
-        <div style={{ display: "grid", gridTemplateColumns: `26px repeat(${end - start}, 1fr) 26px`, gap: 2 }}>
-          {/* Hole numbers */}
-          <div />
-          {slice.map((_, i) => (
-            <div key={`h${i}`} style={{ ...cellBase, fontSize: FS.micro, color: BC.t3, fontWeight: 800 }}>{start + i + 1}</div>
-          ))}
-          <div style={{ ...cellBase, fontSize: FS.micro, color: BC.t3, fontWeight: 800 }}>{start === 0 ? "OUT" : "IN"}</div>
-
-          {/* Par */}
-          <div style={lab}>PAR</div>
-          {slice.map((_, i) => (
-            <div key={`p${i}`} style={{ ...cellBase, fontSize: FS.label, color: BC.t3, fontWeight: 600 }}>{holePars[start + i]}</div>
-          ))}
-          <div style={{ ...cellBase, fontSize: FS.label, color: BC.t3, fontWeight: 700 }}>{parTotal}</div>
-
-          {/* Team A nets */}
-          <div style={{ ...lab, color: BC.teamA }}>{aLabel}</div>
-          {slice.map((h, i) => (
-            <div key={`a${i}`} style={{
-              ...cellBase,
-              color: h.winner === "A" ? BC.teamA : h.aScore == null ? BC.t3 : BC.t2,
-              background: h.winner === "A" ? `${BC.teamA}${ALPHA.tint}` : "transparent",
-            }}>{h.aScore ?? "·"}</div>
-          ))}
-          <div style={{ ...cellBase, color: BC.teamA }}>{total ? aTot || "·" : aWon}</div>
-
-          {/* Team B nets */}
-          <div style={{ ...lab, color: BC.teamB }}>{bLabel}</div>
-          {slice.map((h, i) => (
-            <div key={`b${i}`} style={{
-              ...cellBase,
-              color: h.winner === "B" ? BC.teamB : h.bScore == null ? BC.t3 : BC.t2,
-              background: h.winner === "B" ? `${BC.teamB}${ALPHA.tint}` : "transparent",
-            }}>{h.bScore ?? "·"}</div>
-          ))}
-          <div style={{ ...cellBase, color: BC.teamB }}>{total ? bTot || "·" : bWon}</div>
-
-          {/* Running state — holes up on a Match round, the leader's margin
-              on the running total on a Total one, the points lead on a Points
-              one. All three are colored by who holds the lead, so the row
-              reads the same way whichever the round is. */}
-          <div style={lab}>{total ? "LEAD" : perHole ? "PTS" : "MTCH"}</div>
-          {slice.map((h, i) => {
-            const v = running[start + i];
-            const signed = total || perHole;
-            return (
-              <div key={`m${i}`} style={{
-                ...cellBase, fontSize: FS.label, fontWeight: 800,
-                color: v == null ? BC.t3 : v > 0 ? BC.teamA : v < 0 ? BC.teamB : BC.t3,
-              }}>
-                {v == null ? "" : v === 0 ? (signed ? "—" : "AS") : `${signed ? "+" : ""}${Math.abs(v)}`}
-              </div>
-            );
-          })}
-          <div />
-        </div>
-      </div>
-    );
-  };
-
-  // Double Dot side note — how the dots have been shared out so far. The
-  // cells above show a hole's dots; this says what they add up to, which is
-  // the number the round is actually settled on when it's Total-scored.
-  const dd = scoredFormat === "double_dot"
-    ? segmentState(holes, { total: true, higherWins: true })
-    : null;
-
-  return (
-    <div style={{ padding: "12px 12px 14px", fontFamily: FONT }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-        <span style={{ fontSize: FS.label, fontWeight: 800, color: BC.teamA, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {(match.teamANames || []).join(" / ")}
-        </span>
-        <span style={{ fontSize: FS.label, color: BC.t3, flexShrink: 0 }}>vs</span>
-        <span style={{ fontSize: FS.label, fontWeight: 800, color: BC.teamB, textAlign: "right", flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {(match.teamBNames || []).join(" / ")}
-        </span>
-      </div>
-
-      <div style={{ fontSize: FS.label, color: BC.t3, marginBottom: 10 }}>
-        {[
-          course?.name,
-          FORMATS.find((f) => f.id === format)?.label,
-          // Named where the format's name would otherwise mislead: a Double Dot
-          // round with the override on shows net balls in the rows below, not
-          // dots, and the header is the only place that can say so.
-          methodNamed ? methodNamed.toLowerCase() : null,
-          higherWins ? unit : "net scores",
-          perHole ? describeHolePoints(hp) : total ? `total ${unit}` : "match play",
-        ].filter(Boolean).join(" · ")}
-      </div>
-
-      {nine(0, 9, "FRONT NINE")}
-      {nine(9, 18, "BACK NINE")}
-
-      {dd && (
-        <div style={{
-          marginTop: 2, padding: "7px 10px", borderRadius: 8,
-          background: `${BC.amber}${ALPHA.wash}`, border: `1px solid ${BC.amber}${ALPHA.hair}`,
-          fontSize: FS.label, color: BC.t2, display: "flex", alignItems: "center", gap: 6,
-        }}>
-          <span style={{ fontSize: FS.micro, fontWeight: 800, letterSpacing: 1, color: BC.amber }}>DOTS</span>
-          <span style={{ flex: 1 }} />
-          {!dd.played ? (
-            <span style={{ fontWeight: 700, color: BC.t3 }}>low ball + high ball, 2 per hole</span>
-          ) : (
-            <span style={{ fontWeight: 700 }}>
-              <span style={{ color: BC.teamA }}>{dd.aTot}</span>
-              <span style={{ color: BC.t3 }}>{" – "}</span>
-              <span style={{ color: BC.teamB }}>{dd.bTot}</span>
-              <span style={{ color: dd.margin === 0 ? BC.t3 : teamColor(dd.margin > 0 ? "A" : "B") }}>
-                {dd.margin === 0 ? " · level" : ` · ${statusText(dd)}`}
-              </span>
-              <span style={{ color: BC.t3 }}>{dd.complete ? "" : ` thru ${dd.played}`}</span>
-            </span>
-          )}
-        </div>
-      )}
     </div>
   );
 }
