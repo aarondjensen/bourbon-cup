@@ -133,8 +133,11 @@ const EDITION_DATA_COLS = [
   "bc_players", "bc_courses", "bc_settings", "bc_rounds", "bc_matches",
   "bc_hole_scores", "bc_skins", "bc_ctp", "bc_round_locks",
   "bc_hcp_overrides", "bc_tee_assignments", "bc_groups",
-  "bc_tournament_settings",
+  "bc_tournament_settings", "bc_card_sigs",
 ];
+// bc_notification_tokens is deliberately NOT in that list. A push token is a
+// property of a player's DEVICE, not of an edition — deleting last year's
+// tournament should not unsubscribe everyone's phone from this year's.
 
 // Delete an edition AND all of its data. Irreversible. Refuses to delete the
 // active edition (switch away first) so the running app never loses its data

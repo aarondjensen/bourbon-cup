@@ -24,7 +24,10 @@
 //
 //   • DirectorFinalizeAlert — an app-level notification, above the tab
 //     content and visible on every tab, that appears only when the round
-//     is actually ready (every score in) and only for a director. This is
+//     is actually ready and only for a director. "Ready" now means every
+//     card SIGNED AND ATTESTED (see lib/cardSigs), not merely every score
+//     typed: a complete card is what makes a signature possible, and the
+//     field agreeing is what makes the round over. This is
 //     the mechanism that used to be missing: a director no longer has to
 //     be standing on the Scoring tab, scrolled to the bottom, to learn
 //     that the round is done. It is dismissible, and dismissal is
@@ -64,7 +67,7 @@ import { playerLookup } from "../lib/players";
 // It is not a toast. A toast is 2.8 seconds long and finalizing is the one
 // action that cannot be missed — a director walking off 18 with a phone in
 // their pocket has to still find it there.
-export function DirectorFinalizeAlert({ round, nextRound, progress, onOpen, onDismiss }) {
+export function DirectorFinalizeAlert({ round, nextRound, progress, cards, onOpen, onDismiss }) {
   return (
     <div style={{ flexShrink: 0, padding: "0 10px 6px", fontFamily: FONT }}>
       <style>{`@keyframes bcFinalizePulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(.8); } }`}</style>
@@ -97,7 +100,10 @@ export function DirectorFinalizeAlert({ round, nextRound, progress, onOpen, onDi
               display: "block", fontSize: FS.label, color: BC.t2, lineHeight: 1.35,
               whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
             }}>
-              All {progress.total} scores are in — {nextRound ? `opens Round ${nextRound}` : "closes the tournament"}
+              {cards?.total
+                ? `All ${cards.total} card${cards.total === 1 ? "" : "s"} signed and attested`
+                : `All ${progress.total} scores are in`}
+              {" — "}{nextRound ? `opens Round ${nextRound}` : "closes the tournament"}
             </span>
           </span>
           <span style={{ color: BC.amber, fontSize: FS.lead, fontWeight: 700, flexShrink: 0, paddingRight: 4 }}>›</span>
@@ -129,17 +135,37 @@ export function DirectorFinalizeAlert({ round, nextRound, progress, onOpen, onDi
 // keep theirs: finalizing over missing scores, and reopening a round the
 // field has already moved off.
 export function FinalizeRoundSheet({
-  round, nextRound, lastFinal, progress, tPlayers, onFinalizeRound, notify, onClose,
+  round, nextRound, lastFinal, progress, cards, tPlayers,
+  onFinalizeRound, onAttestAll, notify, onClose,
 }) {
   const { confirm, confirmModal } = useConfirm();
   const [busy, setBusy] = useState(false);
-  const { nameOf } = playerLookup(tPlayers);
+  const { nameOf, shortOf } = playerLookup(tPlayers);
 
   const outList = progress.missingBy
     .slice(0, 6)
     .map(({ pid, missing }) => `• ${nameOf(pid)} — ${missing} hole${missing === 1 ? "" : "s"}`)
     .join("\n")
     + (progress.missingBy.length > 6 ? `\n• …and ${progress.missingBy.length - 6} more` : "");
+
+  // Cards are the gate now (see App.jsx's finalizeReady), so "not ready" has
+  // two shapes and the confirm has to name whichever one applies. Missing
+  // SCORES is the older, blunter problem — someone never posted. Missing
+  // ATTESTATIONS is the new one, and a much softer failure: the golf is
+  // finished and typed, a foursome just walked off without tapping.
+  const cardsReady = cards ? cards.complete : progress.complete;
+  const unsignedCount = cards?.unsigned?.length || 0;
+  const awaitingCount = cards?.awaiting?.length || 0;
+
+  const cardIssues = () => {
+    const lines = [];
+    if (unsignedCount) lines.push(`• ${unsignedCount} card${unsignedCount === 1 ? "" : "s"} not signed at all`);
+    (cards?.awaiting || []).slice(0, 5).forEach(({ match, pending }) => {
+      lines.push(`• Match ${match.matchNumber ?? "?"} — waiting on ${pending.map(shortOf).join(", ")}`);
+    });
+    if (awaitingCount > 5) lines.push(`• …and ${awaitingCount - 5} more signed but unattested`);
+    return lines.join("\n");
+  };
 
   const doFinalize = async () => {
     if (!progress.complete) {
@@ -151,6 +177,24 @@ export function FinalizeRoundSheet({
           "",
           `Finalizing freezes Round ${round}'s handicaps and results, and ${nextRound ? `opens Round ${nextRound} for scoring.` : "closes out the tournament."}`,
           "You can reopen it afterwards if you need to.",
+        ].join("\n"),
+        confirmLabel: "Finalize anyway",
+        destructive: true,
+      });
+      if (!ok) return;
+    } else if (!cardsReady) {
+      // Scores are all in but the cards are not settled. Worth its own
+      // confirm rather than folding into the one above: nothing is missing
+      // here, so "scores are missing" would be a lie, and the remedy is
+      // different — chase four people for a tap, or force it.
+      const ok = await confirm({
+        eyebrow: `Round ${round}`,
+        title: `Finalize Round ${round} before every card is attested?`,
+        message: [
+          `Every score is in, but ${cards.total - cards.attested} of ${cards.total} card${cards.total === 1 ? "" : "s"} ${cards.total - cards.attested === 1 ? "has" : "have"} not been attested:`,
+          cardIssues(),
+          "",
+          "Finalizing does not sign them — they stay on record as unattested. If you just need the round moved along, Attest All Signed does that properly for the cards that were signed.",
         ].join("\n"),
         confirmLabel: "Finalize anyway",
         destructive: true,
@@ -195,6 +239,39 @@ export function FinalizeRoundSheet({
     } finally { setBusy(false); }
   };
 
+  // The director's bypass for the second signature, ported from MnQ's
+  // handleAttestAllWeek. The normal loop needs every non-signer to tap, and
+  // a group that has driven home without doing it blocks the round for
+  // everyone — a hard requirement with no override strands the field on a
+  // round nobody is playing, which is the same reason finalizing over
+  // missing scores is allowed at all.
+  //
+  // It only reaches SIGNED cards. An unsigned card has no signature to
+  // second, and manufacturing one would be the app inventing the ritual
+  // rather than shortcutting the reply to it.
+  const doAttestAll = async () => {
+    const n = awaitingCount;
+    if (!n) { notify("No signed cards are waiting on an attestation", "error"); return; }
+    const ok = await confirm({
+      eyebrow: `Round ${round}`,
+      title: `Attest ${n} signed card${n === 1 ? "" : "s"}?`,
+      message: [
+        "This puts your name behind the second signature on every signed card in the round that is still waiting on one.",
+        "",
+        "Use it when the players who owe an attestation have gone. Cards nobody signed are left alone — those still need signing.",
+      ].join("\n"),
+      confirmLabel: "Attest all signed",
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const done = await onAttestAll();
+      notify(`${done} card${done === 1 ? "" : "s"} attested`, "success");
+    } catch {
+      notify("Could not attest those cards — try again", "error");
+    } finally { setBusy(false); }
+  };
+
   const pct = progress.total ? Math.round((progress.entered / progress.total) * 100) : 0;
 
   return (
@@ -206,7 +283,7 @@ export function FinalizeRoundSheet({
       {round != null ? (
         <>
           <div style={{ fontSize: FS.lead, fontWeight: 800, color: BC.t1, marginBottom: 12 }}>
-            {progress.complete ? `Round ${round} is ready` : `Finalize Round ${round}`}
+            {cardsReady ? `Round ${round} is ready` : `Finalize Round ${round}`}
           </div>
 
           {/* Progress — the number that decides whether Finalize is the
@@ -220,6 +297,67 @@ export function FinalizeRoundSheet({
           <div style={{ height: 5, borderRadius: 3, background: BC.inp, overflow: "hidden", marginBottom: 10 }}>
             <div style={{ width: `${pct}%`, height: "100%", background: progress.complete ? BC.green : BC.amber }} />
           </div>
+
+          {/* Cards attested — the second bar, and the one the ready state
+              actually reads. Deliberately shown NEXT TO the score count
+              rather than instead of it: the two answer different questions
+              ("is the golf typed in" vs "does the field agree") and a
+              director chasing a stuck round needs to know which of them is
+              the one holding it up. */}
+          {cards?.total > 0 && (
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: FS.small, color: BC.t2, marginBottom: 4 }}>
+                <span style={{ fontWeight: 700 }}>Cards attested</span>
+                <span style={{ color: cards.complete ? BC.green : BC.t3, fontWeight: 700 }}>
+                  {cards.attested} / {cards.total}
+                </span>
+              </div>
+              <div style={{ height: 5, borderRadius: 3, background: BC.inp, overflow: "hidden", marginBottom: 10 }}>
+                <div style={{ width: `${Math.round((cards.attested / cards.total) * 100)}%`, height: "100%", background: cards.complete ? BC.green : BC.amber }} />
+              </div>
+
+              {/* Which cards, and whose tap each is short. Only when there
+                  is something outstanding — a settled round says nothing
+                  here, which is how the sheet stays short on the routine
+                  path it is walked down most often. */}
+              {!cards.complete && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: FS.label, fontWeight: 700, letterSpacing: 1, color: BC.t3, marginBottom: 5 }}>
+                    NOT SETTLED
+                  </div>
+                  <div style={{
+                    maxHeight: 116, overflowY: "auto", overscrollBehavior: "contain",
+                    background: BC.inp, borderRadius: 8, padding: "6px 10px",
+                  }}>
+                    {cards.unsigned.map(m => (
+                      <div key={m.id} style={{
+                        display: "flex", justifyContent: "space-between", gap: 10,
+                        fontSize: FS.small, color: BC.t2, padding: "3px 0",
+                      }}>
+                        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          Match {m.matchNumber ?? "?"}
+                        </span>
+                        <span style={{ color: BC.t3, fontWeight: 700, flexShrink: 0 }}>not signed</span>
+                      </div>
+                    ))}
+                    {cards.awaiting.map(({ match: m, pending }) => (
+                      <div key={m.id} style={{
+                        display: "flex", justifyContent: "space-between", gap: 10,
+                        fontSize: FS.small, color: BC.t2, padding: "3px 0",
+                      }}>
+                        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          Match {m.matchNumber ?? "?"}
+                        </span>
+                        <span style={{ color: BC.warn, fontWeight: 700, flexShrink: 0, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {pending.map(shortOf).join(", ")}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
 
           {/* Who is still out, by name. The sheet has the room the card
               never did, so this is the full list rather than the first
@@ -264,11 +402,27 @@ export function FinalizeRoundSheet({
             {" "}You can reopen it afterwards if you need to.
           </div>
 
+          {/* Attest All Signed — above Finalize, because when both are on
+              screen this is nearly always the one that should be tapped
+              first: it settles the round properly and then Finalize becomes
+              the routine solid-amber button rather than an override. */}
+          {awaitingCount > 0 && onAttestAll && (
+            <button onClick={doAttestAll} disabled={busy} style={{
+              width: "100%", padding: "11px 0", borderRadius: 10, marginBottom: 8,
+              cursor: busy ? "default" : "pointer",
+              background: `${BC.hcpBlue}${ALPHA.wash}`, border: `1px solid ${BC.hcpBlue}${ALPHA.line}`,
+              color: BC.hcpBlue, fontSize: FS.small, fontWeight: 800, letterSpacing: 0.5,
+              opacity: busy ? 0.6 : 1, fontFamily: FONT,
+            }}>
+              Attest All Signed ({awaitingCount})
+            </button>
+          )}
+
           <button onClick={doFinalize} disabled={busy} style={{
             width: "100%", padding: "12px 0", borderRadius: 10, cursor: busy ? "default" : "pointer",
-            border: progress.complete ? "none" : `1px solid ${BC.amber}${ALPHA.line}`,
-            background: progress.complete ? BC.amber : "transparent",
-            color: progress.complete ? ON_AMBER : BC.amber,
+            border: cardsReady ? "none" : `1px solid ${BC.amber}${ALPHA.line}`,
+            background: cardsReady ? BC.amber : "transparent",
+            color: cardsReady ? ON_AMBER : BC.amber,
             fontSize: FS.body, fontWeight: 800, letterSpacing: 0.5, opacity: busy ? 0.6 : 1,
             fontFamily: FONT,
           }}>
