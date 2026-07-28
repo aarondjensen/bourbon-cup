@@ -156,7 +156,12 @@ export function Toast({ message, type = "success", top = 30 }) {
 // The banner over every scoring screen: ‹ prev, then Par / HOLE n / HCP, then
 // next ›. Both scoring screens carried a verbatim copy of it — thirty-one
 // lines, identical down to the 0.75 opacity on the three little captions.
-export function HoleNavigator({ hole, par, hcp, onGo }) {
+// `sizes` lets a caller that is fighting for vertical room compact the bar —
+// the scoring screen passes its density's figures. Omitted, it renders at the
+// dimensions both screens used before it was shared.
+const HOLE_NAV_SIZES = { pad: "4px 8px", gap: 6, nav: 36, num: FS.hero, label: FS.micro, side: FS.lead };
+
+export function HoleNavigator({ hole, par, hcp, onGo, sizes = HOLE_NAV_SIZES }) {
   const arrow = (dir) => {
     const at = dir < 0 ? hole === 0 : hole === 17;
     return (
@@ -164,7 +169,7 @@ export function HoleNavigator({ hole, par, hcp, onGo }) {
         onClick={() => onGo(Math.max(0, Math.min(17, hole + dir)))}
         disabled={at}
         style={{
-          width: 28, height: 36, borderRadius: 8, background: "none", border: "none",
+          width: 28, height: sizes.nav, borderRadius: 8, background: "none", border: "none",
           cursor: at ? "default" : "pointer",
           color: at ? `${ON_ACCENT}${ALPHA.line}` : ON_ACCENT,
           fontSize: FS.title, fontWeight: 700,
@@ -173,12 +178,12 @@ export function HoleNavigator({ hole, par, hcp, onGo }) {
       >{dir < 0 ? "\u2039" : "\u203a"}</button>
     );
   };
-  const cap = { fontSize: FS.micro, color: ON_ACCENT, fontWeight: 600, opacity: 0.75 };
-  const val = { fontSize: FS.lead, fontWeight: 800, color: ON_ACCENT };
+  const cap = { fontSize: sizes.label, color: ON_ACCENT, fontWeight: 600, opacity: 0.75 };
+  const val = { fontSize: sizes.side, fontWeight: 800, color: ON_ACCENT };
   return (
     <div style={{
-      background: BC.amberDim, borderRadius: 10, padding: "4px 8px", marginBottom: 6,
-      display: "flex", alignItems: "center",
+      background: BC.amberDim, borderRadius: 10, padding: sizes.pad, marginBottom: sizes.gap,
+      display: "flex", alignItems: "center", flexShrink: 0,
     }}>
       {arrow(-1)}
       <div style={{ flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 8px" }}>
@@ -188,7 +193,7 @@ export function HoleNavigator({ hole, par, hcp, onGo }) {
         </div>
         <div style={{ textAlign: "center" }}>
           <div style={{ ...cap, textTransform: "uppercase", letterSpacing: 1 }}>Hole</div>
-          <div style={{ fontSize: FS.hero, fontWeight: 800, color: ON_ACCENT, lineHeight: 1 }}>{hole + 1}</div>
+          <div style={{ fontSize: sizes.num, fontWeight: 800, color: ON_ACCENT, lineHeight: 1 }}>{hole + 1}</div>
         </div>
         <div style={{ textAlign: "center", minWidth: 32 }}>
           <div style={cap}>HCP</div>
@@ -216,7 +221,7 @@ export function HoleNavigator({ hole, par, hcp, onGo }) {
 // again). `par` drives both the window and the score-shape iconography.
 const SCORE_LABELS = ["Birdie", "Par", "Bogey", "Double", "Triple"];
 
-export function ScoreButtonRow({ par, score, onScore }) {
+export function ScoreButtonRow({ par, score, onScore, fill = false, minHeight = 44, fontSize = FS.lead, labels = true }) {
   // Recenter — when the saved score falls outside [par-1, par+3] (an ace on
   // a par 3, a 9 on a par 4) the whole window slides so the saved number is
   // visible and re-tappable. Because par-1 >= 2 and score >= 1, the shifted
@@ -232,18 +237,45 @@ export function ScoreButtonRow({ par, score, onScore }) {
   // In the recentered case the labels would mislabel the numbers under them
   // ("Birdie" sitting under a 5 on a par 4), so we blank them — the empty
   // slot still reserves its height.
-  const showLabels = btns === defaultBtns;
+  const showLabels = labels && btns === defaultBtns;
+  // The label slot is what keeps the row a stable height, so it holds its
+  // 12px whenever labels are on — even in the recentered case, where the
+  // text is blanked rather than removed. Turned off entirely (`labels`
+  // false) it gives the row back, which is how the scoring screen's tight
+  // density buys the last few pixels it needs.
+  const labelH = labels ? 12 : 0;
+  // `fill` hands the row's height over to its container: buttons stretch to
+  // whatever the card has left rather than standing at a fixed 44. minHeight
+  // is the floor below which a tap target stops being one.
+  const btnBox = fill
+    ? { flex: "1 1 auto", minHeight, height: "auto" }
+    : { height: minHeight };
 
   const nudge = {
-    width: 30, height: 44, borderRadius: 8, background: BC.inp, border: "none",
+    width: 30, borderRadius: 8, background: BC.inp, border: "none",
     color: BC.t3, fontSize: FS.body, fontWeight: 700, cursor: "pointer", flexShrink: 0,
+    ...btnBox,
   };
+  // Each control sits in a column with a label slot beneath it, the nudges
+  // included — their slot is empty, but reserving it is what keeps them
+  // level with the score buttons instead of hanging a label's worth lower.
+  const column = { display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 0, height: "100%" };
 
   return (
-    <div style={{ display: "flex", gap: 4, alignItems: "flex-start" }}>
+    <div style={{
+      display: "flex", gap: 4, alignItems: "stretch",
+      // width, not flex: the row is a block child in the practice tab and a
+      // flex item in the scoring tab, and as a flex item it would otherwise
+      // shrink to its content instead of spanning the card.
+      width: "100%", minWidth: 0,
+      height: fill ? "100%" : "auto", minHeight: 0,
+    }}>
       {/* − sits at the FAR LEFT (not next to +) so the par button lands dead
           center of the seven-control row. Symmetric with the + on the right. */}
-      <button onClick={() => onScore(Math.max(1, (score || par) - 1))} style={nudge}>−</button>
+      <div style={{ ...column, flex: "0 0 auto" }}>
+        <button onClick={() => onScore(Math.max(1, (score || par) - 1))} style={nudge}>−</button>
+        <div style={{ height: labelH }} />
+      </div>
       {btns.map((btn, idx) => {
         const isCur = btn === score;
         const sd = btn - par;
@@ -255,9 +287,9 @@ export function ScoreButtonRow({ par, score, onScore }) {
         // since par isn't in the window then.
         const showParAnchor = btn === par && !isCur;
         return (
-          <div key={btn} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 0 }}>
+          <div key={btn} style={{ ...column, flex: 1 }}>
             <button onClick={() => onScore(isCur ? 0 : btn)} style={{
-              width: "100%", height: 44, borderRadius: 8, cursor: "pointer", fontSize: FS.lead, fontWeight: 800,
+              width: "100%", ...btnBox, borderRadius: 8, cursor: "pointer", fontSize, fontWeight: 800,
               border: "none", background: isCur ? BC.amber : BC.inp, color: isCur ? ON_AMBER : BC.t2,
               position: "relative", display: "flex", alignItems: "center", justifyContent: "center",
               // No CSS transition: when the hole auto-advances, all four
@@ -292,14 +324,17 @@ export function ScoreButtonRow({ par, score, onScore }) {
                 global text-transform, so the labels read as small caps there. */}
             <div style={{
               fontSize: FS.label, color: showParAnchor ? BC.t2 : BC.t3, fontWeight: showParAnchor ? 700 : 600,
-              letterSpacing: 0.4, lineHeight: 1, height: 12, textTransform: "uppercase",
+              letterSpacing: 0.4, lineHeight: 1, height: labelH, textTransform: "uppercase",
             }}>
               {showLabels ? SCORE_LABELS[idx] : ""}
             </div>
           </div>
         );
       })}
-      <button onClick={() => onScore((score || par) + 1)} style={nudge}>+</button>
+      <div style={{ ...column, flex: "0 0 auto" }}>
+        <button onClick={() => onScore((score || par) + 1)} style={nudge}>+</button>
+        <div style={{ height: labelH }} />
+      </div>
     </div>
   );
 }

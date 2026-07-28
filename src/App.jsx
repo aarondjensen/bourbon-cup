@@ -33,6 +33,7 @@ import {
   LOCK_OPEN, LOCK_FINAL,
 } from "./lib/roundLocks";
 import { usePullToRefresh } from "./lib/usePullToRefresh";
+import { useFitDensity } from "./lib/useFitDensity";
 import { processLogo } from "./lib/logoBrand";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { AppHeader } from "./components/AppHeader";
@@ -443,6 +444,11 @@ function FinalizeRoundCard({ round, nextRound, lastFinal, progress, tPlayers, on
 // select between and no strip of rounds at the top either.
 function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teams, hcpOverrides, teeAssignments, roundLocks, rounds, currentRound, onFinalizeRound, ctpData, onSetCtp }) {
   const userPid = user.player_id;
+  // This screen is worked from, not read down — four players' scores have to
+  // be reachable without scrolling to the one at the bottom. It measures the
+  // room it has and sizes its parts to fit. See lib/useFitDensity.
+  const fitRef = useRef(null);
+  const { sizes: fit } = useFitDensity(fitRef);
   // THE GATE. Only the current round's matches exist as far as this screen
   // is concerned — a match from a finalized round is not merely hidden, it
   // is not reachable, so no stale selection can put a score in it.
@@ -537,8 +543,15 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
       notify={notify}
     />
   ) : null;
+  // `1 0 auto` — grow to fill the view, never shrink below content. The
+  // screen therefore fills a tall phone and, if even the tight density can't
+  // fit a short one, spills into a normal scroll rather than clipping a
+  // player card off the bottom.
   const shell = (children) => (
-    <div style={{ fontFamily: FONT }}>
+    <div ref={fitRef} style={{
+      fontFamily: FONT,
+      display: "flex", flexDirection: "column", flex: "1 0 auto", minHeight: 0,
+    }}>
       {children}
       {directorCard}
       <Toast message={toast} />
@@ -667,7 +680,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     // Same reasoning as the Leaderboard strip's cell height: the bar has to
     // be tall enough for a split hole's diagonal to read, and it stays that
     // height for every format so the strip never changes shape between rounds.
-    const cellH = 29, barH = 8;
+    const cellH = fit.statusCell, barH = fit.statusBar;
     const colBorder = { borderRight: i % 9 === 8 ? "none" : `1px solid ${BC.bdr}${ALPHA.hair}` };
     const shell = (children) => (
       <div key={i} style={{
@@ -713,11 +726,11 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     const partial = !allScored && matchPids.some(pid => getScore(pid, h) > 0);
     return (
       <button key={h} onClick={() => goToHole(h)} style={{
-        flex: 1, height: 32, borderRadius: allScored || cur ? 8 : 6,
+        flex: 1, height: fit.holeCell, borderRadius: allScored || cur ? 8 : 6,
         border: allScored && !cur ? `1.5px solid ${BC.amber}${ALPHA.line}` : "none",
         background: cur ? BC.amber : allScored ? BC.amber + ALPHA.wash : partial ? BC.amber + ALPHA.wash : BC.card,
         color: cur ? ON_AMBER : allScored ? BC.amber : BC.t3,
-        fontSize: FS.lead, fontWeight: 700, cursor: "pointer",
+        fontSize: fit.holeFont, fontWeight: 700, cursor: "pointer",
         outline: cur ? `2px solid ${BC.amber}` : "none", outlineOffset: 1,
       }}>{h + 1}</button>
     );
@@ -749,18 +762,18 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
       )}
 
       {/* Front 9 — hole strip + status row. */}
-      <div style={{ display: "flex", gap: 3, marginBottom: 2 }}>
+      <div style={{ display: "flex", gap: 3, marginBottom: 2, flexShrink: 0 }}>
         {Array.from({ length: 9 }, (_, i) => renderHoleCell(i))}
       </div>
-      <div style={{ display: "flex", marginBottom: 4, background: BC.card, border: `1px solid ${BC.bdr}${ALPHA.line}`, borderRadius: 8, padding: "4px 0", alignItems: "center" }}>
+      <div style={{ display: "flex", marginBottom: fit.stack, flexShrink: 0, background: BC.card, border: `1px solid ${BC.bdr}${ALPHA.line}`, borderRadius: 8, padding: `${fit.statusPad}px 0`, alignItems: "center" }}>
         {Array.from({ length: 9 }, (_, i) => renderStatusCell(i))}
       </div>
 
       {/* Back 9 — hole strip + status row. */}
-      <div style={{ display: "flex", gap: 3, marginBottom: 2 }}>
+      <div style={{ display: "flex", gap: 3, marginBottom: 2, flexShrink: 0 }}>
         {Array.from({ length: 9 }, (_, i) => renderHoleCell(i + 9))}
       </div>
-      <div style={{ display: "flex", marginBottom: 4, background: BC.card, border: `1px solid ${BC.bdr}${ALPHA.line}`, borderRadius: 8, padding: "4px 0", alignItems: "center" }}>
+      <div style={{ display: "flex", marginBottom: fit.stack, flexShrink: 0, background: BC.card, border: `1px solid ${BC.bdr}${ALPHA.line}`, borderRadius: 8, padding: `${fit.statusPad}px 0`, alignItems: "center" }}>
         {Array.from({ length: 9 }, (_, i) => renderStatusCell(i + 9))}
       </div>
 
@@ -768,19 +781,20 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           it's reachable without scrolling past four player cards. Slim
           bar styling keeps the vertical cost near zero. */}
       <button onClick={() => setShowScorecard(true)} style={{
-        width: "100%", padding: "5px 0", borderRadius: 8, marginBottom: 4, cursor: "pointer",
+        width: "100%", padding: fit.scorecardPad, borderRadius: 8, marginBottom: fit.stack,
+        cursor: "pointer", flexShrink: 0,
         background: BC.card, border: `1px solid ${BC.bdr}${ALPHA.line}`, color: BC.t2,
         fontSize: FS.small, fontWeight: 700, letterSpacing: 0.5,
       }}>
         Full Scorecard
       </button>
 
-      <HoleNavigator hole={activeHole} par={par} hcp={hcp} onGo={goToHole} />
+      <HoleNavigator hole={activeHole} par={par} hcp={hcp} onGo={goToHole} sizes={fit.nav} />
 
       {/* Format / round badge — small sticker between banner and player cards.
           Tells the user what scoring format their entries are being judged
           against. Useful since this app supports multiple formats per round. */}
-      <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1, padding: "2px 4px", marginBottom: 4 }}>
+      <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1, padding: "2px 4px", marginBottom: fit.stack, flexShrink: 0, display: fit.badge ? "block" : "none" }}>
         {(FORMATS.find(f => f.id === format)?.label || "MATCH PLAY").toUpperCase()}
         {" · "}
         {/* A best-ball override changes what the format's name means, so it is
@@ -818,7 +832,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           ? `🎯 CTP — ${nm}${rec.distance_ft ? ` · ${rec.distance_ft} ft` : ""}${settled ? "" : " · tap to beat it"}`
           : "🎯 Tag closest to the pin";
         const style = {
-          width: "100%", padding: "6px 10px", borderRadius: 8, marginBottom: 4, textAlign: "left",
+          width: "100%", padding: "6px 10px", borderRadius: 8, marginBottom: fit.stack, textAlign: "left", flexShrink: 0,
           background: nm ? BC.amberGlow : BC.card,
           // One alpha, applied once. This used to read `${nm ? BC.amber +
           // "55" : BC.bdr}60`, which on the tagged branch concatenated both
@@ -837,9 +851,9 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           Each shows one header row — name, (CH), stroke dots on the left,
           "Net ±X thru N" right-aligned — then a row of par-relative score
           buttons. Tap a saved score again to clear. */}
-      <div>
+      <div style={{ flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: fit.cardGap }}>
         {[...match.teamA, "DIVIDER", ...match.teamB].map((pid, idx) => {
-          if (pid === "DIVIDER") return <div key="div" style={{ borderTop: `1px dashed ${BC.bdr}`, margin: "8px 0" }} />;
+          if (pid === "DIVIDER") return <div key="div" style={{ borderTop: `1px dashed ${BC.bdr}`, flexShrink: 0, margin: `${fit.cardGap}px 0` }} />;
           const tp = tPlayers.find(t => t.player_id === pid);
           const team = match.teamA.includes(pid) ? "A" : "B";
           const tc = team === "A" ? tA : tB;
@@ -877,7 +891,8 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
 
           return (
             <div key={pid} style={{
-              background: BC.card, borderRadius: 10, marginBottom: 4, padding: "6px 10px",
+              background: BC.card, borderRadius: 10, padding: fit.cardPad,
+              flex: "1 1 0", minHeight: 0, maxHeight: fit.cardMax, display: "flex", flexDirection: "column",
               border: `1px solid ${BC.bdr}`,
             }}>
               {/* Header row — name + (CH) + stroke dots clustered tight on
@@ -887,7 +902,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
                   own beneath; folding it up here buys back a row per card,
                   which over four cards is most of the difference between the
                   scoring screen fitting a phone and having to be scrolled. */}
-              <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 4, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 3, minWidth: 0, flexShrink: 0 }}>
                 <span style={{ fontSize: FS.body, fontWeight: 700, color: BC.t1, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>{tp?.name || pid}</span>
                 <span title={chTitle} style={{ fontSize: FS.small, fontWeight: 700, color: BC.hcpBlue, flexShrink: 0 }}>
                   ({ch}{reduced ? "*" : ""})
@@ -905,7 +920,14 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
                   </span>
                 )}
               </div>
-              <ScoreButtonRow par={par} score={cur} onScore={(v) => onTapScore(pid, v)} />
+              {/* Takes the card's remaining height, so the tap targets are
+                  as big as the device allows rather than a fixed 44. */}
+              <div style={{ flex: "1 1 auto", minHeight: 0, display: "flex" }}>
+                <ScoreButtonRow
+                  par={par} score={cur} onScore={(v) => onTapScore(pid, v)}
+                  fill minHeight={fit.btnMin} fontSize={fit.btnFont} labels={fit.labels}
+                />
+              </div>
             </div>
           );
         })}
@@ -6335,7 +6357,13 @@ export default function App() {
             down the screen is the one thing that defeats pinning it — it
             would sit mid-screen on a thin round, then jump to the top the
             moment the content grew past the fold. */}
-        <div style={{ width: "100%" }}>
+        {/* Scoring is worked from rather than read down, so it fills the
+            view instead of flowing at its natural height — see ScoreEntry's
+            shell. Every other tab keeps the plain block wrapper. */}
+        <div style={{
+          width: "100%",
+          ...(view === "scoring" ? { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" } : null),
+        }}>
         {/* Keyed ErrorBoundary: keying on `view` remounts the boundary
             whenever the tab changes, so a crashed screen self-heals the
             moment the user navigates away instead of showing a blank
