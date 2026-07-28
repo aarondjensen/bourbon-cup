@@ -1,5 +1,5 @@
 import { Component } from "react";
-import { BC } from "../theme";
+import { BC, FS } from "../theme";
 
 // ══════════════════════════════════════════════════════════════════
 //  ErrorBoundary — friendly fallback instead of a blank white screen.
@@ -53,13 +53,13 @@ export default class ErrorBoundary extends Component {
           <circle cx="12" cy="16.8" r="1" fill={BC.t3} />
         </svg>
         <div style={{
-          fontSize: 17, fontWeight: 700, color: BC.t1,
+          fontSize: FS.lead, fontWeight: 700, color: BC.t1,
           letterSpacing: 0.5, marginBottom: 6,
         }}>
           Something went wrong
         </div>
         <div style={{
-          fontSize: 13, color: BC.t3, maxWidth: 300,
+          fontSize: FS.body, color: BC.t3, maxWidth: 300,
           lineHeight: 1.5, marginBottom: 20,
         }}>
           This screen hit an unexpected error. Try switching tabs, or reload the app.
@@ -67,7 +67,7 @@ export default class ErrorBoundary extends Component {
         <button onClick={() => window.location.reload()} style={{
           padding: "10px 20px", borderRadius: 8,
           background: BC.amber, border: "none",
-          color: BC.bg, fontSize: 13, fontWeight: 700,
+          color: BC.bg, fontSize: FS.body, fontWeight: 700,
           cursor: "pointer", letterSpacing: 0.4,
         }}>
           Reload App
@@ -78,7 +78,7 @@ export default class ErrorBoundary extends Component {
           <pre style={{
             marginTop: 20, padding: 10, background: BC.card,
             border: `1px solid ${BC.bdr}`, borderRadius: 6,
-            fontSize: 11, color: BC.danger, maxWidth: 400,
+            fontSize: FS.small, color: BC.danger, maxWidth: 400,
             overflow: "auto", textAlign: "left",
             whiteSpace: "pre-wrap", fontFamily: "monospace",
             textTransform: "none", letterSpacing: 0,

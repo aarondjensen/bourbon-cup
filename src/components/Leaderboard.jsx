@@ -30,7 +30,7 @@
 //  the Scoring tab describes the same match.
 
 import { useState, useMemo } from "react";
-import { BC, ink, teamColor } from "../theme";
+import { BC, FS, ink, teamColor } from "../theme";
 import {
   FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT,
   POINT_METHOD_TRADITIONAL, TROPHY_SILHOUETTE, CUP_POINTS_TO_WIN,
@@ -206,14 +206,14 @@ function SegmentPill({ label, pot, st, pts }) {
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
       <div style={{
-        fontSize: 8, letterSpacing: 1, fontWeight: 800, color: BC.t3,
+        fontSize: FS.micro, letterSpacing: 1, fontWeight: 800, color: BC.t3,
         textAlign: "center", marginBottom: 3, whiteSpace: "nowrap",
       }}>
         {label}{pot ? ` · ${fmtPts(pot)}` : ""}
       </div>
       <div style={{
         textAlign: "center", padding: "5px 2px", borderRadius: 7,
-        fontSize: 12, fontWeight: 800, lineHeight: 1.1,
+        fontSize: FS.small, fontWeight: 800, lineHeight: 1.1,
         background: settled && win ? `${color}26` : "transparent",
         border: `1px ${settled ? "solid" : "dashed"} ${settled ? (win ? `${color}66` : BC.bdr) : `${BC.bdr}`}`,
         color: settled ? (halved ? BC.t2 : color) : st.played ? color : BC.t3,
@@ -264,7 +264,7 @@ function MatchTeamColumn({ tid, names, isLeader, settled }) {
     }}>
       {names.map((nm, i) => (
         <div key={i} style={{
-          fontSize: 13, fontWeight: isLeader ? 700 : 600,
+          fontSize: FS.body, fontWeight: isLeader ? 700 : 600,
           color: isLeader ? BC.t1 : BC.t2, lineHeight: 1.3,
           whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
         }}>{nm}</div>
@@ -291,11 +291,11 @@ const nineColor = (st) => {
 // is pinned to 1 so the two rows sit a predictable distance apart once the
 // grid has aligned them on their baselines.
 const NINE_LABEL = {
-  fontSize: 8, fontWeight: 800, letterSpacing: 0.6, color: BC.t3,
+  fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.6, color: BC.t3,
   lineHeight: 1, minWidth: 24, textAlign: "center",
 };
 const NINE_VALUE = {
-  fontSize: 11, fontWeight: 800, lineHeight: 1, whiteSpace: "nowrap",
+  fontSize: FS.small, fontWeight: 800, lineHeight: 1, whiteSpace: "nowrap",
   minWidth: 24, textAlign: "center",
 };
 
@@ -405,7 +405,7 @@ function MatchCard({
           }}>
             {/* Top row — the three match states. */}
             {showFront && <div style={NINE_LABEL}>F9</div>}
-            <div style={{ fontSize: 17, fontWeight: 800, lineHeight: 1, minWidth: 52, textAlign: "center", color: statusColor }}>
+            <div style={{ fontSize: FS.lead, fontWeight: 800, lineHeight: 1, minWidth: 52, textAlign: "center", color: statusColor }}>
               {statusLabel}
             </div>
             {showBack && <div style={NINE_LABEL}>B9</div>}
@@ -414,7 +414,7 @@ function MatchCard({
                 chevron rides on THRU rather than taking a row of its own,
                 so the expand affordance costs no vertical space. */}
             {showFront && <div style={{ ...NINE_VALUE, color: nineColor(frontSt) }}>{statusText(frontSt)}</div>}
-            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.9, lineHeight: 1, minWidth: 52, textAlign: "center", color: BC.t3 }}>
+            <div style={{ fontSize: FS.label, fontWeight: 700, letterSpacing: 0.9, lineHeight: 1, minWidth: 52, textAlign: "center", color: BC.t3 }}>
               {subLabel} {expanded ? "▴" : "▾"}
             </div>
             {showBack && <div style={{ ...NINE_VALUE, color: nineColor(backSt) }}>{statusText(backSt)}</div>}
@@ -435,16 +435,16 @@ function MatchCard({
               what you open a match to find, not what you scan a board for. */}
           <div style={{ padding: "10px 12px 0" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-              <span style={{ flex: 1, fontSize: 9, fontWeight: 800, letterSpacing: 1, color: BC.t3 }}>
+              <span style={{ flex: 1, fontSize: FS.label, fontWeight: 800, letterSpacing: 1, color: BC.t3 }}>
                 {/* The match's number in the tournament, not its position in
                     this round — Round 2's opener is Match 5 when Round 1 had
                     four. Falls back to the row index only for a match the
                     numbering never reached. */}
                 MATCH {match.matchNumber ?? index + 1}{match.teeTime ? ` · ${match.teeTime}` : ""}
               </span>
-              <span style={{ fontSize: 15, fontWeight: 800, color: BC.teamA }}>{fmtPts(ptsA)}</span>
-              <span style={{ fontSize: 11, color: BC.t3 }}>–</span>
-              <span style={{ fontSize: 15, fontWeight: 800, color: BC.teamB }}>{fmtPts(ptsB)}</span>
+              <span style={{ fontSize: FS.lead, fontWeight: 800, color: BC.teamA }}>{fmtPts(ptsA)}</span>
+              <span style={{ fontSize: FS.small, color: BC.t3 }}>–</span>
+              <span style={{ fontSize: FS.lead, fontWeight: 800, color: BC.teamB }}>{fmtPts(ptsB)}</span>
             </div>
             <div style={{ display: "flex", gap: 6 }}>
               {segments.map((s) => (
@@ -487,17 +487,17 @@ function RoundSection({
             gone with it: every match row already carries its own THRU or
             FINAL, so a round-level repeat was chrome. */}
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-          <span style={{ fontSize: 10, color: BC.t3, width: 10, flexShrink: 0 }}>{open ? "▾" : "▸"}</span>
+          <span style={{ fontSize: FS.label, color: BC.t3, width: 10, flexShrink: 0 }}>{open ? "▾" : "▸"}</span>
           <span style={{
-            fontSize: 12, fontWeight: 800, letterSpacing: 1.2, color: BC.t1,
+            fontSize: FS.small, fontWeight: 800, letterSpacing: 1.2, color: BC.t1,
             minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
           }}>
             {[course?.name || "Course TBD", fmt?.label].filter(Boolean).join(" · ").toUpperCase()}
           </span>
           <span style={{ flex: 1, minWidth: 6 }} />
-          <span style={{ fontSize: 15, fontWeight: 800, flexShrink: 0, color: pts.A >= pts.B ? BC.teamA : `${BC.teamA}99` }}>{fmtPts(pts.A)}</span>
-          <span style={{ fontSize: 11, color: BC.t3, flexShrink: 0 }}>–</span>
-          <span style={{ fontSize: 15, fontWeight: 800, flexShrink: 0, color: pts.B >= pts.A ? BC.teamB : `${BC.teamB}99` }}>{fmtPts(pts.B)}</span>
+          <span style={{ fontSize: FS.lead, fontWeight: 800, flexShrink: 0, color: pts.A >= pts.B ? BC.teamA : `${BC.teamA}99` }}>{fmtPts(pts.A)}</span>
+          <span style={{ fontSize: FS.small, color: BC.t3, flexShrink: 0 }}>–</span>
+          <span style={{ fontSize: FS.lead, fontWeight: 800, flexShrink: 0, color: pts.B >= pts.A ? BC.teamB : `${BC.teamB}99` }}>{fmtPts(pts.B)}</span>
         </div>
         {/* Nothing under the header. The tee, the handicap terms, the scoring
             type and the counting rule all used to sit here; all of it is setup
@@ -507,7 +507,7 @@ function RoundSection({
 
       {open && (
         results.length === 0 ? (
-          <div style={{ padding: "16px 0", textAlign: "center", color: BC.t3, fontSize: 11 }}>
+          <div style={{ padding: "16px 0", textAlign: "center", color: BC.t3, fontSize: FS.small }}>
             No matches set up for this round.
           </div>
         ) : (
@@ -673,8 +673,8 @@ export function TeamLeaderboard({
           mask: `url(${TROPHY_SILHOUETTE}) center/contain no-repeat`,
           opacity: 0.3,
         }} />
-        <div style={{ fontSize: 15, fontWeight: 700, color: BC.t1, letterSpacing: 0.3 }}>No matches yet</div>
-        <div style={{ fontSize: 12, color: BC.t3, maxWidth: 260, lineHeight: 1.5 }}>
+        <div style={{ fontSize: FS.lead, fontWeight: 700, color: BC.t1, letterSpacing: 0.3 }}>No matches yet</div>
+        <div style={{ fontSize: FS.small, color: BC.t3, maxWidth: 260, lineHeight: 1.5 }}>
           Matches will appear here once the tournament schedule is set.
         </div>
       </div>
@@ -701,23 +701,23 @@ export function TeamLeaderboard({
         <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{
-              fontSize: 10, fontWeight: 800, letterSpacing: 0.8, color: BC.teamA,
+              fontSize: FS.label, fontWeight: 800, letterSpacing: 0.8, color: BC.teamA,
               textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
             }}>{tA.name}</div>
-            <div style={{ fontSize: 32, fontWeight: 800, color: BC.teamA, lineHeight: 1.1, marginTop: 1 }}>
+            <div style={{ fontSize: FS.display, fontWeight: 800, color: BC.teamA, lineHeight: 1.1, marginTop: 1 }}>
               {fmtPts(totals.A)}
             </div>
           </div>
           <div style={{ textAlign: "center", flexShrink: 0, paddingTop: 6 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: BC.t1, lineHeight: 1 }}>{fmtPts(toWin)}</div>
-            <div style={{ fontSize: 8, fontWeight: 800, letterSpacing: 1, color: BC.t3, marginTop: 3 }}>TO WIN</div>
+            <div style={{ fontSize: FS.lead, fontWeight: 800, color: BC.t1, lineHeight: 1 }}>{fmtPts(toWin)}</div>
+            <div style={{ fontSize: FS.micro, fontWeight: 800, letterSpacing: 1, color: BC.t3, marginTop: 3 }}>TO WIN</div>
           </div>
           <div style={{ flex: 1, minWidth: 0, textAlign: "right" }}>
             <div style={{
-              fontSize: 10, fontWeight: 800, letterSpacing: 0.8, color: BC.teamB,
+              fontSize: FS.label, fontWeight: 800, letterSpacing: 0.8, color: BC.teamB,
               textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
             }}>{tB.name}</div>
-            <div style={{ fontSize: 32, fontWeight: 800, color: BC.teamB, lineHeight: 1.1, marginTop: 1 }}>
+            <div style={{ fontSize: FS.display, fontWeight: 800, color: BC.teamB, lineHeight: 1.1, marginTop: 1 }}>
               {fmtPts(totals.B)}
             </div>
           </div>
@@ -731,7 +731,7 @@ export function TeamLeaderboard({
             <span style={{
               position: "absolute", left: `${markerPct(pct(totals.A), pct(pending.A))}%`,
               transform: "translateX(-50%)", whiteSpace: "nowrap",
-              fontSize: 9, fontWeight: 800, letterSpacing: 0.3, lineHeight: 1,
+              fontSize: FS.label, fontWeight: 800, letterSpacing: 0.3, lineHeight: 1,
               color: ink(BC.teamA, false),
             }}>+{fmtPts(pending.A)}</span>
           )}
@@ -739,7 +739,7 @@ export function TeamLeaderboard({
             <span style={{
               position: "absolute", right: `${markerPct(pct(totals.B), pct(pending.B))}%`,
               transform: "translateX(50%)", whiteSpace: "nowrap",
-              fontSize: 9, fontWeight: 800, letterSpacing: 0.3, lineHeight: 1,
+              fontSize: FS.label, fontWeight: 800, letterSpacing: 0.3, lineHeight: 1,
               color: ink(BC.teamB, false),
             }}>+{fmtPts(pending.B)}</span>
           )}
@@ -767,7 +767,7 @@ export function TeamLeaderboard({
         </div>
 
         {clincher && (
-          <div style={{ textAlign: "center", marginTop: 7, fontSize: 9, fontWeight: 700, letterSpacing: 1, color: teamColor(clincher) }}>
+          <div style={{ textAlign: "center", marginTop: 7, fontSize: FS.label, fontWeight: 700, letterSpacing: 1, color: teamColor(clincher) }}>
             {(clincher === "A" ? tA.name : tB.name).toUpperCase()} WIN THE CUP
           </div>
         )}
@@ -867,30 +867,30 @@ export function MatchScorecard({ match, result, format, courses, tRounds, teams,
     });
 
     const cellBase = {
-      textAlign: "center", fontSize: 10, fontWeight: 700, padding: "3px 0",
+      textAlign: "center", fontSize: FS.label, fontWeight: 700, padding: "3px 0",
       borderRadius: 4, lineHeight: 1.2,
     };
-    const lab = { fontSize: 8, fontWeight: 800, letterSpacing: 0.5, color: BC.t3, display: "flex", alignItems: "center" };
+    const lab = { fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.5, color: BC.t3, display: "flex", alignItems: "center" };
 
     return (
       <div style={{ marginBottom: 10 }}>
         <div style={{
-          fontSize: 8, fontWeight: 800, letterSpacing: 1.4, color: BC.t3, marginBottom: 4,
+          fontSize: FS.micro, fontWeight: 800, letterSpacing: 1.4, color: BC.t3, marginBottom: 4,
         }}>{label}</div>
         <div style={{ display: "grid", gridTemplateColumns: `26px repeat(${end - start}, 1fr) 26px`, gap: 2 }}>
           {/* Hole numbers */}
           <div />
           {slice.map((_, i) => (
-            <div key={`h${i}`} style={{ ...cellBase, fontSize: 8, color: BC.t3, fontWeight: 800 }}>{start + i + 1}</div>
+            <div key={`h${i}`} style={{ ...cellBase, fontSize: FS.micro, color: BC.t3, fontWeight: 800 }}>{start + i + 1}</div>
           ))}
-          <div style={{ ...cellBase, fontSize: 8, color: BC.t3, fontWeight: 800 }}>{start === 0 ? "OUT" : "IN"}</div>
+          <div style={{ ...cellBase, fontSize: FS.micro, color: BC.t3, fontWeight: 800 }}>{start === 0 ? "OUT" : "IN"}</div>
 
           {/* Par */}
           <div style={lab}>PAR</div>
           {slice.map((_, i) => (
-            <div key={`p${i}`} style={{ ...cellBase, fontSize: 9, color: BC.t3, fontWeight: 600 }}>{holePars[start + i]}</div>
+            <div key={`p${i}`} style={{ ...cellBase, fontSize: FS.label, color: BC.t3, fontWeight: 600 }}>{holePars[start + i]}</div>
           ))}
-          <div style={{ ...cellBase, fontSize: 9, color: BC.t3, fontWeight: 700 }}>{parTotal}</div>
+          <div style={{ ...cellBase, fontSize: FS.label, color: BC.t3, fontWeight: 700 }}>{parTotal}</div>
 
           {/* Team A nets */}
           <div style={{ ...lab, color: BC.teamA }}>{aLabel}</div>
@@ -924,7 +924,7 @@ export function MatchScorecard({ match, result, format, courses, tRounds, teams,
             const signed = total || perHole;
             return (
               <div key={`m${i}`} style={{
-                ...cellBase, fontSize: 8, fontWeight: 800,
+                ...cellBase, fontSize: FS.label, fontWeight: 800,
                 color: v == null ? BC.t3 : v > 0 ? BC.teamA : v < 0 ? BC.teamB : BC.t3,
               }}>
                 {v == null ? "" : v === 0 ? (signed ? "—" : "AS") : `${signed ? "+" : ""}${Math.abs(v)}`}
@@ -947,16 +947,16 @@ export function MatchScorecard({ match, result, format, courses, tRounds, teams,
   return (
     <div style={{ padding: "12px 12px 14px", fontFamily: FONT }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-        <span style={{ fontSize: 10, fontWeight: 800, color: BC.teamA, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        <span style={{ fontSize: FS.label, fontWeight: 800, color: BC.teamA, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
           {(match.teamANames || []).join(" / ")}
         </span>
-        <span style={{ fontSize: 9, color: BC.t3, flexShrink: 0 }}>vs</span>
-        <span style={{ fontSize: 10, fontWeight: 800, color: BC.teamB, textAlign: "right", flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        <span style={{ fontSize: FS.label, color: BC.t3, flexShrink: 0 }}>vs</span>
+        <span style={{ fontSize: FS.label, fontWeight: 800, color: BC.teamB, textAlign: "right", flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
           {(match.teamBNames || []).join(" / ")}
         </span>
       </div>
 
-      <div style={{ fontSize: 9, color: BC.t3, marginBottom: 10 }}>
+      <div style={{ fontSize: FS.label, color: BC.t3, marginBottom: 10 }}>
         {[
           course?.name,
           FORMATS.find((f) => f.id === format)?.label,
@@ -976,9 +976,9 @@ export function MatchScorecard({ match, result, format, courses, tRounds, teams,
         <div style={{
           marginTop: 2, padding: "7px 10px", borderRadius: 8,
           background: `${BC.amber}14`, border: `1px solid ${BC.amber}33`,
-          fontSize: 10, color: BC.t2, display: "flex", alignItems: "center", gap: 6,
+          fontSize: FS.label, color: BC.t2, display: "flex", alignItems: "center", gap: 6,
         }}>
-          <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: 1, color: BC.amber }}>DOTS</span>
+          <span style={{ fontSize: FS.micro, fontWeight: 800, letterSpacing: 1, color: BC.amber }}>DOTS</span>
           <span style={{ flex: 1 }} />
           {!dd.played ? (
             <span style={{ fontWeight: 700, color: BC.t3 }}>low ball + high ball, 2 per hole</span>

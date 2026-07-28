@@ -25,7 +25,7 @@
 
 import { useState } from "react";
 import { Popup } from "./Popup";
-import { BC } from "../theme";
+import { BC, FS } from "../theme";
 
 // Wheel geometry. WHEEL_H must leave a whole number of item slots above
 // and below the selection band, hence the (WHEEL_H - WHEEL_ITEM) / 2
@@ -65,10 +65,10 @@ export function CtpPrompt({ holeNumber, players, teams, leader, leaderName, onSa
 
   return (
     <Popup onClose={onClose} maxWidth={360} padding={20} portal>
-      <div style={{ fontSize: 10, fontWeight: 800, color: BC.amber, letterSpacing: 1.5, marginBottom: 6, textAlign: "center" }}>
+      <div style={{ fontSize: FS.label, fontWeight: 800, color: BC.amber, letterSpacing: 1.5, marginBottom: 6, textAlign: "center" }}>
         Hole {holeNumber} · Par 3
       </div>
-      <div style={{ fontSize: 15, fontWeight: 800, color: BC.t1, letterSpacing: 1.2, marginBottom: 14, textAlign: "center" }}>
+      <div style={{ fontSize: FS.lead, fontWeight: 800, color: BC.t1, letterSpacing: 1.2, marginBottom: 14, textAlign: "center" }}>
         Closest to the Pin
       </div>
 
@@ -79,20 +79,20 @@ export function CtpPrompt({ holeNumber, players, teams, leader, leaderName, onSa
           display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
           background: BC.amberGlow, border: `1px solid ${BC.amber}66`, borderRadius: 10, padding: "8px 10px",
         }}>
-          <span style={{ fontSize: 15 }}>🎯</span>
+          <span style={{ fontSize: FS.lead }}>🎯</span>
           <span style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ display: "block", fontSize: 9, fontWeight: 800, color: BC.gold, letterSpacing: 1.4 }}>
+            <span style={{ display: "block", fontSize: FS.label, fontWeight: 800, color: BC.gold, letterSpacing: 1.4 }}>
               {leader.approved ? "CTP — Final" : "Current CTP"}
             </span>
-            <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: BC.t1, letterSpacing: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span style={{ display: "block", fontSize: FS.body, fontWeight: 700, color: BC.t1, letterSpacing: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {leaderName || "—"}
             </span>
           </span>
-          {leaderDist && <span style={{ fontSize: 13, fontWeight: 800, color: BC.amber, flexShrink: 0 }}>{leaderDist}</span>}
+          {leaderDist && <span style={{ fontSize: FS.body, fontWeight: 800, color: BC.amber, flexShrink: 0 }}>{leaderDist}</span>}
         </div>
       )}
 
-      <div style={{ fontSize: 9, fontWeight: 800, color: BC.t3, letterSpacing: 1.4, marginBottom: 6 }}>
+      <div style={{ fontSize: FS.label, fontWeight: 800, color: BC.t3, letterSpacing: 1.4, marginBottom: 6 }}>
         {leader?.player_id ? "Who was closer?" : "Who was closest?"}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 14 }}>
@@ -108,7 +108,7 @@ export function CtpPrompt({ holeNumber, players, teams, leader, leaderName, onSa
                 background: sel ? BC.amberGlow : BC.inp,
                 border: `1px solid ${sel ? BC.amber : BC.bdr}`,
                 color: sel ? BC.amber : BC.t2,
-                fontSize: 12, fontWeight: 700, letterSpacing: 0.4, cursor: "pointer", textAlign: "left",
+                fontSize: FS.small, fontWeight: 700, letterSpacing: 0.4, cursor: "pointer", textAlign: "left",
               }}
             >
               <span style={{ width: 5, height: 5, borderRadius: "50%", background: accent, flexShrink: 0 }} />
@@ -120,7 +120,7 @@ export function CtpPrompt({ holeNumber, players, teams, leader, leaderName, onSa
         })}
       </div>
 
-      <div style={{ fontSize: 9, fontWeight: 800, color: BC.t3, letterSpacing: 1.4, marginBottom: 6 }}>Approx. distance</div>
+      <div style={{ fontSize: FS.label, fontWeight: 800, color: BC.t3, letterSpacing: 1.4, marginBottom: 6 }}>Approx. distance</div>
       <div style={{ position: "relative", height: WHEEL_H, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 12, overflow: "hidden", marginBottom: 14 }}>
         {/* Selection band + unit label, both click-through so the wheel
             underneath still takes the drag. */}
@@ -131,7 +131,7 @@ export function CtpPrompt({ holeNumber, players, teams, leader, leaderName, onSa
         }} />
         <div style={{
           position: "absolute", right: 46, top: "50%", transform: "translateY(-50%)",
-          fontSize: 11, fontWeight: 800, color: BC.amber, letterSpacing: 1.2, pointerEvents: "none", zIndex: 2,
+          fontSize: FS.small, fontWeight: 800, color: BC.amber, letterSpacing: 1.2, pointerEvents: "none", zIndex: 2,
         }}>FT</div>
         <div
           ref={wheelRef}
@@ -145,7 +145,7 @@ export function CtpPrompt({ holeNumber, players, teams, leader, leaderName, onSa
           {Array.from({ length: MAX_FT }, (_, i) => i + 1).map(ft => (
             <div key={ft} style={{
               height: WHEEL_ITEM, lineHeight: `${WHEEL_ITEM}px`, textAlign: "center",
-              fontSize: ft === feet ? 21 : 18, fontWeight: ft === feet ? 800 : 700,
+              fontSize: ft === feet ? FS.title : FS.lead, fontWeight: ft === feet ? 800 : 700,
               color: ft === feet ? BC.t1 : BC.t3, scrollSnapAlign: "center",
             }}>{ft}</div>
           ))}
@@ -163,7 +163,7 @@ export function CtpPrompt({ holeNumber, players, teams, leader, leaderName, onSa
           background: pid ? BC.amber : BC.inp,
           border: pid ? "none" : `1px solid ${BC.bdr}`,
           color: pid ? "#0a0804" : BC.t3,
-          fontSize: 13, fontWeight: 800, letterSpacing: 0.8,
+          fontSize: FS.body, fontWeight: 800, letterSpacing: 0.8,
           cursor: pid && !saving ? "pointer" : "default",
           opacity: saving ? 0.7 : 1,
         }}
@@ -175,7 +175,7 @@ export function CtpPrompt({ holeNumber, players, teams, leader, leaderName, onSa
         style={{
           width: "100%", marginTop: 7, padding: 13, borderRadius: 10,
           background: BC.inp, border: `1px solid ${BC.bdr}`, color: BC.t2,
-          fontSize: 12, fontWeight: 700, letterSpacing: 0.8, cursor: "pointer",
+          fontSize: FS.small, fontWeight: 700, letterSpacing: 0.8, cursor: "pointer",
         }}
       >
         {leader?.player_id ? "Our group wasn't closer" : "Nobody hit the green"}

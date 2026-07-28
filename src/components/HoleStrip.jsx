@@ -9,7 +9,7 @@
 //  speaks the same colour vocabulary. `format` is the one holeFill wants:
 //  the format the holes were SCORED under, not the round's own.
 
-import { BC } from "../theme";
+import { BC, FS } from "../theme";
 import { holeFill } from "../lib/holeFill";
 
 // Cell height, one value for every format.
@@ -33,7 +33,7 @@ export function HoleStrip({ holes, format, showNumbers = false, settled = true }
   const nums = (start, end) => (
     <div style={{ display: "flex", gap: 1.5, flex: 1, minWidth: 0 }}>
       {holes.slice(start, end).map((_, i) => (
-        <div key={i} style={{ flex: 1, minWidth: 0, textAlign: "center", fontSize: 7, color: BC.t3, fontWeight: 700 }}>
+        <div key={i} style={{ flex: 1, minWidth: 0, textAlign: "center", fontSize: FS.micro, color: BC.t3, fontWeight: 700 }}>
           {start + i + 1}
         </div>
       ))}

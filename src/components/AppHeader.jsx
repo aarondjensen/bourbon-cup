@@ -26,7 +26,7 @@
 //  The mark is drawn as a CSS mask rather than an <img> for the same reason
 //  the nav icon is: the asset is a flat PNG silhouette, so masking is the
 //  only way it takes the exact live theme accent in both light and dark.
-import { BC } from "../theme";
+import { BC, FS } from "../theme";
 import { TROPHY_SILHOUETTE, TOURNAMENT_LOCATION } from "../constants";
 import { getTournamentYear } from "../firebase";
 
@@ -50,7 +50,7 @@ export function AppHeader({ location }) {
       }} />
 
       <div style={{
-        fontSize: 10, fontWeight: 800, letterSpacing: 2.2, color: BC.t2,
+        fontSize: FS.label, fontWeight: 800, letterSpacing: 2.2, color: BC.t2,
         whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
       }}>{getTournamentYear()} · {(location || TOURNAMENT_LOCATION).toUpperCase()}</div>
     </div>

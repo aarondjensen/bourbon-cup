@@ -6,7 +6,7 @@
 // reloads the app (see lib/editions.js), so the switch goes through a
 // confirm first.
 import { useState, useEffect } from "react";
-import { BC } from "../theme";
+import { BC, FS } from "../theme";
 import { Popup, ConfirmModal } from "./Popup";
 import { getActiveTournamentId } from "../firebase";
 import { loadEditions, createEdition, cloneEdition, deleteEdition, switchEdition, ensureActiveEditionDoc } from "../lib/editions";
@@ -14,7 +14,7 @@ import { loadEditions, createEdition, cloneEdition, deleteEdition, switchEdition
 const fieldStyle = (w) => ({
   width: w || "100%", flex: w ? "none" : 1, padding: "9px 11px", borderRadius: 8,
   background: BC.inp, border: `1px solid ${BC.bdr}`, color: BC.t1,
-  fontSize: 13, fontWeight: 600, outline: "none",
+  fontSize: FS.body, fontWeight: 600, outline: "none",
 });
 
 // What a clone can copy. Scores/matches/skins/locks are NEVER cloned.
@@ -69,11 +69,11 @@ export function EditionSwitcher({ open, onClose }) {
   return (
     <>
       <Popup onClose={onClose} maxWidth={400} padding={18} showClose>
-        <div style={{ fontSize: 15, fontWeight: 800, color: BC.t1, letterSpacing: 0.5, marginBottom: 3 }}>Editions</div>
-        <div style={{ fontSize: 12, color: BC.t3, marginBottom: 14 }}>Switch the active year or start a new one.</div>
+        <div style={{ fontSize: FS.lead, fontWeight: 800, color: BC.t1, letterSpacing: 0.5, marginBottom: 3 }}>Editions</div>
+        <div style={{ fontSize: FS.small, color: BC.t3, marginBottom: 14 }}>Switch the active year or start a new one.</div>
 
         {loading ? (
-          <div style={{ fontSize: 12, color: BC.t3, padding: "10px 0 16px" }}>Loading…</div>
+          <div style={{ fontSize: FS.small, color: BC.t3, padding: "10px 0 16px" }}>Loading…</div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
             {editions.map((e) => {
@@ -84,25 +84,25 @@ export function EditionSwitcher({ open, onClose }) {
                   background: BC.inp, border: `1px solid ${isActive ? BC.amber : BC.bdr}`,
                 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: BC.t1 }}>{e.name}</div>
+                    <div style={{ fontSize: FS.body, fontWeight: 800, color: BC.t1 }}>{e.name}</div>
                     <div style={{
-                      fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase",
+                      fontSize: FS.label, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase",
                       color: statusColor(e.status), marginTop: 2,
                     }}>{e.status}</div>
                   </div>
                   {isActive ? (
                     <span style={{
-                      fontSize: 10, fontWeight: 800, letterSpacing: 0.5, color: BC.bg,
+                      fontSize: FS.label, fontWeight: 800, letterSpacing: 0.5, color: BC.bg,
                       background: BC.amber, padding: "5px 10px", borderRadius: 6,
                     }}>ACTIVE</span>
                   ) : (
                     <>
                       <button onClick={() => setPending(e)} style={{
-                        fontSize: 11, fontWeight: 800, letterSpacing: 0.5, color: BC.t2, background: BC.card,
+                        fontSize: FS.small, fontWeight: 800, letterSpacing: 0.5, color: BC.t2, background: BC.card,
                         border: `1px solid ${BC.bdr}`, borderRadius: 8, padding: "7px 12px", cursor: "pointer",
                       }}>Switch</button>
                       <button onClick={() => setPendingDelete(e)} title="Delete edition" style={{
-                        fontSize: 14, fontWeight: 700, color: BC.t3, background: "transparent",
+                        fontSize: FS.body, fontWeight: 700, color: BC.t3, background: "transparent",
                         border: "none", borderRadius: 8, padding: "5px 6px", cursor: "pointer", flexShrink: 0, lineHeight: 1,
                       }}>🗑</button>
                     </>
@@ -114,7 +114,7 @@ export function EditionSwitcher({ open, onClose }) {
         )}
 
         <div style={{ borderTop: `1px solid ${BC.bdr}`, paddingTop: 14 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1.5, color: BC.t3, marginBottom: 9 }}>NEW EDITION</div>
+          <div style={{ fontSize: FS.small, fontWeight: 800, letterSpacing: 1.5, color: BC.t3, marginBottom: 9 }}>NEW EDITION</div>
           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
             <input value={year} onChange={(e) => setYear(e.target.value.replace(/\D/g, "").slice(0, 4))}
               placeholder="Year" inputMode="numeric" style={fieldStyle(78)} />
@@ -132,16 +132,16 @@ export function EditionSwitcher({ open, onClose }) {
 
           {cloneFrom && (
             <div style={{ marginBottom: 10, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, padding: "10px 12px" }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: BC.t3, letterSpacing: 0.5, marginBottom: 8 }}>COPY INTO THE NEW EDITION</div>
+              <div style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.5, marginBottom: 8 }}>COPY INTO THE NEW EDITION</div>
               {CLONE_ITEMS.map(({ key, label }) => (
                 <label key={key} style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 7, cursor: "pointer" }}>
                   <input type="checkbox" checked={cloneOpts[key]}
                     onChange={(e) => setCloneOpts((o) => ({ ...o, [key]: e.target.checked }))}
                     style={{ width: 16, height: 16, accentColor: BC.amber, flexShrink: 0 }} />
-                  <span style={{ fontSize: 12.5, fontWeight: 600, color: BC.t1 }}>{label}</span>
+                  <span style={{ fontSize: FS.small, fontWeight: 600, color: BC.t1 }}>{label}</span>
                 </label>
               ))}
-              <div style={{ fontSize: 10, color: BC.t3, marginTop: 4, lineHeight: 1.4 }}>
+              <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 4, lineHeight: 1.4 }}>
                 Scores, matches, skins &amp; round locks always start fresh.
               </div>
             </div>
@@ -150,7 +150,7 @@ export function EditionSwitcher({ open, onClose }) {
           <button onClick={doCreate} disabled={!year || busy} style={{
             width: "100%", padding: 11, borderRadius: 10, border: "none", cursor: (year && !busy) ? "pointer" : "not-allowed",
             background: (year && !busy) ? BC.amber : BC.inp, color: (year && !busy) ? BC.bg : BC.t3,
-            fontSize: 13, fontWeight: 800, letterSpacing: 0.5,
+            fontSize: FS.body, fontWeight: 800, letterSpacing: 0.5,
           }}>{busy ? "Working…" : (cloneFrom ? "Clone into new edition" : "Create draft edition")}</button>
         </div>
       </Popup>

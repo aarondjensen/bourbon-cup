@@ -179,6 +179,44 @@ export const applyBCTheme = (mode, brand = null) => {
   for (const key in next) BC[key] = next[key];
 };
 
+// ── Type scale ──
+// The app is styled entirely with inline objects, so before this existed
+// every `fontSize:` was a hand-picked number. That produced seventeen
+// distinct sizes between 7px and 40px — an unbroken 1px ladder from 7 to 17
+// — and the same role kept landing on different rungs: the "COURSE" eyebrow
+// label was 9px in one panel and 10px in the next, a player's name was 11,
+// 12, 13 or 14 depending on which list you were looking at. A 1px step is
+// invisible on its own and indistinguishable from a mistake, which is
+// exactly what makes it drift: there was no rung to snap to.
+//
+// FS is that set of rungs. Nine steps, named for the ROLE rather than the
+// number, because the rule the app is trying to hold is "same role, same
+// size" — not "sizes come from a list". Pick the entry whose description
+// matches what you're rendering; if none fits, the answer is almost never a
+// new number, it's that the thing is one of these in disguise.
+//
+// Steps are 2px apart through the text range (8→16) — the smallest gap that
+// reads as deliberate on a phone — then open up for display sizes where a
+// 2px difference stops registering at all.
+export const FS = {
+  micro:    8, // dense grid cells, scorecard column heads, stroke dots, tiny badges
+  label:   10, // all-caps eyebrows/section labels, hint + helper prose, meta lines
+  small:   12, // list rows, secondary body copy, pill and segmented buttons
+  body:    14, // form inputs, standard buttons, player names, card/dialog titles
+  lead:    16, // key values, primary CTAs, panel and screen titles, icon buttons
+  title:   20, // hero numerics, oversized nav glyphs
+  hero:    26, // the active hole number
+  display: 32, // team point totals, large empty-state icons
+  jumbo:   40, // full-screen empty-state icons
+};
+// One functional constraint rides on this scale: a text input below 16px
+// makes iOS Safari zoom the page on focus. Every field the user types free
+// text into (the player modal, GHIN search, course search) is therefore at
+// FS.lead, and stays there — condense those with padding, never by dropping
+// a rung. The narrow numeric cells in the dense director-side grids are the
+// deliberate exception: they are steppers you tap, not fields you type into,
+// and 16px will not fit nine of them across a phone.
+
 // ── Live per-team color accessors ──
 // Single read surface for team colors. These read the live BC tokens (which
 // applyBCTheme keeps in sync with the active branding doc), so a component

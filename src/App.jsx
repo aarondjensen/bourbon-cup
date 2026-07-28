@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { BC, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor } from "./theme";
+import { BC, FS, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor } from "./theme";
 import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession } from "./firebase";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
@@ -168,7 +168,7 @@ const getInitials = (name) => {
 // `colorOverride` lets the cell render in a non-default color (e.g. red for an
 // absent player). Empty cells still show stroke-dot row + a placeholder dot,
 // so column alignment stays consistent before and after a score is entered.
-const ScoreCell = ({ score, par, strokes, size = 13, colorOverride }) => {
+const ScoreCell = ({ score, par, strokes, size = FS.body, colorOverride }) => {
   const sh = size + 8;          // outer shape size (square or circle)
   const dotH = 10;              // height of stroke-dots row above the score
   const bc = colorOverride || BC.t2;
@@ -178,7 +178,7 @@ const ScoreCell = ({ score, par, strokes, size = 13, colorOverride }) => {
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", height: dotH + sh, justifyContent: "flex-end" }}>
         <div style={{ height: dotH, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-          {strokes > 0 && <span style={{ color: colorOverride || BC.hcpBlue, fontSize: 10, fontWeight: 900, letterSpacing: 1, lineHeight: 1 }}>{"•".repeat(strokes)}</span>}
+          {strokes > 0 && <span style={{ color: colorOverride || BC.hcpBlue, fontSize: FS.label, fontWeight: 900, letterSpacing: 1, lineHeight: 1 }}>{"•".repeat(strokes)}</span>}
         </div>
         <div style={{ width: sh, height: sh, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <span style={{ color: BC.t3 + "30", fontSize: size, lineHeight: 1 }}>·</span>
@@ -210,7 +210,7 @@ const ScoreCell = ({ score, par, strokes, size = 13, colorOverride }) => {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", height: dotH + sh, justifyContent: "flex-end" }}>
       <div style={{ height: dotH, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-        {strokes > 0 && <span style={{ color: colorOverride || BC.hcpBlue, fontSize: 10, fontWeight: 900, letterSpacing: 1, lineHeight: 1 }}>{"•".repeat(strokes)}</span>}
+        {strokes > 0 && <span style={{ color: colorOverride || BC.hcpBlue, fontSize: FS.label, fontWeight: 900, letterSpacing: 1, lineHeight: 1 }}>{"•".repeat(strokes)}</span>}
       </div>
       <div style={{ position: "relative", width: sh, height: sh, display: "flex", alignItems: "center", justifyContent: "center" }}>
         {border}
@@ -227,7 +227,7 @@ function Notif({ notif }) {
   return (
     <div style={{ position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)", zIndex: 9999,
       background: notif.type === "error" ? "#7f1d1d" : "#1a2d1a", border: `1px solid ${notif.type === "error" ? "#ef4444" : "#22c55e"}`,
-      borderRadius: 10, padding: "10px 18px", fontSize: 13, fontWeight: 600, color: "#f0e8d8",
+      borderRadius: 10, padding: "10px 18px", fontSize: FS.body, fontWeight: 600, color: "#f0e8d8",
       boxShadow: "0 4px 24px rgba(0,0,0,0.6)", maxWidth: "80vw", textAlign: "center" }}>
       {notif.msg}
     </div>
@@ -267,7 +267,7 @@ function LoginScreen({ players, onLogin, teams, darkMode, tournamentName, tourna
     <button onClick={() => onLogin(p)} style={{
       width: "100%", padding: "clamp(8px, 2.5vw, 12px) clamp(10px, 3vw, 14px)", background: team.color + "22",
       border: `1px solid ${team.accent}33`, borderRadius: 6,
-      color: BC.t2, fontSize: "clamp(13px, 3.8vw, 14px)", fontWeight: 600, cursor: "pointer", textAlign: "center",
+      color: BC.t2, fontSize: `clamp(${FS.small}px, 3.8vw, ${FS.body}px)`, fontWeight: 600, cursor: "pointer", textAlign: "center",
       display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
     }}>
       <span style={{ flex: 1, lineHeight: 1.3 }}>{p.name}</span>
@@ -286,8 +286,8 @@ function LoginScreen({ players, onLogin, teams, darkMode, tournamentName, tourna
 
       {/* Title — sits above the silhouette, outside content card */}
       <div style={{ textAlign: "center", position: "relative", zIndex: 1, marginBottom: 14 }}>
-        <div style={{ fontSize: "clamp(20px, 8vw, 28px)", fontWeight: 800, color: BC.gold, letterSpacing: 2 }}>{(tournamentName || TOURNAMENT_TITLE).toUpperCase()}</div>
-        <div style={{ fontSize: "clamp(10px, 3vw, 12px)", color: BC.t3, letterSpacing: "0.3em", marginTop: 3 }}>{getTournamentYear()} {(tournamentLocation || TOURNAMENT_LOCATION).toUpperCase()}</div>
+        <div style={{ fontSize: `clamp(${FS.title}px, 8vw, ${FS.hero}px)`, fontWeight: 800, color: BC.gold, letterSpacing: 2 }}>{(tournamentName || TOURNAMENT_TITLE).toUpperCase()}</div>
+        <div style={{ fontSize: `clamp(${FS.label}px, 3vw, ${FS.small}px)`, color: BC.t3, letterSpacing: "0.3em", marginTop: 3 }}>{getTournamentYear()} {(tournamentLocation || TOURNAMENT_LOCATION).toUpperCase()}</div>
       </div>
 
       {/* Desktop centering wrapper */}
@@ -306,7 +306,7 @@ function LoginScreen({ players, onLogin, teams, darkMode, tournamentName, tourna
               {/* Player list */}
               <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "clamp(3px, 1vw, 6px)", background: BC.card + "88", border: `1px solid ${team.accent}44`, borderTop: `2px solid ${team.accent}`, borderRadius: 10, padding: "clamp(4px, 1.5vw, 8px)" }}>
                 {teamPlayers.length === 0
-                  ? <div style={{ textAlign: "center", color: BC.t3, fontSize: 11, padding: "12px 4px" }}>No players</div>
+                  ? <div style={{ textAlign: "center", color: BC.t3, fontSize: FS.small, padding: "12px 4px" }}>No players</div>
                   : teamPlayers.map(p => <PlayerBtn key={p.player_id} p={p} team={team} />)
                 }
               </div>
@@ -316,7 +316,7 @@ function LoginScreen({ players, onLogin, teams, darkMode, tournamentName, tourna
       </div>
 
       {players.length === 0 && (
-        <div style={{ textAlign: "center", color: BC.t3, padding: 16, fontSize: 12, position: "relative", zIndex: 1, marginTop: 12 }}>
+        <div style={{ textAlign: "center", color: BC.t3, padding: 16, fontSize: FS.small, position: "relative", zIndex: 1, marginTop: 12 }}>
           No players yet. Type <span style={{ color: BC.amber, fontWeight: 700 }}>{DIRECTOR_CODE}</span> to set up.
         </div>
       )}
@@ -460,7 +460,7 @@ function FinalizeRoundCard({ round, nextRound, lastFinal, progress, tPlayers, on
       background: BC.card, border: `1px solid ${BC.bdr}`, borderRadius: 12,
       padding: "10px 12px", marginTop: 12,
     }}>
-      <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: BC.amber, marginBottom: 8 }}>
+      <div style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 1.5, color: BC.amber, marginBottom: 8 }}>
         DIRECTOR
       </div>
 
@@ -468,7 +468,7 @@ function FinalizeRoundCard({ round, nextRound, lastFinal, progress, tPlayers, on
         <>
           {/* Progress — the number that decides whether Finalize is the
               routine end of a round or an override. */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 11, color: BC.t2, marginBottom: 4 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: FS.small, color: BC.t2, marginBottom: 4 }}>
             <span style={{ fontWeight: 700 }}>Round {round} scores</span>
             <span style={{ color: progress.complete ? BC.green : BC.t3, fontWeight: 700 }}>
               {progress.entered} / {progress.total || 0}
@@ -477,7 +477,7 @@ function FinalizeRoundCard({ round, nextRound, lastFinal, progress, tPlayers, on
           <div style={{ height: 5, borderRadius: 3, background: BC.inp, overflow: "hidden", marginBottom: 6 }}>
             <div style={{ width: `${pct}%`, height: "100%", background: progress.complete ? BC.green : BC.amber }} />
           </div>
-          <div style={{ fontSize: 10, color: BC.t3, lineHeight: 1.35, marginBottom: 8, minHeight: 13 }}>
+          <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.35, marginBottom: 8, minHeight: 13 }}>
             {progress.total === 0
               ? "No matches drawn for this round yet."
               : progress.complete
@@ -489,7 +489,7 @@ function FinalizeRoundCard({ round, nextRound, lastFinal, progress, tPlayers, on
             border: progress.complete ? "none" : `1px solid ${BC.amber}66`,
             background: progress.complete ? BC.amber : "transparent",
             color: progress.complete ? "#0a0804" : BC.amber,
-            fontSize: 13, fontWeight: 800, letterSpacing: 0.5, opacity: busy ? 0.6 : 1,
+            fontSize: FS.body, fontWeight: 800, letterSpacing: 0.5, opacity: busy ? 0.6 : 1,
           }}>
             {busy ? "Working…" : `Finalize Round ${round}`}
           </button>
@@ -497,7 +497,7 @@ function FinalizeRoundCard({ round, nextRound, lastFinal, progress, tPlayers, on
       )}
 
       {round == null && (
-        <div style={{ fontSize: 11, color: BC.t2, lineHeight: 1.4, marginBottom: lastFinal != null ? 8 : 0 }}>
+        <div style={{ fontSize: FS.small, color: BC.t2, lineHeight: 1.4, marginBottom: lastFinal != null ? 8 : 0 }}>
           Every round is final. Scoring is closed for the tournament.
         </div>
       )}
@@ -508,7 +508,7 @@ function FinalizeRoundCard({ round, nextRound, lastFinal, progress, tPlayers, on
         <button onClick={doReopen} disabled={busy} style={{
           width: "100%", padding: "8px 0", marginTop: 8, borderRadius: 8,
           background: "transparent", border: "none", color: BC.t3,
-          fontSize: 11, fontWeight: 700, cursor: busy ? "default" : "pointer",
+          fontSize: FS.small, fontWeight: 700, cursor: busy ? "default" : "pointer",
           textDecoration: "underline", textUnderlineOffset: 3,
         }}>
           Reopen Round {lastFinal}
@@ -775,9 +775,9 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   );
   const empty = (icon, title, sub) => shell(
     <div style={{ textAlign: "center", padding: "40px 20px", color: BC.t3 }}>
-      <div style={{ fontSize: 32, marginBottom: 12 }}>{icon}</div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: BC.t2, marginBottom: 4 }}>{title}</div>
-      {sub && <div style={{ fontSize: 12, lineHeight: 1.45 }}>{sub}</div>}
+      <div style={{ fontSize: FS.display, marginBottom: 12 }}>{icon}</div>
+      <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.t2, marginBottom: 4 }}>{title}</div>
+      {sub && <div style={{ fontSize: FS.small, lineHeight: 1.45 }}>{sub}</div>}
     </div>
   );
 
@@ -918,7 +918,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     if (!hr.played) {
       const someScored = matchPids.some(pid => getScore(pid, i) > 0);
       if (someScored && i !== activeHole) {
-        return shell(<div title="Missing score" style={{ textAlign: "center", fontSize: 12, opacity: 0.55, lineHeight: 1 }}>⚠️</div>);
+        return shell(<div title="Missing score" style={{ textAlign: "center", fontSize: FS.small, opacity: 0.55, lineHeight: 1 }}>⚠️</div>);
       }
       return shell(null);
     }
@@ -929,10 +929,10 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     return shell(
       <>
         <div style={{ height: barH, borderRadius: 3, boxSizing: "border-box", ...holeFill(hr, scoredFormat) }} />
-        <div style={{ textAlign: "center", fontSize: 13, fontWeight: 800, color, lineHeight: 1 }}>
+        <div style={{ textAlign: "center", fontSize: FS.body, fontWeight: 800, color, lineHeight: 1 }}>
           {fromUserView > 0 ? <>▲{fromUserView}</>
             : fromUserView < 0 ? <>▼{Math.abs(fromUserView)}</>
-            : <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.5 }}>TIED</span>}
+            : <span style={{ fontSize: FS.micro, fontWeight: 700, letterSpacing: 0.5 }}>TIED</span>}
         </div>
       </>
     );
@@ -953,7 +953,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
         border: allScored && !cur ? `1.5px solid ${BC.amber}50` : "none",
         background: cur ? BC.amber : allScored ? BC.amber + "15" : partial ? BC.amber + "0a" : BC.card,
         color: cur ? "#0a0804" : allScored ? BC.amber : BC.t3,
-        fontSize: 15, fontWeight: 700, cursor: "pointer",
+        fontSize: FS.lead, fontWeight: 700, cursor: "pointer",
         outline: cur ? `2px solid ${BC.amber}` : "none", outlineOffset: 1,
       }}>{h + 1}</button>
     );
@@ -973,7 +973,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
               // leaving it to the effect below would paint the outgoing hole
               // for a frame first, the same flash returning to the tab had.
               <button key={m.id} onClick={() => { setActiveMatchId(m.id); positionOn(m); }} style={{
-                flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: FS.small, fontWeight: 700, cursor: "pointer",
                 background: active ? BC.amberDim : BC.card,
                 border: `1px solid ${active ? BC.amberDim : BC.bdr}`,
                 color: active ? "#fff" : BC.t2,
@@ -1008,7 +1008,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
       <button onClick={() => setShowScorecard(true)} style={{
         width: "100%", padding: "5px 0", borderRadius: 8, marginBottom: 4, cursor: "pointer",
         background: BC.card, border: `1px solid ${BC.bdr}60`, color: BC.t2,
-        fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
+        fontSize: FS.small, fontWeight: 700, letterSpacing: 0.5,
       }}>
         Full Scorecard
       </button>
@@ -1022,27 +1022,27 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
         <button onClick={() => goToHole(Math.max(0, activeHole - 1))} disabled={activeHole === 0} style={{
           width: 28, height: 36, borderRadius: 8, background: "none", border: "none",
           cursor: activeHole === 0 ? "default" : "pointer",
-          color: activeHole === 0 ? "rgba(255,255,255,0.35)" : "#fff", fontSize: 18, fontWeight: 700,
+          color: activeHole === 0 ? "rgba(255,255,255,0.35)" : "#fff", fontSize: FS.title, fontWeight: 700,
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>‹</button>
         <div style={{ flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 8px" }}>
           <div style={{ textAlign: "center", minWidth: 32 }}>
-            <div style={{ fontSize: 8, color: "#fff", fontWeight: 600, opacity: 0.75 }}>Par</div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: "#fff" }}>{par}</div>
+            <div style={{ fontSize: FS.micro, color: "#fff", fontWeight: 600, opacity: 0.75 }}>Par</div>
+            <div style={{ fontSize: FS.lead, fontWeight: 800, color: "#fff" }}>{par}</div>
           </div>
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 8, color: "#fff", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, opacity: 0.75 }}>Hole</div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: "#fff", lineHeight: 1 }}>{activeHole + 1}</div>
+            <div style={{ fontSize: FS.micro, color: "#fff", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, opacity: 0.75 }}>Hole</div>
+            <div style={{ fontSize: FS.hero, fontWeight: 800, color: "#fff", lineHeight: 1 }}>{activeHole + 1}</div>
           </div>
           <div style={{ textAlign: "center", minWidth: 32 }}>
-            <div style={{ fontSize: 8, color: "#fff", fontWeight: 600, opacity: 0.75 }}>HCP</div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: "#fff" }}>{hcp}</div>
+            <div style={{ fontSize: FS.micro, color: "#fff", fontWeight: 600, opacity: 0.75 }}>HCP</div>
+            <div style={{ fontSize: FS.lead, fontWeight: 800, color: "#fff" }}>{hcp}</div>
           </div>
         </div>
         <button onClick={() => goToHole(Math.min(17, activeHole + 1))} disabled={activeHole === 17} style={{
           width: 28, height: 36, borderRadius: 8, background: "none", border: "none",
           cursor: activeHole === 17 ? "default" : "pointer",
-          color: activeHole === 17 ? "rgba(255,255,255,0.35)" : "#fff", fontSize: 18, fontWeight: 700,
+          color: activeHole === 17 ? "rgba(255,255,255,0.35)" : "#fff", fontSize: FS.title, fontWeight: 700,
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>›</button>
       </div>
@@ -1050,7 +1050,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
       {/* Format / round badge — small sticker between banner and player cards.
           Tells the user what scoring format their entries are being judged
           against. Useful since this app supports multiple formats per round. */}
-      <div style={{ fontSize: 9, color: BC.t3, fontWeight: 700, letterSpacing: 1, padding: "2px 4px", marginBottom: 4 }}>
+      <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1, padding: "2px 4px", marginBottom: 4 }}>
         {(FORMATS.find(f => f.id === format)?.label || "MATCH PLAY").toUpperCase()}
         {" · "}
         {/* A best-ball override changes what the format's name means, so it is
@@ -1092,7 +1092,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           background: nm ? BC.amberGlow : BC.card,
           border: `1px solid ${nm ? BC.amber + "55" : BC.bdr}60`,
           color: nm ? BC.amber : BC.t3,
-          fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+          fontSize: FS.label, fontWeight: 700, letterSpacing: 0.5,
         };
         return settled
           ? <div style={style}>{label}</div>
@@ -1154,17 +1154,17 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
                   which over four cards is most of the difference between the
                   scoring screen fitting a phone and having to be scrolled. */}
               <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 4, minWidth: 0 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: BC.t1, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>{tp?.name || pid}</span>
-                <span title={chTitle} style={{ fontSize: 11, fontWeight: 700, color: BC.hcpBlue, flexShrink: 0 }}>
+                <span style={{ fontSize: FS.body, fontWeight: 700, color: BC.t1, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>{tp?.name || pid}</span>
+                <span title={chTitle} style={{ fontSize: FS.small, fontWeight: 700, color: BC.hcpBlue, flexShrink: 0 }}>
                   ({ch}{reduced ? "*" : ""})
                 </span>
                 {strokes > 0 && (
-                  <span style={{ color: BC.hcpBlue, fontSize: 12, letterSpacing: 1, flexShrink: 0, lineHeight: 1 }}>
+                  <span style={{ color: BC.hcpBlue, fontSize: FS.small, letterSpacing: 1, flexShrink: 0, lineHeight: 1 }}>
                     {"●".repeat(strokes)}
                   </span>
                 )}
                 {thru > 0 && (
-                  <span style={{ marginLeft: "auto", paddingLeft: 8, fontSize: 10, color: BC.t3, lineHeight: 1.1, whiteSpace: "nowrap", flexShrink: 0 }}>
+                  <span style={{ marginLeft: "auto", paddingLeft: 8, fontSize: FS.label, color: BC.t3, lineHeight: 1.1, whiteSpace: "nowrap", flexShrink: 0 }}>
                     Net <strong style={{ color: netToPar < 0 ? BC.danger : netToPar === 0 ? BC.t3 : BC.t1, fontWeight: 700 }}>
                       {fmtScore(netToPar)}
                     </strong> thru {thru}
@@ -1183,11 +1183,11 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
         <Popup onClose={() => setShowScorecard(false)} maxWidth={480} padding={0} outerPadding={12}
           innerStyle={{ background: BC.card, border: `1px solid ${BC.amber}44`, borderRadius: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderBottom: `1px solid ${BC.bdr}` }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>
+            <div style={{ fontSize: FS.small, fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>
               SCORECARD — RD {match.round}{match.matchNumber ? ` · MATCH ${match.matchNumber}` : ""}
             </div>
             <button onClick={() => setShowScorecard(false)} style={{
-              background: "transparent", border: "none", color: BC.t2, fontSize: 18, cursor: "pointer", padding: "0 4px",
+              background: "transparent", border: "none", color: BC.t2, fontSize: FS.title, cursor: "pointer", padding: "0 4px",
             }}>×</button>
           </div>
           <div style={{ padding: 12 }}>
@@ -1196,7 +1196,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           <button onClick={() => setShowScorecard(false)} style={{
             display: "block", width: "calc(100% - 24px)", margin: "0 auto 12px",
             padding: "10px 0", background: BC.inp, border: `1px solid ${BC.bdr}`,
-            borderRadius: 8, color: BC.t2, fontSize: 13, fontWeight: 600,
+            borderRadius: 8, color: BC.t2, fontSize: FS.body, fontWeight: 600,
             cursor: "pointer", letterSpacing: 0.4,
           }}>
             Close
@@ -1234,7 +1234,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
 // The team name over each side of a match card. Small caps in the team's own
 // color; `color` is supplied per side by the caller.
 const teamTagStyle = {
-  fontSize: 8, fontWeight: 800, letterSpacing: 0.8, marginBottom: 3,
+  fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.8, marginBottom: 3,
   textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden",
   textOverflow: "ellipsis",
 };
@@ -1334,7 +1334,7 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
             const active = r === activeRound;
             return (
               <button key={r} onClick={() => setPickedRound(r)} style={{
-                flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: FS.small, fontWeight: 700, cursor: "pointer",
                 background: active ? BC.amberDim : BC.card,
                 border: `1px solid ${active ? BC.amberDim : BC.bdr}`,
                 color: active ? "#fff" : BC.t2,
@@ -1351,15 +1351,15 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
       <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 12, overflow: "hidden" }}>
         <Banner>ROUND {activeRound}</Banner>
         <div style={{ padding: "10px 14px" }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: BC.t1 }}>{course?.name || "Course TBD"}</div>
-          {fmt && <div style={{ fontSize: 11, color: BC.t3, marginTop: 2 }}>{fmt.label}{fmt.desc ? ` · ${fmt.desc}` : ""}</div>}
+          <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.t1 }}>{course?.name || "Course TBD"}</div>
+          {fmt && <div style={{ fontSize: FS.small, color: BC.t3, marginTop: 2 }}>{fmt.label}{fmt.desc ? ` · ${fmt.desc}` : ""}</div>}
           {/* On Team Best Ball the format's own description can't say what the
               round actually counts — that number is per round. Stated here so a
               player reading the tee sheet knows whether their card has to be
               one of six or one of seven. */}
-          {countingLine && <div style={{ fontSize: 11, color: BC.amber, marginTop: 2, fontWeight: 700 }}>{countingLine}</div>}
-          {holePointsLine && <div style={{ fontSize: 11, color: BC.amber, marginTop: 2, fontWeight: 700 }}>{holePointsLine}</div>}
-          {firstTee && <div style={{ fontSize: 11, color: BC.amber, marginTop: 4, fontWeight: 700 }}>First Tee: {firstTee}</div>}
+          {countingLine && <div style={{ fontSize: FS.small, color: BC.amber, marginTop: 2, fontWeight: 700 }}>{countingLine}</div>}
+          {holePointsLine && <div style={{ fontSize: FS.small, color: BC.amber, marginTop: 2, fontWeight: 700 }}>{holePointsLine}</div>}
+          {firstTee && <div style={{ fontSize: FS.small, color: BC.amber, marginTop: 4, fontWeight: 700 }}>First Tee: {firstTee}</div>}
         </div>
       </div>
 
@@ -1370,7 +1370,7 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
         <div style={{
           background: BC.card, borderRadius: 12, border: `1px dashed ${BC.bdr}`,
           padding: "28px 20px", textAlign: "center",
-          fontSize: 12, fontWeight: 700, letterSpacing: 0.4, color: BC.t3,
+          fontSize: FS.small, fontWeight: 700, letterSpacing: 0.4, color: BC.t3,
         }}>
           No pairings yet
         </div>
@@ -1386,7 +1386,7 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
         const teeTime = teeTimeForMatch({ groups, times, match: m });
         return (
         <div key={m.id} style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: "12px 14px", marginBottom: 8 }}>
-          <div style={{ fontSize: 9, color: BC.t3, marginBottom: 8, fontWeight: 800, letterSpacing: 1 }}>
+          <div style={{ fontSize: FS.label, color: BC.t3, marginBottom: 8, fontWeight: 800, letterSpacing: 1 }}>
             MATCH {m.matchNumber ?? i + 1}{teeTime ? `  ·  ${teeTime}` : ""}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10 }}>
@@ -1394,16 +1394,16 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
             <div style={{ minWidth: 0, textAlign: "left", borderLeft: `3px solid ${teamColor("A")}`, paddingLeft: 8 }}>
               <div style={{ ...teamTagStyle, color: teamColor("A") }}>{teams?.A?.name || "Team A"}</div>
               {m.teamA.map(pid => (
-                <div key={pid} style={{ fontSize: 13, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{nameOf(pid)}</div>
+                <div key={pid} style={{ fontSize: FS.body, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{nameOf(pid)}</div>
               ))}
             </div>
             {/* vs */}
-            <div style={{ fontSize: 11, color: BC.t3, fontWeight: 700, padding: "0 4px" }}>vs</div>
+            <div style={{ fontSize: FS.small, color: BC.t3, fontWeight: 700, padding: "0 4px" }}>vs</div>
             {/* Team B — its color rail RIGHT */}
             <div style={{ minWidth: 0, textAlign: "right", borderRight: `3px solid ${teamColor("B")}`, paddingRight: 8 }}>
               <div style={{ ...teamTagStyle, color: teamColor("B") }}>{teams?.B?.name || "Team B"}</div>
               {m.teamB.map(pid => (
-                <div key={pid} style={{ fontSize: 13, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{nameOf(pid)}</div>
+                <div key={pid} style={{ fontSize: FS.body, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{nameOf(pid)}</div>
               ))}
             </div>
           </div>
@@ -1417,11 +1417,11 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
           <Banner>TEE SHEET</Banner>
           {groups.map((g, gi) => (
             <div key={gi} style={{ padding: "9px 14px", borderTop: gi ? `1px solid ${BC.bdr}44` : "none", display: "flex", gap: 10, alignItems: "baseline" }}>
-              <div style={{ fontSize: 11, fontWeight: 800, color: BC.amber, flexShrink: 0, minWidth: 64 }}>{times[gi] || `G${gi + 1}`}</div>
+              <div style={{ fontSize: FS.small, fontWeight: 800, color: BC.amber, flexShrink: 0, minWidth: 64 }}>{times[gi] || `G${gi + 1}`}</div>
               {/* A group mixes the two sides, so the names carry their own
                   team color as a dot rather than the row carrying one. Reads
                   the 2v2 split of a foursome at a glance. */}
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "3px 10px", fontSize: 12, color: BC.t1, lineHeight: 1.4 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "3px 10px", fontSize: FS.small, color: BC.t1, lineHeight: 1.4 }}>
                 {g.map(pid => {
                   const tid = teamOf(pid);
                   return (
@@ -1580,9 +1580,9 @@ function RoundSectionHeading({ children, hint, first }) {
       paddingTop: first ? 0 : 12,
       borderTop: first ? "none" : `1px solid ${BC.bdr}`,
     }}>
-      <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.4, color: BC.gold }}>{children}</div>
+      <div style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 1.4, color: BC.gold }}>{children}</div>
       {hint && (
-        <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5, marginTop: 3 }}>{hint}</div>
+        <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5, marginTop: 3 }}>{hint}</div>
       )}
     </div>
   );
@@ -1595,7 +1595,7 @@ function ChDeltaBadge({ delta }) {
   return (
     <span style={{
       display: "inline-flex", alignItems: "center", gap: 1,
-      fontSize: 9, fontWeight: 800,
+      fontSize: FS.label, fontWeight: 800,
       color: up ? "#22c55e" : "#ef4444",
       animation: "fadeIn 0.2s ease",
     }}>
@@ -2005,9 +2005,9 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
   if (!user.isDirector) return (
     <div style={{ textAlign: "center", padding: 40 }}>
-      <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
-      <div style={{ fontSize: 16, fontWeight: 700, color: BC.t1 }}>Directors Only</div>
-      <div style={{ fontSize: 12, color: BC.t3, marginTop: 8 }}>Only tournament directors can manage settings.</div>
+      <div style={{ fontSize: FS.jumbo, marginBottom: 12 }}>🔒</div>
+      <div style={{ fontSize: FS.lead, fontWeight: 700, color: BC.t1 }}>Directors Only</div>
+      <div style={{ fontSize: FS.small, color: BC.t3, marginTop: 8 }}>Only tournament directors can manage settings.</div>
     </div>
   );
 
@@ -2123,9 +2123,9 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
     }, 400);
   };
 
-  const InputStyle = { width: "100%", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: 13, boxSizing: "border-box", outline: "none", fontFamily: "'Montserrat', sans-serif" };
-  const LabelStyle = { fontSize: 10, color: BC.t3, fontWeight: 700, letterSpacing: 1, marginBottom: 4, display: "block" };
-  const BtnStyle = { padding: "10px 20px", borderRadius: 10, border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer", background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`, color: "#0a0804" };
+  const InputStyle = { width: "100%", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.body, boxSizing: "border-box", outline: "none", fontFamily: "'Montserrat', sans-serif" };
+  const LabelStyle = { fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1, marginBottom: 4, display: "block" };
+  const BtnStyle = { padding: "10px 20px", borderRadius: 10, border: "none", fontSize: FS.body, fontWeight: 700, cursor: "pointer", background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`, color: "#0a0804" };
 
   return (
     <div style={{ fontFamily: "'Montserrat', sans-serif" }}>
@@ -2138,7 +2138,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
       <div style={{ display: "flex", gap: 4, background: BC.card, borderRadius: 12, padding: 4, border: `1px solid ${BC.bdr}` }}>
         {[["players","Players"],["rounds","Rounds"],["matches","Matches"],["courses","Courses"],["tournament","Tournament"]].map(([k, lbl]) => (
           <button key={k} onClick={() => setTab(k)} style={{
-            flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: 10, fontWeight: 700, cursor: "pointer", border: "none",
+            flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: FS.label, fontWeight: 700, cursor: "pointer", border: "none",
             background: tab === k ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
             color: tab === k ? "#0a0804" : BC.t3,
           }}>{lbl}</button>
@@ -2150,7 +2150,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
         <div>
           {/* Right-aligned batch GHIN re-sync (prompt-gated). */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, padding: "0 9px", marginBottom: 8 }}>
-            <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.6, color: BC.t3, textTransform: "uppercase", whiteSpace: "nowrap" }}>GHIN sync</span>
+            <span style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 0.6, color: BC.t3, textTransform: "uppercase", whiteSpace: "nowrap" }}>GHIN sync</span>
             <GhinSyncButton players={tPlayers} onUpdatePlayer={onUpdatePlayer} notify={notify} confirm={confirm} compact />
           </div>
           {[teams.A, teams.B].map(team => (
@@ -2177,13 +2177,13 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       }
                       if (e.key === "Escape") setEditingTeam(null);
                     }}
-                    style={{ flex: 1, background: "transparent", border: "none", borderBottom: `1px solid ${team.accent}`, color: team.accent, fontSize: 11, fontWeight: 800, letterSpacing: 1, outline: "none", textTransform: "uppercase" }}
+                    style={{ flex: 1, background: "transparent", border: "none", borderBottom: `1px solid ${team.accent}`, color: team.accent, fontSize: FS.small, fontWeight: 800, letterSpacing: 1, outline: "none", textTransform: "uppercase" }}
                   />
                 ) : (
                   <span
                     onClick={() => setEditingTeam(team.id)}
                     title="Click to edit team name"
-                    style={{ fontSize: 11, fontWeight: 800, color: team.accent, letterSpacing: 1, flex: 1, cursor: "pointer" }}
+                    style={{ fontSize: FS.small, fontWeight: 800, color: team.accent, letterSpacing: 1, flex: 1, cursor: "pointer" }}
                   >{teamNames[team.id].toUpperCase()}</span>
                 )}
                 {/* + Add button inline with team name */}
@@ -2193,7 +2193,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   style={{
                     padding: "3px 10px", borderRadius: 8, border: `1px solid ${team.accent}66`,
                     background: "transparent", color: team.accent,
-                    fontSize: 16, fontWeight: 700, cursor: "pointer", lineHeight: 1, flexShrink: 0,
+                    fontSize: FS.lead, fontWeight: 700, cursor: "pointer", lineHeight: 1, flexShrink: 0,
                   }}>+</button>
               </div>
 
@@ -2205,27 +2205,27 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 return (
                   <div key={p.player_id} style={{ background: BC.card, borderRadius: 6, padding: "4px 8px", border: `1px solid ${BC.bdr}`, display: "flex", flexDirection: "row", alignItems: "center", gap: 6, boxShadow: `inset 3px 0 0 ${team.accent}55`, marginBottom: 2 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 5, flexBasis: "52%", flexGrow: 0, flexShrink: 1, minWidth: 0 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: playerNameColor(), minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fullName(p)}</span>
-                      {p.isDirector && <span title="Tournament director" style={{ fontSize: 11, flexShrink: 0, lineHeight: 1 }}>👑</span>}
+                      <span style={{ fontSize: FS.small, fontWeight: 600, color: playerNameColor(), minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fullName(p)}</span>
+                      {p.isDirector && <span title="Tournament director" style={{ fontSize: FS.small, flexShrink: 0, lineHeight: 1 }}>👑</span>}
                     </div>
                     {/* Index column doubles as the sync-status glyph: amber * =
                         override, blue G = synced from GHIN, plain = manual. */}
                     <span title={overridden ? `Director override — GHIN/base index is ${p.handicap_index}` : (synced ? "Synced from GHIN" : "Manual index")}
                       style={{ display: "inline-flex", alignItems: "center", gap: 4, width: 56, flexShrink: 0 }}>
-                      <span style={{ fontSize: 12, fontWeight: overridden ? 700 : 500, color: overridden ? BC.amber : playerNameColor() }}>
+                      <span style={{ fontSize: FS.small, fontWeight: overridden ? 700 : 500, color: overridden ? BC.amber : playerNameColor() }}>
                         {effHI}{overridden ? "*" : ""}
                       </span>
-                      {synced && <span style={{ fontSize: 7, fontWeight: 800, letterSpacing: 0.2, color: BC.hcpBlue, border: `1px solid ${BC.hcpBlue}66`, background: BC.hcpBlue + "1f", borderRadius: 3, padding: "1px 3px", lineHeight: 1 }}>G</span>}
+                      {synced && <span style={{ fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.2, color: BC.hcpBlue, border: `1px solid ${BC.hcpBlue}66`, background: BC.hcpBlue + "1f", borderRadius: 3, padding: "1px 3px", lineHeight: 1 }}>G</span>}
                     </span>
                     <span style={{ flex: 1, minWidth: 8 }} />
                     <button onClick={() => setEditingPlayer({ pid: p.player_id, first: p.first_name || (p.last_name ? "" : (p.name || "")), last: p.last_name || "", nick: p.name || "", hi: String(p.handicap_index), ov: (p.hi_override != null && String(p.hi_override).trim() !== "") ? String(p.hi_override) : "", dir: !!p.isDirector })} style={{
-                      fontSize: 9, padding: "2px 8px", borderRadius: 4, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer", flexShrink: 0,
+                      fontSize: FS.label, padding: "2px 8px", borderRadius: 4, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer", flexShrink: 0,
                     }}>Edit</button>
                   </div>
                 );
               })}
               {tPlayers.filter(p => p.team === team.id).length === 0 && (
-                <div style={{ color: BC.t3, fontSize: 11, padding: "6px 10px" }}>No players yet.</div>
+                <div style={{ color: BC.t3, fontSize: FS.small, padding: "6px 10px" }}>No players yet.</div>
               )}
             </div>
           ))}
@@ -2242,10 +2242,11 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             const linked = !!editingPlayer.ghin_number;
             const close = () => setEditingPlayer(null);
             const set = (patch) => setEditingPlayer(prev => prev ? { ...prev, ...patch } : prev);
-            const lbl = { fontSize: 8, fontWeight: 800, letterSpacing: 0.5, color: BC.t3, textTransform: "uppercase", marginBottom: 3, display: "block" };
-            // Input font stays 16px on purpose — anything smaller makes iOS
-            // Safari zoom the page on focus. Height is condensed via padding.
-            const inp = { fontSize: 16, fontWeight: 600, color: BC.t1, width: "100%", boxSizing: "border-box", background: BC.inp, border: `1px solid ${acc}55`, borderRadius: 8, padding: "7px 10px", outline: "none", fontFamily: "'Montserrat', sans-serif" };
+            const lbl = { fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.5, color: BC.t3, textTransform: "uppercase", marginBottom: 3, display: "block" };
+            // Input font stays at FS.lead (16px) on purpose — anything
+            // smaller makes iOS Safari zoom the page on focus. Height is
+            // condensed via padding, not by dropping a rung.
+            const inp = { fontSize: FS.lead, fontWeight: 600, color: BC.t1, width: "100%", boxSizing: "border-box", background: BC.inp, border: `1px solid ${acc}55`, borderRadius: 8, padding: "7px 10px", outline: "none", fontFamily: "'Montserrat', sans-serif" };
             // GHIN link/sync/unlink writes ONLY into the form here (never the db
             // directly) — the whole modal commits on Save, so add & edit behave
             // identically and Cancel truly discards. `formPlayer` gives
@@ -2316,8 +2317,8 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               <Popup onClose={close} portal viewportFit align="start" maxWidth={420} padding={0} outerPadding={12}
                 innerStyle={{ background: BC.card, borderRadius: 16, display: "flex", flexDirection: "column", fontFamily: "'Montserrat', sans-serif" }}>
                 <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 10, padding: "13px 16px", borderBottom: `1px solid ${BC.bdr}` }}>
-                  <div style={{ flex: 1, fontSize: 14, fontWeight: 800, color: BC.t1 }}>{isNew ? "Add Player" : "Edit Player"}</div>
-                  <button onClick={close} aria-label="Close" style={{ width: 32, height: 32, borderRadius: 9, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t2, fontSize: 16, cursor: "pointer", lineHeight: 1 }}>✕</button>
+                  <div style={{ flex: 1, fontSize: FS.body, fontWeight: 800, color: BC.t1 }}>{isNew ? "Add Player" : "Edit Player"}</div>
+                  <button onClick={close} aria-label="Close" style={{ width: 32, height: 32, borderRadius: 9, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t2, fontSize: FS.lead, cursor: "pointer", lineHeight: 1 }}>✕</button>
                 </div>
                 <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", padding: 14, display: "flex", flexDirection: "column", gap: 11 }}>
                   <div style={{ display: "flex", gap: 8 }}>
@@ -2333,7 +2334,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <span style={lbl}>Director</span>
                       <button type="button" onClick={() => set({ dir: !editingPlayer.dir })}
-                        style={{ fontSize: 14, fontWeight: 700, padding: "7px 10px", borderRadius: 8, cursor: "pointer", width: "100%", boxSizing: "border-box", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                        style={{ fontSize: FS.body, fontWeight: 700, padding: "7px 10px", borderRadius: 8, cursor: "pointer", width: "100%", boxSizing: "border-box", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                           border: `1px solid ${editingPlayer.dir ? BC.amber : BC.bdr}`, background: editingPlayer.dir ? BC.amber + "18" : "transparent", color: editingPlayer.dir ? BC.amber : BC.t2 }}>
                         {editingPlayer.dir ? "👑 Director" : "Player"}
                       </button>
@@ -2381,11 +2382,11 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         msg.push("", `${scored.reduce((n, s) => n + s.holes, 0)} scored hole${scored.reduce((n, s) => n + s.holes, 0) === 1 ? "" : "s"} stay in the database (${scored.map(s => `Rd ${s.r}: ${s.holes}`).join(", ")}).`);
                       }
                       if (await confirm({ title: `Remove ${fullName(p)}?`, message: msg.join("\n"), confirmLabel: "Delete", destructive: true })) { onRemovePlayer(p.player_id); close(); } }}
-                      title="Delete player" style={{ flexShrink: 0, padding: "9px 11px", borderRadius: 10, background: "transparent", border: `1px solid ${BC.danger}55`, color: BC.danger, fontSize: 14, fontWeight: 700, cursor: "pointer", lineHeight: 1 }}>🗑</button>
+                      title="Delete player" style={{ flexShrink: 0, padding: "9px 11px", borderRadius: 10, background: "transparent", border: `1px solid ${BC.danger}55`, color: BC.danger, fontSize: FS.body, fontWeight: 700, cursor: "pointer", lineHeight: 1 }}>🗑</button>
                   )}
                   <span style={{ flex: 1 }} />
-                  <button onClick={close} style={{ padding: "10px 16px", borderRadius: 10, background: BC.inp, border: `1px solid ${BC.bdr}`, color: BC.t2, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
-                  <button onClick={doSave} style={{ padding: "10px 20px", borderRadius: 10, background: acc, border: "none", color: "#0a0804", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>{isNew ? "Add" : "Save"}</button>
+                  <button onClick={close} style={{ padding: "10px 16px", borderRadius: 10, background: BC.inp, border: `1px solid ${BC.bdr}`, color: BC.t2, fontSize: FS.body, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+                  <button onClick={doSave} style={{ padding: "10px 20px", borderRadius: 10, background: acc, border: "none", color: "#0a0804", fontSize: FS.body, fontWeight: 800, cursor: "pointer" }}>{isNew ? "Add" : "Save"}</button>
                 </div>
               </Popup>
             );
@@ -2402,7 +2403,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 the previous round's settings on screen. */}
             {[1,2,3,4].map(r => (
               <button key={r} onClick={() => setEditRound(r)} style={{
-                flex: 1, padding: "8px 4px", borderRadius: 10, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                flex: 1, padding: "8px 4px", borderRadius: 10, fontSize: FS.small, fontWeight: 700, cursor: "pointer",
                 background: editRound === r ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
                 border: `1px solid ${editRound === r ? "transparent" : BC.bdr}`,
                 color: editRound === r ? "#0a0804" : BC.t2,
@@ -2416,7 +2417,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             {/* Format + Course — 2 col compact, matched sizing */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, marginBottom: 6 }}>FORMAT</div>
+                <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.gold, marginBottom: 6 }}>FORMAT</div>
                 <select value={roundFormat} onChange={e => {
                   // Picking a format re-seeds every decision that follows from
                   // it. Nothing survives the change that the new format would
@@ -2439,18 +2440,18 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   setCounting(null);
                   setHolePoints(null);
                   setStablefordPoints(null);
-                }} style={{ ...InputStyle, marginBottom: 0, fontSize: 12, padding: "8px 8px", height: 38 }}>
+                }} style={{ ...InputStyle, marginBottom: 0, fontSize: FS.small, padding: "8px 8px", height: 38 }}>
                   <option value="">Select...</option>
                   {FORMATS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
                 </select>
               </div>
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, marginBottom: 6 }}>COURSE</div>
+                <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.gold, marginBottom: 6 }}>COURSE</div>
                 {(() => {
                   const tr = tRounds.find(t => t.round_number === editRound);
                   const course = courses.find(c => c.id === tr?.course_id);
                   return (
-                    <div style={{ padding: "8px 8px", background: BC.inp, borderRadius: 8, border: `1px solid ${BC.bdr}`, fontSize: 12, color: course ? BC.t1 : BC.t3, height: 38, display: "flex", alignItems: "center", overflow: "hidden" }}>
+                    <div style={{ padding: "8px 8px", background: BC.inp, borderRadius: 8, border: `1px solid ${BC.bdr}`, fontSize: FS.small, color: course ? BC.t1 : BC.t3, height: 38, display: "flex", alignItems: "center", overflow: "hidden" }}>
                       {course ? <span style={{ fontWeight: 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{course.name}</span> : <span>Set in Courses tab</span>}
                     </div>
                   );
@@ -2466,7 +2467,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               const fmt = FORMATS.find(f => f.id === formRound.format);
               if (!fmt) return null;
               return (
-                <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5, marginBottom: 10 }}>{fmt.desc}</div>
+                <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5, marginBottom: 10 }}>{fmt.desc}</div>
               );
             })()}
 
@@ -2520,10 +2521,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               const tt = roundTeeTime ? roundTeeTime.split("|") : ["","","",""];
               return (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>TEE TIMES</div>
+                  <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>TEE TIMES</div>
                   {Array.from({ length: slots }, (_, i) => (
                     <div key={i} style={{ flex: 1, display: "flex", alignItems: "center", gap: 3 }}>
-                      <span style={{ fontSize: 9, color: BC.t3, flexShrink: 0, fontWeight: 600 }}>G{i + 1}</span>
+                      <span style={{ fontSize: FS.label, color: BC.t3, flexShrink: 0, fontWeight: 600 }}>G{i + 1}</span>
                       <input
                         value={stripAMPM(tt[i] || "")}
                         onChange={e => { const times = [...tt]; times[i] = e.target.value; setRoundTeeTime(times.join("|")); }}
@@ -2531,7 +2532,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         onKeyDown={e => { if (e.key === "Enter") { e.target.blur(); } }}
                         placeholder=""
                         inputMode="numeric"
-                        style={{ ...InputStyle, marginBottom: 0, fontSize: 16, padding: "4px 3px", textAlign: "center", minWidth: 0, transform: "scale(0.85)", transformOrigin: "center" }}
+                        style={{ ...InputStyle, marginBottom: 0, fontSize: FS.lead, padding: "4px 3px", textAlign: "center", minWidth: 0, transform: "scale(0.85)", transformOrigin: "center" }}
                       />
                     </div>
                   ))}
@@ -2576,7 +2577,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               // resolves to best-ball holes, and it can land on a format that
               // has no menu to show it in.
               const stray = fixed && holeScoring === HOLE_SCORING_BEST_BALL;
-              const lbl = <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>HOLE SCORE</div>;
+              const lbl = <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>HOLE SCORE</div>;
               // A fixed format states its rule and asks nothing — unless the
               // round arrived already overridden. Hiding the control there
               // would leave a setting that is actively scoring the round with
@@ -2586,7 +2587,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 return (
                   <div style={{ marginBottom: 12, display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
                     {lbl}
-                    <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5 }}>{describeHoleScore(fmtId, holeScoring)}</div>
+                    <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5 }}>{describeHoleScore(fmtId, holeScoring)}</div>
                   </div>
                 );
               }
@@ -2600,7 +2601,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 : options.map(m => ({ id: m, label: HOLE_METHOD_LABELS[m] || m, value: m }));
               const current = stray ? HOLE_SCORING_BEST_BALL : resolveHoleMethod(fmtId, holeScoring);
               const bbPill = (active) => ({
-                padding: "4px 12px", borderRadius: 16, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
+                padding: "4px 12px", borderRadius: 16, fontSize: FS.label, fontWeight: 700, border: "none", cursor: "pointer",
                 background: active ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
                 color: active ? "#0a0804" : BC.t3,
               });
@@ -2616,7 +2617,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       ))}
                     </div>
                   </div>
-                  <div style={{ fontSize: 9, color: stray ? BC.amber : BC.t3, lineHeight: 1.5, marginTop: 5 }}>
+                  <div style={{ fontSize: FS.label, color: stray ? BC.amber : BC.t3, lineHeight: 1.5, marginTop: 5 }}>
                     {stray
                       ? `This round is overriding ${fmt?.label || "the format"} and scoring each hole as the side's best net ball. Pick ${fmt?.label || "the format"} to score it as its own name says.`
                       : describeHoleScore(fmtId, holeScoring)}
@@ -2679,14 +2680,14 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 const flat = countingNine(cur, back);
                 return (
                   <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <span title={hint} style={{ fontSize: 9, color: BC.t3, flexShrink: 0, fontWeight: 600 }}>{lbl}</span>
+                    <span title={hint} style={{ fontSize: FS.label, color: BC.t3, flexShrink: 0, fontWeight: 600 }}>{lbl}</span>
                     <input
                       type="number" step="1" min="1" max="20"
                       value={flat == null ? "" : String(flat)}
                       placeholder="—"
                       onChange={e => setNine(back, e.target.value)}
                       onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
-                      style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: 14, textAlign: "center", width: 44 }} />
+                      style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: FS.body, textAlign: "center", width: 44 }} />
                   </div>
                 );
               };
@@ -2699,14 +2700,14 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     const capped = sideSize > 0 && cur[h] > sideSize;
                     return (
                       <div key={h} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
-                        <span style={{ fontSize: 8, color: BC.t3, fontWeight: 700 }}>{h + 1}</span>
+                        <span style={{ fontSize: FS.micro, color: BC.t3, fontWeight: 700 }}>{h + 1}</span>
                         <input
                           type="number" step="1" min="1" max="20"
                           value={String(cur[h])}
                           onChange={e => setHole(h, e.target.value)}
                           onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
                           style={{
-                            ...InputStyle, marginBottom: 0, padding: "3px 0", fontSize: 13,
+                            ...InputStyle, marginBottom: 0, padding: "3px 0", fontSize: FS.body,
                             textAlign: "center", width: "100%", minWidth: 0,
                             color: capped ? BC.amber : undefined,
                             border: `1px solid ${capped ? BC.amber + "66" : BC.bdr}`,
@@ -2723,16 +2724,16 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               return (
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>COUNTING</div>
+                    <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>COUNTING</div>
                     {nineBox(false, "F9", "Set every front-nine hole at once")}
                     {nineBox(true, "B9", "Set every back-nine hole at once")}
                     {sideSize > 0 && (
-                      <span style={{ fontSize: 9, color: BC.t3, fontWeight: 600 }}>of {sideSize} a side</span>
+                      <span style={{ fontSize: FS.label, color: BC.t3, fontWeight: 600 }}>of {sideSize} a side</span>
                     )}
                   </div>
                   {holeRow(false)}
                   {holeRow(true)}
-                  <div style={{ fontSize: 9, color: over ? BC.amber : BC.t3, lineHeight: 1.5, marginTop: 5 }}>
+                  <div style={{ fontSize: FS.label, color: over ? BC.amber : BC.t3, lineHeight: 1.5, marginTop: 5 }}>
                     {over
                       ? `Only ${sideSize} play${sideSize === 1 ? "s" : ""} a side — the holes above ${sideSize} score as all ${sideSize}.`
                       : "Each hole is the sum of the side's best N nets, where N is that hole's count."}
@@ -2756,18 +2757,18 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               const fmtId = formRound.format;
               if (fmtId !== "stableford" && fmtId !== "tilt") return null;
               const rowLabel = (text) => (
-                <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>{text}</div>
+                <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>{text}</div>
               );
               if (fmtId === "tilt") {
                 return (
                   <div style={{ marginBottom: 12 }}>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
                       {rowLabel("POINTS")}
-                      <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5 }}>
+                      <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5 }}>
                         {PAR_RESULTS.map(k => `${PAR_RESULT_LABELS[k]} ${TILT_POINTS[k]}`).join(" · ")}
                       </div>
                     </div>
-                    <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
+                    <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
                       A net birdie doubles your next hole, a second in a row triples it, and it keeps climbing — a par or worse drops you back to face value. The multiplier runs through the turn and applies to minus scores too.
                     </div>
                   </div>
@@ -2785,17 +2786,17 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     {rowLabel("POINTS")}
                     {PAR_RESULTS.map(k => (
                       <div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                        <span style={{ fontSize: 9, color: BC.t3, fontWeight: 600 }}>{PAR_RESULT_LABELS[k]}</span>
+                        <span style={{ fontSize: FS.label, color: BC.t3, fontWeight: 600 }}>{PAR_RESULT_LABELS[k]}</span>
                         <input
                           type="number" step="1"
                           value={val(k)}
                           onChange={e => setRung(k, e.target.value)}
                           onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
-                          style={{ ...InputStyle, marginBottom: 0, padding: "4px 3px", fontSize: 14, textAlign: "center", width: 40 }} />
+                          style={{ ...InputStyle, marginBottom: 0, padding: "4px 3px", fontSize: FS.body, textAlign: "center", width: 40 }} />
                       </div>
                     ))}
                   </div>
-                  <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
+                  <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
                     What each result against par pays. Both partners' points are added together for the side's score on the hole.
                   </div>
                 </div>
@@ -2838,28 +2839,28 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               const perHole = isPointsPerHole(scoringType);
               const hp = resolveHolePoints(holePoints);
               const pill = (active, disabled) => ({
-                padding: "4px 12px", borderRadius: 16, fontSize: 10, fontWeight: 700, border: "none",
+                padding: "4px 12px", borderRadius: 16, fontSize: FS.label, fontWeight: 700, border: "none",
                 cursor: disabled ? "not-allowed" : "pointer",
                 background: active ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
                 color: active ? "#0a0804" : (disabled ? BC.t3 + "66" : BC.t3),
               });
               const numField = (k, lbl) => (
                 <div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                  <span style={{ fontSize: 9, color: BC.t3, flexShrink: 0 }}>{lbl}</span>
+                  <span style={{ fontSize: FS.label, color: BC.t3, flexShrink: 0 }}>{lbl}</span>
                   <input type="number" step="0.5" min="0" value={nassau[k]}
                     onChange={e => setNassau(n => ({ ...n, [k]: parseFloat(e.target.value) || 0 }))}
                     onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
-                    style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: 14, textAlign: "center", width: 44 }} />
+                    style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: FS.body, textAlign: "center", width: 44 }} />
                 </div>
               );
               // Same box, pointed at the hole values instead of the pots.
               const holeField = (k, lbl, hint) => (
                 <div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                  <span title={hint} style={{ fontSize: 9, color: BC.t3, flexShrink: 0 }}>{lbl}</span>
+                  <span title={hint} style={{ fontSize: FS.label, color: BC.t3, flexShrink: 0 }}>{lbl}</span>
                   <input type="number" step="0.5" min="0" value={String(hp[k])}
                     onChange={e => setHolePoints({ ...hp, [k]: e.target.value })}
                     onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
-                    style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: 14, textAlign: "center", width: 44 }} />
+                    style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: FS.body, textAlign: "center", width: 44 }} />
                 </div>
               );
               // Which forms this format offers, and what each MEANS on it.
@@ -2883,7 +2884,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         style={pill(current === f, false)}>{formOfPlayLabel(f, formRound.format)}</button>
                     ))}
                   </div>
-                  <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5, marginBottom: 12 }}>{describeFormOfPlay(current, formRound.format)}</div>
+                  <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5, marginBottom: 12 }}>{describeFormOfPlay(current, formRound.format)}</div>
 
                   <RoundSectionHeading hint={perHole
                     ? "What one hole is worth on each nine."
@@ -2905,7 +2906,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         ? [
                             holeField("front", "F9", "What one front-nine hole is worth"),
                             holeField("back", "B9", "What one back-nine hole is worth"),
-                            <span key="tot" style={{ fontSize: 9, color: BC.t3, fontWeight: 600 }}>
+                            <span key="tot" style={{ fontSize: FS.label, color: BC.t3, fontWeight: 600 }}>
                               a hole · {holePointsTotal(hp)} on the round
                             </span>,
                           ]
@@ -2919,7 +2920,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         this round is worth to the cup — had to be added up by
                         hand from two or three boxes. */}
                     {!perHole && (
-                      <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
+                      <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
                         {isSingle
                           ? `One pot for the 18-hole result. ${nassau.overall || 0} on the round.`
                           : `Three pots — front nine, back nine and the overall. ${(nassau.front || 0) + (nassau.back || 0) + (nassau.overall || 0)} on the round.`}
@@ -2973,14 +2974,14 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               // Same pill as the SCORING toggles, so neither toggle on this
               // row changes shape by moving rows.
               const pctPill = (active, disabled = false) => ({
-                padding: "4px 12px", borderRadius: 16, fontSize: 10, fontWeight: 700, border: "none",
+                padding: "4px 12px", borderRadius: 16, fontSize: FS.label, fontWeight: 700, border: "none",
                 cursor: disabled ? "not-allowed" : "pointer",
                 background: active ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
                 color: active ? "#0a0804" : BC.t3,
               });
               const pctField = (k, lbl, hint) => (
                 <div key={k} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  <span title={hint} style={{ fontSize: 9, color: BC.t3, flexShrink: 0, fontWeight: 600 }}>{lbl}</span>
+                  <span title={hint} style={{ fontSize: FS.label, color: BC.t3, flexShrink: 0, fontWeight: 600 }}>{lbl}</span>
                   <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
                     <input
                       type="number" step="5" min="0" max="150"
@@ -2989,11 +2990,11 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       onChange={e => setField(k, e.target.value)}
                       onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
                       style={{
-                        ...InputStyle, marginBottom: 0, padding: "4px 16px 4px 6px", fontSize: 14,
+                        ...InputStyle, marginBottom: 0, padding: "4px 16px 4px 6px", fontSize: FS.body,
                         textAlign: "center", width: 58,
                         opacity: roundIsFinal ? 0.5 : 1, cursor: roundIsFinal ? "not-allowed" : "text",
                       }} />
-                    <span style={{ position: "absolute", right: 6, fontSize: 10, color: BC.t3, pointerEvents: "none" }}>%</span>
+                    <span style={{ position: "absolute", right: 6, fontSize: FS.label, color: BC.t3, pointerEvents: "none" }}>%</span>
                   </div>
                 </div>
               );
@@ -3011,7 +3012,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         already says handicaps, and this control is specifically
                         the allowance — the percentage of Course Handicap that
                         comes to the tee. The pair beside it is the other half. */}
-                    <div style={{ fontSize: 11, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>ALLOWANCE</div>
+                    <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>ALLOWANCE</div>
                     {/* Allowance off/on. First on the row because it decides
                         whether the percentages beside it exist at all. */}
                     <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}` }}>
@@ -3054,7 +3055,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       hands out a number nobody would have chosen. Said only
                       where it applies, and only while it applies. */}
                   {!on && cur.shared && (
-                    <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
+                    <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
                       {fmt?.label || "This format"} plays one ball per side, so with no allowance the side's team handicap is both partners' full handicaps added together.
                     </div>
                   )}
@@ -3067,12 +3068,12 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       already means, and where the shared-ball line above is
                       already saying something stronger. */}
                   {!on && !cur.shared && describeAllowance(resolveAllowance(fmtId, { enabled: true, ...prefill })) !== "100%" && (
-                    <div style={{ fontSize: 9, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
+                    <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
                       Full Course Handicaps. {fmt?.label || "This format"} is normally played off {describeAllowance(resolveAllowance(fmtId, { enabled: true, ...prefill }))}.
                     </div>
                   )}
                   {roundIsLocked && (
-                    <div style={{ fontSize: 9, color: roundIsFinal ? BC.danger : BC.amber, marginTop: 4 }}>
+                    <div style={{ fontSize: FS.label, color: roundIsFinal ? BC.danger : BC.amber, marginTop: 4 }}>
                       Round {editRound} is locked — the allowance it scored with is frozen in the snapshot, so a change here will not move it.
                     </div>
                   )}
@@ -3088,7 +3089,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               {/* Column headers carry the rest.
                   No lock banner here — touching a control on a locked/final
                   round raises warnRoundLocked's popup instead. */}
-              {tPlayers.length === 0 && <div style={{ fontSize: 11, color: BC.t3 }}>No players added yet.</div>}
+              {tPlayers.length === 0 && <div style={{ fontSize: FS.small, color: BC.t3 }}>No players added yet.</div>}
               {tPlayers.length > 0 && (() => {
                 const tr2h = tRounds.find(t => t.round_number === editRound);
                 const course2h = courses.find(c => c.id === tr2h?.course_id);
@@ -3129,16 +3130,16 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   <div>
                     <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: 4, padding: "0 2px", marginBottom: 4, alignItems: "center" }}>
                       <div />
-                      <div style={{ fontSize: 7, color: BC.t3, fontWeight: 700, textAlign: "center", lineHeight: 1.2 }}>HI</div>
-                      <div style={{ fontSize: 7, color: BC.t3, fontWeight: 700, textAlign: "center" }}>Round CH</div>
+                      <div style={{ fontSize: FS.micro, color: BC.t3, fontWeight: 700, textAlign: "center", lineHeight: 1.2 }}>HI</div>
+                      <div style={{ fontSize: FS.micro, color: BC.t3, fontWeight: 700, textAlign: "center" }}>Round CH</div>
                       {tees2h.length > 0
-                        ? <div style={{ fontSize: 7, color: BC.t3, fontWeight: 700, textAlign: "center", gridColumn: `span ${tees2h.length}` }}>Tee</div>
+                        ? <div style={{ fontSize: FS.micro, color: BC.t3, fontWeight: 700, textAlign: "center", gridColumn: `span ${tees2h.length}` }}>Tee</div>
                         : null}
                       <div />
                     </div>
                     {tees2h.length > 0 && (
                       <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: 4, padding: "0 2px", marginBottom: 6, alignItems: "center" }}>
-                        <div style={{ fontSize: 9, color: BC.t3, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                           Everyone plays
                         </div>
                         <div />
@@ -3211,8 +3212,8 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     };
                     return (
                       <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: `1fr 30px 58px ${tees2.map(() => "22px").join(" ")} 22px`, gap: 4, alignItems: "center", marginBottom: 3 }}>
-                        <div style={{ fontSize: 11, color: playerNameColor(), fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
-                        <div title={hiOverridden ? `Index override (base ${p.handicap_index})` : undefined} style={{ fontSize: 10, color: hiOverridden ? BC.amber : BC.t3, fontWeight: hiOverridden ? 700 : 400, textAlign: "center" }}>{effHI}{hiOverridden ? "*" : ""}</div>
+                        <div style={{ fontSize: FS.small, color: playerNameColor(), fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
+                        <div title={hiOverridden ? `Index override (base ${p.handicap_index})` : undefined} style={{ fontSize: FS.label, color: hiOverridden ? BC.amber : BC.t3, fontWeight: hiOverridden ? 700 : 400, textAlign: "center" }}>{effHI}{hiOverridden ? "*" : ""}</div>
                         <input
                           type="number" step="1"
                           // readOnly (not disabled) when final so the tap still
@@ -3225,7 +3226,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                             setHcpOverrides(prev => ({ ...prev, [editRound]: { ...(prev[editRound]||{}), [p.player_id]: e.target.value } }));
                           }}
                           placeholder={calcedCH != null ? String(calcedCH) : "CH"}
-                          style={{ padding: "5px 8px", background: hasOverride ? BC.amber+"15" : BC.inp, border: `1px solid ${hasOverride ? BC.amber : BC.bdr}`, borderRadius: 6, color: hasOverride ? BC.amber : BC.t2, fontSize: 12, fontWeight: hasOverride ? 700 : 400, outline: "none", textAlign: "center", opacity: roundIsFinal ? 0.5 : 1, cursor: roundIsFinal ? "not-allowed" : "text" }}
+                          style={{ padding: "5px 8px", background: hasOverride ? BC.amber+"15" : BC.inp, border: `1px solid ${hasOverride ? BC.amber : BC.bdr}`, borderRadius: 6, color: hasOverride ? BC.amber : BC.t2, fontSize: FS.small, fontWeight: hasOverride ? 700 : 400, outline: "none", textAlign: "center", opacity: roundIsFinal ? 0.5 : 1, cursor: roundIsFinal ? "not-allowed" : "text" }}
                         />
                         {tees2.map((tee, ti) => {
                           const isAct = currentTee2 === tee.name;
@@ -3279,7 +3280,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               return (
                 <div style={{
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                  padding: "8px 0 2px", fontSize: 10, fontWeight: 700, letterSpacing: 0.5, color,
+                  padding: "8px 0 2px", fontSize: FS.label, fontWeight: 700, letterSpacing: 0.5, color,
                 }}>
                   <span style={{
                     width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
@@ -3321,8 +3322,8 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
           {/* Course Library */}
           <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 14, overflow: "hidden" }}>
             <div style={{ padding: "9px 14px", borderBottom: `1px solid ${BC.bdr}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: BC.gold }}>{courses.length} COURSE{courses.length !== 1 ? "S" : ""}</span>
-              <button onClick={() => { setSearching(!searching); setCourseSearch(""); setSearchResults([]); }} style={{ padding: "4px 10px", borderRadius: 6, background: "transparent", border: `1px solid ${BC.amber}66`, color: BC.amber, fontSize: 10, fontWeight: 700, cursor: "pointer" }}>
+              <span style={{ fontSize: FS.small, fontWeight: 700, color: BC.gold }}>{courses.length} COURSE{courses.length !== 1 ? "S" : ""}</span>
+              <button onClick={() => { setSearching(!searching); setCourseSearch(""); setSearchResults([]); }} style={{ padding: "4px 10px", borderRadius: 6, background: "transparent", border: `1px solid ${BC.amber}66`, color: BC.amber, fontSize: FS.label, fontWeight: 700, cursor: "pointer" }}>
                 {searching ? "Close" : "+ Add Course"}
               </button>
             </div>
@@ -3331,8 +3332,8 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               <div key={c.id} style={{ borderBottom: i < courses.length - 1 ? `1px solid ${BC.bdr}22` : "none" }}>
                 <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 8 }}>
                   <button onClick={() => setExpandedCourse(expandedCourse === c.id ? null : c.id)} style={{ flex: 1, background: "transparent", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13, color: BC.t1 }}>{c.name}</div>
-                    <div style={{ fontSize: 10, color: BC.t3, marginTop: 1 }}>{[c.city, c.state].filter(Boolean).join(", ")} · Par {c.par} · Slope {c.slope}</div>
+                    <div style={{ fontWeight: 600, fontSize: FS.body, color: BC.t1 }}>{c.name}</div>
+                    <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 1 }}>{[c.city, c.state].filter(Boolean).join(", ")} · Par {c.par} · Slope {c.slope}</div>
                   </button>
                   {/* Round assignment buttons */}
                   <div style={{ display: "flex", gap: 3 }}>
@@ -3352,7 +3353,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                             await onSetRound({ id: editionDocId(`bc_round_${r}`), tournament_id: TOURNAMENT_ID, round_number: r, course_id: c.id, format: tr?.format || DEFAULT_FORMAT, tee_time: tr?.tee_time || "", nassau_front: tr?.nassau_front || 1, nassau_back: tr?.nassau_back || 1, nassau_overall: tr?.nassau_overall || 1 });
                           }
                         }} style={{
-                          padding: "3px 6px", borderRadius: 4, fontSize: 9, fontWeight: 700, cursor: "pointer", minWidth: 24, textAlign: "center",
+                          padding: "3px 6px", borderRadius: 4, fontSize: FS.label, fontWeight: 700, cursor: "pointer", minWidth: 24, textAlign: "center",
                           background: isAssigned ? BC.amber : "transparent",
                           color: isAssigned ? "#0a0804" : BC.t3,
                           border: `1px solid ${isAssigned ? BC.amber : BC.bdr}`,
@@ -3360,24 +3361,24 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       );
                     })}
                   </div>
-                  <button onClick={() => setCoursePreview(c)} title="Edit course name, tees & scorecard" style={{ background: "transparent", border: `1px solid ${BC.bdr}`, color: BC.t3, cursor: "pointer", fontSize: 9, fontWeight: 700, borderRadius: 4, padding: "3px 6px" }}>Edit</button>
-                  <button onClick={async () => { if (await confirm(`Remove ${c.name}?`)) onAddCourse({ ...c, _delete: true }); }} style={{ background: "transparent", border: "none", color: BC.t3, cursor: "pointer", fontSize: 14, padding: "2px 4px" }}>✕</button>
+                  <button onClick={() => setCoursePreview(c)} title="Edit course name, tees & scorecard" style={{ background: "transparent", border: `1px solid ${BC.bdr}`, color: BC.t3, cursor: "pointer", fontSize: FS.label, fontWeight: 700, borderRadius: 4, padding: "3px 6px" }}>Edit</button>
+                  <button onClick={async () => { if (await confirm(`Remove ${c.name}?`)) onAddCourse({ ...c, _delete: true }); }} style={{ background: "transparent", border: "none", color: BC.t3, cursor: "pointer", fontSize: FS.body, padding: "2px 4px" }}>✕</button>
                 </div>
                 {expandedCourse === c.id && (
                   <div style={{ padding: "0 14px 12px", background: BC.amber + "06" }}>
                     {(c.tee_boxes || []).sort((a,b) => (parseFloat(b.slope)||0) - (parseFloat(a.slope)||0)).map((tb, tbi) => (
-                      <div key={tbi} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 3, fontSize: 10 }}>
+                      <div key={tbi} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 3, fontSize: FS.label }}>
                         <span style={{ display:"inline-block", width:10, height:10, borderRadius:2, background:tb.color||"#888", flexShrink:0 }} />
                         <span style={{ color: BC.t2, fontWeight: 600, width: 50 }}>{tb.name}</span>
                         <span style={{ color: BC.t3 }}>Rating {tb.rating} · Slope {tb.slope} · Par {tb.par}</span>
                       </div>
                     ))}
-                    {(c.tee_boxes || []).length === 0 && <div style={{ fontSize: 10, color: BC.t3, fontStyle: "italic" }}>No tee data</div>}
+                    {(c.tee_boxes || []).length === 0 && <div style={{ fontSize: FS.label, color: BC.t3, fontStyle: "italic" }}>No tee data</div>}
                   </div>
                 )}
               </div>
             ))}
-            {courses.length === 0 && <div style={{ padding: "16px 14px", color: BC.t3, fontSize: 12 }}>No courses yet. Add one below.</div>}
+            {courses.length === 0 && <div style={{ padding: "16px 14px", color: BC.t3, fontSize: FS.small }}>No courses yet. Add one below.</div>}
           </div>
 
           {/* Search panel */}
@@ -3389,18 +3390,18 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     doesn't zoom back). The search input is autoFocused, so a
                     smaller size zoomed the view the instant the panel opened. */}
                 <select value={courseStateFilter} onChange={e => { setCourseStateFilter(e.target.value); if (courseSearch.trim().length >= 2) doCourseSearch(courseSearch, e.target.value); }}
-                  style={{ width: 64, padding: "9px 6px", background: BC.inp, border: `1px solid ${BC.amber}44`, borderRadius: 8, color: BC.t1, fontSize: 16, flexShrink: 0 }}>
+                  style={{ width: 64, padding: "9px 6px", background: BC.inp, border: `1px solid ${BC.amber}44`, borderRadius: 8, color: BC.t1, fontSize: FS.lead, flexShrink: 0 }}>
                   <option value="">All</option>
                   {["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"].map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
                 <input value={courseSearch} onChange={e => doCourseSearch(e.target.value)} placeholder="Search by course or city..." autoFocus
-                  style={{ flex: 1, padding: "9px 12px", background: BC.inp, border: `1px solid ${BC.amber}44`, borderRadius: 8, color: BC.t1, fontSize: 16, outline: "none" }} />
+                  style={{ flex: 1, padding: "9px 12px", background: BC.inp, border: `1px solid ${BC.amber}44`, borderRadius: 8, color: BC.t1, fontSize: FS.lead, outline: "none" }} />
               </div>
 
-              {searchLoading && <div style={{ textAlign: "center", padding: 12, color: BC.t3, fontSize: 11 }}>Searching GolfCourseAPI...</div>}
+              {searchLoading && <div style={{ textAlign: "center", padding: 12, color: BC.t3, fontSize: FS.small }}>Searching GolfCourseAPI...</div>}
 
               {!searchLoading && courseSearch.trim().length >= 2 && searchResults.length === 0 && (
-                <div style={{ textAlign: "center", padding: "10px 0", color: BC.t3, fontSize: 11 }}>No courses found for "{courseSearch}"</div>
+                <div style={{ textAlign: "center", padding: "10px 0", color: BC.t3, fontSize: FS.small }}>No courses found for "{courseSearch}"</div>
               )}
 
               {!searchLoading && searchResults.filter(c => !courses.find(ex => ex.name.toLowerCase() === c.name.toLowerCase())).map(c => (
@@ -3409,19 +3410,19 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ fontWeight: 600, fontSize: 13 }}>{c.name}</span>
-                        {c._incompleteData && <span style={{ fontSize: 8, background: "#ef444420", border: "1px solid #ef444440", color: "#ef4444", borderRadius: 4, padding: "1px 5px", fontWeight: 700 }}>⚠ incomplete</span>}
-                        {c._source && <span style={{ fontSize: 8, background: `${BC.amber}15`, border: `1px solid ${BC.amber}30`, color: BC.amber, borderRadius: 4, padding: "1px 5px", fontWeight: 600 }}>{c._source}</span>}
+                        <span style={{ fontWeight: 600, fontSize: FS.body }}>{c.name}</span>
+                        {c._incompleteData && <span style={{ fontSize: FS.micro, background: "#ef444420", border: "1px solid #ef444440", color: "#ef4444", borderRadius: 4, padding: "1px 5px", fontWeight: 700 }}>⚠ incomplete</span>}
+                        {c._source && <span style={{ fontSize: FS.micro, background: `${BC.amber}15`, border: `1px solid ${BC.amber}30`, color: BC.amber, borderRadius: 4, padding: "1px 5px", fontWeight: 600 }}>{c._source}</span>}
                       </div>
-                      <div style={{ fontSize: 10, color: BC.t3 }}>{[c.city, c.state].filter(Boolean).join(", ")}{c.par ? ` · Par ${c.par}` : ""}{c.slope && c.slope !== 113 ? ` · Slope ${c.slope}` : ""}</div>
+                      <div style={{ fontSize: FS.label, color: BC.t3 }}>{[c.city, c.state].filter(Boolean).join(", ")}{c.par ? ` · Par ${c.par}` : ""}{c.slope && c.slope !== 113 ? ` · Slope ${c.slope}` : ""}</div>
                     </div>
-                    <span style={{ color: BC.amber, fontSize: 11, fontWeight: 700 }}>Preview →</span>
+                    <span style={{ color: BC.amber, fontSize: FS.small, fontWeight: 700 }}>Preview →</span>
                   </div>
                 </button>
               ))}
 
-              {!courseSearch.trim() && <div style={{ color: BC.t3, fontSize: 10, textAlign: "center", padding: 4 }}>Type at least 2 characters to search</div>}
-              <div style={{ fontSize: 9, color: BC.t3, textAlign: "center", marginTop: 8 }}>Powered by GolfCourseAPI.com · 35,000+ courses</div>
+              {!courseSearch.trim() && <div style={{ color: BC.t3, fontSize: FS.label, textAlign: "center", padding: 4 }}>Type at least 2 characters to search</div>}
+              <div style={{ fontSize: FS.label, color: BC.t3, textAlign: "center", marginTop: 8 }}>Powered by GolfCourseAPI.com · 35,000+ courses</div>
             </div>
           )}
 
@@ -3457,7 +3458,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               } catch { notify("Re-fetch failed", "error"); }
               finally { setRefetchingTees(false); }
             };
-            const ti = { background: BC.bg, border: `1px solid ${BC.amber}30`, borderRadius: 4, color: BC.t1, fontSize: 9, textAlign: "center", width: "100%", padding: "3px 2px", boxSizing: "border-box" };
+            const ti = { background: BC.bg, border: `1px solid ${BC.amber}30`, borderRadius: 4, color: BC.t1, fontSize: FS.label, textAlign: "center", width: "100%", padding: "3px 2px", boxSizing: "border-box" };
             const tiL = { ...ti, textAlign: "left", padding: "3px 5px" };
             return (
               <Popup onClose={() => setCoursePreview(null)} maxWidth={420} padding={0} innerStyle={{ background: BC.card, borderRadius: 16, border: `1px solid ${BC.amber}44` }}>
@@ -3467,21 +3468,21 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                       <div style={{ flex: 1, marginRight: 8 }}>
                         <input value={draft.name} onChange={e => setDraft(p => ({...p, name: e.target.value}))}
-                          style={{ background: "transparent", border: "none", borderBottom: `1px solid ${BC.amber}44`, color: BC.t1, fontSize: 16, fontWeight: 800, width: "100%", padding: "2px 0", outline: "none" }} />
+                          style={{ background: "transparent", border: "none", borderBottom: `1px solid ${BC.amber}44`, color: BC.t1, fontSize: FS.lead, fontWeight: 800, width: "100%", padding: "2px 0", outline: "none" }} />
                         <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
                           <input value={draft.city||""} onChange={e => setDraft(p => ({...p, city: e.target.value}))} placeholder="City"
-                            style={{ ...tiL, fontSize: 10, flex: 1 }} />
+                            style={{ ...tiL, fontSize: FS.label, flex: 1 }} />
                           <select value={draft.state||""} onChange={e => setDraft(p => ({...p, state: e.target.value}))}
-                            style={{ ...ti, fontSize: 10, width: 52 }}>
+                            style={{ ...ti, fontSize: FS.label, width: 52 }}>
                             <option value="">—</option>
                             {["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"].map(s => <option key={s} value={s}>{s}</option>)}
                           </select>
                         </div>
                       </div>
-                      <button onClick={() => setCoursePreview(null)} style={{ background: "transparent", border: "none", color: BC.t3, fontSize: 18, cursor: "pointer", lineHeight: 1 }}>✕</button>
+                      <button onClick={() => setCoursePreview(null)} style={{ background: "transparent", border: "none", color: BC.t3, fontSize: FS.title, cursor: "pointer", lineHeight: 1 }}>✕</button>
                     </div>
                     {draft._incompleteData && (
-                      <div style={{ marginTop: 8, padding: "7px 10px", background: "#ef444410", border: "1px solid #ef444440", borderRadius: 8, fontSize: 9, color: "#ef4444" }}>
+                      <div style={{ marginTop: 8, padding: "7px 10px", background: "#ef444410", border: "1px solid #ef444440", borderRadius: 8, fontSize: FS.label, color: "#ef4444" }}>
                         ⚠ Incomplete data — slope, rating, or tee boxes may be missing. Edit manually below.
                       </div>
                     )}
@@ -3491,20 +3492,20 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     {/* Tee Boxes */}
                     <div style={{ marginBottom: 14 }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, gap: 6 }}>
-                        <div style={{ fontSize: 9, color: BC.t3, fontWeight: 700, textTransform: "uppercase" }}>Tee Boxes</div>
+                        <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, textTransform: "uppercase" }}>Tee Boxes</div>
                         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                           {/* Recover tee data from the golf API — e.g. after a tee
                               was deleted by mistake. Replaces the tee list below. */}
                           <button onClick={refetchTeesFromApi} disabled={refetchingTees} title="Re-fetch tees from the golf API by course name"
-                            style={{ fontSize: 9, padding: "2px 7px", borderRadius: 4, background: "transparent", border: `1px solid ${BC.hcpBlue}60`, color: BC.hcpBlue, cursor: refetchingTees ? "default" : "pointer", fontWeight: 700, opacity: refetchingTees ? 0.5 : 1 }}>
+                            style={{ fontSize: FS.label, padding: "2px 7px", borderRadius: 4, background: "transparent", border: `1px solid ${BC.hcpBlue}60`, color: BC.hcpBlue, cursor: refetchingTees ? "default" : "pointer", fontWeight: 700, opacity: refetchingTees ? 0.5 : 1 }}>
                             {refetchingTees ? "Fetching…" : "⟳ Re-fetch tees"}
                           </button>
                           <button onClick={() => setDraft(p => ({ ...p, tee_boxes: [...(p.tee_boxes||[]), { name: "", color: "#888888", rating: 72.0, slope: 113, par: 72, yardage: 0 }] }))}
-                            style={{ fontSize: 9, padding: "2px 7px", borderRadius: 4, background: "transparent", border: `1px solid ${BC.amber}60`, color: BC.amber, cursor: "pointer", fontWeight: 700 }}>+ Tee</button>
+                            style={{ fontSize: FS.label, padding: "2px 7px", borderRadius: 4, background: "transparent", border: `1px solid ${BC.amber}60`, color: BC.amber, cursor: "pointer", fontWeight: 700 }}>+ Tee</button>
                         </div>
                       </div>
-                      {tbs.length === 0 && <div style={{ fontSize: 10, color: BC.warn, marginBottom: 8, fontStyle: "italic" }}>⚠ No tees from API — add manually</div>}
-                      <div style={{ display: "grid", gridTemplateColumns: "18px 1fr 44px 38px 30px 46px 18px", gap: "3px 4px", fontSize: 8, color: BC.t3, fontWeight: 600, marginBottom: 3 }}>
+                      {tbs.length === 0 && <div style={{ fontSize: FS.label, color: BC.warn, marginBottom: 8, fontStyle: "italic" }}>⚠ No tees from API — add manually</div>}
+                      <div style={{ display: "grid", gridTemplateColumns: "18px 1fr 44px 38px 30px 46px 18px", gap: "3px 4px", fontSize: FS.micro, color: BC.t3, fontWeight: 600, marginBottom: 3 }}>
                         <div/><div>Name</div><div style={{textAlign:"center"}}>Rating</div><div style={{textAlign:"center"}}>Slope</div><div style={{textAlign:"center"}}>Par</div><div style={{textAlign:"center"}}>Yards</div><div/>
                       </div>
                       {tbs.map((tb, i) => (
@@ -3515,14 +3516,14 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                           <input value={tb.slope} onChange={e => setDraft(p => { const t=[...p.tee_boxes]; t[i]={...t[i],slope:e.target.value}; return {...p,tee_boxes:t}; })} style={ti} />
                           <input value={tb.par} onChange={e => setDraft(p => { const t=[...p.tee_boxes]; t[i]={...t[i],par:e.target.value}; return {...p,tee_boxes:t}; })} style={ti} />
                           <input value={tb.yardage} onChange={e => setDraft(p => { const t=[...p.tee_boxes]; t[i]={...t[i],yardage:e.target.value}; return {...p,tee_boxes:t}; })} style={ti} />
-                          <button onClick={() => setDraft(p => ({...p, tee_boxes: p.tee_boxes.filter((_,j) => j!==i)}))} style={{ background:"transparent", border:"none", color:BC.t3, fontSize:11, cursor:"pointer", padding:0 }}>✕</button>
+                          <button onClick={() => setDraft(p => ({...p, tee_boxes: p.tee_boxes.filter((_,j) => j!==i)}))} style={{ background:"transparent", border:"none", color:BC.t3, fontSize:FS.small, cursor:"pointer", padding:0 }}>✕</button>
                         </div>
                       ))}
                     </div>
 
                     {/* Scorecard */}
                     <div style={{ marginBottom: 14 }}>
-                      <div style={{ fontSize: 9, color: BC.t3, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>Scorecard</div>
+                      <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>Scorecard</div>
                       {[["Front", 0, 9], ["Back", 9, 9]].map(([lbl, start, count]) => {
                         const pars = (draft.hole_pars || Array(18).fill(4)).slice(start, start+count);
                         const hcps = (draft.hole_handicaps || Array(18).fill(0)).slice(start, start+count);
@@ -3531,29 +3532,29 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         const hasYds = hy.some(y => y > 0);
                         return (
                           <div key={lbl} style={{ marginBottom: 6 }}>
-                            <div style={{ display: "grid", gridTemplateColumns: `28px repeat(${count}, 1fr) 30px`, gap: 1, fontSize: 8 }}>
+                            <div style={{ display: "grid", gridTemplateColumns: `28px repeat(${count}, 1fr) 30px`, gap: 1, fontSize: FS.micro }}>
                               <div style={{ color: BC.t3, fontWeight: 600, padding: "2px 0" }}>Hole</div>
                               {Array.from({length:count},(_,i) => <div key={i} style={{ textAlign:"center", color:BC.t2, fontWeight:700, padding:"2px 0" }}>{start+i+1}</div>)}
-                              <div style={{ textAlign:"center", color:BC.t3, fontSize:7, padding:"2px 0" }}>Tot</div>
+                              <div style={{ textAlign:"center", color:BC.t3, fontSize:FS.micro, padding:"2px 0" }}>Tot</div>
                             </div>
-                            <div style={{ display: "grid", gridTemplateColumns: `28px repeat(${count}, 1fr) 30px`, gap: 1, fontSize: 8, background: BC.inp, borderRadius: 3, marginBottom: 1 }}>
+                            <div style={{ display: "grid", gridTemplateColumns: `28px repeat(${count}, 1fr) 30px`, gap: 1, fontSize: FS.micro, background: BC.inp, borderRadius: 3, marginBottom: 1 }}>
                               <div style={{ color: BC.t3, fontWeight: 600, padding: "3px 2px" }}>Par</div>
                               {Array.from({length:count},(_,i) => (
                                 <input key={i} value={pars[i]??""} onChange={e => setDraft(p => { const hp=[...(p.hole_pars||Array(18).fill(4))]; hp[start+i]=e.target.value; return {...p,hole_pars:hp}; })}
-                                  style={{ background:"transparent", border:"none", color:BC.t1, fontSize:9, fontWeight:700, textAlign:"center", width:"100%", padding:"3px 0", outline:"none" }} />
+                                  style={{ background:"transparent", border:"none", color:BC.t1, fontSize:FS.micro, fontWeight:700, textAlign:"center", width:"100%", padding:"3px 0", outline:"none" }} />
                               ))}
-                              <div style={{ textAlign:"center", color:BC.amber, fontWeight:800, padding:"3px 0", fontSize:9 }}>{pars.reduce((a,b)=>a+(parseInt(b)||0),0)}</div>
+                              <div style={{ textAlign:"center", color:BC.amber, fontWeight:800, padding:"3px 0", fontSize:FS.micro }}>{pars.reduce((a,b)=>a+(parseInt(b)||0),0)}</div>
                             </div>
-                            <div style={{ display: "grid", gridTemplateColumns: `28px repeat(${count}, 1fr) 30px`, gap: 1, fontSize: 8, marginBottom: 1 }}>
+                            <div style={{ display: "grid", gridTemplateColumns: `28px repeat(${count}, 1fr) 30px`, gap: 1, fontSize: FS.micro, marginBottom: 1 }}>
                               <div style={{ color: BC.t3, fontWeight: 600, padding: "2px 2px" }}>HCP</div>
                               {Array.from({length:count},(_,i) => (
                                 <input key={i} value={hcps[i]??""} onChange={e => setDraft(p => { const hh=[...(p.hole_handicaps||Array(18).fill(0))]; hh[start+i]=e.target.value; return {...p,hole_handicaps:hh}; })}
-                                  style={{ background:"transparent", border:"none", color:BC.t3, fontSize:9, textAlign:"center", width:"100%", padding:"2px 0", outline:"none" }} />
+                                  style={{ background:"transparent", border:"none", color:BC.t3, fontSize:FS.micro, textAlign:"center", width:"100%", padding:"2px 0", outline:"none" }} />
                               ))}
                               <div />
                             </div>
                             {hasYds && (
-                              <div style={{ display: "grid", gridTemplateColumns: `28px repeat(${count}, 1fr) 30px`, gap: 1, fontSize: 8 }}>
+                              <div style={{ display: "grid", gridTemplateColumns: `28px repeat(${count}, 1fr) 30px`, gap: 1, fontSize: FS.micro }}>
                                 <div style={{ color: BC.t3, fontWeight: 600, padding: "2px 2px" }}>Yds</div>
                                 {hy.map((y, i) => <div key={i} style={{ textAlign:"center", color:BC.t3, padding:"2px 0" }}>{y||"–"}</div>)}
                                 <div style={{ textAlign:"center", color:BC.t3, padding:"2px 0" }}>{hy.reduce((a,b)=>a+(parseInt(b)||0),0)||""}</div>
@@ -3566,7 +3567,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
 
                     {/* Actions */}
                     <div style={{ display: "flex", gap: 8 }}>
-                      <button onClick={() => setCoursePreview(null)} style={{ flex: 1, padding: "10px 0", borderRadius: 8, background: "transparent", border: `1px solid ${BC.bdr}`, color: BC.t3, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                      <button onClick={() => setCoursePreview(null)} style={{ flex: 1, padding: "10px 0", borderRadius: 8, background: "transparent", border: `1px solid ${BC.bdr}`, color: BC.t3, fontSize: FS.small, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
                       <button onClick={async () => {
                         const firstTee = draft.tee_boxes?.[0];
                         const cid = `bc_course_${Date.now()}`;
@@ -3587,7 +3588,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         setCoursePreview(null);
                         setSearching(false);
                         notify(`${finalCourse.name} ${isExisting ? "updated" : "added"}!`, "success");
-                      }} style={{ flex: 2, padding: "10px 0", borderRadius: 8, background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`, border: "none", color: "#0a0804", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{isExisting ? "✓ Save Changes" : "✓ Add Course"}</button>
+                      }} style={{ flex: 2, padding: "10px 0", borderRadius: 8, background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`, border: "none", color: "#0a0804", fontSize: FS.body, fontWeight: 700, cursor: "pointer" }}>{isExisting ? "✓ Save Changes" : "✓ Add Course"}</button>
                     </div>
                   </div>
               </Popup>
@@ -3599,15 +3600,15 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
       {tab === "tournament" && (
         <div>
           {/* Active edition — switch year or create a new edition */}
-          <div style={{ fontSize: 10, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Active Edition</div>
+          <div style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Active Edition</div>
           <button onClick={() => setShowEditions(true)} style={{
             width: "100%", marginBottom: 16, padding: "12px 14px", borderRadius: 10,
             background: BC.card, border: `1px solid ${BC.bdr}`, color: BC.t1,
-            fontSize: 13, fontWeight: 700, letterSpacing: 0.3, cursor: "pointer",
+            fontSize: FS.body, fontWeight: 700, letterSpacing: 0.3, cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "space-between",
           }}>
             <span>Edition · <span style={{ color: BC.amber }}>{TOURNAMENT_ID}</span></span>
-            <span style={{ fontSize: 11, color: BC.t3 }}>Switch / new ›</span>
+            <span style={{ fontSize: FS.small, color: BC.t3 }}>Switch / new ›</span>
           </button>
 
           {/* Tournament identity — name and location.
@@ -3619,13 +3620,13 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               the header can't end up with a hole in it. */}
           <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: 14, marginBottom: 16 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase" }}>Tournament</div>
+              <div style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase" }}>Tournament</div>
               <button
                 onClick={() => onSaveTournament({
                   name: editTournamentName.trim() || TOURNAMENT_TITLE,
                   location: editTournamentLocation.trim() || TOURNAMENT_LOCATION,
                 })}
-                style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, color: "#0a0804", background: BC.amber, border: "none", borderRadius: 6, padding: "8px 14px", cursor: "pointer" }}
+                style={{ flexShrink: 0, fontSize: FS.small, fontWeight: 700, color: "#0a0804", background: BC.amber, border: "none", borderRadius: 6, padding: "8px 14px", cursor: "pointer" }}
               >Save</button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -3634,13 +3635,16 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 { key: "location", val: editTournamentLocation, set: setEditTournamentLocation, ph: TOURNAMENT_LOCATION, lbl: "Location" },
               ].map(f => (
                 <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 9, fontWeight: 700, color: BC.t3, letterSpacing: 0.5, width: 52, flexShrink: 0, textTransform: "uppercase" }}>{f.lbl}</span>
+                  {/* 58 is the width of the longest label ("LOCATION") at
+                      FS.label/700 with this tracking, rounded up. The gutter
+                      is fixed so the two inputs share a left edge. */}
+                  <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.5, width: 58, flexShrink: 0, textTransform: "uppercase" }}>{f.lbl}</span>
                   <input
                     value={f.val}
                     onChange={e => f.set(e.target.value)}
                     onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
                     placeholder={f.ph}
-                    style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: 14, fontWeight: 700, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
+                    style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.body, fontWeight: 700, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
                   />
                 </div>
               ))}
@@ -3648,7 +3652,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
           </div>
 
           {/* Teams — name, imported logo, brand color */}
-          <div style={{ fontSize: 10, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Teams</div>
+          <div style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Teams</div>
           {[teams.A, teams.B].map(team => {
             const previewLogo = brandLogoEdit[team.id] || team.logo;
             const dirty = teamDirty(team.id);
@@ -3659,20 +3663,20 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   <div style={{ width: 34, height: 34, borderRadius: 8, background: brandSwatch(team.id) + "22", border: `1px solid ${brandSwatch(team.id)}55`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
                     {previewLogo
                       ? <img src={previewLogo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-                      : <span style={{ fontSize: 14, fontWeight: 800, color: brandSwatch(team.id) }}>{team.id}</span>}
+                      : <span style={{ fontSize: FS.body, fontWeight: 800, color: brandSwatch(team.id) }}>{team.id}</span>}
                   </div>
                   <input
                     value={editTeamNames[team.id]}
                     onChange={e => setEditTeamNames(n => ({ ...n, [team.id]: e.target.value }))}
                     onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
                     placeholder={`Team ${team.id}`}
-                    style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "9px 10px", background: BC.inp, border: `1px solid ${brandSwatch(team.id)}55`, borderRadius: 8, color: BC.t1, fontSize: 13, fontWeight: 800, letterSpacing: 0.5, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
+                    style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "9px 10px", background: BC.inp, border: `1px solid ${brandSwatch(team.id)}55`, borderRadius: 8, color: BC.t1, fontSize: FS.body, fontWeight: 800, letterSpacing: 0.5, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
                   />
                   <button
                     onClick={() => saveTeam(team.id)}
                     disabled={!dirty}
                     style={{
-                      flexShrink: 0, fontSize: 11, fontWeight: 700, borderRadius: 6, padding: "8px 14px", whiteSpace: "nowrap",
+                      flexShrink: 0, fontSize: FS.small, fontWeight: 700, borderRadius: 6, padding: "8px 14px", whiteSpace: "nowrap",
                       color: dirty ? "#0a0804" : BC.t3,
                       background: dirty ? BC.amber : BC.inp,
                       border: dirty ? "none" : `1px solid ${BC.bdr}`,
@@ -3688,14 +3692,14 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     value={brandEdit[team.id]}
                     onChange={e => setBrandEdit(b => ({ ...b, [team.id]: e.target.value }))}
                     placeholder="#rrggbb"
-                    style={{ width: 100, boxSizing: "border-box", padding: "8px 8px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, color: BC.t1, fontSize: 12, fontWeight: 600, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
+                    style={{ width: 100, boxSizing: "border-box", padding: "8px 8px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, color: BC.t1, fontSize: FS.small, fontWeight: 600, outline: "none", fontFamily: "'Montserrat', sans-serif" }}
                   />
-                  <label style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: BC.t2, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, padding: "8px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>
+                  <label style={{ marginLeft: "auto", fontSize: FS.small, fontWeight: 700, color: BC.t2, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, padding: "8px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>
                     {brandBusy === team.id ? "Reading…" : "Import logo"}
                     <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => { pickLogo(team.id, e.target.files?.[0]); e.target.value = ""; }} />
                   </label>
                 </div>
-                <div style={{ fontSize: 10, color: BC.t3, marginTop: 6, lineHeight: 1.4 }}>
+                <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 6, lineHeight: 1.4 }}>
                   Import a logo to set the team badge and auto-fill its color, or enter a hex. Save applies the name and branding live across the app.
                 </div>
               </div>
@@ -3778,21 +3782,21 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
           {/* Pot */}
           <div style={{ background: BC.card, borderRadius: 12, padding: "12px 14px", marginBottom: 12, border: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 10, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>SKINS POT</div>
+              <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>SKINS POT</div>
               {editPot ? (
                 <input autoFocus type="number" value={potInput} onChange={e => setPotInput(e.target.value)}
                   onBlur={() => { onUpdatePot(parseFloat(potInput)||0); setEditPot(false); }}
                   onKeyDown={e => { if (e.key === "Enter") { onUpdatePot(parseFloat(potInput)||0); setEditPot(false); }}}
-                  style={{ fontSize: 20, fontWeight: 800, color: BC.gold, background: "transparent", border: "none", borderBottom: `1px solid ${BC.amber}`, outline: "none", width: 100, fontFamily: "'Montserrat', sans-serif" }} />
+                  style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold, background: "transparent", border: "none", borderBottom: `1px solid ${BC.amber}`, outline: "none", width: 100, fontFamily: "'Montserrat', sans-serif" }} />
               ) : (
-                <div onClick={() => user?.isDirector && setEditPot(true)} style={{ fontSize: 20, fontWeight: 800, color: BC.gold, cursor: user?.isDirector ? "pointer" : "default" }}>
+                <div onClick={() => user?.isDirector && setEditPot(true)} style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold, cursor: user?.isDirector ? "pointer" : "default" }}>
                   ${skinsPot.toFixed(2)}
                 </div>
               )}
             </div>
             <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: 10, color: BC.t3 }}>{totalSkins} skins won</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: BC.amber }}>${perSkin} / skin</div>
+              <div style={{ fontSize: FS.label, color: BC.t3 }}>{totalSkins} skins won</div>
+              <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.amber }}>${perSkin} / skin</div>
             </div>
           </div>
 
@@ -3800,7 +3804,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
           <div style={{ display: "flex", background: BC.card, borderRadius: 16, padding: 3, marginBottom: 12, border: `1px solid ${BC.bdr}`, width: 160 }}>
             {[["Net", false],["Gross", true]].map(([lbl, val]) => (
               <button key={lbl} onClick={() => setGrossMode(val)} style={{
-                flex: 1, padding: "5px 0", borderRadius: 12, fontSize: 10, fontWeight: 700, cursor: "pointer", border: "none",
+                flex: 1, padding: "5px 0", borderRadius: 12, fontSize: FS.label, fontWeight: 700, cursor: "pointer", border: "none",
                 background: grossMode === val ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
                 color: grossMode === val ? "#0a0804" : BC.t3,
               }}>{lbl}</button>
@@ -3810,16 +3814,16 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
           {/* Leaderboard */}
           {Object.keys(skinCount).length > 0 && (
             <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 12, overflow: "hidden" }}>
-              <div style={{ padding: "8px 14px", borderBottom: `1px solid ${BC.bdr}`, fontSize: 10, fontWeight: 700, color: BC.gold, letterSpacing: 1 }}>SKINS LEADERS</div>
+              <div style={{ padding: "8px 14px", borderBottom: `1px solid ${BC.bdr}`, fontSize: FS.label, fontWeight: 700, color: BC.gold, letterSpacing: 1 }}>SKINS LEADERS</div>
               {Object.entries(skinCount).sort((a,b) => b[1]-a[1]).map(([pid, count]) => {
                 const p = tPlayers.find(t => t.player_id === pid);
                 const team = p ? teams[p.team] : null;
                 return (
                   <div key={pid} style={{ display: "flex", alignItems: "center", padding: "8px 14px", borderBottom: `1px solid ${BC.bdr}10`, gap: 8 }}>
                     <div style={{ width: 8, height: 8, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
-                    <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: BC.t1 }}>{p?.name || pid}</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: BC.amber }}>{count} skin{count !== 1 ? "s" : ""}</span>
-                    <span style={{ fontSize: 11, color: BC.t3 }}>${(count * parseFloat(perSkin)).toFixed(2)}</span>
+                    <span style={{ flex: 1, fontSize: FS.body, fontWeight: 600, color: BC.t1 }}>{p?.name || pid}</span>
+                    <span style={{ fontSize: FS.body, fontWeight: 700, color: BC.amber }}>{count} skin{count !== 1 ? "s" : ""}</span>
+                    <span style={{ fontSize: FS.small, color: BC.t3 }}>${(count * parseFloat(perSkin)).toFixed(2)}</span>
                   </div>
                 );
               })}
@@ -3830,7 +3834,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
           <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
             {[1,2,3,4].map(r => (
               <button key={r} onClick={() => setActiveRound(r)} style={{
-                flex: 1, padding: "7px 4px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                flex: 1, padding: "7px 4px", borderRadius: 8, fontSize: FS.small, fontWeight: 700, cursor: "pointer",
                 background: activeRound === r ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
                 border: `1px solid ${activeRound === r ? "transparent" : BC.bdr}`,
                 color: activeRound === r ? "#0a0804" : BC.t2,
@@ -3841,12 +3845,12 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
           {/* Hole-by-hole skins for active round */}
           {computeSkins(activeRound, grossMode).map(s => (
             <div key={s.hole} style={{ display: "flex", alignItems: "center", padding: "7px 12px", background: BC.card, borderRadius: 8, marginBottom: 4, border: `1px solid ${s.winner ? BC.amber + "44" : s.tied ? BC.bdr : BC.bdr}` }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: BC.t3, width: 40 }}>Hole {s.hole + 1}</span>
-              <span style={{ fontSize: 10, color: BC.t3, width: 30 }}>Par {holePars[s.hole]}</span>
-              <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: s.winner ? BC.amber : s.tied ? BC.t3 : BC.t3 }}>
+              <span style={{ fontSize: FS.small, fontWeight: 700, color: BC.t3, width: 40 }}>Hole {s.hole + 1}</span>
+              <span style={{ fontSize: FS.label, color: BC.t3, width: 30 }}>Par {holePars[s.hole]}</span>
+              <span style={{ flex: 1, fontSize: FS.small, fontWeight: 600, color: s.winner ? BC.amber : s.tied ? BC.t3 : BC.t3 }}>
                 {s.winner ? `${s.winner.name} (${s.score})` : s.tied ? "Tied — pushed" : "—"}
               </span>
-              {s.winner && <span style={{ fontSize: 10, color: BC.amber, fontWeight: 700 }}>🏆 Skin</span>}
+              {s.winner && <span style={{ fontSize: FS.label, color: BC.amber, fontWeight: 700 }}>🏆 Skin</span>}
             </div>
           ))}
         </div>
@@ -3854,7 +3858,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
 
       {activeTab === "ctp" && (
         <div>
-          <div style={{ fontSize: 11, color: BC.t3, marginBottom: 12 }}>Closest to the pin on all par 3s — groups tag their own on the Scoring tab as they play; the director settles the hole here.</div>
+          <div style={{ fontSize: FS.small, color: BC.t3, marginBottom: 12 }}>Closest to the pin on all par 3s — groups tag their own on the Scoring tab as they play; the director settles the hole here.</div>
 
           {[1,2,3,4].map(r => {
             const tr2 = tRounds.find(t => t.round_number === r);
@@ -3864,7 +3868,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
             if (par3holes.length === 0) return null;
             return (
               <div key={r} style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: BC.gold, letterSpacing: 1, marginBottom: 8 }}>ROUND {r} — {course2?.name || "TBD"}</div>
+                <div style={{ fontSize: FS.label, fontWeight: 700, color: BC.gold, letterSpacing: 1, marginBottom: 8 }}>ROUND {r} — {course2?.name || "TBD"}</div>
                 {par3holes.map(({ hole }) => {
                   const key = `${r}_${hole}`;
                   const rec = ctpData[key];
@@ -3876,20 +3880,20 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
                   const pending = !!winnerId && rec?.approved !== true;
                   return (
                     <div key={hole} style={{ background: BC.card, borderRadius: 8, padding: "8px 12px", marginBottom: 4, border: `1px solid ${winner ? BC.amber + "44" : BC.bdr}`, display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: BC.t3, width: 44, flexShrink: 0 }}>Hole {hole + 1}</span>
+                      <span style={{ fontSize: FS.small, fontWeight: 700, color: BC.t3, width: 44, flexShrink: 0 }}>Hole {hole + 1}</span>
                       {user?.isDirector ? (
                         <select value={winnerId || ""}
                           onChange={e => onSetCtp(r, hole, e.target.value || null, { distanceFt: e.target.value === winnerId ? rec?.distance_ft ?? null : null, approved: true })}
-                          style={{ flex: 1, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, color: BC.t1, fontSize: 11, padding: "4px 6px", fontFamily: "'Montserrat', sans-serif" }}>
+                          style={{ flex: 1, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, color: BC.t1, fontSize: FS.small, padding: "4px 6px", fontFamily: "'Montserrat', sans-serif" }}>
                           <option value="">-- Not set --</option>
                           {tPlayers.map(p => <option key={p.player_id} value={p.player_id}>{p.name}</option>)}
                         </select>
                       ) : (
-                        <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: winner ? BC.amber : BC.t3 }}>{winner ? winner.name : "Not set"}</span>
+                        <span style={{ flex: 1, fontSize: FS.small, fontWeight: 600, color: winner ? BC.amber : BC.t3 }}>{winner ? winner.name : "Not set"}</span>
                       )}
-                      {rec?.distance_ft ? <span style={{ fontSize: 10, fontWeight: 700, color: BC.amber, flexShrink: 0 }}>{rec.distance_ft} ft</span> : null}
-                      {pending && <span title="Tagged on the course — not settled yet" style={{ fontSize: 9, fontWeight: 700, color: BC.t3, border: `1px solid ${BC.bdr}`, borderRadius: 4, padding: "1px 4px", flexShrink: 0 }}>Pending</span>}
-                      {winner && <span style={{ fontSize: 10, color: BC.amber }}>📍</span>}
+                      {rec?.distance_ft ? <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.amber, flexShrink: 0 }}>{rec.distance_ft} ft</span> : null}
+                      {pending && <span title="Tagged on the course — not settled yet" style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, border: `1px solid ${BC.bdr}`, borderRadius: 4, padding: "1px 4px", flexShrink: 0 }}>Pending</span>}
+                      {winner && <span style={{ fontSize: FS.label, color: BC.amber }}>📍</span>}
                     </div>
                   );
                 })}
@@ -3947,7 +3951,7 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
       {analyticsTab === "current" && (
         <div>
           <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 44px 44px 44px 52px", padding: "8px 12px", borderBottom: `1px solid ${BC.bdr}`, fontSize: 9, fontWeight: 700, color: BC.t3, letterSpacing: 1 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 44px 44px 44px 52px", padding: "8px 12px", borderBottom: `1px solid ${BC.bdr}`, fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1 }}>
               <div>PLAYER</div><div style={{textAlign:"center"}}>W</div><div style={{textAlign:"center"}}>L</div><div style={{textAlign:"center"}}>H</div><div style={{textAlign:"right"}}>PTS</div>
             </div>
             {playerStats.map((p, i) => {
@@ -3956,12 +3960,12 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
                 <div key={p.name} style={{ display: "grid", gridTemplateColumns: "1fr 44px 44px 44px 52px", padding: "9px 12px", borderBottom: i < playerStats.length-1 ? `1px solid ${BC.bdr}10` : "none", alignItems: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <div style={{ width: 6, height: 6, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
-                    <span style={{ fontSize: 12, fontWeight: 600, color: playerNameColor() }}>{p.name}</span>
+                    <span style={{ fontSize: FS.small, fontWeight: 600, color: playerNameColor() }}>{p.name}</span>
                   </div>
-                  <div style={{ textAlign: "center", fontSize: 12, color: "#22c55e", fontWeight: 600 }}>{p.wins}</div>
-                  <div style={{ textAlign: "center", fontSize: 12, color: BC.danger, fontWeight: 600 }}>{p.losses}</div>
-                  <div style={{ textAlign: "center", fontSize: 12, color: BC.t3 }}>{p.halves}</div>
-                  <div style={{ textAlign: "right", fontSize: 12, fontWeight: 700, color: BC.amber }}>{p.pts.toFixed(1)}</div>
+                  <div style={{ textAlign: "center", fontSize: FS.small, color: "#22c55e", fontWeight: 600 }}>{p.wins}</div>
+                  <div style={{ textAlign: "center", fontSize: FS.small, color: BC.danger, fontWeight: 600 }}>{p.losses}</div>
+                  <div style={{ textAlign: "center", fontSize: FS.small, color: BC.t3 }}>{p.halves}</div>
+                  <div style={{ textAlign: "right", fontSize: FS.small, fontWeight: 700, color: BC.amber }}>{p.pts.toFixed(1)}</div>
                 </div>
               );
             })}
@@ -3973,25 +3977,25 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
         <div>
           {historicalData.length === 0 ? (
             <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>
-              <div style={{ fontSize: 32, marginBottom: 12 }}>📊</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: BC.t2, marginBottom: 8 }}>No Historical Data Yet</div>
-              <div style={{ fontSize: 12 }}>Past tournament results will appear here after each year's event is archived.</div>
+              <div style={{ fontSize: FS.display, marginBottom: 12 }}>📊</div>
+              <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.t2, marginBottom: 8 }}>No Historical Data Yet</div>
+              <div style={{ fontSize: FS.small }}>Past tournament results will appear here after each year's event is archived.</div>
             </div>
           ) : (
             historicalData.sort((a,b) => b.year - a.year).map(yr => (
               <div key={yr.id} style={{ background: BC.card, borderRadius: 12, padding: 14, marginBottom: 12, border: `1px solid ${BC.bdr}` }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: BC.gold, marginBottom: 8 }}>{yr.year} · {yr.location}</div>
+                <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.gold, marginBottom: 8 }}>{yr.year} · {yr.location}</div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                  <div style={{ fontSize: 12, color: BC.t1 }}><span style={{ color: teams.A.accent, fontWeight: 700 }}>{yr.teamAName}</span> {yr.teamAScore}</div>
-                  <div style={{ fontSize: 12, color: BC.t1 }}><span style={{ color: teams.B.accent, fontWeight: 700 }}>{yr.teamBName}</span> {yr.teamBScore}</div>
+                  <div style={{ fontSize: FS.small, color: BC.t1 }}><span style={{ color: teams.A.accent, fontWeight: 700 }}>{yr.teamAName}</span> {yr.teamAScore}</div>
+                  <div style={{ fontSize: FS.small, color: BC.t1 }}><span style={{ color: teams.B.accent, fontWeight: 700 }}>{yr.teamBName}</span> {yr.teamBScore}</div>
                 </div>
-                {yr.winner && <div style={{ fontSize: 11, color: BC.amber, fontWeight: 700 }}>🏆 {yr.winner} won the Bourbon Cup</div>}
+                {yr.winner && <div style={{ fontSize: FS.small, color: BC.amber, fontWeight: 700 }}>🏆 {yr.winner} won the Bourbon Cup</div>}
               </div>
             ))
           )}
           {user?.isDirector && (
             <div style={{ textAlign: "center", marginTop: 16 }}>
-              <div style={{ fontSize: 10, color: BC.t3 }}>Historical data can be added by directors via Firestore directly for now.</div>
+              <div style={{ fontSize: FS.label, color: BC.t3 }}>Historical data can be added by directors via Firestore directly for now.</div>
             </div>
           )}
         </div>
@@ -4197,7 +4201,7 @@ function PracticeScoringTab({
   }
   if (!activeMatch) {
     return (
-      <div style={{ textAlign: "center", padding: 40, color: BC.t3, fontSize: 13 }}>
+      <div style={{ textAlign: "center", padding: 40, color: BC.t3, fontSize: FS.body }}>
         You're not in a match for this Mash round.
       </div>
     );
@@ -4273,7 +4277,7 @@ function PracticeScoringTab({
     // Clinch hole — show "X&Y" prominently in green (you won) or red (you lost)
     if (clinchHole !== null && i === clinchHole) {
       const color = st > 0 ? BC.green : st < 0 ? BC.danger : BC.t3;
-      return <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 14, color, fontWeight: 800, lineHeight: `${cellH}px`, ...colBorder }}>{clinchText}</div>;
+      return <div key={i} style={{ flex: 1, textAlign: "center", fontSize: FS.body, color, fontWeight: 800, lineHeight: `${cellH}px`, ...colBorder }}>{clinchText}</div>;
     }
     // Post-clinch holes don't render a status (match is mathematically over)
     if (clinchHole !== null && i > clinchHole) {
@@ -4293,18 +4297,18 @@ function PracticeScoringTab({
       const someScored = matchPids.some(pid => (scoresMap[`${pid}_${i}`] || 0) > 0);
       const isActive = i === activeHole;
       if (someScored && !isActive) {
-        return <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 12, opacity: 0.55, lineHeight: `${cellH}px`, ...colBorder }} title="Missing score">⚠️</div>;
+        return <div key={i} style={{ flex: 1, textAlign: "center", fontSize: FS.small, opacity: 0.55, lineHeight: `${cellH}px`, ...colBorder }} title="Missing score">⚠️</div>;
       }
       return <div key={i} style={{ flex: 1, height: cellH, ...colBorder }} />;
     }
     // All-square — small "TIED" label
     if (st === 0) {
-      return <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 8, fontWeight: 700, color: BC.t3, lineHeight: `${cellH}px`, letterSpacing: 0.5, ...colBorder }}>TIED</div>;
+      return <div key={i} style={{ flex: 1, textAlign: "center", fontSize: FS.micro, fontWeight: 700, color: BC.t3, lineHeight: `${cellH}px`, letterSpacing: 0.5, ...colBorder }}>TIED</div>;
     }
     // Up or down — show the lead with arrow
     const color = st > 0 ? BC.green : BC.danger;
     return (
-      <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 14, fontWeight: 800, color, lineHeight: `${cellH}px`, ...colBorder }}>
+      <div key={i} style={{ flex: 1, textAlign: "center", fontSize: FS.body, fontWeight: 800, color, lineHeight: `${cellH}px`, ...colBorder }}>
         {st > 0 ? "▲" : "▼"}{Math.abs(st)}
       </div>
     );
@@ -4340,7 +4344,7 @@ function PracticeScoringTab({
         border: allScored && !cur ? `1.5px solid ${BC.amber}50` : "none",
         background: cur ? BC.amber : allScored ? BC.amber + "15" : partial ? BC.amber + "0a" : BC.card,
         color: cur ? "#0a0804" : allScored ? BC.amber : BC.t3,
-        fontSize: 15, fontWeight: 700, cursor: "pointer",
+        fontSize: FS.lead, fontWeight: 700, cursor: "pointer",
         outline: cur ? `2px solid ${BC.amber}` : "none", outlineOffset: 1,
       }}>{h + 1}</button>
     );
@@ -4389,7 +4393,7 @@ function PracticeScoringTab({
       <button onClick={() => setShowScorecard(true)} style={{
         width: "100%", padding: "5px 0", borderRadius: 8, marginBottom: 4, cursor: "pointer",
         background: BC.card, border: `1px solid ${BC.bdr}60`,
-        color: BC.t2, fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
+        color: BC.t2, fontSize: FS.small, fontWeight: 700, letterSpacing: 0.5,
       }}>
         Full Scorecard
       </button>
@@ -4415,27 +4419,27 @@ function PracticeScoringTab({
         <button onClick={() => goToHole(Math.max(0, activeHole - 1))} disabled={activeHole === 0} style={{
           width: 28, height: 36, borderRadius: 8, background: "none", border: "none",
           cursor: activeHole === 0 ? "default" : "pointer",
-          color: activeHole === 0 ? "rgba(255,255,255,0.35)" : "#fff", fontSize: 18, fontWeight: 700,
+          color: activeHole === 0 ? "rgba(255,255,255,0.35)" : "#fff", fontSize: FS.title, fontWeight: 700,
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>‹</button>
         <div style={{ flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 8px" }}>
           <div style={{ textAlign: "center", minWidth: 32 }}>
-            <div style={{ fontSize: 8, color: "#fff", fontWeight: 600, opacity: 0.75 }}>Par</div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: "#fff" }}>{par}</div>
+            <div style={{ fontSize: FS.micro, color: "#fff", fontWeight: 600, opacity: 0.75 }}>Par</div>
+            <div style={{ fontSize: FS.lead, fontWeight: 800, color: "#fff" }}>{par}</div>
           </div>
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 8, color: "#fff", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, opacity: 0.75 }}>Hole</div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: "#fff", lineHeight: 1 }}>{activeHole + 1}</div>
+            <div style={{ fontSize: FS.micro, color: "#fff", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, opacity: 0.75 }}>Hole</div>
+            <div style={{ fontSize: FS.hero, fontWeight: 800, color: "#fff", lineHeight: 1 }}>{activeHole + 1}</div>
           </div>
           <div style={{ textAlign: "center", minWidth: 32 }}>
-            <div style={{ fontSize: 8, color: "#fff", fontWeight: 600, opacity: 0.75 }}>HCP</div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: "#fff" }}>{hcp}</div>
+            <div style={{ fontSize: FS.micro, color: "#fff", fontWeight: 600, opacity: 0.75 }}>HCP</div>
+            <div style={{ fontSize: FS.lead, fontWeight: 800, color: "#fff" }}>{hcp}</div>
           </div>
         </div>
         <button onClick={() => goToHole(Math.min(17, activeHole + 1))} disabled={activeHole === 17} style={{
           width: 28, height: 36, borderRadius: 8, background: "none", border: "none",
           cursor: activeHole === 17 ? "default" : "pointer",
-          color: activeHole === 17 ? "rgba(255,255,255,0.35)" : "#fff", fontSize: 18, fontWeight: 700,
+          color: activeHole === 17 ? "rgba(255,255,255,0.35)" : "#fff", fontSize: FS.title, fontWeight: 700,
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>›</button>
       </div>
@@ -4467,10 +4471,10 @@ function PracticeScoringTab({
               {/* Top row — name + (CH) + stroke dots clustered on the LEFT,
                   with the Net line on its own row below. MNQ's layout. */}
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2, minWidth: 0 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: BC.t1, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>{p.name}</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: BC.hcpBlue, flexShrink: 0 }}>({ch})</span>
+                <span style={{ fontSize: FS.body, fontWeight: 700, color: BC.t1, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>{p.name}</span>
+                <span style={{ fontSize: FS.small, fontWeight: 700, color: BC.hcpBlue, flexShrink: 0 }}>({ch})</span>
                 {strokes > 0 && (
-                  <span style={{ color: BC.hcpBlue, fontSize: 12, letterSpacing: 1, flexShrink: 0, lineHeight: 1 }}>
+                  <span style={{ color: BC.hcpBlue, fontSize: FS.small, letterSpacing: 1, flexShrink: 0, lineHeight: 1 }}>
                     {"●".repeat(strokes)}
                   </span>
                 )}
@@ -4479,7 +4483,7 @@ function PracticeScoringTab({
                   text color for even/over par. The brand green was reading as
                   "good news" in the wrong register — golfers scan for red.
                   minHeight reserves the slot before scoring starts. */}
-              <div style={{ fontSize: 10, color: BC.t3, marginBottom: 3, lineHeight: 1.1, minHeight: 10 }}>
+              <div style={{ fontSize: FS.label, color: BC.t3, marginBottom: 3, lineHeight: 1.1, minHeight: 10 }}>
                 {run.thru > 0 && (
                   <>Net <strong style={{ color: run.netVsPar < 0 ? BC.danger : run.netVsPar === 0 ? BC.t3 : BC.t1, fontWeight: 700 }}>
                     {fmtScore(run.netVsPar)}
@@ -4506,15 +4510,15 @@ function PracticeScoringTab({
                 {/* Header */}
                 <div style={{ padding: "12px 14px", borderBottom: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>SCORECARD</div>
-                    <div style={{ fontSize: 10, color: BC.t3, marginTop: 2 }}>
+                    <div style={{ fontSize: FS.small, fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>SCORECARD</div>
+                    <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 2 }}>
                       Match {matchIdx + 1} · <span style={{ color: tcA.accent, fontWeight: 700 }}>T{t1Idx + 1}</span> vs <span style={{ color: tcB.accent, fontWeight: 700 }}>T{t2Idx + 1}</span>
                     </div>
                   </div>
                   <button onClick={() => setShowScorecard(false)} style={{
                     width: 28, height: 28, borderRadius: 6,
                     background: BC.inp, border: `1px solid ${BC.bdr}`,
-                    color: BC.t2, fontSize: 14, fontWeight: 700, cursor: "pointer",
+                    color: BC.t2, fontSize: FS.body, fontWeight: 700, cursor: "pointer",
                     display: "flex", alignItems: "center", justifyContent: "center",
                   }}>×</button>
                 </div>
@@ -4528,7 +4532,7 @@ function PracticeScoringTab({
                 <button onClick={() => setShowScorecard(false)} style={{
                   display: "block", width: "calc(100% - 24px)", margin: "0 auto 12px",
                   padding: "10px 0", background: BC.inp, border: `1px solid ${BC.bdr}`,
-                  borderRadius: 8, color: BC.t2, fontSize: 13, fontWeight: 600,
+                  borderRadius: 8, color: BC.t2, fontSize: FS.body, fontWeight: 600,
                   cursor: "pointer", letterSpacing: 0.4,
                 }}>
                   Close
@@ -4724,7 +4728,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
       const sectionParTotal = sectionPars.reduce((a, b) => a + b, 0);
       const labelW = 46;
       const totW = 32;
-      const lblBase = { width: labelW, flexShrink: 0, fontSize: 9, fontWeight: 700, color: BC.t3, display: "flex", alignItems: "center", paddingLeft: 4, borderRight: gridLine, textTransform: "uppercase", letterSpacing: 0.3 };
+      const lblBase = { width: labelW, flexShrink: 0, fontSize: FS.label, fontWeight: 700, color: BC.t3, display: "flex", alignItems: "center", paddingLeft: 4, borderRight: gridLine, textTransform: "uppercase", letterSpacing: 0.3 };
       const totBase = { width: totW, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", borderLeft: gridLine };
 
       const renderPlayerRow = (pid) => {
@@ -4735,7 +4739,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
         return (
           <div key={pid} style={{ display: "flex", alignItems: "center", borderBottom: gridLine }}>
             <div style={{ ...lblBase, height: 38, gap: 4, paddingTop: 0 }}>
-              <span style={{ fontSize: 12, fontWeight: 800, color: tc?.accent || BC.t1 }}>{getInitials(p?.name)}</span>
+              <span style={{ fontSize: FS.small, fontWeight: 800, color: tc?.accent || BC.t1 }}>{getInitials(p?.name)}</span>
             </div>
             {Array.from({ length: 9 }, (_, i) => {
               const h = i + offset;
@@ -4744,12 +4748,12 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
               if (s > 0) grossTot += s;
               return (
                 <div key={i} style={{ flex: 1, height: 38, display: "flex", alignItems: "center", justifyContent: "center", borderRight: i < 8 ? gridLine : "none" }}>
-                  <ScoreCell score={s} par={holePars[h]} strokes={st} size={13} />
+                  <ScoreCell score={s} par={holePars[h]} strokes={st} size={FS.body} />
                 </div>
               );
             })}
             <div style={{ ...totBase, height: 38 }}>
-              <span style={{ fontSize: 13, fontWeight: 800, color: BC.t1 }}>{grossTot || ""}</span>
+              <span style={{ fontSize: FS.body, fontWeight: 800, color: BC.t1 }}>{grossTot || ""}</span>
             </div>
           </div>
         );
@@ -4760,7 +4764,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
         const tc = isT1Side ? tcA : tcB;
         return (
           <div style={{ display: "flex", alignItems: "center", borderBottom: gridLine, background: tc.color + "15" }}>
-            <div style={{ ...lblBase, height: 32, fontSize: 9, fontWeight: 800, color: tc.accent }}>NET</div>
+            <div style={{ ...lblBase, height: 32, fontSize: FS.label, fontWeight: 800, color: tc.accent }}>NET</div>
             {Array.from({ length: 9 }, (_, i) => {
               const h = i + offset;
               let tNet = 0, ok = true;
@@ -4775,16 +4779,16 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                 <div key={i} style={{ flex: 1, height: 32, display: "flex", alignItems: "center", justifyContent: "center", borderRight: i < 8 ? gridLine : "none" }}>
                   {won ? (
                     <div style={{ width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 4, border: `1.5px solid ${tc.accent}`, background: tc.accent + "20" }}>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: BC.t1 }}>{ok ? tNet : "·"}</span>
+                      <span style={{ fontSize: FS.body, fontWeight: 800, color: BC.t1 }}>{ok ? tNet : "·"}</span>
                     </div>
                   ) : (
-                    <span style={{ fontSize: 13, fontWeight: 800, color: ok ? BC.t1 : BC.t3 + "40" }}>{ok ? tNet : "·"}</span>
+                    <span style={{ fontSize: FS.body, fontWeight: 800, color: ok ? BC.t1 : BC.t3 + "40" }}>{ok ? tNet : "·"}</span>
                   )}
                 </div>
               );
             })}
             <div style={{ ...totBase, height: 32 }}>
-              <span style={{ fontSize: 13, fontWeight: 800, color: BC.t1 }}>{netTot || ""}</span>
+              <span style={{ fontSize: FS.body, fontWeight: 800, color: BC.t1 }}>{netTot || ""}</span>
             </div>
           </div>
         );
@@ -4792,7 +4796,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
 
       const renderMatchRow = () => (
         <div style={{ display: "flex", alignItems: "center", background: BC.amber + "12", borderBottom: gridLine }}>
-          <div style={{ ...lblBase, height: 28, color: BC.amber, fontWeight: 800, fontSize: 9 }}>MATCH</div>
+          <div style={{ ...lblBase, height: 28, color: BC.amber, fontWeight: 800, fontSize: FS.label }}>MATCH</div>
           {Array.from({ length: 9 }, (_, i) => {
             const h = i + offset;
             const st = t1Statuses[h];
@@ -4802,7 +4806,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
               return (
                 <div key={i} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", height: 28, ...colBdr }}>
                   <div style={{ border: `1.5px solid ${color}`, borderRadius: 4, padding: "0 4px", lineHeight: "20px" }}>
-                    <span style={{ fontSize: 12, fontWeight: 800, color, whiteSpace: "nowrap" }}>{t1ClinchText}</span>
+                    <span style={{ fontSize: FS.small, fontWeight: 800, color, whiteSpace: "nowrap" }}>{t1ClinchText}</span>
                   </div>
                 </div>
               );
@@ -4815,8 +4819,8 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
             }
             const color = st > 0 ? "#22c55e" : st < 0 ? BC.danger : BC.t3;
             return (
-              <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 12, fontWeight: 800, color, lineHeight: "28px", ...colBdr }}>
-                {st > 0 ? <><span style={{ fontSize: 12 }}>▲</span>{st}</> : st < 0 ? <><span style={{ fontSize: 12 }}>▼</span>{Math.abs(st)}</> : <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.5 }}>TIED</span>}
+              <div key={i} style={{ flex: 1, textAlign: "center", fontSize: FS.small, fontWeight: 800, color, lineHeight: "28px", ...colBdr }}>
+                {st > 0 ? <><span style={{ fontSize: FS.small }}>▲</span>{st}</> : st < 0 ? <><span style={{ fontSize: FS.small }}>▼</span>{Math.abs(st)}</> : <span style={{ fontSize: FS.micro, fontWeight: 700, letterSpacing: 0.5 }}>TIED</span>}
               </div>
             );
           })}
@@ -4827,31 +4831,31 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
       return (
         <div style={{ marginBottom: 10, border: `1px solid ${BC.bdr}`, borderRadius: 10, overflow: "hidden" }}>
           <div style={{ display: "flex", background: BC.amber }}>
-            <div style={{ ...lblBase, height: 26, color: "#0a0804", opacity: 0.85, borderRight: "none", fontWeight: 800, fontSize: 10 }}>
+            <div style={{ ...lblBase, height: 26, color: "#0a0804", opacity: 0.85, borderRight: "none", fontWeight: 800, fontSize: FS.label }}>
               {offset === 0 ? "FRONT" : "BACK"}
             </div>
             {Array.from({ length: 9 }, (_, i) => (
               <div key={i} style={{ flex: 1, height: 26, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <span style={{ fontSize: 12, fontWeight: 800, color: "#0a0804" }}>{i + offset + 1}</span>
+                <span style={{ fontSize: FS.small, fontWeight: 800, color: "#0a0804" }}>{i + offset + 1}</span>
               </div>
             ))}
             <div style={{ ...totBase, height: 26, borderLeft: "none" }}>
-              <span style={{ fontSize: 10, fontWeight: 800, color: "#0a0804" }}>TOT</span>
+              <span style={{ fontSize: FS.label, fontWeight: 800, color: "#0a0804" }}>TOT</span>
             </div>
           </div>
           <div style={{ display: "flex", borderBottom: gridLine, background: BC.amber + "18" }}>
             <div style={{ ...lblBase, height: 22 }}>PAR</div>
             {sectionPars.map((p, i) => (
-              <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 11, color: BC.t2, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", height: 22, borderRight: i < 8 ? gridLine : "none" }}>{p}</div>
+              <div key={i} style={{ flex: 1, textAlign: "center", fontSize: FS.label, color: BC.t2, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", height: 22, borderRight: i < 8 ? gridLine : "none" }}>{p}</div>
             ))}
             <div style={{ ...totBase, height: 22 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: BC.t3 }}>{sectionParTotal}</span>
+              <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3 }}>{sectionParTotal}</span>
             </div>
           </div>
           <div style={{ display: "flex", borderBottom: gridLine, background: BC.inp }}>
             <div style={{ ...lblBase, height: 20 }}>HCP</div>
             {sectionHcps.map((h, i) => (
-              <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 10, color: BC.t3, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", height: 20, borderRight: i < 8 ? gridLine : "none" }}>{h}</div>
+              <div key={i} style={{ flex: 1, textAlign: "center", fontSize: FS.label, color: BC.t3, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", height: 20, borderRight: i < 8 ? gridLine : "none" }}>{h}</div>
             ))}
             <div style={{ ...totBase, height: 20 }} />
           </div>
@@ -4992,10 +4996,10 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
       <div>
         {/* Course + HCP Mode */}
         <div style={{ background: BC.card, borderRadius: 10, padding: 12, marginBottom: 12, border: `1px solid ${BC.bdr}` }}>
-          <div style={{ fontSize: 10, color: BC.t3, marginBottom: 6, fontWeight: 700, letterSpacing: 1 }}>COURSE</div>
+          <div style={{ fontSize: FS.label, color: BC.t3, marginBottom: 6, fontWeight: 700, letterSpacing: 1 }}>COURSE</div>
           <select value={selCourse} onChange={e => setSelCourse(e.target.value)} style={{
             width: "100%", padding: "8px 10px", background: BC.inp, border: `1px solid ${BC.bdr}`,
-            borderRadius: 6, color: BC.t1, fontSize: 13, marginBottom: 10,
+            borderRadius: 6, color: BC.t1, fontSize: FS.body, marginBottom: 10,
           }}>
             <option value="">— Select course —</option>
             {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -5010,10 +5014,10 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
               tee names. */}
           {courseTees.length > 0 && (
             <>
-              <div style={{ fontSize: 10, color: BC.t3, marginBottom: 6, fontWeight: 700, letterSpacing: 1 }}>TEE BOX</div>
+              <div style={{ fontSize: FS.label, color: BC.t3, marginBottom: 6, fontWeight: 700, letterSpacing: 1 }}>TEE BOX</div>
               <select value={selTee} onChange={e => setSelTee(e.target.value)} style={{
                 width: "100%", padding: "8px 10px", background: BC.inp, border: `1px solid ${BC.bdr}`,
-                borderRadius: 6, color: BC.t1, fontSize: 13, marginBottom: 10,
+                borderRadius: 6, color: BC.t1, fontSize: FS.body, marginBottom: 10,
               }}>
                 {courseTees.map(t => {
                   const slope = parseFloat(t.slope) || 113;
@@ -5029,11 +5033,11 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
             </>
           )}
 
-          <div style={{ fontSize: 10, color: BC.t3, marginBottom: 6, fontWeight: 700, letterSpacing: 1 }}>HANDICAP MODE</div>
+          <div style={{ fontSize: FS.label, color: BC.t3, marginBottom: 6, fontWeight: 700, letterSpacing: 1 }}>HANDICAP MODE</div>
           <div style={{ display: "flex", gap: 6 }}>
             {[["low_man", "Low Man"], ["full", "Full Strokes"]].map(([k, label]) => (
               <button key={k} onClick={() => setHcpMode(k)} style={{
-                flex: 1, padding: "8px 0", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                flex: 1, padding: "8px 0", borderRadius: 8, fontSize: FS.small, fontWeight: 700, cursor: "pointer",
                 background: hcpMode === k ? BC.amber + "22" : BC.inp,
                 border: `1px solid ${hcpMode === k ? BC.amber : BC.bdr}`,
                 color: hcpMode === k ? BC.amber : BC.t2,
@@ -5045,8 +5049,8 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
         {/* Player picker */}
         <div style={{ background: BC.card, borderRadius: 10, padding: 12, marginBottom: 12, border: `1px solid ${BC.bdr}` }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <div style={{ fontSize: 10, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>SELECT 8 PLAYERS</div>
-            <div style={{ fontSize: 11, color: selPlayers.length === 8 ? BC.green : BC.amber, fontWeight: 700 }}>{selPlayers.length}/8</div>
+            <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>SELECT 8 PLAYERS</div>
+            <div style={{ fontSize: FS.small, color: selPlayers.length === 8 ? BC.green : BC.amber, fontWeight: 700 }}>{selPlayers.length}/8</div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
             {sortedPlayers.map(p => {
@@ -5059,18 +5063,18 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                   background: isSel ? teamColor + "22" : BC.inp,
                   border: `1px solid ${isSel ? teamColor : BC.bdr}`,
                   color: isSel ? BC.t1 : BC.t2,
-                  fontSize: 12, fontWeight: 600, cursor: "pointer", textAlign: "left",
+                  fontSize: FS.small, fontWeight: 600, cursor: "pointer", textAlign: "left",
                   display: "flex", alignItems: "center", gap: 6,
                 }}>
                   <span style={{ width: 6, height: 6, borderRadius: "50%", background: teamColor, flexShrink: 0 }} />
                   <span style={{
-                    fontSize: 9, fontWeight: 800, color: isSel ? BC.t1 : BC.t3, letterSpacing: 0.5,
+                    fontSize: FS.label, fontWeight: 800, color: isSel ? BC.t1 : BC.t3, letterSpacing: 0.5,
                     background: isSel ? teamColor + "44" : BC.bdr + "60",
                     padding: "2px 5px", borderRadius: 4, flexShrink: 0,
                   }}>{getInitials(p.name)}</span>
                   <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
                   {slotIdx !== -1 && (
-                    <span style={{ fontSize: 9, fontWeight: 800, color: PRACTICE_TEAM_COLORS[slotIdx].accent, flexShrink: 0 }}>
+                    <span style={{ fontSize: FS.label, fontWeight: 800, color: PRACTICE_TEAM_COLORS[slotIdx].accent, flexShrink: 0 }}>
                       T{slotIdx + 1}
                     </span>
                   )}
@@ -5083,8 +5087,8 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
         {/* Team builder */}
         {selPlayers.length === 8 && (
           <div style={{ background: BC.card, borderRadius: 10, padding: 12, marginBottom: 12, border: `1px solid ${BC.bdr}` }}>
-            <div style={{ fontSize: 10, color: BC.t3, marginBottom: 10, fontWeight: 700, letterSpacing: 1 }}>BUILD 4 TEAMS OF 2</div>
-            <div style={{ fontSize: 11, color: BC.t2, marginBottom: 10 }}>
+            <div style={{ fontSize: FS.label, color: BC.t3, marginBottom: 10, fontWeight: 700, letterSpacing: 1 }}>BUILD 4 TEAMS OF 2</div>
+            <div style={{ fontSize: FS.small, color: BC.t2, marginBottom: 10 }}>
               Tap a team slot to make it active, then tap players above to add them.
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
@@ -5097,21 +5101,21 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                     padding: "10px 12px", borderRadius: 10,
                     background: isActive ? tc.color + "55" : (filled ? tc.color + "20" : BC.inp),
                     border: `2px solid ${isActive ? tc.accent : (filled ? tc.accent + "55" : BC.bdr)}`,
-                    color: BC.t1, fontSize: 11, fontWeight: 700, cursor: "pointer", textAlign: "left",
+                    color: BC.t1, fontSize: FS.small, fontWeight: 700, cursor: "pointer", textAlign: "left",
                     minHeight: 70,
                   }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                       <span style={{ color: tc.accent, letterSpacing: 1 }}>TEAM {i + 1}</span>
-                      <span style={{ fontSize: 9, color: BC.t3 }}>{slot.length}/2</span>
+                      <span style={{ fontSize: FS.label, color: BC.t3 }}>{slot.length}/2</span>
                     </div>
-                    {slot.length === 0 && <div style={{ fontSize: 10, color: BC.t3, fontStyle: "italic" }}>(empty)</div>}
+                    {slot.length === 0 && <div style={{ fontSize: FS.label, color: BC.t3, fontStyle: "italic" }}>(empty)</div>}
                     {slot.map(pid => {
                       const p = tPlayers.find(t => t.player_id === pid);
                       return (
                         <div key={pid} onClick={(e) => { e.stopPropagation(); setTeamSlots(s => s.map((sl, ix) => ix === i ? sl.filter(x => x !== pid) : sl)); }}
-                          style={{ fontSize: 11, fontWeight: 600, color: BC.t1, marginBottom: 2, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+                          style={{ fontSize: FS.small, fontWeight: 600, color: BC.t1, marginBottom: 2, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
                           <span style={{
-                            fontSize: 9, fontWeight: 800, color: tc.accent, letterSpacing: 0.5,
+                            fontSize: FS.label, fontWeight: 800, color: tc.accent, letterSpacing: 0.5,
                             background: tc.color + "55", padding: "2px 4px", borderRadius: 3, flexShrink: 0,
                           }}>{getInitials(p?.name)}</span>
                           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p?.name || pid}</span>
@@ -5124,7 +5128,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
             </div>
             {/* Player chips for assigning */}
             <div style={{ borderTop: `1px solid ${BC.bdr}`, paddingTop: 10 }}>
-              <div style={{ fontSize: 9, color: BC.t3, fontWeight: 700, marginBottom: 6, letterSpacing: 1 }}>
+              <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, marginBottom: 6, letterSpacing: 1 }}>
                 TAP TO ASSIGN TO TEAM {activeSlot + 1}
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
@@ -5139,11 +5143,11 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                       padding: "6px 10px", borderRadius: 14,
                       background: inActive ? tc.accent + "33" : inOther ? BC.inp : BC.hover,
                       border: `1px solid ${inActive ? tc.accent : inOther ? tc.accent + "44" : BC.bdr}`,
-                      color: inOther ? BC.t3 : BC.t1, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                      color: inOther ? BC.t3 : BC.t1, fontSize: FS.small, fontWeight: 700, cursor: "pointer",
                       opacity: inOther && !inActive ? 0.55 : 1, letterSpacing: 0.5,
                     }}>
                       {getInitials(p?.name)}
-                      {slotIdx !== -1 && <span style={{ marginLeft: 4, fontSize: 9, color: tc.accent, fontWeight: 800 }}>T{slotIdx + 1}</span>}
+                      {slotIdx !== -1 && <span style={{ marginLeft: 4, fontSize: FS.label, color: tc.accent, fontWeight: 800 }}>T{slotIdx + 1}</span>}
                     </button>
                   );
                 })}
@@ -5153,9 +5157,9 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
             {/* Match preview */}
             {allTeamsComplete && (
               <div style={{ marginTop: 12, padding: 10, background: BC.amber + "10", borderRadius: 8, border: `1px solid ${BC.amber}33` }}>
-                <div style={{ fontSize: 9, color: BC.amber, fontWeight: 800, letterSpacing: 1, marginBottom: 6 }}>MATCHUPS</div>
+                <div style={{ fontSize: FS.label, color: BC.amber, fontWeight: 800, letterSpacing: 1, marginBottom: 6 }}>MATCHUPS</div>
                 {[[0, 1], [2, 3]].map(([a, b], mi) => (
-                  <div key={mi} style={{ fontSize: 11, color: BC.t1, marginBottom: 4, display: "flex", gap: 4 }}>
+                  <div key={mi} style={{ fontSize: FS.small, color: BC.t1, marginBottom: 4, display: "flex", gap: 4 }}>
                     <span style={{ color: BC.t3, marginRight: 4 }}>Match {mi + 1}:</span>
                     <span style={{ color: PRACTICE_TEAM_COLORS[a].accent, fontWeight: 700 }}>T{a + 1}</span>
                     <span style={{ color: BC.t3 }}>vs</span>
@@ -5173,7 +5177,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
           background: allTeamsComplete && selCourse ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.inp,
           border: `1px solid ${allTeamsComplete && selCourse ? BC.amber : BC.bdr}`,
           color: allTeamsComplete && selCourse ? "#0a0804" : BC.t3,
-          fontSize: 13, fontWeight: 800, cursor: allTeamsComplete && selCourse ? "pointer" : "not-allowed",
+          fontSize: FS.body, fontWeight: 800, cursor: allTeamsComplete && selCourse ? "pointer" : "not-allowed",
           letterSpacing: 1, marginBottom: 10,
         }}>
           {event ? "UPDATE EVENT" : "SAVE EVENT"}
@@ -5183,7 +5187,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
         {event && (
           <button onClick={() => setShowResetConfirm(true)} style={{
             width: "100%", padding: "8px 0", borderRadius: 8, background: "transparent",
-            border: `1px solid ${BC.danger}55`, color: BC.danger, fontSize: 11, fontWeight: 700, cursor: "pointer",
+            border: `1px solid ${BC.danger}55`, color: BC.danger, fontSize: FS.small, fontWeight: 700, cursor: "pointer",
           }}>
             Reset Event (clear scores)
           </button>
@@ -5280,15 +5284,15 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                 gap: 10,
               }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>
+                  <div style={{ fontSize: FS.body, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>
                     {teamPlayers.map(p => p.name).join(" / ")}
                   </div>
                 </div>
                 <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: parColor, lineHeight: 1 }}>
+                  <div style={{ fontSize: FS.title, fontWeight: 800, color: parColor, lineHeight: 1 }}>
                     {thru === 0 ? "—" : fmtScore(toPar)}
                   </div>
-                  <div style={{ fontSize: 9, color: BC.t3, marginTop: 3 }}>Thru {thru}</div>
+                  <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 3 }}>Thru {thru}</div>
                 </div>
               </div>
             );
@@ -5344,7 +5348,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                     match-status pill so it's spatially associated with
                     score data instead of being a header element. The
                     chevron remains the obvious "this card expands" cue. */}
-                <div style={{ position: "absolute", top: 8, right: 12, fontSize: 12, color: BC.t3 }}>
+                <div style={{ position: "absolute", top: 8, right: 12, fontSize: FS.small, color: BC.t3 }}>
                   {isExpanded ? "▴" : "▾"}
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10 }}>
@@ -5363,7 +5367,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                     borderLeft: `3px solid ${BC.amber}`,
                     paddingLeft: 8,
                   }}>
-                    {t1Players.map(p => p && <div key={p.player_id} style={{ fontSize: 14, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{p.name}</div>)}
+                    {t1Players.map(p => p && <div key={p.player_id} style={{ fontSize: FS.body, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{p.name}</div>)}
                   </div>
                   {/* Status column — vertical stack: matchResultText pill
                       on top, "Thru N" subtitle below it. Triangles flank
@@ -5383,9 +5387,9 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                           <Triangle direction="right" />
                         </div>
                       )}
-                      <div style={{ fontSize: 14, fontWeight: 800, color: BC.amber, letterSpacing: 0.5 }}>{r.matchResultText}</div>
+                      <div style={{ fontSize: FS.body, fontWeight: 800, color: BC.amber, letterSpacing: 0.5 }}>{r.matchResultText}</div>
                     </div>
-                    <div style={{ fontSize: 9, color: BC.t3, fontWeight: 600 }}>Thru {r.thru}</div>
+                    <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 600 }}>Thru {r.thru}</div>
                   </div>
                   {/* Team 2 — full names with a vertical bourbon-brown
                       stripe on the RIGHT edge to identify this team as
@@ -5398,7 +5402,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                     borderRight: `3px solid ${BC.gold}`,
                     paddingRight: 8,
                   }}>
-                    {t2Players.map(p => p && <div key={p.player_id} style={{ fontSize: 14, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{p.name}</div>)}
+                    {t2Players.map(p => p && <div key={p.player_id} style={{ fontSize: FS.body, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{p.name}</div>)}
                   </div>
                 </div>
                 {/* Hole-by-hole tracker — two-row "battleship" layout.
@@ -5437,14 +5441,14 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                   <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: 2, paddingTop: 13 }}>
                     <div style={{ display: "flex", gap: 1 }}>
                       {(t1Players.length ? t1Players : [null, null]).map((p, idx) => (
-                        <div key={`t1-${idx}`} style={{ width: 12, fontSize: 9, color: BC.amber, fontWeight: 800, lineHeight: "10px", textAlign: "center" }}>
+                        <div key={`t1-${idx}`} style={{ width: 12, fontSize: FS.label, color: BC.amber, fontWeight: 800, lineHeight: "10px", textAlign: "center" }}>
                           {p?.name?.trim().split(/\s+/).slice(-1)[0]?.[0]?.toUpperCase() || "?"}
                         </div>
                       ))}
                     </div>
                     <div style={{ display: "flex", gap: 1 }}>
                       {(t2Players.length ? t2Players : [null, null]).map((p, idx) => (
-                        <div key={`t2-${idx}`} style={{ width: 12, fontSize: 9, color: BC.gold, fontWeight: 800, lineHeight: "10px", textAlign: "center" }}>
+                        <div key={`t2-${idx}`} style={{ width: 12, fontSize: FS.label, color: BC.gold, fontWeight: 800, lineHeight: "10px", textAlign: "center" }}>
                           {p?.name?.trim().split(/\s+/).slice(-1)[0]?.[0]?.toUpperCase() || "?"}
                         </div>
                       ))}
@@ -5461,7 +5465,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                         (10-18) fit cleanly within their cell width. */}
                     <div style={{ display: "flex", gap: 1, marginBottom: 2 }}>
                       {Array.from({ length: 18 }, (_, i) => (
-                        <div key={i} style={{ flex: 1, fontSize: 7, color: BC.t3, textAlign: "center", fontWeight: 700, lineHeight: "10px" }}>
+                        <div key={i} style={{ flex: 1, fontSize: FS.micro, color: BC.t3, textAlign: "center", fontWeight: 700, lineHeight: "10px" }}>
                           {i + 1}
                         </div>
                       ))}
@@ -5586,7 +5590,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
           }}>
             {[["gross", "Gross"], ["net", "Net"]].map(([k, label]) => (
               <button key={k} onClick={() => setSkinsMode(k)} style={{
-                padding: "5px 10px", borderRadius: 8, fontSize: 10, fontWeight: 700, cursor: "pointer",
+                padding: "5px 10px", borderRadius: 8, fontSize: FS.label, fontWeight: 700, cursor: "pointer",
                 background: skinsMode === k ? BC.amberDim : "transparent",
                 color: skinsMode === k ? "#fff" : BC.t3, border: "none",
                 letterSpacing: 0.4,
@@ -5610,22 +5614,22 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
               const holes = Array.from({ length: 9 }, (_, i) => startHole + i);
               return (
                 <div key={title} style={{ background: BC.card, borderRadius: 10, padding: 8, marginBottom: 10, border: `1px solid ${BC.bdr}` }}>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: BC.amber, letterSpacing: 1.5, marginBottom: 6, padding: "2px 4px 4px" }}>
+                  <div style={{ fontSize: FS.small, fontWeight: 800, color: BC.amber, letterSpacing: 1.5, marginBottom: 6, padding: "2px 4px 4px" }}>
                     {title}
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: `28px repeat(9, 1fr)`, gap: 2 }}>
                     {/* HOLE row — header strip with hole numbers, tinted to
                         sit visually above the data rows. */}
-                    <div style={{ fontSize: 8, color: BC.t3, fontWeight: 800, padding: "5px 0", textAlign: "right", paddingRight: 4, letterSpacing: 0.5 }}>HOLE</div>
+                    <div style={{ fontSize: FS.micro, color: BC.t3, fontWeight: 800, padding: "5px 0", textAlign: "right", paddingRight: 4, letterSpacing: 0.5 }}>HOLE</div>
                     {holes.map(h => (
-                      <div key={`hole-${h}`} style={{ fontSize: 11, fontWeight: 800, color: BC.t1, padding: "5px 0", textAlign: "center", background: BC.inp, borderRadius: 3 }}>
+                      <div key={`hole-${h}`} style={{ fontSize: FS.small, fontWeight: 800, color: BC.t1, padding: "5px 0", textAlign: "center", background: BC.inp, borderRadius: 3 }}>
                         {h + 1}
                       </div>
                     ))}
                     {/* PAR row — secondary reference, lighter weight than HOLE. */}
-                    <div style={{ fontSize: 8, color: BC.t3, fontWeight: 700, padding: "3px 0", textAlign: "right", paddingRight: 4, letterSpacing: 0.5 }}>PAR</div>
+                    <div style={{ fontSize: FS.micro, color: BC.t3, fontWeight: 700, padding: "3px 0", textAlign: "right", paddingRight: 4, letterSpacing: 0.5 }}>PAR</div>
                     {holes.map(h => (
-                      <div key={`par-${h}`} style={{ fontSize: 10, color: BC.t3, fontWeight: 600, padding: "3px 0", textAlign: "center" }}>
+                      <div key={`par-${h}`} style={{ fontSize: FS.label, color: BC.t3, fontWeight: 600, padding: "3px 0", textAlign: "center" }}>
                         {holePars[h]}
                       </div>
                     ))}
@@ -5640,7 +5644,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                       const cells = [];
                       cells.push(
                         <div key={`init-${p.player_id}`} style={{
-                          fontSize: 10, fontWeight: 800, color: BC.t1,
+                          fontSize: FS.label, fontWeight: 800, color: BC.t1,
                           padding: "5px 0", textAlign: "right", paddingRight: 4,
                           alignSelf: "center", letterSpacing: 0.3,
                         }}>
@@ -5681,10 +5685,10 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                             boxSizing: "border-box",
                             minHeight: 32,
                           }}>
-                            <div style={{ height: 8, display: "flex", alignItems: "center", fontSize: 8, fontWeight: 900, letterSpacing: 1, lineHeight: 1, color: dotColor }}>
+                            <div style={{ height: 8, display: "flex", alignItems: "center", fontSize: FS.micro, fontWeight: 900, letterSpacing: 1, lineHeight: 1, color: dotColor }}>
                               {!isGross && strokes > 0 ? "•".repeat(strokes) : ""}
                             </div>
-                            <div style={{ fontSize: 12, fontWeight: skinWin ? 800 : 700, lineHeight: "14px" }}>
+                            <div style={{ fontSize: FS.small, fontWeight: skinWin ? 800 : 700, lineHeight: "14px" }}>
                               {isGross ? (score || "—") : (score ? netScore : "—")}
                             </div>
                           </div>
@@ -5699,8 +5703,8 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
 
             {/* Totals */}
             <div style={{ background: BC.card, borderRadius: 10, padding: 12, border: `1px solid ${BC.bdr}` }}>
-              <div style={{ fontSize: 9, color: BC.t3, fontWeight: 800, letterSpacing: 1, marginBottom: 8 }}>SKINS TOTAL</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 6, fontSize: 11, marginBottom: 4, color: BC.t3, fontWeight: 700 }}>
+              <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 800, letterSpacing: 1, marginBottom: 8 }}>SKINS TOTAL</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 6, fontSize: FS.small, marginBottom: 4, color: BC.t3, fontWeight: 700 }}>
                 <div>PLAYER</div>
                 <div style={{ width: 40, textAlign: "right" }}>GROSS</div>
                 <div style={{ width: 40, textAlign: "right" }}>NET</div>
@@ -5710,7 +5714,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                 if (c.gross === 0 && c.net === 0) return null;
                 const tc = renderPlayerTeamColor(p.player_id);
                 return (
-                  <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 6, padding: "4px 0", borderTop: `1px solid ${BC.bdr}33`, fontSize: 12 }}>
+                  <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 6, padding: "4px 0", borderTop: `1px solid ${BC.bdr}33`, fontSize: FS.small }}>
                     <div style={{ color: BC.t1, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
                       <span style={{ width: 4, height: 4, borderRadius: "50%", background: tc?.accent || BC.t3 }} />
                       {p.name}
@@ -5726,9 +5730,9 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
 
         {tab === "ctp" && (
           <div style={{ background: BC.card, borderRadius: 10, padding: 12, border: `1px solid ${BC.bdr}` }}>
-            <div style={{ fontSize: 9, color: BC.t3, fontWeight: 800, letterSpacing: 1, marginBottom: 10 }}>CLOSEST TO PIN — PAR 3 HOLES</div>
+            <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 800, letterSpacing: 1, marginBottom: 10 }}>CLOSEST TO PIN — PAR 3 HOLES</div>
             {par3Holes.length === 0 && (
-              <div style={{ fontSize: 11, color: BC.t3, padding: 12, textAlign: "center" }}>
+              <div style={{ fontSize: FS.small, color: BC.t3, padding: 12, textAlign: "center" }}>
                 No par 3s configured for this course. Set hole pars in Admin → Courses.
               </div>
             )}
@@ -5737,11 +5741,11 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
               return (
                 <div key={h} style={{ marginBottom: 14, paddingBottom: 10, borderBottom: `1px solid ${BC.bdr}33` }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: BC.gold }}>Hole {h + 1}</div>
+                    <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.gold }}>Hole {h + 1}</div>
                     {winner && (
                       <button onClick={() => onSetCtp(h, null)} style={{
                         background: "transparent", border: `1px solid ${BC.danger}55`, color: BC.danger,
-                        borderRadius: 4, padding: "2px 8px", fontSize: 9, fontWeight: 600, cursor: "pointer",
+                        borderRadius: 4, padding: "2px 8px", fontSize: FS.label, fontWeight: 600, cursor: "pointer",
                       }}>Clear</button>
                     )}
                   </div>
@@ -5755,7 +5759,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                           padding: "6px 8px", borderRadius: 6,
                           background: isW ? tc.color + "55" : BC.inp,
                           border: `1px solid ${isW ? tc.accent : BC.bdr}`,
-                          color: isW ? BC.t1 : BC.t2, fontSize: 11, fontWeight: 600, cursor: "pointer", textAlign: "left",
+                          color: isW ? BC.t1 : BC.t2, fontSize: FS.small, fontWeight: 600, cursor: "pointer", textAlign: "left",
                           display: "flex", alignItems: "center", gap: 4,
                         }}>
                           <span style={{ width: 4, height: 4, borderRadius: "50%", background: tc.accent, flexShrink: 0 }} />
@@ -5772,7 +5776,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
                             if (parts.length <= 1) return nm;
                             return `${parts[0]} ${parts[parts.length - 1][0]}`;
                           })()}</span>
-                          {isW && <span style={{ fontSize: 10 }}>🎯</span>}
+                          {isW && <span style={{ fontSize: FS.label }}>🎯</span>}
                         </button>
                       );
                     })}
@@ -5815,8 +5819,8 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
           modes — full brand green #009144 on white in light, brightened
           #16a34a for visibility on the dark green-tinted bg. */}
       <div style={{ marginBottom: 12, padding: "10px 14px", background: BC.card, borderRadius: 10, border: `1px solid ${BC.amber}33`, textAlign: "center" }}>
-        <div style={{ fontSize: 14, fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>MASH ROUND</div>
-        <div style={{ fontSize: 10, color: BC.t3, marginTop: 2 }}>
+        <div style={{ fontSize: FS.body, fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>MASH ROUND</div>
+        <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 2 }}>
           {event ? `${course?.name || "Course TBD"} · ${event.player_ids?.length || 0} players · ${event.matches?.length || 0} matches` : "No event configured"}
         </div>
       </div>
@@ -5831,7 +5835,7 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
             return (
               <button key={t.k} onClick={() => { if (!isAct) setSubView(t.k); }} style={{
                 flex: 1, padding: "7px 8px", borderRadius: 17,
-                fontSize: 11, fontWeight: 700, border: "none",
+                fontSize: FS.small, fontWeight: 700, border: "none",
                 background: isAct ? BC.amber : "transparent",
                 color: isAct ? "#0a0804" : BC.t3,
                 cursor: isAct ? "default" : "pointer",
@@ -5931,7 +5935,7 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, 
               borderTop: idx === 0 ? "none" : `1px solid ${BC.bdr}22`,
               borderLeft: "none", borderRight: "none", borderBottom: "none",
               color: isActive ? BC.amber : BC.t1,
-              fontSize: 13, fontWeight: isActive ? 700 : 500,
+              fontSize: FS.body, fontWeight: isActive ? 700 : 500,
               cursor: "pointer", textAlign: "left",
               display: "flex", alignItems: "center", justifyContent: "space-between",
             }}>
@@ -5951,7 +5955,7 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, 
             width: "100%", padding: "12px 16px",
             background: "transparent",
             border: "none", borderTop: `1px solid ${BC.bdr}22`,
-            color: BC.t1, fontSize: 13, fontWeight: 500,
+            color: BC.t1, fontSize: FS.body, fontWeight: 500,
             cursor: "pointer", textAlign: "left",
             display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
           }}>
@@ -5981,7 +5985,7 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, 
             width: "100%", padding: "12px 16px",
             background: "transparent",
             border: "none",
-            color: BC.danger, fontSize: 13, fontWeight: 500,
+            color: BC.danger, fontSize: FS.body, fontWeight: 500,
             cursor: "pointer", textAlign: "left",
           }}>
             Logout
@@ -6898,11 +6902,11 @@ export default function App() {
                 display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
                 padding: "60px 20px", textAlign: "center",
               }}>
-                <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.4 }}>🥃</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: BC.t1, marginBottom: 6, letterSpacing: 0.3 }}>
+                <div style={{ fontSize: FS.jumbo, marginBottom: 12, opacity: 0.4 }}>🥃</div>
+                <div style={{ fontSize: FS.lead, fontWeight: 700, color: BC.t1, marginBottom: 6, letterSpacing: 0.3 }}>
                   No bets yet
                 </div>
-                <div style={{ fontSize: 12, color: BC.t3, maxWidth: 280, lineHeight: 1.5 }}>
+                <div style={{ fontSize: FS.small, color: BC.t3, maxWidth: 280, lineHeight: 1.5 }}>
                   Tournament betting will open closer to game time.
                 </div>
               </div>
@@ -7003,7 +7007,7 @@ export default function App() {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 24 }}>
                 {renderIcon(item.icon, active)}
               </div>
-              <span style={{ fontSize: 9, fontWeight: active ? 700 : 500, color: clr, lineHeight: 1 }}>{item.label}</span>
+              <span style={{ fontSize: FS.label, fontWeight: active ? 700 : 500, color: clr, lineHeight: 1 }}>{item.label}</span>
               {active && <div style={{ width: 16, height: 2, borderRadius: 1, background: BC.amber, marginTop: 2 }} />}
             </button>
           );
