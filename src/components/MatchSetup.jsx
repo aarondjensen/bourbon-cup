@@ -415,13 +415,13 @@ export function MatchSetup({
   // One match, as it appears under its tee time. The ⠿ handle carries the
   // drag; the M-number beside it is what the drag changes, since both the
   // number and the time belong to the slot rather than to the match.
+  // No "n SCORED" badge here. What is already being played matters at the one
+  // moment it can be lost — deleting the match — and deleteMatch says it
+  // there, in full, with the hole count and the players named. A badge on
+  // every row spent space restating that to nobody who was about to act on it.
   const matchRow = (m) => {
     const dragging = drag?.id === m.id;
     const draggable = canDragRow(m);
-    // What is riding on this row. Shown before the ✕ rather than only in the
-    // confirmation, so a director scanning the draw can see which matches are
-    // already being played without tapping anything.
-    const impact = matchScoreImpact({ match: m, holeData });
     return (
       <div key={m.id} style={{
         display: "flex", alignItems: "center", gap: 8, padding: "4px 0",
@@ -459,13 +459,6 @@ export function MatchSetup({
           <span style={{ color: BC.t3, fontSize: 11 }}> vs </span>
           <span style={{ color: teams.B.accent, fontWeight: 600 }}>{m.teamBNames?.join(" / ")}</span>
         </div>
-        {impact.hasScores && (
-          <span title={`${impact.holes} holes scored`} style={{
-            flexShrink: 0, fontSize: 8, fontWeight: 800, letterSpacing: 0.5,
-            padding: "3px 6px", borderRadius: 6, whiteSpace: "nowrap",
-            color: BC.green, border: `1px solid ${BC.green}55`, background: `${BC.green}14`,
-          }}>{impact.holes} SCORED</span>
-        )}
         <button onClick={() => deleteMatch(m)} style={xBtn}>✕</button>
       </div>
     );
@@ -638,13 +631,26 @@ export function MatchSetup({
               background: over ? `${BC.amber}14` : BC.card,
             }}
           >
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: rows.length ? 7 : 0 }}>
-              <span style={{ fontSize: 10, fontWeight: 800, color: BC.gold, letterSpacing: 1, flexShrink: 0 }}>G{gi + 1}</span>
-              <span style={{ fontSize: 13, fontWeight: 800, flexShrink: 0, color: times[gi] ? BC.t1 : BC.t3 }}>
-                {times[gi] ? stripAMPM(times[gi]) : "—"}
+            {/* The group and its time centred over the matches riding in it,
+                because that pair is the card's title rather than one more
+                thing in a row. A three-track grid with matched 1fr flanks is
+                what centres it on the CARD — with the count simply floated
+                right, the title would be centred on whatever space the count
+                left over, and would drift as "4/4" grew to "6/4 · too many". */}
+            <div style={{
+              display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "baseline",
+              marginBottom: rows.length ? 7 : 0,
+            }}>
+              <span />
+              <span style={{ display: "flex", alignItems: "baseline", gap: 8, justifySelf: "center" }}>
+                <span style={{ fontSize: 10, fontWeight: 800, color: BC.gold, letterSpacing: 1 }}>G{gi + 1}</span>
+                <span style={{ fontSize: 13, fontWeight: 800, color: times[gi] ? BC.t1 : BC.t3 }}>
+                  {times[gi] ? stripAMPM(times[gi]) : "—"}
+                </span>
               </span>
               <span style={{
-                fontSize: 9, fontWeight: 700, flex: 1, textAlign: "right",
+                fontSize: 9, fontWeight: 700, textAlign: "right", minWidth: 0,
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 color: tooMany ? BC.danger : BC.t3,
               }}>
                 {g.length}/{GROUP_TARGET}{tooMany ? " · too many" : ""}
