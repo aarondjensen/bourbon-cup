@@ -9,21 +9,45 @@
 //    • Toast           — the transient "slides down from the top" toast.
 //    • ScoreButtonRow  — the tappable par-relative score entry row.
 
-import { BC, FONT, ON_ACCENT, SHADOW, ON_AMBER, FS } from "../theme";
+import { BC, FONT, ON_ACCENT, ON_AMBER, SHADOW, ALPHA, dimHex, FS } from "../theme";
 
 
 // ── SegmentedToggle ──
 // options: array of [key, label]. `value` is the active key; `onChange(key)`
-// fires on tap. variant "gradient" (amber gradient + dark ink, the default)
-// or "flat" (solid amber + white). Extra container style via `style`
-// (e.g. { marginBottom: 14 } or { flex: 1 } inside a row).
+// fires on tap. Extra container style via `style` (e.g. { marginBottom: 14 }).
+//
+// Four variants, because the app genuinely has four of these and had built
+// every one of them by hand, seven times over, each drifting a little on
+// radius, padding and what "selected" looks like:
+//
+//   gradient  a sunken track with an amber-gradient thumb. The default, and
+//             what a mode switch inside a card looks like.
+//   flat      the same track, solid amber, white ink.
+//   pills     free-standing buttons with a gap between them, the selected one
+//             filled. This is a row of TABS — rounds, sub-tabs, matches —
+//             which sits on the page rather than in a card.
+//   outline   free-standing, selected marked by an amber edge and amber ink
+//             over the input fill rather than by being filled. For a picker
+//             standing among form controls, where a filled tab would read as
+//             a different kind of thing than the selects beside it.
+//
+// A track (gradient/flat) owns its own background and its buttons are
+// borderless; the free-standing pair (pills/outline) has no track and each
+// button carries its own edge. That is the whole difference.
 export function SegmentedToggle({ options, value, onChange, variant = "gradient", letterSpacing, style }) {
-  const activeBg = variant === "flat"
-    ? BC.amber
-    : `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`;
-  const activeFg = variant === "flat" ? ON_ACCENT : ON_AMBER;
+  const tracked = variant === "gradient" || variant === "flat";
+  const gradient = `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`;
+  const track = tracked
+    ? { background: BC.card, borderRadius: 20, padding: 3, border: `1px solid ${BC.bdr}` }
+    : { gap: 6 };
+  const btn = (on) => {
+    if (variant === "flat")    return { background: on ? BC.amber : "transparent", color: on ? ON_ACCENT : BC.t3, border: "none", borderRadius: 16 };
+    if (variant === "gradient")return { background: on ? gradient : "transparent", color: on ? ON_AMBER  : BC.t3, border: "none", borderRadius: 16 };
+    if (variant === "outline") return { background: on ? BC.amber + ALPHA.tint : BC.inp, color: on ? BC.amber : BC.t2, border: `1px solid ${on ? BC.amber : BC.bdr}`, borderRadius: 8 };
+    return { background: on ? gradient : BC.card, color: on ? ON_AMBER : BC.t2, border: `1px solid ${on ? "transparent" : BC.bdr}`, borderRadius: 8 };
+  };
   return (
-    <div style={{ display: "flex", background: BC.card, borderRadius: 20, padding: 3, border: `1px solid ${BC.bdr}`, ...style }}>
+    <div style={{ display: "flex", ...track, ...style }}>
       {options.map(([k, label]) => {
         const on = value === k;
         return (
@@ -31,10 +55,9 @@ export function SegmentedToggle({ options, value, onChange, variant = "gradient"
             key={k}
             onClick={onChange ? () => onChange(k) : undefined}
             style={{
-              flex: 1, padding: "8px 0", borderRadius: 16, fontSize: FS.small, fontWeight: 700,
-              cursor: "pointer", border: "none",
-              background: on ? activeBg : "transparent",
-              color: on ? activeFg : BC.t3,
+              flex: 1, padding: tracked ? "8px 0" : "8px 4px",
+              fontSize: FS.small, fontWeight: 700, cursor: "pointer",
+              fontFamily: FONT, ...btn(on),
               ...(letterSpacing != null ? { letterSpacing } : {}),
             }}
           >
@@ -90,19 +113,35 @@ export function Banner({ children, background = BC.amber, color = ON_ACCENT }) {
 }
 
 // ── Toast ──
-// Transient action feedback that slides down from the top-center. Renders
-// nothing when `message` is falsy, so callers just pass their toast state.
-export function Toast({ message, top = 30 }) {
+// Transient feedback, top-centre, sliding down. The app had two of these: an
+// amber one here for "hole saved", and a red/green `Notif` in App.jsx for
+// everything else — same job, same corner of the screen, two looks, and which
+// one you got depended on which screen you were standing on.
+//
+// This is the one. `type` picks the accent, so a message reads as what it is
+// before it is read at all; the chip stays dark in both modes because it
+// floats over whatever was already on screen and cannot borrow that screen's
+// surface without sometimes vanishing into it.
+//
+// Deliberately CONTROLLED — it renders `message` and nothing else. That is
+// what let the two merge: `notify()` is fire-and-forget and owns its own
+// 2.8s timer, while the scoring screens hold their toast open for exactly
+// the 1.8s auto-advance window and clear it the moment the hole changes.
+// Both are just a caller deciding when `message` is truthy.
+const TOAST_ACCENT = { error: "danger", warn: "warn", success: "green" };
+export function Toast({ message, type = "success", top = 30 }) {
   if (!message) return null;
+  const accent = BC[TOAST_ACCENT[type] || "green"];
   return (
     <>
       <style>{`@keyframes bcToastDown { 0% { transform: translateX(-50%) translateY(-20px); opacity: 0; } 100% { transform: translateX(-50%) translateY(0); opacity: 1; } }`}</style>
       <div style={{
         position: "fixed", top, left: "50%", transform: "translateX(-50%)",
-        background: BC.amber, color: ON_AMBER,
-        padding: "12px 32px", borderRadius: 12,
+        background: dimHex(accent, 0.42), border: `1px solid ${accent}`,
+        color: ON_ACCENT,
+        padding: "10px 22px", borderRadius: 12,
         fontSize: FS.body, fontWeight: 700, zIndex: 1000,
-        whiteSpace: "nowrap", textAlign: "center",
+        maxWidth: "80vw", textAlign: "center",
         boxShadow: `0 8px 32px ${SHADOW}`,
         animation: "bcToastDown 0.3s ease",
         fontFamily: FONT,

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { BC, FONT, ON_ACCENT, dimHex, SHADOW, SCRIM, ALPHA, ON_AMBER, FS, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor } from "./theme";
+import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, FS, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor } from "./theme";
 import { playerLookup } from "./lib/players";
 import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession } from "./firebase";
 import {
@@ -138,25 +138,6 @@ const ScoreCell = ({ score, par, strokes, size = FS.body, colorOverride }) => {
   );
 };
 
-
-// ── Notification Toast ──
-// Deliberately dark in both modes: it floats over whatever screen you were
-// on, so it cannot borrow that screen's surface without sometimes vanishing
-// into it. It used to spell that out with three colours of its own — a red,
-// a green and a cream. It is the round's accent dimmed instead, so the pair
-// tracks BC.danger / BC.green rather than drifting from them.
-function Notif({ notif }) {
-  if (!notif) return null;
-  const accent = notif.type === "error" ? BC.danger : BC.green;
-  return (
-    <div style={{ position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)", zIndex: 9999,
-      background: dimHex(accent, 0.42), border: `1px solid ${accent}`,
-      borderRadius: 10, padding: "10px 18px", fontSize: FS.body, fontWeight: 600, color: ON_ACCENT,
-      boxShadow: `0 4px 24px ${SCRIM}`, maxWidth: "80vw", textAlign: "center" }}>
-      {notif.msg}
-    </div>
-  );
-}
 
 // ── Login Screen ──
 function LoginScreen({ players, onLogin, teams, darkMode, tournamentName, tournamentLocation }) {
@@ -888,26 +869,24 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
       {/* Match selector — for the rare format that draws a player into more
           than one match in the SAME round. It no longer crosses rounds; the
           strip above owns that axis and only one round of it is live. */}
+      {/* Labelled with the cup's number for each match, not its position in
+          this player's own list — two players in the same match have to be
+          looking at the same name for it. Position the incoming match in the
+          same render as the switch; leaving it to the effect below would paint
+          the outgoing hole for a frame first, the same flash returning to the
+          tab had. */}
       {myMatches.length > 1 && (
-        <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-          {myMatches.map((m, i) => {
-            const active = m.id === match.id;
-            return (
-              // Position the incoming match in the same render as the switch —
-              // leaving it to the effect below would paint the outgoing hole
-              // for a frame first, the same flash returning to the tab had.
-              <button key={m.id} onClick={() => { setActiveMatchId(m.id); positionOn(m); }} style={{
-                flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: FS.small, fontWeight: 700, cursor: "pointer",
-                background: active ? BC.amberDim : BC.card,
-                border: `1px solid ${active ? BC.amberDim : BC.bdr}`,
-                color: active ? ON_ACCENT : BC.t2,
-                // The cup's number for the match, not its position in this
-                // player's own list — two players in the same match have to
-                // be looking at the same name for it.
-              }}>Match {m.matchNumber ?? i + 1}</button>
-            );
-          })}
-        </div>
+        <SegmentedToggle
+          variant="pills"
+          style={{ marginBottom: 10 }}
+          options={myMatches.map((m, i) => [m.id, `Match ${m.matchNumber ?? i + 1}`])}
+          value={match.id}
+          onChange={(id) => {
+            const m = myMatches.find(x => x.id === id);
+            setActiveMatchId(id);
+            if (m) positionOn(m);
+          }}
+        />
       )}
 
       {/* Front 9 — hole strip + status row. */}
@@ -1256,19 +1235,12 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
           jump to Round 3 without scrolling back for the pills. Lands in the
           same spot as the Leaderboard's cup total and the Admin tab bar. */}
       <StickyTop>
-        <div style={{ display: "flex", gap: 6 }}>
-          {rounds.map(r => {
-            const active = r === activeRound;
-            return (
-              <button key={r} onClick={() => setPickedRound(r)} style={{
-                flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: FS.small, fontWeight: 700, cursor: "pointer",
-                background: active ? BC.amberDim : BC.card,
-                border: `1px solid ${active ? BC.amberDim : BC.bdr}`,
-                color: active ? ON_ACCENT : BC.t2,
-              }}>Rd {r}</button>
-            );
-          })}
-        </div>
+        <SegmentedToggle
+          variant="pills"
+          options={rounds.map(r => [r, `Rd ${r}`])}
+          value={activeRound}
+          onChange={setPickedRound}
+        />
       </StickyTop>
 
       {/* Course / format / tee-time banner — uses the TEAMS-banner style
@@ -2045,15 +2017,11 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
           height, and in the same place the other views pin their own lead
           control. See StickyTop for how the seam is painted. */}
       <StickyTop style={{ marginBottom: 4 }}>
-      <div style={{ display: "flex", gap: 4, background: BC.card, borderRadius: 12, padding: 4, border: `1px solid ${BC.bdr}` }}>
-        {[["players","Players"],["rounds","Rounds"],["matches","Matches"],["courses","Courses"],["tournament","Tournament"]].map(([k, lbl]) => (
-          <button key={k} onClick={() => setTab(k)} style={{
-            flex: 1, padding: "8px 4px", borderRadius: 8, fontSize: FS.label, fontWeight: 700, cursor: "pointer", border: "none",
-            background: tab === k ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
-            color: tab === k ? ON_AMBER : BC.t3,
-          }}>{lbl}</button>
-        ))}
-      </div>
+      <SegmentedToggle
+        options={[["players","Players"],["rounds","Rounds"],["matches","Matches"],["courses","Courses"],["tournament","Tournament"]]}
+        value={tab}
+        onChange={setTab}
+      />
       </StickyTop>
 
       {tab === "players" && (
@@ -2311,14 +2279,13 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 the form from Firestore — including for a round with no
                 document yet, which the old inline loader skipped, leaving
                 the previous round's settings on screen. */}
-            {[1,2,3,4].map(r => (
-              <button key={r} onClick={() => setEditRound(r)} style={{
-                flex: 1, padding: "8px 4px", borderRadius: 10, fontSize: FS.small, fontWeight: 700, cursor: "pointer",
-                background: editRound === r ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
-                border: `1px solid ${editRound === r ? "transparent" : BC.bdr}`,
-                color: editRound === r ? ON_AMBER : BC.t2,
-              }}>Rd {r}</button>
-            ))}
+            <SegmentedToggle
+              variant="pills"
+              options={[1,2,3,4].map(r => [r, `Rd ${r}`])}
+              value={editRound}
+              onChange={setEditRound}
+              style={{ flex: 1 }}
+            />
           </div>
           <div style={{ background: BC.card, borderRadius: 12, padding: "12px 12px", border: `1px solid ${BC.bdr}` }}>
             <RoundSectionHeading first hint="What is being played, where, and when it goes off.">
@@ -3710,15 +3677,12 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
           </div>
 
           {/* Gross/Net toggle */}
-          <div style={{ display: "flex", background: BC.card, borderRadius: 16, padding: 3, marginBottom: 12, border: `1px solid ${BC.bdr}`, width: 160 }}>
-            {[["Net", false],["Gross", true]].map(([lbl, val]) => (
-              <button key={lbl} onClick={() => setGrossMode(val)} style={{
-                flex: 1, padding: "5px 0", borderRadius: 12, fontSize: FS.label, fontWeight: 700, cursor: "pointer", border: "none",
-                background: grossMode === val ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
-                color: grossMode === val ? ON_AMBER : BC.t3,
-              }}>{lbl}</button>
-            ))}
-          </div>
+          <SegmentedToggle
+            options={[[false, "Net"], [true, "Gross"]]}
+            value={grossMode}
+            onChange={setGrossMode}
+            style={{ marginBottom: 12, width: 160 }}
+          />
 
           {/* Leaderboard */}
           {Object.keys(skinCount).length > 0 && (
@@ -3740,16 +3704,13 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
           )}
 
           {/* Round tabs */}
-          <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-            {[1,2,3,4].map(r => (
-              <button key={r} onClick={() => setActiveRound(r)} style={{
-                flex: 1, padding: "7px 4px", borderRadius: 8, fontSize: FS.small, fontWeight: 700, cursor: "pointer",
-                background: activeRound === r ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
-                border: `1px solid ${activeRound === r ? "transparent" : BC.bdr}`,
-                color: activeRound === r ? ON_AMBER : BC.t2,
-              }}>Rd {r}</button>
-            ))}
-          </div>
+          <SegmentedToggle
+            variant="pills"
+            style={{ marginBottom: 10 }}
+            options={[1,2,3,4].map(r => [r, `Rd ${r}`])}
+            value={activeRound}
+            onChange={setActiveRound}
+          />
 
           {/* Hole-by-hole skins for active round */}
           {computeSkins(activeRound, grossMode).map(s => (
@@ -4943,16 +4904,12 @@ function PracticeView({ user, tPlayers, courses, notify, teams }) {
           )}
 
           <div style={{ fontSize: FS.label, color: BC.t3, marginBottom: 6, fontWeight: 700, letterSpacing: 1 }}>HANDICAP MODE</div>
-          <div style={{ display: "flex", gap: 6 }}>
-            {[["low_man", "Low Man"], ["full", "Full Strokes"]].map(([k, label]) => (
-              <button key={k} onClick={() => setHcpMode(k)} style={{
-                flex: 1, padding: "8px 0", borderRadius: 8, fontSize: FS.small, fontWeight: 700, cursor: "pointer",
-                background: hcpMode === k ? BC.amber + ALPHA.tint : BC.inp,
-                border: `1px solid ${hcpMode === k ? BC.amber : BC.bdr}`,
-                color: hcpMode === k ? BC.amber : BC.t2,
-              }}>{label}</button>
-            ))}
-          </div>
+          <SegmentedToggle
+            variant="outline"
+            options={[["low_man", "Low Man"], ["full", "Full Strokes"]]}
+            value={hcpMode}
+            onChange={setHcpMode}
+          />
         </div>
 
         {/* Player picker */}
@@ -6655,7 +6612,10 @@ export default function App() {
   return (
     <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: 0, width: "100%", background: BC.bg, display: "flex", flexDirection: "column", fontFamily: FONT, overflow: "hidden", boxSizing: "border-box", paddingTop: "env(safe-area-inset-top, 0px)", paddingLeft: "env(safe-area-inset-left, 0px)", paddingRight: "env(safe-area-inset-right, 0px)" }}>
       <div style={{ maxWidth: 520, width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", flex: 1, minHeight: 0, position: "relative", padding: "0 4px" }}>
-      <Notif notif={notif} />
+      {/* Top-level feedback from notify(). The scoring screens render
+          their own <Toast> lower down for the auto-advance message —
+          same component, different owner of when it shows. */}
+      <Toast message={notif?.msg} type={notif?.type} top={16} />
 
       {/* Pull-to-refresh indicator — circular badge with the trophy
           silhouette inside, fixed-positioned and overlaid above the
