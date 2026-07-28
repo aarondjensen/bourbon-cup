@@ -509,8 +509,10 @@ export function MatchSetup({
         </div>
       )}
 
-      {/* ── Match builder ── */}
-      <div style={sectionLabel}>BUILD A MATCH</div>
+      {/* ── Match builder ──
+          Unlabelled: the two team rosters under the round's banner are what
+          this tab opens with, and picking a name from each is the only thing
+          they can do. A heading over them says nothing the pools don't. */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
         {[["A", teamASel, setTeamASel], ["B", teamBSel, setTeamBSel]].map(([tid, sel, setSel]) => {
           const team = teams[tid];
@@ -591,16 +593,18 @@ export function MatchSetup({
       {/* ── This round's draw ──
           The match list IS the tee sheet. A match sits under the time it goes
           off, a new one lands on the first time with room, and dragging it to
-          another time is the only grouping control there is. */}
-      <div style={{ ...sectionLabel, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <span>ROUND {round} DRAW{fmt ? ` · ${fmt.label}` : ""}</span>
-        {/* Only when something is off the sheet — which after a create never
-            happens, so this is the one-tap fix for a round drawn before the
-            times were the groups, and it vanishes the moment it has worked. */}
-        {matchFitsGroup && loose.length > 0 && !roundFinal && (
+          another time is the only grouping control there is.
+
+          Unlabelled, like the builder above it: the round and its format are
+          already named twice over the top of this tab (the round tabs, the
+          course banner), and the tee-time cards say what the list is without
+          a heading having to. Only Auto-build gets a row — and only while
+          there is something off the sheet for it to place. */}
+      {matchFitsGroup && loose.length > 0 && !roundFinal && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
           <button onClick={buildGroups} style={miniBtn}>Auto-build</button>
-        )}
-      </div>
+        </div>
+      )}
       {rndMatches.length === 0 && (
         <div style={{ fontSize: 10, color: BC.t3, padding: "10px 12px", borderRadius: 10, border: `1px dashed ${BC.bdr}`, textAlign: "center", marginBottom: 10 }}>
           No matches yet for Rd {round} — build one above and it goes off {firstTee || "the first tee"}.
