@@ -26,6 +26,7 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import { BC, FONT, SCRIM, ALPHA, ON_AMBER, FS } from "../theme";
+import { SegmentedToggle } from "./ui";
 import { playerLookup } from "../lib/players";
 import { FORMATS } from "../constants";
 import { TOURNAMENT_ID, editionDocId } from "../firebase";
@@ -608,17 +609,19 @@ export function MatchSetup({
 
   return (
     <div style={{ fontFamily: FONT }}>
-      {/* Round tabs */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
-        {ROUNDS.map(r => (
-          <button key={r} onClick={() => { setRound(r); setTeamASel([]); setTeamBSel([]); setHeld(null); }} style={{
-            flex: 1, padding: "7px 4px", borderRadius: 8, fontSize: FS.small, fontWeight: 700, cursor: "pointer",
-            background: round === r ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.card,
-            border: `1px solid ${round === r ? "transparent" : BC.bdr}`,
-            color: round === r ? ON_AMBER : BC.t2, fontFamily: FONT,
-          }}>Rd {r}</button>
-        ))}
-      </div>
+      {/* Round tabs — the same row of round pills the Matches, Betting and
+          Admin tabs lead with, and now literally the same component. It was
+          a hand-built copy that had already drifted a little (7px of padding
+          against 8) and would have drifted further the moment the shared one
+          changed, which is exactly what happened when selection stopped being
+          drawn in amber. */}
+      <SegmentedToggle
+        variant="pills"
+        style={{ marginBottom: 10 }}
+        options={ROUNDS.map(r => [r, `Rd ${r}`])}
+        value={round}
+        onChange={(r) => { setRound(r); setTeamASel([]); setTeamBSel([]); setHeld(null); }}
+      />
 
       {/* Round context — the course and the format, both set on other tabs and
           repeated here because you cannot sensibly build a draw without them

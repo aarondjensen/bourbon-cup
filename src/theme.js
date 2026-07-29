@@ -113,6 +113,7 @@ export const getBCTheme = (mode, brand = null) => {
       bg: "#fafaf9",        // crisp near-white page
       card: "#ffffff",      // pure white card surface
       inp: "#f0f0ee",       // light neutral gray (input/inactive)
+      thumb: "#ffffff",     // the raised half of a segmented track (see below)
       hover: "#e7e7e4",
       bdr: "#dcdcd9",       // soft neutral border
       t1: "#16161a",        // near-black ink
@@ -137,6 +138,11 @@ export const getBCTheme = (mode, brand = null) => {
     bg: "#0a0a0b",          // true neutral black (Blackout/Gold)
     card: "#161618",        // elevated panel
     inp: "#1d1d20",         // sunken input
+    // The raised half of a segmented track. It is NOT `card`: the track it
+    // sits in is `inp`, and card is only 5 steps off that — the selected tab
+    // would have to be read rather than seen. Lifted past `hover` until it
+    // separates at arm's length in daylight, which is where this app is used.
+    thumb: "#33333a",
     hover: "#26262a",
     bdr: "#2a2a2e",         // neutral border
     t1: "#f5f4f2",          // crisp off-white
@@ -296,6 +302,46 @@ export const SCRIM  = `#000000${ALPHA.held}`;  // 60%
 // color token supports since they're all 6-digit hex.
 export const LIVE_ALPHA = ALPHA.held;
 export const ink = (hex, settled) => (settled ? hex : `${hex}${LIVE_ALPHA}`);
+
+// ── The selected-segment look ─────────────────────────────────────
+// One definition of what "this one is selected" looks like, because the app
+// has this control in five places at three sizes and every one of them used
+// to draw its own: a raised thumb in a recessed field, with a short amber
+// rule under the label.
+//
+// It replaced an amber-gradient fill with near-black ink on 2026-07-29. On
+// the dark theme that fill read as gold; on the light theme's near-white page
+// it read as tarnished bronze, and dark ink on a mid-tone brown was the
+// muddiest contrast pair in the app. Shape now carries "selected" and amber
+// carries only the accent — which is also what lets amber keep meaning
+// something, since it is the override star, the CTP flag and the cup total
+// everywhere else and cannot be all of those AND the tab chrome.
+//
+// `compact` is the 10px-label size used inline on a form row (the Admin
+// round card's scoring and handicap toggles); the rule scales with it so a
+// small pill doesn't wear a smudge.
+export const segThumb = (on, { compact = false, sunken = false } = {}) => ({
+  background: on ? BC.thumb : (sunken ? BC.inp : "transparent"),
+  color: on ? BC.t1 : BC.t3,
+  border: "none",
+  borderRadius: compact ? 14 : 16,
+  position: "relative",
+  // The lift. A step off the ALPHA ladder above rather than a bespoke rgba —
+  // it is a shadow, and a shadow is black at an alpha.
+  boxShadow: on ? `0 1px 3px #000000${ALPHA.hair}` : "none",
+});
+
+// The field the thumb is raised out of. `compact` is the inline size, whose
+// 2px of padding is what keeps a 10px-label row from growing a row taller.
+export const segTrack = ({ compact = false } = {}) => ({
+  display: "flex",
+  background: BC.inp,
+  borderRadius: 20,
+  padding: compact ? 2 : 3,
+  // Transparent rather than absent: it holds the track at the height a
+  // bordered one would be, so two of these never disagree by a pixel.
+  border: "1px solid transparent",
+});
 
 // ── Player-name text color ──
 // Single source of truth for how player names read in rosters and lists.

@@ -3,49 +3,56 @@
 // ══════════════════════════════════════════════════════════════════
 //  One home for the chrome that was previously copy-pasted inline across
 //  App.jsx. All colors come from the live BC theme.
+//    • SegRule         — the amber rule under a selected segment.
 //    • SegmentedToggle — the rounded pill tab switcher.
 //    • StickyTop       — the pinned control strip at the top of a tab.
 //    • Banner          — the amber section header strip.
 //    • Toast           — the transient "slides down from the top" toast.
 //    • ScoreButtonRow  — the tappable par-relative score entry row.
 
-import { BC, FONT, ON_ACCENT, ON_AMBER, SHADOW, ALPHA, dimHex, FS } from "../theme";
+import { BC, FONT, ON_ACCENT, ON_AMBER, SHADOW, ALPHA, dimHex, FS, segThumb, segTrack } from "../theme";
 
+
+// The rule that marks the thumb. A child rather than a border because it is
+// shorter than the pill: an edge-to-edge line reads as a second border on the
+// thumb, a short one reads as an underline on the label.
+export function SegRule({ compact = false }) {
+  return (
+    <span style={{
+      position: "absolute", left: "50%", transform: "translateX(-50%)",
+      bottom: compact ? 3 : 4, width: compact ? 12 : 18, height: 2,
+      borderRadius: 1, background: BC.amber,
+    }} />
+  );
+}
 
 // ── SegmentedToggle ──
 // options: array of [key, label]. `value` is the active key; `onChange(key)`
 // fires on tap. Extra container style via `style` (e.g. { marginBottom: 14 }).
 //
-// Four variants, because the app genuinely has four of these and had built
-// every one of them by hand, seven times over, each drifting a little on
-// radius, padding and what "selected" looks like:
+// Two variants. There were four; `flat` and `outline` were a solid-amber
+// track and an amber-edged picker, and once selection stopped being drawn in
+// amber they were two more answers to a question that now has one:
 //
-//   gradient  a sunken track with an amber-gradient thumb. The default, and
-//             what a mode switch inside a card looks like.
-//   flat      the same track, solid amber, white ink.
-//   pills     free-standing buttons with a gap between them, the selected one
-//             filled. This is a row of TABS — rounds, sub-tabs, matches —
-//             which sits on the page rather than in a card.
-//   outline   free-standing, selected marked by an amber edge and amber ink
-//             over the input fill rather than by being filled. For a picker
-//             standing among form controls, where a filled tab would read as
-//             a different kind of thing than the selects beside it.
+//   segmented a sunken track holding the thumb. The default, and what a mode
+//             switch inside a card looks like.
+//   pills     free-standing buttons with a gap between them — a row of TABS
+//             (rounds, matches) sitting on the page rather than in a card.
+//             Unselected sits in the sunken fill so the selected one has
+//             something to be raised out of; the track variant gets that from
+//             the track itself.
 //
-// A track (gradient/flat) owns its own background and its buttons are
-// borderless; the free-standing pair (pills/outline) has no track and each
-// button carries its own edge. That is the whole difference.
-export function SegmentedToggle({ options, value, onChange, variant = "gradient", letterSpacing, style }) {
-  const tracked = variant === "gradient" || variant === "flat";
-  const gradient = `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`;
-  const track = tracked
-    ? { background: BC.card, borderRadius: 20, padding: 3, border: `1px solid ${BC.bdr}` }
-    : { gap: 6 };
-  const btn = (on) => {
-    if (variant === "flat")    return { background: on ? BC.amber : "transparent", color: on ? ON_ACCENT : BC.t3, border: "none", borderRadius: 16 };
-    if (variant === "gradient")return { background: on ? gradient : "transparent", color: on ? ON_AMBER  : BC.t3, border: "none", borderRadius: 16 };
-    if (variant === "outline") return { background: on ? BC.amber + ALPHA.tint : BC.inp, color: on ? BC.amber : BC.t2, border: `1px solid ${on ? BC.amber : BC.bdr}`, borderRadius: 8 };
-    return { background: on ? gradient : BC.card, color: on ? ON_AMBER : BC.t2, border: `1px solid ${on ? "transparent" : BC.bdr}`, borderRadius: 8 };
-  };
+// The track owns its background and its buttons are borderless; the pills
+// have no track and each button carries its own edge. That is the whole
+// difference — the selected state is the same object in both.
+export function SegmentedToggle({ options, value, onChange, variant = "segmented", letterSpacing, style }) {
+  const tracked = variant === "segmented";
+  // The track is the sunken one so its thumb has something to be raised out
+  // of. Free-standing pills get the same recess per button instead.
+  const track = tracked ? segTrack() : { gap: 6 };
+  const btn = (on) => (tracked
+    ? segThumb(on)
+    : { ...segThumb(on, { sunken: true }), borderRadius: 8, border: `1px solid ${on ? "transparent" : BC.bdr}` });
   return (
     <div style={{ display: "flex", ...track, ...style }}>
       {options.map(([k, label]) => {
@@ -62,6 +69,7 @@ export function SegmentedToggle({ options, value, onChange, variant = "gradient"
             }}
           >
             {label}
+            {on && <SegRule />}
           </button>
         );
       })}
