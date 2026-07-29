@@ -173,6 +173,59 @@ would not.
   Firebase console. Rotating the password does not evict anybody already
   through; existing memberships are never re-checked.
 
+### Deleting an account
+
+**My Account → Delete Account**, which calls the `deleteAccount` callable in
+`functions/index.js`. It exists because the App Store requires it (review
+guideline 5.1.1(v): an app with account creation must offer deletion from
+inside the app), and it is a Cloud Function because the rules deny every step
+of it from a client, on purpose:
+
+- `bc_accounts` is `delete: if false` for everybody. Revoking a membership is a
+  console edit, as above.
+- `bc_players` is director-only apart from the narrow claim update — and that
+  one cannot *unclaim*, because the rule requires the written `auth_uid` to
+  equal the caller's, so a null is refused.
+- Deleting a Firebase Auth user from a phone additionally demands a recent
+  login. The admin SDK does not, which is why nothing here can strand a stale
+  session.
+
+Loosening any of those would trade a real guarantee for a convenience. The
+callable takes **no uid argument** — it acts on the verified auth context, so
+there is no way to phrase a call that deletes somebody else. It goes Firestore
+first, Auth user last: the reverse order revokes the caller's own token
+mid-run and leaves the login gone with the membership still standing.
+
+What goes: the Auth user, the membership document, the `auth_*` fields on every
+roster row that pointed at it (including the email, the only personal
+identifier the roster holds), and every push token for those player ids. Roster
+rows are matched **across all editions**, unscoped by `tournament_id` — editions
+clone the roster, so a uid left linked in `bc_2026` would sign a deleted account
+straight back in next year.
+
+What stays: the roster row itself, unlinked and free to claim again, with the
+name, handicap, scores and signed cards on it. Since sign-in landed that row is
+not the account — it is a tournament entry the director created, carrying holes
+other players attested to, and pulling it would rewrite a result the field
+already agreed to. It is the same trade the director's own unlink makes. Both
+confirm dialogs say so before anybody taps.
+
+Two things stay on the client because only a browser can do them: revoking this
+device's FCM subscription, and revoking the Apple token. The second is its own
+App Store requirement for Sign in with Apple — skip it and the app stays listed
+under Settings → Apple Account on a phone whose account it no longer holds.
+Apple's token arrives once, in the credential from a sign-in, and is not
+stored, so `revokeProviderAccess` reauthenticates to get a fresh one. It is
+best-effort by construction: a blocked popup logs and the deletion proceeds,
+because refusing to delete an account over a popup is the worse failure.
+
+- **It needs `firebase deploy --only functions`.** Until that runs the button
+  reports that deletion isn't deployed yet rather than failing silently — but
+  it does not work. Same by-hand step as the rules.
+- Worth testing on a throwaway account after any change to it, and checking all
+  three outcomes in the console: membership document gone, roster row surviving
+  with `auth_uid: null`, Auth user gone.
+
 ## Directors
 
 **One director appoints the next, in Admin → Players.** The crown toggle in the
