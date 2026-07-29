@@ -66,6 +66,16 @@ import { useHoleAdvance } from "./lib/useHoleAdvance";
 // to the viewport bottom) with the full inset is the known-good layout.
 const NAV_SAFE_PAD = "calc(env(safe-area-inset-bottom, 0px) + 8px)";
 
+// The clearance the scroll area reserves for that bar even if the measured
+// height below is stale or never arrives: the bar's own floor (a 56px tap
+// target plus NAV_SAFE_PAD) and the same 8px gap the measured value adds.
+// Expressed in CSS rather than JS on purpose — env() re-resolves itself the
+// moment the inset changes, with nothing to observe and nothing to re-render,
+// so the tail of a long tab can never end up under the bar. The measured
+// height still wins whenever it is larger (bigger OS text size, taller
+// labels); this is only ever a floor.
+const NAV_CLEARANCE_FLOOR = "calc(env(safe-area-inset-bottom, 0px) + 72px)";
+
 // Where a dismissed "ready to finalize" notification is remembered, per
 // edition — TOURNAMENT_ID is a live binding (firebase.js reassigns it when
 // the edition changes), so this is read at call time, never captured once.
@@ -3826,19 +3836,38 @@ export default function App() {
   // them on a page that never opted out), and once the bar is taller than
   // 64px the tail of every long screen becomes unreachable — the "won't
   // scroll" report. Measuring is the only thing that stays true.
+  //
+  // The box being watched has to be the BORDER box. A ResizeObserver defaults
+  // to the content box, and the bar's height moves almost entirely through
+  // its PADDING — NAV_SAFE_PAD is env(safe-area-inset-bottom) + 8px, and that
+  // inset is not a constant: iOS reports 0 while Safari's bottom toolbar is
+  // expanded and the home-indicator inset once it collapses, and it changes
+  // again on rotation and when a PWA is launched. Every one of those grows
+  // the bar without touching its content box, so a content-box observer never
+  // fires, `navH` keeps its mount value, and the clearance below is short by
+  // exactly the inset — the Admin players list ending under the bar with
+  // nothing left to scroll. Watch the border box and the padding counts.
   const [navH, setNavH] = useState(64);
   useEffect(() => {
     const el = navRef.current;
     if (!el) return;
     const measure = () => setNavH(Math.ceil(el.getBoundingClientRect().height));
     measure();
-    if (typeof ResizeObserver === "undefined") {
-      window.addEventListener("resize", measure);
-      return () => window.removeEventListener("resize", measure);
-    }
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
+    // Viewport events as well as the observer: a safe-area inset can change
+    // without the observed box changing at all on some engines, and these are
+    // the moments it does. `measure` is idempotent — setNavH to the same
+    // number is a no-op re-render.
+    window.addEventListener("resize", measure);
+    window.addEventListener("orientationchange", measure);
+    window.visualViewport?.addEventListener("resize", measure);
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    ro?.observe(el, { box: "border-box" });
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("orientationchange", measure);
+      window.visualViewport?.removeEventListener("resize", measure);
+      ro?.disconnect();
+    };
     // `user` is in the deps because the nav only exists once past the login
     // screen — without it the ref is null on mount and never measured.
   }, [user]);
@@ -4518,8 +4547,16 @@ export default function App() {
         // over the viewport bottom, so the scroll area must reserve room or
         // its last rows hide behind the bar with nothing left to scroll.
         // `navH` is the bar's MEASURED height (safe-area padding included) —
-        // see the ResizeObserver above for why a constant isn't enough.
+        // see the ResizeObserver above for why a constant isn't enough. The
+        // max() against NAV_CLEARANCE_FLOOR is the safety net under it: a
+        // measurement can be stale (the inset moved and nothing re-measured)
+        // or absent (no ResizeObserver), and the cost of it reading short is
+        // rows sitting under the bar with no scroll left to reach them.
+        // Written as shorthand-then-longhand so an engine that can't parse
+        // max() drops only the bottom value and lands back on the shorthand's
+        // 12px, rather than throwing the whole padding away.
         padding: `12px 10px ${navH + 8}px 10px`,
+        paddingBottom: `max(${navH + 8}px, ${NAV_CLEARANCE_FLOOR})`,
         // Every view starts at the TOP of the scroll area. Short views used
         // to be centred vertically here (flexbox auto margins on the inner
         // wrapper), with Admin and Leaderboard opting out because they pin a
