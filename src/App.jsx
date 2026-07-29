@@ -862,27 +862,6 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
   const tr = tRounds.find(t => t.round_number === activeRound);
   const course = courses.find(c => c.id === tr?.course_id);
   const fmt = FORMATS.find(f => f.id === tr?.format);
-  // "Best 6 on the front, 7 on the back" — Team Best Ball only, and blank on
-  // every other format (resolveCounting hands back null for them).
-  const cnt = resolveCounting(tr?.format, tr?.counting_scores);
-  // "Best 6 count on the front, 7 on the back" — and when a nine ramps, the
-  // per-hole numbers spelled out, because on those years "how many count" is
-  // a different answer on the 1st than on the 9th.
-  const nineWords = (back) => {
-    const flat = countingNine(cnt, back);
-    const slice = back ? cnt.slice(9, 18) : cnt.slice(0, 9);
-    return flat != null ? `best ${flat}` : `best ${slice.join("/")}`;
-  };
-  const countingLine = cnt
-    ? `Scores that count — front nine: ${nineWords(false)} · back nine: ${nineWords(true)}`
-    : null;
-  // What a hole is worth, on a round settled hole by hole.
-  const holePointsLine = isPointsPerHole(tr?.scoring_type)
-    ? (() => {
-        const hp = resolveHolePoints(tr?.hole_points);
-        return `Every hole is a point — ${hp.front} on the front, ${hp.back} on the back · ${holePointsTotal(hp)} on the round`;
-      })()
-    : null;
 
   // Same fallback the admin tab uses: a 2-man format's match is its own
   // foursome, so a round nobody has grouped by hand still has tee times.
@@ -891,7 +870,6 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
   });
   const times = rawSlots
     .map(t => { const m = parseTeeTime(t); return m == null ? t : formatTeeTime(m, { ampm: true }); });
-  const firstTee = times[0] || "";
 
   const { nameOf, teamOf } = playerLookup(tPlayers);
 
@@ -925,28 +903,20 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
         />
       </StickyTop>
 
-      {/* Course / format / tee-time banner — uses the TEAMS-banner style
-          (Mash green fill, white centered text) for the section header,
-          with details below. Anchors the round visually in the same
-          visual language as the Leaderboard's TEAMS card. */}
+      {/* Round banner — named by where and what it is, the same way the
+          Leaderboard names its rounds ("Treetops · 2-Man Best Ball"). The
+          round number is already the pill the reader just tapped, and the
+          setup detail that used to sit under it — format blurb, counting
+          rule, hole points, first tee — is either on the Rounds tab or
+          repeated below: every match card carries its own tee time, and so
+          does every row of the tee sheet. */}
       <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 12, overflow: "hidden" }}>
-        <Banner>ROUND {activeRound}</Banner>
-        <div style={{ padding: "10px 14px" }}>
-          <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.t1 }}>{course?.name || "Course TBD"}</div>
-          {fmt && <div style={{ fontSize: FS.small, color: BC.t3, marginTop: 2 }}>{fmt.label}{fmt.desc ? ` · ${fmt.desc}` : ""}</div>}
-          {/* On Team Best Ball the format's own description can't say what the
-              round actually counts — that number is per round. Stated here so a
-              player reading the tee sheet knows whether their card has to be
-              one of six or one of seven. */}
-          {countingLine && <div style={{ fontSize: FS.small, color: BC.amber, marginTop: 2, fontWeight: 700 }}>{countingLine}</div>}
-          {holePointsLine && <div style={{ fontSize: FS.small, color: BC.amber, marginTop: 2, fontWeight: 700 }}>{holePointsLine}</div>}
-          {firstTee && <div style={{ fontSize: FS.small, color: BC.amber, marginTop: 4, fontWeight: 700 }}>First Tee: {firstTee}</div>}
-        </div>
+        <Banner>{[course?.name || "Course TBD", fmt?.label].filter(Boolean).join(" · ").toUpperCase()}</Banner>
       </div>
 
-      {/* A set-up round with no draw yet. The round's own card above still
-          shows the course, format and first tee — the only thing missing is
-          who plays who, so that is the only thing this says. */}
+      {/* A set-up round with no draw yet. The banner above still names the
+          course and format — the only thing missing is who plays who, so
+          that is the only thing this says. */}
       {rndMatches.length === 0 && (
         <div style={{
           background: BC.card, borderRadius: 12, border: `1px dashed ${BC.bdr}`,
