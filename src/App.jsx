@@ -68,13 +68,25 @@ import {
 import { useHoleAdvance } from "./lib/useHoleAdvance";
 
 // ── Bottom-nav safe-area cushion ──────────────────────────────────
-// Full iOS home-indicator inset (34pt on devices that have one) plus 8pt,
-// applied as paddingBottom on the fixed nav bar so the labels clear the
-// home indicator. This is the pre-2026-07-21 value: the interim "navfix"
-// rework made the nav an in-flow flex child and clamped this to 10px, which
-// left the bar mis-seated on real devices. Restoring the fixed bar (pinned
-// to the viewport bottom) with the full inset is the known-good layout.
-const NAV_SAFE_PAD = "calc(env(safe-area-inset-bottom, 0px) + 8px)";
+// Padding under the nav labels, so they clear the home indicator.
+//
+// It was the FULL iOS inset plus 8pt — 42px of nothing below the tabs on a
+// phone that has an indicator, which is clearing it about twice over. The
+// indicator itself is a ~5px bar sitting ~8px off the bottom edge; half the
+// inset plus 6 still lands the labels well clear of it and of the swipe-up
+// gesture, and hands ~19px back to the screen above. On Scoring that is
+// close to a whole row of card height, which is what it is for.
+//
+// (The interim "navfix" rework once clamped this to a flat 10px AND made
+// the nav an in-flow flex child; the bar ended up mis-seated on real
+// devices. The fixed bar is the known-good part — this changes only how
+// much of the inset the padding takes.)
+const NAV_INSET_SHARE = 0.5;
+const NAV_PAD_BASE = 6;
+const NAV_SAFE_PAD = `calc(env(safe-area-inset-bottom, 0px) * ${NAV_INSET_SHARE} + ${NAV_PAD_BASE}px)`;
+// The same figure as a number, for the spacer's floor below. One source, so
+// the reserved clearance cannot describe a bar of a different height.
+const navPadPx = (inset) => Math.round(inset * NAV_INSET_SHARE) + NAV_PAD_BASE;
 
 // Where a dismissed "ready to finalize" notification is remembered, per
 // edition — TOURNAMENT_ID is a live binding (firebase.js reassigns it when
@@ -4559,7 +4571,7 @@ export default function App() {
   // The home-indicator inset, read as a number (see theme.readSafeAreaBottom).
   // It is the floor under the measurement: whatever the bar measures, the
   // clearance is never less than the bar's own minimum — a 56px tap target
-  // plus this inset plus its 8px cushion, plus the 8px gap.
+  // plus navPadPx of this inset, plus the 8px gap.
   const [safeBottom, setSafeBottom] = useState(0);
   useEffect(() => {
     const el = navRef.current;
@@ -5631,14 +5643,14 @@ export default function App() {
             the scrollable area in every engine.
 
             The height is the measured bar plus a gap, floored at the bar's
-            own minimum (a 56px tap target + the home-indicator inset + its
-            8px cushion) so a stale or missing measurement still clears it.
+            own minimum (a 56px tap target + navPadPx of the home-indicator
+            inset) so a stale or missing measurement still clears it.
             Both are numbers rather than a CSS max(): a CSS function an
             engine won't parse takes its declaration with it, and this is not
             a declaration that can afford to go missing. */}
         <div className="bc-nav-spacer" aria-hidden="true" style={{
           flexShrink: 0,
-          height: Math.max(navH + 8, safeBottom + 72),
+          height: Math.max(navH + 8, 56 + navPadPx(safeBottom) + 8),
         }} />
       </div>
 
