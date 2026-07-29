@@ -11,7 +11,17 @@
 //    see the number they have to beat, then either
 //      • tag one of their OWN four players at a measured distance, which
 //        replaces the standing tag, or
-//      • dismiss with "our group wasn't closer" and leave it alone.
+//      • dismiss and leave the hole as it is.
+//
+//    The dismiss says two different things depending on whether anyone
+//    has tagged the hole yet, because on an untagged hole there is no
+//    "closer" to be. Until the first tag lands, EVERY group through the
+//    hole is answering "did anyone in our group hit the green at all?"
+//    — nobody has, or nobody who did wants to claim it. Once a tag is
+//    standing the question narrows to "did we beat it?", so the button
+//    becomes "we didn't get closer". Both are the same no-op write-wise;
+//    the wording is what keeps a group from reading the prompt as a
+//    claim they can't honestly make.
 //
 //  Player-entered tags are provisional (`approved: false` on the record);
 //  the director's Betting → CTP grid is the approval step, and an
@@ -178,7 +188,7 @@ export function CtpPrompt({ holeNumber, players, teams, leader, leaderName, onSa
           fontSize: FS.small, fontWeight: 700, letterSpacing: 0.8, cursor: "pointer",
         }}
       >
-        {leader?.player_id ? "Our group wasn't closer" : "Nobody hit the green"}
+        {leader?.player_id ? "We didn't get closer" : "No one in our group hit the green"}
       </button>
     </Popup>
   );
