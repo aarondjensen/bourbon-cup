@@ -44,10 +44,16 @@ export const FIT_SIZES = {
   },
   compact: {
     holeCell: 29, holeFont: FS.body,
-    statusCell: 24, statusBar: 7, statusPad: 3,
+    statusCell: 24, statusBar: 7, statusPad: 2,
     nav: { pad: "3px 8px", gap: 4, nav: 30, num: FS.title, label: FS.micro, side: FS.body },
-    scorecardPad: "4px 0",
-    badge: true,
+    scorecardPad: "3px 0",
+    // Off here as well as at `tight`. Measured at this density the screen
+    // spends 222px above the player cards, and this row is 18 of it — the
+    // largest single piece that names something already on screen rather
+    // than showing state. compact is by definition a phone that came up
+    // short, so the rule that already governs `tight` starts one density
+    // earlier: reference goes before tap targets do.
+    badge: false,
     stack: 3,
     cardPad: "5px 9px", cardGap: 3, cardMax: 92,
     btnMin: 38, btnFont: FS.lead, labels: true,
@@ -67,18 +73,31 @@ export const FIT_SIZES = {
   },
 };
 
-// Room each density needs, measured against a four-card match. Anything
-// below `tight`'s floor scrolls — there is a point past which shrinking a
-// tap target does more harm than a scrollbar.
+// Room each density needs, against a four-card match.
 //
-// Both went up by 5 when the hole strips were given clearance for the
-// current-hole ring (App's HOLE_RING_REACH): 2px under each of the two
-// strips, and 1px more under the front-nine status row on the densities
-// where fit.stack is 3. The screen got 5px taller, so the room it needs did
-// too — carried across as arithmetic on the measured figure rather than
-// re-measured, since the delta is a known constant.
+// ── What "needs" means, now that it is measured ───────────────────────
+// The player cards are `flex: 1 1 0` with a `btnMin` floor, so as the room
+// shrinks they absorb it — right up until the tap targets hit that floor.
+// Past that point nothing gives, and the surplus has nowhere to go but off
+// the bottom of the screen, under the fixed nav bar.
+//
+// So a density's threshold is the usable height at which ITS OWN tap target
+// reaches btnMin. Above it the density is comfortable; below it, stepping
+// down a density buys more card height than it costs in chrome — measured
+// at usable 540, compact yields a crushed 38px button and tight yields 49.
+//
+// Read off the real screen in a browser rather than reasoned about:
+//
+//   roomy    btnMin 44 — floors near 650, so 665 keeps a margin
+//   compact  btnMin 38 — floors at 559
+//   tight    btnMin 32 — floors at 439, and there is nothing below it
+//
+// COMPACT_NEEDS was 535 for a long time, which is BELOW compact's floor:
+// a phone with 535–559px of room was handed a density that could not fit
+// in it, and the bottom of the last card went under the nav bar. That is
+// the spill this pair of numbers now prevents.
 const ROOMY_NEEDS = 665;
-const COMPACT_NEEDS = 535;
+const COMPACT_NEEDS = 560;
 
 export function densityFor(usable) {
   if (!usable) return "roomy";
