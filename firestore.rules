@@ -14,8 +14,9 @@ rules_version = '2';
 //
 // So writing requires MEMBERSHIP: a bc_accounts/{uid} document, which an
 // account can only create by presenting the tournament password. The
-// password lives in bc_secrets/access, which no client may read; the rules
-// compare against it with `get()`, which is not subject to read rules.
+// password lives in bc_secrets/access, which only a director may read; the
+// rules compare against it with `get()`, which is not subject to read
+// rules, so the check works the same for everybody else.
 // That is what makes it a lock rather than a doorman — it holds against
 // someone reading the bundle, disabling the JavaScript, or skipping the
 // app entirely and talking to Firestore with the public config.
@@ -55,19 +56,29 @@ rules_version = '2';
 // against it.
 //
 // ── Making somebody a director ────────────────────────────────────
-// In the Firebase console, on their bc_accounts document: add
-// `is_director` (boolean) = true. There is no way to do it from the app,
-// by design, and the app reads the same flag to decide whether to show the
-// Admin tab at all — so the console is the single source of truth and a
-// phone can never show an Admin tab whose writes would be refused.
+// A director does it from the app: Admin → Players → the crown in the
+// player modal, which writes `is_director` on that person's bc_accounts
+// document. The app reads the same flag to decide whether to show the
+// Admin tab, so what is on screen is what these rules will honour.
 //
-// The crown in Admin → Players is a LABEL, not a grant. Rules cannot check
-// it: finding the roster row whose auth_uid is yours would need a query,
-// and rules only fetch paths they can construct.
+// Nobody can set it on themselves — not at create time, not after — so
+// knowing the password never promotes anybody, and a director cannot
+// demote themselves either, which means the set can never be emptied from
+// inside the app.
 //
-// Consequence worth knowing before deploying: until at least one
-// membership document carries the flag, nobody can edit the tournament at
-// all. Set it before the rules land, not after.
+// THE FIRST ONE HAS TO COME FROM THIS CONSOLE, because the rule requires a
+// director to already exist: on their bc_accounts/{uid} document, add
+// `is_director` (boolean) = true. That is also the way back if the set is
+// ever emptied, and the way somebody steps down.
+//
+// Consequence worth knowing before publishing: until one membership
+// document carries the flag, nobody can edit the tournament at all. Set it
+// before these rules land, not after.
+//
+// The crown drawn in the roster LIST is read from these same membership
+// documents. The `isDirector` field on bc_players is vestigial — nothing
+// reads it. Rules never could: finding the roster row whose auth_uid is
+// yours would need a query, and rules only fetch paths they can construct.
 //
 // ── What this replaces ────────────────────────────────────────────
 // Until this file, the deployed rules were a single blanket grant:
