@@ -111,7 +111,7 @@ export function SignCardSheet({
       showClose={false}
       innerStyle={{ background: BC.card, border: `1px solid ${BC.amber}${ALPHA.line}`, borderRadius: 12 }}>
       <div style={{ padding: "10px 14px", borderBottom: `1px solid ${BC.bdr}`, fontFamily: FONT }}>
-        <div style={{ fontSize: FS.label, fontWeight: 800, color: BC.amber, letterSpacing: 1.5 }}>
+        <div style={{ fontSize: FS.label, fontWeight: 800, color: BC.amberInk, letterSpacing: 1.5 }}>
           SIGN THE CARD
         </div>
         <div style={{ fontSize: FS.small, color: BC.t2, marginTop: 2 }}>
@@ -248,7 +248,7 @@ export function SignedCardPanel({
           display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6,
           fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 0.5,
         }}>
-          <span style={{ color: BC.amber, letterSpacing: 1.5, fontWeight: 800 }}>
+          <span style={{ color: BC.amberInk, letterSpacing: 1.5, fontWeight: 800 }}>
             {final ? "FINAL" : "SIGNED"}
           </span>
           <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

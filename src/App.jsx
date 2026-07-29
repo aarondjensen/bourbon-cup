@@ -251,7 +251,7 @@ function LoginScreen({ players, onLogin, teams, darkMode, tournamentName, tourna
 
       {players.length === 0 && (
         <div style={{ textAlign: "center", color: BC.t3, padding: 16, fontSize: FS.small, position: "relative", zIndex: 1, marginTop: 12 }}>
-          No players yet. Type <span style={{ color: BC.amber, fontWeight: 700 }}>{DIRECTOR_CODE}</span> to set up.
+          No players yet. Type <span style={{ color: BC.amberInk, fontWeight: 700 }}>{DIRECTOR_CODE}</span> to set up.
         </div>
       )}
       </div>
@@ -601,7 +601,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
         flex: 1, height: fit.holeCell, borderRadius: allScored || cur ? 8 : 6,
         border: allScored && !cur ? `1.5px solid ${BC.amber}${ALPHA.line}` : "none",
         background: cur ? BC.amber : allScored ? BC.amber + ALPHA.wash : partial ? BC.amber + ALPHA.wash : BC.card,
-        color: cur ? ON_AMBER : allScored ? BC.amber : BC.t3,
+        color: cur ? ON_AMBER : allScored ? BC.amberInk : BC.t3,
         fontSize: fit.holeFont, fontWeight: 700, cursor: "pointer",
         outline: cur ? `2px solid ${BC.amber}` : "none", outlineOffset: 1,
       }}>{h + 1}</button>
@@ -690,7 +690,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
         marginBottom: fit.stack, cursor: "pointer", flexShrink: 0, fontFamily: FONT,
         background: complete ? BC.amberGlow : BC.card,
         border: `1px solid ${complete ? BC.amber : BC.bdr}${ALPHA.line}`,
-        color: complete ? BC.amber : BC.t2,
+        color: complete ? BC.amberInk : BC.t2,
         fontSize: complete ? FS.body : FS.small,
         fontWeight: complete ? 800 : 700, letterSpacing: 0.5,
       }}>
@@ -754,7 +754,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           // bytes into a ten-character hex — not a colour, so that border
           // silently did not render at all.
           border: `1px solid ${nm ? BC.amber : BC.bdr}${ALPHA.line}`,
-          color: nm ? BC.amber : BC.t3,
+          color: nm ? BC.amberInk : BC.t3,
           fontSize: FS.label, fontWeight: 700, letterSpacing: 0.5,
         };
         return settled
@@ -879,7 +879,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
         <Popup onClose={() => setShowScorecard(false)} maxWidth={480} padding={0} outerPadding={12}
           innerStyle={{ background: BC.card, border: `1px solid ${BC.amber}${ALPHA.line}`, borderRadius: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderBottom: `1px solid ${BC.bdr}` }}>
-            <div style={{ fontSize: FS.small, fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>
+            <div style={{ fontSize: FS.small, fontWeight: 800, color: BC.amberInk, letterSpacing: 1 }}>
               SCORECARD — RD {match.round}{match.matchNumber ? ` · MATCH ${match.matchNumber}` : ""}
             </div>
             <button onClick={() => setShowScorecard(false)} style={{
@@ -1817,7 +1817,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         override, blue G = synced from GHIN, plain = manual. */}
                     <span title={overridden ? `Director override — GHIN/base index is ${p.handicap_index}` : (synced ? "Synced from GHIN" : "Manual index")}
                       style={{ display: "inline-flex", alignItems: "center", gap: 4, width: 56, flexShrink: 0 }}>
-                      <span style={{ fontSize: FS.small, fontWeight: overridden ? 700 : 500, color: overridden ? BC.amber : playerNameColor() }}>
+                      <span style={{ fontSize: FS.small, fontWeight: overridden ? 700 : 500, color: overridden ? BC.amberInk : playerNameColor() }}>
                         {effHI}{overridden ? "*" : ""}
                       </span>
                       {synced && <span style={{ fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.2, color: BC.hcpBlue, border: `1px solid ${BC.hcpBlue}${ALPHA.line}`, background: BC.hcpBlue + ALPHA.tint, borderRadius: 3, padding: "1px 3px", lineHeight: 1 }}>G</span>}
@@ -1940,7 +1940,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       <span style={lbl}>Director</span>
                       <button type="button" onClick={() => set({ dir: !editingPlayer.dir })}
                         style={{ fontSize: FS.body, fontWeight: 700, padding: "7px 10px", borderRadius: 8, cursor: "pointer", width: "100%", boxSizing: "border-box", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                          border: `1px solid ${editingPlayer.dir ? BC.amber : BC.bdr}`, background: editingPlayer.dir ? BC.amber + ALPHA.wash : "transparent", color: editingPlayer.dir ? BC.amber : BC.t2 }}>
+                          border: `1px solid ${editingPlayer.dir ? BC.amber : BC.bdr}`, background: editingPlayer.dir ? BC.amber + ALPHA.wash : "transparent", color: editingPlayer.dir ? BC.amberInk : BC.t2 }}>
                         {editingPlayer.dir ? "👑 Director" : "Player"}
                       </button>
                     </div>
@@ -1960,9 +1960,9 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       </div>
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ ...lbl, color: BC.amber }}>Override</span>
+                      <span style={{ ...lbl, color: BC.amberInk }}>Override</span>
                       <input type="number" inputMode="decimal" value={editingPlayer.ov} placeholder={String(p ? p.handicap_index : (editingPlayer.hi || ""))} onChange={e => set({ ov: e.target.value })}
-                        style={{ ...inp, border: `1px solid ${BC.amber}${ALPHA.line}`, color: BC.amber }} />
+                        style={{ ...inp, border: `1px solid ${BC.amber}${ALPHA.line}`, color: BC.amberInk }} />
                     </div>
                   </div>
                 </div>
@@ -2222,7 +2222,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       ))}
                     </div>
                   </div>
-                  <div style={{ fontSize: FS.label, color: stray ? BC.amber : BC.t3, lineHeight: 1.5, marginTop: 5 }}>
+                  <div style={{ fontSize: FS.label, color: stray ? BC.amberInk : BC.t3, lineHeight: 1.5, marginTop: 5 }}>
                     {stray
                       ? `This round is overriding ${fmt?.label || "the format"} and scoring each hole as the side's best net ball. Pick ${fmt?.label || "the format"} to score it as its own name says.`
                       : describeHoleScore(fmtId, holeScoring)}
@@ -2314,7 +2314,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                           style={{
                             ...InputStyle, marginBottom: 0, padding: "3px 0", fontSize: FS.body,
                             textAlign: "center", width: "100%", minWidth: 0,
-                            color: capped ? BC.amber : undefined,
+                            color: capped ? BC.amberInk : undefined,
                             border: `1px solid ${capped ? BC.amber + ALPHA.line : BC.bdr}`,
                           }} />
                       </div>
@@ -2338,7 +2338,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   </div>
                   {holeRow(false)}
                   {holeRow(true)}
-                  <div style={{ fontSize: FS.label, color: over ? BC.amber : BC.t3, lineHeight: 1.5, marginTop: 5 }}>
+                  <div style={{ fontSize: FS.label, color: over ? BC.amberInk : BC.t3, lineHeight: 1.5, marginTop: 5 }}>
                     {over
                       ? `Only ${sideSize} play${sideSize === 1 ? "s" : ""} a side — the holes above ${sideSize} score as all ${sideSize}.`
                       : "Each hole is the sum of the side's best N nets, where N is that hole's count."}
@@ -2662,7 +2662,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     </div>
                   )}
                   {roundIsLocked && (
-                    <div style={{ fontSize: FS.label, color: roundIsFinal ? BC.danger : BC.amber, marginTop: 4 }}>
+                    <div style={{ fontSize: FS.label, color: roundIsFinal ? BC.danger : BC.amberInk, marginTop: 4 }}>
                       Round {editRound} is locked — the allowance it scored with is frozen in the snapshot, so a change here will not move it.
                     </div>
                   )}
@@ -2802,7 +2802,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     return (
                       <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: `1fr 30px 58px ${tees2.map(() => "22px").join(" ")} 22px`, gap: 4, alignItems: "center", marginBottom: 3 }}>
                         <div style={{ fontSize: FS.small, color: playerNameColor(), fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
-                        <div title={hiOverridden ? `Index override (base ${p.handicap_index})` : undefined} style={{ fontSize: FS.label, color: hiOverridden ? BC.amber : BC.t3, fontWeight: hiOverridden ? 700 : 400, textAlign: "center" }}>{effHI}{hiOverridden ? "*" : ""}</div>
+                        <div title={hiOverridden ? `Index override (base ${p.handicap_index})` : undefined} style={{ fontSize: FS.label, color: hiOverridden ? BC.amberInk : BC.t3, fontWeight: hiOverridden ? 700 : 400, textAlign: "center" }}>{effHI}{hiOverridden ? "*" : ""}</div>
                         <input
                           type="number" step="1"
                           // readOnly (not disabled) when final so the tap still
@@ -2815,7 +2815,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                             setHcpOverrides(prev => ({ ...prev, [editRound]: { ...(prev[editRound]||{}), [p.player_id]: e.target.value } }));
                           }}
                           placeholder={calcedCH != null ? String(calcedCH) : "CH"}
-                          style={{ padding: "5px 8px", background: hasOverride ? BC.amber + ALPHA.wash : BC.inp, border: `1px solid ${hasOverride ? BC.amber : BC.bdr}`, borderRadius: 6, color: hasOverride ? BC.amber : BC.t2, fontSize: FS.small, fontWeight: hasOverride ? 700 : 400, outline: "none", textAlign: "center", opacity: roundIsFinal ? 0.5 : 1, cursor: roundIsFinal ? "not-allowed" : "text" }}
+                          style={{ padding: "5px 8px", background: hasOverride ? BC.amber + ALPHA.wash : BC.inp, border: `1px solid ${hasOverride ? BC.amber : BC.bdr}`, borderRadius: 6, color: hasOverride ? BC.amberInk : BC.t2, fontSize: FS.small, fontWeight: hasOverride ? 700 : 400, outline: "none", textAlign: "center", opacity: roundIsFinal ? 0.5 : 1, cursor: roundIsFinal ? "not-allowed" : "text" }}
                         />
                         {tees2.map((tee, ti) => {
                           const isAct = currentTee2 === tee.name;
@@ -2862,7 +2862,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 : phase === "error"
                   ? [`Round ${editRound} could not be saved — retrying on your next edit`, BC.danger]
                   : phase === "saving" || (roundDirty && formSeeded)
-                    ? ["Saving…", BC.amber]
+                    ? ["Saving…", BC.amberInk]
                     : phase === "saved"
                       ? [`Round ${editRound} saved`, BC.t3]
                       : ["Changes save automatically", BC.t3];
@@ -2912,7 +2912,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
           <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 14, overflow: "hidden" }}>
             <div style={{ padding: "9px 14px", borderBottom: `1px solid ${BC.bdr}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontSize: FS.small, fontWeight: 700, color: BC.gold }}>{courses.length} COURSE{courses.length !== 1 ? "S" : ""}</span>
-              <button onClick={() => { setSearching(!searching); setCourseSearch(""); setSearchResults([]); }} style={{ padding: "4px 10px", borderRadius: 6, background: "transparent", border: `1px solid ${BC.amber}${ALPHA.line}`, color: BC.amber, fontSize: FS.label, fontWeight: 700, cursor: "pointer" }}>
+              <button onClick={() => { setSearching(!searching); setCourseSearch(""); setSearchResults([]); }} style={{ padding: "4px 10px", borderRadius: 6, background: "transparent", border: `1px solid ${BC.amber}${ALPHA.line}`, color: BC.amberInk, fontSize: FS.label, fontWeight: 700, cursor: "pointer" }}>
                 {searching ? "Close" : "+ Add Course"}
               </button>
             </div>
@@ -3001,11 +3001,11 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         <span style={{ fontWeight: 600, fontSize: FS.body }}>{c.name}</span>
                         {c._incompleteData && <span style={{ fontSize: FS.micro, background: `${BC.danger}${ALPHA.tint}`, border: `1px solid ${BC.danger}${ALPHA.hair}`, color: BC.danger, borderRadius: 4, padding: "1px 5px", fontWeight: 700 }}>⚠ incomplete</span>}
-                        {c._source && <span style={{ fontSize: FS.micro, background: `${BC.amber}${ALPHA.wash}`, border: `1px solid ${BC.amber}${ALPHA.hair}`, color: BC.amber, borderRadius: 4, padding: "1px 5px", fontWeight: 600 }}>{c._source}</span>}
+                        {c._source && <span style={{ fontSize: FS.micro, background: `${BC.amber}${ALPHA.wash}`, border: `1px solid ${BC.amber}${ALPHA.hair}`, color: BC.amberInk, borderRadius: 4, padding: "1px 5px", fontWeight: 600 }}>{c._source}</span>}
                       </div>
                       <div style={{ fontSize: FS.label, color: BC.t3 }}>{[c.city, c.state].filter(Boolean).join(", ")}{c.par ? ` · Par ${c.par}` : ""}{c.slope && c.slope !== 113 ? ` · Slope ${c.slope}` : ""}</div>
                     </div>
-                    <span style={{ color: BC.amber, fontSize: FS.small, fontWeight: 700 }}>Preview →</span>
+                    <span style={{ color: BC.amberInk, fontSize: FS.small, fontWeight: 700 }}>Preview →</span>
                   </div>
                 </button>
               ))}
@@ -3090,7 +3090,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                             {refetchingTees ? "Fetching…" : "⟳ Re-fetch tees"}
                           </button>
                           <button onClick={() => setDraft(p => ({ ...p, tee_boxes: [...(p.tee_boxes||[]), { name: "", color: TEE_UNSET, rating: 72.0, slope: 113, par: 72, yardage: 0 }] }))}
-                            style={{ fontSize: FS.label, padding: "2px 7px", borderRadius: 4, background: "transparent", border: `1px solid ${BC.amber}${ALPHA.line}`, color: BC.amber, cursor: "pointer", fontWeight: 700 }}>+ Tee</button>
+                            style={{ fontSize: FS.label, padding: "2px 7px", borderRadius: 4, background: "transparent", border: `1px solid ${BC.amber}${ALPHA.line}`, color: BC.amberInk, cursor: "pointer", fontWeight: 700 }}>+ Tee</button>
                         </div>
                       </div>
                       {tbs.length === 0 && <div style={{ fontSize: FS.label, color: BC.warn, marginBottom: 8, fontStyle: "italic" }}>⚠ No tees from API — add manually</div>}
@@ -3132,7 +3132,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                                 <input key={i} value={pars[i]??""} onChange={e => setDraft(p => { const hp=[...(p.hole_pars||Array(18).fill(4))]; hp[start+i]=e.target.value; return {...p,hole_pars:hp}; })}
                                   style={{ background:"transparent", border:"none", color:BC.t1, fontSize:FS.micro, fontWeight:700, textAlign:"center", width:"100%", padding:"3px 0", outline:"none" }} />
                               ))}
-                              <div style={{ textAlign:"center", color:BC.amber, fontWeight:800, padding:"3px 0", fontSize:FS.micro }}>{pars.reduce((a,b)=>a+(parseInt(b)||0),0)}</div>
+                              <div style={{ textAlign:"center", color:BC.amberInk, fontWeight:800, padding:"3px 0", fontSize:FS.micro }}>{pars.reduce((a,b)=>a+(parseInt(b)||0),0)}</div>
                             </div>
                             <div style={{ display: "grid", gridTemplateColumns: `28px repeat(${count}, 1fr) 30px`, gap: 1, fontSize: FS.micro, marginBottom: 1 }}>
                               <div style={{ color: BC.t3, fontWeight: 600, padding: "2px 2px" }}>HCP</div>
@@ -3196,7 +3196,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             fontSize: FS.body, fontWeight: 700, letterSpacing: 0.3, cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "space-between",
           }}>
-            <span>Edition · <span style={{ color: BC.amber }}>{TOURNAMENT_ID}</span></span>
+            <span>Edition · <span style={{ color: BC.amberInk }}>{TOURNAMENT_ID}</span></span>
             <span style={{ fontSize: FS.small, color: BC.t3 }}>Switch / new ›</span>
           </button>
 
@@ -3385,7 +3385,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
             </div>
             <div style={{ textAlign: "right" }}>
               <div style={{ fontSize: FS.label, color: BC.t3 }}>{totalSkins} skins won</div>
-              <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.amber }}>${perSkin} / skin</div>
+              <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>${perSkin} / skin</div>
             </div>
           </div>
 
@@ -3408,7 +3408,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
                   <div key={pid} style={{ display: "flex", alignItems: "center", padding: "8px 14px", borderBottom: `1px solid ${BC.bdr}${ALPHA.hair}`, gap: 8 }}>
                     <div style={{ width: 8, height: 8, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
                     <span style={{ flex: 1, fontSize: FS.body, fontWeight: 600, color: BC.t1 }}>{p?.name || pid}</span>
-                    <span style={{ fontSize: FS.body, fontWeight: 700, color: BC.amber }}>{count} skin{count !== 1 ? "s" : ""}</span>
+                    <span style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>{count} skin{count !== 1 ? "s" : ""}</span>
                     <span style={{ fontSize: FS.small, color: BC.t3 }}>${(count * parseFloat(perSkin)).toFixed(2)}</span>
                   </div>
                 );
@@ -3430,10 +3430,10 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
             <div key={s.hole} style={{ display: "flex", alignItems: "center", padding: "7px 12px", background: BC.card, borderRadius: 8, marginBottom: 4, border: `1px solid ${s.winner ? BC.amber + ALPHA.line : s.tied ? BC.bdr : BC.bdr}` }}>
               <span style={{ fontSize: FS.small, fontWeight: 700, color: BC.t3, width: 40 }}>Hole {s.hole + 1}</span>
               <span style={{ fontSize: FS.label, color: BC.t3, width: 30 }}>Par {holePars[s.hole]}</span>
-              <span style={{ flex: 1, fontSize: FS.small, fontWeight: 600, color: s.winner ? BC.amber : s.tied ? BC.t3 : BC.t3 }}>
+              <span style={{ flex: 1, fontSize: FS.small, fontWeight: 600, color: s.winner ? BC.amberInk : s.tied ? BC.t3 : BC.t3 }}>
                 {s.winner ? `${s.winner.name} (${s.score})` : s.tied ? "Tied — pushed" : "—"}
               </span>
-              {s.winner && <span style={{ fontSize: FS.label, color: BC.amber, fontWeight: 700 }}>🏆 Skin</span>}
+              {s.winner && <span style={{ fontSize: FS.label, color: BC.amberInk, fontWeight: 700 }}>🏆 Skin</span>}
             </div>
           ))}
         </div>
@@ -3472,11 +3472,11 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
                           {tPlayers.map(p => <option key={p.player_id} value={p.player_id}>{p.name}</option>)}
                         </select>
                       ) : (
-                        <span style={{ flex: 1, fontSize: FS.small, fontWeight: 600, color: winner ? BC.amber : BC.t3 }}>{winner ? winner.name : "Not set"}</span>
+                        <span style={{ flex: 1, fontSize: FS.small, fontWeight: 600, color: winner ? BC.amberInk : BC.t3 }}>{winner ? winner.name : "Not set"}</span>
                       )}
-                      {rec?.distance_ft ? <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.amber, flexShrink: 0 }}>{rec.distance_ft} ft</span> : null}
+                      {rec?.distance_ft ? <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.amberInk, flexShrink: 0 }}>{rec.distance_ft} ft</span> : null}
                       {pending && <span title="Tagged on the course — not settled yet" style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, border: `1px solid ${BC.bdr}`, borderRadius: 4, padding: "1px 4px", flexShrink: 0 }}>Pending</span>}
-                      {winner && <span style={{ fontSize: FS.label, color: BC.amber }}>📍</span>}
+                      {winner && <span style={{ fontSize: FS.label, color: BC.amberInk }}>📍</span>}
                     </div>
                   );
                 })}
@@ -3548,7 +3548,7 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
                   <div style={{ textAlign: "center", fontSize: FS.small, color: BC.green, fontWeight: 600 }}>{p.wins}</div>
                   <div style={{ textAlign: "center", fontSize: FS.small, color: BC.danger, fontWeight: 600 }}>{p.losses}</div>
                   <div style={{ textAlign: "center", fontSize: FS.small, color: BC.t3 }}>{p.halves}</div>
-                  <div style={{ textAlign: "right", fontSize: FS.small, fontWeight: 700, color: BC.amber }}>{p.pts.toFixed(1)}</div>
+                  <div style={{ textAlign: "right", fontSize: FS.small, fontWeight: 700, color: BC.amberInk }}>{p.pts.toFixed(1)}</div>
                 </div>
               );
             })}
@@ -3572,7 +3572,7 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
                   <div style={{ fontSize: FS.small, color: BC.t1 }}><span style={{ color: teams.A.accent, fontWeight: 700 }}>{yr.teamAName}</span> {yr.teamAScore}</div>
                   <div style={{ fontSize: FS.small, color: BC.t1 }}><span style={{ color: teams.B.accent, fontWeight: 700 }}>{yr.teamBName}</span> {yr.teamBScore}</div>
                 </div>
-                {yr.winner && <div style={{ fontSize: FS.small, color: BC.amber, fontWeight: 700 }}>🏆 {yr.winner} won the Bourbon Cup</div>}
+                {yr.winner && <div style={{ fontSize: FS.small, color: BC.amberInk, fontWeight: 700 }}>🏆 {yr.winner} won the Bourbon Cup</div>}
               </div>
             ))
           )}
@@ -3738,7 +3738,7 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, 
               background: isActive ? BC.amber + ALPHA.wash : "transparent",
               borderTop: idx === 0 ? "none" : `1px solid ${BC.bdr}${ALPHA.hair}`,
               borderLeft: "none", borderRight: "none", borderBottom: "none",
-              color: isActive || item.flag ? BC.amber : BC.t1,
+              color: isActive || item.flag ? BC.amberInk : BC.t1,
               fontSize: FS.body, fontWeight: isActive || item.flag ? 700 : 500,
               cursor: "pointer", textAlign: "left",
               display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -4759,14 +4759,17 @@ export default function App() {
   ];
 
   const renderIcon = (icon, active) => {
-    const clr = active ? BC.amber : BC.t3;
+    // amberInk, not amber: an active tab is an icon, a label and a rule
+    // reading as ONE mark, and the label is 10px — so the whole mark takes
+    // the colour the label needs. In dark mode the two are the same value.
+    const clr = active ? BC.amberInk : BC.t3;
     const sz = 20;
     // Trophy silhouette is a PNG, not an SVG, so we can't simply stroke it
     // with `clr` like the other icons. Filter chains can approximate one
     // color but not arbitrary theme colors, which is why the inactive
     // trophy used to read as a different hue from its tab-mates. Switching
     // to a CSS mask + solid background means the icon takes the EXACT
-    // BC.t3 / BC.amber currently in use, with zero color drift.
+    // BC.t3 / BC.amberInk currently in use, with zero color drift.
     if (icon === "trophy") return <div style={{
       width: sz, height: sz, background: clr,
       WebkitMask: `url(${TROPHY_SILHOUETTE}) center/contain no-repeat`,
@@ -5138,7 +5141,7 @@ export default function App() {
       <div style={{ maxWidth: 520, margin: "0 auto", display: "flex" }}>
         {navItems.map(item => {
           const active = view === item.key;
-          const clr = active ? BC.amber : BC.t3;
+          const clr = active ? BC.amberInk : BC.t3;
           // The notification's persistent half. The bar above can be
           // dismissed; this dot cannot, and it stays lit until the round is
           // actually finalized — pointing at More, which is where the sheet
@@ -5161,7 +5164,7 @@ export default function App() {
                 }} />}
               </div>
               <span style={{ fontSize: FS.label, fontWeight: active ? 700 : 500, color: clr, lineHeight: 1 }}>{item.label}</span>
-              {active && <div style={{ width: 16, height: 2, borderRadius: 1, background: BC.amber, marginTop: 2 }} />}
+              {active && <div style={{ width: 16, height: 2, borderRadius: 1, background: clr, marginTop: 2 }} />}
             </button>
           );
         })}

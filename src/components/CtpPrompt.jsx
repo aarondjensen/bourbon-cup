@@ -75,7 +75,7 @@ export function CtpPrompt({ holeNumber, players, teams, leader, leaderName, onSa
 
   return (
     <Popup onClose={onClose} maxWidth={360} padding={20} portal>
-      <div style={{ fontSize: FS.label, fontWeight: 800, color: BC.amber, letterSpacing: 1.5, marginBottom: 6, textAlign: "center" }}>
+      <div style={{ fontSize: FS.label, fontWeight: 800, color: BC.amberInk, letterSpacing: 1.5, marginBottom: 6, textAlign: "center" }}>
         Hole {holeNumber} · Par 3
       </div>
       <div style={{ fontSize: FS.lead, fontWeight: 800, color: BC.t1, letterSpacing: 1.2, marginBottom: 14, textAlign: "center" }}>
@@ -98,7 +98,7 @@ export function CtpPrompt({ holeNumber, players, teams, leader, leaderName, onSa
               {leaderName || "—"}
             </span>
           </span>
-          {leaderDist && <span style={{ fontSize: FS.body, fontWeight: 800, color: BC.amber, flexShrink: 0 }}>{leaderDist}</span>}
+          {leaderDist && <span style={{ fontSize: FS.body, fontWeight: 800, color: BC.amberInk, flexShrink: 0 }}>{leaderDist}</span>}
         </div>
       )}
 
@@ -117,7 +117,7 @@ export function CtpPrompt({ holeNumber, players, teams, leader, leaderName, onSa
                 display: "flex", alignItems: "center", gap: 5, padding: "11px 8px", borderRadius: 10,
                 background: sel ? BC.amberGlow : BC.inp,
                 border: `1px solid ${sel ? BC.amber : BC.bdr}`,
-                color: sel ? BC.amber : BC.t2,
+                color: sel ? BC.amberInk : BC.t2,
                 fontSize: FS.small, fontWeight: 700, letterSpacing: 0.4, cursor: "pointer", textAlign: "left",
               }}
             >
@@ -141,7 +141,7 @@ export function CtpPrompt({ holeNumber, players, teams, leader, leaderName, onSa
         }} />
         <div style={{
           position: "absolute", right: 46, top: "50%", transform: "translateY(-50%)",
-          fontSize: FS.small, fontWeight: 800, color: BC.amber, letterSpacing: 1.2, pointerEvents: "none", zIndex: 2,
+          fontSize: FS.small, fontWeight: 800, color: BC.amberInk, letterSpacing: 1.2, pointerEvents: "none", zIndex: 2,
         }}>FT</div>
         <div
           ref={wheelRef}

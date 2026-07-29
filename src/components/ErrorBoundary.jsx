@@ -1,5 +1,5 @@
 import { Component } from "react";
-import { BC, FS } from "../theme";
+import { BC, FS, ON_AMBER } from "../theme";
 
 // ══════════════════════════════════════════════════════════════════
 //  ErrorBoundary — friendly fallback instead of a blank white screen.
@@ -67,7 +67,7 @@ export default class ErrorBoundary extends Component {
         <button onClick={() => window.location.reload()} style={{
           padding: "10px 20px", borderRadius: 8,
           background: BC.amber, border: "none",
-          color: BC.bg, fontSize: FS.body, fontWeight: 700,
+          color: ON_AMBER, fontSize: FS.body, fontWeight: 700,
           cursor: "pointer", letterSpacing: 0.4,
         }}>
           Reload App

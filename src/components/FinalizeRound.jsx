@@ -87,7 +87,7 @@ export function DirectorFinalizeAlert({ round, nextRound, progress, cards, onOpe
           }} />
           <span style={{ flex: 1, minWidth: 0 }}>
             <span style={{
-              display: "block", fontSize: FS.small, fontWeight: 800, color: BC.amber,
+              display: "block", fontSize: FS.small, fontWeight: 800, color: BC.amberInk,
               letterSpacing: 0.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
             }}>
               Round {round} is ready to finalize
@@ -106,7 +106,7 @@ export function DirectorFinalizeAlert({ round, nextRound, progress, cards, onOpe
               {" — "}{nextRound ? `opens Round ${nextRound}` : "closes the tournament"}
             </span>
           </span>
-          <span style={{ color: BC.amber, fontSize: FS.lead, fontWeight: 700, flexShrink: 0, paddingRight: 4 }}>›</span>
+          <span style={{ color: BC.amberInk, fontSize: FS.lead, fontWeight: 700, flexShrink: 0, paddingRight: 4 }}>›</span>
         </button>
         {/* Sibling, not nested: a button inside a button is invalid markup
             and iOS resolves the tap to whichever it feels like. */}
@@ -276,7 +276,7 @@ export function FinalizeRoundSheet({
 
   return (
     <Popup onClose={busy ? undefined : onClose} maxWidth={380} padding={18} portal showClose={!busy}>
-      <div style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 1.5, color: BC.amber, marginBottom: 10 }}>
+      <div style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 1.5, color: BC.amberInk, marginBottom: 10 }}>
         DIRECTOR
       </div>
 
@@ -422,7 +422,7 @@ export function FinalizeRoundSheet({
             width: "100%", padding: "12px 0", borderRadius: 10, cursor: busy ? "default" : "pointer",
             border: cardsReady ? "none" : `1px solid ${BC.amber}${ALPHA.line}`,
             background: cardsReady ? BC.amber : "transparent",
-            color: cardsReady ? ON_AMBER : BC.amber,
+            color: cardsReady ? ON_AMBER : BC.amberInk,
             fontSize: FS.body, fontWeight: 800, letterSpacing: 0.5, opacity: busy ? 0.6 : 1,
             fontFamily: FONT,
           }}>

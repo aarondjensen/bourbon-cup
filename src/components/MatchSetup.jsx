@@ -49,7 +49,7 @@ const ROUNDS = [1, 2, 3, 4];
 const cardStyle = { background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}` };
 const miniBtn = {
   padding: "5px 10px", borderRadius: 8, fontSize: FS.label, fontWeight: 700, cursor: "pointer",
-  background: "transparent", border: `1px solid ${BC.amber}${ALPHA.line}`, color: BC.amber, fontFamily: FONT,
+  background: "transparent", border: `1px solid ${BC.amber}${ALPHA.line}`, color: BC.amberInk, fontFamily: FONT,
 };
 const xBtn = {
   fontSize: FS.label, padding: "3px 7px", borderRadius: 6, border: `1px solid ${BC.danger}${ALPHA.hair}`,
@@ -588,8 +588,8 @@ export function MatchSetup({
               cursor: draggable ? (dragging ? "grabbing" : "grab") : "default",
             }}
           >
-            {draggable && <span aria-hidden style={{ fontSize: FS.small, lineHeight: 1, color: dragging ? BC.amber : BC.t3 }}>⠿</span>}
-            <span style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 0.5, minWidth: 22, color: dragging ? BC.amber : BC.gold }}>
+            {draggable && <span aria-hidden style={{ fontSize: FS.small, lineHeight: 1, color: dragging ? BC.amberInk : BC.t3 }}>⠿</span>}
+            <span style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 0.5, minWidth: 22, color: dragging ? BC.amberInk : BC.gold }}>
               M{m.matchNumber ?? "?"}
             </span>
           </div>
@@ -662,7 +662,7 @@ export function MatchSetup({
           ...cardStyle, padding: "9px 12px", marginBottom: 10,
           border: `1px solid ${BC.amber}${ALPHA.line}`, fontSize: FS.label, color: BC.t2, lineHeight: 1.45,
         }}>
-          <span style={{ fontWeight: 800, color: BC.amber, letterSpacing: 1 }}>ROUND {round} IS FINAL. </span>
+          <span style={{ fontWeight: 800, color: BC.amberInk, letterSpacing: 1 }}>ROUND {round} IS FINAL. </span>
           Its draw is locked to its result. Reopen the round on the Scoring tab to change matches.
         </div>
       )}
@@ -844,7 +844,7 @@ export function MatchSetup({
               <span style={{
                 fontSize: FS.label, fontWeight: 700, textAlign: "right", minWidth: 0,
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                color: wouldRefuse ? BC.danger : BC.amber,
+                color: wouldRefuse ? BC.danger : BC.amberInk,
               }}>
                 {wouldRefuse ? "FULL"
                   : wouldSwap ? "SWAP"
@@ -853,7 +853,7 @@ export function MatchSetup({
               </span>
             </div>
             {rows.length === 0 && (
-              <div style={{ fontSize: FS.label, color: over ? BC.amber : BC.t3, fontWeight: 700, letterSpacing: 0.5, padding: "2px 0" }}>
+              <div style={{ fontSize: FS.label, color: over ? BC.amberInk : BC.t3, fontWeight: 700, letterSpacing: 0.5, padding: "2px 0" }}>
                 {over && draggedFrom !== gi ? "DROP HERE" : "OPEN"}
               </div>
             )}
@@ -998,7 +998,7 @@ export function MatchSetup({
       {/* Everything else worth saying about the draw, in one place. */}
       {flagged && (
         <div style={{ ...cardStyle, padding: "9px 11px", marginBottom: 8, border: `1px solid ${BC.amber}${ALPHA.line}` }}>
-          <div style={{ fontSize: FS.label, fontWeight: 800, color: BC.amber, letterSpacing: 1, marginBottom: 6 }}>CHECK</div>
+          <div style={{ fontSize: FS.label, fontWeight: 800, color: BC.amberInk, letterSpacing: 1, marginBottom: 6 }}>CHECK</div>
           {issues.split.map(m => (
             <div key={m.id} style={{ fontSize: FS.label, color: BC.t2, marginBottom: 3 }}>
               · {m.teamANames?.join("/")} vs {m.teamBNames?.join("/")} is split across groups — opponents tee off together.
@@ -1022,7 +1022,7 @@ export function MatchSetup({
       )}
 
       {!flagged && groups.length > 0 && rndMatches.length > 0 && (
-        <div style={{ fontSize: FS.label, color: BC.amber, textAlign: "center", marginBottom: 8, fontWeight: 700 }}>
+        <div style={{ fontSize: FS.label, color: BC.amberInk, textAlign: "center", marginBottom: 8, fontWeight: 700 }}>
           ✓ Every player has a group and a tee time.
         </div>
       )}

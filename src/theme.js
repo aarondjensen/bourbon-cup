@@ -103,10 +103,11 @@ export const glowHex = (hex, a = 0.16) => {
 
 // Augments a base palette in place with per-team tokens (and an optional
 // tournament-accent override), then returns it.
-// AA for normal text. The team accents are used at 10-11px in places — the
-// F9/B9 results, the team name over each cup total — so the large-text 3:1
-// allowance doesn't cover them.
-const TEAM_TEXT_CONTRAST = 4.5;
+// AA for normal text. The accents this applies to are used at 10-11px in
+// places — the F9/B9 results, the team name over each cup total, the "SAVING…"
+// line under the admin form — so the large-text 3:1 allowance doesn't cover
+// them.
+const TEXT_CONTRAST = 4.5;
 
 function withBrand(mode, brand, base) {
   const glowA = mode === "light" ? 0.14 : 0.20;
@@ -130,7 +131,7 @@ function withBrand(mode, brand, base) {
   // names, F9/B9 results and the running match status. Light mode therefore
   // takes the same hue walked down until it clears AA for normal text, since
   // some of what it colors is 10-11px. Dark mode is untouched.
-  const onLight = (hex) => shadeToContrast(hex, base.bg, TEAM_TEXT_CONTRAST);
+  const onLight = (hex) => shadeToContrast(hex, base.bg, TEXT_CONTRAST);
   const aCol = mode === "light" ? onLight(rawA) : rawA;
   const bCol = mode === "light" ? onLight(rawB) : rawB;
   base.teamA = aCol;
@@ -151,6 +152,33 @@ function withBrand(mode, brand, base) {
     base.amberDim = dimHex(brand.tournamentAccent);
     base.amberGlow = glowHex(brand.tournamentAccent, glowA);
   }
+  // ── Amber, twice, and only in light mode ────────────────────────
+  // Amber is the one token in this palette that is BOTH a fill and an ink —
+  // it is the selected score button AND the label under it — and on a
+  // near-white page it cannot be both. Text on #fafaf9 wants a dark amber;
+  // a fill carrying ON_AMBER's near-black wants a light one. Walking a
+  // single value between those two poles, the best any amber manages is
+  // 4.36:1 in each direction: under AA both ways, which is the worst of the
+  // available answers.
+  //
+  // So light mode gets two. `amber` is untouched — every fill, chip, rule
+  // and border keeps the exact colour it has today, and ON_AMBER still
+  // reads 5.85:1 on it — and `amberInk` is that same hue walked down until
+  // text clears AA (#b8801a → #906414, 3.27:1 → 5.00:1 on the page). Dark
+  // mode sets the two equal, because #e0a93c on black is already 9.34:1 as
+  // ink and 9.44:1 under ON_AMBER; there is nothing there to fix and
+  // nothing to change.
+  //
+  // Measured against `inp`, not `bg`: it is the darkest surface in light
+  // mode, and amber genuinely lands on it — the handicap-override field in
+  // the player editor is an amber-on-inp input. Clearing AA there clears it
+  // on the page and the card too, which is where the rest of it sits.
+  //
+  // Derived after the tournament override above so a configured accent gets
+  // the same treatment the built-in one does.
+  base.amberInk = mode === "light"
+    ? shadeToContrast(base.amber, base.inp, TEXT_CONTRAST)
+    : base.amber;
   return base;
 }
 
@@ -166,7 +194,9 @@ export const getBCTheme = (mode, brand = null) => {
       t1: "#16161a",        // near-black ink
       t2: "#5c5c62",        // medium neutral
       t3: "#93939a",        // muted neutral
-      amber: "#b8801a",     // PRIMARY ACCENT — bourbon amber (Blackout/Gold)
+      // PRIMARY ACCENT — bourbon amber (Blackout/Gold). This is the FILL
+      // value; text in amber uses the derived `amberInk` (see withBrand).
+      amber: "#b8801a",
       amberGlow: "rgba(184,128,26,0.14)",
       amberDim: "#8a5f10",  // deeper amber (gradients, hover-state)
       gold: "#8a5a2b",      // SECONDARY ACCENT — bourbon brown (login title, trophy glow)

@@ -6,7 +6,7 @@
 // reloads the app (see lib/editions.js), so the switch goes through a
 // confirm first.
 import { useState, useEffect } from "react";
-import { BC, FS } from "../theme";
+import { BC, FS, ON_AMBER } from "../theme";
 import { Popup, ConfirmModal } from "./Popup";
 import { getActiveTournamentId } from "../firebase";
 import { loadEditions, createEdition, cloneEdition, deleteEdition, switchEdition, ensureActiveEditionDoc } from "../lib/editions";
@@ -64,7 +64,7 @@ export function EditionSwitcher({ open, onClose }) {
     } finally { setBusy(false); }
   };
 
-  const statusColor = (s) => s === "published" ? BC.amber : s === "archived" ? BC.t3 : BC.gold;
+  const statusColor = (s) => s === "published" ? BC.amberInk : s === "archived" ? BC.t3 : BC.gold;
 
   return (
     <>
@@ -92,7 +92,7 @@ export function EditionSwitcher({ open, onClose }) {
                   </div>
                   {isActive ? (
                     <span style={{
-                      fontSize: FS.label, fontWeight: 800, letterSpacing: 0.5, color: BC.bg,
+                      fontSize: FS.label, fontWeight: 800, letterSpacing: 0.5, color: ON_AMBER,
                       background: BC.amber, padding: "5px 10px", borderRadius: 6,
                     }}>ACTIVE</span>
                   ) : (
@@ -149,7 +149,7 @@ export function EditionSwitcher({ open, onClose }) {
 
           <button onClick={doCreate} disabled={!year || busy} style={{
             width: "100%", padding: 11, borderRadius: 10, border: "none", cursor: (year && !busy) ? "pointer" : "not-allowed",
-            background: (year && !busy) ? BC.amber : BC.inp, color: (year && !busy) ? BC.bg : BC.t3,
+            background: (year && !busy) ? BC.amber : BC.inp, color: (year && !busy) ? ON_AMBER : BC.t3,
             fontSize: FS.body, fontWeight: 800, letterSpacing: 0.5,
           }}>{busy ? "Working…" : (cloneFrom ? "Clone into new edition" : "Create draft edition")}</button>
         </div>

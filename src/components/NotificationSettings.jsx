@@ -138,7 +138,7 @@ export function NotificationSettings({ user, notify }) {
 
   const wrap = (children) => (
     <div style={{ fontFamily: FONT, padding: "4px 2px 20px", overflowY: "auto" }}>
-      <div style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 1.5, color: BC.amber, marginBottom: 10 }}>
+      <div style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 1.5, color: BC.amberInk, marginBottom: 10 }}>
         NOTIFICATIONS
       </div>
       {children}
