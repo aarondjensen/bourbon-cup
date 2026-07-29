@@ -3,7 +3,7 @@ import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, HOLE_BANNER, FS, segThumb
 import { playerLookup } from "./lib/players";
 import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, BOOTSTRAP_DIRECTOR } from "./firebase";
 import { PROVIDERS, signIn, signOutUser, onAuthUser, consumeRedirectResult, isCancelled } from "./lib/auth";
-import { claimPlayer, linkedPlayer, isClaimed, accountLabel, unlinkPatch, readMembership, isDirectorAccount, joinWithCode, setAccessCode, readAccessCode, setDirector, membershipFor, playerIsDirector, accountsUnreadable, ACCOUNTS_COL } from "./lib/accounts";
+import { claimPlayer, linkedPlayer, isClaimed, accountLabel, unlinkPatch, readMembership, isDirectorAccount, joinWithCode, setAccessCode, readAccessCode, setDirector, membershipFor, playerIsDirector, accountsUnreadable, ACCOUNTS_COL, deleteAccount } from "./lib/accounts";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
   resolveTeams, DEFAULT_TEAM_NAMES, TOURNAMENT_TITLE, TOURNAMENT_LOCATION,
@@ -43,7 +43,7 @@ import { Popup, ConfirmModal } from "./components/Popup";
 import { CtpPrompt } from "./components/CtpPrompt";
 import { DirectorFinalizeAlert, FinalizeRoundSheet } from "./components/FinalizeRound";
 import { MissingCardNote, SignCardSheet, SignedCardPanel } from "./components/CardSignature";
-import { NotificationSettings } from "./components/NotificationSettings";
+import { AccountView } from "./components/AccountView";
 import { initForegroundNotifications, syncAppBadge } from "./lib/notifications";
 import { SegmentedToggle, SegRule, StickyTop, Banner, Toast, HoleNavigator, ScoreButtonRow } from "./components/ui";
 import { useConfirm } from "./lib/useConfirm";
@@ -4106,7 +4106,7 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
 // that used to be hardcoded here was only ever right at the default text
 // size on a phone whose nav was exactly that tall; anywhere else the menu
 // sank into the bar or floated off it.
-function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, onToggleTheme, finalize, navH }) {
+function SlideMenu({ open, onClose, onNavigate, user, view, finalize, navH }) {
   const dragRef = useRef(null);
   const startYRef = useRef(null);
   const [dragY, setDragY] = useState(0);
@@ -4132,9 +4132,12 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, 
     { key: "analytics", label: "Player Analytics", icon: "📊" },
     { key: "history",   label: "Historical Data",  icon: "📅" },
     { key: "photos",    label: "Photo Library",     icon: "📸", external: true },
-    { key: "notifications", label: "Notifications", icon: "🔔" },
     ...(user?.isDirector ? [{ key: "admin", label: "Admin Settings", icon: "⚙️" }] : []),
-    { key: "logout", label: "Logout", icon: "🚪", onLogout: () => { onLogout(); onClose(); } },
+    // Last, and set apart below: everything above is the EVENT, this is the
+    // person. Notifications, the theme switch and Logout all used to be
+    // rows in this menu; they are now sections of that one screen, so a
+    // preference has one home instead of two.
+    { key: "account",   label: "My Account",        icon: "👤" },
   ];
   return (
     <>
@@ -4164,7 +4167,7 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, 
         }}>
 
         {/* Menu items — no icons */}
-        {items.filter(i => i.key !== "logout").map((item, idx) => {
+        {items.map((item, idx) => {
           const isActive = item.key === view;
           return (
             <button key={item.key} onClick={() => {
@@ -4176,7 +4179,9 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, 
             }} style={{
               width: "100%", padding: "12px 16px",
               background: isActive ? BC.amber + ALPHA.wash : "transparent",
-              borderTop: idx === 0 ? "none" : `1px solid ${BC.bdr}${ALPHA.hair}`,
+              // A full-weight rule above My Account, a hairline between the
+              // rest: the break is what says "this one isn't the event".
+              borderTop: idx === 0 ? "none" : `1px solid ${BC.bdr}${item.key === "account" ? "" : ALPHA.hair}`,
               borderLeft: "none", borderRight: "none", borderBottom: "none",
               color: isActive || item.flag ? BC.amberInk : BC.t1,
               fontSize: FS.body, fontWeight: isActive || item.flag ? 700 : 500,
@@ -4188,53 +4193,6 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, 
             </button>
           );
         })}
-
-        <div style={{ height: 1, background: BC.bdr + ALPHA.hair }} />
-
-        {/* Theme toggle — pill-style switch. Labelled "Dark Mode" because that's
-            what the toggle controls; thumb-on-right = dark active, thumb-on-left
-            = light. Tap anywhere on the row flips it. */}
-        {onToggleTheme && (
-          <button onClick={(e) => { e.stopPropagation(); onToggleTheme(); }} style={{
-            width: "100%", padding: "12px 16px",
-            background: "transparent",
-            border: "none", borderTop: `1px solid ${BC.bdr}${ALPHA.hair}`,
-            color: BC.t1, fontSize: FS.body, fontWeight: 500,
-            cursor: "pointer", textAlign: "left",
-            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
-          }}>
-            <span>Dark Mode</span>
-            {/* iOS-style toggle: track + thumb. On = amber track + thumb right. */}
-            <span aria-hidden style={{
-              position: "relative", width: 36, height: 20, borderRadius: 10,
-              background: darkMode ? BC.amber : BC.bdr,
-              transition: "background 0.2s ease", flexShrink: 0,
-            }}>
-              <span style={{
-                position: "absolute", top: 2, left: darkMode ? 18 : 2,
-                width: 16, height: 16, borderRadius: "50%",
-                background: darkMode ? ON_AMBER : BC.card,
-                transition: "left 0.2s ease",
-                boxShadow: `0 1px 2px ${SHADOW}`,
-              }} />
-            </span>
-          </button>
-        )}
-
-        <div style={{ height: 1, background: BC.bdr + ALPHA.hair }} />
-
-        {/* Logout */}
-        {items.filter(i => i.key === "logout").map(item => (
-          <button key={item.key} onClick={() => { item.onLogout && item.onLogout(); }} style={{
-            width: "100%", padding: "12px 16px",
-            background: "transparent",
-            border: "none",
-            color: BC.danger, fontSize: FS.body, fontWeight: 500,
-            cursor: "pointer", textAlign: "left",
-          }}>
-            Logout
-          </button>
-        ))}
       </div>
     </>
   );
@@ -4997,6 +4955,35 @@ export default function App() {
   const onAddPlayer = useCallback(async (p) => { await db.upsert("bc_players", p); }, []);
   const onUpdatePlayer = useCallback(async (p) => { await db.upsert("bc_players", p); }, []);
   const onRemovePlayer = useCallback(async (pid) => { await db.delete("bc_players", pid); }, []);
+  // ── Delete Account (My Account → Delete Account) ──
+  // The teardown itself is a Cloud Function on the admin SDK, because every
+  // step of it is something the rules deny a client on purpose — see
+  // lib/accounts.deleteAccount for the argument. What is left here is what
+  // only this component knows: which player id owns the push tokens, and
+  // where to put the app afterwards.
+  //
+  // A bootstrap director has no roster row and so no player id; there is
+  // nothing to unsubscribe and the function finds nothing to unlink, which
+  // is the right outcome rather than a special case.
+  const onDeleteAccount = useCallback(async () => {
+    if (!authUser) return { success: false, error: "Not signed in" };
+    const pid = user?.player_id && user.player_id !== BOOTSTRAP_DIRECTOR.player_id
+      ? user.player_id : null;
+
+    const res = await deleteAccount({ playerId: pid });
+    if (!res.ok) return { success: false, error: res.error };
+
+    // The auth listener will fire with null on its own — the user record is
+    // gone — but signing out locally makes the transition immediate rather
+    // than dependent on the SDK noticing, and clears the cached identity.
+    await doSignOut();
+    // Home, not wherever we were. Both exits from My Account land on the
+    // sign-in screen, and the next person to sign in on this device should
+    // arrive at the leaderboard rather than at the settings screen the last
+    // one happened to be standing on.
+    setView("leaderboard");
+    return { success: true };
+  }, [authUser, user?.player_id, doSignOut]);
   const onAddCourse = useCallback(async (c) => { if (c._delete) { await db.delete("bc_courses", c.id); } else { await db.upsert("bc_courses", c); } }, []);
   const onSetSkin = useCallback(async (round, hole, pid) => {
     const id = editionDocId(`bc_skin_r${round}_h${hole+1}`);
@@ -5631,8 +5618,25 @@ export default function App() {
             </div>
           </div>
         )}
-        {view === "notifications" && (
-          <NotificationSettings user={user} notify={notify} />
+        {view === "account" && (
+          <AccountView
+            user={user}
+            // Both halves of "who you are", deliberately separate: the
+            // ACCOUNT (which Google/Apple login this is) and the roster row
+            // it claimed. Deleting the first unlinks the second, so the
+            // screen has to be able to name each one.
+            authUser={authUser}
+            // The LIVE roster row, not the cached session entry, which was
+            // written at the last snapshot and does not know about a rename
+            // or a team change the director has made since.
+            player={linkedPlayer(tPlayers, authUser?.uid)}
+            teams={teams}
+            darkMode={darkMode}
+            onToggleTheme={toggleTheme}
+            onLogout={() => { doSignOut(); setView("leaderboard"); }}
+            onDeleteAccount={onDeleteAccount}
+            notify={notify}
+          />
         )}
         {(view === "analytics" || view === "history") && (
           <AnalyticsView
@@ -5719,7 +5723,7 @@ export default function App() {
         }} />
       </div>
 
-      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={doSignOut} user={user} view={view} darkMode={darkMode} onToggleTheme={toggleTheme} finalize={finalizeMenu} navH={navH} />
+      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} user={user} view={view} finalize={finalizeMenu} navH={navH} />
 
       {/* The Finalize sheet — everything the removed Scoring card held, at
           zero cost until it is opened. */}

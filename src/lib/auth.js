@@ -298,6 +298,50 @@ export async function signOutUser() {
   catch (e) { console.error("[auth] signOut", e); }
 }
 
+// ── Telling Apple to forget us ──────────────────────────────────────
+// Deleting the Firebase user is enough for the app: the uid is gone and
+// nothing signs in as it again. It is NOT enough for Apple. An app that
+// offers Sign in with Apple has to revoke the token when the account goes,
+// or it stays listed forever under Settings → Apple Account → Sign in with
+// Apple on a phone whose account it no longer holds — which is both a
+// review item and, from the user's side, a deletion that did not take.
+//
+// The catch is the token. Apple's access token reaches us exactly once,
+// inside the credential a sign-in hands back, and we do not store it —
+// keeping an OAuth token around to use months later is the thing not to do.
+// So revocation needs a FRESH authorization, which is what the reauth here
+// is for. It is the only reason this function exists: the deletion itself
+// runs through a Cloud Function on the admin SDK, which needs no recent
+// login at all.
+//
+// Best-effort by construction. A blocked popup, a cancelled prompt, or a
+// Google account (nothing to revoke) all return quietly and the caller
+// deletes the account regardless — refusing to delete somebody's account
+// because a popup would not open is the worse failure of the two.
+export async function revokeProviderAccess() {
+  const auth = await authReady();
+  const u = auth.currentUser;
+  if (!u) return { revoked: false, reason: "no_user" };
+  // Google issues no token this call can revoke; Firebase's
+  // revokeAccessToken supports Apple and nothing else today.
+  if (u.providerData?.[0]?.providerId !== "apple.com") return { revoked: false, reason: "not_apple" };
+
+  try {
+    const { reauthenticateWithPopup, revokeAccessToken, OAuthProvider: OAP } =
+      await import("firebase/auth");
+    const res = await reauthenticateWithPopup(u, makeProvider("apple"));
+    const token = OAP.credentialFromResult(res)?.accessToken;
+    if (!token) return { revoked: false, reason: "no_token" };
+    await revokeAccessToken(auth, token);
+    return { revoked: true };
+  } catch (e) {
+    // Logged, never surfaced: the user asked to delete an account, not to
+    // hear about Apple's token endpoint.
+    console.warn("[auth] Apple token revocation skipped:", e?.code || e?.message || e);
+    return { revoked: false, reason: e?.code || "failed" };
+  }
+}
+
 // Which button someone used, for the admin roster. providerData gives
 // "google.com" / "apple.com"; the roster wants a word.
 export const providerLabel = (providerId) =>

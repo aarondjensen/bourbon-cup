@@ -232,6 +232,88 @@ export const unlinkPatch = () => ({
   auth_uid: null, auth_email: null, auth_provider: null, auth_linked_at: null,
 });
 
+// ── Deleting an account ─────────────────────────────────────────────
+// App Store review guideline 5.1.1(v): an app that lets you create an
+// account has to let you delete it from inside the app, without emailing
+// anybody. Now that signing in is real, so is that obligation.
+//
+// ── Why this is a Cloud Function and not four writes from here ─────
+// Because the security rules deny every one of them, deliberately:
+//
+//   • bc_accounts — `delete: if false` for all clients. A client that could
+//     delete its own membership is one loosened rule away from deleting
+//     somebody else's, so revocation was left to the console.
+//   • bc_players — director-only, apart from the one narrow claim update,
+//     and even that cannot be used to UNCLAIM: the rule requires the
+//     written auth_uid to equal the caller's, so writing null is refused.
+//   • the Firebase Auth user — a client can only delete its own, and that
+//     path additionally demands a recent login.
+//
+// Loosening any of those to let a phone do it would trade a real guarantee
+// for a convenience. The admin SDK bypasses rules by design, which makes a
+// callable the honest place for this: one authenticated entry point that
+// does the whole thing, and takes NO uid argument — it acts on the caller's
+// own uid and nothing else. See functions/index.js.
+//
+// ── What goes, and what does not ──────────────────────────────────
+// GONE: the Firebase Auth user (nothing signs in as it again), the
+// membership document (the thing every write in the project is gated on),
+// the auth_* fields on every roster row that pointed at it — including the
+// email, the only personal identifier the roster holds — and every push
+// token registered to those player ids.
+//
+// STAYS: the roster row itself, and with it the name, handicap, scores,
+// signed cards and matches. That is not a hedge — since sign-in landed the
+// roster row is no longer the account. It is a tournament entry the director
+// created, usually before the person ever signed in, and it carries holes
+// other players attested to. Deleting the account unlinks it and leaves the
+// event's record intact, which is exactly what the director's own unlink
+// button does. The screen says so before anybody taps.
+//
+// The FCM revocation stays on the client because only the browser can do it
+// — the admin SDK can delete the row, but it cannot tell this device's push
+// service to stop honouring the subscription.
+export async function deleteAccount({ playerId } = {}) {
+  // Order: revoke at Apple while the account still exists — revocation
+  // reauthenticates, and there is nothing to reauthenticate afterwards.
+  const { revokeProviderAccess } = await import("./auth");
+  await revokeProviderAccess();
+
+  if (playerId) {
+    const { unsubscribeFromPush, clearCachedSubscriptionStatus } = await import("./notifications");
+    // Best-effort: a device that cannot reach FCM must not block the
+    // deletion. The function deletes the rows either way.
+    try { await unsubscribeFromPush(playerId); }
+    catch (e) { console.warn("[account] push cleanup failed", e); }
+    clearCachedSubscriptionStatus(playerId);
+  }
+
+  try {
+    // Dynamically imported for the same reason messaging is: firebase/
+    // functions has no business on the critical path for a leaderboard.
+    const [{ getFunctions, httpsCallable }, { getApp }] = await Promise.all([
+      import("firebase/functions"),
+      import("firebase/app"),
+    ]);
+    const res = await httpsCallable(getFunctions(getApp()), "deleteAccount")();
+    return { ok: true, ...(res?.data || {}) };
+  } catch (e) {
+    // `unauthenticated` means the session went away underneath us — the one
+    // failure where the right advice is "sign in again", not "try again".
+    if (e?.code === "functions/unauthenticated") {
+      return { ok: false, error: "Your sign-in expired. Sign in again, then delete." };
+    }
+    // The callable is deployed by hand, like the rules. Until it is, this is
+    // the failure — and "try again" would be a lie about a build that cannot
+    // succeed until somebody deploys.
+    if (e?.code === "functions/not-found" || e?.code === "functions/internal") {
+      return { ok: false, error: "Account deletion isn't deployed yet — tell the tournament director to deploy the Cloud Functions." };
+    }
+    console.error("[account] delete failed", e);
+    return { ok: false, error: "Couldn't delete the account — check signal and try again." };
+  }
+}
+
 // ── Claiming a name ─────────────────────────────────────────────────
 // Writes only the auth fields (the upsert merges) so a claim can never
 // stomp an edit the director is making to the same player at the same
