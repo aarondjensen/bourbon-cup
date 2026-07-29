@@ -871,20 +871,11 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
   const times = rawSlots
     .map(t => { const m = parseTeeTime(t); return m == null ? t : formatTeeTime(m, { ampm: true }); });
 
-  const { nameOf, teamOf } = playerLookup(tPlayers);
+  const { nameOf } = playerLookup(tPlayers);
 
   // Matches read best in the order they go off — which is also the order
   // their numbers were handed out in, so the cards below count up.
   const ordered = orderMatchesForRound({ matches: rndMatches, groups, times });
-
-  // A tee sheet only earns its space when the groups aren't just the
-  // matches over again — Singles (two matches per foursome) and the team
-  // formats (one match over several foursomes).
-  const needsTeeSheet = groups.length > 0 && rndMatches.some(m => {
-    const pids = [...m.teamA, ...m.teamB];
-    const idxs = new Set(pids.map(p => groups.findIndex(g => g.includes(p))));
-    return idxs.size > 1 || groups.some(g => g.length > pids.length && pids.every(p => g.includes(p)));
-  });
 
   return (
     <div style={{ fontFamily: FONT }}>
@@ -961,35 +952,6 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
         </div>
         );
       })}
-
-      {/* Tee sheet — who walks to the first tee together. */}
-      {needsTeeSheet && (
-        <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginTop: 14, overflow: "hidden" }}>
-          <Banner>TEE SHEET</Banner>
-          {groups.map((g, gi) => (
-            <div key={gi} style={{ padding: "9px 14px", borderTop: gi ? `1px solid ${BC.bdr}${ALPHA.line}` : "none", display: "flex", gap: 10, alignItems: "baseline" }}>
-              <div style={{ fontSize: FS.small, fontWeight: 800, color: BC.amber, flexShrink: 0, minWidth: 64 }}>{times[gi] || `G${gi + 1}`}</div>
-              {/* A group mixes the two sides, so the names carry their own
-                  team color as a dot rather than the row carrying one. Reads
-                  the 2v2 split of a foursome at a glance. */}
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "3px 10px", fontSize: FS.small, color: BC.t1, lineHeight: 1.4 }}>
-                {g.map(pid => {
-                  const tid = teamOf(pid);
-                  return (
-                    <span key={pid} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                      <span style={{
-                        width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
-                        background: tid ? teamColor(tid) : BC.t3,
-                      }} />
-                      {nameOf(pid)}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
