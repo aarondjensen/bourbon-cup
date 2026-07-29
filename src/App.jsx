@@ -74,18 +74,6 @@ import { useHoleAdvance } from "./lib/useHoleAdvance";
 // to the viewport bottom) with the full inset is the known-good layout.
 const NAV_SAFE_PAD = "calc(env(safe-area-inset-bottom, 0px) + 8px)";
 
-// Layout diagnostics — see LayoutDiag. Two ways in, because the place this
-// is needed is a home-screen PWA, which has no address bar to put a query
-// param in: ?diag=1 for a browser tab, and a persisted flag for the icon,
-// toggled by tapping the app header five times (see DIAG_TAPS).
-const DIAG_KEY = "bc_diag";
-const DIAG_TAPS = 5;
-const readDiagFlag = () => {
-  if (typeof window === "undefined") return false;
-  if (new URLSearchParams(window.location.search).get("diag") === "1") return true;
-  try { return localStorage.getItem(DIAG_KEY) === "1"; } catch { return false; }
-};
-
 // Where a dismissed "ready to finalize" notification is remembered, per
 // edition — TOURNAMENT_ID is a live binding (firebase.js reassigns it when
 // the edition changes), so this is read at call time, never captured once.
@@ -3599,73 +3587,6 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
 // that used to be hardcoded here was only ever right at the default text
 // size on a phone whose nav was exactly that tall; anywhere else the menu
 // sank into the bar or floated off it.
-// ── Layout diagnostics (?diag=1) ──────────────────────────────────
-// Off unless the URL says otherwise, and there is no UI anywhere that turns
-// it on. It exists because the bottom-nav clearance has now been wrong twice
-// on a phone while measuring correct on every browser available to test it,
-// and the difference between "the reservation is too small" and "the
-// reservation is not in the scrollable area" is four numbers that only that
-// phone can answer. Add ?diag=1 to the URL, screenshot, read them off.
-function LayoutDiag() {
-  const [d, setD] = useState(null);
-  useEffect(() => {
-    const read = () => {
-      const body = document.querySelector(".bc-app-body");
-      const spacer = document.querySelector(".bc-nav-spacer");
-      const nav = document.querySelector("[data-bc-nav]");
-      if (!body) return;
-      // Deepest real content in the scroll area, ignoring the spacer itself
-      // and anything deliberately pinned.
-      let deepest = -Infinity;
-      for (const n of body.querySelectorAll("*")) {
-        if (n === spacer || spacer?.contains(n)) continue;
-        const cs = getComputedStyle(n);
-        if (cs.position === "sticky" || cs.position === "fixed") continue;
-        const r = n.getBoundingClientRect();
-        if (r.height > 0 && r.bottom > deepest) deepest = r.bottom;
-      }
-      const navR = nav?.getBoundingClientRect();
-      setD({
-        scroll: `${Math.round(body.scrollTop)}/${Math.round(body.scrollHeight - body.clientHeight)}`,
-        client: Math.round(body.clientHeight),
-        scrollH: Math.round(body.scrollHeight),
-        bodyBottom: Math.round(body.getBoundingClientRect().bottom),
-        spacer: spacer ? Math.round(spacer.getBoundingClientRect().height) : "none",
-        navTop: navR ? Math.round(navR.top) : "?",
-        navH: navR ? Math.round(navR.height) : "?",
-        clear: navR && deepest > -Infinity ? Math.round(navR.top - deepest) : "?",
-        inner: window.innerHeight,
-        screen: window.screen?.height ?? "?",
-        drop: getComputedStyle(document.documentElement).getPropertyValue("--bc-vp-drop").trim() || "0px",
-        standalone: (window.navigator?.standalone === true
-          || window.matchMedia?.("(display-mode: standalone)").matches === true) ? "yes" : "no",
-      });
-    };
-    read();
-    const t = setInterval(read, 400);
-    const body = document.querySelector(".bc-app-body");
-    body?.addEventListener("scroll", read, { passive: true });
-    return () => { clearInterval(t); body?.removeEventListener("scroll", read); };
-  }, []);
-  if (!d) return null;
-  return (
-    <div style={{
-      position: "fixed", top: 0, left: 0, right: 0, zIndex: 9999,
-      background: "rgba(0,0,0,0.86)", color: "#7CFF9E", pointerEvents: "none",
-      font: "600 10px/1.35 ui-monospace, Menlo, monospace",
-      // The status bar sits over the top of a standalone webview, so the
-      // readout starts below it or the first line is unreadable — which
-      // would be a diagnostic that fails in exactly the case it is for.
-      padding: "calc(env(safe-area-inset-top, 0px) + 4px) 6px 4px",
-      textTransform: "none", whiteSpace: "pre-wrap",
-    }}>
-      {`scroll ${d.scroll}  client ${d.client}  scrollH ${d.scrollH}\n`}
-      {`spacer ${d.spacer}  navH ${d.navH}  navTop ${d.navTop}  bodyBottom ${d.bodyBottom}\n`}
-      {`clear ${d.clear}  inner ${d.inner}  screen ${d.screen}  drop ${d.drop}  standalone ${d.standalone}`}
-    </div>
-  );
-}
-
 function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, onToggleTheme, finalize, navH }) {
   const dragRef = useRef(null);
   const startYRef = useRef(null);
@@ -4062,27 +3983,6 @@ export default function App() {
     // `user` is in the deps because the nav only exists once past the login
     // screen — without it the ref is null on mount and never measured.
   }, [user]);
-
-  // ── The diagnostics toggle ───────────────────────────────────────
-  // Five taps on the app header. Deliberately undiscoverable: it is a
-  // debugging aid for one specific unreachable device, not a feature, and
-  // the alternative — a menu item — would be permanent chrome for everyone
-  // in exchange for a readout nobody else will ever want.
-  const [diag, setDiag] = useState(readDiagFlag);
-  const diagTaps = useRef({ n: 0, at: 0 });
-  const bumpDiag = useCallback(() => {
-    const now = performance.now();
-    const t = diagTaps.current;
-    t.n = now - t.at > 3000 ? 1 : t.n + 1;
-    t.at = now;
-    if (t.n < DIAG_TAPS) return;
-    t.n = 0;
-    setDiag(prev => {
-      const next = !prev;
-      try { localStorage.setItem(DIAG_KEY, next ? "1" : "0"); } catch { /* private mode */ }
-      return next;
-    });
-  }, []);
 
   const notify = useCallback((msg, type = "success") => {
     setNotif({ msg, type });
@@ -4858,11 +4758,7 @@ export default function App() {
           total pins directly beneath it instead of fighting it for the top
           of the screen. flexShrink is pinned on the header itself so a tall
           tab can't squeeze it. */}
-      {/* The wrapper is the flex item now, so it carries the header's own
-          flexShrink:0 — without it a tall tab could squeeze the band. */}
-      <div onClick={bumpDiag} style={{ flexShrink: 0 }}><AppHeader location={tournamentLocation} /></div>
-
-      {diag && <LayoutDiag />}
+      <AppHeader location={tournamentLocation} />
 
       {/* Ready-to-finalize notification — app chrome, like the header above
           it, so it reaches the director on whichever tab they are on rather
@@ -5134,7 +5030,7 @@ export default function App() {
           paddingBottom keeps the labels clear of the home indicator. The
           scroll area reserves matching clearance so content never hides
           behind the bar. */}
-      <div ref={navRef} data-bc-nav style={{ position: "fixed", bottom: VP_DROP_BOTTOM, left: 0, right: 0, background: BC.card, borderTop: `1px solid ${BC.bdr}`, zIndex: 100, paddingBottom: NAV_SAFE_PAD }}>
+      <div ref={navRef} style={{ position: "fixed", bottom: VP_DROP_BOTTOM, left: 0, right: 0, background: BC.card, borderTop: `1px solid ${BC.bdr}`, zIndex: 100, paddingBottom: NAV_SAFE_PAD }}>
       <div style={{ maxWidth: 520, margin: "0 auto", display: "flex" }}>
         {navItems.map(item => {
           const active = view === item.key;
