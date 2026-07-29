@@ -20,9 +20,19 @@ import { BC, FONT, ON_ACCENT, ON_AMBER, SHADOW, ALPHA, dimHex, FS } from "../the
 // every one of them by hand, seven times over, each drifting a little on
 // radius, padding and what "selected" looks like:
 //
-//   gradient  a sunken track with an amber-gradient thumb. The default, and
-//             what a mode switch inside a card looks like.
-//   flat      the same track, solid amber, white ink.
+//   segmented a sunken track with a raised thumb under the selected label,
+//             marked by a short amber rule beneath it. The default, and what
+//             a mode switch inside a card looks like. It was an amber
+//             gradient with near-black ink until 2026-07-29: on the light
+//             theme's near-white page that gradient read as tarnished
+//             bronze, and dark ink on a mid-tone brown was the muddiest
+//             contrast pair in the app. The thumb now carries the SHAPE of
+//             "selected" and the amber rule carries the accent, which is
+//             also what keeps amber meaning something — it is the override
+//             star, the CTP flag and the cup total everywhere else, and it
+//             cannot be those and the tab chrome at once.
+//   flat      the older track (card surface, hairline edge), solid amber,
+//             white ink. Still what a compact in-card pair wants.
 //   pills     free-standing buttons with a gap between them, the selected one
 //             filled. This is a row of TABS — rounds, sub-tabs, matches —
 //             which sits on the page rather than in a card.
@@ -34,15 +44,30 @@ import { BC, FONT, ON_ACCENT, ON_AMBER, SHADOW, ALPHA, dimHex, FS } from "../the
 // A track (gradient/flat) owns its own background and its buttons are
 // borderless; the free-standing pair (pills/outline) has no track and each
 // button carries its own edge. That is the whole difference.
-export function SegmentedToggle({ options, value, onChange, variant = "gradient", letterSpacing, style }) {
-  const tracked = variant === "gradient" || variant === "flat";
+export function SegmentedToggle({ options, value, onChange, variant = "segmented", letterSpacing, style }) {
+  const tracked = variant === "segmented" || variant === "flat";
   const gradient = `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`;
+  // The segmented track is the sunken one (`inp`) so its raised thumb has
+  // something to be raised out of; `flat` keeps the card-surface track it
+  // has always had. The transparent border on the sunken one is not
+  // decoration — it holds the track at exactly the height the bordered one
+  // is, so the two never disagree by a pixel where they sit side by side.
   const track = tracked
-    ? { background: BC.card, borderRadius: 20, padding: 3, border: `1px solid ${BC.bdr}` }
+    ? {
+        background: variant === "segmented" ? BC.inp : BC.card,
+        borderRadius: 20, padding: 3,
+        border: `1px solid ${variant === "segmented" ? "transparent" : BC.bdr}`,
+      }
     : { gap: 6 };
   const btn = (on) => {
     if (variant === "flat")    return { background: on ? BC.amber : "transparent", color: on ? ON_ACCENT : BC.t3, border: "none", borderRadius: 16 };
-    if (variant === "gradient")return { background: on ? gradient : "transparent", color: on ? ON_AMBER  : BC.t3, border: "none", borderRadius: 16 };
+    if (variant === "segmented") return {
+      background: on ? BC.thumb : "transparent", color: on ? BC.t1 : BC.t3,
+      border: "none", borderRadius: 16, position: "relative",
+      // The lift. One step off the ladder rather than a bespoke rgba — it is
+      // a shadow, and shadows are black at an alpha (see theme.js).
+      boxShadow: on ? `0 1px 3px #000000${ALPHA.hair}` : "none",
+    };
     if (variant === "outline") return { background: on ? BC.amber + ALPHA.tint : BC.inp, color: on ? BC.amber : BC.t2, border: `1px solid ${on ? BC.amber : BC.bdr}`, borderRadius: 8 };
     return { background: on ? gradient : BC.card, color: on ? ON_AMBER : BC.t2, border: `1px solid ${on ? "transparent" : BC.bdr}`, borderRadius: 8 };
   };
@@ -62,6 +87,15 @@ export function SegmentedToggle({ options, value, onChange, variant = "gradient"
             }}
           >
             {label}
+            {/* The accent, on the thumb rather than as the thumb. Short and
+                centred so it reads as an underline on the label, not as a
+                second edge on the pill. */}
+            {on && variant === "segmented" && (
+              <span style={{
+                position: "absolute", left: "50%", bottom: 4, transform: "translateX(-50%)",
+                width: 18, height: 2, borderRadius: 1, background: BC.amber,
+              }} />
+            )}
           </button>
         );
       })}

@@ -113,6 +113,7 @@ export const getBCTheme = (mode, brand = null) => {
       bg: "#fafaf9",        // crisp near-white page
       card: "#ffffff",      // pure white card surface
       inp: "#f0f0ee",       // light neutral gray (input/inactive)
+      thumb: "#ffffff",     // the raised half of a segmented track (see below)
       hover: "#e7e7e4",
       bdr: "#dcdcd9",       // soft neutral border
       t1: "#16161a",        // near-black ink
@@ -137,6 +138,11 @@ export const getBCTheme = (mode, brand = null) => {
     bg: "#0a0a0b",          // true neutral black (Blackout/Gold)
     card: "#161618",        // elevated panel
     inp: "#1d1d20",         // sunken input
+    // The raised half of a segmented track. It is NOT `card`: the track it
+    // sits in is `inp`, and card is only 5 steps off that — the selected tab
+    // would have to be read rather than seen. Lifted past `hover` until it
+    // separates at arm's length in daylight, which is where this app is used.
+    thumb: "#33333a",
     hover: "#26262a",
     bdr: "#2a2a2e",         // neutral border
     t1: "#f5f4f2",          // crisp off-white
