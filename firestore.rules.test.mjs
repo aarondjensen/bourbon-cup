@@ -195,6 +195,21 @@ await check("an anonymous visitor cannot read the password", () =>
 await check("stranger with the WRONG password is refused membership", () =>
   assertFails(setDoc(doc(malloryDb(), "bc_accounts/mallory"), { uid: "mallory", code: "guess" })));
 
+await check("a code typed in the wrong case still gets in", async () => {
+  // The stored code is "bourbon2026"; these are what a phone keyboard and
+  // a person repeating it across a table actually produce.
+  const shout = env.authenticatedContext("shout").firestore();
+  await assertSucceeds(setDoc(doc(shout, "bc_accounts/shout"), { uid: "shout", code: "Bourbon2026" }));
+  const mixed = env.authenticatedContext("mixed").firestore();
+  await assertSucceeds(setDoc(doc(mixed, "bc_accounts/mixed"), { uid: "mixed", code: "BOURBON2026" }));
+});
+
+await check("...but a wrong code in any case is still wrong", () =>
+  assertFails(setDoc(doc(malloryDb(), "bc_accounts/mallory"), { uid: "mallory", code: "BOURBON2027" })));
+
+await check("a non-string code is refused, not an error", () =>
+  assertFails(setDoc(doc(malloryDb(), "bc_accounts/mallory"), { uid: "mallory", code: 2026 })));
+
 await check("stranger with a BLANK password is refused membership", () =>
   assertFails(setDoc(doc(malloryDb(), "bc_accounts/mallory"), { uid: "mallory", code: "" })));
 

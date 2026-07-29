@@ -72,6 +72,10 @@ would not.
 - Set or change it in Admin → Tournament → Access, where **Show** reveals the
   current one. Saving it blank turns the requirement off. Directors only, read
   and write.
+- **Compared without case** — it gets read aloud and typed into a phone by
+  somebody who never saw it written down. The stored value keeps whatever
+  casing was typed, so Show still displays it as written; only the comparison
+  is flattened.
 - **A blank or missing code means the door is open.** That is the bootstrap —
   without it the first membership could never be created and the project would
   be locked to its own owners.

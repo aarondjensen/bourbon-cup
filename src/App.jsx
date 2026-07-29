@@ -3715,7 +3715,7 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
               style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.lead, fontWeight: 700, outline: "none", fontFamily: FONT }}
             />
             <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 6, lineHeight: 1.4 }}>
-              Asked for once per person, after they sign in. Save it blank to turn it off. Anyone already through the door stays through.
+              Asked for once per person, after they sign in. Capitals don't matter. Save it blank to turn it off. Anyone already through the door stays through.
             </div>
           </div>
 

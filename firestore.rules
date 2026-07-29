@@ -157,10 +157,23 @@ service cloud.firestore {
         : null;
     }
 
+    // Compared without case, because this password's life is being said
+    // out loud across a table and typed into a phone by somebody who did
+    // not see it written down. A capital letter at the front — from the
+    // keyboard, or from whoever repeated it — was never a meaningful part
+    // of the secret, and it cost an afternoon once.
+    //
+    // The `is string` guard is load-bearing: `.lower()` on a missing or
+    // non-string field raises, and while a raised rule denies the write
+    // just the same, denying it deliberately is easier to reason about
+    // than denying it by accident. The stored code keeps whatever casing
+    // the director typed — only the comparison is flattened, so Admin can
+    // still show it back the way it was written.
     function codeOK() {
       return accessCode() == null
         || accessCode() == ''
-        || request.resource.data.code == accessCode();
+        || (request.resource.data.get('code', null) is string
+            && request.resource.data.code.lower() == accessCode().lower());
     }
 
     // ── The door ──────────────────────────────────────────────────
