@@ -418,11 +418,8 @@ function ClaimScreen({ players, teams, darkMode, tournamentName, tournamentLocat
       {/* Nobody to tap on an empty roster — the instruction there is the
           director-code line below the columns instead. */}
       {players.length > 0 && (
-        <div style={{ textAlign: "center", marginBottom: 10, maxWidth: 400 }}>
-          <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.t1 }}>Which one are you?</div>
-          <div style={{ fontSize: FS.small, color: BC.t3, marginTop: 2, lineHeight: 1.35 }}>
-            Tap your name once — {authUser?.email || "this account"} stays linked to it.
-          </div>
+        <div style={{ textAlign: "center", marginBottom: 10, fontSize: FS.body, fontWeight: 700, color: BC.t1 }}>
+          Select Your Name
         </div>
       )}
 
