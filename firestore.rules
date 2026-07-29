@@ -102,6 +102,26 @@ service cloud.firestore {
     match /bc_hole_scores/{doc}        { allow read, write: if isOpen(); }
     match /bc_skins/{doc}              { allow read, write: if isOpen(); }
     match /bc_ctp/{doc}                { allow read, write: if isOpen(); }
+    // Card signatures and attestations — one document per signed card. See
+    // src/lib/cardSigs. Written by players from the Scoring tab (sign,
+    // attest, unsign) and by the director's force-attest, so it belongs in
+    // this half of the list rather than with the director-owned data.
+    match /bc_card_sigs/{doc}          { allow read, write: if isOpen(); }
+
+    // ── Push notification tokens ──────────────────────────────────
+    // One document per (player, device). Holds an FCM registration token,
+    // which is a send-to address, not a credential: possession lets you
+    // push a notification to that device, not read anything from it. The
+    // Cloud Functions in functions/ read this collection through the admin
+    // SDK, which bypasses these rules entirely — the grant below is only
+    // for the client that registers and revokes its own token.
+    //
+    // Worth noting what open READ means here specifically: unlike the rest
+    // of this file, where the data is already public to anyone with the
+    // bundle, this collection lets a reader enumerate the league's devices.
+    // That is the same trade the app makes everywhere else, but it is the
+    // one collection where a future sign-in should tighten reads first.
+    match /bc_notification_tokens/{doc} { allow read, write: if isOpen(); }
 
     // ── Everything else ───────────────────────────────────────────
     // Default deny. Adding a collection to the app means adding it here.
