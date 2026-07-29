@@ -67,6 +67,34 @@ export const liftHex = (hex, f = 1.2) => {
   const [r, g, b] = _rgbC(hex);
   return `#${_hxC(r * f)}${_hxC(g * f)}${_hxC(b * f)}`;
 };
+// ── Contrast ─────────────────────────────────────────────────────
+// WCAG relative luminance and contrast ratio. Here so the palette can hold
+// itself to a readable level rather than leaving it to be eyeballed.
+const _srgbC = (c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+export const luminance = (hex) => {
+  const [r, g, b] = _rgbC(hex);
+  return 0.2126 * _srgbC(r) + 0.7152 * _srgbC(g) + 0.0722 * _srgbC(b);
+};
+export const contrast = (a, b) => {
+  const la = luminance(a), lb = luminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+};
+
+// Walk a color toward black until it clears `target` against `bg`, and leave
+// it alone if it already does. A FIXED darkening factor can't do this job:
+// the two team colors need x0.76 and x0.70 to reach the same ratio, because
+// green and teal carry very different luminance per unit of RGB. Stepping to
+// a contrast target instead of a factor is also what keeps this correct for
+// a logo colour nobody has uploaded yet.
+export function shadeToContrast(hex, bg, target = 4.5) {
+  if (contrast(hex, bg) >= target) return hex;
+  for (let f = 0.98; f >= 0.06; f -= 0.02) {
+    const c = dimHex(hex, f);
+    if (contrast(c, bg) >= target) return c;
+  }
+  return dimHex(hex, 0.06);
+}
+
 // Low-alpha wash for glows / tinted backgrounds.
 export const glowHex = (hex, a = 0.16) => {
   const [r, g, b] = _rgbC(hex);
@@ -75,6 +103,11 @@ export const glowHex = (hex, a = 0.16) => {
 
 // Augments a base palette in place with per-team tokens (and an optional
 // tournament-accent override), then returns it.
+// AA for normal text. The team accents are used at 10-11px in places — the
+// F9/B9 results, the team name over each cup total — so the large-text 3:1
+// allowance doesn't cover them.
+const TEAM_TEXT_CONTRAST = 4.5;
+
 function withBrand(mode, brand, base) {
   const glowA = mode === "light" ? 0.14 : 0.20;
   // Fallback team colors live in ONE place — the TEAM_A/TEAM_B definitions in
@@ -88,14 +121,28 @@ function withBrand(mode, brand, base) {
   // is brightened. The defaults are already lifted in constants.js (they have
   // to be — components read TEAM_A.accent directly), so they must not be run
   // through liftHex a second time here.
-  const aCol = brandA ? liftHex(brandA) : TEAM_A.accent;
-  const bCol = brandB ? liftHex(brandB) : TEAM_B.accent;
+  const rawA = brandA ? liftHex(brandA) : TEAM_A.accent;
+  const rawB = brandB ? liftHex(brandB) : TEAM_B.accent;
+  // The lift above is what makes a team color read on a black page — and it
+  // is exactly what stops it reading on a white one. Carried into light mode
+  // unchanged, the two accents measured 2.80:1 and 2.35:1 against #fafaf9:
+  // under the 3:1 floor for even large text, on the colors that carry team
+  // names, F9/B9 results and the running match status. Light mode therefore
+  // takes the same hue walked down until it clears AA for normal text, since
+  // some of what it colors is 10-11px. Dark mode is untouched.
+  const onLight = (hex) => shadeToContrast(hex, base.bg, TEAM_TEXT_CONTRAST);
+  const aCol = mode === "light" ? onLight(rawA) : rawA;
+  const bCol = mode === "light" ? onLight(rawB) : rawB;
   base.teamA = aCol;
-  base.teamADim  = brandA ? dimHex(aCol)         : TEAM_A.color;
-  base.teamAGlow = brandA ? glowHex(aCol, glowA) : TEAM_A.glow;
   base.teamB = bCol;
-  base.teamBDim  = brandB ? dimHex(bCol)         : TEAM_B.color;
-  base.teamBGlow = brandB ? glowHex(bCol, glowA) : TEAM_B.glow;
+  // Dim and glow stay derived from the UN-shaded color: the first is a deep
+  // fill that sits behind light text and is already darker than either
+  // accent, the second a low-alpha wash where contrast doesn't arise. Only
+  // the accent — the one that gets used as ink — needed moving.
+  base.teamADim  = brandA ? dimHex(rawA)         : TEAM_A.color;
+  base.teamAGlow = brandA ? glowHex(rawA, glowA) : TEAM_A.glow;
+  base.teamBDim  = brandB ? dimHex(rawB)         : TEAM_B.color;
+  base.teamBGlow = brandB ? glowHex(rawB, glowA) : TEAM_B.glow;
   // Optional override of the neutral tournament accent (chrome). When
   // omitted, the existing amber/green primary accent is kept as-is, so
   // adopting this is visually a no-op until a tournament is configured.
@@ -284,6 +331,7 @@ export const ALPHA = {
   line:  "55", // 33% — the edge of a thing: card, chip, input, button, bar
   panel: "88", // 53% — a translucent surface that still reads as a surface
   held:  "99", // 60% — ink pulled back on purpose (see `ink` below)
+  soft:  "bf", // 75% — ink pulled back FAR ENOUGH TO READ (see LIVE_ALPHA)
 };
 
 // ── Black, for the two things black is for ──
@@ -300,7 +348,14 @@ export const SCRIM  = `#000000${ALPHA.held}`;  // 60%
 // scanning a board separates "this is decided" from "this could change"
 // before you read a single number. Appended as an alpha byte, which every BC
 // color token supports since they're all 6-digit hex.
-export const LIVE_ALPHA = ALPHA.held;
+// 75%, not the 60% the scrim uses. At 60% an in-play team colour composited
+// onto its card measured 2.33:1 in light mode and 2.96:1 in dark — below the
+// 3:1 floor on the single most-read thing on a live board, the status of a
+// match still being played. 75% holds the "this is still moving" signal (a
+// settled result reads 4.8:1 against an in-play 3.1:1 in light) while keeping
+// both sides of that distinction legible. The scrim stays at 60%: it is a
+// sheet of black over a page, and nothing has to be read THROUGH it.
+export const LIVE_ALPHA = ALPHA.soft;
 export const ink = (hex, settled) => (settled ? hex : `${hex}${LIVE_ALPHA}`);
 
 // ── The selected-segment look ─────────────────────────────────────
