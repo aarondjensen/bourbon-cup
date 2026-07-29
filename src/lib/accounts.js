@@ -139,8 +139,21 @@ export async function setDirector(uid, on) {
 // drawn from these rather than from a field on the roster, so what is on
 // screen is what the rules will honour. A non-director cannot read this;
 // the rules allow the listing only for a director.
-export const membershipFor = (memberships, player) =>
-  (player?.auth_uid && (memberships || []).find(m => m.uid === player.auth_uid)) || null;
+// Matched on the document id first, then a `uid` field. Both are the same
+// value for a membership the app created; a membership typed into the
+// Firebase console by hand — which is how the FIRST director is made — may
+// only have the id.
+export const membershipFor = (memberships, player) => {
+  const uid = player?.auth_uid;
+  if (!uid) return null;
+  return (memberships || []).find(m => m.id === uid || m.uid === uid) || null;
+};
+
+// A director can always see their own membership, so an empty list means
+// the read was refused, not that nobody has signed in. In practice that is
+// one thing: rules older than this build, which have no clause letting a
+// director list the collection.
+export const accountsUnreadable = (memberships) => (memberships || []).length === 0;
 
 export const playerIsDirector = (memberships, player) =>
   membershipFor(memberships, player)?.is_director === true;

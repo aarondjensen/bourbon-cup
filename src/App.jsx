@@ -3,7 +3,7 @@ import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, HOLE_BANNER, FS, segThumb
 import { playerLookup } from "./lib/players";
 import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, BOOTSTRAP_DIRECTOR } from "./firebase";
 import { PROVIDERS, signIn, signOutUser, onAuthUser, consumeRedirectResult, isCancelled } from "./lib/auth";
-import { claimPlayer, linkedPlayer, isClaimed, accountLabel, unlinkPatch, readMembership, isDirectorAccount, joinWithCode, setAccessCode, readAccessCode, setDirector, membershipFor, playerIsDirector, ACCOUNTS_COL } from "./lib/accounts";
+import { claimPlayer, linkedPlayer, isClaimed, accountLabel, unlinkPatch, readMembership, isDirectorAccount, joinWithCode, setAccessCode, readAccessCode, setDirector, membershipFor, playerIsDirector, accountsUnreadable, ACCOUNTS_COL } from "./lib/accounts";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
   resolveTeams, DEFAULT_TEAM_NAMES, TOURNAMENT_TITLE, TOURNAMENT_LOCATION,
@@ -2166,13 +2166,22 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
             const theirMembership = isNew ? null : membershipFor(memberships, p);
             const isSelf = !!theirMembership && theirMembership.uid === user?.auth_uid;
             const canGrantDirector = !isNew && !!theirMembership && !isSelf;
+            // Four different reasons the toggle can be unavailable, and
+            // they want four different actions from the director. Telling
+            // them apart matters most for the last one: an empty accounts
+            // list looks exactly like "nobody has signed in", and the fix
+            // is nothing to do with the player on screen.
             const directorHint = isNew
               ? "Add them first, then they sign in and claim this name."
-              : !theirMembership
-                ? "They need to sign in and enter the tournament password before they can be made a director."
-                : isSelf
-                  ? "You can't change your own — that's what stops the last director locking everyone out. Ask the other director, or edit it in the Firebase console."
-                  : "Grants the Admin tab, and every write behind it.";
+              : accountsUnreadable(memberships)
+                ? "Can't read the accounts list, so no crown can be changed. The rules deployed to Firebase are probably older than this app — re-publish firestore.rules, then reopen this."
+                : !theirMembership
+                  ? (isClaimed(p)
+                      ? "They've claimed this name but haven't been through the password screen on this build yet — ask them to open the app once."
+                      : "They need to sign in and claim this name first.")
+                  : isSelf
+                    ? "You can't change your own — that's what stops the last director locking everyone out. Ask the other director, or edit it in the Firebase console."
+                    : "Grants the Admin tab, and every write behind it.";
             const close = () => setEditingPlayer(null);
             const set = (patch) => setEditingPlayer(prev => prev ? { ...prev, ...patch } : prev);
             const lbl = { fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.5, color: BC.t3, textTransform: "uppercase", marginBottom: 3, display: "block" };
@@ -4416,7 +4425,12 @@ export default function App() {
   const [memberships, setMemberships] = useState([]);
   useEffect(() => {
     if (!isDirectorUser) { setMemberships([]); return; }
-    return db.subscribe(ACCOUNTS_COL, [], setMemberships);
+    // withId, because the membership whose flag started all this — the
+    // first director's — is typed into the Firebase console by hand, and
+    // a document made that way has whatever fields the person thought to
+    // add. Matching on the id instead of a `uid` field means the crown
+    // still finds it.
+    return db.subscribe(ACCOUNTS_COL, [], setMemberships, { withId: true });
   }, [isDirectorUser]);
 
   const onSetDirector = useCallback(async (uid, on) => {

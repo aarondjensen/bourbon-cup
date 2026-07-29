@@ -246,9 +246,16 @@ export const db = {
     try { await deleteDoc(doc(_db, col, String(id))); return true; }
     catch(e) { console.error("db.delete", col, e); return null; }
   },
-  subscribe: (col, filters = [], cb) => {
+  // `withId` stamps the DOCUMENT ID onto each row. Everything in this app
+  // stores its own id as a field as well, so nothing needed it — until
+  // bc_accounts, where a membership can also be created by hand in the
+  // Firebase console (that is how the first director is made) and will
+  // then have only the fields whoever typed it thought to add. The id is
+  // the one thing such a document always has.
+  subscribe: (col, filters = [], cb, { withId = false } = {}) => {
+    const rows = (snap) => snap.docs.map(d => (withId ? { ...d.data(), id: d.id } : d.data()));
     try {
-      return onSnapshot(db._q(col, filters), snap => cb(snap.docs.map(d => d.data())), e => console.error("subscribe", e));
+      return onSnapshot(db._q(col, filters), snap => cb(rows(snap)), e => console.error("subscribe", e));
     } catch(e) { console.error("subscribe setup", e); return () => {}; }
   },
   // db.get with the error left in. Every other reader here swallows a failed
