@@ -85,6 +85,15 @@ export const isDirectorAccount = (membership) => membership?.is_director === tru
 // and reject the write outright if it differs. It stays on the document
 // afterwards, readable by this account alone, which is the person who
 // typed it in the first place.
+// Deployed rules that predate this build have no bc_accounts rule at all,
+// so they refuse every request against it — including the read below,
+// before any password is compared. Reported as a wrong password, that
+// sends the tournament director hunting for a typo in a code that was
+// never the problem. It is worth its own message.
+const STALE_RULES =
+  "The database rules are out of date, so this can't be checked yet — nothing to do with the password. " +
+  "Tell the tournament director to re-publish firestore.rules.";
+
 export async function joinWithCode(authUser, code) {
   if (!authUser?.uid) return { ok: false, error: "Not signed in." };
   try {
@@ -94,7 +103,16 @@ export async function joinWithCode(authUser, code) {
     // permission-denied and be reported below as a wrong password. It is
     // also the recovery path when the startup check could not reach the
     // network and fell through to this screen.
-    if (await db.getById(ACCOUNTS_COL, authUser.uid)) return { ok: true };
+    //
+    // A DENIAL here is never about the code — this read is allowed to
+    // anybody asking after their own membership — so it is caught
+    // separately rather than falling into the catch below.
+    try {
+      if (await db.getById(ACCOUNTS_COL, authUser.uid)) return { ok: true };
+    } catch (e) {
+      if (e?.code === "permission-denied") return { ok: false, error: STALE_RULES };
+      throw e;
+    }
     await db.create(ACCOUNTS_COL, {
       id: authUser.uid,
       uid: authUser.uid,
