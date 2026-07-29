@@ -94,19 +94,30 @@ const authReady = () => {
 // ── Popup or redirect ───────────────────────────────────────────────
 // Popup is the better flow everywhere it works: the app never unloads, so
 // there is no round trip through storage to resume, and Safari's storage
-// partitioning never gets a say. It has exactly one environment where it
-// cannot work — an iOS home-screen install, where `window.open` does not
-// give us a window we can talk back to, and the call either hangs or comes
-// back as a cancelled popup.
+// partitioning never gets a say.
 //
-// That environment is precisely how this app is used, so it gets the
-// redirect flow instead, and redirect brings its own caveat worth knowing
-// before debugging it: on Safari it wants the auth handler to be
-// same-origin with the app. Set VITE_AUTH_DOMAIN=thebourboncup.com (and
-// keep the /__/auth rewrite in vercel.json) to make it so. Without that it
-// usually still works and occasionally, on a cold install, returns no user
-// at all — in which case the user is looking at the sign-in screen again
-// rather than at an error, and tapping the button a second time works.
+// Redirect is the one that bites, and it bit: from an iOS home-screen
+// install it would come back from the auth handler with NO user and NO
+// error — the app simply showed the sign-in screen again, twice in a row,
+// with nothing to go on. Safari partitions storage per top-level origin,
+// so a handler on <project>.firebaseapp.com cannot hand the result back to
+// an app on thebourboncup.com.
+//
+// So popup is now tried FIRST everywhere, including the installed app,
+// and redirect is only the fallback. That order used to be reversed on
+// the assumption that a standalone iOS install cannot open a usable
+// popup; on iOS 16.4+ it generally can, and when it cannot, `window.open`
+// returns nothing and Firebase raises popup-blocked, which drops through
+// to redirect below. Nothing is lost by trying.
+//
+// If redirect is ever reached on that platform it will still come back
+// empty, which is what `markRedirect`/`consumeRedirectResult` exist to
+// SAY rather than swallow. The permanent fix for it is to make the
+// handler same-origin: set VITE_AUTH_DOMAIN=thebourboncup.com (the
+// /__/auth rewrite in vercel.json already serves it), and add that
+// handler URL to the OAuth client's authorized redirect URIs in Google
+// Cloud and to the Services ID's return URLs at Apple. Both are required
+// — miss either and sign-in breaks everywhere, not just here.
 const isStandalone = () => {
   try {
     return window.matchMedia?.("(display-mode: standalone)")?.matches === true
@@ -124,7 +135,31 @@ const isIOS = () => {
   } catch { return false; }
 };
 
-const prefersRedirect = () => isIOS() && isStandalone();
+// The environment where a popup is least likely to survive, and where a
+// "the user closed it" rejection is more likely to mean "it could not talk
+// back to us" than an actual change of mind. Used only to decide whether
+// that rejection is worth retrying as a redirect.
+const popupIsFragile = () => isIOS() && isStandalone();
+
+// ── Saying so when a redirect comes back empty ──────────────────────
+// A redirect that returns with neither a user nor an error is the single
+// most confusing failure this file can produce: the app looks like it just
+// ignored you. sessionStorage survives the round trip (same tab, same
+// origin) and nothing else does, so it is where the fact that a redirect
+// was even attempted gets left.
+const REDIRECT_MARK = "bc_auth_redirect";
+
+const markRedirect = (providerId) => {
+  try { sessionStorage.setItem(REDIRECT_MARK, providerId || "1"); } catch { /* blocked storage */ }
+};
+
+const takeRedirectMark = () => {
+  try {
+    const v = sessionStorage.getItem(REDIRECT_MARK);
+    if (v) sessionStorage.removeItem(REDIRECT_MARK);
+    return v;
+  } catch { return null; }
+};
 
 // Popup failures that are worth retrying as a redirect rather than showing
 // to the user. `popup-blocked` is a blocker extension or a browser that
@@ -185,19 +220,21 @@ export async function signIn(providerId) {
     return out;
   };
 
-  if (prefersRedirect()) {
+  const viaRedirect = async () => {
+    markRedirect(providerId);
     try { await signInWithRedirect(auth, provider); return null; }
-    catch (e) { throw fail(e); }
-  }
+    catch (e) { takeRedirectMark(); throw fail(e); }
+  };
 
   try {
     const res = await signInWithPopup(auth, provider);
     return res?.user || null;
   } catch (e) {
-    if (REDIRECT_FALLBACK.has(e?.code)) {
-      try { await signInWithRedirect(auth, provider); return null; }
-      catch (e2) { throw fail(e2); }
-    }
+    // A popup this environment could never have opened, or — on the one
+    // platform where a popup cannot reliably talk back — one that reported
+    // itself closed. Neither is a reason to give up; both are a reason to
+    // take the long way round.
+    if (REDIRECT_FALLBACK.has(e?.code) || (popupIsFragile() && isCancelled(e))) return viaRedirect();
     throw fail(e);
   }
 }
@@ -208,10 +245,22 @@ export async function signIn(providerId) {
 // that happened on the far side of the round trip — which would otherwise
 // be invisible, the app simply showing the sign-in screen again.
 export async function consumeRedirectResult() {
+  const attempted = takeRedirectMark();
   try {
     const auth = await authReady();
     const res = await getRedirectResult(auth);
-    return { user: res?.user || null, error: null };
+    if (res?.user) return { user: res.user, error: null };
+    if (attempted) {
+      // We sent them to the provider and got back nothing at all. On an
+      // iOS home-screen install this is storage partitioning: the handler
+      // lives on another origin and Safari will not let it hand the result
+      // back. Naming it beats another silent trip to the sign-in screen.
+      return {
+        user: null,
+        error: "Sign-in came back empty. On an iPhone home-screen app this usually clears if you open the site in Safari instead — tell Aaron if it keeps happening.",
+      };
+    }
+    return { user: null, error: null };
   } catch (e) {
     if (isCancelled(e)) return { user: null, error: null };
     return { user: null, error: friendly(e) };
