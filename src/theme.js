@@ -523,8 +523,23 @@ export const VP_DROP_BOTTOM = `calc(-1 * ${VP_DROP})`;
 
 const measureVpDrop = () => {
   if (typeof window === "undefined" || typeof document === "undefined") return 0;
+  // The quirk being corrected is Apple's — apple-mobile-web-app-status-bar-
+  // style is an Apple meta, and only iOS snapshots it at install time — so
+  // only an iOS webview can be in the state this compensates for.
+  //
+  // `display-mode: standalone` alone does not say that: it matches an
+  // installed PWA on Android and on the desktop too, and on a cutout Android
+  // phone the inset-top test below passes while the layout viewport already
+  // ends at the bottom of the glass. That is a drop applied to a device that
+  // needs none, and it pushes the nav straight off the screen.
+  //
+  // navigator.standalone is the iOS signal, and it is also the iOS DETECTOR:
+  // WebKit defines it on iOS/iPadOS only, as a boolean either way, and leaves
+  // it undefined everywhere else — so its presence gates the media query
+  // without sniffing a UA string.
+  const iOS = typeof window.navigator?.standalone === "boolean";
   const standalone = window.navigator?.standalone === true
-    || window.matchMedia?.("(display-mode: standalone)").matches === true;
+    || (iOS && window.matchMedia?.("(display-mode: standalone)").matches === true);
   if (!standalone) return 0;
   // env() is only readable off a laid-out box — getComputedStyle hands back
   // the unresolved token stream for a custom property holding it.
@@ -562,6 +577,19 @@ export const syncVpDrop = () => {
   const drop = measureVpDrop();
   document.documentElement.style.setProperty("--bc-vp-drop", `${drop}px`);
   return drop;
+};
+
+// The same drop as a NUMBER, for the callers that have to do arithmetic with
+// it (the nav's clearance floor). Not a re-measurement: syncVpDrop runs at
+// module init, before React mounts, and again on resize/orientationchange, so
+// this only reads back the value it wrote. Unset — which is every render
+// before that first sync, and every environment without a document — is 0,
+// the same fallback the CSS var carries.
+export const readVpDrop = () => {
+  if (typeof document === "undefined") return 0;
+  const raw = document.documentElement.style.getPropertyValue("--bc-vp-drop");
+  const n = parseFloat(raw);
+  return Number.isFinite(n) && n > 0 ? n : 0;
 };
 
 // ── Global stylesheet ──
