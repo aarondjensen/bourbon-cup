@@ -7,23 +7,62 @@ never branch" rule no longer applies. `App.jsx` is ~6k lines and is the file
 both developers will reach for; unsynchronized pushes to `main` turn that into
 hand-merged conflicts.
 
-**Default to a short-lived branch and a PR** for anything beyond a one-file
-tweak. Branch from an up-to-date `main`, keep the branch alive for hours not
-days, and squash-merge.
+### The shape of one unit of work
 
-Branch cleanup used to be the reason to avoid this: some environments' git
-proxy refuses ref deletions (`403` on `git push --delete`, and the GitHub REST
-API is gated there too), so branches had to be deleted by hand in the GitHub
-UI. The fix is *Settings → General → Automatically delete head branches* on the
-repo, which removes merged branches server-side. **Never attempt to delete a
-remote branch yourself** — it will fail in some environments; let the merge do
-it, or leave it for a human.
+**One task → one branch → one squashed commit on `main` → branch deleted.**
+Branch from an up-to-date `main`, keep the branch alive for hours not days,
+land it, and let the merge remove it.
+
+- **Never reuse a branch across sessions.** A `claude/*` branch is the
+  workspace for one task, not a personal long-lived line of development. If a
+  branch from a previous session is still open, either land it or abandon it
+  deliberately — do not add new work on top of it.
+- **Never merge `main` into a working branch.** Rebase instead:
+  `git fetch origin && git rebase origin/main`. Back-merges are what braid the
+  history into something unreadable, and they are the reason a branch ends up
+  merged into `main` three separate times.
+- **Land through a PR, not a local merge.** `gh pr create --fill`, then
+  `gh pr merge --squash --delete-branch`. A local `git merge` followed by a
+  push to `main` does work, but it skips the PR record *and* it never triggers
+  GitHub's *Automatically delete head branches*, which only fires on a PR
+  merge. That is how a repo accumulates a dozen fully-merged branches nobody
+  can safely identify by eye.
+
+Squash-merging means `git branch --merged origin/main` will stop recognising a
+landed branch, because the squashed commit is a new object with no ancestry
+link. That is expected. Cleanup is handled by `--delete-branch` at merge time,
+not by inspecting merge state afterwards.
 
 Committing directly to `main` is still fine for small, self-contained changes
 when you know the other developer isn't mid-change in the same files. When you
 do, always `git pull --rebase` before pushing.
 
-Still expected on every commit, branch or not:
+### Start and end of every session
+
+**Before starting new work**, run:
+
+```
+git fetch --prune
+git branch -r --no-merged origin/main
+git log --oneline origin/main..<each branch>
+```
+
+If anything comes back, name each branch and summarise what it contains before
+touching anything else. Do not assume an old branch is stale — check whether
+its files exist on `main`. Work has already been stranded this way once.
+
+**Before ending a session**, the branch is either merged, or the closing
+message names it explicitly and says why it is still open. A branch that
+nobody mentions is a branch that gets forgotten.
+
+### Deleting branches
+
+**Never attempt to delete a remote branch yourself.** Some environments' git
+proxy refuses ref deletions (`403` on `git push --delete`, and the GitHub REST
+API is gated there too). Let `gh pr merge --delete-branch` do it, or leave it
+for a human to clear in the GitHub UI.
+
+### Still expected on every commit, branch or not
 
 - Build before committing — `npm run build` must pass.
 - Lint with `npx eslint <changed files>` and compare the error count against
