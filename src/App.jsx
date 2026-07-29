@@ -284,11 +284,6 @@ function SignInScreen({ tournamentName, tournamentLocation, initialError }) {
         {PROVIDERS.map(btn)}
       </div>
       <LoginNote text={shownErr} />
-      {!shownErr && (
-        <div style={{ textAlign: "center", color: BC.t3, fontSize: FS.small, lineHeight: 1.4, maxWidth: 320, marginTop: -24 }}>
-          Sign in once. The app stops asking who you are.
-        </div>
-      )}
     </LoginChrome>
   );
 }
