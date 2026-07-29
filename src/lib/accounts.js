@@ -177,12 +177,26 @@ export const playerIsDirector = (memberships, player) =>
   membershipFor(memberships, player)?.is_director === true;
 
 // ── Reading the password back ───────────────────────────────────────
-// Members only, enforced by the rules — a stranger who could read this
-// would not need to be told the password at all. Returns null when none is
-// set, which is the same thing the door means by "open".
+// Directors only, enforced by the rules — a stranger who could read this
+// would not need to be told the password at all.
+//
+// Three answers, and the third is why this does not just return a string.
+// "No password set" and "I was not allowed to look" are the same absence
+// to a caller that swallows the error, and they are opposite instructions
+// to the director reading the screen: one says the door is open, the other
+// says the rules need re-publishing. This is also the screen somebody
+// reaches for while debugging a password that will not work, which is
+// exactly the wrong moment to be told a comforting lie.
 export async function readAccessCode() {
-  try { return (await db.getById(SECRETS_COL, ACCESS_DOC))?.code || null; }
-  catch { return null; }
+  try {
+    const doc = await db.getById(SECRETS_COL, ACCESS_DOC);
+    return { ok: true, code: doc?.code || null };
+  } catch (e) {
+    if (e?.code === "permission-denied") {
+      return { ok: false, error: "Can't read it — the rules deployed to Firebase are older than this app. Re-publish firestore.rules." };
+    }
+    return { ok: false, error: "Couldn't read it — check signal and try again." };
+  }
 }
 
 // ── Setting the password ────────────────────────────────────────────

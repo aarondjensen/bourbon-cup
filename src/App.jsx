@@ -1549,10 +1549,13 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
   // over a pre-filled password is how you change it by accident. The
   // current code is shown separately, and only when asked for.
   const [editAccessCode, setEditAccessCode] = useState("");
-  const [savedAccessCode, setSavedAccessCode] = useState(undefined); // undefined = not looked up
+  const [savedAccessCode, setSavedAccessCode] = useState(null);
+  const [accessCodeError, setAccessCodeError] = useState("");
   const [showAccessCode, setShowAccessCode] = useState(false);
   const loadAccessCode = useCallback(async () => {
-    setSavedAccessCode(await readAccessCode());
+    const res = await readAccessCode();
+    setSavedAccessCode(res.ok ? res.code : null);
+    setAccessCodeError(res.ok ? "" : res.error);
     setShowAccessCode(true);
   }, []);
   useEffect(() => { setEditTournamentName(tournamentName || ""); }, [tournamentName]);
@@ -3669,6 +3672,7 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                   if (!res.ok) { notify(res.error, "error"); return; }
                   setEditAccessCode("");
                   setSavedAccessCode(next || null);
+                  setAccessCodeError("");
                   notify(next ? "Password changed" : "Password removed", "success");
                 }}
                 style={{ flexShrink: 0, fontSize: FS.small, fontWeight: 700, color: ON_AMBER, background: BC.amber, border: "none", borderRadius: 6, padding: "8px 14px", cursor: "pointer" }}
@@ -3681,8 +3685,8 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, minHeight: 34 }}>
               <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.5, width: 58, flexShrink: 0, textTransform: "uppercase" }}>Current</span>
               {showAccessCode ? (
-                <span style={{ flex: 1, minWidth: 0, fontSize: FS.body, fontWeight: 800, color: savedAccessCode ? BC.amberInk : BC.t3, wordBreak: "break-all" }}>
-                  {savedAccessCode || "None — anyone who signs in can get in"}
+                <span style={{ flex: 1, minWidth: 0, fontSize: accessCodeError ? FS.label : FS.body, fontWeight: accessCodeError ? 600 : 800, lineHeight: 1.35, color: accessCodeError ? BC.danger : (savedAccessCode ? BC.amberInk : BC.t3), wordBreak: "break-all" }}>
+                  {accessCodeError || savedAccessCode || "None — anyone who signs in can get in"}
                 </span>
               ) : (
                 <button type="button" onClick={loadAccessCode} style={{
