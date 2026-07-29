@@ -70,20 +70,32 @@ export const cardComplete = (match, holeData) => {
 // [{ pid, holes: [3, 7, 12] }] — 1-based hole numbers, because that is what
 // the strip prints and what a player standing on the tee calls them.
 //
-// Players who have not started at all are INCLUDED here, unlike MnQ's
-// version. MnQ excludes them because a league night has an "absent /
-// making up" concept that makes a blank card an expected state; a Bourbon
-// Cup round has no such thing, so a player with nothing posted is either
-// still out on the course or has been missed, and both are worth naming.
+// ── Missing means SKIPPED, not "not yet reached" ──────────────────────
+// A hole nobody in the match has posted is a hole the group has not played,
+// and a group standing on the 10th tee is not missing nine scores — it is
+// nine holes into its round. Counting those made the note permanent for the
+// whole round and loudest at the first tee, when it has nothing to say; it
+// also meant the one thing it exists to catch, a hole where three players
+// are in and the fourth was skipped, arrived buried in eight holes of
+// noise. So the window is the holes the match has actually played: any hole
+// where SOMEBODY has a score. Within that window a blank is a real gap.
+//
+// A player who has posted nothing at all still shows every played hole,
+// which is right — they are either still out there or have been missed, and
+// both are worth naming. MnQ excludes that case because a league night has
+// an "absent / making up" concept; a Bourbon Cup round has no such thing.
+//
+// This is deliberately NOT how `cardComplete` above decides: signing still
+// requires all 18. The note answers "what is stopping me signing RIGHT NOW
+// that I could go fix", and an unplayed hole is not that.
 export const missingForCard = (match, holeData) => {
   if (match?.round == null) return [];
-  return matchPlayers(match)
-    .map(pid => {
-      const scored = holeData?.[`${pid}_${match.round}`] || {};
-      const holes = [];
-      for (let h = 0; h < 18; h++) if (!(scored[h] > 0)) holes.push(h + 1);
-      return { pid, holes };
-    })
+  const pids = matchPlayers(match);
+  const scoreAt = (pid, h) => holeData?.[`${pid}_${match.round}`]?.[h];
+  const played = [];
+  for (let h = 0; h < 18; h++) if (pids.some(pid => scoreAt(pid, h) > 0)) played.push(h);
+  return pids
+    .map(pid => ({ pid, holes: played.filter(h => !(scoreAt(pid, h) > 0)).map(h => h + 1) }))
     .filter(m => m.holes.length > 0);
 };
 

@@ -307,6 +307,16 @@ function LoginScreen({ players, onLogin, teams, darkMode, tournamentName, tourna
 // The round selector this view used to carry is gone: entry is gated to the
 // current round (see "The round gate" above), so there is nothing left to
 // select between and no strip of rounds at the top either.
+
+// The ring drawn around the current hole. Its look is the OFFSET — a
+// hairline of page showing between the amber chip and the amber ring — so
+// closing that gap does not shrink the ring, it deletes it. Width plus
+// offset is how far the thing reaches past the cell, and since an outline
+// is invisible to layout, that reach is also what the strip has to leave
+// under itself. See renderHoleCell.
+const HOLE_RING = { width: 2, offset: 1 };
+const HOLE_RING_REACH = HOLE_RING.width + HOLE_RING.offset;
+
 function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teams, hcpOverrides, teeAssignments, roundLocks, rounds, currentRound, ctpData, onSetCtp, cardSigs, onSignCard, onAttestCard, onUnsignCard }) {
   const userPid = user.player_id;
   // This screen is worked from, not read down — four players' scores have to
@@ -592,6 +602,14 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // the current hole a solid accent chip with an outline ring. BC keeps one
   // extra state MNQ has no need for — `partial`, for a hole where some but
   // not all four players are in, which matters over 18 holes.
+  //
+  // The ring on the current hole is an OUTLINE, which means it paints
+  // outside the cell's box and takes up no room in the layout — so the
+  // strip has to leave it some. It reaches three pixels into what was a
+  // two-pixel gap, and what it reached into was the match-status row
+  // directly below: the ring around 10 cut through the top of the back-nine
+  // status card. Both the ring and that gap now come off HOLE_RING_REACH,
+  // so they cannot drift apart again.
   const renderHoleCell = (h) => {
     const cur = h === activeHole;
     const allScored = matchPids.every(pid => getScore(pid, h) > 0);
@@ -603,7 +621,8 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
         background: cur ? BC.amber : allScored ? BC.amber + ALPHA.wash : partial ? BC.amber + ALPHA.wash : BC.card,
         color: cur ? ON_AMBER : allScored ? BC.amberInk : BC.t3,
         fontSize: fit.holeFont, fontWeight: 700, cursor: "pointer",
-        outline: cur ? `2px solid ${BC.amber}` : "none", outlineOffset: 1,
+        outline: cur ? `${HOLE_RING.width}px solid ${BC.amber}` : "none",
+        outlineOffset: HOLE_RING.offset,
       }}>{h + 1}</button>
     );
   };
@@ -659,15 +678,18 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
       {matchSelector}
 
       {/* Front 9 — hole strip + status row. */}
-      <div style={{ display: "flex", gap: 3, marginBottom: 2, flexShrink: 0 }}>
+      <div style={{ display: "flex", gap: 3, marginBottom: HOLE_RING_REACH + 1, flexShrink: 0 }}>
         {Array.from({ length: 9 }, (_, i) => renderHoleCell(i))}
       </div>
-      <div style={{ display: "flex", marginBottom: fit.stack, flexShrink: 0, background: BC.card, border: `1px solid ${BC.bdr}${ALPHA.line}`, borderRadius: 8, padding: `${fit.statusPad}px 0`, alignItems: "center" }}>
+      {/* The one gap the ring reaches UP into: the back-nine strip follows
+          this row, so on the densest phones — where fit.stack is 3 — the
+          ring around 10 would rest on this card's border. */}
+      <div style={{ display: "flex", marginBottom: Math.max(fit.stack, HOLE_RING_REACH + 1), flexShrink: 0, background: BC.card, border: `1px solid ${BC.bdr}${ALPHA.line}`, borderRadius: 8, padding: `${fit.statusPad}px 0`, alignItems: "center" }}>
         {Array.from({ length: 9 }, (_, i) => renderStatusCell(i))}
       </div>
 
       {/* Back 9 — hole strip + status row. */}
-      <div style={{ display: "flex", gap: 3, marginBottom: 2, flexShrink: 0 }}>
+      <div style={{ display: "flex", gap: 3, marginBottom: HOLE_RING_REACH + 1, flexShrink: 0 }}>
         {Array.from({ length: 9 }, (_, i) => renderHoleCell(i + 9))}
       </div>
       <div style={{ display: "flex", marginBottom: fit.stack, flexShrink: 0, background: BC.card, border: `1px solid ${BC.bdr}${ALPHA.line}`, borderRadius: 8, padding: `${fit.statusPad}px 0`, alignItems: "center" }}>
@@ -697,10 +719,14 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
         {complete ? "Complete — Sign Card" : "Full Scorecard"}
       </button>
 
-      {/* Why the button hasn't promoted. Only shown once somebody in the
-          match has started, so the note is "you're nearly there, here's the
-          gap" rather than a warning that greets the first tee. */}
-      {missingCard.length > 0 && matchPids.some(pid => holesEntered(holeData, pid, match.round) > 0) && (
+      {/* Why the button hasn't promoted — but only for holes the group has
+          actually played (lib/cardSigs missingForCard). A hole nobody has
+          posted is a hole ahead of them, not a gap behind them, so this
+          stays quiet through a normal round and speaks up when somebody has
+          genuinely been skipped. The "has anyone started" guard this used to
+          carry is now implied: with no played holes there is nothing to
+          report. */}
+      {missingCard.length > 0 && (
         <MissingCardNote missing={missingCard} nameOf={(pid) => tPlayers.find(p => p.player_id === pid)?.name || pid} />
       )}
 
