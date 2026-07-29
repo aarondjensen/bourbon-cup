@@ -539,7 +539,15 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
 
     const aLead = segmentState(result.holes.slice(0, i + 1), segOpts).margin;
     const fromUserView = userTeam === "A" ? aLead : -aLead;
-    const color = fromUserView > 0 ? BC.green : fromUserView < 0 ? BC.danger : BC.t3;
+    // Coloured by the team that's ahead, not by whether that team is yours.
+    // The bar directly above this number is painted in team colours — on a
+    // Double Dot split hole it's literally half of each — so running the
+    // number off a separate good-news/bad-news palette put two greens 2px
+    // apart, BC.teamA under BC.green, saying nearly the same thing in two
+    // different hues. The ▲/▼ still points from the reader's own side, which
+    // is the part of "is this me" that a colour was never needed for.
+    const leader = aLead > 0 ? "A" : aLead < 0 ? "B" : null;
+    const color = leader ? teamColor(leader) : BC.t3;
     return shell(
       <>
         <div style={{ height: barH, borderRadius: 3, boxSizing: "border-box", ...holeFill(hr, scoredFormat) }} />
