@@ -299,19 +299,37 @@ export const ON_AMBER = "#0a0804";
 // never by the theme.
 export const ON_ACCENT = "#ffffff";
 
-// ── Which of the two, decided by measurement ─────────────────────
-// "Decided by the FILL, never by the theme" is easy to state and easy to
-// get wrong by hand, because a few fills DO differ between modes — amberDim
-// is #8a5f10 in light and #b8801a in dark, and those are not the same
-// decision. Hardcoding one answer for both is how the hole banner ended up
-// white-on-mid-amber at 3.42:1 in dark mode while every other amber fill in
-// the app wore the near-black.
+// ── The header brown ──
+// One brown, for every bar that is a HEADER: the Matches / Skins section
+// strip (ui's Banner) and the hole banner over Scoring, plus the current
+// hole chip that matches it. White text, in both modes.
 //
-// So: hand it the fill and it returns whichever ink reads better on it.
-// Same rule, applied per fill instead of per call site, and it keeps
-// holding when a tournament accent moves the fill somewhere new.
-export const inkOn = (fill) =>
-  contrast(ON_AMBER, fill) >= contrast(ON_ACCENT, fill) ? ON_AMBER : ON_ACCENT;
+// It used to be three different browns depending on where you were standing.
+// The section strip took `amber` — #b8801a on a light page, #e0a93c on a
+// dark one — and the hole banner took `amberDim`, which is #8a5f10 light and
+// #b8801a dark. Four values, two of which are the same colour doing
+// different jobs, and one of which (white on #e0a93c, 2.12:1) was barely
+// text at all.
+//
+// A header bar has no reason to flip with the mode. Ink does — it has to
+// stand off a page that goes from near-white to near-black, which is why
+// `gold` and `amberInk` are different in each. A bar is its own surface, so
+// one value can serve both, and then the ink on it is settled once too.
+//
+// #9b6c16 is that value, walked down from the section strip's light brown
+// until white cleared AA on it: 4.62:1 for the text, and the bar itself
+// still reads as a distinct block against both pages (4.42:1 on the light
+// one, 4.29:1 on the dark). It is not `amber` and is not meant to be —
+// amber is the bright accent you tap, and it wears the near-black.
+export const BROWN = "#9b6c16";
+
+// The header pair, named once. The hole banner over Scoring and the
+// current-hole chip in the strip above it are the same fact said twice on
+// one screen — "this is the hole you are on" — and they used to say it in
+// different colours. Both read this, so the day one changes the other comes
+// with it. It lives here rather than beside HoleNavigator because there is
+// nothing component-shaped left in it: two palette constants.
+export const HOLE_BANNER = { fill: BROWN, ink: ON_ACCENT };
 
 // ── Type scale ──
 // The app is styled entirely with inline objects, so before this existed

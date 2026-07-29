@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, FS, segThumb, segTrack, readSafeAreaBottom, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor, VP_DROP, VP_DROP_BOTTOM } from "./theme";
+import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, HOLE_BANNER, FS, segThumb, segTrack, readSafeAreaBottom, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor, VP_DROP, VP_DROP_BOTTOM } from "./theme";
 import { playerLookup } from "./lib/players";
 import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, BOOTSTRAP_DIRECTOR } from "./firebase";
 import { PROVIDERS, signIn, signOutUser, onAuthUser, consumeRedirectResult, isCancelled } from "./lib/auth";
@@ -45,7 +45,7 @@ import { DirectorFinalizeAlert, FinalizeRoundSheet } from "./components/Finalize
 import { MissingCardNote, SignCardSheet, SignedCardPanel } from "./components/CardSignature";
 import { NotificationSettings } from "./components/NotificationSettings";
 import { initForegroundNotifications, syncAppBadge } from "./lib/notifications";
-import { SegmentedToggle, SegRule, StickyTop, Banner, Toast, HoleNavigator, HOLE_BANNER, ScoreButtonRow } from "./components/ui";
+import { SegmentedToggle, SegRule, StickyTop, Banner, Toast, HoleNavigator, ScoreButtonRow } from "./components/ui";
 import { useConfirm } from "./lib/useConfirm";
 import { useStableCallback } from "./lib/useStableCallback";
 import { EditionSwitcher } from "./components/EditionSwitcher";
@@ -880,7 +880,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     // here and a deep one down there read as two different states rather
     // than one. Taken from HOLE_BANNER rather than copied off it, so the
     // pair cannot come apart the way it just did.
-    const banner = HOLE_BANNER();
+    const banner = HOLE_BANNER;
     return (
       <button key={h} onClick={() => goToHole(h)} style={{
         flex: 1, height: fit.holeCell, borderRadius: allScored || cur ? 8 : 6,

@@ -6,11 +6,11 @@
 //    • SegRule         — the amber rule under a selected segment.
 //    • SegmentedToggle — the rounded pill tab switcher.
 //    • StickyTop       — the pinned control strip at the top of a tab.
-//    • Banner          — the amber section header strip.
+//    • Banner          — the brown section header strip.
 //    • Toast           — the transient "slides down from the top" toast.
 //    • ScoreButtonRow  — the tappable par-relative score entry row.
 
-import { BC, FONT, ON_ACCENT, ON_AMBER, SHADOW, ALPHA, dimHex, inkOn, FS, segThumb, segTrack } from "../theme";
+import { BC, FONT, ON_ACCENT, ON_AMBER, BROWN, HOLE_BANNER, SHADOW, ALPHA, dimHex, FS, segThumb, segTrack } from "../theme";
 
 
 // The rule that marks the thumb. A child rather than a border because it is
@@ -111,8 +111,9 @@ export function StickyTop({ children, padTop = 0, padBottom = 12, style }) {
 }
 
 // ── Banner ──
-// The amber section-header strip (e.g. TEAMS / ROUND 2 / SKINS).
-export function Banner({ children, background = BC.amber, color = ON_ACCENT }) {
+// The brown section-header strip (e.g. TEAMS / ROUND 2 / SKINS). See
+// theme's BROWN for why the fill is one value rather than one per mode.
+export function Banner({ children, background = BROWN, color = ON_ACCENT }) {
   return (
     <div style={{ padding: "8px 14px", background, textAlign: "center" }}>
       <div style={{ fontSize: FS.small, color, fontWeight: 800, letterSpacing: 2 }}>{children}</div>
@@ -169,18 +170,8 @@ export function Toast({ message, type = "success", top = 30 }) {
 // dimensions both screens used before it was shared.
 const HOLE_NAV_SIZES = { pad: "4px 8px", gap: 6, nav: 36, num: FS.hero, label: FS.micro, side: FS.lead };
 
-// The banner's fill, exported because the hole strip's current-hole chip
-// wears the same one \u2014 it is the same fact said twice on one screen, "this
-// is the hole you are on", and the two used to say it in different colours.
-// A caller that wants the banner's look asks for HOLE_BANNER, not amberDim,
-// so the day the banner changes the chip comes with it.
-export const HOLE_BANNER = () => ({ fill: BC.amberDim, ink: inkOn(BC.amberDim) });
-
 export function HoleNavigator({ hole, par, hcp, onGo, sizes = HOLE_NAV_SIZES }) {
-  // Read at render, not at module load: BC is mutated in place on a theme
-  // toggle, and amberDim is one of the tokens whose value differs enough
-  // between the modes to change which ink reads on it.
-  const { fill, ink } = HOLE_BANNER();
+  const { fill, ink } = HOLE_BANNER;
   const arrow = (dir) => {
     const at = dir < 0 ? hole === 0 : hole === 17;
     return (
