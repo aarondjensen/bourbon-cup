@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, FS, segThumb, segTrack, readSafeAreaBottom, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor, VP_DROP, VP_DROP_BOTTOM } from "./theme";
 import { playerLookup } from "./lib/players";
-import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession } from "./firebase";
+import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, BOOTSTRAP_DIRECTOR } from "./firebase";
+import { PROVIDERS, signIn, signOutUser, onAuthUser, consumeRedirectResult, isCancelled } from "./lib/auth";
+import { claimPlayer, linkedPlayer, isClaimed, accountLabel, unlinkPatch } from "./lib/accounts";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
   resolveTeams, DEFAULT_TEAM_NAMES, TOURNAMENT_TITLE, TOURNAMENT_LOCATION,
@@ -156,15 +158,158 @@ const ScoreCell = ({ score, par, strokes, size = FS.body, colorOverride }) => {
 };
 
 
-// ── Login Screen ──
-function LoginScreen({ players, onLogin, teams, darkMode, tournamentName, tournamentLocation }) {
-  const [search, setSearch] = useState("");
+// ══════════════════════════════════════════════════════════════════
+//  Getting in
+// ══════════════════════════════════════════════════════════════════
+//
+// Two screens, in order, and most people see the second one once ever:
+//
+//   1. SignInScreen — Google or Apple. Firebase keeps that session in
+//      IndexedDB, so it survives closing the app, which the old
+//      tap-your-name screen (sessionStorage) never did.
+//   2. ClaimScreen — the same roster grid as before, but now it BINDS the
+//      account to that name (lib/accounts.js) instead of just setting a
+//      variable. Names somebody else has claimed are shown locked.
+//
+// Both share the chrome — silhouette, tournament name, year and place —
+// so the transition between them is just the panel changing.
 
-  useEffect(() => {
-    if (search === DIRECTOR_CODE) {
-      onLogin({ player_id: "bootstrap_director", name: "Director (Setup)", team: null, isDirector: true });
+function LoginChrome({ tournamentName, tournamentLocation, children }) {
+  return (
+    // Centred while it fits, scrolls when it doesn't. The claim screen is
+    // the tall one — twelve names, a confirm bar and the director row clear
+    // an iPhone SE by a few pixels, and a fourteen-man field would not.
+    // `overflow: hidden` here (what the old single-purpose login screen
+    // used) would hide the overflow rather than let anyone reach it, and
+    // html/body are locked by the theme so the page itself cannot scroll.
+    // A lone `margin: auto` child does both jobs: flexbox centres it with
+    // room to spare, and the scroll container takes over without it.
+    <div style={{ height: "100dvh", background: BC.bg, display: "flex", flexDirection: "column", padding: "0 10px", fontFamily: FONT, position: "relative", overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain" }}>
+      {/* Silhouette — fixed full-screen background */}
+      <img src={TROPHY_SILHOUETTE} alt="" style={{
+        position: "fixed", top: "50%", left: "50%",
+        transform: "translate(-50%, -50%)",
+        width: "100%", height: "100%",
+        objectFit: "contain", opacity: 0.28, filter: "brightness(1.4) contrast(1.2)", pointerEvents: "none", userSelect: "none", zIndex: 0,
+      }} />
+
+      <div style={{
+        margin: "auto", width: "100%", flexShrink: 0,
+        display: "flex", flexDirection: "column", alignItems: "center",
+        padding: "calc(env(safe-area-inset-top, 0px) + 12px) 0 calc(env(safe-area-inset-bottom, 0px) + 12px)",
+      }}>
+        {/* Title — sits above the silhouette, outside content card */}
+        <div style={{ textAlign: "center", position: "relative", zIndex: 1, marginBottom: 14 }}>
+          <div style={{ fontSize: `clamp(${FS.title}px, 8vw, ${FS.hero}px)`, fontWeight: 800, color: BC.gold, letterSpacing: 2 }}>{(tournamentName || TOURNAMENT_TITLE).toUpperCase()}</div>
+          <div style={{ fontSize: `clamp(${FS.label}px, 3vw, ${FS.small}px)`, color: BC.t3, letterSpacing: "0.3em", marginTop: 3 }}>{getTournamentYear()} {(tournamentLocation || TOURNAMENT_LOCATION).toUpperCase()}</div>
+        </div>
+
+        {/* Desktop centering wrapper */}
+        <div style={{ width: "100%", maxWidth: 520, display: "flex", flexDirection: "column", alignItems: "center", position: "relative", zIndex: 1 }}>
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// A one-line error/notice under the buttons. Its height is held even when
+// empty so tapping a provider doesn't shove the buttons up the screen.
+const LoginNote = ({ text, tone = "error" }) => (
+  <div style={{ minHeight: 34, marginTop: 10, textAlign: "center", fontSize: FS.small, lineHeight: 1.35, color: tone === "error" ? BC.danger : BC.t3, maxWidth: 360 }}>
+    {text || ""}
+  </div>
+);
+
+// Both marks are inlined as SVG rather than pulled from a CDN or drawn
+// with a text glyph: the Apple  is a font character that only renders on
+// Apple devices, and Google's brand guidance for the button is the
+// four-colour G, not a letter.
+const GoogleMark = ({ size = 18 }) => (
+  <svg width={size} height={size} viewBox="0 0 48 48" aria-hidden="true">
+    <path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-2.8-.4-4H24v7.3h12.1c-.2 2-1.6 5-4.5 7l-.1.3 6.5 5 .5.1c4.1-3.8 6.6-9.4 6.6-15.7z" />
+    <path fill="#34A853" d="M24 46c5.9 0 10.9-2 14.5-5.3l-6.9-5.4c-1.8 1.3-4.3 2.2-7.6 2.2-5.8 0-10.7-3.8-12.5-9.1l-.3.02-6.8 5.2-.1.3C7.9 41 15.4 46 24 46z" />
+    <path fill="#FBBC05" d="M11.5 28.4c-.5-1.4-.8-2.9-.8-4.4 0-1.5.3-3 .7-4.4v-.3l-6.9-5.3-.2.1A22 22 0 0 0 2 24c0 3.5.9 6.9 2.3 9.9l7.2-5.5z" />
+    <path fill="#EB4335" d="M24 9.5c4.1 0 6.9 1.8 8.5 3.3l6.2-6C34.9 3.4 29.9 1 24 1 15.4 1 7.9 6 4.3 13.3l7.2 5.6C13.3 13.6 18.2 9.5 24 9.5z" />
+  </svg>
+);
+
+const AppleMark = ({ size = 18, color = "#FFFFFF" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={color} aria-hidden="true">
+    <path d="M16.37 1.43c0 1.14-.47 2.25-1.24 3.06-.79.85-2.07 1.5-3.12 1.42-.13-1.1.41-2.27 1.15-3.02.79-.85 2.19-1.47 3.21-1.46zM20.5 17.02c-.55 1.27-.82 1.84-1.53 2.96-.98 1.56-2.37 3.5-4.09 3.51-1.53.02-1.93-1-4-.99-2.08.01-2.51 1.01-4.04.99-1.72-.02-3.03-1.77-4.02-3.33C.05 15.8-.24 10.68 1.47 7.96 2.68 6.03 4.6 4.9 6.4 4.9c1.84 0 3 1.01 4.52 1.01 1.48 0 2.38-1.01 4.5-1.01 1.61 0 3.32.88 4.53 2.39-3.98 2.18-3.34 7.85.55 9.73z" />
+  </svg>
+);
+
+// ── Screen 1: sign in ───────────────────────────────────────────────
+function SignInScreen({ tournamentName, tournamentLocation, initialError }) {
+  const [busy, setBusy] = useState(null);
+  // Two sources, no effect syncing them: `initialError` is what a redirect
+  // sign-in failed with on the far side (iOS home-screen installs take that
+  // route), which would otherwise be invisible — the app just reappears
+  // here. `err` is this screen's own attempt failing, and wins once made.
+  const [err, setErr] = useState("");
+  const shownErr = err || initialError || "";
+
+  const go = async (id) => {
+    setErr(""); setBusy(id);
+    try {
+      // Resolves null when the browser is navigating away to the provider;
+      // leaving `busy` set is right in that case — the screen is about to
+      // be replaced, and a re-armed button would just invite a second tap.
+      await signIn(id);
+    } catch (e) {
+      if (!isCancelled(e)) setErr(e?.message || "Sign-in failed. Try again.");
+      setBusy(null);
     }
-  }, [search]);
+  };
+
+  const btn = (p) => (
+    <button key={p.id} onClick={() => go(p.id)} disabled={!!busy} style={{
+      width: "100%", padding: "13px 16px", borderRadius: 12,
+      background: p.brand, color: p.ink,
+      border: p.id === "google" ? "1px solid rgba(0,0,0,0.16)" : "1px solid rgba(255,255,255,0.22)",
+      fontFamily: FONT, fontSize: FS.body, fontWeight: 700, letterSpacing: 0.2,
+      cursor: busy ? "default" : "pointer", opacity: busy && busy !== p.id ? 0.5 : 1,
+      display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+      boxShadow: `0 2px 10px ${SHADOW}`,
+    }}>
+      {p.id === "google" ? <GoogleMark /> : <AppleMark color={p.ink} />}
+      <span>{busy === p.id ? "Opening…" : p.label}</span>
+    </button>
+  );
+
+  return (
+    <LoginChrome tournamentName={tournamentName} tournamentLocation={tournamentLocation}>
+      <div style={{ width: "100%", maxWidth: 340, display: "flex", flexDirection: "column", gap: 10 }}>
+        {PROVIDERS.map(btn)}
+      </div>
+      <LoginNote text={shownErr} />
+      {!shownErr && (
+        <div style={{ textAlign: "center", color: BC.t3, fontSize: FS.small, lineHeight: 1.4, maxWidth: 320, marginTop: -24 }}>
+          Sign in once. The app stops asking who you are.
+        </div>
+      )}
+    </LoginChrome>
+  );
+}
+
+// ── Screen 2: claim your name ───────────────────────────────────────
+// Shown to a signed-in account that no roster document points at. Tapping
+// a name selects it; a second tap on the confirm bar commits, because the
+// link is meant to be permanent and a mis-tap on a 12-name grid is not.
+function ClaimScreen({ players, teams, darkMode, tournamentName, tournamentLocation, authUser, onClaimed, onDirector, onSignOut }) {
+  const [code, setCode] = useState("");
+  const [picked, setPicked] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  // Checked as it is typed rather than in an effect on the value: the
+  // director typing the code is an event, and modelling it as one keeps
+  // the parent's state change out of this component's render cycle.
+  const onCode = (v) => {
+    setCode(v);
+    if (v.trim().toLowerCase() === DIRECTOR_CODE) onDirector();
+  };
 
   // Mash Brothers has TWO logo variants — one designed to be displayed
   // on a black background (the original, with the green flag/white
@@ -180,47 +325,55 @@ function LoginScreen({ players, onLogin, teams, darkMode, tournamentName, tourna
   const teamA = { ...teams.A, logo: customLogoA ? teams.A.logo : (darkMode ? LOGO_TEAM_A : LOGO_TEAM_A_WHITE) };
   const teamB = teams.B;
 
-  const teamAPlayers = players.filter(p => p.team === "A");
-  const teamBPlayers = players.filter(p => p.team === "B");
+  const doClaim = async () => {
+    if (!picked || busy) return;
+    setBusy(true); setErr("");
+    const res = await claimPlayer(picked, authUser);
+    setBusy(false);
+    if (!res.ok) { setErr(res.error); setPicked(null); return; }
+    onClaimed(res.player);
+  };
 
-  const filterPlayers = (list) => list;
-
-  const PlayerBtn = ({ p, team }) => (
-    <button onClick={() => onLogin(p)} style={{
-      width: "100%", padding: "clamp(8px, 2.5vw, 12px) clamp(10px, 3vw, 14px)", background: team.color + ALPHA.tint,
-      border: `1px solid ${team.accent}${ALPHA.hair}`, borderRadius: 6,
-      color: BC.t2, fontSize: `clamp(${FS.small}px, 3.8vw, ${FS.body}px)`, fontWeight: 600, cursor: "pointer", textAlign: "center",
-      display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
-    }}>
-      <span style={{ flex: 1, lineHeight: 1.3 }}>{p.name}</span>
-    </button>
-  );
+  const PlayerBtn = ({ p, team }) => {
+    const taken = isClaimed(p);
+    const sel = picked?.player_id === p.player_id;
+    return (
+      <button
+        onClick={() => !taken && setPicked(sel ? null : p)}
+        disabled={taken || busy}
+        title={taken ? `${p.name} is already linked to an account` : undefined}
+        style={{
+          width: "100%", padding: "clamp(8px, 2.5vw, 12px) clamp(10px, 3vw, 14px)",
+          background: sel ? team.accent : (taken ? "transparent" : team.color + ALPHA.tint),
+          border: `1px solid ${team.accent}${sel ? "" : ALPHA.hair}`, borderRadius: 6,
+          color: sel ? ON_ACCENT : (taken ? BC.t3 : BC.t2),
+          fontSize: `clamp(${FS.small}px, 3.8vw, ${FS.body}px)`, fontWeight: sel ? 800 : 600,
+          cursor: taken ? "default" : "pointer", textAlign: "center", opacity: taken ? 0.45 : 1,
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+        }}>
+        <span style={{ flex: 1, lineHeight: 1.3 }}>{p.name}</span>
+        {taken && <span aria-hidden="true" style={{ fontSize: FS.label, flexShrink: 0 }}>🔒</span>}
+      </button>
+    );
+  };
 
   return (
-    <div style={{ height: "100dvh", background: BC.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 10px", fontFamily: FONT, position: "relative", overflow: "hidden" }}>
-      {/* Silhouette — fixed full-screen background */}
-      <img src={TROPHY_SILHOUETTE} alt="" style={{
-        position: "fixed", top: "50%", left: "50%",
-        transform: "translate(-50%, -50%)",
-        width: "100%", height: "100%",
-        objectFit: "contain", opacity: 0.28, filter: "brightness(1.4) contrast(1.2)", pointerEvents: "none", userSelect: "none", zIndex: 0,
-      }} />
+    <LoginChrome tournamentName={tournamentName} tournamentLocation={tournamentLocation}>
+      {/* Nobody to tap on an empty roster — the instruction there is the
+          director-code line below the columns instead. */}
+      {players.length > 0 && (
+        <div style={{ textAlign: "center", marginBottom: 10, maxWidth: 400 }}>
+          <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.t1 }}>Which one are you?</div>
+          <div style={{ fontSize: FS.small, color: BC.t3, marginTop: 2, lineHeight: 1.35 }}>
+            Tap your name once — {authUser?.email || "this account"} stays linked to it.
+          </div>
+        </div>
+      )}
 
-      {/* Title — sits above the silhouette, outside content card */}
-      <div style={{ textAlign: "center", position: "relative", zIndex: 1, marginBottom: 14 }}>
-        <div style={{ fontSize: `clamp(${FS.title}px, 8vw, ${FS.hero}px)`, fontWeight: 800, color: BC.gold, letterSpacing: 2 }}>{(tournamentName || TOURNAMENT_TITLE).toUpperCase()}</div>
-        <div style={{ fontSize: `clamp(${FS.label}px, 3vw, ${FS.small}px)`, color: BC.t3, letterSpacing: "0.3em", marginTop: 3 }}>{getTournamentYear()} {(tournamentLocation || TOURNAMENT_LOCATION).toUpperCase()}</div>
-      </div>
-
-      {/* Desktop centering wrapper */}
-      <div style={{ width: "100%", maxWidth: 520, display: "flex", flexDirection: "column", alignItems: "center", position: "relative", zIndex: 1 }}>
-
-
-
-      {/* Two-column layout with logos above each column and VS between */}
+      {/* Two-column layout with logos above each column */}
       <div style={{ width: "100%", maxWidth: 480, display: "flex", gap: "clamp(6px, 2vw, 12px)", position: "relative", zIndex: 1, alignItems: "flex-start" }}>
-        {[teamA, teamB].map((team, ti) => {
-          const teamPlayers = filterPlayers(team.id === "A" ? teamAPlayers : teamBPlayers);
+        {[teamA, teamB].map((team) => {
+          const teamPlayers = players.filter(p => p.team === team.id);
           return (
             <div key={team.id} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center" }}>
               {/* Logo centered above column */}
@@ -237,13 +390,60 @@ function LoginScreen({ players, onLogin, teams, darkMode, tournamentName, tourna
         })}
       </div>
 
+      {/* Confirm bar — only once a name is picked. */}
+      {picked && (
+        <button onClick={doClaim} disabled={busy} style={{
+          width: "100%", maxWidth: 480, marginTop: 10, padding: "12px 16px", borderRadius: 12,
+          background: BC.gold, border: "none", color: ON_AMBER,
+          fontFamily: FONT, fontSize: FS.body, fontWeight: 800, cursor: busy ? "default" : "pointer",
+        }}>
+          {busy ? "Linking…" : `I'm ${picked.name} — link this account`}
+        </button>
+      )}
+
+      <LoginNote text={err} />
+
       {players.length === 0 && (
-        <div style={{ textAlign: "center", color: BC.t3, padding: 16, fontSize: FS.small, position: "relative", zIndex: 1, marginTop: 12 }}>
-          No players yet. Type <span style={{ color: BC.amberInk, fontWeight: 700 }}>{DIRECTOR_CODE}</span> to set up.
+        <div style={{ textAlign: "center", color: BC.t3, fontSize: FS.small, marginTop: -22, marginBottom: 8, maxWidth: 360 }}>
+          No players yet. Enter the director code below to set the tournament up.
         </div>
       )}
+
+      {/* The director's way in, and the way back out. The code field used
+          to be referenced by the login screen's hint without ever being
+          rendered, so the documented escape hatch could not be typed into;
+          it is a real input now. It is no longer a password of any kind —
+          you are already signed in by the time you can reach it. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4, width: "100%", maxWidth: 480, justifyContent: "center" }}>
+        <input
+          value={code}
+          onChange={e => onCode(e.target.value)}
+          placeholder="Director code"
+          autoCapitalize="none" autoCorrect="off" spellCheck={false}
+          style={{
+            // Wide enough for the placeholder, which the theme uppercases.
+            width: 175, boxSizing: "border-box", background: BC.inp, border: `1px solid ${BC.bdr}`,
+            borderRadius: 8, padding: "7px 10px", color: BC.t2,
+            // 16px keeps iOS Safari from zooming the page on focus.
+            fontSize: FS.lead, fontFamily: FONT, outline: "none", textAlign: "center",
+          }} />
+        <button onClick={onSignOut} style={{
+          background: "transparent", border: "none", color: BC.t3,
+          fontSize: FS.small, fontFamily: FONT, textDecoration: "underline", cursor: "pointer", padding: "7px 4px",
+        }}>Not you? Sign out</button>
       </div>
-    </div>
+    </LoginChrome>
+  );
+}
+
+// Shown for the moment between "the app started" and "we know who you
+// are" — Firebase restoring its session, then the roster arriving. Without
+// it a cold start flashes the sign-in screen at somebody who is signed in.
+function LoginSplash({ tournamentName, tournamentLocation }) {
+  return (
+    <LoginChrome tournamentName={tournamentName} tournamentLocation={tournamentLocation}>
+      <div style={{ color: BC.t3, fontSize: FS.small, letterSpacing: 1 }}>…</div>
+    </LoginChrome>
   );
 }
 
@@ -1826,6 +2026,12 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     <div style={{ display: "flex", alignItems: "center", gap: 5, flexBasis: "52%", flexGrow: 0, flexShrink: 1, minWidth: 0 }}>
                       <span style={{ fontSize: FS.small, fontWeight: 600, color: playerNameColor(), minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fullName(p)}</span>
                       {p.isDirector && <span title="Tournament director" style={{ fontSize: FS.small, flexShrink: 0, lineHeight: 1 }}>👑</span>}
+                      {/* Whether this name has been claimed by a sign-in.
+                          The director is the only person who can answer
+                          "why can't I pick my own name" (somebody else
+                          claimed it, or they claimed it on a different
+                          account), so the answer lives where they are. */}
+                      {isClaimed(p) && <span title={`Signed in as ${accountLabel(p)}`} style={{ fontSize: FS.label, flexShrink: 0, lineHeight: 1, opacity: 0.75 }}>🔗</span>}
                     </div>
                     {/* Index column doubles as the sync-status glyph: amber * =
                         override, blue G = synced from GHIN, plain = manual. */}
@@ -1922,13 +2128,15 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               if (dirChanged) changes.push(`Director: ${p.isDirector ? "Yes" : "No"} → ${newDir ? "Yes" : "No"}`);
               if ((editingPlayer.ghin_number || null) !== (p.ghin_number || null))
                 changes.push(editingPlayer.ghin_number ? `GHIN: linked #${editingPlayer.ghin_number}` : "GHIN: unlinked");
+              const cutSignIn = !!editingPlayer.unlink && isClaimed(p);
+              if (cutSignIn) changes.push(`Sign-in: unlink ${accountLabel(p)} — they'll pick their name again next time they open the app`);
               if (changes.length === 0) { close(); return; }
               const oldEff = oldOv != null ? oldOv : (parseFloat(p.handicap_index) || 0);
               const newEff = newOv != null ? newOv : (parseFloat(editingPlayer.hi) || 0);
               let impact = oldEff !== newEff ? "\n\n" + describeHiChangeImpact(roundLocks, [1,2,3,4]).text : "";
               if (dirChanged && newDir) impact += "\n\nDirector access grants full admin control (setup, scoring, editions).";
               if (await confirm({ title: "Confirm changes", message: changes.join("\n") + impact })) {
-                onUpdatePlayer({ ...p, name: newName, first_name: first, last_name: last, handicap_index: parseFloat(editingPlayer.hi) || 0, hi_override: newOv, isDirector: newDir, ...ghinFields });
+                onUpdatePlayer({ ...p, name: newName, first_name: first, last_name: last, handicap_index: parseFloat(editingPlayer.hi) || 0, hi_override: newOv, isDirector: newDir, ...ghinFields, ...(cutSignIn ? unlinkPatch() : {}) });
               }
               close();
             };
@@ -1959,6 +2167,30 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       </button>
                     </div>
                   </div>
+                  {/* The sign-in bound to this name. Read-only apart from
+                      cutting it: there is nothing to type here, because the
+                      link is made by the player signing in and tapping
+                      their own name, never by the director assigning one.
+                      Unlinking is the fix for the two things that do go
+                      wrong — somebody claimed the wrong name, or somebody
+                      changed phones and lost the account they used. Like
+                      the GHIN link above, it only writes into the form;
+                      Save commits it. */}
+                  {!isNew && isClaimed(p) && (
+                    <div>
+                      <span style={lbl}>Signed in as</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderRadius: 8, background: BC.inp, border: `1px solid ${editingPlayer.unlink ? BC.danger : BC.bdr}${ALPHA.line}` }}>
+                        <span style={{ flex: 1, minWidth: 0, fontSize: FS.small, fontWeight: 600, color: editingPlayer.unlink ? BC.t3 : BC.t2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textDecoration: editingPlayer.unlink ? "line-through" : "none" }}>
+                          {accountLabel(p)}
+                        </span>
+                        <button type="button" onClick={() => set({ unlink: !editingPlayer.unlink })}
+                          style={{ flexShrink: 0, fontSize: FS.label, fontWeight: 700, padding: "4px 9px", borderRadius: 6, cursor: "pointer",
+                            border: `1px solid ${editingPlayer.unlink ? BC.amber : BC.danger}${ALPHA.line}`, background: "transparent", color: editingPlayer.unlink ? BC.amberInk : BC.danger }}>
+                          {editingPlayer.unlink ? "Keep" : "Unlink"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {/* Index, the GHIN link, and Override on one row — all
                       handicap-related. GHIN fills/syncs the Index; Override
                       (amber) wins over both when set. */}
@@ -3811,9 +4043,45 @@ const TeeSwatch = ({ tee, index = 0, size = 12, round = false, active = false })
 
 // ── Main App ──
 export default function App() {
-  // Restore the signed-in user from sessionStorage so a reload (pull-to-refresh
-  // picking up a new bundle, or an edition switch) doesn't kick them to login.
-  const [user, setUser] = useState(() => readUserSession());
+  // ── Who is using the app ──────────────────────────────────────────
+  // Three layers, resolving in this order on a cold start:
+  //
+  //   authUser  Firebase Auth's persisted session — WHICH ACCOUNT. Held as
+  //             `undefined` until the SDK has read it back off disk, so
+  //             "not signed in" and "not known yet" stay distinguishable;
+  //             conflating them is what flashes the sign-in screen at
+  //             somebody who is already signed in.
+  //   tPlayers  the roster, which carries the account → player link
+  //             (bc_players.auth_uid, see lib/accounts.js).
+  //   user      what the rest of the app means by "you", derived from both
+  //             just below the roster state.
+  //
+  // Nothing here is authoritative locally: the roster is, so a director
+  // unlinking an account takes effect on that phone at the next snapshot
+  // rather than at its next logout.
+  const [authUser, setAuthUser] = useState(undefined);
+  const [authError, setAuthError] = useState("");
+  // Signed in and deliberately not on the roster: the director bootstrapping
+  // an edition that has no players to tap yet.
+  const [bootstrapDirector, setBootstrapDirector] = useState(false);
+  // Whether the roster subscription has delivered anything at all. "No link
+  // found" means nothing until it has.
+  const [playersLoaded, setPlayersLoaded] = useState(false);
+  // Last known account → player pairing, read once at startup. It covers the
+  // gap between Firebase answering and Firestore answering; see firebase.js.
+  const cachedSession = useRef(readUserSession());
+
+  useEffect(() => {
+    // The far side of the redirect flow (lib/auth.js). A SUCCESSFUL redirect
+    // needs nothing here — the state listener fires with the new user like
+    // any other sign-in — but a failed one has no other way to be seen: the
+    // app would simply come back to the sign-in screen with no explanation.
+    consumeRedirectResult().then(({ error }) => { if (error) setAuthError(error); });
+    return onAuthUser(u => {
+      setAuthUser(u || null);
+      if (!u) setBootstrapDirector(false);
+    });
+  }, []);
   // Default landing view. Leaderboard is the right home base — the
   // most-glanced screen during a round, and the natural place for a
   // user reopening the app to check current state.
@@ -3882,6 +4150,51 @@ export default function App() {
   }, [darkMode]);
 
   const [tPlayers, setTPlayers] = useState([]);
+
+  // ── "You" ───────────────────────────────────────────────────────────
+  // The roster row this account has claimed, with the director flag it
+  // carries. Everything downstream — the admin tab, whose card is whose,
+  // the attest badge — reads this, exactly as it read the tapped player
+  // before there were accounts, so nothing else had to change.
+  const user = useMemo(() => {
+    if (!authUser) return null;
+    const linked = linkedPlayer(tPlayers, authUser.uid);
+    if (linked) return { ...linked, isDirector: !!linked.isDirector };
+
+    // The cache is only usable if it belongs to THIS account. The one
+    // exception is the marker an edition switch writes just before
+    // reloading (lib/editions.js), which predates knowing the uid.
+    const cached = cachedSession.current;
+    const mine = cached && (!cached.auth_uid || cached.auth_uid === authUser.uid) ? cached : null;
+    if (bootstrapDirector || mine?.player_id === BOOTSTRAP_DIRECTOR.player_id) return BOOTSTRAP_DIRECTOR;
+    // Roster still in flight: hold the last known identity rather than
+    // flash the claim screen at somebody who claimed a name months ago.
+    if (!playersLoaded && mine) return mine;
+    return null;
+  }, [authUser, tPlayers, playersLoaded, bootstrapDirector]);
+
+  // Keep that cache current. What gets written is the live roster row, so
+  // it can never be staler than what is on screen — and it is cleared the
+  // moment the roster says this account has no name, which is how a
+  // director's unlink reaches a phone that is not looking.
+  useEffect(() => {
+    if (!authUser) { writeUserSession(null); cachedSession.current = null; return; }
+    if (!user) {
+      if (playersLoaded) { writeUserSession(null); cachedSession.current = null; }
+      return;
+    }
+    const entry = { ...user, auth_uid: authUser.uid };
+    cachedSession.current = entry;
+    writeUserSession(entry);
+  }, [user, authUser, playersLoaded]);
+
+  const doSignOut = useCallback(async () => {
+    writeUserSession(null);
+    cachedSession.current = null;
+    setBootstrapDirector(false);
+    await signOutUser();
+  }, []);
+
   const [tRounds, setTRounds] = useState([]);
   const [courses, setCourses] = useState([]);
   const [matches, setMatches] = useState([]);
@@ -4082,7 +4395,7 @@ export default function App() {
   useEffect(() => {
     const unsubs = [];
     const f = [{ field: "tournament_id", op: "==", value: TOURNAMENT_ID }];
-    unsubs.push(db.subscribe("bc_players", f, setTPlayers));
+    unsubs.push(db.subscribe("bc_players", f, rows => { setTPlayers(rows); setPlayersLoaded(true); }));
     unsubs.push(db.subscribe("bc_settings", f, rows => {
       const tn = rows.find(r => r.id === editionDocId("team_names"));
       if (tn) setTeamNames({ A: tn.teamA || DEFAULT_TEAM_NAMES.A, B: tn.teamB || DEFAULT_TEAM_NAMES.B });
@@ -4655,7 +4968,32 @@ export default function App() {
     [roundLocksData, tournamentRounds]
   );
 
-  if (!user) return <LoginScreen players={tPlayers} teams={teams} darkMode={darkMode} tournamentName={tournamentName} tournamentLocation={tournamentLocation} onLogin={p => { const u = { ...p, isDirector: !!p.isDirector }; writeUserSession(u); setUser(u); }} />;
+  // ── The three ways in ─────────────────────────────────────────────
+  // Ordered by what is still unknown. The splash covers both unknowns —
+  // Firebase restoring its session, and the roster that says which player
+  // this account is — because either one resolving to "no" too early puts
+  // a signed-in player back on a login screen, which is the bug this
+  // whole feature exists to kill.
+  const chrome = { tournamentName, tournamentLocation };
+  if (authUser === undefined || (authUser && !user && !playersLoaded)) return <LoginSplash {...chrome} />;
+  if (!authUser) return <SignInScreen {...chrome} initialError={authError} />;
+  if (!user) return (
+    <ClaimScreen
+      {...chrome}
+      players={tPlayers} teams={teams} darkMode={darkMode} authUser={authUser}
+      onClaimed={p => {
+        // The roster snapshot delivers this write back to us immediately
+        // (Firestore fires listeners on local mutations), so `user` is
+        // about to resolve on its own. Priming the cache here is for the
+        // NEXT cold start, not for this render.
+        const entry = { ...p, isDirector: !!p.isDirector, auth_uid: authUser.uid };
+        cachedSession.current = entry;
+        writeUserSession(entry);
+      }}
+      onDirector={() => setBootstrapDirector(true)}
+      onSignOut={doSignOut}
+    />
+  );
 
   // Which side of the cup the reader is on. This is a two-team event, so a
   // player belongs to one team for its whole length and the answer holds for
@@ -5027,7 +5365,7 @@ export default function App() {
         }} />
       </div>
 
-      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={() => { writeUserSession(null); setUser(null); }} user={user} view={view} darkMode={darkMode} onToggleTheme={toggleTheme} finalize={finalizeMenu} navH={navH} />
+      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={doSignOut} user={user} view={view} darkMode={darkMode} onToggleTheme={toggleTheme} finalize={finalizeMenu} navH={navH} />
 
       {/* The Finalize sheet — everything the removed Scoring card held, at
           zero cost until it is opened. */}

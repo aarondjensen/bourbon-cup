@@ -5,42 +5,57 @@ rules_version = '2';
 // ══════════════════════════════════════════════════════════════════
 //
 // ── Read this before changing anything ────────────────────────────
-// This app does NOT use Firebase Authentication. Nobody signs in; the
-// login screen picks a player out of the roster and the director "code"
-// (constants.DIRECTOR_CODE) is a client-side convenience that unhides the
-// admin tab. Every request that reaches Firestore is therefore anonymous —
-// `request.auth` is always null — so any rule that asks for an identity
-// would lock the whole app out, not just the people it was meant to stop.
+// The app signs people in with Google or Apple (src/lib/auth.js), so
+// `request.auth` is a real thing now. Every WRITE below requires it.
+// Reads do not, and that is deliberate: the leaderboard is meant to be
+// glanceable by a spouse on the couch with a link, and the service worker
+// that delivers push has no user to sign in as.
 //
-// What that means in practice: these rules are NOT an access-control
-// boundary. Anyone who has the app's public Firebase config (it ships in
-// the bundle, as it is designed to) can read and write this tournament's
-// data. That is the trade the app has always made — a dozen friends, one
-// weekend, no accounts. Do not mistake the list below for protection.
+// What that buys, precisely: the app's Firebase config ships in the bundle
+// (it is designed to), so anyone who views source can talk to this
+// project. Before, that meant they could rewrite the tournament. Now they
+// need an account first, which is not much of a wall — anybody can make a
+// Google account — but it is the difference between an anonymous script
+// and a person who has left a uid on every document they touched.
 //
-// What the list DOES do is bound the blast radius: only the collections
-// this app actually uses are writable, so a stray or malicious client
-// cannot create arbitrary collections in the project. Everything else is
-// denied by default.
+// Still true, and worth being blunt about: this is NOT a full
+// access-control boundary. A signed-in account can write any collection
+// listed below, not only its own player's rows. Scoring is communal here —
+// one phone posts for a group of four, the director fixes anybody's card —
+// so per-document ownership rules would break the actual workflow before
+// they stopped anybody. The real guards remain the client's: the round
+// gate, the finalize lock, and the card signatures.
 //
-// ── If you ever add sign-in ───────────────────────────────────────
-// Replace `isOpen()` with a real predicate (`request.auth != null` for
-// reads, plus a directors document lookup for the admin-owned
-// collections) and split the list into read-mostly and director-only
-// halves. The collection list is already grouped that way below.
+// ── Deploying this ────────────────────────────────────────────────
+// Rules are deployed by hand and the app is not. Deploy these only once
+// the signed-in build is live and everyone's phone has loaded it (a
+// pull-to-refresh will do it). Deploy them first, and any phone still
+// running the old bundle silently fails every write it attempts — scores
+// typed on the tee that never arrive.
+//
+// ── If you ever want director-only halves ─────────────────────────
+// The list below is already grouped into director-owned data and things
+// players write. Splitting it means a lookup against the roster:
+//   function isDirector() {
+//     return isSignedIn() && exists(/databases/$(database)/documents/bc_players/$(...))
+//   }
+// which needs the player document id to be derivable from request.auth.uid
+// — it is not today (uid lives in a FIELD, bc_players.auth_uid), so that
+// change starts with keying the roster by uid or maintaining a
+// bc_directors/{uid} document.
 //
 // ── What this replaces ────────────────────────────────────────────
 // Until this file, the deployed rules were a single blanket grant:
 //
 //   match /{document=**} { allow read, write: if true; }
 //
-// So the enumeration below IS the change. It cannot break the running app:
-// the list was taken from the collections the client actually touches
-// (`db.subscribe` / `db.get` / `db.upsert` / `db.delete` in
-// src/firebase.js, which is the only Firestore entry point in the repo —
-// pipeline/ and api/ never reach Firestore), so anything newly denied is
-// by construction something no code path here reads or writes. Data in
-// such a collection is untouched, just unreachable until a line is added.
+// So the enumeration below IS the change. The list was taken from the
+// collections the client actually touches (`db.subscribe` / `db.get` /
+// `db.upsert` / `db.delete` in src/firebase.js, which is the only
+// Firestore entry point in the repo — pipeline/ and api/ never reach
+// Firestore), so anything newly denied is by construction something no
+// code path here reads or writes. Data in such a collection is untouched,
+// just unreachable until a line is added.
 //
 // Deploy with:  firebase deploy --only firestore:rules
 //
@@ -52,34 +67,52 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // No identity exists to check (see above). Named rather than inlined so
-    // that the day sign-in lands, there is exactly one place to change.
+    // Reading is open to anyone with the app — a shared leaderboard link,
+    // the push service worker, a phone that has not signed in yet.
     function isOpen() {
       return true;
     }
 
+    // Writing needs an account. One predicate, named, so tightening it
+    // further (to a director lookup, say) is a one-line change here rather
+    // than twenty edits below.
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
     // ── Tournament data ───────────────────────────────────────────
     // Written by the director through the Admin tabs, read by everyone.
-    match /bc_players/{doc}            { allow read, write: if isOpen(); }
-    match /bc_courses/{doc}            { allow read, write: if isOpen(); }
-    match /bc_rounds/{doc}             { allow read, write: if isOpen(); }
-    match /bc_matches/{doc}            { allow read, write: if isOpen(); }
+    match /bc_players/{doc}            { allow read: if isOpen();
+                                         allow write: if isSignedIn(); }
+    match /bc_courses/{doc}            { allow read: if isOpen();
+                                         allow write: if isSignedIn(); }
+    match /bc_rounds/{doc}             { allow read: if isOpen();
+                                         allow write: if isSignedIn(); }
+    match /bc_matches/{doc}            { allow read: if isOpen();
+                                         allow write: if isSignedIn(); }
     // Playing groups — who tees off together, one document per round.
     // Group i goes off at slot i of that round's `tee_time` list; see
     // src/lib/groups.js.
-    match /bc_groups/{doc}             { allow read, write: if isOpen(); }
-    match /bc_tee_assignments/{doc}    { allow read, write: if isOpen(); }
-    match /bc_hcp_overrides/{doc}      { allow read, write: if isOpen(); }
+    match /bc_groups/{doc}             { allow read: if isOpen();
+                                         allow write: if isSignedIn(); }
+    match /bc_tee_assignments/{doc}    { allow read: if isOpen();
+                                         allow write: if isSignedIn(); }
+    match /bc_hcp_overrides/{doc}      { allow read: if isOpen();
+                                         allow write: if isSignedIn(); }
     // Frozen per-round handicaps. Written by the auto-lock on the first
     // score of a round as well as by the director; see src/lib/roundLocks.js.
-    match /bc_round_locks/{doc}        { allow read, write: if isOpen(); }
-    match /bc_settings/{doc}           { allow read, write: if isOpen(); }
-    match /bc_tournament_settings/{doc} { allow read, write: if isOpen(); }
-    match /bc_editions/{doc}           { allow read, write: if isOpen(); }
+    match /bc_round_locks/{doc}        { allow read: if isOpen();
+                                         allow write: if isSignedIn(); }
+    match /bc_settings/{doc}           { allow read: if isOpen();
+                                         allow write: if isSignedIn(); }
+    match /bc_tournament_settings/{doc} { allow read: if isOpen();
+                                         allow write: if isSignedIn(); }
+    match /bc_editions/{doc}           { allow read: if isOpen();
+                                         allow write: if isSignedIn(); }
 
     // ── The archive ───────────────────────────────────────────────
-    // Past tournaments, one document per year. APPEND-ONLY: anyone may add
-    // a year, nobody may change or remove one.
+    // Past tournaments, one document per year. APPEND-ONLY: a signed-in
+    // account may add a year, nobody may change or remove one.
     //
     // The app only ever subscribes to this collection (App.jsx, the
     // bc_historical listener) and has no code path that writes it, so the
@@ -92,23 +125,30 @@ service cloud.firestore {
     // world-writable client cannot quietly rewrite or delete it.
     //
     // To correct a year already loaded, allow update for the one run:
-    //   allow update: if isOpen();
-    match /bc_historical/{doc}         { allow read, create: if isOpen();
+    //   allow update: if isSignedIn();
+    match /bc_historical/{doc}         { allow read: if isOpen();
+                                         allow create: if isSignedIn();
                                          allow update, delete: if false; }
 
     // ── Live scoring ──────────────────────────────────────────────
     // Written by players from the Scoring tab, so these can never be
     // director-only even once sign-in exists.
-    match /bc_hole_scores/{doc}        { allow read, write: if isOpen(); }
-    match /bc_skins/{doc}              { allow read, write: if isOpen(); }
-    match /bc_ctp/{doc}                { allow read, write: if isOpen(); }
+    match /bc_hole_scores/{doc}        { allow read: if isOpen();
+                                         allow write: if isSignedIn(); }
+    match /bc_skins/{doc}              { allow read: if isOpen();
+                                         allow write: if isSignedIn(); }
+    match /bc_ctp/{doc}                { allow read: if isOpen();
+                                         allow write: if isSignedIn(); }
     // Card signatures and attestations — one document per signed card. See
     // src/lib/cardSigs. Written by players from the Scoring tab (sign,
     // attest, unsign) and by the director's force-attest, so it belongs in
     // this half of the list rather than with the director-owned data.
-    match /bc_card_sigs/{doc}          { allow read, write: if isOpen(); }
+    match /bc_card_sigs/{doc}          { allow read: if isOpen();
+                                         allow write: if isSignedIn(); }
 
     // ── Push notification tokens ──────────────────────────────────
+    // (Read stays open here for the same reason as everywhere else; see
+    // the note below on why this is the collection to tighten first.)
     // One document per (player, device). Holds an FCM registration token,
     // which is a send-to address, not a credential: possession lets you
     // push a notification to that device, not read anything from it. The
@@ -121,7 +161,8 @@ service cloud.firestore {
     // bundle, this collection lets a reader enumerate the league's devices.
     // That is the same trade the app makes everywhere else, but it is the
     // one collection where a future sign-in should tighten reads first.
-    match /bc_notification_tokens/{doc} { allow read, write: if isOpen(); }
+    match /bc_notification_tokens/{doc} { allow read: if isOpen();
+                                         allow write: if isSignedIn(); }
 
     // ── Everything else ───────────────────────────────────────────
     // Default deny. Adding a collection to the app means adding it here.

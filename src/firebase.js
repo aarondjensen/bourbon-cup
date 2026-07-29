@@ -73,7 +73,30 @@ const _resolveFirebaseConfig = () => {
   return cfg;
 };
 
-const FIREBASE_CONFIG = _resolveFirebaseConfig();
+// ── The auth handler's origin ───────────────────────────────────────
+// `authDomain` is the origin that hosts Firebase's OAuth handler page, and
+// by default that is <project>.firebaseapp.com — a different origin from
+// the app. Popup sign-in does not care. The redirect flow (which iOS
+// home-screen installs are stuck with, see lib/auth.js) does: Safari
+// partitions storage per top-level origin, so a handler on a foreign
+// origin can come back with nothing.
+//
+// Pointing this at the app's OWN domain fixes that, and costs one rewrite:
+// vercel.json proxies /__/auth/* through to the firebaseapp.com handler,
+// so `https://thebourboncup.com/__/auth/handler` serves the same page from
+// the app's origin. Set VITE_AUTH_DOMAIN to that domain in Vercel to turn
+// it on; the domain must also be listed under Firebase console →
+// Authentication → Settings → Authorized domains.
+//
+// It is a single, separate override rather than part of the all-or-nothing
+// six above because it is orthogonal: it changes where sign-in is served
+// from, not which project the data lives in. Unset, everything behaves as
+// it always has.
+const FIREBASE_CONFIG = (() => {
+  const cfg = _resolveFirebaseConfig();
+  const override = (import.meta.env || {}).VITE_AUTH_DOMAIN;
+  return override ? { ...cfg, authDomain: override } : cfg;
+})();
 
 // ── Active edition pointer ──────────────────────────────────────────
 // Every query and write is namespaced by `tournament_id` so multiple
@@ -157,14 +180,24 @@ export const setActiveTournamentId = (id, namespaced = false) => {
 export const tournamentFilter = () => [{ field: "tournament_id", op: "==", value: TOURNAMENT_ID }];
 
 // ── User session ────────────────────────────────────────────────────
-// The signed-in user (any player OR the director) is cached in sessionStorage
-// so a reload does NOT dump them back to the login / select-player screen.
-// This matters most for two reloads the app does itself:
-//   • pull-to-refresh, which hard-reloads to pick up a newly-shipped bundle,
-//   • switching editions.
-// Without this, every such reload logged everyone out. sessionStorage (not
-// localStorage) is deliberate: the session lasts for the browser tab, not
-// forever on a shared device.
+// WHO is signed in is owned by Firebase Auth (src/lib/auth.js), which
+// persists it in IndexedDB and hands it back asynchronously a moment after
+// startup. WHICH PLAYER that account is lives on the roster document
+// (bc_players.auth_uid), which arrives a moment after THAT, over the
+// Firestore subscription.
+//
+// This cache exists only to cover those two moments. Without it the app
+// would render the sign-in screen, then the claim screen, then finally the
+// leaderboard on every cold start — a flicker that looks exactly like
+// being logged out, which is the complaint this whole feature answers.
+// So the last known (account → player) pairing is written here and used
+// on the next start until the live data confirms or replaces it. It is
+// never trusted on its own: the entry carries the `auth_uid` it belongs
+// to, and is ignored unless Firebase reports that same uid signed in.
+//
+// localStorage, not sessionStorage: sessionStorage is scoped to the tab
+// and is discarded when the home-screen app is closed, which is precisely
+// the reload this is here to survive.
 export const USER_SESSION_KEY = "bc_user";
 
 // Generic director identity used to BOOTSTRAP setup — an empty roster (no
@@ -174,22 +207,26 @@ export const BOOTSTRAP_DIRECTOR = { player_id: "bootstrap_director", name: "Dire
 
 export const readUserSession = () => {
   try {
-    if (typeof sessionStorage === "undefined") return null;
-    const raw = sessionStorage.getItem(USER_SESSION_KEY);
+    if (typeof localStorage === "undefined") return null;
+    const raw = localStorage.getItem(USER_SESSION_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 };
 
 export const writeUserSession = (user) => {
   try {
-    if (typeof sessionStorage === "undefined") return;
-    if (user) sessionStorage.setItem(USER_SESSION_KEY, JSON.stringify(user));
-    else sessionStorage.removeItem(USER_SESSION_KEY);
+    if (typeof localStorage === "undefined") return;
+    if (user) localStorage.setItem(USER_SESSION_KEY, JSON.stringify(user));
+    else localStorage.removeItem(USER_SESSION_KEY);
   } catch { /* blocked storage */ }
 };
 
 const _app = initializeApp(FIREBASE_CONFIG);
 const _db = getFirestore(_app);
+
+// The initialized app, for the one other module that needs it: lib/auth.js
+// builds the Auth instance from it. Everything else goes through `db`.
+export const firebaseApp = _app;
 
 export const db = {
   _q: (col, filters = []) => {

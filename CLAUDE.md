@@ -51,6 +51,33 @@ eventually editing while the other is running a round.
   `.claude/settings.local.json` are gitignored; the secrets in `api/*.js` are
   set in Vercel, not in the repo.
 
+## Sign-in
+
+People sign in with Google or Apple (`src/lib/auth.js`) and then claim a name
+off the roster exactly once (`src/lib/accounts.js`, which stores the uid on the
+`bc_players` document). Firebase persists the session in IndexedDB, so it
+survives closing the app — the old tap-a-player screen kept identity in
+sessionStorage, which is why reopening the app always asked again.
+
+Things that will bite you:
+
+- **Neither provider works until it is enabled in the Firebase console**
+  (Authentication → Sign-in method). Google is one toggle. Apple needs an
+  Apple Developer Program membership — a Services ID, a key and the team id —
+  and the Services ID must list
+  `https://the-bourbon-cup.firebaseapp.com/__/auth/handler` as a return URL.
+- **Every origin you sign in from must be an authorized domain** (Authentication
+  → Settings). That includes `localhost` and any Vercel preview URL you actually
+  test sign-in on, or you get `auth/unauthorized-domain`.
+- **A scratch Firebase project needs its own providers enabled**, or the dev
+  server can read data but nobody can log into it.
+- **Deploy `firestore.rules` after the app, never before.** Writes now require
+  `request.auth`; a phone still running the old anonymous bundle fails every
+  write silently if the rules land first.
+- The director escape hatch (`DIRECTOR_CODE`, typed on the claim screen) still
+  exists for bootstrapping an edition with an empty roster. It is not a
+  password — you are already signed in by the time you can reach it.
+
 ## The api/ handlers during local dev
 
 `api/*.js` are Vercel serverless functions and do not run under `npm run dev`.
