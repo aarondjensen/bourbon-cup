@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, HOLE_BANNER, FS, segThumb, segTrack, readSafeAreaBottom, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor, VP_DROP, VP_DROP_BOTTOM } from "./theme";
+import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, HOLE_BANNER, FS, segThumb, segTrack, readSafeAreaBottom, readVpDrop, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor, VP_DROP, VP_DROP_BOTTOM } from "./theme";
 import { playerLookup } from "./lib/players";
 import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, BOOTSTRAP_DIRECTOR } from "./firebase";
 import { PROVIDERS, signIn, signOutUser, onAuthUser, consumeRedirectResult, isCancelled } from "./lib/auth";
@@ -81,12 +81,40 @@ import { useHoleAdvance } from "./lib/useHoleAdvance";
 // the nav an in-flow flex child; the bar ended up mis-seated on real
 // devices. The fixed bar is the known-good part — this changes only how
 // much of the inset the padding takes.)
+//
+// ── The drop has to be in here too ────────────────────────────────
+// The bar is `bottom: VP_DROP_BOTTOM`, so it hangs VP_DROP px below the
+// layout viewport's bottom edge (see VP_DROP in theme.js). Where that drop is
+// RIGHT, those px are real screen — the bare band a short viewport leaves —
+// and the labels are fine sitting above a 23px padding.
+//
+// Where it is WRONG they are not screen at all, and the bar's whole bottom
+// VP_DROP px is off the display. That is this report: the labels are sliced
+// through their middle and the active tab's underline is gone entirely.
+// Measured in Chromium at a 47px drop, the rule was cut off by 14px and the
+// label by 7px; at 62px, by 29px and 22px.
+//
+// And the drop CAN be wrong, because the two standalone modes it is trying to
+// tell apart are not fully distinguishable: screen.height - innerHeight is
+// non-zero in both of them (the status bar is missing from innerHeight either
+// way), so a non-zero top inset is the only discriminator left — and an
+// installed PWA on a cutout Android phone has one while its layout viewport
+// already ends at the bottom of the glass.
+//
+// So don't make the labels depend on that guess being right. paddingBottom is
+// the only thing holding them up; absorb the drop there first, and clear the
+// home indicator from what's left. Then a wrong drop costs a taller bar
+// instead of an unreadable one, which is the direction to fail in.
+//
+// VP_DROP is 0px in a browser tab, on a desktop, and on a correctly installed
+// icon, so this term vanishes on every device that was already right: those
+// still compute exactly inset * 0.5 + 6.
 const NAV_INSET_SHARE = 0.5;
 const NAV_PAD_BASE = 6;
-const NAV_SAFE_PAD = `calc(env(safe-area-inset-bottom, 0px) * ${NAV_INSET_SHARE} + ${NAV_PAD_BASE}px)`;
+const NAV_SAFE_PAD = `calc(${VP_DROP} + env(safe-area-inset-bottom, 0px) * ${NAV_INSET_SHARE} + ${NAV_PAD_BASE}px)`;
 // The same figure as a number, for the spacer's floor below. One source, so
 // the reserved clearance cannot describe a bar of a different height.
-const navPadPx = (inset) => Math.round(inset * NAV_INSET_SHARE) + NAV_PAD_BASE;
+const navPadPx = (inset, drop = 0) => drop + Math.round(inset * NAV_INSET_SHARE) + NAV_PAD_BASE;
 
 // Where a dismissed "ready to finalize" notification is remembered, per
 // edition — TOURNAMENT_ID is a live binding (firebase.js reassigns it when
@@ -4605,12 +4633,17 @@ export default function App() {
   // clearance is never less than the bar's own minimum — a 56px tap target
   // plus navPadPx of this inset, plus the 8px gap.
   const [safeBottom, setSafeBottom] = useState(0);
+  // The viewport drop, as a number, for the same floor — the bar's padding
+  // now carries it (see NAV_SAFE_PAD), so a floor that left it out would
+  // describe a bar shorter than the one on screen.
+  const [vpDrop, setVpDrop] = useState(0);
   useEffect(() => {
     const el = navRef.current;
     if (!el) return;
     const measure = () => {
       setNavH(Math.ceil(el.getBoundingClientRect().height));
       setSafeBottom(Math.ceil(readSafeAreaBottom()));
+      setVpDrop(Math.ceil(readVpDrop()));
     };
     measure();
     // Viewport events as well as the observer: a safe-area inset can change
@@ -5682,7 +5715,7 @@ export default function App() {
             a declaration that can afford to go missing. */}
         <div className="bc-nav-spacer" aria-hidden="true" style={{
           flexShrink: 0,
-          height: Math.max(navH + 8, 56 + navPadPx(safeBottom) + 8),
+          height: Math.max(navH + 8, 56 + navPadPx(safeBottom, vpDrop) + 8),
         }} />
       </div>
 
