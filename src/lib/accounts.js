@@ -57,15 +57,25 @@ export const ACCOUNTS_COL = "bc_accounts";
 export const SECRETS_COL = "bc_secrets";
 export const ACCESS_DOC = "access";
 
-// ── Is this account through the door? ───────────────────────────────
-// Three answers, not two: `true`, `false`, and a thrown error. A failed
-// read is NOT "no membership" — treating a dropped connection as a locked
-// door would put the password screen in front of somebody who is already
-// through it, on the first tee, with no signal.
-export async function isMember(uid) {
-  if (!uid) return false;
-  return !!(await db.getById(ACCOUNTS_COL, uid));
+// ── Is this account through the door, and who is it? ────────────────
+// Returns the membership document, or null for "signed in, not a member".
+// Errors are NOT caught: a failed read is not the same answer as "no
+// membership", and treating a dropped connection as a locked door would
+// put the password screen in front of somebody who is already through it,
+// on the first tee, with no signal.
+//
+// The document also carries `is_director`, which is the only thing in the
+// project that grants Admin. No client can set it — the rules reject a
+// create that includes it and deny updates outright — so it arrives
+// exactly one way: a human editing the document in the Firebase console.
+// The app reads it here rather than trusting the roster's crown, so the
+// Admin tab can never appear for somebody whose writes would be refused.
+export async function readMembership(uid) {
+  if (!uid) return null;
+  return await db.getById(ACCOUNTS_COL, uid);
 }
+
+export const isDirectorAccount = (membership) => membership?.is_director === true;
 
 // ── Presenting the password ─────────────────────────────────────────
 // The code travels as a field on the membership document because that is

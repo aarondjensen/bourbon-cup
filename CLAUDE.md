@@ -70,18 +70,40 @@ app and talking to Firestore directly, which a client-side password check
 would not.
 
 - Set or change it in Admin → Tournament → Access, where **Show** reveals the
-  current one. Saving it blank turns the requirement off.
-- Reading the code is members-only, and that is the whole of the protection —
-  a stranger who could read it would not need to be told it. It is readable by
-  any of the twelve, not just a director; rules have no director predicate.
-  This concedes little, because every `bc_accounts` document already stores the
-  code its owner typed and is readable by that owner.
+  current one. Saving it blank turns the requirement off. Directors only, read
+  and write.
 - **A blank or missing code means the door is open.** That is the bootstrap —
   without it the first membership could never be created and the project would
   be locked to its own owners.
 - Locking somebody out means deleting their `bc_accounts` document in the
   Firebase console. Rotating the password does not evict anybody already
   through; existing memberships are never re-checked.
+
+## Directors
+
+**Set `is_director: true` on the person's `bc_accounts/{uid}` document in the
+Firebase console.** That is the only way, on purpose: the rules reject a
+membership created with the field and deny updates outright, so no client can
+grant it — not the app, not a phone, not somebody talking to Firestore with the
+public config. The app reads the same flag to decide whether the Admin tab
+exists, so a phone can never show an Admin tab whose writes would be refused.
+
+The crown in Admin → Players is a **label**. It puts 👑 next to a name and
+grants nothing. Rules cannot check it — finding the roster row whose `auth_uid`
+is yours would need a query, and rules only fetch paths they can construct.
+
+What that split buys: a member can do everything a player does from a tee box —
+scores, skins, CTPs, card signatures, the round lock, their own push token, and
+the one narrow update that claims their own name. Everything AdminView owns —
+roster, rounds, matches, courses, groups, tee sheets, settings, editions, the
+password — needs director.
+
+- **Set the flag before deploying rules that depend on it.** Until at least one
+  membership carries it, nobody can edit the tournament at all; the way back is
+  the console, which is where the flag lives anyway.
+- The director escape hatch on the claim screen grants no Admin any more. It
+  gets you into an edition with an empty roster; the flag decides what is there
+  when you arrive.
 - `firestore.rules.test.mjs` covers all of this against the emulator. Run it
   before deploying a rules change.
 

@@ -33,11 +33,22 @@ const check = async (name, fn) => {
   catch (e) { results.push(["FAIL", name, e?.message?.slice(0, 120)]); }
 };
 
+// alice is the director throughout, mallory the stranger, pete an ordinary
+// member. Directorship is granted the only way it can be — out of band,
+// with rules disabled, exactly as a human editing the document in the
+// Firebase console does it.
 const aliceDb = () => env.authenticatedContext("alice").firestore();
 const malloryDb = () => env.authenticatedContext("mallory").firestore();
+const peteDb = () => env.authenticatedContext("pete").firestore();
 const anonDb = () => env.unauthenticatedContext().firestore();
 
 const member = { uid: "alice", email: "a@example.com", joined_at: "now" };
+
+const grantDirector = (uid) => env.withSecurityRulesDisabled(ctx =>
+  setDoc(doc(ctx.firestore(), `bc_accounts/${uid}`), { is_director: true }, { merge: true }));
+
+const seed = (path, data) => env.withSecurityRulesDisabled(ctx =>
+  setDoc(doc(ctx.firestore(), path), data));
 
 // ── With NO password configured (the bootstrap state) ───────────────
 await env.clearFirestore();
@@ -54,6 +65,71 @@ await check("no password set: membership can be created with a blank code", () =
 await check("member can now write a score", () =>
   assertSucceeds(setDoc(doc(aliceDb(), "bc_hole_scores/x"), { v: 1 })));
 
+// ── Director is a flag no client can set ────────────────────────────
+await check("a member cannot make themselves a director on the way in", async () => {
+  await assertFails(setDoc(doc(peteDb(), "bc_accounts/pete"), { uid: "pete", code: "", is_director: true }));
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_accounts/pete"), { uid: "pete", code: "" }));
+});
+
+await check("a member cannot promote themselves afterwards", () =>
+  assertFails(setDoc(doc(peteDb(), "bc_accounts/pete"), { uid: "pete", is_director: true }, { merge: true })));
+
+await check("an ordinary member cannot touch what Admin owns", async () => {
+  await assertFails(setDoc(doc(peteDb(), "bc_players/p9"), { name: "Ringer" }));
+  await assertFails(setDoc(doc(peteDb(), "bc_rounds/r1"), { par: 72 }));
+  await assertFails(setDoc(doc(peteDb(), "bc_matches/m1"), { teamA: [] }));
+  await assertFails(setDoc(doc(peteDb(), "bc_courses/c1"), { name: "Pete's" }));
+  await assertFails(setDoc(doc(peteDb(), "bc_groups/g1"), { players: [] }));
+  await assertFails(setDoc(doc(peteDb(), "bc_settings/team_names"), { teamA: "x" }));
+  await assertFails(setDoc(doc(peteDb(), "bc_editions/bc_2027"), { year: 2027 }));
+  await assertFails(setDoc(doc(peteDb(), "bc_tee_assignments/t1"), { a: 1 }));
+  await assertFails(setDoc(doc(peteDb(), "bc_hcp_overrides/h1"), { a: 1 }));
+  await assertFails(setDoc(doc(peteDb(), "bc_tournament_settings/s1"), { skins_pot: 1 }));
+});
+
+await check("an ordinary member CAN still do everything a player does", async () => {
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_hole_scores/p9h1"), { v: 4 }));
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_ctp/r1h7"), { player_id: "p9" }));
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_skins/r1h3"), { player_id: "p9" }));
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_card_sigs/r1m1"), { signed_by: "p9" }));
+  // The auto-lock fires on the first score of a round, from a player's phone.
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_round_locks/r1"), { state: "open" }));
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_notification_tokens/pete_x"), { token: "t" }));
+});
+
+await grantDirector("alice");
+
+await check("a director can write what Admin owns", async () => {
+  await assertSucceeds(setDoc(doc(aliceDb(), "bc_players/p9"), { name: "Pete C", player_id: "p9" }));
+  await assertSucceeds(setDoc(doc(aliceDb(), "bc_rounds/r1"), { par: 72 }));
+  await assertSucceeds(setDoc(doc(aliceDb(), "bc_settings/team_names"), { teamA: "Mash" }));
+});
+
+// ── Claiming a name: the one roster write an ordinary member makes ──
+await check("a member can claim an unclaimed name", () =>
+  assertSucceeds(setDoc(doc(peteDb(), "bc_players/p9"),
+    { auth_uid: "pete", auth_email: "p@example.com", auth_provider: "google.com", auth_linked_at: "now" }, { merge: true })));
+
+await check("...but cannot change anything else while doing it", () =>
+  assertFails(setDoc(doc(peteDb(), "bc_players/p9"),
+    { auth_uid: "pete", handicap_index: 0 }, { merge: true })));
+
+await check("...cannot claim in somebody else's name", () =>
+  assertFails(setDoc(doc(peteDb(), "bc_players/p9"),
+    { auth_uid: "mallory" }, { merge: true })));
+
+await check("...cannot crown themselves through the claim", () =>
+  assertFails(setDoc(doc(peteDb(), "bc_players/p9"),
+    { auth_uid: "pete", isDirector: true }, { merge: true })));
+
+await check("...and cannot steal a name somebody else has claimed", async () => {
+  await seed("bc_players/p10", { player_id: "p10", name: "Taken", auth_uid: "alice" });
+  await assertFails(setDoc(doc(peteDb(), "bc_players/p10"), { auth_uid: "pete" }, { merge: true }));
+});
+
+await check("a director can unlink a claim", () =>
+  assertSucceeds(setDoc(doc(aliceDb(), "bc_players/p10"), { auth_uid: null }, { merge: true })));
+
 await check("member cannot re-write their own membership", () =>
   assertFails(setDoc(doc(aliceDb(), "bc_accounts/alice"), { ...member, code: "" })));
 
@@ -66,11 +142,17 @@ await check("member can read their own membership", () =>
 await check("nobody can read somebody else's membership", () =>
   assertFails(getDoc(doc(malloryDb(), "bc_accounts/alice"))));
 
-await check("a member can set the password", () =>
+await check("a director can set the password", () =>
   assertSucceeds(setDoc(doc(aliceDb(), "bc_secrets/access"), { code: "bourbon2026" })));
 
+await check("an ordinary member cannot set the password", () =>
+  assertFails(setDoc(doc(peteDb(), "bc_secrets/access"), { code: "petes" })));
+
+await check("an ordinary member cannot READ the password", () =>
+  assertFails(getDoc(doc(peteDb(), "bc_secrets/access"))));
+
 // ── With a password configured ──────────────────────────────────────
-await check("a member can read the password back (Admin shows it)", () =>
+await check("a director can read the password back (Admin shows it)", () =>
   assertSucceeds(getDoc(doc(aliceDb(), "bc_secrets/access"))));
 
 await check("a signed-in non-member CANNOT read the password", () => {

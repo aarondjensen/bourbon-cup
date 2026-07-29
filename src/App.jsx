@@ -3,7 +3,7 @@ import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, FS, segThumb, segTrack, r
 import { playerLookup } from "./lib/players";
 import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, BOOTSTRAP_DIRECTOR } from "./firebase";
 import { PROVIDERS, signIn, signOutUser, onAuthUser, consumeRedirectResult, isCancelled } from "./lib/auth";
-import { claimPlayer, linkedPlayer, isClaimed, accountLabel, unlinkPatch, isMember, joinWithCode, setAccessCode, readAccessCode } from "./lib/accounts";
+import { claimPlayer, linkedPlayer, isClaimed, accountLabel, unlinkPatch, readMembership, isDirectorAccount, joinWithCode, setAccessCode, readAccessCode } from "./lib/accounts";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
   resolveTeams, DEFAULT_TEAM_NAMES, TOURNAMENT_TITLE, TOURNAMENT_LOCATION,
@@ -2212,7 +2212,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               const oldEff = oldOv != null ? oldOv : (parseFloat(p.handicap_index) || 0);
               const newEff = newOv != null ? newOv : (parseFloat(editingPlayer.hi) || 0);
               let impact = oldEff !== newEff ? "\n\n" + describeHiChangeImpact(roundLocks, [1,2,3,4]).text : "";
-              if (dirChanged && newDir) impact += "\n\nDirector access grants full admin control (setup, scoring, editions).";
+              if (dirChanged && newDir) impact += "\n\nThis only shows the crown. Admin access is granted on their account in the Firebase console (is_director), which is the only thing the security rules honour.";
               if (await confirm({ title: "Confirm changes", message: changes.join("\n") + impact })) {
                 onUpdatePlayer({ ...p, name: newName, first_name: first, last_name: last, handicap_index: parseFloat(editingPlayer.hi) || 0, hi_override: newOv, isDirector: newDir, ...ghinFields, ...(cutSignIn ? unlinkPatch() : {}) });
               }
@@ -2237,7 +2237,13 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     <label style={{ flex: 1, minWidth: 0 }}><span style={lbl}>Nickname</span>
                       <input value={editingPlayer.nick} placeholder={defaultNick} onChange={e => set({ nick: e.target.value })} style={inp} /></label>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <span style={lbl}>Director</span>
+                      {/* A label, not a grant. Admin access comes from the
+                          is_director flag on the account's membership
+                          document, set in the Firebase console, because
+                          that is the only thing the security rules can
+                          check — see firestore.rules. This toggle puts the
+                          crown next to a name and nothing more. */}
+                      <span style={lbl} title="Shows the crown. Admin access is granted on the account, in the Firebase console.">Director</span>
                       <button type="button" onClick={() => set({ dir: !editingPlayer.dir })}
                         style={{ fontSize: FS.body, fontWeight: 700, padding: "7px 10px", borderRadius: 8, cursor: "pointer", width: "100%", boxSizing: "border-box", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                           border: `1px solid ${editingPlayer.dir ? BC.amber : BC.bdr}`, background: editingPlayer.dir ? BC.amber + ALPHA.wash : "transparent", color: editingPlayer.dir ? BC.amberInk : BC.t2 }}>
@@ -3557,7 +3563,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     onChange={e => f.set(e.target.value)}
                     onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
                     placeholder={f.ph}
-                    style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.body, fontWeight: 700, outline: "none", fontFamily: FONT }}
+                    // FS.lead for the same reason as the Access field
+                    // below — these are free-text inputs, and under 16px
+                    // iOS zooms in on focus and never comes back out.
+                    style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.lead, fontWeight: 700, outline: "none", fontFamily: FONT }}
                   />
                 </div>
               ))}
@@ -3623,7 +3632,11 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
               placeholder="New password"
               autoCapitalize="none" autoCorrect="off" spellCheck={false}
-              style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.body, fontWeight: 700, outline: "none", fontFamily: FONT }}
+              // FS.lead, not FS.body: iOS Safari zooms the page when a
+              // focused input is under 16px and does not zoom back out on
+              // blur, leaving the director stranded at 2x on a form they
+              // have to finish. See the note on the scale in theme.js.
+              style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.lead, fontWeight: 700, outline: "none", fontFamily: FONT }}
             />
             <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 6, lineHeight: 1.4 }}>
               Asked for once per person, after they sign in. Save it blank to turn it off. Anyone already through the door stays through.
@@ -4215,11 +4228,14 @@ export default function App() {
   // gap between Firebase answering and Firestore answering; see firebase.js.
   const cachedSession = useRef(readUserSession());
 
-  // Whether this account has presented the tournament password. `undefined`
-  // while the answer is in flight, for the same reason authUser is: showing
-  // the password screen to somebody who is already through it, because a
-  // read had not landed yet, would be its own bug.
-  const [member, setMember] = useState(undefined);
+  // The membership document, for an account that has presented the
+  // tournament password — and the only place Admin access comes from, via
+  // its `is_director` flag. `undefined` while the answer is in flight, for
+  // the same reason authUser is: showing the password screen to somebody
+  // who is already through it, because a read had not landed yet, would be
+  // its own bug. null means signed in but not a member.
+  const [membership, setMembership] = useState(undefined);
+  const member = membership === undefined ? undefined : !!membership;
 
   useEffect(() => {
     // The far side of the redirect flow (lib/auth.js). A SUCCESSFUL redirect
@@ -4239,26 +4255,28 @@ export default function App() {
   // cannot tell, it falls to the password screen rather than hanging
   // forever: that screen re-checks membership on submit, so somebody who
   // is already through gets waved past as soon as the network returns.
+  const loadMembership = useCallback(async (uid) => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try { return { ok: true, doc: await readMembership(uid) }; }
+      catch (e) {
+        console.error("[gate] membership check", e);
+        await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
+      }
+    }
+    return { ok: false, doc: null };
+  }, []);
+
   useEffect(() => {
     if (authUser === undefined) return;
-    if (!authUser) { setMember(false); return; }
+    if (!authUser) { setMembership(null); return; }
     let live = true;
-    setMember(undefined);
+    setMembership(undefined);
     (async () => {
-      for (let attempt = 0; attempt < 3 && live; attempt++) {
-        try {
-          const ok = await isMember(authUser.uid);
-          if (live) setMember(ok);
-          return;
-        } catch (e) {
-          console.error("[gate] membership check", e);
-          await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
-        }
-      }
-      if (live) setMember(false);
+      const { doc } = await loadMembership(authUser.uid);
+      if (live) setMembership(doc);
     })();
     return () => { live = false; };
-  }, [authUser]);
+  }, [authUser, loadMembership]);
   // Default landing view. Leaderboard is the right home base — the
   // most-glanced screen during a round, and the natural place for a
   // user reopening the app to check current state.
@@ -4333,22 +4351,38 @@ export default function App() {
   // carries. Everything downstream — the admin tab, whose card is whose,
   // the attest badge — reads this, exactly as it read the tapped player
   // before there were accounts, so nothing else had to change.
+  // Admin access rides on the MEMBERSHIP flag, never on the roster's crown.
+  // The crown is a label the director sets in Admin → Players; the flag is
+  // set in the Firebase console and is the only thing the security rules
+  // will honour. Reading the same source the rules read is what stops the
+  // app from ever offering an Admin tab whose every write would be refused.
+  const isDirectorUser = isDirectorAccount(membership);
+
   const user = useMemo(() => {
     if (!authUser) return null;
     const linked = linkedPlayer(tPlayers, authUser.uid);
-    if (linked) return { ...linked, isDirector: !!linked.isDirector };
+    if (linked) return { ...linked, isDirector: isDirectorUser };
 
     // The cache is only usable if it belongs to THIS account. The one
     // exception is the marker an edition switch writes just before
     // reloading (lib/editions.js), which predates knowing the uid.
     const cached = cachedSession.current;
     const mine = cached && (!cached.auth_uid || cached.auth_uid === authUser.uid) ? cached : null;
-    if (bootstrapDirector || mine?.player_id === BOOTSTRAP_DIRECTOR.player_id) return BOOTSTRAP_DIRECTOR;
+    // The bootstrap identity carries isDirector: true — it predates there
+    // being anywhere else to get the answer. It does not get to grant
+    // anything now: typing the director code on an empty roster gets you
+    // into the app, and the console flag decides whether Admin is there
+    // when you arrive. Otherwise the code would offer a tab whose every
+    // write the rules would refuse.
+    if (bootstrapDirector || mine?.player_id === BOOTSTRAP_DIRECTOR.player_id) {
+      return { ...BOOTSTRAP_DIRECTOR, isDirector: isDirectorUser };
+    }
     // Roster still in flight: hold the last known identity rather than
     // flash the claim screen at somebody who claimed a name months ago.
-    if (!playersLoaded && mine) return mine;
+    // The cached crown is not trusted either — same reason.
+    if (!playersLoaded && mine) return { ...mine, isDirector: isDirectorUser };
     return null;
-  }, [authUser, tPlayers, playersLoaded, bootstrapDirector]);
+  }, [authUser, tPlayers, playersLoaded, bootstrapDirector, isDirectorUser]);
 
   // Keep that cache current. What gets written is the live roster row, so
   // it can never be staler than what is on screen — and it is cleared the
@@ -5157,7 +5191,12 @@ export default function App() {
   if (authUser === undefined || (authUser && member === undefined) || (authUser && member && !user && !playersLoaded)) return <LoginSplash {...chrome} />;
   if (!authUser) return <SignInScreen {...chrome} initialError={authError} />;
   if (!member) return (
-    <GateScreen {...chrome} authUser={authUser} onSignOut={doSignOut} onPassed={() => setMember(true)} />
+    // Re-read rather than assume: the membership document that was just
+    // created is also where Admin access is read from, and a director flag
+    // set in the console before the first sign-in would be missed by a
+    // locally-invented one.
+    <GateScreen {...chrome} authUser={authUser} onSignOut={doSignOut}
+      onPassed={async () => { const { doc } = await loadMembership(authUser.uid); setMembership(doc || { uid: authUser.uid }); }} />
   );
   if (!user) return (
     <ClaimScreen

@@ -25,13 +25,19 @@ rules_version = '2';
 // user to sign in as. If that ever needs to change, `isOpen()` is the one
 // place to change it.
 //
-// Worth being blunt about what is still true: a member can write any
-// collection listed below, not only their own player's rows. Scoring is
-// communal here — one phone posts for a group of four, the director fixes
-// anybody's card — so per-document ownership would break the actual
-// workflow before it stopped anybody. Membership is the boundary; the
-// round gate, the finalize lock and the card signatures remain the
-// client-side guards on top of it.
+// Membership is not the last word: what Admin owns — the roster, rounds,
+// matches, courses, groups, tee sheets, settings, editions and the
+// password — requires DIRECTOR on top of it, which is a flag no client can
+// set (see isDirector below). Members write the things players actually do
+// from a tee box: scores, skins, CTPs, card signatures, the round lock,
+// their own push token, and the one narrow update that claims their own
+// name off the roster.
+//
+// Within each half there is no per-document ownership, deliberately.
+// Scoring is communal — one phone posts for a group of four, the director
+// fixes anybody's card — so "only your own rows" would break the actual
+// workflow before it stopped anybody. The round gate, the finalize lock
+// and the card signatures remain the client-side guards on top.
 //
 // ── Deploying this ────────────────────────────────────────────────
 // Rules are deployed by hand and the app is not. Deploy these only once
@@ -48,16 +54,20 @@ rules_version = '2';
 // already through the door — existing memberships are never re-checked
 // against it.
 //
-// ── If you ever want director-only halves ─────────────────────────
-// The list below is already grouped into director-owned data and things
-// players write. Splitting it means a lookup against the roster:
-//   function isDirector() {
-//     return isMember() && exists(/databases/$(database)/documents/bc_players/$(...))
-//   }
-// which needs the player document id to be derivable from request.auth.uid
-// — it is not today (uid lives in a FIELD, bc_players.auth_uid), so that
-// change starts with keying the roster by uid, or with putting a director
-// flag on the membership document and denying clients the right to set it.
+// ── Making somebody a director ────────────────────────────────────
+// In the Firebase console, on their bc_accounts document: add
+// `is_director` (boolean) = true. There is no way to do it from the app,
+// by design, and the app reads the same flag to decide whether to show the
+// Admin tab at all — so the console is the single source of truth and a
+// phone can never show an Admin tab whose writes would be refused.
+//
+// The crown in Admin → Players is a LABEL, not a grant. Rules cannot check
+// it: finding the roster row whose auth_uid is yours would need a query,
+// and rules only fetch paths they can construct.
+//
+// Consequence worth knowing before deploying: until at least one
+// membership document carries the flag, nobody can edit the tournament at
+// all. Set it before the rules land, not after.
 //
 // ── What this replaces ────────────────────────────────────────────
 // Until this file, the deployed rules were a single blanket grant:
@@ -107,6 +117,30 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/bc_accounts/$(request.auth.uid));
     }
 
+    // ── Directors ─────────────────────────────────────────────────
+    // A flag on the membership document, and one that NO CLIENT CAN SET:
+    // `create` below rejects any attempt to include it, and `update` is
+    // denied outright, so the only way it gets there is a human editing
+    // the document in the Firebase console (the admin SDK bypasses these
+    // rules). That is the point — director is the one role that should not
+    // be grantable from a phone, by a stray tap or by anybody who works
+    // out what the app is talking to.
+    //
+    // It deliberately does NOT read the crown on the roster
+    // (bc_players.isDirector). Rules cannot search for the roster row whose
+    // auth_uid is yours — `get()` needs a path it can construct, and the
+    // uid lives in a field — so that crown stays a label on screen and
+    // this flag is what actually grants anything.
+    //
+    // `get(key, default)` rather than `.is_director`, so a membership
+    // document written before this existed reads as false instead of
+    // erroring the whole evaluation.
+    function isDirector() {
+      return isMember()
+        && get(/databases/$(database)/documents/bc_accounts/$(request.auth.uid))
+             .data.get('is_director', false) == true;
+    }
+
     // The password, and the deliberate hole in it. `accessCode()` reads a
     // document no client may read — rules `get()` is not subject to read
     // rules, which is the whole trick: the secret can be compared without
@@ -148,7 +182,8 @@ service cloud.firestore {
     //         somebody else's if this rule were ever loosened by accident.
     match /bc_accounts/{uid} {
       allow read: if isSignedIn() && request.auth.uid == uid;
-      allow create: if isSignedIn() && request.auth.uid == uid && codeOK();
+      allow create: if isSignedIn() && request.auth.uid == uid && codeOK()
+                    && !('is_director' in request.resource.data);
       allow update, delete: if false;
     }
 
@@ -158,50 +193,63 @@ service cloud.firestore {
     // worth nothing. `codeOK()` above compares against it regardless, since
     // rules `get()` is not subject to these read rules.
     //
-    // Members can read it, so Admin can show the director a code they have
-    // forgotten. That concedes less than it appears: every membership
-    // document already stores the code its owner typed, readable by that
-    // owner, so anybody inside the door can already recover the code they
-    // came through. The only thing this adds is that a member who joined
-    // before a rotation can see the current one — and they are already
-    // someone who can write anything in the project.
-    //
-    // Write is members-only too, so any of the twelve can rotate the code.
-    // There is no director predicate here to lean on; see the header.
+    // Directors can read it, so Admin can show one a code they have
+    // forgotten, and change it. Nobody else can do either.
     match /bc_secrets/{doc} {
-      allow read: if isMember();
-      allow write: if isMember();
+      allow read: if isDirector();
+      allow write: if isDirector();
     }
 
     // ── Tournament data ───────────────────────────────────────────
     // Written by the director through the Admin tabs, read by everyone.
-    match /bc_players/{doc}            { allow read: if isOpen();
-                                         allow write: if isMember(); }
+    // Every one of these corresponds to a screen only a director can open;
+    // the call sites were walked before gating them (src/App.jsx —
+    // onAddPlayer, onSetRound, onSetMatch, onAddCourse, onSaveGroups, the
+    // Admin save handlers, and lib/editions.js).
+
+    // The roster carries one exception, and it is the reason this block is
+    // not a one-liner: claiming a name is an ordinary member writing to a
+    // director-owned collection. It is allowed, narrowly — only the
+    // auth_* fields may change, only to the claimer's own uid, and only on
+    // a row nobody has claimed. So it cannot rename anybody, move a
+    // handicap, hand out a crown, or take a name that is already taken.
+    // The director's unlink is a plain director write and needs none of it.
+    match /bc_players/{doc} {
+      allow read: if isOpen();
+      allow update: if isMember()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['auth_uid', 'auth_email', 'auth_provider', 'auth_linked_at'])
+        && request.resource.data.auth_uid == request.auth.uid
+        && (!('auth_uid' in resource.data)
+            || resource.data.auth_uid == null
+            || resource.data.auth_uid == request.auth.uid);
+      allow write: if isDirector();
+    }
     match /bc_courses/{doc}            { allow read: if isOpen();
-                                         allow write: if isMember(); }
+                                         allow write: if isDirector(); }
     match /bc_rounds/{doc}             { allow read: if isOpen();
-                                         allow write: if isMember(); }
+                                         allow write: if isDirector(); }
     match /bc_matches/{doc}            { allow read: if isOpen();
-                                         allow write: if isMember(); }
+                                         allow write: if isDirector(); }
     // Playing groups — who tees off together, one document per round.
     // Group i goes off at slot i of that round's `tee_time` list; see
     // src/lib/groups.js.
     match /bc_groups/{doc}             { allow read: if isOpen();
-                                         allow write: if isMember(); }
+                                         allow write: if isDirector(); }
     match /bc_tee_assignments/{doc}    { allow read: if isOpen();
-                                         allow write: if isMember(); }
+                                         allow write: if isDirector(); }
     match /bc_hcp_overrides/{doc}      { allow read: if isOpen();
-                                         allow write: if isMember(); }
+                                         allow write: if isDirector(); }
     // Frozen per-round handicaps. Written by the auto-lock on the first
     // score of a round as well as by the director; see src/lib/roundLocks.js.
     match /bc_round_locks/{doc}        { allow read: if isOpen();
                                          allow write: if isMember(); }
     match /bc_settings/{doc}           { allow read: if isOpen();
-                                         allow write: if isMember(); }
+                                         allow write: if isDirector(); }
     match /bc_tournament_settings/{doc} { allow read: if isOpen();
-                                         allow write: if isMember(); }
+                                         allow write: if isDirector(); }
     match /bc_editions/{doc}           { allow read: if isOpen();
-                                         allow write: if isMember(); }
+                                         allow write: if isDirector(); }
 
     // ── The archive ───────────────────────────────────────────────
     // Past tournaments, one document per year. APPEND-ONLY: a signed-in
