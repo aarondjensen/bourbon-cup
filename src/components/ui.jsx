@@ -10,7 +10,7 @@
 //    • Toast           — the transient "slides down from the top" toast.
 //    • ScoreButtonRow  — the tappable par-relative score entry row.
 
-import { BC, FONT, ON_ACCENT, ON_AMBER, SHADOW, ALPHA, dimHex, FS, segThumb, segTrack } from "../theme";
+import { BC, FONT, ON_ACCENT, ON_AMBER, SHADOW, ALPHA, dimHex, inkOn, FS, segThumb, segTrack } from "../theme";
 
 
 // The rule that marks the thumb. A child rather than a border because it is
@@ -169,7 +169,18 @@ export function Toast({ message, type = "success", top = 30 }) {
 // dimensions both screens used before it was shared.
 const HOLE_NAV_SIZES = { pad: "4px 8px", gap: 6, nav: 36, num: FS.hero, label: FS.micro, side: FS.lead };
 
+// The banner's fill, exported because the hole strip's current-hole chip
+// wears the same one \u2014 it is the same fact said twice on one screen, "this
+// is the hole you are on", and the two used to say it in different colours.
+// A caller that wants the banner's look asks for HOLE_BANNER, not amberDim,
+// so the day the banner changes the chip comes with it.
+export const HOLE_BANNER = () => ({ fill: BC.amberDim, ink: inkOn(BC.amberDim) });
+
 export function HoleNavigator({ hole, par, hcp, onGo, sizes = HOLE_NAV_SIZES }) {
+  // Read at render, not at module load: BC is mutated in place on a theme
+  // toggle, and amberDim is one of the tokens whose value differs enough
+  // between the modes to change which ink reads on it.
+  const { fill, ink } = HOLE_BANNER();
   const arrow = (dir) => {
     const at = dir < 0 ? hole === 0 : hole === 17;
     return (
@@ -179,18 +190,18 @@ export function HoleNavigator({ hole, par, hcp, onGo, sizes = HOLE_NAV_SIZES }) 
         style={{
           width: 28, height: sizes.nav, borderRadius: 8, background: "none", border: "none",
           cursor: at ? "default" : "pointer",
-          color: at ? `${ON_ACCENT}${ALPHA.line}` : ON_ACCENT,
+          color: at ? `${ink}${ALPHA.line}` : ink,
           fontSize: FS.title, fontWeight: 700,
           display: "flex", alignItems: "center", justifyContent: "center",
         }}
       >{dir < 0 ? "\u2039" : "\u203a"}</button>
     );
   };
-  const cap = { fontSize: sizes.label, color: ON_ACCENT, fontWeight: 600, opacity: 0.75 };
-  const val = { fontSize: sizes.side, fontWeight: 800, color: ON_ACCENT };
+  const cap = { fontSize: sizes.label, color: ink, fontWeight: 600, opacity: 0.75 };
+  const val = { fontSize: sizes.side, fontWeight: 800, color: ink };
   return (
     <div style={{
-      background: BC.amberDim, borderRadius: 10, padding: sizes.pad, marginBottom: sizes.gap,
+      background: fill, borderRadius: 10, padding: sizes.pad, marginBottom: sizes.gap,
       display: "flex", alignItems: "center", flexShrink: 0,
     }}>
       {arrow(-1)}
@@ -201,7 +212,7 @@ export function HoleNavigator({ hole, par, hcp, onGo, sizes = HOLE_NAV_SIZES }) 
         </div>
         <div style={{ textAlign: "center" }}>
           <div style={{ ...cap, textTransform: "uppercase", letterSpacing: 1 }}>Hole</div>
-          <div style={{ fontSize: sizes.num, fontWeight: 800, color: ON_ACCENT, lineHeight: 1 }}>{hole + 1}</div>
+          <div style={{ fontSize: sizes.num, fontWeight: 800, color: ink, lineHeight: 1 }}>{hole + 1}</div>
         </div>
         <div style={{ textAlign: "center", minWidth: 32 }}>
           <div style={cap}>HCP</div>

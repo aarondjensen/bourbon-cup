@@ -202,7 +202,13 @@ export const getBCTheme = (mode, brand = null) => {
       gold: "#8a5a2b",      // SECONDARY ACCENT — bourbon brown (login title, trophy glow)
       goldGlow: "rgba(138,90,43,0.10)",
       danger: "#c1272d",    // traditional deep red
-      warn: "#c2570d",      // burnt orange
+      // Burnt orange. Unlike amber this one is only ever INK — every call
+      // site is a `color:` — so it can just be dark enough to read, no
+      // second token needed. It was #c2570d, which measured 4.07:1 on the
+      // surface it most often sits on: the 8% wash of itself behind the
+      // can't-sign note, where it is a 10px label. 4.52:1 there now, 4.79
+      // on the page, 5.00 on a card.
+      warn: "#b6520c",
       green: "#047857",     // generic positive (distinct from brand accent)
       // Handicap blue — matches MNQ's K.hcpBlue exactly so users
       // moving between the two apps see consistent visual language for
@@ -292,6 +298,20 @@ export const ON_AMBER = "#0a0804";
 // under them doesn't either. Which of the two you want is decided by the FILL,
 // never by the theme.
 export const ON_ACCENT = "#ffffff";
+
+// ── Which of the two, decided by measurement ─────────────────────
+// "Decided by the FILL, never by the theme" is easy to state and easy to
+// get wrong by hand, because a few fills DO differ between modes — amberDim
+// is #8a5f10 in light and #b8801a in dark, and those are not the same
+// decision. Hardcoding one answer for both is how the hole banner ended up
+// white-on-mid-amber at 3.42:1 in dark mode while every other amber fill in
+// the app wore the near-black.
+//
+// So: hand it the fill and it returns whichever ink reads better on it.
+// Same rule, applied per fill instead of per call site, and it keeps
+// holding when a tournament accent moves the fill somewhere new.
+export const inkOn = (fill) =>
+  contrast(ON_AMBER, fill) >= contrast(ON_ACCENT, fill) ? ON_AMBER : ON_ACCENT;
 
 // ── Type scale ──
 // The app is styled entirely with inline objects, so before this existed

@@ -43,7 +43,7 @@ import { DirectorFinalizeAlert, FinalizeRoundSheet } from "./components/Finalize
 import { MissingCardNote, SignCardSheet, SignedCardPanel } from "./components/CardSignature";
 import { NotificationSettings } from "./components/NotificationSettings";
 import { initForegroundNotifications, syncAppBadge } from "./lib/notifications";
-import { SegmentedToggle, SegRule, StickyTop, Banner, Toast, HoleNavigator, ScoreButtonRow } from "./components/ui";
+import { SegmentedToggle, SegRule, StickyTop, Banner, Toast, HoleNavigator, HOLE_BANNER, ScoreButtonRow } from "./components/ui";
 import { useConfirm } from "./lib/useConfirm";
 import { useStableCallback } from "./lib/useStableCallback";
 import { EditionSwitcher } from "./components/EditionSwitcher";
@@ -602,14 +602,21 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     const cur = h === activeHole;
     const allScored = matchPids.every(pid => getScore(pid, h) > 0);
     const partial = !allScored && matchPids.some(pid => getScore(pid, h) > 0);
+    // The current hole wears the hole banner's colours — same fill, same
+    // ink, ring included. They are the same claim made twice on one screen,
+    // "this is the hole you are on", and saying it in a bright amber chip up
+    // here and a deep one down there read as two different states rather
+    // than one. Taken from HOLE_BANNER rather than copied off it, so the
+    // pair cannot come apart the way it just did.
+    const banner = HOLE_BANNER();
     return (
       <button key={h} onClick={() => goToHole(h)} style={{
         flex: 1, height: fit.holeCell, borderRadius: allScored || cur ? 8 : 6,
         border: allScored && !cur ? `1.5px solid ${BC.amber}${ALPHA.line}` : "none",
-        background: cur ? BC.amber : allScored ? BC.amber + ALPHA.wash : partial ? BC.amber + ALPHA.wash : BC.card,
-        color: cur ? ON_AMBER : allScored ? BC.amberInk : BC.t3,
+        background: cur ? banner.fill : allScored ? BC.amber + ALPHA.wash : partial ? BC.amber + ALPHA.wash : BC.card,
+        color: cur ? banner.ink : allScored ? BC.amberInk : BC.t3,
         fontSize: fit.holeFont, fontWeight: 700, cursor: "pointer",
-        outline: cur ? `${HOLE_RING.width}px solid ${BC.amber}` : "none",
+        outline: cur ? `${HOLE_RING.width}px solid ${banner.fill}` : "none",
         outlineOffset: HOLE_RING.offset,
       }}>{h + 1}</button>
     );
