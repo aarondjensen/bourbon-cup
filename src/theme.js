@@ -303,6 +303,46 @@ export const SCRIM  = `#000000${ALPHA.held}`;  // 60%
 export const LIVE_ALPHA = ALPHA.held;
 export const ink = (hex, settled) => (settled ? hex : `${hex}${LIVE_ALPHA}`);
 
+// ── The selected-segment look ─────────────────────────────────────
+// One definition of what "this one is selected" looks like, because the app
+// has this control in five places at three sizes and every one of them used
+// to draw its own: a raised thumb in a recessed field, with a short amber
+// rule under the label.
+//
+// It replaced an amber-gradient fill with near-black ink on 2026-07-29. On
+// the dark theme that fill read as gold; on the light theme's near-white page
+// it read as tarnished bronze, and dark ink on a mid-tone brown was the
+// muddiest contrast pair in the app. Shape now carries "selected" and amber
+// carries only the accent — which is also what lets amber keep meaning
+// something, since it is the override star, the CTP flag and the cup total
+// everywhere else and cannot be all of those AND the tab chrome.
+//
+// `compact` is the 10px-label size used inline on a form row (the Admin
+// round card's scoring and handicap toggles); the rule scales with it so a
+// small pill doesn't wear a smudge.
+export const segThumb = (on, { compact = false, sunken = false } = {}) => ({
+  background: on ? BC.thumb : (sunken ? BC.inp : "transparent"),
+  color: on ? BC.t1 : BC.t3,
+  border: "none",
+  borderRadius: compact ? 14 : 16,
+  position: "relative",
+  // The lift. A step off the ALPHA ladder above rather than a bespoke rgba —
+  // it is a shadow, and a shadow is black at an alpha.
+  boxShadow: on ? `0 1px 3px #000000${ALPHA.hair}` : "none",
+});
+
+// The field the thumb is raised out of. `compact` is the inline size, whose
+// 2px of padding is what keeps a 10px-label row from growing a row taller.
+export const segTrack = ({ compact = false } = {}) => ({
+  display: "flex",
+  background: BC.inp,
+  borderRadius: 20,
+  padding: compact ? 2 : 3,
+  // Transparent rather than absent: it holds the track at the height a
+  // bordered one would be, so two of these never disagree by a pixel.
+  border: "1px solid transparent",
+});
+
 // ── Player-name text color ──
 // Single source of truth for how player names read in rosters and lists.
 // Brightening them updates every instance that routes through here. Uses the

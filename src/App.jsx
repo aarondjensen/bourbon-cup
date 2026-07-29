@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, FS, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor, VP_DROP, VP_DROP_BOTTOM } from "./theme";
+import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, FS, segThumb, segTrack, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor, VP_DROP, VP_DROP_BOTTOM } from "./theme";
 import { playerLookup } from "./lib/players";
 import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession } from "./firebase";
 import {
@@ -40,7 +40,7 @@ import { AppHeader } from "./components/AppHeader";
 import { Popup, ConfirmModal } from "./components/Popup";
 import { CtpPrompt } from "./components/CtpPrompt";
 import { DirectorFinalizeAlert, FinalizeRoundSheet } from "./components/FinalizeRound";
-import { SegmentedToggle, StickyTop, Banner, Toast, HoleNavigator, ScoreButtonRow } from "./components/ui";
+import { SegmentedToggle, SegRule, StickyTop, Banner, Toast, HoleNavigator, ScoreButtonRow } from "./components/ui";
 import { useConfirm } from "./lib/useConfirm";
 import { useStableCallback } from "./lib/useStableCallback";
 import { EditionSwitcher } from "./components/EditionSwitcher";
@@ -2101,20 +2101,22 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                    { id: HOLE_SCORING_BEST_BALL, label: "Best Ball", value: HOLE_SCORING_BEST_BALL }]
                 : options.map(m => ({ id: m, label: HOLE_METHOD_LABELS[m] || m, value: m }));
               const current = stray ? HOLE_SCORING_BEST_BALL : resolveHoleMethod(fmtId, holeScoring);
+              // Same selected-segment object the tab bars use, at the inline
+              // size — see theme.segThumb. These rows are the same control as the
+              // tab bar above them and used to be drawn three separate ways.
               const bbPill = (active) => ({
-                padding: "4px 12px", borderRadius: 16, fontSize: FS.label, fontWeight: 700, border: "none", cursor: "pointer",
-                background: active ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
-                color: active ? ON_AMBER : BC.t3,
+                padding: "4px 12px 6px", fontSize: FS.label, fontWeight: 700, cursor: "pointer",
+                ...segThumb(active, { compact: true }),
               });
               return (
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                     {lbl}
-                    <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}` }}>
+                    <div style={segTrack({ compact: true })}>
                       {pills.map(p => (
                         <button key={p.id} onClick={() => setHoleScoring(p.value)}
                           title={HOLE_METHOD_DESCRIPTIONS[p.value] || describeHoleScore(fmtId, p.value)}
-                          style={bbPill(current === p.value)}>{p.label}</button>
+                          style={bbPill(current === p.value)}>{p.label}{current === p.value && <SegRule compact />}</button>
                       ))}
                     </div>
                   </div>
@@ -2325,10 +2327,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               const perHole = isPointsPerHole(scoringType);
               const hp = resolveHolePoints(holePoints);
               const pill = (active, disabled) => ({
-                padding: "4px 12px", borderRadius: 16, fontSize: FS.label, fontWeight: 700, border: "none",
+                padding: "4px 12px 6px", fontSize: FS.label, fontWeight: 700,
                 cursor: disabled ? "not-allowed" : "pointer",
-                background: active ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
-                color: active ? ON_AMBER : (disabled ? BC.t3 + ALPHA.line : BC.t3),
+                ...segThumb(active, { compact: true }),
+                ...(disabled && !active ? { color: BC.t3 + ALPHA.line } : null),
               });
               const numField = (k, lbl) => (
                 <div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}>
@@ -2364,10 +2366,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   <RoundSectionHeading hint="How those hole scores turn into points.">
                     FORM OF PLAY
                   </RoundSectionHeading>
-                  <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}`, alignSelf: "flex-start", width: "fit-content", marginBottom: 5 }}>
+                  <div style={{ ...segTrack({ compact: true }), alignSelf: "flex-start", width: "fit-content", marginBottom: 5 }}>
                     {offered.map(f => (
                       <button key={f} onClick={() => setScoringType(f)} title={describeFormOfPlay(f, formRound.format)}
-                        style={pill(current === f, false)}>{formOfPlayLabel(f, formRound.format)}</button>
+                        style={pill(current === f, false)}>{formOfPlayLabel(f, formRound.format)}{current === f && <SegRule compact />}</button>
                     ))}
                   </div>
                   <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5, marginBottom: 12 }}>{describeFormOfPlay(current, formRound.format)}</div>
@@ -2382,7 +2384,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         use for it and it stands down rather than sitting there
                         offering a choice that changes nothing. */}
                     {!perHole && (
-                      <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}`, width: "fit-content", marginBottom: 8 }}>
+                      <div style={{ ...segTrack({ compact: true }), width: "fit-content", marginBottom: 8 }}>
                         <button onClick={() => setNassau(n => ({ front: 0, back: 0, overall: n.overall || 1 }))} title="One pot for the 18-hole result" style={pill(isSingle, false)}>Single</button>
                         <button onClick={() => setNassau(n => ({ front: n.front || 1, back: n.back || 1, overall: n.overall || 1 }))} title="Three independent pots — front nine, back nine, and the overall match" style={pill(!isSingle, false)}>Nassau</button>
                       </div>
@@ -2460,10 +2462,9 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               // Same pill as the SCORING toggles, so neither toggle on this
               // row changes shape by moving rows.
               const pctPill = (active, disabled = false) => ({
-                padding: "4px 12px", borderRadius: 16, fontSize: FS.label, fontWeight: 700, border: "none",
+                padding: "4px 12px 6px", fontSize: FS.label, fontWeight: 700,
                 cursor: disabled ? "not-allowed" : "pointer",
-                background: active ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : "transparent",
-                color: active ? ON_AMBER : BC.t3,
+                ...segThumb(active, { compact: true }),
               });
               const pctField = (k, lbl, hint) => (
                 <div key={k} style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -2501,15 +2502,15 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>ALLOWANCE</div>
                     {/* Allowance off/on. First on the row because it decides
                         whether the percentages beside it exist at all. */}
-                    <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}` }}>
+                    <div style={segTrack({ compact: true })}>
                       <button onClick={() => setOn(false)}
                         title={cur.shared
                           ? `No allowance — the side plays one ball off both partners' full Course Handicaps added together`
                           : "No allowance — every player plays their full Course Handicap"}
-                        style={pctPill(!on, roundIsFinal)}>Off</button>
+                        style={pctPill(!on, roundIsFinal)}>Off{!on && <SegRule compact />}</button>
                       <button onClick={() => setOn(true)}
                         title={`Reduce handicaps — ${fmt?.label || "this format"} plays off ${describeAllowance(resolveAllowance(fmtId, { enabled: true, ...prefill }))}`}
-                        style={pctPill(on, roundIsFinal)}>On</button>
+                        style={pctPill(on, roundIsFinal)}>On{on && <SegRule compact />}</button>
                     </div>
                     {on && (cur.split
                       ? [
@@ -2524,14 +2525,14 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                         the row and the toggle wraps, and a lone toggle
                         right-aligned on its own line reads as orphaned rather
                         than as the continuation it is. */}
-                    <div style={{ display: "flex", background: BC.bg, borderRadius: 20, padding: 2, border: `1px solid ${BC.bdr}` }}>
+                    <div style={segTrack({ compact: true })}>
                       {[["low_man", "Low Man"], ["full", "All"]].map(([val, lbl]) => (
                         <button key={val}
                           onClick={() => setHandicapMode(prev => ({ ...prev, [editRound]: val }))}
                           title={val === "low_man"
                             ? "Everyone plays the difference off the lowest Course Handicap in the match"
                             : "Everyone plays their full Course Handicap"}
-                          style={pctPill((handicapMode[editRound] || "low_man") === val)}>{lbl}</button>
+                          style={pctPill((handicapMode[editRound] || "low_man") === val)}>{lbl}{(handicapMode[editRound] || "low_man") === val && <SegRule compact />}</button>
                       ))}
                     </div>
                   </div>
@@ -4660,7 +4661,7 @@ export default function App() {
               <div style={{ display: "flex", alignItems: "center", gap: 8, opacity: 0.5, pointerEvents: "none" }}>
                 <SegmentedToggle
                   options={[["skins", "Skins"], ["ctp", "CTP"]]}
-                  value="skins" variant="flat" letterSpacing={0.5} style={{ flex: 1 }}
+                  value="skins" letterSpacing={0.5} style={{ flex: 1 }}
                 />
               </div>
             </StickyTop>
