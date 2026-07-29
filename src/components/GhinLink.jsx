@@ -372,7 +372,10 @@ export function GhinSyncButton({ players, onUpdatePlayer, notify, confirm, compa
       const n = linked.length;
       const ok = await confirm({
         title: "Re-sync handicaps from GHIN",
-        message: `This pulls the current Handicap Index for all ${n} GHIN-linked player${n !== 1 ? "s" : ""} from the USGA GHIN database and overwrites their stored index.\n\n• Director overrides are kept (they still win).\n• Manual (non-linked) players are untouched.`,
+        // "Both teams" is stated because this button now lives in team A's
+        // header, where it heads the handicap COLUMN rather than that team —
+        // the one thing about it that isn't self-evident from where it sits.
+        message: `This pulls the current Handicap Index for all ${n} GHIN-linked player${n !== 1 ? "s" : ""} in the tournament — both teams — from the USGA GHIN database, and overwrites their stored index.\n\n• Director overrides are kept (they still win).\n• Manual (non-linked) players are untouched.`,
         confirmLabel: `Re-sync ${n}`,
       });
       if (!ok) return;
@@ -407,7 +410,8 @@ export function GhinSyncButton({ players, onUpdatePlayer, notify, confirm, compa
       <button
         disabled={busy || !linked.length}
         onClick={syncAll}
-        title={linked.length ? `Re-sync ${linked.length} GHIN-linked player${linked.length !== 1 ? "s" : ""}` : "No GHIN-linked players yet"}
+        title={linked.length ? `Re-sync all ${linked.length} GHIN-linked player${linked.length !== 1 ? "s" : ""} (both teams)` : "No GHIN-linked players yet"}
+        aria-label="Re-sync handicaps from GHIN for every linked player"
         style={{
           boxSizing: "border-box", display: "inline-flex", alignItems: "center", justifyContent: "center",
           width: 24, height: 24, padding: 0, borderRadius: 6, lineHeight: 1,

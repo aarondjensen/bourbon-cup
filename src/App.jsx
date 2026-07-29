@@ -2057,15 +2057,14 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
 
       {tab === "players" && (
         <div>
-          {/* Right-aligned batch GHIN re-sync (prompt-gated). */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, padding: "0 9px", marginBottom: 8 }}>
-            <span style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 0.6, color: BC.t3, textTransform: "uppercase", whiteSpace: "nowrap" }}>GHIN sync</span>
-            <GhinSyncButton players={tPlayers} onUpdatePlayer={onUpdatePlayer} notify={notify} confirm={confirm} compact />
-          </div>
           {[teams.A, teams.B].map(team => (
             <div key={team.id} style={{ marginBottom: 10 }}>
-              {/* Team header with editable name */}
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, padding: "8px 12px", background: team.color + ALPHA.tint, borderRadius: 10, border: `1px solid ${team.accent}${ALPHA.line}` }}>
+              {/* Team header, laid out on the PLAYER ROW's columns rather than
+                  on its own: same 8px gutters, same 52% name block, same 56px
+                  slot after it. That is what lets the GHIN control below sit
+                  over the numbers it acts on instead of merely near them. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, padding: "8px 8px", background: team.color + ALPHA.tint, borderRadius: 10, border: `1px solid ${team.accent}${ALPHA.line}` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 5, flexBasis: "52%", flexGrow: 0, flexShrink: 1, minWidth: 0 }}>
                 {team.logo && !editingTeam && (
                   <img src={team.logo} alt={team.name} style={{ width: 28, height: 28, objectFit: "contain", flexShrink: 0 }} />
                 )}
@@ -2092,10 +2091,25 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                   <span
                     onClick={() => setEditingTeam(team.id)}
                     title="Click to edit team name"
-                    style={{ fontSize: FS.small, fontWeight: 800, color: team.accent, letterSpacing: 1, flex: 1, cursor: "pointer" }}
+                    style={{ fontSize: FS.small, fontWeight: 800, color: team.accent, letterSpacing: 1, flex: 1, minWidth: 0, cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                   >{teamNames[team.id].toUpperCase()}</span>
                 )}
-                {/* + Add button inline with team name */}
+                </div>
+                {/* The handicap column's head. The batch GHIN re-sync is the
+                    only thing that acts on that whole column, so it IS the
+                    header — a dedicated row for one icon was a row of mostly
+                    nothing. It syncs every linked player in the tournament,
+                    not team A's: it is over the column, not inside the team,
+                    and the prompt it raises says so before anything is
+                    written. Team B's header keeps the empty slot so both
+                    headers stay on the same columns as the rows. */}
+                <span style={{ display: "inline-flex", alignItems: "center", width: 56, flexShrink: 0 }}>
+                  {team.id === "A" && (
+                    <GhinSyncButton players={tPlayers} onUpdatePlayer={onUpdatePlayer} notify={notify} confirm={confirm} compact />
+                  )}
+                </span>
+                <span style={{ flex: 1, minWidth: 8 }} />
+                {/* + Add button, over the rows' Edit */}
                 <button
                   onClick={() => setEditingPlayer({ isNew: true, team: team.id, first: "", last: "", nick: "", hi: "", ov: "", dir: false })}
                   title="Add player"
