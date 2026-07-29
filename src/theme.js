@@ -415,6 +415,25 @@ const measureVpDrop = () => {
   return short > 0 ? Math.min(short, insetTop) : 0;
 };
 
+// ── Reading an inset from JS ──────────────────────────────────────
+// The same probe measureVpDrop uses, pointed at the bottom inset and
+// exported, because the bottom-nav clearance needs this as a NUMBER.
+//
+// It used to be CSS — `max(<measured>px, calc(env(safe-area-inset-bottom) +
+// 72px))` — which reads well and puts the floor exactly where it belongs. But
+// a CSS function that an engine won't parse takes its whole declaration with
+// it, and the failure mode of this particular declaration is content sitting
+// under the bar with no scroll left to reach it. A number can't be dropped.
+export const readSafeAreaBottom = () => {
+  if (typeof document === "undefined") return 0;
+  const probe = document.createElement("div");
+  probe.style.cssText = "position:fixed;top:0;left:0;width:0;visibility:hidden;pointer-events:none;height:env(safe-area-inset-bottom, 0px)";
+  (document.body || document.documentElement).appendChild(probe);
+  const inset = probe.getBoundingClientRect().height;
+  probe.remove();
+  return inset > 0 ? inset : 0;
+};
+
 export const syncVpDrop = () => {
   if (typeof document === "undefined") return 0;
   const drop = measureVpDrop();

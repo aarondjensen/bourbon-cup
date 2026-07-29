@@ -93,14 +93,24 @@ export function useFitDensity(ref, selector = ".bc-app-body") {
   useLayoutEffect(() => {
     const host = ref.current?.closest(selector);
     if (!host) return;
+    // The nav clearance is an ELEMENT at the end of the scroll content, not
+    // bottom padding on the host (see App's bc-nav-spacer for why). It is
+    // reserved room either way, so it comes off the same budget — reading
+    // only the padding would hand the scoring screen ~100px it does not have
+    // and push it a density too large for the phone it is on.
+    const spacer = host.querySelector(".bc-nav-spacer");
     const read = () => {
       const cs = getComputedStyle(host);
       const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
-      setUsable(Math.max(0, host.clientHeight - pad));
+      const reserved = spacer ? spacer.getBoundingClientRect().height : 0;
+      setUsable(Math.max(0, host.clientHeight - pad - reserved));
     };
     read();
     const ro = new ResizeObserver(read);
     ro.observe(host);
+    // The spacer as well: it grows when the bar does, and that changes the
+    // room left over without the host's own box moving at all.
+    if (spacer) ro.observe(spacer);
     return () => ro.disconnect();
   }, [ref, selector]);
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, FS, segThumb, segTrack, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor, VP_DROP, VP_DROP_BOTTOM } from "./theme";
+import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, FS, segThumb, segTrack, readSafeAreaBottom, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor, VP_DROP, VP_DROP_BOTTOM } from "./theme";
 import { playerLookup } from "./lib/players";
 import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession } from "./firebase";
 import {
@@ -66,15 +66,9 @@ import { useHoleAdvance } from "./lib/useHoleAdvance";
 // to the viewport bottom) with the full inset is the known-good layout.
 const NAV_SAFE_PAD = "calc(env(safe-area-inset-bottom, 0px) + 8px)";
 
-// The clearance the scroll area reserves for that bar even if the measured
-// height below is stale or never arrives: the bar's own floor (a 56px tap
-// target plus NAV_SAFE_PAD) and the same 8px gap the measured value adds.
-// Expressed in CSS rather than JS on purpose — env() re-resolves itself the
-// moment the inset changes, with nothing to observe and nothing to re-render,
-// so the tail of a long tab can never end up under the bar. The measured
-// height still wins whenever it is larger (bigger OS text size, taller
-// labels); this is only ever a floor.
-const NAV_CLEARANCE_FLOOR = "calc(env(safe-area-inset-bottom, 0px) + 72px)";
+// Layout diagnostics, opt-in per URL and per load (see LayoutDiag).
+const DIAG = typeof window !== "undefined"
+  && new URLSearchParams(window.location.search).get("diag") === "1";
 
 // Where a dismissed "ready to finalize" notification is remembered, per
 // edition — TOURNAMENT_ID is a live binding (firebase.js reassigns it when
@@ -3497,6 +3491,69 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
 // that used to be hardcoded here was only ever right at the default text
 // size on a phone whose nav was exactly that tall; anywhere else the menu
 // sank into the bar or floated off it.
+// ── Layout diagnostics (?diag=1) ──────────────────────────────────
+// Off unless the URL says otherwise, and there is no UI anywhere that turns
+// it on. It exists because the bottom-nav clearance has now been wrong twice
+// on a phone while measuring correct on every browser available to test it,
+// and the difference between "the reservation is too small" and "the
+// reservation is not in the scrollable area" is four numbers that only that
+// phone can answer. Add ?diag=1 to the URL, screenshot, read them off.
+function LayoutDiag() {
+  const [d, setD] = useState(null);
+  useEffect(() => {
+    const read = () => {
+      const body = document.querySelector(".bc-app-body");
+      const spacer = document.querySelector(".bc-nav-spacer");
+      const nav = document.querySelector("[data-bc-nav]");
+      if (!body) return;
+      // Deepest real content in the scroll area, ignoring the spacer itself
+      // and anything deliberately pinned.
+      let deepest = -Infinity;
+      for (const n of body.querySelectorAll("*")) {
+        if (n === spacer || spacer?.contains(n)) continue;
+        const cs = getComputedStyle(n);
+        if (cs.position === "sticky" || cs.position === "fixed") continue;
+        const r = n.getBoundingClientRect();
+        if (r.height > 0 && r.bottom > deepest) deepest = r.bottom;
+      }
+      const navR = nav?.getBoundingClientRect();
+      setD({
+        scroll: `${Math.round(body.scrollTop)}/${Math.round(body.scrollHeight - body.clientHeight)}`,
+        client: Math.round(body.clientHeight),
+        scrollH: Math.round(body.scrollHeight),
+        bodyBottom: Math.round(body.getBoundingClientRect().bottom),
+        spacer: spacer ? Math.round(spacer.getBoundingClientRect().height) : "none",
+        navTop: navR ? Math.round(navR.top) : "?",
+        navH: navR ? Math.round(navR.height) : "?",
+        clear: navR && deepest > -Infinity ? Math.round(navR.top - deepest) : "?",
+        inner: window.innerHeight,
+        screen: window.screen?.height ?? "?",
+        drop: getComputedStyle(document.documentElement).getPropertyValue("--bc-vp-drop").trim() || "0px",
+        standalone: (window.navigator?.standalone === true
+          || window.matchMedia?.("(display-mode: standalone)").matches === true) ? "yes" : "no",
+      });
+    };
+    read();
+    const t = setInterval(read, 400);
+    const body = document.querySelector(".bc-app-body");
+    body?.addEventListener("scroll", read, { passive: true });
+    return () => { clearInterval(t); body?.removeEventListener("scroll", read); };
+  }, []);
+  if (!d) return null;
+  return (
+    <div style={{
+      position: "fixed", top: 0, left: 0, right: 0, zIndex: 9999,
+      background: "rgba(0,0,0,0.86)", color: "#7CFF9E", pointerEvents: "none",
+      font: "600 10px/1.35 ui-monospace, Menlo, monospace", padding: "4px 6px",
+      textTransform: "none", whiteSpace: "pre-wrap",
+    }}>
+      {`scroll ${d.scroll}  client ${d.client}  scrollH ${d.scrollH}\n`}
+      {`spacer ${d.spacer}  navH ${d.navH}  navTop ${d.navTop}  bodyBottom ${d.bodyBottom}\n`}
+      {`clear ${d.clear}  inner ${d.inner}  screen ${d.screen}  drop ${d.drop}  standalone ${d.standalone}`}
+    </div>
+  );
+}
+
 function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, onToggleTheme, finalize, navH }) {
   const dragRef = useRef(null);
   const startYRef = useRef(null);
@@ -3849,10 +3906,18 @@ export default function App() {
   // exactly the inset — the Admin players list ending under the bar with
   // nothing left to scroll. Watch the border box and the padding counts.
   const [navH, setNavH] = useState(64);
+  // The home-indicator inset, read as a number (see theme.readSafeAreaBottom).
+  // It is the floor under the measurement: whatever the bar measures, the
+  // clearance is never less than the bar's own minimum — a 56px tap target
+  // plus this inset plus its 8px cushion, plus the 8px gap.
+  const [safeBottom, setSafeBottom] = useState(0);
   useEffect(() => {
     const el = navRef.current;
     if (!el) return;
-    const measure = () => setNavH(Math.ceil(el.getBoundingClientRect().height));
+    const measure = () => {
+      setNavH(Math.ceil(el.getBoundingClientRect().height));
+      setSafeBottom(Math.ceil(readSafeAreaBottom()));
+    };
     measure();
     // Viewport events as well as the observer: a safe-area inset can change
     // without the observed box changing at all on some engines, and these are
@@ -4525,6 +4590,8 @@ export default function App() {
           tab can't squeeze it. */}
       <AppHeader location={tournamentLocation} />
 
+      {DIAG && <LayoutDiag />}
+
       {/* Ready-to-finalize notification — app chrome, like the header above
           it, so it reaches the director on whichever tab they are on rather
           than only at the bottom of Scoring. Outside the scroll area for the
@@ -4544,20 +4611,9 @@ export default function App() {
       {/* Content */}
       <div className="bc-app-body" style={{
         flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden",
-        // Bottom clearance for the FIXED nav bar. The nav is position:fixed
-        // over the viewport bottom, so the scroll area must reserve room or
-        // its last rows hide behind the bar with nothing left to scroll.
-        // `navH` is the bar's MEASURED height (safe-area padding included) —
-        // see the ResizeObserver above for why a constant isn't enough. The
-        // max() against NAV_CLEARANCE_FLOOR is the safety net under it: a
-        // measurement can be stale (the inset moved and nothing re-measured)
-        // or absent (no ResizeObserver), and the cost of it reading short is
-        // rows sitting under the bar with no scroll left to reach them.
-        // Written as shorthand-then-longhand so an engine that can't parse
-        // max() drops only the bottom value and lands back on the shorthand's
-        // 12px, rather than throwing the whole padding away.
-        padding: `12px 10px ${navH + 8}px 10px`,
-        paddingBottom: `max(${navH + 8}px, ${NAV_CLEARANCE_FLOOR})`,
+        // NO bottom padding — the clearance for the fixed nav is a real
+        // element at the end of the content instead (see the spacer below).
+        padding: "12px 10px 0 10px",
         // Every view starts at the TOP of the scroll area. Short views used
         // to be centred vertically here (flexbox auto margins on the inner
         // wrapper), with Admin and Leaderboard opting out because they pin a
@@ -4738,6 +4794,32 @@ export default function App() {
         )}
         </ErrorBoundary>
         </div>
+
+        {/* ── Clearance for the fixed nav ──────────────────────────────
+            An ELEMENT, not padding on the scroll container above.
+
+            It was padding until 2026-07-29, and padding is the one way to
+            reserve this that an engine is allowed to leave out of the
+            scrollable area: a scroll container's bottom padding has a long
+            history of being dropped from scrollHeight (block containers in
+            older Blink, and WebKit in cases the flex layout here was meant
+            to cover). When it is dropped the reservation is invisible to
+            scrolling — the last rows sit under the bar and no amount of
+            scrolling brings them up, which is exactly the report this is
+            chasing, and exactly why making the padding BIGGER did not help.
+            In-flow content has no such exemption: a box with a height is in
+            the scrollable area in every engine.
+
+            The height is the measured bar plus a gap, floored at the bar's
+            own minimum (a 56px tap target + the home-indicator inset + its
+            8px cushion) so a stale or missing measurement still clears it.
+            Both are numbers rather than a CSS max(): a CSS function an
+            engine won't parse takes its declaration with it, and this is not
+            a declaration that can afford to go missing. */}
+        <div className="bc-nav-spacer" aria-hidden="true" style={{
+          flexShrink: 0,
+          height: Math.max(navH + 8, safeBottom + 72),
+        }} />
       </div>
 
       <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} onLogout={() => { writeUserSession(null); setUser(null); }} user={user} view={view} darkMode={darkMode} onToggleTheme={toggleTheme} finalize={finalizeMenu} navH={navH} />
@@ -4767,7 +4849,7 @@ export default function App() {
           paddingBottom keeps the labels clear of the home indicator. The
           scroll area reserves matching clearance so content never hides
           behind the bar. */}
-      <div ref={navRef} style={{ position: "fixed", bottom: VP_DROP_BOTTOM, left: 0, right: 0, background: BC.card, borderTop: `1px solid ${BC.bdr}`, zIndex: 100, paddingBottom: NAV_SAFE_PAD }}>
+      <div ref={navRef} data-bc-nav style={{ position: "fixed", bottom: VP_DROP_BOTTOM, left: 0, right: 0, background: BC.card, borderTop: `1px solid ${BC.bdr}`, zIndex: 100, paddingBottom: NAV_SAFE_PAD }}>
       <div style={{ maxWidth: 520, margin: "0 auto", display: "flex" }}>
         {navItems.map(item => {
           const active = view === item.key;
