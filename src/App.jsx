@@ -3,7 +3,7 @@ import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, FS, segThumb, segTrack, r
 import { playerLookup } from "./lib/players";
 import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, BOOTSTRAP_DIRECTOR } from "./firebase";
 import { PROVIDERS, signIn, signOutUser, onAuthUser, consumeRedirectResult, isCancelled } from "./lib/auth";
-import { claimPlayer, linkedPlayer, isClaimed, accountLabel, unlinkPatch, isMember, joinWithCode, setAccessCode } from "./lib/accounts";
+import { claimPlayer, linkedPlayer, isClaimed, accountLabel, unlinkPatch, isMember, joinWithCode, setAccessCode, readAccessCode } from "./lib/accounts";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
   resolveTeams, DEFAULT_TEAM_NAMES, TOURNAMENT_TITLE, TOURNAMENT_LOCATION,
@@ -1532,10 +1532,17 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   const [brandBusy, setBrandBusy] = useState(null); // team id mid-extraction
   const [editTournamentName, setEditTournamentName] = useState(tournamentName || "");
   const [editTournamentLocation, setEditTournamentLocation] = useState(tournamentLocation || "");
-  // No hydrating effect for this one, unlike its neighbours: there is
-  // nothing to hydrate FROM. The access code cannot be read back by any
-  // client, so this field always starts empty and means "the new one".
+  // The input always starts empty and always means "the NEW one" — unlike
+  // its neighbours it is never seeded from the saved value, because typing
+  // over a pre-filled password is how you change it by accident. The
+  // current code is shown separately, and only when asked for.
   const [editAccessCode, setEditAccessCode] = useState("");
+  const [savedAccessCode, setSavedAccessCode] = useState(undefined); // undefined = not looked up
+  const [showAccessCode, setShowAccessCode] = useState(false);
+  const loadAccessCode = useCallback(async () => {
+    setSavedAccessCode(await readAccessCode());
+    setShowAccessCode(true);
+  }, []);
   useEffect(() => { setEditTournamentName(tournamentName || ""); }, [tournamentName]);
   useEffect(() => { setEditTournamentLocation(tournamentLocation || ""); }, [tournamentLocation]);
   useEffect(() => {
@@ -3558,11 +3565,11 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
           </div>
 
           {/* Access — the password that stands between "signed in with
-              Google" and "can change the tournament". Write-only on
-              purpose: the code lives in a document no client may read (the
-              security rules compare against it without ever serving it),
-              so this card can offer to change the password but can never
-              show it. Saving an empty field takes the password off. */}
+              Google" and "can change the tournament". The current code is
+              behind a tap rather than on screen: this panel gets shown to
+              other people often enough (handicaps, tee times) that leaving
+              a password sitting on it would undo the point of having one.
+              Saving an empty field takes the password off. */}
           <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: 14, marginBottom: 16 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
               <div style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase" }}>Access</div>
@@ -3580,11 +3587,36 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   const res = await setAccessCode(next);
                   if (!res.ok) { notify(res.error, "error"); return; }
                   setEditAccessCode("");
+                  setSavedAccessCode(next || null);
                   notify(next ? "Password changed" : "Password removed", "success");
                 }}
                 style={{ flexShrink: 0, fontSize: FS.small, fontWeight: 700, color: ON_AMBER, background: BC.amber, border: "none", borderRadius: 6, padding: "8px 14px", cursor: "pointer" }}
               >Save</button>
             </div>
+
+            {/* The current one. Fetched on demand — the read is a members-
+                only round trip to Firestore, so there is no reason to make
+                it on every visit to this tab. */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, minHeight: 34 }}>
+              <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.5, width: 58, flexShrink: 0, textTransform: "uppercase" }}>Current</span>
+              {showAccessCode ? (
+                <span style={{ flex: 1, minWidth: 0, fontSize: FS.body, fontWeight: 800, color: savedAccessCode ? BC.amberInk : BC.t3, wordBreak: "break-all" }}>
+                  {savedAccessCode || "None — anyone who signs in can get in"}
+                </span>
+              ) : (
+                <button type="button" onClick={loadAccessCode} style={{
+                  fontSize: FS.small, fontWeight: 700, padding: "6px 12px", borderRadius: 6,
+                  border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t2, cursor: "pointer",
+                }}>Show</button>
+              )}
+              {showAccessCode && (
+                <button type="button" onClick={() => setShowAccessCode(false)} style={{
+                  flexShrink: 0, fontSize: FS.small, fontWeight: 700, padding: "6px 12px", borderRadius: 6,
+                  border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer",
+                }}>Hide</button>
+              )}
+            </div>
+
             <input
               value={editAccessCode}
               onChange={e => setEditAccessCode(e.target.value)}
@@ -3594,7 +3626,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.body, fontWeight: 700, outline: "none", fontFamily: FONT }}
             />
             <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 6, lineHeight: 1.4 }}>
-              Asked for once per person, after they sign in. Not shown here — nobody can read it back, not even you. Save it blank to turn it off.
+              Asked for once per person, after they sign in. Save it blank to turn it off. Anyone already through the door stays through.
             </div>
           </div>
 

@@ -70,8 +70,16 @@ await check("a member can set the password", () =>
   assertSucceeds(setDoc(doc(aliceDb(), "bc_secrets/access"), { code: "bourbon2026" })));
 
 // ── With a password configured ──────────────────────────────────────
-await check("nobody can read the password back", () =>
-  assertFails(getDoc(doc(aliceDb(), "bc_secrets/access"))));
+await check("a member can read the password back (Admin shows it)", () =>
+  assertSucceeds(getDoc(doc(aliceDb(), "bc_secrets/access"))));
+
+await check("a signed-in non-member CANNOT read the password", () => {
+  const bob = env.authenticatedContext("bob").firestore();
+  return assertFails(getDoc(doc(bob, "bc_secrets/access")));
+});
+
+await check("an anonymous visitor cannot read the password", () =>
+  assertFails(getDoc(doc(anonDb(), "bc_secrets/access"))));
 
 await check("stranger with the WRONG password is refused membership", () =>
   assertFails(setDoc(doc(malloryDb(), "bc_accounts/mallory"), { uid: "mallory", code: "guess" })));

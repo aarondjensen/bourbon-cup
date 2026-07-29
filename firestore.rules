@@ -152,12 +152,24 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // The password itself. No client may read it, ever — that is what lets
-    // the rules above compare against it safely. A member may replace it
-    // (Admin → Tournament → Access), which is a deliberate trade: any of
-    // the twelve can rotate the code, and none of them can see it.
+    // The password itself. Read is denied to everyone OUTSIDE the door and
+    // that is the load-bearing half: if a stranger could read this document
+    // they could read the code and let themselves in, and the gate would be
+    // worth nothing. `codeOK()` above compares against it regardless, since
+    // rules `get()` is not subject to these read rules.
+    //
+    // Members can read it, so Admin can show the director a code they have
+    // forgotten. That concedes less than it appears: every membership
+    // document already stores the code its owner typed, readable by that
+    // owner, so anybody inside the door can already recover the code they
+    // came through. The only thing this adds is that a member who joined
+    // before a rotation can see the current one — and they are already
+    // someone who can write anything in the project.
+    //
+    // Write is members-only too, so any of the twelve can rotate the code.
+    // There is no director predicate here to lean on; see the header.
     match /bc_secrets/{doc} {
-      allow read: if false;
+      allow read: if isMember();
       allow write: if isMember();
     }
 

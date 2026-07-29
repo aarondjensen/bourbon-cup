@@ -69,9 +69,13 @@ never serve. So it holds against someone reading the bundle or skipping the
 app and talking to Firestore directly, which a client-side password check
 would not.
 
-- Set or change it in Admin → Tournament → Access. It is write-only: nobody,
-  director included, can read the current one back. Saving it blank turns the
-  requirement off.
+- Set or change it in Admin → Tournament → Access, where **Show** reveals the
+  current one. Saving it blank turns the requirement off.
+- Reading the code is members-only, and that is the whole of the protection —
+  a stranger who could read it would not need to be told it. It is readable by
+  any of the twelve, not just a director; rules have no director predicate.
+  This concedes little, because every `bc_accounts` document already stores the
+  code its owner typed and is readable by that owner.
 - **A blank or missing code means the door is open.** That is the bootstrap —
   without it the first membership could never be created and the project would
   be locked to its own owners.

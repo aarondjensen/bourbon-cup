@@ -99,9 +99,16 @@ export async function joinWithCode(authUser, code) {
   }
 }
 
+// ── Reading the password back ───────────────────────────────────────
+// Members only, enforced by the rules — a stranger who could read this
+// would not need to be told the password at all. Returns null when none is
+// set, which is the same thing the door means by "open".
+export async function readAccessCode() {
+  try { return (await db.getById(SECRETS_COL, ACCESS_DOC))?.code || null; }
+  catch { return null; }
+}
+
 // ── Setting the password ────────────────────────────────────────────
-// Write-only by design: nobody, director included, can read the current
-// code back out, so Admin can offer "change it" but never "here it is".
 // Saving an empty value removes the requirement — the rules treat a blank
 // or missing code as an open door, which is also what makes the very first
 // setup possible before any code exists.
