@@ -214,4 +214,43 @@ export const db = {
       return onSnapshot(db._q(col, filters), snap => cb(snap.docs.map(d => d.data())), e => console.error("subscribe", e));
     } catch(e) { console.error("subscribe setup", e); return () => {}; }
   },
+  // db.get with the error left in. Every other reader here swallows a failed
+  // query into `[]`, which is the right default for a screen that would
+  // rather render empty than blow up — but it makes "the read failed" and
+  // "there is nothing there" the same answer. The notification code has to
+  // tell those apart: treating a transient failure as "not subscribed" would
+  // nag a subscribed user to re-enable push they already have.
+  getStrict: async (col, filters = []) => {
+    const s = await getDocs(db._q(col, filters));
+    return s.docs.map(d => d.data());
+  },
+};
+
+// ── Firebase Cloud Messaging (lazy-loaded) ──────────────────────────
+// Messaging only exists where there is a Service Worker + Push API +
+// Notifications API. iOS Safari below 16.4 has no Push API at all, and
+// even on 16.4+ it only works from a home-screen install.
+//
+// CRITICAL: this module is imported by everything. A top-level import of
+// firebase/messaging would put the messaging SDK on the critical path for
+// the entire app, and any failure loading it — unsupported browser, a
+// flaky chunk fetch — would turn into a blank page rather than a missing
+// notification. The dynamic import keeps the blast radius at the one
+// caller that asked.
+let _messaging = null;
+let _messagingChecked = false;
+export const getMessagingInstance = async () => {
+  if (_messagingChecked) return _messaging;
+  _messagingChecked = true;
+  try {
+    const { getMessaging, isSupported } = await import("firebase/messaging");
+    if (!(await isSupported())) return null;
+    _messaging = getMessaging(_app);
+    return _messaging;
+  } catch (e) {
+    // Some browsers throw out of isSupported rather than returning false.
+    // Either way the answer is the same: no push here.
+    console.warn("Firebase Messaging unavailable:", e?.message || e);
+    return null;
+  }
 };

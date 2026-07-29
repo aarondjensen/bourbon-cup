@@ -40,6 +40,9 @@ import { AppHeader } from "./components/AppHeader";
 import { Popup, ConfirmModal } from "./components/Popup";
 import { CtpPrompt } from "./components/CtpPrompt";
 import { DirectorFinalizeAlert, FinalizeRoundSheet } from "./components/FinalizeRound";
+import { MissingCardNote, SignCardSheet, SignedCardPanel } from "./components/CardSignature";
+import { NotificationSettings } from "./components/NotificationSettings";
+import { initForegroundNotifications, syncAppBadge } from "./lib/notifications";
 import { SegmentedToggle, SegRule, StickyTop, Banner, Toast, HoleNavigator, ScoreButtonRow } from "./components/ui";
 import { useConfirm } from "./lib/useConfirm";
 import { useStableCallback } from "./lib/useStableCallback";
@@ -55,6 +58,11 @@ import {
   stripAMPM,
 } from "./lib/groups";
 import { holesEntered, roundScoreProgress } from "./lib/scoreGuard";
+import {
+  cardSigBareId, sigForMatch, cardComplete, missingForCard,
+  nonSignerPids, isFullyAttested, cardState,
+  roundCardProgress, pendingAttestations,
+} from "./lib/cardSigs";
 import { useHoleAdvance } from "./lib/useHoleAdvance";
 
 // ── Bottom-nav safe-area cushion ──────────────────────────────────
@@ -299,7 +307,7 @@ function LoginScreen({ players, onLogin, teams, darkMode, tournamentName, tourna
 // The round selector this view used to carry is gone: entry is gated to the
 // current round (see "The round gate" above), so there is nothing left to
 // select between and no strip of rounds at the top either.
-function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teams, hcpOverrides, teeAssignments, roundLocks, rounds, currentRound, ctpData, onSetCtp }) {
+function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teams, hcpOverrides, teeAssignments, roundLocks, rounds, currentRound, ctpData, onSetCtp, cardSigs, onSignCard, onAttestCard, onUnsignCard }) {
   const userPid = user.player_id;
   // This screen is worked from, not read down — four players' scores have to
   // be reachable without scrolling to the one at the bottom. It measures the
@@ -323,6 +331,9 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // par-3 CTP chip re-opens it deliberately and ignores the guard.
   const [ctpPrompt, setCtpPrompt] = useState(null);
   const promptedCtp = useRef({});
+  // The sign sheet. Only reachable from the promoted Full Scorecard button,
+  // which only promotes on a complete card — see components/CardSignature.
+  const [showSign, setShowSign] = useState(false);
 
   // Resolved, not stored — the selection is re-derived from the matches the
   // gate currently allows. When a round is finalized under a player's feet,
@@ -375,6 +386,16 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // dots on the scoring screen and the strokes in the leaderboard math can
   // never diverge — one allocation, one source.
   const strokeMaps = result?.strokeMaps || {};
+
+  // ── Signature state for the card on screen ──
+  // Derived, never stored: `sig` is looked up out of the live subscription
+  // every render, so a signature landing on another player's phone locks
+  // this one's score buttons in the same beat it appears on theirs.
+  const sig = match ? sigForMatch(cardSigs, match.id) : null;
+  const signState = match ? cardState(match, sig) : "open";
+  const signed = signState !== "open";
+  const complete = match ? cardComplete(match, holeData) : false;
+  const missingCard = match && !complete && !signed ? missingForCard(match, holeData) : [];
 
   // No more hooks below this line.
 
@@ -467,6 +488,12 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // ScoreButtonRow hands back the new gross directly (0 = cleared, which it
   // sends when the active button is tapped again), so no toggle logic here.
   const onTapScore = async (pid, score) => {
+    // A signed card is not editable. In practice this is unreachable — the
+    // signed view replaces the score buttons entirely — but it is the write
+    // path, and the screen it defends against is one another device can put
+    // it into mid-tap. Cheap, and the alternative is a score that lands in a
+    // card somebody has already sworn to.
+    if (signed) return;
     // Read the hole and the player's existing score BEFORE the write —
     // the CTP trigger below needs to know this was a first entry, and
     // auto-advance can move activeHole while the save is in flight.
@@ -573,30 +600,55 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     );
   };
 
+  /* Match selector — for the rare format that draws a player into more
+     than one match in the SAME round. It no longer crosses rounds; the
+     strip above owns that axis and only one round of it is live.
+
+     Labelled with the cup's number for each match, not its position in
+     this player's own list — two players in the same match have to be
+     looking at the same name for it. Position the incoming match in the
+     same render as the switch; leaving it to the effect below would paint
+     the outgoing hole for a frame first, the same flash returning to the
+     tab had.
+
+     Hoisted out of the tree below because the signed view needs it too: a
+     player with a signed card and an unsigned one has to be able to get
+     back to the one that still needs scores. */
+  const matchSelector = myMatches.length > 1 ? (
+    <SegmentedToggle
+      variant="pills"
+      style={{ marginBottom: 10 }}
+      options={myMatches.map((m, i) => [m.id, `Match ${m.matchNumber ?? i + 1}`])}
+      value={match.id}
+      onChange={(id) => {
+        const m = myMatches.find(x => x.id === id);
+        setActiveMatchId(id);
+        if (m) positionOn(id, pidsOf(m), scoresAt(m.round));
+      }}
+    />
+  ) : null;
+
+  // ── Signed: the card replaces the scoring screen ──
+  // Not a banner over the score buttons — the buttons are gone, because a
+  // signed card has no scores left to enter and the screen's whole budget
+  // (see useFitDensity) is better spent showing the card that was signed.
+  if (signed) return shell(
+    <>
+      {matchSelector}
+      <SignedCardPanel
+        match={match} sig={sig} result={result} format={format}
+        holePars={holePars} holeHcps={holeHcps} course={course}
+        teams={teams} tPlayers={tPlayers} getScore={getScore} viewer={userTeam}
+        userPid={userPid} notify={notify}
+        onAttest={() => onAttestCard(match, userPid)}
+        onUnsign={() => onUnsignCard(match)}
+      />
+    </>
+  );
+
   return shell(
     <>
-      {/* Match selector — for the rare format that draws a player into more
-          than one match in the SAME round. It no longer crosses rounds; the
-          strip above owns that axis and only one round of it is live. */}
-      {/* Labelled with the cup's number for each match, not its position in
-          this player's own list — two players in the same match have to be
-          looking at the same name for it. Position the incoming match in the
-          same render as the switch; leaving it to the effect below would paint
-          the outgoing hole for a frame first, the same flash returning to the
-          tab had. */}
-      {myMatches.length > 1 && (
-        <SegmentedToggle
-          variant="pills"
-          style={{ marginBottom: 10 }}
-          options={myMatches.map((m, i) => [m.id, `Match ${m.matchNumber ?? i + 1}`])}
-          value={match.id}
-          onChange={(id) => {
-            const m = myMatches.find(x => x.id === id);
-            setActiveMatchId(id);
-            if (m) positionOn(id, pidsOf(m), scoresAt(m.round));
-          }}
-        />
-      )}
+      {matchSelector}
 
       {/* Front 9 — hole strip + status row. */}
       <div style={{ display: "flex", gap: 3, marginBottom: 2, flexShrink: 0 }}>
@@ -616,15 +668,33 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
 
       {/* Full Scorecard — sits ABOVE the hole banner (MNQ's placement) so
           it's reachable without scrolling past four player cards. Slim
-          bar styling keeps the vertical cost near zero. */}
-      <button onClick={() => setShowScorecard(true)} style={{
-        width: "100%", padding: fit.scorecardPad, borderRadius: 8, marginBottom: fit.stack,
-        cursor: "pointer", flexShrink: 0,
-        background: BC.card, border: `1px solid ${BC.bdr}${ALPHA.line}`, color: BC.t2,
-        fontSize: FS.small, fontWeight: 700, letterSpacing: 0.5,
+          bar styling keeps the vertical cost near zero.
+
+          It is also the sign entry point. Once every player in the match has
+          all eighteen, this same button promotes to the amber "Complete —
+          Sign Card" CTA and opens the sign sheet instead of the read-only
+          scorecard. One button doing two jobs is deliberate: a second,
+          permanent Sign button would cost the score buttons a row for the
+          entire round to be tappable at the end of it, which is the exact
+          trade the Finalize card lost. */}
+      <button onClick={() => (complete ? setShowSign(true) : setShowScorecard(true))} style={{
+        width: "100%", padding: complete ? "9px 0" : fit.scorecardPad, borderRadius: 8,
+        marginBottom: fit.stack, cursor: "pointer", flexShrink: 0, fontFamily: FONT,
+        background: complete ? BC.amberGlow : BC.card,
+        border: `1px solid ${complete ? BC.amber : BC.bdr}${ALPHA.line}`,
+        color: complete ? BC.amber : BC.t2,
+        fontSize: complete ? FS.body : FS.small,
+        fontWeight: complete ? 800 : 700, letterSpacing: 0.5,
       }}>
-        Full Scorecard
+        {complete ? "Complete — Sign Card" : "Full Scorecard"}
       </button>
+
+      {/* Why the button hasn't promoted. Only shown once somebody in the
+          match has started, so the note is "you're nearly there, here's the
+          gap" rather than a warning that greets the first tee. */}
+      {missingCard.length > 0 && matchPids.some(pid => holesEntered(holeData, pid, match.round) > 0) && (
+        <MissingCardNote missing={missingCard} nameOf={(pid) => tPlayers.find(p => p.player_id === pid)?.name || pid} />
+      )}
 
       <HoleNavigator hole={activeHole} par={par} hcp={hcp} onGo={goToHole} sizes={fit.nav} />
 
@@ -769,6 +839,28 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           );
         })}
       </div>
+
+      {/* The sign sheet — the card in full, then one button. Handed the
+          same resolved pieces the scorecard modal below gets, so what a
+          player signs is exactly what they have been looking at. */}
+      {showSign && (
+        <SignCardSheet
+          match={match} result={result} format={format}
+          holePars={holePars} holeHcps={holeHcps} course={course}
+          teams={teams} tPlayers={tPlayers} getScore={getScore} viewer={userTeam}
+          userPid={userPid}
+          onClose={() => setShowSign(false)}
+          onSign={async () => {
+            const res = await onSignCard(match, userPid);
+            if (res) {
+              setShowSign(false);
+              notify("Card signed — waiting on the others to attest", "success");
+            } else {
+              notify("Could not sign the card — try again", "error");
+            }
+          }}
+        />
+      )}
 
       {/* Scorecard modal — the MNQ-framed card (components/FullScorecard),
           not the Leaderboard's team-only grid: this one is opened by a
@@ -3592,6 +3684,7 @@ function SlideMenu({ open, onClose, onNavigate, onLogout, user, view, darkMode, 
     { key: "analytics", label: "Player Analytics", icon: "📊" },
     { key: "history",   label: "Historical Data",  icon: "📅" },
     { key: "photos",    label: "Photo Library",     icon: "📸", external: true },
+    { key: "notifications", label: "Notifications", icon: "🔔" },
     ...(user?.isDirector ? [{ key: "admin", label: "Admin Settings", icon: "⚙️" }] : []),
     { key: "logout", label: "Logout", icon: "🚪", onLogout: () => { onLogout(); onClose(); } },
   ];
@@ -3838,6 +3931,12 @@ export default function App() {
   const [courses, setCourses] = useState([]);
   const [matches, setMatches] = useState([]);
   const [holeData, setHoleData] = useState({});
+  // One signature document per signed card — see lib/cardSigs. Kept as the
+  // raw row array rather than keyed by match, because every consumer either
+  // looks one match up (sigForMatch) or folds the whole round at once
+  // (roundCardProgress), and a second shape would just be a third thing to
+  // keep honest.
+  const [cardSigs, setCardSigs] = useState([]);
   const [notif, setNotif] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [hcpOverridesData, setHcpOverridesData] = useState({}); // { round: { pid: value } }
@@ -3879,6 +3978,12 @@ export default function App() {
   // over, which is exactly the kind of staleness this feature exists to
   // prevent. Refs are always current.
   const roundLocksRef = useRef({});
+  // Same reasoning for the signature rows: attesting is read-modify-write
+  // against the CURRENT document (append this player to `attested_by`), and
+  // a useCallback that closed over the state array would append to whatever
+  // it saw when it was created — silently dropping the attestation that
+  // landed in between.
+  const cardSigsRef = useRef([]);
   const lockInputsRef = useRef({ players: [], tRounds: [], courses: [], hcpOverrides: {}, teeAssignments: {} });
   const lockInFlightRef = useRef({}); // { round: true } — de-dupes concurrent auto-locks in this client
 
@@ -4114,6 +4219,10 @@ export default function App() {
     }));
     unsubs.push(db.subscribe("bc_courses", f, setCourses));
     unsubs.push(db.subscribe("bc_matches", f, setMatches));
+    unsubs.push(db.subscribe("bc_card_sigs", f, rows => {
+      cardSigsRef.current = rows;   // keep the ref hot for the attest path
+      setCardSigs(rows);
+    }));
     unsubs.push(db.subscribe("bc_hole_scores", f, rows => {
       const hd = {};
       rows.forEach(r => {
@@ -4327,6 +4436,85 @@ export default function App() {
       await db.delete("bc_ctp", id);
     }
   }, []);
+  // ── Card signature / attestation ─────────────────────────────────────
+  // Three writes against bc_card_sigs, and the whole workflow is these
+  // three plus the director's force-attest below. See lib/cardSigs for the
+  // model and why signatures live in their own collection.
+  //
+  // Every field is written on every call, for the same reason onSetCtp does
+  // it: db.upsert MERGES, so an update that omitted `attested_by` would
+  // leave the previous list attached to a card that no longer has it.
+  const onSignCard = useCallback(async (match, pid) => {
+    if (!match || !pid) return null;
+    // A match whose only member is the signer has nobody left to attest.
+    // Rather than leaving it stuck at "waiting on 0 players" forever, it
+    // attests itself at signing time — with `attested_by` populated, not
+    // just the boolean, so the FINAL badge and the attester chips can never
+    // disagree about the same card. (MnQ learned this one the hard way.)
+    const others = nonSignerPids(match, { signed_by: pid });
+    const doc = {
+      id: editionDocId(cardSigBareId(match.round, match.id)),
+      tournament_id: TOURNAMENT_ID,
+      round_number: match.round,
+      match_id: match.id,
+      signed_by: pid,
+      signed_at: new Date().toISOString(),
+      // Empty in both branches — when `others` is empty there is nobody to
+      // list, so the auto-attested card's chip row and its FINAL badge agree
+      // by construction rather than by a second field being kept in step.
+      attested_by: [],
+      attested: others.length === 0,
+    };
+    return db.upsert("bc_card_sigs", doc);
+  }, []);
+
+  // Additive: an attester is appended, and the card flips to `attested`
+  // only on the one that completes the set. Recomputed from the document
+  // rather than from a count so two players attesting at once converge on
+  // the same answer instead of racing to a stale total.
+  const onAttestCard = useCallback(async (match, pid) => {
+    if (!match || !pid) return null;
+    const sig = sigForMatch(cardSigsRef.current, match.id);
+    if (!sig) return null;
+    const attested_by = [...new Set([...(sig.attested_by || []), pid])];
+    const done = nonSignerPids(match, sig).every(p => attested_by.includes(p));
+    return db.upsert("bc_card_sigs", { ...sig, attested_by, attested: done });
+  }, []);
+
+  // Unsign deletes the document outright rather than blanking its fields.
+  // "No signature" and "a signature that has been withdrawn" are the same
+  // state — the card is a draft again — and one of them is a row that has
+  // to be filtered out of every count downstream.
+  const onUnsignCard = useCallback(async (match) => {
+    const sig = match ? sigForMatch(cardSigsRef.current, match.id) : null;
+    if (!sig) return null;
+    return db.delete("bc_card_sigs", sig.id || editionDocId(cardSigBareId(match.round, match.id)));
+  }, []);
+
+  // The director's escape hatch, ported from MnQ's handleAttestAllWeek: the
+  // normal loop needs every non-signer to tap Attest, and a group that has
+  // driven home without doing it blocks the round for everybody else. This
+  // bypasses the second signature for every signed-but-unattested card in
+  // one round. It cannot invent a signature — an unsigned card is still
+  // unsigned afterwards, which is deliberate: force-attesting a card nobody
+  // signed would be the app inventing the whole ritual, not just the reply.
+  const onAttestAllInRound = useCallback(async (round, roundMatches) => {
+    const pending = (roundMatches || []).filter(m => {
+      const sig = sigForMatch(cardSigsRef.current, m.id);
+      return sig && !isFullyAttested(m, sig);
+    });
+    for (const m of pending) {
+      const sig = sigForMatch(cardSigsRef.current, m.id);
+      await db.upsert("bc_card_sigs", {
+        ...sig,
+        attested_by: nonSignerPids(m, sig),
+        attested: true,
+        attested_forced_at: new Date().toISOString(),
+      });
+    }
+    return pending.length;
+  }, []);
+
   const onUpdatePot = useCallback(async (amt) => {
     setSkinsPot(amt);
     await db.upsert("bc_tournament_settings", { id: editionDocId("bc_settings_main"), tournament_id: TOURNAMENT_ID, skins_pot: amt });
@@ -4477,12 +4665,53 @@ export default function App() {
     () => roundScoreProgress(enrichedMatches, holeData, currentRound),
     [enrichedMatches, holeData, currentRound]
   );
+  // The same round counted the other way: how many of its cards have been
+  // signed, and how many of those every non-signer has attested. See
+  // lib/cardSigs.
+  const roundCards = useMemo(
+    () => roundCardProgress(enrichedMatches, cardSigs, currentRound),
+    [enrichedMatches, cardSigs, currentRound]
+  );
+  // ── Push: foreground rendering and the app badge ─────────────────────
+  // FCM does not display anything while the tab is focused, so the
+  // foreground handler has to be attached for "a push always shows a
+  // notification" to be true. Idempotent, and a no-op on a device that
+  // never enabled push.
+  useEffect(() => { initForegroundNotifications(); }, []);
+
+  // The badge counts what this player still OWES — cards signed by someone
+  // else in their match and not yet attested by them. That is why it is
+  // computed here from live data rather than incremented by notifications:
+  // a badge driven by pushes counts messages, and messages are not
+  // obligations. Attesting on any device clears it on this one.
+  // Scoped to the CURRENT round, which is the only one the Scoring tab will
+  // let anybody act on (see "The round gate"). Normally that costs nothing —
+  // a round cannot go final until its cards are attested — but the director
+  // can finalize over an unattested card, and a badge counting something
+  // with no reachable button would never clear.
+  const myPendingAttest = useMemo(
+    () => pendingAttestations(
+      enrichedMatches.filter(m => m.round === currentRound),
+      cardSigs, user?.player_id,
+    ),
+    [enrichedMatches, cardSigs, currentRound, user?.player_id]
+  );
+  useEffect(() => { syncAppBadge(myPendingAttest.length); }, [myPendingAttest.length]);
+
   const isDirector = !!user?.isDirector;
   // "Ready" is the blunt, complete-round definition, and deliberately so: a
   // notification that fired on a guess ("looks about done") would be the
   // same accident the round gate exists to prevent, pointed at the one
   // action that moves the whole field. Everything else goes through More.
-  const finalizeReady = isDirector && currentRound != null && roundProgress.complete;
+  //
+  // What counts as complete moved with the signature workflow: every card
+  // ATTESTED, not merely every score typed. All eighteen holes being in is
+  // now the condition for the last card being signable, not for the round
+  // being over — the round is over when the field agrees it is. Attestation
+  // implies completeness (a card cannot be signed with a hole missing) with
+  // one exception, the director's force-attest, and that is a deliberate
+  // human override rather than a gap.
+  const finalizeReady = isDirector && currentRound != null && roundCards.complete;
   const finalizeNextRound = useMemo(
     () => nextRoundNumber(roundLocksData, tournamentRounds),
     [roundLocksData, tournamentRounds]
@@ -4638,6 +4867,7 @@ export default function App() {
           round={currentRound}
           nextRound={finalizeNextRound}
           progress={roundProgress}
+          cards={roundCards}
           onOpen={() => setFinalizeOpen(true)}
           onDismiss={() => snoozeFinalizeAlert(currentRound)}
         />
@@ -4721,6 +4951,10 @@ export default function App() {
             currentRound={currentRound}
             ctpData={ctpData}
             onSetCtp={onSetCtp}
+            cardSigs={cardSigs}
+            onSignCard={onSignCard}
+            onAttestCard={onAttestCard}
+            onUnsignCard={onUnsignCard}
           />
         )}
         {view === "groups" && (
@@ -4773,6 +5007,9 @@ export default function App() {
               </div>
             </div>
           </div>
+        )}
+        {view === "notifications" && (
+          <NotificationSettings user={user} notify={notify} />
         )}
         {(view === "analytics" || view === "history") && (
           <AnalyticsView
@@ -4867,8 +5104,13 @@ export default function App() {
           nextRound={finalizeNextRound}
           lastFinal={finalizeLastFinal}
           progress={roundProgress}
+          cards={roundCards}
           tPlayers={tPlayers}
           onFinalizeRound={onFinalizeRound}
+          onAttestAll={() => onAttestAllInRound(
+            currentRound,
+            enrichedMatches.filter(m => m.round === currentRound),
+          )}
           notify={notify}
           onClose={() => setFinalizeOpen(false)}
         />
