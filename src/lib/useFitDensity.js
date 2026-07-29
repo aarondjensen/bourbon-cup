@@ -70,8 +70,15 @@ export const FIT_SIZES = {
 // Room each density needs, measured against a four-card match. Anything
 // below `tight`'s floor scrolls — there is a point past which shrinking a
 // tap target does more harm than a scrollbar.
-const ROOMY_NEEDS = 660;
-const COMPACT_NEEDS = 530;
+//
+// Both went up by 5 when the hole strips were given clearance for the
+// current-hole ring (App's HOLE_RING_REACH): 2px under each of the two
+// strips, and 1px more under the front-nine status row on the densities
+// where fit.stack is 3. The screen got 5px taller, so the room it needs did
+// too — carried across as arithmetic on the measured figure rather than
+// re-measured, since the delta is a known constant.
+const ROOMY_NEEDS = 665;
+const COMPACT_NEEDS = 535;
 
 export function densityFor(usable) {
   if (!usable) return "roomy";

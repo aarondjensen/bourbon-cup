@@ -49,35 +49,37 @@ import { nonSignerPids, isFullyAttested } from "../lib/cardSigs";
 // on 18 wondering why has no way to find out. Names the players and the
 // holes, so the fix is a tap away rather than an audit.
 //
-// Long lists are clipped rather than wrapped: a card missing forty holes is
-// a card nobody is about to sign, and the count carries that better than
+// ── Why it is ONE line ────────────────────────────────────────────────
+// This note lives on the Scoring tab, which is fit to the device rather
+// than scrolled: it has a fixed height budget, and every pixel this takes
+// comes out of the score buttons underneath it. As a header plus four
+// player rows it cost around a hundred of them — it visibly squashed the
+// tap targets it was sitting above, for a message that is usually "one
+// player, one hole".
+//
+// So it is a strip: one row, clipped rather than wrapped, holding as many
+// players as fit and a count for the rest. What it has to do is tell you
+// something is wrong and where to look. A card missing forty scores is a
+// card nobody is about to sign, and the count carries that better than
 // forty numbers would.
 export function MissingCardNote({ missing, nameOf }) {
   if (!missing?.length) return null;
+  // "Tim C hole 7" for a real gap, "Dave K 4 holes" once naming them stops
+  // being useful — the point of the number is to go look, not to read it here.
+  const part = ({ pid, holes }) => `${nameOf(pid)} ${holes.length > 3
+    ? `${holes.length} holes`
+    : `hole${holes.length > 1 ? "s" : ""} ${holes.join(", ")}`}`;
+  const shown = missing.slice(0, 2).map(part).join(" · ");
+  const rest = missing.length - 2;
   return (
     <div style={{
-      width: "100%", padding: "8px 10px", borderRadius: 8, marginBottom: 6,
+      width: "100%", padding: "5px 9px", borderRadius: 8, marginBottom: 6,
       background: `${BC.warn}${ALPHA.wash}`, border: `1px solid ${BC.warn}${ALPHA.line}`,
       color: BC.warn, fontFamily: FONT, boxSizing: "border-box", flexShrink: 0,
+      fontSize: FS.label, fontWeight: 700, lineHeight: 1.4,
+      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
     }}>
-      <div style={{ fontSize: FS.small, fontWeight: 800, marginBottom: 3 }}>
-        Missing scores — can&apos;t sign yet
-      </div>
-      {missing.slice(0, 4).map(({ pid, holes }) => (
-        <div key={pid} style={{
-          fontSize: FS.label, fontWeight: 700, opacity: 0.9, lineHeight: 1.45,
-          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-        }}>
-          {nameOf(pid)} — {holes.length > 6
-            ? `${holes.length} holes`
-            : `hole${holes.length > 1 ? "s" : ""} ${holes.join(", ")}`}
-        </div>
-      ))}
-      {missing.length > 4 && (
-        <div style={{ fontSize: FS.label, fontWeight: 700, opacity: 0.9 }}>
-          …and {missing.length - 4} more
-        </div>
-      )}
+      ⚠ Can&apos;t sign — {shown}{rest > 0 ? ` · +${rest} more` : ""}
     </div>
   );
 }
@@ -111,7 +113,7 @@ export function SignCardSheet({
       showClose={false}
       innerStyle={{ background: BC.card, border: `1px solid ${BC.amber}${ALPHA.line}`, borderRadius: 12 }}>
       <div style={{ padding: "10px 14px", borderBottom: `1px solid ${BC.bdr}`, fontFamily: FONT }}>
-        <div style={{ fontSize: FS.label, fontWeight: 800, color: BC.amber, letterSpacing: 1.5 }}>
+        <div style={{ fontSize: FS.label, fontWeight: 800, color: BC.amberInk, letterSpacing: 1.5 }}>
           SIGN THE CARD
         </div>
         <div style={{ fontSize: FS.small, color: BC.t2, marginTop: 2 }}>
@@ -248,7 +250,7 @@ export function SignedCardPanel({
           display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6,
           fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 0.5,
         }}>
-          <span style={{ color: BC.amber, letterSpacing: 1.5, fontWeight: 800 }}>
+          <span style={{ color: BC.amberInk, letterSpacing: 1.5, fontWeight: 800 }}>
             {final ? "FINAL" : "SIGNED"}
           </span>
           <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

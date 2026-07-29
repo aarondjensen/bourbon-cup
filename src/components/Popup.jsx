@@ -55,7 +55,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { BC, FONT, ON_ACCENT, SHADOW, SCRIM, FS, VP_DROP_BOTTOM } from "../theme";
+import { BC, FONT, ON_ACCENT, ON_AMBER, SHADOW, SCRIM, FS, VP_DROP_BOTTOM } from "../theme";
 
 const Z_MAP = { content: 500, modal: 900 };
 const STD_BACKDROP = SCRIM;
@@ -258,7 +258,11 @@ function ConfirmModalInner({ m }) {
 
   const isDanger = m.destructive === true || m.variant === "danger";
   const confirmBg = isDanger ? BC.danger : BC.amber;
-  const confirmFg = isDanger ? ON_ACCENT : BC.bg;
+  // ON_AMBER, not BC.bg: which ink an amber button takes is decided by the
+  // FILL, never by the theme. BC.bg happens to be near-black in dark mode,
+  // which is why this read correctly there and read as near-white on
+  // mid-amber — 3.42:1 — in light.
+  const confirmFg = isDanger ? ON_ACCENT : ON_AMBER;
   const handleCancel = m.onCancel || (() => {});
 
   return (
@@ -270,7 +274,7 @@ function ConfirmModalInner({ m }) {
     <Popup onClose={handleCancel} maxWidth={340} zIndex="modal" padding={20} portal>
       {m.eyebrow && (
         <div style={{
-          fontSize: FS.small, fontWeight: 700, color: BC.amber,
+          fontSize: FS.small, fontWeight: 700, color: BC.amberInk,
           letterSpacing: 1.5, textTransform: "uppercase",
           marginBottom: 10,
         }}>{m.eyebrow}</div>
