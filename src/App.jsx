@@ -3,7 +3,7 @@ import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, FS, segThumb, segTrack, r
 import { playerLookup } from "./lib/players";
 import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, BOOTSTRAP_DIRECTOR } from "./firebase";
 import { PROVIDERS, signIn, signOutUser, onAuthUser, consumeRedirectResult, isCancelled } from "./lib/auth";
-import { claimPlayer, linkedPlayer, isClaimed, accountLabel, unlinkPatch, readMembership, isDirectorAccount, joinWithCode, setAccessCode, readAccessCode } from "./lib/accounts";
+import { claimPlayer, linkedPlayer, isClaimed, accountLabel, unlinkPatch, readMembership, isDirectorAccount, joinWithCode, setAccessCode, readAccessCode, setDirector, membershipFor, playerIsDirector, ACCOUNTS_COL } from "./lib/accounts";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
   resolveTeams, DEFAULT_TEAM_NAMES, TOURNAMENT_TITLE, TOURNAMENT_LOCATION,
@@ -1511,7 +1511,7 @@ function ChDeltaBadge({ delta }) {
   );
 }
 
-function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks }) {
+function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks }) {
   const [tab, setTab] = useState("players");
   const [editTeamNames, setEditTeamNames] = useState({ A: "", B: "" });
   const [editingTeam, setEditingTeam] = useState(null);
@@ -2103,7 +2103,11 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                   <div key={p.player_id} style={{ background: BC.card, borderRadius: 6, padding: "4px 8px", border: `1px solid ${BC.bdr}`, display: "flex", flexDirection: "row", alignItems: "center", gap: 6, boxShadow: `inset 3px 0 0 ${team.accent}${ALPHA.line}`, marginBottom: 2 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 5, flexBasis: "52%", flexGrow: 0, flexShrink: 1, minWidth: 0 }}>
                       <span style={{ fontSize: FS.small, fontWeight: 600, color: playerNameColor(), minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fullName(p)}</span>
-                      {p.isDirector && <span title="Tournament director" style={{ fontSize: FS.small, flexShrink: 0, lineHeight: 1 }}>👑</span>}
+                      {/* Drawn from the membership document, which is the
+                          flag the security rules check. Not from the
+                          roster, which cannot be checked by them and would
+                          be free to disagree. */}
+                      {playerIsDirector(memberships, p) && <span title="Tournament director" style={{ fontSize: FS.small, flexShrink: 0, lineHeight: 1 }}>👑</span>}
                       {/* Whether this name has been claimed by a sign-in.
                           The director is the only person who can answer
                           "why can't I pick my own name" (somebody else
@@ -2121,7 +2125,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                       {synced && <span style={{ fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.2, color: BC.hcpBlue, border: `1px solid ${BC.hcpBlue}${ALPHA.line}`, background: BC.hcpBlue + ALPHA.tint, borderRadius: 3, padding: "1px 3px", lineHeight: 1 }}>G</span>}
                     </span>
                     <span style={{ flex: 1, minWidth: 8 }} />
-                    <button onClick={() => setEditingPlayer({ pid: p.player_id, first: p.first_name || (p.last_name ? "" : (p.name || "")), last: p.last_name || "", nick: p.name || "", hi: String(p.handicap_index), ov: (p.hi_override != null && String(p.hi_override).trim() !== "") ? String(p.hi_override) : "", dir: !!p.isDirector })} style={{
+                    <button onClick={() => setEditingPlayer({ pid: p.player_id, first: p.first_name || (p.last_name ? "" : (p.name || "")), last: p.last_name || "", nick: p.name || "", hi: String(p.handicap_index), ov: (p.hi_override != null && String(p.hi_override).trim() !== "") ? String(p.hi_override) : "", dir: playerIsDirector(memberships, p) })} style={{
                       fontSize: FS.label, padding: "2px 8px", borderRadius: 4, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer", flexShrink: 0,
                     }}>Edit</button>
                   </div>
@@ -2143,6 +2147,20 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             const acc = ((isNew ? teams[editingPlayer.team] : teams[p.team]) || teams.A).accent;
             const defaultNick = toDisplayName(editingPlayer.first, editingPlayer.last);
             const linked = !!editingPlayer.ghin_number;
+            // Who this row's crown can be changed by, and why not.
+            // Mirrors the rules exactly (firestore.rules, bc_accounts
+            // update) so the button is never offered for a write that
+            // would come back refused.
+            const theirMembership = isNew ? null : membershipFor(memberships, p);
+            const isSelf = !!theirMembership && theirMembership.uid === user?.auth_uid;
+            const canGrantDirector = !isNew && !!theirMembership && !isSelf;
+            const directorHint = isNew
+              ? "Add them first, then they sign in and claim this name."
+              : !theirMembership
+                ? "They need to sign in and enter the tournament password before they can be made a director."
+                : isSelf
+                  ? "You can't change your own — that's what stops the last director locking everyone out. Ask the other director, or edit it in the Firebase console."
+                  : "Grants the Admin tab, and every write behind it.";
             const close = () => setEditingPlayer(null);
             const set = (patch) => setEditingPlayer(prev => prev ? { ...prev, ...patch } : prev);
             const lbl = { fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.5, color: BC.t3, textTransform: "uppercase", marginBottom: 3, display: "block" };
@@ -2190,7 +2208,7 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                 const pid = `bc_player_${Date.now()}`;
                 await onAddPlayer({ id: pid, player_id: pid, tournament_id: TOURNAMENT_ID, team: editingPlayer.team,
                   name: newName, first_name: first, last_name: last,
-                  handicap_index: parseFloat(editingPlayer.hi) || 0, hi_override: newOv, isDirector: newDir, ...ghinFields });
+                  handicap_index: parseFloat(editingPlayer.hi) || 0, hi_override: newOv, ...ghinFields });
                 notify(`Added ${newName}`, "success");
                 close();
                 return;
@@ -2202,8 +2220,9 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               if (baseChanged) changes.push(`Index: ${p.handicap_index} → ${editingPlayer.hi}`);
               const oldOv = (p.hi_override != null && String(p.hi_override).trim() !== "") ? (parseFloat(p.hi_override) || 0) : null;
               if (newOv !== oldOv) changes.push(`Override: ${oldOv == null ? "—" : oldOv} → ${newOv == null ? "— (use index)" : newOv}`);
-              const dirChanged = newDir !== !!p.isDirector;
-              if (dirChanged) changes.push(`Director: ${p.isDirector ? "Yes" : "No"} → ${newDir ? "Yes" : "No"}`);
+              const wasDir = playerIsDirector(memberships, p);
+              const dirChanged = canGrantDirector && newDir !== wasDir;
+              if (dirChanged) changes.push(`Director: ${wasDir ? "Yes" : "No"} → ${newDir ? "Yes" : "No"}`);
               if ((editingPlayer.ghin_number || null) !== (p.ghin_number || null))
                 changes.push(editingPlayer.ghin_number ? `GHIN: linked #${editingPlayer.ghin_number}` : "GHIN: unlinked");
               const cutSignIn = !!editingPlayer.unlink && isClaimed(p);
@@ -2212,9 +2231,19 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
               const oldEff = oldOv != null ? oldOv : (parseFloat(p.handicap_index) || 0);
               const newEff = newOv != null ? newOv : (parseFloat(editingPlayer.hi) || 0);
               let impact = oldEff !== newEff ? "\n\n" + describeHiChangeImpact(roundLocks, [1,2,3,4]).text : "";
-              if (dirChanged && newDir) impact += "\n\nThis only shows the crown. Admin access is granted on their account in the Firebase console (is_director), which is the only thing the security rules honour.";
+              if (dirChanged) impact += newDir
+                ? "\n\nA director can do everything in Admin: the roster, rounds, matches, courses, groups, tee times, settings, editions and the access password."
+                : "\n\nThey keep their name and everything a player does — scores, skins, signatures. They lose the Admin tab.";
               if (await confirm({ title: "Confirm changes", message: changes.join("\n") + impact })) {
-                onUpdatePlayer({ ...p, name: newName, first_name: first, last_name: last, handicap_index: parseFloat(editingPlayer.hi) || 0, hi_override: newOv, isDirector: newDir, ...ghinFields, ...(cutSignIn ? unlinkPatch() : {}) });
+                onUpdatePlayer({ ...p, name: newName, first_name: first, last_name: last, handicap_index: parseFloat(editingPlayer.hi) || 0, hi_override: newOv, ...ghinFields, ...(cutSignIn ? unlinkPatch() : {}) });
+                // A separate document, and one the rules police, so it is
+                // reported separately: the roster edit above can succeed
+                // while this is refused.
+                if (dirChanged) {
+                  const res = await onSetDirector(theirMembership.uid, newDir);
+                  if (!res.ok) notify(res.error, "error");
+                  else notify(newDir ? `${newName} is a director` : `${newName} is no longer a director`, "success");
+                }
               }
               close();
             };
@@ -2237,20 +2266,28 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
                     <label style={{ flex: 1, minWidth: 0 }}><span style={lbl}>Nickname</span>
                       <input value={editingPlayer.nick} placeholder={defaultNick} onChange={e => set({ nick: e.target.value })} style={inp} /></label>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      {/* A label, not a grant. Admin access comes from the
-                          is_director flag on the account's membership
-                          document, set in the Firebase console, because
-                          that is the only thing the security rules can
-                          check — see firestore.rules. This toggle puts the
-                          crown next to a name and nothing more. */}
-                      <span style={lbl} title="Shows the crown. Admin access is granted on the account, in the Firebase console.">Director</span>
-                      <button type="button" onClick={() => set({ dir: !editingPlayer.dir })}
-                        style={{ fontSize: FS.body, fontWeight: 700, padding: "7px 10px", borderRadius: 8, cursor: "pointer", width: "100%", boxSizing: "border-box", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                      {/* This IS the grant — it writes is_director on their
+                          membership document, which is the only flag the
+                          security rules honour. Two things it cannot do,
+                          both enforced by those rules rather than here:
+                          appoint somebody who has never signed in (there is
+                          no membership document to flag), and change your
+                          own (so the last director can never remove
+                          themselves). */}
+                      <span style={lbl}>Director</span>
+                      <button type="button"
+                        disabled={!canGrantDirector}
+                        title={directorHint}
+                        onClick={() => set({ dir: !editingPlayer.dir })}
+                        style={{ fontSize: FS.body, fontWeight: 700, padding: "7px 10px", borderRadius: 8, cursor: canGrantDirector ? "pointer" : "default", width: "100%", boxSizing: "border-box", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", opacity: canGrantDirector ? 1 : 0.5,
                           border: `1px solid ${editingPlayer.dir ? BC.amber : BC.bdr}`, background: editingPlayer.dir ? BC.amber + ALPHA.wash : "transparent", color: editingPlayer.dir ? BC.amberInk : BC.t2 }}>
                         {editingPlayer.dir ? "👑 Director" : "Player"}
                       </button>
                     </div>
                   </div>
+                  {!isNew && !canGrantDirector && (
+                    <div style={{ fontSize: FS.label, color: BC.t3, marginTop: -6, lineHeight: 1.4 }}>{directorHint}</div>
+                  )}
                   {/* The sign-in bound to this name. Read-only apart from
                       cutting it: there is nothing to type here, because the
                       link is made by the player signing in and tapping
@@ -4358,6 +4395,23 @@ export default function App() {
   // app from ever offering an Admin tab whose every write would be refused.
   const isDirectorUser = isDirectorAccount(membership);
 
+  // Every membership, but only for a director — the rules allow the listing
+  // to nobody else, and nobody else has a screen that needs it. It is what
+  // draws the crown in Admin → Players, so that badge shows the same flag
+  // the rules check rather than a field on the roster that could disagree
+  // with it. Subscribed rather than fetched so appointing somebody updates
+  // the row you just tapped.
+  const [memberships, setMemberships] = useState([]);
+  useEffect(() => {
+    if (!isDirectorUser) { setMemberships([]); return; }
+    return db.subscribe(ACCOUNTS_COL, [], setMemberships);
+  }, [isDirectorUser]);
+
+  const onSetDirector = useCallback(async (uid, on) => {
+    const res = await setDirector(uid, on);
+    return res;
+  }, []);
+
   const user = useMemo(() => {
     if (!authUser) return null;
     const linked = linkedPlayer(tPlayers, authUser.uid);
@@ -5518,6 +5572,8 @@ export default function App() {
             tRounds={enrichedRounds}
             courses={courses}
             matches={enrichedMatches}
+            memberships={memberships}
+            onSetDirector={onSetDirector}
             onAddPlayer={onAddPlayer}
             onUpdatePlayer={onUpdatePlayer}
             onRemovePlayer={onRemovePlayer}

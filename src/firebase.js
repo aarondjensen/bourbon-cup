@@ -280,6 +280,19 @@ export const db = {
     await setDoc(doc(_db, col, String(data.id)), data);
     return data;
   },
+  // `upsert` with the rejection left in — for the other write the rules
+  // police, appointing a director. A denial there is an answer ("not yours
+  // to give"), not a glitch to log.
+  //
+  // The id is a separate argument rather than a field on the payload, and
+  // that is load-bearing: the rule for this write allows exactly one key to
+  // change, and `upsert`'s habit of writing `id` into the document as well
+  // would put a second key in the diff and get the whole thing refused.
+  upsertStrict: async (col, id, data) => {
+    if (!id) throw new Error("upsertStrict needs an id");
+    await setDoc(doc(_db, col, String(id)), data, { merge: true });
+    return data;
+  },
 };
 
 // ── Firebase Cloud Messaging (lazy-loaded) ──────────────────────────

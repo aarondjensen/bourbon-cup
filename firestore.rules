@@ -168,23 +168,46 @@ service cloud.firestore {
     // the password screen. Its existence IS membership; everything below
     // is gated on it.
     //
-    // create: your own uid only, and only with the right password. There
-    //         is no other way to mint one — not even for a director, who
-    //         has no more power here than anybody else.
-    // read:   your own only. The app needs to know "am I through?" on
-    //         every cold start, and nobody needs to enumerate the league's
-    //         accounts. Note this also means the code field, which is
-    //         stored on the document so the rules could compare it, is
-    //         visible to exactly one person: the one who typed it.
-    // update/delete: nobody. Revoking somebody means deleting their
-    //         document from the Firebase console, deliberately — a client
-    //         that could delete its own membership could also delete
-    //         somebody else's if this rule were ever loosened by accident.
+    // create: your own uid only, and only with the right password, and
+    //         never carrying is_director. There is no other way to mint a
+    //         membership — not even for a director.
+    // read:   your own, plus every membership for a director, who needs to
+    //         see who else is one to show it in Admin → Players.
+    // update: ONE field, is_director, and only a director may set it, and
+    //         never on themselves. See below.
+    // delete: nobody. Revoking somebody entirely is deleting their
+    //         document in the Firebase console, deliberately — a client
+    //         that could delete its own membership could delete somebody
+    //         else's if this rule were ever loosened by accident.
+    //
+    // Why a director may appoint another one, having just said the flag is
+    // console-only: because the alternative was worse. Left console-only,
+    // the crown in Admin → Players had to be a label that granted nothing,
+    // and a director changing it next year would believe they had handed
+    // over access when they had not. Two sources of truth, drifting
+    // silently, a year apart. Now there is one, the app writes it, and the
+    // crown shows what the rules will actually honour.
+    //
+    // It concedes little. A director can already rewrite the roster, the
+    // rounds and the password; appointing someone is not a larger power
+    // than that. What stays impossible is the dangerous half: nobody can
+    // make THEMSELVES a director, at create time or after, so the flag
+    // cannot be self-issued by anyone who merely knows the password.
+    //
+    // The self exclusion also holds an invariant worth having: a director
+    // cannot demote themselves, so whoever is acting stays one, and the
+    // set can never be emptied from inside the app. Stepping down entirely
+    // is a console edit — the same place the FIRST director has to come
+    // from, since this rule requires one to already exist.
     match /bc_accounts/{uid} {
-      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow read: if isDirector() || (isSignedIn() && request.auth.uid == uid);
       allow create: if isSignedIn() && request.auth.uid == uid && codeOK()
                     && !('is_director' in request.resource.data);
-      allow update, delete: if false;
+      allow update: if isDirector()
+                    && request.auth.uid != uid
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['is_director']);
+      allow delete: if false;
     }
 
     // The password itself. Read is denied to everyone OUTSIDE the door and

@@ -81,16 +81,32 @@ would not.
 
 ## Directors
 
-**Set `is_director: true` on the person's `bc_accounts/{uid}` document in the
-Firebase console.** That is the only way, on purpose: the rules reject a
-membership created with the field and deny updates outright, so no client can
-grant it — not the app, not a phone, not somebody talking to Firestore with the
-public config. The app reads the same flag to decide whether the Admin tab
-exists, so a phone can never show an Admin tab whose writes would be refused.
+**One director appoints the next, in Admin → Players.** The crown toggle in the
+player modal writes `is_director` on that person's `bc_accounts` document,
+which is the flag the security rules check — so the badge on screen and the
+access behind it can never disagree. The crown you see in the roster list is
+read from the same place.
 
-The crown in Admin → Players is a **label**. It puts 👑 next to a name and
-grants nothing. Rules cannot check it — finding the roster row whose `auth_uid`
-is yours would need a query, and rules only fetch paths they can construct.
+Two things it deliberately cannot do, both enforced by the rules rather than
+by the UI:
+
+- **Appoint somebody who has never signed in.** The flag lives on a membership
+  document, and there isn't one until they've been through the password screen.
+  The toggle is disabled with that explanation.
+- **Change your own.** Nobody appoints themselves, and nobody steps down from
+  inside the app — which means the last director can never remove themselves
+  and leave the tournament unadministered. Stepping down is a console edit.
+
+**The first director has to come from the Firebase console**, since the rule
+requires one to already exist: set `is_director: true` on their
+`bc_accounts/{uid}` document. That is also the way back if the set is ever
+emptied.
+
+The app reads the same flag to decide whether the Admin tab exists, so a phone
+can never show an Admin tab whose writes would be refused. The `isDirector`
+field on `bc_players` is vestigial — nothing reads it any more. Rules never
+could: finding the roster row whose `auth_uid` is yours would need a query, and
+rules only fetch paths they can construct.
 
 What that split buys: a member can do everything a player does from a tee box —
 scores, skins, CTPs, card signatures, the round lock, their own push token, and
@@ -98,9 +114,9 @@ the one narrow update that claims their own name. Everything AdminView owns —
 roster, rounds, matches, courses, groups, tee sheets, settings, editions, the
 password — needs director.
 
-- **Set the flag before deploying rules that depend on it.** Until at least one
+- **Set the first flag before deploying rules that depend on it.** Until one
   membership carries it, nobody can edit the tournament at all; the way back is
-  the console, which is where the flag lives anyway.
+  the console.
 - The director escape hatch on the claim screen grants no Admin any more. It
   gets you into an edition with an empty roster; the flag decides what is there
   when you arrive.

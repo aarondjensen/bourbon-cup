@@ -19,7 +19,7 @@
 import {
   initializeTestEnvironment, assertFails, assertSucceeds,
 } from "@firebase/rules-unit-testing";
-import { doc, setDoc, getDoc, deleteDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc, getDocs, collection, deleteDoc } from "firebase/firestore";
 import { readFileSync } from "node:fs";
 
 const env = await initializeTestEnvironment({
@@ -98,6 +98,35 @@ await check("an ordinary member CAN still do everything a player does", async ()
 });
 
 await grantDirector("alice");
+
+// ── Appointing a director from the app ──────────────────────────────
+await check("a director can appoint another member", () =>
+  // The exact shape db.upsertStrict sends: a merge carrying one key. It
+  // sends the id as the path, never as a field — a second changed key
+  // here is refused, which is what this asserts as much as the grant.
+  assertSucceeds(setDoc(doc(aliceDb(), "bc_accounts/pete"), { is_director: true }, { merge: true })));
+
+await check("...and can demote them again", () =>
+  assertSucceeds(setDoc(doc(aliceDb(), "bc_accounts/pete"), { is_director: false }, { merge: true })));
+
+await check("...but not while also writing the id field", () =>
+  assertFails(setDoc(doc(aliceDb(), "bc_accounts/pete"), { id: "pete", is_director: true }, { merge: true })));
+
+await check("a director cannot change their OWN flag (last one out)", () =>
+  assertFails(setDoc(doc(aliceDb(), "bc_accounts/alice"), { is_director: false }, { merge: true })));
+
+await check("a director cannot alter anything else on a membership", async () => {
+  await assertFails(setDoc(doc(aliceDb(), "bc_accounts/pete"), { code: "peek" }, { merge: true }));
+  await assertFails(setDoc(doc(aliceDb(), "bc_accounts/pete"), { is_director: true, email: "x@y.z" }, { merge: true }));
+});
+
+await check("an ordinary member cannot appoint anybody", () =>
+  assertFails(setDoc(doc(peteDb(), "bc_accounts/mallory"), { is_director: true }, { merge: true })));
+
+await check("a director can list every membership; a member cannot", async () => {
+  await assertSucceeds(getDocs(collection(aliceDb(), "bc_accounts")));
+  await assertFails(getDocs(collection(peteDb(), "bc_accounts")));
+});
 
 await check("a director can write what Admin owns", async () => {
   await assertSucceeds(setDoc(doc(aliceDb(), "bc_players/p9"), { name: "Pete C", player_id: "p9" }));

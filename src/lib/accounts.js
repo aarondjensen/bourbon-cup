@@ -33,11 +33,12 @@
 // be issued a MEMBERSHIP: a bc_accounts/{uid} document.
 //
 // The password is checked by the security rules, not here. It lives in
-// bc_secrets/access, which no client can read — rules can `get()` a
-// document the reader is denied — and the rules also gate every write in
-// the project on the membership document existing. That is the difference
-// between a password and a doorman: the check survives someone reading the
-// bundle, disabling the JavaScript, or talking to Firestore directly.
+// bc_secrets/access, which only a director may read — rules can `get()` a
+// document the reader is denied, which is what lets them compare against
+// it either way — and the rules also gate every write in the project on
+// the membership document existing. That is the difference between a
+// password and a doorman: the check survives someone reading the bundle,
+// disabling the JavaScript, or talking to Firestore directly.
 //
 // What this file can do is ask ("create my membership, here is the code")
 // and read the answer. A rejection comes back as permission-denied, which
@@ -65,11 +66,12 @@ export const ACCESS_DOC = "access";
 // on the first tee, with no signal.
 //
 // The document also carries `is_director`, which is the only thing in the
-// project that grants Admin. No client can set it — the rules reject a
-// create that includes it and deny updates outright — so it arrives
-// exactly one way: a human editing the document in the Firebase console.
-// The app reads it here rather than trusting the roster's crown, so the
-// Admin tab can never appear for somebody whose writes would be refused.
+// project that grants Admin. Nobody can set it on themselves — the rules
+// reject a create that carries it, and an update to your own — so it comes
+// either from another director (setDirector below) or from the console,
+// which is where the first one has to come from. The app reads it here
+// rather than trusting the roster's crown, so the Admin tab can never
+// appear for somebody whose writes would be refused.
 export async function readMembership(uid) {
   if (!uid) return null;
   return await db.getById(ACCOUNTS_COL, uid);
@@ -108,6 +110,40 @@ export async function joinWithCode(authUser, code) {
     return { ok: false, error: "Could not check that — check signal and try again." };
   }
 }
+
+// ── Appointing a director ───────────────────────────────────────────
+// Writes the one field the rules honour, on somebody else's membership.
+// Refused unless you are a director already, and refused outright on your
+// own document — nobody appoints themselves, and nobody can step down from
+// inside the app, which is what keeps the set of directors from being
+// emptied by mistake.
+//
+// The target must have signed in and been through the password screen: the
+// flag lives on a membership document, and there is nothing to flag until
+// one exists. The caller checks that first so it can say so; this reports
+// what the database said if it slips through anyway.
+export async function setDirector(uid, on) {
+  if (!uid) return { ok: false, error: "That player hasn't signed in yet." };
+  try {
+    await db.upsertStrict(ACCOUNTS_COL, uid, { is_director: !!on });
+    return { ok: true };
+  } catch (e) {
+    if (e?.code === "permission-denied") {
+      return { ok: false, error: "Only a director can do that, and not to their own account." };
+    }
+    return { ok: false, error: "Could not save that — check signal and try again." };
+  }
+}
+
+// Every membership, for a director's Admin screen — the roster's crown is
+// drawn from these rather than from a field on the roster, so what is on
+// screen is what the rules will honour. A non-director cannot read this;
+// the rules allow the listing only for a director.
+export const membershipFor = (memberships, player) =>
+  (player?.auth_uid && (memberships || []).find(m => m.uid === player.auth_uid)) || null;
+
+export const playerIsDirector = (memberships, player) =>
+  membershipFor(memberships, player)?.is_director === true;
 
 // ── Reading the password back ───────────────────────────────────────
 // Members only, enforced by the rules — a stranger who could read this
