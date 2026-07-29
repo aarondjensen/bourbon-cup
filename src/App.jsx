@@ -66,9 +66,17 @@ import { useHoleAdvance } from "./lib/useHoleAdvance";
 // to the viewport bottom) with the full inset is the known-good layout.
 const NAV_SAFE_PAD = "calc(env(safe-area-inset-bottom, 0px) + 8px)";
 
-// Layout diagnostics, opt-in per URL and per load (see LayoutDiag).
-const DIAG = typeof window !== "undefined"
-  && new URLSearchParams(window.location.search).get("diag") === "1";
+// Layout diagnostics — see LayoutDiag. Two ways in, because the place this
+// is needed is a home-screen PWA, which has no address bar to put a query
+// param in: ?diag=1 for a browser tab, and a persisted flag for the icon,
+// toggled by tapping the app header five times (see DIAG_TAPS).
+const DIAG_KEY = "bc_diag";
+const DIAG_TAPS = 5;
+const readDiagFlag = () => {
+  if (typeof window === "undefined") return false;
+  if (new URLSearchParams(window.location.search).get("diag") === "1") return true;
+  try { return localStorage.getItem(DIAG_KEY) === "1"; } catch { return false; }
+};
 
 // Where a dismissed "ready to finalize" notification is remembered, per
 // edition — TOURNAMENT_ID is a live binding (firebase.js reassigns it when
@@ -3544,7 +3552,11 @@ function LayoutDiag() {
     <div style={{
       position: "fixed", top: 0, left: 0, right: 0, zIndex: 9999,
       background: "rgba(0,0,0,0.86)", color: "#7CFF9E", pointerEvents: "none",
-      font: "600 10px/1.35 ui-monospace, Menlo, monospace", padding: "4px 6px",
+      font: "600 10px/1.35 ui-monospace, Menlo, monospace",
+      // The status bar sits over the top of a standalone webview, so the
+      // readout starts below it or the first line is unreadable — which
+      // would be a diagnostic that fails in exactly the case it is for.
+      padding: "calc(env(safe-area-inset-top, 0px) + 4px) 6px 4px",
       textTransform: "none", whiteSpace: "pre-wrap",
     }}>
       {`scroll ${d.scroll}  client ${d.client}  scrollH ${d.scrollH}\n`}
@@ -3937,6 +3949,27 @@ export default function App() {
     // `user` is in the deps because the nav only exists once past the login
     // screen — without it the ref is null on mount and never measured.
   }, [user]);
+
+  // ── The diagnostics toggle ───────────────────────────────────────
+  // Five taps on the app header. Deliberately undiscoverable: it is a
+  // debugging aid for one specific unreachable device, not a feature, and
+  // the alternative — a menu item — would be permanent chrome for everyone
+  // in exchange for a readout nobody else will ever want.
+  const [diag, setDiag] = useState(readDiagFlag);
+  const diagTaps = useRef({ n: 0, at: 0 });
+  const bumpDiag = useCallback(() => {
+    const now = performance.now();
+    const t = diagTaps.current;
+    t.n = now - t.at > 3000 ? 1 : t.n + 1;
+    t.at = now;
+    if (t.n < DIAG_TAPS) return;
+    t.n = 0;
+    setDiag(prev => {
+      const next = !prev;
+      try { localStorage.setItem(DIAG_KEY, next ? "1" : "0"); } catch { /* private mode */ }
+      return next;
+    });
+  }, []);
 
   const notify = useCallback((msg, type = "success") => {
     setNotif({ msg, type });
@@ -4588,9 +4621,11 @@ export default function App() {
           total pins directly beneath it instead of fighting it for the top
           of the screen. flexShrink is pinned on the header itself so a tall
           tab can't squeeze it. */}
-      <AppHeader location={tournamentLocation} />
+      {/* The wrapper is the flex item now, so it carries the header's own
+          flexShrink:0 — without it a tall tab could squeeze the band. */}
+      <div onClick={bumpDiag} style={{ flexShrink: 0 }}><AppHeader location={tournamentLocation} /></div>
 
-      {DIAG && <LayoutDiag />}
+      {diag && <LayoutDiag />}
 
       {/* Ready-to-finalize notification — app chrome, like the header above
           it, so it reaches the director on whichever tab they are on rather
