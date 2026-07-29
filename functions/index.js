@@ -305,3 +305,83 @@ exports.sendTestPush = onCall(async (request) => {
   logger.info("sendTestPush", { playerId, ...result });
   return result;
 });
+
+// ═══════════════════════════════════════════════════════════════════
+//  CALLABLE 2 — delete my account
+// ═══════════════════════════════════════════════════════════════════
+// App Store review guideline 5.1.1(v): an app with account creation has to
+// offer account deletion from inside the app. My Account → Delete Account
+// calls this.
+//
+// ── Why it is here and not in the client ──────────────────────────
+// Every step is something the security rules deny a client, on purpose:
+// bc_accounts has `delete: if false`; bc_players is director-only apart
+// from the narrow claim update, which cannot write a null auth_uid; and
+// deleting an Auth user from a phone demands a recent login. The admin SDK
+// bypasses rules, so this runs the whole teardown in one place instead of
+// four loosened rules. See the note in src/lib/accounts.js.
+//
+// ── It takes no arguments, and that is the security model ─────────
+// The uid comes from the verified auth context, never from the payload.
+// There is no way to phrase a call to this that deletes somebody else.
+//
+// ── Order ─────────────────────────────────────────────────────────
+// Firestore first, Auth user last. The reverse would revoke the caller's
+// own token mid-run and leave a half-deleted account: the login gone, the
+// membership still granting writes to nobody.
+//
+// Roster rows are unlinked, not deleted: since sign-in landed, the row is a
+// tournament entry the director created — a name, a handicap, and scores
+// other players attested to — and the account is the auth_* fields pointing
+// at it. Unlinking is also what frees the name to be claimed again.
+//
+// ACROSS EDITIONS. A uid can sit on several roster rows: editions clone the
+// roster, so a player linked in bc_2025 is still linked in bc_2026. The
+// query is deliberately unscoped by tournament — deleting an account means
+// every edition, or next year's app signs them straight back in.
+exports.deleteAccount = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in first.");
+
+  const summary = { unlinked: 0, tokens: 0, membership: false, playerIds: [] };
+
+  // 1. Unlink every roster row this account claimed, in every edition.
+  //    Nulls rather than deleted keys, matching lib/accounts.unlinkPatch —
+  //    a merge that omitted them would leave the old values in place.
+  const rows = await db.collection("bc_players").where("auth_uid", "==", uid).get();
+  const unlink = {
+    auth_uid: null, auth_email: null, auth_provider: null, auth_linked_at: null,
+  };
+  for (const row of rows.docs) {
+    const pid = row.data()?.player_id || row.id;
+    if (pid && !summary.playerIds.includes(pid)) summary.playerIds.push(pid);
+    await row.ref.set(unlink, { merge: true });
+    summary.unlinked += 1;
+  }
+
+  // 2. Every push token for those player ids, on every device. The client
+  //    revokes THIS device's subscription with FCM before calling (only a
+  //    browser can do that); these are the rows, including the ones for
+  //    devices that are not in anyone's hand right now.
+  for (const pid of summary.playerIds) {
+    const toks = await db.collection(TOKENS_COL).where("player_id", "==", pid).get();
+    for (const t of toks.docs) { await t.ref.delete(); summary.tokens += 1; }
+  }
+
+  // 3. The membership document — the thing every write in the project is
+  //    gated on. After this the account can read the leaderboard and
+  //    nothing else, which is the correct state for the half-second before
+  //    the login itself goes.
+  const acct = db.collection("bc_accounts").doc(uid);
+  if ((await acct.get()).exists) { await acct.delete(); summary.membership = true; }
+
+  // 4. The login. Refresh tokens are revoked first so another device holding
+  //    a live session is logged out rather than running on a token that
+  //    outlives the user record by up to an hour.
+  try { await admin.auth().revokeRefreshTokens(uid); }
+  catch (err) { logger.warn("revokeRefreshTokens failed", { uid, err: err?.message }); }
+  await admin.auth().deleteUser(uid);
+
+  logger.info("deleteAccount", { uid, ...summary });
+  return summary;
+});
