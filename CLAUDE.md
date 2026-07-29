@@ -1,5 +1,56 @@
 # Working agreement
 
+## Land it, don't ask
+
+The default is to build the change and merge it. Aaron would rather look at the
+result on his phone than read a description of it and approve a plan, and
+`git revert` is cheap. A question that the merged result would have answered
+faster than the question did is a question that should not have been asked.
+
+So stop doing these:
+
+- asking which of two layouts he prefers before building either one
+- describing what a change will look like and waiting for a yes
+- offering three options when one is clearly right and the other two exist for
+  symmetry
+- holding finished work back pending a question the merged result answers
+- ending a message with "want me to go ahead?" when nothing is at risk
+
+"He might not like it" is never a reason to hold work back. Land it; he will
+say "undo that" and it costs one revert.
+
+### The one exception
+
+Land without asking **unless the change can fail in a way he cannot see.**
+Then say so before merging — one or two sentences naming the specific failure,
+not a general caveat. That covers:
+
+- **Anything that can lie to the user.** A delete that reports success and
+  leaves the record behind. A save that silently drops a field. These look
+  correct on screen, which is exactly what makes them dangerous, and "I'll ask
+  you to undo it" cannot catch them because there is nothing to see.
+- **Writes to the live tournament during play.** Firestore is shared and live.
+  There is no revert for a wrong score posted in front of the field.
+- **`firestore.rules` and Cloud Functions.** Reverting the commit does not
+  un-lock-out a phone mid-round. Ordering still applies: app first, rules
+  second.
+- **Anything a `git revert` does not actually undo** — a Firestore data
+  migration, a Firebase Console setting, a Vercel env var, an iOS
+  install-time meta tag that only re-snapshots on reinstall.
+- **Work that is finished but inert until somebody deploys.** If a feature
+  needs `firebase deploy --only functions` or a rules deploy to function, say
+  so plainly at merge time. Otherwise it ships looking complete and fails in
+  the field.
+
+The test is not "is this a big change." It is "if this is wrong, will he find
+out by looking?" If yes, just land it.
+
+### Flag once
+
+One flag, at the point of merging. Not a caveats section on every message, not
+a re-raise of something he already answered. If he says land it anyway, land
+it and don't mention it again.
+
 ## Git
 
 This is a two-developer project, so the old "always commit straight to `main`,
