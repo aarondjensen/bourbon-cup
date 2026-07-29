@@ -53,11 +53,33 @@ eventually editing while the other is running a round.
 
 ## Sign-in
 
-People sign in with Google or Apple (`src/lib/auth.js`) and then claim a name
-off the roster exactly once (`src/lib/accounts.js`, which stores the uid on the
-`bc_players` document). Firebase persists the session in IndexedDB, so it
-survives closing the app — the old tap-a-player screen kept identity in
-sessionStorage, which is why reopening the app always asked again.
+Three steps, each seen once: sign in with Google or Apple (`src/lib/auth.js`),
+enter the tournament password, then claim a name off the roster
+(`src/lib/accounts.js`, which stores the uid on the `bc_players` document).
+Firebase persists the session in IndexedDB, so it survives closing the app —
+the old tap-a-player screen kept identity in sessionStorage, which is why
+reopening the app always asked again.
+
+The password is the actual access control, and it is enforced by the security
+rules, not by the UI. Presenting it mints a `bc_accounts/{uid}` document, and
+every write in the project requires that document to exist. The code lives in
+`bc_secrets/access`, which **no client may read** — rules `get()` is not
+subject to read rules, which is what lets them compare against a secret they
+never serve. So it holds against someone reading the bundle or skipping the
+app and talking to Firestore directly, which a client-side password check
+would not.
+
+- Set or change it in Admin → Tournament → Access. It is write-only: nobody,
+  director included, can read the current one back. Saving it blank turns the
+  requirement off.
+- **A blank or missing code means the door is open.** That is the bootstrap —
+  without it the first membership could never be created and the project would
+  be locked to its own owners.
+- Locking somebody out means deleting their `bc_accounts` document in the
+  Firebase console. Rotating the password does not evict anybody already
+  through; existing memberships are never re-checked.
+- `firestore.rules.test.mjs` covers all of this against the emulator. Run it
+  before deploying a rules change.
 
 Things that will bite you:
 
@@ -71,12 +93,14 @@ Things that will bite you:
   test sign-in on, or you get `auth/unauthorized-domain`.
 - **A scratch Firebase project needs its own providers enabled**, or the dev
   server can read data but nobody can log into it.
-- **Deploy `firestore.rules` after the app, never before.** Writes now require
-  `request.auth`; a phone still running the old anonymous bundle fails every
-  write silently if the rules land first.
-- The director escape hatch (`DIRECTOR_CODE`, typed on the claim screen) still
-  exists for bootstrapping an edition with an empty roster. It is not a
-  password — you are already signed in by the time you can reach it.
+- **Deploy `firestore.rules` after the app, never before.** Writes require a
+  membership document; a phone on an older bundle has no way to get one and
+  fails every write silently if the rules land first.
+- The director escape hatch (`DIRECTOR_CODE`, typed on the claim screen) exists
+  for bootstrapping an edition with an empty roster, and the field only appears
+  when the roster IS empty. It is a constant in the bundle, so it is not a
+  secret — leaving it reachable on a set-up tournament would hand Admin to
+  anyone who reads the JavaScript.
 
 ## The api/ handlers during local dev
 

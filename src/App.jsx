@@ -3,7 +3,7 @@ import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, FS, segThumb, segTrack, r
 import { playerLookup } from "./lib/players";
 import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, BOOTSTRAP_DIRECTOR } from "./firebase";
 import { PROVIDERS, signIn, signOutUser, onAuthUser, consumeRedirectResult, isCancelled } from "./lib/auth";
-import { claimPlayer, linkedPlayer, isClaimed, accountLabel, unlinkPatch } from "./lib/accounts";
+import { claimPlayer, linkedPlayer, isClaimed, accountLabel, unlinkPatch, isMember, joinWithCode, setAccessCode } from "./lib/accounts";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
   resolveTeams, DEFAULT_TEAM_NAMES, TOURNAMENT_TITLE, TOURNAMENT_LOCATION,
@@ -288,7 +288,68 @@ function SignInScreen({ tournamentName, tournamentLocation, initialError }) {
   );
 }
 
-// ── Screen 2: claim your name ───────────────────────────────────────
+// ── Screen 2: the password ──────────────────────────────────────────
+// Signing in proves who you are; it does not prove you were invited. This
+// is where the second half happens, and it is checked by the security
+// rules rather than here — the submit below writes a membership document
+// carrying the typed code, and the database rejects it if the code is
+// wrong (see lib/accounts.js and firestore.rules). Nothing on this screen
+// knows the password, so nothing on this screen can leak it.
+function GateScreen({ tournamentName, tournamentLocation, authUser, onPassed, onSignOut }) {
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const submit = async (e) => {
+    e?.preventDefault?.();
+    if (busy) return;
+    setBusy(true); setErr("");
+    const res = await joinWithCode(authUser, code);
+    setBusy(false);
+    if (!res.ok) { setErr(res.error); return; }
+    onPassed();
+  };
+
+  return (
+    <LoginChrome tournamentName={tournamentName} tournamentLocation={tournamentLocation}>
+      <form onSubmit={submit} style={{ width: "100%", maxWidth: 340, display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
+        <div style={{ textAlign: "center", fontSize: FS.small, color: BC.t3, lineHeight: 1.4 }}>
+          Signed in as {authUser?.email || "your account"}.<br />Enter the tournament password.
+        </div>
+        <input
+          value={code}
+          onChange={e => setCode(e.target.value)}
+          // Not type="password": there is no privacy to protect from
+          // somebody standing on the same tee box, and a masked field on a
+          // phone keyboard is how you get three failed attempts.
+          type="text" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+          autoComplete="one-time-code" autoFocus
+          placeholder="Password"
+          style={{
+            width: "100%", boxSizing: "border-box", background: BC.inp,
+            border: `1px solid ${err ? BC.danger : BC.bdr}`, borderRadius: 10,
+            padding: "12px 14px", color: BC.t1, textAlign: "center",
+            // 16px, or iOS Safari zooms the page on focus.
+            fontSize: FS.lead, fontWeight: 700, fontFamily: FONT, outline: "none",
+          }} />
+        <button type="submit" disabled={busy} style={{
+          width: "100%", padding: "12px 16px", borderRadius: 12,
+          background: BC.gold, border: "none", color: ON_AMBER,
+          fontFamily: FONT, fontSize: FS.body, fontWeight: 800, cursor: busy ? "default" : "pointer",
+        }}>{busy ? "Checking…" : "Continue"}</button>
+      </form>
+
+      <LoginNote text={err} />
+
+      <button onClick={onSignOut} style={{
+        background: "transparent", border: "none", color: BC.t3,
+        fontSize: FS.small, fontFamily: FONT, textDecoration: "underline", cursor: "pointer", padding: "4px",
+      }}>Sign out</button>
+    </LoginChrome>
+  );
+}
+
+// ── Screen 3: claim your name ───────────────────────────────────────
 // Shown to a signed-in account that no roster document points at. Tapping
 // a name selects it; a second tap on the confirm bar commits, because the
 // link is meant to be permanent and a mis-tap on a 12-name grid is not.
@@ -404,24 +465,31 @@ function ClaimScreen({ players, teams, darkMode, tournamentName, tournamentLocat
         </div>
       )}
 
-      {/* The director's way in, and the way back out. The code field used
-          to be referenced by the login screen's hint without ever being
-          rendered, so the documented escape hatch could not be typed into;
-          it is a real input now. It is no longer a password of any kind —
-          you are already signed in by the time you can reach it. */}
+      {/* The director's way in, and the way back out.
+          The code field appears ONLY on an empty roster, which is the only
+          situation it is for: bootstrapping an edition with no name to tap.
+          DIRECTOR_CODE is a constant in the bundle, so anyone who reads the
+          JavaScript knows it — leaving the field on a set-up tournament
+          would hand full Admin to any signed-in stranger. On an empty
+          roster there is nothing yet to take.
+          (It was referenced by the old login screen's hint without ever
+          being rendered at all, so the documented escape hatch could not be
+          typed into. It is a real input now, just a narrower one.) */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4, width: "100%", maxWidth: 480, justifyContent: "center" }}>
-        <input
-          value={code}
-          onChange={e => onCode(e.target.value)}
-          placeholder="Director code"
-          autoCapitalize="none" autoCorrect="off" spellCheck={false}
-          style={{
-            // Wide enough for the placeholder, which the theme uppercases.
-            width: 175, boxSizing: "border-box", background: BC.inp, border: `1px solid ${BC.bdr}`,
-            borderRadius: 8, padding: "7px 10px", color: BC.t2,
-            // 16px keeps iOS Safari from zooming the page on focus.
-            fontSize: FS.lead, fontFamily: FONT, outline: "none", textAlign: "center",
-          }} />
+        {players.length === 0 && (
+          <input
+            value={code}
+            onChange={e => onCode(e.target.value)}
+            placeholder="Director code"
+            autoCapitalize="none" autoCorrect="off" spellCheck={false}
+            style={{
+              // Wide enough for the placeholder, which the theme uppercases.
+              width: 175, boxSizing: "border-box", background: BC.inp, border: `1px solid ${BC.bdr}`,
+              borderRadius: 8, padding: "7px 10px", color: BC.t2,
+              // 16px keeps iOS Safari from zooming the page on focus.
+              fontSize: FS.lead, fontFamily: FONT, outline: "none", textAlign: "center",
+            }} />
+        )}
         <button onClick={onSignOut} style={{
           background: "transparent", border: "none", color: BC.t3,
           fontSize: FS.small, fontFamily: FONT, textDecoration: "underline", cursor: "pointer", padding: "7px 4px",
@@ -1467,6 +1535,10 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
   const [brandBusy, setBrandBusy] = useState(null); // team id mid-extraction
   const [editTournamentName, setEditTournamentName] = useState(tournamentName || "");
   const [editTournamentLocation, setEditTournamentLocation] = useState(tournamentLocation || "");
+  // No hydrating effect for this one, unlike its neighbours: there is
+  // nothing to hydrate FROM. The access code cannot be read back by any
+  // client, so this field always starts empty and means "the new one".
+  const [editAccessCode, setEditAccessCode] = useState("");
   useEffect(() => { setEditTournamentName(tournamentName || ""); }, [tournamentName]);
   useEffect(() => { setEditTournamentLocation(tournamentLocation || ""); }, [tournamentLocation]);
   useEffect(() => {
@@ -3488,6 +3560,47 @@ function AdminView({ user, tPlayers, tRounds, courses, matches, onAddPlayer, onU
             </div>
           </div>
 
+          {/* Access — the password that stands between "signed in with
+              Google" and "can change the tournament". Write-only on
+              purpose: the code lives in a document no client may read (the
+              security rules compare against it without ever serving it),
+              so this card can offer to change the password but can never
+              show it. Saving an empty field takes the password off. */}
+          <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: 14, marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+              <div style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase" }}>Access</div>
+              <button
+                onClick={async () => {
+                  const next = editAccessCode.trim();
+                  const ok = await confirm({
+                    title: next ? "Change the password?" : "Remove the password?",
+                    message: next
+                      ? `Anyone signing in from now on needs "${next}" before they can claim a name or post a score.\n\nNobody already through the door is affected — this does not sign anybody out.`
+                      : "Anybody who signs in with Google or Apple will be able to claim a name and post scores.",
+                    destructive: !next,
+                  });
+                  if (!ok) return;
+                  const res = await setAccessCode(next);
+                  if (!res.ok) { notify(res.error, "error"); return; }
+                  setEditAccessCode("");
+                  notify(next ? "Password changed" : "Password removed", "success");
+                }}
+                style={{ flexShrink: 0, fontSize: FS.small, fontWeight: 700, color: ON_AMBER, background: BC.amber, border: "none", borderRadius: 6, padding: "8px 14px", cursor: "pointer" }}
+              >Save</button>
+            </div>
+            <input
+              value={editAccessCode}
+              onChange={e => setEditAccessCode(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+              placeholder="New password"
+              autoCapitalize="none" autoCorrect="off" spellCheck={false}
+              style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.body, fontWeight: 700, outline: "none", fontFamily: FONT }}
+            />
+            <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 6, lineHeight: 1.4 }}>
+              Asked for once per person, after they sign in. Not shown here — nobody can read it back, not even you. Save it blank to turn it off.
+            </div>
+          </div>
+
           {/* Teams — name, imported logo, brand color */}
           <div style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Teams</div>
           {[teams.A, teams.B].map(team => {
@@ -4073,6 +4186,12 @@ export default function App() {
   // gap between Firebase answering and Firestore answering; see firebase.js.
   const cachedSession = useRef(readUserSession());
 
+  // Whether this account has presented the tournament password. `undefined`
+  // while the answer is in flight, for the same reason authUser is: showing
+  // the password screen to somebody who is already through it, because a
+  // read had not landed yet, would be its own bug.
+  const [member, setMember] = useState(undefined);
+
   useEffect(() => {
     // The far side of the redirect flow (lib/auth.js). A SUCCESSFUL redirect
     // needs nothing here — the state listener fires with the new user like
@@ -4084,6 +4203,33 @@ export default function App() {
       if (!u) setBootstrapDirector(false);
     });
   }, []);
+
+  // Ask the door. A FAILED read is not a "no" — a phone coming up on bad
+  // signal must not be told its password is needed again — so it retries
+  // before giving an answer, and the splash holds meanwhile. If it still
+  // cannot tell, it falls to the password screen rather than hanging
+  // forever: that screen re-checks membership on submit, so somebody who
+  // is already through gets waved past as soon as the network returns.
+  useEffect(() => {
+    if (authUser === undefined) return;
+    if (!authUser) { setMember(false); return; }
+    let live = true;
+    setMember(undefined);
+    (async () => {
+      for (let attempt = 0; attempt < 3 && live; attempt++) {
+        try {
+          const ok = await isMember(authUser.uid);
+          if (live) setMember(ok);
+          return;
+        } catch (e) {
+          console.error("[gate] membership check", e);
+          await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
+        }
+      }
+      if (live) setMember(false);
+    })();
+    return () => { live = false; };
+  }, [authUser]);
   // Default landing view. Leaderboard is the right home base — the
   // most-glanced screen during a round, and the natural place for a
   // user reopening the app to check current state.
@@ -4970,15 +5116,20 @@ export default function App() {
     [roundLocksData, tournamentRounds]
   );
 
-  // ── The three ways in ─────────────────────────────────────────────
-  // Ordered by what is still unknown. The splash covers both unknowns —
-  // Firebase restoring its session, and the roster that says which player
-  // this account is — because either one resolving to "no" too early puts
-  // a signed-in player back on a login screen, which is the bug this
-  // whole feature exists to kill.
+  // ── The ways in ───────────────────────────────────────────────────
+  // Sign in → password → claim a name, each one skipped once it has been
+  // answered, which for almost everybody means none of them appear again
+  // after the first time. Ordered by what is still unknown, and the splash
+  // covers every unknown — Firebase restoring its session, the door, and
+  // the roster that says which player this account is — because any of
+  // them resolving to "no" too early puts a signed-in player back on a
+  // login screen, which is the bug this whole feature exists to kill.
   const chrome = { tournamentName, tournamentLocation };
-  if (authUser === undefined || (authUser && !user && !playersLoaded)) return <LoginSplash {...chrome} />;
+  if (authUser === undefined || (authUser && member === undefined) || (authUser && member && !user && !playersLoaded)) return <LoginSplash {...chrome} />;
   if (!authUser) return <SignInScreen {...chrome} initialError={authError} />;
+  if (!member) return (
+    <GateScreen {...chrome} authUser={authUser} onSignOut={doSignOut} onPassed={() => setMember(true)} />
+  );
   if (!user) return (
     <ClaimScreen
       {...chrome}

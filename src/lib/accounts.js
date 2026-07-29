@@ -25,11 +25,94 @@
 // per-app relay address, and people change their Google address. The email
 // is stored alongside it purely so the director can see, in Admin, whose
 // account is attached to a name.
+//
+// ── The door in front of all of this ──────────────────────────────
+// Signing in is free — anybody with a Google account can do it, and the
+// app's Firebase config ships in the bundle. So between signing in and
+// touching anything, an account has to present the tournament password and
+// be issued a MEMBERSHIP: a bc_accounts/{uid} document.
+//
+// The password is checked by the security rules, not here. It lives in
+// bc_secrets/access, which no client can read — rules can `get()` a
+// document the reader is denied — and the rules also gate every write in
+// the project on the membership document existing. That is the difference
+// between a password and a doorman: the check survives someone reading the
+// bundle, disabling the JavaScript, or talking to Firestore directly.
+//
+// What this file can do is ask ("create my membership, here is the code")
+// and read the answer. A rejection comes back as permission-denied, which
+// means exactly one thing here: wrong password.
 import { db } from "../firebase";
 
 // The fields this module owns on a player document. Grouped so the admin
 // unlink and the claim write cannot drift apart.
 export const AUTH_FIELDS = ["auth_uid", "auth_email", "auth_provider", "auth_linked_at"];
+
+// One membership document per account, keyed BY the uid so the rules can
+// check `exists(.../bc_accounts/$(request.auth.uid))` in one hop. (The
+// roster cannot be keyed that way — a player exists before their account
+// does — which is why the uid lives in a field there and a doc id here.)
+export const ACCOUNTS_COL = "bc_accounts";
+// The password itself. Read-denied to every client; only the rules see it.
+export const SECRETS_COL = "bc_secrets";
+export const ACCESS_DOC = "access";
+
+// ── Is this account through the door? ───────────────────────────────
+// Three answers, not two: `true`, `false`, and a thrown error. A failed
+// read is NOT "no membership" — treating a dropped connection as a locked
+// door would put the password screen in front of somebody who is already
+// through it, on the first tee, with no signal.
+export async function isMember(uid) {
+  if (!uid) return false;
+  return !!(await db.getById(ACCOUNTS_COL, uid));
+}
+
+// ── Presenting the password ─────────────────────────────────────────
+// The code travels as a field on the membership document because that is
+// the only channel the rules can see — they compare it against the secret
+// and reject the write outright if it differs. It stays on the document
+// afterwards, readable by this account alone, which is the person who
+// typed it in the first place.
+export async function joinWithCode(authUser, code) {
+  if (!authUser?.uid) return { ok: false, error: "Not signed in." };
+  try {
+    // Already through? Say so and write nothing. This is not just an
+    // optimisation: the rules deny UPDATE on a membership document, so a
+    // second create by somebody who already has one would come back as
+    // permission-denied and be reported below as a wrong password. It is
+    // also the recovery path when the startup check could not reach the
+    // network and fell through to this screen.
+    if (await db.getById(ACCOUNTS_COL, authUser.uid)) return { ok: true };
+    await db.create(ACCOUNTS_COL, {
+      id: authUser.uid,
+      uid: authUser.uid,
+      code: (code || "").trim(),
+      email: authUser.email || null,
+      joined_at: new Date().toISOString(),
+    });
+    return { ok: true };
+  } catch (e) {
+    if (e?.code === "permission-denied") {
+      return { ok: false, error: "That password isn't right." };
+    }
+    return { ok: false, error: "Could not check that — check signal and try again." };
+  }
+}
+
+// ── Setting the password ────────────────────────────────────────────
+// Write-only by design: nobody, director included, can read the current
+// code back out, so Admin can offer "change it" but never "here it is".
+// Saving an empty value removes the requirement — the rules treat a blank
+// or missing code as an open door, which is also what makes the very first
+// setup possible before any code exists.
+export async function setAccessCode(code) {
+  try {
+    await db.create(SECRETS_COL, { id: ACCESS_DOC, code: (code || "").trim() || null });
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Could not save the password." };
+  }
+}
 
 // Has anybody claimed this roster spot?
 export const isClaimed = (p) => !!p?.auth_uid;

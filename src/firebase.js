@@ -9,7 +9,7 @@
 // Firestore Security Rules, not by hiding the key.
 import { initializeApp } from "firebase/app";
 import {
-  getFirestore, collection, doc, setDoc, getDocs,
+  getFirestore, collection, doc, setDoc, getDoc, getDocs,
   query, where, onSnapshot, deleteDoc,
 } from "firebase/firestore";
 
@@ -260,6 +260,25 @@ export const db = {
   getStrict: async (col, filters = []) => {
     const s = await getDocs(db._q(col, filters));
     return s.docs.map(d => d.data());
+  },
+  // One document, by id. Everything else here queries a collection, which
+  // is the right shape for tournament data but the wrong one for a document
+  // whose id you already know AND whose collection you are not allowed to
+  // list — bc_accounts is readable only to its owner (see firestore.rules),
+  // so a `where` over it is rejected outright while a direct read is fine.
+  // Errors are thrown rather than swallowed: "denied" and "absent" are
+  // different answers here and the caller has to tell them apart.
+  getById: async (col, id) => {
+    const snap = await getDoc(doc(_db, col, String(id)));
+    return snap.exists() ? snap.data() : null;
+  },
+  // A create that is allowed to fail loudly. `upsert` merges and swallows,
+  // which is right for tournament data; the membership write needs the
+  // rejection, because "permission-denied" IS the wrong-password answer.
+  create: async (col, data) => {
+    if (!data?.id) throw new Error("create needs an id");
+    await setDoc(doc(_db, col, String(data.id)), data);
+    return data;
   },
 };
 
