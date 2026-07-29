@@ -507,39 +507,39 @@ export const playerNameColor = () => BC.t1;
 //
 // The two states tell themselves apart, no sniffing required: once iOS has
 // reserved the status bar the top inset is 0, and when it hasn't the inset
-// is exactly the height that fell off the bottom.
+// is exactly the height that fell off the bottom. Which is to say the two
+// numbers AGREE in the state being corrected — they are one status bar,
+// measured twice — so agreement is the test, not the smaller of the two:
 //
-//     drop = min(screen.height - innerHeight, safe-area-inset-top)
+//     short = screen.height - innerHeight
+//     drop  = short ≈ safe-area-inset-top ? safe-area-inset-top : 0
 //
 // This is not the banned measurement above. Nothing here asks how tall the
-// app is: it reads ONE offset, clamped to a status bar's height, which is
-// 0px for a correctly installed icon, 0px in a browser tab, and 0px on
-// anything that isn't a standalone iOS webview. Consumers use it through a
-// CSS variable whose fallback is 0px, so if this never runs the layout is
-// exactly what it was before.
+// app is: it reads ONE offset, corroborated by a second, which is 0px for a
+// correctly installed icon, 0px in a browser tab, and 0px on anything that
+// isn't the webview this compensates for. Consumers use it through a CSS
+// variable whose fallback is 0px, so if this never runs the layout is exactly
+// what it was before.
+//
+// Because the two have to agree, a non-zero result is the REAL distance from
+// the viewport's bottom edge to the glass — not an upper bound on it. That is
+// what lets the bottom nav seat its box on the result and keep its ordinary
+// home-indicator padding; see NAV_SAFE_PAD in App.jsx for why a bound was not
+// good enough.
 export const VP_DROP = "var(--bc-vp-drop, 0px)";
 // Bottom-anchored fixed elements reach past the short viewport with this.
 export const VP_DROP_BOTTOM = `calc(-1 * ${VP_DROP})`;
 
 const measureVpDrop = () => {
   if (typeof window === "undefined" || typeof document === "undefined") return 0;
-  // The quirk being corrected is Apple's — apple-mobile-web-app-status-bar-
-  // style is an Apple meta, and only iOS snapshots it at install time — so
-  // only an iOS webview can be in the state this compensates for.
-  //
-  // `display-mode: standalone` alone does not say that: it matches an
-  // installed PWA on Android and on the desktop too, and on a cutout Android
-  // phone the inset-top test below passes while the layout viewport already
-  // ends at the bottom of the glass. That is a drop applied to a device that
-  // needs none, and it pushes the nav straight off the screen.
-  //
-  // navigator.standalone is the iOS signal, and it is also the iOS DETECTOR:
-  // WebKit defines it on iOS/iPadOS only, as a boolean either way, and leaves
-  // it undefined everywhere else — so its presence gates the media query
-  // without sniffing a UA string.
-  const iOS = typeof window.navigator?.standalone === "boolean";
+  // Do NOT gate this on navigator.standalone existing. That was tried, to keep
+  // the drop off Android and desktop installs, and it silently turned the drop
+  // OFF on a phone that needed it: the property is not dependable as an "is
+  // this iOS" marker, and where it is absent the media query below is the only
+  // thing recognising an installed app at all. The result was the bare band
+  // this whole mechanism exists to cover, straight back on screen.
   const standalone = window.navigator?.standalone === true
-    || (iOS && window.matchMedia?.("(display-mode: standalone)").matches === true);
+    || window.matchMedia?.("(display-mode: standalone)").matches === true;
   if (!standalone) return 0;
   // env() is only readable off a laid-out box — getComputedStyle hands back
   // the unresolved token stream for a custom property holding it.
@@ -550,7 +550,23 @@ const measureVpDrop = () => {
   probe.remove();
   if (insetTop <= 0) return 0;
   const short = (window.screen?.height || 0) - window.innerHeight;
-  return short > 0 ? Math.min(short, insetTop) : 0;
+  if (short <= 0) return 0;
+  // ── Require the two to AGREE, don't just take the smaller ────────
+  // In the state being corrected they are the same number, and the reason is
+  // structural: the height missing from the bottom IS the status bar the page
+  // is now drawing under, so `short` and `insetTop` are two measurements of
+  // one status bar. Math.min() accepted them disagreeing, which is what let
+  // this fire where it shouldn't: an installed PWA on a cutout Android phone
+  // reports a top inset for the cutout AND a large `short` (its status bar
+  // plus its system navigation bar), so the min was a real number and the nav
+  // got pushed off a screen whose viewport already ended at the glass.
+  //
+  // Requiring agreement is what makes the result trustworthy rather than
+  // merely bounded: when this returns non-zero it is now the ACTUAL distance
+  // from the viewport's bottom edge to the glass, so callers can seat a bar on
+  // it and use their normal padding. A couple of px of tolerance because
+  // insetTop comes off getBoundingClientRect and can be fractional.
+  return Math.abs(short - insetTop) <= 2 ? Math.round(insetTop) : 0;
 };
 
 // ── Reading an inset from JS ──────────────────────────────────────
@@ -577,19 +593,6 @@ export const syncVpDrop = () => {
   const drop = measureVpDrop();
   document.documentElement.style.setProperty("--bc-vp-drop", `${drop}px`);
   return drop;
-};
-
-// The same drop as a NUMBER, for the callers that have to do arithmetic with
-// it (the nav's clearance floor). Not a re-measurement: syncVpDrop runs at
-// module init, before React mounts, and again on resize/orientationchange, so
-// this only reads back the value it wrote. Unset — which is every render
-// before that first sync, and every environment without a document — is 0,
-// the same fallback the CSS var carries.
-export const readVpDrop = () => {
-  if (typeof document === "undefined") return 0;
-  const raw = document.documentElement.style.getPropertyValue("--bc-vp-drop");
-  const n = parseFloat(raw);
-  return Number.isFinite(n) && n > 0 ? n : 0;
 };
 
 // ── Global stylesheet ──
