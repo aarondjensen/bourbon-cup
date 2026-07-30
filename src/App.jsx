@@ -46,6 +46,7 @@ import { MissingCardNote, SignCardSheet, SignedCardPanel } from "./components/Ca
 import { AccountView } from "./components/AccountView";
 import { initForegroundNotifications, syncAppBadge } from "./lib/notifications";
 import { SegmentedToggle, SegRule, StickyTop, Banner, Toast, HoleNavigator, ScoreButtonRow } from "./components/ui";
+import { GroupSwitcher } from "./components/GroupSwitcher";
 import { useConfirm } from "./lib/useConfirm";
 import { useStableCallback } from "./lib/useStableCallback";
 import { EditionSwitcher } from "./components/EditionSwitcher";
@@ -641,10 +642,19 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // THE GATE. Only the current round's matches exist as far as this screen
   // is concerned — a match from a finalized round is not merely hidden, it
   // is not reachable, so no stale selection can put a score in it.
-  const myMatches = useMemo(
-    () => matches.filter(m => m.round === currentRound && [...m.teamA, ...m.teamB].includes(userPid)),
-    [matches, currentRound, userPid]
+  const roundMatches = useMemo(
+    () => matches.filter(m => m.round === currentRound),
+    [matches, currentRound]
   );
+  const myMatches = useMemo(
+    () => roundMatches.filter(m => [...m.teamA, ...m.teamB].includes(userPid)),
+    [roundMatches, userPid]
+  );
+  // A director can score ANY group in the open round — see the group switcher
+  // below for what that is for. The round gate above still holds: this widens
+  // which match of the OPEN round is reachable, never which round is.
+  const isDirector = !!user.isDirector;
+  const scorable = isDirector ? roundMatches : myMatches;
 
   // ── Hooks (always fire, in stable order) ──
   const [activeMatchId, setActiveMatchId] = useState(null);
@@ -663,7 +673,10 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // gate currently allows. When a round is finalized under a player's feet,
   // a held `activeMatchId` simply stops matching and the screen falls to the
   // new round's match instead of scoring into the closed one.
-  const match = myMatches.find(m => m.id === activeMatchId) || myMatches[0] || null;
+  // Own match first when there is one, so the tab still opens where it always
+  // did for a director who is also playing; `scorable[0]` only carries a
+  // director who is not in this round's draw at all.
+  const match = scorable.find(m => m.id === activeMatchId) || myMatches[0] || scorable[0] || null;
   const tr = match ? tRounds.find(t => t.round_number === match.round) : null;
   // Round handicap lock (src/lib/roundLocks.js). When present, the course
   // pointer and the hole tables come from the snapshot so this screen shows
@@ -719,6 +732,13 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   const signState = match ? cardState(match, sig) : "open";
   const signed = signState !== "open";
   const complete = match ? cardComplete(match, holeData) : false;
+  // Whether the Full Scorecard button is allowed to promote to the sign CTA.
+  // A signature is a claim by somebody IN the match — `signed_by` lands on the
+  // card and every attestation is checked against the roster of that match —
+  // so a director looking at another group's card gets the read-only
+  // scorecard, however complete it is. Attesting is already gated the same way
+  // inside SignedCardPanel.
+  const canSign = complete && matchPids.includes(userPid);
   const missingCard = match && !complete && !signed ? missingForCard(match, holeData) : [];
 
   // No more hooks below this line.
@@ -847,7 +867,15 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // Match round, the lead on the running total on a Total one. It used to
   // count holes won unconditionally, so a Total round showed a match-play
   // state it wasn't being scored on.
-  const userTeam = match.teamA.includes(userPid) ? "A" : "B";
+  // Whose side the ▲/▼ is read from. Normally that is settled by the match
+  // itself, but a director scoring somebody else's group is in neither side
+  // of it — and falling through to "B" would silently invert every glyph on
+  // screen. Their roster team answers it instead, so the strip reads from the
+  // same side it does on their own card.
+  const inMatch = matchPids.includes(userPid);
+  const userTeam = inMatch
+    ? (match.teamA.includes(userPid) ? "A" : "B")
+    : (tPlayers.find(p => p.player_id === userPid)?.team === "B" ? "B" : "A");
   // The hole-scoring axis is read off `scoredFormat` below rather than from a
   // flag here: the badge names the METHOD a hole was scored by, and since a
   // format can now offer more than one, "was it best ball" is no longer the
@@ -979,31 +1007,49 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     );
   };
 
-  /* Match selector — for the rare format that draws a player into more
-     than one match in the SAME round. It no longer crosses rounds; the
-     strip above owns that axis and only one round of it is live.
+  /* Which match this screen is pointed at. Two controls, because there are
+     two reasons to move:
 
-     Labelled with the cup's number for each match, not its position in
-     this player's own list — two players in the same match have to be
-     looking at the same name for it. Position the incoming match in the
-     same render as the switch; leaving it to the effect below would paint
-     the outgoing hole for a frame first, the same flash returning to the
-     tab had.
+     PILLS, for the rare format that draws a player into more than one match
+     in the SAME round. Labelled with the cup's number for each match, not
+     its position in this player's own list — two players in the same match
+     have to be looking at the same name for it.
+
+     GROUP SWITCHER, for a director, over every group in the round. A row of
+     pills does not survive eight matches, and the thing a director needs to
+     find is not a number but a foursome, so it is a button that opens a list
+     naming who is in each.
+
+     Neither crosses rounds; the strip above owns that axis and only one round
+     of it is live.
 
      Hoisted out of the tree below because the signed view needs it too: a
      player with a signed card and an unsigned one has to be able to get
      back to the one that still needs scores. */
-  const matchSelector = myMatches.length > 1 ? (
+  // Switching, wherever it is offered from. Positions the incoming match in
+  // the SAME render as the selection — leaving it to the effect below paints
+  // the outgoing hole for a frame first, the same flash returning to the tab
+  // used to have.
+  const switchToMatch = (id) => {
+    const m = scorable.find(x => x.id === id);
+    setActiveMatchId(id);
+    if (m) positionOn(id, pidsOf(m), scoresAt(m.round));
+  };
+
+  const matchSelector = isDirector && roundMatches.length > 1 ? (
+    // A director gets one control covering every group in the round (see
+    // GroupSwitcher), which subsumes the multi-match case below.
+    <GroupSwitcher
+      matches={roundMatches} current={match} tPlayers={tPlayers}
+      userPid={userPid} onPick={switchToMatch}
+    />
+  ) : myMatches.length > 1 ? (
     <SegmentedToggle
       variant="pills"
       style={{ marginBottom: 10 }}
       options={myMatches.map((m, i) => [m.id, `Match ${m.matchNumber ?? i + 1}`])}
       value={match.id}
-      onChange={(id) => {
-        const m = myMatches.find(x => x.id === id);
-        setActiveMatchId(id);
-        if (m) positionOn(id, pidsOf(m), scoresAt(m.round));
-      }}
+      onChange={switchToMatch}
     />
   ) : null;
 
@@ -1059,16 +1105,16 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           permanent Sign button would cost the score buttons a row for the
           entire round to be tappable at the end of it, which is the exact
           trade the Finalize card lost. */}
-      <button onClick={() => (complete ? setShowSign(true) : setShowScorecard(true))} style={{
-        width: "100%", padding: complete ? "9px 0" : fit.scorecardPad, borderRadius: 8,
+      <button onClick={() => (canSign ? setShowSign(true) : setShowScorecard(true))} style={{
+        width: "100%", padding: canSign ? "9px 0" : fit.scorecardPad, borderRadius: 8,
         marginBottom: fit.stack, cursor: "pointer", flexShrink: 0, fontFamily: FONT,
-        background: complete ? BC.amberGlow : BC.card,
-        border: `1px solid ${complete ? BC.amber : BC.bdr}${ALPHA.line}`,
-        color: complete ? BC.amberInk : BC.t2,
-        fontSize: complete ? FS.body : FS.small,
-        fontWeight: complete ? 800 : 700, letterSpacing: 0.5,
+        background: canSign ? BC.amberGlow : BC.card,
+        border: `1px solid ${canSign ? BC.amber : BC.bdr}${ALPHA.line}`,
+        color: canSign ? BC.amberInk : BC.t2,
+        fontSize: canSign ? FS.body : FS.small,
+        fontWeight: canSign ? 800 : 700, letterSpacing: 0.5,
       }}>
-        {complete ? "Complete — Sign Card" : "Full Scorecard"}
+        {canSign ? "Complete — Sign Card" : "Full Scorecard"}
       </button>
 
       {/* Why the button hasn't promoted — but only for holes the group has
