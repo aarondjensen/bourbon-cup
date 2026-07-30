@@ -864,6 +864,23 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // The same flags the engine scored with, from the same helper — the status
   // strip below counts whatever the round is actually settled on.
   const segOpts = segmentOptsFor({ ...match, hole_points: result?.holePoints }, format);
+  // ── Where the group has definitely been ──────────────────────────
+  // The furthest hole EVERY player in the match has finished. It is the line
+  // the missing-score badge below is drawn against: a hole before it is
+  // behind the group, so a gap in it is a skipped player. A hole at or past
+  // it is one they are on or have not reached, and a gap there is just a
+  // score nobody has typed yet.
+  //
+  // Every player, not `hr.played` — that one asks whether both SIDES have a
+  // number, and on a best-ball hole one player carries their side. Measuring
+  // the frontier that way would advance it while the group is still entering
+  // the hole they are on, which is the very thing this is here to stop.
+  let lastFullHole = -1;
+  if (matchPids.length) {
+    for (let h = 0; h < 18; h++) {
+      if (matchPids.every(pid => getScore(pid, h) > 0)) lastFullHole = h;
+    }
+  }
   const renderStatusCell = (i) => {
     // Same reasoning as the Leaderboard strip's cell height: the bar has to
     // be tall enough for a split hole's diagonal to read, and it stays that
@@ -879,10 +896,24 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     if (!result || !result.holes[i]) return shell(null);
 
     const hr = result.holes[i];
-    // Partial-score warning for non-active past holes
+    // ── Somebody got skipped back there ──
+    // Only for a hole BEHIND the group (see lastFullHole). It used to be any
+    // partially-scored hole that wasn't the active one, which made it fire
+    // while the scorer was still typing: enter the first player's score on
+    // the hole they are standing on, glance away to a different hole, and
+    // that hole — still being worked — was suddenly flagged. It also stuck a
+    // permanent warning on any hole ahead of the group that had picked up a
+    // stray tap.
+    //
+    // The evidence that a hole is behind the group is a LATER hole they have
+    // finished; a gap in it is then a skipped player worth chasing. Anything
+    // at or past the frontier is not yet a gap, just a score nobody has
+    // typed. The active hole stays excluded on top of that, for navigating
+    // back INTO a gap to fix it — the cell being worked on does not need to
+    // warn about itself.
     if (!hr.played) {
       const someScored = matchPids.some(pid => getScore(pid, i) > 0);
-      if (someScored && i !== activeHole) {
+      if (someScored && i !== activeHole && i < lastFullHole) {
         return shell(<div title="Missing score" style={{ textAlign: "center", fontSize: FS.small, opacity: 0.55, lineHeight: 1 }}>⚠️</div>);
       }
       return shell(null);
