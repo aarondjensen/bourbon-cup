@@ -55,7 +55,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { BC, FONT, ON_ACCENT, ON_AMBER, SHADOW, SCRIM, FS, VP_DROP_BOTTOM } from "../theme";
+import { BC, FONT, ON_ACCENT, ON_AMBER, SHADOW, SCRIM, FS } from "../theme";
 
 const Z_MAP = { content: 500, modal: 900 };
 const STD_BACKDROP = SCRIM;
@@ -138,11 +138,15 @@ export function Popup({
         // Otherwise the classic full-viewport overlay.
         ...(viewportFit
           ? { top: rect.top, left: rect.left, width: rect.width, height: rect.height, paddingTop: `calc(env(safe-area-inset-top, 0px) + ${outerPadding}px)` }
-          // The backdrop covers the app, and the app can reach below the
-          // layout viewport (VP_DROP, see theme.js) — 0px everywhere but an
-          // old iOS home-screen icon, where inset:0 would leave an undimmed
-          // strip under it.
-          : { top: 0, left: 0, right: 0, bottom: VP_DROP_BOTTOM }),
+          // Plain inset:0. This used to reach below the layout viewport to dim
+          // the strip an old iOS home-screen icon leaves under it, which never
+          // worked: the webview clips at its bottom edge, so the backdrop was
+          // not painting down there and the strip was undimmed either way. It
+          // is canvas-painted (see bcGlobalCSS) and no element can cover it, so
+          // on that one install mode a modal leaves a card-coloured sliver at
+          // the very bottom. Cosmetic, and cheaper than having every popup
+          // reach out and mutate the root background.
+          : { top: 0, left: 0, right: 0, bottom: 0 }),
         background: STD_BACKDROP,
         zIndex: z,
         display: "flex",

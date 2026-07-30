@@ -512,25 +512,41 @@ export const playerNameColor = () => BC.t1;
 // measured twice — so agreement is the test, not the smaller of the two:
 //
 //     short = screen.height - innerHeight
-//     drop  = short ≈ safe-area-inset-top ? safe-area-inset-top : 0
+//     band  = short ≈ safe-area-inset-top ? safe-area-inset-top : 0
 //
 // This is not the banned measurement above. Nothing here asks how tall the
 // app is: it reads ONE offset, corroborated by a second, which is 0px for a
 // correctly installed icon, 0px in a browser tab, and 0px on anything that
-// isn't the webview this compensates for. Consumers use it through a CSS
-// variable whose fallback is 0px, so if this never runs the layout is exactly
-// what it was before.
+// isn't the webview this describes.
 //
-// Because the two have to agree, a non-zero result is the REAL distance from
-// the viewport's bottom edge to the glass — not an upper bound on it. That is
-// what lets the bottom nav seat its box on the result and keep its ordinary
-// home-indicator padding; see NAV_SAFE_PAD in App.jsx for why a bound was not
-// good enough.
-export const VP_DROP = "var(--bc-vp-drop, 0px)";
-// Bottom-anchored fixed elements reach past the short viewport with this.
-export const VP_DROP_BOTTOM = `calc(-1 * ${VP_DROP})`;
+// ── What this number is NOT for ───────────────────────────────────
+// It is NOT an offset to push bottom-anchored elements down by. That was the
+// original idea and it does not work, which three screenshots off a 17e settle:
+//
+//   band=0  the nav's box is 85pt tall, paints all 85pt, sits on the webview's
+//           bottom edge, and the 47pt below it stays page-coloured.
+//   band=47 the same box is moved down onto the glass and paints only 38pt.
+//           85 - 47 = 38. The labels, 23pt up from a box bottom now level with
+//           the glass, land in the missing 47 and are simply gone.
+//
+// Nothing an element does can paint below the layout viewport's bottom edge —
+// the webview clips there, full stop. The band is painted by the ROOT
+// background propagating to the canvas, and that is the only thing that can
+// colour it. So this number has exactly two honest uses:
+//
+//   1. Nothing. The canvas colour covers the band whatever its size, with no
+//      measurement at all — see bcGlobalCSS below. That is the actual fix.
+//   2. Telling the bottom nav how much clearance it is ALREADY getting for
+//      free. The band is real reserved screen between the labels and the home
+//      indicator, so padding that duplicates it just makes the bar taller.
+//
+// Both are safe if this number is wrong, which is the point of moving it here
+// from the layout: over-measure and the nav trims a little padding it could
+// have kept, under-measure and it keeps a little it didn't need. Neither can
+// clip a label or strand a row of cards.
+export const VP_BAND = "var(--bc-vp-band, 0px)";
 
-const measureVpDrop = () => {
+const measureVpBand = () => {
   if (typeof window === "undefined" || typeof document === "undefined") return 0;
   // Do NOT gate this on navigator.standalone existing. That was tried, to keep
   // the drop off Android and desktop installs, and it silently turned the drop
@@ -570,7 +586,7 @@ const measureVpDrop = () => {
 };
 
 // ── Reading an inset from JS ──────────────────────────────────────
-// The same probe measureVpDrop uses, pointed at the bottom inset and
+// The same probe measureVpBand uses, pointed at the bottom inset and
 // exported, because the bottom-nav clearance needs this as a NUMBER.
 //
 // It used to be CSS — `max(<measured>px, calc(env(safe-area-inset-bottom) +
@@ -588,11 +604,20 @@ export const readSafeAreaBottom = () => {
   return inset > 0 ? inset : 0;
 };
 
-export const syncVpDrop = () => {
+export const syncVpBand = () => {
   if (typeof document === "undefined") return 0;
-  const drop = measureVpDrop();
-  document.documentElement.style.setProperty("--bc-vp-drop", `${drop}px`);
-  return drop;
+  const band = measureVpBand();
+  document.documentElement.style.setProperty("--bc-vp-band", `${band}px`);
+  return band;
+};
+
+// The same figure as a NUMBER, for the nav's clearance floor, which is
+// arithmetic rather than CSS. Reads back what syncVpBand wrote — that runs at
+// module init before React mounts, and again on resize/orientationchange.
+export const readVpBand = () => {
+  if (typeof document === "undefined") return 0;
+  const n = parseFloat(document.documentElement.style.getPropertyValue("--bc-vp-band"));
+  return Number.isFinite(n) && n > 0 ? n : 0;
 };
 
 // ── Global stylesheet ──
@@ -603,9 +628,32 @@ export const syncVpDrop = () => {
 // Layout contract: html/body/#root are a plain full-height, non-scrolling,
 // non-overscrolling backdrop painted in the theme bg. All real layout is
 // done by the app shell, which is position:fixed; inset:0 on top of them.
-export const bcGlobalCSS = (bg) => `
+//
+// ── html carries the CARD colour, and that is deliberate ──────────
+// `html`'s background is the one that propagates to the canvas, and the canvas
+// is the whole drawable surface — including the strip below the layout
+// viewport on a webview that doesn't fill the screen (see VP_BAND above). No
+// element can paint down there; this can, and it is the ONLY thing that can.
+//
+// That strip is directly under the bottom nav, so the colour it wants is the
+// nav's, not the page's. Painting it `card` makes the bar read as reaching the
+// glass instead of floating above a bare band — with no measurement, at any
+// band height, and with nothing positioned outside the viewport where it would
+// only be clipped.
+//
+// body and #root keep `bg`, and they cover the entire layout viewport, so
+// every device WITHOUT such a strip looks exactly as before: the card colour
+// is painted only where it is never seen.
+export const bcGlobalCSS = (bg, card) => `
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body, #root {
+  html {
+    height: 100%;
+    width: 100%;
+    background: ${card};
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  body, #root {
     height: 100%;
     width: 100%;
     background: ${bg};
@@ -634,7 +682,7 @@ export const bcGlobalCSS = (bg) => `
 if (typeof document !== "undefined") {
   const _style = document.createElement("style");
   _style.id = "bc-global-style";
-  _style.textContent = bcGlobalCSS(BC.bg);
+  _style.textContent = bcGlobalCSS(BC.bg, BC.card);
   document.head.appendChild(_style);
 
   // ── Inject Montserrat font ──
@@ -643,11 +691,11 @@ if (typeof document !== "undefined") {
   _link.href = "https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap";
   document.head.appendChild(_link);
 
-  // ── Seat the bottom edge (see VP_DROP above) ──
+  // ── Measure the band below the viewport (see VP_BAND above) ──
   // Measured before React mounts so the nav never paints in the wrong place,
   // and re-measured on the events that can change it. Both listeners are for
   // the lifetime of the document, so there is nothing to tear down.
-  syncVpDrop();
-  window.addEventListener("resize", syncVpDrop);
-  window.addEventListener("orientationchange", syncVpDrop);
+  syncVpBand();
+  window.addEventListener("resize", syncVpBand);
+  window.addEventListener("orientationchange", syncVpBand);
 }
