@@ -629,31 +629,35 @@ export const readVpBand = () => {
 // non-overscrolling backdrop painted in the theme bg. All real layout is
 // done by the app shell, which is position:fixed; inset:0 on top of them.
 //
-// ── html carries the CARD colour, and that is deliberate ──────────
-// `html`'s background is the one that propagates to the canvas, and the canvas
-// is the whole drawable surface — including the strip below the layout
-// viewport on a webview that doesn't fill the screen (see VP_BAND above). No
-// element can paint down there; this can, and it is the ONLY thing that can.
+// ── html AND body carry the CARD colour, #root carries bg ─────────
+// The strip below the layout viewport, on a webview that doesn't fill the
+// screen (see VP_BAND above), is painted by the document's background rather
+// than by any element — nothing positioned can reach it. That strip sits
+// directly under the bottom nav, so the colour it wants is the nav's, not the
+// page's: painting it `card` makes the bar read as reaching the glass instead
+// of floating above a bare band, with no measurement and at any band height.
 //
-// That strip is directly under the bottom nav, so the colour it wants is the
-// nav's, not the page's. Painting it `card` makes the bar read as reaching the
-// glass instead of floating above a bare band — with no measurement, at any
-// band height, and with nothing positioned outside the viewport where it would
-// only be clipped.
+// It is on BOTH html and body on purpose. Per CSS it is the ROOT element's
+// background that propagates to the canvas, so `html` alone should do it — and
+// on a real device it did not. A 2020 SE with a short webview kept showing the
+// strip in `bg` while html was already `card`, which says WebKit is sampling
+// the BODY for the out-of-viewport paint, not the root. Setting both is robust
+// to which one it actually reads, and costs nothing.
 //
-// body and #root keep `bg`, and they cover the entire layout viewport, so
-// every device WITHOUT such a strip looks exactly as before: the card colour
-// is painted only where it is never seen.
+// #root keeps `bg`, and it covers the entire layout viewport (as does the app
+// shell, which paints bg over it again), so every device is pixel-identical
+// inside the viewport and the card colour is painted only where it would
+// otherwise be a bare strip.
 export const bcGlobalCSS = (bg, card) => `
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  html {
+  html, body {
     height: 100%;
     width: 100%;
     background: ${card};
     overflow: hidden;
     overscroll-behavior: none;
   }
-  body, #root {
+  #root {
     height: 100%;
     width: 100%;
     background: ${bg};
