@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, HOLE_BANNER, FS, segThumb, segTrack, readSafeAreaBottom, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor, VP_DROP, VP_DROP_BOTTOM } from "./theme";
+import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, HOLE_BANNER, FS, segThumb, segTrack, readSafeAreaBottom, readVpBand, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor, VP_BAND } from "./theme";
 import { playerLookup } from "./lib/players";
 import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, BOOTSTRAP_DIRECTOR } from "./firebase";
 import { PROVIDERS, signIn, signOutUser, onAuthUser, consumeRedirectResult, isCancelled } from "./lib/auth";
@@ -82,20 +82,28 @@ import { useHoleAdvance } from "./lib/useHoleAdvance";
 // devices. The fixed bar is the known-good part — this changes only how
 // much of the inset the padding takes.)
 //
-// This is the clearance from the bar's own bottom EDGE, and it does not carry
-// the viewport drop. It briefly did, as insurance against a drop that
-// over-measured and hung the labels off the bottom of the screen — but paying
-// for that here costs a whole status bar of padding on the phones where the
-// drop is real and correct, which is a fat bar with its labels floating.
-// measureVpDrop() now returns the true distance to the glass or zero, never a
-// bounded guess, so the bar's edge is genuinely on the glass and this is
-// genuinely all the clearance needed. See theme.js.
+// ── Minus the band, which is clearance we already have ─────────────
+// On a webview that doesn't reach the bottom of the screen, VP_BAND is the
+// strip of glass below it (see theme.js). That strip is real reserved space
+// between these labels and the home indicator — the very thing this padding
+// buys — so padding it a second time just makes the bar taller for no gain.
+// Subtract it, floored at zero, and the total clearance from the glass becomes
+// max(indicator clearance, band) instead of the sum.
+//
+// This is a safe place for a measurement to be wrong, which is why it is the
+// only place one is left: too big and the bar trims padding it could have
+// kept, too small and it keeps padding it didn't need. Nothing moves outside
+// the viewport, so nothing can be clipped either way.
+//
+// VP_BAND is 0px on every device whose webview does fill the screen, so this
+// still computes exactly inset * 0.5 + 6 there.
 const NAV_INSET_SHARE = 0.5;
 const NAV_PAD_BASE = 6;
-const NAV_SAFE_PAD = `calc(env(safe-area-inset-bottom, 0px) * ${NAV_INSET_SHARE} + ${NAV_PAD_BASE}px)`;
+const NAV_SAFE_PAD = `max(0px, calc(env(safe-area-inset-bottom, 0px) * ${NAV_INSET_SHARE} + ${NAV_PAD_BASE}px - ${VP_BAND}))`;
 // The same figure as a number, for the spacer's floor below. One source, so
 // the reserved clearance cannot describe a bar of a different height.
-const navPadPx = (inset) => Math.round(inset * NAV_INSET_SHARE) + NAV_PAD_BASE;
+const navPadPx = (inset, band = 0) =>
+  Math.max(0, Math.round(inset * NAV_INSET_SHARE) + NAV_PAD_BASE - band);
 
 // Where a dismissed "ready to finalize" notification is remembered, per
 // edition — TOURNAMENT_ID is a live binding (firebase.js reassigns it when
@@ -4132,9 +4140,9 @@ function SlideMenu({ open, onClose, onNavigate, user, view, finalize, navH }) {
           position: "fixed",
           // Flush with the top of the bar: -1px so the menu's bottom border
           // and the bar's top border stay the single hairline they are now.
-          // VP_DROP is the band an old home-screen icon leaves below the
-          // layout viewport — the bar drops into it, so the menu does too.
-          bottom: `calc(${navH - 1}px - ${VP_DROP})`,
+          // Nothing to compensate for below that — the bar is seated on the
+          // viewport's bottom edge, not hanging past it.
+          bottom: navH - 1,
           right: "max(8px, calc(50vw - 252px))",
           transform: `translateY(${dragY}px)`,
           transition: dragY === 0 ? "transform 0.2s ease, opacity 0.15s ease" : "none",
@@ -4384,7 +4392,7 @@ export default function App() {
     // rules (see theme.js). Re-emitting the whole sheet here — rather than
     // a hand-maintained copy of it — is what keeps the app-height layout
     // contract intact across a theme toggle.
-    if (styleEl) styleEl.textContent = bcGlobalCSS(BC.bg);
+    if (styleEl) styleEl.textContent = bcGlobalCSS(BC.bg, BC.card);
   }, [darkMode]);
 
   const [tPlayers, setTPlayers] = useState([]);
@@ -4572,12 +4580,16 @@ export default function App() {
   // clearance is never less than the bar's own minimum — a 56px tap target
   // plus navPadPx of this inset, plus the 8px gap.
   const [safeBottom, setSafeBottom] = useState(0);
+  // The strip of glass below the webview, if any (theme.js). It counts toward
+  // the nav's clearance, so the floor below has to know about it too.
+  const [vpBand, setVpBand] = useState(0);
   useEffect(() => {
     const el = navRef.current;
     if (!el) return;
     const measure = () => {
       setNavH(Math.ceil(el.getBoundingClientRect().height));
       setSafeBottom(Math.ceil(readSafeAreaBottom()));
+      setVpBand(Math.ceil(readVpBand()));
     };
     measure();
     // Viewport events as well as the observer: a safe-area inset can change
@@ -5372,13 +5384,15 @@ export default function App() {
   // Dynamic Island tall under the nav. Don't reintroduce one. Safari also
   // re-pins fixed elements above its own toolbar for free.
   //
-  // The bottom is VP_DROP_BOTTOM rather than 0 because that containing block
-  // is honest in every case but one: a home-screen icon installed before the
-  // status-bar meta was fixed still gets a viewport one status bar short of
-  // the screen. VP_DROP is 0px everywhere else, so this reads as bottom: 0
-  // on every other device. See theme.js.
+  // The bottom is a plain 0, and stays one. A home-screen icon installed
+  // before the status-bar meta was fixed does get a viewport one status bar
+  // short of the screen, and this used to hang past the bottom edge by that
+  // much to cover the difference. It cannot: the webview clips everything below
+  // its bottom edge, so reaching past it painted nothing and only cost the nav
+  // the labels it pushed down there. The strip is coloured by the canvas
+  // instead — see bcGlobalCSS in theme.js.
   return (
-    <div style={{ position: "fixed", top: 0, right: 0, bottom: VP_DROP_BOTTOM, left: 0, width: "100%", background: BC.bg, display: "flex", flexDirection: "column", fontFamily: FONT, overflow: "hidden", boxSizing: "border-box", paddingTop: "env(safe-area-inset-top, 0px)", paddingLeft: "env(safe-area-inset-left, 0px)", paddingRight: "env(safe-area-inset-right, 0px)" }}>
+    <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: 0, width: "100%", background: BC.bg, display: "flex", flexDirection: "column", fontFamily: FONT, overflow: "hidden", boxSizing: "border-box", paddingTop: "env(safe-area-inset-top, 0px)", paddingLeft: "env(safe-area-inset-left, 0px)", paddingRight: "env(safe-area-inset-right, 0px)" }}>
       <div style={{ maxWidth: 520, width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", flex: 1, minHeight: 0, position: "relative", padding: "0 4px" }}>
       {/* Top-level feedback from notify(). The scoring screens render
           their own <Toast> lower down for the auto-advance message —
@@ -5695,7 +5709,7 @@ export default function App() {
             a declaration that can afford to go missing. */}
         <div className="bc-nav-spacer" aria-hidden="true" style={{
           flexShrink: 0,
-          height: Math.max(navH + 8, 56 + navPadPx(safeBottom) + 8),
+          height: Math.max(navH + 8, 56 + navPadPx(safeBottom, vpBand) + 8),
         }} />
       </div>
 
@@ -5731,7 +5745,7 @@ export default function App() {
           paddingBottom keeps the labels clear of the home indicator. The
           scroll area reserves matching clearance so content never hides
           behind the bar. */}
-      <div ref={navRef} style={{ position: "fixed", bottom: VP_DROP_BOTTOM, left: 0, right: 0, background: BC.card, borderTop: `1px solid ${BC.bdr}`, zIndex: 100, paddingBottom: NAV_SAFE_PAD }}>
+      <div ref={navRef} style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: BC.card, borderTop: `1px solid ${BC.bdr}`, zIndex: 100, paddingBottom: NAV_SAFE_PAD }}>
       <div style={{ maxWidth: 520, margin: "0 auto", display: "flex" }}>
         {navItems.map(item => {
           const active = view === item.key;
