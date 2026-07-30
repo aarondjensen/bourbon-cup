@@ -986,7 +986,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
       <SignedCardPanel
         match={match} sig={sig} result={result} format={format}
         holePars={holePars} holeHcps={holeHcps} course={course}
-        teams={teams} tPlayers={tPlayers} getScore={getScore} viewer={userTeam}
+        tPlayers={tPlayers} getScore={getScore} viewer={userTeam}
         userPid={userPid} notify={notify}
         onAttest={() => onAttestCard(match, userPid)}
         onUnsign={() => onUnsignCard(match)}
@@ -1202,8 +1202,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
         <SignCardSheet
           match={match} result={result} format={format}
           holePars={holePars} holeHcps={holeHcps} course={course}
-          teams={teams} tPlayers={tPlayers} getScore={getScore} viewer={userTeam}
-          userPid={userPid}
+          tPlayers={tPlayers} getScore={getScore} viewer={userTeam}
           onClose={() => setShowSign(false)}
           onSign={async () => {
             const res = await onSignCard(match, userPid);
@@ -1237,7 +1236,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
             <FullScorecard
               match={match} result={result} format={format}
               holePars={holePars} holeHcps={holeHcps} course={course}
-              teams={teams} tPlayers={tPlayers} getScore={getScore}
+              tPlayers={tPlayers} getScore={getScore}
               viewer={userTeam}
             />
           </div>

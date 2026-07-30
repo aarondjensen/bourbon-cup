@@ -15,13 +15,11 @@
 //    HOLE   1 2 3 4 5 6 7 8 9  OUT   ← accent band
 //    PAR    4 4 3 5 …           36
 //    HCP    7 1 15 …                 ← which holes give strokes
-//    ── TEAM A ──                    ← team name, in the team's color
-//    AJ 12  ⑤ 4 3 …             38   ← per-player GROSS, golf notation
-//    KJ  8  4 ④ 6 …             41
+//    AJ 12  ⑤ 4 3 …             38   ← per-player GROSS, golf notation.
+//    KJ  8  4 ④ 6 …             41     Initials in the team's color.
 //    NET    4 3 3 …             33   ← the side's number for the hole
 //    MATCH  ▲1 ▲2 AS …        2 UP   ← where the match stands
-//    ── TEAM B ──
-//    …
+//    …                                 then Team B, same shape
 //
 //  What that buys, in order of how much it matters on a phone:
 //
@@ -33,9 +31,9 @@
 //      come from result.strokeMaps — the same allocation the match was
 //      scored with — so the card cannot show a stroke the engine didn't
 //      give.
-//    • ONE ROW PER PLAYER, grouped under their team, with the side's
-//      scoring row directly beneath. How the side's number was made is
-//      then visible rather than asserted.
+//    • ONE ROW PER PLAYER, initials in their team's color, with the
+//      side's scoring row directly beneath. How the side's number was
+//      made is then visible rather than asserted.
 //
 //  Bourbon Cup differences from MNQ, all of them forced by this app
 //  having formats MNQ does not:
@@ -209,7 +207,7 @@ export function ScoreCell({ score, par, strokes = 0, size = CELL, color }) {
 //                             directly above this, and its segment pills
 //                             say it a third time.
 export function FullScorecard({
-  match, result, format, holePars, holeHcps, course, teams, tPlayers, getScore,
+  match, result, format, holePars, holeHcps, course, tPlayers, getScore,
   viewer = "A", showHeader = true,
 }) {
   if (!result) return null;
@@ -339,21 +337,14 @@ export function FullScorecard({
       </div>
     );
 
-    // Just the team's name. The players under it are identified by the
-    // initials in their own row, and spelled out once in the header — MNQ
-    // does the same, and repeating four names above each of two nines is
-    // four lines of a phone spent saying nothing new.
-    const TeamLabel = (tid) => (
-      <div style={{
-        padding: "5px 4px 2px",
-        fontSize: FS.micro, fontWeight: 800, letterSpacing: 1, color: teamColor(tid),
-        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-      }}>
-        {teams[tid]?.name || `TEAM ${tid}`}
-      </div>
-    );
-
-    const PlayerRow = (pid) => {
+    // There is no team-name row above these blocks. It cost a line of a
+    // phone per team per nine — four lines of a card that has to fit on a
+    // screen — to say something the initials now say themselves: a player
+    // row is printed in its team's color, the same color as that side's NET
+    // row directly beneath it and the same one the names in the header are
+    // in. Which side a row belongs to was never the question anyone had
+    // while reading this; whose row it is, is.
+    const PlayerRow = (pid, tid) => {
       const rowH = 30;
       let gross = 0;
       const cells = idx.map((h) => {
@@ -367,7 +358,7 @@ export function FullScorecard({
       return (
         <div key={pid} style={{ display: "flex", alignItems: "center", borderBottom: gridLine() }}>
           <div style={labelCell(rowH, { gap: 3, color: BC.t1, paddingTop: 8 })}>
-            <span style={{ fontSize: FS.small, fontWeight: 800, color: BC.t1 }}>{initials(nameOf(pid))}</span>
+            <span style={{ fontSize: FS.small, fontWeight: 800, color: teamColor(tid) }}>{initials(nameOf(pid))}</span>
             {ch != null && <span style={{ fontSize: FS.micro, fontWeight: 700, color: BC.hcpBlue }}>{ch}</span>}
           </div>
           {cells.map((c, i) => (
@@ -494,13 +485,15 @@ export function FullScorecard({
         {HoleRow}
         {ParRow}
         {HcpRow}
-        {TeamLabel("A")}
-        {match.teamA.map(PlayerRow)}
+        {match.teamA.map((pid) => PlayerRow(pid, "A"))}
         {SideRow("A")}
         {MatchRow}
-        {TeamLabel("B")}
-        {match.teamB.map(PlayerRow)}
-        {SideRow("B")}
+        {/* The MATCH row is a floating chip; without a team label under it
+            Team B's first row would butt straight into its border. */}
+        <div style={{ marginTop: 5 }}>
+          {match.teamB.map((pid) => PlayerRow(pid, "B"))}
+          {SideRow("B")}
+        </div>
       </div>
     );
   };

@@ -298,7 +298,7 @@ const NINE_VALUE = {
 //  Match card
 // ══════════════════════════════════════════════════════════════════
 function MatchCard({
-  index, first, match, result, format, teams, tPlayers,
+  index, first, match, result, format, tPlayers,
   courses, tRounds, roundLocks, holeData, viewer, expanded, onToggle,
 }) {
   const total = resolveScoring(match).formOfPlay === SCORING_TYPE_TOTAL;
@@ -461,7 +461,7 @@ function MatchCard({
             <FullScorecard
               match={match} result={result} format={format}
               holePars={cardCtx.holePars} holeHcps={cardCtx.holeHcps} course={cardCtx.course}
-              teams={teams} tPlayers={tPlayers} getScore={getScore} viewer={viewer}
+              tPlayers={tPlayers} getScore={getScore} viewer={viewer}
               showHeader={false}
             />
           </div>
@@ -475,7 +475,7 @@ function MatchCard({
 //  Round section
 // ══════════════════════════════════════════════════════════════════
 function RoundSection({
-  meta, results, open, onToggle, teams, tPlayers,
+  meta, results, open, onToggle, tPlayers,
   courses, tRounds, roundLocks, holeData, viewer, expandedMatch, setExpandedMatch,
 }) {
   const { course, fmt, pts, state } = meta;
@@ -534,7 +534,6 @@ function RoundSection({
                 match={m}
                 result={r}
                 format={format}
-                teams={teams}
                 tPlayers={tPlayers}
                 courses={courses}
                 tRounds={tRounds}
@@ -807,7 +806,6 @@ export function TeamLeaderboard({
           results={roundMeta[rnd].results}
           open={openOverrides[rnd] ?? defaultOpen.has(rnd)}
           onToggle={() => setOpenOverrides((p) => ({ ...p, [rnd]: !(p[rnd] ?? defaultOpen.has(rnd)) }))}
-          teams={teams}
           tPlayers={tPlayers}
           courses={courses}
           tRounds={tRounds}
