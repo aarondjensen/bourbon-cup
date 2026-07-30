@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, HOLE_BANNER, FS, segThumb, segTrack, readSafeAreaBottom, readVpBand, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor, VP_BAND } from "./theme";
+import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, HOLE_BANNER, FS, segThumb, segTrack, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor } from "./theme";
 import { playerLookup } from "./lib/players";
 import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, BOOTSTRAP_DIRECTOR } from "./firebase";
 import { PROVIDERS, signIn, signOutUser, onAuthUser, consumeRedirectResult, isCancelled } from "./lib/auth";
@@ -70,40 +70,41 @@ import { useHoleAdvance } from "./lib/useHoleAdvance";
 // ── Bottom-nav safe-area cushion ──────────────────────────────────
 // Padding under the nav labels, so they clear the home indicator.
 //
-// It was the FULL iOS inset plus 8pt — 42px of nothing below the tabs on a
-// phone that has an indicator, which is clearing it about twice over. The
-// indicator itself is a ~5px bar sitting ~8px off the bottom edge; half the
-// inset plus 6 still lands the labels well clear of it and of the swipe-up
-// gesture, and hands ~19px back to the screen above. On Scoring that is
-// close to a whole row of card height, which is what it is for.
+// This is now the ONLY number involved in seating the bar, because the bar is
+// an in-flow flex child of the shell (see the nav's own comment) rather than a
+// second position:fixed element that the scroll area had to guess the height
+// of. Nothing reads it back in JavaScript, nothing measures the bar, and there
+// is no second copy of this arithmetic to drift out of step with it.
 //
-// (The interim "navfix" rework once clamped this to a flat 10px AND made
-// the nav an in-flow flex child; the bar ended up mis-seated on real
-// devices. The fixed bar is the known-good part — this changes only how
-// much of the inset the padding takes.)
+// The value is the plain inset with an 8px floor:
 //
-// ── Minus the band, which is clearance we already have ─────────────
-// On a webview that doesn't reach the bottom of the screen, VP_BAND is the
-// strip of glass below it (see theme.js). That strip is real reserved space
-// between these labels and the home indicator — the very thing this padding
-// buys — so padding it a second time just makes the bar taller for no gain.
-// Subtract it, floored at zero, and the total clearance from the glass becomes
-// max(indicator clearance, band) instead of the sum.
+//   • The inset is what the platform says is unsafe, so honour all of it
+//     rather than a fraction. The previous half-inset-plus-6 was invented to
+//     claw back ~19px of screen, but the bar was over-tall for a different
+//     reason — the button below already carries its own bottom padding — so
+//     the fraction was treating a symptom in the wrong place. Trim the button,
+//     not the inset.
+//   • The floor covers every device that reports 0: a browser tab, a desktop
+//     window, an older phone with a physical home button. Without it the
+//     labels would sit flush against the bottom border on those.
 //
-// This is a safe place for a measurement to be wrong, which is why it is the
-// only place one is left: too big and the bar trims padding it could have
-// kept, too small and it keeps padding it didn't need. Nothing moves outside
-// the viewport, so nothing can be clipped either way.
+// The bar's BACKGROUND still paints through the whole inset down to the glass,
+// because the padding is inside the bar's own box. Only the labels and tap
+// centres are held above the indicator, which is exactly the platform
+// convention — the same shape as a native iOS tab bar.
 //
-// VP_BAND is 0px on every device whose webview does fill the screen, so this
-// still computes exactly inset * 0.5 + 6 there.
-const NAV_INSET_SHARE = 0.5;
-const NAV_PAD_BASE = 6;
-const NAV_SAFE_PAD = `max(0px, calc(env(safe-area-inset-bottom, 0px) * ${NAV_INSET_SHARE} + ${NAV_PAD_BASE}px - ${VP_BAND}))`;
-// The same figure as a number, for the spacer's floor below. One source, so
-// the reserved clearance cannot describe a bar of a different height.
-const navPadPx = (inset, band = 0) =>
-  Math.max(0, Math.round(inset * NAV_INSET_SHARE) + NAV_PAD_BASE - band);
+// Deliberately NOT here any more: the `- VP_BAND` subtraction. That corrected
+// for a layout viewport one status bar short of the screen, which only happens
+// to a home-screen icon snapshotted before index.html pinned
+// apple-mobile-web-app-status-bar-style to "black". Two reasons it is gone:
+// the band is already covered visually by the canvas colour (bcGlobalCSS in
+// theme.js), and subtracting it meant this CSS value and a JS reimplementation
+// of the same formula both had to agree about a number read back out of an
+// inline custom property. They were one silent mismatch away from a bar whose
+// reserved clearance described a bar of a different height.
+const NAV_MIN_PAD = 8;
+const NAV_SAFE_PAD = `max(${NAV_MIN_PAD}px, env(safe-area-inset-bottom, 0px))`;
+
 
 // Where a dismissed "ready to finalize" notification is remembered, per
 // edition — TOURNAMENT_ID is a live binding (firebase.js reassigns it when
@@ -213,7 +214,14 @@ function LoginChrome({ tournamentName, tournamentLocation, children }) {
     // html/body are locked by the theme so the page itself cannot scroll.
     // A lone `margin: auto` child does both jobs: flexbox centres it with
     // room to spare, and the scroll container takes over without it.
-    <div style={{ height: "100dvh", background: BC.bg, display: "flex", flexDirection: "column", padding: "0 10px", fontFamily: FONT, position: "relative", overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain" }}>
+    // `position: fixed` on all four edges, NOT height:100dvh. dvh is the
+    // DYNAMIC viewport unit: on iOS Safari it tracks the collapsing address
+    // bar, so this container grew and shrank by ~60px while somebody was
+    // mid-tap on a name, and the whole centred panel walked up the screen
+    // under their finger. The fixed box is pinned to the layout viewport,
+    // which does not move, and it is the same pattern the signed-in shell
+    // uses — one anchoring rule for both screens.
+    <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: 0, background: BC.bg, display: "flex", flexDirection: "column", padding: "0 10px", fontFamily: FONT, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain" }}>
       {/* Silhouette — fixed full-screen background */}
       <img src={TROPHY_SILHOUETTE} alt="" style={{
         position: "fixed", top: "50%", left: "50%",
@@ -4549,48 +4557,44 @@ export default function App() {
   // menuOpen changes.
   const popupOpenRef = useRef(false);
 
-  // The bottom nav, measured by the effect below, which feeds the scroll
-  // area's bottom clearance.
   const navRef = useRef(null);
 
-  // ── Bottom clearance for the fixed nav ───────────────────────────
-  // The nav is position:fixed over the bottom of the viewport, so the
-  // scroll area has to reserve room or its last rows sit behind the bar
-  // with no way to scroll them into view. That clearance used to be the
-  // constant 64px + safe-area, which is only correct while the nav is
-  // exactly the height it is at the default text size. It is not: the
-  // labels grow with the OS text-size setting (iOS text-size-adjust scales
-  // them on a page that never opted out), and once the bar is taller than
-  // 64px the tail of every long screen becomes unreachable — the "won't
-  // scroll" report. Measuring is the only thing that stays true.
+  // ── The nav's height, for the slide-up menu ONLY ──────────────────
+  // This used to feed the scroll area's bottom clearance as well, and that was
+  // the whole problem. The nav was a SECOND position:fixed element, a sibling
+  // of the shell rather than a row inside it, so the shell had no idea it
+  // existed and the scroll area had to reserve space for a bar it could not
+  // see. Every "the last row is stuck under the bar" and "the bar floats above
+  // the bottom" report was that reservation being briefly, or permanently,
+  // the wrong number:
   //
-  // The box being watched has to be the BORDER box. A ResizeObserver defaults
-  // to the content box, and the bar's height moves almost entirely through
-  // its PADDING — NAV_SAFE_PAD is env(safe-area-inset-bottom) + 8px, and that
-  // inset is not a constant: iOS reports 0 while Safari's bottom toolbar is
-  // expanded and the home-indicator inset once it collapses, and it changes
-  // again on rotation and when a PWA is launched. Every one of those grows
-  // the bar without touching its content box, so a content-box observer never
-  // fires, `navH` keeps its mount value, and the clearance below is short by
-  // exactly the inset — the Admin players list ending under the bar with
-  // nothing left to scroll. Watch the border box and the padding counts.
+  //   • On the first paint it is literally a guess — the state below seeded 64
+  //     while the real bar is 56 plus the inset, so the very first frame of
+  //     every cold start was wrong by up to 30px.
+  //   • Montserrat is fetched at runtime (theme.js injects the <link>), so the
+  //     10px labels re-metric when it lands. The bar changes height a beat
+  //     after the app is interactive, and the reservation jumps with it.
+  //   • Raising the OS text size scales the labels, so the bar grows and the
+  //     reservation is short until an observer callback catches up.
+  //
+  // The nav is now an in-flow flex child of the shell, which means the SHELL
+  // reserves the space, in layout, with no number at all. What is left here
+  // feeds one consumer: the slide-up menu, which is an overlay that seats
+  // itself on top of the bar and therefore genuinely needs a pixel figure.
+  // That is a safe place for a measurement, and the reason it is the only one
+  // left: if this is briefly stale the menu sits a couple of pixels off the
+  // bar for one frame. It can no longer strand content behind anything.
+  //
+  // Still a BORDER-box observer. A ResizeObserver defaults to the content box
+  // and this bar's height moves mostly through its padding — NAV_SAFE_PAD is
+  // an env() inset, and iOS reports 0 for it while Safari's bottom toolbar is
+  // expanded and the home-indicator figure once it collapses. A content-box
+  // observer never fires on any of that.
   const [navH, setNavH] = useState(64);
-  // The home-indicator inset, read as a number (see theme.readSafeAreaBottom).
-  // It is the floor under the measurement: whatever the bar measures, the
-  // clearance is never less than the bar's own minimum — a 56px tap target
-  // plus navPadPx of this inset, plus the 8px gap.
-  const [safeBottom, setSafeBottom] = useState(0);
-  // The strip of glass below the webview, if any (theme.js). It counts toward
-  // the nav's clearance, so the floor below has to know about it too.
-  const [vpBand, setVpBand] = useState(0);
   useEffect(() => {
     const el = navRef.current;
     if (!el) return;
-    const measure = () => {
-      setNavH(Math.ceil(el.getBoundingClientRect().height));
-      setSafeBottom(Math.ceil(readSafeAreaBottom()));
-      setVpBand(Math.ceil(readVpBand()));
-    };
+    const measure = () => setNavH(Math.ceil(el.getBoundingClientRect().height));
     measure();
     // Viewport events as well as the observer: a safe-area inset can change
     // without the observed box changing at all on some engines, and these are
@@ -4601,6 +4605,8 @@ export default function App() {
     window.visualViewport?.addEventListener("resize", measure);
     const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
     ro?.observe(el, { box: "border-box" });
+    // Fonts are the other thing that changes this without a viewport event.
+    document.fonts?.ready?.then(measure).catch(() => {});
     return () => {
       window.removeEventListener("resize", measure);
       window.removeEventListener("orientationchange", measure);
@@ -4610,6 +4616,48 @@ export default function App() {
     // `user` is in the deps because the nav only exists once past the login
     // screen — without it the ref is null on mount and never measured.
   }, [user]);
+
+  // ── Put the shell back on the top edge after the keyboard ─────────
+  // The shell is position:fixed to the layout viewport, so it cannot be
+  // scrolled — except that iOS does it anyway. When a field near the bottom
+  // takes focus, WKWebView scrolls the LAYOUT viewport to bring it above the
+  // keyboard, and it does that whether or not html/body say overflow:hidden.
+  // Everything fixed goes up with it, which is exactly the "the header slides
+  // off the top and the bar isn't at the bottom any more" report: the app is
+  // fine, the window is offset. Worse, dismissing the keyboard does not always
+  // put the offset back, so the app can sit permanently a few dozen pixels
+  // high until something forces a scroll.
+  //
+  // This is NOT the banned viewport measurement. It never asks how tall
+  // anything is and never sizes anything — it reads two offsets and, if either
+  // is non-zero, sets it to zero. There is no value it can get wrong.
+  //
+  // Ordered so the common case costs nothing: bail immediately unless there is
+  // actually an offset to clear.
+  useEffect(() => {
+    const reset = () => {
+      if (window.scrollY !== 0 || window.pageYOffset !== 0) window.scrollTo(0, 0);
+      const doc = document.scrollingElement || document.documentElement;
+      if (doc && doc.scrollTop !== 0) doc.scrollTop = 0;
+    };
+    // On blur, and one frame later: iOS restores its own offset asynchronously
+    // after the keyboard animation, so a single synchronous reset can be undone
+    // by the platform a moment after it runs.
+    const onFocusOut = () => { reset(); requestAnimationFrame(reset); setTimeout(reset, 150); };
+    // The keyboard closing shows up as a visualViewport resize with no focus
+    // change at all — e.g. the user hits the keyboard's own dismiss key.
+    const onVvChange = () => { if ((window.visualViewport?.offsetTop || 0) === 0) reset(); };
+    window.addEventListener("focusout", onFocusOut);
+    window.addEventListener("orientationchange", onFocusOut);
+    window.visualViewport?.addEventListener("resize", onVvChange);
+    window.visualViewport?.addEventListener("scroll", onVvChange);
+    return () => {
+      window.removeEventListener("focusout", onFocusOut);
+      window.removeEventListener("orientationchange", onFocusOut);
+      window.visualViewport?.removeEventListener("resize", onVvChange);
+      window.visualViewport?.removeEventListener("scroll", onVvChange);
+    };
+  }, []);
 
   const notify = useCallback((msg, type = "success") => {
     setNotif({ msg, type });
@@ -5376,28 +5424,74 @@ export default function App() {
     return null;
   };
 
-  // App shell — position:fixed, pinned to all four edges. The fixed
-  // containing block is the ONE bottom-edge signal iOS reports honestly:
-  // in an installed home-screen app window.visualViewport.height subtracts
-  // env(safe-area-inset-top) (812 reported for a genuinely 874pt iPhone 16
-  // Pro webview), so any JS-measured height leaves a black band exactly one
-  // Dynamic Island tall under the nav. Don't reintroduce one. Safari also
-  // re-pins fixed elements above its own toolbar for free.
+  // ══ App shell ══════════════════════════════════════════════════════
+  // position:fixed, pinned to all four edges, and it is the ONLY thing in the
+  // app that decides where the top and bottom edges are.
   //
-  // The bottom is a plain 0, and stays one. A home-screen icon installed
-  // before the status-bar meta was fixed does get a viewport one status bar
-  // short of the screen, and this used to hang past the bottom edge by that
-  // much to cover the difference. It cannot: the webview clips everything below
-  // its bottom edge, so reaching past it painted nothing and only cost the nav
-  // the labels it pushed down there. The strip is coloured by the canvas
-  // instead — see bcGlobalCSS in theme.js.
+  // ── Why fixed and not a measured height ──────────────────────────
+  // The fixed containing block is the one bottom-edge signal iOS reports
+  // honestly. In an installed home-screen app window.visualViewport.height
+  // silently subtracts env(safe-area-inset-top) — 812 reported for a genuinely
+  // 874pt iPhone 16 Pro webview — so any JS-measured height leaves a black band
+  // exactly one Dynamic Island tall under the nav. Don't reintroduce one.
+  // Safari also re-pins fixed elements above its own toolbar for free.
+  //
+  // ── Why the bottom is a plain 0 with NO padding ───────────────────
+  // Two reasons, and they are the change that fixes the bar.
+  //
+  // 1. It has to stay 0 because nothing can paint below the viewport's bottom
+  //    edge. A home-screen icon installed before the status-bar meta was fixed
+  //    does get a viewport one status bar short of the screen, and this used to
+  //    hang past the bottom edge to cover the difference. It cannot: the webview
+  //    clips there, so reaching past it painted nothing and only cost the nav
+  //    the labels it pushed down. That strip is coloured by the canvas instead —
+  //    see bcGlobalCSS in theme.js.
+  //
+  // 2. No paddingBottom means the shell's CONTENT box bottom is the viewport
+  //    bottom, which is what lets the nav be the last in-flow child of this
+  //    flex column instead of a second position:fixed element. Those two
+  //    resolve to the identical y-coordinate — same containing block, same
+  //    edge — so in-flow costs nothing geometrically and buys the thing the
+  //    fixed bar could never have: the shell KNOWS the bar is there. The scroll
+  //    area is sized by flexbox around it, so there is no height to measure, no
+  //    spacer to keep in step, and no frame on which the two disagree.
+  //
+  //    (An earlier "navfix" pass moved the nav in-flow and the bar came out
+  //    mis-seated, which is why it went back to fixed. Two things were wrong in
+  //    that pass and neither was the in-flow part: it also clamped the bar's
+  //    bottom padding to a flat 10px, which is what actually mis-seated the
+  //    labels, and index.html still said black-translucent, so the layout
+  //    viewport genuinely ended one status bar above the glass and NO layout
+  //    mode could have reached it.)
+  //
+  // ── Insets ────────────────────────────────────────────────────────
+  // Left and right stay here: they apply to every row, and a landscape notch
+  // has to inset the nav exactly as much as the content — being in-flow, the
+  // nav now gets that for free instead of running under the rounded corner on
+  // its own left:0/right:0.
+  //
+  // The TOP inset moved out, down into AppHeader. It was here, which meant one
+  // gap above the trophy was the sum of three separate paddings in three
+  // different components; and the strip it reserves was painted by the shell,
+  // so a translucent status bar had page background sliding under it. The
+  // header owns its own top spacing now. See AppHeader.
+  //
+  // `width` is gone too. left:0 + right:0 + width:100% is over-constrained, so
+  // the browser drops one of them (`right`, in LTR) — the shell and the nav
+  // were nominally agreeing about the right edge via two different properties.
   return (
-    <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: 0, width: "100%", background: BC.bg, display: "flex", flexDirection: "column", fontFamily: FONT, overflow: "hidden", boxSizing: "border-box", paddingTop: "env(safe-area-inset-top, 0px)", paddingLeft: "env(safe-area-inset-left, 0px)", paddingRight: "env(safe-area-inset-right, 0px)" }}>
+    <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: 0, background: BC.bg, display: "flex", flexDirection: "column", fontFamily: FONT, overflow: "hidden", boxSizing: "border-box", paddingLeft: "env(safe-area-inset-left, 0px)", paddingRight: "env(safe-area-inset-right, 0px)" }}>
       <div style={{ maxWidth: 520, width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", flex: 1, minHeight: 0, position: "relative", padding: "0 4px" }}>
       {/* Top-level feedback from notify(). The scoring screens render
           their own <Toast> lower down for the auto-advance message —
           same component, different owner of when it shows. */}
-      <Toast message={notif?.msg} type={notif?.type} top={16} />
+      {/* `top` is an inset-aware string, not a number. The toast is
+          position:fixed, so it was never affected by the shell's padding even
+          when the shell had some — a plain 16 put it under the Dynamic Island
+          on an installed app and under the status bar on Android edge-to-edge.
+          Toast spreads `top` straight into its style, so a calc() works here
+          with no change to the component. */}
+      <Toast message={notif?.msg} type={notif?.type} top="calc(env(safe-area-inset-top, 0px) + 16px)" />
 
       {/* Pull-to-refresh indicator — circular badge with the trophy
           silhouette inside, fixed-positioned and overlaid above the
@@ -5412,7 +5506,10 @@ export default function App() {
         <div style={{
           position: "fixed", top: 0, left: 0, right: 0, zIndex: 999,
           display: "flex", justifyContent: "center",
-          paddingTop: Math.min(pullY, 100) - 20,
+          // Same reason as the toast above: this is position:fixed at top:0, so
+          // it starts at the physical top of the viewport and has to clear the
+          // status bar / island itself.
+          paddingTop: `calc(env(safe-area-inset-top, 0px) + ${Math.min(pullY, 100) - 20}px)`,
           transition: refreshing ? "all .3s" : "none",
           pointerEvents: "none",
         }}>
@@ -5476,8 +5573,12 @@ export default function App() {
       {/* Content */}
       <div className="bc-app-body" style={{
         flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden",
-        // NO bottom padding — the clearance for the fixed nav is a real
-        // element at the end of the content instead (see the spacer below).
+        // Bottom stays 0 here. There is no nav clearance to reserve any more —
+        // the nav is a sibling row below this box, not an overlay on top of it,
+        // so this box's bottom edge IS the top of the bar and flexbox keeps it
+        // there at every bar height. The small breathing gap is a real element
+        // at the end of the content rather than padding on this container; see
+        // the spacer below for why that distinction still matters.
         padding: "12px 10px 0 10px",
         // Every view starts at the TOP of the scroll area. Short views used
         // to be centred vertically here (flexbox auto margins on the inner
@@ -5686,31 +5787,25 @@ export default function App() {
         </ErrorBoundary>
         </div>
 
-        {/* ── Clearance for the fixed nav ──────────────────────────────
-            An ELEMENT, not padding on the scroll container above.
+        {/* ── Breathing gap at the end of the content ───────────────────
+            A CONSTANT 12px, and no longer clearance for anything.
 
-            It was padding until 2026-07-29, and padding is the one way to
-            reserve this that an engine is allowed to leave out of the
-            scrollable area: a scroll container's bottom padding has a long
-            history of being dropped from scrollHeight (block containers in
-            older Blink, and WebKit in cases the flex layout here was meant
-            to cover). When it is dropped the reservation is invisible to
-            scrolling — the last rows sit under the bar and no amount of
-            scrolling brings them up, which is exactly the report this is
-            chasing, and exactly why making the padding BIGGER did not help.
-            In-flow content has no such exemption: a box with a height is in
-            the scrollable area in every engine.
+            It used to be `max(navH + 8, 56 + navPadPx(...) + 8)` — the whole
+            reservation for a bar the shell couldn't see. That is gone: the nav
+            is a flex row below the scroll container now, so the space is
+            reserved by layout and this is only the gap that keeps the last card
+            off the bar's top border.
 
-            The height is the measured bar plus a gap, floored at the bar's
-            own minimum (a 56px tap target + navPadPx of the home-indicator
-            inset) so a stale or missing measurement still clears it.
-            Both are numbers rather than a CSS max(): a CSS function an
-            engine won't parse takes its declaration with it, and this is not
-            a declaration that can afford to go missing. */}
-        <div className="bc-nav-spacer" aria-hidden="true" style={{
-          flexShrink: 0,
-          height: Math.max(navH + 8, 56 + navPadPx(safeBottom, vpBand) + 8),
-        }} />
+            Still an ELEMENT rather than padding on the scroll container, which
+            is worth keeping for the reason it was introduced: a scroll
+            container's bottom padding has a long history of being left out of
+            scrollHeight (block containers in older Blink, and WebKit in cases
+            this flex layout was meant to cover), and when it is dropped the
+            reservation is invisible to scrolling. In-flow content has no such
+            exemption — a box with a height is in the scrollable area in every
+            engine. The stake is now 12px of whitespace rather than access to
+            the last row, but there is no reason to reintroduce the hazard. */}
+        <div className="bc-nav-spacer" aria-hidden="true" style={{ flexShrink: 0, height: 12 }} />
       </div>
 
       <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} user={user} view={view} finalize={finalizeMenu} navH={navH} />
@@ -5736,17 +5831,44 @@ export default function App() {
       )}
       </div>
 
-      {/* Bottom Nav — FIXED to the viewport bottom (restored pre-2026-07-21
-          layout). Being position:fixed, it pins to the true viewport bottom
-          regardless of how the app shell is sized — which is why this is the
-          robust approach: even if the shell's computed bottom edge is off (as
-          it was on real devices with the in-flow "navfix" version), the bar
-          still seats on the physical bottom. The full safe-area inset as
-          paddingBottom keeps the labels clear of the home indicator. The
-          scroll area reserves matching clearance so content never hides
-          behind the bar. */}
-      <div ref={navRef} style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: BC.card, borderTop: `1px solid ${BC.bdr}`, zIndex: 100, paddingBottom: NAV_SAFE_PAD }}>
-      <div style={{ maxWidth: 520, margin: "0 auto", display: "flex" }}>
+      {/* ══ Bottom Nav ══════════════════════════════════════════════════
+          The LAST IN-FLOW ROW of the shell's flex column. Not position:fixed.
+
+          Those two land on the same pixel — the shell is fixed to all four
+          edges with no bottom padding, so its content box bottom already IS the
+          viewport bottom, and a `bottom: 0` fixed bar has the same containing
+          block and the same edge. There is no geometric difference to gain or
+          lose here, which is the point: in-flow is free, and it is the only
+          version where the shell knows the bar exists.
+
+          That is the whole fix for the bar. As a fixed sibling, the bar was
+          invisible to the layout — flexbox sized the scroll area as if the
+          bottom of the screen were empty, and the only thing keeping content
+          from disappearing behind the bar was a JS-measured spacer trying to
+          predict a height that changes with the safe-area inset, the OS text
+          size, and whether Montserrat has finished downloading. Predicting it
+          correctly on every frame of every device is not a solvable problem.
+          As a flex row it isn't a prediction: `flexShrink: 0` here plus
+          `flex: 1; minHeight: 0` on the scroll area above is the entire
+          contract, resolved by the layout engine, on every frame, for free.
+
+          flexShrink: 0 is load-bearing. Without it a tall enough scroll area
+          could compress the bar rather than scroll, and the shell's
+          overflow: hidden would clip the labels off the bottom.
+
+          position: relative is what makes zIndex apply to an in-flow box —
+          z-index is ignored on `position: static`. It stays at 100 so it keeps
+          sitting under the slide menu's backdrop (200), which is what lets a
+          tap on the bar dismiss the menu.
+
+          paddingBottom is the home-indicator cushion, NAV_SAFE_PAD. It is
+          inside the bar's box, so the card background still paints all the way
+          down to the glass and only the labels are held clear. See the constant
+          at the top of this file. */}
+      <div ref={navRef} style={{ flexShrink: 0, position: "relative", background: BC.card, borderTop: `1px solid ${BC.bdr}`, zIndex: 100, paddingBottom: NAV_SAFE_PAD }}>
+      {/* padding matches the content column's `0 4px` so the five tabs line up
+          with the cards above them instead of being 4px wider on each side. */}
+      <div style={{ maxWidth: 520, margin: "0 auto", display: "flex", padding: "0 4px" }}>
         {navItems.map(item => {
           const active = view === item.key;
           const clr = active ? BC.amberInk : BC.t3;
@@ -5760,8 +5882,14 @@ export default function App() {
               if (item.key === "menu") { setMenuOpen(true); return; }
               setView(item.key);
             }} style={{
-              flex: 1, padding: "8px 4px 10px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 3,
-              background: "transparent", border: "none", cursor: "pointer", minHeight: 56,
+              // 6px at the bottom, not 10. The bar's excess height was here, not
+              // in the safe-area inset: this padding and the inset were both
+              // buying the same clearance below the labels, which is why the
+              // inset previously got scaled to half. Trimming this instead means
+              // the inset can be honoured in full — the platform figure, not a
+              // fraction of it — and the bar still comes out shorter than before.
+              flex: 1, padding: "8px 4px 6px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 3,
+              background: "transparent", border: "none", cursor: "pointer", minHeight: 52,
             }}>
               <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", height: 24 }}>
                 {renderIcon(item.icon, active)}

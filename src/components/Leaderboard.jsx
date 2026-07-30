@@ -680,7 +680,15 @@ export function TeamLeaderboard({
     return (
       <div style={{
         fontFamily: FONT, display: "flex", flexDirection: "column", alignItems: "center",
-        justifyContent: "center", minHeight: "calc(100svh - 250px)", textAlign: "center",
+        // `flex: 1` against the scroll container, NOT `calc(100svh - 250px)`.
+        // svh measures the SCREEN, and this box lives inside the shell's scroll
+        // area — which is the screen minus the app header, minus the nav, minus
+        // the body's own padding. Subtracting a hardcoded 250 was a guess at
+        // that chrome, and any device where the guess ran long made this empty
+        // state taller than the space available and put a scrollbar on a screen
+        // with nothing to scroll. `flex: 1` asks the container instead of the
+        // screen, so it is exactly right at every chrome height.
+        justifyContent: "center", flex: 1, minHeight: 220, textAlign: "center",
         padding: "0 24px", gap: 10,
       }}>
         <div style={{

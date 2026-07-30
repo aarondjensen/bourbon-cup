@@ -26,9 +26,44 @@
 //  The mark is drawn as a CSS mask rather than an <img> for the same reason
 //  the nav icon is: the asset is a flat PNG silhouette, so masking is the
 //  only way it takes the exact live theme accent in both light and dark.
+//
+//  ── This band owns the top safe-area inset ────────────────────────────
+//  env(safe-area-inset-top) used to be paddingTop on the app shell, two
+//  components up. Moving it here fixes three things at once:
+//
+//    1. ONE number instead of three. The gap above the trophy was the shell's
+//       inset, plus the 520-wide column's padding, plus this band's own
+//       padding — three components, three files, and no way to nudge the
+//       header down a couple of pixels without guessing which one to edit.
+//       The header's distance from the top of the screen is now decided
+//       entirely by HEADER_SAFE_PAD below.
+//
+//    2. The reserved strip is PAINTED by the thing that reserves it. The shell
+//       painted it in BC.bg, so on any platform with a translucent status bar
+//       — Android edge-to-edge, and an iOS home-screen icon snapshotted while
+//       index.html still said black-translucent — content scrolling in the
+//       body slid visibly under the clock. This band is opaque and sits above
+//       the scroll area in the flex column, so nothing can pass behind it.
+//
+//    3. It is symmetric with the bottom. The nav carries its own
+//       safe-area-inset-bottom for exactly the same reasons; the shell now
+//       carries only left and right, which are the two that really do apply to
+//       every row.
+//
+//  flexShrink: 0 is not optional — the shell is a flex column with
+//  overflow: hidden, so without it a tall tab could compress this band and the
+//  clipped remainder would look like the header failing to fit.
 import { BC, FONT, FS } from "../theme";
 import { TROPHY_SILHOUETTE, TOURNAMENT_LOCATION } from "../constants";
 import { getTournamentYear } from "../firebase";
+
+// The single knob for how far the header sits from the top of the screen.
+// 5px above the platform's inset: on an installed iOS app with
+// status-bar-style "black" the inset resolves to 0 and this is a plain 5px gap
+// below an opaque status bar, which is what "snug" means there. On Android
+// edge-to-edge and in a browser tab with a translucent bar, the inset is real
+// and the 5px rides on top of it.
+const HEADER_SAFE_PAD = "calc(env(safe-area-inset-top, 0px) + 5px)";
 
 export function AppHeader({ location }) {
   return (
@@ -40,7 +75,15 @@ export function AppHeader({ location }) {
     // instead of stray text.
     <div style={{
       display: "flex", flexDirection: "column", alignItems: "center",
-      gap: 4, padding: "5px 12px 7px", flexShrink: 0,
+      gap: 4, flexShrink: 0,
+      // Longhand rather than the shorthand it replaced ("5px 12px 7px"), so the
+      // inset-aware top can't be silently overwritten by a later shorthand.
+      paddingTop: HEADER_SAFE_PAD,
+      paddingLeft: 12, paddingRight: 12, paddingBottom: 7,
+      // Opaque, and above the scroll area in the stacking order: this band is
+      // what the status bar sits on, and content must not show through it.
+      background: BC.bg,
+      position: "relative", zIndex: 2,
       fontFamily: FONT,
     }}>
       <div style={{
