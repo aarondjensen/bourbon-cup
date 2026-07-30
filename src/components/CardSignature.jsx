@@ -96,12 +96,10 @@ export function MissingCardNote({ missing, nameOf }) {
 // confirm on a modal that already is one trains the reflex that defeats
 // both. (Same call, same reasoning, as FinalizeRoundSheet's.)
 export function SignCardSheet({
-  match, result, format, holePars, holeHcps, course, teams, tPlayers, getScore,
-  viewer, userPid, onSign, onClose,
+  match, result, format, holePars, holeHcps, course, tPlayers, getScore,
+  viewer, onSign, onClose,
 }) {
   const [busy, setBusy] = useState(false);
-  const { nameOf } = playerLookup(tPlayers);
-  const others = nonSignerPids(match, { signed_by: userPid });
 
   const doSign = async () => {
     setBusy(true);
@@ -112,34 +110,21 @@ export function SignCardSheet({
     <Popup onClose={busy ? undefined : onClose} maxWidth={480} padding={0} outerPadding={12} portal
       showClose={false}
       innerStyle={{ background: BC.card, border: `1px solid ${BC.amber}${ALPHA.line}`, borderRadius: 12 }}>
-      <div style={{ padding: "10px 14px", borderBottom: `1px solid ${BC.bdr}`, fontFamily: FONT }}>
-        <div style={{ fontSize: FS.label, fontWeight: 800, color: BC.amberInk, letterSpacing: 1.5 }}>
-          SIGN THE CARD
-        </div>
-        <div style={{ fontSize: FS.small, color: BC.t2, marginTop: 2 }}>
-          Round {match.round}{match.matchNumber ? ` · Match ${match.matchNumber}` : ""}
-        </div>
-      </div>
-
+      {/* No heading above the card, and no explanation below it. The card
+          names the four players, the course and the format; the button says
+          Sign Card; the sheet only opens on a deliberate tap. A title, a
+          round/match line and a paragraph on what signing means were three
+          bands of a phone spent restating what the card and the button
+          already say to anybody who has signed one before — which, by the
+          time this opens, is everybody. */}
       <div style={{ padding: 12 }}>
         <FullScorecard
           match={match} result={result} format={format}
           holePars={holePars} holeHcps={holeHcps} course={course}
-          teams={teams} tPlayers={tPlayers} getScore={getScore} viewer={viewer} />
+          tPlayers={tPlayers} getScore={getScore} viewer={viewer} />
       </div>
 
-      {/* What signing means, in the words the ritual actually has. The
-          second line is the one that matters: signing is not the end of the
-          card, it is the start of everyone else checking it. */}
-      <div style={{ padding: "0 14px", fontSize: FS.label, color: BC.t3, lineHeight: 1.5, fontFamily: FONT }}>
-        Signing says these eighteen holes are complete and correct. It locks
-        the scores{others.length > 0
-          ? ` and asks ${others.map(nameOf).join(", ")} to attest.`
-          : "."}
-        {" "}Anyone in the match can unsign it until the last attestation lands.
-      </div>
-
-      <div style={{ padding: 14, fontFamily: FONT }}>
+      <div style={{ padding: "0 14px 14px", fontFamily: FONT }}>
         <button onClick={doSign} disabled={busy} style={{
           width: "100%", padding: "13px 0", borderRadius: 10, border: "none",
           background: BC.amber, color: ON_AMBER,
@@ -167,7 +152,7 @@ export function SignCardSheet({
 // the signer sees none, an attester sees Attest, and once they have
 // attested they see the wait.
 export function SignedCardPanel({
-  match, sig, result, format, holePars, holeHcps, course, teams, tPlayers, getScore,
+  match, sig, result, format, holePars, holeHcps, course, tPlayers, getScore,
   viewer, userPid, onAttest, onUnsign, notify,
 }) {
   const { confirm, confirmModal } = useConfirm();
@@ -241,7 +226,7 @@ export function SignedCardPanel({
         <FullScorecard
           match={match} result={result} format={format}
           holePars={holePars} holeHcps={holeHcps} course={course}
-          teams={teams} tPlayers={tPlayers} getScore={getScore} viewer={viewer} />
+          tPlayers={tPlayers} getScore={getScore} viewer={viewer} />
       </div>
 
       {/* ── The status block ── */}
