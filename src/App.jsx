@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, HOLE_BANNER, FS, segThumb, segTrack, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor } from "./theme";
+import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, HOLE_BANNER, FS, segThumb, segTrack, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor, VP_BAND } from "./theme";
 import { playerLookup } from "./lib/players";
 import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, BOOTSTRAP_DIRECTOR } from "./firebase";
 import { PROVIDERS, signIn, signOutUser, onAuthUser, consumeRedirectResult, isCancelled } from "./lib/auth";
@@ -93,17 +93,46 @@ import { useHoleAdvance } from "./lib/useHoleAdvance";
 // centres are held above the indicator, which is exactly the platform
 // convention — the same shape as a native iOS tab bar.
 //
-// Deliberately NOT here any more: the `- VP_BAND` subtraction. That corrected
-// for a layout viewport one status bar short of the screen, which only happens
-// to a home-screen icon snapshotted before index.html pinned
-// apple-mobile-web-app-status-bar-style to "black". Two reasons it is gone:
-// the band is already covered visually by the canvas colour (bcGlobalCSS in
-// theme.js), and subtracting it meant this CSS value and a JS reimplementation
-// of the same formula both had to agree about a number read back out of an
-// inline custom property. They were one silent mismatch away from a bar whose
-// reserved clearance described a bar of a different height.
+// ── Minus the band, because that clearance already exists ─────────
+// VP_BAND (theme.js) is the strip of screen BELOW the layout viewport on a
+// webview that doesn't reach the glass. It is real, reserved, untouchable space
+// sitting directly under this bar — which is exactly the clearance this padding
+// buys — so paying for it twice just makes the bar taller for nothing.
+//
+// This was removed once, on the reasoning that the band only affects a
+// home-screen icon snapshotted before index.html pinned status-bar-style to
+// "black", and no newly-installed icon can land in that state. True, and beside
+// the point: icons that are ALREADY installed stay in it forever, and on a
+// sixteen-player tournament app most of the field is an already-installed icon.
+// Measured on a real iPhone 17e (390x844pt) with a stale icon:
+//
+//   env(safe-area-inset-top)    47pt   ← would be 0 if "black" had taken
+//   layout viewport               797pt   = 844 - 47
+//   nav box                      93.6pt  = 59.6 chrome + 34 inset
+//   nav top border                704pt   ← matches the screenshot to 0.6pt
+//   white below the labels         87pt   ← 34 inset + 6 button + 47 band
+//
+// 34pt of home-indicator inset stacked on 47pt of dead space. Subtracting turns
+// the total clearance from a SUM into a max(), which is what it should always
+// have been. On a device whose webview does fill the screen VP_BAND is 0px and
+// this is exactly the inset, so nothing changes there — which is why a 17 Pro
+// looked right while the 17e did not.
+//
+// The floor is applied INSIDE the subtraction, not outside: max(8px, inset)
+// first, then take the band off that. Outside, the 8px floor would survive on a
+// device that already has 47pt of clearance and waste it.
+//
+// ── Why this nesting is safe to write now ─────────────────────────
+// The comment this replaces warned against exactly this kind of nested CSS,
+// because a function an engine refuses to parse takes its whole declaration
+// with it, and the failure mode used to be content stranded under the bar with
+// no scroll left to reach it. That failure mode is gone. The nav is an in-flow
+// flex row, so the shell reserves its real height whatever this resolves to; if
+// the declaration drops entirely the bar is simply 34pt shorter and the labels
+// sit nearer its edge. Nothing can be stranded, so the arithmetic can live in
+// CSS where it belongs instead of being duplicated in JS.
 const NAV_MIN_PAD = 8;
-const NAV_SAFE_PAD = `max(${NAV_MIN_PAD}px, env(safe-area-inset-bottom, 0px))`;
+const NAV_SAFE_PAD = `max(0px, calc(max(${NAV_MIN_PAD}px, env(safe-area-inset-bottom, 0px)) - ${VP_BAND}))`;
 
 
 // Where a dismissed "ready to finalize" notification is remembered, per
