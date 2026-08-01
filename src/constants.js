@@ -633,36 +633,52 @@ export const describeHolePoints = (spec) => {
 // rides on top of it.
 //
 // The rungs run best-first so a table renders in the order a golfer thinks.
-// `double` is "double bogey or worse": there is no rung below it, because
-// every format that uses this ladder stops counting down at some point.
-export const PAR_RESULTS = ["albatross", "eagle", "birdie", "par", "bogey", "double"];
+// The ladder is open at BOTH ends: `double_albatross` is "four under or
+// better" and `triple` is "triple bogey or worse", because a net score has no
+// floor and the table has to have a rung for whatever a card actually says.
+export const PAR_RESULTS = [
+  "double_albatross", "albatross", "eagle", "birdie", "par", "bogey", "double", "triple",
+];
 
 export const PAR_RESULT_LABELS = {
-  albatross: "Albatross", eagle: "Eagle", birdie: "Birdie",
-  par: "Par", bogey: "Bogey", double: "Double +",
+  double_albatross: "Dbl Alb", albatross: "Albatross", eagle: "Eagle", birdie: "Birdie",
+  par: "Par", bogey: "Bogey", double: "Double", triple: "Triple +",
 };
 
 // Which rung a hole landed on, from its net score's difference to par.
 export const parResultFor = (netVsPar) =>
-  netVsPar <= -3 ? "albatross"
-    : netVsPar === -2 ? "eagle"
-      : netVsPar === -1 ? "birdie"
-        : netVsPar === 0 ? "par"
-          : netVsPar === 1 ? "bogey"
-            : "double";
+  netVsPar <= -4 ? "double_albatross"
+    : netVsPar === -3 ? "albatross"
+      : netVsPar === -2 ? "eagle"
+        : netVsPar === -1 ? "birdie"
+          : netVsPar === 0 ? "par"
+            : netVsPar === 1 ? "bogey"
+              : netVsPar === 2 ? "double"
+                : "triple";
 
 // Each format's table, and the default a director starts from.
 //
-// Stableford's reproduce exactly what the engine computed before the table was
-// editable (`max(0, 2 - d)`), so no stored round changes by gaining a table it
-// never had. Tilt's are the game's own — a harsher ladder where a double bogey
-// actively costs you.
+// Tilt's are the game's own — a harsher ladder where a double bogey actively
+// costs you. Stableford's middle rungs reproduce exactly what the engine
+// computed before the table was editable (`max(0, 2 - d)`), with a hole four
+// under paying 10 and a triple bogey or worse costing 3.
+//
+// Tilt's two outer rungs repeat their neighbours (16 and -4) because that is
+// precisely what the format scored when the ladder stopped at albatross and
+// double: a stored Tilt round settles the same before and after this table grew
+// two rows. They are the director's to change, like every other rung.
 //
 // Every rung on both is editable, negatives included: a table that can only
 // ever pay is a table with no downside, which is the whole point of Tilt's.
 export const PAR_POINTS_DEFAULTS = {
-  stableford: { albatross: 5, eagle: 4, birdie: 3, par: 2, bogey: 1, double: 0 },
-  tilt: { albatross: 16, eagle: 8, birdie: 4, par: 2, bogey: 0, double: -4 },
+  stableford: {
+    double_albatross: 10, albatross: 5, eagle: 4, birdie: 3,
+    par: 2, bogey: 1, double: 0, triple: -3,
+  },
+  tilt: {
+    double_albatross: 16, albatross: 16, eagle: 8, birdie: 4,
+    par: 2, bogey: 0, double: -4, triple: -4,
+  },
 };
 
 export const formatUsesParPoints = (formatId) => !!PAR_POINTS_DEFAULTS[formatId];
@@ -703,10 +719,17 @@ export const resolveParPoints = (formatId, saved) => {
 // The hole that EARNS a multiplier does not get it; "the subsequent hole" does.
 // The rungs are the director's to set; these rules are not.
 
-// How many birdies a result is worth toward the multiplier. Everything from a
-// par down takes you off Tilt and is therefore worth none.
+// How many birdies a result is worth toward the multiplier — simply how many
+// under par it is, which is why a double albatross is four. Everything from a
+// par down takes you off Tilt and is therefore worth none. This is the
+// format's rule rather than the table's, so it does not follow what a rung was
+// edited to pay.
 export const tiltBirdieValue = (result) =>
-  result === "birdie" ? 1 : result === "eagle" ? 2 : result === "albatross" ? 3 : 0;
+  result === "birdie" ? 1
+    : result === "eagle" ? 2
+      : result === "albatross" ? 3
+        : result === "double_albatross" ? 4
+          : 0;
 
 // The multiplier a hole is scored at, from the streak of birdies carried into
 // it. One birdie doubles, two triples, and it keeps going — `streak + 1`.
