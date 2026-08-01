@@ -644,9 +644,8 @@ const ALL_PAR_RESULTS = [
 //
 // Stableford cuts finest: it prices a hole four under and it prices a triple
 // bogey, so both ends carry their own rung. Tilt stops at albatross and at
-// double bogey, exactly as it always has — anything better than one or worse
-// than the other falls onto that end rung, which is the behaviour every Tilt
-// round already stored was scored under.
+// double bogey — its printed key ends "Dub +", so anything worse falls onto
+// that rung, and nothing above an albatross is priced separately either.
 export const PAR_RESULTS_BY_FORMAT = {
   stableford: ALL_PAR_RESULTS,
   tilt: ["albatross", "eagle", "birdie", "par", "bogey", "double"],
@@ -693,16 +692,15 @@ export const parResultFor = (netVsPar, formatId) => {
 
 // Each format's table, and the default a director starts from.
 //
-// Tilt's are the game's own — a harsher ladder where a double bogey actively
-// costs you — and they are untouched.
+// Both are the Bourbon Cup key, off the printed cards, and both differ from
+// what the app carried before: Tilt's albatross paid 16 where the card says 12,
+// and Stableford's whole ladder was `max(0, 2 - d)` — the formula it used
+// before the table was editable, which paid a par 2 and bottomed out at nought
+// rather than taking points off a double bogey.
 //
-// Stableford's are the Bourbon Cup key, off the printed card. They are NOT the
-// standard Stableford ladder and they are not what this app computed before the
-// table was editable (`max(0, 2 - d)`, which paid a par 2 and bottomed out at
-// nought). BC pays par 1 and takes points off a double bogey, so the numbers
-// here are the card's rather than the formula's: the field is scored against
-// what it was handed on the tee, and the app agreeing with the sheet matters
-// more than the app agreeing with its own history.
+// Neither is the standard version of its game. That is the point: the field is
+// scored against what it was handed on the tee, so the app agreeing with the
+// sheet beats the app agreeing with its own history.
 //
 // Every rung on both is editable, negatives included: a table that can only
 // ever pay is a table with no downside, which is the whole point of Tilt's.
@@ -711,7 +709,7 @@ export const PAR_POINTS_DEFAULTS = {
     double_albatross: 10, albatross: 7, eagle: 5, birdie: 3,
     par: 1, bogey: 0, double: -2, triple: -3,
   },
-  tilt: { albatross: 16, eagle: 8, birdie: 4, par: 2, bogey: 0, double: -4 },
+  tilt: { albatross: 12, eagle: 8, birdie: 4, par: 2, bogey: 0, double: -4 },
 };
 
 export const formatUsesParPoints = (formatId) => !!PAR_POINTS_DEFAULTS[formatId];

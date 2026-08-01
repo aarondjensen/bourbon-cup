@@ -26,12 +26,11 @@ describe("parResultFor on Stableford", () => {
   });
 });
 
-// Tilt's ladder did not grow. A hole better than an albatross or worse than a
-// double bogey lands on that end rung, which is precisely what it scored
-// before Stableford's table gained two rows — so every stored Tilt round
-// settles to the same number.
+// Tilt's ladder did not grow when Stableford's did — its key ends "Dub +" and
+// tops out at Alba, so a hole outside that range lands on the end rung rather
+// than on one of the two Stableford added.
 describe("parResultFor on Tilt", () => {
-  it("stops at albatross and at double, as it always has", () => {
+  it("stops at albatross and at double, as its key does", () => {
     const r = (d) => parResultFor(d, "tilt");
     expect(r(-6)).toBe("albatross");
     expect(r(-4)).toBe("albatross");
@@ -79,9 +78,8 @@ describe("the ladders and their tables", () => {
     expect(parResultsFor("tilt")).not.toContain("triple");
   });
 
-  // The Bourbon Cup key off the printed card, rung for rung. This is the one
-  // table in here that has to match a piece of paper the field is holding, so
-  // it is asserted whole rather than by the rungs that happened to change.
+  // Both tables have to match a piece of paper the field is holding, so both
+  // are asserted whole rather than by the rungs that happened to change.
   it("defaults Stableford to the BC key", () => {
     expect(resolveParPoints("stableford", null)).toEqual({
       double_albatross: 10, albatross: 7, eagle: 5, birdie: 3,
@@ -89,9 +87,9 @@ describe("the ladders and their tables", () => {
     });
   });
 
-  it("leaves Tilt's table exactly as it was", () => {
+  it("defaults Tilt to the BC key", () => {
     expect(resolveParPoints("tilt", null))
-      .toEqual({ albatross: 16, eagle: 8, birdie: 4, par: 2, bogey: 0, double: -4 });
+      .toEqual({ albatross: 12, eagle: 8, birdie: 4, par: 2, bogey: 0, double: -4 });
   });
 
   // The per-rung fallback is what protects a stored round: a table saved
