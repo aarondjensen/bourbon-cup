@@ -7,6 +7,21 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+
+    // ── Unit tests (`npm test` / `npm run test:run`) ──
+    // Only the pure modules under src/. firestore.rules.test.mjs at the repo
+    // root is deliberately left out: it is an INTEGRATION test that needs the
+    // Firestore emulator listening on 127.0.0.1:8080 and dies with
+    // ECONNREFUSED without it. Inside the default glob it would make the suite
+    // red on a clean checkout, and a suite that is red by default is one
+    // everybody learns to ignore.
+    //
+    // Run the rules suite deliberately, with the emulator up:
+    //   firebase emulators:exec --only firestore "npx vitest run firestore.rules.test.mjs"
+    test: {
+      include: ['src/**/*.{test,spec}.{js,jsx}'],
+    },
+
     server: {
       // Honor $PORT so a second dev server on the same machine (the other
       // developer's tooling, or a second agent session) gets the port it was
