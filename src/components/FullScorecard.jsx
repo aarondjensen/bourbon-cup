@@ -206,11 +206,33 @@ export function ScoreCell({ score, par, strokes = 0, size = CELL, color }) {
 //                             match row names the pair and states the match
 //                             directly above this, and its segment pills
 //                             say it a third time.
+//    conceal                — { through, side } on a SEALED round, null on
+//                             every other one. See lib/reveal.js. Past hole
+//                             `through` this card stops printing anything
+//                             that COMPARES the two sides — the other side's
+//                             row, the hole-won marks, the running line, the
+//                             nine's result — and keeps everything that is
+//                             just a card: the gross scores the group is
+//                             writing down, and `side`'s own numbers.
+//
+//                             It has to work that way rather than by hiding
+//                             the data, because the group holding this phone
+//                             is entering two of the four cards on it. What
+//                             the blackout owes them is not their opponents'
+//                             scores back; it is what those scores ADD UP TO,
+//                             which is the round nobody is allowed to know.
 export function FullScorecard({
   match, result, format, holePars, holeHcps, course, tPlayers, getScore,
-  viewer = "A", showHeader = true,
+  viewer = "A", showHeader = true, conceal = null,
 }) {
   if (!result) return null;
+
+  // One question, asked in six places below. `conceal.through` is a count of
+  // holes, `h` a 0-based index, so hole `through` is the first sealed one.
+  const sealedHole = (h) => !!conceal && h >= conceal.through;
+  // A nine only states a result once every hole in it is out.
+  const sealedNine = (start) => sealedHole(start + 8);
+  const mySide = conceal?.side === "B" ? "B" : "A";
 
   const { formOfPlay } = resolveScoring(match);
   const total = formOfPlay === SCORING_TYPE_TOTAL;
@@ -380,9 +402,12 @@ export function FullScorecard({
       const rowH = 26;
       const col = teamColor(tid);
       const key = tid === "A" ? "aScore" : "bScore";
+      // The other side's row is the round, so it stops at the reveal. Your
+      // own keeps going: a team is never hidden from itself.
+      const hidden = (h) => sealedHole(h) && tid !== mySide;
       let sum = 0, allIn = true;
       idx.forEach((h) => {
-        const v = holes[h]?.[key];
+        const v = hidden(h) ? null : holes[h]?.[key];
         if (v == null) allIn = false; else sum += v;
       });
       return (
@@ -390,11 +415,16 @@ export function FullScorecard({
           <div style={labelCell(rowH, { color: col })}>{sideLabel}</div>
           {idx.map((h, i) => {
             const hr = holes[h];
-            const v = hr?.[key];
-            const won = hr?.winner === tid;
+            const v = hidden(h) ? null : hr?.[key];
+            // Who took the hole is a comparison, so it goes dark for BOTH
+            // sides — a mark left on your own row would say the other side
+            // lost it, which is the same leak the other way round.
+            const won = hr?.winner === tid && !sealedHole(h);
             return (
               <div key={h} style={holeCell(i, rowH)}>
-                {won ? (
+                {hidden(h) ? (
+                  <span style={{ fontSize: FS.micro, opacity: 0.5 }} title="Sealed until the reveal">🔒</span>
+                ) : won ? (
                   <div style={{
                     minWidth: 20, height: 20, padding: "0 3px",
                     display: "flex", alignItems: "center", justifyContent: "center",
@@ -411,7 +441,12 @@ export function FullScorecard({
             );
           })}
           <div style={totCell(rowH)}>
-            <span style={{ fontSize: FS.small, fontWeight: 800, color: col }}>{allIn || sum ? sum : ""}</span>
+            {/* A nine with a sealed hole in it has no total to state on the
+                other side — printing the revealed part would read as the
+                whole nine and hand over a comparison that isn't out yet. */}
+            {hidden(end - 1) || hidden(start)
+              ? <span style={{ fontSize: FS.micro, opacity: 0.5 }}>🔒</span>
+              : <span style={{ fontSize: FS.small, fontWeight: 800, color: col }}>{allIn || sum ? sum : ""}</span>}
           </div>
         </div>
       );
@@ -430,6 +465,14 @@ export function FullScorecard({
         <div style={labelCell(26, { borderRight: "none", color: BC.t2 })}>{runLabel}</div>
         {idx.map((h, i) => {
           const v = running[h];
+          // The running line IS the result, so it is the first thing a
+          // sealed hole takes away — before the clinch check below, which
+          // would otherwise announce a finish nobody has been shown.
+          if (sealedHole(h)) return (
+            <div key={h} title="Sealed until the reveal" style={holeCell(i, 26)}>
+              <span style={{ fontSize: FS.micro, opacity: 0.5 }}>🔒</span>
+            </div>
+          );
           // Past the clinch there is nothing to say — the match was over.
           if (clinchHole != null && h > clinchHole) return <div key={h} style={holeCell(i, 26)} />;
           if (clinchHole === h) {
@@ -469,13 +512,17 @@ export function FullScorecard({
         {/* The nine's own result. A chip rather than a bare number, so it
             reads as this block's summary and not as a tenth hole. */}
         <div style={totCell(26, { borderLeft: "none" })}>
-          <span style={{
-            fontSize: FS.micro, fontWeight: 800, whiteSpace: "nowrap",
-            padding: "2px 3px", borderRadius: 4,
-            color: segLeader ? teamColor(segLeader) : BC.t3,
-            background: segLeader ? `${teamColor(segLeader)}${ALPHA.wash}` : "transparent",
-            border: `1px solid ${segLeader ? `${teamColor(segLeader)}${ALPHA.line}` : "transparent"}`,
-          }}>{statusText(seg)}</span>
+          {sealedNine(start) ? (
+            <span style={{ fontSize: FS.micro, opacity: 0.5 }} title="Sealed until the reveal">🔒</span>
+          ) : (
+            <span style={{
+              fontSize: FS.micro, fontWeight: 800, whiteSpace: "nowrap",
+              padding: "2px 3px", borderRadius: 4,
+              color: segLeader ? teamColor(segLeader) : BC.t3,
+              background: segLeader ? `${teamColor(segLeader)}${ALPHA.wash}` : "transparent",
+              border: `1px solid ${segLeader ? `${teamColor(segLeader)}${ALPHA.line}` : "transparent"}`,
+            }}>{statusText(seg)}</span>
+          )}
         </div>
       </div>
     );
@@ -512,8 +559,8 @@ export function FullScorecard({
         </span>
         <span style={{
           flexShrink: 0, fontSize: FS.small, fontWeight: 800,
-          color: overallLeader ? teamColor(overallLeader) : BC.t3,
-        }}>{statusText(overall)}</span>
+          color: conceal ? BC.amberInk : overallLeader ? teamColor(overallLeader) : BC.t3,
+        }}>{conceal ? "🔒 SEALED" : statusText(overall)}</span>
         <span style={{ flex: 1, minWidth: 0, fontSize: FS.label, fontWeight: 800, lineHeight: 1.3, color: BC.teamB, textAlign: "right" }}>
           {(match.teamBNames || []).join(" / ")}
         </span>

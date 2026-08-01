@@ -49,6 +49,7 @@ import { HoleStrip } from "./HoleStrip";
 import { FullScorecard } from "./FullScorecard";
 import { StickyTop } from "./ui";
 import { isRoundFinal } from "../lib/roundLocks";
+import { HOLE_COUNT, revealState, revealSummary, stepReveal } from "../lib/reveal";
 
 const ALL_ROUNDS = [1, 2, 3, 4];
 
@@ -472,13 +473,209 @@ function MatchCard({
 }
 
 // ══════════════════════════════════════════════════════════════════
+//  Sealed round — the blackout, and the reveal that lifts it
+// ══════════════════════════════════════════════════════════════════
+//  See lib/reveal.js for what a sealed round is and why. What lands on
+//  this screen is three things, in this order:
+//
+//    • the BANNER, saying the round is sealed and how much of it is out.
+//    • YOUR SIDE, hole by hole, for every hole your team has posted. This
+//      is the half of the feature that is not a subtraction: the board is
+//      scored off the revealed holes only (App hands this component hole
+//      data that genuinely stops at the reveal), so a team watching its
+//      own round needs its own numbers handed to it separately.
+//    • the REVEAL, for a director — one tap a hole, and every phone in
+//      the room follows.
+//
+//  Nothing here reads the other side. The one prop that could — the
+//  reader's own match result, computed off unsealed data — is indexed by
+//  `viewer` at the top of the component and never re-derived below it.
+
+// One nine of the reader's own side. `key` is aScore/bScore, resolved by
+// the caller; this block cannot address the other column.
+function OwnNine({ holes, start, label, sideKey, through, countLabel }) {
+  const idx = Array.from({ length: 9 }, (_, i) => start + i);
+  let sum = 0, any = false;
+  idx.forEach((h) => {
+    const v = holes?.[h]?.[sideKey];
+    if (v != null) { sum += v; any = true; }
+  });
+  const cell = (i) => ({
+    flex: 1, minWidth: 0, textAlign: "center",
+    borderRight: i < 8 ? `1px solid ${BC.bdr}${ALPHA.hair}` : "none",
+  });
+  return (
+    <div style={{ marginBottom: 6 }}>
+      <div style={{ display: "flex", alignItems: "center" }}>
+        {idx.map((h, i) => (
+          <div key={h} style={{ ...cell(i), fontSize: FS.micro, fontWeight: 800, color: BC.t3, paddingBottom: 2 }}>
+            {h + 1}
+          </div>
+        ))}
+        <div style={{ width: 46, flexShrink: 0, textAlign: "center", fontSize: FS.micro, fontWeight: 800, color: BC.t3, letterSpacing: 0.5 }}>
+          {label}
+        </div>
+      </div>
+      <div style={{ display: "flex", alignItems: "stretch" }}>
+        {idx.map((h, i) => {
+          const v = holes?.[h]?.[sideKey];
+          // A hole the room has already seen is tinted. Your own numbers
+          // are shown either way — the tint says what is PUBLIC, which is
+          // the one thing a player at the house cannot work out by looking.
+          const out = h < through;
+          return (
+            <div key={h} style={{
+              ...cell(i), padding: "3px 0", borderRadius: 4,
+              background: out ? `${BC.amber}${ALPHA.wash}` : "transparent",
+              fontSize: FS.small, fontWeight: 800,
+              color: v == null ? `${BC.t3}${ALPHA.hair}` : out ? BC.amberInk : BC.t1,
+            }}>
+              {v == null ? "·" : v}
+            </div>
+          );
+        })}
+        <div style={{ width: 46, flexShrink: 0, textAlign: "center", padding: "3px 0", fontSize: FS.small, fontWeight: 800, color: BC.t1 }}>
+          {any ? sum : ""}
+        </div>
+      </div>
+      {countLabel && (
+        <div style={{ textAlign: "right", fontSize: FS.micro, fontWeight: 700, letterSpacing: 0.5, color: BC.t3, marginTop: 1 }}>
+          {countLabel}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The reader's own side of one sealed match — the card a team watches
+// itself on while the round is dark.
+function OwnSideCard({ result, viewer, teamName, through }) {
+  const sideKey = viewer === "A" ? "aScore" : "bScore";
+  const holes = result?.holes || [];
+  let thru = 0, total = 0, any = false;
+  holes.forEach((h, i) => {
+    const v = h?.[sideKey];
+    if (v == null) return;
+    total += v; any = true; thru = i + 1;
+  });
+  // Team Best Ball counts a different number of balls on each nine, and the
+  // sums in the rows above are meaningless without it.
+  const counting = result?.counting || null;
+  const col = teamColor(viewer);
+
+  return (
+    <div style={{ padding: "10px 12px 8px", borderTop: `1px solid ${BC.bdr}${ALPHA.line}` }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
+        <span style={{
+          minWidth: 0, fontSize: FS.label, fontWeight: 800, letterSpacing: 0.8, color: col,
+          textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        }}>{teamName}</span>
+        <span style={{ fontSize: FS.micro, fontWeight: 800, letterSpacing: 1, color: BC.t3 }}>YOUR SIDE ONLY</span>
+        <span style={{ marginLeft: "auto", flexShrink: 0, fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.5 }}>
+          {thru ? `THRU ${thru}` : "NOT STARTED"}
+        </span>
+      </div>
+      <OwnNine holes={holes} start={0} label="OUT" sideKey={sideKey} through={through}
+        countLabel={counting ? `best ${counting[0]} of the side` : null} />
+      <OwnNine holes={holes} start={9} label="IN" sideKey={sideKey} through={through}
+        countLabel={counting ? `best ${counting[9]} of the side` : null} />
+      <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 4 }}>
+        <span style={{ fontSize: FS.micro, fontWeight: 800, letterSpacing: 1, color: BC.t3 }}>YOUR TOTAL</span>
+        <span style={{ marginLeft: "auto", fontSize: FS.lead, fontWeight: 800, color: col }}>{any ? total : "—"}</span>
+      </div>
+    </div>
+  );
+}
+
+// ── The reveal control ───────────────────────────────────────────
+// Directors only, and it is the whole ceremony: one tap turns over one
+// hole for every phone in the room. Back steps one hole the other way —
+// which is also the way out of a tap nobody meant to make, since 0 is the
+// round fully sealed again.
+//
+// REVEAL ALL takes two taps. It is the one control here that can end the
+// evening in a single press, and a thumb resting on a phone being passed
+// around the room is exactly how that would happen.
+function RevealControl({ through, onSet }) {
+  const [armAll, setArmAll] = useState(false);
+  const done = through >= HOLE_COUNT;
+  const btn = (extra) => ({
+    padding: "8px 10px", borderRadius: 8, cursor: "pointer", fontFamily: FONT,
+    fontSize: FS.label, fontWeight: 800, letterSpacing: 0.6,
+    background: BC.inp, border: `1px solid ${BC.bdr}`, color: BC.t2, ...extra,
+  });
+  return (
+    <div style={{ display: "flex", alignItems: "stretch", gap: 6, padding: "8px 12px 12px" }}>
+      <button
+        onClick={() => { setArmAll(false); onSet(stepReveal(through, -1)); }}
+        disabled={through <= 0}
+        style={btn({ flexShrink: 0, opacity: through <= 0 ? 0.4 : 1, cursor: through <= 0 ? "not-allowed" : "pointer" })}
+      >◀ BACK</button>
+      <button
+        onClick={() => { setArmAll(false); onSet(stepReveal(through, 1)); }}
+        disabled={done}
+        style={btn({
+          flex: 1, fontSize: FS.body,
+          background: done ? BC.inp : BC.amberGlow,
+          border: `1px solid ${done ? BC.bdr : BC.amber}${done ? "" : ALPHA.line}`,
+          color: done ? BC.t3 : BC.amberInk,
+          cursor: done ? "not-allowed" : "pointer",
+        })}
+      >{done ? "ALL 18 REVEALED" : `REVEAL HOLE ${through + 1} ▸`}</button>
+      {!done && (
+        <button
+          onClick={() => { if (armAll) { setArmAll(false); onSet(HOLE_COUNT); } else setArmAll(true); }}
+          onBlur={() => setArmAll(false)}
+          style={btn({
+            flexShrink: 0,
+            background: armAll ? `${BC.danger}${ALPHA.tint}` : BC.inp,
+            border: `1px solid ${armAll ? BC.danger : BC.bdr}`,
+            color: armAll ? BC.danger : BC.t2,
+          })}
+        >{armAll ? "SURE?" : "ALL"}</button>
+      )}
+    </div>
+  );
+}
+
+// The banner, the own-side card and (for a director) the control, as one
+// panel that sits where the match rows would be.
+function SealedPanel({ through, ownCards, remaining, canReveal, onSetReveal }) {
+  return (
+    <div style={{
+      marginTop: 8, background: BC.card, borderRadius: 12, overflow: "hidden",
+      border: `1px solid ${BC.amber}${ALPHA.line}`,
+    }}>
+      <div style={{ padding: "11px 12px 10px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+          <span aria-hidden="true" style={{ fontSize: FS.small, lineHeight: 1 }}>🔒</span>
+          <span style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 1, color: BC.amberInk }}>
+            SEALED · HOLE-BY-HOLE REVEAL
+          </span>
+          <span style={{ marginLeft: "auto", fontSize: FS.label, fontWeight: 800, color: BC.t3, letterSpacing: 0.5 }}>
+            {through} / {HOLE_COUNT}
+          </span>
+        </div>
+        <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5 }}>
+          {revealSummary(through)}. Nobody sees the other side until the cards are
+          turned over{remaining > 0 ? ` — ${fmtPts(remaining)} still to come` : ""}.
+        </div>
+      </div>
+      {ownCards}
+      {canReveal && <RevealControl through={through} onSet={onSetReveal} />}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
 //  Round section
 // ══════════════════════════════════════════════════════════════════
 function RoundSection({
   meta, results, open, onToggle, tPlayers,
   courses, tRounds, roundLocks, holeData, viewer, expandedMatch, setExpandedMatch,
+  sealPanel,
 }) {
-  const { course, fmt, pts, state } = meta;
+  const { course, fmt, pts, state, seal } = meta;
 
   // The round header is a plain row, not a card. Four match rows plus a
   // boxed header per round was two levels of container for one level of
@@ -503,6 +700,18 @@ function RoundSection({
           }}>
             {[course?.name || "Course TBD", fmt?.label].filter(Boolean).join(" · ").toUpperCase()}
           </span>
+          {/* The one round-level chip left on this bar. It earns the room the
+              live/final chip lost: a collapsed round showing 0–0 is otherwise
+              indistinguishable from one nobody has teed off on, and those are
+              very different things on the last day. */}
+          {seal?.concealing && (
+            <span style={{
+              flexShrink: 0, fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.8,
+              padding: "2px 5px", borderRadius: 4, whiteSpace: "nowrap",
+              background: `${BC.amber}${ALPHA.wash}`, border: `1px solid ${BC.amber}${ALPHA.line}`,
+              color: BC.amberInk,
+            }}>🔒 {seal.through}/{HOLE_COUNT}</span>
+          )}
           <span style={{ flex: 1, minWidth: 6 }} />
           <span style={{ fontSize: FS.lead, fontWeight: 800, flexShrink: 0, color: pts.A >= pts.B ? BC.teamA : `${BC.teamA}${ALPHA.held}` }}>{fmtPts(pts.A)}</span>
           <span style={{ fontSize: FS.small, color: BC.t3, flexShrink: 0 }}>–</span>
@@ -520,6 +729,13 @@ function RoundSection({
             No matches set up for this round.
           </div>
         ) : (
+          <>
+          {sealPanel}
+          {/* A sealed round with nothing turned over yet has no match rows to
+              draw — every one of them would say "THRU 0" against a tee time,
+              which reads as a round that hasn't started rather than one being
+              held back. The panel above says what is actually true. */}
+          {seal?.concealing && seal.through === 0 ? null : (
           /* One container per round, matches separated by hairlines — so the
              round reads as a single scoreboard rather than a stack of cards. */
           <div style={{
@@ -545,6 +761,8 @@ function RoundSection({
               />
             ))}
           </div>
+          )}
+          </>
         )
       )}
     </div>
@@ -559,9 +777,23 @@ function RoundSection({
 // match on this board — which is what lets an expanded scorecard's running
 // MATCH row read ▲ / ▼ from the reader's own side rather than an arbitrary
 // one. See components/FullScorecard.jsx on the two currencies of color.
+//
+// ── The two hole maps ────────────────────────────────────────────
+// `holeData` is the CONCEALED map — App has already removed every hole past
+// a sealed round's reveal (see lib/reveal.concealHoleData), so everything
+// this board computes from it is scored off the revealed holes and nothing
+// else. There is no branch anywhere below that has the sealed numbers and
+// chooses not to draw them; it does not have them.
+//
+// `ownHoleData` is the unsealed one, and it feeds exactly one thing: the
+// reader's own side of a sealed round (OwnSideCard). A team is allowed to
+// watch itself — that is the ask — so the one component that needs the real
+// numbers gets them, indexes them by `viewer`, and never looks at the other
+// column. Everything else on this screen is handed `holeData`.
 export function TeamLeaderboard({
-  matches, holeData, courses, tRounds, tPlayers, rounds, teams,
+  matches, holeData, ownHoleData, courses, tRounds, tPlayers, rounds, teams,
   hcpOverrides, teeAssignments, roundLocks, viewer,
+  canReveal = false, onSetReveal,
 }) {
   const [expandedMatch, setExpandedMatch] = useState(null);
   // Round open/closed. Absent key = follow the automatic rule below;
@@ -606,10 +838,15 @@ export function TeamLeaderboard({
       // "-0.5 pts left".
       avail = Math.max(avail, pts.A + pts.B);
       const { tr, course } = getRoundCourseCtx({ roundLocks, round: rnd, tRounds, courses });
-      const settled = results.length > 0
+      const seal = revealState(tRounds, rnd);
+      // A sealed round is never "final" on this board, however finished it is
+      // on the course: its points are still coming. Saying FINAL over a round
+      // whose result nobody has seen would be the board's own spoiler — it
+      // would mean the numbers beside it are the whole story, and they aren't.
+      const settled = results.length > 0 && !seal.concealing
         && (isRoundFinal(roundLocks, rnd) || results.every(({ match: m, result: r }) => matchSettled(m, r)));
       out[rnd] = {
-        results, pts, avail, holesPlayed, course,
+        results, pts, avail, holesPlayed, course, seal,
         fmt: FORMATS.find((f) => f.id === tr?.format) || null,
         state: settled ? "final" : holesPlayed > 0 ? "live" : "upcoming",
       };
@@ -617,11 +854,33 @@ export function TeamLeaderboard({
     return out;
   }, [roundNumbers, matchResults, tRounds, courses, roundLocks]);
 
-  // Which rounds open by default: every live round. With nothing live,
-  // fall back to the furthest round that has been played (so a finished
-  // tournament opens on the last round) or the first scheduled round.
+  // ── The reader's own side of a sealed round ──────────────────────
+  // The ONE place the unsealed hole data is used, and it is used a column at
+  // a time: computeMatchResult fills both sides, `viewer` picks one, and
+  // OwnSideCard below reads nothing else off it. Only sealed rounds are
+  // computed at all, so an ordinary tournament pays nothing for this.
+  const ownResults = useMemo(() => {
+    const out = {};
+    roundNumbers.forEach((rnd) => {
+      if (!roundMeta[rnd]?.seal?.concealing) return;
+      const fmt = tRounds.find((t) => t.round_number === rnd)?.format || DEFAULT_FORMAT;
+      out[rnd] = matches
+        .filter((m) => m.round === rnd)
+        .sort((a, b) => (a.matchNumber ?? 0) - (b.matchNumber ?? 0))
+        .map((m) => ({
+          match: m,
+          result: computeMatchResult(m, ownHoleData || {}, courses, tRounds, tPlayers, fmt, hcpOverrides, undefined, teeAssignments, roundLocks),
+        }));
+    });
+    return out;
+  }, [roundNumbers, roundMeta, matches, ownHoleData, courses, tRounds, tPlayers, hcpOverrides, teeAssignments, roundLocks]);
+
+  // Which rounds open by default: every live round, plus any round still
+  // being revealed — that one IS the screen everybody is looking at, and its
+  // revealed-holes-only view reads as "upcoming" until the first hole is
+  // turned over, which would have folded it away at exactly the wrong moment.
   const defaultOpen = useMemo(() => {
-    const live = roundNumbers.filter((r) => roundMeta[r].state === "live");
+    const live = roundNumbers.filter((r) => roundMeta[r].state === "live" || roundMeta[r].seal?.concealing);
     if (live.length) return new Set(live);
     const played = roundNumbers.filter((r) => roundMeta[r].holesPlayed > 0);
     if (played.length) return new Set([played[played.length - 1]]);
@@ -662,6 +921,25 @@ export function TeamLeaderboard({
     () => Math.max(cupPointsOnOffer(matches, tRounds, playersPerSide), totals.A + totals.B),
     [matches, tRounds, playersPerSide, totals]
   );
+
+  // ── What the cup total is NOT counting ───────────────────────────
+  // The totals above are banked points, and a sealed round banks nothing
+  // past its reveal. That is correct — but a cup bar that silently leaves a
+  // whole round out is the one place this feature could mislead rather than
+  // withhold, so the board says so, and says how much. The figure is the
+  // sealed rounds' pot less whatever the reveal has already paid out.
+  const sealedOut = useMemo(() => {
+    const conceal = roundNumbers.filter((r) => roundMeta[r]?.seal?.concealing);
+    if (!conceal.length) return null;
+    let pot = 0, banked = 0;
+    conceal.forEach((rnd) => {
+      roundMeta[rnd].results.forEach(({ match: m, result: r }) => {
+        pot += matchPot(m);
+        banked += r.totalPts.A + r.totalPts.B;
+      });
+    });
+    return { rounds: conceal, remaining: Math.max(0, pot - banked) };
+  }, [roundNumbers, roundMeta]);
   // The configured target wins over the derived one — see CUP_POINTS_TO_WIN.
   // The fallback still applies when it's unset, and it's also what decides
   // a clinch below, so the bar and the number can't tell different stories.
@@ -674,6 +952,41 @@ export function TeamLeaderboard({
   // still wins if the schedule turns out bigger than that.
   const barScale = Math.max(totalAvail, CUP_POINTS_TO_WIN ? toWin * 2 - 1 : 0);
   const pct = (v) => (barScale ? Math.min(100, (v / barScale) * 100) : 0);
+
+  // What a round's section carries above its match rows. Three states, and
+  // the third is the one that is easy to leave out: once the last hole is
+  // turned over there is no panel left, but a DIRECTOR still needs the
+  // control — it is the only way back from a hole revealed by a stray tap,
+  // and from the dry run somebody walks to 18 the week before.
+  const sealPanelFor = (rnd) => {
+    const seal = roundMeta[rnd]?.seal;
+    if (!seal?.sealed) return null;
+    const drive = canReveal && onSetReveal ? (n) => onSetReveal(rnd, n) : null;
+    if (!seal.concealing) {
+      return drive ? (
+        <div style={{ marginTop: 8, background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}` }}>
+          <RevealControl through={seal.through} onSet={drive} />
+        </div>
+      ) : null;
+    }
+    return (
+      <SealedPanel
+        through={seal.through}
+        remaining={sealedOut?.remaining ?? 0}
+        canReveal={!!drive}
+        onSetReveal={drive || (() => {})}
+        ownCards={(ownResults[rnd] || []).map(({ match: m, result: r }) => (
+          <OwnSideCard
+            key={m.id}
+            result={r}
+            viewer={viewer}
+            teamName={viewer === "A" ? tA.name : tB.name}
+            through={seal.through}
+          />
+        ))}
+      />
+    );
+  };
 
   if (roundNumbers.length === 0) {
     return (
@@ -789,6 +1102,19 @@ export function TeamLeaderboard({
           <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 2, marginLeft: -1, background: BC.bg, opacity: 0.9 }} />
         </div>
 
+        {/* Said before the clinch line, deliberately: a cup that reads as won
+            while a sealed round is still holding points is a cup that has not
+            been won yet, and the reader needs that in the same glance. */}
+        {sealedOut && (
+          <div style={{
+            marginTop: 7, textAlign: "center", fontSize: FS.label, fontWeight: 700,
+            letterSpacing: 0.5, color: BC.amberInk, lineHeight: 1.4,
+          }}>
+            🔒 Round{sealedOut.rounds.length > 1 ? "s" : ""} {sealedOut.rounds.join(", ")} sealed
+            {sealedOut.remaining > 0 ? ` — ${fmtPts(sealedOut.remaining)} not yet revealed` : ""}
+          </div>
+        )}
+
         {clincher && (
           <div style={{ textAlign: "center", marginTop: 7, fontSize: FS.label, fontWeight: 700, letterSpacing: 1, color: teamColor(clincher) }}>
             {(clincher === "A" ? tA.name : tB.name).toUpperCase()} WIN THE CUP
@@ -804,6 +1130,7 @@ export function TeamLeaderboard({
           round={rnd}
           meta={roundMeta[rnd]}
           results={roundMeta[rnd].results}
+          sealPanel={sealPanelFor(rnd)}
           open={openOverrides[rnd] ?? defaultOpen.has(rnd)}
           onToggle={() => setOpenOverrides((p) => ({ ...p, [rnd]: !(p[rnd] ?? defaultOpen.has(rnd)) }))}
           tPlayers={tPlayers}

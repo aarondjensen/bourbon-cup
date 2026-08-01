@@ -95,9 +95,13 @@ export function MissingCardNote({ missing, nameOf }) {
 // in the match right up until the last attestation lands. Stacking a
 // confirm on a modal that already is one trains the reflex that defeats
 // both. (Same call, same reasoning, as FinalizeRoundSheet's.)
+// `conceal` rides straight through to the card — see FullScorecard. A player
+// signing a sealed round's card is swearing to the GROSS SCORES on it, which
+// is all a card ever was; what the blackout holds back is what they add up to,
+// and that is not what a signature is for.
 export function SignCardSheet({
   match, result, format, holePars, holeHcps, course, tPlayers, getScore,
-  viewer, onSign, onClose,
+  viewer, onSign, onClose, conceal = null,
 }) {
   const [busy, setBusy] = useState(false);
 
@@ -121,7 +125,7 @@ export function SignCardSheet({
         <FullScorecard
           match={match} result={result} format={format}
           holePars={holePars} holeHcps={holeHcps} course={course}
-          tPlayers={tPlayers} getScore={getScore} viewer={viewer} />
+          tPlayers={tPlayers} getScore={getScore} viewer={viewer} conceal={conceal} />
       </div>
 
       <div style={{ padding: "0 14px 14px", fontFamily: FONT }}>
@@ -153,7 +157,7 @@ export function SignCardSheet({
 // attested they see the wait.
 export function SignedCardPanel({
   match, sig, result, format, holePars, holeHcps, course, tPlayers, getScore,
-  viewer, userPid, onAttest, onUnsign, notify, isDirector = false,
+  viewer, userPid, onAttest, onUnsign, notify, isDirector = false, conceal = null,
 }) {
   const { confirm, confirmModal } = useConfirm();
   const [busy, setBusy] = useState(false);
@@ -238,7 +242,7 @@ export function SignedCardPanel({
         <FullScorecard
           match={match} result={result} format={format}
           holePars={holePars} holeHcps={holeHcps} course={course}
-          tPlayers={tPlayers} getScore={getScore} viewer={viewer} />
+          tPlayers={tPlayers} getScore={getScore} viewer={viewer} conceal={conceal} />
       </div>
 
       {/* ── The status block ── */}
