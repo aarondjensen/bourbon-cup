@@ -32,8 +32,26 @@
 // Incoming initialValue changes sync into local state ONLY when not
 // dirty — if the user is mid-edit, their work is preserved and save()
 // reconciles.
+//
+// ── Why the clean snapshot is state and not a ref ───────────────────
+// It was a ref, on the reasoning that nothing in the render tree depended
+// on it. That reasoning was wrong twice over, and WBC — which adopted this
+// hook and put it in front of a real form — hit both:
+//
+//   1. `isDirty` IS derived from it and IS rendered. Writing cleanRef in
+//      save() therefore changed the answer without scheduling a render, so
+//      a saved form kept showing its Save button lit until something else
+//      happened to re-render it.
+//   2. Reading a ref during render is a side effect. React Compiler
+//      responds by giving up on memoizing the whole component.
+//
+// Making it state fixes both: save() now schedules the re-render that
+// clears the flag. The sync is likewise done DURING RENDER rather than in
+// an effect — React re-runs the component immediately without committing
+// the first pass, so the inputs never paint a frame of stale text, and no
+// synchronous setState-inside-an-effect cascade is created.
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useCallback } from "react";
 
 function stableStringify(obj) {
   return JSON.stringify(obj, (_k, v) => {
@@ -48,37 +66,38 @@ function stableStringify(obj) {
 
 export function useDirtyForm({ initialValue, onSave }) {
   const [value, setValueRaw] = useState(initialValue);
-  // Snapshot of the committed ("clean") value. A ref because nothing in
-  // the render tree depends on it directly — only the dirty check reads it.
-  const cleanRef = useRef(initialValue);
+  // The committed ("clean") snapshot. See the header for why this is state.
+  const [clean, setClean] = useState(initialValue);
 
-  // Sync incoming initialValue → local state ONLY when not dirty.
-  useEffect(() => {
-    const isCurrentlyDirty = stableStringify(value) !== stableStringify(cleanRef.current);
-    if (!isCurrentlyDirty) {
-      cleanRef.current = initialValue;
-      setValueRaw(initialValue);
-    }
-  }, [initialValue, value]);
+  const cleanKey = stableStringify(clean);
+  const isDirty = stableStringify(value) !== cleanKey;
+
+  // Sync incoming initialValue → local state ONLY when not dirty, so a user
+  // mid-edit keeps their work and save() reconciles.
+  //
+  // Compared on the STRINGIFIED values rather than on identity, so a caller
+  // that builds initialValue inline — a new object every render — syncs once
+  // and then stops, instead of looping forever.
+  const initKey = stableStringify(initialValue);
+  if (!isDirty && cleanKey !== initKey) {
+    setClean(initialValue);
+    setValueRaw(initialValue);
+  }
 
   const setValue = useCallback((next) => {
     setValueRaw(prev => typeof next === "function" ? next(prev) : next);
   }, []);
-
-  const isDirty = stableStringify(value) !== stableStringify(cleanRef.current);
 
   const save = useCallback(async () => {
     // Snapshot the value at save time — protects against further edits
     // while the save is in flight. The snapshot becomes the new clean state.
     const snapshot = value;
     const result = await onSave(snapshot);
-    cleanRef.current = snapshot;
+    setClean(snapshot);
     return result;
   }, [value, onSave]);
 
-  const reset = useCallback(() => {
-    setValueRaw(cleanRef.current);
-  }, []);
+  const reset = useCallback(() => { setValueRaw(clean); }, [clean]);
 
   return { value, setValue, isDirty, save, reset };
 }
