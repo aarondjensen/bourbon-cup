@@ -1788,8 +1788,8 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
   const [searchLoading, setSearchLoading] = useState(false);
   const [refetchingTees, setRefetchingTees] = useState(false);
   const [coursePreview, setCoursePreview] = useState(null);
-  const [expandedCourse, setExpandedCourse] = useState(null);
-  const [searching, setSearching] = useState(false);
+  // The course library, opened from the round it is about to be assigned to.
+  const [coursePicker, setCoursePicker] = useState(false);
   const searchTimerRef = useRef(null);
 
   const [editRound, setEditRound] = useState(1);
@@ -2197,6 +2197,28 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
     }, 400);
   };
 
+  // Assigning a course rewrites the round document, so every field it already
+  // carries has to ride along — a bare course_id write would blank the format
+  // and the tee times with it.
+  const assignCourseToRound = async (r, courseId) => {
+    const tr = tRounds.find(t => t.round_number === r);
+    await onSetRound({
+      id: editionDocId(`bc_round_${r}`), tournament_id: TOURNAMENT_ID,
+      round_number: r, course_id: courseId,
+      format: tr?.format || DEFAULT_FORMAT, tee_time: tr?.tee_time || "",
+      nassau_front: tr?.nassau_front || 1, nassau_back: tr?.nassau_back || 1,
+      nassau_overall: tr?.nassau_overall || 1,
+    });
+  };
+
+  // The saved library, filtered by the same box that queries the API — so a
+  // course you already have surfaces above the search results rather than
+  // being added a second time.
+  const courseQuery = courseSearch.trim().toLowerCase();
+  const libraryCourses = courseQuery.length >= 2
+    ? courses.filter(c => (c.name || "").toLowerCase().includes(courseQuery) || (c.city || "").toLowerCase().includes(courseQuery))
+    : courses;
+
   const InputStyle = { width: "100%", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.body, boxSizing: "border-box", outline: "none", fontFamily: FONT };
   const LabelStyle = { fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1, marginBottom: 4, display: "block" };
   const BtnStyle = { padding: "10px 20px", borderRadius: 10, border: "none", fontSize: FS.body, fontWeight: 700, cursor: "pointer", background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`, color: ON_AMBER };
@@ -2210,7 +2232,7 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
           control. See StickyTop for how the seam is painted. */}
       <StickyTop style={{ marginBottom: 4 }}>
       <SegmentedToggle
-        options={[["players","Players"],["rounds","Rounds"],["matches","Matches"],["courses","Courses"],["tournament","Tournament"]]}
+        options={[["players","Players"],["rounds","Rounds"],["matches","Matches"],["tournament","Tournament"]]}
         value={tab}
         onChange={setTab}
       />
@@ -2614,13 +2636,26 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
               </div>
               <div>
                 <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.gold, marginBottom: 6 }}>COURSE</div>
+                {/* Was a dead read-only box saying "Set in Courses tab". Picking
+                    a course is a ROUND decision, so it is made here now, in the
+                    round it acts on — the library opens over this field instead
+                    of living in a tab of its own. */}
                 {(() => {
                   const tr = tRounds.find(t => t.round_number === editRound);
                   const course = courses.find(c => c.id === tr?.course_id);
                   return (
-                    <div style={{ padding: "8px 8px", background: BC.inp, borderRadius: 8, border: `1px solid ${BC.bdr}`, fontSize: FS.small, color: course ? BC.t1 : BC.t3, height: 38, display: "flex", alignItems: "center", overflow: "hidden" }}>
-                      {course ? <span style={{ fontWeight: 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{course.name}</span> : <span>Set in Courses tab</span>}
-                    </div>
+                    <button onClick={() => setCoursePicker(true)} style={{
+                      width: "100%", padding: "8px 8px", background: BC.inp, borderRadius: 8,
+                      border: `1px solid ${course ? BC.bdr : BC.amber + ALPHA.line}`,
+                      fontSize: FS.small, color: course ? BC.t1 : BC.amberInk, height: 38,
+                      display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4,
+                      overflow: "hidden", cursor: "pointer", textAlign: "left", fontFamily: FONT,
+                    }}>
+                      <span style={{ fontWeight: course ? 400 : 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {course ? course.name : "Choose..."}
+                      </span>
+                      <span style={{ color: BC.t3, flexShrink: 0 }}>›</span>
+                    </button>
                   );
                 })()}
               </div>
@@ -3469,26 +3504,63 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
         />
       )}
 
-      {tab === "courses" && (
-        <div>
-          {/* Course Library */}
-          <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 14, overflow: "hidden" }}>
-            <div style={{ padding: "9px 14px", borderBottom: `1px solid ${BC.bdr}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: FS.small, fontWeight: 700, color: BC.gold }}>{courses.length} COURSE{courses.length !== 1 ? "S" : ""}</span>
-              <button onClick={() => { setSearching(!searching); setCourseSearch(""); setSearchResults([]); }} style={{ padding: "4px 10px", borderRadius: 6, background: "transparent", border: `1px solid ${BC.amber}${ALPHA.line}`, color: BC.amberInk, fontSize: FS.label, fontWeight: 700, cursor: "pointer" }}>
-                {searching ? "Close" : "+ Add Course"}
-              </button>
+      {/* ── Course library ───────────────────────────────────────────
+          Was a top-level "Courses" tab. Assigning a course is a ROUND
+          decision, so the library opens over the round it acts on: the old
+          flow made you leave the round you were setting up, work an R1–R4
+          grid against a flat list, and navigate back. Nothing it could do was
+          lost — the row chips still assign to any round, and search, add,
+          edit and remove are all still here.
+
+          One search box, always open, covering both halves. "Do I already
+          have this one?" and "can I find it?" are the same typing, and the
+          "+ Add Course" toggle hid the second question behind a control you
+          had to know to press. */}
+      {coursePicker && (
+        <Popup onClose={() => setCoursePicker(false)} maxWidth={460} padding={0} outerPadding={12} portal zIndex={450}
+          innerStyle={{ background: BC.card, border: `1px solid ${BC.amber}${ALPHA.line}`, borderRadius: 16 }}>
+          <div>
+            {/* Sticky so the search box stays reachable while a long library
+                scrolls under it — the card itself is the scroll container. */}
+            <div style={{ padding: "12px 14px", borderBottom: `1px solid ${BC.bdr}`, position: "sticky", top: 0, background: BC.card, zIndex: 1 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <span style={{ fontSize: FS.small, fontWeight: 700, color: BC.gold }}>COURSE FOR RD {editRound}</span>
+                <button onClick={() => setCoursePicker(false)} style={{ background: "transparent", border: "none", color: BC.t3, fontSize: FS.title, cursor: "pointer", lineHeight: 1, padding: 0 }}>✕</button>
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <select value={courseStateFilter} onChange={e => { setCourseStateFilter(e.target.value); if (courseSearch.trim().length >= 2) doCourseSearch(courseSearch, e.target.value); }}
+                  style={{ width: 64, padding: "9px 6px", background: BC.inp, border: `1px solid ${BC.amber}${ALPHA.line}`, borderRadius: 8, color: BC.t1, fontSize: FS.lead, flexShrink: 0 }}>
+                  <option value="">All</option>
+                  {["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"].map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+                {/* FS.lead is 16px, which is what stops iOS Safari zooming the
+                    page on focus — under 16px it zooms in and never back. */}
+                <input value={courseSearch} onChange={e => doCourseSearch(e.target.value)} placeholder="Search courses…"
+                  style={{ flex: 1, minWidth: 0, padding: "9px 12px", background: BC.inp, border: `1px solid ${BC.amber}${ALPHA.line}`, borderRadius: 8, color: BC.t1, fontSize: FS.lead, outline: "none", boxSizing: "border-box" }} />
+                {courseSearch !== "" && (
+                  <button onClick={() => doCourseSearch("")} style={{ flexShrink: 0, padding: "0 10px", borderRadius: 8, background: "transparent", border: `1px solid ${BC.bdr}`, color: BC.t3, fontSize: FS.lead, cursor: "pointer" }}>✕</button>
+                )}
+              </div>
             </div>
 
-            {courses.map((c, i) => (
-              <div key={c.id} style={{ borderBottom: i < courses.length - 1 ? `1px solid ${BC.bdr}${ALPHA.hair}` : "none" }}>
-                <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 8 }}>
-                  <button onClick={() => setExpandedCourse(expandedCourse === c.id ? null : c.id)} style={{ flex: 1, background: "transparent", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: FS.body, color: BC.t1 }}>{c.name}</div>
-                    <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 1 }}>{[c.city, c.state].filter(Boolean).join(", ")} · Par {c.par} · Slope {c.slope}</div>
-                  </button>
-                  {/* Round assignment buttons */}
-                  <div style={{ display: "flex", gap: 3 }}>
+            {libraryCourses.map((c, i) => {
+              const onThisRound = tRounds.find(t => t.round_number === editRound)?.course_id === c.id;
+              return (
+              <div key={c.id} style={{ borderBottom: i < libraryCourses.length - 1 ? `1px solid ${BC.bdr}${ALPHA.hair}` : "none", padding: "10px 14px" }}>
+                {/* Two lines, because at popup width the name and six controls
+                    on one row left the name about 150px and wrapping. Line one
+                    is the primary action — it puts this course on the round the
+                    picker was opened from and closes. Line two is everything
+                    else: the other rounds, edit, remove. */}
+                <button onClick={async () => { await assignCourseToRound(editRound, c.id); setCoursePicker(false); }}
+                  style={{ display: "block", width: "100%", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: FS.body, color: onThisRound ? BC.amberInk : BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {onThisRound && "✓ "}{c.name}
+                  </div>
+                  <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{[c.city, c.state].filter(Boolean).join(", ")} · Par {c.par} · Slope {c.slope}</div>
+                </button>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 7 }}>
+                  <div style={{ display: "flex", gap: 3, flex: 1 }}>
                     {[1,2,3,4].map(r => {
                       const tr = tRounds.find(t => t.round_number === r);
                       const isAssigned = tr?.course_id === c.id;
@@ -3496,13 +3568,11 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                       return (
                         <button key={r} onClick={async () => {
                           if (isAssigned) {
-                            await onSetRound({ id: editionDocId(`bc_round_${r}`), tournament_id: TOURNAMENT_ID, round_number: r, course_id: null, format: tr?.format || DEFAULT_FORMAT, tee_time: tr?.tee_time || "", nassau_front: tr?.nassau_front || 1, nassau_back: tr?.nassau_back || 1, nassau_overall: tr?.nassau_overall || 1 });
+                            await assignCourseToRound(r, null);
                           } else if (otherCourse) {
-                            if (await confirm(`Replace ${otherCourse.name} for Rd ${r}?`)) {
-                              await onSetRound({ id: editionDocId(`bc_round_${r}`), tournament_id: TOURNAMENT_ID, round_number: r, course_id: c.id, format: tr?.format || DEFAULT_FORMAT, tee_time: tr?.tee_time || "", nassau_front: tr?.nassau_front || 1, nassau_back: tr?.nassau_back || 1, nassau_overall: tr?.nassau_overall || 1 });
-                            }
+                            if (await confirm(`Replace ${otherCourse.name} for Rd ${r}?`)) await assignCourseToRound(r, c.id);
                           } else {
-                            await onSetRound({ id: editionDocId(`bc_round_${r}`), tournament_id: TOURNAMENT_ID, round_number: r, course_id: c.id, format: tr?.format || DEFAULT_FORMAT, tee_time: tr?.tee_time || "", nassau_front: tr?.nassau_front || 1, nassau_back: tr?.nassau_back || 1, nassau_overall: tr?.nassau_overall || 1 });
+                            await assignCourseToRound(r, c.id);
                           }
                         }} style={{
                           padding: "3px 6px", borderRadius: 4, fontSize: FS.label, fontWeight: 700, cursor: "pointer", minWidth: 24, textAlign: "center",
@@ -3516,44 +3586,19 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                   <button onClick={() => setCoursePreview(c)} title="Edit course name, tees & scorecard" style={{ background: "transparent", border: `1px solid ${BC.bdr}`, color: BC.t3, cursor: "pointer", fontSize: FS.label, fontWeight: 700, borderRadius: 4, padding: "3px 6px" }}>Edit</button>
                   <button onClick={async () => { if (await confirm(`Remove ${c.name}?`)) onAddCourse({ ...c, _delete: true }); }} style={{ background: "transparent", border: "none", color: BC.t3, cursor: "pointer", fontSize: FS.body, padding: "2px 4px" }}>✕</button>
                 </div>
-                {expandedCourse === c.id && (
-                  <div style={{ padding: "0 14px 12px", background: BC.amber + ALPHA.wash }}>
-                    {(c.tee_boxes || []).sort((a,b) => (parseFloat(b.slope)||0) - (parseFloat(a.slope)||0)).map((tb, tbi) => (
-                      <div key={tbi} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 3, fontSize: FS.label }}>
-                        <TeeSwatch tee={tb} index={tbi} size={10} />
-                        <span style={{ color: BC.t2, fontWeight: 600, width: 50 }}>{tb.name}</span>
-                        <span style={{ color: BC.t3 }}>Rating {tb.rating} · Slope {tb.slope} · Par {tb.par}</span>
-                      </div>
-                    ))}
-                    {(c.tee_boxes || []).length === 0 && <div style={{ fontSize: FS.label, color: BC.t3, fontStyle: "italic" }}>No tee data</div>}
-                  </div>
-                )}
               </div>
-            ))}
-            {courses.length === 0 && <div style={{ padding: "16px 14px", color: BC.t3, fontSize: FS.small }}>No courses yet. Add one below.</div>}
-          </div>
+              );
+            })}
+            {courses.length === 0 && <div style={{ padding: "16px 14px", color: BC.t3, fontSize: FS.small }}>No courses yet — search above.</div>}
+            {courses.length > 0 && libraryCourses.length === 0 && (
+              <div style={{ padding: "10px 14px", color: BC.t3, fontSize: FS.label }}>Nothing saved matches “{courseSearch.trim()}”.</div>
+            )}
 
-          {/* Search panel */}
-          {searching && (
-            <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: 14 }}>
-              <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-                {/* fontSize 16 on both controls prevents iOS Safari's
-                    zoom-on-focus (anything < 16px zooms the whole page in and
-                    doesn't zoom back). The search input is autoFocused, so a
-                    smaller size zoomed the view the instant the panel opened. */}
-                <select value={courseStateFilter} onChange={e => { setCourseStateFilter(e.target.value); if (courseSearch.trim().length >= 2) doCourseSearch(courseSearch, e.target.value); }}
-                  style={{ width: 64, padding: "9px 6px", background: BC.inp, border: `1px solid ${BC.amber}${ALPHA.line}`, borderRadius: 8, color: BC.t1, fontSize: FS.lead, flexShrink: 0 }}>
-                  <option value="">All</option>
-                  {["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"].map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-                <input value={courseSearch} onChange={e => doCourseSearch(e.target.value)} placeholder="Search by course or city..." autoFocus
-                  style={{ flex: 1, padding: "9px 12px", background: BC.inp, border: `1px solid ${BC.amber}${ALPHA.line}`, borderRadius: 8, color: BC.t1, fontSize: FS.lead, outline: "none" }} />
-              </div>
-
-              {searchLoading && <div style={{ textAlign: "center", padding: 12, color: BC.t3, fontSize: FS.small }}>Searching GolfCourseAPI...</div>}
+            <div style={{ padding: 14, borderTop: `1px solid ${BC.bdr}` }}>
+              {searchLoading && <div style={{ textAlign: "center", padding: 12, color: BC.t3, fontSize: FS.small }}>Searching…</div>}
 
               {!searchLoading && courseSearch.trim().length >= 2 && searchResults.length === 0 && (
-                <div style={{ textAlign: "center", padding: "10px 0", color: BC.t3, fontSize: FS.small }}>No courses found for "{courseSearch}"</div>
+                <div style={{ textAlign: "center", padding: "10px 0", color: BC.t3, fontSize: FS.small }}>Nothing found for “{courseSearch}”</div>
               )}
 
               {!searchLoading && searchResults.filter(c => !courses.find(ex => ex.name.toLowerCase() === c.name.toLowerCase())).map(c => (
@@ -3573,13 +3618,15 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                 </button>
               ))}
 
-              {!courseSearch.trim() && <div style={{ color: BC.t3, fontSize: FS.label, textAlign: "center", padding: 4 }}>Type at least 2 characters to search</div>}
-              <div style={{ fontSize: FS.label, color: BC.t3, textAlign: "center", marginTop: 8 }}>Powered by GolfCourseAPI.com · 35,000+ courses</div>
             </div>
-          )}
+          </div>
+        </Popup>
+      )}
 
-          {/* Course Preview / Edit Modal */}
-          {coursePreview && (() => {
+      {/* Course editor — opened from a library row's Edit, or from an API
+          result to review it before it is saved. Rendered outside the picker
+          so it survives the picker closing underneath it. */}
+      {coursePreview && (() => {
             const draft = coursePreview;
             const setDraft = fn => setCoursePreview(prev => fn(prev));
             const tbs = draft.tee_boxes || [];
@@ -3737,8 +3784,17 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                         // Strip all undefined fields — Firestore rejects them
                         const finalCourse = Object.fromEntries(Object.entries(rawCourse).filter(([_, v]) => v !== undefined));
                         await onAddCourse(finalCourse);
+                        // A course added while picking one for a round was
+                        // added FOR that round — putting it there is the whole
+                        // reason the search was open, and leaving the director
+                        // to then find it in the list and tap it again is a
+                        // step with no decision in it.
+                        if (!isExisting && coursePicker) {
+                          await assignCourseToRound(editRound, finalCourse.id);
+                          setCoursePicker(false);
+                        }
                         setCoursePreview(null);
-                        setSearching(false);
+                        doCourseSearch("");
                         notify(`${finalCourse.name} ${isExisting ? "updated" : "added"}!`, "success");
                       }} style={{ flex: 2, padding: "10px 0", borderRadius: 8, background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`, border: "none", color: ON_AMBER, fontSize: FS.body, fontWeight: 700, cursor: "pointer" }}>{isExisting ? "✓ Save Changes" : "✓ Add Course"}</button>
                     </div>
@@ -3746,8 +3802,6 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
               </Popup>
             );
           })()}
-        </div>
-      )}
 
       {tab === "tournament" && (
         <div>
