@@ -3662,8 +3662,16 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
             };
             const ti = { background: BC.bg, border: `1px solid ${BC.amber}${ALPHA.hair}`, borderRadius: 4, color: BC.t1, fontSize: FS.label, textAlign: "center", width: "100%", padding: "3px 2px", boxSizing: "border-box" };
             const tiL = { ...ti, textAlign: "left", padding: "3px 5px" };
+            // `portal` below is load-bearing, not decoration. This editor
+            // opens from a row inside the course picker, and the picker IS
+            // portaled to <body>. Rendered inline, the editor sits inside the
+            // app tree instead, under an ancestor that caps its stacking
+            // context — so its higher z-index counted only against its
+            // siblings, and the picker's backdrop painted straight over it.
+            // With both on <body> the ladder in Popup.jsx actually applies:
+            // picker 450 < editor 500 (content) < ConfirmModal 900 (modal).
             return (
-              <Popup onClose={() => setCoursePreview(null)} maxWidth={420} padding={0} innerStyle={{ background: BC.card, borderRadius: 16, border: `1px solid ${BC.amber}${ALPHA.line}` }}>
+              <Popup onClose={() => setCoursePreview(null)} maxWidth={420} padding={0} portal innerStyle={{ background: BC.card, borderRadius: 16, border: `1px solid ${BC.amber}${ALPHA.line}` }}>
 
                   {/* Header */}
                   <div style={{ padding: "14px 16px 10px", borderBottom: `1px solid ${BC.bdr}`, position: "sticky", top: 0, background: BC.card, zIndex: 1 }}>
