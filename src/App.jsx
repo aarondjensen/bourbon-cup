@@ -1650,6 +1650,12 @@ const echoedSlice = (written, round, key, incomingSlice) =>
 // it was a Best Ball round), and never leave one answered off-screen (Medal's
 // unit, and the format's recommended allowance, both lived in `title`
 // tooltips — which a phone never shows).
+// The Rounds tab's player grid: name | HI | Round CH | tee | delta. Declared
+// once because the header row, and every player row under it, have to agree —
+// they were built from the same template string in three places, which is how
+// the header and the rows drifted apart the last time a column moved.
+const ROUND_PLAYER_COLS = "1fr 30px 58px 30px 22px";
+
 // A rule and a name, nothing else. Each of these used to carry a sentence
 // underneath it — "How each side's number for a hole is arrived at." under a
 // heading reading HOLE SCORING — and six of them stacked down the round form,
@@ -1801,6 +1807,10 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
   const [chDeltas, setChDeltas] = useState({});
   const [editingPlayer, setEditingPlayer] = useState(null); // { pid, first, last, nick, hi, ov, dir }
   const [teeAssignments, setTeeAssignments] = useState({}); // { round: { pid: teeName } }
+  // Which player's row is open for a tee of their own. One at a time: two open
+  // rows is two lists of the same swatches on screen with nothing saying which
+  // belongs to whom.
+  const [teeRowOpen, setTeeRowOpen] = useState(null); // player_id | null
   const [nassau, setNassau] = useState(NASSAU_DEFAULT);
   const [scoringType, setScoringType] = useState(SCORING_TYPE_MATCH);
   // The other scoring axis: how a side's number for a hole is made. "format"
@@ -3284,8 +3294,10 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                 const tr2h = tRounds.find(t => t.round_number === editRound);
                 const course2h = courses.find(c => c.id === tr2h?.course_id);
                 const tees2h = course2h?.tee_boxes || [];
-                // Grid: name | init | round-input | tee-dots... | delta
-                const gridCols = `1fr 30px 58px ${tees2h.map(() => "22px").join(" ")} 22px`;
+                // Grid: name | HI | round-CH input | one tee swatch | delta.
+                // Fixed width now — it used to widen by one column per tee on
+                // the course, so a five-tee course pushed the name to nothing.
+                const gridCols = ROUND_PLAYER_COLS;
                 const assignedH = teeAssignments[editRound] || {};
                 const teeOf = (pid) => assignedH[pid] || tees2h[0]?.name;
 
@@ -3318,46 +3330,56 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
 
                 return (
                   <div>
+                    {/* ── Everyone plays ───────────────────────────────────
+                        The field-wide tee is the CONTROL now, not a shortcut
+                        sitting above sixteen identical rows of dots. A field
+                        plays one tee and a handful move off it, so this is the
+                        decision; the exceptions are made per player, behind a
+                        tap, on the row they belong to.
+
+                        Shaped like WBC's: swatch, name and the slope/rating
+                        that is the reason to pick one tee over another. It was
+                        a row of bare dots, which asked the director to know
+                        which colour meant which tee before they could choose. */}
+                    {tees2h.length > 0 && (
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: FS.micro, color: BC.t3, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 5 }}>Everyone plays</div>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          {tees2h.map((tee, ti) => {
+                            // Lit only when the whole field is genuinely on this
+                            // tee — so the row doubles as the answer to "is
+                            // anyone off the default?" without opening a row.
+                            const allOn = tPlayers.length > 0 && tPlayers.every(p => teeOf(p.player_id) === tee.name);
+                            return (
+                              <button key={tee.name} disabled={roundIsFinal}
+                                onClick={() => assignAllTees(tee.name)}
+                                style={{
+                                  flex: 1, minWidth: 0, padding: "7px 3px", borderRadius: 8,
+                                  cursor: roundIsFinal ? "not-allowed" : "pointer",
+                                  background: allOn ? BC.amber + ALPHA.wash : BC.inp,
+                                  border: `1px solid ${allOn ? BC.amber : BC.bdr}`,
+                                  opacity: roundIsFinal ? 0.5 : 1,
+                                  display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+                                  transition: "background 0.15s ease, border-color 0.15s ease",
+                                }}>
+                                <TeeSwatch tee={tee} index={ti} size={16} round active={allOn} />
+                                <span style={{ fontSize: FS.micro, fontWeight: 700, color: allOn ? BC.amberInk : BC.t2, maxWidth: "100%", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tee.name}</span>
+                                <span style={{ fontSize: FS.micro, color: BC.t3, lineHeight: 1 }}>{tee.slope}/{tee.rating}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                     <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: 4, padding: "0 2px", marginBottom: 4, alignItems: "center" }}>
                       <div />
                       <div style={{ fontSize: FS.micro, color: BC.t3, fontWeight: 700, textAlign: "center", lineHeight: 1.2 }}>HI</div>
                       <div style={{ fontSize: FS.micro, color: BC.t3, fontWeight: 700, textAlign: "center" }}>Round CH</div>
                       {tees2h.length > 0
-                        ? <div style={{ fontSize: FS.micro, color: BC.t3, fontWeight: 700, textAlign: "center", gridColumn: `span ${tees2h.length}` }}>Tee</div>
+                        ? <div style={{ fontSize: FS.micro, color: BC.t3, fontWeight: 700, textAlign: "center" }}>Tee</div>
                         : null}
                       <div />
                     </div>
-                    {tees2h.length > 0 && (
-                      <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: 4, padding: "0 2px", marginBottom: 6, alignItems: "center" }}>
-                        <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          Everyone plays
-                        </div>
-                        <div />
-                        <div />
-                        {tees2h.map((tee, ti) => {
-                          // Lit only when the whole field is genuinely on this
-                          // tee — so the row doubles as the answer to "is
-                          // anyone off the default?" without opening a row.
-                          const allOn = tPlayers.every(p => teeOf(p.player_id) === tee.name);
-                          return (
-                            <button key={tee.name} disabled={roundIsFinal}
-                              onClick={() => assignAllTees(tee.name)}
-                              title={`Move every player to ${tee.name}`}
-                              style={{
-                                background: "transparent", border: "none", padding: 0,
-                                cursor: roundIsFinal ? "not-allowed" : "pointer",
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                                opacity: roundIsFinal ? (allOn ? 0.55 : 0.2) : (allOn ? 1 : 0.35),
-                                transform: allOn ? "scale(1.15)" : "scale(0.85)",
-                                transition: "all 0.15s ease",
-                              }}>
-                              <TeeSwatch tee={tee} index={ti} size={14} round active={allOn} />
-                            </button>
-                          );
-                        })}
-                        <div />
-                      </div>
-                    )}
                   </div>
                 );
               })()}
@@ -3400,8 +3422,26 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                       }
                       setTeeAssignments(prev => ({ ...prev, [editRound]: { ...(prev[editRound]||{}), [p.player_id]: teeName } }));
                     };
+                    // Is this player off whatever the field is playing? The
+                    // collapsed row shows one swatch, so an exception has to
+                    // look different from the default or it disappears.
+                    //
+                    // Measured against the most-played tee rather than "does
+                    // everyone match" — the latter marks the whole field amber
+                    // the moment one person moves, which says the opposite of
+                    // what it should. On an even split nothing is the minority
+                    // and nothing is marked.
+                    const teeCounts = {};
+                    tPlayers.forEach(x => {
+                      const t = assignments2[x.player_id] || tees2[0]?.name;
+                      if (t) teeCounts[t] = (teeCounts[t] || 0) + 1;
+                    });
+                    const maxTeeCount = Math.max(0, ...Object.values(teeCounts));
+                    const offField = tees2.length > 0 && (teeCounts[currentTee2] || 0) < maxTeeCount;
+                    const teeOpen = teeRowOpen === p.player_id;
                     return (
-                      <div key={p.player_id} style={{ display: "grid", gridTemplateColumns: `1fr 30px 58px ${tees2.map(() => "22px").join(" ")} 22px`, gap: 4, alignItems: "center", marginBottom: 3 }}>
+                      <div key={p.player_id}>
+                      <div style={{ display: "grid", gridTemplateColumns: ROUND_PLAYER_COLS, gap: 4, alignItems: "center", marginBottom: 3 }}>
                         <div style={{ fontSize: FS.small, color: playerNameColor(), fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
                         <div title={hiOverridden ? `Index override (base ${p.handicap_index})` : undefined} style={{ fontSize: FS.label, color: hiOverridden ? BC.amberInk : BC.t3, fontWeight: hiOverridden ? 700 : 400, textAlign: "center" }}>{effHI}{hiOverridden ? "*" : ""}</div>
                         <input
@@ -3418,22 +3458,34 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                           placeholder={calcedCH != null ? String(calcedCH) : "CH"}
                           style={{ padding: "5px 8px", background: hasOverride ? BC.amber + ALPHA.wash : BC.inp, border: `1px solid ${hasOverride ? BC.amber : BC.bdr}`, borderRadius: 6, color: hasOverride ? BC.amberInk : BC.t2, fontSize: FS.small, fontWeight: hasOverride ? 700 : 400, outline: "none", textAlign: "center", opacity: roundIsFinal ? 0.5 : 1, cursor: roundIsFinal ? "not-allowed" : "text" }}
                         />
-                        {tees2.map((tee, ti) => {
-                          const isAct = currentTee2 === tee.name;
-                          // Not `disabled` when final — the tap must still land
-                          // so warnRoundLocked can explain WHY nothing changes.
-                          return (
-                            <button key={tee.name} onClick={() => { if (warnRoundLocked()) return; assignTee2(tee.name); }} title={tee.name} style={{
-                              background: "transparent", border: "none", cursor: roundIsFinal ? "not-allowed" : "pointer", padding: 0,
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                              opacity: roundIsFinal ? (isAct ? 0.55 : 0.2) : (isAct ? 1 : 0.35),
-                              transform: isAct ? "scale(1.3)" : "scale(1)",
-                              transition: "all 0.15s ease",
+                        {/* One swatch: the tee this player is actually on, and
+                            the way in to change it. A row of every tee on the
+                            course, repeated down sixteen players, was the same
+                            question asked sixteen times when the answer is
+                            almost always "whatever the field is playing". */}
+                        {tees2.length > 0 ? (
+                          <button
+                            onClick={() => setTeeRowOpen(teeOpen ? null : p.player_id)}
+                            title={`${currentTee2 || "No tee"} — tap to change`}
+                            style={{
+                              background: "transparent", border: "none", padding: 0, cursor: "pointer",
+                              display: "flex", alignItems: "center", justifyContent: "center", gap: 1,
+                              opacity: roundIsFinal ? 0.55 : 1,
                             }}>
-                              <TeeSwatch tee={tee} index={ti} size={14} round active={isAct} />
-                            </button>
-                          );
-                        })}
+                            <TeeSwatch
+                              tee={tees2.find(t => t.name === currentTee2) || tees2[0]}
+                              index={Math.max(0, tees2.findIndex(t => t.name === currentTee2))}
+                              size={14} round active />
+                            <span style={{
+                              fontSize: FS.micro, lineHeight: 1,
+                              // Amber only when this player is genuinely off
+                              // whatever everyone else is on.
+                              color: offField ? BC.amberInk : BC.t3,
+                              transform: teeOpen ? "rotate(180deg)" : "none",
+                              transition: "transform 0.15s ease",
+                            }}>▾</span>
+                          </button>
+                        ) : <div />}
                         {/* Standing override delta wins over the passing one a
                             tee change raises — once a manual CH is set the tee
                             no longer decides this player's strokes. */}
@@ -3446,6 +3498,38 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                                 <ChDeltaBadge delta={chDeltas[`tee_${editRound}_${p.player_id}`]} />
                               )}
                         </div>
+                      </div>
+
+                      {/* Expanded: this player's own tee. Same buttons as the
+                          field-wide row above, so choosing a tee looks the same
+                          whether it is for everyone or for one person — and it
+                          carries the slope/rating, which is the whole reason
+                          somebody is being moved off the field's tee. */}
+                      {teeOpen && tees2.length > 0 && (
+                        <div style={{ display: "flex", gap: 4, margin: "0 0 8px", padding: "7px 8px", background: BC.inp, borderRadius: 8, border: `1px solid ${BC.bdr}` }}>
+                          {tees2.map((tee, ti) => {
+                            const isAct = currentTee2 === tee.name;
+                            // Not `disabled` when final — the tap must still land
+                            // so warnRoundLocked can explain WHY nothing changes.
+                            return (
+                              <button key={tee.name}
+                                onClick={() => { if (warnRoundLocked()) return; assignTee2(tee.name); setTeeRowOpen(null); }}
+                                style={{
+                                  flex: 1, minWidth: 0, padding: "5px 3px", borderRadius: 6,
+                                  cursor: roundIsFinal ? "not-allowed" : "pointer",
+                                  background: isAct ? BC.amber + ALPHA.wash : "transparent",
+                                  border: `1px solid ${isAct ? BC.amber : BC.bdr}`,
+                                  opacity: roundIsFinal ? 0.5 : 1,
+                                  display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                                }}>
+                                <TeeSwatch tee={tee} index={ti} size={13} round active={isAct} />
+                                <span style={{ fontSize: FS.micro, fontWeight: 700, color: isAct ? BC.amberInk : BC.t2, maxWidth: "100%", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tee.name}</span>
+                                <span style={{ fontSize: FS.micro, color: BC.t3, lineHeight: 1 }}>{tee.slope}/{tee.rating}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                       </div>
                     );
                   })}
