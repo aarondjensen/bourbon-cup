@@ -628,6 +628,13 @@ function LoginSplash({ tournamentName, tournamentLocation }) {
 //     round header in the switcher list, the warn-tinted chip in the app
 //     header, and a banner across the top of the scoring screen with the way
 //     back on it.
+//   • and a closed round OPENS READ-ONLY. Arriving somewhere is not the same
+//     as being able to change it: the score buttons are a grid of large
+//     targets covering most of the screen, so a director who came to LOOK at
+//     Round 1 is one brushed thumb from moving it. The first tap asks instead
+//     of writing, naming the player, the hole and both numbers, and saying yes
+//     applies that tap and arms the group — so correcting a card is one
+//     question, not eighteen. Walking to another group drops the arming.
 //
 // Everyone who is not a director is unchanged, down to the empty states.
 
@@ -676,6 +683,14 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // selection is: it is which round THIS SCREEN is pointed at, not a fact about
   // the tournament, and two directors' phones may honestly be on different ones.
   const [pickedRound, setPickedRound] = useState(null);
+  // ── The safety catch on a closed round ──
+  // The match id editing has been ARMED for, or null. An off-round screen opens
+  // read-only: a director who came to look at Round 1 can brush a score button
+  // and nothing happens. Arming takes a confirmation that names the change,
+  // and it is per MATCH — walking to another group, or back to the live round,
+  // drops it (see the effect below), so it can never be left on behind you.
+  const [armedMatchId, setArmedMatchId] = useState(null);
+  const { confirm, confirmModal } = useConfirm();
   const [showScorecard, setShowScorecard] = useState(false);
   // Closest-to-the-pin prompt — the 0-based index of the par 3 it is asking
   // about, or null. `promptedCtp` is the session guard that keeps it to ONE
@@ -739,6 +754,19 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // did for a director who is also playing; `scorable[0]` only carries a
   // director who is not in this round's draw at all.
   const match = scorable.find(m => m.id === activeMatchId) || myMatches[0] || scorable[0] || null;
+  // Read-only until armed, and only ever on a closed round. `armedMatchId` is
+  // compared against the match ACTUALLY on screen rather than the one that was
+  // armed, so a selection that resolves elsewhere — a match deleted, a round
+  // finalized under the director's feet — lands read-only rather than carrying
+  // an arming that was granted for something else.
+  const editLocked = offRound && armedMatchId !== match?.id;
+  // Dropping the arming is a state update in an effect rather than a
+  // derivation, because it has to survive the round going back to live: the
+  // condition that would clear it (`offRound`) stops being true at the same
+  // moment, so nothing derived would ever fire.
+  useEffect(() => {
+    if (armedMatchId != null && armedMatchId !== match?.id) setArmedMatchId(null);
+  }, [armedMatchId, match?.id]);
   const tr = match ? tRounds.find(t => t.round_number === match.round) : null;
   // Round handicap lock (src/lib/roundLocks.js). When present, the course
   // pointer and the hole tables come from the snapshot so this screen shows
@@ -865,6 +893,11 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
       {groupSwitcher}
       {children}
       <Toast message={toast} />
+      {/* The closed-round catch asks through this. On `shell` rather than in
+          the branches, so the question can be asked from anywhere on the
+          screen — including the banner, which renders above the fold on the
+          signed card too. */}
+      <ConfirmModal modal={confirmModal} />
     </div>
   );
   const empty = (icon, title, sub) => shell(
@@ -955,8 +988,47 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     // auto-advance can move activeHole while the save is in flight.
     const h = activeHole;
     const prior = getScore(pid, h);
+    // ── The catch on a closed round ──
+    // The first tap does not enter a score, it asks. And it asks about THIS
+    // tap by name — who, which hole, what it says now and what it would say —
+    // because "are you sure?" is a question a thumb answers yes to without
+    // reading, and the whole point here is the tap nobody meant to make.
+    //
+    // Saying yes applies that tap AND arms the match, so a director correcting
+    // a card does not confirm eighteen times; the banner turns loud for as long
+    // as it stays armed, and walking away from the match drops it. Saying no
+    // leaves the round exactly as it was.
+    if (editLocked) {
+      const ok = await confirmEdit(pid, h, prior, score);
+      if (!ok) return;
+      setArmedMatchId(match.id);
+    }
     await onSaveHole(pid, match.round, h, score || null, tr?.course_id);
     maybePromptCtp(pid, h, score || 0, prior);
+  };
+
+  // What a tap asks. Lifted out of onTapScore only to keep the write path
+  // readable — the banner's Edit button asks its own, shorter question, since
+  // it is arming deliberately rather than intercepting a tap and has no score
+  // to name.
+  const confirmEdit = async (pid, h, prior, next) => {
+    const who = tPlayers.find(p => p.player_id === pid)?.name || pid;
+    const state = LOCK_STATE_LABEL[roundLockState(roundLocks, match.round)];
+    const was = prior > 0 ? String(prior) : "no score";
+    const now = next > 0 ? String(next) : "no score";
+    return confirm({
+      eyebrow: `Round ${match.round} · ${state}`,
+      title: "Change a score in a closed round?",
+      message: [
+        `${who}, hole ${h + 1}: ${was} → ${now}.`,
+        "",
+        "This is not the round being played. The change posts immediately and moves the leaderboard, and the players in this match are not asked.",
+        "",
+        "Editing stays on for this group until you leave it.",
+      ].join("\n"),
+      confirmLabel: "Change it",
+      destructive: true,
+    });
   };
 
   // Status cell rendering — for the two-row match status bar between
@@ -1160,41 +1232,94 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // so a director working the round everybody is playing pays nothing for it
   // and sees exactly what they saw before this existed.
   //
-  // The whole row is the way back — a director who opened Round 1 to fix one
-  // hole should not have to find the crown again to leave, and "return to the
-  // round the tournament is on" is the only thing they can want next. When
-  // there is no live round to return to it is a plain band instead of a
-  // button, rather than a control that looks like it goes somewhere and does
-  // nothing.
+  // The row says which state the screen is in and carries both moves a
+  // director can want from it, as two separate hit targets:
+  //
+  //   the TEXT, left — back to the round the tournament is on. Somebody who
+  //     opened Round 1 to fix one hole should not have to find the crown again
+  //     to leave. When there is no live round to return to it is a plain span
+  //     rather than a control that looks like it goes somewhere and does
+  //     nothing.
+  //   the BUTTON, right — the safety catch. Off, it reads Edit and arms the
+  //     match; on, it reads Done and drops the arming. Tapping a score while
+  //     it is off asks the same question, so this is the deliberate way in
+  //     rather than the only one.
+  //
+  // Two buttons rather than one row that does both, because a nested button is
+  // not a thing, and because "leave" and "start editing" are opposite enough
+  // that sharing a hit target would be its own accident.
   const offRoundBanner = offRound ? (() => {
     const canReturn = currentRound != null;
-    const Tag = canReturn ? "button" : "div";
+    const state = LOCK_STATE_LABEL[roundLockState(roundLocks, match.round)];
+    // Read-only is the resting state and it is stated in grey; armed is the
+    // exception and it is the only one that gets the warn colour. The two must
+    // not look alike at a glance — that glance is the whole feature.
+    const tone = editLocked ? BC.t2 : BC.warn;
     return (
-      <Tag
-        {...(canReturn ? { onClick: () => { setPickedRound(null); setActiveMatchId(null); } } : {})}
-        style={{
-          display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left",
-          marginBottom: 8, padding: "7px 10px", borderRadius: 8, flexShrink: 0,
-          background: `${BC.warn}${ALPHA.wash}`, border: `1px solid ${BC.warn}${ALPHA.line}`,
-          cursor: canReturn ? "pointer" : "default", fontFamily: FONT,
-        }}>
-        <span aria-hidden="true" style={{ fontSize: FS.small, lineHeight: 1 }}>⚠️</span>
-        <span style={{ minWidth: 0, flex: 1 }}>
-          <span style={{ display: "block", fontSize: FS.small, fontWeight: 800, letterSpacing: 0.5, color: BC.warn }}>
-            EDITING ROUND {match.round} — {LOCK_STATE_LABEL[roundLockState(roundLocks, match.round)]}
-          </span>
-          <span style={{ display: "block", fontSize: FS.label, color: BC.t3, lineHeight: 1.35 }}>
-            {canReturn
-              ? "Not the live round. Scores you change here move the leaderboard."
-              : "The event is over. Scores you change here move the final result."}
-          </span>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 6, width: "100%",
+        marginBottom: 8, padding: "5px 6px 5px 10px", borderRadius: 8, flexShrink: 0,
+        background: editLocked ? BC.card : `${BC.warn}${ALPHA.wash}`,
+        border: `1px solid ${editLocked ? `${BC.bdr}${ALPHA.line}` : `${BC.warn}${ALPHA.line}`}`,
+        fontFamily: FONT,
+      }}>
+        <span aria-hidden="true" style={{ fontSize: FS.small, lineHeight: 1 }}>
+          {editLocked ? "🔒" : "⚠️"}
         </span>
-        {canReturn && (
-          <span style={{ flexShrink: 0, fontSize: FS.label, fontWeight: 800, color: BC.t2, letterSpacing: 0.5 }}>
-            Rd {currentRound} ›
-          </span>
-        )}
-      </Tag>
+        {(() => {
+          const inner = (
+            <>
+              <span style={{ display: "block", fontSize: FS.small, fontWeight: 800, letterSpacing: 0.5, color: tone }}>
+                {editLocked ? `ROUND ${match.round} — ${state} · READ-ONLY` : `EDITING ROUND ${match.round} — ${state}`}
+              </span>
+              <span style={{ display: "block", fontSize: FS.label, color: BC.t3, lineHeight: 1.35 }}>
+                {editLocked
+                  ? (canReturn ? `Not the live round. Tap for Round ${currentRound}.` : "The event is over.")
+                  : (canReturn
+                    ? `Changes post straight away. Tap for Round ${currentRound}.`
+                    : "Changes post straight away and move the final result.")}
+              </span>
+            </>
+          );
+          return canReturn ? (
+            <button
+              onClick={() => { setPickedRound(null); setActiveMatchId(null); }}
+              style={{
+                minWidth: 0, flex: 1, textAlign: "left", padding: "2px 0",
+                background: "transparent", border: "none", cursor: "pointer", fontFamily: FONT,
+              }}>
+              {inner}
+            </button>
+          ) : (
+            <span style={{ minWidth: 0, flex: 1 }}>{inner}</span>
+          );
+        })()}
+        <button
+          onClick={async () => {
+            if (!editLocked) { setArmedMatchId(null); return; }
+            const ok = await confirm({
+              eyebrow: `Round ${match.round} · ${state}`,
+              title: "Edit scores in a closed round?",
+              message: [
+                "This is not the round being played. Anything you change posts immediately and moves the leaderboard, and the players in this match are not asked.",
+                "",
+                "Editing stays on for this group until you tap Done or leave it.",
+              ].join("\n"),
+              confirmLabel: "Edit scores",
+              destructive: true,
+            });
+            if (ok) setArmedMatchId(match.id);
+          }}
+          style={{
+            flexShrink: 0, padding: "6px 10px", borderRadius: 6, cursor: "pointer", fontFamily: FONT,
+            fontSize: FS.label, fontWeight: 800, letterSpacing: 0.5,
+            background: editLocked ? BC.inp : `${BC.warn}${ALPHA.line}`,
+            border: `1px solid ${editLocked ? BC.bdr : BC.warn}`,
+            color: editLocked ? BC.t2 : BC.warn,
+          }}>
+          {editLocked ? "Edit" : "Done"}
+        </button>
+      </div>
     );
   })() : null;
 
