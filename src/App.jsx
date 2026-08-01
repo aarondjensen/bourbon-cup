@@ -1650,7 +1650,11 @@ const echoedSlice = (written, round, key, incomingSlice) =>
 // it was a Best Ball round), and never leave one answered off-screen (Medal's
 // unit, and the format's recommended allowance, both lived in `title`
 // tooltips — which a phone never shows).
-function RoundSectionHeading({ children, hint, first }) {
+// A rule and a name, nothing else. Each of these used to carry a sentence
+// underneath it — "How each side's number for a hole is arrived at." under a
+// heading reading HOLE SCORING — and six of them stacked down the round form,
+// pushing the controls they were describing off the screen.
+function RoundSectionHeading({ children, first }) {
   return (
     <div style={{
       marginTop: first ? 0 : 14, marginBottom: 8,
@@ -1658,9 +1662,6 @@ function RoundSectionHeading({ children, hint, first }) {
       borderTop: first ? "none" : `1px solid ${BC.bdr}`,
     }}>
       <div style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 1.4, color: BC.gold }}>{children}</div>
-      {hint && (
-        <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5, marginTop: 3 }}>{hint}</div>
-      )}
     </div>
   );
 }
@@ -2378,7 +2379,10 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                       : "They need to sign in and claim this name first.")
                   : isSelf
                     ? "You can't change your own — that's what stops the last director locking everyone out. Ask the other director, or edit it in the Firebase console."
-                    : "Grants the Admin tab, and every write behind it.";
+                    // The toggle is available and says Director. Every other
+                    // branch above explains why it ISN'T; this one was just
+                    // describing what the word means.
+                    : null;
             const close = () => setEditingPlayer(null);
             const set = (patch) => setEditingPlayer(prev => prev ? { ...prev, ...patch } : prev);
             const lbl = { fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.5, color: BC.t3, textTransform: "uppercase", marginBottom: 3, display: "block" };
@@ -2600,7 +2604,7 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
             />
           </div>
           <div style={{ background: BC.card, borderRadius: 12, padding: "12px 12px", border: `1px solid ${BC.bdr}` }}>
-            <RoundSectionHeading first hint="What is being played, where, and when it goes off.">
+            <RoundSectionHeading first>
               THE ROUND
             </RoundSectionHeading>
             {/* Format + Course — 2 col compact, matched sizing */}
@@ -2631,7 +2635,7 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                   setParPoints(null);
                 }} style={{ ...InputStyle, marginBottom: 0, fontSize: FS.small, padding: "8px 8px", height: 38 }}>
                   <option value="">Select...</option>
-                  {FORMATS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+                  {FORMATS.map(f => <option key={f.id} value={f.id} title={f.desc}>{f.label}</option>)}
                 </select>
               </div>
               <div>
@@ -2661,17 +2665,11 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
               </div>
             </div>
 
-            {/* What the format IS, in its own words. The select shows a name
-                and nothing else, so the game itself was the one thing the
-                round form never said — and every section below is a
-                consequence of it. FORMATS carries the sentence. */}
-            {(() => {
-              const fmt = FORMATS.find(f => f.id === formRound.format);
-              if (!fmt) return null;
-              return (
-                <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5, marginBottom: 10 }}>{fmt.desc}</div>
-              );
-            })()}
+            {/* The format's own sentence (FORMATS.desc) used to print here, in
+                full, on every round. It is still on each <option>'s title for
+                anyone who wants it — but a director choosing "Four-Ball" knows
+                what a four-ball is, and a paragraph restating it sat between
+                the format and the tee times on every visit. */}
 
             {/* Tee Times */}
 
@@ -2763,7 +2761,7 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                 round in net strokes. Same class of bug as offering it on a
                 format that already sums the best N (which discarded the
                 counts); the fix is the same one, applied to all of them. */}
-            <RoundSectionHeading hint="How each side's number for a hole is arrived at.">
+            <RoundSectionHeading>
               HOLE SCORING
             </RoundSectionHeading>
             {(() => {
@@ -2779,19 +2777,16 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
               // has no menu to show it in.
               const stray = fixed && holeScoring === HOLE_SCORING_BEST_BALL;
               const lbl = <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>HOLE SCORE</div>;
-              // A fixed format states its rule and asks nothing — unless the
-              // round arrived already overridden. Hiding the control there
-              // would leave a setting that is actively scoring the round with
-              // no way to see or clear it, so it stays, in amber, with a way
-              // back. Every other fixed round never sees a control at all.
-              if (fixed && !stray) {
-                return (
-                  <div style={{ marginBottom: 12, display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-                    {lbl}
-                    <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5 }}>{describeHoleScore(fmtId, holeScoring)}</div>
-                  </div>
-                );
-              }
+              // A fixed format decides this itself, so there is nothing here to
+              // set. It used to print the rule anyway, under a label, with no
+              // control beside it — a row that could not be acted on. A section
+              // holding no decision is not on the page at all now.
+              //
+              // The exception is a round that arrived already overridden:
+              // hiding the control there would leave a setting that is actively
+              // scoring the round with no way to see or clear it, so it stays,
+              // in amber, with a way back.
+              if (fixed && !stray) return null;
               // Pills name the METHODS on offer, not Off/On against a control
               // labelled with a format's name — "Best Ball: Off" read as a
               // claim about what the round IS, rather than as a choice between
@@ -2820,11 +2815,15 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                       ))}
                     </div>
                   </div>
-                  <div style={{ fontSize: FS.label, color: stray ? BC.amberInk : BC.t3, lineHeight: 1.5, marginTop: 5 }}>
-                    {stray
-                      ? `This round is overriding ${fmt?.label || "the format"} and scoring each hole as the side's best net ball. Pick ${fmt?.label || "the format"} to score it as its own name says.`
-                      : describeHoleScore(fmtId, holeScoring)}
-                  </div>
+                  {/* The pills name the methods, so the sentence restating the
+                      selected one is gone. What stays is the override warning:
+                      that is not a description of a control, it is the round
+                      not scoring the way its format's name says. */}
+                  {stray && (
+                    <div style={{ fontSize: FS.label, color: BC.amberInk, lineHeight: 1.5, marginTop: 5 }}>
+                      Overriding {fmt?.label || "the format"} — holes score as each side's best net ball.
+                    </div>
+                  )}
                 </div>
               );
             })()}
@@ -2936,11 +2935,16 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                   </div>
                   {holeRow(false)}
                   {holeRow(true)}
-                  <div style={{ fontSize: FS.label, color: over ? BC.amberInk : BC.t3, lineHeight: 1.5, marginTop: 5 }}>
-                    {over
-                      ? `Only ${sideSize} play${sideSize === 1 ? "s" : ""} a side — the holes above ${sideSize} score as all ${sideSize}.`
-                      : "Each hole is the sum of the side's best N nets, where N is that hole's count."}
-                  </div>
+                  {/* Only the over-count case says anything now. What the grid
+                      DOES ("the sum of the side's best N nets") is what a grid
+                      of per-hole counts under a heading reading COUNTING
+                      already shows; what it can't show is that some of those
+                      numbers are higher than there are players to honour them. */}
+                  {over && (
+                    <div style={{ fontSize: FS.label, color: BC.amberInk, lineHeight: 1.5, marginTop: 5 }}>
+                      Only {sideSize} play{sideSize === 1 ? "s" : ""} a side — anything above {sideSize} scores as {sideSize}.
+                    </div>
+                  )}
                 </div>
               );
             })()}
@@ -2983,10 +2987,10 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                       </div>
                     ))}
                   </div>
-                  <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
-                    What each result against par pays. Both partners' points are added together for the side's score on the hole.
-                    {fmtId === "tilt" && " A net birdie then doubles your next hole, a second in a row triples it, and it keeps climbing — a par or worse drops you back to face value. The multiplier runs through the turn and applies to minus scores too."}
-                  </div>
+                  {/* The rungs are labelled Eagle/Birdie/Par/… and hold the
+                      number each pays — the sentence that used to restate that
+                      is gone, and so is Tilt's escalating-multiplier rule,
+                      which belongs to the format rather than to these boxes. */}
                 </div>
               );
             })()}
@@ -3051,19 +3055,22 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                     style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: FS.body, textAlign: "center", width: 44 }} />
                 </div>
               );
-              // Which forms this format offers, and what each MEANS on it.
-              // Only the accrual axis changes with the format — its running
-              // total is strokes on most, dots on Double Dot, points on
-              // Stableford and Tilt — so the pill is called "Stroke" only where
-              // that is what it counts, and "Total" everywhere else. A director
-              // who read "Medal" on a Double Dot round had every reason to
-              // think it meant strokes. None of that is optional detail, so it
-              // is on the page rather than in a tooltip a phone never shows.
+              // Which forms this format offers. Only the accrual axis changes
+              // with the format — the running total is strokes on most, dots on
+              // Double Dot, points on Stableford and Tilt — so the pill is
+              // called "Stroke" only where that is what it counts, and "Total"
+              // everywhere else. A director who read "Medal" on a Double Dot
+              // round had every reason to think it meant strokes.
+              //
+              // That naming is why the sentence that used to sit under these
+              // pills is gone: the label is the explanation now. Keep it that
+              // way — a pill that needs a paragraph is a pill with the wrong
+              // name on it.
               const offered = formsFor(formRound.format);
               const current = resolveFormOfPlay(formRound.format, scoringType);
               return (
                 <>
-                  <RoundSectionHeading hint="How those hole scores turn into points.">
+                  <RoundSectionHeading>
                     FORM OF PLAY
                   </RoundSectionHeading>
                   <div style={{ ...segTrack({ compact: true }), alignSelf: "flex-start", width: "fit-content", marginBottom: 5 }}>
@@ -3072,11 +3079,8 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                         style={pill(current === f, false)}>{formOfPlayLabel(f, formRound.format)}{current === f && <SegRule compact />}</button>
                     ))}
                   </div>
-                  <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5, marginBottom: 12 }}>{describeFormOfPlay(current, formRound.format)}</div>
 
-                  <RoundSectionHeading hint={perHole
-                    ? "What one hole is worth on each nine."
-                    : "How many pots the round pays, and what each is worth."}>
+                  <RoundSectionHeading>
                     POINTS AT STAKE
                   </RoundSectionHeading>
                   <div style={{ marginBottom: 12 }}>
@@ -3110,8 +3114,8 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                     {!perHole && (
                       <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
                         {isSingle
-                          ? `One pot for the 18-hole result. ${nassau.overall || 0} on the round.`
-                          : `Three pots — front nine, back nine and the overall. ${(nassau.front || 0) + (nassau.back || 0) + (nassau.overall || 0)} on the round.`}
+                          ? `${nassau.overall || 0} on the round`
+                          : `${(nassau.front || 0) + (nassau.back || 0) + (nassau.overall || 0)} on the round`}
                       </div>
                     )}
                   </div>
@@ -3141,7 +3145,7 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                     the formats where a side effectively plays one ball.
                 Both settings are stored on the round doc and frozen into the
                 lock snapshot. */}
-            <RoundSectionHeading hint="How much of each player's Course Handicap comes to the tee, and off whom.">
+            <RoundSectionHeading>
               HANDICAPS
             </RoundSectionHeading>
             {(() => {
@@ -3242,8 +3246,8 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                       hands out a number nobody would have chosen. Said only
                       where it applies, and only while it applies. */}
                   {!on && cur.shared && (
-                    <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
-                      {fmt?.label || "This format"} plays one ball per side, so with no allowance the side's team handicap is both partners' full handicaps added together.
+                    <div style={{ fontSize: FS.label, color: BC.amberInk, lineHeight: 1.5, marginTop: 5 }}>
+                      One ball per side — with no allowance each side plays both partners' handicaps added together.
                     </div>
                   )}
                   {/* The format's recommended terms, on the page. Off is a
@@ -3256,12 +3260,12 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                       already saying something stronger. */}
                   {!on && !cur.shared && describeAllowance(resolveAllowance(fmtId, { enabled: true, ...prefill })) !== "100%" && (
                     <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
-                      Full Course Handicaps. {fmt?.label || "This format"} is normally played off {describeAllowance(resolveAllowance(fmtId, { enabled: true, ...prefill }))}.
+                      Normally played off {describeAllowance(resolveAllowance(fmtId, { enabled: true, ...prefill }))}.
                     </div>
                   )}
                   {roundIsLocked && (
                     <div style={{ fontSize: FS.label, color: roundIsFinal ? BC.danger : BC.amberInk, marginTop: 4 }}>
-                      Round {editRound} is locked — the allowance it scored with is frozen in the snapshot, so a change here will not move it.
+                      Round {editRound} is locked — its allowance is frozen, so a change here will not move it.
                     </div>
                   )}
                 </div>
@@ -3269,7 +3273,7 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
             })()}
 
             {/* Per-player handicap overrides and tee assignments. */}
-            <RoundSectionHeading hint="Per-player exceptions for this round — a tee off the field's, or a Course Handicap set by hand.">
+            <RoundSectionHeading>
               PLAYERS
             </RoundSectionHeading>
             <div style={{ marginBottom: 14 }}>
@@ -3898,7 +3902,7 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
               <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.5, width: 58, flexShrink: 0, textTransform: "uppercase" }}>Current</span>
               {showAccessCode ? (
                 <span style={{ flex: 1, minWidth: 0, fontSize: accessCodeError ? FS.label : FS.body, fontWeight: accessCodeError ? 600 : 800, lineHeight: 1.35, color: accessCodeError ? BC.danger : (savedAccessCode ? BC.amberInk : BC.t3), wordBreak: "break-all" }}>
-                  {accessCodeError || savedAccessCode || "None — anyone who signs in can get in"}
+                  {accessCodeError || savedAccessCode || "None"}
                 </span>
               ) : (
                 <button type="button" onClick={loadAccessCode} style={{
@@ -3926,8 +3930,12 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
               // have to finish. See the note on the scale in theme.js.
               style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.lead, fontWeight: 700, outline: "none", fontFamily: FONT }}
             />
+            {/* All that survives of a four-sentence explanation. The other
+                three described what a password is; this one is the only thing
+                the field cannot show — that emptying it is how you remove it,
+                which nobody would try on a control called "New password". */}
             <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 6, lineHeight: 1.4 }}>
-              Asked for once per person, after they sign in. Capitals don't matter. Save it blank to turn it off. Anyone already through the door stays through.
+              Save blank to remove.
             </div>
           </div>
 
@@ -3978,9 +3986,6 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                     {brandBusy === team.id ? "Reading…" : "Import logo"}
                     <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => { pickLogo(team.id, e.target.files?.[0]); e.target.value = ""; }} />
                   </label>
-                </div>
-                <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 6, lineHeight: 1.4 }}>
-                  Import a logo to set the team badge and auto-fill its color, or enter a hex. Save applies the name and branding live across the app.
                 </div>
               </div>
             );
