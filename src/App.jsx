@@ -1654,13 +1654,13 @@ const echoedSlice = (written, round, key, incomingSlice) =>
 // underneath it — "How each side's number for a hole is arrived at." under a
 // heading reading HOLE SCORING — and six of them stacked down the round form,
 // pushing the controls they were describing off the screen.
-function RoundSectionHeading({ children, first }) {
+// Always a divider now. There was a `first` variant that dropped the rule and
+// the spacing, for the one heading that opened the card — that heading is gone
+// (the round pills above it already name the round), so every remaining one is
+// separating a group of settings from the group before it.
+function RoundSectionHeading({ children }) {
   return (
-    <div style={{
-      marginTop: first ? 0 : 14, marginBottom: 8,
-      paddingTop: first ? 0 : 12,
-      borderTop: first ? "none" : `1px solid ${BC.bdr}`,
-    }}>
+    <div style={{ marginTop: 14, marginBottom: 8, paddingTop: 12, borderTop: `1px solid ${BC.bdr}` }}>
       <div style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 1.4, color: BC.gold }}>{children}</div>
     </div>
   );
@@ -2604,9 +2604,11 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
             />
           </div>
           <div style={{ background: BC.card, borderRadius: 12, padding: "12px 12px", border: `1px solid ${BC.bdr}` }}>
-            <RoundSectionHeading first>
-              THE ROUND
-            </RoundSectionHeading>
+            {/* No heading on the first section. The round pills sit directly
+                above this card and already say which round it is — "THE ROUND"
+                under them named the thing you had just selected. The sections
+                further down still carry headings, because those separate one
+                group of settings from the next. */}
             {/* Format + Course — 2 col compact, matched sizing */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
               <div>
@@ -3250,19 +3252,16 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                       One ball per side — with no allowance each side plays both partners' handicaps added together.
                     </div>
                   )}
-                  {/* The format's recommended terms, on the page. Off is a
-                      legitimate choice, but it was one made against a
-                      recommendation that only existed inside the On button's
-                      tooltip — invisible on every phone the director actually
-                      sets a round up on. Silent where the recommendation is
-                      100% (Singles), since "plays off 100%" is what Off
-                      already means, and where the shared-ball line above is
-                      already saying something stronger. */}
-                  {!on && !cur.shared && describeAllowance(resolveAllowance(fmtId, { enabled: true, ...prefill })) !== "100%" && (
-                    <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
-                      Normally played off {describeAllowance(resolveAllowance(fmtId, { enabled: true, ...prefill }))}.
-                    </div>
-                  )}
+                  {/* The "normally played off 90%" recommendation that used to
+                      print here when the allowance was Off is gone. Off is a
+                      legitimate choice, and a line second-guessing it appeared
+                      on most rounds — the On button's own default still puts
+                      the recommended figure one tap away.
+
+                      The shared-ball line above is NOT this and stays: it
+                      reports what the round will actually do (add both
+                      partners' full handicaps together), which no control on
+                      the page shows. */}
                   {roundIsLocked && (
                     <div style={{ fontSize: FS.label, color: roundIsFinal ? BC.danger : BC.amberInk, marginTop: 4 }}>
                       Round {editRound} is locked — its allowance is frozen, so a change here will not move it.
