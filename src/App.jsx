@@ -58,6 +58,7 @@ import { MatchSetup } from "./components/MatchSetup";
 import {
   GROUPS_COL, groupsDocId, encodeGroups, decodeGroups,
   teeTimeForMatch, parseTeeTime, formatTeeTime, DEFAULT_TEE_INTERVAL, TEE_SLOTS,
+  matchPlayers,
   roundPlaySetup, orderMatchesForRound, numberMatches,
   stripAMPM,
 } from "./lib/groups";
@@ -2345,7 +2346,7 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                       {synced && <span style={{ fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.2, color: BC.hcpBlue, border: `1px solid ${BC.hcpBlue}${ALPHA.line}`, background: BC.hcpBlue + ALPHA.tint, borderRadius: 3, padding: "1px 3px", lineHeight: 1 }}>G</span>}
                     </span>
                     <span style={{ flex: 1, minWidth: 8 }} />
-                    <button onClick={() => setEditingPlayer({ pid: p.player_id, first: p.first_name || (p.last_name ? "" : (p.name || "")), last: p.last_name || "", nick: p.name || "", hi: String(p.handicap_index), ov: (p.hi_override != null && String(p.hi_override).trim() !== "") ? String(p.hi_override) : "", dir: playerIsDirector(memberships, p) })} style={{
+                    <button onClick={() => setEditingPlayer({ pid: p.player_id, team: p.team, first: p.first_name || (p.last_name ? "" : (p.name || "")), last: p.last_name || "", nick: p.name || "", hi: String(p.handicap_index), ov: (p.hi_override != null && String(p.hi_override).trim() !== "") ? String(p.hi_override) : "", dir: playerIsDirector(memberships, p) })} style={{
                       fontSize: FS.label, padding: "2px 8px", borderRadius: 4, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer", flexShrink: 0,
                     }}>Edit</button>
                   </div>
@@ -2364,7 +2365,9 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
             const isNew = !!editingPlayer.isNew;
             const p = isNew ? null : tPlayers.find(x => x.player_id === editingPlayer.pid);
             if (!isNew && !p) return null;
-            const acc = ((isNew ? teams[editingPlayer.team] : teams[p.team]) || teams.A).accent;
+            // Follows the form, not the saved document, so switching team in
+            // the editor recolours the sheet as you tap rather than after Save.
+            const acc = (teams[editingPlayer.team] || teams[p?.team] || teams.A).accent;
             const defaultNick = toDisplayName(editingPlayer.first, editingPlayer.last);
             const linked = !!editingPlayer.ghin_number;
             // Who this row's crown can be changed by, and why not.
@@ -2446,6 +2449,9 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                 return;
               }
               const changes = [];
+              const newTeam = editingPlayer.team || p.team;
+              const teamChanged = newTeam !== p.team;
+              if (teamChanged) changes.push(`Team: ${teamNames[p.team]} → ${teamNames[newTeam]}`);
               if (first !== (p.first_name||"") || last !== (p.last_name||"") || newName !== p.name)
                 changes.push(`Name → ${fullName({ first_name: first, last_name: last })} (shows as "${newName}")`);
               const baseChanged = parseFloat(editingPlayer.hi) !== parseFloat(p.handicap_index);
@@ -2463,11 +2469,24 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
               const oldEff = oldOv != null ? oldOv : (parseFloat(p.handicap_index) || 0);
               const newEff = newOv != null ? newOv : (parseFloat(editingPlayer.hi) || 0);
               let impact = oldEff !== newEff ? "\n\n" + describeHiChangeImpact(roundLocks, [1,2,3,4]).text : "";
+              // The half of a team move this console cannot do for you. A match
+              // holds its players in teamA/teamB arrays of its own, so a player
+              // already drawn stays on the side they were drawn into no matter
+              // what their roster row says — and nothing on screen would tell
+              // the director that until the scoring looked wrong.
+              if (teamChanged) {
+                const drawn = [...new Set((matches || [])
+                  .filter(m => matchPlayers(m).includes(p.player_id))
+                  .map(m => m.round))].sort((a, b) => a - b);
+                impact += drawn.length
+                  ? `\n\nRound ${drawn.join(", ")} already has them drawn into a match on their old side. Moving them here does not redraw it — sort that out on the Matches tab.`
+                  : "\n\nNo match has been drawn for them yet, so there is nothing else to change.";
+              }
               if (dirChanged) impact += newDir
                 ? "\n\nA director can do everything in Admin: the roster, rounds, matches, courses, groups, tee times, settings, editions and the access password."
                 : "\n\nThey keep their name and everything a player does — scores, skins, signatures. They lose the Admin tab.";
               if (await confirm({ title: "Confirm changes", message: changes.join("\n") + impact })) {
-                onUpdatePlayer({ ...p, name: newName, first_name: first, last_name: last, handicap_index: parseFloat(editingPlayer.hi) || 0, hi_override: newOv, ...ghinFields, ...(cutSignIn ? unlinkPatch() : {}) });
+                onUpdatePlayer({ ...p, team: newTeam, name: newName, first_name: first, last_name: last, handicap_index: parseFloat(editingPlayer.hi) || 0, hi_override: newOv, ...ghinFields, ...(cutSignIn ? unlinkPatch() : {}) });
                 // A separate document, and one the rules police, so it is
                 // reported separately: the roster edit above can succeed
                 // while this is refused.
@@ -2492,6 +2511,40 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                       <input autoFocus value={editingPlayer.first} onChange={e => set({ first: e.target.value })} style={inp} /></label>
                     <label style={{ flex: 1, minWidth: 0 }}><span style={lbl}>Last name</span>
                       <input value={editingPlayer.last} onChange={e => set({ last: e.target.value })} style={inp} /></label>
+                  </div>
+                  {/* ── Team ──
+                      The one thing about a player this console could not
+                      change. Moving somebody between sides meant deleting them
+                      from one and adding them to the other — which mints a new
+                      player_id, so it cut their sign-in and stranded every
+                      score already keyed to the old id.
+
+                      Here it is one tap and the id never moves, so scores,
+                      signatures and their sign-in all come with them.
+
+                      Not drag-and-drop: the roster rows already own the swipe
+                      gesture, and a long-press-drag between two lists on a
+                      phone is the fiddliest way to answer an A-or-B question. */}
+                  <div>
+                    <span style={lbl}>Team</span>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {[teams.A, teams.B].map(t => {
+                        const on = editingPlayer.team === t.id;
+                        return (
+                          <button key={t.id} type="button" onClick={() => set({ team: t.id })}
+                            style={{
+                              flex: 1, minWidth: 0, fontSize: FS.body, fontWeight: 700,
+                              padding: "7px 10px", borderRadius: 8, cursor: "pointer",
+                              boxSizing: "border-box", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                              border: `1px solid ${on ? t.accent : BC.bdr}`,
+                              background: on ? t.accent + ALPHA.wash : "transparent",
+                              color: on ? t.accent : BC.t2,
+                            }}>
+                            {teamNames[t.id]}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                   {/* Nickname + Director paired on one row, like First/Last. */}
                   <div style={{ display: "flex", gap: 8 }}>
