@@ -696,18 +696,20 @@ export const parResultFor = (netVsPar, formatId) => {
 // Tilt's are the game's own — a harsher ladder where a double bogey actively
 // costs you — and they are untouched.
 //
-// Stableford's middle rungs reproduce exactly what the engine computed before
-// the table was editable (`max(0, 2 - d)`), so no stored round changes by
-// gaining a table it never had. Its two outer rungs are the ones this format
-// prices and Tilt does not: a hole four under pays 10, a triple bogey or worse
-// costs 3.
+// Stableford's are the Bourbon Cup key, off the printed card. They are NOT the
+// standard Stableford ladder and they are not what this app computed before the
+// table was editable (`max(0, 2 - d)`, which paid a par 2 and bottomed out at
+// nought). BC pays par 1 and takes points off a double bogey, so the numbers
+// here are the card's rather than the formula's: the field is scored against
+// what it was handed on the tee, and the app agreeing with the sheet matters
+// more than the app agreeing with its own history.
 //
 // Every rung on both is editable, negatives included: a table that can only
 // ever pay is a table with no downside, which is the whole point of Tilt's.
 export const PAR_POINTS_DEFAULTS = {
   stableford: {
-    double_albatross: 10, albatross: 5, eagle: 4, birdie: 3,
-    par: 2, bogey: 1, double: 0, triple: -3,
+    double_albatross: 10, albatross: 7, eagle: 5, birdie: 3,
+    par: 1, bogey: 0, double: -2, triple: -3,
   },
   tilt: { albatross: 16, eagle: 8, birdie: 4, par: 2, bogey: 0, double: -4 },
 };

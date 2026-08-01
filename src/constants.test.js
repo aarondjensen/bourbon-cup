@@ -79,17 +79,14 @@ describe("the ladders and their tables", () => {
     expect(parResultsFor("tilt")).not.toContain("triple");
   });
 
-  it("pays Stableford's new outer rungs 10 and -3", () => {
-    const t = resolveParPoints("stableford", null);
-    expect(t.double_albatross).toBe(10);
-    expect(t.triple).toBe(-3);
-  });
-
-  // The rungs Stableford has always had, unchanged: a round saved before the
-  // table grew must settle to the same number afterwards.
-  it("leaves Stableford's original rungs alone", () => {
-    expect(resolveParPoints("stableford", null))
-      .toMatchObject({ albatross: 5, eagle: 4, birdie: 3, par: 2, bogey: 1, double: 0 });
+  // The Bourbon Cup key off the printed card, rung for rung. This is the one
+  // table in here that has to match a piece of paper the field is holding, so
+  // it is asserted whole rather than by the rungs that happened to change.
+  it("defaults Stableford to the BC key", () => {
+    expect(resolveParPoints("stableford", null)).toEqual({
+      double_albatross: 10, albatross: 7, eagle: 5, birdie: 3,
+      par: 1, bogey: 0, double: -2, triple: -3,
+    });
   });
 
   it("leaves Tilt's table exactly as it was", () => {
@@ -97,11 +94,21 @@ describe("the ladders and their tables", () => {
       .toEqual({ albatross: 16, eagle: 8, birdie: 4, par: 2, bogey: 0, double: -4 });
   });
 
+  // The per-rung fallback is what protects a stored round: a table saved
+  // before the BC key landed keeps every value it actually wrote, and only the
+  // rungs it never had are filled from the defaults.
   it("falls back per rung, so a partial saved table keeps its defaults", () => {
-    const t = resolveParPoints("stableford", { triple: -5, birdie: "" });
-    expect(t.triple).toBe(-5);
+    const t = resolveParPoints("stableford", { par: 2, bogey: 1, double: 0, birdie: "" });
+    expect(t).toMatchObject({ par: 2, bogey: 1, double: 0 });
     expect(t.birdie).toBe(3);
     expect(t.double_albatross).toBe(10);
+    expect(t.triple).toBe(-3);
+  });
+
+  // Zero is a value a director can mean — BC's own bogey rung is one — so it
+  // must survive rather than reading as an empty box.
+  it("keeps a saved zero instead of falling back", () => {
+    expect(resolveParPoints("stableford", { double_albatross: 0 }).double_albatross).toBe(0);
   });
 
   it("has no table for a format that isn't scored against par", () => {
