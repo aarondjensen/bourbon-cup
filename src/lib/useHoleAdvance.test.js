@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { openingHole } from "./useHoleAdvance";
+import { openingHole, HOLES } from "./useHoleAdvance";
 
 // Only `openingHole` is covered here. The hook around it is timers, refs and
 // React state — it needs a renderer BC has no jsdom environment for — but the
@@ -9,68 +9,86 @@ import { openingHole } from "./useHoleAdvance";
 // before jumping, every single time a player returns to their card.
 
 // A reader over { pid: { holeIdx: strokes } }, matching the getScore contract:
-// 0 (not undefined) for an unscored hole.
+// falsy for an unscored hole.
 const reader = (map) => (pid, h) => map?.[pid]?.[h] || 0;
 // n holes posted for a player.
 const card = (n, s = 4) => Object.fromEntries(Array.from({ length: n }, (_, i) => [i, s]));
 
 describe("openingHole", () => {
   it("opens on the first hole the match has not all finished", () => {
-    expect(openingHole(["a", "b"], reader({ a: card(7), b: card(7) }))).toBe(7);
+    const r = openingHole(["a", "b"], reader({ a: card(7), b: card(7) }));
+    expect(r).toMatchObject({ hole: 7, allComplete: false, resolved: true });
   });
 
   // The match moves together — one player short means the hole isn't done,
   // and the screen belongs on the hole that is still open, not on the one the
   // fastest player has reached.
   it("waits for the slowest player on a hole", () => {
-    expect(openingHole(["a", "b"], reader({ a: card(9), b: card(4) }))).toBe(4);
+    expect(openingHole(["a", "b"], reader({ a: card(9), b: card(4) })).hole).toBe(4);
   });
 
   // A back-filled gap: the live edge is the GAP, not the far end. This is what
   // makes auto-advance's edge-skipping and this function agree.
   it("returns to a gap left behind", () => {
     const a = { ...card(18) }; delete a[5];
-    expect(openingHole(["a"], reader({ a }))).toBe(5);
+    const r = openingHole(["a"], reader({ a }));
+    expect(r.hole).toBe(5);
+    expect(r.allComplete).toBe(false);
   });
 
   it("treats a cleared score (0) as unplayed", () => {
-    expect(openingHole(["a"], reader({ a: { ...card(6), 3: 0 } }))).toBe(3);
+    expect(openingHole(["a"], reader({ a: { ...card(6), 3: 0 } })).hole).toBe(3);
   });
 
-  // ── The three ways of answering "hole 1" ──
-  // All of them return 0, and the hook's callers rely on that: `positionOn`
-  // uses `edge > 0` to decide whether it had real data to position FROM, so
-  // every 0 deliberately leaves the deferred cold-load jump armed.
-  it("starts at the start when nothing has been posted", () => {
-    expect(openingHole(["a", "b"], reader({}))).toBe(0);
+  // ── A finished match ──
+  // Lands on the LAST hole, not the first. There is no next hole to fast-
+  // forward to, and 18 is what the group was looking at when they finished —
+  // the same answer WBC gives.
+  it("lands on the last hole when everything is in", () => {
+    const r = openingHole(["a", "b"], reader({ a: card(18), b: card(18) }));
+    expect(r).toMatchObject({ hole: HOLES - 1, allComplete: true, resolved: true });
   });
 
-  it("returns 0 with no players", () => {
-    expect(openingHole([], reader({}))).toBe(0);
-    expect(openingHole(undefined, reader({}))).toBe(0);
+  // ── The cold-load distinction, which is the point of `resolved` ──
+  // An empty map and a genuinely untouched card both answer "hole 1", and so
+  // does a match whose live edge really is hole 1. Only the caller knows which
+  // it is looking at, so the answer says whether it came from real data —
+  // `positionedFor` keys on that, never on the hole index.
+  it("is unresolved when nothing has been posted", () => {
+    expect(openingHole(["a", "b"], reader({})))
+      .toMatchObject({ hole: 0, hasAnyScores: false, resolved: false });
   });
 
-  // Nothing to fast-forward TO. The screen shows hole 1 of a finished card
-  // rather than being parked on 18 with no next hole.
-  it("returns 0 when every player has every hole", () => {
-    expect(openingHole(["a", "b"], reader({ a: card(18), b: card(18) }))).toBe(0);
+  it("is unresolved with no players", () => {
+    expect(openingHole([], reader({}))).toMatchObject({ hole: 0, resolved: false });
+    expect(openingHole(undefined, reader({}))).toMatchObject({ hole: 0, resolved: false });
   });
 
-  it("is the live edge as soon as one score exists", () => {
-    expect(openingHole(["a", "b"], reader({ a: { 0: 5 } }))).toBe(0);
-    expect(openingHole(["a", "b"], reader({ a: { 0: 5 }, b: { 0: 4 } }))).toBe(1);
+  it("is resolved as soon as one score exists, even on hole 1", () => {
+    expect(openingHole(["a", "b"], reader({ a: { 0: 5 } })))
+      .toMatchObject({ hole: 0, hasAnyScores: true, resolved: true });
+    expect(openingHole(["a", "b"], reader({ a: { 0: 5 }, b: { 0: 4 } })).hole).toBe(1);
   });
 
   it("tolerates a reader that returns undefined for every hole", () => {
-    expect(openingHole(["a"], () => undefined)).toBe(0);
+    expect(openingHole(["a"], () => undefined)).toMatchObject({ hole: 0, resolved: false });
+  });
+
+  it("drops empty slots in the player list", () => {
+    expect(openingHole(["a", null, undefined], reader({ a: card(3) })).hole).toBe(3);
   });
 
   it("handles a singles match (one player a side)", () => {
-    expect(openingHole(["a", "b"], reader({ a: card(12), b: card(12) }))).toBe(12);
+    expect(openingHole(["a", "b"], reader({ a: card(12), b: card(12) })).hole).toBe(12);
   });
 
   it("handles a full foursome", () => {
     const scores = { a: card(6), b: card(6), c: card(6), d: card(5) };
-    expect(openingHole(["a", "b", "c", "d"], reader(scores))).toBe(5);
+    expect(openingHole(["a", "b", "c", "d"], reader(scores)).hole).toBe(5);
+  });
+
+  it("honours a shorter card for a nine-hole round", () => {
+    expect(openingHole(["a"], reader({ a: card(9) }), 9))
+      .toMatchObject({ hole: 8, allComplete: true });
   });
 });
