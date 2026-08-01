@@ -3506,28 +3506,44 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                           carries the slope/rating, which is the whole reason
                           somebody is being moved off the field's tee. */}
                       {teeOpen && tees2.length > 0 && (
-                        <div style={{ display: "flex", gap: 4, margin: "0 0 8px", padding: "7px 8px", background: BC.inp, borderRadius: 8, border: `1px solid ${BC.bdr}` }}>
-                          {tees2.map((tee, ti) => {
-                            const isAct = currentTee2 === tee.name;
-                            // Not `disabled` when final — the tap must still land
-                            // so warnRoundLocked can explain WHY nothing changes.
-                            return (
-                              <button key={tee.name}
-                                onClick={() => { if (warnRoundLocked()) return; assignTee2(tee.name); setTeeRowOpen(null); }}
-                                style={{
-                                  flex: 1, minWidth: 0, padding: "5px 3px", borderRadius: 6,
-                                  cursor: roundIsFinal ? "not-allowed" : "pointer",
-                                  background: isAct ? BC.amber + ALPHA.wash : "transparent",
-                                  border: `1px solid ${isAct ? BC.amber : BC.bdr}`,
-                                  opacity: roundIsFinal ? 0.5 : 1,
-                                  display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-                                }}>
-                                <TeeSwatch tee={tee} index={ti} size={13} round active={isAct} />
-                                <span style={{ fontSize: FS.micro, fontWeight: 700, color: isAct ? BC.amberInk : BC.t2, maxWidth: "100%", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tee.name}</span>
-                                <span style={{ fontSize: FS.micro, color: BC.t3, lineHeight: 1 }}>{tee.slope}/{tee.rating}</span>
-                              </button>
-                            );
-                          })}
+                        // Right-aligned and sized to its contents, so the
+                        // options land under the tee column they came out of
+                        // rather than stretching the full width of the card.
+                        // Stretched, each button was a third of the row wide
+                        // and the group read as a new section instead of as
+                        // this player's swatch, opened.
+                        <div style={{ display: "flex", justifyContent: "flex-end", margin: "-1px 0 7px" }}>
+                          <div style={{
+                            display: "flex", gap: 3, maxWidth: "100%",
+                            padding: "5px 6px", background: BC.inp, borderRadius: 8,
+                            border: `1px solid ${BC.bdr}`,
+                          }}>
+                            {tees2.map((tee, ti) => {
+                              const isAct = currentTee2 === tee.name;
+                              // Not `disabled` when final — the tap must still
+                              // land so warnRoundLocked can explain WHY nothing
+                              // changes.
+                              return (
+                                <button key={tee.name}
+                                  onClick={() => { if (warnRoundLocked()) return; assignTee2(tee.name); setTeeRowOpen(null); }}
+                                  style={{
+                                    // Content-width, shrinking only if a course
+                                    // carries more tees than the row can hold.
+                                    flex: "0 1 auto", minWidth: 0,
+                                    padding: "4px 7px", borderRadius: 6,
+                                    cursor: roundIsFinal ? "not-allowed" : "pointer",
+                                    background: isAct ? BC.amber + ALPHA.wash : "transparent",
+                                    border: `1px solid ${isAct ? BC.amber : BC.bdr}`,
+                                    opacity: roundIsFinal ? 0.5 : 1,
+                                    display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                                  }}>
+                                  <TeeSwatch tee={tee} index={ti} size={13} round active={isAct} />
+                                  <span style={{ fontSize: FS.micro, fontWeight: 700, lineHeight: 1.1, color: isAct ? BC.amberInk : BC.t2, maxWidth: "100%", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tee.name}</span>
+                                  <span style={{ fontSize: FS.micro, color: BC.t3, lineHeight: 1, whiteSpace: "nowrap" }}>{tee.slope}/{tee.rating}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
                       )}
                       </div>
