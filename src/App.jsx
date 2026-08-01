@@ -33,7 +33,7 @@ import {
   markRoundFinal, unfinalizeRound, clearRoundLockDoc,
   roundLockState, describeHiChangeImpact,
   currentRoundNumber, nextRoundNumber, lastFinalRoundNumber,
-  LOCK_OPEN, LOCK_FINAL,
+  LOCK_OPEN, LOCK_FINAL, LOCK_STATE_LABEL,
 } from "./lib/roundLocks";
 import { usePullToRefresh } from "./lib/usePullToRefresh";
 import { useFitDensity } from "./lib/useFitDensity";
@@ -605,6 +605,31 @@ function LoginSplash({ tournamentName, tournamentLocation }) {
 // the tournament window (see firestore.rules), so it stops accidents, not a
 // determined writer — which is exactly the threat model the director
 // described.
+//
+// ── The director's way past it ────────────────────────────────────
+// A DIRECTOR can point this screen at any round, not just the live one. The
+// gate above was total, and being total it also closed the only door for
+// fixing what it could not prevent: a card entered against the wrong hole and
+// signed over, a score nobody queried until the next morning. Once that round
+// was finalized there was no way to correct it from inside the app — the fix
+// was a Firebase console edit, by hand, on the document ids.
+//
+// So the gate is now the DEFAULT rather than the boundary, and only for a
+// director. What it still guarantees is that nobody arrives on a closed round
+// by accident:
+//
+//   • it opens on the current round, every time. `pickedRound` starts null and
+//     a director who never touches the switcher sees exactly what they saw
+//     before this existed.
+//   • leaving the current round takes a deliberate act — picking a group out
+//     of a labelled round in the switcher. There is no way to drift there.
+//   • being off it is stated three times over, because a score typed into the
+//     wrong round is precisely what this whole section exists to stop: the
+//     round header in the switcher list, the warn-tinted chip in the app
+//     header, and a banner across the top of the scoring screen with the way
+//     back on it.
+//
+// Everyone who is not a director is unchanged, down to the empty states.
 
 // The Finalize control is NOT on this screen. It used to be a card pinned
 // under the player cards for the whole round; it now lives in an app-level
@@ -641,25 +666,16 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // room it has and sizes its parts to fit. See lib/useFitDensity.
   const fitRef = useRef(null);
   const { sizes: fit } = useFitDensity(fitRef);
-  // THE GATE. Only the current round's matches exist as far as this screen
-  // is concerned — a match from a finalized round is not merely hidden, it
-  // is not reachable, so no stale selection can put a score in it.
-  const roundMatches = useMemo(
-    () => matches.filter(m => m.round === currentRound),
-    [matches, currentRound]
-  );
-  const myMatches = useMemo(
-    () => roundMatches.filter(m => [...m.teamA, ...m.teamB].includes(userPid)),
-    [roundMatches, userPid]
-  );
-  // A director can score ANY group in the open round — see the group switcher
-  // below for what that is for. The round gate above still holds: this widens
-  // which match of the OPEN round is reachable, never which round is.
   const isDirector = !!user.isDirector;
-  const scorable = isDirector ? roundMatches : myMatches;
 
   // ── Hooks (always fire, in stable order) ──
   const [activeMatchId, setActiveMatchId] = useState(null);
+  // A director's explicit choice of round. null means "follow the tournament",
+  // which is what everybody starts on and what everybody who is not a director
+  // is pinned to. Held here rather than lifted, for the same reason the match
+  // selection is: it is which round THIS SCREEN is pointed at, not a fact about
+  // the tournament, and two directors' phones may honestly be on different ones.
+  const [pickedRound, setPickedRound] = useState(null);
   const [showScorecard, setShowScorecard] = useState(false);
   // Closest-to-the-pin prompt — the 0-based index of the par 3 it is asking
   // about, or null. `promptedCtp` is the session guard that keeps it to ONE
@@ -677,6 +693,43 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // null on any screen where the header isn't mounted.
   const [headerSlot, setHeaderSlot] = useState(null);
   useEffect(() => { setHeaderSlot(document.getElementById(HEADER_SLOT_ID)); }, []);
+
+  // THE GATE, resolved. The round this screen is pointed at: the tournament's
+  // current round unless a director has deliberately picked another one, and
+  // only ever a round that still exists — a pick left standing while the round
+  // it named was deleted falls back rather than pointing at nothing.
+  const viewRound = (isDirector && pickedRound != null && rounds.includes(pickedRound))
+    ? pickedRound
+    : currentRound;
+  // Off the round everybody else is on. Every warning below keys off this one
+  // value, so there is no state where the screen is somewhere unexpected and
+  // one of the three tells has been forgotten.
+  //
+  // A null currentRound — every round finalized, the event over — counts as
+  // off-round for anything the director opens. There is no live round to be
+  // ON, and that is the state where a stray edit is LEAST likely to be
+  // noticed, so it is the last state that should go unmarked.
+  const offRound = viewRound != null && viewRound !== currentRound;
+
+  // Only the viewed round's matches exist as far as the scoring surface is
+  // concerned — a match from another round is not merely hidden, it is not
+  // reachable, so no stale selection can put a score in it.
+  const roundMatches = useMemo(
+    () => matches.filter(m => m.round === viewRound),
+    [matches, viewRound]
+  );
+  const myMatches = useMemo(
+    () => roundMatches.filter(m => [...m.teamA, ...m.teamB].includes(userPid)),
+    [roundMatches, userPid]
+  );
+  // What the switcher lists, which is the one place that DOES cross rounds:
+  // every match in the tournament for a director, nothing for anybody else.
+  const switchable = useMemo(
+    () => (isDirector ? [...matches].sort((a, b) => (a.round - b.round) || ((a.matchNumber ?? 0) - (b.matchNumber ?? 0))) : []),
+    [isDirector, matches]
+  );
+  // A director can score ANY group in the round on screen.
+  const scorable = isDirector ? roundMatches : myMatches;
 
   // Resolved, not stored — the selection is re-derived from the matches the
   // gate currently allows. When a round is finalized under a player's feet,
@@ -752,6 +805,49 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
 
   // No more hooks below this line.
 
+  // Switching, wherever it is offered from. Positions the incoming match in
+  // the SAME render as the selection — leaving it to the effect below paints
+  // the outgoing hole for a frame first, the same flash returning to the tab
+  // used to have.
+  //
+  // Picking across rounds moves the ROUND too, in the same call: the switcher
+  // is the only door out of the current round, and a selection that set the
+  // match without setting the round would be resolved straight back by the
+  // gate above. A pick landing back on the live round clears the override
+  // rather than pinning it, so a director who wanders off and comes back is
+  // following the tournament again instead of holding a round that happens to
+  // match today.
+  const switchToMatch = (id) => {
+    const m = (isDirector ? switchable : scorable).find(x => x.id === id);
+    if (!m) return;
+    setPickedRound(m.round === currentRound ? null : m.round);
+    setActiveMatchId(id);
+    positionOn(id, pidsOf(m), scoresAt(m.round));
+  };
+
+  // A director gets one control covering every group in every round, which
+  // subsumes the multi-match case below — so the pills never render for one.
+  // It lives in the app header's right-hand slot (components/AppHeader): it
+  // is chrome, not part of the scoring flow, and up there it costs this
+  // screen nothing at all — not a row, not a corner of one. Portaled rather
+  // than lifted into the header, because what it switches is this screen's
+  // own selection and that state has no business moving up two components to
+  // be rendered in a band that has no idea a round is being scored.
+  //
+  // Rendered inside `shell` rather than in the two full-screen returns, so it
+  // survives the empty states as well. That is what keeps "the tournament is
+  // over" from being a dead end for the one person who still has work to do
+  // in it — the crown is up there on that screen too, and it is the way back
+  // into a finished round.
+  const directorSwitching = isDirector && switchable.length > 1;
+  const groupSwitcher = directorSwitching && headerSlot ? createPortal(
+    <GroupSwitcher
+      matches={switchable} current={match} currentRound={currentRound}
+      roundLocks={roundLocks} tPlayers={tPlayers}
+      userPid={userPid} onPick={switchToMatch}
+    />, headerSlot,
+  ) : null;
+
   // `1 0 auto` — grow to fill the view, never shrink below content. The
   // screen therefore fills a tall phone and, if even the tight density can't
   // fit a short one, spills into a normal scroll rather than clipping a
@@ -764,6 +860,9 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
       fontFamily: FONT,
       display: "flex", flexDirection: "column", flex: "1 0 auto", minHeight: 0,
     }}>
+      {/* Portals to the app header's right-hand slot — occupies nothing here,
+          on any branch. */}
+      {groupSwitcher}
       {children}
       <Toast message={toast} />
     </div>
@@ -775,19 +874,23 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
       {sub && <div style={{ fontSize: FS.small, lineHeight: 1.45 }}>{sub}</div>}
     </div>
   );
+  // What a director is told on an empty state that is only empty for them:
+  // the crown is in the header and it is the way out. Everybody else is told
+  // nothing extra, because for them these screens really are the end of it.
+  const viaCrown = directorSwitching ? " Use 👑 in the header to open any round." : "";
 
   // Nothing is open for scoring: either the schedule hasn't been built yet,
   // or the director has finalized the last round and the event is over.
-  if (currentRound == null) return rounds.length === 0
+  if (viewRound == null) return rounds.length === 0
     ? empty("⛳", "No rounds set up yet", "The tournament schedule hasn't been built.")
-    : empty("🏆", "The tournament is over", "Every round is final. Head to the Leaderboard for the result.");
+    : empty("🏆", "The tournament is over", `Every round is final. Head to the Leaderboard for the result.${viaCrown}`);
 
   if (!match) return empty(
     "⛳",
-    `You're not in a Round ${currentRound} match`,
+    `You're not in a Round ${viewRound} match`,
     myMatches.length === 0 && matches.some(m => [...m.teamA, ...m.teamB].includes(userPid))
-      ? `Scoring is open for Round ${currentRound} only. Your other rounds are on the Matches tab.`
-      : "Check the Matches tab once the draw is made."
+      ? `Scoring is open for Round ${viewRound} only. Your other rounds are on the Matches tab.${viaCrown}`
+      : `Check the Matches tab once the draw is made.${viaCrown}`
   );
 
   if (!course) return empty("⛳", `Round ${match.round} course not configured yet`);
@@ -1024,46 +1127,18 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
      its position in this player's own list — two players in the same match
      have to be looking at the same name for it.
 
-     GROUP SWITCHER, for a director, over every group in the round. A row of
+     GROUP SWITCHER, for a director, over every group in every round. A row of
      pills does not survive eight matches, and the thing a director needs to
      find is not a number but a foursome, so it is a button that opens a list
      naming who is in each. It is kept SEPARATE from the pills below because
      it does not get a row of its own on this screen — it is a badge that
-     rides on the Full Scorecard bar, so the one director on the course does
-     not cost every phone that is one 26px of score-button height all round.
-     See components/GroupSwitcher.
+     rides on the app header, so the one director on the course does not cost
+     every phone that is one 26px of score-button height all round.
+     See components/GroupSwitcher. It is built further up, next to `shell`,
+     because the empty states need it too.
 
-     Neither crosses rounds; the strip above owns that axis and only one round
-     of it is live.
-
-     Hoisted out of the tree below because the signed view needs it too: a
-     player with a signed card and an unsigned one has to be able to get
-     back to the one that still needs scores. */
-  // Switching, wherever it is offered from. Positions the incoming match in
-  // the SAME render as the selection — leaving it to the effect below paints
-  // the outgoing hole for a frame first, the same flash returning to the tab
-  // used to have.
-  const switchToMatch = (id) => {
-    const m = scorable.find(x => x.id === id);
-    setActiveMatchId(id);
-    if (m) positionOn(id, pidsOf(m), scoresAt(m.round));
-  };
-
-  // A director gets one control covering every group in the round, which
-  // subsumes the multi-match case below — so the pills never render for one.
-  // It lives in the app header's right-hand slot (components/AppHeader): it
-  // is chrome, not part of the scoring flow, and up there it costs this
-  // screen nothing at all — not a row, not a corner of one. Portaled rather
-  // than lifted into the header, because what it switches is this screen's
-  // own selection and that state has no business moving up two components to
-  // be rendered in a band that has no idea a round is being scored.
-  const directorSwitching = isDirector && roundMatches.length > 1;
-  const groupSwitcher = directorSwitching && headerSlot ? createPortal(
-    <GroupSwitcher
-      matches={roundMatches} current={match} tPlayers={tPlayers}
-      userPid={userPid} onPick={switchToMatch}
-    />, headerSlot,
-  ) : null;
+     The pills do not cross rounds. The switcher does, and it is the only
+     thing in the app that does — see "The director's way past it" above. */
 
   // Gated on `directorSwitching`, NOT on the portal: the slot is null for the
   // first render, and keying off that would flash a row of pills at a
@@ -1078,20 +1153,64 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     />
   ) : null;
 
+  // ── The off-round banner ─────────────────────────────────────────────
+  // The loudest of the three tells, and the only one that costs this screen
+  // any height — which it is worth, because it is the one in the eyeline of
+  // somebody typing. It renders ONLY when the screen is off the live round,
+  // so a director working the round everybody is playing pays nothing for it
+  // and sees exactly what they saw before this existed.
+  //
+  // The whole row is the way back — a director who opened Round 1 to fix one
+  // hole should not have to find the crown again to leave, and "return to the
+  // round the tournament is on" is the only thing they can want next. When
+  // there is no live round to return to it is a plain band instead of a
+  // button, rather than a control that looks like it goes somewhere and does
+  // nothing.
+  const offRoundBanner = offRound ? (() => {
+    const canReturn = currentRound != null;
+    const Tag = canReturn ? "button" : "div";
+    return (
+      <Tag
+        {...(canReturn ? { onClick: () => { setPickedRound(null); setActiveMatchId(null); } } : {})}
+        style={{
+          display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left",
+          marginBottom: 8, padding: "7px 10px", borderRadius: 8, flexShrink: 0,
+          background: `${BC.warn}${ALPHA.wash}`, border: `1px solid ${BC.warn}${ALPHA.line}`,
+          cursor: canReturn ? "pointer" : "default", fontFamily: FONT,
+        }}>
+        <span aria-hidden="true" style={{ fontSize: FS.small, lineHeight: 1 }}>⚠️</span>
+        <span style={{ minWidth: 0, flex: 1 }}>
+          <span style={{ display: "block", fontSize: FS.small, fontWeight: 800, letterSpacing: 0.5, color: BC.warn }}>
+            EDITING ROUND {match.round} — {LOCK_STATE_LABEL[roundLockState(roundLocks, match.round)]}
+          </span>
+          <span style={{ display: "block", fontSize: FS.label, color: BC.t3, lineHeight: 1.35 }}>
+            {canReturn
+              ? "Not the live round. Scores you change here move the leaderboard."
+              : "The event is over. Scores you change here move the final result."}
+          </span>
+        </span>
+        {canReturn && (
+          <span style={{ flexShrink: 0, fontSize: FS.label, fontWeight: 800, color: BC.t2, letterSpacing: 0.5 }}>
+            Rd {currentRound} ›
+          </span>
+        )}
+      </Tag>
+    );
+  })() : null;
+
   // ── Signed: the card replaces the scoring screen ──
   // Not a banner over the score buttons — the buttons are gone, because a
   // signed card has no scores left to enter and the screen's whole budget
   // (see useFitDensity) is better spent showing the card that was signed.
   if (signed) return shell(
     <>
+      {offRoundBanner}
       {matchSelector}
-      {/* Portals to the app header — no box of its own on either branch. */}
-      {groupSwitcher}
       <SignedCardPanel
         match={match} sig={sig} result={result} format={format}
         holePars={holePars} holeHcps={holeHcps} course={course}
         tPlayers={tPlayers} getScore={getScore} viewer={userTeam}
-        userPid={userPid} notify={notify}
+        userPid={userPid} notify={notify} isDirector={isDirector}
         onAttest={() => onAttestCard(match, userPid)}
         onUnsign={() => onUnsignCard(match)}
       />
@@ -1100,9 +1219,8 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
 
   return shell(
     <>
+      {offRoundBanner}
       {matchSelector}
-      {/* Portals to the app header's right-hand slot — nothing lands here. */}
-      {groupSwitcher}
 
       {/* Front 9 — hole strip + status row. */}
       <div style={{ display: "flex", gap: 3, marginBottom: HOLE_RING_REACH + 1, flexShrink: 0 }}>

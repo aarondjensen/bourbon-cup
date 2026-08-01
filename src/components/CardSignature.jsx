@@ -153,7 +153,7 @@ export function SignCardSheet({
 // attested they see the wait.
 export function SignedCardPanel({
   match, sig, result, format, holePars, holeHcps, course, tPlayers, getScore,
-  viewer, userPid, onAttest, onUnsign, notify,
+  viewer, userPid, onAttest, onUnsign, notify, isDirector = false,
 }) {
   const { confirm, confirmModal } = useConfirm();
   const [busy, setBusy] = useState(false);
@@ -181,13 +181,25 @@ export function SignedCardPanel({
   };
 
   const doUnsign = async () => {
+    // A director reaching a card they are not in, or a card everybody has
+    // already agreed to, is told what makes their case different — that the
+    // four people who signed it are not here, and that the result on the
+    // leaderboard moves as soon as a score does. The ordinary in-match unsign
+    // says none of that, because for the four of them none of it is true.
+    const asDirector = !inMatch || final;
     const ok = await confirm({
       eyebrow: `Round ${match.round}`,
-      title: "Unsign this card?",
+      title: final ? "Unsign this final card?" : "Unsign this card?",
       message: [
         `${nameOf(sig.signed_by)}'s signature is removed and every attestation on it is cleared.`,
         "",
         "The scores go back to being editable by anyone in the match. Nothing already posted is deleted — the card just stops being final.",
+        ...(asDirector ? [
+          "",
+          final
+            ? "This card was attested by the whole group. Undoing that is yours to do, but it undoes something four people agreed to — tell them."
+            : "You are not in this match. The players who signed it will not be asked.",
+        ] : []),
       ].join("\n"),
       confirmLabel: "Unsign",
       destructive: true,
@@ -295,16 +307,29 @@ export function SignedCardPanel({
         {/* The way back, and it stays open to ANY of the four rather than to
             the signer alone: the whole point of a second signature is that
             the person who typed the scores is not the only one who gets to
-            say whether they are right. Gone once the card is final —
-            unpicking that is a director's job, through Admin. */}
-        {inMatch && !final && (
+            say whether they are right.
+
+            For the four of them it closes once the card is final, unchanged.
+            A DIRECTOR keeps it in both cases — a card they are not in, and a
+            card that is final — because this is the only door to a score that
+            went in wrong, and every other route to it was a Firebase console
+            edit by hand. That is the same trade the group switcher makes one
+            screen up: the fix has to exist somewhere, and a director with a
+            confirm dialog in front of them is a better somewhere than a
+            document id typed into a web console.
+
+            It reads "Unsign" rather than "Unsign & edit" for a director not in
+            the match, because editing is not what they get — the scores become
+            editable, but signing the card back is still the group's. */}
+        {(isDirector || (inMatch && !final)) && (
           <button onClick={doUnsign} disabled={busy} style={{
             width: "100%", padding: "9px 0", marginTop: 6, borderRadius: 8,
-            background: "transparent", border: "none", color: BC.t3,
+            background: "transparent", border: "none",
+            color: final ? BC.warn : BC.t3,
             fontSize: FS.small, fontWeight: 700, cursor: busy ? "default" : "pointer",
             textDecoration: "underline", textUnderlineOffset: 3, fontFamily: FONT,
           }}>
-            Unsign &amp; edit
+            {inMatch && !final ? "Unsign & edit" : final ? "Unsign final card" : "Unsign this card"}
           </button>
         )}
       </div>
