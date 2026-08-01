@@ -567,9 +567,12 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
   // handicap is used and the round's MODE does not enter into it. The allowance
   // still applies — it decided the playing handicap itself.
   const parStrokeMap = (pid) => getStrokeMap(playingCH[pid] ?? 0);
+  // Classified on the LADDER of the format being scored — Stableford prices a
+  // hole four under and a triple bogey, Tilt stops at albatross and double —
+  // so the rung handed back is always one this round's table has a value for.
   const parResult = (pid, h) => {
     const net = netScore(getPlayerScores(pid)[h], h, parStrokeMap(pid));
-    return net == null ? null : parResultFor(net - holePars[h]);
+    return net == null ? null : parResultFor(net - holePars[h], holeFormat);
   };
   // Asked of the format the HOLES are being scored under, so the table always
   // matches the branch that reads it.

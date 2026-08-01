@@ -628,26 +628,56 @@ export const describeHolePoints = (spec) => {
 
 // ── Points against par ──
 // Two formats score a hole by what it was against PAR rather than against the
-// other side: Stableford and Tilt. They share one ladder of results and differ
-// only in what each rung pays — and in Tilt's case, in the multiplier that
-// rides on top of it.
+// other side: Stableford and Tilt. They are different games with different
+// tables — different rungs, different values, and in Tilt's case a multiplier
+// that rides on top.
 //
 // The rungs run best-first so a table renders in the order a golfer thinks.
-// The ladder is open at BOTH ends: `double_albatross` is "four under or
-// better" and `triple` is "triple bogey or worse", because a net score has no
-// floor and the table has to have a rung for whatever a card actually says.
-export const PAR_RESULTS = [
+// This list is the finest grain any format cuts to; each format's own ladder
+// below is a CONTIGUOUS slice of it, which is what lets a result be classified
+// once and then collapsed onto whichever ladder is being scored.
+const ALL_PAR_RESULTS = [
   "double_albatross", "albatross", "eagle", "birdie", "par", "bogey", "double", "triple",
 ];
 
-export const PAR_RESULT_LABELS = {
-  double_albatross: "Dbl Alb", albatross: "Albatross", eagle: "Eagle", birdie: "Birdie",
-  par: "Par", bogey: "Bogey", double: "Double", triple: "Triple +",
+// Each format's ladder.
+//
+// Stableford cuts finest: it prices a hole four under and it prices a triple
+// bogey, so both ends carry their own rung. Tilt stops at albatross and at
+// double bogey, exactly as it always has — anything better than one or worse
+// than the other falls onto that end rung, which is the behaviour every Tilt
+// round already stored was scored under.
+export const PAR_RESULTS_BY_FORMAT = {
+  stableford: ALL_PAR_RESULTS,
+  tilt: ["albatross", "eagle", "birdie", "par", "bogey", "double"],
 };
 
-// Which rung a hole landed on, from its net score's difference to par.
-export const parResultFor = (netVsPar) =>
-  netVsPar <= -4 ? "double_albatross"
+// The rungs a format's table actually has. Unknown formats get the full ladder
+// so a caller never has to handle an empty one.
+export const parResultsFor = (formatId) =>
+  PAR_RESULTS_BY_FORMAT[formatId] || ALL_PAR_RESULTS;
+
+const PAR_RESULT_NAMES = {
+  double_albatross: "Dbl Alb", albatross: "Albatross", eagle: "Eagle", birdie: "Birdie",
+  par: "Par", bogey: "Bogey", double: "Double", triple: "Triple",
+};
+
+// A rung's label, which depends on where the format's ladder ENDS: the bottom
+// rung swallows everything below it, so it reads "+". That is why Tilt shows
+// "Double +" and Stableford — which has a triple rung underneath — shows a
+// plain "Double" and puts the "+" on "Triple".
+export const parResultLabel = (formatId, rung) => {
+  const ladder = parResultsFor(formatId);
+  const suffix = rung === ladder[ladder.length - 1] ? " +" : "";
+  return (PAR_RESULT_NAMES[rung] || rung) + suffix;
+};
+
+// Which rung a hole landed on, from its net score's difference to par, on the
+// ladder the format being scored actually has. Classified at full grain and
+// then clamped onto that ladder's ends — so on Tilt a five-under is an
+// albatross and a quadruple bogey is a double, same as it has always scored.
+export const parResultFor = (netVsPar, formatId) => {
+  const fine = netVsPar <= -4 ? "double_albatross"
     : netVsPar === -3 ? "albatross"
       : netVsPar === -2 ? "eagle"
         : netVsPar === -1 ? "birdie"
@@ -655,18 +685,22 @@ export const parResultFor = (netVsPar) =>
             : netVsPar === 1 ? "bogey"
               : netVsPar === 2 ? "double"
                 : "triple";
+  const ladder = parResultsFor(formatId);
+  const at = (rung) => ALL_PAR_RESULTS.indexOf(rung);
+  const i = Math.min(Math.max(at(fine), at(ladder[0])), at(ladder[ladder.length - 1]));
+  return ALL_PAR_RESULTS[i];
+};
 
 // Each format's table, and the default a director starts from.
 //
 // Tilt's are the game's own — a harsher ladder where a double bogey actively
-// costs you. Stableford's middle rungs reproduce exactly what the engine
-// computed before the table was editable (`max(0, 2 - d)`), with a hole four
-// under paying 10 and a triple bogey or worse costing 3.
+// costs you — and they are untouched.
 //
-// Tilt's two outer rungs repeat their neighbours (16 and -4) because that is
-// precisely what the format scored when the ladder stopped at albatross and
-// double: a stored Tilt round settles the same before and after this table grew
-// two rows. They are the director's to change, like every other rung.
+// Stableford's middle rungs reproduce exactly what the engine computed before
+// the table was editable (`max(0, 2 - d)`), so no stored round changes by
+// gaining a table it never had. Its two outer rungs are the ones this format
+// prices and Tilt does not: a hole four under pays 10, a triple bogey or worse
+// costs 3.
 //
 // Every rung on both is editable, negatives included: a table that can only
 // ever pay is a table with no downside, which is the whole point of Tilt's.
@@ -675,10 +709,7 @@ export const PAR_POINTS_DEFAULTS = {
     double_albatross: 10, albatross: 5, eagle: 4, birdie: 3,
     par: 2, bogey: 1, double: 0, triple: -3,
   },
-  tilt: {
-    double_albatross: 16, albatross: 16, eagle: 8, birdie: 4,
-    par: 2, bogey: 0, double: -4, triple: -4,
-  },
+  tilt: { albatross: 16, eagle: 8, birdie: 4, par: 2, bogey: 0, double: -4 },
 };
 
 export const formatUsesParPoints = (formatId) => !!PAR_POINTS_DEFAULTS[formatId];
@@ -697,7 +728,7 @@ export const resolveParPoints = (formatId, saved) => {
     return Number.isFinite(n) ? n : fallback;
   };
   const out = {};
-  PAR_RESULTS.forEach(k => { out[k] = num(saved?.[k], def[k]); });
+  parResultsFor(formatId).forEach(k => { out[k] = num(saved?.[k], def[k]); });
   return out;
 };
 
@@ -719,17 +750,12 @@ export const resolveParPoints = (formatId, saved) => {
 // The hole that EARNS a multiplier does not get it; "the subsequent hole" does.
 // The rungs are the director's to set; these rules are not.
 
-// How many birdies a result is worth toward the multiplier — simply how many
-// under par it is, which is why a double albatross is four. Everything from a
-// par down takes you off Tilt and is therefore worth none. This is the
-// format's rule rather than the table's, so it does not follow what a rung was
-// edited to pay.
+// How many birdies a result is worth toward the multiplier. Everything from a
+// par down takes you off Tilt and is therefore worth none. Albatross is the top
+// of Tilt's ladder, so a hole four under arrives here as one — there is no
+// finer rung for this to answer for.
 export const tiltBirdieValue = (result) =>
-  result === "birdie" ? 1
-    : result === "eagle" ? 2
-      : result === "albatross" ? 3
-        : result === "double_albatross" ? 4
-          : 0;
+  result === "birdie" ? 1 : result === "eagle" ? 2 : result === "albatross" ? 3 : 0;
 
 // The multiplier a hole is scored at, from the streak of birdies carried into
 // it. One birdie doubles, two triples, and it keeps going — `streak + 1`.

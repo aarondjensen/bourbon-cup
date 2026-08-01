@@ -18,7 +18,7 @@ import {
   holeOptionsFor, resolveHoleMethod, HOLE_METHOD_LABELS, HOLE_METHOD_DESCRIPTIONS,
   formsFor, formDefaultFor, resolveFormOfPlay, formOfPlayLabel, describeFormOfPlay,
   handicapModeFor, allowanceStartsOn,
-  resolveParPoints, parPointsDefaultFor, formatUsesParPoints, PAR_RESULTS, PAR_RESULT_LABELS,
+  resolveParPoints, parPointsDefaultFor, formatUsesParPoints, parResultsFor, parResultLabel,
 } from "./constants";
 import {
   calcCH, calcCHForCourse, fmtScore,
@@ -3021,11 +3021,15 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                 hole's number is arrived at.
 
                 Both tables are the director's to set, and they are different
-                games: Stableford's defaults reproduce exactly what the engine
-                computed before the table existed, Tilt's are the harsher ladder
-                the format is named for. What Tilt's table cannot express — the
-                multiplier that rides on a birdie streak — is stated underneath,
-                because those rules are the game rather than a setting. */}
+                games — different RUNGS as well as different values, which is
+                why the row is built from the format's own ladder rather than
+                one shared list. Stableford prices a hole four under and a
+                triple bogey; Tilt's harsher ladder stops at albatross and
+                double, and the bottom rung of each carries the "+" that says
+                it swallows everything below it. What Tilt's table cannot
+                express — the multiplier that rides on a birdie streak — is
+                stated underneath, because those rules are the game rather than
+                a setting. */}
             {(() => {
               const fmtId = formRound.format;
               if (!formatUsesParPoints(fmtId)) return null;
@@ -3040,9 +3044,9 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>POINTS</div>
-                    {PAR_RESULTS.map(k => (
+                    {parResultsFor(fmtId).map(k => (
                       <div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                        <span style={{ fontSize: FS.label, color: BC.t3, fontWeight: 600 }}>{PAR_RESULT_LABELS[k]}</span>
+                        <span style={{ fontSize: FS.label, color: BC.t3, fontWeight: 600 }}>{parResultLabel(fmtId, k)}</span>
                         <input
                           type="number" step="1"
                           value={val(k)}
