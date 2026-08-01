@@ -1018,7 +1018,11 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
      GROUP SWITCHER, for a director, over every group in the round. A row of
      pills does not survive eight matches, and the thing a director needs to
      find is not a number but a foursome, so it is a button that opens a list
-     naming who is in each.
+     naming who is in each. It is kept SEPARATE from the pills below because
+     it does not get a row of its own on this screen — it is a badge that
+     rides on the Full Scorecard bar, so the one director on the course does
+     not cost every phone that is one 26px of score-button height all round.
+     See components/GroupSwitcher.
 
      Neither crosses rounds; the strip above owns that axis and only one round
      of it is live.
@@ -1036,14 +1040,16 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     if (m) positionOn(id, pidsOf(m), scoresAt(m.round));
   };
 
-  const matchSelector = isDirector && roundMatches.length > 1 ? (
-    // A director gets one control covering every group in the round (see
-    // GroupSwitcher), which subsumes the multi-match case below.
+  // A director gets one control covering every group in the round, which
+  // subsumes the multi-match case below — so the pills never render for one.
+  const groupSwitcher = isDirector && roundMatches.length > 1 ? (
     <GroupSwitcher
       matches={roundMatches} current={match} tPlayers={tPlayers}
       userPid={userPid} onPick={switchToMatch}
     />
-  ) : myMatches.length > 1 ? (
+  ) : null;
+
+  const matchSelector = groupSwitcher ? null : myMatches.length > 1 ? (
     <SegmentedToggle
       variant="pills"
       style={{ marginBottom: 10 }}
@@ -1060,6 +1066,13 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   if (signed) return shell(
     <>
       {matchSelector}
+      {/* The signed view has no Full Scorecard bar to ride on, and no score
+          buttons to protect either — so here the chip does get a row. */}
+      {groupSwitcher && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6, flexShrink: 0 }}>
+          {groupSwitcher}
+        </div>
+      )}
       <SignedCardPanel
         match={match} sig={sig} result={result} format={format}
         holePars={holePars} holeHcps={holeHcps} course={course}
@@ -1105,17 +1118,23 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           permanent Sign button would cost the score buttons a row for the
           entire round to be tappable at the end of it, which is the exact
           trade the Finalize card lost. */}
-      <button onClick={() => (canSign ? setShowSign(true) : setShowScorecard(true))} style={{
-        width: "100%", padding: canSign ? "9px 0" : fit.scorecardPad, borderRadius: 8,
-        marginBottom: fit.stack, cursor: "pointer", flexShrink: 0, fontFamily: FONT,
-        background: canSign ? BC.amberGlow : BC.card,
-        border: `1px solid ${canSign ? BC.amber : BC.bdr}${ALPHA.line}`,
-        color: canSign ? BC.amberInk : BC.t2,
-        fontSize: canSign ? FS.body : FS.small,
-        fontWeight: canSign ? 800 : 700, letterSpacing: 0.5,
-      }}>
-        {canSign ? "Complete — Sign Card" : "Full Scorecard"}
-      </button>
+      {/* The director's group chip rides along on the right of this bar (see
+          GroupSwitcher). A row is the one thing this screen cannot spare, and
+          this row is already here. */}
+      <div style={{ display: "flex", gap: 6, alignItems: "stretch", marginBottom: fit.stack, flexShrink: 0 }}>
+        <button onClick={() => (canSign ? setShowSign(true) : setShowScorecard(true))} style={{
+          flex: 1, minWidth: 0, padding: canSign ? "9px 0" : fit.scorecardPad, borderRadius: 8,
+          cursor: "pointer", fontFamily: FONT,
+          background: canSign ? BC.amberGlow : BC.card,
+          border: `1px solid ${canSign ? BC.amber : BC.bdr}${ALPHA.line}`,
+          color: canSign ? BC.amberInk : BC.t2,
+          fontSize: canSign ? FS.body : FS.small,
+          fontWeight: canSign ? 800 : 700, letterSpacing: 0.5,
+        }}>
+          {canSign ? "Complete — Sign Card" : "Full Scorecard"}
+        </button>
+        {groupSwitcher}
+      </div>
 
       {/* Why the button hasn't promoted — but only for holes the group has
           actually played (lib/cardSigs missingForCard). A hole nobody has

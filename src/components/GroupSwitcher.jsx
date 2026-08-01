@@ -18,11 +18,26 @@
 // group in front of them is not looking for "Match 6", they are looking for
 // the four people standing there. So this is a button that opens a list, and
 // the list leads with the names.
+//
+// ── Why the trigger is a crown over M6 and not a labelled pill ─────
+// This screen is fit to the device, not scrolled (lib/useFitDensity): every
+// pixel above the player cards comes out of the score buttons' height. The
+// trigger started as a right-aligned pill reading "👑 MATCH 1 ▾" on a row of
+// its own, which cost 26px of that budget — for one director, all round, on
+// every phone that is one.
+//
+// So it is a chip the size of a badge, and it does not get a row. It rides on
+// the Full Scorecard bar, which is full width and already there, so its
+// vertical cost is zero rather than merely small. Two lines because the crown
+// alone does not say WHICH group you are pointed at, and that is the question
+// a director asks it — but "Match" spelled out was never part of the answer at
+// a glance, and neither was the caret. The popup is the disclosure.
 import { useState } from "react";
 import { BC, FONT, FS, ALPHA, teamColor } from "../theme";
 import { Popup } from "./Popup";
 
 const label = (m, i) => `Match ${m.matchNumber ?? i + 1}`;
+const shortLabel = (m, i) => `M${m.matchNumber ?? i + 1}`;
 
 export function GroupSwitcher({ matches, current, tPlayers, userPid, onPick }) {
   const [open, setOpen] = useState(false);
@@ -32,23 +47,28 @@ export function GroupSwitcher({ matches, current, tPlayers, userPid, onPick }) {
 
   return (
     <>
-      {/* Right-aligned, and the only thing on its row: this is a tool, not
-          part of the scoring flow, so it sits out of the way of everything
-          below it rather than competing for the middle of the screen. */}
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6, flexShrink: 0 }}>
-        <button onClick={() => setOpen(true)} style={{
-          display: "flex", alignItems: "center", gap: 5,
-          padding: "3px 9px", borderRadius: 999, cursor: "pointer", fontFamily: FONT,
+      {/* No wrapper and no margin: the caller places this. On the scoring
+          screen it sits at the end of the Full Scorecard bar; the signed view
+          gives it a row, because that screen is not fighting for height. */}
+      <button onClick={() => setOpen(true)}
+        title={`${label(current, currentIdx)} — score another group`}
+        aria-label={`${label(current, currentIdx)}. Score another group`}
+        style={{
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          gap: 1, flexShrink: 0, alignSelf: "stretch", minWidth: 38,
+          padding: "2px 7px", borderRadius: 8, cursor: "pointer", fontFamily: FONT,
           background: BC.card, border: `1px solid ${BC.bdr}`,
-          color: BC.t2, fontSize: FS.label, fontWeight: 700, letterSpacing: 0.5,
         }}>
-          {/* The crown is the tell that this control is not what everyone
-              else on the course is looking at. */}
-          <span aria-hidden="true">👑</span>
-          {label(current, currentIdx)}
-          <span aria-hidden="true" style={{ color: BC.t3 }}>▾</span>
-        </button>
-      </div>
+        {/* The crown is the tell that this control is not what everyone else
+            on the course is looking at; the number under it is which group
+            the screen is currently pointed at. */}
+        <span aria-hidden="true" style={{ fontSize: FS.label, lineHeight: 1 }}>👑</span>
+        <span aria-hidden="true" style={{
+          fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.5, lineHeight: 1, color: BC.t2,
+        }}>
+          {shortLabel(current, currentIdx)}
+        </span>
+      </button>
 
       {open && (
         <Popup onClose={() => setOpen(false)} maxWidth={420} padding={0} portal showClose>
