@@ -50,6 +50,22 @@
 //       carries only left and right, which are the two that really do apply to
 //       every row.
 //
+//  ── The right-hand slot ───────────────────────────────────────────────
+//  HEADER_SLOT_ID marks an empty, absolutely-positioned box at the far right
+//  of this band. A screen with one piece of chrome that belongs up here —
+//  today only Scoring's director group chip — portals into it rather than
+//  spending a row of its own on it (see components/GroupSwitcher).
+//
+//  Absolute, so the mark and caption stay centred on the BAND rather than on
+//  whatever is left over beside the slot: an in-flow item on this row would
+//  shove the trophy off-centre by half its width the moment it appeared, and
+//  the header would visibly jump each time a director opened Scoring. Being
+//  out of flow also means the slot cannot make this band any taller, which is
+//  the whole reason the chip came up here.
+//
+//  The portal fills it from a screen further down the tree, so anything in it
+//  unmounts with that screen — nothing here has to know which tab is open.
+//
 //  flexShrink: 0 is not optional — the shell is a flex column with
 //  overflow: hidden, so without it a tall tab could compress this band and the
 //  clipped remainder would look like the header failing to fit.
@@ -64,6 +80,10 @@ import { getTournamentYear } from "../firebase";
 // edge-to-edge and in a browser tab with a translucent bar, the inset is real
 // and the 5px rides on top of it.
 const HEADER_SAFE_PAD = "calc(env(safe-area-inset-top, 0px) + 5px)";
+
+// The id a screen portals its header-right chrome into. Exported so the
+// portaling side names the same box this one renders.
+export const HEADER_SLOT_ID = "bc-header-slot";
 
 export function AppHeader({ location }) {
   return (
@@ -96,6 +116,16 @@ export function AppHeader({ location }) {
         fontSize: FS.label, fontWeight: 800, letterSpacing: 2.2, color: BC.t2,
         whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
       }}>{getTournamentYear()} · {(location || TOURNAMENT_LOCATION).toUpperCase()}</div>
+
+      {/* Right-hand slot — see the note at the top. Bottom-aligned with the
+          caption rather than centred on the band, so the chip sits level with
+          the type beside it instead of floating against the trophy. `right`
+          matches the scroll area's 10px content padding, not this band's 12,
+          so it lines up with the right edge of what's underneath it. */}
+      <div id={HEADER_SLOT_ID} style={{
+        position: "absolute", right: 10, bottom: 7,
+        display: "flex", alignItems: "flex-end",
+      }} />
     </div>
   );
 }

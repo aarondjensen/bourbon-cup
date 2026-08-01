@@ -26,12 +26,17 @@
 // its own, which cost 26px of that budget — for one director, all round, on
 // every phone that is one.
 //
-// So it is a chip the size of a badge, and it does not get a row. It rides on
-// the Full Scorecard bar, which is full width and already there, so its
-// vertical cost is zero rather than merely small. Two lines because the crown
-// alone does not say WHICH group you are pointed at, and that is the question
-// a director asks it — but "Match" spelled out was never part of the answer at
-// a glance, and neither was the caret. The popup is the disclosure.
+// So it is a chip the size of a badge, and it does not get a row — it does not
+// live on this screen at all. ScoreEntry portals it into the app header's
+// right-hand slot (components/AppHeader), which is chrome that is already on
+// screen and already that tall, so the scoring view pays nothing for it. That
+// is also where it belongs by rights: it is a tool for pointing the app at a
+// group, not a step in entering a score.
+//
+// Two lines because the crown alone does not say WHICH group you are pointed
+// at, and that is the question a director asks it — but "Match" spelled out
+// was never part of the answer at a glance, and neither was the caret. The
+// popup is the disclosure.
 import { useState } from "react";
 import { BC, FONT, FS, ALPHA, teamColor } from "../theme";
 import { Popup } from "./Popup";
@@ -47,16 +52,15 @@ export function GroupSwitcher({ matches, current, tPlayers, userPid, onPick }) {
 
   return (
     <>
-      {/* No wrapper and no margin: the caller places this. On the scoring
-          screen it sits at the end of the Full Scorecard bar; the signed view
-          gives it a row, because that screen is not fighting for height. */}
+      {/* No wrapper and no margin: the caller places this, and today the
+          caller portals it into a box in the app header. */}
       <button onClick={() => setOpen(true)}
         title={`${label(current, currentIdx)} — score another group`}
         aria-label={`${label(current, currentIdx)}. Score another group`}
         style={{
           display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          gap: 1, flexShrink: 0, alignSelf: "stretch", minWidth: 38,
-          padding: "2px 7px", borderRadius: 8, cursor: "pointer", fontFamily: FONT,
+          gap: 2, flexShrink: 0, minWidth: 38,
+          padding: "3px 7px", borderRadius: 8, cursor: "pointer", fontFamily: FONT,
           background: BC.card, border: `1px solid ${BC.bdr}`,
         }}>
         {/* The crown is the tell that this control is not what everyone else

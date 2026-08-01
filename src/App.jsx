@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, HOLE_BANNER, FS, segThumb, segTrack, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor, VP_BAND } from "./theme";
 import { playerLookup } from "./lib/players";
 import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, BOOTSTRAP_DIRECTOR } from "./firebase";
@@ -38,7 +39,7 @@ import { usePullToRefresh } from "./lib/usePullToRefresh";
 import { useFitDensity } from "./lib/useFitDensity";
 import { processLogo } from "./lib/logoBrand";
 import ErrorBoundary from "./components/ErrorBoundary";
-import { AppHeader } from "./components/AppHeader";
+import { AppHeader, HEADER_SLOT_ID } from "./components/AppHeader";
 import { Popup, ConfirmModal } from "./components/Popup";
 import { CtpPrompt } from "./components/CtpPrompt";
 import { DirectorFinalizeAlert, FinalizeRoundSheet } from "./components/FinalizeRound";
@@ -668,6 +669,13 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // The sign sheet. Only reachable from the promoted Full Scorecard button,
   // which only promotes on a complete card — see components/CardSignature.
   const [showSign, setShowSign] = useState(false);
+  // The header's right-hand slot, which the director's group chip portals
+  // into (components/AppHeader). Read in an effect rather than during render:
+  // the header and this screen commit together, so the box is not in the
+  // document yet the first time this renders. One extra render on mount, and
+  // null on any screen where the header isn't mounted.
+  const [headerSlot, setHeaderSlot] = useState(null);
+  useEffect(() => { setHeaderSlot(document.getElementById(HEADER_SLOT_ID)); }, []);
 
   // Resolved, not stored — the selection is re-derived from the matches the
   // gate currently allows. When a round is finalized under a player's feet,
@@ -1042,14 +1050,24 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
 
   // A director gets one control covering every group in the round, which
   // subsumes the multi-match case below — so the pills never render for one.
-  const groupSwitcher = isDirector && roundMatches.length > 1 ? (
+  // It lives in the app header's right-hand slot (components/AppHeader): it
+  // is chrome, not part of the scoring flow, and up there it costs this
+  // screen nothing at all — not a row, not a corner of one. Portaled rather
+  // than lifted into the header, because what it switches is this screen's
+  // own selection and that state has no business moving up two components to
+  // be rendered in a band that has no idea a round is being scored.
+  const directorSwitching = isDirector && roundMatches.length > 1;
+  const groupSwitcher = directorSwitching && headerSlot ? createPortal(
     <GroupSwitcher
       matches={roundMatches} current={match} tPlayers={tPlayers}
       userPid={userPid} onPick={switchToMatch}
-    />
+    />, headerSlot,
   ) : null;
 
-  const matchSelector = groupSwitcher ? null : myMatches.length > 1 ? (
+  // Gated on `directorSwitching`, NOT on the portal: the slot is null for the
+  // first render, and keying off that would flash a row of pills at a
+  // director for one frame before the chip took over.
+  const matchSelector = directorSwitching ? null : myMatches.length > 1 ? (
     <SegmentedToggle
       variant="pills"
       style={{ marginBottom: 10 }}
@@ -1066,13 +1084,8 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   if (signed) return shell(
     <>
       {matchSelector}
-      {/* The signed view has no Full Scorecard bar to ride on, and no score
-          buttons to protect either — so here the chip does get a row. */}
-      {groupSwitcher && (
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6, flexShrink: 0 }}>
-          {groupSwitcher}
-        </div>
-      )}
+      {/* Portals to the app header — no box of its own on either branch. */}
+      {groupSwitcher}
       <SignedCardPanel
         match={match} sig={sig} result={result} format={format}
         holePars={holePars} holeHcps={holeHcps} course={course}
@@ -1087,6 +1100,8 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   return shell(
     <>
       {matchSelector}
+      {/* Portals to the app header's right-hand slot — nothing lands here. */}
+      {groupSwitcher}
 
       {/* Front 9 — hole strip + status row. */}
       <div style={{ display: "flex", gap: 3, marginBottom: HOLE_RING_REACH + 1, flexShrink: 0 }}>
@@ -1118,23 +1133,17 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           permanent Sign button would cost the score buttons a row for the
           entire round to be tappable at the end of it, which is the exact
           trade the Finalize card lost. */}
-      {/* The director's group chip rides along on the right of this bar (see
-          GroupSwitcher). A row is the one thing this screen cannot spare, and
-          this row is already here. */}
-      <div style={{ display: "flex", gap: 6, alignItems: "stretch", marginBottom: fit.stack, flexShrink: 0 }}>
-        <button onClick={() => (canSign ? setShowSign(true) : setShowScorecard(true))} style={{
-          flex: 1, minWidth: 0, padding: canSign ? "9px 0" : fit.scorecardPad, borderRadius: 8,
-          cursor: "pointer", fontFamily: FONT,
-          background: canSign ? BC.amberGlow : BC.card,
-          border: `1px solid ${canSign ? BC.amber : BC.bdr}${ALPHA.line}`,
-          color: canSign ? BC.amberInk : BC.t2,
-          fontSize: canSign ? FS.body : FS.small,
-          fontWeight: canSign ? 800 : 700, letterSpacing: 0.5,
-        }}>
-          {canSign ? "Complete — Sign Card" : "Full Scorecard"}
-        </button>
-        {groupSwitcher}
-      </div>
+      <button onClick={() => (canSign ? setShowSign(true) : setShowScorecard(true))} style={{
+        width: "100%", padding: canSign ? "9px 0" : fit.scorecardPad, borderRadius: 8,
+        marginBottom: fit.stack, cursor: "pointer", flexShrink: 0, fontFamily: FONT,
+        background: canSign ? BC.amberGlow : BC.card,
+        border: `1px solid ${canSign ? BC.amber : BC.bdr}${ALPHA.line}`,
+        color: canSign ? BC.amberInk : BC.t2,
+        fontSize: canSign ? FS.body : FS.small,
+        fontWeight: canSign ? 800 : 700, letterSpacing: 0.5,
+      }}>
+        {canSign ? "Complete — Sign Card" : "Full Scorecard"}
+      </button>
 
       {/* Why the button hasn't promoted — but only for holes the group has
           actually played (lib/cardSigs missingForCard). A hole nobody has
