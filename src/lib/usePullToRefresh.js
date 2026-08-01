@@ -11,12 +11,34 @@
 // hook shape MNQ/WBC use, so the gesture stays identical across all
 // three apps.
 //
+// ── How a popup suppresses the gesture ──────────────────────────────
+// Two mechanisms, and the DOM one is the one that scales.
+//
+// Originally there was only `popupOpenRef`: App.jsx flipped it by hand from
+// whatever modal state it happened to remember, and a modal nobody added to
+// that expression was a modal the pull-to-refresh fought. It covered exactly
+// `menuOpen || finalizeOpen` — while BC by then had a dozen popups (the
+// scorecard, the course preview, the CTP prompt, the group switcher, the
+// edition switcher, every ConfirmModal), none of which suppressed anything.
+// Pull down inside one of them at its scroll top and the page behind it
+// started refreshing.
+//
+// The fix came back from WBC, which took this hook and wired it to the DOM
+// instead: <Popup> already stamps `data-popup` on its backdrop, so walking up
+// from the touch target tells us whether the touch landed inside a popup —
+// no state to keep in sync, and portaled and inline popups behave alike. This
+// is the hook Popup.jsx's own comment was written in anticipation of.
+//
+// `popupOpenRef` is kept because it covers what the marker cannot: the slide
+// menu, which is not a <Popup>. Either one suppresses; neither is required.
+//
 // What stays with the caller (App.jsx owns these, passes them in):
-//   • popupOpenRef        — a ref that reads true whenever a top-level
-//                           modal/menu is open, so the gesture no-ops
-//                           and doesn't fight the modal's own scroll.
-//                           Read via .current inside the handlers so a
-//                           popup toggle never forces handler re-install.
+//   • popupOpenRef        — optional. A ref that reads true whenever an
+//                           overlay that is NOT a <Popup> is showing, so
+//                           the gesture no-ops and doesn't fight that
+//                           overlay's own scroll. Read via .current inside
+//                           the handlers so toggling it never forces a
+//                           handler re-install.
 //   • hasNewBundle        — async () => boolean. Checks whether a newer
 //                           Vite build has shipped; when true the hook
 //                           hard-reloads so the user picks up the latest
@@ -70,16 +92,24 @@ export function usePullToRefresh({
   // container. Suppressed entirely while `refreshing` is true (one
   // refresh at a time) and while a popup is open. The "at top" check
   // walks up from the touch target to find the scrollClass element — if
-  // the target isn't inside it, the gesture is ignored (touches inside
-  // the slide menu, the login screen, or a modal). passive:false on
+  // the target isn't inside it, or the walk crosses a popup backdrop
+  // first, the gesture is ignored (touches inside the slide menu, the
+  // login screen, or a modal). passive:false on
   // touchmove is required because we preventDefault() to stop the
   // browser's native overscroll bounce while the user is pulling.
   useEffect(() => {
     if (refreshing) return;
 
+    // Walk up from the touch target. Returns the scroll container, or null if
+    // we cross a popup backdrop first (the gesture belongs to the modal, not
+    // the page behind it) or never find one at all (touch outside the app
+    // body). Checking the marker BEFORE the scroll class matters: a portaled
+    // popup is not inside the body div, but a non-portaled one is, and
+    // without this test that one would find the container and pull the page.
     const findScrollEl = (target) => {
       let el = target;
       while (el) {
+        if (el.dataset && el.dataset.popup != null) return null;
         if (el.classList && el.classList.contains(scrollClass)) return el;
         el = el.parentElement;
       }
