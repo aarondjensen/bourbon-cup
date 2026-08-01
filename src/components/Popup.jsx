@@ -42,11 +42,12 @@
 //  ─────
 //  • Stop-propagation on the inner card is automatic — children click
 //    freely without closing the popup.
-//  • The `data-popup` attribute is left on the backdrop as a hook for
-//    any future DOM-based popup detection. BC's pull-to-refresh instead
-//    suppresses via the state-driven popupOpenRef, so keep flipping that
-//    when you open a Popup (set it true while mounted) to keep the
-//    gesture from firing behind the modal.
+//  • The `data-popup` attribute on the backdrop is load-bearing, not
+//    decoration: usePullToRefresh walks up from the touch target and
+//    bails when it crosses one, which is how every popup — portaled or
+//    inline — suppresses the pull-to-refresh gesture without anyone
+//    remembering to register it anywhere. Don't remove it, and don't
+//    build a popup that skips this wrapper without adding the marker.
 //  • Colors come only from the live `BC` theme object; no team names or
 //    team colors are baked in, so this chrome is safe across any year's
 //    tournament config. ConfirmModal's confirm color is the primary

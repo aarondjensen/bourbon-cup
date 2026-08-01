@@ -4684,10 +4684,13 @@ export default function App() {
   // usePullToRefresh hook (src/lib/usePullToRefresh.js); it's wired up
   // below, after hasNewBundle. popupOpenRef stays here because the
   // caller owns it and passes it into the hook.
-  // popupOpenRef = true whenever a top-level modal/menu is showing. Read
-  // synchronously by the touch handlers (refs don't trigger re-renders
-  // and are always up-to-date). Updated via the effect below whenever
-  // menuOpen changes.
+  //
+  // It no longer has to list every modal in the app: anything rendered
+  // through <Popup> stamps `data-popup` on its backdrop and the hook
+  // suppresses on that by itself. What is left here is the overlays that
+  // are NOT popups — the slide-up menu, and the finalize sheet that opens
+  // from it. Read synchronously by the touch handlers (refs don't trigger
+  // re-renders and are always up to date).
   const popupOpenRef = useRef(false);
 
   const navRef = useRef(null);
@@ -4797,9 +4800,10 @@ export default function App() {
     setTimeout(() => setNotif(null), 2800);
   }, []);
 
-  // Keep popupOpenRef in sync with menuOpen so touch handlers see
-  // "popup is open" without having to participate in React's render cycle.
-  // If additional top-level modals get added later, OR them in here.
+  // Keep popupOpenRef in sync with the non-<Popup> overlays so touch
+  // handlers see "an overlay is open" without having to participate in
+  // React's render cycle. A new modal built on <Popup> needs nothing here;
+  // only another bespoke full-screen overlay would.
   useEffect(() => { popupOpenRef.current = menuOpen || finalizeOpen; }, [menuOpen, finalizeOpen]);
 
   // Reconcile the edition doc-id namespacing flag from the canonical edition

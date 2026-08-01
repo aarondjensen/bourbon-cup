@@ -22,7 +22,7 @@ import { useEffect, useRef, useState } from "react";
 // The first hole this group has not finished — where a screen should open.
 // Returns 0 for a card with nothing on it yet (start at the start) and for a
 // completed one (there is nothing to fast-forward to).
-export function openingHole(pids, score) {
+export function openingHole(pids = [], score) {
   if (pids.length === 0) return 0;
   const hasAny = pids.some(pid => {
     for (let h = 0; h < 18; h++) if (score(pid, h) > 0) return true;
