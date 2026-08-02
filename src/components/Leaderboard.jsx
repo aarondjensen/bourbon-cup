@@ -33,6 +33,7 @@
 //  the Scoring tab describes the same match.
 
 import { useState, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { BC, FONT, ALPHA, FS, ink, teamColor } from "../theme";
 import { playerLookup } from "../lib/players";
 import {
@@ -49,7 +50,8 @@ import { HoleStrip } from "./HoleStrip";
 import { FullScorecard } from "./FullScorecard";
 import { StickyTop } from "./ui";
 import { isRoundFinal } from "../lib/roundLocks";
-import { HOLE_COUNT, revealState, revealSummary, stepReveal } from "../lib/reveal";
+import { HOLE_COUNT, revealState, revealSummary, stepReveal, COUNTDOWN_HASH } from "../lib/reveal";
+import { FinalCountdown } from "./FinalCountdown";
 
 const ALL_ROUNDS = [1, 2, 3, 4];
 
@@ -640,7 +642,7 @@ function RevealControl({ through, onSet }) {
 
 // The banner, the own-side card and (for a director) the control, as one
 // panel that sits where the match rows would be.
-function SealedPanel({ through, ownCards, remaining, canReveal, onSetReveal }) {
+function SealedPanel({ through, ownCards, remaining, canReveal, onSetReveal, onOpenCountdown }) {
   return (
     <div style={{
       marginTop: 8, background: BC.card, borderRadius: 12, overflow: "hidden",
@@ -650,16 +652,30 @@ function SealedPanel({ through, ownCards, remaining, canReveal, onSetReveal }) {
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
           <span aria-hidden="true" style={{ fontSize: FS.small, lineHeight: 1 }}>🔒</span>
           <span style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 1, color: BC.amberInk }}>
-            SEALED · HOLE-BY-HOLE REVEAL
+            THE FINAL COUNTDOWN · SEALED
           </span>
           <span style={{ marginLeft: "auto", fontSize: FS.label, fontWeight: 800, color: BC.t3, letterSpacing: 0.5 }}>
             {through} / {HOLE_COUNT}
           </span>
         </div>
         <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5 }}>
-          {revealSummary(through)}. Nobody sees the other side until the cards are
-          turned over{remaining > 0 ? ` — ${fmtPts(remaining)} still to come` : ""}.
+          {revealSummary(through)}. Nobody sees the other side, and this board does
+          not move, until the cards are turned over
+          {remaining > 0 ? ` — ${fmtPts(remaining)} still to come` : ""}.
         </div>
+        {/* The way onto the television. Offered to EVERYBODY, not just the
+            director: the screen the room watches is signed in as whoever
+            happened to be holding the laptop, and a countdown only a director
+            could open would be a countdown nobody could put on the TV. The
+            controls inside it are still director-only. */}
+        <button onClick={onOpenCountdown} style={{
+          width: "100%", marginTop: 9, padding: "9px 0", borderRadius: 8,
+          background: BC.amberGlow, border: `1px solid ${BC.amber}${ALPHA.line}`,
+          color: BC.amberInk, fontFamily: FONT, fontSize: FS.body, fontWeight: 800,
+          letterSpacing: 1, cursor: "pointer",
+        }}>
+          📺 OPEN THE FINAL COUNTDOWN
+        </button>
       </div>
       {ownCards}
       {canReveal && <RevealControl through={through} onSet={onSetReveal} />}
@@ -793,7 +809,7 @@ function RoundSection({
 export function TeamLeaderboard({
   matches, holeData, ownHoleData, courses, tRounds, tPlayers, rounds, teams,
   hcpOverrides, teeAssignments, roundLocks, viewer,
-  canReveal = false, onSetReveal,
+  canReveal = false, onSetReveal, autoCountdown = false,
 }) {
   const [expandedMatch, setExpandedMatch] = useState(null);
   // Round open/closed. Absent key = follow the automatic rule below;
@@ -953,6 +969,64 @@ export function TeamLeaderboard({
   const barScale = Math.max(totalAvail, CUP_POINTS_TO_WIN ? toWin * 2 - 1 : 0);
   const pct = (v) => (barScale ? Math.min(100, (v / barScale) * 100) : 0);
 
+  // ── The Final Countdown ──────────────────────────────────────────
+  // Which round's countdown is on screen, or null. It renders as a portal
+  // onto document.body rather than inside this tab, because it is a
+  // television screen and it has no business inheriting the app's phone
+  // shell, its bottom nav or its scroll container.
+  //
+  // `autoCountdown` is App's reading of the #countdown hash at startup: the
+  // television is pointed at one URL and has to land on the countdown by
+  // itself, since nobody is going to walk over and tap the button after
+  // every refresh. Resolved during render rather than in an effect so the
+  // scoreboard never paints for a frame first — see the same pattern, for
+  // the same reason, in FinalCountdown's stagger.
+  const [countdownRound, setCountdownRound] = useState(null);
+  const [autoOpened, setAutoOpened] = useState(!autoCountdown);
+  if (!autoOpened) {
+    const rnd = roundNumbers.find((r) => roundMeta[r]?.seal?.sealed);
+    if (rnd != null) { setAutoOpened(true); setCountdownRound(rnd); }
+  }
+  // The hash follows the screen, so a refresh in front of sixteen people
+  // comes back to where it was.
+  const setHash = (on) => {
+    try {
+      const { pathname, search } = window.location;
+      window.history.replaceState(null, "", on ? `${pathname}${search}${COUNTDOWN_HASH}` : `${pathname}${search}`);
+    } catch { /* a browser that refuses to rewrite its own URL still runs the countdown */ }
+  };
+  const openCountdown = (rnd) => { setCountdownRound(rnd); setHash(true); };
+  const closeCountdown = () => { setCountdownRound(null); setHash(false); };
+
+  const countdown = countdownRound != null && (() => {
+    const rnd = countdownRound;
+    const meta = roundMeta[rnd];
+    const entry = meta?.results?.[0];
+    if (!entry) return null;
+    const { course, holePars, holeHcps } = getRoundCourseCtx({ roundLocks, round: rnd, tRounds, courses });
+    return createPortal(
+      <FinalCountdown
+        match={entry.match}
+        result={entry.result}
+        getScore={(pid, h) => (holeData?.[`${pid}_${rnd}`] || {})[h] || 0}
+        holePars={holePars}
+        holeHcps={holeHcps}
+        tPlayers={tPlayers}
+        teams={teams}
+        courseName={course?.name || null}
+        formatLabel={meta.fmt?.label || null}
+        through={meta.seal?.through ?? HOLE_COUNT}
+        totals={totals}
+        toWin={toWin}
+        clincher={clincher}
+        canAdvance={canReveal && !!onSetReveal}
+        onAdvance={(n) => onSetReveal(rnd, n)}
+        onClose={closeCountdown}
+      />,
+      document.body,
+    );
+  })();
+
   // What a round's section carries above its match rows. Three states, and
   // the third is the one that is easy to leave out: once the last hole is
   // turned over there is no panel left, but a DIRECTOR still needs the
@@ -975,6 +1049,7 @@ export function TeamLeaderboard({
         remaining={sealedOut?.remaining ?? 0}
         canReveal={!!drive}
         onSetReveal={drive || (() => {})}
+        onOpenCountdown={() => openCountdown(rnd)}
         ownCards={(ownResults[rnd] || []).map(({ match: m, result: r }) => (
           <OwnSideCard
             key={m.id}
@@ -1122,6 +1197,8 @@ export function TeamLeaderboard({
         )}
       </div>
       </StickyTop>
+
+      {countdown}
 
       {/* ── Rounds ── */}
       {roundNumbers.map((rnd) => (

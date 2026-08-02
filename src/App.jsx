@@ -37,6 +37,7 @@ import {
 } from "./lib/roundLocks";
 import {
   concealHoleData, revealState, sealDefaultFor, revealSummary, HOLE_COUNT,
+  COUNTDOWN_HASH,
 } from "./lib/reveal";
 import { usePullToRefresh } from "./lib/usePullToRefresh";
 import { useFitDensity } from "./lib/useFitDensity";
@@ -72,6 +73,17 @@ import {
   roundCardProgress, pendingAttestations,
 } from "./lib/cardSigs";
 import { useHoleAdvance } from "./lib/useHoleAdvance";
+
+// ── Landing straight on the Final Countdown ───────────────────────
+// Read ONCE, at module load, before React has rendered anything: the
+// television is pointed at `…/#countdown`, HDMI'd into the room, and it has
+// to come up on the countdown by itself — including after the refresh
+// somebody performs two minutes before everyone sits down. A constant
+// rather than a live hash listener because this is the app's STARTING
+// state; once it is running, opening and closing the countdown rewrites the
+// hash itself (see components/Leaderboard).
+const AUTO_COUNTDOWN =
+  typeof window !== "undefined" && window.location.hash === COUNTDOWN_HASH;
 
 // ── Bottom-nav safe-area cushion ──────────────────────────────────
 // Padding under the nav labels, so they clear the home indicator.
@@ -3528,11 +3540,12 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
               );
             })()}
 
-            {/* ── The reveal ─────────────────────────────────────────────
+            {/* ── The Final Countdown ────────────────────────────────────
                 The Bourbon Cup's closing round is played in the dark: scored
                 live on the course like any other, shown to nobody until
                 everyone is back at the house and the holes are turned over
-                one at a time. See lib/reveal.js.
+                one at a time on the television. See lib/reveal.js and
+                components/FinalCountdown.
 
                 It is a per-round switch rather than a property of the format
                 because sealing a round is a decision about the DAY, not about
@@ -3540,12 +3553,12 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                 to turn it off in the year somebody wants the last round live.
                 It opens ON for Team Best Ball and OFF for everything else.
 
-                What is NOT here: how far the reveal has got. That is driven
+                What is NOT here: how far the countdown has got. That is driven
                 from the Leaderboard, in front of the room, and putting it on
                 a tab that auto-saves would make giving the ending away a
                 side effect of editing a tee time. */}
             <RoundSectionHeading>
-              THE REVEAL
+              THE FINAL COUNTDOWN
             </RoundSectionHeading>
             {(() => {
               const seal = revealState(tRounds, editRound);
@@ -3577,24 +3590,38 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ ...segTrack({ compact: true }), width: "fit-content", marginBottom: 8 }}>
                     <button onClick={() => setSeal(false)} title="Scored and shown live, like every other round" style={pill(!sealed)}>
-                      Open{!sealed && <SegRule compact />}
+                      Off{!sealed && <SegRule compact />}
                     </button>
-                    <button onClick={() => setSeal(true)} title="Scored live, shown to nobody until the reveal" style={pill(sealed)}>
-                      Sealed{sealed && <SegRule compact />}
+                    <button onClick={() => setSeal(true)} title="Sealed all day, revealed hole by hole at the house" style={pill(sealed)}>
+                      On{sealed && <SegRule compact />}
                     </button>
                   </div>
-                  <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5 }}>
-                    {sealed
-                      ? "Scored live, shown to nobody. Each side sees only its own numbers; the scoreboard, the scoring screen and the stats tab all hold the result back until a director turns the holes over."
-                      : "Scored and shown live, like every other round."}
-                  </div>
+                  {/* What ON actually does, stated as the three separate
+                      guarantees it makes rather than as "it hides things" —
+                      a director turning this on is promising the field a
+                      blackout, and needs to know exactly how wide it is. */}
+                  {sealed ? (
+                    <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.6 }}>
+                      <div style={{ color: BC.amberInk, fontWeight: 800, letterSpacing: 0.5, marginBottom: 3 }}>
+                        ACTIVE — this round is sealed
+                      </div>
+                      · Each side sees only its own numbers, on the board and on the scoring screen.<br />
+                      · The leaderboard does not move — the cup total leaves this round out until it is revealed.<br />
+                      · The countdown is queued up: a director opens it from the Leaderboard and turns the holes over one at a time.
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5 }}>
+                      Scored and shown live, like every other round.
+                    </div>
+                  )}
                   {/* Only once the round is actually sealed in Firestore — a
                       toggle flipped a second ago has not been saved yet, and
-                      reporting a reveal state off the unsaved form would be
+                      reporting a countdown state off the unsaved form would be
                       reporting on a round that does not exist. */}
                   {seal.sealed && (
                     <div style={{ fontSize: FS.label, marginTop: 6, color: BC.amberInk, fontWeight: 700, lineHeight: 1.5 }}>
-                      🔒 {revealSummary(seal.through)} — the reveal is driven from the Leaderboard.
+                      🔒 {revealSummary(seal.through)} — driven from the Leaderboard, or from
+                      the television at {COUNTDOWN_HASH}.
                     </div>
                   )}
                 </div>
@@ -6500,6 +6527,7 @@ export default function App() {
             viewer={viewerTeam}
             canReveal={isDirector}
             onSetReveal={onSetReveal}
+            autoCountdown={AUTO_COUNTDOWN}
           />
         )}
         {view === "scoring" && (

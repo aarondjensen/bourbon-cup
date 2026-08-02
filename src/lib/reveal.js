@@ -159,3 +159,9 @@ export const revealSummary = (through) =>
   through <= 0
     ? "Sealed — nothing revealed yet"
     : `${through} of ${HOLE_COUNT} holes revealed`;
+
+// The hash the Final Countdown lives behind. It exists so the television can
+// be pointed at one URL, bookmarked, and survive the refresh somebody will
+// inevitably perform two minutes before everyone sits down — the app is a
+// single page with no router, so a hash is the whole of its addressing.
+export const COUNTDOWN_HASH = "#countdown";
