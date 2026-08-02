@@ -7,10 +7,11 @@
 //    • SegmentedToggle — the rounded pill tab switcher.
 //    • StickyTop       — the pinned control strip at the top of a tab.
 //    • Banner          — the brown section header strip.
+//    • PlayerName      — a name with its initial in the team's colour.
 //    • Toast           — the transient "slides down from the top" toast.
 //    • ScoreButtonRow  — the tappable par-relative score entry row.
 
-import { BC, FONT, ON_ACCENT, BROWN, BIRDIE_RED, HOLE_BANNER, SHADOW, ALPHA, dimHex, FS, segThumb, segTrack } from "../theme";
+import { BC, FONT, ON_ACCENT, BROWN, BIRDIE_RED, HOLE_BANNER, SHADOW, ALPHA, dimHex, teamColor, FS, segThumb, segTrack } from "../theme";
 
 
 // The rule that marks the thumb. A child rather than a border because it is
@@ -119,6 +120,32 @@ export function Banner({ children, background = BROWN, color = ON_ACCENT }) {
       <div style={{ fontSize: FS.small, color, fontWeight: 800, letterSpacing: 2 }}>{children}</div>
     </div>
   );
+}
+
+// ── PlayerName ──
+// A player's name with its first letter in their team's colour.
+//
+// The scoring screen stacks four names with nothing but a dashed rule to say
+// which two are on which side, and the rule is easy to miss on a phone held
+// at arm's length in the sun. One coloured letter puts the side on every
+// name without spending a row, a badge or a swatch — and it is the same
+// thing the Full Scorecard already does with its initials column, so this is
+// the treatment spreading rather than a new one arriving.
+//
+// Returns a fragment, not a wrapper: every caller already has a span with its
+// own size, weight, clipping and ellipsis on it, and those must keep applying
+// to the whole name. Only the colour of the first character changes.
+//
+// An unknown team leaves the name entirely alone — a roster row with no side
+// is a data problem, and inventing a colour for it would hide that.
+export function PlayerName({ name, team }) {
+  const s = String(name ?? "");
+  if (!s) return null;
+  const c = team === "A" || team === "B" ? teamColor(team) : null;
+  if (!c) return s;
+  return <>
+    <span style={{ color: c }}>{s.slice(0, 1)}</span>{s.slice(1)}
+  </>;
 }
 
 // ── Toast ──

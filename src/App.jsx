@@ -49,7 +49,7 @@ import { DirectorFinalizeAlert, FinalizeRoundSheet } from "./components/Finalize
 import { MissingCardNote, SignCardSheet, SignedCardPanel } from "./components/CardSignature";
 import { AccountView } from "./components/AccountView";
 import { initForegroundNotifications, syncAppBadge } from "./lib/notifications";
-import { SegmentedToggle, SegRule, StickyTop, Banner, Toast, HoleNavigator, ScoreButtonRow } from "./components/ui";
+import { SegmentedToggle, SegRule, StickyTop, Banner, PlayerName, Toast, HoleNavigator, ScoreButtonRow } from "./components/ui";
 import { GroupSwitcher } from "./components/GroupSwitcher";
 import { useConfirm } from "./lib/useConfirm";
 import { useStableCallback } from "./lib/useStableCallback";
@@ -1562,7 +1562,12 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
                   which over four cards is most of the difference between the
                   scoring screen fitting a phone and having to be scrolled. */}
               <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 3, minWidth: 0, flexShrink: 0 }}>
-                <span style={{ fontSize: FS.body, fontWeight: 700, color: BC.t1, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>{tp?.name || pid}</span>
+                {/* `team` here is the side of THIS match, not the roster row —
+                    they agree in every real draw, and the match is the thing
+                    on screen. */}
+                <span style={{ fontSize: FS.body, fontWeight: 700, color: BC.t1, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>
+                  <PlayerName name={tp?.name || pid} team={team} />
+                </span>
                 <span title={chTitle} style={{ fontSize: FS.small, fontWeight: 700, color: BC.hcpBlue, flexShrink: 0 }}>
                   ({ch}{reduced ? "*" : ""})
                 </span>
