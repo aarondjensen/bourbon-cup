@@ -126,6 +126,25 @@ export function FieldCard({ players, pars, hcps, scoreFor, strokesFor, skins, gr
           </div>
         )}
 
+        {/* Who took each hole. It sits with the other header rows rather than
+            under the field: it is the answer, and sixteen rows is too far to
+            scroll to find out how the nine went. The amber cells below are
+            the same answer read down instead of across — this row is also the
+            only place a push is stated in words rather than implied by a
+            column with nothing lit in it. */}
+        <div style={{ display: "flex", height: 17, borderTop: `1px solid ${BC.bdr}`, background: `${BC.amber}${ALPHA.wash}` }}>
+          <div style={labelCell({ color: BC.amberInk })}>SKIN</div>
+          {idx.map(h => {
+            const w = winnerAt[h];
+            return (
+              <div key={h} style={{ ...holeCell, fontSize: FS.micro, fontWeight: 800, color: w ? BC.amberInk : BC.t3 }}>
+                {w ? initials(w.name) : "–"}
+              </div>
+            );
+          })}
+          <div style={totCell({ color: BC.amberInk })}>{nineCount}</div>
+        </div>
+
         {/* One row per player in the round */}
         {players.map(p => {
           const won = idx.filter(h => winnerAt[h]?.pid === p.player_id).length;
@@ -148,23 +167,6 @@ export function FieldCard({ players, pars, hcps, scoreFor, strokesFor, skins, gr
             </div>
           );
         })}
-
-        {/* Who took each hole. The amber cells above already say it, but they
-            say it sixteen rows apart — this is the same answer read across
-            instead of down, and it is the only place a push is stated in
-            words rather than implied by an unlit column. */}
-        <div style={{ display: "flex", height: 17, borderTop: `1px solid ${BC.bdr}`, background: `${BC.amber}${ALPHA.wash}` }}>
-          <div style={labelCell({ color: BC.amberInk })}>SKIN</div>
-          {idx.map(h => {
-            const w = winnerAt[h];
-            return (
-              <div key={h} style={{ ...holeCell, fontSize: FS.micro, fontWeight: 800, color: w ? BC.amberInk : BC.t3 }}>
-                {w ? initials(w.name) : "–"}
-              </div>
-            );
-          })}
-          <div style={totCell({ color: BC.amberInk })}>{nineCount}</div>
-        </div>
       </div>
     </div>
   );

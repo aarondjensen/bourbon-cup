@@ -4809,35 +4809,26 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
             </div>
           )}
 
-          {/* Round tabs */}
-          {roundList.length > 1 && (
-            <SegmentedToggle
-              variant="pills"
-              style={{ marginBottom: 10 }}
-              options={roundList.map(r => [r, `Rd ${r}`])}
-              value={shownRound}
-              onChange={setActiveRound}
-            />
-          )}
-
-          {/* The round's card, whole field, with the skins on it.
-              Collapsible and shut by default: the pot and the leaders are
-              the glance, and a nine-by-sixteen grid above the fold would
-              push both off a phone. */}
-          <div
-            onClick={() => setCardOpen(o => !o)}
-            style={{
-              display: "flex", alignItems: "center", gap: 8, cursor: "pointer",
-              background: BC.card, border: `1px solid ${cardOpen ? BC.amber + ALPHA.line : BC.bdr}`,
-              borderRadius: 8, padding: "9px 12px", marginBottom: cardOpen ? 8 : 0,
+          {/* Round tabs — and the way into the card.
+              A round pill opens that round's scorecard underneath it, and
+              tapping the open round again shuts it. There is no separate
+              "Scorecard" header to tap: the round IS the thing being opened,
+              so a second control saying so was a row of chrome asking the
+              same question twice.
+              Rendered even for a one-round tournament, where the pills would
+              otherwise be pointless — with the header gone they are the only
+              way to reach the card. */}
+          <SegmentedToggle
+            variant="pills"
+            style={{ marginBottom: cardOpen ? 8 : 0 }}
+            options={roundList.map(r => [r, `Rd ${r}`])}
+            value={cardOpen ? shownRound : null}
+            onChange={r => {
+              if (r === shownRound && cardOpen) { setCardOpen(false); return; }
+              setActiveRound(r);
+              setCardOpen(true);
             }}
-          >
-            <span style={{ fontSize: FS.label, fontWeight: 800, color: BC.amberInk, letterSpacing: 0.6 }}>SCORECARD</span>
-            <span style={{ flex: 1, fontSize: FS.small, color: BC.t3 }}>
-              {shownSkins.filter(s => s.winner).length} of 18 holes won
-            </span>
-            <span style={{ fontSize: FS.small, color: BC.t3 }}>{cardOpen ? "▾" : "▸"}</span>
-          </div>
+          />
 
           {cardOpen && (
             <FieldCard
