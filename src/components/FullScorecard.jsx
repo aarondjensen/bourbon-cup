@@ -117,11 +117,21 @@ const initials = (name) =>
 //  An empty cell keeps the same height AND still draws its stroke dots:
 //  a blank card at the turn is how a player checks where their shots
 //  fall on the nine they are about to play.
-export function ScoreCell({ score, par, strokes = 0, size = CELL, color }) {
+//
+//  `skin` fills the cell amber — the score took the hole outright. It is
+//  used by the field card (components/FieldCard) and by nothing on a match
+//  card, because a match card holds four of the field's players and cannot
+//  know whether a low number here was low across the round.
+//
+//  The fill sits UNDER the notation rather than replacing it, and the ring
+//  and the digit both switch to ON_AMBER: a skin is very often a birdie,
+//  and a treatment that ate the ring would trade the card's oldest piece of
+//  language for its newest.
+export function ScoreCell({ score, par, strokes = 0, size = CELL, color, skin = false }) {
   const s = size;
   const sh = s + 8;      // the ring/box is a little larger than the digit
   const dotH = 9;        // the stroke-dot lane above it
-  const bc = color || BC.t2;
+  const bc = skin ? ON_AMBER : (color || BC.t2);
 
   const dots = strokes > 0 && (
     <span style={{ color: BC.hcpBlue, fontSize: FS.micro, fontWeight: 800, letterSpacing: 1, lineHeight: 1 }}>
@@ -179,8 +189,9 @@ export function ScoreCell({ score, par, strokes = 0, size = CELL, color }) {
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", height: dotH + sh, justifyContent: "flex-end" }}>
       {lane}
       <div style={{ position: "relative", width: sh, height: sh, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {skin && <div style={{ position: "absolute", inset: -1, borderRadius: 4, background: BC.amber }} />}
         {border}
-        <span style={{ fontSize: s, fontWeight: 700, color: color || BC.t1 }}>{score}</span>
+        <span style={{ position: "relative", fontSize: s, fontWeight: skin ? 800 : 700, color: skin ? ON_AMBER : (color || BC.t1) }}>{score}</span>
       </div>
     </div>
   );

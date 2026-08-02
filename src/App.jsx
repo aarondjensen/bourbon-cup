@@ -58,6 +58,7 @@ import { EditionSwitcher } from "./components/EditionSwitcher";
 import { GhinLinkButton, GhinSyncButton } from "./components/GhinLink";
 import { TeamLeaderboard } from "./components/Leaderboard";
 import { FullScorecard } from "./components/FullScorecard";
+import { FieldCard } from "./components/FieldCard";
 import { MatchSetup } from "./components/MatchSetup";
 import {
   GROUPS_COL, groupsDocId, encodeGroups, decodeGroups,
@@ -4619,6 +4620,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   const [editPot, setEditPot] = useState(false);
   const [potInput, setPotInput] = useState("");
   const [grossMode, setGrossMode] = useState(false);
+  const [cardOpen, setCardOpen] = useState(false);
 
   // The rounds that actually exist, not a hardcoded 1-4: a two-round
   // tournament used to get two empty tabs, and a fifth round never appeared
@@ -4649,12 +4651,33 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
     };
   };
 
+  // Every player's stroke allocation for a round, built once.
+  //
+  // Net skins are handicap-derived, so they answer to the round lock too — a
+  // settled skin must not change hands because someone synced a GHIN index the
+  // next morning. Uses the canonical buildStrokeMap so handicaps over 18 wrap
+  // correctly (a hole can get 2+ strokes); the old inline lookup capped every
+  // hole at 1.
+  //
+  // The field card reads the SAME maps to draw its stroke dots, so a dot
+  // printed on a cell is always the stroke the skin was decided with.
+  const strokeMapsFor = (round) => {
+    const { tr: tr2, course: course2, hcps } = roundSetup(round);
+    const maps = {};
+    tPlayers.forEach(p => {
+      const ch = getRoundCH({
+        roundLocks, round, pid: p.player_id, players: tPlayers,
+        course: course2, chOverrides: hcpOverrides, teeAssignments, roundTee: tr2?.tee_box,
+      });
+      maps[p.player_id] = buildStrokeMap(ch, hcps);
+    });
+    return maps;
+  };
+
   // Compute skins for a round
   const computeSkins = (round, gross) => {
-    // Net skins are handicap-derived, so they answer to the round lock too —
-    // a settled skin must not change hands because someone synced a GHIN
-    // index the next morning.
-    const { tr: tr2, course: course2, pars, hcps } = roundSetup(round);
+    const { pars } = roundSetup(round);
+    const maps = gross ? null : strokeMapsFor(round);
 
     const skins = [];
     for (let h = 0; h < 18; h++) {
@@ -4662,14 +4685,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
         const raw = (holeData[`${p.player_id}_${round}`] || {})[h];
         if (raw == null) return null;
         if (gross) return { pid: p.player_id, name: p.name, score: raw };
-        // Net: strokes off the frozen CH when the round is locked. Uses the
-        // canonical buildStrokeMap so handicaps over 18 wrap correctly (a hole
-        // can get 2+ strokes) — the old inline lookup capped every hole at 1.
-        const ch = getRoundCH({
-          roundLocks, round, pid: p.player_id, players: tPlayers,
-          course: course2, chOverrides: hcpOverrides, teeAssignments, roundTee: tr2?.tee_box,
-        });
-        const strokes = buildStrokeMap(ch, hcps)[h] || 0;
+        const strokes = maps[p.player_id]?.[h] || 0;
         return { pid: p.player_id, name: p.name, score: raw - strokes };
       }).filter(Boolean);
 
@@ -4687,6 +4703,23 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   allSkins.forEach(s => { skinCount[s.winner.pid] = (skinCount[s.winner.pid] || 0) + 1; });
   const totalSkins = allSkins.length;
   const perSkin = totalSkins > 0 ? (skinsPot / totalSkins).toFixed(2) : "0.00";
+
+  // ── What the field card is drawn from ──
+  // The shown round's setup, skins and stroke maps, resolved once. Every one
+  // of these is safe with a null round (no schedule yet): roundSetup falls
+  // back to a par-4 course, and a scoreless round yields no skins.
+  const shownSetup = roundSetup(shownRound);
+  const shownSkins = computeSkins(shownRound, grossMode);
+  // Only when something is going to draw a dot with them.
+  const shownStrokeMaps = (grossMode || !cardOpen) ? {} : strokeMapsFor(shownRound);
+  // Team, then name. Skins is an individual game and the sides mean nothing
+  // to it, but the roster is grouped this way on every other screen, and a
+  // player looking for their own row among sixteen finds it faster in the
+  // order they already know than in one sorted by a number that moves.
+  const fieldPlayers = [...tPlayers].sort((a, b) =>
+    String(a.team || "").localeCompare(String(b.team || "")) ||
+    String(a.name || "").localeCompare(String(b.name || ""))
+  );
 
   // One commit path for the pot, reached by blur — Enter just blurs the
   // field. Committing on both fired two Firestore writes for one edit.
@@ -4787,19 +4820,36 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
             />
           )}
 
-          {/* Hole-by-hole skins for active round */}
-          {computeSkins(shownRound, grossMode).map(s => (
-            <div key={s.hole} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", background: BC.card, borderRadius: 8, marginBottom: 4, border: `1px solid ${s.winner ? BC.amber + ALPHA.line : BC.bdr}` }}>
-              {/* nowrap: at 40px "Hole 10" broke over two lines and doubled the
-                  row height for exactly half the list. */}
-              <span style={{ fontSize: FS.small, fontWeight: 700, color: BC.t3, width: 54, flexShrink: 0, whiteSpace: "nowrap" }}>Hole {s.hole + 1}</span>
-              <span style={{ fontSize: FS.label, color: BC.t3, width: 34, flexShrink: 0, whiteSpace: "nowrap" }}>Par {s.par}</span>
-              <span style={{ flex: 1, minWidth: 0, fontSize: FS.small, fontWeight: 600, color: s.winner ? BC.amberInk : BC.t3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {s.winner ? `${s.winner.name} (${s.score})` : s.tied ? "Tied — pushed" : "—"}
-              </span>
-              {s.winner && <span style={{ fontSize: FS.label, color: BC.amberInk, fontWeight: 700 }}>🏆 Skin</span>}
-            </div>
-          ))}
+          {/* The round's card, whole field, with the skins on it.
+              Collapsible and shut by default: the pot and the leaders are
+              the glance, and a nine-by-sixteen grid above the fold would
+              push both off a phone. */}
+          <div
+            onClick={() => setCardOpen(o => !o)}
+            style={{
+              display: "flex", alignItems: "center", gap: 8, cursor: "pointer",
+              background: BC.card, border: `1px solid ${cardOpen ? BC.amber + ALPHA.line : BC.bdr}`,
+              borderRadius: 8, padding: "9px 12px", marginBottom: cardOpen ? 8 : 0,
+            }}
+          >
+            <span style={{ fontSize: FS.label, fontWeight: 800, color: BC.amberInk, letterSpacing: 0.6 }}>SCORECARD</span>
+            <span style={{ flex: 1, fontSize: FS.small, color: BC.t3 }}>
+              {shownSkins.filter(s => s.winner).length} of 18 holes won
+            </span>
+            <span style={{ fontSize: FS.small, color: BC.t3 }}>{cardOpen ? "▾" : "▸"}</span>
+          </div>
+
+          {cardOpen && (
+            <FieldCard
+              players={fieldPlayers}
+              pars={shownSetup.pars}
+              hcps={shownSetup.hcps}
+              scoreFor={(pid, h) => (holeData[`${pid}_${shownRound}`] || {})[h] || 0}
+              strokesFor={(pid, h) => shownStrokeMaps[pid]?.[h] || 0}
+              skins={shownSkins}
+              gross={grossMode}
+            />
+          )}
         </div>
       )}
 
