@@ -59,6 +59,7 @@ import { GhinLinkButton, GhinSyncButton } from "./components/GhinLink";
 import { TeamLeaderboard } from "./components/Leaderboard";
 import { FullScorecard } from "./components/FullScorecard";
 import { FieldCard } from "./components/FieldCard";
+import { BuyInEditor } from "./components/BuyIns";
 import { MatchSetup } from "./components/MatchSetup";
 import {
   GROUPS_COL, groupsDocId, encodeGroups, decodeGroups,
@@ -4614,7 +4615,7 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
 // Groups tag their own par 3s from the Scoring tab as they walk off the green
 // — provisional, `approved: false` — and the director settles each hole from
 // this screen. See onSetCtp for why that split exists.
-function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeData, ctpData, skinsPot, onSetCtp, onUpdatePot, user, roundLocks, hcpOverrides, teeAssignments, teams }) {
+function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeData, ctpData, skinsPot, buyIns, onSetCtp, onUpdatePot, onUpdateBuyIns, user, roundLocks, hcpOverrides, teeAssignments, teams }) {
   const [activeTab, setActiveTab] = useState("skins");
   const [activeRound, setActiveRound] = useState(null);
   const [editPot, setEditPot] = useState(false);
@@ -4625,6 +4626,23 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // the skins card would mean opening one tab silently rearranged the other.
   const [ctpRound, setCtpRound] = useState(null);
   const [ctpOpen, setCtpOpen] = useState(false);
+  const [editBuyIns, setEditBuyIns] = useState(null); // "skins" | "ctp" | null
+
+  // ── Who is playing for what ──
+  // A null list means the director has never tagged anybody, and that means
+  // EVERYBODY — so a tournament that never opens the buy-in panel behaves
+  // exactly as it did before buy-ins existed.
+  const inField = (ids) => (ids == null ? tPlayers : tPlayers.filter(p => ids.includes(p.player_id)));
+  const skinsField = inField(buyIns?.skinsIn);
+  const ctpField = inField(buyIns?.ctpIn);
+  const ctpInSet = new Set(ctpField.map(p => p.player_id));
+
+  // The pot is COUNTED from the buy-ins once a buy-in price exists. Until one
+  // does, the hand-typed pot stands and stays editable — which is the only
+  // thing a tournament already under way has.
+  const skinsCounted = (buyIns?.skinsAmount || 0) > 0;
+  const skinsPotValue = skinsCounted ? skinsField.length * buyIns.skinsAmount : skinsPot;
+  const ctpPotValue = (buyIns?.ctpAmount || 0) > 0 ? ctpField.length * buyIns.ctpAmount : 0;
 
   // The rounds that actually exist, not a hardcoded 1-4: a two-round
   // tournament used to get two empty tabs, and a fifth round never appeared
@@ -4668,7 +4686,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   const strokeMapsFor = (round) => {
     const { tr: tr2, course: course2, hcps } = roundSetup(round);
     const maps = {};
-    tPlayers.forEach(p => {
+    skinsField.forEach(p => {
       const ch = getRoundCH({
         roundLocks, round, pid: p.player_id, players: tPlayers,
         course: course2, chOverrides: hcpOverrides, teeAssignments, roundTee: tr2?.tee_box,
@@ -4685,7 +4703,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
 
     const skins = [];
     for (let h = 0; h < 18; h++) {
-      const scores = tPlayers.map(p => {
+      const scores = skinsField.map(p => {
         const raw = (holeData[`${p.player_id}_${round}`] || {})[h];
         if (raw == null) return null;
         if (gross) return { pid: p.player_id, name: p.name, score: raw };
@@ -4706,7 +4724,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   const skinCount = {};
   allSkins.forEach(s => { skinCount[s.winner.pid] = (skinCount[s.winner.pid] || 0) + 1; });
   const totalSkins = allSkins.length;
-  const perSkin = totalSkins > 0 ? (skinsPot / totalSkins).toFixed(2) : "0.00";
+  const perSkin = totalSkins > 0 ? (skinsPotValue / totalSkins).toFixed(2) : "0.00";
 
   // ── What the field card is drawn from ──
   // The shown round's setup, skins and stroke maps, resolved once. Every one
@@ -4720,7 +4738,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // to it, but the roster is grouped this way on every other screen, and a
   // player looking for their own row among sixteen finds it faster in the
   // order they already know than in one sorted by a number that moves.
-  const fieldPlayers = [...tPlayers].sort((a, b) =>
+  const fieldPlayers = [...skinsField].sort((a, b) =>
     String(a.team || "").localeCompare(String(b.team || "")) ||
     String(a.name || "").localeCompare(String(b.name || ""))
   );
@@ -4744,7 +4762,10 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
     return pars.flatMap((p, h) => {
       if (p !== 3) return [];
       const rec = ctpData[`${r}_${h}`];
-      return rec?.player_id ? [{ round: r, hole: h, ...rec }] : [];
+      // A tag naming somebody who is not in the CTP game does not score. It
+      // still shows on its hole — the document is the hole's answer — but the
+      // board and the payout are for the players who bought in.
+      return rec?.player_id && ctpInSet.has(rec.player_id) ? [{ round: r, hole: h, ...rec }] : [];
     });
   });
   const ctpLeaders = Object.values(ctpTags.reduce((acc, t) => {
@@ -4782,7 +4803,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
           rather than taking it away. */}
       <StickyTop>
         <SegmentedToggle
-          options={[["skins", "🎰 Skins"], ["ctp", "🎯 Closest to Pin"]]}
+          options={[["skins", "Skins"], ["ctp", "Closest to Pin"]]}
           value={activeTab} onChange={setActiveTab} letterSpacing={0.5}
         />
       </StickyTop>
@@ -4792,31 +4813,63 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
       {roundList.length > 0 && activeTab === "skins" && (
         <div>
           {/* Pot */}
-          <div style={{ background: BC.card, borderRadius: 12, padding: "12px 14px", marginBottom: 12, border: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>SKINS POT</div>
-              {editPot ? (
-                <input autoFocus type="number" inputMode="decimal" value={potInput} onChange={e => setPotInput(e.target.value)}
-                  onBlur={commitPot}
-                  onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
-                  style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold, background: "transparent", border: "none", borderBottom: `1px solid ${BC.amber}`, outline: "none", width: 100, fontFamily: FONT }} />
-              ) : (
-                // Seed the field from the LIVE pot at the moment editing opens,
-                // not at mount: the value arrives from Firestore after the
-                // first render, and another director can change it while this
-                // screen is open. Seeding at mount meant a director who tapped
-                // in and straight back out saved a stale pot over the real one.
-                <div onClick={() => { if (user?.isDirector) { setPotInput(String(skinsPot)); setEditPot(true); } }}
-                  style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold, cursor: user?.isDirector ? "pointer" : "default" }}>
-                  ${skinsPot.toFixed(2)}
-                </div>
-              )}
+          <div style={{ background: BC.card, borderRadius: 12, marginBottom: editBuyIns === "skins" ? 0 : 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
+            <div style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>SKINS POT</div>
+                {/* Once a buy-in price is set the pot is COUNTED, not typed, so
+                    the inline editor gives way — the way to change it is to
+                    change who is in. A tournament with no buy-in price keeps
+                    the hand-typed pot exactly as it was. */}
+                {skinsCounted ? (
+                  <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold }}>${skinsPotValue.toFixed(2)}</div>
+                ) : editPot ? (
+                  <input autoFocus type="number" inputMode="decimal" value={potInput} onChange={e => setPotInput(e.target.value)}
+                    onBlur={commitPot}
+                    onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                    style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold, background: "transparent", border: "none", borderBottom: `1px solid ${BC.amber}`, outline: "none", width: 100, fontFamily: FONT }} />
+                ) : (
+                  // Seed the field from the LIVE pot at the moment editing opens,
+                  // not at mount: the value arrives from Firestore after the
+                  // first render, and another director can change it while this
+                  // screen is open. Seeding at mount meant a director who tapped
+                  // in and straight back out saved a stale pot over the real one.
+                  <div onClick={() => { if (user?.isDirector) { setPotInput(String(skinsPot)); setEditPot(true); } }}
+                    style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold, cursor: user?.isDirector ? "pointer" : "default" }}>
+                    ${skinsPot.toFixed(2)}
+                  </div>
+                )}
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: FS.label, color: BC.t3 }}>{totalSkins} skins won</div>
+                <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>${perSkin} / skin</div>
+              </div>
             </div>
-            <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: FS.label, color: BC.t3 }}>{totalSkins} skins won</div>
-              <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>${perSkin} / skin</div>
-            </div>
+            {user?.isDirector && (
+              <div
+                onClick={() => setEditBuyIns(v => (v === "skins" ? null : "skins"))}
+                style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "8px 14px", borderTop: `1px solid ${BC.bdr}` }}
+              >
+                <span style={{ flex: 1, fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.6 }}>
+                  {skinsField.length} IN{skinsCounted ? ` · $${buyIns.skinsAmount} EACH` : ""}
+                </span>
+                <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.amberInk, letterSpacing: 0.6 }}>
+                  BUY-INS {editBuyIns === "skins" ? "▾" : "▸"}
+                </span>
+              </div>
+            )}
           </div>
+
+          {user?.isDirector && editBuyIns === "skins" && (
+            <BuyInEditor
+              players={tPlayers}
+              amount={buyIns?.skinsAmount || 0}
+              ids={buyIns?.skinsIn ?? null}
+              onChange={patch => onUpdateBuyIns(
+                "amount" in patch ? { skins_buyin: patch.amount } : { skins_in: patch.ids }
+              )}
+            />
+          )}
 
           {/* Gross/Net toggle */}
           <SegmentedToggle
@@ -4886,6 +4939,54 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
             ? empty("🎯", "No par 3s yet", "Closest-to-the-pin holes come from the course. They appear here once a round has a course with a par 3 on it.")
             : (
               <>
+                {/* CTP POT — the same card as the skins pot, minus the typed
+                    fallback. CTP never had a hand-entered pot to preserve, so
+                    it is counted from the buy-ins or it is nothing.
+                    Hidden from players until there IS one: this card is new,
+                    and "$0.00" is not worth a row on a tournament whose
+                    director has not set a CTP buy-in. The director keeps it
+                    either way — it is where they set one. */}
+                {(ctpPotValue > 0 || user?.isDirector) && (
+                <div style={{ background: BC.card, borderRadius: 12, marginBottom: editBuyIns === "ctp" ? 0 : 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
+                  <div style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>CTP POT</div>
+                      <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold }}>${ctpPotValue.toFixed(2)}</div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: FS.label, color: BC.t3 }}>{ctpTags.length} pin{ctpTags.length !== 1 ? "s" : ""} taken</div>
+                      <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>
+                        ${(ctpTags.length > 0 ? ctpPotValue / ctpTags.length : 0).toFixed(2)} / pin
+                      </div>
+                    </div>
+                  </div>
+                  {user?.isDirector && (
+                    <div
+                      onClick={() => setEditBuyIns(v => (v === "ctp" ? null : "ctp"))}
+                      style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "8px 14px", borderTop: `1px solid ${BC.bdr}` }}
+                    >
+                      <span style={{ flex: 1, fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.6 }}>
+                        {ctpField.length} IN{(buyIns?.ctpAmount || 0) > 0 ? ` · $${buyIns.ctpAmount} EACH` : ""}
+                      </span>
+                      <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.amberInk, letterSpacing: 0.6 }}>
+                        BUY-INS {editBuyIns === "ctp" ? "▾" : "▸"}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                )}
+
+                {user?.isDirector && editBuyIns === "ctp" && (
+                  <BuyInEditor
+                    players={tPlayers}
+                    amount={buyIns?.ctpAmount || 0}
+                    ids={buyIns?.ctpIn ?? null}
+                    onChange={patch => onUpdateBuyIns(
+                      "amount" in patch ? { ctp_buyin: patch.amount } : { ctp_in: patch.ids }
+                    )}
+                  />
+                )}
+
                 {/* CTP LEADERS, the same shape as SKINS LEADERS. Where skins
                     print money, this prints the closest the player has been
                     all week — the only other number a CTP has. */}
@@ -4953,7 +5054,12 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                                 onChange={e => onSetCtp(ctpShownRound, hole, e.target.value || null, { distanceFt: e.target.value === winnerId ? rec?.distance_ft ?? null : null, approved: true })}
                                 style={{ flex: 1, minWidth: 0, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, color: BC.t1, fontSize: FS.small, padding: "4px 6px", fontFamily: FONT }}>
                                 <option value="">-- Not set --</option>
-                                {tPlayers.map(p => <option key={p.player_id} value={p.player_id}>{p.name}</option>)}
+                                {/* Only players who bought into CTP are offered.
+                                    A hole already tagged to somebody since taken
+                                    out still shows their name in the row below —
+                                    that is what the document says — but they
+                                    cannot be picked again. */}
+                                {ctpField.map(p => <option key={p.player_id} value={p.player_id}>{p.name}</option>)}
                               </select>
                             ) : (
                               <span style={{ flex: 1, minWidth: 0, fontSize: FS.small, fontWeight: 600, color: winner ? BC.amberInk : BC.t3 }}>{winner ? winner.name : "Not set"}</span>
@@ -5325,6 +5431,12 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [ctpData, setCtpData] = useState({});     // { "round_hole": record }
   const [skinsPot, setSkinsPot] = useState(0);
+  // Side-game buy-ins, from bc_settings_main. Each `*In` is an ARRAY of player
+  // ids, or NULL when no director has ever touched it — and null means
+  // everybody, which is what every tournament played before this existed was.
+  // An empty array is a different answer (nobody), so the two must not be
+  // collapsed. See components/BuyIns.
+  const [buyIns, setBuyIns] = useState({ skinsAmount: 0, skinsIn: null, ctpAmount: 0, ctpIn: null });
   const [historicalData, setHistoricalData] = useState([]);
   // The saved team-name overrides (from the bc_settings/team_names doc).
   // Defaults come from constants so the fallback names live in one place.
@@ -5755,7 +5867,15 @@ export default function App() {
     }));
     unsubs.push(db.subscribe("bc_tournament_settings", f, rows => {
       const s = rows.find(r => r.id === editionDocId("bc_settings_main"));
-      if (s?.skins_pot) setSkinsPot(s.skins_pot);
+      if (s?.skins_pot != null) setSkinsPot(s.skins_pot);
+      // `Array.isArray` is the whole test: an absent field reads as null
+      // (everybody in), a stored [] reads as [] (nobody in).
+      setBuyIns({
+        skinsAmount: s?.skins_buyin || 0,
+        skinsIn: Array.isArray(s?.skins_in) ? s.skins_in : null,
+        ctpAmount: s?.ctp_buyin || 0,
+        ctpIn: Array.isArray(s?.ctp_in) ? s.ctp_in : null,
+      });
     }));
     unsubs.push(db.subscribe("bc_historical", [{ field: "type", op: "==", value: "year" }], setHistoricalData));
     unsubs.push(db.subscribe("bc_tee_assignments", f, rows => {
@@ -6129,6 +6249,23 @@ export default function App() {
   const onUpdatePot = useCallback(async (amt) => {
     setSkinsPot(amt);
     await db.upsert("bc_tournament_settings", { id: editionDocId("bc_settings_main"), tournament_id: TOURNAMENT_ID, skins_pot: amt });
+  }, []);
+  // Buy-ins, onto the same settings document — which the rules already make
+  // director-write and everybody-read, so none of this needs a rules deploy.
+  //
+  // A MERGE of only the named fields, deliberately: writing the whole shape
+  // every time would materialise `skins_in: null` as a stored field and
+  // destroy the distinction between "never configured" and "nobody in".
+  // Applied locally first so sixteen taps down a roster feel immediate.
+  const onUpdateBuyIns = useCallback(async (patch) => {
+    setBuyIns(b => ({
+      ...b,
+      ...("skins_buyin" in patch ? { skinsAmount: patch.skins_buyin } : {}),
+      ...("skins_in" in patch ? { skinsIn: patch.skins_in } : {}),
+      ...("ctp_buyin" in patch ? { ctpAmount: patch.ctp_buyin } : {}),
+      ...("ctp_in" in patch ? { ctpIn: patch.ctp_in } : {}),
+    }));
+    await db.upsert("bc_tournament_settings", { id: editionDocId("bc_settings_main"), tournament_id: TOURNAMENT_ID, ...patch });
   }, []);
   const onSetRound = useCallback(async (r) => { await db.upsert("bc_rounds", r); }, []);
   // ── Turning a hole over ──────────────────────────────────────────
@@ -6699,8 +6836,10 @@ export default function App() {
             holeData={revealedHoleData}
             ctpData={ctpData}
             skinsPot={skinsPot}
+            buyIns={buyIns}
             onSetCtp={onSetCtp}
             onUpdatePot={onUpdatePot}
+            onUpdateBuyIns={onUpdateBuyIns}
             user={user}
             roundLocks={roundLocksData}
             hcpOverrides={hcpOverridesData}
