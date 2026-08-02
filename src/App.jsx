@@ -4572,28 +4572,62 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
 
 
 // ── Betting View ──
-function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData, skinsPot, onSetSkin, onSetCtp, onUpdatePot, user, enrichedRounds, roundLocks, hcpOverrides, teeAssignments, teams }) {
+//
+// The two side games that run across the whole tournament instead of inside
+// any one match. They are built on opposite principles, deliberately:
+//
+// SKINS ARE DERIVED, never stored. Low score on a hole takes it, a tie pushes
+// it, and the pot divides by however many were won. There is no skins editor
+// anywhere in the app on purpose — a stored winner is a second answer that can
+// disagree with the card, and the card is the one the field signed. (`bc_skins`
+// predates this; nothing writes it and nothing reads it.)
+//
+// CTP IS CAPTURED, because it is the one thing here the card does not record.
+// Groups tag their own par 3s from the Scoring tab as they walk off the green
+// — provisional, `approved: false` — and the director settles each hole from
+// this screen. See onSetCtp for why that split exists.
+function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeData, ctpData, skinsPot, onSetCtp, onUpdatePot, user, roundLocks, hcpOverrides, teeAssignments, teams }) {
   const [activeTab, setActiveTab] = useState("skins");
-  const [activeRound, setActiveRound] = useState(1);
+  const [activeRound, setActiveRound] = useState(null);
   const [editPot, setEditPot] = useState(false);
-  const [potInput, setPotInput] = useState(String(skinsPot));
+  const [potInput, setPotInput] = useState("");
   const [grossMode, setGrossMode] = useState(false);
 
-  const tr = tRounds.find(t => t.round_number === activeRound);
-  const course = courses.find(c => c.id === tr?.course_id);
-  const holePars = resolveHolePars(course);
-  const par3s = holePars.map((p, i) => ({ hole: i, par: p })).filter(h => h.par === 3);
+  // The rounds that actually exist, not a hardcoded 1-4: a two-round
+  // tournament used to get two empty tabs, and a fifth round never appeared
+  // at all.
+  const roundList = rounds?.length ? rounds : [];
+  // Open on the round being played, and never leave the round toggle pointing
+  // at a round that has since been deleted off the schedule.
+  const shownRound = roundList.includes(activeRound) ? activeRound
+    : roundList.includes(currentRound) ? currentRound
+    : (roundList[0] ?? null);
+
+  // A round's course and hole tables, resolved the way every other scoring
+  // surface resolves them: through the round LOCK when there is one. A locked
+  // round froze its course, so reading the live round doc instead would re-par
+  // a settled hole if the director later re-pointed the round somewhere else.
+  //
+  // Both tabs go through this. The CTP grid used to read `course.hole_pars`
+  // raw, which meant it could offer a different set of par 3s than the ones
+  // the Scoring tab actually prompted on.
+  const roundSetup = (round) => {
+    const tr2 = tRounds.find(t => t.round_number === round);
+    const bLock = lockForRound(roundLocks, round);
+    const course2 = courses.find(c => c.id === (bLock?.course_id || tr2?.course_id));
+    return {
+      tr: tr2, lock: bLock, course: course2,
+      pars: resolveHolePars(course2, bLock),
+      hcps: resolveHoleHcps(course2, bLock),
+    };
+  };
 
   // Compute skins for a round
   const computeSkins = (round, gross) => {
-    const tr2 = tRounds.find(t => t.round_number === round);
     // Net skins are handicap-derived, so they answer to the round lock too —
     // a settled skin must not change hands because someone synced a GHIN
     // index the next morning.
-    const bLock = lockForRound(roundLocks, round);
-    const course2 = courses.find(c => c.id === (bLock?.course_id || tr2?.course_id));
-    const pars = resolveHolePars(course2, bLock);
-    const hcps = resolveHoleHcps(course2, bLock);
+    const { tr: tr2, course: course2, pars, hcps } = roundSetup(round);
 
     const skins = [];
     for (let h = 0; h < 18; h++) {
@@ -4612,42 +4646,72 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
         return { pid: p.player_id, name: p.name, score: raw - strokes };
       }).filter(Boolean);
 
-      if (scores.length < 2) { skins.push({ hole: h, winner: null, tied: false }); continue; }
+      if (scores.length < 2) { skins.push({ hole: h, winner: null, tied: false, par: pars[h] }); continue; }
       const min = Math.min(...scores.map(s => s.score));
       const winners = scores.filter(s => s.score === min);
       if (winners.length === 1) skins.push({ hole: h, winner: winners[0], score: min, par: pars[h] });
-      else skins.push({ hole: h, winner: null, tied: true, score: min });
+      else skins.push({ hole: h, winner: null, tied: true, score: min, par: pars[h] });
     }
     return skins;
   };
 
-  const allSkins = [1,2,3,4].flatMap(r => computeSkins(r, grossMode).filter(s => s.winner).map(s => ({ ...s, round: r })));
+  const allSkins = roundList.flatMap(r => computeSkins(r, grossMode).filter(s => s.winner).map(s => ({ ...s, round: r })));
   const skinCount = {};
   allSkins.forEach(s => { skinCount[s.winner.pid] = (skinCount[s.winner.pid] || 0) + 1; });
   const totalSkins = allSkins.length;
   const perSkin = totalSkins > 0 ? (skinsPot / totalSkins).toFixed(2) : "0.00";
 
+  // One commit path for the pot, reached by blur — Enter just blurs the
+  // field. Committing on both fired two Firestore writes for one edit.
+  const commitPot = () => {
+    setEditPot(false);
+    const amt = parseFloat(potInput);
+    onUpdatePot(Number.isFinite(amt) && amt > 0 ? amt : 0);
+  };
+
+  const empty = (icon, title, sub) => (
+    <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 20px", textAlign: "center" }}>
+        <div style={{ fontSize: FS.jumbo, marginBottom: 12, opacity: 0.4 }}>{icon}</div>
+        <div style={{ fontSize: FS.lead, fontWeight: 700, color: BC.t1, marginBottom: 6, letterSpacing: 0.3 }}>{title}</div>
+        <div style={{ fontSize: FS.small, color: BC.t3, maxWidth: 280, lineHeight: 1.5 }}>{sub}</div>
+      </div>
+    </div>
+  );
+
   return (
     <div style={{ fontFamily: FONT }}>
-      {/* Tab toggle */}
-      <SegmentedToggle
-        options={[["skins", "🎰 Skins"], ["ctp", "🎯 Closest to Pin"]]}
-        value={activeTab} onChange={setActiveTab} style={{ marginBottom: 14 }}
-      />
+      {/* Tab toggle. Pinned so this tab's lead control sits exactly where
+          every other tab's does, and so the skins list scrolls under it
+          rather than taking it away. */}
+      <StickyTop>
+        <SegmentedToggle
+          options={[["skins", "🎰 Skins"], ["ctp", "🎯 Closest to Pin"]]}
+          value={activeTab} onChange={setActiveTab} letterSpacing={0.5}
+        />
+      </StickyTop>
 
-      {activeTab === "skins" && (
+      {roundList.length === 0 && empty("🥃", "No bets yet", "Skins and closest-to-the-pin open once the tournament has a round on the schedule.")}
+
+      {roundList.length > 0 && activeTab === "skins" && (
         <div>
           {/* Pot */}
           <div style={{ background: BC.card, borderRadius: 12, padding: "12px 14px", marginBottom: 12, border: `1px solid ${BC.bdr}`, display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>SKINS POT</div>
               {editPot ? (
-                <input autoFocus type="number" value={potInput} onChange={e => setPotInput(e.target.value)}
-                  onBlur={() => { onUpdatePot(parseFloat(potInput)||0); setEditPot(false); }}
-                  onKeyDown={e => { if (e.key === "Enter") { onUpdatePot(parseFloat(potInput)||0); setEditPot(false); }}}
+                <input autoFocus type="number" inputMode="decimal" value={potInput} onChange={e => setPotInput(e.target.value)}
+                  onBlur={commitPot}
+                  onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
                   style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold, background: "transparent", border: "none", borderBottom: `1px solid ${BC.amber}`, outline: "none", width: 100, fontFamily: FONT }} />
               ) : (
-                <div onClick={() => user?.isDirector && setEditPot(true)} style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold, cursor: user?.isDirector ? "pointer" : "default" }}>
+                // Seed the field from the LIVE pot at the moment editing opens,
+                // not at mount: the value arrives from Firestore after the
+                // first render, and another director can change it while this
+                // screen is open. Seeding at mount meant a director who tapped
+                // in and straight back out saved a stale pot over the real one.
+                <div onClick={() => { if (user?.isDirector) { setPotInput(String(skinsPot)); setEditPot(true); } }}
+                  style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold, cursor: user?.isDirector ? "pointer" : "default" }}>
                   ${skinsPot.toFixed(2)}
                 </div>
               )}
@@ -4686,20 +4750,24 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
           )}
 
           {/* Round tabs */}
-          <SegmentedToggle
-            variant="pills"
-            style={{ marginBottom: 10 }}
-            options={[1,2,3,4].map(r => [r, `Rd ${r}`])}
-            value={activeRound}
-            onChange={setActiveRound}
-          />
+          {roundList.length > 1 && (
+            <SegmentedToggle
+              variant="pills"
+              style={{ marginBottom: 10 }}
+              options={roundList.map(r => [r, `Rd ${r}`])}
+              value={shownRound}
+              onChange={setActiveRound}
+            />
+          )}
 
           {/* Hole-by-hole skins for active round */}
-          {computeSkins(activeRound, grossMode).map(s => (
-            <div key={s.hole} style={{ display: "flex", alignItems: "center", padding: "7px 12px", background: BC.card, borderRadius: 8, marginBottom: 4, border: `1px solid ${s.winner ? BC.amber + ALPHA.line : s.tied ? BC.bdr : BC.bdr}` }}>
-              <span style={{ fontSize: FS.small, fontWeight: 700, color: BC.t3, width: 40 }}>Hole {s.hole + 1}</span>
-              <span style={{ fontSize: FS.label, color: BC.t3, width: 30 }}>Par {holePars[s.hole]}</span>
-              <span style={{ flex: 1, fontSize: FS.small, fontWeight: 600, color: s.winner ? BC.amberInk : s.tied ? BC.t3 : BC.t3 }}>
+          {computeSkins(shownRound, grossMode).map(s => (
+            <div key={s.hole} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", background: BC.card, borderRadius: 8, marginBottom: 4, border: `1px solid ${s.winner ? BC.amber + ALPHA.line : BC.bdr}` }}>
+              {/* nowrap: at 40px "Hole 10" broke over two lines and doubled the
+                  row height for exactly half the list. */}
+              <span style={{ fontSize: FS.small, fontWeight: 700, color: BC.t3, width: 54, flexShrink: 0, whiteSpace: "nowrap" }}>Hole {s.hole + 1}</span>
+              <span style={{ fontSize: FS.label, color: BC.t3, width: 34, flexShrink: 0, whiteSpace: "nowrap" }}>Par {s.par}</span>
+              <span style={{ flex: 1, minWidth: 0, fontSize: FS.small, fontWeight: 600, color: s.winner ? BC.amberInk : BC.t3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {s.winner ? `${s.winner.name} (${s.score})` : s.tied ? "Tied — pushed" : "—"}
               </span>
               {s.winner && <span style={{ fontSize: FS.label, color: BC.amberInk, fontWeight: 700 }}>🏆 Skin</span>}
@@ -4708,14 +4776,15 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
         </div>
       )}
 
-      {activeTab === "ctp" && (
+      {roundList.length > 0 && activeTab === "ctp" && (
         <div>
           <div style={{ fontSize: FS.small, color: BC.t3, marginBottom: 12 }}>Closest to the pin on all par 3s — groups tag their own on the Scoring tab as they play; the director settles the hole here.</div>
 
-          {[1,2,3,4].map(r => {
-            const tr2 = tRounds.find(t => t.round_number === r);
-            const course2 = courses.find(c => c.id === tr2?.course_id);
-            const pars2 = course2?.hole_pars || [];
+          {roundList.every(r => !roundSetup(r).pars.some(p => p === 3))
+            && empty("🎯", "No par 3s yet", "Closest-to-the-pin holes come from the course. They appear here once a round has a course with a par 3 on it.")}
+
+          {roundList.map(r => {
+            const { course: course2, pars: pars2 } = roundSetup(r);
             const par3holes = pars2.map((p, i) => ({ hole: i, par: p })).filter(h => h.par === 3);
             if (par3holes.length === 0) return null;
             return (
@@ -4732,7 +4801,7 @@ function BettingView({ tPlayers, tRounds, courses, holeData, skinsData, ctpData,
                   const pending = !!winnerId && rec?.approved !== true;
                   return (
                     <div key={hole} style={{ background: BC.card, borderRadius: 8, padding: "8px 12px", marginBottom: 4, border: `1px solid ${winner ? BC.amber + ALPHA.line : BC.bdr}`, display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: FS.small, fontWeight: 700, color: BC.t3, width: 44, flexShrink: 0 }}>Hole {hole + 1}</span>
+                      <span style={{ fontSize: FS.small, fontWeight: 700, color: BC.t3, width: 54, flexShrink: 0, whiteSpace: "nowrap" }}>Hole {hole + 1}</span>
                       {user?.isDirector ? (
                         <select value={winnerId || ""}
                           onChange={e => onSetCtp(r, hole, e.target.value || null, { distanceFt: e.target.value === winnerId ? rec?.distance_ft ?? null : null, approved: true })}
@@ -5106,8 +5175,7 @@ export default function App() {
   // user reopening the app to check current state.
   const [view, setView] = useState("leaderboard");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [skinsData, setSkinsData] = useState({}); // { "round_hole": pid }
-  const [ctpData, setCtpData] = useState({});     // { "round_hole": pid }
+  const [ctpData, setCtpData] = useState({});     // { "round_hole": record }
   const [skinsPot, setSkinsPot] = useState(0);
   const [historicalData, setHistoricalData] = useState([]);
   // The saved team-name overrides (from the bc_settings/team_names doc).
@@ -5517,11 +5585,9 @@ export default function App() {
       setBrand(b);
     }));
     unsubs.push(db.subscribe("bc_rounds", f, rows => setTRounds(rows)));
-    unsubs.push(db.subscribe("bc_skins", f, rows => {
-      const sd = {};
-      rows.forEach(r => { sd[`${r.round}_${r.hole}`] = r.player_id; });
-      setSkinsData(sd);
-    }));
+    // No bc_skins listener: skins are derived from the cards in BettingView,
+    // never stored. The collection is legacy — it was only ever written, and
+    // subscribing to it cost a live listener to fill a map nothing read.
     unsubs.push(db.subscribe("bc_ctp", f, rows => {
       const cd = {};
       // The value is the RECORD, not just the winner's id: the scoring
@@ -5806,11 +5872,11 @@ export default function App() {
     return { success: true };
   }, [authUser, user?.player_id, doSignOut]);
   const onAddCourse = useCallback(async (c) => { if (c._delete) { await db.delete("bc_courses", c.id); } else { await db.upsert("bc_courses", c); } }, []);
-  const onSetSkin = useCallback(async (round, hole, pid) => {
-    const id = editionDocId(`bc_skin_r${round}_h${hole+1}`);
-    if (pid) await db.upsert("bc_skins", { id, tournament_id: TOURNAMENT_ID, round, hole, player_id: pid });
-    else await db.delete("bc_skins", id);
-  }, []);
+  // There is no onSetSkin. A skin is whoever is lowest on the hole, worked
+  // out from the cards every time it is shown — see BettingView. Storing a
+  // winner would create a second answer that can disagree with the scorecard
+  // the field signed, and no screen ever offered a way to correct it.
+  //
   // One document per round+hole — the hole's STANDING closest-to-the-pin.
   // A later group that gets inside the current tag overwrites it, which is
   // the whole point: the doc is the current answer, not a log of attempts.
@@ -6471,45 +6537,27 @@ export default function App() {
           />
         )}
         {view === "betting" && (
-          // Main-app betting view is parked behind a placeholder until
-          // the real tournament betting flow is finalized (skins/CTP at
-          // the Bourbon Cup level — multi-round, multi-pot, with the
-          // skins-pot accumulator). This placeholder matches the rest of
-          // the app's styling (TEAMS-banner-style header, neutral "no
-          // data" body) so when real betting data lands, the visual
-          // scaffold is already consistent.
-          <div style={{ fontFamily: FONT }}>
-            {/* Skins/CTP toggle scaffold — disabled visual. Communicates
-                "this section will have these two modes" without
-                committing to data the user can't act on. Pinned so this
-                tab's lead control sits exactly where every other tab's
-                does, and so the real skins grid can grow underneath it
-                without the toggle scrolling away. */}
-            <StickyTop>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, opacity: 0.5, pointerEvents: "none" }}>
-                <SegmentedToggle
-                  options={[["skins", "Skins"], ["ctp", "CTP"]]}
-                  value="skins" letterSpacing={0.5} style={{ flex: 1 }}
-                />
-              </div>
-            </StickyTop>
-
-            <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
-              <Banner>SKINS</Banner>
-              <div style={{
-                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                padding: "60px 20px", textAlign: "center",
-              }}>
-                <div style={{ fontSize: FS.jumbo, marginBottom: 12, opacity: 0.4 }}>🥃</div>
-                <div style={{ fontSize: FS.lead, fontWeight: 700, color: BC.t1, marginBottom: 6, letterSpacing: 0.3 }}>
-                  No bets yet
-                </div>
-                <div style={{ fontSize: FS.small, color: BC.t3, maxWidth: 280, lineHeight: 1.5 }}>
-                  Tournament betting will open closer to game time.
-                </div>
-              </div>
-            </div>
-          </div>
+          <BettingView
+            tPlayers={tPlayers}
+            tRounds={enrichedRounds}
+            rounds={tournamentRounds}
+            currentRound={currentRound}
+            courses={courses}
+            /* Concealed hole data, same as the scoreboard and the analytics
+               tab: skins are derived hole by hole off these scores, so the
+               real map here would read out a sealed round's card one skin at
+               a time from a tab nobody thought to check. */
+            holeData={revealedHoleData}
+            ctpData={ctpData}
+            skinsPot={skinsPot}
+            onSetCtp={onSetCtp}
+            onUpdatePot={onUpdatePot}
+            user={user}
+            roundLocks={roundLocksData}
+            hcpOverrides={hcpOverridesData}
+            teeAssignments={teeAssignmentsData}
+            teams={teams}
+          />
         )}
         {view === "account" && (
           <AccountView
