@@ -189,7 +189,12 @@ export function ScoreCell({ score, par, strokes = 0, size = CELL, color, skin = 
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", height: dotH + sh, justifyContent: "flex-end" }}>
       {lane}
       <div style={{ position: "relative", width: sh, height: sh, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        {skin && <div style={{ position: "absolute", inset: -1, borderRadius: 4, background: BC.amber }} />}
+        {/* Same `ring` placement as the notation, one pixel proud of it on
+            every side. It has to carry the optical nudge too: `inset` would
+            centre the fill on the CELL while the ring is centred on the
+            GLYPH, and the ~1px between those two reads as a bogey square
+            sitting low in its own highlight. */}
+        {skin && <div style={{ ...ring, width: sh + 2, height: sh + 2, borderRadius: 4, background: BC.amber }} />}
         {border}
         <span style={{ position: "relative", fontSize: s, fontWeight: skin ? 800 : 700, color: skin ? ON_AMBER : (color || BC.t1) }}>{score}</span>
       </div>
