@@ -212,6 +212,18 @@ export const getBCTheme = (mode, brand = null) => {
       // #b6520c was picked against the card and reads 4.32:1 where the note
       // really is. #af4f0c is 4.59:1 there, 5.09 on the page, 5.32 on a card.
       warn: "#af4f0c",
+      // ── The selected score chip ──
+      // The page, inverted — but pulled back off the extreme. At full t1 the
+      // chip was near-black on a white page at 17:1, which reads as an alert
+      // rather than a tick. This is a charcoal: still unmistakably the
+      // loudest thing on the card at 12:1 for the digit and 12.5:1 against
+      // the card, without shouting.
+      sel: "#33333a",
+      // The birdie circle drawn on that chip, which is why it is a BRIGHT
+      // red on the LIGHT palette. The chip is the page turned over, so
+      // everything on it wants the ink of the other mode: a deep red would
+      // vanish into a charcoal. 3.60:1 on it, past the 3:1 a ring needs.
+      birdieRed: "#ef5350",
       green: "#047857",     // generic positive (distinct from brand accent)
       // Handicap blue — matches MNQ's K.hcpBlue exactly so users
       // moving between the two apps see consistent visual language for
@@ -255,6 +267,15 @@ export const getBCTheme = (mode, brand = null) => {
     // separation brought across: hue 26°, 1.40:1 apart, still 6.68:1 on the
     // page.
     warn: "#ef7215",
+    // ── The selected score chip ── (see the light palette for the idea)
+    // Softened the same way and for the same reason: pure #f5f4f2 on a black
+    // page was 18:1, a headlight in a dark room and the brightest thing on a
+    // screen used outdoors at dusk. This off-white keeps the digit at 14:1
+    // and the chip at 12.9:1 against its card.
+    sel: "#d9d9de",
+    // DEEP red here, because this chip is the light one. Same inversion as
+    // the light palette's, running the other way. 4.15:1 on it.
+    birdieRed: "#c1272d",
     green: "#22c55e",
     hcpBlue: "#3b82f6",
   });
@@ -338,21 +359,6 @@ export const ON_ACCENT = "#ffffff";
 // number it is built on is unmoved: white 4.61:1 on it, and the bar reads
 // 4.30:1 against the dark page and 4.41:1 against the light one.
 export const BROWN = "#a06a08";
-
-// ── The birdie red ──
-// The circle drawn on a SELECTED score, which is the one chip on the screen
-// whose surface is the inverse of the page — near-white in dark mode,
-// near-black in light (see ScoreButtonRow). So the red on it cannot be
-// BC.danger: that flips with the mode, and the surface flips the other way,
-// which lands the bright red on near-white and the deep red on near-black,
-// each on exactly the wrong background.
-//
-// One value, picked to clear the 3:1 bar for a graphical mark on BOTH of
-// those fills: 4.02:1 on the dark chip, 4.08:1 on the light one. For scale,
-// the red it replaces measured 1.32:1 and 1.27:1 on the brown fill this chip
-// used to have — a birdie ring nobody could see, on the one score everybody
-// wants to look at.
-export const BIRDIE_RED = "#e0353f";
 
 // The header pair, named once. The hole banner over Scoring and the
 // current-hole chip in the strip above it are the same fact said twice on
