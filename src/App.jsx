@@ -4621,11 +4621,9 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   const [editPot, setEditPot] = useState(false);
   const [potInput, setPotInput] = useState("");
   const [grossMode, setGrossMode] = useState(false);
-  const [cardOpen, setCardOpen] = useState(false);
   // The CTP tab keeps its own round and its own open state. Sharing them with
   // the skins card would mean opening one tab silently rearranged the other.
   const [ctpRound, setCtpRound] = useState(null);
-  const [ctpOpen, setCtpOpen] = useState(false);
   const [editBuyIns, setEditBuyIns] = useState(null); // "skins" | "ctp" | null
 
   // ── Who is playing for what ──
@@ -4648,11 +4646,34 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // tournament used to get two empty tabs, and a fifth round never appeared
   // at all.
   const roundList = rounds?.length ? rounds : [];
-  // Open on the round being played, and never leave the round toggle pointing
-  // at a round that has since been deleted off the schedule.
-  const shownRound = roundList.includes(activeRound) ? activeRound
-    : roundList.includes(currentRound) ? currentRound
-    : (roundList[0] ?? null);
+
+  // ── Which round this tab lands on ──
+  // The most recent round that has actually been played, which is not the same
+  // question as which round is open. `currentRound` is the lowest round nobody
+  // has finalized yet, so it is null once the tournament is over — landing the
+  // tab back on Round 1 the moment the last round was signed off — and on the
+  // morning of Round 2 it points at a round with nothing in it while Round 1's
+  // results sit one tap away.
+  //
+  // So: the open round if anyone has entered a score in it, otherwise the last
+  // round that has scores, otherwise wherever the schedule has got to. A
+  // finished tournament lands on its final round; a tournament that has not
+  // started lands on its first.
+  //
+  // It follows the play on its own until somebody taps a round, and from then
+  // on that choice stands.
+  const playedRounds = roundList.filter(r =>
+    tPlayers.some(p => Object.keys(holeData[`${p.player_id}_${r}`] || {}).length > 0));
+  const lastPlayed = playedRounds.length ? playedRounds[playedRounds.length - 1] : null;
+  const defaultRound =
+      (currentRound != null && playedRounds.includes(currentRound)) ? currentRound
+    : lastPlayed != null ? lastPlayed
+    : (currentRound != null && roundList.includes(currentRound)) ? currentRound
+    : (roundList[roundList.length - 1] ?? null);
+
+  // Never leave a round toggle pointing at a round that has since been deleted
+  // off the schedule.
+  const shownRound = roundList.includes(activeRound) ? activeRound : defaultRound;
 
   // A round's course and hole tables, resolved the way every other scoring
   // surface resolves them: through the round LOCK when there is one. A locked
@@ -4732,8 +4753,8 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // back to a par-4 course, and a scoreless round yields no skins.
   const shownSetup = roundSetup(shownRound);
   const shownSkins = computeSkins(shownRound, grossMode);
-  // Only when something is going to draw a dot with them.
-  const shownStrokeMaps = (grossMode || !cardOpen) ? {} : strokeMapsFor(shownRound);
+  // Gross mode draws no dots, so it needs no maps.
+  const shownStrokeMaps = grossMode ? {} : strokeMapsFor(shownRound);
   // Team, then name. Skins is an individual game and the sides mean nothing
   // to it, but the roster is grouped this way on every other screen, and a
   // player looking for their own row among sixteen finds it faster in the
@@ -4744,9 +4765,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   );
 
   // ── The CTP tab ──
-  const ctpShownRound = roundList.includes(ctpRound) ? ctpRound
-    : roundList.includes(currentRound) ? currentRound
-    : (roundList[0] ?? null);
+  const ctpShownRound = roundList.includes(ctpRound) ? ctpRound : defaultRound;
   const noPar3s = roundList.every(r => !roundSetup(r).pars.some(p => p === 3));
 
   // Every standing tag, read through each round's OWN par table rather than
@@ -4898,38 +4917,28 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
             </div>
           )}
 
-          {/* Round tabs — and the way into the card.
-              A round pill opens that round's scorecard underneath it, and
-              tapping the open round again shuts it. There is no separate
-              "Scorecard" header to tap: the round IS the thing being opened,
-              so a second control saying so was a row of chrome asking the
-              same question twice.
-              Rendered even for a one-round tournament, where the pills would
-              otherwise be pointless — with the header gone they are the only
-              way to reach the card. */}
+          {/* Round tabs. The card below is always open, so these pick which
+              round it shows rather than whether there is one — and the
+              selected pill doubles as the label saying which round is on
+              screen, which is why it renders even for a one-round
+              tournament. */}
           <SegmentedToggle
             variant="pills"
-            style={{ marginBottom: cardOpen ? 8 : 0 }}
+            style={{ marginBottom: 8 }}
             options={roundList.map(r => [r, `Rd ${r}`])}
-            value={cardOpen ? shownRound : null}
-            onChange={r => {
-              if (r === shownRound && cardOpen) { setCardOpen(false); return; }
-              setActiveRound(r);
-              setCardOpen(true);
-            }}
+            value={shownRound}
+            onChange={setActiveRound}
           />
 
-          {cardOpen && (
-            <FieldCard
-              players={fieldPlayers}
-              pars={shownSetup.pars}
-              hcps={shownSetup.hcps}
-              scoreFor={(pid, h) => (holeData[`${pid}_${shownRound}`] || {})[h] || 0}
-              strokesFor={(pid, h) => shownStrokeMaps[pid]?.[h] || 0}
-              skins={shownSkins}
-              gross={grossMode}
-            />
-          )}
+          <FieldCard
+            players={fieldPlayers}
+            pars={shownSetup.pars}
+            hcps={shownSetup.hcps}
+            scoreFor={(pid, h) => (holeData[`${pid}_${shownRound}`] || {})[h] || 0}
+            strokesFor={(pid, h) => shownStrokeMaps[pid]?.[h] || 0}
+            skins={shownSkins}
+            gross={grossMode}
+          />
         </div>
       )}
 
@@ -5013,17 +5022,13 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                     every round's stacked into one list. */}
                 <SegmentedToggle
                   variant="pills"
-                  style={{ marginBottom: ctpOpen ? 8 : 0 }}
+                  style={{ marginBottom: 8 }}
                   options={roundList.map(r => [r, `Rd ${r}`])}
-                  value={ctpOpen ? ctpShownRound : null}
-                  onChange={r => {
-                    if (r === ctpShownRound && ctpOpen) { setCtpOpen(false); return; }
-                    setCtpRound(r);
-                    setCtpOpen(true);
-                  }}
+                  value={ctpShownRound}
+                  onChange={setCtpRound}
                 />
 
-                {ctpOpen && (() => {
+                {(() => {
                   const { course: course2, pars: pars2 } = roundSetup(ctpShownRound);
                   const par3holes = pars2.map((p, i) => ({ hole: i, par: p })).filter(h => h.par === 3);
                   if (par3holes.length === 0) {
