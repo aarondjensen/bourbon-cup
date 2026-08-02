@@ -4621,6 +4621,10 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   const [potInput, setPotInput] = useState("");
   const [grossMode, setGrossMode] = useState(false);
   const [cardOpen, setCardOpen] = useState(false);
+  // The CTP tab keeps its own round and its own open state. Sharing them with
+  // the skins card would mean opening one tab silently rearranged the other.
+  const [ctpRound, setCtpRound] = useState(null);
+  const [ctpOpen, setCtpOpen] = useState(false);
 
   // The rounds that actually exist, not a hardcoded 1-4: a two-round
   // tournament used to get two empty tabs, and a fifth round never appeared
@@ -4720,6 +4724,38 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
     String(a.team || "").localeCompare(String(b.team || "")) ||
     String(a.name || "").localeCompare(String(b.name || ""))
   );
+
+  // ── The CTP tab ──
+  const ctpShownRound = roundList.includes(ctpRound) ? ctpRound
+    : roundList.includes(currentRound) ? currentRound
+    : (roundList[0] ?? null);
+  const noPar3s = roundList.every(r => !roundSetup(r).pars.some(p => p === 3));
+
+  // Every standing tag, read through each round's OWN par table rather than
+  // straight off ctpData: a record left on a hole that is no longer a par 3 —
+  // a course re-pointed after the fact — would otherwise keep counting for
+  // somebody on a hole the tab no longer shows.
+  //
+  // An unsettled tag still counts. The document is the hole's current answer
+  // and not a log of attempts, which is exactly what the rows below display;
+  // a leaderboard that ignored pending tags would disagree with them.
+  const ctpTags = roundList.flatMap(r => {
+    const { pars } = roundSetup(r);
+    return pars.flatMap((p, h) => {
+      if (p !== 3) return [];
+      const rec = ctpData[`${r}_${h}`];
+      return rec?.player_id ? [{ round: r, hole: h, ...rec }] : [];
+    });
+  });
+  const ctpLeaders = Object.values(ctpTags.reduce((acc, t) => {
+    const e = acc[t.player_id] || (acc[t.player_id] = { pid: t.player_id, count: 0, best: null });
+    e.count += 1;
+    if (t.distance_ft != null && (e.best == null || t.distance_ft < e.best)) e.best = t.distance_ft;
+    return acc;
+  }, {}))
+    // Most pins, then the closest single shot among equals — the tiebreak the
+    // players would use themselves.
+    .sort((a, b) => b.count - a.count || (a.best ?? Infinity) - (b.best ?? Infinity));
 
   // One commit path for the pot, reached by blur — Enter just blurs the
   // field. Committing on both fired two Firestore writes for one edit.
@@ -4846,49 +4882,93 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
 
       {roundList.length > 0 && activeTab === "ctp" && (
         <div>
-          <div style={{ fontSize: FS.small, color: BC.t3, marginBottom: 12 }}>Closest to the pin on all par 3s — groups tag their own on the Scoring tab as they play; the director settles the hole here.</div>
+          {noPar3s
+            ? empty("🎯", "No par 3s yet", "Closest-to-the-pin holes come from the course. They appear here once a round has a course with a par 3 on it.")
+            : (
+              <>
+                {/* CTP LEADERS, the same shape as SKINS LEADERS. Where skins
+                    print money, this prints the closest the player has been
+                    all week — the only other number a CTP has. */}
+                {ctpLeaders.length > 0 && (
+                  <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 12, overflow: "hidden" }}>
+                    <div style={{ padding: "8px 14px", borderBottom: `1px solid ${BC.bdr}`, fontSize: FS.label, fontWeight: 700, color: BC.gold, letterSpacing: 1 }}>CTP LEADERS</div>
+                    {ctpLeaders.map(({ pid, count, best }) => {
+                      const p = tPlayers.find(t => t.player_id === pid);
+                      const team = p ? teams[p.team] : null;
+                      return (
+                        <div key={pid} style={{ display: "flex", alignItems: "center", padding: "8px 14px", borderBottom: `1px solid ${BC.bdr}${ALPHA.hair}`, gap: 8 }}>
+                          <div style={{ width: 8, height: 8, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
+                          <span style={{ flex: 1, fontSize: FS.body, fontWeight: 600, color: BC.t1 }}>{p?.name || pid}</span>
+                          <span style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>{count} CTP{count !== 1 ? "s" : ""}</span>
+                          <span style={{ fontSize: FS.small, color: BC.t3 }}>{best != null ? `${best} ft` : "—"}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
 
-          {roundList.every(r => !roundSetup(r).pars.some(p => p === 3))
-            && empty("🎯", "No par 3s yet", "Closest-to-the-pin holes come from the course. They appear here once a round has a course with a par 3 on it.")}
+                {/* Same opener as the skins card: the round pill IS the
+                    control, and it reveals that round's par 3s rather than
+                    every round's stacked into one list. */}
+                <SegmentedToggle
+                  variant="pills"
+                  style={{ marginBottom: ctpOpen ? 8 : 0 }}
+                  options={roundList.map(r => [r, `Rd ${r}`])}
+                  value={ctpOpen ? ctpShownRound : null}
+                  onChange={r => {
+                    if (r === ctpShownRound && ctpOpen) { setCtpOpen(false); return; }
+                    setCtpRound(r);
+                    setCtpOpen(true);
+                  }}
+                />
 
-          {roundList.map(r => {
-            const { course: course2, pars: pars2 } = roundSetup(r);
-            const par3holes = pars2.map((p, i) => ({ hole: i, par: p })).filter(h => h.par === 3);
-            if (par3holes.length === 0) return null;
-            return (
-              <div key={r} style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: FS.label, fontWeight: 700, color: BC.gold, letterSpacing: 1, marginBottom: 8 }}>ROUND {r} — {course2?.name || "TBD"}</div>
-                {par3holes.map(({ hole }) => {
-                  const key = `${r}_${hole}`;
-                  const rec = ctpData[key];
-                  const winnerId = rec?.player_id || null;
-                  const winner = tPlayers.find(p => p.player_id === winnerId);
-                  // A tag a group entered on the course is provisional until
-                  // the director touches it here — picking a name from the
-                  // dropdown (even re-picking the same one) is the approval.
-                  const pending = !!winnerId && rec?.approved !== true;
+                {ctpOpen && (() => {
+                  const { course: course2, pars: pars2 } = roundSetup(ctpShownRound);
+                  const par3holes = pars2.map((p, i) => ({ hole: i, par: p })).filter(h => h.par === 3);
+                  if (par3holes.length === 0) {
+                    return (
+                      <div style={{ background: BC.card, borderRadius: 8, border: `1px solid ${BC.bdr}`, padding: "14px 12px", fontSize: FS.small, color: BC.t3, textAlign: "center" }}>
+                        No par 3s on {course2?.name || "this course"}.
+                      </div>
+                    );
+                  }
                   return (
-                    <div key={hole} style={{ background: BC.card, borderRadius: 8, padding: "8px 12px", marginBottom: 4, border: `1px solid ${winner ? BC.amber + ALPHA.line : BC.bdr}`, display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: FS.small, fontWeight: 700, color: BC.t3, width: 54, flexShrink: 0, whiteSpace: "nowrap" }}>Hole {hole + 1}</span>
-                      {user?.isDirector ? (
-                        <select value={winnerId || ""}
-                          onChange={e => onSetCtp(r, hole, e.target.value || null, { distanceFt: e.target.value === winnerId ? rec?.distance_ft ?? null : null, approved: true })}
-                          style={{ flex: 1, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, color: BC.t1, fontSize: FS.small, padding: "4px 6px", fontFamily: FONT }}>
-                          <option value="">-- Not set --</option>
-                          {tPlayers.map(p => <option key={p.player_id} value={p.player_id}>{p.name}</option>)}
-                        </select>
-                      ) : (
-                        <span style={{ flex: 1, fontSize: FS.small, fontWeight: 600, color: winner ? BC.amberInk : BC.t3 }}>{winner ? winner.name : "Not set"}</span>
-                      )}
-                      {rec?.distance_ft ? <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.amberInk, flexShrink: 0 }}>{rec.distance_ft} ft</span> : null}
-                      {pending && <span title="Tagged on the course — not settled yet" style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, border: `1px solid ${BC.bdr}`, borderRadius: 4, padding: "1px 4px", flexShrink: 0 }}>Pending</span>}
-                      {winner && <span style={{ fontSize: FS.label, color: BC.amberInk }}>📍</span>}
-                    </div>
+                    <>
+                      <div style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1, marginBottom: 6 }}>
+                        {(course2?.name || "TBD").toUpperCase()}
+                      </div>
+                      {par3holes.map(({ hole }) => {
+                        const rec = ctpData[`${ctpShownRound}_${hole}`];
+                        const winnerId = rec?.player_id || null;
+                        const winner = tPlayers.find(p => p.player_id === winnerId);
+                        // A tag a group entered on the course is provisional until
+                        // the director touches it here — picking a name from the
+                        // dropdown (even re-picking the same one) is the approval.
+                        const pending = !!winnerId && rec?.approved !== true;
+                        return (
+                          <div key={hole} style={{ background: BC.card, borderRadius: 8, padding: "8px 12px", marginBottom: 4, border: `1px solid ${winner ? BC.amber + ALPHA.line : BC.bdr}`, display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: FS.small, fontWeight: 700, color: BC.t3, width: 54, flexShrink: 0, whiteSpace: "nowrap" }}>Hole {hole + 1}</span>
+                            {user?.isDirector ? (
+                              <select value={winnerId || ""}
+                                onChange={e => onSetCtp(ctpShownRound, hole, e.target.value || null, { distanceFt: e.target.value === winnerId ? rec?.distance_ft ?? null : null, approved: true })}
+                                style={{ flex: 1, minWidth: 0, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, color: BC.t1, fontSize: FS.small, padding: "4px 6px", fontFamily: FONT }}>
+                                <option value="">-- Not set --</option>
+                                {tPlayers.map(p => <option key={p.player_id} value={p.player_id}>{p.name}</option>)}
+                              </select>
+                            ) : (
+                              <span style={{ flex: 1, minWidth: 0, fontSize: FS.small, fontWeight: 600, color: winner ? BC.amberInk : BC.t3 }}>{winner ? winner.name : "Not set"}</span>
+                            )}
+                            {rec?.distance_ft ? <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.amberInk, flexShrink: 0 }}>{rec.distance_ft} ft</span> : null}
+                            {pending && <span title="Tagged on the course — not settled yet" style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, border: `1px solid ${BC.bdr}`, borderRadius: 4, padding: "1px 4px", flexShrink: 0 }}>Pending</span>}
+                            {winner && <span style={{ fontSize: FS.label, color: BC.amberInk, flexShrink: 0 }}>📍</span>}
+                          </div>
+                        );
+                      })}
+                    </>
                   );
-                })}
-              </div>
-            );
-          })}
+                })()}
+              </>
+            )}
         </div>
       )}
     </div>
