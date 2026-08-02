@@ -35,6 +35,9 @@ import {
   currentRoundNumber, nextRoundNumber, lastFinalRoundNumber,
   LOCK_OPEN, LOCK_FINAL, LOCK_STATE_LABEL,
 } from "./lib/roundLocks";
+import {
+  concealHoleData, revealState, sealDefaultFor, revealSummary, HOLE_COUNT,
+} from "./lib/reveal";
 import { usePullToRefresh } from "./lib/usePullToRefresh";
 import { useFitDensity } from "./lib/useFitDensity";
 import { processLogo } from "./lib/logoBrand";
@@ -1060,6 +1063,16 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   const userTeam = inMatch
     ? (match.teamA.includes(userPid) ? "A" : "B")
     : (tPlayers.find(p => p.player_id === userPid)?.team === "B" ? "B" : "A");
+  // ── The blackout, on the phone doing the scoring ─────────────────
+  // A sealed round (lib/reveal.js) is entered exactly as it always was —
+  // this screen keeps every score, including the two opponents in a mixed
+  // foursome, because somebody has to write them down. What it stops
+  // printing is what they COME TO: the running match state under each hole,
+  // and, on the card behind the Full Scorecard button, the other side's
+  // numbers and the running line. Those are the round, and the round is not
+  // known until the cards are turned over at the house.
+  const roundSeal = revealState(tRounds, match.round);
+  const conceal = roundSeal.concealing ? { through: roundSeal.through, side: userTeam } : null;
   // The hole-scoring axis is read off `scoredFormat` below rather than from a
   // flag here: the badge names the METHOD a hole was scored by, and since a
   // format can now offer more than one, "was it best ball" is no longer the
@@ -1106,6 +1119,14 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
       }}>{children}</div>
     );
     if (!result || !result.holes[i]) return shell(null);
+    // Sealed: the bar says who took the hole and the glyph says where the
+    // match stands, so both go. The hole strip above still shows which holes
+    // this group has posted — that is progress, not the result.
+    if (conceal && i >= conceal.through) {
+      return shell(
+        <div title="Sealed until the reveal" style={{ textAlign: "center", fontSize: FS.small, opacity: 0.4, lineHeight: 1 }}>🔒</div>
+      );
+    }
 
     const hr = result.holes[i];
     // ── Somebody got skipped back there ──
@@ -1323,6 +1344,31 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     );
   })() : null;
 
+  // ── The sealed-round banner ──────────────────────────────────────
+  // Costs this screen a row, and only on the one round that is sealed. It is
+  // worth it: without a line saying so, a status strip full of padlocks reads
+  // as an app that has broken rather than a round that is being kept. It also
+  // states the one thing a player on the 7th needs to know — keep entering
+  // scores, the numbers are landing, you just aren't being shown the answer.
+  const sealedBanner = conceal ? (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 8, width: "100%",
+      marginBottom: 8, padding: "5px 10px", borderRadius: 8, flexShrink: 0,
+      background: `${BC.amber}${ALPHA.wash}`, border: `1px solid ${BC.amber}${ALPHA.line}`,
+      fontFamily: FONT,
+    }}>
+      <span aria-hidden="true" style={{ fontSize: FS.small, lineHeight: 1 }}>🔒</span>
+      <span style={{ minWidth: 0, flex: 1 }}>
+        <span style={{ display: "block", fontSize: FS.small, fontWeight: 800, letterSpacing: 0.5, color: BC.amberInk }}>
+          SEALED ROUND — {revealSummary(conceal.through)}
+        </span>
+        <span style={{ display: "block", fontSize: FS.label, color: BC.t3, lineHeight: 1.35 }}>
+          Keep posting scores. Nobody sees the match until the reveal.
+        </span>
+      </span>
+    </div>
+  ) : null;
+
   // ── Signed: the card replaces the scoring screen ──
   // Not a banner over the score buttons — the buttons are gone, because a
   // signed card has no scores left to enter and the screen's whole budget
@@ -1330,12 +1376,13 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   if (signed) return shell(
     <>
       {offRoundBanner}
+      {sealedBanner}
       {matchSelector}
       <SignedCardPanel
         match={match} sig={sig} result={result} format={format}
         holePars={holePars} holeHcps={holeHcps} course={course}
         tPlayers={tPlayers} getScore={getScore} viewer={userTeam}
-        userPid={userPid} notify={notify} isDirector={isDirector}
+        userPid={userPid} notify={notify} isDirector={isDirector} conceal={conceal}
         onAttest={() => onAttestCard(match, userPid)}
         onUnsign={() => onUnsignCard(match)}
       />
@@ -1345,6 +1392,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   return shell(
     <>
       {offRoundBanner}
+      {sealedBanner}
       {matchSelector}
 
       {/* Front 9 — hole strip + status row. */}
@@ -1551,7 +1599,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
         <SignCardSheet
           match={match} result={result} format={format}
           holePars={holePars} holeHcps={holeHcps} course={course}
-          tPlayers={tPlayers} getScore={getScore} viewer={userTeam}
+          tPlayers={tPlayers} getScore={getScore} viewer={userTeam} conceal={conceal}
           onClose={() => setShowSign(false)}
           onSign={async () => {
             const res = await onSignCard(match, userPid);
@@ -1586,7 +1634,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
               match={match} result={result} format={format}
               holePars={holePars} holeHcps={holeHcps} course={course}
               tPlayers={tPlayers} getScore={getScore}
-              viewer={userTeam}
+              viewer={userTeam} conceal={conceal}
             />
           </div>
           <button onClick={() => setShowScorecard(false)} style={{
@@ -1793,7 +1841,7 @@ const sameRoundMap = (a, b) => JSON.stringify(liveEntries(a)) === JSON.stringify
 const roundSettingsSignature = (r) => JSON.stringify([
   r.format, r.handicap_mode, r.tee_time, r.scoring_type, r.hole_scoring,
   r.nassau_front, r.nassau_back, r.nassau_overall, r.allowance, r.counting_scores,
-  r.hole_points, r.par_points,
+  r.hole_points, r.par_points, r.sealed,
 ]);
 
 // The handicap allowance, normalized to the shape the round's FORMAT calls
@@ -1821,6 +1869,29 @@ const roundCounting = (format, raw) => {
   const counts = resolveCounting(format || DEFAULT_FORMAT, raw);
   return counts ? { holes: counts } : null;
 };
+
+// What the blackout switch OPENS AT on a round that has never carried it —
+// on for the one format the reveal exists for, off for every other. See
+// lib/reveal.js.
+//
+// Unlike the allowance and the counting scores above, this one is deliberately
+// NOT applied to both sides of the auto-save diff. Those are read back through
+// their normalizer everywhere they matter, so an unwritten default is a real
+// default. This isn't: the leaderboard reads `sealed` off the round DOCUMENT,
+// and a default that only exists inside a form the field never opens is not a
+// default, it is a form that disagrees with the board. So the seeded value
+// lands on the form, differs from the empty document, and is written — which
+// is also what makes the switch mean something the first time a director
+// looks at it.
+//
+// `final` is the guard on the other end: a round already in the books seeds
+// OFF, so opening a finished tournament's Rounds tab can never black out a
+// result the field has already seen. It only applies to the SEED — once the
+// flag is stored the stored value wins, which is what keeps a sealed round
+// from un-sealing itself the moment it is finalized. The reveal happens after
+// the round is over; that is the entire point of it.
+const roundSealedSeed = (format, raw, final) =>
+  raw == null ? (!final && sealDefaultFor(format)) : !!raw;
 
 // Hole values, normalized the same way, and only on a round that is actually
 // settled hole by hole — a Match or Total round has no hole values to store.
@@ -2076,6 +2147,12 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
   // What each result against par pays, on the one format whose table is the
   // director's to set. Null means "the default", same as the three above.
   const [parPoints, setParPoints] = useState(null);
+  // Whether the round is sealed (lib/reveal.js). A concrete boolean rather
+  // than the null-means-default the four above use: "is this round shown to
+  // the field" is not a scoring detail with a recommended value, it is a yes
+  // or a no, and the seeding that picks the opening answer happens once in
+  // roundSealed rather than on every read.
+  const [sealed, setSealed] = useState(false);
   // ── Handicap-lock state ──
   // Read-only here: locking is automatic on the first score of a round (see
   // ensureRoundLock in App). These flags only gate the round form's editing.
@@ -2171,10 +2248,15 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
       counting_scores: roundCounting(fmt, tr.counting_scores),
       hole_points: roundHolePoints(form, tr.hole_points),
       par_points: roundParPoints(fmt, tr.par_points),
+      // Raw, so the auto-save diff compares the form against what Firestore
+      // actually holds. `sealed_seed` is what an unwritten round OPENS at and
+      // is never part of the signature — see roundSealedSeed.
+      sealed: !!tr.sealed,
+      sealed_seed: roundSealedSeed(fmt, tr.sealed, roundIsFinal),
       ch_overrides: hcpOverridesFromDb?.[editRound] || {},
       tee_assignments: teeAssignmentsFromDb?.[editRound] || {},
     };
-  }, [tRounds, editRound, hcpOverridesFromDb, teeAssignmentsFromDb]);
+  }, [tRounds, editRound, hcpOverridesFromDb, teeAssignmentsFromDb, roundIsFinal]);
 
   // The same shape, built from the form. `course_id` rides along unchanged
   // — it belongs to the Courses tab and is only here so a round write does
@@ -2200,10 +2282,11 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
       counting_scores: roundCounting(fmt, counting),
       hole_points: roundHolePoints(form, holePoints),
       par_points: roundParPoints(fmt, parPoints),
+      sealed,
       ch_overrides: hcpOverrides[editRound] || {},
       tee_assignments: teeAssignments[editRound] || {},
     };
-  }, [storedRound, roundFormat, handicapMode, editRound, roundTeeTime, nassau, scoringType, holeScoring, allowance, counting, holePoints, parPoints, hcpOverrides, teeAssignments]);
+  }, [storedRound, roundFormat, handicapMode, editRound, roundTeeTime, nassau, scoringType, holeScoring, allowance, counting, holePoints, parPoints, sealed, hcpOverrides, teeAssignments]);
 
   const storedSettingsSig = roundSettingsSignature(storedRound);
   const hcpDocSig = JSON.stringify(hcpOverridesFromDb ?? null);
@@ -2241,6 +2324,7 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
     setCounting(storedRound.counting_scores);
     setHolePoints(storedRound.hole_points);
     setParPoints(storedRound.par_points);
+    setSealed(storedRound.sealed_seed);
     setHandicapMode(prev => ({ ...prev, [editRound]: storedRound.handicap_mode }));
   }, [seed, seededRound, editRound, storedSettingsSig, storedRound]);
 
@@ -2305,6 +2389,10 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
         counting_scores: payload.counting_scores,
         hole_points: payload.hole_points,
         par_points: payload.par_points,
+        // `reveal_through` is deliberately absent — the reveal is driven from
+        // the scoreboard and must never move because somebody edited a tee
+        // time. See onSetReveal in App and lib/reveal.js.
+        sealed: payload.sealed,
       });
       setAutoSave({ phase: "saved", round });
     } catch (err) {
@@ -3432,6 +3520,79 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                     )}
                   </div>
                 </>
+              );
+            })()}
+
+            {/* ── The reveal ─────────────────────────────────────────────
+                The Bourbon Cup's closing round is played in the dark: scored
+                live on the course like any other, shown to nobody until
+                everyone is back at the house and the holes are turned over
+                one at a time. See lib/reveal.js.
+
+                It is a per-round switch rather than a property of the format
+                because sealing a round is a decision about the DAY, not about
+                how a hole is scored — and because a director needs to be able
+                to turn it off in the year somebody wants the last round live.
+                It opens ON for Team Best Ball and OFF for everything else.
+
+                What is NOT here: how far the reveal has got. That is driven
+                from the Leaderboard, in front of the room, and putting it on
+                a tab that auto-saves would make giving the ending away a
+                side effect of editing a tee time. */}
+            <RoundSectionHeading>
+              THE REVEAL
+            </RoundSectionHeading>
+            {(() => {
+              const seal = revealState(tRounds, editRound);
+              const pill = (active) => ({
+                padding: "4px 12px 6px", fontSize: FS.label, fontWeight: 700, cursor: "pointer",
+                ...segThumb(active, { compact: true }),
+              });
+              // The one control on this tab that still writes on a FINAL
+              // round. Everything else here allocates strokes or prices a
+              // match, and a finished round answers to its snapshot for all
+              // of that — but the seal decides only whether a result has been
+              // SHOWN, and by the time the reveal matters the round is always
+              // over. Locking it with the rest would mean a director who left
+              // round 4 open had no way back but the Firebase console.
+              //
+              // It writes directly rather than through the auto-save, because
+              // that path stands down entirely on a final round.
+              const setSeal = (next) => {
+                setSealed(next);
+                if (!roundIsFinal) return;
+                onSetRound({
+                  id: editionDocId(`bc_round_${editRound}`),
+                  tournament_id: TOURNAMENT_ID,
+                  round_number: editRound,
+                  sealed: next,
+                });
+              };
+              return (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ ...segTrack({ compact: true }), width: "fit-content", marginBottom: 8 }}>
+                    <button onClick={() => setSeal(false)} title="Scored and shown live, like every other round" style={pill(!sealed)}>
+                      Open{!sealed && <SegRule compact />}
+                    </button>
+                    <button onClick={() => setSeal(true)} title="Scored live, shown to nobody until the reveal" style={pill(sealed)}>
+                      Sealed{sealed && <SegRule compact />}
+                    </button>
+                  </div>
+                  <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5 }}>
+                    {sealed
+                      ? "Scored live, shown to nobody. Each side sees only its own numbers; the scoreboard, the scoring screen and the stats tab all hold the result back until a director turns the holes over."
+                      : "Scored and shown live, like every other round."}
+                  </div>
+                  {/* Only once the round is actually sealed in Firestore — a
+                      toggle flipped a second ago has not been saved yet, and
+                      reporting a reveal state off the unsaved form would be
+                      reporting on a round that does not exist. */}
+                  {seal.sealed && (
+                    <div style={{ fontSize: FS.label, marginTop: 6, color: BC.amberInk, fontWeight: 700, lineHeight: 1.5 }}>
+                      🔒 {revealSummary(seal.through)} — the reveal is driven from the Leaderboard.
+                    </div>
+                  )}
+                </div>
               );
             })()}
 
@@ -5432,6 +5593,22 @@ export default function App() {
     hole_scoring: resolveScoring(r).holeScoring,
   })), [tRounds]);
 
+  // ── The blackout, applied once, at the source ────────────────────
+  // Every hole past a sealed round's reveal, removed (see lib/reveal.js).
+  // The read-only surfaces — the scoreboard and the analytics tab — are
+  // handed THIS map rather than the real one, so a round nobody has turned
+  // over yet is not a round they are trusted to draw carefully: it is a
+  // round with no scores in it, and every point, strip, status and total
+  // they compute follows from that on its own.
+  //
+  // The identity is returned untouched when nothing is sealed, which is
+  // every round of every other day, so the memo chains downstream of this
+  // are unaffected outside the one round it exists for.
+  const revealedHoleData = useMemo(
+    () => concealHoleData(holeData, enrichedRounds),
+    [holeData, enrichedRounds]
+  );
+
   // Enhance matches with nassau + scoring type from their round.
   //
   // The ROUND wins. These are round-level settings — the admin console only
@@ -5735,6 +5912,20 @@ export default function App() {
     await db.upsert("bc_tournament_settings", { id: editionDocId("bc_settings_main"), tournament_id: TOURNAMENT_ID, skins_pot: amt });
   }, []);
   const onSetRound = useCallback(async (r) => { await db.upsert("bc_rounds", r); }, []);
+  // ── Turning a hole over ──────────────────────────────────────────
+  // A merge write of ONE field on the round document, deliberately kept off
+  // the Rounds tab's auto-save path (see lib/reveal.js): the reveal is a live
+  // act performed in front of the room, and it must not be something a
+  // director can trigger by editing a tee time. `bc_rounds` is director-only
+  // in the rules, so who may do this is already settled there.
+  const onSetReveal = useCallback(async (round, through) => {
+    await db.upsert("bc_rounds", {
+      id: editionDocId(`bc_round_${round}`),
+      tournament_id: TOURNAMENT_ID,
+      round_number: round,
+      reveal_through: Math.max(0, Math.min(HOLE_COUNT, Math.round(through) || 0)),
+    });
+  }, []);
   // Groups are written whole — the document is one round's list, and a
   // partial update of an array has no meaning here.
   const onSaveGroups = useCallback(async (round, groups) => {
@@ -6225,7 +6416,8 @@ export default function App() {
         {view === "leaderboard" && (
           <TeamLeaderboard
             matches={enrichedMatches}
-            holeData={holeData}
+            holeData={revealedHoleData}
+            ownHoleData={holeData}
             courses={courses}
             tRounds={enrichedRounds}
             tPlayers={tPlayers}
@@ -6235,6 +6427,8 @@ export default function App() {
             teeAssignments={teeAssignmentsData}
             roundLocks={roundLocksData}
             viewer={viewerTeam}
+            canReveal={isDirector}
+            onSetReveal={onSetReveal}
           />
         )}
         {view === "scoring" && (
@@ -6333,8 +6527,12 @@ export default function App() {
           />
         )}
         {(view === "analytics" || view === "history") && (
+          /* Concealed hole data, same as the scoreboard: this tab's per-player
+             W/L/PTS is the cup total sliced a different way, so a sealed round
+             left in it would give the ending away from a tab nobody thought to
+             check. */
           <AnalyticsView
-            tPlayers={tPlayers} matches={enrichedMatches} holeData={holeData}
+            tPlayers={tPlayers} matches={enrichedMatches} holeData={revealedHoleData}
             tRounds={enrichedRounds} courses={courses} historicalData={historicalData} user={user}
             hcpOverrides={hcpOverridesData} teeAssignments={teeAssignmentsData}
             roundLocks={roundLocksData} teams={teams}
