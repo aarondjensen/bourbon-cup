@@ -10,7 +10,7 @@
 //    • Toast           — the transient "slides down from the top" toast.
 //    • ScoreButtonRow  — the tappable par-relative score entry row.
 
-import { BC, FONT, ON_ACCENT, BROWN, HOLE_BANNER, SHADOW, ALPHA, dimHex, FS, segThumb, segTrack } from "../theme";
+import { BC, FONT, ON_ACCENT, BROWN, BIRDIE_RED, HOLE_BANNER, SHADOW, ALPHA, dimHex, FS, segThumb, segTrack } from "../theme";
 
 
 // The rule that marks the thumb. A child rather than a border because it is
@@ -304,35 +304,40 @@ export function ScoreButtonRow({ par, score, onScore, fill = false, minHeight = 
           <div key={btn} style={{ ...column, flex: 1 }}>
             <button onClick={() => onScore(isCur ? 0 : btn)} style={{
               width: "100%", ...btnBox, borderRadius: 8, cursor: "pointer", fontSize, fontWeight: 800,
-              // BROWN, not amber. The selected score is the biggest filled
-              // block on the screen after the hole banner, and in amber the
-              // two sat at the same hue 24 points of lightness apart — near
-              // enough to read as a failed match rather than a pair. One
-              // warm FILL for the whole screen; gold stays what it is
-              // everywhere else, an ink and a hairline. See theme's BROWN.
-              border: "none", background: isCur ? BROWN : BC.inp, color: isCur ? ON_ACCENT : BC.t2,
+              // INVERTED — the chip is the page turned inside out: BC.t1 is
+              // the ink colour, so the fill is near-white on a dark page and
+              // near-black on a light one, and the digit is the page colour
+              // back again. 18:1 either way, and the loudest thing on the
+              // screen without spending a hue to get there.
+              //
+              // Which matters, because every hue on this screen is already
+              // taken. In amber it clashed with the hole banner — same hue,
+              // 24 points of lightness apart, near enough to read as a
+              // failed match. In brown it matched the banner and stopped
+              // reading as a tap at all. Inverted collides with nothing,
+              // because it is not a colour.
+              border: "none",
+              background: isCur ? BC.t1 : BC.inp,
+              color: isCur ? BC.bg : BC.t2,
               position: "relative", display: "flex", alignItems: "center", justifyContent: "center",
               // No CSS transition: when the hole auto-advances, all four
               // selections should swap instantly. A fade cross-dissolves them
               // through a half-amber state that reads as ghost selections.
             }}>
-              {/* SELECTED-STATE rings — circle for under par (nested for
-                  eagle-or-better), square for over par (nested for
-                  double-bogey-or-worse), drawn over the selected fill.
+              {/* SELECTED-STATE rings — a RED circle for under par (nested
+                  for eagle-or-better), a square in the chip's own ink for
+                  over par (nested for double-bogey-or-worse).
 
-                  Both in the fill's own ink. The under-par one used to be
-                  BC.danger, which measured 1.65:1 on the old amber fill and
-                  1.32:1 on this one — a red ring nobody could see, on the
-                  one score anybody wants to look at. The SHAPE is what says
-                  under or over par; it always was, since a birdie and a
-                  bogey are a circle and a square either way. Red survives
-                  where it is legible: the resting outlines below, on the
-                  sunken fill. */}
+                  The birdie ring is red because that is what a birdie ring
+                  is on a paper card, and it is BIRDIE_RED rather than
+                  BC.danger because this chip's surface runs opposite to the
+                  page: BC.danger flips with the mode and would land each of
+                  its two reds on the wrong one of the two fills. See theme. */}
               {isCur && sd !== 0 && (
                 <div style={{ position: "absolute", width: boxSize, height: boxSize, left: "50%", top: "50%", transform: "translate(-50%, -50%)" }}>
-                  <div style={{ position: "absolute", inset: 0, borderRadius: sd < 0 ? "50%" : 3, border: `1.5px solid ${ON_ACCENT}` }} />
+                  <div style={{ position: "absolute", inset: 0, borderRadius: sd < 0 ? "50%" : 3, border: `1.5px solid ${sd < 0 ? BIRDIE_RED : BC.bg}` }} />
                   {Math.abs(sd) >= 2 && (
-                    <div style={{ position: "absolute", inset: 3, borderRadius: sd < 0 ? "50%" : 2, border: `1px solid ${ON_ACCENT}` }} />
+                    <div style={{ position: "absolute", inset: 3, borderRadius: sd < 0 ? "50%" : 2, border: `1px solid ${sd < 0 ? BIRDIE_RED : BC.bg}` }} />
                   )}
                 </div>
               )}

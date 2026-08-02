@@ -339,6 +339,21 @@ export const ON_ACCENT = "#ffffff";
 // 4.30:1 against the dark page and 4.41:1 against the light one.
 export const BROWN = "#a06a08";
 
+// ── The birdie red ──
+// The circle drawn on a SELECTED score, which is the one chip on the screen
+// whose surface is the inverse of the page — near-white in dark mode,
+// near-black in light (see ScoreButtonRow). So the red on it cannot be
+// BC.danger: that flips with the mode, and the surface flips the other way,
+// which lands the bright red on near-white and the deep red on near-black,
+// each on exactly the wrong background.
+//
+// One value, picked to clear the 3:1 bar for a graphical mark on BOTH of
+// those fills: 4.02:1 on the dark chip, 4.08:1 on the light one. For scale,
+// the red it replaces measured 1.32:1 and 1.27:1 on the brown fill this chip
+// used to have — a birdie ring nobody could see, on the one score everybody
+// wants to look at.
+export const BIRDIE_RED = "#e0353f";
+
 // The header pair, named once. The hole banner over Scoring and the
 // current-hole chip in the strip above it are the same fact said twice on
 // one screen — "this is the hole you are on" — and they used to say it in
