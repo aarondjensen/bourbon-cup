@@ -618,6 +618,18 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
   // Compute per-hole results
   const holeResults = Array(18).fill(null).map((_, h) => {
     let aScore = null, bScore = null;
+    // ── Which balls made the number ──────────────────────────────
+    // { A: [pid…], B: [pid…] } on the formats where a side's hole score is
+    // built from SOME of its balls rather than all of them, null everywhere
+    // else. It exists for the Final Countdown (components/FinalCountdown):
+    // in a Team Best Ball the story of a hole is not the number, it is whose
+    // ball counted, and a screen that worked that out for itself would be
+    // re-deriving a result the engine already has — the one thing every
+    // other surface in this app is careful not to do.
+    //
+    // A side that hasn't posted a full hole gets an empty list rather than a
+    // partial one: the number is null, so there is nothing to attribute.
+    let counted = null;
     if (holeFormat === "singles") {
       const aPid = teamA[0], bPid = teamB[0];
       const aMap = getAdjustedStrokeMap(aPid);
@@ -627,10 +639,18 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
       aScore = netScore(aRaw, h, aMap);
       bScore = netScore(bRaw, h, bMap);
     } else if (holeFormat === "best_ball") {
-      const aNets = teamA.map(pid => { const m = getAdjustedStrokeMap(pid); return netScore(getPlayerScores(pid)[h], h, m); }).filter(s => s != null);
-      const bNets = teamB.map(pid => { const m = getAdjustedStrokeMap(pid); return netScore(getPlayerScores(pid)[h], h, m); }).filter(s => s != null);
-      aScore = aNets.length ? Math.min(...aNets) : null;
-      bScore = bNets.length ? Math.min(...bNets) : null;
+      counted = { A: [], B: [] };
+      const bestBall = (side, tid) => {
+        const nets = side
+          .map(pid => ({ pid, net: netScore(getPlayerScores(pid)[h], h, getAdjustedStrokeMap(pid)) }))
+          .filter(e => e.net != null)
+          .sort((a, b) => a.net - b.net);
+        if (!nets.length) return null;
+        counted[tid] = [nets[0].pid];
+        return nets[0].net;
+      };
+      aScore = bestBall(teamA, "A");
+      bScore = bestBall(teamB, "B");
     } else if (holeFormat === "team_best_ball") {
       // ── Team Best Ball ──
       // The whole side is one match, and a hole is the SUM of that side's
@@ -646,18 +666,28 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
       // net can only ever lower the sum (it is added only if it beats one
       // already counted), so the number moves in one direction and settles
       // the moment the side finishes the hole.
+      //
+      // The sort is STABLE, which decides the one thing the sum does not: when
+      // two players post the same net and only one of them fits inside N, the
+      // one listed first on the side counts. The hole is worth the same number
+      // either way — this only picks which of two equally true stories the
+      // Countdown tells, and picking it by roster order at least makes it the
+      // same story on every phone in the room.
+      counted = { A: [], B: [] };
       const nets = (side) => side
-        .map(pid => netScore(getPlayerScores(pid)[h], h, getAdjustedStrokeMap(pid)))
-        .filter(s => s != null)
-        .sort((a, b) => a - b);
+        .map(pid => ({ pid, net: netScore(getPlayerScores(pid)[h], h, getAdjustedStrokeMap(pid)) }))
+        .filter(e => e.net != null)
+        .sort((a, b) => a.net - b.net);
       const need = countFor(h);
-      const sideScore = (side) => {
+      const sideScore = (side, tid) => {
         const ns = nets(side);
         if (!need || ns.length < need) return null;
-        return ns.slice(0, need).reduce((a, b) => a + b, 0);
+        const take = ns.slice(0, need);
+        counted[tid] = take.map(e => e.pid);
+        return take.reduce((a, e) => a + e.net, 0);
       };
-      aScore = sideScore(teamA);
-      bScore = sideScore(teamB);
+      aScore = sideScore(teamA, "A");
+      bScore = sideScore(teamB, "B");
     } else if (holeFormat === "aggregate" || holeFormat === "team_total") {
       // Combined team net per hole — both teammates' net scores are summed
       // and compared as a single team score. The Bourbon Cup name for this is
@@ -740,7 +770,7 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
       if (higherWins) winner = aScore > bScore ? "A" : aScore < bScore ? "B" : null;
       else winner = aScore < bScore ? "A" : aScore > bScore ? "B" : null;
     }
-    return { h, aScore, bScore, winner, played: aScore != null && bScore != null };
+    return { h, aScore, bScore, winner, counted, played: aScore != null && bScore != null };
   });
 
   // How the round settles, given formOfPlay (resolved at the top).
