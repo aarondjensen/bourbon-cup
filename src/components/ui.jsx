@@ -261,9 +261,13 @@ export function ScoreButtonRow({ par, score, onScore, fill = false, minHeight = 
     ? { flex: "1 1 auto", minHeight, height: "auto" }
     : { height: minHeight };
 
+  // t2, not t3: the glyph IS the control here, and on the sunken `inp` fill
+  // t3 measured 4.23:1 in dark and 2.67:1 in light — the second of those is
+  // under the 3:1 floor for a graphical control, never mind text. t2 keeps
+  // them quieter than the score numbers (t1) without making them a guess.
   const nudge = {
     width: 30, borderRadius: 8, background: BC.inp, border: "none",
-    color: BC.t3, fontSize: FS.body, fontWeight: 700, cursor: "pointer", flexShrink: 0,
+    color: BC.t2, fontSize: FS.body, fontWeight: 700, cursor: "pointer", flexShrink: 0,
     ...btnBox,
   };
   // Each control sits in a column with a label slot beneath it, the nudges
