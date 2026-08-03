@@ -1452,8 +1452,13 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
         width: "100%", padding: canSign ? "9px 0" : fit.scorecardPad, borderRadius: 8,
         marginBottom: fit.stack, cursor: "pointer", flexShrink: 0, fontFamily: FONT,
         background: canSign ? BC.amberGlow : BC.card,
-        border: `1px solid ${canSign ? BC.amber : BC.bdr}${ALPHA.line}`,
-        color: canSign ? BC.amberInk : BC.t2,
+        // A card-coloured bar with a neutral edge sat flat against the strips
+        // above it and read as a caption. It keeps its footprint — a hint of
+        // the accent on the edge, full-strength ink, and a shadow to lift it
+        // off the background is enough to read as something to tap.
+        border: `1px solid ${canSign ? BC.amber + ALPHA.line : BC.amber + ALPHA.hair}`,
+        boxShadow: `0 1px 2px ${SHADOW}`,
+        color: canSign ? BC.amberInk : BC.t1,
         fontSize: canSign ? FS.body : FS.small,
         fontWeight: canSign ? 800 : 700, letterSpacing: 0.5,
       }}>
