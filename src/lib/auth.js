@@ -37,7 +37,7 @@
 // call comes back as auth/unauthorized-domain. The error text below says
 // so in as many words, because that one is otherwise a guessing game.
 import {
-  getAuth, setPersistence, indexedDBLocalPersistence, browserLocalPersistence,
+  getAuth,
   GoogleAuthProvider, OAuthProvider, signInWithPopup, signInWithRedirect,
   getRedirectResult, onAuthStateChanged, signOut,
 } from "firebase/auth";
@@ -72,24 +72,69 @@ const makeProvider = (id) => {
   return p;
 };
 
-// ── The auth instance ───────────────────────────────────────────────
-// Persistence is set explicitly rather than left at the SDK default so the
-// intent is legible: IndexedDB first, localStorage if IndexedDB is
-// unavailable (private windows, some embedded webviews). Both outlive the
-// tab, which is the whole point. A failure to set it is not fatal — the
-// SDK keeps its default and the user simply signs in again sooner.
+// ── The auth instance, and why nothing is awaited to get it ─────────
+// `getAuth` is synchronous, and it already installs exactly the
+// persistence this app wants: [indexedDB, localStorage, session], tried in
+// that order. An explicit setPersistence used to sit here saying the same
+// thing — and cost a home-screen install its first sign-in every time.
+//
+// The reason is user activation. iOS lets a page call window.open only
+// inside the gesture that asked for it, and that permission does not
+// survive a real trip to disk or the network. Awaiting setPersistence
+// meant opening IndexedDB — on a fresh install, creating it — before the
+// popup call was ever reached, by which point the tap had expired and
+// Safari refused the window. The second tap worked because the promise
+// was already resolved and the wait collapsed to a microtask, which
+// activation does survive. Hence: fails once, works after.
+//
+// So this is sync, and signIn() calls signInWithPopup with nothing awaited
+// in front of it.
 let _auth = null;
-let _ready = null;
+export const authInstance = () => (_auth ||= getAuth(firebaseApp));
 
-const authReady = () => {
-  if (_ready) return _ready;
-  _auth = getAuth(firebaseApp);
-  _ready = setPersistence(_auth, indexedDBLocalPersistence)
-    .catch(() => setPersistence(_auth, browserLocalPersistence))
-    .catch((e) => { console.warn("[auth] persistence unavailable:", e?.message || e); })
-    .then(() => _auth);
-  return _ready;
+// ── Warming up ──────────────────────────────────────────────────────
+// The SDK has an await of its own that no amount of care here can remove:
+// signInWithPopup does `await resolver._initialize(auth)` before opening
+// the window, and that initialize loads the auth iframe over the network.
+// On a phone that has just installed the app, nothing is cached and that
+// is a real round trip — so the popup would open long after the tap, and
+// be blocked, exactly as before.
+//
+// It only happens once per page load, though, so the fix is to make it
+// happen while the user is still reading the screen instead of when they
+// tap. getRedirectResult drives the same _initialize, and the app has to
+// call it at startup anyway to collect a pending redirect. One call, kicked
+// off at import: it warms the resolver AND answers the redirect question,
+// and everything that needs either awaits the same promise.
+let _warm = null;
+
+const warmAuth = () => {
+  if (_warm) return _warm;
+  const attempted = takeRedirectMark();
+  _warm = getRedirectResult(authInstance()).then(
+    (res) => {
+      if (res?.user) return { user: res.user, error: null };
+      if (attempted) {
+        // We sent them to the provider and got back nothing at all. On an
+        // iOS home-screen install this is storage partitioning: the handler
+        // lives on another origin and Safari will not let it hand the result
+        // back. Naming it beats another silent trip to the sign-in screen.
+        return {
+          user: null,
+          error: "Sign-in came back empty. On an iPhone home-screen app this usually clears if you open the site in Safari instead — tell Aaron if it keeps happening.",
+        };
+      }
+      return { user: null, error: null };
+    },
+    (e) => (isCancelled(e) ? { user: null, error: null } : { user: null, error: friendly(e) })
+  );
+  return _warm;
 };
+
+// Resolves once a popup can actually be opened inside a tap. The sign-in
+// screen holds its buttons until then — a disabled button for a moment is
+// a better answer than a tap that silently does nothing.
+export const whenAuthReady = () => warmAuth().then(() => true);
 
 // ── Popup or redirect ───────────────────────────────────────────────
 // Popup is the better flow everywhere it works: the app never unloads, so
@@ -211,8 +256,12 @@ const friendly = (err) => {
 // navigated away for the redirect flow (in which case this page is about
 // to be replaced and there is nothing to render). Rejects with an Error
 // carrying a human `message` plus the original `code`.
-export async function signIn(providerId) {
-  const auth = await authReady();
+// NOT async, and nothing is awaited before signInWithPopup — see the note
+// on user activation above. Everything this needs (the auth instance, the
+// provider) is built synchronously so the popup call happens inside the
+// tap that asked for it.
+export function signIn(providerId) {
+  const auth = authInstance();
   const provider = makeProvider(providerId);
   const fail = (e) => {
     const out = new Error(friendly(e));
@@ -226,46 +275,23 @@ export async function signIn(providerId) {
     catch (e) { takeRedirectMark(); throw fail(e); }
   };
 
-  try {
-    const res = await signInWithPopup(auth, provider);
-    return res?.user || null;
-  } catch (e) {
+  return signInWithPopup(auth, provider).then((res) => res?.user || null, (e) => {
     // A popup this environment could never have opened, or — on the one
     // platform where a popup cannot reliably talk back — one that reported
     // itself closed. Neither is a reason to give up; both are a reason to
     // take the long way round.
     if (REDIRECT_FALLBACK.has(e?.code) || (popupIsFragile() && isCancelled(e))) return viaRedirect();
     throw fail(e);
-  }
+  });
 }
 
-// The other half of the redirect flow, called once at startup. A pending
-// redirect resolves into a signed-in user here; onAuthUser then fires with
-// it like any other sign-in, so callers only need this to surface an ERROR
-// that happened on the far side of the round trip — which would otherwise
-// be invisible, the app simply showing the sign-in screen again.
-export async function consumeRedirectResult() {
-  const attempted = takeRedirectMark();
-  try {
-    const auth = await authReady();
-    const res = await getRedirectResult(auth);
-    if (res?.user) return { user: res.user, error: null };
-    if (attempted) {
-      // We sent them to the provider and got back nothing at all. On an
-      // iOS home-screen install this is storage partitioning: the handler
-      // lives on another origin and Safari will not let it hand the result
-      // back. Naming it beats another silent trip to the sign-in screen.
-      return {
-        user: null,
-        error: "Sign-in came back empty. On an iPhone home-screen app this usually clears if you open the site in Safari instead — tell Aaron if it keeps happening.",
-      };
-    }
-    return { user: null, error: null };
-  } catch (e) {
-    if (isCancelled(e)) return { user: null, error: null };
-    return { user: null, error: friendly(e) };
-  }
-}
+// The other half of the redirect flow, and the app's startup call. Both
+// are the same promise now (see warmAuth): collecting a pending redirect
+// is what initializes the resolver, so asking the question is also what
+// makes the next popup openable. A SUCCESSFUL redirect needs nothing from
+// the caller — the state listener fires with the new user like any other
+// sign-in — but a failed one has no other way to be seen.
+export const consumeRedirectResult = () => warmAuth();
 
 // ── Watching the session ────────────────────────────────────────────
 // Fires immediately with the restored user (or null) once the SDK has read
@@ -275,9 +301,13 @@ export async function consumeRedirectResult() {
 export function onAuthUser(cb) {
   let stop = () => {};
   let cancelled = false;
-  authReady().then((auth) => {
+  // Not awaited on the instance (getAuth is synchronous), but deferred a
+  // tick so the listener is registered after warmAuth has had the chance
+  // to collect a pending redirect — the SDK reports that as an ordinary
+  // sign-in, and registering first would have it arrive twice.
+  Promise.resolve().then(() => {
     if (cancelled) return;
-    stop = onAuthStateChanged(auth, (u) => {
+    stop = onAuthStateChanged(authInstance(), (u) => {
       cb(u ? {
         uid: u.uid,
         email: u.email || null,
@@ -294,7 +324,7 @@ export function onAuthUser(cb) {
 }
 
 export async function signOutUser() {
-  try { await signOut(await authReady()); }
+  try { await signOut(authInstance()); }
   catch (e) { console.error("[auth] signOut", e); }
 }
 
@@ -319,7 +349,7 @@ export async function signOutUser() {
 // deletes the account regardless — refusing to delete somebody's account
 // because a popup would not open is the worse failure of the two.
 export async function revokeProviderAccess() {
-  const auth = await authReady();
+  const auth = authInstance();
   const u = auth.currentUser;
   if (!u) return { revoked: false, reason: "no_user" };
   // Google issues no token this call can revoke; Firebase's
@@ -346,3 +376,10 @@ export async function revokeProviderAccess() {
 // "google.com" / "apple.com"; the roster wants a word.
 export const providerLabel = (providerId) =>
   providerId === "apple.com" ? "Apple" : providerId === "google.com" ? "Google" : "account";
+
+// Start the warm-up the moment this module is evaluated, not when a screen
+// mounts or a button is tapped. On a phone that just installed the app,
+// loading the auth iframe is a cold network fetch, and every millisecond
+// of it that happens before the user's thumb arrives is a millisecond the
+// popup is not waiting on.
+warmAuth();

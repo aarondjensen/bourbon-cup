@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, HOLE_BANNER, FS, segThumb, segTrack, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor, VP_BAND } from "./theme";
 import { playerLookup } from "./lib/players";
 import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, BOOTSTRAP_DIRECTOR } from "./firebase";
-import { PROVIDERS, signIn, signOutUser, onAuthUser, consumeRedirectResult, isCancelled } from "./lib/auth";
+import { PROVIDERS, signIn, signOutUser, onAuthUser, consumeRedirectResult, isCancelled, whenAuthReady } from "./lib/auth";
 import { claimPlayer, linkedPlayer, isClaimed, accountLabel, unlinkPatch, readMembership, isDirectorAccount, joinWithCode, setAccessCode, readAccessCode, setDirector, membershipFor, playerIsDirector, accountsUnreadable, ACCOUNTS_COL, deleteAccount } from "./lib/accounts";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
@@ -329,6 +329,13 @@ const AppleMark = ({ size = 18, color = "#FFFFFF" }) => (
 // ── Screen 1: sign in ───────────────────────────────────────────────
 function SignInScreen({ tournamentName, tournamentLocation, initialError }) {
   const [busy, setBusy] = useState(null);
+  // Whether a popup can actually be opened yet — see lib/auth.js. On a
+  // fresh home-screen install the auth iframe is a cold network fetch, and
+  // a tap that lands before it finishes gets a window Safari refuses. A
+  // button disabled for that moment is a better answer than one that looks
+  // ready and silently does nothing, which is what this cost twice.
+  const [ready, setReady] = useState(false);
+  useEffect(() => { let live = true; whenAuthReady().then(() => { if (live) setReady(true); }); return () => { live = false; }; }, []);
   // Two sources, no effect syncing them: `initialError` is what a redirect
   // sign-in failed with on the far side (iOS home-screen installs take that
   // route), which would otherwise be invisible — the app just reappears
@@ -350,12 +357,14 @@ function SignInScreen({ tournamentName, tournamentLocation, initialError }) {
   };
 
   const btn = (p) => (
-    <button key={p.id} onClick={() => go(p.id)} disabled={!!busy} style={{
+    <button key={p.id} onClick={() => go(p.id)} disabled={!!busy || !ready} style={{
       width: "100%", padding: "13px 16px", borderRadius: 12,
       background: p.brand, color: p.ink,
       border: p.id === "google" ? "1px solid rgba(0,0,0,0.16)" : "1px solid rgba(255,255,255,0.22)",
       fontFamily: FONT, fontSize: FS.body, fontWeight: 700, letterSpacing: 0.2,
-      cursor: busy ? "default" : "pointer", opacity: busy && busy !== p.id ? 0.5 : 1,
+      cursor: (busy || !ready) ? "default" : "pointer",
+      opacity: !ready ? 0.55 : (busy && busy !== p.id ? 0.5 : 1),
+      transition: "opacity .2s",
       display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
       boxShadow: `0 2px 10px ${SHADOW}`,
     }}>
