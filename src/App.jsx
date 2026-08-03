@@ -4629,16 +4629,19 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   const [activeRound, setActiveRound] = useState(null);
   const [editPot, setEditPot] = useState(false);
   const [potInput, setPotInput] = useState("");
-  const [grossMode, setGrossMode] = useState(false);
+  // Gross is the default, and the left-hand option. Skins are a gross game
+  // here; net is the deviation, and it should take a deliberate tap to get to
+  // rather than being what the tab quietly opens on.
+  const [grossMode, setGrossMode] = useState(true);
   // The CTP tab keeps its own round and its own open state. Sharing them with
   // the skins card would mean opening one tab silently rearranged the other.
   const [ctpRound, setCtpRound] = useState(null);
   const [editBuyIns, setEditBuyIns] = useState(null); // "skins" | "ctp" | null
   const { confirm, confirmModal } = useConfirm();
 
-  // Net is the DEFAULT, so this cannot fire on arrival — only when somebody
-  // has gone to Gross and come back, which is a deliberate act and therefore
-  // fair game. Fires every time they do it, which is the joke.
+  // Gross is the default, so this never fires on arrival: reaching Net always
+  // means somebody crossed the toggle to get there, which is a deliberate act
+  // and therefore fair game. Fires every time they do it, which is the joke.
   const pickMode = (gross) => {
     setGrossMode(gross);
     if (!gross) {
@@ -4916,7 +4919,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
 
           {/* Gross/Net toggle */}
           <SegmentedToggle
-            options={[[false, "Net"], [true, "Gross"]]}
+            options={[[true, "Gross"], [false, "Net"]]}
             value={grossMode}
             onChange={pickMode}
             style={{ marginBottom: 12, width: 160, marginLeft: "auto", marginRight: "auto" }}
