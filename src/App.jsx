@@ -4637,21 +4637,6 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // the skins card would mean opening one tab silently rearranged the other.
   const [ctpRound, setCtpRound] = useState(null);
   const [editBuyIns, setEditBuyIns] = useState(null); // "skins" | "ctp" | null
-  const { confirm, confirmModal } = useConfirm();
-
-  // Gross is the default, so this never fires on arrival: reaching Net always
-  // means somebody crossed the toggle to get there, which is a deliberate act
-  // and therefore fair game. Fires every time they do it, which is the joke.
-  const pickMode = (gross) => {
-    setGrossMode(gross);
-    if (!gross) {
-      confirm({
-        title: "NET skins?!",
-        message: "This is for entertainment purposes only, real men don't play net skins.",
-        alert: true,
-      });
-    }
-  };
 
   // ── Who is playing for what ──
   // A null list means the director has never tagged anybody, and that means
@@ -4921,7 +4906,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
           <SegmentedToggle
             options={[[true, "Gross"], [false, "Net"]]}
             value={grossMode}
-            onChange={pickMode}
+            onChange={setGrossMode}
             style={{ marginBottom: 12, width: 160, marginLeft: "auto", marginRight: "auto" }}
           />
 
@@ -5109,8 +5094,6 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
             )}
         </div>
       )}
-
-      <ConfirmModal modal={confirmModal} />
     </div>
   );
 }
