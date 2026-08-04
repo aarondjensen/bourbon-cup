@@ -17,6 +17,10 @@
 //       useHoleAdvance({ matchId: match?.id, pids, getScore });
 //
 // `getScore(pid, hole)` must return 0 (not undefined) for an unscored hole.
+//
+// `hold` freezes the advance where it is — for a screen that raises a
+// question about the hole just finished (the CTP prompt) and needs the hole
+// to still be there while it is answered.
 import { useEffect, useRef, useState } from "react";
 
 export const HOLES = 18;
@@ -75,7 +79,7 @@ export function openingHole(pids, score, holes = HOLES) {
   return { hole: holes - 1, allComplete: true, hasAnyScores: true, resolved: true };
 }
 
-export function useHoleAdvance({ matchId, pids, getScore }) {
+export function useHoleAdvance({ matchId, pids, getScore, hold = false }) {
   // Open on the live edge, resolved synchronously from the scores we already
   // have. Leaving the screen unmounts it, so returning mid-round used to
   // render hole 1 and jump forward 400ms later — a visible flash on every
@@ -188,6 +192,12 @@ export function useHoleAdvance({ matchId, pids, getScore }) {
     // Arm before the suppression checks — a hole the user is mid-edit on still
     // needs to arm so finishing it advances as usual.
     if (!holeComplete) { if (anyScores) advanceArmed.current[armKey] = true; return; }
+    // Held: the screen is asking about THIS hole (the CTP prompt) and the
+    // answer is about the shot that was just played on it. Sliding the hole
+    // out from under that question — and the toast animating behind the
+    // popup — is what the hold is for. The arm above still stands, so the
+    // advance runs as usual the moment the question is answered.
+    if (hold) return;
     if (activeHole >= 17 || editing || allComplete) return;
     if (!advanceArmed.current[armKey]) return;
     // Fire immediately so the wait reads as "saving — advancing", not dead time.
@@ -207,7 +217,7 @@ export function useHoleAdvance({ matchId, pids, getScore }) {
     return () => { clearTimeout(timer); setToast(null); };
     // pids is fixed for a match, and the derived signals above already cover scores
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [holeComplete, activeHole, editing, allComplete, anyScores, curHoleScoreSig, matchId]);
+  }, [holeComplete, activeHole, editing, allComplete, anyScores, curHoleScoreSig, matchId, hold]);
 
   // Safety net — clear the toast after 3s in case the cleanup misses an edge.
   useEffect(() => {

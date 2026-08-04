@@ -692,7 +692,7 @@ function LoginSplash({ tournamentName, tournamentLocation }) {
 const HOLE_RING = { width: 2, offset: 1 };
 const HOLE_RING_REACH = HOLE_RING.width + HOLE_RING.offset;
 
-function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teams, hcpOverrides, teeAssignments, roundLocks, rounds, currentRound, ctpData, onSetCtp, cardSigs, onSignCard, onAttestCard, onUnsignCard }) {
+function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teams, hcpOverrides, teeAssignments, roundLocks, rounds, currentRound, ctpData, onSetCtp, onConfirmCtp, cardSigs, onSignCard, onAttestCard, onUnsignCard }) {
   const userPid = user.player_id;
   // This screen is worked from, not read down — four players' scores have to
   // be reachable without scrolling to the one at the bottom. It measures the
@@ -829,7 +829,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // Which hole is showing, when it moves on by itself, and the toast during
   // the wait — see lib/useHoleAdvance.
   const { activeHole, goToHole, toast, positionOn } =
-    useHoleAdvance({ matchId: match?.id ?? null, pids: matchPids, getScore });
+    useHoleAdvance({ matchId: match?.id ?? null, pids: matchPids, getScore, hold: ctpPrompt != null });
 
   const par = holePars[activeHole];
   const hcp = holeHcps[activeHole];
@@ -964,11 +964,11 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // has claimed it.
   const ctpFor = (h) => ctpData?.[`${match.round}_${h}`] || null;
 
-  // Ported from MNQ: when the score just entered completes a par 3 for THIS
-  // group, pop the tag popup on the device that entered it. Every group gets
-  // the prompt as they walk off the green — an earlier group's tag shows in
-  // the popup as the number to beat, so a group either claims the hole or
-  // dismisses with "our group wasn't closer" and leaves it standing.
+  // When the score just entered completes a par 3 for THIS group, pop the tag
+  // popup on the device that entered it. Every group gets the prompt as they
+  // walk off the green — an earlier group's tag shows in the popup as the
+  // number to beat, so a group either claims the hole with a shorter distance
+  // or passes and leaves it standing.
   //
   // Guards, in the order they matter:
   //   • a real score on a par 3 — clearing a score never opens it
@@ -1001,6 +1001,18 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     // Through notify(), not the hole-advance toast: tagging a CTP is ordinary
     // app feedback, not part of the "this hole is done" sequence.
     notify(`🎯 CTP tagged — hole ${h + 1} · ${nm} ${feet} ft`);
+  };
+
+  // The other answer the prompt takes. A group that walks off a par 3 without
+  // getting inside the standing tag is not saying nothing — they are saying
+  // the tag is right, and that is the only thing that turns "nobody has been
+  // asked" into "everybody has been asked and it stands". Recorded against
+  // the reader's own player id, so a hole cannot be confirmed by a phone
+  // nobody is holding.
+  const confirmCtp = async () => {
+    const h = ctpPrompt;
+    if (h == null || !userPid) return;
+    await onConfirmCtp?.(match.round, h, userPid);
   };
 
   // ScoreButtonRow hands back the new gross directly (0 = cleared, which it
@@ -1698,6 +1710,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
             leader={rec}
             leaderName={rec?.player_id ? (tPlayers.find(p => p.player_id === rec.player_id)?.name || "") : ""}
             onSave={saveCtp}
+            onPass={confirmCtp}
             onClose={() => setCtpPrompt(null)}
           />
         );
@@ -5071,6 +5084,13 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                         // the director touches it here — picking a name from the
                         // dropdown (even re-picking the same one) is the approval.
                         const pending = !!winnerId && rec?.approved !== true;
+                        // How many groups have walked off this hole agreeing
+                        // the tag stands (the pass answer in the on-course
+                        // prompt). It is the difference between a tag nobody
+                        // has been past yet and one the whole field has seen,
+                        // which is exactly what a director is weighing when
+                        // deciding whether to settle it.
+                        const agreed = (rec?.confirmed_by || []).length;
                         return (
                           <div key={hole} style={{ background: BC.card, borderRadius: 8, padding: "8px 12px", marginBottom: 4, border: `1px solid ${winner ? BC.amber + ALPHA.line : BC.bdr}`, display: "flex", alignItems: "center", gap: 8 }}>
                             <span style={{ fontSize: FS.small, fontWeight: 700, color: BC.t3, width: 54, flexShrink: 0, whiteSpace: "nowrap" }}>Hole {hole + 1}</span>
@@ -5090,7 +5110,16 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                               <span style={{ flex: 1, minWidth: 0, fontSize: FS.small, fontWeight: 600, color: winner ? BC.amberInk : BC.t3 }}>{winner ? winner.name : "Not set"}</span>
                             )}
                             {rec?.distance_ft ? <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.amberInk, flexShrink: 0 }}>{rec.distance_ft} ft</span> : null}
-                            {pending && <span title="Tagged on the course — not settled yet" style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, border: `1px solid ${BC.bdr}`, borderRadius: 4, padding: "1px 4px", flexShrink: 0 }}>Pending</span>}
+                            {pending && (
+                              <span
+                                title={agreed
+                                  ? `Tagged on the course — not settled yet. ${agreed} later ${agreed === 1 ? "group has" : "groups have"} confirmed it stands.`
+                                  : "Tagged on the course — not settled yet"}
+                                style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, border: `1px solid ${BC.bdr}`, borderRadius: 4, padding: "1px 4px", flexShrink: 0, whiteSpace: "nowrap" }}
+                              >
+                                Pending{agreed ? ` · ✓${agreed}` : ""}
+                              </span>
+                            )}
                             {winner && <span style={{ fontSize: FS.label, color: BC.amberInk, flexShrink: 0 }}>📍</span>}
                           </div>
                         );
@@ -5662,6 +5691,8 @@ export default function App() {
   // it saw when it was created — silently dropping the attestation that
   // landed in between.
   const cardSigsRef = useRef([]);
+  // And for the CTP records, which confirming appends to the same way.
+  const ctpDataRef = useRef({});
   const lockInputsRef = useRef({ players: [], tRounds: [], courses: [], hcpOverrides: {}, teeAssignments: {} });
   const lockInFlightRef = useRef({}); // { round: true } — de-dupes concurrent auto-locks in this client
 
@@ -5886,8 +5917,13 @@ export default function App() {
           distance_ft: r.distance_ft ?? null,
           approved: r.approved === true,
           tagged_by: r.tagged_by || null,
+          // Who has walked off the hole agreeing the tag stands. See
+          // onConfirmCtp — a pass in the on-course prompt is an answer,
+          // and this is where it lands.
+          confirmed_by: Array.isArray(r.confirmed_by) ? r.confirmed_by : [],
         };
       });
+      ctpDataRef.current = cd;   // keep the ref hot for the confirm append
       setCtpData(cd);
     }));
     unsubs.push(db.subscribe("bc_tournament_settings", f, rows => {
@@ -6191,6 +6227,27 @@ export default function App() {
     } else {
       await db.delete("bc_ctp", id);
     }
+  }, []);
+  // ── Confirming a standing CTP ────────────────────────────────────────
+  // The pass answer from the on-course prompt. Additive and idempotent, so
+  // two phones in the same group confirming at once converge instead of
+  // racing, and a group re-answering its own hole doesn't stack duplicates.
+  //
+  // A merge write of ONLY this field, deliberately: the winner, the distance
+  // and who tagged it belong to whoever tagged it, and a confirmation must
+  // never be able to overwrite them. It reads the record it is appending to
+  // out of the live map rather than the document, which is the same snapshot
+  // the prompt showed the group — confirming what they were actually looking
+  // at. Nothing to confirm on an untagged hole.
+  const onConfirmCtp = useCallback(async (round, hole, pid) => {
+    const rec = ctpDataRef.current[`${round}_${hole}`];
+    if (!rec?.player_id || !pid) return;
+    if ((rec.confirmed_by || []).includes(pid)) return;
+    await db.upsert("bc_ctp", {
+      id: editionDocId(`bc_ctp_r${round}_h${hole+1}`),
+      tournament_id: TOURNAMENT_ID,
+      confirmed_by: [...new Set([...(rec.confirmed_by || []), pid])],
+    });
   }, []);
   // ── Card signature / attestation ─────────────────────────────────────
   // Three writes against bc_card_sigs, and the whole workflow is these
@@ -6831,6 +6888,7 @@ export default function App() {
             currentRound={currentRound}
             ctpData={ctpData}
             onSetCtp={onSetCtp}
+            onConfirmCtp={onConfirmCtp}
             cardSigs={cardSigs}
             onSignCard={onSignCard}
             onAttestCard={onAttestCard}
