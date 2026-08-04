@@ -77,23 +77,42 @@ export const cardComplete = (match, holeData) => {
 // whole round and loudest at the first tee, when it has nothing to say; it
 // also meant the one thing it exists to catch, a hole where three players
 // are in and the fourth was skipped, arrived buried in eight holes of
-// noise. So the window is the holes the match has actually played: any hole
-// where SOMEBODY has a score. Within that window a blank is a real gap.
+// noise. So a hole only counts once SOMEBODY has a score on it.
 //
-// A player who has posted nothing at all still shows every played hole,
-// which is right — they are either still out there or have been missed, and
-// both are worth naming. MnQ excludes that case because a league night has
-// an "absent / making up" concept; a Bourbon Cup round has no such thing.
+// ── And not the hole they are standing on either ──────────────────────
+// That alone is not enough, and it is why this note still fired on the
+// first tee: the moment the first of four players is entered, the hole he
+// was entered on has "somebody with a score", so the other three are
+// instantly missing it. The scorer is told the card cannot be signed while
+// he is still tapping in the group he is standing with.
+//
+// So the window stops SHORT of the furthest hole anybody has touched. That
+// hole is the one in progress, by definition — it is where the group is —
+// and a blank on it is a score not yet typed, not a gap. Everything before
+// it is behind them, and a blank there is somebody who got skipped.
+//
+// The two conditions are both load-bearing. Dropping the first would flag
+// holes the group has not reached at all, which on a shotgun start is most
+// of the card for most of the round; dropping the second is the bug above.
+//
+// A player who has posted nothing at all still shows every hole in that
+// window, which is right — they are either still out there or have been
+// missed, and both are worth naming. MnQ excludes that case because a
+// league night has an "absent / making up" concept; a Bourbon Cup round has
+// no such thing.
 //
 // This is deliberately NOT how `cardComplete` above decides: signing still
 // requires all 18. The note answers "what is stopping me signing RIGHT NOW
-// that I could go fix", and an unplayed hole is not that.
+// that I could go fix", and neither an unplayed hole nor the one being
+// played is that.
 export const missingForCard = (match, holeData) => {
   if (match?.round == null) return [];
   const pids = matchPlayers(match);
   const scoreAt = (pid, h) => holeData?.[`${pid}_${match.round}`]?.[h];
-  const played = [];
-  for (let h = 0; h < 18; h++) if (pids.some(pid => scoreAt(pid, h) > 0)) played.push(h);
+  const touched = [];
+  for (let h = 0; h < 18; h++) if (pids.some(pid => scoreAt(pid, h) > 0)) touched.push(h);
+  const frontier = touched.length ? touched[touched.length - 1] : -1;
+  const played = touched.filter(h => h < frontier);
   return pids
     .map(pid => ({ pid, holes: played.filter(h => !(scoreAt(pid, h) > 0)).map(h => h + 1) }))
     .filter(m => m.holes.length > 0);

@@ -204,11 +204,26 @@ export const getBCTheme = (mode, brand = null) => {
       danger: "#c1272d",    // traditional deep red
       // Burnt orange. Unlike amber this one is only ever INK — every call
       // site is a `color:` — so it can just be dark enough to read, no
-      // second token needed. It was #c2570d, which measured 4.07:1 on the
-      // surface it most often sits on: the 8% wash of itself behind the
-      // can't-sign note, where it is a 10px label. 4.52:1 there now, 4.79
-      // on the page, 5.00 on a card.
-      warn: "#b6520c",
+      // second token needed.
+      //
+      // Measured on the surface it actually sits on rather than the one it
+      // was assumed to: the can't-sign note on Scoring lays its 8% wash over
+      // the PAGE, not over a card, and the page is the darker of the two.
+      // #b6520c was picked against the card and reads 4.32:1 where the note
+      // really is. #af4f0c is 4.59:1 there, 5.09 on the page, 5.32 on a card.
+      warn: "#af4f0c",
+      // ── The selected score chip ──
+      // The page, inverted — but pulled back off the extreme. At full t1 the
+      // chip was near-black on a white page at 17:1, which reads as an alert
+      // rather than a tick. This is a charcoal: still unmistakably the
+      // loudest thing on the card at 12:1 for the digit and 12.5:1 against
+      // the card, without shouting.
+      sel: "#33333a",
+      // The birdie circle drawn on that chip, which is why it is a BRIGHT
+      // red on the LIGHT palette. The chip is the page turned over, so
+      // everything on it wants the ink of the other mode: a deep red would
+      // vanish into a charcoal. 3.60:1 on it, past the 3:1 a ring needs.
+      birdieRed: "#ef5350",
       green: "#047857",     // generic positive (distinct from brand accent)
       // Handicap blue — matches MNQ's K.hcpBlue exactly so users
       // moving between the two apps see consistent visual language for
@@ -243,7 +258,24 @@ export const getBCTheme = (mode, brand = null) => {
     gold: "#d4a843",        // SECONDARY ACCENT — bourbon brown
     goldGlow: "rgba(212,168,67,0.12)",
     danger: "#ef5350",
-    warn: "#f59e0b",
+    // Burnt orange, and it has to be ORANGE — #f59e0b was hue 38° against
+    // amber's 40°, which measures 1.01:1 side by side. Not "similar": the
+    // same colour. On the dark Scoring screen the can't-sign strip sat two
+    // rows above an amber score button and read as more amber chrome rather
+    // than as a warning. The light palette never had this problem — its warn
+    // is hue 25° and separates from its amber at 1.46:1 — so this is that
+    // separation brought across: hue 26°, 1.40:1 apart, still 6.68:1 on the
+    // page.
+    warn: "#ef7215",
+    // ── The selected score chip ── (see the light palette for the idea)
+    // Softened the same way and for the same reason: pure #f5f4f2 on a black
+    // page was 18:1, a headlight in a dark room and the brightest thing on a
+    // screen used outdoors at dusk. This off-white keeps the digit at 14:1
+    // and the chip at 12.9:1 against its card.
+    sel: "#d9d9de",
+    // DEEP red here, because this chip is the light one. Same inversion as
+    // the light palette's, running the other way. 4.15:1 on it.
+    birdieRed: "#c1272d",
     green: "#22c55e",
     hcpBlue: "#3b82f6",
   });
@@ -321,7 +353,12 @@ export const ON_ACCENT = "#ffffff";
 // still reads as a distinct block against both pages (4.42:1 on the light
 // one, 4.29:1 on the dark). It is not `amber` and is not meant to be —
 // amber is the bright accent you tap, and it wears the near-black.
-export const BROWN = "#9b6c16";
+// Saturation nudged from #9b6c16 (75%) to 90% at the same lightness. On a
+// near-black page a brown this dark has to earn its warmth from chroma or it
+// reads olive — "muddy", next to the gold accent it shares a hue with. Every
+// number it is built on is unmoved: white 4.61:1 on it, and the bar reads
+// 4.30:1 against the dark page and 4.41:1 against the light one.
+export const BROWN = "#a06a08";
 
 // The header pair, named once. The hole banner over Scoring and the
 // current-hole chip in the strip above it are the same fact said twice on

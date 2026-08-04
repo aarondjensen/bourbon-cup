@@ -7,10 +7,11 @@
 //    • SegmentedToggle — the rounded pill tab switcher.
 //    • StickyTop       — the pinned control strip at the top of a tab.
 //    • Banner          — the brown section header strip.
+//    • PlayerName      — a name with its initial in the team's colour.
 //    • Toast           — the transient "slides down from the top" toast.
 //    • ScoreButtonRow  — the tappable par-relative score entry row.
 
-import { BC, FONT, ON_ACCENT, ON_AMBER, BROWN, HOLE_BANNER, SHADOW, ALPHA, dimHex, FS, segThumb, segTrack } from "../theme";
+import { BC, FONT, ON_ACCENT, BROWN, HOLE_BANNER, SHADOW, ALPHA, dimHex, teamColor, FS, segThumb, segTrack } from "../theme";
 
 
 // The rule that marks the thumb. A child rather than a border because it is
@@ -119,6 +120,32 @@ export function Banner({ children, background = BROWN, color = ON_ACCENT }) {
       <div style={{ fontSize: FS.small, color, fontWeight: 800, letterSpacing: 2 }}>{children}</div>
     </div>
   );
+}
+
+// ── PlayerName ──
+// A player's name with its first letter in their team's colour.
+//
+// The scoring screen stacks four names with nothing but a dashed rule to say
+// which two are on which side, and the rule is easy to miss on a phone held
+// at arm's length in the sun. One coloured letter puts the side on every
+// name without spending a row, a badge or a swatch — and it is the same
+// thing the Full Scorecard already does with its initials column, so this is
+// the treatment spreading rather than a new one arriving.
+//
+// Returns a fragment, not a wrapper: every caller already has a span with its
+// own size, weight, clipping and ellipsis on it, and those must keep applying
+// to the whole name. Only the colour of the first character changes.
+//
+// An unknown team leaves the name entirely alone — a roster row with no side
+// is a data problem, and inventing a colour for it would hide that.
+export function PlayerName({ name, team }) {
+  const s = String(name ?? "");
+  if (!s) return null;
+  const c = team === "A" || team === "B" ? teamColor(team) : null;
+  if (!c) return s;
+  return <>
+    <span style={{ color: c }}>{s.slice(0, 1)}</span>{s.slice(1)}
+  </>;
 }
 
 // ── Toast ──
@@ -261,9 +288,13 @@ export function ScoreButtonRow({ par, score, onScore, fill = false, minHeight = 
     ? { flex: "1 1 auto", minHeight, height: "auto" }
     : { height: minHeight };
 
+  // t2, not t3: the glyph IS the control here, and on the sunken `inp` fill
+  // t3 measured 4.23:1 in dark and 2.67:1 in light — the second of those is
+  // under the 3:1 floor for a graphical control, never mind text. t2 keeps
+  // them quieter than the score numbers (t1) without making them a guess.
   const nudge = {
     width: 30, borderRadius: 8, background: BC.inp, border: "none",
-    color: BC.t3, fontSize: FS.body, fontWeight: 700, cursor: "pointer", flexShrink: 0,
+    color: BC.t2, fontSize: FS.body, fontWeight: 700, cursor: "pointer", flexShrink: 0,
     ...btnBox,
   };
   // Each control sits in a column with a label slot beneath it, the nudges
@@ -292,7 +323,7 @@ export function ScoreButtonRow({ par, score, onScore, fill = false, minHeight = 
         const boxSize = 32;
         // Par anchor — the par button's label gets a brighter color and a
         // bolder weight so the eye finds par as the visual reference.
-        // Suppressed when par is the selected score (the amber fill is
+        // Suppressed when par is the selected score (the selected fill is
         // already the focal point) and absent entirely when recentered,
         // since par isn't in the window then.
         const showParAnchor = btn === par && !isCur;
@@ -300,20 +331,44 @@ export function ScoreButtonRow({ par, score, onScore, fill = false, minHeight = 
           <div key={btn} style={{ ...column, flex: 1 }}>
             <button onClick={() => onScore(isCur ? 0 : btn)} style={{
               width: "100%", ...btnBox, borderRadius: 8, cursor: "pointer", fontSize, fontWeight: 800,
-              border: "none", background: isCur ? BC.amber : BC.inp, color: isCur ? ON_AMBER : BC.t2,
+              // INVERTED — the chip is the page turned inside out: a light
+              // fill on a dark page and a dark one on a light page, with the
+              // page's own colour written back on it. The loudest thing on
+              // the screen without spending a hue to get there.
+              //
+              // Which matters, because every hue here is already taken. In
+              // amber it clashed with the hole banner — same hue, 24 points
+              // of lightness apart, near enough to read as a failed match.
+              // In brown it matched the banner and stopped reading as a tap
+              // at all. Inverted collides with nothing, because it is not a
+              // colour.
+              //
+              // BC.sel rather than BC.t1: at the full extreme this was 18:1,
+              // which is a headlight rather than a tick. Backed off to ~12:1
+              // — still unmistakably the loudest thing on the card, and no
+              // longer the brightest thing on the phone. See theme.
+              border: "none",
+              background: isCur ? BC.sel : BC.inp,
+              color: isCur ? BC.bg : BC.t2,
               position: "relative", display: "flex", alignItems: "center", justifyContent: "center",
               // No CSS transition: when the hole auto-advances, all four
               // selections should swap instantly. A fade cross-dissolves them
               // through a half-amber state that reads as ghost selections.
             }}>
-              {/* SELECTED-STATE rings — red circle for under par (nested for
-                  eagle-or-better), dark square for over par (nested for
-                  double-bogey-or-worse). Drawn over the amber fill. */}
+              {/* SELECTED-STATE rings — a RED circle for under par (nested
+                  for eagle-or-better), a square in the chip's own ink for
+                  over par (nested for double-bogey-or-worse).
+
+                  The birdie ring is red because that is what a birdie ring
+                  is on a paper card, and it is BC.birdieRed rather than
+                  BC.danger because this chip's surface runs OPPOSITE to the
+                  page — so it wants the other mode's red, and birdieRed is
+                  that inversion already resolved per palette. See theme. */}
               {isCur && sd !== 0 && (
                 <div style={{ position: "absolute", width: boxSize, height: boxSize, left: "50%", top: "50%", transform: "translate(-50%, -50%)" }}>
-                  <div style={{ position: "absolute", inset: 0, borderRadius: sd < 0 ? "50%" : 3, border: `1.5px solid ${sd < 0 ? BC.danger : ON_AMBER}` }} />
+                  <div style={{ position: "absolute", inset: 0, borderRadius: sd < 0 ? "50%" : 3, border: `1.5px solid ${sd < 0 ? BC.birdieRed : BC.bg}` }} />
                   {Math.abs(sd) >= 2 && (
-                    <div style={{ position: "absolute", inset: 3, borderRadius: sd < 0 ? "50%" : 2, border: `1px solid ${sd < 0 ? BC.danger : ON_AMBER}` }} />
+                    <div style={{ position: "absolute", inset: 3, borderRadius: sd < 0 ? "50%" : 2, border: `1px solid ${sd < 0 ? BC.birdieRed : BC.bg}` }} />
                   )}
                 </div>
               )}
