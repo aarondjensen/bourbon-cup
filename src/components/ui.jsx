@@ -165,7 +165,23 @@ export function PlayerName({ name, team }) {
 // the 1.8s auto-advance window and clear it the moment the hole changes.
 // Both are just a caller deciding when `message` is truthy.
 const TOAST_ACCENT = { error: "danger", warn: "warn", success: "green" };
-export function Toast({ message, type = "success", top = 30 }) {
+// `oneLine` is for a toast that has to fit inside something. The scoring
+// screen's auto-advance toast lands on the app header band and must not reach
+// past it: everything below that band is a tappable hole, and a toast sitting
+// over the strip both hides the hole you are being advanced to and eats the
+// tap if you reach for it. Two lines of the default box is 54px, which clears
+// the band and lands squarely on the strip.
+//
+// So this variant is short by construction rather than by luck — one line,
+// clipped rather than wrapped, on a box small enough to sit within the band
+// (26px against the band's 51). Its message is expected to be short; a long
+// one ellipsises instead of growing, which is the right failure for a chip
+// that is gone in 1.8 seconds.
+//
+// The default box is unchanged, because notify() carries arbitrary text —
+// a CTP tag with a name and a distance in it — and clipping that would lose
+// the part that matters.
+export function Toast({ message, type = "success", top = 30, oneLine = false }) {
   if (!message) return null;
   const accent = BC[TOAST_ACCENT[type] || "green"];
   return (
@@ -175,9 +191,14 @@ export function Toast({ message, type = "success", top = 30 }) {
         position: "fixed", top, left: "50%", transform: "translateX(-50%)",
         background: dimHex(accent, 0.42), border: `1px solid ${accent}`,
         color: ON_ACCENT,
-        padding: "10px 22px", borderRadius: 12,
-        fontSize: FS.body, fontWeight: 700, zIndex: 1000,
-        maxWidth: "80vw", textAlign: "center",
+        borderRadius: oneLine ? 999 : 12,
+        padding: oneLine ? "5px 14px" : "10px 22px",
+        fontSize: oneLine ? FS.small : FS.body,
+        lineHeight: oneLine ? 1.2 : undefined,
+        fontWeight: 700, zIndex: 1000,
+        maxWidth: oneLine ? "min(88vw, 340px)" : "80vw",
+        ...(oneLine ? { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } : null),
+        textAlign: "center",
         boxShadow: `0 8px 32px ${SHADOW}`,
         animation: "bcToastDown 0.3s ease",
         fontFamily: FONT,

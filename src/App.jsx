@@ -42,7 +42,7 @@ import { usePullToRefresh } from "./lib/usePullToRefresh";
 import { useFitDensity } from "./lib/useFitDensity";
 import { processLogo } from "./lib/logoBrand";
 import ErrorBoundary from "./components/ErrorBoundary";
-import { AppHeader, HEADER_SLOT_ID } from "./components/AppHeader";
+import { AppHeader, HEADER_SLOT_ID, HEADER_TOAST_TOP } from "./components/AppHeader";
 import { Popup, ConfirmModal } from "./components/Popup";
 import { CtpPrompt } from "./components/CtpPrompt";
 import { DirectorFinalizeAlert, FinalizeRoundSheet } from "./components/FinalizeRound";
@@ -895,7 +895,10 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           on any branch. */}
       {groupSwitcher}
       {children}
-      <Toast message={toast} />
+      {/* Pinned to the app header band and kept to one line, because
+          everything below that band on this screen is a tappable hole — see
+          AppHeader's HEADER_TOAST_TOP and ui's Toast. */}
+      <Toast message={toast} top={HEADER_TOAST_TOP} oneLine />
       {/* The closed-round catch asks through this. On `shell` rather than in
           the branches, so the question can be asked from anywhere on the
           screen — including the banner, which renders above the fold on the

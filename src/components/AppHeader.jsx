@@ -85,6 +85,18 @@ const HEADER_SAFE_PAD = "calc(env(safe-area-inset-top, 0px) + 5px)";
 // portaling side names the same box this one renders.
 export const HEADER_SLOT_ID = "bc-header-slot";
 
+// Where a fixed-position toast has to sit to land ON this band and nowhere
+// else. The band's content runs from HEADER_SAFE_PAD for 51px — trophy 28,
+// gap 4, caption 12, bottom padding 7 — so a 26px one-line toast centres at
+// +17 and its bottom edge stops ~13px short of the band's.
+//
+// Exported for the same reason HEADER_SLOT_ID is: the alternative is the
+// scoring screen hardcoding a guess at this file's padding, and then being
+// silently wrong the next time the trophy is resized. Everything below this
+// band on the Scoring tab is a tappable hole, so "how far down can a toast
+// reach" is a real constraint and it belongs to the thing that sets it.
+export const HEADER_TOAST_TOP = "calc(env(safe-area-inset-top, 0px) + 17px)";
+
 export function AppHeader({ location }) {
   return (
     // Sized for a band that is now on EVERY screen rather than one: the mark
