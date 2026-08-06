@@ -34,7 +34,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BC, FONT, FS, ALPHA, ON_ACCENT, ON_AMBER } from "../theme";
 import { Popup } from "./Popup";
 import { PHOTO_LIBRARY_URL } from "../constants";
-import { groupByRound, canDelete, validateSource } from "../lib/media";
+import { groupByRound, canDelete, validateSource, uploadFailureMessage } from "../lib/media";
 
 // Same two primitives AccountView defines, for the same reason: this screen is
 // a page of cards and section headings and the app has no shared component for
@@ -210,24 +210,33 @@ export function PhotosView({
 
     setBusy(true);
     let done = 0;
-    let failed = 0;
+    const failures = [];
     for (const file of usable) {
       setProgress(`${done + 1} of ${usable.length}`);
       try {
         await onUpload(file);
         done += 1;
       } catch (err) {
-        // Keep going. A batch of twenty that stops dead on the one HEIC the
+        // Keep going. A batch of twenty that stops dead on the one photo the
         // browser could not decode is worse than nineteen uploaded photos and
         // a count of what did not make it.
-        failed += 1;
+        failures.push(err);
         console.error("photo upload failed:", err);
       }
     }
     setBusy(false);
     setProgress(null);
-    if (failed) notify?.(`${done} added, ${failed} couldn't be read.`, "error");
-    else notify?.(done === 1 ? "Photo added." : `${done} photos added.`);
+
+    if (!failures.length) {
+      notify?.(done === 1 ? "Photo added." : `${done} photos added.`);
+      return;
+    }
+    // Say what actually went wrong. This used to report "couldn't be read" for
+    // every failure — decode, encode, network and permissions all collapsed
+    // into one sentence that was wrong for three of them, on a phone with no
+    // console to check. The thrown messages are written to be read by whoever
+    // is holding it; a Firebase error code is not, so those get translated.
+    notify?.(`${done ? `${done} added. ` : ""}${uploadFailureMessage(failures[0], failures.length)}`, "error");
   };
 
   const remove = async (item) => {

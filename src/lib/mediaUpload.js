@@ -27,6 +27,7 @@ import {
   DISPLAY_EDGE, THUMB_EDGE, WEBP_QUALITY, THUMB_QUALITY,
   HOSTS, KINDS, photoId, storagePaths, mediaDocId,
   resizePlan, squareCropPlan, validateSource,
+  ENCODINGS, MAX_UPLOAD_BYTES,
 } from "./media";
 
 // Cached so a run of uploads pays the dynamic import once.
@@ -48,22 +49,61 @@ const storageApi = () => {
 const IMMUTABLE_YEAR = "public, max-age=31536000, immutable";
 
 // ── Decoding ───────────────────────────────────────────────────────
+// Two decoders, tried in order, because one of them is not enough on a phone.
+//
 // `imageOrientation: "from-image"` is what applies the EXIF rotation flag. Get
 // this wrong and a good fraction of any iPhone library renders sideways, which
 // is not a subtle bug but is an easy one to ship — the photo looks correct in
 // the OS picker right up until the canvas draws it.
+
+// The fallback decoder, and the one that matters on an iPhone.
+//
+// createImageBitmap cannot always take a HEIC blob even on a device whose
+// image stack decodes HEIC perfectly well — the picker usually transcodes to
+// JPEG on the way out, but not on every iOS version or every "Keep Originals"
+// setting. An <img> goes through the platform's own decoder, which on iOS
+// handles HEIC natively.
+//
+// EXIF orientation still applies here: CSS `image-orientation` defaults to
+// `from-image`, and drawImage honours the rendered orientation.
+const decodeViaImg = (file) => new Promise((resolve, reject) => {
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    // Same shape the render functions expect from an ImageBitmap, so nothing
+    // downstream has to know which decoder produced it.
+    resolve({
+      width: img.naturalWidth,
+      height: img.naturalHeight,
+      source: img,
+      close: () => URL.revokeObjectURL(url),
+    });
+  };
+  img.onerror = () => {
+    URL.revokeObjectURL(url);
+    reject(new Error("This phone couldn't open that photo."));
+  };
+  img.src = url;
+});
+
+// ImageBitmap draws directly; the <img> fallback carries its element in
+// `source`. drawImage accepts either.
+const drawable = (bitmap) => bitmap.source || bitmap;
+
 const decode = async (file) => {
   if (typeof createImageBitmap === "function") {
     try {
       return await createImageBitmap(file, { imageOrientation: "from-image" });
     } catch {
-      // Safari has historically rejected the options bag rather than ignoring
-      // it. Retry bare — orientation may be off on that path, but a rotated
-      // photo beats no photo.
-      return await createImageBitmap(file);
+      try {
+        // Safari has historically rejected the options bag rather than
+        // ignoring it. Retry bare — orientation may be off on that path, but a
+        // rotated photo beats no photo.
+        return await createImageBitmap(file);
+      } catch { /* fall through to the <img> decoder */ }
     }
   }
-  throw new Error("This browser cannot read that photo.");
+  return decodeViaImg(file);
 };
 
 // ── Drawing ────────────────────────────────────────────────────────
@@ -77,17 +117,46 @@ const canvasFor = (w, h) => {
   return c;
 };
 
-const toBlob = async (canvas, quality) => {
+// Encode once, in a named format, and REPORT WHAT CAME BACK.
+//
+// That last part is the whole point. Safari does not refuse an unsupported
+// canvas export type — it hands back a PNG and says nothing, so asking for
+// WebP and trusting the answer produces a silent 3-5MB upload that the 2MB
+// rule then refuses with an opaque permission error. Every caller here checks
+// `blob.type` against what it asked for.
+const encodeAs = async (canvas, type, quality) => {
+  let blob;
   if (typeof canvas.convertToBlob === "function") {
-    return canvas.convertToBlob({ type: "image/webp", quality });
+    // OffscreenCanvas rejects outright on an unsupported type rather than
+    // substituting one, so a throw here is just "try the next format".
+    try { blob = await canvas.convertToBlob({ type, quality }); }
+    catch { return null; }
+  } else {
+    blob = await new Promise(resolve => canvas.toBlob(resolve, type, quality));
   }
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      b => (b ? resolve(b) : reject(new Error("Could not encode that photo."))),
-      "image/webp",
-      quality,
-    );
-  });
+  if (!blob) return null;
+  return blob.type === type ? blob : null;
+};
+
+// Try the preferred formats in order, then push quality down until the result
+// fits what storage.rules will accept.
+//
+// The quality ladder is not about looking good — a 1600px photo at q0.8 is
+// ~250KB, nowhere near the 2MB cap. It exists so that the pathological case (a
+// huge, noisy, incompressible image) degrades in quality instead of failing an
+// upload on a tee box.
+//
+// STRICTLY less than the cap, because that is how storage.rules compares it.
+// At exactly 2MB the rule refuses the write, and it refuses it as the same
+// opaque permission error this whole path exists to avoid.
+const encodeBest = async (canvas, baseQuality) => {
+  for (const { type, ext } of ENCODINGS) {
+    for (const quality of [baseQuality, 0.6, 0.45]) {
+      const blob = await encodeAs(canvas, type, quality);
+      if (blob && blob.size < MAX_UPLOAD_BYTES) return { blob, type, ext };
+    }
+  }
+  throw new Error("This phone couldn't convert that photo to a smaller size.");
 };
 
 // The display rendition: longest edge to DISPLAY_EDGE, whole frame kept.
@@ -96,8 +165,9 @@ const renderDisplay = async (bitmap) => {
   const canvas = canvasFor(plan.w, plan.h);
   const ctx = canvas.getContext("2d");
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(bitmap, 0, 0, plan.w, plan.h);
-  return { blob: await toBlob(canvas, WEBP_QUALITY), w: plan.w, h: plan.h };
+  ctx.drawImage(drawable(bitmap), 0, 0, plan.w, plan.h);
+  const out = await encodeBest(canvas, WEBP_QUALITY);
+  return { ...out, w: plan.w, h: plan.h };
 };
 
 // The thumbnail: centre square, so the grid is a contact sheet rather than a
@@ -107,8 +177,8 @@ const renderThumb = async (bitmap) => {
   const canvas = canvasFor(crop.edge, crop.edge);
   const ctx = canvas.getContext("2d");
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(bitmap, crop.sx, crop.sy, crop.size, crop.size, 0, 0, crop.edge, crop.edge);
-  return { blob: await toBlob(canvas, THUMB_QUALITY) };
+  ctx.drawImage(drawable(bitmap), crop.sx, crop.sy, crop.size, crop.size, 0, 0, crop.edge, crop.edge);
+  return encodeBest(canvas, THUMB_QUALITY);
 };
 
 // ── When the photo was taken ───────────────────────────────────────
@@ -146,15 +216,25 @@ export const uploadPhoto = async ({ file, tid, uid, uploaderName, round = null, 
   }
 
   const id = photoId(now, rand);
-  const paths = storagePaths(tid, id);
+  // The extension and content type come from what the browser ACTUALLY
+  // encoded, not from what was asked for. A JPEG parked at a .webp path would
+  // be served with the wrong content type for as long as the photo exists.
+  //
+  // Each size carries its OWN extension. They almost always agree — the two
+  // encodes ask for the same formats in the same order — but "almost always"
+  // is how a thumbnail ends up named .jpg while holding WebP, and the two
+  // calls cost nothing.
+  const paths = {
+    full: storagePaths(tid, id, display.ext).full,
+    thumb: storagePaths(tid, id, thumb.ext).thumb,
+  };
   const { getStorage, ref, uploadBytes, getDownloadURL } = await storageApi();
   const storage = getStorage(firebaseApp);
-  const meta = { contentType: "image/webp", cacheControl: IMMUTABLE_YEAR };
 
   const fullRef = ref(storage, paths.full);
   const thumbRef = ref(storage, paths.thumb);
-  await uploadBytes(fullRef, display.blob, meta);
-  await uploadBytes(thumbRef, thumb.blob, meta);
+  await uploadBytes(fullRef, display.blob, { contentType: display.type, cacheControl: IMMUTABLE_YEAR });
+  await uploadBytes(thumbRef, thumb.blob, { contentType: thumb.type, cacheControl: IMMUTABLE_YEAR });
   const [url, thumbUrl] = await Promise.all([getDownloadURL(fullRef), getDownloadURL(thumbRef)]);
 
   return {

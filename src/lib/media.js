@@ -82,11 +82,40 @@ export const MAX_SOURCE_BYTES = 50 * 1024 * 1024;
 // unrelated. `tid` is the full tournament id — "bc_2025", not "2025".
 export const mediaDocId = (tid, id) => `med_${tid}_${id}`;
 
+// What storage.rules will accept. The two MUST agree: the rule rejects
+// anything at or above this, and a rejection arrives as an opaque permission
+// error long after the photo was picked, which is the least debuggable way for
+// an upload to fail. mediaUpload.js re-encodes at lower quality rather than let
+// a photo hit this.
+//
+// The comparison is STRICTLY LESS THAN on both sides — the rule reads
+// `request.resource.size < 2 * 1024 * 1024`, so a blob of exactly this size is
+// refused. mediaUpload.js uses `<` for the same reason.
+export const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
+
+// The formats to try encoding, in order of preference.
+//
+// WebP first — it is roughly 30% smaller than JPEG at the same quality, which
+// is the whole storage argument. But Safari's canvas has historically NOT
+// encoded WebP, and it does not fail when asked to: `toBlob` quietly hands
+// back a PNG instead. An unnoticed PNG is a 3-5MB upload where a 250KB one was
+// intended, which then breaches MAX_UPLOAD_BYTES and is refused by the rules —
+// on an iPhone, which is most of the field.
+//
+// So mediaUpload.js checks what it actually got and falls through to JPEG,
+// and the EXTENSION travels with the choice — a JPEG stored at a .webp path
+// would be served with the wrong content type forever.
+export const ENCODINGS = [
+  { type: "image/webp", ext: "webp" },
+  { type: "image/jpeg", ext: "jpg" },
+];
+
 // Where the bytes sit in the Storage bucket. Keyed by edition so clearing a
-// year out is a prefix listing rather than a query.
-export const storagePaths = (tid, id) => ({
-  full: `editions/${tid}/${id}.webp`,
-  thumb: `editions/${tid}/${id}_thumb.webp`,
+// year out is a prefix listing rather than a query. The extension is whatever
+// the browser actually managed to encode, not what was asked for.
+export const storagePaths = (tid, id, ext = "webp") => ({
+  full: `editions/${tid}/${id}.${ext}`,
+  thumb: `editions/${tid}/${id}_thumb.${ext}`,
 });
 
 // An id for a newly picked photo. Time-ordered prefix so a bucket listing and
@@ -226,6 +255,30 @@ export const photoUploadsAllowed = (config) => !config?.uploadsDisabled;
 // administrator": on this tournament the director is standing next to them.
 export const uploadsDisabledReason = (config) =>
   config?.reason || "Photo uploads are paused — this month's storage budget was reached.";
+
+// ── What to say when an upload fails ───────────────────────────────
+// Firebase throws codes, not sentences. Left raw they reach the screen as
+// "storage/unauthorized", which tells the person holding the phone nothing and
+// tells whoever they report it to almost nothing either. Each of these maps to
+// the actual situation and, where possible, what to do about it.
+export function uploadFailureMessage(err, count = 1) {
+  const code = String(err?.code || "");
+  const many = count > 1 ? ` (${count} photos)` : "";
+  if (code === "storage/unauthorized" || code === "permission-denied") {
+    return `Photos are locked right now — sign out and back in, or ask the director.${many}`;
+  }
+  if (code === "storage/retry-limit-exceeded" || code === "storage/canceled" || code === "unavailable") {
+    return `Couldn't reach the server — try again when you have signal.${many}`;
+  }
+  if (code === "storage/quota-exceeded") {
+    return `Photo storage is full for now.${many}`;
+  }
+  // Everything thrown by mediaUpload.js is already a sentence meant for this
+  // screen, so it is used as-is rather than replaced with something vaguer.
+  const msg = String(err?.message || "").trim();
+  if (msg && !msg.startsWith("Firebase") && msg.length < 120) return `${msg}${many}`;
+  return `That photo couldn't be added.${many}`;
+}
 
 // ── Deletion ───────────────────────────────────────────────────────
 // Who may remove a photo, decided here so the gallery and firestore.rules
