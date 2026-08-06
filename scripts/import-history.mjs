@@ -245,34 +245,47 @@ const db = getFirestore();
 // survive and every screen shows the field twice. Refused rather than warned,
 // because the run that does it looks exactly like the run that doesn't until
 // somebody opens the app.
+//
+// An occupied year is SKIPPED, not fatal. Whatever is in 2024 says nothing
+// about 2016, and refusing the whole run over one year means nine years wait
+// on one decision. What is skipped is named, loudly, because a run that
+// silently did eight ninths of the job reads exactly like one that did all of
+// it.
+const writing = [];
 if (!UNDO) {
   const occupied = [];
-  for (const { edition } of runs) {
-    const tid = `bc_${edition.year}`;
+  for (const run of runs) {
+    const tid = `bc_${run.edition.year}`;
     const rows = await db.collection("bc_players").where("tournament_id", "==", tid).get();
     const handBuilt = rows.docs.filter((d) => !d.data().imported_from).length;
-    if (handBuilt) occupied.push(`${edition.year}: ${handBuilt} roster rows already there, not from this import`);
-  }
-  if (occupied.length && !FORCE) {
-    die("Those editions already exist in the app. Nothing was written.", "",
-        ...occupied.map((o) => `  ${o}`), "",
-        "This import would sit a second roster beside the one that is there rather than",
-        "replace it. Delete the edition in Admin → Tournament → Editions first, or add",
-        "--force if you know the two sets of documents will not collide.");
+    if (handBuilt && !FORCE) {
+      occupied.push(`${run.edition.year}: ${handBuilt} roster rows already there, not from this import`);
+    } else {
+      if (handBuilt) console.log(`⚠ --force: ${run.edition.year} already holds ${handBuilt} roster rows this import did not write.`);
+      writing.push(run);
+    }
   }
   if (occupied.length) {
-    console.log("⚠ --force: writing into editions that already hold a roster —");
-    for (const o of occupied) console.log(`    ${o}`);
+    console.log("\nSKIPPED — these editions already exist in the app:");
+    for (const o of occupied) console.log(`  ${o}`);
+    console.log("\n  Writing into one would sit a second roster beside the one that is there rather");
+    console.log("  than replace it — the ids don't collide, so both would survive and every screen");
+    console.log("  would show the field twice. Delete the edition in Admin → Tournament → Editions");
+    console.log("  and run this again, or add --force if you know the two sets won't collide.\n");
   }
+  if (!writing.length) die("Every edition in this run was skipped. Nothing was written.");
+} else {
+  writing.push(...runs);
 }
 
 // 500 is Firestore's hard limit on a batch; 400 leaves room and keeps a failed
 // batch small enough to reason about.
 const BATCH = 400;
 let done = 0;
-const tick = () => process.stdout.write(`\r${done}/${total} documents…`);
+const target = writing.reduce((n, r) => n + countDocs(r.built), 0);
+const tick = () => process.stdout.write(`\r${done}/${target} documents…`);
 
-for (const { built } of runs) {
+for (const { built } of writing) {
   for (const col of IMPORT_COLLECTIONS) {
     const docs = built[col] || [];
     for (let i = 0; i < docs.length; i += BATCH) {
@@ -292,5 +305,6 @@ for (const { built } of runs) {
   }
 }
 
-console.log(`\r${UNDO ? "Deleted" : "Wrote"} ${done} documents across ${runs.length} editions.        `);
+console.log(`\r${UNDO ? "Deleted" : "Wrote"} ${done} documents across ${writing.length} editions ` +
+  `(${writing.map((r) => r.edition.year).join(", ")}).        `);
 if (!UNDO) console.log("\nSwitch to any year in Admin → Tournament → Editions, or the ☰ menu → Tournaments.");
