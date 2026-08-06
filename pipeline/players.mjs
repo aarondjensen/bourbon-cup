@@ -17,38 +17,48 @@
 // what their name is: Telly, House, Elger, T-Mo, Hile, Weezy. They keep their
 // handle until somebody who knows fills it in, which is the honest failure —
 // a guessed surname is worse than a nickname.
+// ── The 2022 handle change ────────────────────────────────────────
+// In 2022 the sheets stopped writing people as "Ben T" and started writing
+// them as "Telly". Six men changed name mid-record that way, on top of the two
+// (Carp and CuzNick) that were already folded here — and until now the fact
+// layer read each of them as two golfers who happened never to appear in the
+// same year:
+//
+//   Telly = Ben T · House = Shaun W · T-Mo = Tim C
+//   Weezy = Paul W · Hile = Jim H   · Elger = Joe E
+//
+// The year ranges say so on their own — every handle starts in 2022, the year
+// the name it replaces stops — and data/rounds.csv, exported before the split
+// happened, already carries the folded names. Hile is the one that needed
+// deciding: Jim H played 2016–2021 and stops exactly where Hile begins, while
+// Matt H appears once, in Louisville in 2017, alongside Jim.
 export const PLAYERS = {
   // core (2020/2023/2025 era)
-  jensen:{name:"Jensen",  aliases:["Aaron J","Aaron Jensen"], first:"Aaron", last:"Jensen"},
-  kj:    {name:"KJ",      aliases:["Kevin J","Kevin Jensen"], first:"Kevin", last:"Jensen"},
-  telly: {name:"Telly",   aliases:[]},
-  rmac:  {name:"R-Mac",   aliases:["RMac","Ryan M"], first:"Ryan", last:"M"},
-  house: {name:"House",   aliases:[]},
-  tjsc:  {name:"TJSC",    aliases:["Tj Crawforth","TJ"], first:"TJ", last:"Crawforth"},
-  dk:    {name:"DK",      aliases:["Dave K","David Kelley"], first:"Dave", last:"Kelley"},
-  saugy: {name:"Saugy",   aliases:["Paul Sauter","Paul S"], first:"Paul", last:"Sauter"},   // Paul S = Saugy: confirmed same person
-  elger: {name:"Elger",   aliases:[]},
-  andy:  {name:"Andy",    aliases:["Andy H","Andrew Harris"], first:"Andy", last:"Harris"},
-  pace:  {name:"Pace",    aliases:["Adam P","Adam Pace"], first:"Adam", last:"Pace"},
-  tmo:   {name:"T-Mo",    aliases:[]},
+  jensen:{name:"Aaron J", aliases:["Jensen","Aaron Jensen"], first:"Aaron", last:"Jensen"},
+  kj:    {name:"Kevin J", aliases:["KJ","Kevin Jensen"], first:"Kevin", last:"Jensen"},
+  rmac:  {name:"Ryan M",  aliases:["R-Mac","RMac"], first:"Ryan", last:"M"},
+  tjsc:  {name:"TJ C",    aliases:["TJSC","Tj Crawforth","TJ"], first:"TJ", last:"Crawforth"},
+  dk:    {name:"Dave K",  aliases:["DK","David Kelley"], first:"Dave", last:"Kelley"},
+  saugy: {name:"Paul S",  aliases:["Saugy","Paul Sauter"], first:"Paul", last:"Sauter"},   // Paul S = Saugy: confirmed same person
+  elger: {name:"Joe E",   aliases:["Elger"], first:"Joe", last:"Elger"},
+  andy:  {name:"Andy H",  aliases:["Andy","Andrew Harris"], first:"Andy", last:"Harris"},
+  pace:  {name:"Adam P",  aliases:["Pace","Adam Pace"], first:"Adam", last:"Pace"},
   joeo:  {name:"Joe O",   aliases:["Joe O'Connell"], first:"Joe", last:"O'Connell"},
-  hile:  {name:"Hile",    aliases:[]},
-  weezy: {name:"Weezy",   aliases:[]},
   // introduced in 2016 roster
-  bent:  {name:"Ben T",   aliases:[]},
+  bent:  {name:"Ben T",   aliases:["Telly"]},        // = Telly (2022 handle change)
   daveb: {name:"Dave B",  aliases:[]},
-  paulw: {name:"Paul W",  aliases:[]},
-  timc:  {name:"Tim C",   aliases:[]},
-  jimh:  {name:"Jim H",   aliases:[]},
+  paulw: {name:"Paul W",  aliases:["Weezy"]},        // = Weezy (2022 handle change)
+  timc:  {name:"Tim C",   aliases:["T-Mo","TMo"]},   // = T-Mo (2022 handle change)
+  jimh:  {name:"Jim H",   aliases:["Hile"], first:"Jim", last:"Hile"},   // = Hile (2022 handle change; Jim not Matt — see the note above)
   johns: {name:"John S",  aliases:[]},   // 2016 CH -4 confirmed genuine (scratch-plus player), not a data error
   petec: {name:"Pete C",  aliases:["Carp"]},   // = Carp: confirmed same person (handle changed ~2022; carp folded → petec)
   // introduced in 2017 roster
   kylem: {name:"Kyle M",  aliases:[]},
-  matth: {name:"Matt H",  aliases:[]},
+  matth: {name:"Matt H",  aliases:[]},   // Louisville (2017) only, and NOT the Hile of 2022 on
   grants:{name:"Grant S", aliases:[]},
   nicks: {name:"Nick S",  aliases:["CuzNick"]},   // = CuzNick: confirmed same person (handle changed ~2022; cuznick folded → nicks)
   // introduced in 2018 roster
-  shaunw:{name:"Shaun W", aliases:[]},
+  shaunw:{name:"Shaun W", aliases:["House"]},   // = House (2022 handle change)
   // introduced in 2020 roster (Julius P, Scott R — both confirmed real players; 2020 only)
   juliusp:{name:"Julius P", aliases:[]},
   scottr: {name:"Scott R",  aliases:[]},

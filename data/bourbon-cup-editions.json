@@ -84,7 +84,7 @@
           "id": "jimh",
           "name": "Jim H",
           "first": "Jim",
-          "last": "H",
+          "last": "Hile",
           "team": "B",
           "index": 24.7
         },
@@ -187,20 +187,20 @@
           },
           "hole_points": null,
           "ch": {
+            "andy": 9,
             "bent": 10,
-            "pace": 13,
             "daveb": 20,
             "dk": 23,
-            "joeo": 21,
-            "saugy": 36,
-            "paulw": 14,
-            "timc": 14,
-            "andy": 9,
             "jimh": 28,
+            "joeo": 21,
             "johns": -4,
             "kj": 20,
+            "pace": 13,
+            "paulw": 14,
             "petec": 24,
             "rmac": 16,
+            "saugy": 36,
+            "timc": 14,
             "tjsc": 15
           }
         },
@@ -261,20 +261,20 @@
           },
           "hole_points": null,
           "ch": {
+            "andy": 10,
             "bent": 10,
-            "pace": 14,
             "daveb": 22,
             "dk": 25,
-            "joeo": 23,
-            "saugy": 39,
-            "paulw": 15,
-            "timc": 15,
-            "andy": 10,
             "jimh": 30,
+            "joeo": 23,
             "johns": -5,
             "kj": 21,
+            "pace": 14,
+            "paulw": 15,
             "petec": 26,
             "rmac": 17,
+            "saugy": 39,
+            "timc": 15,
             "tjsc": 16
           }
         },
@@ -335,19 +335,19 @@
           },
           "hole_points": null,
           "ch": {
+            "andy": 9,
             "bent": 10,
-            "pace": 14,
             "daveb": 21,
             "dk": 24,
-            "joeo": 22,
-            "saugy": 37,
-            "paulw": 15,
-            "andy": 9,
             "jimh": 29,
+            "joeo": 22,
             "johns": -4,
             "kj": 20,
+            "pace": 14,
+            "paulw": 15,
             "petec": 25,
             "rmac": 16,
+            "saugy": 37,
             "tjsc": 16
           }
         },
@@ -407,19 +407,19 @@
             "back": 2
           },
           "ch": {
+            "andy": 10,
             "bent": 10,
-            "pace": 15,
             "daveb": 22,
             "dk": 26,
-            "joeo": 23,
-            "saugy": 40,
-            "paulw": 16,
-            "andy": 10,
             "jimh": 31,
+            "joeo": 23,
             "johns": -5,
             "kj": 22,
+            "pace": 15,
+            "paulw": 16,
             "petec": 26,
             "rmac": 18,
+            "saugy": 40,
             "tjsc": 17
           },
           "counting_scores": {
@@ -436,23 +436,23 @@
         {
           "round": 1,
           "teamA": [
-            "timc",
-            "dk"
-          ],
-          "teamB": [
-            "rmac",
-            "jimh"
-          ]
-        },
-        {
-          "round": 1,
-          "teamA": [
             "bent",
             "daveb"
           ],
           "teamB": [
             "andy",
             "tjsc"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "timc",
+            "dk"
+          ],
+          "teamB": [
+            "rmac",
+            "jimh"
           ]
         },
         {
@@ -491,17 +491,6 @@
         {
           "round": 2,
           "teamA": [
-            "pace",
-            "saugy"
-          ],
-          "teamB": [
-            "tjsc",
-            "jimh"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
             "bent",
             "dk"
           ],
@@ -522,18 +511,29 @@
           ]
         },
         {
-          "round": 3,
+          "round": 2,
           "teamA": [
-            "bent"
+            "pace",
+            "saugy"
           ],
           "teamB": [
-            "tjsc"
+            "tjsc",
+            "jimh"
           ]
         },
         {
           "round": 3,
           "teamA": [
-            "paulw"
+            "dk"
+          ],
+          "teamB": [
+            "andy"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "bent"
           ],
           "teamB": [
             "tjsc"
@@ -551,33 +551,6 @@
         {
           "round": 3,
           "teamA": [
-            "pace"
-          ],
-          "teamB": [
-            "kj"
-          ]
-        },
-        {
-          "round": 3,
-          "teamA": [
-            "dk"
-          ],
-          "teamB": [
-            "andy"
-          ]
-        },
-        {
-          "round": 3,
-          "teamA": [
-            "timc"
-          ],
-          "teamB": [
-            "rmac"
-          ]
-        },
-        {
-          "round": 3,
-          "teamA": [
             "joeo"
           ],
           "teamB": [
@@ -587,10 +560,37 @@
         {
           "round": 3,
           "teamA": [
+            "pace"
+          ],
+          "teamB": [
+            "kj"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "paulw"
+          ],
+          "teamB": [
+            "tjsc"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
             "saugy"
           ],
           "teamB": [
             "petec"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "timc"
+          ],
+          "teamB": [
+            "rmac"
           ]
         },
         {
@@ -655,7 +655,7 @@
           "id": "jimh",
           "name": "Jim H",
           "first": "Jim",
-          "last": "H",
+          "last": "Hile",
           "team": "A",
           "index": 26
         },
@@ -814,21 +814,21 @@
           },
           "hole_points": null,
           "ch": {
-            "jensen": 8,
-            "pace": 13,
             "andy": 10,
-            "jimh": 28,
-            "kylem": 22,
-            "matth": 19,
-            "petec": 24,
-            "rmac": 15,
             "bent": 10,
             "daveb": 20,
             "grants": 16,
+            "jensen": 8,
+            "jimh": 28,
             "kj": 19,
+            "kylem": 22,
+            "matth": 19,
             "nicks": 9,
-            "saugy": 34,
+            "pace": 13,
             "paulw": 16,
+            "petec": 24,
+            "rmac": 15,
+            "saugy": 34,
             "tjsc": 14
           }
         },
@@ -889,21 +889,21 @@
           },
           "hole_points": null,
           "ch": {
-            "jensen": 8,
-            "pace": 14,
             "andy": 11,
-            "jimh": 29,
-            "kylem": 23,
-            "matth": 20,
-            "petec": 26,
-            "rmac": 15,
             "bent": 10,
             "daveb": 19,
             "grants": 17,
+            "jensen": 8,
+            "jimh": 29,
             "kj": 19,
+            "kylem": 23,
+            "matth": 20,
             "nicks": 10,
-            "saugy": 34,
+            "pace": 14,
             "paulw": 17,
+            "petec": 26,
+            "rmac": 15,
+            "saugy": 34,
             "tjsc": 15
           }
         },
@@ -964,21 +964,21 @@
           },
           "hole_points": null,
           "ch": {
-            "jensen": 12.8,
-            "pace": 20,
             "andy": 15.8,
-            "jimh": 20,
-            "kylem": 15.8,
-            "matth": 12.8,
-            "petec": 19.4,
-            "rmac": 19.4,
             "bent": 13.6,
             "daveb": 17.8,
             "grants": 23.8,
+            "jensen": 12.8,
+            "jimh": 20,
             "kj": 13.6,
+            "kylem": 15.8,
+            "matth": 12.8,
             "nicks": 12,
-            "saugy": 23.8,
+            "pace": 20,
             "paulw": 17.8,
+            "petec": 19.4,
+            "rmac": 19.4,
+            "saugy": 23.8,
             "tjsc": 12
           }
         },
@@ -1038,21 +1038,21 @@
             "back": 2
           },
           "ch": {
-            "jensen": 7,
-            "pace": 13,
             "andy": 10,
-            "jimh": 29,
-            "kylem": 22,
-            "matth": 20,
-            "petec": 24,
-            "rmac": 14,
             "bent": 10,
             "daveb": 18,
             "grants": 16,
+            "jensen": 7,
+            "jimh": 29,
             "kj": 18,
+            "kylem": 22,
+            "matth": 20,
             "nicks": 9,
-            "saugy": 33,
+            "pace": 13,
             "paulw": 16,
+            "petec": 24,
+            "rmac": 14,
+            "saugy": 33,
             "tjsc": 14
           },
           "counting_scores": {
@@ -1066,6 +1066,28 @@
         }
       ],
       "matches": [
+        {
+          "round": 1,
+          "teamA": [
+            "andy",
+            "pace"
+          ],
+          "teamB": [
+            "bent",
+            "saugy"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "jensen",
+            "petec"
+          ],
+          "teamB": [
+            "tjsc",
+            "daveb"
+          ]
+        },
         {
           "round": 1,
           "teamA": [
@@ -1089,52 +1111,21 @@
           ]
         },
         {
-          "round": 1,
-          "teamA": [
-            "jensen",
-            "petec"
-          ],
-          "teamB": [
-            "tjsc",
-            "daveb"
-          ]
-        },
-        {
-          "round": 1,
-          "teamA": [
-            "andy",
-            "pace"
-          ],
-          "teamB": [
-            "bent",
-            "saugy"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
-            "jensen"
-          ],
-          "teamB": [
-            "nicks"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
-            "pace"
-          ],
-          "teamB": [
-            "grants"
-          ]
-        },
-        {
           "round": 2,
           "teamA": [
             "andy"
           ],
           "teamB": [
             "kj"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "matth"
+          ],
+          "teamB": [
+            "bent"
           ]
         },
         {
@@ -1149,19 +1140,19 @@
         {
           "round": 2,
           "teamA": [
-            "petec"
+            "pace"
           ],
           "teamB": [
-            "tjsc"
+            "grants"
           ]
         },
         {
           "round": 2,
           "teamA": [
-            "matth"
+            "jensen"
           ],
           "teamB": [
-            "bent"
+            "nicks"
           ]
         },
         {
@@ -1183,6 +1174,26 @@
           ]
         },
         {
+          "round": 2,
+          "teamA": [
+            "petec"
+          ],
+          "teamB": [
+            "tjsc"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "andy",
+            "kylem"
+          ],
+          "teamB": [
+            "paulw",
+            "daveb"
+          ]
+        },
+        {
           "round": 3,
           "teamA": [
             "rmac",
@@ -1191,17 +1202,6 @@
           "teamB": [
             "bent",
             "kj"
-          ]
-        },
-        {
-          "round": 3,
-          "teamA": [
-            "pace",
-            "jimh"
-          ],
-          "teamB": [
-            "nicks",
-            "tjsc"
           ]
         },
         {
@@ -1218,12 +1218,12 @@
         {
           "round": 3,
           "teamA": [
-            "andy",
-            "kylem"
+            "pace",
+            "jimh"
           ],
           "teamB": [
-            "paulw",
-            "daveb"
+            "nicks",
+            "tjsc"
           ]
         },
         {
@@ -1315,7 +1315,7 @@
           "id": "jimh",
           "name": "Jim H",
           "first": "Jim",
-          "last": "H",
+          "last": "Hile",
           "team": "A",
           "index": null
         },
@@ -1450,22 +1450,22 @@
           },
           "hole_points": null,
           "ch": {
-            "bent": 4,
-            "nicks": 7,
-            "paulw": 10,
-            "shaunw": 9,
-            "tjsc": 10,
-            "timc": 13,
-            "jimh": 22,
-            "saugy": 21,
-            "jensen": 5,
             "andy": 6,
-            "grants": 9,
-            "rmac": 11,
-            "kj": 12,
+            "bent": 4,
             "daveb": 14,
             "dk": 15,
-            "petec": 18
+            "grants": 9,
+            "jensen": 5,
+            "jimh": 22,
+            "kj": 12,
+            "nicks": 7,
+            "paulw": 10,
+            "petec": 18,
+            "rmac": 11,
+            "saugy": 21,
+            "shaunw": 9,
+            "timc": 13,
+            "tjsc": 10
           }
         },
         {
@@ -1525,22 +1525,22 @@
           },
           "hole_points": null,
           "ch": {
-            "bent": 5,
-            "nicks": 10,
-            "paulw": 14,
-            "shaunw": 13,
-            "tjsc": 14,
-            "timc": 18,
-            "jimh": 30,
-            "saugy": 30,
-            "jensen": 7,
             "andy": 8,
-            "grants": 13,
-            "rmac": 16,
-            "kj": 17,
+            "bent": 5,
             "daveb": 20,
             "dk": 22,
-            "petec": 26
+            "grants": 13,
+            "jensen": 7,
+            "jimh": 30,
+            "kj": 17,
+            "nicks": 10,
+            "paulw": 14,
+            "petec": 26,
+            "rmac": 16,
+            "saugy": 30,
+            "shaunw": 13,
+            "timc": 18,
+            "tjsc": 14
           }
         },
         {
@@ -1600,22 +1600,22 @@
           },
           "hole_points": null,
           "ch": {
-            "bent": 5,
-            "nicks": 11,
-            "paulw": 15,
-            "shaunw": 14,
-            "tjsc": 15,
-            "timc": 19,
-            "jimh": 32,
-            "saugy": 31,
-            "jensen": 7,
             "andy": 8,
-            "grants": 14,
-            "rmac": 17,
-            "kj": 18,
+            "bent": 5,
             "daveb": 21,
             "dk": 23,
-            "petec": 27
+            "grants": 14,
+            "jensen": 7,
+            "jimh": 32,
+            "kj": 18,
+            "nicks": 11,
+            "paulw": 15,
+            "petec": 27,
+            "rmac": 17,
+            "saugy": 31,
+            "shaunw": 14,
+            "timc": 19,
+            "tjsc": 15
           }
         },
         {
@@ -1674,22 +1674,22 @@
             "back": 2
           },
           "ch": {
-            "bent": 5,
-            "nicks": 11,
-            "paulw": 14,
-            "shaunw": 13,
-            "tjsc": 14,
-            "timc": 18,
-            "jimh": 31,
-            "saugy": 30,
-            "jensen": 7,
             "andy": 8,
-            "grants": 13,
-            "rmac": 16,
-            "kj": 17,
+            "bent": 5,
             "daveb": 21,
             "dk": 23,
-            "petec": 26
+            "grants": 13,
+            "jensen": 7,
+            "jimh": 31,
+            "kj": 17,
+            "nicks": 11,
+            "paulw": 14,
+            "petec": 26,
+            "rmac": 16,
+            "saugy": 30,
+            "shaunw": 13,
+            "timc": 18,
+            "tjsc": 14
           },
           "counting_scores": {
             "front": 4,
@@ -1702,6 +1702,17 @@
         }
       ],
       "matches": [
+        {
+          "round": 1,
+          "teamA": [
+            "bent",
+            "paulw"
+          ],
+          "teamB": [
+            "andy",
+            "dk"
+          ]
+        },
         {
           "round": 1,
           "teamA": [
@@ -1727,17 +1738,6 @@
         {
           "round": 1,
           "teamA": [
-            "bent",
-            "paulw"
-          ],
-          "teamB": [
-            "andy",
-            "dk"
-          ]
-        },
-        {
-          "round": 1,
-          "teamA": [
             "tjsc",
             "timc"
           ],
@@ -1749,19 +1749,19 @@
         {
           "round": 2,
           "teamA": [
-            "timc"
+            "shaunw"
           ],
           "teamB": [
-            "jensen"
+            "andy"
           ]
         },
         {
           "round": 2,
           "teamA": [
-            "nicks"
+            "bent"
           ],
           "teamB": [
-            "rmac"
+            "grants"
           ]
         },
         {
@@ -1785,10 +1785,19 @@
         {
           "round": 2,
           "teamA": [
-            "bent"
+            "timc"
           ],
           "teamB": [
-            "grants"
+            "jensen"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "jimh"
+          ],
+          "teamB": [
+            "petec"
           ]
         },
         {
@@ -1803,19 +1812,21 @@
         {
           "round": 2,
           "teamA": [
-            "shaunw"
+            "nicks"
           ],
           "teamB": [
-            "andy"
+            "rmac"
           ]
         },
         {
-          "round": 2,
+          "round": 3,
           "teamA": [
-            "jimh"
+            "nicks",
+            "saugy"
           ],
           "teamB": [
-            "petec"
+            "andy",
+            "grants"
           ]
         },
         {
@@ -1838,17 +1849,6 @@
           "teamB": [
             "jensen",
             "daveb"
-          ]
-        },
-        {
-          "round": 3,
-          "teamA": [
-            "nicks",
-            "saugy"
-          ],
-          "teamB": [
-            "andy",
-            "grants"
           ]
         },
         {
@@ -1951,7 +1951,7 @@
           "id": "jimh",
           "name": "Jim H",
           "first": "Jim",
-          "last": "H",
+          "last": "Hile",
           "team": "A",
           "index": 26.4
         },
@@ -2086,22 +2086,22 @@
           },
           "hole_points": null,
           "ch": {
-            "bent": 5.6,
-            "jensen": 5.6,
-            "timc": 7.9,
-            "tjsc": 10.1,
-            "paulw": 7.9,
-            "dk": 10.1,
-            "jimh": 15.4,
-            "saugy": 15.4,
-            "johns": 3.3,
             "andy": 3.3,
-            "pace": 5.6,
+            "bent": 5.6,
+            "dk": 10.1,
             "grants": 5.6,
-            "rmac": 8,
+            "jensen": 5.6,
+            "jimh": 15.4,
+            "johns": 3.3,
             "kj": 8,
             "kylem": 12.8,
-            "petec": 12.8
+            "pace": 5.6,
+            "paulw": 7.9,
+            "petec": 12.8,
+            "rmac": 8,
+            "saugy": 15.4,
+            "timc": 7.9,
+            "tjsc": 10.1
           }
         },
         {
@@ -2161,22 +2161,22 @@
           },
           "hole_points": null,
           "ch": {
-            "johns": -3,
-            "bent": 8,
             "andy": 10,
-            "jensen": 8,
-            "grants": 11,
-            "pace": 11,
-            "tjsc": 17,
-            "petec": 26,
-            "timc": 15,
-            "rmac": 14,
-            "kj": 18,
+            "bent": 8,
             "dk": 23,
-            "paulw": 16,
+            "grants": 11,
+            "jensen": 8,
+            "jimh": 30,
+            "johns": -3,
+            "kj": 18,
             "kylem": 25,
+            "pace": 11,
+            "paulw": 16,
+            "petec": 26,
+            "rmac": 14,
             "saugy": 32,
-            "jimh": 30
+            "timc": 15,
+            "tjsc": 17
           }
         },
         {
@@ -2236,22 +2236,22 @@
           },
           "hole_points": null,
           "ch": {
-            "johns": -3,
-            "grants": 11,
-            "pace": 11,
-            "bent": 8,
-            "rmac": 14,
             "andy": 10,
-            "jensen": 8,
-            "tjsc": 17,
-            "kj": 18,
-            "timc": 15,
+            "bent": 8,
             "dk": 23,
+            "grants": 11,
+            "jensen": 8,
             "jimh": 30,
+            "johns": -3,
+            "kj": 18,
+            "kylem": 25,
+            "pace": 11,
             "paulw": 16,
             "petec": 26,
+            "rmac": 14,
             "saugy": 31,
-            "kylem": 25
+            "timc": 15,
+            "tjsc": 17
           }
         },
         {
@@ -2310,22 +2310,22 @@
             "back": 2
           },
           "ch": {
-            "johns": -3,
             "andy": 11,
-            "pace": 13,
-            "grants": 13,
             "bent": 9,
-            "jensen": 9,
             "dk": 24,
-            "timc": 16,
+            "grants": 13,
+            "jensen": 9,
             "jimh": 33,
-            "rmac": 15,
+            "johns": -3,
             "kj": 20,
-            "paulw": 18,
-            "tjsc": 19,
-            "petec": 28,
             "kylem": 27,
-            "saugy": 35
+            "pace": 13,
+            "paulw": 18,
+            "petec": 28,
+            "rmac": 15,
+            "saugy": 35,
+            "timc": 16,
+            "tjsc": 19
           },
           "counting_scores": {
             "front": 4,
@@ -2352,17 +2352,6 @@
         {
           "round": 1,
           "teamA": [
-            "timc",
-            "paulw"
-          ],
-          "teamB": [
-            "pace",
-            "grants"
-          ]
-        },
-        {
-          "round": 1,
-          "teamA": [
             "tjsc",
             "dk"
           ],
@@ -2374,12 +2363,59 @@
         {
           "round": 1,
           "teamA": [
+            "timc",
+            "paulw"
+          ],
+          "teamB": [
+            "pace",
+            "grants"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
             "jimh",
             "saugy"
           ],
           "teamB": [
             "kylem",
             "petec"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "jimh"
+          ],
+          "teamB": [
+            "andy"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "bent"
+          ],
+          "teamB": [
+            "rmac"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "dk"
+          ],
+          "teamB": [
+            "johns"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "paulw"
+          ],
+          "teamB": [
+            "grants"
           ]
         },
         {
@@ -2403,24 +2439,6 @@
         {
           "round": 2,
           "teamA": [
-            "jimh"
-          ],
-          "teamB": [
-            "andy"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
-            "paulw"
-          ],
-          "teamB": [
-            "grants"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
             "tjsc"
           ],
           "teamB": [
@@ -2433,46 +2451,6 @@
             "saugy"
           ],
           "teamB": [
-            "petec"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
-            "dk"
-          ],
-          "teamB": [
-            "johns"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
-            "bent"
-          ],
-          "teamB": [
-            "rmac"
-          ]
-        },
-        {
-          "round": 3,
-          "teamA": [
-            "jensen",
-            "saugy"
-          ],
-          "teamB": [
-            "grants",
-            "kylem"
-          ]
-        },
-        {
-          "round": 3,
-          "teamA": [
-            "timc",
-            "tjsc"
-          ],
-          "teamB": [
-            "kj",
             "petec"
           ]
         },
@@ -2496,6 +2474,28 @@
           "teamB": [
             "johns",
             "pace"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "jensen",
+            "saugy"
+          ],
+          "teamB": [
+            "grants",
+            "kylem"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "timc",
+            "tjsc"
+          ],
+          "teamB": [
+            "kj",
+            "petec"
           ]
         },
         {
@@ -2719,21 +2719,21 @@
           },
           "hole_points": null,
           "ch": {
-            "jensen": 7,
-            "nicks": 7,
-            "timc": 8,
-            "juliusp": 10,
-            "pace": 10,
-            "kj": 11,
-            "tjsc": 14,
-            "joeo": 15,
-            "scottr": 3,
-            "bent": 4,
             "andy": 7,
-            "shaunw": 10,
-            "petec": 20,
+            "bent": 4,
             "dk": 21,
-            "kylem": 24
+            "jensen": 7,
+            "joeo": 15,
+            "juliusp": 10,
+            "kj": 11,
+            "kylem": 24,
+            "nicks": 7,
+            "pace": 10,
+            "petec": 20,
+            "scottr": 3,
+            "shaunw": 10,
+            "timc": 8,
+            "tjsc": 14
           }
         },
         {
@@ -2793,21 +2793,21 @@
           },
           "hole_points": null,
           "ch": {
-            "jensen": 8,
-            "nicks": 8,
-            "timc": 9,
-            "juliusp": 11,
-            "pace": 12,
-            "kj": 12,
-            "tjsc": 15,
-            "joeo": 17,
-            "scottr": 4,
-            "bent": 5,
             "andy": 8,
-            "shaunw": 11,
-            "petec": 22,
+            "bent": 5,
             "dk": 23,
-            "kylem": 26
+            "jensen": 8,
+            "joeo": 17,
+            "juliusp": 11,
+            "kj": 12,
+            "kylem": 26,
+            "nicks": 8,
+            "pace": 12,
+            "petec": 22,
+            "scottr": 4,
+            "shaunw": 11,
+            "timc": 9,
+            "tjsc": 15
           }
         },
         {
@@ -2867,21 +2867,21 @@
           },
           "hole_points": null,
           "ch": {
-            "jensen": 8,
-            "nicks": 8,
-            "timc": 9,
-            "juliusp": 11,
-            "pace": 12,
-            "kj": 12,
-            "tjsc": 16,
-            "joeo": 17,
-            "scottr": 4,
-            "bent": 5,
             "andy": 8,
-            "shaunw": 11,
-            "petec": 22,
+            "bent": 5,
             "dk": 23,
-            "kylem": 26
+            "jensen": 8,
+            "joeo": 17,
+            "juliusp": 11,
+            "kj": 12,
+            "kylem": 26,
+            "nicks": 8,
+            "pace": 12,
+            "petec": 22,
+            "scottr": 4,
+            "shaunw": 11,
+            "timc": 9,
+            "tjsc": 16
           }
         },
         {
@@ -2940,21 +2940,21 @@
             "back": 2
           },
           "ch": {
-            "jensen": 6,
-            "nicks": 5,
-            "timc": 7,
-            "juliusp": 8,
-            "pace": 10,
-            "kj": 9,
-            "tjsc": 12,
-            "joeo": 14,
-            "scottr": 3,
-            "bent": 3,
             "andy": 6,
-            "shaunw": 8,
-            "petec": 18,
+            "bent": 3,
             "dk": 19,
+            "jensen": 6,
+            "joeo": 14,
+            "juliusp": 8,
+            "kj": 9,
             "kylem": 22,
+            "nicks": 5,
+            "pace": 10,
+            "petec": 18,
+            "scottr": 3,
+            "shaunw": 8,
+            "timc": 7,
+            "tjsc": 12,
             "ghost": 0
           },
           "counting_scores": {
@@ -2968,6 +2968,17 @@
         }
       ],
       "matches": [
+        {
+          "round": 1,
+          "teamA": [
+            "nicks",
+            "tjsc"
+          ],
+          "teamB": [
+            "bent",
+            "andy"
+          ]
+        },
         {
           "round": 1,
           "teamA": [
@@ -2987,17 +2998,6 @@
           ],
           "teamB": [
             "petec"
-          ]
-        },
-        {
-          "round": 1,
-          "teamA": [
-            "nicks",
-            "tjsc"
-          ],
-          "teamB": [
-            "bent",
-            "andy"
           ]
         },
         {
@@ -3023,10 +3023,46 @@
         {
           "round": 2,
           "teamA": [
+            "pace"
+          ],
+          "teamB": [
+            "bent"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "kj"
+          ],
+          "teamB": [
+            "dk"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "jensen"
+          ],
+          "teamB": [
+            "petec"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
             "joeo"
           ],
           "teamB": [
             "andy"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "tjsc"
+          ],
+          "teamB": [
+            "kylem"
           ]
         },
         {
@@ -3048,50 +3084,14 @@
           ]
         },
         {
-          "round": 2,
+          "round": 3,
           "teamA": [
-            "pace"
-          ],
-          "teamB": [
-            "bent"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
-            "jensen"
-          ],
-          "teamB": [
-            "petec"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
+            "timc",
             "kj"
           ],
           "teamB": [
-            "dk"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
-            "tjsc"
-          ],
-          "teamB": [
+            "andy",
             "kylem"
-          ]
-        },
-        {
-          "round": 3,
-          "teamA": [
-            "nicks",
-            "pace"
-          ],
-          "teamB": [
-            "scottr",
-            "shaunw"
           ]
         },
         {
@@ -3108,22 +3108,22 @@
         {
           "round": 3,
           "teamA": [
-            "timc",
-            "kj"
-          ],
-          "teamB": [
-            "andy",
-            "kylem"
-          ]
-        },
-        {
-          "round": 3,
-          "teamA": [
             "jensen",
             "joeo"
           ],
           "teamB": [
             "petec"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "nicks",
+            "pace"
+          ],
+          "teamB": [
+            "scottr",
+            "shaunw"
           ]
         },
         {
@@ -3327,7 +3327,7 @@
           "id": "jimh",
           "name": "Jim H",
           "first": "Jim",
-          "last": "H",
+          "last": "Hile",
           "team": "A",
           "index": 24.8
         },
@@ -3462,22 +3462,22 @@
           },
           "hole_points": null,
           "ch": {
-            "jensen": 5,
-            "bent": 5,
-            "nicks": 6,
-            "kj": 9,
-            "tjsc": 12,
-            "dk": 16,
-            "jimh": 26,
-            "saugy": 30,
             "andy": 6,
-            "shaunw": 8,
-            "pace": 9,
-            "timc": 10,
-            "rmac": 10,
-            "paulw": 13,
+            "bent": 5,
+            "dk": 16,
+            "jensen": 5,
+            "jimh": 26,
             "joeo": 15,
-            "petec": 17
+            "kj": 9,
+            "nicks": 6,
+            "pace": 9,
+            "paulw": 13,
+            "petec": 17,
+            "rmac": 10,
+            "saugy": 30,
+            "shaunw": 8,
+            "timc": 10,
+            "tjsc": 12
           }
         },
         {
@@ -3537,22 +3537,22 @@
           },
           "hole_points": null,
           "ch": {
-            "jensen": 7,
-            "bent": 7,
-            "nicks": 8,
-            "kj": 12,
-            "tjsc": 15,
-            "dk": 19,
-            "jimh": 30,
-            "saugy": 34,
             "andy": 8,
-            "shaunw": 10,
-            "pace": 11,
-            "timc": 12,
-            "rmac": 13,
-            "paulw": 16,
+            "bent": 7,
+            "dk": 19,
+            "jensen": 7,
+            "jimh": 30,
             "joeo": 18,
-            "petec": 20
+            "kj": 12,
+            "nicks": 8,
+            "pace": 11,
+            "paulw": 16,
+            "petec": 20,
+            "rmac": 13,
+            "saugy": 34,
+            "shaunw": 10,
+            "timc": 12,
+            "tjsc": 15
           }
         },
         {
@@ -3612,22 +3612,22 @@
           },
           "hole_points": null,
           "ch": {
-            "jensen": 4.3,
-            "bent": 7.7,
-            "nicks": 5.2,
-            "kj": 4.3,
-            "tjsc": 5.2,
-            "dk": 11,
-            "jimh": 11,
-            "saugy": 7.7,
             "andy": 5.5,
-            "shaunw": 5.3,
-            "pace": 5.3,
-            "timc": 6.2,
-            "rmac": 6.2,
-            "paulw": 8.7,
+            "bent": 7.7,
+            "dk": 11,
+            "jensen": 4.3,
+            "jimh": 11,
             "joeo": 5.5,
-            "petec": 8.7
+            "kj": 4.3,
+            "nicks": 5.2,
+            "pace": 5.3,
+            "paulw": 8.7,
+            "petec": 8.7,
+            "rmac": 6.2,
+            "saugy": 7.7,
+            "shaunw": 5.3,
+            "timc": 6.2,
+            "tjsc": 5.2
           }
         },
         {
@@ -3686,22 +3686,22 @@
             "back": 2
           },
           "ch": {
-            "jensen": 6,
-            "bent": 6,
-            "nicks": 7,
-            "kj": 10,
-            "tjsc": 13,
-            "dk": 17,
-            "jimh": 27,
-            "saugy": 31,
             "andy": 6,
-            "shaunw": 8,
-            "pace": 10,
-            "timc": 11,
-            "rmac": 11,
-            "paulw": 14,
+            "bent": 6,
+            "dk": 17,
+            "jensen": 6,
+            "jimh": 27,
             "joeo": 16,
-            "petec": 18
+            "kj": 10,
+            "nicks": 7,
+            "pace": 10,
+            "paulw": 14,
+            "petec": 18,
+            "rmac": 11,
+            "saugy": 31,
+            "shaunw": 8,
+            "timc": 11,
+            "tjsc": 13
           },
           "counting_scores": {
             "front": 5,
@@ -3714,6 +3714,28 @@
         }
       ],
       "matches": [
+        {
+          "round": 1,
+          "teamA": [
+            "bent",
+            "kj"
+          ],
+          "teamB": [
+            "andy",
+            "pace"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "tjsc",
+            "dk"
+          ],
+          "teamB": [
+            "paulw",
+            "petec"
+          ]
+        },
         {
           "round": 1,
           "teamA": [
@@ -3737,61 +3759,12 @@
           ]
         },
         {
-          "round": 1,
-          "teamA": [
-            "tjsc",
-            "dk"
-          ],
-          "teamB": [
-            "paulw",
-            "petec"
-          ]
-        },
-        {
-          "round": 1,
-          "teamA": [
-            "bent",
-            "kj"
-          ],
-          "teamB": [
-            "andy",
-            "pace"
-          ]
-        },
-        {
           "round": 2,
           "teamA": [
-            "tjsc"
+            "jensen"
           ],
           "teamB": [
-            "shaunw"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
-            "kj"
-          ],
-          "teamB": [
-            "rmac"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
-            "saugy"
-          ],
-          "teamB": [
-            "joeo"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
-            "dk"
-          ],
-          "teamB": [
-            "petec"
+            "andy"
           ]
         },
         {
@@ -3806,6 +3779,15 @@
         {
           "round": 2,
           "teamA": [
+            "dk"
+          ],
+          "teamB": [
+            "petec"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
             "jimh"
           ],
           "teamB": [
@@ -3815,10 +3797,19 @@
         {
           "round": 2,
           "teamA": [
-            "jensen"
+            "saugy"
           ],
           "teamB": [
-            "andy"
+            "joeo"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "kj"
+          ],
+          "teamB": [
+            "rmac"
           ]
         },
         {
@@ -3831,14 +3822,23 @@
           ]
         },
         {
-          "round": 3,
+          "round": 2,
           "teamA": [
-            "dk",
-            "jimh"
+            "tjsc"
           ],
           "teamB": [
-            "paulw",
-            "petec"
+            "shaunw"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "jensen",
+            "kj"
+          ],
+          "teamB": [
+            "andy",
+            "joeo"
           ]
         },
         {
@@ -3855,12 +3855,12 @@
         {
           "round": 3,
           "teamA": [
-            "jensen",
-            "kj"
+            "dk",
+            "jimh"
           ],
           "teamB": [
-            "andy",
-            "joeo"
+            "paulw",
+            "petec"
           ]
         },
         {
@@ -3944,8 +3944,10 @@
           "index": 10.3
         },
         {
-          "id": "house",
-          "name": "House",
+          "id": "shaunw",
+          "name": "Shaun W",
+          "first": "Shaun",
+          "last": "W",
           "team": "A",
           "index": 9.3
         },
@@ -3974,8 +3976,10 @@
           "index": 25.2
         },
         {
-          "id": "telly",
-          "name": "Telly",
+          "id": "bent",
+          "name": "Ben T",
+          "first": "Ben",
+          "last": "T",
           "team": "B",
           "index": 6.9
         },
@@ -3996,8 +4000,10 @@
           "index": 9
         },
         {
-          "id": "tmo",
-          "name": "T-Mo",
+          "id": "timc",
+          "name": "Tim C",
+          "first": "Tim",
+          "last": "C",
           "team": "B",
           "index": 12.2
         },
@@ -4010,8 +4016,10 @@
           "index": 11.6
         },
         {
-          "id": "weezy",
-          "name": "Weezy",
+          "id": "paulw",
+          "name": "Paul W",
+          "first": "Paul",
+          "last": "W",
           "team": "B",
           "index": 14
         },
@@ -4024,8 +4032,10 @@
           "index": 11.7
         },
         {
-          "id": "hile",
-          "name": "Hile",
+          "id": "jimh",
+          "name": "Jim H",
+          "first": "Jim",
+          "last": "Hile",
           "team": "B",
           "index": 18.5
         }
@@ -4088,22 +4098,22 @@
           },
           "hole_points": null,
           "ch": {
-            "jensen": 9,
-            "nicks": 9,
             "andy": 9,
-            "pace": 11,
-            "house": 12,
+            "bent": 7,
             "dk": 15,
-            "petec": 19,
-            "saugy": 36,
-            "telly": 7,
-            "kj": 10,
-            "rmac": 12,
-            "tmo": 13,
-            "tjsc": 15,
-            "weezy": 15,
+            "jensen": 9,
+            "jimh": 28,
             "joeo": 17,
-            "hile": 28
+            "kj": 10,
+            "nicks": 9,
+            "pace": 11,
+            "paulw": 15,
+            "petec": 19,
+            "rmac": 12,
+            "saugy": 36,
+            "shaunw": 12,
+            "timc": 13,
+            "tjsc": 15
           }
         },
         {
@@ -4163,22 +4173,22 @@
           },
           "hole_points": null,
           "ch": {
-            "jensen": 5,
-            "nicks": 4,
             "andy": 5,
-            "pace": 6,
-            "house": 7,
+            "bent": 2,
             "dk": 10,
-            "petec": 14,
-            "saugy": 30,
-            "telly": 2,
-            "kj": 5,
-            "rmac": 7,
-            "tmo": 9,
-            "tjsc": 10,
-            "weezy": 10,
+            "jensen": 5,
+            "jimh": 23,
             "joeo": 13,
-            "hile": 23
+            "kj": 5,
+            "nicks": 4,
+            "pace": 6,
+            "paulw": 10,
+            "petec": 14,
+            "rmac": 7,
+            "saugy": 30,
+            "shaunw": 7,
+            "timc": 9,
+            "tjsc": 10
           }
         },
         {
@@ -4238,22 +4248,22 @@
           },
           "hole_points": null,
           "ch": {
-            "jensen": 5,
-            "nicks": 4,
             "andy": 5,
-            "pace": 6,
-            "house": 7,
+            "bent": 2,
             "dk": 10,
-            "petec": 14,
-            "saugy": 30,
-            "telly": 2,
-            "kj": 5,
-            "rmac": 7,
-            "tmo": 9,
-            "tjsc": 10,
-            "weezy": 10,
+            "jensen": 5,
+            "jimh": 23,
             "joeo": 13,
-            "hile": 23
+            "kj": 5,
+            "nicks": 4,
+            "pace": 6,
+            "paulw": 10,
+            "petec": 14,
+            "rmac": 7,
+            "saugy": 30,
+            "shaunw": 7,
+            "timc": 9,
+            "tjsc": 10
           }
         },
         {
@@ -4312,22 +4322,22 @@
             "back": 2
           },
           "ch": {
-            "jensen": 8,
-            "nicks": 8,
             "andy": 8,
-            "pace": 9,
-            "house": 10,
+            "bent": 6,
             "dk": 12,
-            "petec": 18,
-            "saugy": 34,
-            "telly": 6,
-            "kj": 8,
-            "rmac": 9,
-            "tmo": 11,
-            "tjsc": 13,
-            "weezy": 14,
+            "jensen": 8,
+            "jimh": 26,
             "joeo": 15,
-            "hile": 26
+            "kj": 8,
+            "nicks": 8,
+            "pace": 9,
+            "paulw": 14,
+            "petec": 18,
+            "rmac": 9,
+            "saugy": 34,
+            "shaunw": 10,
+            "timc": 11,
+            "tjsc": 13
           },
           "counting_scores": {
             "front": 5,
@@ -4343,6 +4353,28 @@
         {
           "round": 1,
           "teamA": [
+            "andy",
+            "pace"
+          ],
+          "teamB": [
+            "rmac",
+            "timc"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "jensen",
+            "dk"
+          ],
+          "teamB": [
+            "bent",
+            "jimh"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
             "nicks",
             "saugy"
           ],
@@ -4354,43 +4386,12 @@
         {
           "round": 1,
           "teamA": [
-            "andy",
-            "pace"
-          ],
-          "teamB": [
-            "rmac",
-            "tmo"
-          ]
-        },
-        {
-          "round": 1,
-          "teamA": [
-            "house",
+            "shaunw",
             "petec"
           ],
           "teamB": [
             "kj",
-            "weezy"
-          ]
-        },
-        {
-          "round": 1,
-          "teamA": [
-            "jensen",
-            "dk"
-          ],
-          "teamB": [
-            "telly",
-            "hile"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
-            "nicks"
-          ],
-          "teamB": [
-            "telly"
+            "paulw"
           ]
         },
         {
@@ -4405,19 +4406,19 @@
         {
           "round": 2,
           "teamA": [
-            "pace"
+            "nicks"
           ],
           "teamB": [
-            "weezy"
+            "bent"
           ]
         },
         {
           "round": 2,
           "teamA": [
-            "house"
+            "dk"
           ],
           "teamB": [
-            "tmo"
+            "tjsc"
           ]
         },
         {
@@ -4432,10 +4433,10 @@
         {
           "round": 2,
           "teamA": [
-            "dk"
+            "saugy"
           ],
           "teamB": [
-            "tjsc"
+            "jimh"
           ]
         },
         {
@@ -4450,20 +4451,29 @@
         {
           "round": 2,
           "teamA": [
-            "saugy"
+            "pace"
           ],
           "teamB": [
-            "hile"
+            "paulw"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "shaunw"
+          ],
+          "teamB": [
+            "timc"
           ]
         },
         {
           "round": 3,
           "teamA": [
             "andy",
-            "house"
+            "shaunw"
           ],
           "teamB": [
-            "tmo",
+            "timc",
             "tjsc"
           ]
         },
@@ -4485,8 +4495,8 @@
             "petec"
           ],
           "teamB": [
-            "telly",
-            "weezy"
+            "bent",
+            "paulw"
           ]
         },
         {
@@ -4497,7 +4507,7 @@
           ],
           "teamB": [
             "rmac",
-            "hile"
+            "jimh"
           ]
         },
         {
@@ -4507,20 +4517,20 @@
             "nicks",
             "andy",
             "pace",
-            "house",
+            "shaunw",
             "dk",
             "petec",
             "saugy"
           ],
           "teamB": [
-            "telly",
+            "bent",
             "kj",
             "rmac",
-            "tmo",
+            "timc",
             "tjsc",
-            "weezy",
+            "paulw",
             "joeo",
-            "hile"
+            "jimh"
           ]
         }
       ],
@@ -4536,8 +4546,10 @@
       },
       "players": [
         {
-          "id": "telly",
-          "name": "Telly",
+          "id": "bent",
+          "name": "Ben T",
+          "first": "Ben",
+          "last": "T",
           "team": "A",
           "index": null
         },
@@ -4566,8 +4578,10 @@
           "index": null
         },
         {
-          "id": "house",
-          "name": "House",
+          "id": "shaunw",
+          "name": "Shaun W",
+          "first": "Shaun",
+          "last": "W",
           "team": "A",
           "index": null
         },
@@ -4597,7 +4611,9 @@
         },
         {
           "id": "elger",
-          "name": "Elger",
+          "name": "Joe E",
+          "first": "Joe",
+          "last": "Elger",
           "team": "B",
           "index": null
         },
@@ -4626,8 +4642,10 @@
           "index": null
         },
         {
-          "id": "tmo",
-          "name": "T-Mo",
+          "id": "timc",
+          "name": "Tim C",
+          "first": "Tim",
+          "last": "C",
           "team": "B",
           "index": null
         },
@@ -4640,14 +4658,18 @@
           "index": null
         },
         {
-          "id": "hile",
-          "name": "Hile",
+          "id": "jimh",
+          "name": "Jim H",
+          "first": "Jim",
+          "last": "Hile",
           "team": "B",
           "index": null
         },
         {
-          "id": "weezy",
-          "name": "Weezy",
+          "id": "paulw",
+          "name": "Paul W",
+          "first": "Paul",
+          "last": "W",
           "team": "B",
           "index": null
         }
@@ -4710,22 +4732,22 @@
           },
           "hole_points": null,
           "ch": {
-            "telly": 8,
+            "andy": 6,
+            "bent": 8,
+            "dk": 15,
+            "elger": 5,
+            "jensen": 7,
+            "jimh": 17,
+            "joeo": 14,
             "kj": 8,
             "nicks": 9,
-            "rmac": 9,
-            "house": 10,
-            "tjsc": 14,
-            "dk": 15,
-            "saugy": 33,
-            "elger": 5,
-            "andy": 6,
-            "jensen": 7,
             "pace": 10,
-            "tmo": 11,
-            "joeo": 14,
-            "hile": 17,
-            "weezy": 17
+            "paulw": 17,
+            "rmac": 9,
+            "saugy": 33,
+            "shaunw": 10,
+            "timc": 11,
+            "tjsc": 14
           }
         },
         {
@@ -4785,22 +4807,22 @@
           },
           "hole_points": null,
           "ch": {
-            "telly": 6,
+            "andy": 4,
+            "bent": 6,
+            "dk": 13,
+            "elger": 3,
+            "jensen": 5,
+            "jimh": 14,
+            "joeo": 12,
             "kj": 6,
             "nicks": 7,
-            "rmac": 7,
-            "house": 7,
-            "tjsc": 11,
-            "dk": 13,
-            "saugy": 31,
-            "elger": 3,
-            "andy": 4,
-            "jensen": 5,
             "pace": 7,
-            "tmo": 8,
-            "joeo": 12,
-            "hile": 14,
-            "weezy": 15
+            "paulw": 15,
+            "rmac": 7,
+            "saugy": 31,
+            "shaunw": 7,
+            "timc": 8,
+            "tjsc": 11
           }
         },
         {
@@ -4860,22 +4882,22 @@
           },
           "hole_points": null,
           "ch": {
-            "telly": 4.5,
+            "andy": 3.2,
+            "bent": 4.5,
+            "dk": 10.9,
+            "elger": 3.2,
+            "jensen": 4.4,
+            "jimh": 9.1,
+            "joeo": 6.3,
             "kj": 4.5,
             "nicks": 5.1,
-            "rmac": 5.1,
-            "house": 5.9,
-            "tjsc": 5.9,
-            "dk": 10.9,
-            "saugy": 10.9,
-            "elger": 3.2,
-            "andy": 3.2,
-            "jensen": 4.4,
             "pace": 4.4,
-            "tmo": 6.3,
-            "joeo": 6.3,
-            "hile": 9.1,
-            "weezy": 9.1
+            "paulw": 9.1,
+            "rmac": 5.1,
+            "saugy": 10.9,
+            "shaunw": 5.9,
+            "timc": 6.3,
+            "tjsc": 5.9
           }
         },
         {
@@ -4934,22 +4956,22 @@
             "back": 2
           },
           "ch": {
-            "telly": 8,
+            "andy": 6,
+            "bent": 8,
+            "dk": 16,
+            "elger": 5,
+            "jensen": 7,
+            "jimh": 18,
+            "joeo": 15,
             "kj": 9,
             "nicks": 10,
-            "rmac": 9,
-            "house": 9,
-            "tjsc": 14,
-            "dk": 16,
-            "saugy": 35,
-            "elger": 5,
-            "andy": 6,
-            "jensen": 7,
             "pace": 10,
-            "tmo": 11,
-            "joeo": 15,
-            "hile": 18,
-            "weezy": 18
+            "paulw": 18,
+            "rmac": 9,
+            "saugy": 35,
+            "shaunw": 9,
+            "timc": 11,
+            "tjsc": 14
           },
           "counting_scores": {
             "front": 3,
@@ -4966,11 +4988,11 @@
           "round": 1,
           "teamA": [
             "rmac",
-            "house"
+            "shaunw"
           ],
           "teamB": [
             "elger",
-            "tmo"
+            "timc"
           ]
         },
         {
@@ -4981,13 +5003,13 @@
           ],
           "teamB": [
             "pace",
-            "weezy"
+            "paulw"
           ]
         },
         {
           "round": 1,
           "teamA": [
-            "telly",
+            "bent",
             "dk"
           ],
           "teamB": [
@@ -5003,7 +5025,34 @@
           ],
           "teamB": [
             "jensen",
-            "hile"
+            "jimh"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "dk"
+          ],
+          "teamB": [
+            "andy"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "bent"
+          ],
+          "teamB": [
+            "pace"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "shaunw"
+          ],
+          "teamB": [
+            "elger"
           ]
         },
         {
@@ -5018,46 +5067,10 @@
         {
           "round": 2,
           "teamA": [
-            "house"
+            "saugy"
           ],
           "teamB": [
-            "elger"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
-            "kj"
-          ],
-          "teamB": [
-            "tmo"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
-            "tjsc"
-          ],
-          "teamB": [
-            "weezy"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
-            "telly"
-          ],
-          "teamB": [
-            "pace"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
-            "dk"
-          ],
-          "teamB": [
-            "andy"
+            "jimh"
           ]
         },
         {
@@ -5072,21 +5085,41 @@
         {
           "round": 2,
           "teamA": [
-            "saugy"
+            "kj"
           ],
           "teamB": [
-            "hile"
+            "timc"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "tjsc"
+          ],
+          "teamB": [
+            "paulw"
           ]
         },
         {
           "round": 3,
           "teamA": [
-            "telly",
+            "bent",
             "kj"
           ],
           "teamB": [
             "elger",
             "andy"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "dk",
+            "saugy"
+          ],
+          "teamB": [
+            "jimh",
+            "paulw"
           ]
         },
         {
@@ -5103,33 +5136,22 @@
         {
           "round": 3,
           "teamA": [
-            "house",
+            "shaunw",
             "tjsc"
           ],
           "teamB": [
-            "tmo",
+            "timc",
             "joeo"
-          ]
-        },
-        {
-          "round": 3,
-          "teamA": [
-            "dk",
-            "saugy"
-          ],
-          "teamB": [
-            "hile",
-            "weezy"
           ]
         },
         {
           "round": 4,
           "teamA": [
-            "telly",
+            "bent",
             "kj",
             "nicks",
             "rmac",
-            "house",
+            "shaunw",
             "tjsc",
             "dk",
             "saugy"
@@ -5139,10 +5161,10 @@
             "andy",
             "jensen",
             "pace",
-            "tmo",
+            "timc",
             "joeo",
-            "hile",
-            "weezy"
+            "jimh",
+            "paulw"
           ]
         }
       ],
@@ -5176,8 +5198,10 @@
           "index": 7.3
         },
         {
-          "id": "telly",
-          "name": "Telly",
+          "id": "bent",
+          "name": "Ben T",
+          "first": "Ben",
+          "last": "T",
           "team": "A",
           "index": 6.9
         },
@@ -5238,8 +5262,10 @@
           "index": 7.8
         },
         {
-          "id": "house",
-          "name": "House",
+          "id": "shaunw",
+          "name": "Shaun W",
+          "first": "Shaun",
+          "last": "W",
           "team": "B",
           "index": 9.3
         },
@@ -5252,14 +5278,18 @@
           "index": 9
         },
         {
-          "id": "tmo",
-          "name": "T-Mo",
+          "id": "timc",
+          "name": "Tim C",
+          "first": "Tim",
+          "last": "C",
           "team": "B",
           "index": 12.2
         },
         {
-          "id": "weezy",
-          "name": "Weezy",
+          "id": "paulw",
+          "name": "Paul W",
+          "first": "Paul",
+          "last": "W",
           "team": "B",
           "index": 14
         },
@@ -5272,8 +5302,10 @@
           "index": 11.7
         },
         {
-          "id": "hile",
-          "name": "Hile",
+          "id": "jimh",
+          "name": "Jim H",
+          "first": "Jim",
+          "last": "Hile",
           "team": "B",
           "index": 18.5
         }
@@ -5336,22 +5368,22 @@
           },
           "hole_points": null,
           "ch": {
-            "nicks": 6,
             "andy": 6,
-            "telly": 7,
-            "pace": 10,
-            "tjsc": 12,
+            "bent": 7,
             "dk": 15,
-            "petec": 18,
-            "saugy": 28,
             "jensen": 6,
-            "kj": 7,
-            "house": 7,
-            "rmac": 9,
-            "tmo": 10,
-            "weezy": 11,
+            "jimh": 13,
             "joeo": 11,
-            "hile": 13
+            "kj": 7,
+            "nicks": 6,
+            "pace": 10,
+            "paulw": 11,
+            "petec": 18,
+            "rmac": 9,
+            "saugy": 28,
+            "shaunw": 7,
+            "timc": 10,
+            "tjsc": 12
           }
         },
         {
@@ -5411,22 +5443,22 @@
           },
           "hole_points": null,
           "ch": {
-            "nicks": 5,
             "andy": 5,
-            "telly": 6,
-            "pace": 9,
-            "tjsc": 12,
+            "bent": 6,
             "dk": 15,
-            "petec": 18,
-            "saugy": 29,
             "jensen": 5,
-            "kj": 6,
-            "house": 7,
-            "rmac": 8,
-            "tmo": 10,
-            "weezy": 10,
+            "jimh": 13,
             "joeo": 11,
-            "hile": 13
+            "kj": 6,
+            "nicks": 5,
+            "pace": 9,
+            "paulw": 10,
+            "petec": 18,
+            "rmac": 8,
+            "saugy": 29,
+            "shaunw": 7,
+            "timc": 10,
+            "tjsc": 12
           }
         },
         {
@@ -5486,22 +5518,22 @@
           },
           "hole_points": null,
           "ch": {
-            "nicks": 4.4,
             "andy": 5.4,
-            "telly": 4.3,
-            "pace": 4.3,
-            "tjsc": 4.4,
+            "bent": 4.3,
             "dk": 10.3,
-            "petec": 5.4,
-            "saugy": 10.3,
             "jensen": 4.3,
-            "kj": 4.4,
-            "house": 4.8,
-            "rmac": 5.7,
-            "tmo": 4.4,
-            "weezy": 4.3,
+            "jimh": 5.7,
             "joeo": 4.8,
-            "hile": 5.7
+            "kj": 4.4,
+            "nicks": 4.4,
+            "pace": 4.3,
+            "paulw": 4.3,
+            "petec": 5.4,
+            "rmac": 5.7,
+            "saugy": 10.3,
+            "shaunw": 4.8,
+            "timc": 4.4,
+            "tjsc": 4.4
           }
         },
         {
@@ -5560,22 +5592,22 @@
             "back": 2
           },
           "ch": {
-            "nicks": 8,
             "andy": 8,
-            "telly": 8,
-            "pace": 13,
-            "tjsc": 16,
+            "bent": 8,
             "dk": 18,
-            "petec": 22,
-            "saugy": 35,
             "jensen": 8,
-            "kj": 9,
-            "house": 10,
-            "rmac": 11,
-            "tmo": 14,
-            "weezy": 14,
+            "jimh": 17,
             "joeo": 14,
-            "hile": 17
+            "kj": 9,
+            "nicks": 8,
+            "pace": 13,
+            "paulw": 14,
+            "petec": 22,
+            "rmac": 11,
+            "saugy": 35,
+            "shaunw": 10,
+            "timc": 14,
+            "tjsc": 16
           },
           "counting_scores": {
             "front": 4,
@@ -5591,7 +5623,7 @@
         {
           "round": 1,
           "teamA": [
-            "telly",
+            "bent",
             "tjsc"
           ],
           "teamB": [
@@ -5607,7 +5639,7 @@
           ],
           "teamB": [
             "rmac",
-            "tmo"
+            "timc"
           ]
         },
         {
@@ -5617,8 +5649,8 @@
             "petec"
           ],
           "teamB": [
-            "house",
-            "hile"
+            "shaunw",
+            "jimh"
           ]
         },
         {
@@ -5629,61 +5661,7 @@
           ],
           "teamB": [
             "kj",
-            "weezy"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
-            "nicks"
-          ],
-          "teamB": [
-            "house"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
-            "saugy"
-          ],
-          "teamB": [
-            "hile"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
-            "dk"
-          ],
-          "teamB": [
-            "kj"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
-            "petec"
-          ],
-          "teamB": [
-            "weezy"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
-            "telly"
-          ],
-          "teamB": [
-            "rmac"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
-            "tjsc"
-          ],
-          "teamB": [
-            "joeo"
+            "paulw"
           ]
         },
         {
@@ -5698,10 +5676,86 @@
         {
           "round": 2,
           "teamA": [
+            "bent"
+          ],
+          "teamB": [
+            "rmac"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "dk"
+          ],
+          "teamB": [
+            "kj"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "saugy"
+          ],
+          "teamB": [
+            "jimh"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "tjsc"
+          ],
+          "teamB": [
+            "joeo"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "nicks"
+          ],
+          "teamB": [
+            "shaunw"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
             "pace"
           ],
           "teamB": [
-            "tmo"
+            "timc"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "petec"
+          ],
+          "teamB": [
+            "paulw"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "andy",
+            "petec"
+          ],
+          "teamB": [
+            "shaunw",
+            "joeo"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "bent",
+            "pace"
+          ],
+          "teamB": [
+            "kj",
+            "timc"
           ]
         },
         {
@@ -5712,7 +5766,7 @@
           ],
           "teamB": [
             "rmac",
-            "hile"
+            "jimh"
           ]
         },
         {
@@ -5723,29 +5777,7 @@
           ],
           "teamB": [
             "jensen",
-            "weezy"
-          ]
-        },
-        {
-          "round": 3,
-          "teamA": [
-            "andy",
-            "petec"
-          ],
-          "teamB": [
-            "house",
-            "joeo"
-          ]
-        },
-        {
-          "round": 3,
-          "teamA": [
-            "telly",
-            "pace"
-          ],
-          "teamB": [
-            "kj",
-            "tmo"
+            "paulw"
           ]
         },
         {
@@ -5753,7 +5785,7 @@
           "teamA": [
             "nicks",
             "andy",
-            "telly",
+            "bent",
             "pace",
             "tjsc",
             "dk",
@@ -5763,12 +5795,12 @@
           "teamB": [
             "jensen",
             "kj",
-            "house",
+            "shaunw",
             "rmac",
-            "tmo",
-            "weezy",
+            "timc",
+            "paulw",
             "joeo",
-            "hile"
+            "jimh"
           ]
         }
       ],
@@ -5818,8 +5850,10 @@
           "index": 9
         },
         {
-          "id": "house",
-          "name": "House",
+          "id": "shaunw",
+          "name": "Shaun W",
+          "first": "Shaun",
+          "last": "W",
           "team": "A",
           "index": 9.3
         },
@@ -5832,8 +5866,10 @@
           "index": 11.6
         },
         {
-          "id": "hile",
-          "name": "Hile",
+          "id": "jimh",
+          "name": "Jim H",
+          "first": "Jim",
+          "last": "Hile",
           "team": "A",
           "index": 18.5
         },
@@ -5846,8 +5882,10 @@
           "index": 18.8
         },
         {
-          "id": "telly",
-          "name": "Telly",
+          "id": "bent",
+          "name": "Ben T",
+          "first": "Ben",
+          "last": "T",
           "team": "B",
           "index": 6.9
         },
@@ -5876,14 +5914,18 @@
           "index": 11.7
         },
         {
-          "id": "tmo",
-          "name": "T-Mo",
+          "id": "timc",
+          "name": "Tim C",
+          "first": "Tim",
+          "last": "C",
           "team": "B",
           "index": 12.2
         },
         {
-          "id": "weezy",
-          "name": "Weezy",
+          "id": "paulw",
+          "name": "Paul W",
+          "first": "Paul",
+          "last": "W",
           "team": "B",
           "index": 14
         },
@@ -5962,22 +6004,22 @@
           },
           "hole_points": null,
           "ch": {
-            "jensen": 7,
             "andy": 8,
+            "bent": 7,
+            "dk": 18,
+            "jensen": 7,
+            "jimh": 21,
+            "joeo": 13,
             "kj": 8,
-            "rmac": 9,
-            "house": 10,
-            "tjsc": 13,
-            "hile": 21,
-            "petec": 21,
-            "telly": 7,
             "nicks": 10,
             "pace": 11,
-            "joeo": 13,
-            "tmo": 13,
-            "weezy": 16,
-            "dk": 18,
-            "saugy": 31
+            "paulw": 16,
+            "petec": 21,
+            "rmac": 9,
+            "saugy": 31,
+            "shaunw": 10,
+            "timc": 13,
+            "tjsc": 13
           }
         },
         {
@@ -6037,22 +6079,22 @@
           },
           "hole_points": null,
           "ch": {
-            "jensen": 6,
             "andy": 7,
+            "bent": 6,
+            "dk": 17,
+            "jensen": 6,
+            "jimh": 19,
+            "joeo": 11,
             "kj": 7,
-            "rmac": 8,
-            "house": 9,
-            "tjsc": 11,
-            "hile": 19,
-            "petec": 19,
-            "telly": 6,
             "nicks": 9,
             "pace": 10,
-            "joeo": 11,
-            "tmo": 12,
-            "weezy": 14,
-            "dk": 17,
-            "saugy": 27
+            "paulw": 14,
+            "petec": 19,
+            "rmac": 8,
+            "saugy": 27,
+            "shaunw": 9,
+            "timc": 12,
+            "tjsc": 11
           }
         },
         {
@@ -6112,22 +6154,22 @@
           },
           "hole_points": null,
           "ch": {
-            "jensen": 6.2,
             "andy": 4.8,
+            "bent": 4.5,
+            "dk": 11.5,
+            "jensen": 6.2,
+            "jimh": 7.2,
+            "joeo": 7.4,
             "kj": 5.3,
-            "rmac": 4.8,
-            "house": 7.2,
-            "tjsc": 5.3,
-            "hile": 7.2,
-            "petec": 6.2,
-            "telly": 4.5,
             "nicks": 4.5,
             "pace": 6.5,
-            "joeo": 7.4,
-            "tmo": 6.5,
-            "weezy": 7.4,
-            "dk": 11.5,
-            "saugy": 11.5
+            "paulw": 7.4,
+            "petec": 6.2,
+            "rmac": 4.8,
+            "saugy": 11.5,
+            "shaunw": 7.2,
+            "timc": 6.5,
+            "tjsc": 5.3
           }
         },
         {
@@ -6186,22 +6228,22 @@
             "back": 2
           },
           "ch": {
-            "jensen": 8,
             "andy": 9,
+            "bent": 8,
+            "dk": 20,
+            "jensen": 8,
+            "jimh": 23,
+            "joeo": 14,
             "kj": 9,
-            "rmac": 11,
-            "house": 11,
-            "tjsc": 14,
-            "hile": 23,
-            "petec": 23,
-            "telly": 8,
             "nicks": 12,
             "pace": 13,
-            "joeo": 14,
-            "tmo": 15,
-            "weezy": 17,
-            "dk": 20,
-            "saugy": 31
+            "paulw": 17,
+            "petec": 23,
+            "rmac": 11,
+            "saugy": 31,
+            "shaunw": 11,
+            "timc": 15,
+            "tjsc": 14
           },
           "counting_scores": {
             "front": 4,
@@ -6221,7 +6263,7 @@
             "kj"
           ],
           "teamB": [
-            "telly",
+            "bent",
             "joeo"
           ]
         },
@@ -6232,7 +6274,7 @@
             "tjsc"
           ],
           "teamB": [
-            "tmo",
+            "timc",
             "dk"
           ]
         },
@@ -6240,7 +6282,7 @@
           "round": 1,
           "teamA": [
             "rmac",
-            "house"
+            "shaunw"
           ],
           "teamB": [
             "pace",
@@ -6250,39 +6292,12 @@
         {
           "round": 1,
           "teamA": [
-            "hile",
+            "jimh",
             "petec"
           ],
           "teamB": [
             "nicks",
-            "weezy"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
-            "rmac"
-          ],
-          "teamB": [
-            "telly"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
-            "petec"
-          ],
-          "teamB": [
-            "tmo"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
-            "jensen"
-          ],
-          "teamB": [
-            "nicks"
+            "paulw"
           ]
         },
         {
@@ -6297,28 +6312,10 @@
         {
           "round": 2,
           "teamA": [
-            "tjsc"
+            "rmac"
           ],
           "teamB": [
-            "joeo"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
-            "hile"
-          ],
-          "teamB": [
-            "saugy"
-          ]
-        },
-        {
-          "round": 2,
-          "teamA": [
-            "house"
-          ],
-          "teamB": [
-            "weezy"
+            "bent"
           ]
         },
         {
@@ -6331,6 +6328,51 @@
           ]
         },
         {
+          "round": 2,
+          "teamA": [
+            "jensen"
+          ],
+          "teamB": [
+            "nicks"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "jimh"
+          ],
+          "teamB": [
+            "saugy"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "tjsc"
+          ],
+          "teamB": [
+            "joeo"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "shaunw"
+          ],
+          "teamB": [
+            "paulw"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "petec"
+          ],
+          "teamB": [
+            "timc"
+          ]
+        },
+        {
           "round": 3,
           "teamA": [
             "andy",
@@ -6338,7 +6380,7 @@
           ],
           "teamB": [
             "pace",
-            "tmo"
+            "timc"
           ]
         },
         {
@@ -6348,7 +6390,7 @@
             "tjsc"
           ],
           "teamB": [
-            "telly",
+            "bent",
             "nicks"
           ]
         },
@@ -6366,12 +6408,12 @@
         {
           "round": 3,
           "teamA": [
-            "house",
-            "hile"
+            "shaunw",
+            "jimh"
           ],
           "teamB": [
             "joeo",
-            "weezy"
+            "paulw"
           ]
         },
         {
@@ -6381,18 +6423,18 @@
             "andy",
             "kj",
             "rmac",
-            "house",
+            "shaunw",
             "tjsc",
-            "hile",
+            "jimh",
             "petec"
           ],
           "teamB": [
-            "telly",
+            "bent",
             "nicks",
             "pace",
             "joeo",
-            "tmo",
-            "weezy",
+            "timc",
+            "paulw",
             "dk",
             "saugy"
           ]

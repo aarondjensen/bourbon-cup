@@ -281,11 +281,45 @@ if (!UNDO) {
 // 500 is Firestore's hard limit on a batch; 400 leaves room and keeps a failed
 // batch small enough to reason about.
 const BATCH = 400;
+
+// ── What the last run wrote and this one doesn't ──────────────────
+// Document ids are derived from (year, round, player, hole), so a re-run
+// normally lands on top of itself. An id that CHANGES does not: when Telly
+// turned out to be Ben T, `hist_2023_telly` stopped being written and stayed
+// in the database, and 2023 would have shown seventeen players — the sixteen
+// that played and the ghost of a name.
+//
+// So a re-run deletes what it previously wrote and no longer would. The
+// predicate is exact on both sides: only documents inside an edition this run
+// is writing, only ones carrying this import's `imported_from`, and only ones
+// absent from the set about to be written. A row a director added in the app
+// has no such field and is never a candidate.
+const pruneStale = async (built) => {
+  let removed = 0;
+  for (const col of IMPORT_COLLECTIONS) {
+    if (col === "bc_editions") continue;   // one document, and its id never moves
+    const keep = new Set((built[col] || []).map((d) => String(d.id)));
+    const rows = await db.collection(col).where("tournament_id", "==", built.editionId).get();
+    const stale = rows.docs.filter((d) => d.data().imported_from && !keep.has(d.id));
+    for (let i = 0; i < stale.length; i += BATCH) {
+      const batch = db.batch();
+      for (const d of stale.slice(i, i + BATCH)) batch.delete(d.ref);
+      await batch.commit();
+      removed += Math.min(BATCH, stale.length - i);
+    }
+  }
+  return removed;
+};
 let done = 0;
 const target = writing.reduce((n, r) => n + countDocs(r.built), 0);
 const tick = () => process.stdout.write(`\r${done}/${target} documents…`);
 
+let pruned = 0;
 for (const { built } of writing) {
+  // Prune BEFORE writing, so a run interrupted between the two leaves an
+  // edition short rather than an edition doubled — a missing card is visible,
+  // a duplicated roster reads as real.
+  if (!UNDO) pruned += await pruneStale(built);
   for (const col of IMPORT_COLLECTIONS) {
     const docs = built[col] || [];
     for (let i = 0; i < docs.length; i += BATCH) {
@@ -307,4 +341,5 @@ for (const { built } of writing) {
 
 console.log(`\r${UNDO ? "Deleted" : "Wrote"} ${done} documents across ${writing.length} editions ` +
   `(${writing.map((r) => r.edition.year).join(", ")}).        `);
+if (pruned) console.log(`Removed ${pruned} documents a previous import wrote that this one no longer does.`);
 if (!UNDO) console.log("\nSwitch to any year in Admin → Tournament → Editions, or the ☰ menu → Tournaments.");

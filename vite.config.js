@@ -19,7 +19,12 @@ export default defineConfig(({ mode }) => {
     // Run the rules suite deliberately, with the emulator up:
     //   firebase emulators:exec --only firestore "npx vitest run firestore.rules.test.mjs"
     test: {
-      include: ['src/**/*.{test,spec}.{js,jsx}'],
+      // pipeline/ is in as well as src/: the identity registry there decides
+      // that two rows on two spreadsheets are the same golfer, and it has been
+      // wrong in a way nothing downstream can notice — a split identity gives
+      // each half a complete, plausible record. It is a pure module like the
+      // ones under src/, and it wants the same suite.
+      include: ['{src,pipeline}/**/*.{test,spec}.{js,jsx,mjs}'],
     },
 
     server: {

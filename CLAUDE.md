@@ -165,7 +165,24 @@ They were not typed in. Three layers build them, each with its own job:
   (`hist_2025_jensen`) don't collide with the app's (`bc_player_<ms>`), so both
   rosters would survive and every screen would show the field twice. Before
   writing, it asks Firestore whether each target edition already holds roster
-  rows without an `imported_from` field, which is what will protect 2026.
+  rows without an `imported_from` field, which is what will protect 2026. Every
+  document it writes carries that field, and a re-run deletes the ones it wrote
+  before that it no longer would — which is how a changed player id cleans up
+  after itself instead of leaving a second roster behind.
+
+**Who is who is decided in one place** — `pipeline/players.mjs`. The 2022
+sheets renamed six men mid-record (Telly is Ben T, House is Shaun W, T-Mo is
+Tim C, Weezy is Paul W, Hile is Jim H, Elger is Joe E), and until those folds
+were restored the fact layer read them as twelve golfers who happened never to
+appear in the same year. Nothing downstream can catch that: a split identity
+gives each half a complete, plausible record. `pipeline/players.test.js` pins
+every fold, and the registry also carries each player's real name — the app
+shows first name and last initial everywhere, so the import writes that form.
+
+The generated fact files are sorted before they are written, so a rebuild is
+byte-comparable with what is committed and "does this still reproduce?" has an
+answer. `pipeline/export-csv.mjs` rebuilds `data/holes.csv`, `rounds.csv` and
+`matches.csv`, which used to be hand-exported and therefore drifted.
 
 **The course handicap is stored, not derived.** Handicaps were pasted into
 those sheets as values, per round, already rounded and blended; no single index
