@@ -60,6 +60,7 @@ import { TeamLeaderboard } from "./components/Leaderboard";
 import { FullScorecard } from "./components/FullScorecard";
 import { FieldCard } from "./components/FieldCard";
 import { BuyInEditor } from "./components/BuyIns";
+import { LowNetCard } from "./components/LowNetCard";
 import { MatchSetup } from "./components/MatchSetup";
 import {
   GROUPS_COL, groupsDocId, encodeGroups, decodeGroups,
@@ -4636,6 +4637,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // The CTP tab keeps its own round and its own open state. Sharing them with
   // the skins card would mean opening one tab silently rearranged the other.
   const [ctpRound, setCtpRound] = useState(null);
+  const [lowNetRound, setLowNetRound] = useState(null);
   const [editBuyIns, setEditBuyIns] = useState(null); // "skins" | "ctp" | null
 
   // ── Who is playing for what ──
@@ -4653,6 +4655,8 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   const skinsCounted = (buyIns?.skinsAmount || 0) > 0;
   const skinsPotValue = skinsCounted ? skinsField.length * buyIns.skinsAmount : skinsPot;
   const ctpPotValue = (buyIns?.ctpAmount || 0) > 0 ? ctpField.length * buyIns.ctpAmount : 0;
+  const lowNetField = inField(buyIns?.lowNetIn);
+  const lowNetPotValue = (buyIns?.lowNetAmount || 0) > 0 ? lowNetField.length * buyIns.lowNetAmount : 0;
 
   // The rounds that actually exist, not a hardcoded 1-4: a two-round
   // tournament used to get two empty tabs, and a fifth round never appeared
@@ -4776,8 +4780,62 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
     String(a.name || "").localeCompare(String(b.name || ""))
   );
 
+  // ── Low net ──
+  // One round, one card: gross for eighteen less the course handicap the round
+  // was played off. Only a FINISHED card is ranked — a player through fourteen
+  // is not leading on net, they are unfinished, and ranking them would put
+  // whoever had played least on top all afternoon.
+  //
+  // Equal lowest cards are CO-WINNERS, not a push. A skin pushes because the
+  // hole carries; low net has nowhere to carry to, so the round's share splits.
+  const lowNetRows = (round) => {
+    const { tr: tr2, course: course2 } = roundSetup(round);
+    const rows = lowNetField.map(p => {
+      const card = holeData[`${p.player_id}_${round}`] || {};
+      const played = Object.keys(card).filter(h => card[h] > 0);
+      const gross = played.reduce((a, h) => a + card[h], 0);
+      const ch = getRoundCH({
+        roundLocks, round, pid: p.player_id, players: tPlayers,
+        course: course2, chOverrides: hcpOverrides, teeAssignments, roundTee: tr2?.tee_box,
+      });
+      return {
+        pid: p.player_id, name: p.name, team: p.team,
+        thru: played.length, complete: played.length === 18,
+        gross, ch, net: gross - ch,
+      };
+    });
+    const done = rows.filter(r => r.complete);
+    const best = done.length ? Math.min(...done.map(r => r.net)) : null;
+    rows.forEach(r => { r.won = r.complete && r.net === best; });
+    // Finished cards first, ranked; the unfinished trail behind in play order.
+    return rows.sort((a, b) =>
+      (b.complete ? 1 : 0) - (a.complete ? 1 : 0) ||
+      (a.complete ? a.net - b.net : b.thru - a.thru) ||
+      String(a.name).localeCompare(String(b.name))
+    );
+  };
+
+  // The pot is divided by the ROUNDS, not by the wins. Each round is worth the
+  // same share, and a tied round splits ITS share between the co-winners — so
+  // a tie cannot make one round pay out more in total than a clean one, which
+  // dividing by wins would have done.
+  const lowNetRoundShare = roundList.length ? lowNetPotValue / roundList.length : 0;
+  const lowNetWins = roundList.flatMap(r => {
+    const winners = lowNetRows(r).filter(x => x.won);
+    return winners.map(w => ({ ...w, round: r, share: lowNetRoundShare / winners.length }));
+  });
+  const lowNetDecided = new Set(lowNetWins.map(w => w.round)).size;
+  const lowNetLeaders = Object.values(lowNetWins.reduce((acc, w) => {
+    const e = acc[w.pid] || (acc[w.pid] = { pid: w.pid, count: 0, best: null, money: 0 });
+    e.count += 1;
+    e.money += w.share;
+    if (e.best == null || w.net < e.best) e.best = w.net;
+    return acc;
+  }, {})).sort((a, b) => b.count - a.count || (a.best ?? Infinity) - (b.best ?? Infinity));
+
   // ── The CTP tab ──
   const ctpShownRound = roundList.includes(ctpRound) ? ctpRound : defaultRound;
+  const lowNetShownRound = roundList.includes(lowNetRound) ? lowNetRound : defaultRound;
   const noPar3s = roundList.every(r => !roundSetup(r).pars.some(p => p === 3));
 
   // Every standing tag, read through each round's OWN par table rather than
@@ -4834,7 +4892,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
           rather than taking it away. */}
       <StickyTop>
         <SegmentedToggle
-          options={[["skins", "Skins"], ["ctp", "Closest to Pin"]]}
+          options={[["skins", "Skins"], ["ctp", "CTP"], ["lownet", "Low Net"]]}
           value={activeTab} onChange={setActiveTab} letterSpacing={0.5}
         />
       </StickyTop>
@@ -5092,6 +5150,79 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                 })()}
               </>
             )}
+        </div>
+      )}
+
+      {roundList.length > 0 && activeTab === "lownet" && (
+        <div>
+          {/* LOW NET POT — counted from buy-ins, like CTP. */}
+          {(lowNetPotValue > 0 || user?.isDirector) && (
+            <div style={{ background: BC.card, borderRadius: 12, marginBottom: editBuyIns === "lownet" ? 0 : 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
+              <div style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>LOW NET POT</div>
+                  <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold }}>${lowNetPotValue.toFixed(2)}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: FS.label, color: BC.t3 }}>{lowNetDecided} of {roundList.length} decided</div>
+                  <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>${lowNetRoundShare.toFixed(2)} / round</div>
+                </div>
+              </div>
+              {user?.isDirector && (
+                <div
+                  onClick={() => setEditBuyIns(v => (v === "lownet" ? null : "lownet"))}
+                  style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "8px 14px", borderTop: `1px solid ${BC.bdr}` }}
+                >
+                  <span style={{ flex: 1, fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.6 }}>
+                    {lowNetField.length} IN{(buyIns?.lowNetAmount || 0) > 0 ? ` · $${buyIns.lowNetAmount} EACH` : ""}
+                  </span>
+                  <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.amberInk, letterSpacing: 0.6 }}>
+                    BUY-INS {editBuyIns === "lownet" ? "▾" : "▸"}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {user?.isDirector && editBuyIns === "lownet" && (
+            <BuyInEditor
+              players={tPlayers}
+              amount={buyIns?.lowNetAmount || 0}
+              ids={buyIns?.lowNetIn ?? null}
+              onChange={patch => onUpdateBuyIns(
+                "amount" in patch ? { lownet_buyin: patch.amount } : { lownet_in: patch.ids }
+              )}
+            />
+          )}
+
+          {/* LOW NET LEADERS — rounds won, then the best card among equals. */}
+          {lowNetLeaders.length > 0 && (
+            <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 12, overflow: "hidden" }}>
+              <div style={{ padding: "8px 14px", borderBottom: `1px solid ${BC.bdr}`, fontSize: FS.label, fontWeight: 700, color: BC.gold, letterSpacing: 1 }}>LOW NET LEADERS</div>
+              {lowNetLeaders.map(({ pid, count, money }) => {
+                const p = tPlayers.find(t => t.player_id === pid);
+                const team = p ? teams[p.team] : null;
+                return (
+                  <div key={pid} style={{ display: "flex", alignItems: "center", padding: "8px 14px", borderBottom: `1px solid ${BC.bdr}${ALPHA.hair}`, gap: 8 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
+                    <span style={{ flex: 1, minWidth: 0, fontSize: FS.body, fontWeight: 600, color: BC.t1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p?.name || pid}</span>
+                    <span style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>{count} round{count !== 1 ? "s" : ""}</span>
+                    <span style={{ fontSize: FS.small, color: BC.t3 }}>${money.toFixed(2)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <SegmentedToggle
+            variant="pills"
+            style={{ marginBottom: 8 }}
+            options={roundList.map(r => [r, `Rd ${r}`])}
+            value={lowNetShownRound}
+            onChange={setLowNetRound}
+          />
+
+          <LowNetCard rows={lowNetRows(lowNetShownRound)} />
         </div>
       )}
     </div>
@@ -5453,7 +5584,7 @@ export default function App() {
   // everybody, which is what every tournament played before this existed was.
   // An empty array is a different answer (nobody), so the two must not be
   // collapsed. See components/BuyIns.
-  const [buyIns, setBuyIns] = useState({ skinsAmount: 0, skinsIn: null, ctpAmount: 0, ctpIn: null });
+  const [buyIns, setBuyIns] = useState({ skinsAmount: 0, skinsIn: null, ctpAmount: 0, ctpIn: null, lowNetAmount: 0, lowNetIn: null });
   const [historicalData, setHistoricalData] = useState([]);
   // The saved team-name overrides (from the bc_settings/team_names doc).
   // Defaults come from constants so the fallback names live in one place.
@@ -5892,6 +6023,8 @@ export default function App() {
         skinsIn: Array.isArray(s?.skins_in) ? s.skins_in : null,
         ctpAmount: s?.ctp_buyin || 0,
         ctpIn: Array.isArray(s?.ctp_in) ? s.ctp_in : null,
+        lowNetAmount: s?.lownet_buyin || 0,
+        lowNetIn: Array.isArray(s?.lownet_in) ? s.lownet_in : null,
       });
     }));
     unsubs.push(db.subscribe("bc_historical", [{ field: "type", op: "==", value: "year" }], setHistoricalData));
@@ -6281,6 +6414,8 @@ export default function App() {
       ...("skins_in" in patch ? { skinsIn: patch.skins_in } : {}),
       ...("ctp_buyin" in patch ? { ctpAmount: patch.ctp_buyin } : {}),
       ...("ctp_in" in patch ? { ctpIn: patch.ctp_in } : {}),
+      ...("lownet_buyin" in patch ? { lowNetAmount: patch.lownet_buyin } : {}),
+      ...("lownet_in" in patch ? { lowNetIn: patch.lownet_in } : {}),
     }));
     await db.upsert("bc_tournament_settings", { id: editionDocId("bc_settings_main"), tournament_id: TOURNAMENT_ID, ...patch });
   }, []);
