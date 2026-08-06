@@ -473,8 +473,15 @@ function ClaimScreen({ players, teams, darkMode, tournamentName, tournamentLocat
   // Names/logos come from the resolved `teams`. For team A's DEFAULT (Mash)
   // logo we swap in the light-bg variant in light mode; an imported custom
   // logo (a data URL) is used as-is in both modes.
+  // A team with no logo at all is an edition whose teams are not these teams —
+  // an imported year, where the badge above the column would be somebody
+  // else's (see resolveTeams). The theme swap only applies to the Mash logo it
+  // was written for, so it happens INSIDE the branch that has one.
   const customLogoA = typeof teams.A.logo === "string" && teams.A.logo.startsWith("data:");
-  const teamA = { ...teams.A, logo: customLogoA ? teams.A.logo : (darkMode ? LOGO_TEAM_A : LOGO_TEAM_A_WHITE) };
+  const teamA = {
+    ...teams.A,
+    logo: customLogoA ? teams.A.logo : (teams.A.logo ? (darkMode ? LOGO_TEAM_A : LOGO_TEAM_A_WHITE) : null),
+  };
   const teamB = teams.B;
 
   const doClaim = async () => {
@@ -525,8 +532,20 @@ function ClaimScreen({ players, teams, darkMode, tournamentName, tournamentLocat
           const teamPlayers = players.filter(p => p.team === team.id);
           return (
             <div key={team.id} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center" }}>
-              {/* Logo centered above column */}
-              <img src={team.logo} alt={team.name} style={{ width: "clamp(60px, 32vw, 90px)", height: "clamp(44px, 22vw, 64px)", objectFit: "contain", marginBottom: 6 }} />
+              {/* Logo centered above column — or the team's NAME, on a year
+                  whose teams have no logo. The old cups had names and nothing
+                  else, and the name is the thing that identifies the side. */}
+              {team.logo ? (
+                <img src={team.logo} alt={team.name} style={{ width: "clamp(60px, 32vw, 90px)", height: "clamp(44px, 22vw, 64px)", objectFit: "contain", marginBottom: 6 }} />
+              ) : (
+                <div style={{
+                  width: "100%", height: "clamp(44px, 22vw, 64px)", marginBottom: 6,
+                  display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center",
+                  color: team.accent, fontSize: `clamp(${FS.body}px, 4.6vw, ${FS.title}px)`,
+                  fontWeight: 800, letterSpacing: 0.5, lineHeight: 1.15, textTransform: "uppercase",
+                  overflowWrap: "anywhere",
+                }}>{team.name}</div>
+              )}
               {/* Player list */}
               <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "clamp(3px, 1vw, 6px)", background: BC.card + ALPHA.panel, border: `1px solid ${team.accent}${ALPHA.line}`, borderTop: `2px solid ${team.accent}`, borderRadius: 10, padding: "clamp(4px, 1.5vw, 8px)" }}>
                 {teamPlayers.length === 0

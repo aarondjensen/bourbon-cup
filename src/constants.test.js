@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   PAR_RESULTS_BY_FORMAT, PAR_POINTS_DEFAULTS,
   parResultsFor, parResultLabel, parResultFor, resolveParPoints, tiltBirdieValue,
+  resolveTeams, TEAM_A, TEAM_B,
 } from "./constants";
 
 // Only the against-par ladders are covered here — the piece of constants.js
@@ -148,5 +149,33 @@ describe("tiltBirdieValue", () => {
 
   it("takes a par or worse off Tilt", () => {
     ["par", "bogey", "double"].forEach(r => expect(tiltBirdieValue(r)).toBe(0));
+  });
+});
+
+
+// A logo belongs to a TEAM, not to a side. The old cups had neither logos nor
+// these teams, and 2023 opened wearing the Mash Brothers flag.
+describe("resolveTeams", () => {
+  it("keeps the default badge while the team is still that team", () => {
+    const t = resolveTeams({ A: TEAM_A.name, B: TEAM_B.name });
+    expect(t.A.logo).toBe(TEAM_A.logo);
+    expect(t.B.logo).toBe(TEAM_B.logo);
+  });
+
+  it("keeps it when no names are stored at all — that is the same team", () => {
+    expect(resolveTeams(null).A.logo).toBe(TEAM_A.logo);
+  });
+
+  it("drops it for a side with a different name, rather than lending it out", () => {
+    const t = resolveTeams({ A: "TEES", B: "WEEZ" });
+    expect(t.A.logo).toBe(null);
+    expect(t.B.logo).toBe(null);
+    expect(t.A.name).toBe("TEES");
+  });
+
+  it("changes nothing else about the side", () => {
+    const t = resolveTeams({ A: "TEES", B: "WEEZ" });
+    expect(t.A.id).toBe("A");
+    expect(t.A.accent).toBe(TEAM_A.accent);
   });
 });

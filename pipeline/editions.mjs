@@ -40,7 +40,7 @@
 import { readFileSync, readdirSync, existsSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildResolver, displayName, PLAYERS } from "./players.mjs";
+import { buildResolver, formalName, realName } from "./players.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DATA_DIR = join(ROOT, "data");
@@ -615,9 +615,20 @@ function buildYear(year, { backbone, facts }) {
   }
 
   // The ghost, if this year played one, in the rounds where it has a card.
-  const roster = players.map((p) => ({
-    id: p.id, name: displayName(p.id) || p.sheet_name, team: p.team, index: p.index,
-  }));
+  // The app shows a player as first name + last initial and stores that on the
+  // roster row, so the roster carries the same three fields AdminView writes:
+  // the real name, and the display form built from it. A player the registry
+  // has no real name for keeps the handle the sheets used — see players.mjs.
+  const roster = players.map((p) => {
+    const real = realName(p.id);
+    return {
+      id: p.id,
+      name: formalName(p.id) || p.sheet_name,
+      ...(real ? { first: real.first, last: real.last } : {}),
+      team: p.team,
+      index: p.index,
+    };
+  });
   const extraHoles = [];
   for (const r of rounds) {
     const card = ghostCard(dir, r.round, master.teams);

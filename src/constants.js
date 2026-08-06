@@ -72,10 +72,28 @@ export const DEFAULT_TEAM_NAMES = { A: TEAM_A.name, B: TEAM_B.name };
 // needs {team + current name} should read from here (via App's `teams` memo)
 // rather than re-merging `{ ...TEAM_A, name: teamNames?.A || TEAM_A.name }`
 // inline — that merge used to be copy-pasted across five components.
-export const resolveTeams = (teamNames) => ({
-  A: { ...TEAM_A, name: teamNames?.A || TEAM_A.name },
-  B: { ...TEAM_B, name: teamNames?.B || TEAM_B.name },
-});
+// ── Whose badge is that? ──────────────────────────────────────────
+// The two logos above are Mash Brothers' and Shot Callers'. They are the
+// DEFAULT because they are this cup's current teams, not because they belong
+// to whichever side happens to be called A — and an edition with different
+// teams must not wear them. 2023 was TEES against WEEZ, and it opened showing
+// the Mash Brothers flag.
+//
+// So a team keeps the default logo only while it is still that team, by name.
+// Anything else gets `logo: null`, and the screens that show one fall back to
+// the team's name, which is the thing that is actually known. A logo of its
+// own always wins: the branding doc is layered over this in App's `teams`
+// memo, so an edition that uploaded one is unaffected.
+const defaultLogoFor = (team, name) => (name === team.name ? team.logo : null);
+
+export const resolveTeams = (teamNames) => {
+  const nameA = teamNames?.A || TEAM_A.name;
+  const nameB = teamNames?.B || TEAM_B.name;
+  return {
+    A: { ...TEAM_A, name: nameA, logo: defaultLogoFor(TEAM_A, nameA) },
+    B: { ...TEAM_B, name: nameB, logo: defaultLogoFor(TEAM_B, nameB) },
+  };
+};
 
 // ── The vocabulary a format is described in ─────────────────────────
 // These sit above FORMATS because every entry in the catalog is written in
