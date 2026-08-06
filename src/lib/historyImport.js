@@ -181,7 +181,7 @@ export const tournamentDocFor = ({ year, name }) => ({
 });
 
 // bc_players — one roster row per golfer per year.
-export const playerDocFor = ({ year, id, name, team, index }) => {
+export const playerDocFor = ({ year, id, name, team, index, borrowed = false }) => {
   const pid = historyPlayerId(year, id);
   return {
     id: pid,
@@ -190,6 +190,10 @@ export const playerDocFor = ({ year, id, name, team, index }) => {
     name: String(name ?? id),
     team: team === "B" ? "B" : "A",
     handicap_index: Number.isFinite(Number(index)) ? Number(index) : 0,
+    // 2020's compiled card. A roster row because Team Best Ball needs the ball
+    // on the side, flagged because it is not a person — every screen that
+    // lists PLAYERS filters it out through lib/players.isBorrowedBall.
+    ...(borrowed ? { borrowed: true } : {}),
     // Explicitly null rather than absent: the roster row for a finished
     // tournament has no account behind it and never will have had one, and a
     // missing field reads as "not written yet" to the claim screen.

@@ -17,6 +17,21 @@
 // Unknown ids fall back to the id itself for a name, which is what every
 // caller already did — it keeps a stale match row readable instead of
 // rendering a blank where a player used to be.
+// ── The borrowed ball ─────────────────────────────────────────────
+// 2020 went out a man short and played against a compiled card — a ball made
+// of the team's own scores, not a person. It has to EXIST as a roster row,
+// because Team Best Ball adds the best N nets on a side and a side of seven
+// against a side of eight is not the round that was played: leave it out and
+// that round reads 13–14 instead of the 7½–19½ it finished.
+//
+// But it is not somebody, so it does not belong in a list of players. Every
+// screen that shows the ROSTER filters it out through here; every screen that
+// shows a SCORE leaves it alone, which is the line between the two.
+export const isBorrowedBall = (p) => !!p?.borrowed;
+
+// The roster, minus anything that isn't a golfer.
+export const realPlayers = (players) => (players || []).filter((p) => !isBorrowedBall(p));
+
 export function playerLookup(players) {
   const find = (pid) => (players || []).find((p) => p.player_id === pid);
   const nameOf = (pid) => find(pid)?.name || pid;
