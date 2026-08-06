@@ -49,6 +49,8 @@ import { CtpPrompt } from "./components/CtpPrompt";
 import { DirectorFinalizeAlert, FinalizeRoundSheet } from "./components/FinalizeRound";
 import { MissingCardNote, SignCardSheet, SignedCardPanel } from "./components/CardSignature";
 import { AccountView } from "./components/AccountView";
+import { PhotosView } from "./components/PhotosView";
+import { photoUploadsAllowed, uploadsDisabledReason, CONFIG_COL, PHOTOS_CONFIG_ID } from "./lib/media";
 import { initForegroundNotifications, syncAppBadge } from "./lib/notifications";
 import { SegmentedToggle, SegRule, StickyTop, Banner, PlayerName, Toast, HoleNavigator, ScoreButtonRow } from "./components/ui";
 import { GroupSwitcher } from "./components/GroupSwitcher";
@@ -5299,7 +5301,11 @@ function SlideMenu({ open, onClose, onNavigate, user, view, finalize, onEditions
     // The active year rides on the row so the menu says which tournament is on
     // screen without opening anything.
     { key: "editions",  label: "Tournaments",      icon: "🏆", action: onEditions, value: String(getTournamentYear()) },
-    { key: "photos",    label: "Photo Library",     icon: "📸", external: true },
+    // Was a link out to thebourboncup.com/photos. It is now a tab in the app,
+    // because a photo taken on the tee has to be able to go somewhere from the
+    // phone that took it. The site is still where the older years live, and
+    // the tab links out to it — see components/PhotosView.
+    { key: "photos",    label: "Photos",            icon: "📸" },
     ...(user?.isDirector ? [{ key: "admin", label: "Admin Settings", icon: "⚙️" }] : []),
     // Last, and set apart below: everything above is the EVENT, this is the
     // person. Notifications, the theme switch and Logout all used to be
@@ -5342,7 +5348,6 @@ function SlideMenu({ open, onClose, onNavigate, user, view, finalize, onEditions
               // An action item settles here and never navigates — there is no
               // `finalize` view to route to, only a sheet to raise.
               if (item.action) { item.action(); onClose(); return; }
-              if (item.external) { window.open("https://thebourboncup.com/photos", "_blank"); onClose(); return; }
               onNavigate(item.key); onClose();
             }} style={{
               width: "100%", padding: "12px 16px",
@@ -5682,6 +5687,11 @@ export default function App() {
   // (roundCardProgress), and a second shape would just be a third thing to
   // keep honest.
   const [cardSigs, setCardSigs] = useState([]);
+  // The photo library's index for the active edition. See src/lib/media.js —
+  // these documents point at the photos, they do not contain them.
+  const [media, setMedia] = useState([]);
+  // bc_config/photos — the budget circuit breaker's flag. Null until read.
+  const [photoConfig, setPhotoConfig] = useState(null);
   const [notif, setNotif] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [hcpOverridesData, setHcpOverridesData] = useState({}); // { round: { pid: value } }
@@ -6025,8 +6035,39 @@ export default function App() {
       });
       setHoleData(hd);
     }));
+    // Whether photo uploads are switched on. One tiny document, subscribed
+    // with the rest because every phone needs it and it never changes — see
+    // onBudgetAlert in functions/index.js, which only writes it on a
+    // transition precisely so this listener stays quiet. NOT edition-scoped:
+    // the budget is the project's, not a year's.
+    unsubs.push(db.subscribe(CONFIG_COL, [], rows => {
+      setPhotoConfig(rows.find(r => r.id === PHOTOS_CONFIG_ID) || null);
+    }, { withId: true }));
     return () => unsubs.forEach(u => u());
   }, []);
+
+  // ── The photo index, subscribed only once somebody opens Photos ──
+  // Deliberately NOT in the block above. Every other subscription there is
+  // bounded by the shape of a tournament — sixteen players, four rounds,
+  // eighteen holes — but this one grows with however many photos get posted,
+  // and Firestore bills a read per document each time a listener attaches.
+  //
+  // The app has no persistent cache, so every cold start re-reads everything
+  // it subscribes to. Attaching this on load would mean a phone that never
+  // opens the gallery still paying for the whole index on each launch, times
+  // a dozen phones, times however often a phone reloads over a cup weekend.
+  // Mounting it on first open instead makes the cost proportional to people
+  // actually looking at photos.
+  //
+  // `photosOpened` latches: once opened, the subscription stays for the rest
+  // of the session, so coming back to the gallery is instant and somebody
+  // else's photo still shows up live on every phone that has it open.
+  const [photosOpened, setPhotosOpened] = useState(false);
+  useEffect(() => { if (view === "photos") setPhotosOpened(true); }, [view]);
+  useEffect(() => {
+    if (!photosOpened) return;
+    return db.subscribe("bc_media", [{ field: "tournament_id", op: "==", value: TOURNAMENT_ID }], setMedia);
+  }, [photosOpened]);
 
   // Enhance tRounds with nassau data
   const enrichedRounds = useMemo(() => tRounds.map(r => ({
@@ -6306,6 +6347,59 @@ export default function App() {
       tournament_id: TOURNAMENT_ID,
       confirmed_by: [...new Set([...(rec.confirmed_by || []), pid])],
     });
+  }, []);
+
+  // ── The photo library's two writes ───────────────────────────────────
+  // Both go through lib/mediaUpload.js, which owns the canvas work and the
+  // bucket; this pair owns the Firestore side, because `db` lives here and a
+  // second write path into bc_media is how two of them drift apart.
+  //
+  // The order matters in both directions and is the opposite each time:
+  //
+  //   uploading  bytes first, then the index document. A document pointing at
+  //              a photo that failed to upload is a broken tile in the grid;
+  //              bytes with no document are invisible and cost 250KB.
+  //   deleting   document first, then the bytes. The document is what makes
+  //              the photo exist in the app, so removing it is what the person
+  //              tapping Remove actually asked for — and if the byte delete
+  //              then fails, the result is a hidden orphan rather than a photo
+  //              that is still on screen after being deleted.
+  //
+  // `db.upsert` and `db.delete` swallow their errors, which is right for a
+  // score and wrong here: the gallery counts what failed and says so. Hence
+  // the null / false check on each.
+  //
+  // useStableCallback rather than useCallback: the round a photo is stamped
+  // with is computed further down this component, so a [] dependency list
+  // would freeze the first render's value — a photo posted on round 3 filed
+  // under round 1 for the rest of the session.
+  const onUploadPhoto = useStableCallback(async (file) => {
+    const uid = authUser?.uid;
+    if (!uid) throw new Error("You need to be signed in to add photos.");
+    const { uploadPhoto } = await import("./lib/mediaUpload");
+    const row = await uploadPhoto({
+      file,
+      tid: getActiveTournamentId(),
+      uid,
+      uploaderName: user?.name || "",
+      // Stamped with the round being played — and only then. `currentRound`
+      // is null once every round is final, which is exactly the state a
+      // finished year is in, so a photo added while browsing 2019 carries no
+      // round rather than claiming to be from round 2 of it. On the live
+      // tournament the guess is right far more often than not and saves a
+      // picker on a screen somebody is using one-handed on a tee box; a
+      // dinner photo landing under the round it was taken during is a wrong
+      // label, not a lost photo.
+      round: currentRound,
+    });
+    if (!(await db.upsert("bc_media", row))) throw new Error("Couldn't save that photo.");
+  });
+
+  const onDeletePhoto = useCallback(async (item) => {
+    if (!item?.id) return;
+    if (!(await db.delete("bc_media", item.id))) throw new Error("Couldn't remove that photo.");
+    const { deletePhotoBytes } = await import("./lib/mediaUpload");
+    await deletePhotoBytes(item);
   }, []);
   // ── Card signature / attestation ─────────────────────────────────────
   // Three writes against bc_card_sigs, and the whole workflow is these
@@ -7019,6 +7113,26 @@ export default function App() {
             tRounds={enrichedRounds} courses={courses} historicalData={historicalData} user={user}
             hcpOverrides={hcpOverridesData} teeAssignments={teeAssignmentsData}
             roundLocks={roundLocksData} teams={teams}
+          />
+        )}
+        {view === "photos" && (
+          /* `canPost` is membership, not a role: everybody who has been through
+             the password screen posts photos, the same way everybody scores.
+             The one identity held back is the spectator — somebody who opened a
+             finished year they are not in. The rules would take that write, since
+             they only ask for a membership; not offering it is the same judgement
+             the claim screen makes, that a year you are only looking at is not
+             one you add to. */
+          <PhotosView
+            items={media}
+            year={getTournamentYear()}
+            uid={authUser?.uid || null}
+            isDirector={!!user?.isDirector}
+            canPost={!!authUser?.uid && user?.player_id !== SPECTATOR_ID && photoUploadsAllowed(photoConfig)}
+            uploadsBlockedReason={photoUploadsAllowed(photoConfig) ? "" : uploadsDisabledReason(photoConfig)}
+            onUpload={onUploadPhoto}
+            onDelete={onDeletePhoto}
+            notify={notify}
           />
         )}
         {view === "admin" && (
