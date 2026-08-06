@@ -92,6 +92,23 @@ export const accentFrom = ({ fill, ink }) => {
   return null;
 };
 
+// Stored as the sheet has it, dark navy and all. The app lifts a brand colour
+// for the dark theme and walks it down for the light one (theme.withBrand), so
+// the document keeps the true colour and only the display is adjusted.
+
+// ── What the banner does not say ──────────────────────────────────
+// 2022 wrote its teams in coloured TYPE on a grey banner, and only got half
+// way: Sautering Irons are lettered navy, HileDrivers in the default black.
+// Aaron named the missing one — "irons are navy and drivers are red" — and the
+// red is the sheet's own #CC0000, the colour that year uses for Drivers points
+// further down the scoreboard, rather than a hex invented here.
+//
+// A year belongs in this table only when the workbook genuinely does not carry
+// the colour. Everything else is read.
+const NAMED_BY_HAND = {
+  2022: { B: "#CC0000" },   // Drivers, red
+};
+
 export function teamBrandFor(year, teams) {
   const dir = join(SHEETS_DIR, String(year));
   const file = existsSync(dir) && readdirSync(dir).find((f) => f.endsWith(".xlsx"));
@@ -116,8 +133,12 @@ export function teamBrandFor(year, teams) {
       const val = text[Number(m[4])];
       if (!val) continue;
       const { fill, ink } = styleOf(Number(m[3]));
-      if (!isIdentity(fill)) continue;
-      found.push({ col: m[1], text: val, fill, ink });
+      // A banner says its colour with a fill or with its TYPE. 2022 used type
+      // on a grey banner, so a cell whose fill is furniture still counts when
+      // it is lettered in something.
+      const painted = isIdentity(fill) ? fill : null;
+      if (!painted && !(isIdentity(ink) && saturation(ink) > 0.15)) continue;
+      found.push({ col: m[1], text: val, fill: painted, ink });
     }
     if (!found.length) return null;
 
@@ -133,12 +154,21 @@ export function teamBrandFor(year, teams) {
     if (!A && !B) {
       const distinct = [];
       for (const f of found.sort((a, b) => a.col.length - b.col.length || a.col.localeCompare(b.col))) {
-        if (!distinct.some((d) => d.fill === f.fill)) distinct.push(f);
+        if (!distinct.some((d) => accentFrom(d) === accentFrom(f))) distinct.push(f);
       }
       [A, B] = distinct;
     }
-    if (!A || !B || A.fill === B.fill) return null;
-    return { A: { ...A, accent: accentFrom(A) }, B: { ...B, accent: accentFrom(B) } };
+    const told = NAMED_BY_HAND[year] || {};
+    const side = (hit, named) => {
+      const accent = named || (hit ? accentFrom(hit) : null);
+      return accent || hit ? { text: hit?.text || "named by hand", fill: hit?.fill ?? null, accent } : null;
+    };
+    const out = { A: side(A, told.A), B: side(B, told.B) };
+    if (!out.A || !out.B) return null;
+    // Two sides painted the same colour is the banner saying nothing about
+    // either of them — a template shade this file has not learned to ignore.
+    if (out.A.accent && out.A.accent === out.B.accent) return null;
+    return out;
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
