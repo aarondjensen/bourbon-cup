@@ -190,6 +190,27 @@ export const tournamentDocFor = ({ year, name }) => ({
   imported_from: SOURCE,
 });
 
+// bc_settings/branding — the team colours a year was played in.
+//
+// Read off the SCOREBOARD banner in the workbook (see pipeline/team-brand.mjs),
+// which is the only place a sheet records them. A side with no colour is left
+// OUT of the document rather than defaulted: the app falls back to its own
+// palette for a side the branding doc says nothing about, and 2016–2018 played
+// under no team colours at all.
+//
+// No logo. Only 2024's workbook has one embedded, and a logo is a decision
+// about an edition rather than something to sweep in with the scores.
+export const brandingDocFor = ({ year, brand }) => {
+  const doc = {
+    id: editionDocId("branding", editionIdForYear(year)),
+    tournament_id: editionIdForYear(year),
+    imported_from: SOURCE,
+  };
+  if (brand?.A?.color) doc.teamA = { color: brand.A.color };
+  if (brand?.B?.color) doc.teamB = { color: brand.B.color };
+  return (doc.teamA || doc.teamB) ? doc : null;
+};
+
 // bc_players — one roster row per golfer per year.
 export const playerDocFor = ({ year, id, name, first, last, team, index, borrowed = false }) => {
   const pid = historyPlayerId(year, id);
@@ -428,7 +449,8 @@ export const buildEdition = (edition, holes = [], { handicapModeFor, counting } 
     bc_settings: [
       teamNamesDocFor({ year, teams: edition.teams }),
       tournamentDocFor({ year, name: edition.name }),
-    ],
+      brandingDocFor({ year, brand: edition.brand }),
+    ].filter(Boolean),
     bc_players: edition.players.map((p) => playerDocFor({ year, ...p })),
     bc_courses: rounds.map((r) => courseDocFor({ year, round: r.round, course: r.course })),
     bc_rounds: rounds.map((r) => roundDocFor({ year, round: r })),

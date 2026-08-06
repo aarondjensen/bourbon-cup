@@ -184,6 +184,16 @@ byte-comparable with what is committed and "does this still reproduce?" has an
 answer. `pipeline/export-csv.mjs` rebuilds `data/holes.csv`, `rounds.csv` and
 `matches.csv`, which used to be hand-exported and therefore drifted.
 
+**The team colours come off the SCOREBOARD banner** — `pipeline/team-brand.mjs`,
+run as part of `build:editions`. It is the only place a sheet records them: the
+Master Input's team cell is highlighted yellow because it is an input cell, and
+the rest of the workbook's colour is the template's own. A black banner hands
+over to its type (Shot Callers is black lettered in teal, which is the teal the
+app has always drawn them in); a banner in black and white gives no colour and
+that side keeps the app's palette. 2016–2018 and 2022 have no banner colour at
+all. **No logos** — only 2024's workbook has one embedded, and the sheets for
+the other years hold none.
+
 **The course handicap is stored, not derived.** Handicaps were pasted into
 those sheets as values, per round, already rounded and blended; no single index
 reproduces them. So each round is imported already LOCKED and FINAL with the

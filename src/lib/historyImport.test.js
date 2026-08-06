@@ -5,7 +5,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildEdition, editionDocFor, editionIdForYear, historyPlayerId, historyCourseId,
   isHistoryCourseId, playerDocFor, roundDocFor, roundLockDocFor, matchDocFor, holeDocFor,
-  teamNamesDocFor, formOfPlayFor, allowanceFor, countDocs, IMPORT_COLLECTIONS, HISTORY_TEE,
+  teamNamesDocFor, brandingDocFor, formOfPlayFor, allowanceFor, countDocs, IMPORT_COLLECTIONS, HISTORY_TEE,
 } from "./historyImport.js";
 import { isBorrowedBall, realPlayers } from "./players.js";
 
@@ -246,5 +246,25 @@ describe("the name on a roster row", () => {
     expect(doc.name).toBe("Weezy");
     expect("first_name" in doc).toBe(false);
     expect("last_name" in doc).toBe(false);
+  });
+});
+
+describe("the branding document", () => {
+  it("carries the colours the year's scoreboard banner was painted in", () => {
+    const doc = brandingDocFor({ year: 2021, brand: { A: { color: "#9FC5E8" }, B: { color: "#B7B7B7" } } });
+    expect(doc).toMatchObject({
+      id: "bc_2021__branding", tournament_id: "bc_2021",
+      teamA: { color: "#9FC5E8" }, teamB: { color: "#B7B7B7" },
+    });
+  });
+
+  it("leaves out a side with no colour, so the app's own palette stands", () => {
+    const doc = brandingDocFor({ year: 2023, brand: { A: { color: "#316746" } } });
+    expect(doc.teamA).toEqual({ color: "#316746" });
+    expect("teamB" in doc).toBe(false);
+  });
+
+  it("writes nothing at all for a year that had no team colours", () => {
+    expect(brandingDocFor({ year: 2017, brand: null })).toBe(null);
   });
 });
