@@ -36,3 +36,12 @@ data/*.db
 # Claude Code: settings.json and launch.json are shared so both developers'
 # agents behave the same way. Personal permission grants stay out.
 .claude/settings.local.json
+
+# Firebase service-account keys. `scripts/import-history.mjs` needs one, and
+# the console downloads it under this name — into whatever folder the browser
+# saves to, which is sometimes this one. The key bypasses firestore.rules
+# entirely, so a commit of it hands the whole database to anyone who reads the
+# repo. Ignored by the pattern the console itself names the file with, in every
+# directory, so it cannot be added by accident.
+*firebase-adminsdk*.json
+serviceAccount*.json
