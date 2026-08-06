@@ -159,8 +159,13 @@ They were not typed in. Three layers build them, each with its own job:
 - **`scripts/import-history.mjs`** (`npm run import:history`) writes them.
   **Dry run by default**; needs `--write`, a service-account key, and
   `firebase-admin` (`npm i --no-save firebase-admin`). It refuses a key for
-  another project, and it skips the live edition — 2025 is in Firestore
-  already, played in the app, and its documents are the real ones.
+  another project, and it will not write into an edition that already exists in
+  the app — 2025 was entered by hand and accounts are claimed to its roster.
+  That is not an overwrite hazard, it is a duplication one: the import's ids
+  (`hist_2025_jensen`) don't collide with the app's (`bc_player_<ms>`), so both
+  rosters would survive and every screen would show the field twice. Before
+  writing, it asks Firestore whether each target edition already holds roster
+  rows without an `imported_from` field, which is what will protect 2026.
 
 **The course handicap is stored, not derived.** Handicaps were pasted into
 those sheets as values, per round, already rounded and blended; no single index

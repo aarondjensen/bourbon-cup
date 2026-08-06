@@ -33,12 +33,21 @@
 // firebase-admin is not a dependency of the app, so install it for the run
 // (`npm i --no-save firebase-admin`) or run this from functions/, which has it.
 //
-// ── The running year is not imported ──────────────────────────────
-// 2025 is the LIVE edition — it is in Firestore already, played in the app,
-// and its documents are the real ones. Importing it would overwrite a running
-// tournament's roster and scores with a reconstruction of the same event, and
-// the reconstruction is not the record. It is skipped unless it is named
-// explicitly with --year, and even then it asks for --force.
+// ── A year the app already holds is not imported ──────────────────
+// 2025 was typed into the app by hand, to try the app against a tournament
+// that had already been played. Its roster rows are the ones accounts have
+// claimed, and its document ids were minted by the app (`bc_player_<ms>`), not
+// by this import (`hist_2025_<name>`).
+//
+// That difference is the whole hazard. An import of 2025 would not REPLACE
+// what is there — the ids don't collide — it would sit a second roster, a
+// second draw and a second set of cards beside the first, inside the same
+// edition. Every screen would show sixteen players twice.
+//
+// So it is skipped, and naming it with --year asks for --force on top. The
+// same reasoning covers any edition built in the app rather than imported —
+// 2026 when it starts — which is why the write half also asks Firestore
+// whether the year it is about to write already has a hand-built roster in it.
 //
 // ── Idempotent ────────────────────────────────────────────────────
 // Every document id is derived from (year, round, player, hole), so a second
@@ -68,13 +77,12 @@ const FORCE = has("--force");
 const yearArg = valueOf("--year") ? Number(valueOf("--year")) : null;
 const allowProject = valueOf("--allow-project");
 
-// The edition the app is actually running. Read from firebase.js so there is
-// one answer and it is the one the app uses, rather than a year written twice.
-const LIVE_EDITION = (() => {
-  const src = readFileSync(join(ROOT, "src", "firebase.js"), "utf8");
-  return src.match(/DEFAULT_TOURNAMENT_ID\s*=\s*"([^"]+)"/)?.[1] || "bc_2025";
-})();
-const LIVE_YEAR = Number(String(LIVE_EDITION).replace(/\D/g, ""));
+// Years the app already holds, built in it rather than imported into it. A
+// plain list, not derived from the active-edition pointer: that pointer moves
+// to 2026 the moment next year is set up, and a rule that read it would then
+// happily import a second 2025 on top of the one people have claimed names in.
+// A year leaves this list only if its documents are gone from Firestore.
+const BUILT_IN_THE_APP = new Set([2025]);
 
 // ── Which project this repo belongs to ────────────────────────────
 // Read from .firebaserc, the file `firebase deploy` reads, so the check and
@@ -138,16 +146,18 @@ const { editions } = read("bourbon-cup-editions.json");
 const backbone = read("bourbon-cup-backbone.json");
 const facts = read("bourbon-cup-matchfacts.json").matchFacts;
 
-const wanted = editions.filter((e) => (yearArg ? e.year === yearArg : e.year !== LIVE_YEAR));
+const wanted = editions.filter((e) => (yearArg ? e.year === yearArg : !BUILT_IN_THE_APP.has(e.year)));
 if (!wanted.length) {
   die(yearArg ? `No edition for ${yearArg} in data/bourbon-cup-editions.json.`
-              : "No editions to import. Run `node pipeline/editions.mjs` first.");
+              : "No editions to import. Run `npm run build:editions` first.");
 }
-if (yearArg === LIVE_YEAR && !FORCE) {
-  die(`${LIVE_YEAR} is the LIVE edition (${LIVE_EDITION}) — it is in Firestore already, played in the app.`,
-      "Importing it would overwrite the real tournament with a reconstruction of it.",
+if (yearArg && BUILT_IN_THE_APP.has(yearArg) && !FORCE) {
+  die(`${yearArg} is already in the app — it was entered by hand, and accounts are claimed to its roster.`,
+      "This import would not replace it. Its document ids are different, so you would get a",
+      "second roster, a second draw and a second set of cards inside the same edition.",
       "",
-      "If that is genuinely what you want, add --force.");
+      "If you mean to do it anyway, delete that edition in Admin → Tournament → Editions",
+      "first, then add --force.");
 }
 
 console.log(
@@ -180,10 +190,12 @@ for (const edition of wanted) {
 
 const total = runs.reduce((n, r) => n + countDocs(r.built), 0);
 console.log(`\n${runs.length} editions, ${total} documents.`);
-if (wanted.some((e) => e.year === LIVE_YEAR)) {
-  console.log(`\n⚠ ${LIVE_YEAR} is the live edition. --force was given, so it WILL be overwritten.`);
+const forced = wanted.filter((e) => BUILT_IN_THE_APP.has(e.year));
+if (forced.length) {
+  console.log(`\n⚠ ${forced.map((e) => e.year).join(", ")} is already in the app and --force was given.`);
+  console.log("  Unless that edition has been deleted first, this ADDS a second roster beside the one there.");
 } else if (!yearArg) {
-  console.log(`${LIVE_YEAR} is skipped — it is the live edition, already in Firestore.`);
+  console.log(`${[...BUILT_IN_THE_APP].join(", ")} skipped — already in the app, entered by hand.`);
 }
 
 // A year the app scores differently from the record is not imported. The whole
@@ -221,6 +233,38 @@ initializeApp({
   ...(serviceAccount ? { credential: cert(serviceAccount) } : {}),
 });
 const db = getFirestore();
+
+// ── Is this year already somebody's tournament? ───────────────────
+// The list above is a declaration, and a declaration goes stale. This is the
+// check that cannot: ask the database whether the edition about to be written
+// already holds roster rows this import did not write. Every document it
+// creates carries an `imported_from` field, so anything without one was built
+// in the app — by a director setting up 2026, or by whoever typed in 2025.
+//
+// Writing on top of that does not replace it. The ids differ, so both rosters
+// survive and every screen shows the field twice. Refused rather than warned,
+// because the run that does it looks exactly like the run that doesn't until
+// somebody opens the app.
+if (!UNDO) {
+  const occupied = [];
+  for (const { edition } of runs) {
+    const tid = `bc_${edition.year}`;
+    const rows = await db.collection("bc_players").where("tournament_id", "==", tid).get();
+    const handBuilt = rows.docs.filter((d) => !d.data().imported_from).length;
+    if (handBuilt) occupied.push(`${edition.year}: ${handBuilt} roster rows already there, not from this import`);
+  }
+  if (occupied.length && !FORCE) {
+    die("Those editions already exist in the app. Nothing was written.", "",
+        ...occupied.map((o) => `  ${o}`), "",
+        "This import would sit a second roster beside the one that is there rather than",
+        "replace it. Delete the edition in Admin → Tournament → Editions first, or add",
+        "--force if you know the two sets of documents will not collide.");
+  }
+  if (occupied.length) {
+    console.log("⚠ --force: writing into editions that already hold a roster —");
+    for (const o of occupied) console.log(`    ${o}`);
+  }
+}
 
 // 500 is Firestore's hard limit on a batch; 400 leaves room and keeps a failed
 // batch small enough to reason about.
