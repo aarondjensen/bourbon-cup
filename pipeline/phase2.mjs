@@ -161,7 +161,10 @@ for(const [r,f] of Object.entries(fmtByRound)){
 const outPath=join(DATA_DIR, "bourbon-cup-matchfacts.json");
 let prior=[];
 if(APPEND){ try{ prior=JSON.parse(readFileSync(outPath,"utf8")).matchFacts.filter(m=>m.year!==year); }catch{} }
-writeFileSync(outPath,JSON.stringify({matchFacts:[...prior,...matchFacts]},null,2));
+// Sorted for the same reason backbone.mjs sorts: the file should be a
+// function of the sheets, not of the order the years were run in.
+const allFacts=[...prior,...matchFacts].sort((a,b)=>(a.year-b.year)||(a.round-b.round)||String(a.player).localeCompare(String(b.player)));
+writeFileSync(outPath,JSON.stringify({matchFacts:allFacts},null,2));
 writeFileSync(join(DATA_DIR, `bourbon-cup-${year}-full.json`),
   JSON.stringify({playerHole:PH.filter(h=>h.year===year),playerRound:PR.filter(p=>p.year===year),matchFacts},null,2));
 

@@ -29,6 +29,12 @@ dist-ssr
 # sheets + *.json facts are the source of truth for historical stats)
 data/*.db
 
+# Phase 2's per-year scratch file. It writes one beside the merged facts on
+# every run — the same rows the backbone and matchfacts files already hold, cut
+# to one year. Nothing reads them; they are a byproduct of a rebuild, and ten
+# of them appearing untracked after `npm run build:editions` is noise.
+data/bourbon-cup-*-full.json
+
 # Local Firebase project override (see .env.example). `*.local` above already
 # covers .env.local; this catches a bare .env too.
 .env

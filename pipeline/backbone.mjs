@@ -172,5 +172,11 @@ if(MERGE){
   const yrs=[...new Set(merged.playerRound.map(p=>p.year))].sort();
   console.log(`\n→ MERGE mode: incoming [${[...incomingYears].sort().join(",")}] into existing → years now [${yrs.join(",")}]`);
 }
+// Sorted before writing, so the file is a function of the SHEETS and nothing
+// else. It used to come out in whatever order the years were passed on the
+// command line, which made a regeneration a 5MB diff even when not one fact
+// had changed — and made "does this still rebuild the same?" unanswerable.
+const bySeq = (a,b) => (a.year-b.year) || (a.round-b.round) || String(a.player).localeCompare(String(b.player)) || ((a.hole||0)-(b.hole||0));
+merged = { playerHole: [...merged.playerHole].sort(bySeq), playerRound: [...merged.playerRound].sort(bySeq) };
 writeFileSync(outPath,JSON.stringify(merged,null,2));
 console.log(`\n→ bourbon-cup-backbone.json (${merged.playerHole.length} hole facts, ${merged.playerRound.length} round facts)`+(issues?` · ${issues} issues`:" · clean"));

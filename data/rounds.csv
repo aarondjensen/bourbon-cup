@@ -1,631 +1,631 @@
 year,round,player,format,scoring_type,course,course_handicap,gross_total,net_total,net_vs_par,eagles,birdies,pars,bogies,doubles,net_pars_or_better,match_royale
+2016,1,Andy H,2man_best_ball,match_status,Arthur Hills - Orange,9,87,78,5,1,3,7,4,3,7.5,9.6
 2016,1,Ben T,2man_best_ball,match_status,Arthur Hills - Orange,10,88,78,5,0,5,5,6,2,7.5,9.2
-2016,1,Adam P,2man_best_ball,match_status,Arthur Hills - Orange,13,84,71,-2,0,5,10,3,0,10,11.1
 2016,1,Dave B,2man_best_ball,match_status,Arthur Hills - Orange,20,97,77,4,1,4,7,3,3,8.5,10.1
 2016,1,Dave K,2man_best_ball,match_status,Arthur Hills - Orange,23,126,103,30,0,2,2,4,10,3,4.7
-2016,1,Joe O,2man_best_ball,match_status,Arthur Hills - Orange,21,101,80,7,2,5,3,3,5,8.5,9.5
-2016,1,Paul S,2man_best_ball,match_status,Arthur Hills - Orange,36,118,82,9,2,2,7,1,6,7.5,8.6
-2016,1,Paul W,2man_best_ball,match_status,Arthur Hills - Orange,14,101,87,14,0,4,3,6,5,5.5,7.3
-2016,1,Tim C,2man_best_ball,match_status,Arthur Hills - Orange,14,98,84,11,0,0,10,6,2,5,7.3
-2016,1,Andy H,2man_best_ball,match_status,Arthur Hills - Orange,9,87,78,5,1,3,7,4,3,7.5,9.6
 2016,1,Jim H,2man_best_ball,match_status,Arthur Hills - Orange,28,114,86,13,0,2,7,4,5,5.5,7.2
+2016,1,Joe O,2man_best_ball,match_status,Arthur Hills - Orange,21,101,80,7,2,5,3,3,5,8.5,9.5
 2016,1,John S,2man_best_ball,match_status,Arthur Hills - Orange,-4,74,78,5,0,0,13,5,0,6.5,8.8
 2016,1,Kevin J,2man_best_ball,match_status,Arthur Hills - Orange,20,87,67,-6,1,6,9,2,0,11.5,11.9
+2016,1,Adam P,2man_best_ball,match_status,Arthur Hills - Orange,13,84,71,-2,0,5,10,3,0,10,11.1
+2016,1,Paul W,2man_best_ball,match_status,Arthur Hills - Orange,14,101,87,14,0,4,3,6,5,5.5,7.3
 2016,1,Pete C,2man_best_ball,match_status,Arthur Hills - Orange,24,102,78,5,0,3,8,6,1,7,9.4
 2016,1,Ryan M,2man_best_ball,match_status,Arthur Hills - Orange,16,84,68,-5,0,10,4,3,1,12,12
-2016,1,TJSC,2man_best_ball,match_status,Arthur Hills - Orange,15,97,82,9,0,5,4,5,4,7,8.4
+2016,1,Paul S,2man_best_ball,match_status,Arthur Hills - Orange,36,118,82,9,2,2,7,1,6,7.5,8.6
+2016,1,Tim C,2man_best_ball,match_status,Arthur Hills - Orange,14,98,84,11,0,0,10,6,2,5,7.3
+2016,1,TJ C,2man_best_ball,match_status,Arthur Hills - Orange,15,97,82,9,0,5,4,5,4,7,8.4
+2016,2,Andy H,2man_hi_lo,match_status,The Heather - Orange,10,90,80,8,0,3,7,5,3,6.5,9.2
 2016,2,Ben T,2man_hi_lo,match_status,The Heather - Orange,10,87,77,5,3,2,5,5,3,7.5,10.2
-2016,2,Adam P,2man_hi_lo,match_status,The Heather - Orange,14,89,75,3,0,4,7,7,0,7.5,10.5
 2016,2,Dave B,2man_hi_lo,match_status,The Heather - Orange,22,102,80,8,1,2,8,4,3,7,9.5
 2016,2,Dave K,2man_hi_lo,match_status,The Heather - Orange,25,122,97,25,0,0,6,6,6,3,5.3
-2016,2,Joe O,2man_hi_lo,match_status,The Heather - Orange,23,103,80,8,1,2,6,6,3,6,8.8
-2016,2,Paul S,2man_hi_lo,match_status,The Heather - Orange,39,116,77,5,1,5,4,6,2,8,10
-2016,2,Paul W,2man_hi_lo,match_status,The Heather - Orange,15,95,80,8,1,4,6,4,3,8,9.9
-2016,2,Tim C,2man_hi_lo,match_status,The Heather - Orange,15,93,78,6,0,4,6,6,2,7,9.3
-2016,2,Andy H,2man_hi_lo,match_status,The Heather - Orange,10,90,80,8,0,3,7,5,3,6.5,9.2
 2016,2,Jim H,2man_hi_lo,match_status,The Heather - Orange,30,107,77,5,2,3,5,5,3,7.5,9.9
+2016,2,Joe O,2man_hi_lo,match_status,The Heather - Orange,23,103,80,8,1,2,6,6,3,6,8.8
 2016,2,John S,2man_hi_lo,match_status,The Heather - Orange,-5,76,81,9,0,4,5,6,3,6.5,8.8
 2016,2,Kevin J,2man_hi_lo,match_status,The Heather - Orange,21,104,83,11,0,2,6,7,3,5,8.3
+2016,2,Adam P,2man_hi_lo,match_status,The Heather - Orange,14,89,75,3,0,4,7,7,0,7.5,10.5
+2016,2,Paul W,2man_hi_lo,match_status,The Heather - Orange,15,95,80,8,1,4,6,4,3,8,9.9
 2016,2,Pete C,2man_hi_lo,match_status,The Heather - Orange,26,113,87,15,1,3,4,4,6,6,7.2
 2016,2,Ryan M,2man_hi_lo,match_status,The Heather - Orange,17,99,82,10,0,5,3,6,4,6.5,8.5
-2016,2,TJSC,2man_hi_lo,match_status,The Heather - Orange,16,96,80,8,1,2,9,3,3,7.5,9.6
+2016,2,Paul S,2man_hi_lo,match_status,The Heather - Orange,39,116,77,5,1,5,4,6,2,8,10
+2016,2,Tim C,2man_hi_lo,match_status,The Heather - Orange,15,93,78,6,0,4,6,6,2,7,9.3
+2016,2,TJ C,2man_hi_lo,match_status,The Heather - Orange,16,96,80,8,1,2,9,3,3,7.5,9.6
+2016,3,Andy H,singles,match_status,Crooked Tree - Purple,9,83,74,3,0,6,4,7,1,8,9.8
 2016,3,Ben T,singles,match_status,Crooked Tree - Purple,10,74,64,-7,1,9,4,4,0,12,12.7
-2016,3,Adam P,singles,match_status,Crooked Tree - Purple,14,93,79,8,0,2,10,3,3,7,9
 2016,3,Dave B,singles,match_status,Crooked Tree - Purple,21,102,81,10,2,1,4,7,4,5,7.4
 2016,3,Dave K,singles,match_status,Crooked Tree - Purple,24,98,74,3,1,4,7,3,3,8.5,9.8
-2016,3,Joe O,singles,match_status,Crooked Tree - Purple,22,107,85,14,1,3,4,4,6,6,7.2
-2016,3,Paul S,singles,match_status,Crooked Tree - Purple,37,122,85,14,1,2,5,4,6,5.5,7.4
-2016,3,Paul W,singles,match_status,Crooked Tree - Purple,15,88,73,2,0,3,12,1,2,9,10.3
-2016,3,Andy H,singles,match_status,Crooked Tree - Purple,9,83,74,3,0,6,4,7,1,8,9.8
 2016,3,Jim H,singles,match_status,Crooked Tree - Purple,29,106,77,6,2,2,6,4,4,7,8.7
+2016,3,Joe O,singles,match_status,Crooked Tree - Purple,22,107,85,14,1,3,4,4,6,6,7.2
 2016,3,John S,singles,match_status,Crooked Tree - Purple,-4,65,69,-2,1,3,11,3,0,9.5,11.1
 2016,3,Kevin J,singles,match_status,Crooked Tree - Purple,20,106,86,15,0,3,6,4,5,6,7.1
+2016,3,Adam P,singles,match_status,Crooked Tree - Purple,14,93,79,8,0,2,10,3,3,7,9
+2016,3,Paul W,singles,match_status,Crooked Tree - Purple,15,88,73,2,0,3,12,1,2,9,10.3
 2016,3,Pete C,singles,match_status,Crooked Tree - Purple,25,116,91,20,0,3,6,4,5,6,6.9
 2016,3,Ryan M,singles,match_status,Crooked Tree - Purple,16,86,70,-1,0,7,5,6,0,9.5,10.7
-2016,3,TJSC,singles,match_status,Crooked Tree - Purple,16,91,75,4,0,1,13,3,1,7.5,9.4
+2016,3,Paul S,singles,match_status,Crooked Tree - Purple,37,122,85,14,1,2,5,4,6,5.5,7.4
+2016,3,TJ C,singles,match_status,Crooked Tree - Purple,16,91,75,4,0,1,13,3,1,7.5,9.4
+2016,4,Andy H,team_best_ball,contribution,Bay Harbor (Quarry/Links) - Blue,10,89,79,7,0,4,6,5,3,7,8.9
 2016,4,Ben T,team_best_ball,contribution,Bay Harbor (Quarry/Links) - Blue,10,88,78,6,1,7,2,3,5,9,9
-2016,4,Adam P,team_best_ball,contribution,Bay Harbor (Quarry/Links) - Blue,15,87,72,0,2,5,5,3,3,9.5,11.1
 2016,4,Dave B,team_best_ball,contribution,Bay Harbor (Quarry/Links) - Blue,22,100,78,6,1,3,7,4,3,7.5,8.8
 2016,4,Dave K,team_best_ball,contribution,Bay Harbor (Quarry/Links) - Blue,26,115,89,17,2,1,5,3,7,5.5,6.4
-2016,4,Joe O,team_best_ball,contribution,Bay Harbor (Quarry/Links) - Blue,23,91,68,-4,3,4,8,0,3,11,12.1
-2016,4,Paul S,team_best_ball,contribution,Bay Harbor (Quarry/Links) - Blue,40,119,79,7,3,2,5,3,5,7.5,8.6
-2016,4,Paul W,team_best_ball,contribution,Bay Harbor (Quarry/Links) - Blue,16,100,84,12,2,1,5,5,5,5.5,7.5
-2016,4,Andy H,team_best_ball,contribution,Bay Harbor (Quarry/Links) - Blue,10,89,79,7,0,4,6,5,3,7,8.9
 2016,4,Jim H,team_best_ball,contribution,Bay Harbor (Quarry/Links) - Blue,31,112,81,9,1,4,4,7,2,7,8.9
+2016,4,Joe O,team_best_ball,contribution,Bay Harbor (Quarry/Links) - Blue,23,91,68,-4,3,4,8,0,3,11,12.1
 2016,4,John S,team_best_ball,contribution,Bay Harbor (Quarry/Links) - Blue,-5,68,73,1,0,5,7,6,0,8.5,10.1
 2016,4,Kevin J,team_best_ball,contribution,Bay Harbor (Quarry/Links) - Blue,22,101,79,7,1,6,4,2,5,9,9.4
+2016,4,Adam P,team_best_ball,contribution,Bay Harbor (Quarry/Links) - Blue,15,87,72,0,2,5,5,3,3,9.5,11.1
+2016,4,Paul W,team_best_ball,contribution,Bay Harbor (Quarry/Links) - Blue,16,100,84,12,2,1,5,5,5,5.5,7.5
 2016,4,Pete C,team_best_ball,contribution,Bay Harbor (Quarry/Links) - Blue,26,117,91,19,0,3,3,7,5,4.5,6.2
 2016,4,Ryan M,team_best_ball,contribution,Bay Harbor (Quarry/Links) - Blue,18,92,74,2,4,3,4,3,4,9,10.3
-2016,4,TJSC,team_best_ball,contribution,Bay Harbor (Quarry/Links) - Blue,17,95,78,6,3,2,5,2,6,7.5,8.6
-2017,1,Aaron J,2man_best_ball,match_status,NEVEL MEADE - Blue,8,92,84,12,0,2,5,9,2,4.5,6.3
-2017,1,Adam P,2man_best_ball,match_status,NEVEL MEADE - Blue,13,84,71,-1,0,9,4,3,2,11,10.5
+2016,4,Paul S,team_best_ball,contribution,Bay Harbor (Quarry/Links) - Blue,40,119,79,7,3,2,5,3,5,7.5,8.6
+2016,4,TJ C,team_best_ball,contribution,Bay Harbor (Quarry/Links) - Blue,17,95,78,6,3,2,5,2,6,7.5,8.6
 2017,1,Andy H,2man_best_ball,match_status,NEVEL MEADE - Blue,10,85,75,3,0,4,9,3,2,8.5,8.9
-2017,1,Jim H,2man_best_ball,match_status,NEVEL MEADE - Blue,28,113,85,13,0,4,5,3,6,6.5,7.1
-2017,1,Kyle M,2man_best_ball,match_status,NEVEL MEADE - Blue,22,106,84,12,0,5,2,6,5,6,6.7
-2017,1,Matt H,2man_best_ball,match_status,NEVEL MEADE - Blue,19,103,84,12,1,2,3,8,4,4.5,6.3
-2017,1,Pete C,2man_best_ball,match_status,NEVEL MEADE - Blue,24,94,70,-2,2,6,5,3,2,10.5,11
-2017,1,Ryan M,2man_best_ball,match_status,NEVEL MEADE - Blue,15,83,68,-4,0,6,10,2,0,11,11.1
 2017,1,Ben T,2man_best_ball,match_status,NEVEL MEADE - Blue,10,86,76,4,0,4,7,6,1,7.5,8.7
 2017,1,Dave B,2man_best_ball,match_status,NEVEL MEADE - Blue,20,88,68,-4,1,6,7,4,0,10.5,10.9
 2017,1,Grant S,2man_best_ball,match_status,NEVEL MEADE - Blue,16,93,77,5,0,4,7,5,2,7.5,8.2
+2017,1,Aaron J,2man_best_ball,match_status,NEVEL MEADE - Blue,8,92,84,12,0,2,5,9,2,4.5,6.3
+2017,1,Jim H,2man_best_ball,match_status,NEVEL MEADE - Blue,28,113,85,13,0,4,5,3,6,6.5,7.1
 2017,1,Kevin J,2man_best_ball,match_status,NEVEL MEADE - Blue,19,86,67,-5,1,6,9,1,1,11.5,11.1
+2017,1,Kyle M,2man_best_ball,match_status,NEVEL MEADE - Blue,22,106,84,12,0,5,2,6,5,6,6.7
+2017,1,Matt H,2man_best_ball,match_status,NEVEL MEADE - Blue,19,103,84,12,1,2,3,8,4,4.5,6.3
 2017,1,Nick S,2man_best_ball,match_status,NEVEL MEADE - Blue,9,84,75,3,0,4,7,7,0,7.5,8.7
-2017,1,Paul S,2man_best_ball,match_status,NEVEL MEADE - Blue,34,97,63,-9,1,10,5,1,1,13.5,12.6
+2017,1,Adam P,2man_best_ball,match_status,NEVEL MEADE - Blue,13,84,71,-1,0,9,4,3,2,11,10.5
 2017,1,Paul W,2man_best_ball,match_status,NEVEL MEADE - Blue,16,94,78,6,0,5,6,3,4,8,8
-2017,1,TJSC,2man_best_ball,match_status,NEVEL MEADE - Blue,14,91,77,5,1,1,9,6,1,6.5,8.1
-2017,2,Aaron J,singles,match_status,COVERED BRIDGE - Gold,8,76,68,-4,1,7,6,3,1,11,10.7
-2017,2,Adam P,singles,match_status,COVERED BRIDGE - Gold,14,78,64,-8,1,8,7,2,0,12.5,11.6
+2017,1,Pete C,2man_best_ball,match_status,NEVEL MEADE - Blue,24,94,70,-2,2,6,5,3,2,10.5,11
+2017,1,Ryan M,2man_best_ball,match_status,NEVEL MEADE - Blue,15,83,68,-4,0,6,10,2,0,11,11.1
+2017,1,Paul S,2man_best_ball,match_status,NEVEL MEADE - Blue,34,97,63,-9,1,10,5,1,1,13.5,12.6
+2017,1,TJ C,2man_best_ball,match_status,NEVEL MEADE - Blue,14,91,77,5,1,1,9,6,1,6.5,8.1
 2017,2,Andy H,singles,match_status,COVERED BRIDGE - Gold,11,82,71,-1,0,8,4,5,1,10,9.2
-2017,2,Jim H,singles,match_status,COVERED BRIDGE - Gold,29,110,81,9,2,1,7,4,4,6.5,6.7
-2017,2,Kyle M,singles,match_status,COVERED BRIDGE - Gold,23,103,80,8,0,4,6,5,3,7,7.4
-2017,2,Matt H,singles,match_status,COVERED BRIDGE - Gold,20,101,81,9,0,3,6,6,3,6,6.3
-2017,2,Pete C,singles,match_status,COVERED BRIDGE - Gold,26,90,64,-8,4,5,5,3,1,11.5,11.7
-2017,2,Ryan M,singles,match_status,COVERED BRIDGE - Gold,15,83,68,-4,1,6,7,4,0,10.5,10.6
 2017,2,Ben T,singles,match_status,COVERED BRIDGE - Gold,10,84,74,2,0,2,12,4,0,8,8.6
 2017,2,Dave B,singles,match_status,COVERED BRIDGE - Gold,19,95,76,4,1,5,5,6,1,8.5,8.6
 2017,2,Grant S,singles,match_status,COVERED BRIDGE - Gold,17,86,69,-3,0,5,11,2,0,10.5,9.7
+2017,2,Aaron J,singles,match_status,COVERED BRIDGE - Gold,8,76,68,-4,1,7,6,3,1,11,10.7
+2017,2,Jim H,singles,match_status,COVERED BRIDGE - Gold,29,110,81,9,2,1,7,4,4,6.5,6.7
 2017,2,Kevin J,singles,match_status,COVERED BRIDGE - Gold,19,97,78,6,0,3,8,5,2,7,7.3
+2017,2,Kyle M,singles,match_status,COVERED BRIDGE - Gold,23,103,80,8,0,4,6,5,3,7,7.4
+2017,2,Matt H,singles,match_status,COVERED BRIDGE - Gold,20,101,81,9,0,3,6,6,3,6,6.3
 2017,2,Nick S,singles,match_status,COVERED BRIDGE - Gold,10,79,69,-3,2,3,9,4,0,9.5,10
-2017,2,Paul S,singles,match_status,COVERED BRIDGE - Gold,34,106,72,0,1,6,5,4,2,9.5,9.3
+2017,2,Adam P,singles,match_status,COVERED BRIDGE - Gold,14,78,64,-8,1,8,7,2,0,12.5,11.6
 2017,2,Paul W,singles,match_status,COVERED BRIDGE - Gold,17,94,77,5,1,4,6,4,3,8,7.7
-2017,2,TJSC,singles,match_status,COVERED BRIDGE - Gold,15,89,74,2,1,4,7,4,2,8.5,8.4
-2017,3,Aaron J,pinehurst,match_status,CHAMPIONS POINTE - White,12.8,87,74.2,2.200000000000003,0,3,10,4,1,8,6.4
-2017,3,Adam P,pinehurst,match_status,CHAMPIONS POINTE - White,20,88,68,-4,0,9,4,5,0,11,9.5
+2017,2,Pete C,singles,match_status,COVERED BRIDGE - Gold,26,90,64,-8,4,5,5,3,1,11.5,11.7
+2017,2,Ryan M,singles,match_status,COVERED BRIDGE - Gold,15,83,68,-4,1,6,7,4,0,10.5,10.6
+2017,2,Paul S,singles,match_status,COVERED BRIDGE - Gold,34,106,72,0,1,6,5,4,2,9.5,9.3
+2017,2,TJ C,singles,match_status,COVERED BRIDGE - Gold,15,89,74,2,1,4,7,4,2,8.5,8.4
 2017,3,Andy H,pinehurst,match_status,CHAMPIONS POINTE - White,15.8,84,68.2,-3.799999999999997,1,5,8,4,0,10,8.5
-2017,3,Jim H,pinehurst,match_status,CHAMPIONS POINTE - White,20,88,68,-4,0,9,4,5,0,11,9.5
-2017,3,Kyle M,pinehurst,match_status,CHAMPIONS POINTE - White,15.8,84,68.2,-3.799999999999997,1,5,8,4,0,10,8.5
-2017,3,Matt H,pinehurst,match_status,CHAMPIONS POINTE - White,12.8,87,74.2,2.200000000000003,0,3,10,4,1,8,6.4
-2017,3,Pete C,pinehurst,match_status,CHAMPIONS POINTE - White,19.4,76,56.6,-15.399999999999999,1,13,4,0,0,16,13.1
-2017,3,Ryan M,pinehurst,match_status,CHAMPIONS POINTE - White,19.4,76,56.6,-15.399999999999999,1,13,4,0,0,16,13.1
 2017,3,Ben T,pinehurst,match_status,CHAMPIONS POINTE - White,13.6,81,67.4,-4.599999999999994,2,5,7,3,1,10.5,9.3
 2017,3,Dave B,pinehurst,match_status,CHAMPIONS POINTE - White,17.8,89,71.2,-0.7999999999999972,0,7,5,5,1,9.5,7.9
 2017,3,Grant S,pinehurst,match_status,CHAMPIONS POINTE - White,23.8,99,75.2,3.200000000000003,1,4,6,4,3,8,7.5
+2017,3,Aaron J,pinehurst,match_status,CHAMPIONS POINTE - White,12.8,87,74.2,2.200000000000003,0,3,10,4,1,8,6.4
+2017,3,Jim H,pinehurst,match_status,CHAMPIONS POINTE - White,20,88,68,-4,0,9,4,5,0,11,9.5
 2017,3,Kevin J,pinehurst,match_status,CHAMPIONS POINTE - White,13.6,81,67.4,-4.599999999999994,2,5,7,3,1,10.5,9.3
+2017,3,Kyle M,pinehurst,match_status,CHAMPIONS POINTE - White,15.8,84,68.2,-3.799999999999997,1,5,8,4,0,10,8.5
+2017,3,Matt H,pinehurst,match_status,CHAMPIONS POINTE - White,12.8,87,74.2,2.200000000000003,0,3,10,4,1,8,6.4
 2017,3,Nick S,pinehurst,match_status,CHAMPIONS POINTE - White,12,79,67,-5,1,5,10,2,0,11,9.7
-2017,3,Paul S,pinehurst,match_status,CHAMPIONS POINTE - White,23.8,99,75.2,3.200000000000003,1,4,6,4,3,8,7.5
+2017,3,Adam P,pinehurst,match_status,CHAMPIONS POINTE - White,20,88,68,-4,0,9,4,5,0,11,9.5
 2017,3,Paul W,pinehurst,match_status,CHAMPIONS POINTE - White,17.8,89,71.2,-0.7999999999999972,0,7,5,5,1,9.5,7.9
-2017,3,TJSC,pinehurst,match_status,CHAMPIONS POINTE - White,12,79,67,-5,1,5,10,2,0,11,9.7
-2017,4,Aaron J,8man_top4net,contribution,GLENOAKS CC - Black,7,96,89,17,0,0,7,8,3,3.5,7.6
-2017,4,Adam P,8man_top4net,contribution,GLENOAKS CC - Black,13,90,77,5,0,5,7,3,3,8.5,10.5
+2017,3,Pete C,pinehurst,match_status,CHAMPIONS POINTE - White,19.4,76,56.6,-15.399999999999999,1,13,4,0,0,16,13.1
+2017,3,Ryan M,pinehurst,match_status,CHAMPIONS POINTE - White,19.4,76,56.6,-15.399999999999999,1,13,4,0,0,16,13.1
+2017,3,Paul S,pinehurst,match_status,CHAMPIONS POINTE - White,23.8,99,75.2,3.200000000000003,1,4,6,4,3,8,7.5
+2017,3,TJ C,pinehurst,match_status,CHAMPIONS POINTE - White,12,79,67,-5,1,5,10,2,0,11,9.7
 2017,4,Andy H,8man_top4net,contribution,GLENOAKS CC - Black,10,88,78,6,0,4,7,5,2,7.5,10.5
-2017,4,Jim H,8man_top4net,contribution,GLENOAKS CC - Black,29,112,83,11,2,3,4,3,6,7,9.5
-2017,4,Kyle M,8man_top4net,contribution,GLENOAKS CC - Black,22,118,96,24,0,2,3,6,7,3.5,6.7
-2017,4,Matt H,8man_top4net,contribution,GLENOAKS CC - Black,20,103,83,11,1,1,8,4,4,6,9
-2017,4,Pete C,8man_top4net,contribution,GLENOAKS CC - Black,24,103,79,7,1,3,7,4,3,7.5,10.3
-2017,4,Ryan M,8man_top4net,contribution,GLENOAKS CC - Black,14,93,79,7,0,5,5,5,3,7.5,9.7
 2017,4,Ben T,8man_top4net,contribution,GLENOAKS CC - Black,10,93,83,11,0,4,5,4,5,6.5,9.1
 2017,4,Dave B,8man_top4net,contribution,GLENOAKS CC - Black,18,107,89,17,0,4,3,5,6,5.5,7.7
 2017,4,Grant S,8man_top4net,contribution,GLENOAKS CC - Black,16,102,86,14,0,4,6,2,6,7,8.5
+2017,4,Aaron J,8man_top4net,contribution,GLENOAKS CC - Black,7,96,89,17,0,0,7,8,3,3.5,7.6
+2017,4,Jim H,8man_top4net,contribution,GLENOAKS CC - Black,29,112,83,11,2,3,4,3,6,7,9.5
 2017,4,Kevin J,8man_top4net,contribution,GLENOAKS CC - Black,18,104,86,14,0,4,5,3,6,6.5,8.9
+2017,4,Kyle M,8man_top4net,contribution,GLENOAKS CC - Black,22,118,96,24,0,2,3,6,7,3.5,6.7
+2017,4,Matt H,8man_top4net,contribution,GLENOAKS CC - Black,20,103,83,11,1,1,8,4,4,6,9
 2017,4,Nick S,8man_top4net,contribution,GLENOAKS CC - Black,9,96,87,15,0,4,3,5,6,5.5,8.1
-2017,4,Paul S,8man_top4net,contribution,GLENOAKS CC - Black,33,118,85,13,0,5,5,3,5,7.5,8.5
+2017,4,Adam P,8man_top4net,contribution,GLENOAKS CC - Black,13,90,77,5,0,5,7,3,3,8.5,10.5
 2017,4,Paul W,8man_top4net,contribution,GLENOAKS CC - Black,16,90,74,2,0,6,6,4,2,9,11.6
-2017,4,TJSC,8man_top4net,contribution,GLENOAKS CC - Black,14,100,86,14,0,2,6,5,5,5,7.9
-2018,1,Ben T,shamble,match_status,Katke - Crimson/Silver,4,78,74,2,0,4,9,4,1,8.5,8.6
-2018,1,Nick S,shamble,match_status,Katke - Crimson/Silver,7,79,72,0,1,4,8,4,1,9,8.8
-2018,1,Paul W,shamble,match_status,Katke - Crimson/Silver,10,81,71,-1,1,6,6,3,2,10,9.7
-2018,1,Shaun W,shamble,match_status,Katke - Crimson/Silver,9,80,71,-1,1,4,9,3,1,9.5,9.2
-2018,1,TJSC,shamble,match_status,Katke - Crimson/Silver,10,90,80,8,0,6,3,6,3,7.5,7.8
-2018,1,Tim C,shamble,match_status,Katke - Crimson/Silver,13,80,67,-5,1,8,5,3,1,11.5,11.3
-2018,1,Jim H,shamble,match_status,Katke - Crimson/Silver,22,102,80,8,2,3,2,7,4,6,7.2
-2018,1,Paul S,shamble,match_status,Katke - Crimson/Silver,21,96,75,3,1,5,5,5,2,8.5,8.3
-2018,1,Aaron J,shamble,match_status,Katke - Crimson/Silver,5,83,78,6,1,1,7,9,0,5.5,7
+2017,4,Pete C,8man_top4net,contribution,GLENOAKS CC - Black,24,103,79,7,1,3,7,4,3,7.5,10.3
+2017,4,Ryan M,8man_top4net,contribution,GLENOAKS CC - Black,14,93,79,7,0,5,5,5,3,7.5,9.7
+2017,4,Paul S,8man_top4net,contribution,GLENOAKS CC - Black,33,118,85,13,0,5,5,3,5,7.5,8.5
+2017,4,TJ C,8man_top4net,contribution,GLENOAKS CC - Black,14,100,86,14,0,2,6,5,5,5,7.9
 2018,1,Andy H,shamble,match_status,Katke - Crimson/Silver,6,73,67,-5,2,6,6,3,1,11,9.8
-2018,1,Grant S,shamble,match_status,Katke - Crimson/Silver,9,82,73,1,2,4,6,3,3,9,8.7
-2018,1,Ryan M,shamble,match_status,Katke - Crimson/Silver,11,91,80,8,0,3,8,4,3,7,6.7
-2018,1,Kevin J,shamble,match_status,Katke - Crimson/Silver,12,74,62,-10,2,5,11,0,0,12.5,12.3
+2018,1,Ben T,shamble,match_status,Katke - Crimson/Silver,4,78,74,2,0,4,9,4,1,8.5,8.6
 2018,1,Dave B,shamble,match_status,Katke - Crimson/Silver,14,85,71,-1,1,6,6,3,2,10,9.9
 2018,1,Dave K,shamble,match_status,Katke - Crimson/Silver,15,87,72,0,0,9,3,4,2,10.5,9.4
+2018,1,Grant S,shamble,match_status,Katke - Crimson/Silver,9,82,73,1,2,4,6,3,3,9,8.7
+2018,1,Aaron J,shamble,match_status,Katke - Crimson/Silver,5,83,78,6,1,1,7,9,0,5.5,7
+2018,1,Jim H,shamble,match_status,Katke - Crimson/Silver,22,102,80,8,2,3,2,7,4,6,7.2
+2018,1,Kevin J,shamble,match_status,Katke - Crimson/Silver,12,74,62,-10,2,5,11,0,0,12.5,12.3
+2018,1,Nick S,shamble,match_status,Katke - Crimson/Silver,7,79,72,0,1,4,8,4,1,9,8.8
+2018,1,Paul W,shamble,match_status,Katke - Crimson/Silver,10,81,71,-1,1,6,6,3,2,10,9.7
 2018,1,Pete C,shamble,match_status,Katke - Crimson/Silver,18,90,72,0,0,5,9,3,1,9.5,9.2
-2018,2,Ben T,singles,match_status,St. Ives - Blue/White,5,80,75,3,0,3,9,6,0,7.5,9.2
-2018,2,Nick S,singles,match_status,St. Ives - Blue/White,10,90,80,8,0,2,8,6,2,6,7.1
-2018,2,Paul W,singles,match_status,St. Ives - Blue/White,14,88,74,2,0,7,5,4,2,9.5,10.2
-2018,2,Shaun W,singles,match_status,St. Ives - Blue/White,13,90,77,5,1,6,6,0,5,10,9.8
-2018,2,TJSC,singles,match_status,St. Ives - Blue/White,14,92,78,6,1,3,8,2,4,8,9
-2018,2,Tim C,singles,match_status,St. Ives - Blue/White,18,92,74,2,0,5,8,4,1,9,9.6
-2018,2,Jim H,singles,match_status,St. Ives - Blue/White,30,109,79,7,1,3,6,5,3,7,8.5
-2018,2,Paul S,singles,match_status,St. Ives - Blue/White,30,104,74,2,3,1,9,1,4,8.5,10.1
-2018,2,Aaron J,singles,match_status,St. Ives - Blue/White,7,83,76,4,1,3,7,5,2,7.5,9.4
+2018,1,Ryan M,shamble,match_status,Katke - Crimson/Silver,11,91,80,8,0,3,8,4,3,7,6.7
+2018,1,Paul S,shamble,match_status,Katke - Crimson/Silver,21,96,75,3,1,5,5,5,2,8.5,8.3
+2018,1,Shaun W,shamble,match_status,Katke - Crimson/Silver,9,80,71,-1,1,4,9,3,1,9.5,9.2
+2018,1,Tim C,shamble,match_status,Katke - Crimson/Silver,13,80,67,-5,1,8,5,3,1,11.5,11.3
+2018,1,TJ C,shamble,match_status,Katke - Crimson/Silver,10,90,80,8,0,6,3,6,3,7.5,7.8
 2018,2,Andy H,singles,match_status,St. Ives - Blue/White,8,88,80,8,1,4,4,7,2,7,8.5
-2018,2,Grant S,singles,match_status,St. Ives - Blue/White,13,96,83,11,0,2,5,9,2,4.5,7.2
-2018,2,Ryan M,singles,match_status,St. Ives - Blue/White,16,97,81,9,0,3,6,7,2,6,8
-2018,2,Kevin J,singles,match_status,St. Ives - Blue/White,17,88,71,-1,0,6,9,2,1,10.5,10.7
+2018,2,Ben T,singles,match_status,St. Ives - Blue/White,5,80,75,3,0,3,9,6,0,7.5,9.2
 2018,2,Dave B,singles,match_status,St. Ives - Blue/White,20,96,76,4,1,4,4,7,2,7,8.3
 2018,2,Dave K,singles,match_status,St. Ives - Blue/White,22,102,80,8,0,3,10,2,3,8,8.7
+2018,2,Grant S,singles,match_status,St. Ives - Blue/White,13,96,83,11,0,2,5,9,2,4.5,7.2
+2018,2,Aaron J,singles,match_status,St. Ives - Blue/White,7,83,76,4,1,3,7,5,2,7.5,9.4
+2018,2,Jim H,singles,match_status,St. Ives - Blue/White,30,109,79,7,1,3,6,5,3,7,8.5
+2018,2,Kevin J,singles,match_status,St. Ives - Blue/White,17,88,71,-1,0,6,9,2,1,10.5,10.7
+2018,2,Nick S,singles,match_status,St. Ives - Blue/White,10,90,80,8,0,2,8,6,2,6,7.1
+2018,2,Paul W,singles,match_status,St. Ives - Blue/White,14,88,74,2,0,7,5,4,2,9.5,10.2
 2018,2,Pete C,singles,match_status,St. Ives - Blue/White,26,100,74,2,1,5,7,2,3,9.5,9.8
-2018,3,Ben T,2man_best_ball,match_status,Tullymore - Blue/White,5,80,75,3,0,3,9,6,0,7.5,8.3
-2018,3,Nick S,2man_best_ball,match_status,Tullymore - Blue/White,11,78,67,-5,1,5,10,2,0,11,10.7
-2018,3,Paul W,2man_best_ball,match_status,Tullymore - Blue/White,15,89,74,2,0,4,9,4,1,8.5,8.8
-2018,3,Shaun W,2man_best_ball,match_status,Tullymore - Blue/White,14,83,69,-3,1,6,6,5,0,10,10
-2018,3,TJSC,2man_best_ball,match_status,Tullymore - Blue/White,15,106,91,19,1,2,2,7,6,4,4.9
-2018,3,Tim C,2man_best_ball,match_status,Tullymore - Blue/White,19,86,67,-5,2,5,9,0,2,11.5,10.7
-2018,3,Jim H,2man_best_ball,match_status,Tullymore - Blue/White,32,104,72,0,3,2,6,6,1,8,8.9
-2018,3,Paul S,2man_best_ball,match_status,Tullymore - Blue/White,31,100,69,-3,1,6,6,4,1,10,9.7
-2018,3,Aaron J,2man_best_ball,match_status,Tullymore - Blue/White,7,84,77,5,0,4,7,6,1,7.5,8
+2018,2,Ryan M,singles,match_status,St. Ives - Blue/White,16,97,81,9,0,3,6,7,2,6,8
+2018,2,Paul S,singles,match_status,St. Ives - Blue/White,30,104,74,2,3,1,9,1,4,8.5,10.1
+2018,2,Shaun W,singles,match_status,St. Ives - Blue/White,13,90,77,5,1,6,6,0,5,10,9.8
+2018,2,Tim C,singles,match_status,St. Ives - Blue/White,18,92,74,2,0,5,8,4,1,9,9.6
+2018,2,TJ C,singles,match_status,St. Ives - Blue/White,14,92,78,6,1,3,8,2,4,8,9
 2018,3,Andy H,2man_best_ball,match_status,Tullymore - Blue/White,8,82,74,2,1,4,7,4,2,8.5,8.6
-2018,3,Grant S,2man_best_ball,match_status,Tullymore - Blue/White,14,88,74,2,2,6,4,1,5,10,9.2
-2018,3,Ryan M,2man_best_ball,match_status,Tullymore - Blue/White,17,92,75,3,0,6,5,5,2,8.5,8.6
-2018,3,Kevin J,2man_best_ball,match_status,Tullymore - Blue/White,18,96,78,6,1,6,4,3,4,9,8.4
+2018,3,Ben T,2man_best_ball,match_status,Tullymore - Blue/White,5,80,75,3,0,3,9,6,0,7.5,8.3
 2018,3,Dave B,2man_best_ball,match_status,Tullymore - Blue/White,21,88,67,-5,1,11,2,1,3,13,11.4
 2018,3,Dave K,2man_best_ball,match_status,Tullymore - Blue/White,23,93,70,-2,1,6,6,4,1,10,9.7
+2018,3,Grant S,2man_best_ball,match_status,Tullymore - Blue/White,14,88,74,2,2,6,4,1,5,10,9.2
+2018,3,Aaron J,2man_best_ball,match_status,Tullymore - Blue/White,7,84,77,5,0,4,7,6,1,7.5,8
+2018,3,Jim H,2man_best_ball,match_status,Tullymore - Blue/White,32,104,72,0,3,2,6,6,1,8,8.9
+2018,3,Kevin J,2man_best_ball,match_status,Tullymore - Blue/White,18,96,78,6,1,6,4,3,4,9,8.4
+2018,3,Nick S,2man_best_ball,match_status,Tullymore - Blue/White,11,78,67,-5,1,5,10,2,0,11,10.7
+2018,3,Paul W,2man_best_ball,match_status,Tullymore - Blue/White,15,89,74,2,0,4,9,4,1,8.5,8.8
 2018,3,Pete C,2man_best_ball,match_status,Tullymore - Blue/White,27,105,78,6,1,3,6,5,3,7,8
-2018,4,Ben T,team_best_ball,contribution,Katke - Crimson/Silver,5,89,84,12,0,2,7,4,5,5.5,5.9
-2018,4,Nick S,team_best_ball,contribution,Katke - Crimson/Silver,11,82,71,-1,0,8,5,3,2,10.5,9.8
-2018,4,Paul W,team_best_ball,contribution,Katke - Crimson/Silver,14,88,74,2,1,5,5,5,2,8.5,8.5
-2018,4,Shaun W,team_best_ball,contribution,Katke - Crimson/Silver,13,85,72,0,0,6,7,4,1,9.5,9.6
-2018,4,TJSC,team_best_ball,contribution,Katke - Crimson/Silver,14,93,79,7,1,3,4,8,2,6,6.3
-2018,4,Tim C,team_best_ball,contribution,Katke - Crimson/Silver,18,84,66,-6,1,7,7,3,0,11.5,11
-2018,4,Jim H,team_best_ball,contribution,Katke - Crimson/Silver,31,101,70,-2,2,7,4,2,3,11,10.1
-2018,4,Paul S,team_best_ball,contribution,Katke - Crimson/Silver,30,104,74,2,1,3,9,3,2,8.5,8.6
-2018,4,Aaron J,team_best_ball,contribution,Katke - Crimson/Silver,7,76,69,-3,0,6,10,1,1,11,10.2
+2018,3,Ryan M,2man_best_ball,match_status,Tullymore - Blue/White,17,92,75,3,0,6,5,5,2,8.5,8.6
+2018,3,Paul S,2man_best_ball,match_status,Tullymore - Blue/White,31,100,69,-3,1,6,6,4,1,10,9.7
+2018,3,Shaun W,2man_best_ball,match_status,Tullymore - Blue/White,14,83,69,-3,1,6,6,5,0,10,10
+2018,3,Tim C,2man_best_ball,match_status,Tullymore - Blue/White,19,86,67,-5,2,5,9,0,2,11.5,10.7
+2018,3,TJ C,2man_best_ball,match_status,Tullymore - Blue/White,15,106,91,19,1,2,2,7,6,4,4.9
 2018,4,Andy H,team_best_ball,contribution,Katke - Crimson/Silver,8,83,75,3,0,4,10,2,2,9,8.7
-2018,4,Grant S,team_best_ball,contribution,Katke - Crimson/Silver,13,85,72,0,2,2,9,4,1,8.5,9.3
-2018,4,Ryan M,team_best_ball,contribution,Katke - Crimson/Silver,16,83,67,-5,1,7,6,4,0,11,10.3
-2018,4,Kevin J,team_best_ball,contribution,Katke - Crimson/Silver,17,93,76,4,0,3,10,3,2,8,8
+2018,4,Ben T,team_best_ball,contribution,Katke - Crimson/Silver,5,89,84,12,0,2,7,4,5,5.5,5.9
 2018,4,Dave B,team_best_ball,contribution,Katke - Crimson/Silver,21,95,74,2,2,2,10,2,2,9,9.1
 2018,4,Dave K,team_best_ball,contribution,Katke - Crimson/Silver,23,99,76,4,0,6,5,5,2,8.5,8.5
+2018,4,Grant S,team_best_ball,contribution,Katke - Crimson/Silver,13,85,72,0,2,2,9,4,1,8.5,9.3
+2018,4,Aaron J,team_best_ball,contribution,Katke - Crimson/Silver,7,76,69,-3,0,6,10,1,1,11,10.2
+2018,4,Jim H,team_best_ball,contribution,Katke - Crimson/Silver,31,101,70,-2,2,7,4,2,3,11,10.1
+2018,4,Kevin J,team_best_ball,contribution,Katke - Crimson/Silver,17,93,76,4,0,3,10,3,2,8,8
+2018,4,Nick S,team_best_ball,contribution,Katke - Crimson/Silver,11,82,71,-1,0,8,5,3,2,10.5,9.8
+2018,4,Paul W,team_best_ball,contribution,Katke - Crimson/Silver,14,88,74,2,1,5,5,5,2,8.5,8.5
 2018,4,Pete C,team_best_ball,contribution,Katke - Crimson/Silver,26,97,71,-1,2,5,5,4,2,9.5,10.1
-2023,1,Ben T,dirty_dozen,dots,Sundance - Blue,8,87,79,7,0,3,7,6,2,6.5,7.9
-2023,1,Kevin J,dirty_dozen,dots,Sundance - Blue,8,81,73,1,0,5,7,6,0,8.5,10
-2023,1,Nick S,dirty_dozen,dots,Sundance - Blue,9,85,76,4,1,4,5,6,2,7.5,8.9
-2023,1,Ryan M,dirty_dozen,dots,Sundance - Blue,9,87,78,6,0,3,8,5,2,7,8.6
-2023,1,Shaun W,dirty_dozen,dots,Sundance - Blue,10,83,73,1,2,4,6,4,2,9,9.7
-2023,1,TJSC,dirty_dozen,dots,Sundance - Blue,14,81,67,-5,0,7,9,2,0,11.5,11.8
-2023,1,Dave K,dirty_dozen,dots,Sundance - Blue,15,91,76,4,0,4,9,2,3,8.5,9.3
-2023,1,Paul S,dirty_dozen,dots,Sundance - Blue,33,114,81,9,0,6,5,3,4,8.5,9.2
-2023,1,Joe E,dirty_dozen,dots,Sundance - Blue,5,88,83,11,0,3,6,6,3,6,7.4
-2023,1,Andy H,dirty_dozen,dots,Sundance - Blue,6,87,81,9,1,1,6,8,2,5,7.2
-2023,1,Aaron J,dirty_dozen,dots,Sundance - Blue,7,85,78,6,0,5,6,4,3,8,8.9
-2023,1,Adam P,dirty_dozen,dots,Sundance - Blue,10,89,79,7,1,3,6,4,4,7,8.4
-2023,1,Tim C,dirty_dozen,dots,Sundance - Blue,11,87,76,4,2,5,3,4,4,8.5,9
-2023,1,Joe O,dirty_dozen,dots,Sundance - Blue,14,91,77,5,0,6,4,5,3,8,9.4
-2023,1,Jim H,dirty_dozen,dots,Sundance - Blue,17,97,80,8,0,3,9,4,2,7.5,8.7
-2023,1,Paul W,dirty_dozen,dots,Sundance - Blue,17,93,76,4,1,5,5,5,2,8.5,9.5
-2023,2,Ben T,singles,match_status,The Wolverine - White,6,75,69,-3,1,3,12,2,0,10,11.2
-2023,2,Kevin J,singles,match_status,The Wolverine - White,6,80,74,2,2,4,5,4,3,8.5,10
-2023,2,Nick S,singles,match_status,The Wolverine - White,7,87,80,8,0,2,9,6,1,6.5,8.1
-2023,2,Ryan M,singles,match_status,The Wolverine - White,7,77,70,-2,1,4,10,2,1,10,11
-2023,2,Shaun W,singles,match_status,The Wolverine - White,7,84,77,5,0,6,7,3,2,9.5,10.3
-2023,2,TJSC,singles,match_status,The Wolverine - White,11,91,80,8,0,4,5,7,2,6.5,8.1
-2023,2,Dave K,singles,match_status,The Wolverine - White,13,91,78,6,1,3,6,5,3,7,8.6
-2023,2,Paul S,singles,match_status,The Wolverine - White,31,109,78,6,5,1,4,2,6,8,8.3
-2023,2,Joe E,singles,match_status,The Wolverine - White,3,84,81,9,0,2,9,4,3,6.5,8.1
-2023,2,Andy H,singles,match_status,The Wolverine - White,4,89,85,13,0,1,7,7,3,4.5,6.5
-2023,2,Aaron J,singles,match_status,The Wolverine - White,5,79,74,2,1,2,10,4,1,8,9.9
-2023,2,Adam P,singles,match_status,The Wolverine - White,7,84,77,5,1,3,5,8,1,6.5,8.5
-2023,2,Tim C,singles,match_status,The Wolverine - White,8,84,76,4,0,3,10,3,2,8,9.1
-2023,2,Joe O,singles,match_status,The Wolverine - White,12,89,77,5,0,4,7,5,2,7.5,8.4
-2023,2,Jim H,singles,match_status,The Wolverine - White,14,94,80,8,0,1,9,7,1,5.5,7.8
-2023,2,Paul W,singles,match_status,The Wolverine - White,15,89,74,2,0,7,5,3,3,9.5,10
-2023,3,Ben T,2man_scramble,match_status,The Wolverine - Blue,4.5,72,67.5,-4.5,0,7,8,3,0,11,8.9
-2023,3,Kevin J,2man_scramble,match_status,The Wolverine - Blue,4.5,72,67.5,-4.5,0,7,8,3,0,11,8.9
-2023,3,Nick S,2man_scramble,match_status,The Wolverine - Blue,5.1,76,70.9,-1.0999999999999943,2,2,9,5,0,8.5,6.9
-2023,3,Ryan M,2man_scramble,match_status,The Wolverine - Blue,5.1,76,70.9,-1.0999999999999943,2,2,9,5,0,8.5,6.9
-2023,3,Shaun W,2man_scramble,match_status,The Wolverine - Blue,5.9,71,65.1,-6.900000000000006,2,4,10,2,0,11,9.1
-2023,3,TJSC,2man_scramble,match_status,The Wolverine - Blue,5.9,71,65.1,-6.900000000000006,2,4,10,2,0,11,9.1
-2023,3,Dave K,2man_scramble,match_status,The Wolverine - Blue,10.9,73,62.1,-9.899999999999999,1,8,8,1,0,13,10.2
-2023,3,Paul S,2man_scramble,match_status,The Wolverine - Blue,10.9,73,62.1,-9.899999999999999,1,8,8,1,0,13,10.2
-2023,3,Joe E,2man_scramble,match_status,The Wolverine - Blue,3.2,71,67.8,-4.200000000000003,1,4,11,2,0,10.5,8.2
-2023,3,Andy H,2man_scramble,match_status,The Wolverine - Blue,3.2,71,67.8,-4.200000000000003,1,4,11,2,0,10.5,8.2
-2023,3,Aaron J,2man_scramble,match_status,The Wolverine - Blue,4.4,67,62.6,-9.399999999999999,2,6,9,1,0,12.5,10.4
-2023,3,Adam P,2man_scramble,match_status,The Wolverine - Blue,4.4,67,62.6,-9.399999999999999,2,6,9,1,0,12.5,10.4
-2023,3,Tim C,2man_scramble,match_status,The Wolverine - Blue,6.3,73,66.7,-5.299999999999997,2,3,11,2,0,10.5,8.8
-2023,3,Joe O,2man_scramble,match_status,The Wolverine - Blue,6.3,73,66.7,-5.299999999999997,2,3,11,2,0,10.5,8.8
-2023,3,Jim H,2man_scramble,match_status,The Wolverine - Blue,9.1,74,64.9,-7.099999999999994,1,7,8,2,0,12,9.5
-2023,3,Paul W,2man_scramble,match_status,The Wolverine - Blue,9.1,74,64.9,-7.099999999999994,1,7,8,2,0,12,9.5
-2023,4,Ben T,team_best_ball,contribution,The Bear - White,8,84,76,4,0,4,7,6,1,7.5,9.9
-2023,4,Kevin J,team_best_ball,contribution,The Bear - White,9,105,96,24,0,3,2,4,9,4,5.5
-2023,4,Nick S,team_best_ball,contribution,The Bear - White,10,89,79,7,0,3,9,4,2,7.5,9.4
-2023,4,Ryan M,team_best_ball,contribution,The Bear - White,9,89,80,8,0,1,11,4,2,6.5,9.2
-2023,4,Shaun W,team_best_ball,contribution,The Bear - White,9,92,83,11,0,3,8,2,5,7,8.8
-2023,4,TJSC,team_best_ball,contribution,The Bear - White,14,96,82,10,0,1,8,7,2,5,8
-2023,4,Dave K,team_best_ball,contribution,The Bear - White,16,89,73,1,0,5,8,4,1,9,11.1
-2023,4,Paul S,team_best_ball,contribution,The Bear - White,35,114,79,7,1,5,4,2,6,8,9.3
-2023,4,Joe E,team_best_ball,contribution,The Bear - White,5,87,82,10,1,0,8,7,2,5,8.1
-2023,4,Andy H,team_best_ball,contribution,The Bear - White,6,82,76,4,0,5,6,6,1,8,10.3
-2023,4,Aaron J,team_best_ball,contribution,The Bear - White,7,76,69,-3,4,2,7,4,1,9.5,11.5
-2023,4,Adam P,team_best_ball,contribution,The Bear - White,10,92,82,10,0,4,4,7,3,6,8.2
-2023,4,Tim C,team_best_ball,contribution,The Bear - White,11,91,80,8,0,3,5,9,1,5.5,8.9
-2023,4,Joe O,team_best_ball,contribution,The Bear - White,15,103,88,16,0,3,5,6,4,5.5,7.6
-2023,4,Jim H,team_best_ball,contribution,The Bear - White,18,99,81,9,0,1,8,8,1,5,8.5
-2023,4,Paul W,team_best_ball,contribution,The Bear - White,18,94,76,4,2,1,8,5,2,7,9.7
-2019,1,Ben T,2man_scramble,match_status,HIDDEN RIVER - Blue,5.6,67,61,-11,3,5,9,1,0,12.5,10.9
-2019,1,Aaron J,2man_scramble,match_status,HIDDEN RIVER - Blue,5.6,67,61,-11,3,5,9,1,0,12.5,10.9
-2019,1,Tim C,2man_scramble,match_status,HIDDEN RIVER - Blue,7.9,74,66,-6,1,4,12,1,0,11,8.9
-2019,1,TJSC,2man_scramble,match_status,HIDDEN RIVER - Blue,10.1,79,69,-3,1,6,6,5,0,10,7.9
-2019,1,Paul W,2man_scramble,match_status,HIDDEN RIVER - Blue,7.9,74,66,-6,1,4,12,1,0,11,8.9
-2019,1,Dave K,2man_scramble,match_status,HIDDEN RIVER - Blue,10.1,79,69,-3,1,6,6,5,0,10,7.9
-2019,1,Jim H,2man_scramble,match_status,HIDDEN RIVER - Blue,15.4,93,78,6,0,3,8,5,2,7,5.9
-2019,1,Paul S,2man_scramble,match_status,HIDDEN RIVER - Blue,15.4,93,78,6,0,3,8,5,2,7,5.9
-2019,1,John S,2man_scramble,match_status,HIDDEN RIVER - Blue,3.3,62,59,-13,1,11,5,1,0,14.5,12.1
+2018,4,Ryan M,team_best_ball,contribution,Katke - Crimson/Silver,16,83,67,-5,1,7,6,4,0,11,10.3
+2018,4,Paul S,team_best_ball,contribution,Katke - Crimson/Silver,30,104,74,2,1,3,9,3,2,8.5,8.6
+2018,4,Shaun W,team_best_ball,contribution,Katke - Crimson/Silver,13,85,72,0,0,6,7,4,1,9.5,9.6
+2018,4,Tim C,team_best_ball,contribution,Katke - Crimson/Silver,18,84,66,-6,1,7,7,3,0,11.5,11
+2018,4,TJ C,team_best_ball,contribution,Katke - Crimson/Silver,14,93,79,7,1,3,4,8,2,6,6.3
 2019,1,Andy H,2man_scramble,match_status,HIDDEN RIVER - Blue,3.3,62,59,-13,1,11,5,1,0,14.5,12.1
-2019,1,Adam P,2man_scramble,match_status,HIDDEN RIVER - Blue,5.6,72,66,-6,1,5,10,2,0,11,9.1
+2019,1,Ben T,2man_scramble,match_status,HIDDEN RIVER - Blue,5.6,67,61,-11,3,5,9,1,0,12.5,10.9
+2019,1,Dave K,2man_scramble,match_status,HIDDEN RIVER - Blue,10.1,79,69,-3,1,6,6,5,0,10,7.9
 2019,1,Grant S,2man_scramble,match_status,HIDDEN RIVER - Blue,5.6,72,66,-6,1,5,10,2,0,11,9.1
-2019,1,Ryan M,2man_scramble,match_status,HIDDEN RIVER - Blue,8,76,68,-4,1,5,9,3,0,10.5,8.7
+2019,1,Aaron J,2man_scramble,match_status,HIDDEN RIVER - Blue,5.6,67,61,-11,3,5,9,1,0,12.5,10.9
+2019,1,Jim H,2man_scramble,match_status,HIDDEN RIVER - Blue,15.4,93,78,6,0,3,8,5,2,7,5.9
+2019,1,John S,2man_scramble,match_status,HIDDEN RIVER - Blue,3.3,62,59,-13,1,11,5,1,0,14.5,12.1
 2019,1,Kevin J,2man_scramble,match_status,HIDDEN RIVER - Blue,8,76,68,-4,1,5,9,3,0,10.5,8.7
 2019,1,Kyle M,2man_scramble,match_status,HIDDEN RIVER - Blue,12.8,80,67,-5,1,5,9,3,0,10.5,8.5
+2019,1,Adam P,2man_scramble,match_status,HIDDEN RIVER - Blue,5.6,72,66,-6,1,5,10,2,0,11,9.1
+2019,1,Paul W,2man_scramble,match_status,HIDDEN RIVER - Blue,7.9,74,66,-6,1,4,12,1,0,11,8.9
 2019,1,Pete C,2man_scramble,match_status,HIDDEN RIVER - Blue,12.8,80,67,-5,1,5,9,3,0,10.5,8.5
-2019,2,John S,singles,match_status,HARBOR POINT - Black,-3,69,72,1,1,5,5,6,1,8.5,9.3
-2019,2,Ben T,singles,match_status,HARBOR POINT - Black,8,80,72,1,1,5,6,5,1,9,9.5
+2019,1,Ryan M,2man_scramble,match_status,HIDDEN RIVER - Blue,8,76,68,-4,1,5,9,3,0,10.5,8.7
+2019,1,Paul S,2man_scramble,match_status,HIDDEN RIVER - Blue,15.4,93,78,6,0,3,8,5,2,7,5.9
+2019,1,Tim C,2man_scramble,match_status,HIDDEN RIVER - Blue,7.9,74,66,-6,1,4,12,1,0,11,8.9
+2019,1,TJ C,2man_scramble,match_status,HIDDEN RIVER - Blue,10.1,79,69,-3,1,6,6,5,0,10,7.9
 2019,2,Andy H,singles,match_status,HARBOR POINT - Black,10,82,72,1,0,5,8,4,1,9,9.4
-2019,2,Aaron J,singles,match_status,HARBOR POINT - Black,8,82,74,3,1,3,7,6,1,7.5,8.5
-2019,2,Grant S,singles,match_status,HARBOR POINT - Black,11,82,71,0,0,8,4,4,2,10,10
-2019,2,Adam P,singles,match_status,HARBOR POINT - Black,11,88,77,6,1,3,6,6,2,7,7.8
-2019,2,TJSC,singles,match_status,HARBOR POINT - Black,17,88,71,0,0,4,10,4,0,9,9.5
-2019,2,Pete C,singles,match_status,HARBOR POINT - Black,26,89,63,-8,2,11,2,0,3,14,12.6
-2019,2,Tim C,singles,match_status,HARBOR POINT - Black,15,89,74,3,0,5,8,3,2,9,9.4
-2019,2,Ryan M,singles,match_status,HARBOR POINT - Black,14,91,77,6,1,2,7,6,2,6.5,8.1
-2019,2,Kevin J,singles,match_status,HARBOR POINT - Black,18,92,74,3,0,4,8,5,1,8,8.9
+2019,2,Ben T,singles,match_status,HARBOR POINT - Black,8,80,72,1,1,5,6,5,1,9,9.5
 2019,2,Dave K,singles,match_status,HARBOR POINT - Black,23,92,69,-2,0,5,10,3,0,10,10.5
-2019,2,Paul W,singles,match_status,HARBOR POINT - Black,16,98,82,11,0,3,5,8,2,5.5,7
-2019,2,Kyle M,singles,match_status,HARBOR POINT - Black,25,108,83,12,2,2,5,4,5,6.5,7.4
-2019,2,Paul S,singles,match_status,HARBOR POINT - Black,32,109,77,6,1,6,4,3,4,9,9.2
+2019,2,Grant S,singles,match_status,HARBOR POINT - Black,11,82,71,0,0,8,4,4,2,10,10
+2019,2,Aaron J,singles,match_status,HARBOR POINT - Black,8,82,74,3,1,3,7,6,1,7.5,8.5
 2019,2,Jim H,singles,match_status,HARBOR POINT - Black,30,118,88,17,0,3,7,3,5,6.5,6.9
-2019,3,John S,2man_best_ball,match_status,LITTLE TRAVERSE BAY - White,-3,64,67,-5,1,7,7,2,1,11.5,12.4
-2019,3,Grant S,2man_best_ball,match_status,LITTLE TRAVERSE BAY - White,11,86,75,3,1,3,7,6,1,7.5,9.7
-2019,3,Adam P,2man_best_ball,match_status,LITTLE TRAVERSE BAY - White,11,87,76,4,0,3,10,3,2,8,9.8
-2019,3,Ben T,2man_best_ball,match_status,LITTLE TRAVERSE BAY - White,8,87,79,7,0,3,8,5,2,7,9.3
-2019,3,Ryan M,2man_best_ball,match_status,LITTLE TRAVERSE BAY - White,14,89,75,3,0,6,8,2,2,10,10.8
+2019,2,John S,singles,match_status,HARBOR POINT - Black,-3,69,72,1,1,5,5,6,1,8.5,9.3
+2019,2,Kevin J,singles,match_status,HARBOR POINT - Black,18,92,74,3,0,4,8,5,1,8,8.9
+2019,2,Kyle M,singles,match_status,HARBOR POINT - Black,25,108,83,12,2,2,5,4,5,6.5,7.4
+2019,2,Adam P,singles,match_status,HARBOR POINT - Black,11,88,77,6,1,3,6,6,2,7,7.8
+2019,2,Paul W,singles,match_status,HARBOR POINT - Black,16,98,82,11,0,3,5,8,2,5.5,7
+2019,2,Pete C,singles,match_status,HARBOR POINT - Black,26,89,63,-8,2,11,2,0,3,14,12.6
+2019,2,Ryan M,singles,match_status,HARBOR POINT - Black,14,91,77,6,1,2,7,6,2,6.5,8.1
+2019,2,Paul S,singles,match_status,HARBOR POINT - Black,32,109,77,6,1,6,4,3,4,9,9.2
+2019,2,Tim C,singles,match_status,HARBOR POINT - Black,15,89,74,3,0,5,8,3,2,9,9.4
+2019,2,TJ C,singles,match_status,HARBOR POINT - Black,17,88,71,0,0,4,10,4,0,9,9.5
 2019,3,Andy H,2man_best_ball,match_status,LITTLE TRAVERSE BAY - White,10,90,80,8,2,1,6,6,3,6,8.5
-2019,3,Aaron J,2man_best_ball,match_status,LITTLE TRAVERSE BAY - White,8,90,82,10,0,2,7,7,2,5.5,8.1
-2019,3,TJSC,2man_best_ball,match_status,LITTLE TRAVERSE BAY - White,17,92,75,3,0,7,4,4,3,9,10.2
-2019,3,Kevin J,2man_best_ball,match_status,LITTLE TRAVERSE BAY - White,18,94,76,4,1,4,6,5,2,8,9.7
-2019,3,Tim C,2man_best_ball,match_status,LITTLE TRAVERSE BAY - White,15,94,79,7,0,1,11,4,2,6.5,9
+2019,3,Ben T,2man_best_ball,match_status,LITTLE TRAVERSE BAY - White,8,87,79,7,0,3,8,5,2,7,9.3
 2019,3,Dave K,2man_best_ball,match_status,LITTLE TRAVERSE BAY - White,23,101,78,6,1,2,10,3,2,8,9.9
+2019,3,Grant S,2man_best_ball,match_status,LITTLE TRAVERSE BAY - White,11,86,75,3,1,3,7,6,1,7.5,9.7
+2019,3,Aaron J,2man_best_ball,match_status,LITTLE TRAVERSE BAY - White,8,90,82,10,0,2,7,7,2,5.5,8.1
 2019,3,Jim H,2man_best_ball,match_status,LITTLE TRAVERSE BAY - White,30,102,72,0,1,4,7,6,0,8.5,10.8
+2019,3,John S,2man_best_ball,match_status,LITTLE TRAVERSE BAY - White,-3,64,67,-5,1,7,7,2,1,11.5,12.4
+2019,3,Kevin J,2man_best_ball,match_status,LITTLE TRAVERSE BAY - White,18,94,76,4,1,4,6,5,2,8,9.7
+2019,3,Kyle M,2man_best_ball,match_status,LITTLE TRAVERSE BAY - White,25,123,98,26,1,1,3,5,8,3.5,5
+2019,3,Adam P,2man_best_ball,match_status,LITTLE TRAVERSE BAY - White,11,87,76,4,0,3,10,3,2,8,9.8
 2019,3,Paul W,2man_best_ball,match_status,LITTLE TRAVERSE BAY - White,16,105,89,17,0,2,3,7,6,3.5,6.2
 2019,3,Pete C,2man_best_ball,match_status,LITTLE TRAVERSE BAY - White,26,111,85,13,1,4,4,2,7,7,8.2
+2019,3,Ryan M,2man_best_ball,match_status,LITTLE TRAVERSE BAY - White,14,89,75,3,0,6,8,2,2,10,10.8
 2019,3,Paul S,2man_best_ball,match_status,LITTLE TRAVERSE BAY - White,31,120,89,17,0,3,3,6,6,4.5,6.5
-2019,3,Kyle M,2man_best_ball,match_status,LITTLE TRAVERSE BAY - White,25,123,98,26,1,1,3,5,8,3.5,5
-2019,4,John S,team_best_ball,contribution,BAY HARBOR - P/L - Blue gam,-3,78,81,11,0,0,8,9,1,4,7.4
+2019,3,Tim C,2man_best_ball,match_status,LITTLE TRAVERSE BAY - White,15,94,79,7,0,1,11,4,2,6.5,9
+2019,3,TJ C,2man_best_ball,match_status,LITTLE TRAVERSE BAY - White,17,92,75,3,0,7,4,4,3,9,10.2
 2019,4,Andy H,team_best_ball,contribution,BAY HARBOR - P/L - Blue gam,11,82,71,1,0,6,7,3,2,9.5,10.7
-2019,4,Adam P,team_best_ball,contribution,BAY HARBOR - P/L - Blue gam,13,87,74,4,0,4,6,8,0,7,9.5
-2019,4,Grant S,team_best_ball,contribution,BAY HARBOR - P/L - Blue gam,13,89,76,6,0,4,9,2,3,8.5,10.2
 2019,4,Ben T,team_best_ball,contribution,BAY HARBOR - P/L - Blue gam,9,89,80,10,0,3,8,4,3,7,8.8
-2019,4,Aaron J,team_best_ball,contribution,BAY HARBOR - P/L - Blue gam,9,91,82,12,0,2,6,8,2,5,7.3
 2019,4,Dave K,team_best_ball,contribution,BAY HARBOR - P/L - Blue gam,24,91,67,-3,1,6,6,4,1,10,11.3
-2019,4,Tim C,team_best_ball,contribution,BAY HARBOR - P/L - Blue gam,16,92,76,6,1,3,6,6,2,7,9
+2019,4,Grant S,team_best_ball,contribution,BAY HARBOR - P/L - Blue gam,13,89,76,6,0,4,9,2,3,8.5,10.2
+2019,4,Aaron J,team_best_ball,contribution,BAY HARBOR - P/L - Blue gam,9,91,82,12,0,2,6,8,2,5,7.3
 2019,4,Jim H,team_best_ball,contribution,BAY HARBOR - P/L - Blue gam,33,94,61,-9,5,5,5,1,2,12.5,13.1
-2019,4,Ryan M,team_best_ball,contribution,BAY HARBOR - P/L - Blue gam,15,94,79,9,0,2,7,7,2,5.5,8.2
+2019,4,John S,team_best_ball,contribution,BAY HARBOR - P/L - Blue gam,-3,78,81,11,0,0,8,9,1,4,7.4
 2019,4,Kevin J,team_best_ball,contribution,BAY HARBOR - P/L - Blue gam,20,96,76,6,1,3,7,3,4,7.5,9.5
-2019,4,Paul W,team_best_ball,contribution,BAY HARBOR - P/L - Blue gam,18,98,80,10,0,3,7,4,4,6.5,8.1
-2019,4,TJSC,team_best_ball,contribution,BAY HARBOR - P/L - Blue gam,19,98,79,9,0,1,10,5,2,6,8.3
-2019,4,Pete C,team_best_ball,contribution,BAY HARBOR - P/L - Blue gam,28,111,83,13,0,3,6,5,4,6,7.9
 2019,4,Kyle M,team_best_ball,contribution,BAY HARBOR - P/L - Blue gam,27,117,90,20,0,3,3,6,6,4.5,6.1
+2019,4,Adam P,team_best_ball,contribution,BAY HARBOR - P/L - Blue gam,13,87,74,4,0,4,6,8,0,7,9.5
+2019,4,Paul W,team_best_ball,contribution,BAY HARBOR - P/L - Blue gam,18,98,80,10,0,3,7,4,4,6.5,8.1
+2019,4,Pete C,team_best_ball,contribution,BAY HARBOR - P/L - Blue gam,28,111,83,13,0,3,6,5,4,6,7.9
+2019,4,Ryan M,team_best_ball,contribution,BAY HARBOR - P/L - Blue gam,15,94,79,9,0,2,7,7,2,5.5,8.2
 2019,4,Paul S,team_best_ball,contribution,BAY HARBOR - P/L - Blue gam,35,117,82,12,0,5,3,6,4,6.5,8.6
-2021,1,Aaron J,2man_best_ball,match_status,Bear Slide - White,5,81,76,5,0,4,7,5,2,7.5,9.5
-2021,1,Ben T,2man_best_ball,match_status,Bear Slide - White,5,89,84,13,0,2,5,7,4,4.5,6.7
-2021,1,Nick S,2man_best_ball,match_status,Bear Slide - White,6,81,75,4,0,4,7,6,1,7.5,9
-2021,1,Kevin J,2man_best_ball,match_status,Bear Slide - White,9,82,73,2,0,3,11,3,1,8.5,10.1
-2021,1,TJSC,2man_best_ball,match_status,Bear Slide - White,12,81,69,-2,1,4,10,2,1,10,11.4
-2021,1,Dave K,2man_best_ball,match_status,Bear Slide - White,16,101,85,14,0,2,5,8,3,4.5,6.9
-2021,1,Jim H,2man_best_ball,match_status,Bear Slide - White,26,100,74,3,2,4,6,2,4,9,9.5
-2021,1,Paul S,2man_best_ball,match_status,Bear Slide - White,30,118,88,17,0,3,2,8,5,4,6.1
-2021,1,Andy H,2man_best_ball,match_status,Bear Slide - White,6,81,75,4,0,5,5,7,1,7.5,9.2
-2021,1,Shaun W,2man_best_ball,match_status,Bear Slide - White,8,71,63,-8,2,7,6,3,0,12,12.4
-2021,1,Adam P,2man_best_ball,match_status,Bear Slide - White,9,80,71,0,0,5,10,1,2,10,10.9
-2021,1,Tim C,2man_best_ball,match_status,Bear Slide - White,10,88,78,7,0,3,7,6,2,6.5,7.8
-2021,1,Ryan M,2man_best_ball,match_status,Bear Slide - White,10,96,86,15,0,1,9,2,6,5.5,6.9
-2021,1,Paul W,2man_best_ball,match_status,Bear Slide - White,13,96,83,12,0,3,6,5,4,6,7.2
-2021,1,Joe O,2man_best_ball,match_status,Bear Slide - White,15,89,74,3,0,5,8,2,3,9,10.2
-2021,1,Pete C,2man_best_ball,match_status,Bear Slide - White,17,89,72,1,1,5,8,1,3,10,10.3
-2021,2,Aaron J,singles,match_status,Purgatory - White,7,80,73,1,1,4,7,5,1,8.5,9.1
-2021,2,Ben T,singles,match_status,Purgatory - White,7,76,69,-3,0,5,11,2,0,10.5,10.4
-2021,2,Nick S,singles,match_status,Purgatory - White,8,85,77,5,0,4,7,6,1,7.5,8
-2021,2,Kevin J,singles,match_status,Purgatory - White,12,82,70,-2,2,3,8,5,0,9,9.9
-2021,2,TJSC,singles,match_status,Purgatory - White,15,89,74,2,0,3,11,3,1,8.5,8.9
-2021,2,Dave K,singles,match_status,Purgatory - White,19,94,75,3,1,4,6,5,2,8,8.5
-2021,2,Jim H,singles,match_status,Purgatory - White,30,107,77,5,0,7,4,2,5,9,8.5
-2021,2,Paul S,singles,match_status,Purgatory - White,34,116,82,10,1,3,6,3,5,7,7.5
-2021,2,Andy H,singles,match_status,Purgatory - White,8,84,76,4,0,7,3,5,3,8.5,8.5
-2021,2,Shaun W,singles,match_status,Purgatory - White,10,78,68,-4,1,4,11,2,0,10.5,10.7
-2021,2,Adam P,singles,match_status,Purgatory - White,11,85,74,2,1,6,5,3,3,9.5,9.4
-2021,2,Tim C,singles,match_status,Purgatory - White,12,85,73,1,1,3,9,4,1,8.5,9.2
-2021,2,Ryan M,singles,match_status,Purgatory - White,13,93,80,8,0,2,9,5,2,6.5,7.1
-2021,2,Paul W,singles,match_status,Purgatory - White,16,89,73,1,0,7,5,5,1,9.5,9.4
-2021,2,Joe O,singles,match_status,Purgatory - White,18,89,71,-1,0,7,6,4,1,10,9.9
-2021,2,Pete C,singles,match_status,Purgatory - White,20,94,74,2,2,2,9,3,2,8.5,8.7
-2021,3,Aaron J,2man_scramble,match_status,Purgatory - White,4.3,71,66.7,-5.299999999999997,0,7,9,2,0,11.5,8.3
-2021,3,Ben T,2man_scramble,match_status,Purgatory - White,7.7,74,66.3,-5.700000000000003,0,7,9,2,0,11.5,8.5
-2021,3,Nick S,2man_scramble,match_status,Purgatory - White,5.2,67,61.8,-10.200000000000003,2,7,8,1,0,13,10.5
-2021,3,Kevin J,2man_scramble,match_status,Purgatory - White,4.3,71,66.7,-5.299999999999997,0,7,9,2,0,11.5,8.3
-2021,3,TJSC,2man_scramble,match_status,Purgatory - White,5.2,67,61.8,-10.200000000000003,2,7,8,1,0,13,10.5
-2021,3,Dave K,2man_scramble,match_status,Purgatory - White,11,77,66,-6,0,9,6,3,0,12,8.5
-2021,3,Jim H,2man_scramble,match_status,Purgatory - White,11,77,66,-6,0,9,6,3,0,12,8.5
-2021,3,Paul S,2man_scramble,match_status,Purgatory - White,7.7,74,66.3,-5.700000000000003,0,7,9,2,0,11.5,8.5
-2021,3,Andy H,2man_scramble,match_status,Purgatory - White,5.5,67,61.5,-10.5,1,9,7,1,0,13.5,10.5
-2021,3,Shaun W,2man_scramble,match_status,Purgatory - White,5.3,69,63.7,-8.299999999999997,1,8,7,2,0,12.5,9.6
-2021,3,Adam P,2man_scramble,match_status,Purgatory - White,5.3,69,63.7,-8.299999999999997,1,8,7,2,0,12.5,9.6
-2021,3,Tim C,2man_scramble,match_status,Purgatory - White,6.2,66,59.8,-12.200000000000003,3,7,7,1,0,13.5,11.2
-2021,3,Ryan M,2man_scramble,match_status,Purgatory - White,6.2,66,59.8,-12.200000000000003,3,7,7,1,0,13.5,11.2
-2021,3,Paul W,2man_scramble,match_status,Purgatory - White,8.7,83,74.3,2.299999999999997,0,4,7,7,0,7.5,4.9
-2021,3,Joe O,2man_scramble,match_status,Purgatory - White,5.5,67,61.5,-10.5,1,9,7,1,0,13.5,10.5
-2021,3,Pete C,2man_scramble,match_status,Purgatory - White,8.7,83,74.3,2.299999999999997,0,4,7,7,0,7.5,4.9
-2021,4,Aaron J,team_best_ball,contribution,Prairie View - White,6,83,77,5,1,4,5,6,2,7.5,10
-2021,4,Ben T,team_best_ball,contribution,Prairie View - White,6,91,85,13,0,2,7,5,4,5.5,7.9
-2021,4,Nick S,team_best_ball,contribution,Prairie View - White,7,90,83,11,0,2,5,9,2,4.5,8
-2021,4,Kevin J,team_best_ball,contribution,Prairie View - White,10,93,83,11,0,2,6,7,3,5,8
-2021,4,TJSC,team_best_ball,contribution,Prairie View - White,13,95,82,10,0,4,4,8,2,6,8.6
-2021,4,Dave K,team_best_ball,contribution,Prairie View - White,17,101,84,12,0,3,6,4,5,6,7.8
-2021,4,Jim H,team_best_ball,contribution,Prairie View - White,27,105,78,6,1,6,2,5,4,8,9.5
-2021,4,Paul S,team_best_ball,contribution,Prairie View - White,31,115,84,12,2,2,4,4,6,6,7.6
-2021,4,Andy H,team_best_ball,contribution,Prairie View - White,6,88,82,10,0,4,4,7,3,6,8.5
-2021,4,Shaun W,team_best_ball,contribution,Prairie View - White,8,87,79,7,1,1,8,7,1,6,9.2
-2021,4,Adam P,team_best_ball,contribution,Prairie View - White,10,97,87,15,0,2,4,7,5,4,6.3
-2021,4,Tim C,team_best_ball,contribution,Prairie View - White,11,100,89,17,0,3,5,4,6,5.5,7.1
-2021,4,Ryan M,team_best_ball,contribution,Prairie View - White,11,85,74,2,0,4,10,2,2,9,10.8
-2021,4,Paul W,team_best_ball,contribution,Prairie View - White,14,88,74,2,0,4,10,2,2,9,10.7
-2021,4,Joe O,team_best_ball,contribution,Prairie View - White,16,85,69,-3,0,8,5,5,0,10.5,12
-2021,4,Pete C,team_best_ball,contribution,Prairie View - White,18,87,69,-3,0,9,4,4,1,11,12
-2022,1,Aaron J,2man_best_ball,match_status,GVSU Meadows - Blue,9,85,76,5,2,3,5,6,2,7.5,9.5
-2022,1,Nick S,2man_best_ball,match_status,GVSU Meadows - Blue,9,78,69,-2,1,4,9,4,0,9.5,11.1
-2022,1,Andy H,2man_best_ball,match_status,GVSU Meadows - Blue,9,87,78,7,0,2,9,6,1,6.5,9
-2022,1,Adam P,2man_best_ball,match_status,GVSU Meadows - Blue,11,84,73,2,0,6,6,5,1,9,10.6
-2022,1,Shaun W,2man_best_ball,match_status,GVSU Meadows - Blue,12,86,74,3,0,3,9,6,0,7.5,9.8
-2022,1,Dave K,2man_best_ball,match_status,GVSU Meadows - Blue,15,92,77,6,0,7,3,4,4,8.5,9.5
-2022,1,Pete C,2man_best_ball,match_status,GVSU Meadows - Blue,19,111,92,21,1,1,4,6,6,4,6.1
-2022,1,Paul S,2man_best_ball,match_status,GVSU Meadows - Blue,36,111,75,4,2,6,4,2,4,10,10.5
-2022,1,Ben T,2man_best_ball,match_status,GVSU Meadows - Blue,7,87,80,9,0,4,6,4,4,7,8.5
-2022,1,Kevin J,2man_best_ball,match_status,GVSU Meadows - Blue,10,85,75,4,1,2,10,3,2,8,9.8
-2022,1,Ryan M,2man_best_ball,match_status,GVSU Meadows - Blue,12,94,82,11,0,3,5,8,2,5.5,7.7
-2022,1,Tim C,2man_best_ball,match_status,GVSU Meadows - Blue,13,90,77,6,0,2,9,6,1,6.5,8.9
-2022,1,TJSC,2man_best_ball,match_status,GVSU Meadows - Blue,15,91,76,5,0,4,7,5,2,7.5,9.6
-2022,1,Paul W,2man_best_ball,match_status,GVSU Meadows - Blue,15,90,75,4,0,6,5,4,3,8.5,9.9
-2022,1,Joe O,2man_best_ball,match_status,GVSU Meadows - Blue,17,108,91,20,0,2,5,6,5,4.5,6.6
-2022,1,Jim H,2man_best_ball,match_status,GVSU Meadows - Blue,28,113,85,14,0,3,4,5,6,5,7.1
-2022,2,Aaron J,singles,match_status,Ravines GC - White,5,79,74,2,0,3,10,5,0,8,10.5
-2022,2,Nick S,singles,match_status,Ravines GC - White,4,84,80,8,0,1,8,9,0,5,8.1
-2022,2,Andy H,singles,match_status,Ravines GC - White,5,87,82,10,0,2,9,3,4,6.5,8.9
-2022,2,Adam P,singles,match_status,Ravines GC - White,6,91,85,13,0,3,5,6,4,5.5,7.4
-2022,2,Shaun W,singles,match_status,Ravines GC - White,7,89,82,10,0,2,5,10,1,4.5,7.8
-2022,2,Dave K,singles,match_status,Ravines GC - White,10,88,78,6,0,3,8,5,2,7,9
-2022,2,Pete C,singles,match_status,Ravines GC - White,14,91,77,5,0,4,7,5,2,7.5,9.3
-2022,2,Paul S,singles,match_status,Ravines GC - White,30,122,92,20,0,1,7,4,6,4.5,6.7
-2022,2,Ben T,singles,match_status,Ravines GC - White,2,84,82,10,0,3,4,10,1,5,7.9
-2022,2,Kevin J,singles,match_status,Ravines GC - White,5,78,73,1,0,7,4,6,1,9,10.8
-2022,2,Ryan M,singles,match_status,Ravines GC - White,7,84,77,5,0,3,9,5,1,7.5,9.9
-2022,2,Tim C,singles,match_status,Ravines GC - White,9,92,83,11,0,2,9,2,5,6.5,8.5
-2022,2,TJSC,singles,match_status,Ravines GC - White,10,90,80,8,0,5,5,5,3,7.5,9.5
-2022,2,Paul W,singles,match_status,Ravines GC - White,10,95,85,13,0,3,6,6,3,6,7.9
-2022,2,Joe O,singles,match_status,Ravines GC - White,13,87,74,2,0,5,8,4,1,9,11
-2022,2,Jim H,singles,match_status,Ravines GC - White,23,95,72,0,2,5,4,5,2,9,10.8
-2022,3,Aaron J,2man_tilt,tilt,Ravines GC - White,5,85,80,8,0,3,7,5,3,6.5,8.2
-2022,3,Nick S,2man_tilt,tilt,Ravines GC - White,4,81,77,5,0,4,6,7,1,7,8.9
-2022,3,Andy H,2man_tilt,tilt,Ravines GC - White,5,79,74,2,0,4,9,4,1,8.5,10.4
-2022,3,Adam P,2man_tilt,tilt,Ravines GC - White,6,89,83,11,0,0,9,7,2,4.5,7.2
-2022,3,Shaun W,2man_tilt,tilt,Ravines GC - White,7,92,85,13,0,2,5,7,4,4.5,6.9
-2022,3,Dave K,2man_tilt,tilt,Ravines GC - White,10,77,67,-5,0,7,10,0,1,12,12.5
-2022,3,Pete C,2man_tilt,tilt,Ravines GC - White,14,89,75,3,0,4,7,7,0,7.5,9.8
-2022,3,Paul S,2man_tilt,tilt,Ravines GC - White,30,107,77,5,1,5,4,4,4,8,9.2
-2022,3,Ben T,2man_tilt,tilt,Ravines GC - White,2,85,83,11,0,0,8,9,1,4,6.8
-2022,3,Kevin J,2man_tilt,tilt,Ravines GC - White,5,90,85,13,0,1,7,7,3,4.5,6.7
-2022,3,Ryan M,2man_tilt,tilt,Ravines GC - White,7,81,74,2,1,3,9,3,2,8.5,10.5
-2022,3,Tim C,2man_tilt,tilt,Ravines GC - White,9,83,74,2,0,3,10,5,0,8,10
-2022,3,TJSC,2man_tilt,tilt,Ravines GC - White,10,88,78,6,0,3,7,7,1,6.5,8.3
-2022,3,Paul W,2man_tilt,tilt,Ravines GC - White,10,91,81,9,1,0,9,5,3,5.5,7.9
-2022,3,Joe O,2man_tilt,tilt,Ravines GC - White,13,85,72,0,1,5,6,5,1,9,10.7
-2022,3,Jim H,2man_tilt,tilt,Ravines GC - White,23,98,75,3,1,3,8,4,2,8,9.9
-2022,4,Aaron J,team_best_ball,contribution,American Dunes - Freedom/WH,8,79,71,-1,0,5,10,2,1,10,11.2
-2022,4,Nick S,team_best_ball,contribution,American Dunes - Freedom/WH,8,94,86,14,0,3,5,6,4,5.5,7.4
-2022,4,Andy H,team_best_ball,contribution,American Dunes - Freedom/WH,8,85,77,5,0,2,9,7,0,6.5,9.2
-2022,4,Adam P,team_best_ball,contribution,American Dunes - Freedom/WH,9,95,86,14,0,1,7,8,2,4.5,7.2
-2022,4,Shaun W,team_best_ball,contribution,American Dunes - Freedom/WH,10,92,82,10,0,3,8,4,3,7,8.9
-2022,4,Dave K,team_best_ball,contribution,American Dunes - Freedom/WH,12,90,78,6,0,3,8,5,2,7,8.8
-2022,4,Pete C,team_best_ball,contribution,American Dunes - Freedom/WH,18,98,80,8,0,5,5,5,3,7.5,8.9
-2022,4,Paul S,team_best_ball,contribution,American Dunes - Freedom/WH,34,106,72,0,4,3,3,6,2,8.5,9.9
-2022,4,Ben T,team_best_ball,contribution,American Dunes - Freedom/WH,6,82,76,4,1,3,8,3,3,8,9.8
-2022,4,Kevin J,team_best_ball,contribution,American Dunes - Freedom/WH,8,79,71,-1,1,4,8,5,0,9,10.9
-2022,4,Ryan M,team_best_ball,contribution,American Dunes - Freedom/WH,9,90,81,9,0,3,6,7,2,6,8
-2022,4,Tim C,team_best_ball,contribution,American Dunes - Freedom/WH,11,95,84,12,1,0,8,4,5,5,7.1
-2022,4,TJSC,team_best_ball,contribution,American Dunes - Freedom/WH,13,89,76,4,1,5,5,4,3,8.5,9.8
-2022,4,Paul W,team_best_ball,contribution,American Dunes - Freedom/WH,14,93,79,7,0,3,8,5,2,7,8.8
-2022,4,Joe O,team_best_ball,contribution,American Dunes - Freedom/WH,15,99,84,12,0,3,5,7,3,5.5,7.7
-2022,4,Jim H,team_best_ball,contribution,American Dunes - Freedom/WH,26,99,73,1,0,7,4,6,1,9,10.3
-2020,1,Aaron J,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,7,87,80,8,0,1,10,6,1,6,10.3
-2020,1,Nick S,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,7,88,81,9,0,5,4,4,5,7,9.5
-2020,1,Tim C,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,8,91,83,11,0,1,8,6,3,5,9.1
-2020,1,Julius P,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,10,91,81,9,0,4,6,5,3,7,9.8
-2020,1,Adam P,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,10,93,83,11,0,1,7,8,2,4.5,8.8
-2020,1,Kevin J,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,11,89,78,6,1,5,4,5,3,8,10.4
-2020,1,TJSC,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,14,96,82,10,2,0,6,7,3,5,8.6
-2020,1,Joe O,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,15,101,86,14,0,1,8,4,5,5,8.2
-2020,1,Scott R,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,3,84,81,9,0,0,12,3,3,6,9.6
-2020,1,Ben T,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,4,94,90,18,0,1,5,8,4,3.5,7.3
+2019,4,Tim C,team_best_ball,contribution,BAY HARBOR - P/L - Blue gam,16,92,76,6,1,3,6,6,2,7,9
+2019,4,TJ C,team_best_ball,contribution,BAY HARBOR - P/L - Blue gam,19,98,79,9,0,1,10,5,2,6,8.3
 2020,1,Andy H,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,7,93,86,14,0,2,5,6,5,4.5,8
-2020,1,Shaun W,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,10,92,82,10,0,2,6,9,1,5,9.4
-2020,1,Pete C,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,20,99,79,7,0,3,7,6,2,6.5,9.8
+2020,1,Ben T,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,4,94,90,18,0,1,5,8,4,3.5,7.3
 2020,1,Dave K,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,21,102,81,9,0,4,6,6,2,7,9.8
+2020,1,Aaron J,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,7,87,80,8,0,1,10,6,1,6,10.3
+2020,1,Joe O,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,15,101,86,14,0,1,8,4,5,5,8.2
+2020,1,Julius P,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,10,91,81,9,0,4,6,5,3,7,9.8
+2020,1,Kevin J,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,11,89,78,6,1,5,4,5,3,8,10.4
 2020,1,Kyle M,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,24,118,94,22,0,0,8,1,9,4,6.5
-2020,2,Aaron J,singles,match_status,Harbor Shores - Gray,8,96,88,17,1,2,4,5,6,5,8
-2020,2,Nick S,singles,match_status,Harbor Shores - Gray,8,96,88,17,0,1,6,5,6,4,8.4
-2020,2,Tim C,singles,match_status,Harbor Shores - Gray,9,88,79,8,0,2,8,6,2,6,10.8
-2020,2,Julius P,singles,match_status,Harbor Shores - Gray,11,80,69,-2,2,5,5,5,1,9.5,12.8
-2020,2,Adam P,singles,match_status,Harbor Shores - Gray,12,104,92,21,1,2,3,8,4,4.5,9.1
-2020,2,Kevin J,singles,match_status,Harbor Shores - Gray,12,94,82,11,0,3,5,6,4,5.5,10
-2020,2,TJSC,singles,match_status,Harbor Shores - Gray,15,106,91,20,0,3,4,6,5,5,8.8
-2020,2,Joe O,singles,match_status,Harbor Shores - Gray,17,115,98,27,0,1,3,6,8,2.5,6.9
-2020,2,Scott R,singles,match_status,Harbor Shores - Gray,4,90,86,15,0,1,8,4,5,5,9.2
-2020,2,Ben T,singles,match_status,Harbor Shores - Gray,5,97,92,21,0,0,3,10,5,1.5,6.9
+2020,1,Nick S,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,7,88,81,9,0,5,4,4,5,7,9.5
+2020,1,Adam P,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,10,93,83,11,0,1,7,8,2,4.5,8.8
+2020,1,Pete C,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,20,99,79,7,0,3,7,6,2,6.5,9.8
+2020,1,Scott R,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,3,84,81,9,0,0,12,3,3,6,9.6
+2020,1,Shaun W,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,10,92,82,10,0,2,6,9,1,5,9.4
+2020,1,Tim C,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,8,91,83,11,0,1,8,6,3,5,9.1
+2020,1,TJ C,2man_hi_lo,match_status,Lake Mich Hills - Blue 2,14,96,82,10,2,0,6,7,3,5,8.6
 2020,2,Andy H,singles,match_status,Harbor Shores - Gray,8,88,80,9,1,4,3,7,3,6.5,9.9
-2020,2,Shaun W,singles,match_status,Harbor Shores - Gray,11,102,91,20,0,3,3,4,8,4.5,7.8
-2020,2,Pete C,singles,match_status,Harbor Shores - Gray,22,109,87,16,0,1,11,1,5,6.5,9.4
+2020,2,Ben T,singles,match_status,Harbor Shores - Gray,5,97,92,21,0,0,3,10,5,1.5,6.9
 2020,2,Dave K,singles,match_status,Harbor Shores - Gray,23,107,84,13,1,6,3,3,5,8.5,11.1
+2020,2,Aaron J,singles,match_status,Harbor Shores - Gray,8,96,88,17,1,2,4,5,6,5,8
+2020,2,Joe O,singles,match_status,Harbor Shores - Gray,17,115,98,27,0,1,3,6,8,2.5,6.9
+2020,2,Julius P,singles,match_status,Harbor Shores - Gray,11,80,69,-2,2,5,5,5,1,9.5,12.8
+2020,2,Kevin J,singles,match_status,Harbor Shores - Gray,12,94,82,11,0,3,5,6,4,5.5,10
 2020,2,Kyle M,singles,match_status,Harbor Shores - Gray,26,131,105,34,0,0,4,3,11,2,6
-2020,3,Aaron J,2man_best_ball,match_status,Harbor Shores - Gray,8,99,91,20,0,1,4,9,4,3,8
-2020,3,Nick S,2man_best_ball,match_status,Harbor Shores - Gray,8,102,94,23,0,0,3,9,6,1.5,6.7
-2020,3,Tim C,2man_best_ball,match_status,Harbor Shores - Gray,9,93,84,13,0,1,6,9,2,4,9.6
-2020,3,Julius P,2man_best_ball,match_status,Harbor Shores - Gray,11,83,72,1,2,4,6,5,1,9,12.6
-2020,3,Adam P,2man_best_ball,match_status,Harbor Shores - Gray,12,98,86,15,0,2,6,7,3,5,9.6
-2020,3,Kevin J,2man_best_ball,match_status,Harbor Shores - Gray,12,101,89,18,0,1,9,2,6,5.5,9.1
-2020,3,TJSC,2man_best_ball,match_status,Harbor Shores - Gray,16,101,85,14,0,3,4,8,3,5,8.9
-2020,3,Joe O,2man_best_ball,match_status,Harbor Shores - Gray,17,110,93,22,0,1,4,8,5,3,7.6
-2020,3,Scott R,2man_best_ball,match_status,Harbor Shores - Gray,4,91,87,16,0,2,5,6,5,4.5,8.7
-2020,3,Ben T,2man_best_ball,match_status,Harbor Shores - Gray,5,91,86,15,0,2,5,6,5,4.5,8.6
+2020,2,Nick S,singles,match_status,Harbor Shores - Gray,8,96,88,17,0,1,6,5,6,4,8.4
+2020,2,Adam P,singles,match_status,Harbor Shores - Gray,12,104,92,21,1,2,3,8,4,4.5,9.1
+2020,2,Pete C,singles,match_status,Harbor Shores - Gray,22,109,87,16,0,1,11,1,5,6.5,9.4
+2020,2,Scott R,singles,match_status,Harbor Shores - Gray,4,90,86,15,0,1,8,4,5,5,9.2
+2020,2,Shaun W,singles,match_status,Harbor Shores - Gray,11,102,91,20,0,3,3,4,8,4.5,7.8
+2020,2,Tim C,singles,match_status,Harbor Shores - Gray,9,88,79,8,0,2,8,6,2,6,10.8
+2020,2,TJ C,singles,match_status,Harbor Shores - Gray,15,106,91,20,0,3,4,6,5,5,8.8
 2020,3,Andy H,2man_best_ball,match_status,Harbor Shores - Gray,8,91,83,12,1,3,1,10,3,4.5,9.4
-2020,3,Shaun W,2man_best_ball,match_status,Harbor Shores - Gray,11,88,77,6,0,3,7,7,1,6.5,11.4
-2020,3,Pete C,2man_best_ball,match_status,Harbor Shores - Gray,22,126,104,33,0,0,4,6,8,2,6.3
+2020,3,Ben T,2man_best_ball,match_status,Harbor Shores - Gray,5,91,86,15,0,2,5,6,5,4.5,8.6
 2020,3,Dave K,2man_best_ball,match_status,Harbor Shores - Gray,23,96,73,2,3,2,6,4,3,8,11.9
+2020,3,Aaron J,2man_best_ball,match_status,Harbor Shores - Gray,8,99,91,20,0,1,4,9,4,3,8
+2020,3,Joe O,2man_best_ball,match_status,Harbor Shores - Gray,17,110,93,22,0,1,4,8,5,3,7.6
+2020,3,Julius P,2man_best_ball,match_status,Harbor Shores - Gray,11,83,72,1,2,4,6,5,1,9,12.6
+2020,3,Kevin J,2man_best_ball,match_status,Harbor Shores - Gray,12,101,89,18,0,1,9,2,6,5.5,9.1
 2020,3,Kyle M,2man_best_ball,match_status,Harbor Shores - Gray,26,128,102,31,0,1,4,5,8,3,6.6
-2020,4,Aaron J,team_best_ball,contribution,HawksHead - White,6,82,76,4,0,4,7,6,1,7.5,8.8
-2020,4,Nick S,team_best_ball,contribution,HawksHead - White,5,86,81,9,0,2,8,5,3,6,7.8
-2020,4,Tim C,team_best_ball,contribution,HawksHead - White,7,81,74,2,0,3,13,0,2,9.5,9.9
-2020,4,Julius P,team_best_ball,contribution,HawksHead - White,8,78,70,-2,2,3,9,3,1,9.5,11.1
-2020,4,Adam P,team_best_ball,contribution,HawksHead - White,10,83,73,1,1,5,5,6,1,8.5,9.3
-2020,4,Kevin J,team_best_ball,contribution,HawksHead - White,9,86,77,5,0,5,7,4,2,8.5,8.9
-2020,4,TJSC,team_best_ball,contribution,HawksHead - White,12,97,85,13,0,3,4,7,4,5,6.4
-2020,4,Joe O,team_best_ball,contribution,HawksHead - White,14,95,81,9,1,4,2,7,4,6,7.4
-2020,4,Scott R,team_best_ball,contribution,HawksHead - White,3,84,81,9,0,1,10,5,2,6,7
-2020,4,Ben T,team_best_ball,contribution,HawksHead - White,3,81,78,6,1,0,12,3,2,7,8.4
+2020,3,Nick S,2man_best_ball,match_status,Harbor Shores - Gray,8,102,94,23,0,0,3,9,6,1.5,6.7
+2020,3,Adam P,2man_best_ball,match_status,Harbor Shores - Gray,12,98,86,15,0,2,6,7,3,5,9.6
+2020,3,Pete C,2man_best_ball,match_status,Harbor Shores - Gray,22,126,104,33,0,0,4,6,8,2,6.3
+2020,3,Scott R,2man_best_ball,match_status,Harbor Shores - Gray,4,91,87,16,0,2,5,6,5,4.5,8.7
+2020,3,Shaun W,2man_best_ball,match_status,Harbor Shores - Gray,11,88,77,6,0,3,7,7,1,6.5,11.4
+2020,3,Tim C,2man_best_ball,match_status,Harbor Shores - Gray,9,93,84,13,0,1,6,9,2,4,9.6
+2020,3,TJ C,2man_best_ball,match_status,Harbor Shores - Gray,16,101,85,14,0,3,4,8,3,5,8.9
 2020,4,Andy H,team_best_ball,contribution,HawksHead - White,6,74,68,-4,2,5,6,5,0,10,10.9
-2020,4,Shaun W,team_best_ball,contribution,HawksHead - White,8,84,76,4,0,6,5,5,2,8.5,9.5
-2020,4,Pete C,team_best_ball,contribution,HawksHead - White,18,89,71,-1,2,5,7,1,3,10.5,10.7
+2020,4,Ben T,team_best_ball,contribution,HawksHead - White,3,81,78,6,1,0,12,3,2,7,8.4
 2020,4,Dave K,team_best_ball,contribution,HawksHead - White,19,86,67,-5,1,5,10,2,0,11,11.4
+2020,4,Aaron J,team_best_ball,contribution,HawksHead - White,6,82,76,4,0,4,7,6,1,7.5,8.8
+2020,4,Joe O,team_best_ball,contribution,HawksHead - White,14,95,81,9,1,4,2,7,4,6,7.4
+2020,4,Julius P,team_best_ball,contribution,HawksHead - White,8,78,70,-2,2,3,9,3,1,9.5,11.1
+2020,4,Kevin J,team_best_ball,contribution,HawksHead - White,9,86,77,5,0,5,7,4,2,8.5,8.9
 2020,4,Kyle M,team_best_ball,contribution,HawksHead - White,22,105,83,11,1,1,7,5,4,5.5,7.6
-2024,1,Nick S,2man_stableford,stableford,The Loop Red - Middle,6,80,74,4,0,3,8,7,0,7,9.6
+2020,4,Nick S,team_best_ball,contribution,HawksHead - White,5,86,81,9,0,2,8,5,3,6,7.8
+2020,4,Adam P,team_best_ball,contribution,HawksHead - White,10,83,73,1,1,5,5,6,1,8.5,9.3
+2020,4,Pete C,team_best_ball,contribution,HawksHead - White,18,89,71,-1,2,5,7,1,3,10.5,10.7
+2020,4,Scott R,team_best_ball,contribution,HawksHead - White,3,84,81,9,0,1,10,5,2,6,7
+2020,4,Shaun W,team_best_ball,contribution,HawksHead - White,8,84,76,4,0,6,5,5,2,8.5,9.5
+2020,4,Tim C,team_best_ball,contribution,HawksHead - White,7,81,74,2,0,3,13,0,2,9.5,9.9
+2020,4,TJ C,team_best_ball,contribution,HawksHead - White,12,97,85,13,0,3,4,7,4,5,6.4
+2021,1,Andy H,2man_best_ball,match_status,Bear Slide - White,6,81,75,4,0,5,5,7,1,7.5,9.2
+2021,1,Ben T,2man_best_ball,match_status,Bear Slide - White,5,89,84,13,0,2,5,7,4,4.5,6.7
+2021,1,Dave K,2man_best_ball,match_status,Bear Slide - White,16,101,85,14,0,2,5,8,3,4.5,6.9
+2021,1,Aaron J,2man_best_ball,match_status,Bear Slide - White,5,81,76,5,0,4,7,5,2,7.5,9.5
+2021,1,Jim H,2man_best_ball,match_status,Bear Slide - White,26,100,74,3,2,4,6,2,4,9,9.5
+2021,1,Joe O,2man_best_ball,match_status,Bear Slide - White,15,89,74,3,0,5,8,2,3,9,10.2
+2021,1,Kevin J,2man_best_ball,match_status,Bear Slide - White,9,82,73,2,0,3,11,3,1,8.5,10.1
+2021,1,Nick S,2man_best_ball,match_status,Bear Slide - White,6,81,75,4,0,4,7,6,1,7.5,9
+2021,1,Adam P,2man_best_ball,match_status,Bear Slide - White,9,80,71,0,0,5,10,1,2,10,10.9
+2021,1,Paul W,2man_best_ball,match_status,Bear Slide - White,13,96,83,12,0,3,6,5,4,6,7.2
+2021,1,Pete C,2man_best_ball,match_status,Bear Slide - White,17,89,72,1,1,5,8,1,3,10,10.3
+2021,1,Ryan M,2man_best_ball,match_status,Bear Slide - White,10,96,86,15,0,1,9,2,6,5.5,6.9
+2021,1,Paul S,2man_best_ball,match_status,Bear Slide - White,30,118,88,17,0,3,2,8,5,4,6.1
+2021,1,Shaun W,2man_best_ball,match_status,Bear Slide - White,8,71,63,-8,2,7,6,3,0,12,12.4
+2021,1,Tim C,2man_best_ball,match_status,Bear Slide - White,10,88,78,7,0,3,7,6,2,6.5,7.8
+2021,1,TJ C,2man_best_ball,match_status,Bear Slide - White,12,81,69,-2,1,4,10,2,1,10,11.4
+2021,2,Andy H,singles,match_status,Purgatory - White,8,84,76,4,0,7,3,5,3,8.5,8.5
+2021,2,Ben T,singles,match_status,Purgatory - White,7,76,69,-3,0,5,11,2,0,10.5,10.4
+2021,2,Dave K,singles,match_status,Purgatory - White,19,94,75,3,1,4,6,5,2,8,8.5
+2021,2,Aaron J,singles,match_status,Purgatory - White,7,80,73,1,1,4,7,5,1,8.5,9.1
+2021,2,Jim H,singles,match_status,Purgatory - White,30,107,77,5,0,7,4,2,5,9,8.5
+2021,2,Joe O,singles,match_status,Purgatory - White,18,89,71,-1,0,7,6,4,1,10,9.9
+2021,2,Kevin J,singles,match_status,Purgatory - White,12,82,70,-2,2,3,8,5,0,9,9.9
+2021,2,Nick S,singles,match_status,Purgatory - White,8,85,77,5,0,4,7,6,1,7.5,8
+2021,2,Adam P,singles,match_status,Purgatory - White,11,85,74,2,1,6,5,3,3,9.5,9.4
+2021,2,Paul W,singles,match_status,Purgatory - White,16,89,73,1,0,7,5,5,1,9.5,9.4
+2021,2,Pete C,singles,match_status,Purgatory - White,20,94,74,2,2,2,9,3,2,8.5,8.7
+2021,2,Ryan M,singles,match_status,Purgatory - White,13,93,80,8,0,2,9,5,2,6.5,7.1
+2021,2,Paul S,singles,match_status,Purgatory - White,34,116,82,10,1,3,6,3,5,7,7.5
+2021,2,Shaun W,singles,match_status,Purgatory - White,10,78,68,-4,1,4,11,2,0,10.5,10.7
+2021,2,Tim C,singles,match_status,Purgatory - White,12,85,73,1,1,3,9,4,1,8.5,9.2
+2021,2,TJ C,singles,match_status,Purgatory - White,15,89,74,2,0,3,11,3,1,8.5,8.9
+2021,3,Andy H,2man_scramble,match_status,Purgatory - White,5.5,67,61.5,-10.5,1,9,7,1,0,13.5,10.5
+2021,3,Ben T,2man_scramble,match_status,Purgatory - White,7.7,74,66.3,-5.700000000000003,0,7,9,2,0,11.5,8.5
+2021,3,Dave K,2man_scramble,match_status,Purgatory - White,11,77,66,-6,0,9,6,3,0,12,8.5
+2021,3,Aaron J,2man_scramble,match_status,Purgatory - White,4.3,71,66.7,-5.299999999999997,0,7,9,2,0,11.5,8.3
+2021,3,Jim H,2man_scramble,match_status,Purgatory - White,11,77,66,-6,0,9,6,3,0,12,8.5
+2021,3,Joe O,2man_scramble,match_status,Purgatory - White,5.5,67,61.5,-10.5,1,9,7,1,0,13.5,10.5
+2021,3,Kevin J,2man_scramble,match_status,Purgatory - White,4.3,71,66.7,-5.299999999999997,0,7,9,2,0,11.5,8.3
+2021,3,Nick S,2man_scramble,match_status,Purgatory - White,5.2,67,61.8,-10.200000000000003,2,7,8,1,0,13,10.5
+2021,3,Adam P,2man_scramble,match_status,Purgatory - White,5.3,69,63.7,-8.299999999999997,1,8,7,2,0,12.5,9.6
+2021,3,Paul W,2man_scramble,match_status,Purgatory - White,8.7,83,74.3,2.299999999999997,0,4,7,7,0,7.5,4.9
+2021,3,Pete C,2man_scramble,match_status,Purgatory - White,8.7,83,74.3,2.299999999999997,0,4,7,7,0,7.5,4.9
+2021,3,Ryan M,2man_scramble,match_status,Purgatory - White,6.2,66,59.8,-12.200000000000003,3,7,7,1,0,13.5,11.2
+2021,3,Paul S,2man_scramble,match_status,Purgatory - White,7.7,74,66.3,-5.700000000000003,0,7,9,2,0,11.5,8.5
+2021,3,Shaun W,2man_scramble,match_status,Purgatory - White,5.3,69,63.7,-8.299999999999997,1,8,7,2,0,12.5,9.6
+2021,3,Tim C,2man_scramble,match_status,Purgatory - White,6.2,66,59.8,-12.200000000000003,3,7,7,1,0,13.5,11.2
+2021,3,TJ C,2man_scramble,match_status,Purgatory - White,5.2,67,61.8,-10.200000000000003,2,7,8,1,0,13,10.5
+2021,4,Andy H,team_best_ball,contribution,Prairie View - White,6,88,82,10,0,4,4,7,3,6,8.5
+2021,4,Ben T,team_best_ball,contribution,Prairie View - White,6,91,85,13,0,2,7,5,4,5.5,7.9
+2021,4,Dave K,team_best_ball,contribution,Prairie View - White,17,101,84,12,0,3,6,4,5,6,7.8
+2021,4,Aaron J,team_best_ball,contribution,Prairie View - White,6,83,77,5,1,4,5,6,2,7.5,10
+2021,4,Jim H,team_best_ball,contribution,Prairie View - White,27,105,78,6,1,6,2,5,4,8,9.5
+2021,4,Joe O,team_best_ball,contribution,Prairie View - White,16,85,69,-3,0,8,5,5,0,10.5,12
+2021,4,Kevin J,team_best_ball,contribution,Prairie View - White,10,93,83,11,0,2,6,7,3,5,8
+2021,4,Nick S,team_best_ball,contribution,Prairie View - White,7,90,83,11,0,2,5,9,2,4.5,8
+2021,4,Adam P,team_best_ball,contribution,Prairie View - White,10,97,87,15,0,2,4,7,5,4,6.3
+2021,4,Paul W,team_best_ball,contribution,Prairie View - White,14,88,74,2,0,4,10,2,2,9,10.7
+2021,4,Pete C,team_best_ball,contribution,Prairie View - White,18,87,69,-3,0,9,4,4,1,11,12
+2021,4,Ryan M,team_best_ball,contribution,Prairie View - White,11,85,74,2,0,4,10,2,2,9,10.8
+2021,4,Paul S,team_best_ball,contribution,Prairie View - White,31,115,84,12,2,2,4,4,6,6,7.6
+2021,4,Shaun W,team_best_ball,contribution,Prairie View - White,8,87,79,7,1,1,8,7,1,6,9.2
+2021,4,Tim C,team_best_ball,contribution,Prairie View - White,11,100,89,17,0,3,5,4,6,5.5,7.1
+2021,4,TJ C,team_best_ball,contribution,Prairie View - White,13,95,82,10,0,4,4,8,2,6,8.6
+2022,1,Andy H,2man_best_ball,match_status,GVSU Meadows - Blue,9,87,78,7,0,2,9,6,1,6.5,9
+2022,1,Ben T,2man_best_ball,match_status,GVSU Meadows - Blue,7,87,80,9,0,4,6,4,4,7,8.5
+2022,1,Dave K,2man_best_ball,match_status,GVSU Meadows - Blue,15,92,77,6,0,7,3,4,4,8.5,9.5
+2022,1,Aaron J,2man_best_ball,match_status,GVSU Meadows - Blue,9,85,76,5,2,3,5,6,2,7.5,9.5
+2022,1,Jim H,2man_best_ball,match_status,GVSU Meadows - Blue,28,113,85,14,0,3,4,5,6,5,7.1
+2022,1,Joe O,2man_best_ball,match_status,GVSU Meadows - Blue,17,108,91,20,0,2,5,6,5,4.5,6.6
+2022,1,Kevin J,2man_best_ball,match_status,GVSU Meadows - Blue,10,85,75,4,1,2,10,3,2,8,9.8
+2022,1,Nick S,2man_best_ball,match_status,GVSU Meadows - Blue,9,78,69,-2,1,4,9,4,0,9.5,11.1
+2022,1,Adam P,2man_best_ball,match_status,GVSU Meadows - Blue,11,84,73,2,0,6,6,5,1,9,10.6
+2022,1,Paul W,2man_best_ball,match_status,GVSU Meadows - Blue,15,90,75,4,0,6,5,4,3,8.5,9.9
+2022,1,Pete C,2man_best_ball,match_status,GVSU Meadows - Blue,19,111,92,21,1,1,4,6,6,4,6.1
+2022,1,Ryan M,2man_best_ball,match_status,GVSU Meadows - Blue,12,94,82,11,0,3,5,8,2,5.5,7.7
+2022,1,Paul S,2man_best_ball,match_status,GVSU Meadows - Blue,36,111,75,4,2,6,4,2,4,10,10.5
+2022,1,Shaun W,2man_best_ball,match_status,GVSU Meadows - Blue,12,86,74,3,0,3,9,6,0,7.5,9.8
+2022,1,Tim C,2man_best_ball,match_status,GVSU Meadows - Blue,13,90,77,6,0,2,9,6,1,6.5,8.9
+2022,1,TJ C,2man_best_ball,match_status,GVSU Meadows - Blue,15,91,76,5,0,4,7,5,2,7.5,9.6
+2022,2,Andy H,singles,match_status,Ravines GC - White,5,87,82,10,0,2,9,3,4,6.5,8.9
+2022,2,Ben T,singles,match_status,Ravines GC - White,2,84,82,10,0,3,4,10,1,5,7.9
+2022,2,Dave K,singles,match_status,Ravines GC - White,10,88,78,6,0,3,8,5,2,7,9
+2022,2,Aaron J,singles,match_status,Ravines GC - White,5,79,74,2,0,3,10,5,0,8,10.5
+2022,2,Jim H,singles,match_status,Ravines GC - White,23,95,72,0,2,5,4,5,2,9,10.8
+2022,2,Joe O,singles,match_status,Ravines GC - White,13,87,74,2,0,5,8,4,1,9,11
+2022,2,Kevin J,singles,match_status,Ravines GC - White,5,78,73,1,0,7,4,6,1,9,10.8
+2022,2,Nick S,singles,match_status,Ravines GC - White,4,84,80,8,0,1,8,9,0,5,8.1
+2022,2,Adam P,singles,match_status,Ravines GC - White,6,91,85,13,0,3,5,6,4,5.5,7.4
+2022,2,Paul W,singles,match_status,Ravines GC - White,10,95,85,13,0,3,6,6,3,6,7.9
+2022,2,Pete C,singles,match_status,Ravines GC - White,14,91,77,5,0,4,7,5,2,7.5,9.3
+2022,2,Ryan M,singles,match_status,Ravines GC - White,7,84,77,5,0,3,9,5,1,7.5,9.9
+2022,2,Paul S,singles,match_status,Ravines GC - White,30,122,92,20,0,1,7,4,6,4.5,6.7
+2022,2,Shaun W,singles,match_status,Ravines GC - White,7,89,82,10,0,2,5,10,1,4.5,7.8
+2022,2,Tim C,singles,match_status,Ravines GC - White,9,92,83,11,0,2,9,2,5,6.5,8.5
+2022,2,TJ C,singles,match_status,Ravines GC - White,10,90,80,8,0,5,5,5,3,7.5,9.5
+2022,3,Andy H,2man_tilt,tilt,Ravines GC - White,5,79,74,2,0,4,9,4,1,8.5,10.4
+2022,3,Ben T,2man_tilt,tilt,Ravines GC - White,2,85,83,11,0,0,8,9,1,4,6.8
+2022,3,Dave K,2man_tilt,tilt,Ravines GC - White,10,77,67,-5,0,7,10,0,1,12,12.5
+2022,3,Aaron J,2man_tilt,tilt,Ravines GC - White,5,85,80,8,0,3,7,5,3,6.5,8.2
+2022,3,Jim H,2man_tilt,tilt,Ravines GC - White,23,98,75,3,1,3,8,4,2,8,9.9
+2022,3,Joe O,2man_tilt,tilt,Ravines GC - White,13,85,72,0,1,5,6,5,1,9,10.7
+2022,3,Kevin J,2man_tilt,tilt,Ravines GC - White,5,90,85,13,0,1,7,7,3,4.5,6.7
+2022,3,Nick S,2man_tilt,tilt,Ravines GC - White,4,81,77,5,0,4,6,7,1,7,8.9
+2022,3,Adam P,2man_tilt,tilt,Ravines GC - White,6,89,83,11,0,0,9,7,2,4.5,7.2
+2022,3,Paul W,2man_tilt,tilt,Ravines GC - White,10,91,81,9,1,0,9,5,3,5.5,7.9
+2022,3,Pete C,2man_tilt,tilt,Ravines GC - White,14,89,75,3,0,4,7,7,0,7.5,9.8
+2022,3,Ryan M,2man_tilt,tilt,Ravines GC - White,7,81,74,2,1,3,9,3,2,8.5,10.5
+2022,3,Paul S,2man_tilt,tilt,Ravines GC - White,30,107,77,5,1,5,4,4,4,8,9.2
+2022,3,Shaun W,2man_tilt,tilt,Ravines GC - White,7,92,85,13,0,2,5,7,4,4.5,6.9
+2022,3,Tim C,2man_tilt,tilt,Ravines GC - White,9,83,74,2,0,3,10,5,0,8,10
+2022,3,TJ C,2man_tilt,tilt,Ravines GC - White,10,88,78,6,0,3,7,7,1,6.5,8.3
+2022,4,Andy H,team_best_ball,contribution,American Dunes - Freedom/WH,8,85,77,5,0,2,9,7,0,6.5,9.2
+2022,4,Ben T,team_best_ball,contribution,American Dunes - Freedom/WH,6,82,76,4,1,3,8,3,3,8,9.8
+2022,4,Dave K,team_best_ball,contribution,American Dunes - Freedom/WH,12,90,78,6,0,3,8,5,2,7,8.8
+2022,4,Aaron J,team_best_ball,contribution,American Dunes - Freedom/WH,8,79,71,-1,0,5,10,2,1,10,11.2
+2022,4,Jim H,team_best_ball,contribution,American Dunes - Freedom/WH,26,99,73,1,0,7,4,6,1,9,10.3
+2022,4,Joe O,team_best_ball,contribution,American Dunes - Freedom/WH,15,99,84,12,0,3,5,7,3,5.5,7.7
+2022,4,Kevin J,team_best_ball,contribution,American Dunes - Freedom/WH,8,79,71,-1,1,4,8,5,0,9,10.9
+2022,4,Nick S,team_best_ball,contribution,American Dunes - Freedom/WH,8,94,86,14,0,3,5,6,4,5.5,7.4
+2022,4,Adam P,team_best_ball,contribution,American Dunes - Freedom/WH,9,95,86,14,0,1,7,8,2,4.5,7.2
+2022,4,Paul W,team_best_ball,contribution,American Dunes - Freedom/WH,14,93,79,7,0,3,8,5,2,7,8.8
+2022,4,Pete C,team_best_ball,contribution,American Dunes - Freedom/WH,18,98,80,8,0,5,5,5,3,7.5,8.9
+2022,4,Ryan M,team_best_ball,contribution,American Dunes - Freedom/WH,9,90,81,9,0,3,6,7,2,6,8
+2022,4,Paul S,team_best_ball,contribution,American Dunes - Freedom/WH,34,106,72,0,4,3,3,6,2,8.5,9.9
+2022,4,Shaun W,team_best_ball,contribution,American Dunes - Freedom/WH,10,92,82,10,0,3,8,4,3,7,8.9
+2022,4,Tim C,team_best_ball,contribution,American Dunes - Freedom/WH,11,95,84,12,1,0,8,4,5,5,7.1
+2022,4,TJ C,team_best_ball,contribution,American Dunes - Freedom/WH,13,89,76,4,1,5,5,4,3,8.5,9.8
+2023,1,Andy H,dirty_dozen,dots,Sundance - Blue,6,87,81,9,1,1,6,8,2,5,7.2
+2023,1,Ben T,dirty_dozen,dots,Sundance - Blue,8,87,79,7,0,3,7,6,2,6.5,7.9
+2023,1,Dave K,dirty_dozen,dots,Sundance - Blue,15,91,76,4,0,4,9,2,3,8.5,9.3
+2023,1,Joe E,dirty_dozen,dots,Sundance - Blue,5,88,83,11,0,3,6,6,3,6,7.4
+2023,1,Aaron J,dirty_dozen,dots,Sundance - Blue,7,85,78,6,0,5,6,4,3,8,8.9
+2023,1,Jim H,dirty_dozen,dots,Sundance - Blue,17,97,80,8,0,3,9,4,2,7.5,8.7
+2023,1,Joe O,dirty_dozen,dots,Sundance - Blue,14,91,77,5,0,6,4,5,3,8,9.4
+2023,1,Kevin J,dirty_dozen,dots,Sundance - Blue,8,81,73,1,0,5,7,6,0,8.5,10
+2023,1,Nick S,dirty_dozen,dots,Sundance - Blue,9,85,76,4,1,4,5,6,2,7.5,8.9
+2023,1,Adam P,dirty_dozen,dots,Sundance - Blue,10,89,79,7,1,3,6,4,4,7,8.4
+2023,1,Paul W,dirty_dozen,dots,Sundance - Blue,17,93,76,4,1,5,5,5,2,8.5,9.5
+2023,1,Ryan M,dirty_dozen,dots,Sundance - Blue,9,87,78,6,0,3,8,5,2,7,8.6
+2023,1,Paul S,dirty_dozen,dots,Sundance - Blue,33,114,81,9,0,6,5,3,4,8.5,9.2
+2023,1,Shaun W,dirty_dozen,dots,Sundance - Blue,10,83,73,1,2,4,6,4,2,9,9.7
+2023,1,Tim C,dirty_dozen,dots,Sundance - Blue,11,87,76,4,2,5,3,4,4,8.5,9
+2023,1,TJ C,dirty_dozen,dots,Sundance - Blue,14,81,67,-5,0,7,9,2,0,11.5,11.8
+2023,2,Andy H,singles,match_status,The Wolverine - White,4,89,85,13,0,1,7,7,3,4.5,6.5
+2023,2,Ben T,singles,match_status,The Wolverine - White,6,75,69,-3,1,3,12,2,0,10,11.2
+2023,2,Dave K,singles,match_status,The Wolverine - White,13,91,78,6,1,3,6,5,3,7,8.6
+2023,2,Joe E,singles,match_status,The Wolverine - White,3,84,81,9,0,2,9,4,3,6.5,8.1
+2023,2,Aaron J,singles,match_status,The Wolverine - White,5,79,74,2,1,2,10,4,1,8,9.9
+2023,2,Jim H,singles,match_status,The Wolverine - White,14,94,80,8,0,1,9,7,1,5.5,7.8
+2023,2,Joe O,singles,match_status,The Wolverine - White,12,89,77,5,0,4,7,5,2,7.5,8.4
+2023,2,Kevin J,singles,match_status,The Wolverine - White,6,80,74,2,2,4,5,4,3,8.5,10
+2023,2,Nick S,singles,match_status,The Wolverine - White,7,87,80,8,0,2,9,6,1,6.5,8.1
+2023,2,Adam P,singles,match_status,The Wolverine - White,7,84,77,5,1,3,5,8,1,6.5,8.5
+2023,2,Paul W,singles,match_status,The Wolverine - White,15,89,74,2,0,7,5,3,3,9.5,10
+2023,2,Ryan M,singles,match_status,The Wolverine - White,7,77,70,-2,1,4,10,2,1,10,11
+2023,2,Paul S,singles,match_status,The Wolverine - White,31,109,78,6,5,1,4,2,6,8,8.3
+2023,2,Shaun W,singles,match_status,The Wolverine - White,7,84,77,5,0,6,7,3,2,9.5,10.3
+2023,2,Tim C,singles,match_status,The Wolverine - White,8,84,76,4,0,3,10,3,2,8,9.1
+2023,2,TJ C,singles,match_status,The Wolverine - White,11,91,80,8,0,4,5,7,2,6.5,8.1
+2023,3,Andy H,2man_scramble,match_status,The Wolverine - Blue,3.2,71,67.8,-4.200000000000003,1,4,11,2,0,10.5,8.2
+2023,3,Ben T,2man_scramble,match_status,The Wolverine - Blue,4.5,72,67.5,-4.5,0,7,8,3,0,11,8.9
+2023,3,Dave K,2man_scramble,match_status,The Wolverine - Blue,10.9,73,62.1,-9.899999999999999,1,8,8,1,0,13,10.2
+2023,3,Joe E,2man_scramble,match_status,The Wolverine - Blue,3.2,71,67.8,-4.200000000000003,1,4,11,2,0,10.5,8.2
+2023,3,Aaron J,2man_scramble,match_status,The Wolverine - Blue,4.4,67,62.6,-9.399999999999999,2,6,9,1,0,12.5,10.4
+2023,3,Jim H,2man_scramble,match_status,The Wolverine - Blue,9.1,74,64.9,-7.099999999999994,1,7,8,2,0,12,9.5
+2023,3,Joe O,2man_scramble,match_status,The Wolverine - Blue,6.3,73,66.7,-5.299999999999997,2,3,11,2,0,10.5,8.8
+2023,3,Kevin J,2man_scramble,match_status,The Wolverine - Blue,4.5,72,67.5,-4.5,0,7,8,3,0,11,8.9
+2023,3,Nick S,2man_scramble,match_status,The Wolverine - Blue,5.1,76,70.9,-1.0999999999999943,2,2,9,5,0,8.5,6.9
+2023,3,Adam P,2man_scramble,match_status,The Wolverine - Blue,4.4,67,62.6,-9.399999999999999,2,6,9,1,0,12.5,10.4
+2023,3,Paul W,2man_scramble,match_status,The Wolverine - Blue,9.1,74,64.9,-7.099999999999994,1,7,8,2,0,12,9.5
+2023,3,Ryan M,2man_scramble,match_status,The Wolverine - Blue,5.1,76,70.9,-1.0999999999999943,2,2,9,5,0,8.5,6.9
+2023,3,Paul S,2man_scramble,match_status,The Wolverine - Blue,10.9,73,62.1,-9.899999999999999,1,8,8,1,0,13,10.2
+2023,3,Shaun W,2man_scramble,match_status,The Wolverine - Blue,5.9,71,65.1,-6.900000000000006,2,4,10,2,0,11,9.1
+2023,3,Tim C,2man_scramble,match_status,The Wolverine - Blue,6.3,73,66.7,-5.299999999999997,2,3,11,2,0,10.5,8.8
+2023,3,TJ C,2man_scramble,match_status,The Wolverine - Blue,5.9,71,65.1,-6.900000000000006,2,4,10,2,0,11,9.1
+2023,4,Andy H,team_best_ball,contribution,The Bear - White,6,82,76,4,0,5,6,6,1,8,10.3
+2023,4,Ben T,team_best_ball,contribution,The Bear - White,8,84,76,4,0,4,7,6,1,7.5,9.9
+2023,4,Dave K,team_best_ball,contribution,The Bear - White,16,89,73,1,0,5,8,4,1,9,11.1
+2023,4,Joe E,team_best_ball,contribution,The Bear - White,5,87,82,10,1,0,8,7,2,5,8.1
+2023,4,Aaron J,team_best_ball,contribution,The Bear - White,7,76,69,-3,4,2,7,4,1,9.5,11.5
+2023,4,Jim H,team_best_ball,contribution,The Bear - White,18,99,81,9,0,1,8,8,1,5,8.5
+2023,4,Joe O,team_best_ball,contribution,The Bear - White,15,103,88,16,0,3,5,6,4,5.5,7.6
+2023,4,Kevin J,team_best_ball,contribution,The Bear - White,9,105,96,24,0,3,2,4,9,4,5.5
+2023,4,Nick S,team_best_ball,contribution,The Bear - White,10,89,79,7,0,3,9,4,2,7.5,9.4
+2023,4,Adam P,team_best_ball,contribution,The Bear - White,10,92,82,10,0,4,4,7,3,6,8.2
+2023,4,Paul W,team_best_ball,contribution,The Bear - White,18,94,76,4,2,1,8,5,2,7,9.7
+2023,4,Ryan M,team_best_ball,contribution,The Bear - White,9,89,80,8,0,1,11,4,2,6.5,9.2
+2023,4,Paul S,team_best_ball,contribution,The Bear - White,35,114,79,7,1,5,4,2,6,8,9.3
+2023,4,Shaun W,team_best_ball,contribution,The Bear - White,9,92,83,11,0,3,8,2,5,7,8.8
+2023,4,Tim C,team_best_ball,contribution,The Bear - White,11,91,80,8,0,3,5,9,1,5.5,8.9
+2023,4,TJ C,team_best_ball,contribution,The Bear - White,14,96,82,10,0,1,8,7,2,5,8
 2024,1,Andy H,2man_stableford,stableford,The Loop Red - Middle,6,82,76,6,0,4,8,3,3,8,9.6
 2024,1,Ben T,2man_stableford,stableford,The Loop Red - Middle,7,80,73,3,2,1,8,6,1,7,9.7
-2024,1,Adam P,2man_stableford,stableford,The Loop Red - Middle,10,84,74,4,0,6,5,5,2,8.5,9.8
-2024,1,TJSC,2man_stableford,stableford,The Loop Red - Middle,12,89,77,7,0,5,5,5,3,7.5,8.9
 2024,1,Dave K,2man_stableford,stableford,The Loop Red - Middle,15,88,73,3,1,6,7,0,4,10.5,10.3
-2024,1,Pete C,2man_stableford,stableford,The Loop Red - Middle,18,92,74,4,0,4,8,4,2,8,9.6
-2024,1,Paul S,2man_stableford,stableford,The Loop Red - Middle,28,101,73,3,0,5,8,3,2,9,9.9
 2024,1,Aaron J,2man_stableford,stableford,The Loop Red - Middle,6,82,76,6,0,2,10,4,2,7,9.1
-2024,1,Kevin J,2man_stableford,stableford,The Loop Red - Middle,7,86,79,9,1,4,5,5,3,7.5,8.8
-2024,1,Shaun W,2man_stableford,stableford,The Loop Red - Middle,7,86,79,9,0,4,7,2,5,7.5,8.5
-2024,1,Ryan M,2man_stableford,stableford,The Loop Red - Middle,9,87,78,8,0,4,5,7,2,6.5,8.7
-2024,1,Tim C,2man_stableford,stableford,The Loop Red - Middle,10,89,79,9,0,4,4,7,3,6,8.2
-2024,1,Paul W,2man_stableford,stableford,The Loop Red - Middle,11,86,75,5,0,3,7,8,0,6.5,8.6
-2024,1,Joe O,2man_stableford,stableford,The Loop Red - Middle,11,91,80,10,0,1,8,7,2,5,8
 2024,1,Jim H,2man_stableford,stableford,The Loop Red - Middle,13,97,84,14,0,3,6,4,5,6,6.8
-2024,2,Nick S,singles,match_status,The Nightmare - Blue/White,5,84,79,7,1,2,7,5,3,6.5,8.7
+2024,1,Joe O,2man_stableford,stableford,The Loop Red - Middle,11,91,80,10,0,1,8,7,2,5,8
+2024,1,Kevin J,2man_stableford,stableford,The Loop Red - Middle,7,86,79,9,1,4,5,5,3,7.5,8.8
+2024,1,Nick S,2man_stableford,stableford,The Loop Red - Middle,6,80,74,4,0,3,8,7,0,7,9.6
+2024,1,Adam P,2man_stableford,stableford,The Loop Red - Middle,10,84,74,4,0,6,5,5,2,8.5,9.8
+2024,1,Paul W,2man_stableford,stableford,The Loop Red - Middle,11,86,75,5,0,3,7,8,0,6.5,8.6
+2024,1,Pete C,2man_stableford,stableford,The Loop Red - Middle,18,92,74,4,0,4,8,4,2,8,9.6
+2024,1,Ryan M,2man_stableford,stableford,The Loop Red - Middle,9,87,78,8,0,4,5,7,2,6.5,8.7
+2024,1,Paul S,2man_stableford,stableford,The Loop Red - Middle,28,101,73,3,0,5,8,3,2,9,9.9
+2024,1,Shaun W,2man_stableford,stableford,The Loop Red - Middle,7,86,79,9,0,4,7,2,5,7.5,8.5
+2024,1,Tim C,2man_stableford,stableford,The Loop Red - Middle,10,89,79,9,0,4,4,7,3,6,8.2
+2024,1,TJ C,2man_stableford,stableford,The Loop Red - Middle,12,89,77,7,0,5,5,5,3,7.5,8.9
 2024,2,Andy H,singles,match_status,The Nightmare - Blue/White,5,79,74,2,1,1,11,5,0,7.5,10.5
 2024,2,Ben T,singles,match_status,The Nightmare - Blue/White,6,78,72,0,1,2,12,2,1,9,11.5
-2024,2,Adam P,singles,match_status,The Nightmare - Blue/White,9,95,86,14,0,2,4,9,3,4,7.1
-2024,2,TJSC,singles,match_status,The Nightmare - Blue/White,12,93,81,9,1,3,4,7,3,6,8.5
 2024,2,Dave K,singles,match_status,The Nightmare - Blue/White,15,95,80,8,0,3,7,5,3,6.5,8.6
-2024,2,Pete C,singles,match_status,The Nightmare - Blue/White,18,93,75,3,0,7,5,4,2,9.5,10.8
-2024,2,Paul S,singles,match_status,The Nightmare - Blue/White,29,111,82,10,2,3,4,5,4,7,8.8
 2024,2,Aaron J,singles,match_status,The Nightmare - Blue/White,5,85,80,8,0,4,6,5,3,7,9.1
-2024,2,Kevin J,singles,match_status,The Nightmare - Blue/White,6,86,80,8,1,1,7,7,2,5.5,8.5
-2024,2,Shaun W,singles,match_status,The Nightmare - Blue/White,7,89,82,10,0,3,6,7,2,6,9.1
-2024,2,Ryan M,singles,match_status,The Nightmare - Blue/White,8,91,83,11,0,1,8,6,3,5,7.9
-2024,2,Tim C,singles,match_status,The Nightmare - Blue/White,10,92,82,10,0,2,7,6,3,5.5,8.2
-2024,2,Paul W,singles,match_status,The Nightmare - Blue/White,10,87,77,5,0,4,8,4,2,8,9.6
-2024,2,Joe O,singles,match_status,The Nightmare - Blue/White,11,90,79,7,0,2,8,7,1,6,9.3
 2024,2,Jim H,singles,match_status,The Nightmare - Blue/White,13,95,82,10,0,3,4,9,2,5,7.9
-2024,3,Nick S,2man_scramble,match_status,The Dream - Blue,4.4,66,62,-10,3,5,9,1,0,12.5,11
+2024,2,Joe O,singles,match_status,The Nightmare - Blue/White,11,90,79,7,0,2,8,7,1,6,9.3
+2024,2,Kevin J,singles,match_status,The Nightmare - Blue/White,6,86,80,8,1,1,7,7,2,5.5,8.5
+2024,2,Nick S,singles,match_status,The Nightmare - Blue/White,5,84,79,7,1,2,7,5,3,6.5,8.7
+2024,2,Adam P,singles,match_status,The Nightmare - Blue/White,9,95,86,14,0,2,4,9,3,4,7.1
+2024,2,Paul W,singles,match_status,The Nightmare - Blue/White,10,87,77,5,0,4,8,4,2,8,9.6
+2024,2,Pete C,singles,match_status,The Nightmare - Blue/White,18,93,75,3,0,7,5,4,2,9.5,10.8
+2024,2,Ryan M,singles,match_status,The Nightmare - Blue/White,8,91,83,11,0,1,8,6,3,5,7.9
+2024,2,Paul S,singles,match_status,The Nightmare - Blue/White,29,111,82,10,2,3,4,5,4,7,8.8
+2024,2,Shaun W,singles,match_status,The Nightmare - Blue/White,7,89,82,10,0,3,6,7,2,6,9.1
+2024,2,Tim C,singles,match_status,The Nightmare - Blue/White,10,92,82,10,0,2,7,6,3,5.5,8.2
+2024,2,TJ C,singles,match_status,The Nightmare - Blue/White,12,93,81,9,1,3,4,7,3,6,8.5
 2024,3,Andy H,2man_scramble,match_status,The Dream - Blue,5.4,75,70,-2,1,5,7,5,0,9.5,7.5
 2024,3,Ben T,2man_scramble,match_status,The Dream - Blue,4.3,68,64,-8,0,9,8,1,0,13,10.3
-2024,3,Adam P,2man_scramble,match_status,The Dream - Blue,4.3,68,64,-8,0,9,8,1,0,13,10.3
-2024,3,TJSC,2man_scramble,match_status,The Dream - Blue,4.4,66,62,-10,3,5,9,1,0,12.5,11
 2024,3,Dave K,2man_scramble,match_status,The Dream - Blue,10.3,82,72,0,1,6,5,5,1,9.5,7.5
-2024,3,Pete C,2man_scramble,match_status,The Dream - Blue,5.4,75,70,-2,1,5,7,5,0,9.5,7.5
-2024,3,Paul S,2man_scramble,match_status,The Dream - Blue,10.3,82,72,0,1,6,5,5,1,9.5,7.5
 2024,3,Aaron J,2man_scramble,match_status,The Dream - Blue,4.3,76,72,0,0,7,5,5,1,9.5,7.3
-2024,3,Kevin J,2man_scramble,match_status,The Dream - Blue,4.4,70,66,-6,1,5,11,1,0,11.5,9.4
-2024,3,Shaun W,2man_scramble,match_status,The Dream - Blue,4.8,68,63,-9,2,5,10,1,0,12,10.1
-2024,3,Ryan M,2man_scramble,match_status,The Dream - Blue,5.7,72,66,-6,1,5,10,2,0,11,8.8
-2024,3,Tim C,2man_scramble,match_status,The Dream - Blue,4.4,70,66,-6,1,5,11,1,0,11.5,9.4
-2024,3,Paul W,2man_scramble,match_status,The Dream - Blue,4.3,76,72,0,0,7,5,5,1,9.5,7.3
-2024,3,Joe O,2man_scramble,match_status,The Dream - Blue,4.8,68,63,-9,2,5,10,1,0,12,10.1
 2024,3,Jim H,2man_scramble,match_status,The Dream - Blue,5.7,72,66,-6,1,5,10,2,0,11,8.8
-2024,4,Nick S,team_best_ball,contribution,Forest Dunes - ii/iii,8,84,76,4,2,4,4,5,3,8,10.6
+2024,3,Joe O,2man_scramble,match_status,The Dream - Blue,4.8,68,63,-9,2,5,10,1,0,12,10.1
+2024,3,Kevin J,2man_scramble,match_status,The Dream - Blue,4.4,70,66,-6,1,5,11,1,0,11.5,9.4
+2024,3,Nick S,2man_scramble,match_status,The Dream - Blue,4.4,66,62,-10,3,5,9,1,0,12.5,11
+2024,3,Adam P,2man_scramble,match_status,The Dream - Blue,4.3,68,64,-8,0,9,8,1,0,13,10.3
+2024,3,Paul W,2man_scramble,match_status,The Dream - Blue,4.3,76,72,0,0,7,5,5,1,9.5,7.3
+2024,3,Pete C,2man_scramble,match_status,The Dream - Blue,5.4,75,70,-2,1,5,7,5,0,9.5,7.5
+2024,3,Ryan M,2man_scramble,match_status,The Dream - Blue,5.7,72,66,-6,1,5,10,2,0,11,8.8
+2024,3,Paul S,2man_scramble,match_status,The Dream - Blue,10.3,82,72,0,1,6,5,5,1,9.5,7.5
+2024,3,Shaun W,2man_scramble,match_status,The Dream - Blue,4.8,68,63,-9,2,5,10,1,0,12,10.1
+2024,3,Tim C,2man_scramble,match_status,The Dream - Blue,4.4,70,66,-6,1,5,11,1,0,11.5,9.4
+2024,3,TJ C,2man_scramble,match_status,The Dream - Blue,4.4,66,62,-10,3,5,9,1,0,12.5,11
 2024,4,Andy H,team_best_ball,contribution,Forest Dunes - ii/iii,8,87,79,7,0,5,7,3,3,8.5,9.4
 2024,4,Ben T,team_best_ball,contribution,Forest Dunes - ii/iii,8,91,83,11,0,2,7,6,3,5.5,8
-2024,4,Adam P,team_best_ball,contribution,Forest Dunes - ii/iii,13,98,85,13,0,2,6,7,3,5,8
-2024,4,TJSC,team_best_ball,contribution,Forest Dunes - ii/iii,16,88,72,0,0,4,10,4,0,9,10.3
 2024,4,Dave K,team_best_ball,contribution,Forest Dunes - ii/iii,18,103,85,13,0,2,7,4,5,5.5,7.6
-2024,4,Pete C,team_best_ball,contribution,Forest Dunes - ii/iii,22,101,79,7,0,5,5,5,3,7.5,9.5
-2024,4,Paul S,team_best_ball,contribution,Forest Dunes - ii/iii,35,109,74,2,1,7,4,2,4,10,10.3
 2024,4,Aaron J,team_best_ball,contribution,Forest Dunes - ii/iii,8,86,78,6,0,5,6,4,3,8,9.9
-2024,4,Kevin J,team_best_ball,contribution,Forest Dunes - ii/iii,9,92,83,11,0,3,6,5,4,6,8.1
-2024,4,Shaun W,team_best_ball,contribution,Forest Dunes - ii/iii,10,91,81,9,0,5,2,9,2,6,8.6
-2024,4,Ryan M,team_best_ball,contribution,Forest Dunes - ii/iii,11,91,80,8,1,3,5,7,2,6.5,9.1
-2024,4,Tim C,team_best_ball,contribution,Forest Dunes - ii/iii,14,89,75,3,0,3,9,6,0,7.5,9.4
-2024,4,Paul W,team_best_ball,contribution,Forest Dunes - ii/iii,14,104,90,18,0,1,6,6,5,4,6.4
-2024,4,Joe O,team_best_ball,contribution,Forest Dunes - ii/iii,14,94,80,8,0,4,7,5,2,7.5,9.1
 2024,4,Jim H,team_best_ball,contribution,Forest Dunes - ii/iii,17,94,77,5,0,4,8,4,2,8,9.5
-2025,1,Aaron J,double_dot,dots,Kaufman - White,7,79,72,0,1,4,8,4,1,9,10
+2024,4,Joe O,team_best_ball,contribution,Forest Dunes - ii/iii,14,94,80,8,0,4,7,5,2,7.5,9.1
+2024,4,Kevin J,team_best_ball,contribution,Forest Dunes - ii/iii,9,92,83,11,0,3,6,5,4,6,8.1
+2024,4,Nick S,team_best_ball,contribution,Forest Dunes - ii/iii,8,84,76,4,2,4,4,5,3,8,10.6
+2024,4,Adam P,team_best_ball,contribution,Forest Dunes - ii/iii,13,98,85,13,0,2,6,7,3,5,8
+2024,4,Paul W,team_best_ball,contribution,Forest Dunes - ii/iii,14,104,90,18,0,1,6,6,5,4,6.4
+2024,4,Pete C,team_best_ball,contribution,Forest Dunes - ii/iii,22,101,79,7,0,5,5,5,3,7.5,9.5
+2024,4,Ryan M,team_best_ball,contribution,Forest Dunes - ii/iii,11,91,80,8,1,3,5,7,2,6.5,9.1
+2024,4,Paul S,team_best_ball,contribution,Forest Dunes - ii/iii,35,109,74,2,1,7,4,2,4,10,10.3
+2024,4,Shaun W,team_best_ball,contribution,Forest Dunes - ii/iii,10,91,81,9,0,5,2,9,2,6,8.6
+2024,4,Tim C,team_best_ball,contribution,Forest Dunes - ii/iii,14,89,75,3,0,3,9,6,0,7.5,9.4
+2024,4,TJ C,team_best_ball,contribution,Forest Dunes - ii/iii,16,88,72,0,0,4,10,4,0,9,10.3
 2025,1,Andy H,double_dot,dots,Kaufman - White,8,84,76,4,1,3,7,6,1,7.5,8.7
-2025,1,Kevin J,double_dot,dots,Kaufman - White,8,86,78,6,0,3,8,5,2,7,8.1
-2025,1,Ryan M,double_dot,dots,Kaufman - White,9,89,80,8,0,3,5,9,1,5.5,7.1
-2025,1,Shaun W,double_dot,dots,Kaufman - White,10,84,74,2,0,6,5,6,1,8.5,9.2
-2025,1,TJSC,double_dot,dots,Kaufman - White,13,93,80,8,0,2,11,3,2,7.5,7.9
-2025,1,Jim H,double_dot,dots,Kaufman - White,21,95,74,2,0,4,10,2,2,9,9.4
-2025,1,Pete C,double_dot,dots,Kaufman - White,21,100,79,7,1,3,5,6,3,6.5,7.2
 2025,1,Ben T,double_dot,dots,Kaufman - White,7,78,71,-1,0,6,7,5,0,9.5,10.2
+2025,1,Dave K,double_dot,dots,Kaufman - White,18,91,73,1,0,5,8,4,1,9,9.6
+2025,1,Aaron J,double_dot,dots,Kaufman - White,7,79,72,0,1,4,8,4,1,9,10
+2025,1,Jim H,double_dot,dots,Kaufman - White,21,95,74,2,0,4,10,2,2,9,9.4
+2025,1,Joe O,double_dot,dots,Kaufman - White,13,94,81,9,0,3,6,6,3,6,7.3
+2025,1,Kevin J,double_dot,dots,Kaufman - White,8,86,78,6,0,3,8,5,2,7,8.1
 2025,1,Nick S,double_dot,dots,Kaufman - White,10,85,75,3,0,4,9,3,2,8.5,9
 2025,1,Adam P,double_dot,dots,Kaufman - White,11,83,72,0,0,6,7,4,1,9.5,10
-2025,1,Joe O,double_dot,dots,Kaufman - White,13,94,81,9,0,3,6,6,3,6,7.3
-2025,1,Tim C,double_dot,dots,Kaufman - White,13,102,89,17,0,4,3,8,3,5.5,6.3
 2025,1,Paul W,double_dot,dots,Kaufman - White,16,86,70,-2,1,5,7,5,0,9.5,10.4
-2025,1,Dave K,double_dot,dots,Kaufman - White,18,91,73,1,0,5,8,4,1,9,9.6
+2025,1,Pete C,double_dot,dots,Kaufman - White,21,100,79,7,1,3,5,6,3,6.5,7.2
+2025,1,Ryan M,double_dot,dots,Kaufman - White,9,89,80,8,0,3,5,9,1,5.5,7.1
 2025,1,Paul S,double_dot,dots,Kaufman - White,31,93,62,-10,0,11,6,1,0,14,13.6
-2025,2,Aaron J,singles,match_status,Quail Ridge - White,6,83,77,5,2,3,5,4,4,7.5,8.8
+2025,1,Shaun W,double_dot,dots,Kaufman - White,10,84,74,2,0,6,5,6,1,8.5,9.2
+2025,1,Tim C,double_dot,dots,Kaufman - White,13,102,89,17,0,4,3,8,3,5.5,6.3
+2025,1,TJ C,double_dot,dots,Kaufman - White,13,93,80,8,0,2,11,3,2,7.5,7.9
 2025,2,Andy H,singles,match_status,Quail Ridge - White,7,76,69,-3,1,6,7,3,1,10.5,11.8
-2025,2,Kevin J,singles,match_status,Quail Ridge - White,7,85,78,6,0,5,4,8,1,7,8.8
-2025,2,Ryan M,singles,match_status,Quail Ridge - White,8,96,88,16,0,0,6,8,4,3,6.1
-2025,2,Shaun W,singles,match_status,Quail Ridge - White,9,87,78,6,0,6,6,2,4,9,9.6
-2025,2,TJSC,singles,match_status,Quail Ridge - White,11,86,75,3,0,6,6,4,2,9,10.2
-2025,2,Jim H,singles,match_status,Quail Ridge - White,19,103,84,12,0,3,6,5,4,6,7.4
-2025,2,Pete C,singles,match_status,Quail Ridge - White,19,97,78,6,1,1,10,3,3,7,8.5
 2025,2,Ben T,singles,match_status,Quail Ridge - White,6,80,74,2,1,3,8,5,1,8,10.1
+2025,2,Dave K,singles,match_status,Quail Ridge - White,17,89,72,0,1,6,5,4,2,9.5,10.9
+2025,2,Aaron J,singles,match_status,Quail Ridge - White,6,83,77,5,2,3,5,4,4,7.5,8.8
+2025,2,Jim H,singles,match_status,Quail Ridge - White,19,103,84,12,0,3,6,5,4,6,7.4
+2025,2,Joe O,singles,match_status,Quail Ridge - White,11,96,85,13,0,2,5,8,3,4.5,6.4
+2025,2,Kevin J,singles,match_status,Quail Ridge - White,7,85,78,6,0,5,4,8,1,7,8.8
 2025,2,Nick S,singles,match_status,Quail Ridge - White,9,86,77,5,0,4,7,5,2,7.5,8.8
 2025,2,Adam P,singles,match_status,Quail Ridge - White,10,87,77,5,0,2,10,5,1,7,9.2
-2025,2,Joe O,singles,match_status,Quail Ridge - White,11,96,85,13,0,2,5,8,3,4.5,6.4
-2025,2,Tim C,singles,match_status,Quail Ridge - White,12,89,77,5,0,4,7,5,2,7.5,9.3
 2025,2,Paul W,singles,match_status,Quail Ridge - White,14,91,77,5,0,2,10,5,1,7,9.3
-2025,2,Dave K,singles,match_status,Quail Ridge - White,17,89,72,0,1,6,5,4,2,9.5,10.9
+2025,2,Pete C,singles,match_status,Quail Ridge - White,19,97,78,6,1,1,10,3,3,7,8.5
+2025,2,Ryan M,singles,match_status,Quail Ridge - White,8,96,88,16,0,0,6,8,4,3,6.1
 2025,2,Paul S,singles,match_status,Quail Ridge - White,27,109,82,10,0,3,7,6,2,6.5,8.6
-2025,3,Aaron J,2man_scramble,match_status,Quail Ridge - Blue,6.2,72,66,-6,1,7,7,3,0,11.5,9
+2025,2,Shaun W,singles,match_status,Quail Ridge - White,9,87,78,6,0,6,6,2,4,9,9.6
+2025,2,Tim C,singles,match_status,Quail Ridge - White,12,89,77,5,0,4,7,5,2,7.5,9.3
+2025,2,TJ C,singles,match_status,Quail Ridge - White,11,86,75,3,0,6,6,4,2,9,10.2
 2025,3,Andy H,2man_scramble,match_status,Quail Ridge - Blue,4.8,68,63,-9,2,7,6,3,0,12,9.9
-2025,3,Kevin J,2man_scramble,match_status,Quail Ridge - Blue,5.3,74,69,-3,1,4,10,3,0,10,7.7
-2025,3,Ryan M,2man_scramble,match_status,Quail Ridge - Blue,4.8,68,63,-9,2,7,6,3,0,12,9.9
-2025,3,Shaun W,2man_scramble,match_status,Quail Ridge - Blue,7.2,75,68,-4,1,5,9,3,0,10.5,8.1
-2025,3,TJSC,2man_scramble,match_status,Quail Ridge - Blue,5.3,74,69,-3,1,4,10,3,0,10,7.7
-2025,3,Jim H,2man_scramble,match_status,Quail Ridge - Blue,7.2,75,68,-4,1,5,9,3,0,10.5,8.1
-2025,3,Pete C,2man_scramble,match_status,Quail Ridge - Blue,6.2,72,66,-6,1,7,7,3,0,11.5,9
 2025,3,Ben T,2man_scramble,match_status,Quail Ridge - Blue,4.5,66,62,-10,3,6,7,2,0,12.5,11.1
+2025,3,Dave K,2man_scramble,match_status,Quail Ridge - Blue,11.5,76,65,-7,1,7,8,2,0,12,9.5
+2025,3,Aaron J,2man_scramble,match_status,Quail Ridge - Blue,6.2,72,66,-6,1,7,7,3,0,11.5,9
+2025,3,Jim H,2man_scramble,match_status,Quail Ridge - Blue,7.2,75,68,-4,1,5,9,3,0,10.5,8.1
+2025,3,Joe O,2man_scramble,match_status,Quail Ridge - Blue,7.4,76,69,-3,1,7,4,6,0,10,7.9
+2025,3,Kevin J,2man_scramble,match_status,Quail Ridge - Blue,5.3,74,69,-3,1,4,10,3,0,10,7.7
 2025,3,Nick S,2man_scramble,match_status,Quail Ridge - Blue,4.5,66,62,-10,3,6,7,2,0,12.5,11.1
 2025,3,Adam P,2man_scramble,match_status,Quail Ridge - Blue,6.5,73,67,-5,1,5,10,2,0,11,8.7
-2025,3,Joe O,2man_scramble,match_status,Quail Ridge - Blue,7.4,76,69,-3,1,7,4,6,0,10,7.9
-2025,3,Tim C,2man_scramble,match_status,Quail Ridge - Blue,6.5,73,67,-5,1,5,10,2,0,11,8.7
 2025,3,Paul W,2man_scramble,match_status,Quail Ridge - Blue,7.4,76,69,-3,1,7,4,6,0,10,7.9
-2025,3,Dave K,2man_scramble,match_status,Quail Ridge - Blue,11.5,76,65,-7,1,7,8,2,0,12,9.5
+2025,3,Pete C,2man_scramble,match_status,Quail Ridge - Blue,6.2,72,66,-6,1,7,7,3,0,11.5,9
+2025,3,Ryan M,2man_scramble,match_status,Quail Ridge - Blue,4.8,68,63,-9,2,7,6,3,0,12,9.9
 2025,3,Paul S,2man_scramble,match_status,Quail Ridge - Blue,11.5,76,65,-7,1,7,8,2,0,12,9.5
-2025,4,Aaron J,team_best_ball,contribution,Thornapple Pointe - White,8,81,73,1,0,7,5,5,1,9.5,10.4
+2025,3,Shaun W,2man_scramble,match_status,Quail Ridge - Blue,7.2,75,68,-4,1,5,9,3,0,10.5,8.1
+2025,3,Tim C,2man_scramble,match_status,Quail Ridge - Blue,6.5,73,67,-5,1,5,10,2,0,11,8.7
+2025,3,TJ C,2man_scramble,match_status,Quail Ridge - Blue,5.3,74,69,-3,1,4,10,3,0,10,7.7
 2025,4,Andy H,team_best_ball,contribution,Thornapple Pointe - White,9,85,76,4,1,4,7,3,3,8.5,9.1
-2025,4,Kevin J,team_best_ball,contribution,Thornapple Pointe - White,9,80,71,-1,1,5,6,6,0,9,10.6
-2025,4,Ryan M,team_best_ball,contribution,Thornapple Pointe - White,11,81,70,-2,1,6,7,2,2,10.5,11
-2025,4,Shaun W,team_best_ball,contribution,Thornapple Pointe - White,11,93,82,10,0,6,2,8,2,7,8.5
-2025,4,TJSC,team_best_ball,contribution,Thornapple Pointe - White,14,90,76,4,0,7,3,6,2,8.5,9.3
-2025,4,Jim H,team_best_ball,contribution,Thornapple Pointe - White,23,94,71,-1,2,2,9,5,0,8.5,10.3
-2025,4,Pete C,team_best_ball,contribution,Thornapple Pointe - White,23,117,94,22,0,2,3,4,9,3.5,5.3
 2025,4,Ben T,team_best_ball,contribution,Thornapple Pointe - White,8,86,78,6,0,5,4,7,2,7,8.6
+2025,4,Dave K,team_best_ball,contribution,Thornapple Pointe - White,20,97,77,5,0,5,6,5,2,8,9.4
+2025,4,Aaron J,team_best_ball,contribution,Thornapple Pointe - White,8,81,73,1,0,7,5,5,1,9.5,10.4
+2025,4,Jim H,team_best_ball,contribution,Thornapple Pointe - White,23,94,71,-1,2,2,9,5,0,8.5,10.3
+2025,4,Joe O,team_best_ball,contribution,Thornapple Pointe - White,14,99,85,13,0,1,8,5,4,5,7
+2025,4,Kevin J,team_best_ball,contribution,Thornapple Pointe - White,9,80,71,-1,1,5,6,6,0,9,10.6
 2025,4,Nick S,team_best_ball,contribution,Thornapple Pointe - White,12,94,82,10,1,4,4,5,4,7,8.2
 2025,4,Adam P,team_best_ball,contribution,Thornapple Pointe - White,13,89,76,4,1,5,4,6,2,8,9
-2025,4,Joe O,team_best_ball,contribution,Thornapple Pointe - White,14,99,85,13,0,1,8,5,4,5,7
-2025,4,Tim C,team_best_ball,contribution,Thornapple Pointe - White,15,87,72,0,0,6,8,2,2,10,10.2
 2025,4,Paul W,team_best_ball,contribution,Thornapple Pointe - White,17,93,76,4,0,3,11,2,2,8.5,9.5
-2025,4,Dave K,team_best_ball,contribution,Thornapple Pointe - White,20,97,77,5,0,5,6,5,2,8,9.4
+2025,4,Pete C,team_best_ball,contribution,Thornapple Pointe - White,23,117,94,22,0,2,3,4,9,3.5,5.3
+2025,4,Ryan M,team_best_ball,contribution,Thornapple Pointe - White,11,81,70,-2,1,6,7,2,2,10.5,11
 2025,4,Paul S,team_best_ball,contribution,Thornapple Pointe - White,31,116,85,13,0,1,8,6,3,5,7.6
+2025,4,Shaun W,team_best_ball,contribution,Thornapple Pointe - White,11,93,82,10,0,6,2,8,2,7,8.5
+2025,4,Tim C,team_best_ball,contribution,Thornapple Pointe - White,15,87,72,0,0,6,8,2,2,10,10.2
+2025,4,TJ C,team_best_ball,contribution,Thornapple Pointe - White,14,90,76,4,0,7,3,6,2,8.5,9.3

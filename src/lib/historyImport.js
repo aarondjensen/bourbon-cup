@@ -63,6 +63,14 @@ export const editionDocId = (bareId, tid) => `${tid}__${bareId}`;
 
 export const editionIdForYear = (year) => `bc_${Number(year)}`;
 
+// Stamped on EVERY document this import writes. Two jobs: it tells a director
+// looking at 2019 in the console that the year was imported rather than
+// played in the app, and it is what the import prunes by — a re-run deletes
+// the documents IT wrote that the new build no longer contains, which is how
+// a changed id (Telly turning out to be Ben T) cleans up after itself instead
+// of leaving a second roster behind.
+export const SOURCE = "data/historical sheets";
+
 // A roster id for one golfer in one year. Year-scoped because the roster row
 // IS the player document in this app — its id is the `player_id` that hole
 // scores and matches point at — so one document cannot be shared by two
@@ -160,7 +168,7 @@ export const editionDocFor = ({ year, name }) => ({
   created_from: null,
   // Provenance, so a director looking at 2019 in the Firebase console can tell
   // an imported year from one that was played in the app.
-  imported_from: "data/historical sheets",
+  imported_from: SOURCE,
 });
 
 // bc_settings/team_names — the two team names, which changed every year and
@@ -170,6 +178,7 @@ export const teamNamesDocFor = ({ year, teams }) => ({
   tournament_id: editionIdForYear(year),
   teamA: String(teams?.A ?? "").trim() || "Team A",
   teamB: String(teams?.B ?? "").trim() || "Team B",
+  imported_from: SOURCE,
 });
 
 // bc_settings/tournament — the name and location on the header.
@@ -178,6 +187,7 @@ export const tournamentDocFor = ({ year, name }) => ({
   tournament_id: editionIdForYear(year),
   name: String(name ?? "").trim() || `The Bourbon Cup ${year}`,
   location: "",
+  imported_from: SOURCE,
 });
 
 // bc_players — one roster row per golfer per year.
@@ -204,7 +214,7 @@ export const playerDocFor = ({ year, id, name, first, last, team, index, borrowe
     // tournament has no account behind it and never will have had one, and a
     // missing field reads as "not written yet" to the claim screen.
     auth_uid: null,
-    imported_from: "data/historical sheets",
+    imported_from: SOURCE,
   };
 };
 
@@ -223,7 +233,7 @@ export const courseDocFor = ({ year, round, course }) => {
     hole_pars: (course?.hole_pars || []).map((p) => Number(p) || 4),
     hole_handicaps: (course?.hole_handicaps || []).map((h) => Number(h) || 0),
     tee_boxes: [{ name: HISTORY_TEE, color: "#8b6b3d", rating, slope, par, yardage: 0 }],
-    imported_from: "data/historical sheets",
+    imported_from: SOURCE,
   };
 };
 
@@ -264,7 +274,7 @@ export const roundDocFor = ({ year, round }) => {
     // counterpart in the catalog still says what was really played — Dirty
     // Dozen scored as Double Dot, 8-Man Top 4 Net as Team Best Ball.
     source_format: round.source_format,
-    imported_from: "data/historical sheets",
+    imported_from: SOURCE,
   };
   return doc;
 };
@@ -284,7 +294,7 @@ export const matchDocFor = ({ year, match, nameOf }) => {
     teamB: B,
     teamANames: match.teamA.map(nameOf),
     teamBNames: match.teamB.map(nameOf),
-    imported_from: "data/historical sheets",
+    imported_from: SOURCE,
   };
 };
 
@@ -302,6 +312,7 @@ export const holeDocFor = ({ year, round, playerId, hole, gross, courseName }) =
     hole_number: Number(hole),
     score: Number(gross),
     course_id: historyCourseId(year, round, courseName),
+    imported_from: SOURCE,
   };
 };
 
@@ -365,7 +376,7 @@ export const roundLockDocFor = ({ year, round, players, ch, course }) => {
     hole_pars: (round.course?.hole_pars || []).map((p) => Number(p) || 4),
     hole_handicaps: (round.course?.hole_handicaps || []).map((h) => Number(h) || 0),
     players: snapshot,
-    imported_from: "data/historical sheets",
+    imported_from: SOURCE,
   };
 };
 
