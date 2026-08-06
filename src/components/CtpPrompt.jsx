@@ -38,6 +38,13 @@
 //  tag stands the question narrows to whether they beat it, and the
 //  button becomes the confirmation above.
 //
+//  One more thing the bar has to say, and only when it is certainly
+//  true: that the tag in front of the group came from BEHIND them. A
+//  group that walks off to make its tee time and puts the hole in later
+//  is otherwise shown a number that did not exist when they were on the
+//  green, reading as the group ahead — and the tie rule quietly runs
+//  backwards. lib/ctp decides when that is knowable.
+//
 //  Player-entered tags are provisional (`approved: false` on the
 //  record); the director's Betting → CTP grid is the approval step, and
 //  an approved hole stops prompting. Nothing here decides who wins —
@@ -60,7 +67,7 @@ const MAX_FT = 60;
 
 const clampFeet = (ft) => Math.max(1, Math.min(MAX_FT, Math.round(ft) || 0)) || 10;
 
-export function CtpPrompt({ holeNumber, players, teams, leader, leaderName, onSave, onPass, onClose }) {
+export function CtpPrompt({ holeNumber, players, teams, leader, leaderName, outOfOrder, onSave, onPass, onClose }) {
   const [pid, setPid] = useState("");
   // null means UNANSWERED — see the wheel below. Not 10, which is an
   // answer, and not the standing distance, which is somebody else's.
@@ -152,20 +159,40 @@ export function CtpPrompt({ holeNumber, players, teams, leader, leaderName, onSa
         {/* Standing tag — the number to beat, from an earlier group. */}
         {hasLeader && (
           <div style={{
-            display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
+            marginBottom: 12,
             background: BC.warn + ALPHA.wash, border: `1px solid ${BC.warn}${ALPHA.line}`,
-            borderRadius: 10, padding: "8px 10px",
+            borderRadius: 10,
           }}>
-            <span style={{ fontSize: FS.body }}>⛳</span>
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: "block", fontSize: FS.micro, fontWeight: 800, color: BC.warn, letterSpacing: 1.2 }}>
-                {leader.approved ? "CTP — Final" : "Current CTP"}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px" }}>
+              <span style={{ fontSize: FS.body }}>⛳</span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontSize: FS.micro, fontWeight: 800, color: BC.warn, letterSpacing: 1.2 }}>
+                  {leader.approved ? "CTP — Final" : "Current CTP"}
+                </span>
+                <span style={{ display: "block", fontSize: FS.small, fontWeight: 700, color: BC.t1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {leaderName || "—"}
+                </span>
               </span>
-              <span style={{ display: "block", fontSize: FS.small, fontWeight: 700, color: BC.t1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {leaderName || "—"}
-              </span>
-            </span>
-            {leaderDist && <span style={{ fontSize: FS.small, fontWeight: 800, color: BC.warn, flexShrink: 0 }}>{leaderDist}</span>}
+              {leaderDist && <span style={{ fontSize: FS.small, fontWeight: 800, color: BC.warn, flexShrink: 0 }}>{leaderDist}</span>}
+            </div>
+            {/* Tagged out of order — the group BEHIND us got in first. Inside
+                this bar rather than above it, because it is not a second
+                thing to read: it is what this number IS. A group that walked
+                off to make its tee time is being shown a tag from players who
+                were still waiting to hit, and left to itself the bar reads as
+                the group ahead of them. Two stacked boxes also read as one
+                wall of shouting on a phone in sunlight — the app's face is
+                all caps — so the copy stays short and there is only ever one
+                box. See lib/ctp for when this is allowed to appear. */}
+            {outOfOrder && (
+              <div style={{ borderTop: `1px solid ${BC.warn}${ALPHA.hair}`, padding: "7px 10px 8px", display: "flex", gap: 6 }}>
+                <span style={{ fontSize: FS.label }}>⏱</span>
+                <span style={{ fontSize: FS.label, color: BC.t2, lineHeight: 1.45, minWidth: 0 }}>
+                  <span style={{ fontWeight: 800, color: BC.warn }}>{outOfOrder.label} tagged this after you finished.</span>
+                  {" "}Tag it if you were closer — a tie stays theirs.
+                </span>
+              </div>
+            )}
           </div>
         )}
 
