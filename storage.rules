@@ -1,0 +1,92 @@
+rules_version = '2';
+
+// ══════════════════════════════════════════════════════════════════
+//  Cloud Storage security rules — The Bourbon Cup
+// ══════════════════════════════════════════════════════════════════
+//
+// This bucket holds one thing: photos posted from the app, keyed by edition.
+// The years that were photographed before this existed live on the
+// tournament's own site (see src/constants.js PHOTO_LIBRARY_URL), not here.
+//
+// ── Read this before widening anything ────────────────────────────
+// These rules CANNOT do what firestore.rules does, and the difference is not
+// an oversight.
+//
+// Every write in firestore.rules requires MEMBERSHIP: a bc_accounts/{uid}
+// document, obtained by presenting the tournament password. That check is an
+// `exists()` against Firestore. Storage rules have no equivalent — there is no
+// way to read Firestore, or anything else, from this file. The only facts
+// available here are the caller's auth token and the properties of the object
+// being written.
+//
+// So the strongest gate this bucket can have is: signed in, small, an image.
+// A stranger with a Google account and the app's public config — which ships
+// in the bundle by design — can write objects here. What they CANNOT do is
+// make one appear in the app: a photo exists in the Bourbon Cup because a
+// bc_media document points at it, and creating that document requires
+// membership. An unreferenced object is invisible, capped at 2MB, and
+// removable by a director emptying the bucket.
+//
+// That is the accepted trade for a sixteen-person tournament. If it ever needs
+// to be closed properly, the fix is not a cleverer rule here — it is routing
+// uploads through a Cloud Function that checks membership and hands back a
+// signed URL, at the cost of an invocation per photo.
+//
+// ── The size cap is the cost control ──────────────────────────────
+// 2MB is generous for what the client actually sends. src/lib/mediaUpload.js
+// downscales every photo to a 1600px WebP (~250KB) and a 400px thumbnail
+// (~25KB) before uploading, so a legitimate write is a tenth of the cap. The
+// cap exists to bound what an unauthenticated-in-spirit writer can cost, not
+// to constrain the app.
+//
+// Deploy: `firebase deploy --only storage` from the repo root. Until that
+// runs, every upload fails — the default rules on a new bucket deny the app
+// as thoroughly as they deny anybody else.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // What the client is downscaled to. Kept as one place so the cap and the
+    // comment above it cannot drift apart.
+    function withinSize() {
+      return request.resource.size < 2 * 1024 * 1024;
+    }
+
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // ── An edition's photos ───────────────────────────────────────
+    // Keyed by tournament id — editions/bc_2026/{id}.webp and {id}_thumb.webp
+    // — so clearing a year out is a prefix delete rather than a query, and a
+    // year that has been graduated to the public site can be emptied without
+    // touching the one being played.
+    //
+    // Read is open. The URLs are unguessable download URLs handed out by the
+    // SDK, and the gallery that shows them is open to anybody with the link,
+    // the same as the leaderboard.
+    match /editions/{edition}/{file} {
+      allow read: if true;
+      allow create: if isSignedIn() && withinSize() && isImage();
+      // No update: a photo id is generated per upload and bytes are never
+      // rewritten in place, which is also what makes the year-long immutable
+      // Cache-Control header on them safe.
+      allow update: if false;
+      // Deleting bytes is paired with deleting the bc_media document, and
+      // that document is what firestore.rules actually guards. A signed-in
+      // caller can only delete here; they cannot make the photo disappear
+      // from the app without also passing the membership check over there.
+      allow delete: if isSignedIn();
+    }
+
+    // ── Everything else ───────────────────────────────────────────
+    // Default deny. Adding a prefix to the app means adding it here.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

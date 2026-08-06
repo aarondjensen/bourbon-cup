@@ -47,6 +47,11 @@ export const oppTeam = (tid) => tid === "A" ? TEAM_B : TEAM_A;
 export const TOURNAMENT_TITLE = "The Bourbon Cup";
 export const TOURNAMENT_LOCATION = "Gaylord, MI";
 
+// The tournament's own photo site — every year that was photographed before
+// the app had a gallery of its own. The Photos tab links out to it rather than
+// trying to be it; see src/components/PhotosView.jsx.
+export const PHOTO_LIBRARY_URL = "https://thebourboncup.com/photos";
+
 // ── Points to win the cup ──
 // Normally null: the leaderboard works the target out from the schedule —
 // each round's format gives a match count against the roster, each round's

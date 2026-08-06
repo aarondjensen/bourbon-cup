@@ -233,6 +233,70 @@ await check("a non-member cannot set the password", () => {
   return assertFails(setDoc(doc(bob, "bc_secrets/access"), { code: "mine" }));
 });
 
+// ── The photo library ───────────────────────────────────────────────
+// alice is the director, pete and mallory ordinary members. See the
+// bc_media block in firestore.rules for why each of these is the rule.
+const photo = (uid, over = {}) =>
+  ({ kind: "photo", host: "storage", uploadedBy: uid, url: "u", thumbUrl: "t", ...over });
+
+await check("a member can post a photo under their own uid", () =>
+  assertSucceeds(setDoc(doc(peteDb(), "bc_media/med_bc_2026_p1"), photo("pete"))));
+
+await check("...but not under somebody else's name", () =>
+  assertFails(setDoc(doc(peteDb(), "bc_media/med_bc_2026_p2"), photo("alice"))));
+
+await check("a non-member cannot post a photo at all", () => {
+  const bob = env.authenticatedContext("bob").firestore();
+  return assertFails(setDoc(doc(bob, "bc_media/med_bc_2026_p3"), photo("bob")));
+});
+
+await check("a member can fix their own caption but cannot reassign the photo", async () => {
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_media/med_bc_2026_p1"), { caption: "18th" }, { merge: true }));
+  await assertFails(setDoc(doc(peteDb(), "bc_media/med_bc_2026_p1"), { uploadedBy: "mallory" }, { merge: true }));
+});
+
+await check("a member cannot touch somebody else's photo", async () => {
+  await seed("bc_media/med_bc_2026_a1", photo("alice"));
+  await assertFails(setDoc(doc(peteDb(), "bc_media/med_bc_2026_a1"), { caption: "mine now" }, { merge: true }));
+  await assertFails(deleteDoc(doc(peteDb(), "bc_media/med_bc_2026_a1")));
+});
+
+await check("a member can remove what they posted", () =>
+  assertSucceeds(deleteDoc(doc(peteDb(), "bc_media/med_bc_2026_p1"))));
+
+await check("a graduated photo is the director's to remove, not the poster's", async () => {
+  await seed("bc_media/med_bc_2019_g1", photo("pete", { host: "archive" }));
+  await assertFails(deleteDoc(doc(peteDb(), "bc_media/med_bc_2019_g1")));
+  await assertSucceeds(deleteDoc(doc(aliceDb(), "bc_media/med_bc_2019_g1")));
+});
+
+await check("a director can remove anybody's photo", async () => {
+  await seed("bc_media/med_bc_2026_p9", photo("pete"));
+  await assertSucceeds(deleteDoc(doc(aliceDb(), "bc_media/med_bc_2026_p9")));
+});
+
+await check("anon can browse the gallery", () =>
+  assertSucceeds(getDoc(doc(anonDb(), "bc_media/med_bc_2026_a1"))));
+
+// The circuit breaker is enforced here, not just honoured by the app.
+await check("a tripped breaker refuses new photos and still allows removals", async () => {
+  await seed("bc_config/photos", { uploadsDisabled: true, reason: "budget" });
+  await seed("bc_media/med_bc_2026_p4", photo("pete"));
+  await assertFails(setDoc(doc(peteDb(), "bc_media/med_bc_2026_p5"), photo("pete")));
+  await assertSucceeds(deleteDoc(doc(peteDb(), "bc_media/med_bc_2026_p4")));
+});
+
+await check("a member cannot clear a breaker a budget tripped", () =>
+  assertFails(setDoc(doc(peteDb(), "bc_config/photos"), { uploadsDisabled: false }, { merge: true })));
+
+await check("a director can, and photos come back", async () => {
+  await assertSucceeds(setDoc(doc(aliceDb(), "bc_config/photos"), { uploadsDisabled: false }, { merge: true }));
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_media/med_bc_2026_p6"), photo("pete")));
+});
+
+await check("everyone can read whether uploads are on, signed in or not", () =>
+  assertSucceeds(getDoc(doc(anonDb(), "bc_config/photos"))));
+
 // ── Reads stay open, and the archive stays append-only ──────────────
 await check("anon can still read the leaderboard data", () =>
   assertSucceeds(getDoc(doc(anonDb(), "bc_hole_scores/x"))));

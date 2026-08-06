@@ -334,6 +334,84 @@ service cloud.firestore {
     match /bc_card_sigs/{doc}          { allow read: if isOpen();
                                          allow write: if isMember(); }
 
+    // ── The photo library ─────────────────────────────────────────
+    // One document per photo. Not the photo — the INDEX of it: where the
+    // bytes are (`host`) and the two URLs to draw them from. See
+    // src/lib/media.js for why Firestore holds only the index.
+    //
+    // Posting a photo is a MEMBER write, like scoring is. The cup is sixteen
+    // people at a golf course and the photos are theirs; routing every one
+    // through a director would mean nobody posts any.
+    //
+    // Three things this block does that no other collection here needs:
+    //
+    //   1. `create` pins uploadedBy to the caller's own uid. Without it a
+    //      member could post under somebody else's name — that field is what
+    //      the delete rule below trusts, so it has to be unforgeable at the
+    //      moment it is written.
+    //
+    //   2. `update` is the poster's own, and cannot reassign the photo. A
+    //      caption fix should not be able to become a change of author, which
+    //      is exactly what an unguarded update would allow.
+    //
+    //   3. `delete` splits on host. A photo still in the bucket is the
+    //      poster's to remove; anything else — a year graduated out to the
+    //      public library — is director-only, because its bytes are no longer
+    //      somewhere the app can delete from and removing the document would
+    //      strand a file. lib/media.js canDelete() mirrors this exactly, and
+    //      media.test.js pins it.
+    //
+    // The bucket itself is governed by storage.rules, which CANNOT reproduce
+    // the membership gate — Storage rules have no way to read Firestore. That
+    // asymmetry is documented in full over there; the short version is that
+    // this document is what makes a photo exist in the app, so bytes written
+    // without one are invisible.
+    //
+    // The circuit breaker, enforced rather than suggested. The app hides the
+    // upload button when this is tripped (src/lib/media.js), but a hidden
+    // button is not a cap — a phone that was mid-upload, or anybody talking to
+    // Firestore directly, would sail past it.
+    //
+    // Costs one or two document reads per photo CREATE. Creates are a few
+    // hundred per tournament, so that is nothing; it would be the wrong trade
+    // on bc_hole_scores and is not applied there.
+    function photoUploadsOn() {
+      return !exists(/databases/$(database)/documents/bc_config/photos)
+        || get(/databases/$(database)/documents/bc_config/photos)
+             .data.get('uploadsDisabled', false) == false;
+    }
+
+    match /bc_media/{doc} {
+      allow read: if isOpen();
+      allow create: if isMember()
+                    && photoUploadsOn()
+                    && request.resource.data.uploadedBy == request.auth.uid;
+      allow update: if isDirector()
+                    || (isMember()
+                        && resource.data.uploadedBy == request.auth.uid
+                        && request.resource.data.uploadedBy == resource.data.uploadedBy);
+      allow delete: if isDirector()
+                    || (isMember()
+                        && resource.data.uploadedBy == request.auth.uid
+                        && resource.data.host == 'storage');
+    }
+
+    // ── Runtime switches ──────────────────────────────────────────
+    // Today this holds exactly one document: bc_config/photos, the photo
+    // library's budget circuit breaker. It is written by the onBudgetAlert
+    // Cloud Function through the admin SDK, which bypasses these rules
+    // entirely — so the grant below is only about the two client paths.
+    //
+    // Read is open because every phone has to know whether uploads are on,
+    // including before anybody signs in.
+    //
+    // Write is DIRECTOR-only, and that is the whole point: a member must not
+    // be able to clear a breaker that a budget tripped. A director can, which
+    // is the manual override for "the budget was wrong" — the same person who
+    // can go and raise the budget.
+    match /bc_config/{doc}             { allow read: if isOpen();
+                                         allow write: if isDirector(); }
+
     // ── Push notification tokens ──────────────────────────────────
     // (Read stays open here for the same reason as everywhere else; see
     // the note below on why this is the collection to tighten first.)
