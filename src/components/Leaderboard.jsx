@@ -35,7 +35,7 @@
 import { useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { BC, FONT, ALPHA, FS, ink, teamColor } from "../theme";
-import { playerLookup } from "../lib/players";
+import { playerLookup, realPlayers } from "../lib/players";
 import {
   FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT,
   POINT_METHOD_TRADITIONAL, TROPHY_SILHOUETTE, CUP_POINTS_TO_WIN,
@@ -928,8 +928,12 @@ export function TeamLeaderboard({
   // Takes the smaller side so an in-progress roster can't inflate the cup;
   // falls back to the larger one when only one side has been entered.
   const playersPerSide = useMemo(() => {
-    const a = (tPlayers || []).filter((p) => p.team === "A").length;
-    const b = (tPlayers || []).filter((p) => p.team === "B").length;
+    // Golfers, not balls: 2020's compiled card sits on a side so Team Best
+    // Ball has something to count, but it never made a match of its own, so
+    // counting it here would price the cup a match too high.
+    const roster = realPlayers(tPlayers);
+    const a = roster.filter((p) => p.team === "A").length;
+    const b = roster.filter((p) => p.team === "B").length;
     return Math.min(a, b) || Math.max(a, b);
   }, [tPlayers]);
 

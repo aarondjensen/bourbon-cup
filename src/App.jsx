@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, HOLE_BANNER, FS, segThumb, segTrack, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor, VP_BAND } from "./theme";
-import { playerLookup } from "./lib/players";
+import { playerLookup, realPlayers } from "./lib/players";
 import { db, TOURNAMENT_ID, getTournamentYear, getActiveTournamentId, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, BOOTSTRAP_DIRECTOR, SPECTATOR_ID } from "./firebase";
 import { PROVIDERS, signIn, signOutUser, onAuthUser, consumeRedirectResult, isCancelled, whenAuthReady } from "./lib/auth";
 import { claimPlayer, linkedPlayer, isClaimed, accountLabel, unlinkPatch, readMembership, isDirectorAccount, joinWithCode, setAccessCode, readAccessCode, setDirector, membershipFor, playerIsDirector, accountsUnreadable, ACCOUNTS_COL, deleteAccount } from "./lib/accounts";
@@ -2681,7 +2681,7 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                     headers stay on the same columns as the rows. */}
                 <span style={{ display: "inline-flex", alignItems: "center", width: 56, flexShrink: 0 }}>
                   {team.id === "A" && (
-                    <GhinSyncButton players={tPlayers} onUpdatePlayer={onUpdatePlayer} notify={notify} confirm={confirm} compact />
+                    <GhinSyncButton players={realPlayers(tPlayers)} onUpdatePlayer={onUpdatePlayer} notify={notify} confirm={confirm} compact />
                   )}
                 </span>
                 <span style={{ flex: 1, minWidth: 8 }} />
@@ -2696,8 +2696,10 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                   }}>+</button>
               </div>
 
-              {/* Player list */}
-              {tPlayers.filter(p => p.team === team.id).map(p => {
+              {/* Player list. `realPlayers` drops 2020's compiled card — it is a
+                  roster row so Team Best Ball has a ball on that side, not a
+                  golfer anybody can edit. See lib/players.isBorrowedBall. */}
+              {realPlayers(tPlayers).filter(p => p.team === team.id).map(p => {
                 const overridden = p.hi_override != null && String(p.hi_override).trim() !== "";
                 const effHI = overridden ? p.hi_override : p.handicap_index;
                 const synced = !overridden && !!p.ghin_number;
@@ -2733,7 +2735,7 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                   </div>
                 );
               })}
-              {tPlayers.filter(p => p.team === team.id).length === 0 && (
+              {realPlayers(tPlayers).filter(p => p.team === team.id).length === 0 && (
                 <div style={{ color: BC.t3, fontSize: FS.small, padding: "6px 10px" }}>No players yet.</div>
               )}
             </div>
@@ -3303,8 +3305,8 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
               const sideSize = rndMatches.length
                 ? Math.max(...rndMatches.flatMap(m => [m.teamA?.length || 0, m.teamB?.length || 0]))
                 : Math.min(
-                    tPlayers.filter(p => p.team === "A").length,
-                    tPlayers.filter(p => p.team === "B").length,
+                    realPlayers(tPlayers).filter(p => p.team === "A").length,
+                    realPlayers(tPlayers).filter(p => p.team === "B").length,
                   );
               const writeHoles = (holes) => setCounting({ holes });
               const setHole = (h, v) => {
@@ -3912,7 +3914,7 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
               {[teams.A, teams.B].map((team, teamIdx) => (
                 <div key={team.id} style={{ marginBottom: 4 }}>
                   {teamIdx === 1 && <div style={{ height: 1, background: BC.bdr, margin: "6px 0 8px" }} />}
-                  {tPlayers.filter(p => p.team === team.id).map(p => {
+                  {realPlayers(tPlayers).filter(p => p.team === team.id).map(p => {
                     // Effective INDEX (player-level override ?? GHIN/base). Shown
                     // for reference; the per-round control below overrides the CH.
                     const hiOverridden = p.hi_override != null && String(p.hi_override).trim() !== "";
@@ -4664,7 +4666,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // A null list means the director has never tagged anybody, and that means
   // EVERYBODY — so a tournament that never opens the buy-in panel behaves
   // exactly as it did before buy-ins existed.
-  const inField = (ids) => (ids == null ? tPlayers : tPlayers.filter(p => ids.includes(p.player_id)));
+  const inField = (ids) => (ids == null ? realPlayers(tPlayers) : realPlayers(tPlayers).filter(p => ids.includes(p.player_id)));
   const skinsField = inField(buyIns?.skinsIn);
   const ctpField = inField(buyIns?.ctpIn);
   const ctpInSet = new Set(ctpField.map(p => p.player_id));
@@ -4915,7 +4917,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
 
           {user?.isDirector && editBuyIns === "skins" && (
             <BuyInEditor
-              players={tPlayers}
+              players={realPlayers(tPlayers)}
               amount={buyIns?.skinsAmount || 0}
               ids={buyIns?.skinsIn ?? null}
               onChange={patch => onUpdateBuyIns(
@@ -5021,7 +5023,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
 
                 {user?.isDirector && editBuyIns === "ctp" && (
                   <BuyInEditor
-                    players={tPlayers}
+                    players={realPlayers(tPlayers)}
                     amount={buyIns?.ctpAmount || 0}
                     ids={buyIns?.ctpIn ?? null}
                     onChange={patch => onUpdateBuyIns(
@@ -6624,7 +6626,7 @@ export default function App() {
   if (!user) return (
     <ClaimScreen
       {...chrome}
-      players={tPlayers} teams={teams} darkMode={darkMode} authUser={authUser}
+      players={realPlayers(tPlayers)} teams={teams} darkMode={darkMode} authUser={authUser}
       onClaimed={p => {
         // The roster snapshot delivers this write back to us immediately
         // (Firestore fires listeners on local mutations), so `user` is

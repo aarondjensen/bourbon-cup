@@ -7,6 +7,7 @@ import {
   isHistoryCourseId, playerDocFor, roundDocFor, roundLockDocFor, matchDocFor, holeDocFor,
   teamNamesDocFor, formOfPlayFor, allowanceFor, countDocs, IMPORT_COLLECTIONS, HISTORY_TEE,
 } from "./historyImport.js";
+import { isBorrowedBall, realPlayers } from "./players.js";
 
 const round = (over = {}) => ({
   round: 1,
@@ -203,5 +204,31 @@ describe("matchDocFor", () => {
     const a = matchDocFor({ year: 2019, match: { round: 2, teamA: ["jensen"], teamB: ["kj"] }, nameOf: (x) => x });
     const b = matchDocFor({ year: 2019, match: { round: 2, teamA: ["jensen"], teamB: ["telly"] }, nameOf: (x) => x });
     expect(a.id).not.toBe(b.id);
+  });
+});
+
+describe("the borrowed ball", () => {
+  it("is flagged on the roster row so the player lists can drop it", () => {
+    const doc = playerDocFor({ year: 2020, id: "ghost", name: "Ghost", team: "B", index: 0, borrowed: true });
+    expect(doc.borrowed).toBe(true);
+    expect(isBorrowedBall(doc)).toBe(true);
+  });
+
+  it("leaves the flag off everybody else, rather than writing borrowed: false", () => {
+    const doc = playerDocFor({ year: 2020, id: "jensen", name: "Jensen", team: "A", index: 6.9 });
+    expect("borrowed" in doc).toBe(false);
+    expect(isBorrowedBall(doc)).toBe(false);
+  });
+
+  it("still gets a roster row and its scores — Team Best Ball needs the ball", () => {
+    const withGhost = edition({
+      players: [...edition().players, { id: "ghost", name: "Ghost", team: "B", index: 0, borrowed: true }],
+      extra_holes: holes("ghost", 6).map(({ round: r, player, hole, gross }) => ({ round: r, player, hole, gross })),
+    });
+    const b = buildEdition(withGhost, holes("jensen"), { handicapModeFor: () => "full" });
+    expect(b.bc_players.find((p) => p.player_id === "hist_2019_ghost").borrowed).toBe(true);
+    expect(b.bc_hole_scores.filter((h) => h.player_id === "hist_2019_ghost")).toHaveLength(18);
+    // …and the roster the app would SHOW is everybody else.
+    expect(realPlayers(b.bc_players).map((p) => p.name)).toEqual(["Jensen", "KJ"]);
   });
 });
