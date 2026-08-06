@@ -232,3 +232,19 @@ describe("the borrowed ball", () => {
     expect(realPlayers(b.bc_players).map((p) => p.name)).toEqual(["Jensen", "KJ"]);
   });
 });
+
+describe("the name on a roster row", () => {
+  it("is first name and last initial, the way AdminView writes it", () => {
+    const doc = playerDocFor({ year: 2019, id: "jensen", name: "Aaron J", first: "Aaron", last: "Jensen", team: "A", index: 7.2 });
+    expect(doc.name).toBe("Aaron J");
+    expect(doc.first_name).toBe("Aaron");
+    expect(doc.last_name).toBe("Jensen");
+  });
+
+  it("keeps the handle, and writes no name fields, for a player nobody recorded one for", () => {
+    const doc = playerDocFor({ year: 2019, id: "weezy", name: "Weezy", team: "B", index: 12 });
+    expect(doc.name).toBe("Weezy");
+    expect("first_name" in doc).toBe(false);
+    expect("last_name" in doc).toBe(false);
+  });
+});

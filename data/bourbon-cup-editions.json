@@ -11,90 +11,120 @@
         {
           "id": "bent",
           "name": "Ben T",
+          "first": "Ben",
+          "last": "T",
           "team": "A",
           "index": 8.3
         },
         {
           "id": "pace",
-          "name": "Pace",
+          "name": "Adam P",
+          "first": "Adam",
+          "last": "Pace",
           "team": "A",
           "index": 11.6
         },
         {
           "id": "daveb",
           "name": "Dave B",
+          "first": "Dave",
+          "last": "B",
           "team": "A",
           "index": 17.8
         },
         {
           "id": "dk",
-          "name": "DK",
+          "name": "Dave K",
+          "first": "Dave",
+          "last": "Kelley",
           "team": "A",
           "index": 20.4
         },
         {
           "id": "joeo",
           "name": "Joe O",
+          "first": "Joe",
+          "last": "O'Connell",
           "team": "A",
           "index": 18.4
         },
         {
           "id": "saugy",
-          "name": "Saugy",
+          "name": "Paul S",
+          "first": "Paul",
+          "last": "Sauter",
           "team": "A",
           "index": 31.7
         },
         {
           "id": "paulw",
           "name": "Paul W",
+          "first": "Paul",
+          "last": "W",
           "team": "A",
           "index": 12.4
         },
         {
           "id": "timc",
           "name": "Tim C",
+          "first": "Tim",
+          "last": "C",
           "team": "A",
           "index": 12.5
         },
         {
           "id": "andy",
-          "name": "Andy",
+          "name": "Andy H",
+          "first": "Andy",
+          "last": "Harris",
           "team": "B",
           "index": 7.9
         },
         {
           "id": "jimh",
           "name": "Jim H",
+          "first": "Jim",
+          "last": "H",
           "team": "B",
           "index": 24.7
         },
         {
           "id": "johns",
           "name": "John S",
+          "first": "John",
+          "last": "S",
           "team": "B",
           "index": -3.8
         },
         {
           "id": "kj",
-          "name": "KJ",
+          "name": "Kevin J",
+          "first": "Kevin",
+          "last": "Jensen",
           "team": "B",
           "index": 17.4
         },
         {
           "id": "petec",
           "name": "Pete C",
+          "first": "Pete",
+          "last": "C",
           "team": "B",
           "index": 20.9
         },
         {
           "id": "rmac",
-          "name": "R-Mac",
+          "name": "Ryan M",
+          "first": "Ryan",
+          "last": "M",
           "team": "B",
           "index": 14
         },
         {
           "id": "tjsc",
-          "name": "TJSC",
+          "name": "TJ C",
+          "first": "TJ",
+          "last": "Crawforth",
           "team": "B",
           "index": 13.4
         }
@@ -599,97 +629,129 @@
       "players": [
         {
           "id": "jensen",
-          "name": "Jensen",
+          "name": "Aaron J",
+          "first": "Aaron",
+          "last": "Jensen",
           "team": "A",
           "index": 6.2
         },
         {
           "id": "pace",
-          "name": "Pace",
+          "name": "Adam P",
+          "first": "Adam",
+          "last": "Pace",
           "team": "A",
           "index": 11.3
         },
         {
           "id": "andy",
-          "name": "Andy",
+          "name": "Andy H",
+          "first": "Andy",
+          "last": "Harris",
           "team": "A",
           "index": 9.1
         },
         {
           "id": "jimh",
           "name": "Jim H",
+          "first": "Jim",
+          "last": "H",
           "team": "A",
           "index": 26
         },
         {
           "id": "kylem",
           "name": "Kyle M",
+          "first": "Kyle",
+          "last": "M",
           "team": "A",
           "index": 20.2
         },
         {
           "id": "matth",
           "name": "Matt H",
+          "first": "Matt",
+          "last": "H",
           "team": "A",
           "index": 18.1
         },
         {
           "id": "petec",
           "name": "Pete C",
+          "first": "Pete",
+          "last": "C",
           "team": "A",
           "index": 21.8
         },
         {
           "id": "rmac",
-          "name": "R-Mac",
+          "name": "Ryan M",
+          "first": "Ryan",
+          "last": "M",
           "team": "A",
           "index": 12.4
         },
         {
           "id": "bent",
           "name": "Ben T",
+          "first": "Ben",
+          "last": "T",
           "team": "B",
           "index": 8.7
         },
         {
           "id": "daveb",
           "name": "Dave B",
+          "first": "Dave",
+          "last": "B",
           "team": "B",
           "index": 16.5
         },
         {
           "id": "grants",
           "name": "Grant S",
+          "first": "Grant",
+          "last": "S",
           "team": "B",
           "index": 14.1
         },
         {
           "id": "kj",
-          "name": "KJ",
+          "name": "Kevin J",
+          "first": "Kevin",
+          "last": "Jensen",
           "team": "B",
           "index": 16.5
         },
         {
           "id": "nicks",
           "name": "Nick S",
+          "first": "Nick",
+          "last": "S",
           "team": "B",
           "index": 8.3
         },
         {
           "id": "saugy",
-          "name": "Saugy",
+          "name": "Paul S",
+          "first": "Paul",
+          "last": "Sauter",
           "team": "B",
           "index": 29.6
         },
         {
           "id": "paulw",
           "name": "Paul W",
+          "first": "Paul",
+          "last": "W",
           "team": "B",
           "index": 14.9
         },
         {
           "id": "tjsc",
-          "name": "TJSC",
+          "name": "TJ C",
+          "first": "TJ",
+          "last": "Crawforth",
           "team": "B",
           "index": 13
         }
@@ -1204,96 +1266,128 @@
         {
           "id": "bent",
           "name": "Ben T",
+          "first": "Ben",
+          "last": "T",
           "team": "A",
           "index": null
         },
         {
           "id": "nicks",
           "name": "Nick S",
+          "first": "Nick",
+          "last": "S",
           "team": "A",
           "index": null
         },
         {
           "id": "paulw",
           "name": "Paul W",
+          "first": "Paul",
+          "last": "W",
           "team": "A",
           "index": null
         },
         {
           "id": "shaunw",
           "name": "Shaun W",
+          "first": "Shaun",
+          "last": "W",
           "team": "A",
           "index": null
         },
         {
           "id": "tjsc",
-          "name": "TJSC",
+          "name": "TJ C",
+          "first": "TJ",
+          "last": "Crawforth",
           "team": "A",
           "index": null
         },
         {
           "id": "timc",
           "name": "Tim C",
+          "first": "Tim",
+          "last": "C",
           "team": "A",
           "index": null
         },
         {
           "id": "jimh",
           "name": "Jim H",
+          "first": "Jim",
+          "last": "H",
           "team": "A",
           "index": null
         },
         {
           "id": "saugy",
-          "name": "Saugy",
+          "name": "Paul S",
+          "first": "Paul",
+          "last": "Sauter",
           "team": "A",
           "index": null
         },
         {
           "id": "jensen",
-          "name": "Jensen",
+          "name": "Aaron J",
+          "first": "Aaron",
+          "last": "Jensen",
           "team": "B",
           "index": null
         },
         {
           "id": "andy",
-          "name": "Andy",
+          "name": "Andy H",
+          "first": "Andy",
+          "last": "Harris",
           "team": "B",
           "index": null
         },
         {
           "id": "grants",
           "name": "Grant S",
+          "first": "Grant",
+          "last": "S",
           "team": "B",
           "index": null
         },
         {
           "id": "rmac",
-          "name": "R-Mac",
+          "name": "Ryan M",
+          "first": "Ryan",
+          "last": "M",
           "team": "B",
           "index": null
         },
         {
           "id": "kj",
-          "name": "KJ",
+          "name": "Kevin J",
+          "first": "Kevin",
+          "last": "Jensen",
           "team": "B",
           "index": null
         },
         {
           "id": "daveb",
           "name": "Dave B",
+          "first": "Dave",
+          "last": "B",
           "team": "B",
           "index": null
         },
         {
           "id": "dk",
-          "name": "DK",
+          "name": "Dave K",
+          "first": "Dave",
+          "last": "Kelley",
           "team": "B",
           "index": null
         },
         {
           "id": "petec",
           "name": "Pete C",
+          "first": "Pete",
+          "last": "C",
           "team": "B",
           "index": null
         }
@@ -1808,96 +1902,128 @@
         {
           "id": "bent",
           "name": "Ben T",
+          "first": "Ben",
+          "last": "T",
           "team": "A",
           "index": 7.5
         },
         {
           "id": "jensen",
-          "name": "Jensen",
+          "name": "Aaron J",
+          "first": "Aaron",
+          "last": "Jensen",
           "team": "A",
           "index": 7.2
         },
         {
           "id": "timc",
           "name": "Tim C",
+          "first": "Tim",
+          "last": "C",
           "team": "A",
           "index": 13.3
         },
         {
           "id": "tjsc",
-          "name": "TJSC",
+          "name": "TJ C",
+          "first": "TJ",
+          "last": "Crawforth",
           "team": "A",
           "index": 15.1
         },
         {
           "id": "paulw",
           "name": "Paul W",
+          "first": "Paul",
+          "last": "W",
           "team": "A",
           "index": 14.5
         },
         {
           "id": "dk",
-          "name": "DK",
+          "name": "Dave K",
+          "first": "Dave",
+          "last": "Kelley",
           "team": "A",
           "index": 19.5
         },
         {
           "id": "jimh",
           "name": "Jim H",
+          "first": "Jim",
+          "last": "H",
           "team": "A",
           "index": 26.4
         },
         {
           "id": "saugy",
-          "name": "Saugy",
+          "name": "Paul S",
+          "first": "Paul",
+          "last": "Sauter",
           "team": "A",
           "index": 28.4
         },
         {
           "id": "johns",
           "name": "John S",
+          "first": "John",
+          "last": "S",
           "team": "B",
           "index": -2.5
         },
         {
           "id": "andy",
-          "name": "Andy",
+          "name": "Andy H",
+          "first": "Andy",
+          "last": "Harris",
           "team": "B",
           "index": 9
         },
         {
           "id": "pace",
-          "name": "Pace",
+          "name": "Adam P",
+          "first": "Adam",
+          "last": "Pace",
           "team": "B",
           "index": 10.4
         },
         {
           "id": "grants",
           "name": "Grant S",
+          "first": "Grant",
+          "last": "S",
           "team": "B",
           "index": 10.2
         },
         {
           "id": "rmac",
-          "name": "R-Mac",
+          "name": "Ryan M",
+          "first": "Ryan",
+          "last": "M",
           "team": "B",
           "index": 12.5
         },
         {
           "id": "kj",
-          "name": "KJ",
+          "name": "Kevin J",
+          "first": "Kevin",
+          "last": "Jensen",
           "team": "B",
           "index": 16.3
         },
         {
           "id": "kylem",
           "name": "Kyle M",
+          "first": "Kyle",
+          "last": "M",
           "team": "B",
           "index": 21.6
         },
         {
           "id": "petec",
           "name": "Pete C",
+          "first": "Pete",
+          "last": "C",
           "team": "B",
           "index": 22.6
         }
@@ -2409,91 +2535,121 @@
       "players": [
         {
           "id": "jensen",
-          "name": "Jensen",
+          "name": "Aaron J",
+          "first": "Aaron",
+          "last": "Jensen",
           "team": "A",
           "index": 6.9
         },
         {
           "id": "nicks",
           "name": "Nick S",
+          "first": "Nick",
+          "last": "S",
           "team": "A",
           "index": 6.6
         },
         {
           "id": "timc",
           "name": "Tim C",
+          "first": "Tim",
+          "last": "C",
           "team": "A",
           "index": 7.6
         },
         {
           "id": "juliusp",
           "name": "Julius P",
+          "first": "Julius",
+          "last": "P",
           "team": "A",
           "index": 9.3
         },
         {
           "id": "pace",
-          "name": "Pace",
+          "name": "Adam P",
+          "first": "Adam",
+          "last": "Pace",
           "team": "A",
           "index": 10.8
         },
         {
           "id": "kj",
-          "name": "KJ",
+          "name": "Kevin J",
+          "first": "Kevin",
+          "last": "Jensen",
           "team": "A",
           "index": 9.9
         },
         {
           "id": "tjsc",
-          "name": "TJSC",
+          "name": "TJ C",
+          "first": "TJ",
+          "last": "Crawforth",
           "team": "A",
           "index": 12.9
         },
         {
           "id": "joeo",
           "name": "Joe O",
+          "first": "Joe",
+          "last": "O'Connell",
           "team": "A",
           "index": 14
         },
         {
           "id": "scottr",
           "name": "Scott R",
+          "first": "Scott",
+          "last": "R",
           "team": "B",
           "index": 4
         },
         {
           "id": "bent",
           "name": "Ben T",
+          "first": "Ben",
+          "last": "T",
           "team": "B",
           "index": 4.3
         },
         {
           "id": "andy",
-          "name": "Andy",
+          "name": "Andy H",
+          "first": "Andy",
+          "last": "Harris",
           "team": "B",
           "index": 7
         },
         {
           "id": "shaunw",
           "name": "Shaun W",
+          "first": "Shaun",
+          "last": "W",
           "team": "B",
           "index": 9.2
         },
         {
           "id": "petec",
           "name": "Pete C",
+          "first": "Pete",
+          "last": "C",
           "team": "B",
           "index": 18.4
         },
         {
           "id": "dk",
-          "name": "DK",
+          "name": "Dave K",
+          "first": "Dave",
+          "last": "Kelley",
           "team": "B",
           "index": 18.7
         },
         {
           "id": "kylem",
           "name": "Kyle M",
+          "first": "Kyle",
+          "last": "M",
           "team": "B",
           "index": 21.8
         },
@@ -3121,97 +3277,129 @@
       "players": [
         {
           "id": "jensen",
-          "name": "Jensen",
+          "name": "Aaron J",
+          "first": "Aaron",
+          "last": "Jensen",
           "team": "A",
           "index": 6
         },
         {
           "id": "bent",
           "name": "Ben T",
+          "first": "Ben",
+          "last": "T",
           "team": "A",
           "index": 6.2
         },
         {
           "id": "nicks",
           "name": "Nick S",
+          "first": "Nick",
+          "last": "S",
           "team": "A",
           "index": 7
         },
         {
           "id": "kj",
-          "name": "KJ",
+          "name": "Kevin J",
+          "first": "Kevin",
+          "last": "Jensen",
           "team": "A",
           "index": 9.8
         },
         {
           "id": "tjsc",
-          "name": "TJSC",
+          "name": "TJ C",
+          "first": "TJ",
+          "last": "Crawforth",
           "team": "A",
           "index": 12.6
         },
         {
           "id": "dk",
-          "name": "DK",
+          "name": "Dave K",
+          "first": "Dave",
+          "last": "Kelley",
           "team": "A",
           "index": 15.7
         },
         {
           "id": "jimh",
           "name": "Jim H",
+          "first": "Jim",
+          "last": "H",
           "team": "A",
           "index": 24.8
         },
         {
           "id": "saugy",
-          "name": "Saugy",
+          "name": "Paul S",
+          "first": "Paul",
+          "last": "Sauter",
           "team": "A",
           "index": 28.5
         },
         {
           "id": "andy",
-          "name": "Andy",
+          "name": "Andy H",
+          "first": "Andy",
+          "last": "Harris",
           "team": "B",
           "index": 6.8
         },
         {
           "id": "shaunw",
           "name": "Shaun W",
+          "first": "Shaun",
+          "last": "W",
           "team": "B",
           "index": 8.5
         },
         {
           "id": "pace",
-          "name": "Pace",
+          "name": "Adam P",
+          "first": "Adam",
+          "last": "Pace",
           "team": "B",
           "index": 9.6
         },
         {
           "id": "timc",
           "name": "Tim C",
+          "first": "Tim",
+          "last": "C",
           "team": "B",
           "index": 10.4
         },
         {
           "id": "rmac",
-          "name": "R-Mac",
+          "name": "Ryan M",
+          "first": "Ryan",
+          "last": "M",
           "team": "B",
           "index": 10.6
         },
         {
           "id": "paulw",
           "name": "Paul W",
+          "first": "Paul",
+          "last": "W",
           "team": "B",
           "index": 13.7
         },
         {
           "id": "joeo",
           "name": "Joe O",
+          "first": "Joe",
+          "last": "O'Connell",
           "team": "B",
           "index": 15.1
         },
         {
           "id": "petec",
           "name": "Pete C",
+          "first": "Pete",
+          "last": "C",
           "team": "B",
           "index": 16.7
         }
@@ -3725,25 +3913,33 @@
       "players": [
         {
           "id": "jensen",
-          "name": "Jensen",
+          "name": "Aaron J",
+          "first": "Aaron",
+          "last": "Jensen",
           "team": "A",
           "index": 6.8
         },
         {
           "id": "nicks",
           "name": "Nick S",
+          "first": "Nick",
+          "last": "S",
           "team": "A",
           "index": 9.6
         },
         {
           "id": "andy",
-          "name": "Andy",
+          "name": "Andy H",
+          "first": "Andy",
+          "last": "Harris",
           "team": "A",
           "index": 7.3
         },
         {
           "id": "pace",
-          "name": "Pace",
+          "name": "Adam P",
+          "first": "Adam",
+          "last": "Pace",
           "team": "A",
           "index": 10.3
         },
@@ -3755,19 +3951,25 @@
         },
         {
           "id": "dk",
-          "name": "DK",
+          "name": "Dave K",
+          "first": "Dave",
+          "last": "Kelley",
           "team": "A",
           "index": 16.5
         },
         {
           "id": "petec",
           "name": "Pete C",
+          "first": "Pete",
+          "last": "C",
           "team": "A",
           "index": 18.8
         },
         {
           "id": "saugy",
-          "name": "Saugy",
+          "name": "Paul S",
+          "first": "Paul",
+          "last": "Sauter",
           "team": "A",
           "index": 25.2
         },
@@ -3779,13 +3981,17 @@
         },
         {
           "id": "kj",
-          "name": "KJ",
+          "name": "Kevin J",
+          "first": "Kevin",
+          "last": "Jensen",
           "team": "B",
           "index": 7.8
         },
         {
           "id": "rmac",
-          "name": "R-Mac",
+          "name": "Ryan M",
+          "first": "Ryan",
+          "last": "M",
           "team": "B",
           "index": 9
         },
@@ -3797,7 +4003,9 @@
         },
         {
           "id": "tjsc",
-          "name": "TJSC",
+          "name": "TJ C",
+          "first": "TJ",
+          "last": "Crawforth",
           "team": "B",
           "index": 11.6
         },
@@ -3810,6 +4018,8 @@
         {
           "id": "joeo",
           "name": "Joe O",
+          "first": "Joe",
+          "last": "O'Connell",
           "team": "B",
           "index": 11.7
         },
@@ -4333,19 +4543,25 @@
         },
         {
           "id": "kj",
-          "name": "KJ",
+          "name": "Kevin J",
+          "first": "Kevin",
+          "last": "Jensen",
           "team": "A",
           "index": null
         },
         {
           "id": "nicks",
           "name": "Nick S",
+          "first": "Nick",
+          "last": "S",
           "team": "A",
           "index": null
         },
         {
           "id": "rmac",
-          "name": "R-Mac",
+          "name": "Ryan M",
+          "first": "Ryan",
+          "last": "M",
           "team": "A",
           "index": null
         },
@@ -4357,19 +4573,25 @@
         },
         {
           "id": "tjsc",
-          "name": "TJSC",
+          "name": "TJ C",
+          "first": "TJ",
+          "last": "Crawforth",
           "team": "A",
           "index": null
         },
         {
           "id": "dk",
-          "name": "DK",
+          "name": "Dave K",
+          "first": "Dave",
+          "last": "Kelley",
           "team": "A",
           "index": null
         },
         {
           "id": "saugy",
-          "name": "Saugy",
+          "name": "Paul S",
+          "first": "Paul",
+          "last": "Sauter",
           "team": "A",
           "index": null
         },
@@ -4381,19 +4603,25 @@
         },
         {
           "id": "andy",
-          "name": "Andy",
+          "name": "Andy H",
+          "first": "Andy",
+          "last": "Harris",
           "team": "B",
           "index": null
         },
         {
           "id": "jensen",
-          "name": "Jensen",
+          "name": "Aaron J",
+          "first": "Aaron",
+          "last": "Jensen",
           "team": "B",
           "index": null
         },
         {
           "id": "pace",
-          "name": "Pace",
+          "name": "Adam P",
+          "first": "Adam",
+          "last": "Pace",
           "team": "B",
           "index": null
         },
@@ -4406,6 +4634,8 @@
         {
           "id": "joeo",
           "name": "Joe O",
+          "first": "Joe",
+          "last": "O'Connell",
           "team": "B",
           "index": null
         },
@@ -4932,12 +5162,16 @@
         {
           "id": "nicks",
           "name": "Nick S",
+          "first": "Nick",
+          "last": "S",
           "team": "A",
           "index": 9.6
         },
         {
           "id": "andy",
-          "name": "Andy",
+          "name": "Andy H",
+          "first": "Andy",
+          "last": "Harris",
           "team": "A",
           "index": 7.3
         },
@@ -4949,43 +5183,57 @@
         },
         {
           "id": "pace",
-          "name": "Pace",
+          "name": "Adam P",
+          "first": "Adam",
+          "last": "Pace",
           "team": "A",
           "index": 10.3
         },
         {
           "id": "tjsc",
-          "name": "TJSC",
+          "name": "TJ C",
+          "first": "TJ",
+          "last": "Crawforth",
           "team": "A",
           "index": 11.6
         },
         {
           "id": "dk",
-          "name": "DK",
+          "name": "Dave K",
+          "first": "Dave",
+          "last": "Kelley",
           "team": "A",
           "index": 16.5
         },
         {
           "id": "petec",
           "name": "Pete C",
+          "first": "Pete",
+          "last": "C",
           "team": "A",
           "index": 18.8
         },
         {
           "id": "saugy",
-          "name": "Saugy",
+          "name": "Paul S",
+          "first": "Paul",
+          "last": "Sauter",
           "team": "A",
           "index": 25.2
         },
         {
           "id": "jensen",
-          "name": "Jensen",
+          "name": "Aaron J",
+          "first": "Aaron",
+          "last": "Jensen",
           "team": "B",
           "index": 6.8
         },
         {
           "id": "kj",
-          "name": "KJ",
+          "name": "Kevin J",
+          "first": "Kevin",
+          "last": "Jensen",
           "team": "B",
           "index": 7.8
         },
@@ -4997,7 +5245,9 @@
         },
         {
           "id": "rmac",
-          "name": "R-Mac",
+          "name": "Ryan M",
+          "first": "Ryan",
+          "last": "M",
           "team": "B",
           "index": 9
         },
@@ -5016,6 +5266,8 @@
         {
           "id": "joeo",
           "name": "Joe O",
+          "first": "Joe",
+          "last": "O'Connell",
           "team": "B",
           "index": 11.7
         },
@@ -5535,25 +5787,33 @@
       "players": [
         {
           "id": "jensen",
-          "name": "Jensen",
+          "name": "Aaron J",
+          "first": "Aaron",
+          "last": "Jensen",
           "team": "A",
           "index": 6.8
         },
         {
           "id": "andy",
-          "name": "Andy",
+          "name": "Andy H",
+          "first": "Andy",
+          "last": "Harris",
           "team": "A",
           "index": 7.3
         },
         {
           "id": "kj",
-          "name": "KJ",
+          "name": "Kevin J",
+          "first": "Kevin",
+          "last": "Jensen",
           "team": "A",
           "index": 7.8
         },
         {
           "id": "rmac",
-          "name": "R-Mac",
+          "name": "Ryan M",
+          "first": "Ryan",
+          "last": "M",
           "team": "A",
           "index": 9
         },
@@ -5565,7 +5825,9 @@
         },
         {
           "id": "tjsc",
-          "name": "TJSC",
+          "name": "TJ C",
+          "first": "TJ",
+          "last": "Crawforth",
           "team": "A",
           "index": 11.6
         },
@@ -5578,6 +5840,8 @@
         {
           "id": "petec",
           "name": "Pete C",
+          "first": "Pete",
+          "last": "C",
           "team": "A",
           "index": 18.8
         },
@@ -5590,18 +5854,24 @@
         {
           "id": "nicks",
           "name": "Nick S",
+          "first": "Nick",
+          "last": "S",
           "team": "B",
           "index": 9.6
         },
         {
           "id": "pace",
-          "name": "Pace",
+          "name": "Adam P",
+          "first": "Adam",
+          "last": "Pace",
           "team": "B",
           "index": 10.3
         },
         {
           "id": "joeo",
           "name": "Joe O",
+          "first": "Joe",
+          "last": "O'Connell",
           "team": "B",
           "index": 11.7
         },
@@ -5619,13 +5889,17 @@
         },
         {
           "id": "dk",
-          "name": "DK",
+          "name": "Dave K",
+          "first": "Dave",
+          "last": "Kelley",
           "team": "B",
           "index": 16.5
         },
         {
           "id": "saugy",
-          "name": "Saugy",
+          "name": "Paul S",
+          "first": "Paul",
+          "last": "Sauter",
           "team": "B",
           "index": 25.2
         }

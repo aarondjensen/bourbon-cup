@@ -181,13 +181,19 @@ export const tournamentDocFor = ({ year, name }) => ({
 });
 
 // bc_players — one roster row per golfer per year.
-export const playerDocFor = ({ year, id, name, team, index, borrowed = false }) => {
+export const playerDocFor = ({ year, id, name, first, last, team, index, borrowed = false }) => {
   const pid = historyPlayerId(year, id);
   return {
     id: pid,
     player_id: pid,
     tournament_id: editionIdForYear(year),
+    // `name` is the display form — first name, last initial — because that is
+    // what every screen outside the admin console renders and what AdminView
+    // stores here when a director adds somebody. first_name/last_name are the
+    // source it is built from, and are what that console edits.
     name: String(name ?? id),
+    ...(first ? { first_name: first } : {}),
+    ...(last ? { last_name: last } : {}),
     team: team === "B" ? "B" : "A",
     handicap_index: Number.isFinite(Number(index)) ? Number(index) : 0,
     // 2020's compiled card. A roster row because Team Best Ball needs the ball
