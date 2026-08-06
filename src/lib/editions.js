@@ -16,7 +16,7 @@
 // hard-reloads, so every subscription and piece of state rebuilds cleanly
 // against the new tournament_id (a live db.subscribe captures its filter
 // value at creation, so a reload is the simplest correct re-init).
-import { db, getActiveTournamentId, setActiveTournamentId, editionDocId, writeUserSession, BOOTSTRAP_DIRECTOR } from "../firebase";
+import { db, getActiveTournamentId, setActiveTournamentId, editionDocId, writeUserSession, spectatorSession } from "../firebase";
 
 export const EDITIONS_COL = "bc_editions";
 
@@ -154,12 +154,20 @@ export const deleteEdition = async (id) => {
 };
 
 // Flip the active pointer (with its namespacing flag), then hard-reload.
-// Switching is a director-only action (the Editions modal is director-gated),
-// so persist the generic director identity across the reload — keeps director
-// access without carrying a stale player that may not exist in the new edition,
-// and avoids dropping onto the login screen of a possibly-empty new edition.
+//
+// The identity written across the reload is the SPECTATOR (see firebase.js):
+// player-less, edition-scoped, granting nothing. It is what stops the switch
+// dropping somebody on the claim screen of an edition their account has no
+// roster row in — which is every year before this one, and also a brand-new
+// edition with an empty roster.
+//
+// It used to write the bootstrap director here, back when switching was a
+// director-only action. Admin access never came from that identity anyway —
+// it comes from the membership flag the rules read — so the only thing the
+// change costs is a label that said "Director (Setup)" to a player looking at
+// 2019.
 export const switchEdition = (id, { reload = true, namespaced = false } = {}) => {
   setActiveTournamentId(id, namespaced);
-  writeUserSession(BOOTSTRAP_DIRECTOR);
+  writeUserSession(spectatorSession(id));
   if (reload && typeof window !== "undefined") window.location.reload();
 };

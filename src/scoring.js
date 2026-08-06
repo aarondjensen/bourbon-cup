@@ -10,7 +10,11 @@ import {
   HOLE_SCORING_BEST_BALL, SCORING_TYPE_POINTS, SCORING_TYPE_TOTAL,
   formatUnit, UNIT_STROKES, handicapModeFor, resolveHoleMethod,
   resolveParPoints, parResultFor, tiltBirdieValue, tiltMultiplier,
-} from "./constants";
+  // The `.js` is deliberate. Vite resolves both forms identically, but
+  // scripts/import-history.mjs loads this engine under PLAIN NODE to verify a
+  // year before writing it, and Node's ESM resolver requires the extension —
+  // without it the import script dies before it reads a row.
+} from "./constants.js";
 
 // ── Course Handicap math ──
 // USGA Course Handicap formula:

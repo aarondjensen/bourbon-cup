@@ -141,6 +141,66 @@ eventually editing while the other is running a round.
   `.claude/settings.local.json` are gitignored; the secrets in `api/*.js` are
   set in Vercel, not in the repo.
 
+## The old cups
+
+2016–2024 are editions like any other. Switch to one in **☰ → Tournaments**
+(anybody) or **Admin → Tournament → Editions** (a director, who also builds
+next year there) and the leaderboard, the draw, the scorecards and the round
+detail all work, because nothing about those years is special-cased.
+
+They were not typed in. Three layers build them, each with its own job:
+
+- **`pipeline/editions.mjs`** (`npm run build:editions`) reads the sheets under
+  `data/historical sheets` and writes `data/bourbon-cup-editions.json` — teams,
+  roster, courses, round setup and the draw. Scores are not copied into it;
+  they already exist hole by hole in `bourbon-cup-backbone.json`.
+- **`src/lib/historyImport.js`** turns that plus the backbone into the
+  documents. Pure — no Firebase, no React — so it is unit-tested.
+- **`scripts/import-history.mjs`** (`npm run import:history`) writes them.
+  **Dry run by default**; needs `--write`, a service-account key, and
+  `firebase-admin` (`npm i --no-save firebase-admin`). It refuses a key for
+  another project, and it will not write into an edition that already exists in
+  the app — 2025 was entered by hand and accounts are claimed to its roster.
+  That is not an overwrite hazard, it is a duplication one: the import's ids
+  (`hist_2025_jensen`) don't collide with the app's (`bc_player_<ms>`), so both
+  rosters would survive and every screen would show the field twice. Before
+  writing, it asks Firestore whether each target edition already holds roster
+  rows without an `imported_from` field, which is what will protect 2026.
+
+**The course handicap is stored, not derived.** Handicaps were pasted into
+those sheets as values, per round, already rounded and blended; no single index
+reproduces them. So each round is imported already LOCKED and FINAL with the
+recorded handicap frozen in the snapshot, which is the app's own mechanism for
+"this round never recalculates" (`getRoundCH` reads `lock.players[pid].ch`
+first). It is also true: those tournaments are over.
+
+**Nothing is imported that cannot be checked.** `src/lib/historyVerify.js`
+scores every imported year with the app's own engine and compares it against
+three independent records — the gross totals and handicaps from the backbone,
+every match's running status from the scorecards, and Round 4's point share off
+the card. `historyImport.fidelity.test.js` runs it on every `npm test`, and the
+import script runs the same checks and **refuses to write a year that fails**.
+All ten years currently reproduce exactly. If a change to the scoring engine
+would re-score 2016, that test is where you find out.
+
+Two things worth knowing before touching it:
+
+- **The shared-ball rounds carry a 50/50 allowance**, which is not an allowance
+  anybody played off. The sheets blended Scramble and Pinehurst handicaps
+  themselves and wrote the result on both partners' rows, so applying the
+  catalog's 35/15 to it blends an already-blended number. See the note in
+  `historyImport.js`.
+- **Round 4's contribution count is calibrated, not copied.** The sheets set it
+  hole by hole and the app holds one number per nine, so the import searches
+  for the pair that reproduces the round's recorded point share, breaking ties
+  toward the sheet's own numbers.
+
+Switching editions writes a player-less **spectator** identity
+(`firebase.spectatorSession`), scoped to the edition it was written for. That
+is what stops a player who opened 2019 from being asked to bind their account
+to a roster row on a finished tournament — and the scope is what keeps a player
+who has never claimed a name meeting the claim screen on the year being played.
+
 ## Sign-in
 
 Three steps, each seen once: sign in with Google or Apple (`src/lib/auth.js`),

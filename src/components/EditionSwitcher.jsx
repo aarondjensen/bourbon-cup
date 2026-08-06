@@ -1,10 +1,23 @@
 // ══════════════════════════════════════════════════════════════════
-//  EditionSwitcher — director modal to change the active year or start
-//  a new one. Gated to the director at the call site.
+//  EditionSwitcher — every year the cup has been played, and the door
+//  to next year's.
 // ══════════════════════════════════════════════════════════════════
 // Reuses the shared Popup + ConfirmModal chrome. Switching an edition
 // reloads the app (see lib/editions.js), so the switch goes through a
 // confirm first.
+//
+// Two doors open this, and they want different things:
+//
+//   ☰ → Tournaments      ANYBODY. Reading a past year — its leaderboard, its
+//                        cards, who won — is the whole reason the old cups
+//                        were imported, and reading is open to every member
+//                        in firestore.rules.
+//   Admin → Tournament   the DIRECTOR, who also builds next year here.
+//
+// `canManage` is the difference: without it this is a list of years and a
+// Switch button. It is not a security boundary — firestore.rules is, and it
+// allows bc_editions writes to a director only — it is there so a player is
+// not shown controls whose every tap comes back refused.
 import { useState, useEffect } from "react";
 import { BC, FS, ON_AMBER } from "../theme";
 import { Popup, ConfirmModal } from "./Popup";
@@ -27,7 +40,7 @@ const CLONE_ITEMS = [
 ];
 const DEFAULT_CLONE_OPTS = { players: true, teams: true, tournamentName: true, courses: false, rounds: false };
 
-export function EditionSwitcher({ open, onClose }) {
+export function EditionSwitcher({ open, onClose, canManage = false }) {
   const [editions, setEditions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [year, setYear] = useState("");
@@ -44,12 +57,16 @@ export function EditionSwitcher({ open, onClose }) {
     let alive = true;
     (async () => {
       setLoading(true);
-      await ensureActiveEditionDoc();
+      // Seeding the running year into the list is a WRITE, and bc_editions is
+      // director-only in the rules — so a player opening this only reads. The
+      // seed exists for a project whose picker has never been opened by a
+      // director, which is a state one director visit fixes for everybody.
+      if (canManage) await ensureActiveEditionDoc();
       const rows = await loadEditions();
       if (alive) { setEditions(rows); setLoading(false); }
     })();
     return () => { alive = false; };
-  }, [open]);
+  }, [open, canManage]);
 
   if (!open) return null;
 
@@ -69,8 +86,10 @@ export function EditionSwitcher({ open, onClose }) {
   return (
     <>
       <Popup onClose={onClose} maxWidth={400} padding={18} showClose>
-        <div style={{ fontSize: FS.lead, fontWeight: 800, color: BC.t1, letterSpacing: 0.5, marginBottom: 3 }}>Editions</div>
-        <div style={{ fontSize: FS.small, color: BC.t3, marginBottom: 14 }}>Switch the active year or start a new one.</div>
+        <div style={{ fontSize: FS.lead, fontWeight: 800, color: BC.t1, letterSpacing: 0.5, marginBottom: 3 }}>Tournaments</div>
+        <div style={{ fontSize: FS.small, color: BC.t3, marginBottom: 14 }}>
+          {canManage ? "Open a year, or start the next one." : "Open any year the cup has been played."}
+        </div>
 
         {loading ? (
           <div style={{ fontSize: FS.small, color: BC.t3, padding: "10px 0 16px" }}>Loading…</div>
@@ -100,11 +119,13 @@ export function EditionSwitcher({ open, onClose }) {
                       <button onClick={() => setPending(e)} style={{
                         fontSize: FS.small, fontWeight: 800, letterSpacing: 0.5, color: BC.t2, background: BC.card,
                         border: `1px solid ${BC.bdr}`, borderRadius: 8, padding: "7px 12px", cursor: "pointer",
-                      }}>Switch</button>
-                      <button onClick={() => setPendingDelete(e)} title="Delete edition" style={{
-                        fontSize: FS.body, fontWeight: 700, color: BC.t3, background: "transparent",
-                        border: "none", borderRadius: 8, padding: "5px 6px", cursor: "pointer", flexShrink: 0, lineHeight: 1,
-                      }}>🗑</button>
+                      }}>Open</button>
+                      {canManage && (
+                        <button onClick={() => setPendingDelete(e)} title="Delete edition" style={{
+                          fontSize: FS.body, fontWeight: 700, color: BC.t3, background: "transparent",
+                          border: "none", borderRadius: 8, padding: "5px 6px", cursor: "pointer", flexShrink: 0, lineHeight: 1,
+                        }}>🗑</button>
+                      )}
                     </>
                   )}
                 </div>
@@ -113,6 +134,7 @@ export function EditionSwitcher({ open, onClose }) {
           </div>
         )}
 
+        {canManage && (
         <div style={{ borderTop: `1px solid ${BC.bdr}`, paddingTop: 14 }}>
           <div style={{ fontSize: FS.small, fontWeight: 800, letterSpacing: 1.5, color: BC.t3, marginBottom: 9 }}>NEW EDITION</div>
           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
@@ -153,14 +175,19 @@ export function EditionSwitcher({ open, onClose }) {
             fontSize: FS.body, fontWeight: 800, letterSpacing: 0.5,
           }}>{busy ? "Working…" : (cloneFrom ? "Clone into new edition" : "Create draft edition")}</button>
         </div>
+        )}
       </Popup>
 
       {pending && (
         <ConfirmModal
-          eyebrow="Switch edition"
-          title={`Switch to ${pending.name}?`}
-          message="The app will reload to load this edition's data."
-          confirmLabel="Switch"
+          eyebrow="Open tournament"
+          title={`Open ${pending.name}?`}
+          message={pending.status === "archived"
+            // Said plainly, because it is the thing somebody opening 2019
+            // notices first and would otherwise read as being logged out.
+            ? "The app will reload onto that year. It's finished, so it opens read-only — every card and result, nothing to change. Come back here to return to this year."
+            : "The app will reload to load this edition's data."}
+          confirmLabel="Open"
           onConfirm={() => switchEdition(pending.id, { namespaced: !!pending.namespaced })}
           onCancel={() => setPending(null)}
         />
@@ -170,7 +197,13 @@ export function EditionSwitcher({ open, onClose }) {
         <ConfirmModal
           eyebrow="Delete edition"
           title={`Delete ${pendingDelete.name}?`}
-          message={`This permanently deletes ${pendingDelete.name} and ALL of its players, courses, settings, rounds, scores and results. This can't be undone.`}
+          message={`This permanently deletes ${pendingDelete.name} and ALL of its players, courses, settings, rounds, scores and results.${
+            // An imported year is the one deletion that IS reversible, and
+            // saying so is the difference between a director leaving a
+            // mis-imported 2019 in place and fixing it.
+            pendingDelete.imported_from
+              ? " It was imported from the spreadsheets in the repo, so it can be put back by running the import again."
+              : " This can't be undone."}`}
           confirmLabel="Delete"
           variant="danger"
           onConfirm={async () => {

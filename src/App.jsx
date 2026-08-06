@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, HOLE_BANNER, FS, segThumb, segTrack, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor, VP_BAND } from "./theme";
 import { playerLookup } from "./lib/players";
-import { db, TOURNAMENT_ID, getTournamentYear, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, BOOTSTRAP_DIRECTOR } from "./firebase";
+import { db, TOURNAMENT_ID, getTournamentYear, getActiveTournamentId, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, BOOTSTRAP_DIRECTOR, SPECTATOR_ID } from "./firebase";
 import { PROVIDERS, signIn, signOutUser, onAuthUser, consumeRedirectResult, isCancelled, whenAuthReady } from "./lib/auth";
 import { claimPlayer, linkedPlayer, isClaimed, accountLabel, unlinkPatch, readMembership, isDirectorAccount, joinWithCode, setAccessCode, readAccessCode, setDirector, membershipFor, playerIsDirector, accountsUnreadable, ACCOUNTS_COL, deleteAccount } from "./lib/accounts";
 import {
@@ -2618,7 +2618,7 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
 
   return (
     <div style={{ fontFamily: FONT }}>
-      <EditionSwitcher open={showEditions} onClose={() => setShowEditions(false)} />
+      <EditionSwitcher open={showEditions} onClose={() => setShowEditions(false)} canManage />
       {/* Tabs — pinned to the top of the scroll area so the bar stays in the
           SAME place on every sub-tab, regardless of that tab's content
           height, and in the same place the other views pin their own lead
@@ -5246,7 +5246,7 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
 // that used to be hardcoded here was only ever right at the default text
 // size on a phone whose nav was exactly that tall; anywhere else the menu
 // sank into the bar or floated off it.
-function SlideMenu({ open, onClose, onNavigate, user, view, finalize, navH }) {
+function SlideMenu({ open, onClose, onNavigate, user, view, finalize, onEditions, navH }) {
   const dragRef = useRef(null);
   const startYRef = useRef(null);
   const [dragY, setDragY] = useState(0);
@@ -5271,6 +5271,13 @@ function SlideMenu({ open, onClose, onNavigate, user, view, finalize, navH }) {
     ...(finalize ? [{ key: "finalize", label: finalize.label, icon: "🏁", action: finalize.onOpen, flag: finalize.ready }] : []),
     { key: "analytics", label: "Player Analytics", icon: "📊" },
     { key: "history",   label: "Historical Data",  icon: "📅" },
+    // Every year the cup has been played, each one a whole tournament you can
+    // open — the leaderboard, the draw and all sixty-four cards of it. It sits
+    // under Historical Data because they answer the same question from two
+    // sides: that row is the summary of the past, this one walks into it.
+    // The active year rides on the row so the menu says which tournament is on
+    // screen without opening anything.
+    { key: "editions",  label: "Tournaments",      icon: "🏆", action: onEditions, value: String(getTournamentYear()) },
     { key: "photos",    label: "Photo Library",     icon: "📸", external: true },
     ...(user?.isDirector ? [{ key: "admin", label: "Admin Settings", icon: "⚙️" }] : []),
     // Last, and set apart below: everything above is the EVENT, this is the
@@ -5329,6 +5336,7 @@ function SlideMenu({ open, onClose, onNavigate, user, view, finalize, navH }) {
               display: "flex", alignItems: "center", justifyContent: "space-between",
             }}>
               <span>{item.label}</span>
+              {item.value && <span style={{ fontSize: FS.small, fontWeight: 700, color: BC.t3 }}>{item.value}</span>}
               {(isActive || item.flag) && <span style={{ width: 6, height: 6, borderRadius: "50%", background: BC.amber, flexShrink: 0 }} />}
             </button>
           );
@@ -5484,6 +5492,7 @@ export default function App() {
   // user reopening the app to check current state.
   const [view, setView] = useState("leaderboard");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [editionsOpen, setEditionsOpen] = useState(false);
   const [ctpData, setCtpData] = useState({});     // { "round_hole": record }
   const [skinsPot, setSkinsPot] = useState(0);
   // Side-game buy-ins, from bc_settings_main. Each `*In` is an ARRAY of player
@@ -5605,6 +5614,13 @@ export default function App() {
     // write the rules would refuse.
     if (bootstrapDirector || mine?.player_id === BOOTSTRAP_DIRECTOR.player_id) {
       return { ...BOOTSTRAP_DIRECTOR, isDirector: isDirectorUser };
+    }
+    // Looking at another year. Written by an edition switch and good only for
+    // the edition it names (see firebase.spectatorSession), so a player who
+    // has never claimed a name still meets the claim screen on the tournament
+    // being played. The crown is not trusted from the cache here either.
+    if (mine?.player_id === SPECTATOR_ID && mine.edition === getActiveTournamentId()) {
+      return { ...mine, isDirector: isDirectorUser };
     }
     // Roster still in flight: hold the last known identity rather than
     // flash the claim screen at somebody who claimed a name months ago.
@@ -7055,7 +7071,13 @@ export default function App() {
         <div className="bc-nav-spacer" aria-hidden="true" style={{ flexShrink: 0, height: 12 }} />
       </div>
 
-      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} user={user} view={view} finalize={finalizeMenu} navH={navH} />
+      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} user={user} view={view}
+        finalize={finalizeMenu} onEditions={() => setEditionsOpen(true)} navH={navH} />
+
+      {/* Every year the cup has been played. Opened from the menu by anybody;
+          `canManage` is what adds the create/delete half for a director, who
+          also reaches the same modal from Admin → Tournament. */}
+      <EditionSwitcher open={editionsOpen} onClose={() => setEditionsOpen(false)} canManage={!!user?.isDirector} />
 
       {/* The Finalize sheet — everything the removed Scoring card held, at
           zero cost until it is opened. */}
