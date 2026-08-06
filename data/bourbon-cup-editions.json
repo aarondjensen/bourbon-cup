@@ -617,7 +617,9 @@
         }
       ],
       "extra_holes": [],
-      "warnings": []
+      "warnings": [
+        "no team colours on the scoreboard banner — the app's own palette stands"
+      ]
     },
     {
       "year": 2017,
@@ -1252,7 +1254,8 @@
       ],
       "extra_holes": [],
       "warnings": [
-        "no points table on the sheet — matches scored at the 3-point Nassau of the years either side"
+        "no points table on the sheet — matches scored at the 3-point Nassau of the years either side",
+        "no team colours on the scoreboard banner — the app's own palette stands"
       ]
     },
     {
@@ -1888,7 +1891,8 @@
       ],
       "extra_holes": [],
       "warnings": [
-        "R4: contributions per hole varied — the sheet's own count is 4/4"
+        "R4: contributions per hole varied — the sheet's own count is 4/4",
+        "no team colours on the scoreboard banner — the app's own palette stands"
       ]
     },
     {
@@ -1897,6 +1901,14 @@
       "teams": {
         "A": "DEFCON",
         "B": "BULLEIT"
+      },
+      "brand": {
+        "A": {
+          "color": "#B6D7A8"
+        },
+        "B": {
+          "color": "#B7B7B7"
+        }
       },
       "players": [
         {
@@ -2531,6 +2543,14 @@
       "teams": {
         "A": "Family Biz",
         "B": "TeeHawks"
+      },
+      "brand": {
+        "A": {
+          "color": "#FFC281"
+        },
+        "B": {
+          "color": "#96FF96"
+        }
       },
       "players": [
         {
@@ -3273,6 +3293,14 @@
       "teams": {
         "A": "Choy's Boyz",
         "B": "Tall Boys"
+      },
+      "brand": {
+        "A": {
+          "color": "#9FC5E8"
+        },
+        "B": {
+          "color": "#B7B7B7"
+        }
       },
       "players": [
         {
@@ -4535,7 +4563,9 @@
         }
       ],
       "extra_holes": [],
-      "warnings": []
+      "warnings": [
+        "no team colours on the scoreboard banner — the app's own palette stands"
+      ]
     },
     {
       "year": 2023,
@@ -4543,6 +4573,11 @@
       "teams": {
         "A": "TEES",
         "B": "WEEZ"
+      },
+      "brand": {
+        "A": {
+          "color": "#316746"
+        }
       },
       "players": [
         {
@@ -5180,6 +5215,11 @@
         "A": "Foxes",
         "B": "Admin"
       },
+      "brand": {
+        "A": {
+          "color": "#086FB2"
+        }
+      },
       "players": [
         {
           "id": "nicks",
@@ -5815,6 +5855,14 @@
       "teams": {
         "A": "Mash Brothers",
         "B": "Shot Callers"
+      },
+      "brand": {
+        "A": {
+          "color": "#129547"
+        },
+        "B": {
+          "color": "#A2C4C9"
+        }
       },
       "players": [
         {

@@ -41,6 +41,7 @@ import { readFileSync, readdirSync, existsSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildResolver, formalName, realName } from "./players.mjs";
+import { teamBrandFor } from "./team-brand.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DATA_DIR = join(ROOT, "data");
@@ -646,10 +647,21 @@ function buildYear(year, { backbone, facts }) {
     warnings.push(`R${r.round}: a borrowed ball ("Ghost") is on the card and is imported as a roster entry`);
   }
 
+  // The colours the year was played in, off the SCOREBOARD banner. Part of the
+  // build rather than a second pass over the file, so a rebuild cannot quietly
+  // drop them.
+  const teams = { A: master.teams[0] || "Team A", B: master.teams[1] || "Team B" };
+  const banner = teamBrandFor(year, teams);
+  const brand = {};
+  if (banner?.A?.accent) brand.A = { color: banner.A.accent };
+  if (banner?.B?.accent) brand.B = { color: banner.B.accent };
+  if (!banner) warnings.push("no team colours on the scoreboard banner — the app's own palette stands");
+
   return {
     year,
     name: `The Bourbon Cup ${year}`,
-    teams: { A: master.teams[0] || "Team A", B: master.teams[1] || "Team B" },
+    teams,
+    ...(Object.keys(brand).length ? { brand } : {}),
     players: roster,
     rounds,
     matches,
