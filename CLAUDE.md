@@ -190,8 +190,9 @@ Master Input's team cell is highlighted yellow because it is an input cell, and
 the rest of the workbook's colour is the template's own. A black banner hands
 over to its type (Shot Callers is black lettered in teal, which is the teal the
 app has always drawn them in); a banner in black and white gives no colour and
-that side keeps the app's palette. 2016–2018 and 2022 have no banner colour at
-all. **No logos** — only 2024's workbook has one embedded, and the sheets for
+that side keeps the app's palette. 2016–2018 have no banner colour at all, and
+2022 wrote its teams in coloured type rather than a fill — Irons navy, and
+Drivers red from the one hex Aaron had to name, which the file says so about. **No logos** — only 2024's workbook has one embedded, and the sheets for
 the other years hold none.
 
 **The course handicap is stored, not derived.** Handicaps were pasted into

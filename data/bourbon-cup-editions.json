@@ -3938,6 +3938,14 @@
         "A": "Irons",
         "B": "Drivers"
       },
+      "brand": {
+        "A": {
+          "color": "#073763"
+        },
+        "B": {
+          "color": "#CC0000"
+        }
+      },
       "players": [
         {
           "id": "jensen",
@@ -4563,9 +4571,7 @@
         }
       ],
       "extra_holes": [],
-      "warnings": [
-        "no team colours on the scoreboard banner — the app's own palette stands"
-      ]
+      "warnings": []
     },
     {
       "year": 2023,
