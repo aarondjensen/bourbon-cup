@@ -205,6 +205,28 @@ export const USER_SESSION_KEY = "bc_user";
 // exist in the new edition. Persisted in place of a stale player identity.
 export const BOOTSTRAP_DIRECTOR = { player_id: "bootstrap_director", name: "Director (Setup)", team: null, isDirector: true };
 
+// ── Viewing an edition you are not in ───────────────────────────────
+// Every past cup imported from the spreadsheets has a roster of sixteen
+// players and not one account behind any of them, because those tournaments
+// finished before the app existed. Landing on the claim screen is the wrong
+// answer there: it asks somebody who only wanted to look at 2019 to bind their
+// account to a roster row on a finished tournament, which only a director can
+// undo.
+//
+// So switching editions writes THIS instead of a player — a player-less
+// identity that gets past the claim screen and shows the app read-only, the
+// same way the bootstrap director does for an empty new edition. It grants
+// nothing: Admin still rides on the membership flag, exactly as it does for
+// every other identity.
+//
+// SCOPED TO THE EDITION IT WAS WRITTEN FOR, which is the part that matters. A
+// player who has never claimed a name must still meet the claim screen on the
+// live tournament; without the scope, one look at 2019 would leave them a
+// spectator on the year they are actually playing.
+export const SPECTATOR_ID = "spectator";
+export const spectatorSession = (tid = TOURNAMENT_ID) =>
+  ({ player_id: SPECTATOR_ID, name: "Viewing", team: null, isDirector: false, edition: tid });
+
 export const readUserSession = () => {
   try {
     if (typeof localStorage === "undefined") return null;

@@ -1,0 +1,6133 @@
+{
+  "editions": [
+    {
+      "year": 2016,
+      "name": "The Bourbon Cup 2016",
+      "teams": {
+        "A": "BIRDS",
+        "B": "SHOOTERS"
+      },
+      "players": [
+        {
+          "id": "bent",
+          "name": "Ben T",
+          "team": "A",
+          "index": 8.3
+        },
+        {
+          "id": "pace",
+          "name": "Pace",
+          "team": "A",
+          "index": 11.6
+        },
+        {
+          "id": "daveb",
+          "name": "Dave B",
+          "team": "A",
+          "index": 17.8
+        },
+        {
+          "id": "dk",
+          "name": "DK",
+          "team": "A",
+          "index": 20.4
+        },
+        {
+          "id": "joeo",
+          "name": "Joe O",
+          "team": "A",
+          "index": 18.4
+        },
+        {
+          "id": "saugy",
+          "name": "Saugy",
+          "team": "A",
+          "index": 31.7
+        },
+        {
+          "id": "paulw",
+          "name": "Paul W",
+          "team": "A",
+          "index": 12.4
+        },
+        {
+          "id": "timc",
+          "name": "Tim C",
+          "team": "A",
+          "index": 12.5
+        },
+        {
+          "id": "andy",
+          "name": "Andy",
+          "team": "B",
+          "index": 7.9
+        },
+        {
+          "id": "jimh",
+          "name": "Jim H",
+          "team": "B",
+          "index": 24.7
+        },
+        {
+          "id": "johns",
+          "name": "John S",
+          "team": "B",
+          "index": -3.8
+        },
+        {
+          "id": "kj",
+          "name": "KJ",
+          "team": "B",
+          "index": 17.4
+        },
+        {
+          "id": "petec",
+          "name": "Pete C",
+          "team": "B",
+          "index": 20.9
+        },
+        {
+          "id": "rmac",
+          "name": "R-Mac",
+          "team": "B",
+          "index": 14
+        },
+        {
+          "id": "tjsc",
+          "name": "TJSC",
+          "team": "B",
+          "index": 13.4
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "format": "best_ball",
+          "source_format": "2man_best_ball",
+          "course": {
+            "name": "Arthur Hills - Orange",
+            "par": 73,
+            "rating": 71.2,
+            "slope": 130,
+            "hole_pars": [
+              4,
+              4,
+              5,
+              4,
+              4,
+              5,
+              3,
+              4,
+              3,
+              4,
+              5,
+              4,
+              5,
+              3,
+              4,
+              3,
+              4,
+              5
+            ],
+            "hole_handicaps": [
+              9,
+              13,
+              7,
+              11,
+              1,
+              3,
+              17,
+              5,
+              15,
+              14,
+              2,
+              12,
+              10,
+              18,
+              4,
+              16,
+              6,
+              8
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 1
+          },
+          "hole_points": null,
+          "ch": {
+            "bent": 10,
+            "pace": 13,
+            "daveb": 20,
+            "dk": 23,
+            "joeo": 21,
+            "saugy": 36,
+            "paulw": 14,
+            "timc": 14,
+            "andy": 9,
+            "jimh": 28,
+            "johns": -4,
+            "kj": 20,
+            "petec": 24,
+            "rmac": 16,
+            "tjsc": 15
+          }
+        },
+        {
+          "round": 2,
+          "format": "double_dot",
+          "source_format": "2man_hi_lo",
+          "course": {
+            "name": "The Heather - Orange",
+            "par": 72,
+            "rating": 70.3,
+            "slope": 139,
+            "hole_pars": [
+              4,
+              4,
+              4,
+              3,
+              5,
+              3,
+              4,
+              4,
+              5,
+              4,
+              5,
+              3,
+              4,
+              4,
+              5,
+              3,
+              4,
+              4
+            ],
+            "hole_handicaps": [
+              13,
+              9,
+              7,
+              15,
+              1,
+              17,
+              11,
+              5,
+              3,
+              14,
+              2,
+              16,
+              8,
+              6,
+              10,
+              18,
+              12,
+              4
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 1
+          },
+          "hole_points": null,
+          "ch": {
+            "bent": 10,
+            "pace": 14,
+            "daveb": 22,
+            "dk": 25,
+            "joeo": 23,
+            "saugy": 39,
+            "paulw": 15,
+            "timc": 15,
+            "andy": 10,
+            "jimh": 30,
+            "johns": -5,
+            "kj": 21,
+            "petec": 26,
+            "rmac": 17,
+            "tjsc": 16
+          }
+        },
+        {
+          "round": 3,
+          "format": "singles",
+          "source_format": "singles",
+          "course": {
+            "name": "Crooked Tree - Purple",
+            "par": 71,
+            "rating": 71.4,
+            "slope": 135,
+            "hole_pars": [
+              4,
+              3,
+              4,
+              4,
+              3,
+              5,
+              4,
+              3,
+              5,
+              4,
+              3,
+              4,
+              5,
+              4,
+              3,
+              4,
+              5,
+              4
+            ],
+            "hole_handicaps": [
+              11,
+              17,
+              3,
+              9,
+              13,
+              1,
+              5,
+              15,
+              7,
+              6,
+              16,
+              12,
+              2,
+              14,
+              18,
+              10,
+              4,
+              8
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 1
+          },
+          "hole_points": null,
+          "ch": {
+            "bent": 10,
+            "pace": 14,
+            "daveb": 21,
+            "dk": 24,
+            "joeo": 22,
+            "saugy": 37,
+            "paulw": 15,
+            "andy": 9,
+            "jimh": 29,
+            "johns": -4,
+            "kj": 20,
+            "petec": 25,
+            "rmac": 16,
+            "tjsc": 16
+          }
+        },
+        {
+          "round": 4,
+          "format": "team_best_ball",
+          "source_format": "team_best_ball",
+          "course": {
+            "name": "Bay Harbor (Quarry/Links) - Blue",
+            "par": 72,
+            "rating": 71.2,
+            "slope": 142,
+            "hole_pars": [
+              4,
+              4,
+              4,
+              3,
+              4,
+              4,
+              5,
+              3,
+              5,
+              4,
+              3,
+              5,
+              4,
+              5,
+              4,
+              4,
+              3,
+              4
+            ],
+            "hole_handicaps": [
+              13,
+              7,
+              9,
+              17,
+              15,
+              5,
+              3,
+              11,
+              1,
+              18,
+              14,
+              2,
+              6,
+              4,
+              12,
+              8,
+              16,
+              10
+            ]
+          },
+          "nassau": null,
+          "hole_points": {
+            "front": 1,
+            "back": 2
+          },
+          "ch": {
+            "bent": 10,
+            "pace": 15,
+            "daveb": 22,
+            "dk": 26,
+            "joeo": 23,
+            "saugy": 40,
+            "paulw": 16,
+            "andy": 10,
+            "jimh": 31,
+            "johns": -5,
+            "kj": 22,
+            "petec": 26,
+            "rmac": 18,
+            "tjsc": 17
+          },
+          "counting_scores": {
+            "front": 4,
+            "back": 4
+          },
+          "recorded_points": {
+            "B": 8.5,
+            "A": 18.5
+          }
+        }
+      ],
+      "matches": [
+        {
+          "round": 1,
+          "teamA": [
+            "timc",
+            "dk"
+          ],
+          "teamB": [
+            "rmac",
+            "jimh"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "bent",
+            "daveb"
+          ],
+          "teamB": [
+            "andy",
+            "tjsc"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "pace",
+            "joeo"
+          ],
+          "teamB": [
+            "johns",
+            "kj"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "paulw",
+            "saugy"
+          ],
+          "teamB": [
+            "rmac",
+            "petec"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "timc",
+            "paulw"
+          ],
+          "teamB": [
+            "andy",
+            "rmac"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "pace",
+            "saugy"
+          ],
+          "teamB": [
+            "tjsc",
+            "jimh"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "bent",
+            "dk"
+          ],
+          "teamB": [
+            "johns",
+            "petec"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "daveb",
+            "joeo"
+          ],
+          "teamB": [
+            "kj",
+            "petec"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "bent"
+          ],
+          "teamB": [
+            "tjsc"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "paulw"
+          ],
+          "teamB": [
+            "tjsc"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "daveb"
+          ],
+          "teamB": [
+            "jimh"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "pace"
+          ],
+          "teamB": [
+            "kj"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "dk"
+          ],
+          "teamB": [
+            "andy"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "timc"
+          ],
+          "teamB": [
+            "rmac"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "joeo"
+          ],
+          "teamB": [
+            "johns"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "saugy"
+          ],
+          "teamB": [
+            "petec"
+          ]
+        },
+        {
+          "round": 4,
+          "teamA": [
+            "bent",
+            "pace",
+            "daveb",
+            "dk",
+            "joeo",
+            "saugy",
+            "paulw",
+            "timc"
+          ],
+          "teamB": [
+            "andy",
+            "jimh",
+            "johns",
+            "kj",
+            "petec",
+            "rmac",
+            "tjsc"
+          ]
+        }
+      ],
+      "extra_holes": [],
+      "warnings": []
+    },
+    {
+      "year": 2017,
+      "name": "The Bourbon Cup 2017",
+      "teams": {
+        "A": "G-MEN",
+        "B": "B9B"
+      },
+      "players": [
+        {
+          "id": "jensen",
+          "name": "Jensen",
+          "team": "A",
+          "index": 6.2
+        },
+        {
+          "id": "pace",
+          "name": "Pace",
+          "team": "A",
+          "index": 11.3
+        },
+        {
+          "id": "andy",
+          "name": "Andy",
+          "team": "A",
+          "index": 9.1
+        },
+        {
+          "id": "jimh",
+          "name": "Jim H",
+          "team": "A",
+          "index": 26
+        },
+        {
+          "id": "kylem",
+          "name": "Kyle M",
+          "team": "A",
+          "index": 20.2
+        },
+        {
+          "id": "matth",
+          "name": "Matt H",
+          "team": "A",
+          "index": 18.1
+        },
+        {
+          "id": "petec",
+          "name": "Pete C",
+          "team": "A",
+          "index": 21.8
+        },
+        {
+          "id": "rmac",
+          "name": "R-Mac",
+          "team": "A",
+          "index": 12.4
+        },
+        {
+          "id": "bent",
+          "name": "Ben T",
+          "team": "B",
+          "index": 8.7
+        },
+        {
+          "id": "daveb",
+          "name": "Dave B",
+          "team": "B",
+          "index": 16.5
+        },
+        {
+          "id": "grants",
+          "name": "Grant S",
+          "team": "B",
+          "index": 14.1
+        },
+        {
+          "id": "kj",
+          "name": "KJ",
+          "team": "B",
+          "index": 16.5
+        },
+        {
+          "id": "nicks",
+          "name": "Nick S",
+          "team": "B",
+          "index": 8.3
+        },
+        {
+          "id": "saugy",
+          "name": "Saugy",
+          "team": "B",
+          "index": 29.6
+        },
+        {
+          "id": "paulw",
+          "name": "Paul W",
+          "team": "B",
+          "index": 14.9
+        },
+        {
+          "id": "tjsc",
+          "name": "TJSC",
+          "team": "B",
+          "index": 13
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "format": "best_ball",
+          "source_format": "2man_best_ball",
+          "course": {
+            "name": "NEVEL MEADE - Blue",
+            "par": 72,
+            "rating": 70.1,
+            "slope": 124,
+            "hole_pars": [
+              4,
+              5,
+              4,
+              4,
+              3,
+              4,
+              5,
+              3,
+              4,
+              4,
+              4,
+              4,
+              3,
+              5,
+              3,
+              4,
+              4,
+              5
+            ],
+            "hole_handicaps": [
+              12,
+              8,
+              2,
+              18,
+              16,
+              14,
+              4,
+              10,
+              6,
+              13,
+              1,
+              3,
+              17,
+              7,
+              9,
+              11,
+              5,
+              15
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 1
+          },
+          "hole_points": null,
+          "ch": {
+            "jensen": 8,
+            "pace": 13,
+            "andy": 10,
+            "jimh": 28,
+            "kylem": 22,
+            "matth": 19,
+            "petec": 24,
+            "rmac": 15,
+            "bent": 10,
+            "daveb": 20,
+            "grants": 16,
+            "kj": 19,
+            "nicks": 9,
+            "saugy": 34,
+            "paulw": 16,
+            "tjsc": 14
+          }
+        },
+        {
+          "round": 2,
+          "format": "singles",
+          "source_format": "singles",
+          "course": {
+            "name": "COVERED BRIDGE - Gold",
+            "par": 72,
+            "rating": 70.9,
+            "slope": 129,
+            "hole_pars": [
+              4,
+              4,
+              3,
+              4,
+              5,
+              4,
+              4,
+              3,
+              5,
+              4,
+              4,
+              3,
+              4,
+              5,
+              4,
+              4,
+              3,
+              5
+            ],
+            "hole_handicaps": [
+              17,
+              3,
+              15,
+              7,
+              1,
+              11,
+              13,
+              5,
+              9,
+              6,
+              16,
+              14,
+              4,
+              8,
+              12,
+              2,
+              18,
+              10
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 1
+          },
+          "hole_points": null,
+          "ch": {
+            "jensen": 8,
+            "pace": 14,
+            "andy": 11,
+            "jimh": 29,
+            "kylem": 23,
+            "matth": 20,
+            "petec": 26,
+            "rmac": 15,
+            "bent": 10,
+            "daveb": 19,
+            "grants": 17,
+            "kj": 19,
+            "nicks": 10,
+            "saugy": 34,
+            "paulw": 17,
+            "tjsc": 15
+          }
+        },
+        {
+          "round": 3,
+          "format": "pinehurst",
+          "source_format": "pinehurst",
+          "course": {
+            "name": "CHAMPIONS POINTE - White",
+            "par": 72,
+            "rating": 71.3,
+            "slope": 130,
+            "hole_pars": [
+              4,
+              3,
+              5,
+              3,
+              4,
+              5,
+              4,
+              4,
+              4,
+              4,
+              3,
+              5,
+              4,
+              4,
+              3,
+              5,
+              4,
+              4
+            ],
+            "hole_handicaps": [
+              17,
+              13,
+              5,
+              9,
+              15,
+              11,
+              1,
+              3,
+              7,
+              14,
+              16,
+              8,
+              6,
+              10,
+              12,
+              4,
+              18,
+              2
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 1
+          },
+          "hole_points": null,
+          "ch": {
+            "jensen": 12.8,
+            "pace": 20,
+            "andy": 15.8,
+            "jimh": 20,
+            "kylem": 15.8,
+            "matth": 12.8,
+            "petec": 19.4,
+            "rmac": 19.4,
+            "bent": 13.6,
+            "daveb": 17.8,
+            "grants": 23.8,
+            "kj": 13.6,
+            "nicks": 12,
+            "saugy": 23.8,
+            "paulw": 17.8,
+            "tjsc": 12
+          }
+        },
+        {
+          "round": 4,
+          "format": "team_best_ball",
+          "source_format": "8man_top4net",
+          "course": {
+            "name": "GLENOAKS CC - Black",
+            "par": 72,
+            "rating": 71.5,
+            "slope": 125,
+            "hole_pars": [
+              4,
+              4,
+              3,
+              4,
+              4,
+              4,
+              5,
+              3,
+              5,
+              4,
+              4,
+              3,
+              5,
+              4,
+              4,
+              5,
+              4,
+              3
+            ],
+            "hole_handicaps": [
+              7,
+              1,
+              9,
+              5,
+              11,
+              13,
+              17,
+              15,
+              3,
+              6,
+              18,
+              16,
+              10,
+              8,
+              14,
+              4,
+              2,
+              12
+            ]
+          },
+          "nassau": null,
+          "hole_points": {
+            "front": 1,
+            "back": 2
+          },
+          "ch": {
+            "jensen": 7,
+            "pace": 13,
+            "andy": 10,
+            "jimh": 29,
+            "kylem": 22,
+            "matth": 20,
+            "petec": 24,
+            "rmac": 14,
+            "bent": 10,
+            "daveb": 18,
+            "grants": 16,
+            "kj": 18,
+            "nicks": 9,
+            "saugy": 33,
+            "paulw": 16,
+            "tjsc": 14
+          },
+          "counting_scores": {
+            "front": 4,
+            "back": 4
+          },
+          "recorded_points": {
+            "A": 13,
+            "B": 14
+          }
+        }
+      ],
+      "matches": [
+        {
+          "round": 1,
+          "teamA": [
+            "kylem",
+            "matth"
+          ],
+          "teamB": [
+            "grants",
+            "paulw"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "rmac",
+            "jimh"
+          ],
+          "teamB": [
+            "nicks",
+            "kj"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "jensen",
+            "petec"
+          ],
+          "teamB": [
+            "tjsc",
+            "daveb"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "andy",
+            "pace"
+          ],
+          "teamB": [
+            "bent",
+            "saugy"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "jensen"
+          ],
+          "teamB": [
+            "nicks"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "pace"
+          ],
+          "teamB": [
+            "grants"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "andy"
+          ],
+          "teamB": [
+            "kj"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "rmac"
+          ],
+          "teamB": [
+            "daveb"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "petec"
+          ],
+          "teamB": [
+            "tjsc"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "matth"
+          ],
+          "teamB": [
+            "bent"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "jimh"
+          ],
+          "teamB": [
+            "paulw"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "kylem"
+          ],
+          "teamB": [
+            "saugy"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "rmac",
+            "petec"
+          ],
+          "teamB": [
+            "bent",
+            "kj"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "pace",
+            "jimh"
+          ],
+          "teamB": [
+            "nicks",
+            "tjsc"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "jensen",
+            "matth"
+          ],
+          "teamB": [
+            "grants",
+            "saugy"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "andy",
+            "kylem"
+          ],
+          "teamB": [
+            "paulw",
+            "daveb"
+          ]
+        },
+        {
+          "round": 4,
+          "teamA": [
+            "jensen",
+            "pace",
+            "andy",
+            "jimh",
+            "kylem",
+            "matth",
+            "petec",
+            "rmac"
+          ],
+          "teamB": [
+            "bent",
+            "daveb",
+            "grants",
+            "kj",
+            "nicks",
+            "saugy",
+            "paulw",
+            "tjsc"
+          ]
+        }
+      ],
+      "extra_holes": [],
+      "warnings": [
+        "no points table on the sheet — matches scored at the 3-point Nassau of the years either side"
+      ]
+    },
+    {
+      "year": 2018,
+      "name": "The Bourbon Cup 2018",
+      "teams": {
+        "A": "TEE'S CO.",
+        "B": "BEASTS"
+      },
+      "players": [
+        {
+          "id": "bent",
+          "name": "Ben T",
+          "team": "A",
+          "index": null
+        },
+        {
+          "id": "nicks",
+          "name": "Nick S",
+          "team": "A",
+          "index": null
+        },
+        {
+          "id": "paulw",
+          "name": "Paul W",
+          "team": "A",
+          "index": null
+        },
+        {
+          "id": "shaunw",
+          "name": "Shaun W",
+          "team": "A",
+          "index": null
+        },
+        {
+          "id": "tjsc",
+          "name": "TJSC",
+          "team": "A",
+          "index": null
+        },
+        {
+          "id": "timc",
+          "name": "Tim C",
+          "team": "A",
+          "index": null
+        },
+        {
+          "id": "jimh",
+          "name": "Jim H",
+          "team": "A",
+          "index": null
+        },
+        {
+          "id": "saugy",
+          "name": "Saugy",
+          "team": "A",
+          "index": null
+        },
+        {
+          "id": "jensen",
+          "name": "Jensen",
+          "team": "B",
+          "index": null
+        },
+        {
+          "id": "andy",
+          "name": "Andy",
+          "team": "B",
+          "index": null
+        },
+        {
+          "id": "grants",
+          "name": "Grant S",
+          "team": "B",
+          "index": null
+        },
+        {
+          "id": "rmac",
+          "name": "R-Mac",
+          "team": "B",
+          "index": null
+        },
+        {
+          "id": "kj",
+          "name": "KJ",
+          "team": "B",
+          "index": null
+        },
+        {
+          "id": "daveb",
+          "name": "Dave B",
+          "team": "B",
+          "index": null
+        },
+        {
+          "id": "dk",
+          "name": "DK",
+          "team": "B",
+          "index": null
+        },
+        {
+          "id": "petec",
+          "name": "Pete C",
+          "team": "B",
+          "index": null
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "format": "shamble",
+          "source_format": "shamble",
+          "course": {
+            "name": "Katke - Crimson/Silver",
+            "par": 72,
+            "rating": 69.7,
+            "slope": 131,
+            "hole_pars": [
+              4,
+              4,
+              4,
+              3,
+              4,
+              5,
+              4,
+              3,
+              5,
+              4,
+              3,
+              5,
+              4,
+              4,
+              3,
+              5,
+              3,
+              5
+            ],
+            "hole_handicaps": [
+              13,
+              1,
+              17,
+              5,
+              7,
+              15,
+              3,
+              9,
+              11,
+              4,
+              8,
+              16,
+              14,
+              2,
+              10,
+              18,
+              6,
+              12
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 1
+          },
+          "hole_points": null,
+          "ch": {
+            "bent": 4,
+            "nicks": 7,
+            "paulw": 10,
+            "shaunw": 9,
+            "tjsc": 10,
+            "timc": 13,
+            "jimh": 22,
+            "saugy": 21,
+            "jensen": 5,
+            "andy": 6,
+            "grants": 9,
+            "rmac": 11,
+            "kj": 12,
+            "daveb": 14,
+            "dk": 15,
+            "petec": 18
+          }
+        },
+        {
+          "round": 2,
+          "format": "singles",
+          "source_format": "singles",
+          "course": {
+            "name": "St. Ives - Blue/White",
+            "par": 72,
+            "rating": 69.4,
+            "slope": 129,
+            "hole_pars": [
+              4,
+              3,
+              4,
+              5,
+              4,
+              4,
+              5,
+              3,
+              4,
+              4,
+              5,
+              4,
+              3,
+              4,
+              4,
+              3,
+              5,
+              4
+            ],
+            "hole_handicaps": [
+              3,
+              13,
+              1,
+              5,
+              11,
+              17,
+              7,
+              15,
+              9,
+              14,
+              12,
+              8,
+              16,
+              2,
+              10,
+              18,
+              6,
+              4
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 1
+          },
+          "hole_points": null,
+          "ch": {
+            "bent": 5,
+            "nicks": 10,
+            "paulw": 14,
+            "shaunw": 13,
+            "tjsc": 14,
+            "timc": 18,
+            "jimh": 30,
+            "saugy": 30,
+            "jensen": 7,
+            "andy": 8,
+            "grants": 13,
+            "rmac": 16,
+            "kj": 17,
+            "daveb": 20,
+            "dk": 22,
+            "petec": 26
+          }
+        },
+        {
+          "round": 3,
+          "format": "best_ball",
+          "source_format": "2man_best_ball",
+          "course": {
+            "name": "Tullymore - Blue/White",
+            "par": 72,
+            "rating": 69.6,
+            "slope": 136,
+            "hole_pars": [
+              5,
+              4,
+              4,
+              3,
+              3,
+              4,
+              3,
+              5,
+              4,
+              4,
+              4,
+              3,
+              5,
+              4,
+              3,
+              5,
+              4,
+              5
+            ],
+            "hole_handicaps": [
+              5,
+              1,
+              9,
+              13,
+              17,
+              11,
+              15,
+              3,
+              7,
+              4,
+              14,
+              16,
+              8,
+              6,
+              18,
+              2,
+              12,
+              10
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 1
+          },
+          "hole_points": null,
+          "ch": {
+            "bent": 5,
+            "nicks": 11,
+            "paulw": 15,
+            "shaunw": 14,
+            "tjsc": 15,
+            "timc": 19,
+            "jimh": 32,
+            "saugy": 31,
+            "jensen": 7,
+            "andy": 8,
+            "grants": 14,
+            "rmac": 17,
+            "kj": 18,
+            "daveb": 21,
+            "dk": 23,
+            "petec": 27
+          }
+        },
+        {
+          "round": 4,
+          "format": "team_best_ball",
+          "source_format": "team_best_ball",
+          "course": {
+            "name": "Katke - Crimson/Silver",
+            "par": 72,
+            "rating": 69.7,
+            "slope": 131,
+            "hole_pars": [
+              4,
+              4,
+              4,
+              3,
+              4,
+              5,
+              4,
+              3,
+              5,
+              4,
+              3,
+              5,
+              4,
+              4,
+              3,
+              5,
+              3,
+              5
+            ],
+            "hole_handicaps": [
+              13,
+              1,
+              17,
+              5,
+              7,
+              15,
+              3,
+              9,
+              11,
+              4,
+              8,
+              16,
+              14,
+              2,
+              10,
+              18,
+              6,
+              12
+            ]
+          },
+          "nassau": null,
+          "hole_points": {
+            "front": 1,
+            "back": 2
+          },
+          "ch": {
+            "bent": 5,
+            "nicks": 11,
+            "paulw": 14,
+            "shaunw": 13,
+            "tjsc": 14,
+            "timc": 18,
+            "jimh": 31,
+            "saugy": 30,
+            "jensen": 7,
+            "andy": 8,
+            "grants": 13,
+            "rmac": 16,
+            "kj": 17,
+            "daveb": 21,
+            "dk": 23,
+            "petec": 26
+          },
+          "counting_scores": {
+            "front": 4,
+            "back": 4
+          },
+          "recorded_points": {
+            "B": 12,
+            "A": 15
+          }
+        }
+      ],
+      "matches": [
+        {
+          "round": 1,
+          "teamA": [
+            "saugy",
+            "jimh"
+          ],
+          "teamB": [
+            "grants",
+            "daveb"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "nicks",
+            "shaunw"
+          ],
+          "teamB": [
+            "jensen",
+            "kj"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "bent",
+            "paulw"
+          ],
+          "teamB": [
+            "andy",
+            "dk"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "tjsc",
+            "timc"
+          ],
+          "teamB": [
+            "rmac",
+            "petec"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "timc"
+          ],
+          "teamB": [
+            "jensen"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "nicks"
+          ],
+          "teamB": [
+            "rmac"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "paulw"
+          ],
+          "teamB": [
+            "daveb"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "tjsc"
+          ],
+          "teamB": [
+            "dk"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "bent"
+          ],
+          "teamB": [
+            "grants"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "saugy"
+          ],
+          "teamB": [
+            "kj"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "shaunw"
+          ],
+          "teamB": [
+            "andy"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "jimh"
+          ],
+          "teamB": [
+            "petec"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "bent",
+            "timc"
+          ],
+          "teamB": [
+            "rmac",
+            "kj"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "tjsc",
+            "jimh"
+          ],
+          "teamB": [
+            "jensen",
+            "daveb"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "nicks",
+            "saugy"
+          ],
+          "teamB": [
+            "andy",
+            "grants"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "shaunw",
+            "paulw"
+          ],
+          "teamB": [
+            "dk",
+            "petec"
+          ]
+        },
+        {
+          "round": 4,
+          "teamA": [
+            "bent",
+            "nicks",
+            "paulw",
+            "shaunw",
+            "tjsc",
+            "timc",
+            "jimh",
+            "saugy"
+          ],
+          "teamB": [
+            "jensen",
+            "andy",
+            "grants",
+            "rmac",
+            "kj",
+            "daveb",
+            "dk",
+            "petec"
+          ]
+        }
+      ],
+      "extra_holes": [],
+      "warnings": [
+        "R4: contributions per hole varied — the sheet's own count is 4/4"
+      ]
+    },
+    {
+      "year": 2019,
+      "name": "The Bourbon Cup 2019",
+      "teams": {
+        "A": "DEFCON",
+        "B": "BULLEIT"
+      },
+      "players": [
+        {
+          "id": "bent",
+          "name": "Ben T",
+          "team": "A",
+          "index": 7.5
+        },
+        {
+          "id": "jensen",
+          "name": "Jensen",
+          "team": "A",
+          "index": 7.2
+        },
+        {
+          "id": "timc",
+          "name": "Tim C",
+          "team": "A",
+          "index": 13.3
+        },
+        {
+          "id": "tjsc",
+          "name": "TJSC",
+          "team": "A",
+          "index": 15.1
+        },
+        {
+          "id": "paulw",
+          "name": "Paul W",
+          "team": "A",
+          "index": 14.5
+        },
+        {
+          "id": "dk",
+          "name": "DK",
+          "team": "A",
+          "index": 19.5
+        },
+        {
+          "id": "jimh",
+          "name": "Jim H",
+          "team": "A",
+          "index": 26.4
+        },
+        {
+          "id": "saugy",
+          "name": "Saugy",
+          "team": "A",
+          "index": 28.4
+        },
+        {
+          "id": "johns",
+          "name": "John S",
+          "team": "B",
+          "index": -2.5
+        },
+        {
+          "id": "andy",
+          "name": "Andy",
+          "team": "B",
+          "index": 9
+        },
+        {
+          "id": "pace",
+          "name": "Pace",
+          "team": "B",
+          "index": 10.4
+        },
+        {
+          "id": "grants",
+          "name": "Grant S",
+          "team": "B",
+          "index": 10.2
+        },
+        {
+          "id": "rmac",
+          "name": "R-Mac",
+          "team": "B",
+          "index": 12.5
+        },
+        {
+          "id": "kj",
+          "name": "KJ",
+          "team": "B",
+          "index": 16.3
+        },
+        {
+          "id": "kylem",
+          "name": "Kyle M",
+          "team": "B",
+          "index": 21.6
+        },
+        {
+          "id": "petec",
+          "name": "Pete C",
+          "team": "B",
+          "index": 22.6
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "format": "scramble",
+          "source_format": "2man_scramble",
+          "course": {
+            "name": "HIDDEN RIVER - Blue",
+            "par": 72,
+            "rating": 72.1,
+            "slope": 131,
+            "hole_pars": [
+              4,
+              4,
+              3,
+              4,
+              5,
+              4,
+              5,
+              4,
+              3,
+              4,
+              5,
+              4,
+              3,
+              4,
+              3,
+              4,
+              5,
+              4
+            ],
+            "hole_handicaps": [
+              13,
+              9,
+              17,
+              7,
+              11,
+              1,
+              5,
+              3,
+              15,
+              14,
+              18,
+              6,
+              12,
+              4,
+              16,
+              8,
+              2,
+              10
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 1
+          },
+          "hole_points": null,
+          "ch": {
+            "bent": 5.6,
+            "jensen": 5.6,
+            "timc": 7.9,
+            "tjsc": 10.1,
+            "paulw": 7.9,
+            "dk": 10.1,
+            "jimh": 15.4,
+            "saugy": 15.4,
+            "johns": 3.3,
+            "andy": 3.3,
+            "pace": 5.6,
+            "grants": 5.6,
+            "rmac": 8,
+            "kj": 8,
+            "kylem": 12.8,
+            "petec": 12.8
+          }
+        },
+        {
+          "round": 2,
+          "format": "singles",
+          "source_format": "singles",
+          "course": {
+            "name": "HARBOR POINT - Black",
+            "par": 71,
+            "rating": 68.8,
+            "slope": 131,
+            "hole_pars": [
+              5,
+              4,
+              4,
+              3,
+              4,
+              4,
+              4,
+              4,
+              4,
+              5,
+              3,
+              5,
+              3,
+              5,
+              3,
+              4,
+              3,
+              4
+            ],
+            "hole_handicaps": [
+              13,
+              3,
+              11,
+              5,
+              1,
+              15,
+              7,
+              17,
+              9,
+              14,
+              2,
+              6,
+              8,
+              4,
+              18,
+              12,
+              16,
+              10
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 1
+          },
+          "hole_points": null,
+          "ch": {
+            "johns": -3,
+            "bent": 8,
+            "andy": 10,
+            "jensen": 8,
+            "grants": 11,
+            "pace": 11,
+            "tjsc": 17,
+            "petec": 26,
+            "timc": 15,
+            "rmac": 14,
+            "kj": 18,
+            "dk": 23,
+            "paulw": 16,
+            "kylem": 25,
+            "saugy": 32,
+            "jimh": 30
+          }
+        },
+        {
+          "round": 3,
+          "format": "best_ball",
+          "source_format": "2man_best_ball",
+          "course": {
+            "name": "LITTLE TRAVERSE BAY - White",
+            "par": 72,
+            "rating": 70.3,
+            "slope": 130,
+            "hole_pars": [
+              4,
+              5,
+              3,
+              4,
+              5,
+              4,
+              3,
+              4,
+              4,
+              3,
+              4,
+              4,
+              4,
+              4,
+              5,
+              3,
+              5,
+              4
+            ],
+            "hole_handicaps": [
+              5,
+              11,
+              17,
+              13,
+              9,
+              1,
+              15,
+              3,
+              7,
+              18,
+              12,
+              6,
+              10,
+              14,
+              2,
+              16,
+              8,
+              4
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 1
+          },
+          "hole_points": null,
+          "ch": {
+            "johns": -3,
+            "grants": 11,
+            "pace": 11,
+            "bent": 8,
+            "rmac": 14,
+            "andy": 10,
+            "jensen": 8,
+            "tjsc": 17,
+            "kj": 18,
+            "timc": 15,
+            "dk": 23,
+            "jimh": 30,
+            "paulw": 16,
+            "petec": 26,
+            "saugy": 31,
+            "kylem": 25
+          }
+        },
+        {
+          "round": 4,
+          "format": "team_best_ball",
+          "source_format": "team_best_ball",
+          "course": {
+            "name": "BAY HARBOR - P/L - Blue gam",
+            "par": 70,
+            "rating": 71.5,
+            "slope": 140,
+            "hole_pars": [
+              4,
+              4,
+              4,
+              5,
+              3,
+              4,
+              4,
+              4,
+              3,
+              4,
+              4,
+              4,
+              3,
+              4,
+              4,
+              5,
+              3,
+              4
+            ],
+            "hole_handicaps": [
+              7,
+              11,
+              5,
+              1,
+              13,
+              3,
+              9,
+              15,
+              17,
+              16,
+              8,
+              10,
+              18,
+              14,
+              6,
+              4,
+              12,
+              2
+            ]
+          },
+          "nassau": null,
+          "hole_points": {
+            "front": 1,
+            "back": 2
+          },
+          "ch": {
+            "johns": -3,
+            "andy": 11,
+            "pace": 13,
+            "grants": 13,
+            "bent": 9,
+            "jensen": 9,
+            "dk": 24,
+            "timc": 16,
+            "jimh": 33,
+            "rmac": 15,
+            "kj": 20,
+            "paulw": 18,
+            "tjsc": 19,
+            "petec": 28,
+            "kylem": 27,
+            "saugy": 35
+          },
+          "counting_scores": {
+            "front": 4,
+            "back": 6
+          },
+          "recorded_points": {
+            "B": 10,
+            "A": 17
+          }
+        }
+      ],
+      "matches": [
+        {
+          "round": 1,
+          "teamA": [
+            "jensen",
+            "bent"
+          ],
+          "teamB": [
+            "johns",
+            "andy"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "timc",
+            "paulw"
+          ],
+          "teamB": [
+            "pace",
+            "grants"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "tjsc",
+            "dk"
+          ],
+          "teamB": [
+            "rmac",
+            "kj"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "jimh",
+            "saugy"
+          ],
+          "teamB": [
+            "kylem",
+            "petec"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "jensen"
+          ],
+          "teamB": [
+            "kj"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "timc"
+          ],
+          "teamB": [
+            "kylem"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "jimh"
+          ],
+          "teamB": [
+            "andy"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "paulw"
+          ],
+          "teamB": [
+            "grants"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "tjsc"
+          ],
+          "teamB": [
+            "pace"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "saugy"
+          ],
+          "teamB": [
+            "petec"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "dk"
+          ],
+          "teamB": [
+            "johns"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "bent"
+          ],
+          "teamB": [
+            "rmac"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "jensen",
+            "saugy"
+          ],
+          "teamB": [
+            "grants",
+            "kylem"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "timc",
+            "tjsc"
+          ],
+          "teamB": [
+            "kj",
+            "petec"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "dk",
+            "jimh"
+          ],
+          "teamB": [
+            "andy",
+            "rmac"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "bent",
+            "paulw"
+          ],
+          "teamB": [
+            "johns",
+            "pace"
+          ]
+        },
+        {
+          "round": 4,
+          "teamA": [
+            "bent",
+            "jensen",
+            "timc",
+            "tjsc",
+            "paulw",
+            "dk",
+            "jimh",
+            "saugy"
+          ],
+          "teamB": [
+            "johns",
+            "andy",
+            "pace",
+            "grants",
+            "rmac",
+            "kj",
+            "kylem",
+            "petec"
+          ]
+        }
+      ],
+      "extra_holes": [],
+      "warnings": []
+    },
+    {
+      "year": 2020,
+      "name": "The Bourbon Cup 2020",
+      "teams": {
+        "A": "Family Biz",
+        "B": "TeeHawks"
+      },
+      "players": [
+        {
+          "id": "jensen",
+          "name": "Jensen",
+          "team": "A",
+          "index": 6.9
+        },
+        {
+          "id": "nicks",
+          "name": "Nick S",
+          "team": "A",
+          "index": 6.6
+        },
+        {
+          "id": "timc",
+          "name": "Tim C",
+          "team": "A",
+          "index": 7.6
+        },
+        {
+          "id": "juliusp",
+          "name": "Julius P",
+          "team": "A",
+          "index": 9.3
+        },
+        {
+          "id": "pace",
+          "name": "Pace",
+          "team": "A",
+          "index": 10.8
+        },
+        {
+          "id": "kj",
+          "name": "KJ",
+          "team": "A",
+          "index": 9.9
+        },
+        {
+          "id": "tjsc",
+          "name": "TJSC",
+          "team": "A",
+          "index": 12.9
+        },
+        {
+          "id": "joeo",
+          "name": "Joe O",
+          "team": "A",
+          "index": 14
+        },
+        {
+          "id": "scottr",
+          "name": "Scott R",
+          "team": "B",
+          "index": 4
+        },
+        {
+          "id": "bent",
+          "name": "Ben T",
+          "team": "B",
+          "index": 4.3
+        },
+        {
+          "id": "andy",
+          "name": "Andy",
+          "team": "B",
+          "index": 7
+        },
+        {
+          "id": "shaunw",
+          "name": "Shaun W",
+          "team": "B",
+          "index": 9.2
+        },
+        {
+          "id": "petec",
+          "name": "Pete C",
+          "team": "B",
+          "index": 18.4
+        },
+        {
+          "id": "dk",
+          "name": "DK",
+          "team": "B",
+          "index": 18.7
+        },
+        {
+          "id": "kylem",
+          "name": "Kyle M",
+          "team": "B",
+          "index": 21.8
+        },
+        {
+          "id": "ghost",
+          "name": "Ghost",
+          "team": "B",
+          "index": 0,
+          "borrowed": true
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "format": "double_dot",
+          "source_format": "2man_hi_lo",
+          "course": {
+            "name": "Lake Mich Hills - Blue 2",
+            "par": 72,
+            "rating": 71.2,
+            "slope": 130,
+            "hole_pars": [
+              4,
+              4,
+              3,
+              5,
+              4,
+              4,
+              5,
+              3,
+              4,
+              5,
+              4,
+              4,
+              3,
+              4,
+              5,
+              4,
+              3,
+              4
+            ],
+            "hole_handicaps": [
+              3,
+              13,
+              17,
+              1,
+              7,
+              11,
+              9,
+              15,
+              5,
+              2,
+              6,
+              4,
+              16,
+              10,
+              12,
+              8,
+              14,
+              18
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 2
+          },
+          "hole_points": null,
+          "ch": {
+            "jensen": 7,
+            "nicks": 7,
+            "timc": 8,
+            "juliusp": 10,
+            "pace": 10,
+            "kj": 11,
+            "tjsc": 14,
+            "joeo": 15,
+            "scottr": 3,
+            "bent": 4,
+            "andy": 7,
+            "shaunw": 10,
+            "petec": 20,
+            "dk": 21,
+            "kylem": 24
+          }
+        },
+        {
+          "round": 2,
+          "format": "singles",
+          "source_format": "singles",
+          "course": {
+            "name": "Harbor Shores - Gray",
+            "par": 71,
+            "rating": 70.8,
+            "slope": 137,
+            "hole_pars": [
+              4,
+              3,
+              4,
+              3,
+              5,
+              4,
+              4,
+              4,
+              5,
+              5,
+              3,
+              4,
+              3,
+              4,
+              5,
+              4,
+              3,
+              4
+            ],
+            "hole_handicaps": [
+              11,
+              17,
+              15,
+              5,
+              7,
+              3,
+              1,
+              9,
+              13,
+              12,
+              18,
+              10,
+              16,
+              4,
+              8,
+              2,
+              14,
+              6
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 1
+          },
+          "hole_points": null,
+          "ch": {
+            "jensen": 8,
+            "nicks": 8,
+            "timc": 9,
+            "juliusp": 11,
+            "pace": 12,
+            "kj": 12,
+            "tjsc": 15,
+            "joeo": 17,
+            "scottr": 4,
+            "bent": 5,
+            "andy": 8,
+            "shaunw": 11,
+            "petec": 22,
+            "dk": 23,
+            "kylem": 26
+          }
+        },
+        {
+          "round": 3,
+          "format": "best_ball",
+          "source_format": "2man_best_ball",
+          "course": {
+            "name": "Harbor Shores - Gray",
+            "par": 71,
+            "rating": 70.8,
+            "slope": 137,
+            "hole_pars": [
+              4,
+              3,
+              4,
+              3,
+              5,
+              4,
+              4,
+              4,
+              5,
+              5,
+              3,
+              4,
+              3,
+              4,
+              5,
+              4,
+              3,
+              4
+            ],
+            "hole_handicaps": [
+              11,
+              17,
+              15,
+              5,
+              7,
+              3,
+              1,
+              9,
+              13,
+              12,
+              18,
+              10,
+              16,
+              4,
+              8,
+              2,
+              14,
+              6
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 2
+          },
+          "hole_points": null,
+          "ch": {
+            "jensen": 8,
+            "nicks": 8,
+            "timc": 9,
+            "juliusp": 11,
+            "pace": 12,
+            "kj": 12,
+            "tjsc": 16,
+            "joeo": 17,
+            "scottr": 4,
+            "bent": 5,
+            "andy": 8,
+            "shaunw": 11,
+            "petec": 22,
+            "dk": 23,
+            "kylem": 26
+          }
+        },
+        {
+          "round": 4,
+          "format": "team_best_ball",
+          "source_format": "team_best_ball",
+          "course": {
+            "name": "HawksHead - White",
+            "par": 72,
+            "rating": 70.2,
+            "slope": 124,
+            "hole_pars": [
+              4,
+              5,
+              3,
+              4,
+              5,
+              3,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              3,
+              5,
+              4,
+              3,
+              5,
+              4
+            ],
+            "hole_handicaps": [
+              12,
+              6,
+              18,
+              4,
+              8,
+              16,
+              10,
+              2,
+              14,
+              9,
+              15,
+              7,
+              13,
+              1,
+              3,
+              17,
+              11,
+              5
+            ]
+          },
+          "nassau": null,
+          "hole_points": {
+            "front": 1,
+            "back": 2
+          },
+          "ch": {
+            "jensen": 6,
+            "nicks": 5,
+            "timc": 7,
+            "juliusp": 8,
+            "pace": 10,
+            "kj": 9,
+            "tjsc": 12,
+            "joeo": 14,
+            "scottr": 3,
+            "bent": 3,
+            "andy": 6,
+            "shaunw": 8,
+            "petec": 18,
+            "dk": 19,
+            "kylem": 22,
+            "ghost": 0
+          },
+          "counting_scores": {
+            "front": 4,
+            "back": 6
+          },
+          "recorded_points": {
+            "B": 19.5,
+            "A": 7.5
+          }
+        }
+      ],
+      "matches": [
+        {
+          "round": 1,
+          "teamA": [
+            "timc",
+            "juliusp"
+          ],
+          "teamB": [
+            "shaunw",
+            "dk"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "jensen",
+            "kj"
+          ],
+          "teamB": [
+            "petec"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "nicks",
+            "tjsc"
+          ],
+          "teamB": [
+            "bent",
+            "andy"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "pace",
+            "joeo"
+          ],
+          "teamB": [
+            "scottr",
+            "kylem"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "juliusp"
+          ],
+          "teamB": [
+            "andy"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "joeo"
+          ],
+          "teamB": [
+            "andy"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "nicks"
+          ],
+          "teamB": [
+            "scottr"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "timc"
+          ],
+          "teamB": [
+            "shaunw"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "pace"
+          ],
+          "teamB": [
+            "bent"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "jensen"
+          ],
+          "teamB": [
+            "petec"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "kj"
+          ],
+          "teamB": [
+            "dk"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "tjsc"
+          ],
+          "teamB": [
+            "kylem"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "nicks",
+            "pace"
+          ],
+          "teamB": [
+            "scottr",
+            "shaunw"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "juliusp",
+            "tjsc"
+          ],
+          "teamB": [
+            "bent",
+            "dk"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "timc",
+            "kj"
+          ],
+          "teamB": [
+            "andy",
+            "kylem"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "jensen",
+            "joeo"
+          ],
+          "teamB": [
+            "petec"
+          ]
+        },
+        {
+          "round": 4,
+          "teamA": [
+            "jensen",
+            "nicks",
+            "timc",
+            "juliusp",
+            "pace",
+            "kj",
+            "tjsc",
+            "joeo"
+          ],
+          "teamB": [
+            "scottr",
+            "bent",
+            "andy",
+            "shaunw",
+            "petec",
+            "dk",
+            "kylem",
+            "ghost"
+          ]
+        }
+      ],
+      "extra_holes": [
+        {
+          "round": 4,
+          "player": "ghost",
+          "hole": 1,
+          "gross": 5
+        },
+        {
+          "round": 4,
+          "player": "ghost",
+          "hole": 2,
+          "gross": 4
+        },
+        {
+          "round": 4,
+          "player": "ghost",
+          "hole": 3,
+          "gross": 2
+        },
+        {
+          "round": 4,
+          "player": "ghost",
+          "hole": 4,
+          "gross": 3
+        },
+        {
+          "round": 4,
+          "player": "ghost",
+          "hole": 5,
+          "gross": 6
+        },
+        {
+          "round": 4,
+          "player": "ghost",
+          "hole": 6,
+          "gross": 4
+        },
+        {
+          "round": 4,
+          "player": "ghost",
+          "hole": 7,
+          "gross": 5
+        },
+        {
+          "round": 4,
+          "player": "ghost",
+          "hole": 8,
+          "gross": 4
+        },
+        {
+          "round": 4,
+          "player": "ghost",
+          "hole": 9,
+          "gross": 4
+        },
+        {
+          "round": 4,
+          "player": "ghost",
+          "hole": 10,
+          "gross": 7
+        },
+        {
+          "round": 4,
+          "player": "ghost",
+          "hole": 11,
+          "gross": 6
+        },
+        {
+          "round": 4,
+          "player": "ghost",
+          "hole": 12,
+          "gross": 4
+        },
+        {
+          "round": 4,
+          "player": "ghost",
+          "hole": 13,
+          "gross": 3
+        },
+        {
+          "round": 4,
+          "player": "ghost",
+          "hole": 14,
+          "gross": 3
+        },
+        {
+          "round": 4,
+          "player": "ghost",
+          "hole": 15,
+          "gross": 5
+        },
+        {
+          "round": 4,
+          "player": "ghost",
+          "hole": 16,
+          "gross": 3
+        },
+        {
+          "round": 4,
+          "player": "ghost",
+          "hole": 17,
+          "gross": 5
+        },
+        {
+          "round": 4,
+          "player": "ghost",
+          "hole": 18,
+          "gross": 3
+        }
+      ],
+      "warnings": [
+        "R1: match jensen+kj vs petec is not 2v2",
+        "R3: match jensen+joeo vs petec is not 2v2",
+        "R4: contributions per hole varied — the sheet's own count is 4/6",
+        "R4: a borrowed ball (\"Ghost\") is on the card and is imported as a roster entry"
+      ]
+    },
+    {
+      "year": 2021,
+      "name": "The Bourbon Cup 2021",
+      "teams": {
+        "A": "Choy's Boyz",
+        "B": "Tall Boys"
+      },
+      "players": [
+        {
+          "id": "jensen",
+          "name": "Jensen",
+          "team": "A",
+          "index": 6
+        },
+        {
+          "id": "bent",
+          "name": "Ben T",
+          "team": "A",
+          "index": 6.2
+        },
+        {
+          "id": "nicks",
+          "name": "Nick S",
+          "team": "A",
+          "index": 7
+        },
+        {
+          "id": "kj",
+          "name": "KJ",
+          "team": "A",
+          "index": 9.8
+        },
+        {
+          "id": "tjsc",
+          "name": "TJSC",
+          "team": "A",
+          "index": 12.6
+        },
+        {
+          "id": "dk",
+          "name": "DK",
+          "team": "A",
+          "index": 15.7
+        },
+        {
+          "id": "jimh",
+          "name": "Jim H",
+          "team": "A",
+          "index": 24.8
+        },
+        {
+          "id": "saugy",
+          "name": "Saugy",
+          "team": "A",
+          "index": 28.5
+        },
+        {
+          "id": "andy",
+          "name": "Andy",
+          "team": "B",
+          "index": 6.8
+        },
+        {
+          "id": "shaunw",
+          "name": "Shaun W",
+          "team": "B",
+          "index": 8.5
+        },
+        {
+          "id": "pace",
+          "name": "Pace",
+          "team": "B",
+          "index": 9.6
+        },
+        {
+          "id": "timc",
+          "name": "Tim C",
+          "team": "B",
+          "index": 10.4
+        },
+        {
+          "id": "rmac",
+          "name": "R-Mac",
+          "team": "B",
+          "index": 10.6
+        },
+        {
+          "id": "paulw",
+          "name": "Paul W",
+          "team": "B",
+          "index": 13.7
+        },
+        {
+          "id": "joeo",
+          "name": "Joe O",
+          "team": "B",
+          "index": 15.1
+        },
+        {
+          "id": "petec",
+          "name": "Pete C",
+          "team": "B",
+          "index": 16.7
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "format": "best_ball",
+          "source_format": "2man_best_ball",
+          "course": {
+            "name": "Bear Slide - White",
+            "par": 71,
+            "rating": 69.3,
+            "slope": 125,
+            "hole_pars": [
+              4,
+              4,
+              5,
+              3,
+              4,
+              3,
+              4,
+              5,
+              4,
+              4,
+              4,
+              5,
+              4,
+              3,
+              4,
+              3,
+              4,
+              4
+            ],
+            "hole_handicaps": [
+              3,
+              13,
+              17,
+              7,
+              5,
+              11,
+              9,
+              15,
+              1,
+              4,
+              16,
+              10,
+              6,
+              12,
+              14,
+              18,
+              8,
+              2
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 2
+          },
+          "hole_points": null,
+          "ch": {
+            "jensen": 5,
+            "bent": 5,
+            "nicks": 6,
+            "kj": 9,
+            "tjsc": 12,
+            "dk": 16,
+            "jimh": 26,
+            "saugy": 30,
+            "andy": 6,
+            "shaunw": 8,
+            "pace": 9,
+            "timc": 10,
+            "rmac": 10,
+            "paulw": 13,
+            "joeo": 15,
+            "petec": 17
+          }
+        },
+        {
+          "round": 2,
+          "format": "singles",
+          "source_format": "singles",
+          "course": {
+            "name": "Purgatory - White",
+            "par": 72,
+            "rating": 72,
+            "slope": 135,
+            "hole_pars": [
+              4,
+              4,
+              3,
+              4,
+              5,
+              4,
+              3,
+              4,
+              5,
+              4,
+              4,
+              3,
+              5,
+              4,
+              4,
+              4,
+              3,
+              5
+            ],
+            "hole_handicaps": [
+              18,
+              8,
+              16,
+              2,
+              6,
+              10,
+              12,
+              4,
+              14,
+              7,
+              15,
+              11,
+              5,
+              3,
+              9,
+              1,
+              17,
+              13
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 1
+          },
+          "hole_points": null,
+          "ch": {
+            "jensen": 7,
+            "bent": 7,
+            "nicks": 8,
+            "kj": 12,
+            "tjsc": 15,
+            "dk": 19,
+            "jimh": 30,
+            "saugy": 34,
+            "andy": 8,
+            "shaunw": 10,
+            "pace": 11,
+            "timc": 12,
+            "rmac": 13,
+            "paulw": 16,
+            "joeo": 18,
+            "petec": 20
+          }
+        },
+        {
+          "round": 3,
+          "format": "scramble",
+          "source_format": "2man_scramble",
+          "course": {
+            "name": "Purgatory - White",
+            "par": 72,
+            "rating": 72,
+            "slope": 135,
+            "hole_pars": [
+              4,
+              4,
+              3,
+              4,
+              5,
+              4,
+              3,
+              4,
+              5,
+              4,
+              4,
+              3,
+              5,
+              4,
+              4,
+              4,
+              3,
+              5
+            ],
+            "hole_handicaps": [
+              18,
+              8,
+              16,
+              2,
+              6,
+              10,
+              12,
+              4,
+              14,
+              7,
+              15,
+              11,
+              5,
+              3,
+              9,
+              1,
+              17,
+              13
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 2
+          },
+          "hole_points": null,
+          "ch": {
+            "jensen": 4.3,
+            "bent": 7.7,
+            "nicks": 5.2,
+            "kj": 4.3,
+            "tjsc": 5.2,
+            "dk": 11,
+            "jimh": 11,
+            "saugy": 7.7,
+            "andy": 5.5,
+            "shaunw": 5.3,
+            "pace": 5.3,
+            "timc": 6.2,
+            "rmac": 6.2,
+            "paulw": 8.7,
+            "joeo": 5.5,
+            "petec": 8.7
+          }
+        },
+        {
+          "round": 4,
+          "format": "team_best_ball",
+          "source_format": "team_best_ball",
+          "course": {
+            "name": "Prairie View - White",
+            "par": 72,
+            "rating": 70.7,
+            "slope": 129,
+            "hole_pars": [
+              4,
+              4,
+              5,
+              3,
+              4,
+              3,
+              5,
+              4,
+              4,
+              4,
+              4,
+              3,
+              5,
+              4,
+              3,
+              4,
+              4,
+              5
+            ],
+            "hole_handicaps": [
+              12,
+              14,
+              8,
+              16,
+              10,
+              18,
+              4,
+              6,
+              2,
+              5,
+              11,
+              15,
+              7,
+              1,
+              17,
+              13,
+              3,
+              9
+            ]
+          },
+          "nassau": null,
+          "hole_points": {
+            "front": 1,
+            "back": 2
+          },
+          "ch": {
+            "jensen": 6,
+            "bent": 6,
+            "nicks": 7,
+            "kj": 10,
+            "tjsc": 13,
+            "dk": 17,
+            "jimh": 27,
+            "saugy": 31,
+            "andy": 6,
+            "shaunw": 8,
+            "pace": 10,
+            "timc": 11,
+            "rmac": 11,
+            "paulw": 14,
+            "joeo": 16,
+            "petec": 18
+          },
+          "counting_scores": {
+            "front": 5,
+            "back": 7
+          },
+          "recorded_points": {
+            "B": 17,
+            "A": 10
+          }
+        }
+      ],
+      "matches": [
+        {
+          "round": 1,
+          "teamA": [
+            "nicks",
+            "jensen"
+          ],
+          "teamB": [
+            "shaunw",
+            "rmac"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "jimh",
+            "saugy"
+          ],
+          "teamB": [
+            "timc",
+            "joeo"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "tjsc",
+            "dk"
+          ],
+          "teamB": [
+            "paulw",
+            "petec"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "bent",
+            "kj"
+          ],
+          "teamB": [
+            "andy",
+            "pace"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "tjsc"
+          ],
+          "teamB": [
+            "shaunw"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "kj"
+          ],
+          "teamB": [
+            "rmac"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "saugy"
+          ],
+          "teamB": [
+            "joeo"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "dk"
+          ],
+          "teamB": [
+            "petec"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "bent"
+          ],
+          "teamB": [
+            "timc"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "jimh"
+          ],
+          "teamB": [
+            "pace"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "jensen"
+          ],
+          "teamB": [
+            "andy"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "nicks"
+          ],
+          "teamB": [
+            "paulw"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "dk",
+            "jimh"
+          ],
+          "teamB": [
+            "paulw",
+            "petec"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "bent",
+            "saugy"
+          ],
+          "teamB": [
+            "timc",
+            "rmac"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "jensen",
+            "kj"
+          ],
+          "teamB": [
+            "andy",
+            "joeo"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "nicks",
+            "tjsc"
+          ],
+          "teamB": [
+            "shaunw",
+            "pace"
+          ]
+        },
+        {
+          "round": 4,
+          "teamA": [
+            "jensen",
+            "bent",
+            "nicks",
+            "kj",
+            "tjsc",
+            "dk",
+            "jimh",
+            "saugy"
+          ],
+          "teamB": [
+            "andy",
+            "shaunw",
+            "pace",
+            "timc",
+            "rmac",
+            "paulw",
+            "joeo",
+            "petec"
+          ]
+        }
+      ],
+      "extra_holes": [],
+      "warnings": [
+        "R4: contributions per hole varied — the sheet's own count is 5/7"
+      ]
+    },
+    {
+      "year": 2022,
+      "name": "The Bourbon Cup 2022",
+      "teams": {
+        "A": "Irons",
+        "B": "Drivers"
+      },
+      "players": [
+        {
+          "id": "jensen",
+          "name": "Jensen",
+          "team": "A",
+          "index": 6.8
+        },
+        {
+          "id": "nicks",
+          "name": "Nick S",
+          "team": "A",
+          "index": 9.6
+        },
+        {
+          "id": "andy",
+          "name": "Andy",
+          "team": "A",
+          "index": 7.3
+        },
+        {
+          "id": "pace",
+          "name": "Pace",
+          "team": "A",
+          "index": 10.3
+        },
+        {
+          "id": "house",
+          "name": "House",
+          "team": "A",
+          "index": 9.3
+        },
+        {
+          "id": "dk",
+          "name": "DK",
+          "team": "A",
+          "index": 16.5
+        },
+        {
+          "id": "petec",
+          "name": "Pete C",
+          "team": "A",
+          "index": 18.8
+        },
+        {
+          "id": "saugy",
+          "name": "Saugy",
+          "team": "A",
+          "index": 25.2
+        },
+        {
+          "id": "telly",
+          "name": "Telly",
+          "team": "B",
+          "index": 6.9
+        },
+        {
+          "id": "kj",
+          "name": "KJ",
+          "team": "B",
+          "index": 7.8
+        },
+        {
+          "id": "rmac",
+          "name": "R-Mac",
+          "team": "B",
+          "index": 9
+        },
+        {
+          "id": "tmo",
+          "name": "T-Mo",
+          "team": "B",
+          "index": 12.2
+        },
+        {
+          "id": "tjsc",
+          "name": "TJSC",
+          "team": "B",
+          "index": 11.6
+        },
+        {
+          "id": "weezy",
+          "name": "Weezy",
+          "team": "B",
+          "index": 14
+        },
+        {
+          "id": "joeo",
+          "name": "Joe O",
+          "team": "B",
+          "index": 11.7
+        },
+        {
+          "id": "hile",
+          "name": "Hile",
+          "team": "B",
+          "index": 18.5
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "format": "best_ball",
+          "source_format": "2man_best_ball",
+          "course": {
+            "name": "GVSU Meadows - Blue",
+            "par": 71,
+            "rating": 71.5,
+            "slope": 132,
+            "hole_pars": [
+              4,
+              4,
+              3,
+              5,
+              4,
+              4,
+              3,
+              4,
+              5,
+              4,
+              4,
+              4,
+              3,
+              5,
+              4,
+              4,
+              3,
+              4
+            ],
+            "hole_handicaps": [
+              2,
+              8,
+              14,
+              12,
+              6,
+              18,
+              10,
+              4,
+              16,
+              13,
+              3,
+              9,
+              15,
+              11,
+              5,
+              7,
+              17,
+              1
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 2
+          },
+          "hole_points": null,
+          "ch": {
+            "jensen": 9,
+            "nicks": 9,
+            "andy": 9,
+            "pace": 11,
+            "house": 12,
+            "dk": 15,
+            "petec": 19,
+            "saugy": 36,
+            "telly": 7,
+            "kj": 10,
+            "rmac": 12,
+            "tmo": 13,
+            "tjsc": 15,
+            "weezy": 15,
+            "joeo": 17,
+            "hile": 28
+          }
+        },
+        {
+          "round": 2,
+          "format": "singles",
+          "source_format": "singles",
+          "course": {
+            "name": "Ravines GC - White",
+            "par": 72,
+            "rating": 68.1,
+            "slope": 129,
+            "hole_pars": [
+              4,
+              4,
+              3,
+              5,
+              4,
+              4,
+              4,
+              3,
+              5,
+              4,
+              4,
+              3,
+              4,
+              5,
+              4,
+              4,
+              3,
+              5
+            ],
+            "hole_handicaps": [
+              9,
+              15,
+              13,
+              1,
+              3,
+              5,
+              17,
+              11,
+              7,
+              4,
+              10,
+              16,
+              14,
+              2,
+              8,
+              18,
+              12,
+              6
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 1
+          },
+          "hole_points": null,
+          "ch": {
+            "jensen": 5,
+            "nicks": 4,
+            "andy": 5,
+            "pace": 6,
+            "house": 7,
+            "dk": 10,
+            "petec": 14,
+            "saugy": 30,
+            "telly": 2,
+            "kj": 5,
+            "rmac": 7,
+            "tmo": 9,
+            "tjsc": 10,
+            "weezy": 10,
+            "joeo": 13,
+            "hile": 23
+          }
+        },
+        {
+          "round": 3,
+          "format": "tilt",
+          "source_format": "2man_tilt",
+          "course": {
+            "name": "Ravines GC - White",
+            "par": 72,
+            "rating": 68.1,
+            "slope": 129,
+            "hole_pars": [
+              4,
+              4,
+              3,
+              5,
+              4,
+              4,
+              4,
+              3,
+              5,
+              4,
+              4,
+              3,
+              4,
+              5,
+              4,
+              4,
+              3,
+              5
+            ],
+            "hole_handicaps": [
+              9,
+              15,
+              13,
+              1,
+              3,
+              5,
+              17,
+              11,
+              7,
+              4,
+              10,
+              16,
+              14,
+              2,
+              8,
+              18,
+              12,
+              6
+            ]
+          },
+          "nassau": {
+            "front": 0,
+            "back": 0,
+            "overall": 4
+          },
+          "hole_points": null,
+          "ch": {
+            "jensen": 5,
+            "nicks": 4,
+            "andy": 5,
+            "pace": 6,
+            "house": 7,
+            "dk": 10,
+            "petec": 14,
+            "saugy": 30,
+            "telly": 2,
+            "kj": 5,
+            "rmac": 7,
+            "tmo": 9,
+            "tjsc": 10,
+            "weezy": 10,
+            "joeo": 13,
+            "hile": 23
+          }
+        },
+        {
+          "round": 4,
+          "format": "team_best_ball",
+          "source_format": "team_best_ball",
+          "course": {
+            "name": "American Dunes - Freedom/WH",
+            "par": 72,
+            "rating": 70.3,
+            "slope": 133,
+            "hole_pars": [
+              4,
+              5,
+              4,
+              3,
+              4,
+              5,
+              3,
+              4,
+              4,
+              4,
+              4,
+              3,
+              5,
+              4,
+              3,
+              4,
+              4,
+              5
+            ],
+            "hole_handicaps": [
+              10,
+              18,
+              6,
+              14,
+              2,
+              12,
+              16,
+              4,
+              8,
+              3,
+              13,
+              15,
+              11,
+              7,
+              9,
+              1,
+              5,
+              17
+            ]
+          },
+          "nassau": null,
+          "hole_points": {
+            "front": 1,
+            "back": 2
+          },
+          "ch": {
+            "jensen": 8,
+            "nicks": 8,
+            "andy": 8,
+            "pace": 9,
+            "house": 10,
+            "dk": 12,
+            "petec": 18,
+            "saugy": 34,
+            "telly": 6,
+            "kj": 8,
+            "rmac": 9,
+            "tmo": 11,
+            "tjsc": 13,
+            "weezy": 14,
+            "joeo": 15,
+            "hile": 26
+          },
+          "counting_scores": {
+            "front": 5,
+            "back": 6
+          },
+          "recorded_points": {
+            "A": 10.5,
+            "B": 16.5
+          }
+        }
+      ],
+      "matches": [
+        {
+          "round": 1,
+          "teamA": [
+            "nicks",
+            "saugy"
+          ],
+          "teamB": [
+            "tjsc",
+            "joeo"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "andy",
+            "pace"
+          ],
+          "teamB": [
+            "rmac",
+            "tmo"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "house",
+            "petec"
+          ],
+          "teamB": [
+            "kj",
+            "weezy"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "jensen",
+            "dk"
+          ],
+          "teamB": [
+            "telly",
+            "hile"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "nicks"
+          ],
+          "teamB": [
+            "telly"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "andy"
+          ],
+          "teamB": [
+            "rmac"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "pace"
+          ],
+          "teamB": [
+            "weezy"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "house"
+          ],
+          "teamB": [
+            "tmo"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "jensen"
+          ],
+          "teamB": [
+            "kj"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "dk"
+          ],
+          "teamB": [
+            "tjsc"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "petec"
+          ],
+          "teamB": [
+            "joeo"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "saugy"
+          ],
+          "teamB": [
+            "hile"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "andy",
+            "house"
+          ],
+          "teamB": [
+            "tmo",
+            "tjsc"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "nicks",
+            "dk"
+          ],
+          "teamB": [
+            "kj",
+            "joeo"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "jensen",
+            "petec"
+          ],
+          "teamB": [
+            "telly",
+            "weezy"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "pace",
+            "saugy"
+          ],
+          "teamB": [
+            "rmac",
+            "hile"
+          ]
+        },
+        {
+          "round": 4,
+          "teamA": [
+            "jensen",
+            "nicks",
+            "andy",
+            "pace",
+            "house",
+            "dk",
+            "petec",
+            "saugy"
+          ],
+          "teamB": [
+            "telly",
+            "kj",
+            "rmac",
+            "tmo",
+            "tjsc",
+            "weezy",
+            "joeo",
+            "hile"
+          ]
+        }
+      ],
+      "extra_holes": [],
+      "warnings": []
+    },
+    {
+      "year": 2023,
+      "name": "The Bourbon Cup 2023",
+      "teams": {
+        "A": "TEES",
+        "B": "WEEZ"
+      },
+      "players": [
+        {
+          "id": "telly",
+          "name": "Telly",
+          "team": "A",
+          "index": null
+        },
+        {
+          "id": "kj",
+          "name": "KJ",
+          "team": "A",
+          "index": null
+        },
+        {
+          "id": "nicks",
+          "name": "Nick S",
+          "team": "A",
+          "index": null
+        },
+        {
+          "id": "rmac",
+          "name": "R-Mac",
+          "team": "A",
+          "index": null
+        },
+        {
+          "id": "house",
+          "name": "House",
+          "team": "A",
+          "index": null
+        },
+        {
+          "id": "tjsc",
+          "name": "TJSC",
+          "team": "A",
+          "index": null
+        },
+        {
+          "id": "dk",
+          "name": "DK",
+          "team": "A",
+          "index": null
+        },
+        {
+          "id": "saugy",
+          "name": "Saugy",
+          "team": "A",
+          "index": null
+        },
+        {
+          "id": "elger",
+          "name": "Elger",
+          "team": "B",
+          "index": null
+        },
+        {
+          "id": "andy",
+          "name": "Andy",
+          "team": "B",
+          "index": null
+        },
+        {
+          "id": "jensen",
+          "name": "Jensen",
+          "team": "B",
+          "index": null
+        },
+        {
+          "id": "pace",
+          "name": "Pace",
+          "team": "B",
+          "index": null
+        },
+        {
+          "id": "tmo",
+          "name": "T-Mo",
+          "team": "B",
+          "index": null
+        },
+        {
+          "id": "joeo",
+          "name": "Joe O",
+          "team": "B",
+          "index": null
+        },
+        {
+          "id": "hile",
+          "name": "Hile",
+          "team": "B",
+          "index": null
+        },
+        {
+          "id": "weezy",
+          "name": "Weezy",
+          "team": "B",
+          "index": null
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "format": "double_dot",
+          "source_format": "dirty_dozen",
+          "course": {
+            "name": "Sundance - Blue",
+            "par": 72,
+            "rating": 71.4,
+            "slope": 131,
+            "hole_pars": [
+              4,
+              4,
+              3,
+              4,
+              4,
+              5,
+              4,
+              3,
+              5,
+              4,
+              4,
+              4,
+              3,
+              5,
+              4,
+              5,
+              3,
+              4
+            ],
+            "hole_handicaps": [
+              14,
+              16,
+              11,
+              12,
+              6,
+              8,
+              17,
+              5,
+              2,
+              9,
+              13,
+              4,
+              18,
+              7,
+              3,
+              10,
+              15,
+              1
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 2
+          },
+          "hole_points": null,
+          "ch": {
+            "telly": 8,
+            "kj": 8,
+            "nicks": 9,
+            "rmac": 9,
+            "house": 10,
+            "tjsc": 14,
+            "dk": 15,
+            "saugy": 33,
+            "elger": 5,
+            "andy": 6,
+            "jensen": 7,
+            "pace": 10,
+            "tmo": 11,
+            "joeo": 14,
+            "hile": 17,
+            "weezy": 17
+          }
+        },
+        {
+          "round": 2,
+          "format": "singles",
+          "source_format": "singles",
+          "course": {
+            "name": "The Wolverine - White",
+            "par": 72,
+            "rating": 68.7,
+            "slope": 134,
+            "hole_pars": [
+              4,
+              4,
+              5,
+              4,
+              3,
+              4,
+              4,
+              5,
+              3,
+              4,
+              5,
+              3,
+              4,
+              3,
+              4,
+              4,
+              4,
+              5
+            ],
+            "hole_handicaps": [
+              11,
+              5,
+              1,
+              13,
+              15,
+              3,
+              9,
+              7,
+              17,
+              4,
+              2,
+              14,
+              10,
+              18,
+              16,
+              8,
+              12,
+              6
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 1
+          },
+          "hole_points": null,
+          "ch": {
+            "telly": 6,
+            "kj": 6,
+            "nicks": 7,
+            "rmac": 7,
+            "house": 7,
+            "tjsc": 11,
+            "dk": 13,
+            "saugy": 31,
+            "elger": 3,
+            "andy": 4,
+            "jensen": 5,
+            "pace": 7,
+            "tmo": 8,
+            "joeo": 12,
+            "hile": 14,
+            "weezy": 15
+          }
+        },
+        {
+          "round": 3,
+          "format": "scramble",
+          "source_format": "2man_scramble",
+          "course": {
+            "name": "The Wolverine - Blue",
+            "par": 72,
+            "rating": 71.8,
+            "slope": 138,
+            "hole_pars": [
+              4,
+              4,
+              5,
+              4,
+              3,
+              4,
+              4,
+              5,
+              3,
+              4,
+              5,
+              3,
+              4,
+              3,
+              4,
+              4,
+              4,
+              5
+            ],
+            "hole_handicaps": [
+              11,
+              5,
+              1,
+              13,
+              15,
+              3,
+              9,
+              7,
+              17,
+              4,
+              2,
+              14,
+              10,
+              18,
+              16,
+              8,
+              12,
+              6
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 2
+          },
+          "hole_points": null,
+          "ch": {
+            "telly": 4.5,
+            "kj": 4.5,
+            "nicks": 5.1,
+            "rmac": 5.1,
+            "house": 5.9,
+            "tjsc": 5.9,
+            "dk": 10.9,
+            "saugy": 10.9,
+            "elger": 3.2,
+            "andy": 3.2,
+            "jensen": 4.4,
+            "pace": 4.4,
+            "tmo": 6.3,
+            "joeo": 6.3,
+            "hile": 9.1,
+            "weezy": 9.1
+          }
+        },
+        {
+          "round": 4,
+          "format": "team_best_ball",
+          "source_format": "team_best_ball",
+          "course": {
+            "name": "The Bear - White",
+            "par": 72,
+            "rating": 71.1,
+            "slope": 139,
+            "hole_pars": [
+              4,
+              4,
+              5,
+              3,
+              4,
+              5,
+              4,
+              4,
+              3,
+              5,
+              4,
+              4,
+              3,
+              4,
+              5,
+              4,
+              3,
+              4
+            ],
+            "hole_handicaps": [
+              11,
+              3,
+              15,
+              13,
+              1,
+              17,
+              5,
+              7,
+              9,
+              18,
+              4,
+              6,
+              12,
+              16,
+              14,
+              2,
+              8,
+              10
+            ]
+          },
+          "nassau": null,
+          "hole_points": {
+            "front": 1,
+            "back": 2
+          },
+          "ch": {
+            "telly": 8,
+            "kj": 9,
+            "nicks": 10,
+            "rmac": 9,
+            "house": 9,
+            "tjsc": 14,
+            "dk": 16,
+            "saugy": 35,
+            "elger": 5,
+            "andy": 6,
+            "jensen": 7,
+            "pace": 10,
+            "tmo": 11,
+            "joeo": 15,
+            "hile": 18,
+            "weezy": 18
+          },
+          "counting_scores": {
+            "front": 3,
+            "back": 5
+          },
+          "recorded_points": {
+            "B": 16.5,
+            "A": 10.5
+          }
+        }
+      ],
+      "matches": [
+        {
+          "round": 1,
+          "teamA": [
+            "rmac",
+            "house"
+          ],
+          "teamB": [
+            "elger",
+            "tmo"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "nicks",
+            "saugy"
+          ],
+          "teamB": [
+            "pace",
+            "weezy"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "telly",
+            "dk"
+          ],
+          "teamB": [
+            "andy",
+            "joeo"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "kj",
+            "tjsc"
+          ],
+          "teamB": [
+            "jensen",
+            "hile"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "nicks"
+          ],
+          "teamB": [
+            "jensen"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "house"
+          ],
+          "teamB": [
+            "elger"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "kj"
+          ],
+          "teamB": [
+            "tmo"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "tjsc"
+          ],
+          "teamB": [
+            "weezy"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "telly"
+          ],
+          "teamB": [
+            "pace"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "dk"
+          ],
+          "teamB": [
+            "andy"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "rmac"
+          ],
+          "teamB": [
+            "joeo"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "saugy"
+          ],
+          "teamB": [
+            "hile"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "telly",
+            "kj"
+          ],
+          "teamB": [
+            "elger",
+            "andy"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "rmac",
+            "nicks"
+          ],
+          "teamB": [
+            "jensen",
+            "pace"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "house",
+            "tjsc"
+          ],
+          "teamB": [
+            "tmo",
+            "joeo"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "dk",
+            "saugy"
+          ],
+          "teamB": [
+            "hile",
+            "weezy"
+          ]
+        },
+        {
+          "round": 4,
+          "teamA": [
+            "telly",
+            "kj",
+            "nicks",
+            "rmac",
+            "house",
+            "tjsc",
+            "dk",
+            "saugy"
+          ],
+          "teamB": [
+            "elger",
+            "andy",
+            "jensen",
+            "pace",
+            "tmo",
+            "joeo",
+            "hile",
+            "weezy"
+          ]
+        }
+      ],
+      "extra_holes": [],
+      "warnings": [
+        "R4: contributions per hole varied — the sheet's own count is 3/5"
+      ]
+    },
+    {
+      "year": 2024,
+      "name": "The Bourbon Cup 2024",
+      "teams": {
+        "A": "Foxes",
+        "B": "Admin"
+      },
+      "players": [
+        {
+          "id": "nicks",
+          "name": "Nick S",
+          "team": "A",
+          "index": 9.6
+        },
+        {
+          "id": "andy",
+          "name": "Andy",
+          "team": "A",
+          "index": 7.3
+        },
+        {
+          "id": "telly",
+          "name": "Telly",
+          "team": "A",
+          "index": 6.9
+        },
+        {
+          "id": "pace",
+          "name": "Pace",
+          "team": "A",
+          "index": 10.3
+        },
+        {
+          "id": "tjsc",
+          "name": "TJSC",
+          "team": "A",
+          "index": 11.6
+        },
+        {
+          "id": "dk",
+          "name": "DK",
+          "team": "A",
+          "index": 16.5
+        },
+        {
+          "id": "petec",
+          "name": "Pete C",
+          "team": "A",
+          "index": 18.8
+        },
+        {
+          "id": "saugy",
+          "name": "Saugy",
+          "team": "A",
+          "index": 25.2
+        },
+        {
+          "id": "jensen",
+          "name": "Jensen",
+          "team": "B",
+          "index": 6.8
+        },
+        {
+          "id": "kj",
+          "name": "KJ",
+          "team": "B",
+          "index": 7.8
+        },
+        {
+          "id": "house",
+          "name": "House",
+          "team": "B",
+          "index": 9.3
+        },
+        {
+          "id": "rmac",
+          "name": "R-Mac",
+          "team": "B",
+          "index": 9
+        },
+        {
+          "id": "tmo",
+          "name": "T-Mo",
+          "team": "B",
+          "index": 12.2
+        },
+        {
+          "id": "weezy",
+          "name": "Weezy",
+          "team": "B",
+          "index": 14
+        },
+        {
+          "id": "joeo",
+          "name": "Joe O",
+          "team": "B",
+          "index": 11.7
+        },
+        {
+          "id": "hile",
+          "name": "Hile",
+          "team": "B",
+          "index": 18.5
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "format": "stableford",
+          "source_format": "2man_stableford",
+          "course": {
+            "name": "The Loop Red - Middle",
+            "par": 70,
+            "rating": 68.7,
+            "slope": 117,
+            "hole_pars": [
+              4,
+              5,
+              4,
+              3,
+              4,
+              3,
+              4,
+              4,
+              5,
+              4,
+              3,
+              4,
+              5,
+              3,
+              4,
+              4,
+              3,
+              4
+            ],
+            "hole_handicaps": [
+              11,
+              9,
+              7,
+              13,
+              3,
+              17,
+              15,
+              1,
+              5,
+              2,
+              12,
+              14,
+              8,
+              16,
+              6,
+              4,
+              18,
+              10
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 2
+          },
+          "hole_points": null,
+          "ch": {
+            "nicks": 6,
+            "andy": 6,
+            "telly": 7,
+            "pace": 10,
+            "tjsc": 12,
+            "dk": 15,
+            "petec": 18,
+            "saugy": 28,
+            "jensen": 6,
+            "kj": 7,
+            "house": 7,
+            "rmac": 9,
+            "tmo": 10,
+            "weezy": 11,
+            "joeo": 11,
+            "hile": 13
+          }
+        },
+        {
+          "round": 2,
+          "format": "singles",
+          "source_format": "singles",
+          "course": {
+            "name": "The Nightmare - Blue/White",
+            "par": 72,
+            "rating": 69.3,
+            "slope": 128,
+            "hole_pars": [
+              4,
+              3,
+              4,
+              4,
+              3,
+              5,
+              4,
+              5,
+              4,
+              4,
+              5,
+              3,
+              4,
+              3,
+              4,
+              4,
+              4,
+              5
+            ],
+            "hole_handicaps": [
+              13,
+              15,
+              5,
+              9,
+              17,
+              3,
+              11,
+              1,
+              7,
+              16,
+              6,
+              18,
+              8,
+              12,
+              4,
+              10,
+              14,
+              2
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 1
+          },
+          "hole_points": null,
+          "ch": {
+            "nicks": 5,
+            "andy": 5,
+            "telly": 6,
+            "pace": 9,
+            "tjsc": 12,
+            "dk": 15,
+            "petec": 18,
+            "saugy": 29,
+            "jensen": 5,
+            "kj": 6,
+            "house": 7,
+            "rmac": 8,
+            "tmo": 10,
+            "weezy": 10,
+            "joeo": 11,
+            "hile": 13
+          }
+        },
+        {
+          "round": 3,
+          "format": "scramble",
+          "source_format": "2man_scramble",
+          "course": {
+            "name": "The Dream - Blue",
+            "par": 72,
+            "rating": 71,
+            "slope": 128,
+            "hole_pars": [
+              5,
+              4,
+              4,
+              4,
+              3,
+              4,
+              4,
+              3,
+              5,
+              4,
+              5,
+              3,
+              4,
+              4,
+              4,
+              5,
+              3,
+              4
+            ],
+            "hole_handicaps": [
+              9,
+              7,
+              5,
+              3,
+              13,
+              11,
+              15,
+              17,
+              1,
+              12,
+              10,
+              16,
+              6,
+              14,
+              4,
+              8,
+              18,
+              2
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 2
+          },
+          "hole_points": null,
+          "ch": {
+            "nicks": 4.4,
+            "andy": 5.4,
+            "telly": 4.3,
+            "pace": 4.3,
+            "tjsc": 4.4,
+            "dk": 10.3,
+            "petec": 5.4,
+            "saugy": 10.3,
+            "jensen": 4.3,
+            "kj": 4.4,
+            "house": 4.8,
+            "rmac": 5.7,
+            "tmo": 4.4,
+            "weezy": 4.3,
+            "joeo": 4.8,
+            "hile": 5.7
+          }
+        },
+        {
+          "round": 4,
+          "format": "team_best_ball",
+          "source_format": "team_best_ball",
+          "course": {
+            "name": "Forest Dunes - ii/iii",
+            "par": 72,
+            "rating": 71.3,
+            "slope": 140,
+            "hole_pars": [
+              4,
+              4,
+              3,
+              4,
+              5,
+              4,
+              5,
+              4,
+              3,
+              4,
+              3,
+              4,
+              4,
+              4,
+              5,
+              3,
+              4,
+              5
+            ],
+            "hole_handicaps": [
+              15,
+              1,
+              13,
+              9,
+              5,
+              11,
+              7,
+              3,
+              17,
+              4,
+              18,
+              10,
+              14,
+              2,
+              6,
+              8,
+              16,
+              12
+            ]
+          },
+          "nassau": null,
+          "hole_points": {
+            "front": 1,
+            "back": 2
+          },
+          "ch": {
+            "nicks": 8,
+            "andy": 8,
+            "telly": 8,
+            "pace": 13,
+            "tjsc": 16,
+            "dk": 18,
+            "petec": 22,
+            "saugy": 35,
+            "jensen": 8,
+            "kj": 9,
+            "house": 10,
+            "rmac": 11,
+            "tmo": 14,
+            "weezy": 14,
+            "joeo": 14,
+            "hile": 17
+          },
+          "counting_scores": {
+            "front": 4,
+            "back": 6
+          },
+          "recorded_points": {
+            "A": 17.5,
+            "B": 9.5
+          }
+        }
+      ],
+      "matches": [
+        {
+          "round": 1,
+          "teamA": [
+            "telly",
+            "tjsc"
+          ],
+          "teamB": [
+            "jensen",
+            "joeo"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "andy",
+            "dk"
+          ],
+          "teamB": [
+            "rmac",
+            "tmo"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "pace",
+            "petec"
+          ],
+          "teamB": [
+            "house",
+            "hile"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "nicks",
+            "saugy"
+          ],
+          "teamB": [
+            "kj",
+            "weezy"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "nicks"
+          ],
+          "teamB": [
+            "house"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "saugy"
+          ],
+          "teamB": [
+            "hile"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "dk"
+          ],
+          "teamB": [
+            "kj"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "petec"
+          ],
+          "teamB": [
+            "weezy"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "telly"
+          ],
+          "teamB": [
+            "rmac"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "tjsc"
+          ],
+          "teamB": [
+            "joeo"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "andy"
+          ],
+          "teamB": [
+            "jensen"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "pace"
+          ],
+          "teamB": [
+            "tmo"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "dk",
+            "saugy"
+          ],
+          "teamB": [
+            "rmac",
+            "hile"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "nicks",
+            "tjsc"
+          ],
+          "teamB": [
+            "jensen",
+            "weezy"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "andy",
+            "petec"
+          ],
+          "teamB": [
+            "house",
+            "joeo"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "telly",
+            "pace"
+          ],
+          "teamB": [
+            "kj",
+            "tmo"
+          ]
+        },
+        {
+          "round": 4,
+          "teamA": [
+            "nicks",
+            "andy",
+            "telly",
+            "pace",
+            "tjsc",
+            "dk",
+            "petec",
+            "saugy"
+          ],
+          "teamB": [
+            "jensen",
+            "kj",
+            "house",
+            "rmac",
+            "tmo",
+            "weezy",
+            "joeo",
+            "hile"
+          ]
+        }
+      ],
+      "extra_holes": [],
+      "warnings": [
+        "R4: contributions per hole varied — the sheet's own count is 4/6"
+      ]
+    },
+    {
+      "year": 2025,
+      "name": "The Bourbon Cup 2025",
+      "teams": {
+        "A": "Mash Brothers",
+        "B": "Shot Callers"
+      },
+      "players": [
+        {
+          "id": "jensen",
+          "name": "Jensen",
+          "team": "A",
+          "index": 6.8
+        },
+        {
+          "id": "andy",
+          "name": "Andy",
+          "team": "A",
+          "index": 7.3
+        },
+        {
+          "id": "kj",
+          "name": "KJ",
+          "team": "A",
+          "index": 7.8
+        },
+        {
+          "id": "rmac",
+          "name": "R-Mac",
+          "team": "A",
+          "index": 9
+        },
+        {
+          "id": "house",
+          "name": "House",
+          "team": "A",
+          "index": 9.3
+        },
+        {
+          "id": "tjsc",
+          "name": "TJSC",
+          "team": "A",
+          "index": 11.6
+        },
+        {
+          "id": "hile",
+          "name": "Hile",
+          "team": "A",
+          "index": 18.5
+        },
+        {
+          "id": "petec",
+          "name": "Pete C",
+          "team": "A",
+          "index": 18.8
+        },
+        {
+          "id": "telly",
+          "name": "Telly",
+          "team": "B",
+          "index": 6.9
+        },
+        {
+          "id": "nicks",
+          "name": "Nick S",
+          "team": "B",
+          "index": 9.6
+        },
+        {
+          "id": "pace",
+          "name": "Pace",
+          "team": "B",
+          "index": 10.3
+        },
+        {
+          "id": "joeo",
+          "name": "Joe O",
+          "team": "B",
+          "index": 11.7
+        },
+        {
+          "id": "tmo",
+          "name": "T-Mo",
+          "team": "B",
+          "index": 12.2
+        },
+        {
+          "id": "weezy",
+          "name": "Weezy",
+          "team": "B",
+          "index": 14
+        },
+        {
+          "id": "dk",
+          "name": "DK",
+          "team": "B",
+          "index": 16.5
+        },
+        {
+          "id": "saugy",
+          "name": "Saugy",
+          "team": "B",
+          "index": 25.2
+        }
+      ],
+      "rounds": [
+        {
+          "round": 1,
+          "format": "double_dot",
+          "source_format": "double_dot",
+          "course": {
+            "name": "Kaufman - White",
+            "par": 72,
+            "rating": 70.8,
+            "slope": 134,
+            "hole_pars": [
+              4,
+              5,
+              4,
+              3,
+              4,
+              4,
+              5,
+              3,
+              4,
+              4,
+              4,
+              5,
+              3,
+              4,
+              4,
+              5,
+              3,
+              4
+            ],
+            "hole_handicaps": [
+              13,
+              3,
+              9,
+              17,
+              5,
+              11,
+              1,
+              15,
+              7,
+              6,
+              16,
+              14,
+              18,
+              2,
+              8,
+              12,
+              10,
+              4
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 2
+          },
+          "hole_points": null,
+          "ch": {
+            "jensen": 7,
+            "andy": 8,
+            "kj": 8,
+            "rmac": 9,
+            "house": 10,
+            "tjsc": 13,
+            "hile": 21,
+            "petec": 21,
+            "telly": 7,
+            "nicks": 10,
+            "pace": 11,
+            "joeo": 13,
+            "tmo": 13,
+            "weezy": 16,
+            "dk": 18,
+            "saugy": 31
+          }
+        },
+        {
+          "round": 2,
+          "format": "singles",
+          "source_format": "singles",
+          "course": {
+            "name": "Quail Ridge - White",
+            "par": 72,
+            "rating": 70,
+            "slope": 129,
+            "hole_pars": [
+              4,
+              4,
+              5,
+              3,
+              5,
+              4,
+              4,
+              4,
+              3,
+              5,
+              4,
+              4,
+              4,
+              4,
+              3,
+              4,
+              3,
+              5
+            ],
+            "hole_handicaps": [
+              11,
+              17,
+              5,
+              13,
+              1,
+              9,
+              3,
+              7,
+              15,
+              4,
+              14,
+              2,
+              8,
+              10,
+              12,
+              16,
+              18,
+              6
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 1
+          },
+          "hole_points": null,
+          "ch": {
+            "jensen": 6,
+            "andy": 7,
+            "kj": 7,
+            "rmac": 8,
+            "house": 9,
+            "tjsc": 11,
+            "hile": 19,
+            "petec": 19,
+            "telly": 6,
+            "nicks": 9,
+            "pace": 10,
+            "joeo": 11,
+            "tmo": 12,
+            "weezy": 14,
+            "dk": 17,
+            "saugy": 27
+          }
+        },
+        {
+          "round": 3,
+          "format": "scramble",
+          "source_format": "2man_scramble",
+          "course": {
+            "name": "Quail Ridge - Blue",
+            "par": 72,
+            "rating": 71.9,
+            "slope": 136,
+            "hole_pars": [
+              4,
+              4,
+              5,
+              3,
+              5,
+              4,
+              4,
+              4,
+              3,
+              5,
+              4,
+              4,
+              4,
+              4,
+              3,
+              4,
+              3,
+              5
+            ],
+            "hole_handicaps": [
+              11,
+              17,
+              5,
+              13,
+              1,
+              9,
+              3,
+              7,
+              15,
+              4,
+              14,
+              2,
+              8,
+              10,
+              12,
+              16,
+              18,
+              6
+            ]
+          },
+          "nassau": {
+            "front": 1,
+            "back": 1,
+            "overall": 2
+          },
+          "hole_points": null,
+          "ch": {
+            "jensen": 6.2,
+            "andy": 4.8,
+            "kj": 5.3,
+            "rmac": 4.8,
+            "house": 7.2,
+            "tjsc": 5.3,
+            "hile": 7.2,
+            "petec": 6.2,
+            "telly": 4.5,
+            "nicks": 4.5,
+            "pace": 6.5,
+            "joeo": 7.4,
+            "tmo": 6.5,
+            "weezy": 7.4,
+            "dk": 11.5,
+            "saugy": 11.5
+          }
+        },
+        {
+          "round": 4,
+          "format": "team_best_ball",
+          "source_format": "team_best_ball",
+          "course": {
+            "name": "Thornapple Pointe - White",
+            "par": 72,
+            "rating": 71.9,
+            "slope": 139,
+            "hole_pars": [
+              4,
+              4,
+              4,
+              4,
+              5,
+              3,
+              5,
+              3,
+              4,
+              4,
+              4,
+              3,
+              5,
+              4,
+              3,
+              5,
+              4,
+              4
+            ],
+            "hole_handicaps": [
+              3,
+              7,
+              9,
+              11,
+              1,
+              15,
+              13,
+              17,
+              5,
+              18,
+              6,
+              16,
+              12,
+              2,
+              14,
+              10,
+              4,
+              8
+            ]
+          },
+          "nassau": null,
+          "hole_points": {
+            "front": 1,
+            "back": 2
+          },
+          "ch": {
+            "jensen": 8,
+            "andy": 9,
+            "kj": 9,
+            "rmac": 11,
+            "house": 11,
+            "tjsc": 14,
+            "hile": 23,
+            "petec": 23,
+            "telly": 8,
+            "nicks": 12,
+            "pace": 13,
+            "joeo": 14,
+            "tmo": 15,
+            "weezy": 17,
+            "dk": 20,
+            "saugy": 31
+          },
+          "counting_scores": {
+            "front": 4,
+            "back": 6
+          },
+          "recorded_points": {
+            "A": 20,
+            "B": 7
+          }
+        }
+      ],
+      "matches": [
+        {
+          "round": 1,
+          "teamA": [
+            "andy",
+            "kj"
+          ],
+          "teamB": [
+            "telly",
+            "joeo"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "jensen",
+            "tjsc"
+          ],
+          "teamB": [
+            "tmo",
+            "dk"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "rmac",
+            "house"
+          ],
+          "teamB": [
+            "pace",
+            "saugy"
+          ]
+        },
+        {
+          "round": 1,
+          "teamA": [
+            "hile",
+            "petec"
+          ],
+          "teamB": [
+            "nicks",
+            "weezy"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "rmac"
+          ],
+          "teamB": [
+            "telly"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "petec"
+          ],
+          "teamB": [
+            "tmo"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "jensen"
+          ],
+          "teamB": [
+            "nicks"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "andy"
+          ],
+          "teamB": [
+            "pace"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "tjsc"
+          ],
+          "teamB": [
+            "joeo"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "hile"
+          ],
+          "teamB": [
+            "saugy"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "house"
+          ],
+          "teamB": [
+            "weezy"
+          ]
+        },
+        {
+          "round": 2,
+          "teamA": [
+            "kj"
+          ],
+          "teamB": [
+            "dk"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "andy",
+            "rmac"
+          ],
+          "teamB": [
+            "pace",
+            "tmo"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "kj",
+            "tjsc"
+          ],
+          "teamB": [
+            "telly",
+            "nicks"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "jensen",
+            "petec"
+          ],
+          "teamB": [
+            "dk",
+            "saugy"
+          ]
+        },
+        {
+          "round": 3,
+          "teamA": [
+            "house",
+            "hile"
+          ],
+          "teamB": [
+            "joeo",
+            "weezy"
+          ]
+        },
+        {
+          "round": 4,
+          "teamA": [
+            "jensen",
+            "andy",
+            "kj",
+            "rmac",
+            "house",
+            "tjsc",
+            "hile",
+            "petec"
+          ],
+          "teamB": [
+            "telly",
+            "nicks",
+            "pace",
+            "joeo",
+            "tmo",
+            "weezy",
+            "dk",
+            "saugy"
+          ]
+        }
+      ],
+      "extra_holes": [],
+      "warnings": [
+        "R4: contributions per hole varied — the sheet's own count is 4/6"
+      ]
+    }
+  ]
+}
