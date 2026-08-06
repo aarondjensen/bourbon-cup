@@ -65,9 +65,10 @@ import {
   GROUPS_COL, groupsDocId, encodeGroups, decodeGroups,
   teeTimeForMatch, parseTeeTime, formatTeeTime, DEFAULT_TEE_INTERVAL, TEE_SLOTS,
   matchPlayers,
-  roundPlaySetup, orderMatchesForRound, numberMatches,
+  roundPlaySetup, orderMatchesForRound, numberMatches, groupIndexForMatch,
   stripAMPM,
 } from "./lib/groups";
+import { groupKey, tagAheadOfPlay } from "./lib/ctp";
 import { holesEntered, roundScoreProgress } from "./lib/scoreGuard";
 import {
   cardSigBareId, sigForMatch, cardComplete, missingForCard,
@@ -692,7 +693,7 @@ function LoginSplash({ tournamentName, tournamentLocation }) {
 const HOLE_RING = { width: 2, offset: 1 };
 const HOLE_RING_REACH = HOLE_RING.width + HOLE_RING.offset;
 
-function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teams, hcpOverrides, teeAssignments, roundLocks, rounds, currentRound, ctpData, onSetCtp, onConfirmCtp, cardSigs, onSignCard, onAttestCard, onUnsignCard }) {
+function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teams, hcpOverrides, teeAssignments, roundLocks, rounds, currentRound, groups, ctpData, onSetCtp, onConfirmCtp, cardSigs, onSignCard, onAttestCard, onUnsignCard }) {
   const userPid = user.player_id;
   // This screen is worked from, not read down — four players' scores have to
   // be reachable without scrolling to the one at the bottom. It measures the
@@ -964,6 +965,20 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // has claimed it.
   const ctpFor = (h) => ctpData?.[`${match.round}_${h}`] || null;
 
+  // Where this match sits in the round's draw, and who its group is. Both
+  // ride along on any tag this device makes, so the NEXT group to be asked
+  // can be told whether the number in front of them came from behind them —
+  // see lib/ctp. A match nobody has grouped, or one spread across two
+  // groups, has no place in the order and says so with a null: unknown must
+  // never read as "off first".
+  const myGroupIdx = (() => {
+    const gs = groups?.[match.round];
+    if (!gs?.length) return null;
+    const i = groupIndexForMatch({ groups: gs, match });
+    return i < 0 ? null : i;
+  })();
+  const myGroupKey = myGroupIdx == null ? null : groupKey(groups[match.round][myGroupIdx]);
+
   // When the score just entered completes a par 3 for THIS group, pop the tag
   // popup on the device that entered it. Every group gets the prompt as they
   // walk off the green — an earlier group's tag shows in the popup as the
@@ -996,7 +1011,10 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   const saveCtp = async (winnerPid, feet) => {
     const h = ctpPrompt;
     setCtpPrompt(null);
-    await onSetCtp(match.round, h, winnerPid, { distanceFt: feet, approved: false, taggedBy: userPid });
+    await onSetCtp(match.round, h, winnerPid, {
+      distanceFt: feet, approved: false, taggedBy: userPid,
+      groupKey: myGroupKey, groupOrder: myGroupIdx,
+    });
     const nm = tPlayers.find(p => p.player_id === winnerPid)?.name || "";
     // Through notify(), not the hole-advance toast: tagging a CTP is ordinary
     // app feedback, not part of the "this hole is done" sequence.
@@ -1520,34 +1538,11 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
         {result?.counting && ` · BEST ${result.counting[activeHole]}`}
       </div>
 
-      {/* Par-3 CTP chip — the standing closest-to-the-pin for this hole,
-          and the way back into the tag popup. The automatic prompt fires
-          once per hole per session, so without this a group that dismissed
-          it (or measured a second ball after) would have no way to claim
-          the hole. Reads as a plain badge, not a control, once the
-          director has settled the hole. */}
-      {par === 3 && (() => {
-        const rec = ctpFor(activeHole);
-        const nm = rec?.player_id ? (tPlayers.find(p => p.player_id === rec.player_id)?.name || "—") : null;
-        const settled = rec?.approved === true;
-        const label = nm
-          ? `🎯 CTP — ${nm}${rec.distance_ft ? ` · ${rec.distance_ft} ft` : ""}${settled ? "" : " · tap to beat it"}`
-          : "🎯 Tag closest to the pin";
-        const style = {
-          width: "100%", padding: "6px 10px", borderRadius: 8, marginBottom: fit.stack, textAlign: "left", flexShrink: 0,
-          background: nm ? BC.amberGlow : BC.card,
-          // One alpha, applied once. This used to read `${nm ? BC.amber +
-          // "55" : BC.bdr}60`, which on the tagged branch concatenated both
-          // bytes into a ten-character hex — not a colour, so that border
-          // silently did not render at all.
-          border: `1px solid ${nm ? BC.amber : BC.bdr}${ALPHA.line}`,
-          color: nm ? BC.amberInk : BC.t3,
-          fontSize: FS.label, fontWeight: 700, letterSpacing: 0.5,
-        };
-        return settled
-          ? <div style={style}>{label}</div>
-          : <button onClick={() => setCtpPrompt(activeHole)} style={{ ...style, cursor: "pointer" }}>{label}</button>;
-      })()}
+      {/* No CTP row rides above the players on a par 3. The prompt that
+          fires once the hole is scored asks the question and shows the
+          standing distance, so a second copy of it here only bought a row —
+          and on a par 3 that row pushed the last player's score buttons
+          down behind the tab bar. The prompt is the whole story. */}
 
       {/* Player score cards — 4 stacked, T1 above dashed divider, T2 below.
           Each shows one header row — name, (CH), stroke dots on the left,
@@ -1709,6 +1704,12 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
             teams={teams}
             leader={rec}
             leaderName={rec?.player_id ? (tPlayers.find(p => p.player_id === rec.player_id)?.name || "") : ""}
+            outOfOrder={rec ? tagAheadOfPlay({
+              leaderOrder: rec.tagged_group_order,
+              leaderKey: rec.tagged_group_key,
+              myOrder: myGroupIdx,
+              myKey: myGroupKey,
+            }) : null}
             onSave={saveCtp}
             onPass={confirmCtp}
             onClose={() => setCtpPrompt(null)}
@@ -5917,6 +5918,14 @@ export default function App() {
           distance_ft: r.distance_ft ?? null,
           approved: r.approved === true,
           tagged_by: r.tagged_by || null,
+          // WHICH GROUP tagged it, and where that group tees off. The player
+          // id above says who typed; this says where they were in the field,
+          // which is the only way a group entering late can be told that the
+          // number in front of them came from BEHIND them. Null on a
+          // director's pick and on any tag written before this was recorded —
+          // see lib/ctp, where an unknown order deliberately says nothing.
+          tagged_group_key: r.tagged_group_key || null,
+          tagged_group_order: Number.isInteger(r.tagged_group_order) ? r.tagged_group_order : null,
           // Who has walked off the hole agreeing the tag stands. See
           // onConfirmCtp — a pass in the on-course prompt is an answer,
           // and this is where it lands.
@@ -6215,14 +6224,26 @@ export default function App() {
   // only the director can operate, writes true and freezes the hole.
   // Every field is written on every call because db.upsert merges — a
   // director reassignment that omitted distance_ft would otherwise leave
-  // the previous group's measurement attached to a different player.
+  // the previous group's measurement attached to a different player. The
+  // tagging GROUP is written the same way and for the same reason: a
+  // director's pick off the Betting tab carries no group, and inheriting the
+  // last group's tee order would have the prompt telling the next group the
+  // field is out of order on the strength of a stale field.
+  //
+  // `confirmed_by` is CLEARED rather than merged. A confirmation was
+  // agreement with a distance that has just been beaten; carrying it onto
+  // the new tag would show the field agreeing with a number it has never
+  // seen.
   const onSetCtp = useCallback(async (round, hole, pid, opts = {}) => {
-    const { distanceFt = null, approved = true, taggedBy = null } = opts;
+    const { distanceFt = null, approved = true, taggedBy = null, groupKey: gKey = null, groupOrder = null } = opts;
     const id = editionDocId(`bc_ctp_r${round}_h${hole+1}`);
     if (pid) {
       await db.upsert("bc_ctp", {
         id, tournament_id: TOURNAMENT_ID, round, hole, player_id: pid,
         distance_ft: distanceFt, approved, tagged_by: taggedBy,
+        tagged_group_key: gKey,
+        tagged_group_order: Number.isInteger(groupOrder) ? groupOrder : null,
+        confirmed_by: [],
       });
     } else {
       await db.delete("bc_ctp", id);
@@ -6886,6 +6907,7 @@ export default function App() {
             roundLocks={roundLocksData}
             rounds={tournamentRounds}
             currentRound={currentRound}
+            groups={groupsData}
             ctpData={ctpData}
             onSetCtp={onSetCtp}
             onConfirmCtp={onConfirmCtp}
