@@ -294,13 +294,22 @@ const BATCH = 400;
 // is writing, only ones carrying this import's `imported_from`, and only ones
 // absent from the set about to be written. A row a director added in the app
 // has no such field and is never a candidate.
+//
+// `imported_from` is the primary marker, and it is not sufficient on its own:
+// it went onto hole scores LATER than onto everything else, so the run that
+// first needed a prune could not see the 720 cards the fold had orphaned. A
+// document is therefore also this import's when it points at a player id only
+// this import mints — `hist_<year>_<name>` — inside an edition this import
+// owns. A roster row a director added has neither mark and is never touched.
 const pruneStale = async (built) => {
   let removed = 0;
+  const mine = (data) => !!data.imported_from
+    || String(data.player_id || "").startsWith(`hist_${built.year}_`);
   for (const col of IMPORT_COLLECTIONS) {
     if (col === "bc_editions") continue;   // one document, and its id never moves
     const keep = new Set((built[col] || []).map((d) => String(d.id)));
     const rows = await db.collection(col).where("tournament_id", "==", built.editionId).get();
-    const stale = rows.docs.filter((d) => d.data().imported_from && !keep.has(d.id));
+    const stale = rows.docs.filter((d) => mine(d.data()) && !keep.has(d.id));
     for (let i = 0; i < stale.length; i += BATCH) {
       const batch = db.batch();
       for (const d of stale.slice(i, i + BATCH)) batch.delete(d.ref);
