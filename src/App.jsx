@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, HOLE_BANNER, FS, segThumb, segTrack, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor, VP_BAND } from "./theme";
 import { playerLookup, realPlayers } from "./lib/players";
-import { db, TOURNAMENT_ID, getTournamentYear, getActiveTournamentId, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, BOOTSTRAP_DIRECTOR, SPECTATOR_ID } from "./firebase";
+import { db, TOURNAMENT_ID, getTournamentYear, getActiveTournamentId, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, readTournamentIdentity, writeTournamentIdentity, BOOTSTRAP_DIRECTOR, SPECTATOR_ID } from "./firebase";
 import { PROVIDERS, signIn, signOutUser, onAuthUser, consumeRedirectResult, isCancelled, whenAuthReady } from "./lib/auth";
 import { claimPlayer, linkedPlayer, isClaimed, accountLabel, unlinkPatch, readMembership, isDirectorAccount, joinWithCode, setAccessCode, readAccessCode, setDirector, membershipFor, playerIsDirector, accountsUnreadable, ACCOUNTS_COL, deleteAccount } from "./lib/accounts";
 import {
@@ -4480,8 +4480,8 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
 
           {/* Tournament identity — name and location.
               One card and one Save for both: they're the same sentence on
-              every screen that shows them ("The Bourbon Cup · 2025 · Gaylord,
-              MI"), and a director renaming the tournament for a new venue
+              every screen that shows them ("The Bourbon Cup · 2025 · Grand
+              Rapids, MI"), and a director renaming the tournament for a venue
               would otherwise have to remember two separate saves. An empty
               field falls back to its constant rather than saving blank, so
               the header can't end up with a hole in it. */}
@@ -5662,13 +5662,16 @@ export default function App() {
   // The saved team-name overrides (from the bc_settings/team_names doc).
   // Defaults come from constants so the fallback names live in one place.
   const [teamNames, setTeamNames] = useState(DEFAULT_TEAM_NAMES);
-  // Director-set tournament identity (bc_settings/tournament). Both fall back
-  // to their constants, so the login screen always has a name and a place
-  // even before an edition has been through Admin → Tournament. The YEAR is
-  // deliberately not one of these — it follows the active edition (see
+  // Director-set tournament identity (bc_settings/tournament). Seeded from
+  // what this device last saw for THIS edition, so a cold start opens on the
+  // right place instead of lettering the splash from the constants and then
+  // correcting itself when the document lands (see firebase.identityKey).
+  // The constants are the last resort — an edition never opened here, or one
+  // that has never been through Admin → Tournament. The YEAR is deliberately
+  // not one of these: it follows the active edition (see
   // firebase.getTournamentYear), so it can't disagree with the data on screen.
-  const [tournamentName, setTournamentName] = useState(TOURNAMENT_TITLE);
-  const [tournamentLocation, setTournamentLocation] = useState(TOURNAMENT_LOCATION);
+  const [tournamentName, setTournamentName] = useState(() => readTournamentIdentity()?.name || TOURNAMENT_TITLE);
+  const [tournamentLocation, setTournamentLocation] = useState(() => readTournamentIdentity()?.location || TOURNAMENT_LOCATION);
   // Theme state — toggled via the More menu. The actual color values live in
   // the module-level BC object (mutated by applyBCTheme); this state's only
   // job is to trigger a top-level re-render so children re-read fresh BC
@@ -6068,8 +6071,12 @@ export default function App() {
       const tn = rows.find(r => r.id === editionDocId("team_names"));
       if (tn) setTeamNames({ A: tn.teamA || DEFAULT_TEAM_NAMES.A, B: tn.teamB || DEFAULT_TEAM_NAMES.B });
       const tourn = rows.find(r => r.id === editionDocId("tournament"));
-      setTournamentName(tourn?.name?.trim() || TOURNAMENT_TITLE);
-      setTournamentLocation(tourn?.location?.trim() || TOURNAMENT_LOCATION);
+      const tName = tourn?.name?.trim() || TOURNAMENT_TITLE;
+      const tLocation = tourn?.location?.trim() || TOURNAMENT_LOCATION;
+      setTournamentName(tName);
+      setTournamentLocation(tLocation);
+      // Remember it for the next cold start, so the splash opens on this.
+      writeTournamentIdentity({ name: tName, location: tLocation });
       // Branding: apply to the live BC theme immediately (using the current
       // mode via ref), then store it so a later theme toggle re-applies it.
       const br = rows.find(r => r.id === editionDocId("branding"));

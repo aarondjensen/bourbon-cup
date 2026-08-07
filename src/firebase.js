@@ -243,6 +243,40 @@ export const writeUserSession = (user) => {
   } catch { /* blocked storage */ }
 };
 
+// ── Tournament identity cache ───────────────────────────────────────
+// Same idea as the user session above, for the same reason: the name and
+// place live in bc_settings/tournament and arrive a moment after startup,
+// and the app has to letter the splash before then.
+//
+// It used to letter it from the constants in constants.js, which are not
+// this edition's answer — they are the fallback for an edition nobody has
+// set up yet, and they point at the NEXT cup's venue. So a cold start on
+// 2025 opened "2025 · GAYLORD, MI" (2026's town) and snapped to
+// "2025 · GRAND RAPIDS, MI" when the document landed, which reads as the
+// app correcting itself about where the tournament is.
+//
+// Keyed by edition, because the name and the place are per-edition and an
+// edition switch hard-reloads: opening 2019 must not letter itself with the
+// venue of the year you were just looking at. Nothing is invented here — a
+// cold start on an edition never opened on this device still falls back to
+// the constants, which is the only case they were ever meant to cover.
+const identityKey = (tid = TOURNAMENT_ID) => `bc_tournament_identity_${tid}`;
+
+export const readTournamentIdentity = (tid) => {
+  try {
+    if (typeof localStorage === "undefined") return null;
+    const raw = localStorage.getItem(identityKey(tid));
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+};
+
+export const writeTournamentIdentity = ({ name, location }, tid) => {
+  try {
+    if (typeof localStorage === "undefined") return;
+    localStorage.setItem(identityKey(tid), JSON.stringify({ name, location }));
+  } catch { /* blocked storage */ }
+};
+
 const _app = initializeApp(FIREBASE_CONFIG);
 const _db = getFirestore(_app);
 
