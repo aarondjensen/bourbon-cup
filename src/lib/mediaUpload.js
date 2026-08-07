@@ -197,7 +197,7 @@ const takenAtOf = (file) => {
 // second write path into the same collection is how two of them drift.
 //
 // Throws with a message meant to be shown to whoever is holding the phone.
-export const uploadPhoto = async ({ file, tid, uid, uploaderName, round = null, caption = "", now = Date.now(), rand = Math.random() }) => {
+export const uploadPhoto = async ({ file, tid, uid, uploaderName, caption = "", now = Date.now(), rand = Math.random() }) => {
   const check = validateSource(file);
   if (!check.ok) throw new Error(check.reason);
   if (!tid) throw new Error("No tournament is selected.");
@@ -251,7 +251,6 @@ export const uploadPhoto = async ({ file, tid, uid, uploaderName, round = null, 
     thumbPath: paths.thumb,
     w: display.w,
     h: display.h,
-    round: Number.isFinite(Number(round)) && Number(round) > 0 ? Number(round) : null,
     caption: String(caption || "").slice(0, 280),
     uploadedBy: uid,
     uploadedByName: uploaderName || "",

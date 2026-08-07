@@ -3,7 +3,7 @@ import {
   HOSTS, KINDS, DISPLAY_EDGE, THUMB_EDGE, MAX_SOURCE_BYTES,
   mediaDocId, storagePaths, photoId,
   resizePlan, squareCropPlan, validateSource,
-  takenTime, sortByTaken, groupByRound, UNROUNDED_LABEL, canDelete,
+  takenTime, sortByTaken, canDelete, saveFilename,
   photoUploadsAllowed, uploadsDisabledReason, ENCODINGS, MAX_UPLOAD_BYTES,
 } from "./media";
 
@@ -216,50 +216,40 @@ describe("sortByTaken", () => {
   });
 });
 
-describe("groupByRound", () => {
-  const items = [
-    { id: "r2", round: 2, takenAt: "2026-06-22T15:00:00.000Z" },
-    { id: "r1", round: 1, takenAt: "2026-06-21T15:00:00.000Z" },
-    { id: "dinner", takenAt: "2026-06-20T15:00:00.000Z" },
-    { id: "r1b", round: 1, takenAt: "2026-06-21T18:00:00.000Z" },
-  ];
 
-  it("orders rounds ascending, however the photos arrived", () => {
-    expect(groupByRound(items).map(g => g.round)).toEqual([1, 2, null]);
+describe("saveFilename", () => {
+  const item = { mediaId: "abc123", id: "med_bc_2026_abc123" };
+
+  it("names a saved photo after the cup, not after a generated id alone", () => {
+    expect(saveFilename(item, "image/webp")).toBe("bourbon-cup-abc123.webp");
   });
 
-  it("labels each round and the leftovers", () => {
-    const groups = groupByRound(items);
-    expect(groups[0].label).toBe("Round 1");
-    expect(groups.at(-1).label).toBe(UNROUNDED_LABEL);
+  it("spells jpeg the way every other file on a phone spells it", () => {
+    expect(saveFilename(item, "image/jpeg")).toBe("bourbon-cup-abc123.jpg");
   });
 
-  it("sorts newest first inside a round", () => {
-    expect(groupByRound(items)[0].items.map(i => i.id)).toEqual(["r1b", "r1"]);
+  it("cuts a structured suffix rather than putting it in the filename", () => {
+    // image/svg+xml would otherwise land as "…svg+xml", which a phone will
+    // not open.
+    expect(saveFilename(item, "image/svg+xml")).toBe("bourbon-cup-abc123.svg");
   });
 
-  it("omits the unrounded group entirely when every photo has a round", () => {
-    const groups = groupByRound([{ id: "x", round: 1 }]);
-    expect(groups).toHaveLength(1);
-    expect(groups[0].round).toBe(1);
+  it("cuts MIME parameters too", () => {
+    expect(saveFilename(item, "image/jpeg; charset=binary")).toBe("bourbon-cup-abc123.jpg");
   });
 
-  it("treats a whole finished year with no rounds as one group, not as leftovers", () => {
-    const groups = groupByRound([{ id: "x" }, { id: "y" }]);
-    expect(groups).toHaveLength(1);
-    expect(groups[0].round).toBeNull();
-    expect(groups[0].items).toHaveLength(2);
+  it("falls back to jpg rather than producing a file with no extension", () => {
+    expect(saveFilename(item, "")).toBe("bourbon-cup-abc123.jpg");
+    expect(saveFilename(item, null)).toBe("bourbon-cup-abc123.jpg");
+    expect(saveFilename(item, "notamimetype")).toBe("bourbon-cup-abc123.jpg");
   });
 
-  it("does not read round 0 or a junk round as a real round", () => {
-    const groups = groupByRound([{ id: "a", round: 0 }, { id: "b", round: "x" }]);
-    expect(groups).toHaveLength(1);
-    expect(groups[0].round).toBeNull();
+  it("uses the document id when a photo predates mediaId", () => {
+    expect(saveFilename({ id: "med_bc_2026_xyz" }, "image/webp")).toBe("bourbon-cup-med_bc_2026_xyz.webp");
   });
 
-  it("loses no photo", () => {
-    const total = groupByRound(items).reduce((n, g) => n + g.items.length, 0);
-    expect(total).toBe(items.length);
+  it("still produces a usable name for nothing at all", () => {
+    expect(saveFilename(null, "image/webp")).toBe("bourbon-cup-photo.webp");
   });
 });
 
