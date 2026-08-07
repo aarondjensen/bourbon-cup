@@ -1899,6 +1899,10 @@
       "year": 2019,
       "name": "The Bourbon Cup 2019",
       "teams": {
+        "A": "DefCon8",
+        "B": "BulleitProof"
+      },
+      "teams_as_written": {
         "A": "DEFCON",
         "B": "BULLEIT"
       },
@@ -3935,6 +3939,10 @@
       "year": 2022,
       "name": "The Bourbon Cup 2022",
       "teams": {
+        "A": "Sautering Irons",
+        "B": "HileDrivers"
+      },
+      "teams_as_written": {
         "A": "Irons",
         "B": "Drivers"
       },
@@ -4577,6 +4585,10 @@
       "year": 2023,
       "name": "The Bourbon Cup 2023",
       "teams": {
+        "A": "Master Tees",
+        "B": "Weezervoir Dogs"
+      },
+      "teams_as_written": {
         "A": "TEES",
         "B": "WEEZ"
       },
@@ -5218,6 +5230,10 @@
       "year": 2024,
       "name": "The Bourbon Cup 2024",
       "teams": {
+        "A": "Silver Foxes",
+        "B": "The Administration"
+      },
+      "teams_as_written": {
         "A": "Foxes",
         "B": "Admin"
       },

@@ -121,6 +121,23 @@ const GAME_KEY = (label) => {
   return null;
 };
 
+// ── What a team was actually called ───────────────────────────────
+// The Master Input's team cell is a key, not a banner: it is what the rest of
+// the workbook does lookups against, so it is short and often shouted (TEES,
+// B9B, WEEZ). The name a team went by is longer, and Aaron gave the ones that
+// differ.
+//
+// Kept apart from the sheet's name rather than replacing it, because the sheet
+// name is what the scoreboard banner is matched on when the colours are read
+// (see team-brand.mjs) — rename it there and the colour lookup stops finding
+// its team.
+const DISPLAY_NAMES = {
+  2019: { A: "DefCon8", B: "BulleitProof" },
+  2022: { A: "Sautering Irons", B: "HileDrivers" },
+  2023: { A: "Master Tees", B: "Weezervoir Dogs" },
+  2024: { A: "Silver Foxes", B: "The Administration" },
+};
+
 // ── The points table ──────────────────────────────────────────────
 // "Game Scoring / Points Awarded" on the Master Input: what a match in each
 // game is worth, front / back / overall. That IS the app's Nassau, field for
@@ -652,6 +669,9 @@ function buildYear(year, { backbone, facts }) {
   // drop them.
   const teams = { A: master.teams[0] || "Team A", B: master.teams[1] || "Team B" };
   const banner = teamBrandFor(year, teams);
+  // Read with the sheet's name, shown under the team's own.
+  const named = DISPLAY_NAMES[year] || {};
+  const display = { A: named.A || teams.A, B: named.B || teams.B };
   const brand = {};
   if (banner?.A?.accent) brand.A = { color: banner.A.accent };
   if (banner?.B?.accent) brand.B = { color: banner.B.accent };
@@ -660,7 +680,10 @@ function buildYear(year, { backbone, facts }) {
   return {
     year,
     name: `The Bourbon Cup ${year}`,
-    teams,
+    teams: display,
+    // What the Master Input calls them, kept because it is the key every other
+    // tab in that workbook joins on.
+    ...(display.A !== teams.A || display.B !== teams.B ? { teams_as_written: teams } : {}),
     ...(Object.keys(brand).length ? { brand } : {}),
     players: roster,
     rounds,
