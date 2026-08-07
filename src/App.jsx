@@ -6507,7 +6507,7 @@ export default function App() {
   // would freeze the first render's values and attribute every photo of the
   // session to whoever the app thought you were on load — which, on a cold
   // start, is nobody.
-  const onUploadPhoto = useStableCallback(async (file) => {
+  const onUploadPhoto = useStableCallback(async (file, onProgress) => {
     const uid = authUser?.uid;
     if (!uid) throw new Error("You need to be signed in to add photos.");
     const { uploadPhoto } = await import("./lib/mediaUpload");
@@ -6516,6 +6516,10 @@ export default function App() {
       tid: getActiveTournamentId(),
       uid,
       uploaderName: user?.name || "",
+      // Passed straight through to the tile the gallery already drew for this
+      // photo. It is the screen's own progress, so the screen owns what it
+      // looks like; this layer only forwards it.
+      onProgress,
     });
     if (!(await db.upsert("bc_media", row))) throw new Error("Couldn't save that photo.");
   });

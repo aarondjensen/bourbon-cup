@@ -9,7 +9,9 @@
 // Firestore Security Rules, not by hiding the key.
 import { initializeApp } from "firebase/app";
 import {
-  getFirestore, collection, doc, setDoc, getDoc, getDocs,
+  getFirestore, initializeFirestore,
+  persistentLocalCache, persistentMultipleTabManager,
+  collection, doc, setDoc, getDoc, getDocs,
   query, where, onSnapshot, deleteDoc,
 } from "firebase/firestore";
 
@@ -244,7 +246,45 @@ export const writeUserSession = (user) => {
 };
 
 const _app = initializeApp(FIREBASE_CONFIG);
-const _db = getFirestore(_app);
+// ── The cache that survives a reload ────────────────────────────────
+// The default Firestore cache is IN MEMORY and thrown away on every reload,
+// which means a cold start re-reads — and re-pays for — every document this
+// app subscribes to.
+//
+// That is not a small number here. The subscriptions are scoped to a whole
+// edition: the roster, every round, every match, the groups, the tee sheet,
+// the locks, the signatures, and hole scores at sixteen players x four rounds
+// x eighteen holes. A cold start is on the order of a thousand documents.
+//
+// And a phone on a golf course cold-starts constantly — the screen locks, iOS
+// evicts the tab to take a photo, somebody switches to the camera and back. A
+// dozen phones relaunching twenty to forty times over a weekend day is
+// hundreds of thousands of billed reads against a 50,000/day free quota.
+//
+// With a persistent cache the listener resumes from its stored resume token
+// and only CHANGED documents come down the wire or onto the bill — roughly an
+// order of magnitude less. The second benefit matters just as much on this
+// course: a relaunch in a dead spot paints from disk instead of showing an
+// empty leaderboard.
+//
+// `persistentMultipleTabManager` is required rather than optional. Without it
+// a second tab — or the same phone with the app open twice — fails to
+// initialise its cache at all.
+//
+// Wrapped, because this can legitimately throw: Safari private browsing
+// refuses the storage, and an already-initialised Firestore rejects a second
+// initializeFirestore. Falling back to the in-memory default is the old
+// behaviour, which is worse but is not broken.
+const _db = (() => {
+  try {
+    return initializeFirestore(_app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    });
+  } catch (e) {
+    console.warn("[firebase] Persistent cache unavailable, using memory cache:", e?.message || e);
+    return getFirestore(_app);
+  }
+})();
 
 // The initialized app, for the one other module that needs it: lib/auth.js
 // builds the Auth instance from it. Everything else goes through `db`.

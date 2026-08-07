@@ -27,7 +27,7 @@ import {
   DISPLAY_EDGE, THUMB_EDGE, WEBP_QUALITY, THUMB_QUALITY,
   HOSTS, KINDS, photoId, storagePaths, mediaDocId,
   resizePlan, squareCropPlan, validateSource,
-  ENCODINGS, MAX_UPLOAD_BYTES,
+  ENCODINGS, MAX_UPLOAD_BYTES, UPLOAD_PHASE,
 } from "./media";
 
 // Cached so a run of uploads pays the dynamic import once.
@@ -197,7 +197,23 @@ const takenAtOf = (file) => {
 // second write path into the same collection is how two of them drift.
 //
 // Throws with a message meant to be shown to whoever is holding the phone.
-export const uploadPhoto = async ({ file, tid, uid, uploaderName, caption = "", now = Date.now(), rand = Math.random() }) => {
+// ── Progress ───────────────────────────────────────────────────────
+// Two phases, because they are genuinely different and only one of them can
+// be measured:
+//
+//   preparing  decode, resize, encode. All CPU, no byte count to report, and
+//              on an older phone with a 12-megapixel source it is the SLOWER
+//              half. The caller draws something indeterminate.
+//   uploading  real bytes over a real network, so a real fraction.
+//
+// The fraction spans BOTH files as one number. Reporting each separately makes
+// the bar reach 100%, reset and climb again, which reads as a failed retry —
+// and the thumbnail is a tenth the size of the display copy, so the two halves
+// are not even equal.
+export const uploadPhoto = async ({ file, tid, uid, uploaderName, caption = "", now = Date.now(), rand = Math.random(), onProgress }) => {
+  const report = (fraction, phase) => { try { onProgress?.(fraction, phase); } catch { /* a caller's render must never fail an upload */ } };
+  report(0, UPLOAD_PHASE.preparing);
+
   const check = validateSource(file);
   if (!check.ok) throw new Error(check.reason);
   if (!tid) throw new Error("No tournament is selected.");
@@ -228,13 +244,33 @@ export const uploadPhoto = async ({ file, tid, uid, uploaderName, caption = "", 
     full: storagePaths(tid, id, display.ext).full,
     thumb: storagePaths(tid, id, thumb.ext).thumb,
   };
-  const { getStorage, ref, uploadBytes, getDownloadURL } = await storageApi();
+  const { getStorage, ref, uploadBytesResumable, getDownloadURL } = await storageApi();
   const storage = getStorage(firebaseApp);
 
   const fullRef = ref(storage, paths.full);
   const thumbRef = ref(storage, paths.thumb);
-  await uploadBytes(fullRef, display.blob, { contentType: display.type, cacheControl: IMMUTABLE_YEAR });
-  await uploadBytes(thumbRef, thumb.blob, { contentType: thumb.type, cacheControl: IMMUTABLE_YEAR });
+
+  // One denominator across both files, and each file's transferred count kept
+  // separately so the running total is monotonic even though the two uploads
+  // report independently.
+  const totalBytes = display.blob.size + thumb.blob.size;
+  const sent = { full: 0, thumb: 0 };
+  const bump = (which, bytes) => {
+    sent[which] = bytes;
+    report(totalBytes ? Math.min(1, (sent.full + sent.thumb) / totalBytes) : 0, UPLOAD_PHASE.uploading);
+  };
+
+  // uploadBytesResumable rather than uploadBytes: the plain one resolves or
+  // rejects and tells you nothing in between, which on a tee box is the whole
+  // duration of the thing somebody is waiting on.
+  const put = (fileRef, blob, meta, which) => new Promise((resolve, reject) => {
+    const task = uploadBytesResumable(fileRef, blob, meta);
+    task.on("state_changed", s => bump(which, s.bytesTransferred), reject, resolve);
+  });
+
+  report(0, UPLOAD_PHASE.uploading);
+  await put(fullRef, display.blob, { contentType: display.type, cacheControl: IMMUTABLE_YEAR }, "full");
+  await put(thumbRef, thumb.blob, { contentType: thumb.type, cacheControl: IMMUTABLE_YEAR }, "thumb");
   const [url, thumbUrl] = await Promise.all([getDownloadURL(fullRef), getDownloadURL(thumbRef)]);
 
   return {

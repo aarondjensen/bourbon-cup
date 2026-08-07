@@ -35,7 +35,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BC, FONT, FS, ALPHA, ON_ACCENT, ON_AMBER } from "../theme";
 import { Popup } from "./Popup";
 import { PHOTO_LIBRARY_URL } from "../constants";
-import { sortByTaken, canDelete, validateSource, uploadFailureMessage, saveFilename } from "../lib/media";
+import { sortByTaken, canDelete, validateSource, uploadFailureMessage, UPLOAD_PHASE } from "../lib/media";
+import { savePhoto, saveMessage } from "../lib/mediaSave";
 
 // The same Card AccountView defines, for the same reason: this screen is a
 // page of cards and the app has no shared component for one.
@@ -52,6 +53,51 @@ const Card = ({ children, style }) => (
 // up the screen.
 const COLS = 3;
 const GAP = 4;
+
+// ── PendingTile ────────────────────────────────────────────────────
+// A photo that has been PICKED but not yet uploaded, drawn from a local object
+// URL so it is on screen before a single byte has moved.
+//
+// This exists because the alternative — a spinner inside the Add button —
+// leaves somebody looking at a screen that has not changed, wondering whether
+// the tap registered. The next thing they do is tap again, and now there are
+// two of everything. Showing the photo itself is the only unambiguous answer
+// to "did that work", and it is available instantly and for free.
+//
+// Two states, matching the two phases an upload actually has: a pulse while
+// the phone is decoding and re-encoding (no byte count exists to report), and
+// a real bar once bytes are moving.
+function PendingTile({ entry }) {
+  const uploading = entry.phase === UPLOAD_PHASE.uploading;
+  return (
+    <div style={{
+      position: "relative", aspectRatio: "1 / 1", borderRadius: 6,
+      overflow: "hidden", background: BC.inp,
+    }}>
+      <img
+        src={entry.previewUrl}
+        alt=""
+        style={{
+          width: "100%", height: "100%", objectFit: "cover", display: "block",
+          opacity: 0.45,
+          animation: uploading ? "none" : "bcPhotoPulse 1.4s ease-in-out infinite",
+        }}
+      />
+      {/* The bar sits on the bottom edge of the tile rather than centred: it
+          must not cover the photo it is describing, which is the thing that
+          tells somebody WHICH upload this is. */}
+      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 3, background: `${BC.bg}${ALPHA.panel}` }}>
+        <div style={{
+          height: "100%",
+          width: uploading ? `${Math.round(entry.fraction * 100)}%` : "100%",
+          background: BC.amber,
+          opacity: uploading ? 1 : 0.4,
+          transition: "width .2s linear",
+        }} />
+      </div>
+    </div>
+  );
+}
 
 // ── Tile ───────────────────────────────────────────────────────────
 function Tile({ item, onOpen }) {
@@ -91,30 +137,20 @@ function Tile({ item, onOpen }) {
 // are the same photo.
 //
 // ── Saving a photo to the phone it is being looked at on ──────────
-// Long-pressing the image has always worked and still does. This is the same
-// thing said out loud, because "long-press it" is folk knowledge and half the
-// field will never find it.
-//
-// Two paths, and the first is the one that matters on a phone:
-//
-//   share    navigator.share with a File opens the OS sheet, where iOS offers
-//            "Save Image" straight into Photos — the gesture somebody already
-//            knows. Android gets the same sheet.
-//   download an <a download>, for a desktop browser with no share sheet.
-//
-// The `download` ATTRIBUTE ALONE IS NOT ENOUGH and that is why the bytes are
-// fetched first: the attribute is ignored cross-origin, and the photo lives on
-// firebasestorage.googleapis.com, so a plain link would navigate to the image
-// instead of saving it. Fetching into a blob makes the object URL same-origin,
-// where `download` is honoured. That fetch is allowed because the Storage
-// endpoint answers with `access-control-allow-origin: *`.
+// The routes and what each one reports live in lib/mediaSave.js. What belongs
+// here is WHEN the bytes are fetched, because that is a rendering decision.
 //
 // THE BLOB IS FETCHED WHEN THE PHOTO OPENS, not when Save is tapped. Safari
-// requires share() to be called while the tap is still "live", and awaiting a
-// fetch inside the handler spends that — the sheet never opens and it looks
-// like the button does nothing. Having the blob ready makes the handler
-// synchronous up to the share() call. The image is on screen anyway, so this
-// is a cache hit rather than a second download.
+// will not open a share sheet from a handler that has awaited anything — the
+// tap's activation is spent by then, the sheet never appears, and the button
+// looks dead on exactly the phones that matter. Having the bytes in hand makes
+// the handler synchronous up to the share() call. The display copy is on
+// screen anyway, so this is normally a cache hit rather than a second
+// download.
+//
+// The fetch needs BUCKET CORS to be configured for this origin. Without it the
+// fetch fails, `blob` stays null, and mediaSave falls back to opening the photo
+// in a tab — degraded, not broken, and it says so rather than claiming a save.
 function Lightbox({ item, items, onClose, onStep, onDelete, canRemove, busy, notify }) {
   const idx = items.findIndex(i => i.id === item.id);
   // The fetched bytes AND the url they came from, held together. Paging is
@@ -139,51 +175,10 @@ function Lightbox({ item, items, onClose, onStep, onDelete, canRemove, busy, not
   }, [item.url]);
 
   const save = async () => {
-    try {
-      if (blob) {
-        const file = new File([blob], saveFilename(item, blob.type), { type: blob.type });
-        if (navigator.canShare?.({ files: [file] })) {
-          await navigator.share({ files: [file] });
-          return;
-        }
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = file.name;
-        a.click();
-        // Revoked on the next tick rather than immediately: Safari has been
-        // known to cancel a download whose object URL is released in the same
-        // frame the click was dispatched.
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-        return;
-      }
-      // The fetch failed or has not landed. Opening the photo itself still
-      // gets somebody to a long-press, which is better than a dead button.
-      window.open(item.url, "_blank", "noopener");
-    } catch (err) {
-      // Dismissing the share sheet throws AbortError. That is somebody
-      // changing their mind, not a failure, and it must not raise a toast.
-      if (err?.name === "AbortError") return;
-      console.error("photo save failed:", err);
-      notify?.("Couldn't save that photo — try holding the picture instead.", "error");
-    }
+    const status = await savePhoto({ item, blob });
+    const msg = saveMessage(status);
+    if (msg) notify?.(msg, status === "saved" ? "success" : "error");
   };
-
-  // The key handler is bound once, but `onStep` closes over the current photo
-  // and changes every time one is opened. Held in a ref — updated in an effect,
-  // never during render — so the listener always calls the live one without
-  // being torn down and re-added on each step.
-  const stepRef = useRef(onStep);
-  useEffect(() => { stepRef.current = onStep; }, [onStep]);
-
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === "ArrowLeft") stepRef.current(-1);
-      if (e.key === "ArrowRight") stepRef.current(1);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
 
   return (
     <Popup onClose={onClose} maxWidth={640} padding={0} portal>
@@ -260,8 +255,20 @@ export function PhotosView({
 }) {
   const [open, setOpen] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState(null);
+  // Photos that have been PICKED but not yet stored. Each carries a local
+  // object URL so it can be on screen instantly — see PendingTile for why that
+  // matters more than a spinner does.
+  const [pending, setPending] = useState([]);
   const fileRef = useRef(null);
+
+  // Object URLs are a manual allocation. Each is revoked as its upload
+  // finishes, and this covers the other exit: navigating away mid-batch, which
+  // would otherwise leak one decoded photo per file picked.
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
+  useEffect(() => () => {
+    pendingRef.current.forEach(p => URL.revokeObjectURL(p.previewUrl));
+  }, []);
 
   // One list, newest first, and the lightbox pages through the same array the
   // grid draws — so "next" on screen and "next" in the array are one thing.
@@ -290,13 +297,24 @@ export function PhotosView({
     const usable = files.filter(f => validateSource(f).ok);
     if (!usable.length) return;
 
+    // Every picked photo goes on screen NOW, before a byte moves.
+    const queued = usable.map((file, i) => ({
+      key: `pending_${Date.now()}_${i}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
+      fraction: 0,
+      phase: UPLOAD_PHASE.preparing,
+    }));
+    setPending(prev => [...prev, ...queued]);
+
     setBusy(true);
     let done = 0;
     const failures = [];
-    for (const file of usable) {
-      setProgress(`${done + 1} of ${usable.length}`);
+    for (const entry of queued) {
       try {
-        await onUpload(file);
+        await onUpload(entry.file, (fraction, phase) => {
+          setPending(prev => prev.map(p => (p.key === entry.key ? { ...p, fraction, phase } : p)));
+        });
         done += 1;
       } catch (err) {
         // Keep going. A batch of twenty that stops dead on the one photo the
@@ -304,10 +322,15 @@ export function PhotosView({
         // a count of what did not make it.
         failures.push(err);
         console.error("photo upload failed:", err);
+      } finally {
+        // Dropped as each one lands rather than at the end of the batch, so
+        // the tile is replaced by the real one from Firestore instead of
+        // sitting beside it.
+        URL.revokeObjectURL(entry.previewUrl);
+        setPending(prev => prev.filter(p => p.key !== entry.key));
       }
     }
     setBusy(false);
-    setProgress(null);
 
     if (!failures.length) {
       notify?.(done === 1 ? "Photo added." : `${done} photos added.`);
@@ -367,7 +390,7 @@ export function PhotosView({
               color: ON_AMBER, fontSize: FS.small, fontWeight: 800, fontFamily: FONT,
               cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1, flexShrink: 0,
             }}>
-              {busy ? (progress || "Adding…") : "Add Photos"}
+              {busy ? "Adding…" : "Add Photos"}
             </button>
           </>
         )}
@@ -387,7 +410,29 @@ export function PhotosView({
         </Card>
       )}
 
-      {!items.length ? (
+      {/* Picked but not yet stored. Above the sheet because they are the most
+          recent thing that happened, which is where the newest photo goes
+          anyway — and because a row that appears at the bottom of a 500-photo
+          gallery is a row nobody sees. */}
+      {pending.length > 0 && (
+        <div style={{ marginBottom: 18 }}>
+          <div style={{
+            fontSize: FS.label, fontWeight: 800, letterSpacing: 1.5,
+            color: BC.amberInk, marginBottom: 8,
+          }}>
+            Adding {pending.length} {pending.length === 1 ? "photo" : "photos"}
+          </div>
+          {/* Declared once for the whole section rather than inside the tile:
+              a batch of twenty would otherwise put twenty identical copies of
+              the same keyframes in the document. */}
+          <style>{"@keyframes bcPhotoPulse { 0%,100% { opacity: .30 } 50% { opacity: .62 } }"}</style>
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${COLS}, 1fr)`, gap: GAP }}>
+            {pending.map(entry => <PendingTile key={entry.key} entry={entry} />)}
+          </div>
+        </div>
+      )}
+
+      {!items.length && !pending.length ? (
         <Card style={{ textAlign: "center", padding: 24 }}>
           <div style={{ fontSize: FS.body, color: BC.t2 }}>
             {canPost
@@ -395,13 +440,13 @@ export function PhotosView({
               : "No photos from this tournament yet."}
           </div>
         </Card>
-      ) : (
+      ) : items.length ? (
         <div style={{ display: "grid", gridTemplateColumns: `repeat(${COLS}, 1fr)`, gap: GAP, marginBottom: 18 }}>
           {flat.map(item => (
             <Tile key={item.id} item={item} onOpen={setOpen} />
           ))}
         </div>
-      )}
+      ) : null}
 
       {/* The years that were photographed before this screen existed. They live
           on the tournament's own website and always have; this tab is what the
