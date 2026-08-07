@@ -75,6 +75,20 @@ export const THUMB_QUALITY = 0.72;
 // capped separately and far lower in storage.rules.
 export const MAX_SOURCE_BYTES = 50 * 1024 * 1024;
 
+// ── Upload progress ────────────────────────────────────────────────
+// Two phases, because they are genuinely different and only one of them can
+// be measured:
+//
+//   preparing  decode, resize, encode. All CPU, no byte count to report, and
+//              on an older phone with a 12-megapixel source it is the SLOWER
+//              half. The screen draws something indeterminate.
+//   uploading  real bytes over a real network, so a real fraction.
+//
+// Lives here rather than in mediaUpload.js so the gallery can read the phase
+// without statically importing the uploader — which would pull it out of its
+// own lazy chunk and back into the bundle every player loads.
+export const UPLOAD_PHASE = { preparing: "preparing", uploading: "uploading" };
+
 // ── Identity and paths ─────────────────────────────────────────────
 // Document ids carry the edition, the same way editionDocId() does for every
 // other per-edition document (see src/firebase.js): the edition is in the id,
