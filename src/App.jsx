@@ -6502,10 +6502,11 @@ export default function App() {
   // score and wrong here: the gallery counts what failed and says so. Hence
   // the null / false check on each.
   //
-  // useStableCallback rather than useCallback: the round a photo is stamped
-  // with is computed further down this component, so a [] dependency list
-  // would freeze the first render's value — a photo posted on round 3 filed
-  // under round 1 for the rest of the session.
+  // useStableCallback rather than useCallback: the signed-in account and the
+  // roster row it claimed both change after mount, so a [] dependency list
+  // would freeze the first render's values and attribute every photo of the
+  // session to whoever the app thought you were on load — which, on a cold
+  // start, is nobody.
   const onUploadPhoto = useStableCallback(async (file) => {
     const uid = authUser?.uid;
     if (!uid) throw new Error("You need to be signed in to add photos.");
@@ -6515,15 +6516,6 @@ export default function App() {
       tid: getActiveTournamentId(),
       uid,
       uploaderName: user?.name || "",
-      // Stamped with the round being played — and only then. `currentRound`
-      // is null once every round is final, which is exactly the state a
-      // finished year is in, so a photo added while browsing 2019 carries no
-      // round rather than claiming to be from round 2 of it. On the live
-      // tournament the guess is right far more often than not and saves a
-      // picker on a screen somebody is using one-handed on a tee box; a
-      // dinner photo landing under the round it was taken during is a wrong
-      // label, not a lost photo.
-      round: currentRound,
     });
     if (!(await db.upsert("bc_media", row))) throw new Error("Couldn't save that photo.");
   });

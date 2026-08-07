@@ -25,31 +25,24 @@
 // `loading="lazy"` on top of that means scrolling a 500-photo year still only
 // pays for the rows that get looked at.
 //
-// ── Grouping ──────────────────────────────────────────────────────
-// Rounds in order, then everything that belongs to the cup but not to a round
-// — the drive up, the dinner, the trophy — under one heading at the end. On a
-// finished year that last group is the whole thing, so it is not styled as
-// leftovers.
+// ── One sheet, newest first ───────────────────────────────────────
+// No headings. There were "Round 1 / Round 2" ones, and they were guesses:
+// the round could only come from which one was open at UPLOAD time, and
+// nobody uploads from the tee — the camera roll gets emptied on Sunday night,
+// which filed the whole weekend under one round. See the note in lib/media.js.
+// The ORDER still holds, because it comes off each file's own date.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BC, FONT, FS, ALPHA, ON_ACCENT, ON_AMBER } from "../theme";
 import { Popup } from "./Popup";
 import { PHOTO_LIBRARY_URL } from "../constants";
-import { groupByRound, canDelete, validateSource, uploadFailureMessage } from "../lib/media";
+import { sortByTaken, canDelete, validateSource, uploadFailureMessage, saveFilename } from "../lib/media";
 
-// Same two primitives AccountView defines, for the same reason: this screen is
-// a page of cards and section headings and the app has no shared component for
-// either.
+// The same Card AccountView defines, for the same reason: this screen is a
+// page of cards and the app has no shared component for one.
 const Card = ({ children, style }) => (
   <div style={{
     background: BC.card, border: `1px solid ${BC.bdr}`, borderRadius: 10,
     padding: "14px 16px", ...style,
-  }}>{children}</div>
-);
-
-const SectionLabel = ({ children, style }) => (
-  <div style={{
-    fontSize: FS.label, fontWeight: 800, letterSpacing: 1.5,
-    color: BC.amberInk, marginBottom: 8, ...style,
   }}>{children}</div>
 );
 
@@ -92,12 +85,90 @@ function Tile({ item, onOpen }) {
 }
 
 // ── Lightbox ───────────────────────────────────────────────────────
-// The display copy, its caption, and — for whoever is allowed to remove it —
-// a delete. Arrow keys and the on-screen chevrons move through the same
-// flattened, sorted list the grid is showing, so paging never jumps between
-// groups in an order the screen did not display.
-function Lightbox({ item, items, onClose, onStep, onDelete, canRemove, busy }) {
+// The display copy, its caption, a Save, and — for whoever is allowed to
+// remove it — a delete. Arrow keys and the on-screen chevrons move through the
+// same sorted list the grid is showing, so "next" here and "next" on screen
+// are the same photo.
+//
+// ── Saving a photo to the phone it is being looked at on ──────────
+// Long-pressing the image has always worked and still does. This is the same
+// thing said out loud, because "long-press it" is folk knowledge and half the
+// field will never find it.
+//
+// Two paths, and the first is the one that matters on a phone:
+//
+//   share    navigator.share with a File opens the OS sheet, where iOS offers
+//            "Save Image" straight into Photos — the gesture somebody already
+//            knows. Android gets the same sheet.
+//   download an <a download>, for a desktop browser with no share sheet.
+//
+// The `download` ATTRIBUTE ALONE IS NOT ENOUGH and that is why the bytes are
+// fetched first: the attribute is ignored cross-origin, and the photo lives on
+// firebasestorage.googleapis.com, so a plain link would navigate to the image
+// instead of saving it. Fetching into a blob makes the object URL same-origin,
+// where `download` is honoured. That fetch is allowed because the Storage
+// endpoint answers with `access-control-allow-origin: *`.
+//
+// THE BLOB IS FETCHED WHEN THE PHOTO OPENS, not when Save is tapped. Safari
+// requires share() to be called while the tap is still "live", and awaiting a
+// fetch inside the handler spends that — the sheet never opens and it looks
+// like the button does nothing. Having the blob ready makes the handler
+// synchronous up to the share() call. The image is on screen anyway, so this
+// is a cache hit rather than a second download.
+function Lightbox({ item, items, onClose, onStep, onDelete, canRemove, busy, notify }) {
   const idx = items.findIndex(i => i.id === item.id);
+  // The fetched bytes AND the url they came from, held together. Paging is
+  // what makes that necessary: the previous photo's blob is still in state
+  // while the next one downloads, and saving then would write the wrong photo
+  // to somebody's camera roll under the right name. Pairing them means a
+  // mismatch reads as "not ready yet", which is exactly what it is.
+  //
+  // It also keeps the reset out of the effect body — clearing state
+  // synchronously there is a cascading render, and the pairing makes it
+  // unnecessary rather than merely quieter.
+  const [fetched, setFetched] = useState(null);
+  const blob = fetched?.url === item.url ? fetched.blob : null;
+
+  useEffect(() => {
+    let live = true;
+    fetch(item.url)
+      .then(r => (r.ok ? r.blob() : null))
+      .then(b => { if (live && b) setFetched({ url: item.url, blob: b }); })
+      .catch(() => { /* Save falls back to opening the photo in a tab */ });
+    return () => { live = false; };
+  }, [item.url]);
+
+  const save = async () => {
+    try {
+      if (blob) {
+        const file = new File([blob], saveFilename(item, blob.type), { type: blob.type });
+        if (navigator.canShare?.({ files: [file] })) {
+          await navigator.share({ files: [file] });
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = file.name;
+        a.click();
+        // Revoked on the next tick rather than immediately: Safari has been
+        // known to cancel a download whose object URL is released in the same
+        // frame the click was dispatched.
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        return;
+      }
+      // The fetch failed or has not landed. Opening the photo itself still
+      // gets somebody to a long-press, which is better than a dead button.
+      window.open(item.url, "_blank", "noopener");
+    } catch (err) {
+      // Dismissing the share sheet throws AbortError. That is somebody
+      // changing their mind, not a failure, and it must not raise a toast.
+      if (err?.name === "AbortError") return;
+      console.error("photo save failed:", err);
+      notify?.("Couldn't save that photo — try holding the picture instead.", "error");
+    }
+  };
+
   // The key handler is bound once, but `onStep` closes over the current photo
   // and changes every time one is opened. Held in a ref — updated in an effect,
   // never during render — so the listener always calls the live one without
@@ -137,10 +208,22 @@ function Lightbox({ item, items, onClose, onStep, onDelete, canRemove, busy }) {
           <span>{item.uploadedByName || "—"}</span>
           <span>{items.length ? `${idx + 1} of ${items.length}` : ""}</span>
         </div>
+        {/* Save leads and is the full-width one: everybody can do it, on
+            everybody's photo. Remove is the rarer, heavier action and sits
+            under it in its own colour. */}
+        <button onClick={save} style={{
+          width: "100%", marginTop: 12, padding: "10px 0", borderRadius: 10,
+          background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`,
+          border: "none", color: ON_AMBER,
+          fontSize: FS.small, fontWeight: 800, fontFamily: FONT, cursor: "pointer",
+        }}>
+          Save to phone
+        </button>
         {canRemove && (
           <button onClick={() => onDelete(item)} disabled={busy} style={{
-            width: "100%", marginTop: 12, padding: "10px 0", borderRadius: 10,
-            background: BC.danger, border: "none", color: ON_ACCENT,
+            width: "100%", marginTop: 8, padding: "10px 0", borderRadius: 10,
+            background: "transparent", border: `1px solid ${BC.danger}${ALPHA.line}`,
+            color: BC.danger,
             fontSize: FS.small, fontWeight: 800, fontFamily: FONT,
             cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1,
           }}>
@@ -180,10 +263,9 @@ export function PhotosView({
   const [progress, setProgress] = useState(null);
   const fileRef = useRef(null);
 
-  const groups = useMemo(() => groupByRound(items), [items]);
-  // The flattened list the lightbox pages through — the same order the groups
-  // are drawn in, so "next" on screen and "next" in the array are one thing.
-  const flat = useMemo(() => groups.flatMap(g => g.items), [groups]);
+  // One list, newest first, and the lightbox pages through the same array the
+  // grid draws — so "next" on screen and "next" in the array are one thing.
+  const flat = useMemo(() => sortByTaken(items), [items]);
 
   const step = (dir) => {
     if (!open) return;
@@ -314,16 +396,11 @@ export function PhotosView({
           </div>
         </Card>
       ) : (
-        groups.map(group => (
-          <div key={group.round ?? "loose"} style={{ marginBottom: 18 }}>
-            <SectionLabel>{group.label}</SectionLabel>
-            <div style={{ display: "grid", gridTemplateColumns: `repeat(${COLS}, 1fr)`, gap: GAP }}>
-              {group.items.map(item => (
-                <Tile key={item.id} item={item} onOpen={setOpen} />
-              ))}
-            </div>
-          </div>
-        ))
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${COLS}, 1fr)`, gap: GAP, marginBottom: 18 }}>
+          {flat.map(item => (
+            <Tile key={item.id} item={item} onOpen={setOpen} />
+          ))}
+        </div>
       )}
 
       {/* The years that were photographed before this screen existed. They live
@@ -352,6 +429,7 @@ export function PhotosView({
           onStep={step}
           onDelete={remove}
           onClose={() => setOpen(null)}
+          notify={notify}
         />
       )}
     </div>

@@ -197,36 +197,26 @@ export const takenTime = (item) => {
   return Number.isNaN(c) ? 0 : c;
 };
 
-// Newest first. The gallery opens on the most recent thing that happened,
-// which during a live tournament is the hole somebody just played.
+// Newest first, and that is the whole of the gallery's organisation.
+//
+// ── Why there is no round grouping ────────────────────────────────
+// There was, and it was wrong. The round could only ever be guessed from
+// WHICH ROUND WAS OPEN WHEN THE PHOTO WAS UPLOADED, and nobody uploads from
+// the tee — they empty their camera roll on Sunday night, which filed the
+// whole weekend under whatever round the app was showing at that moment. A
+// heading that says "Round 2" over Friday's photos is worse than no heading:
+// it is a fact the screen states and gets wrong, and nothing else on it looks
+// any less trustworthy for being beside one.
+//
+// Ordering survives that, which is why it is still here. `takenAt` comes off
+// the file's own date, so a batch dumped days later still sorts by when the
+// photos were TAKEN — the sheet reads in the order the weekend happened
+// whether it was posted from the course or from a laptop afterwards.
+//
+// If rounds ever come back it will be because somebody TOLD the app, not
+// because it inferred one.
 export const sortByTaken = (items) =>
   [...(items || [])].sort((a, b) => takenTime(b) - takenTime(a));
-
-// Rounds first, in order, then everything that belongs to the cup but not to
-// a round — the dinner, the drive up, the trophy — under one heading at the
-// end. A photo added to a finished year has no round at all (see App.jsx: the
-// round is only stamped while one is actually being played), so the unrounded
-// group is not an edge case and does not read as leftovers.
-export const UNROUNDED_LABEL = "Around the tournament";
-
-export const groupByRound = (items) => {
-  const rounds = new Map();
-  const loose = [];
-  for (const item of sortByTaken(items)) {
-    const r = Number(item?.round);
-    if (Number.isFinite(r) && r > 0) {
-      if (!rounds.has(r)) rounds.set(r, []);
-      rounds.get(r).push(item);
-    } else {
-      loose.push(item);
-    }
-  }
-  const groups = [...rounds.keys()]
-    .sort((a, b) => a - b)
-    .map(round => ({ round, label: `Round ${round}`, items: rounds.get(round) }));
-  if (loose.length) groups.push({ round: null, label: UNROUNDED_LABEL, items: loose });
-  return groups;
-};
 
 // ── The budget circuit breaker ─────────────────────────────────────
 // Google Cloud budgets alert; they do not cap. The only native hard stop
@@ -279,6 +269,25 @@ export function uploadFailureMessage(err, count = 1) {
   if (msg && !msg.startsWith("Firebase") && msg.length < 120) return `${msg}${many}`;
   return `That photo couldn't be added.${many}`;
 }
+
+// ── The name a saved photo lands under ─────────────────────────────
+// This ends up in somebody's camera roll or Downloads folder, so it carries
+// the cup's name rather than the generated id alone.
+//
+// The extension is derived from the blob's OWN type rather than from the
+// stored path, because those can disagree: an old document written before the
+// JPEG fallback existed points at a `.webp` path, and what actually comes back
+// is whatever the bytes are.
+//
+// A MIME type is not just "type/subtype". It can carry a structured suffix
+// (`image/svg+xml`) or parameters (`image/jpeg; charset=binary`), and pasting
+// either into a filename produces something a phone will not open. Both are
+// cut, and `jpeg` is spelled the way every other file on a phone spells it.
+export const saveFilename = (item, mimeType) => {
+  const sub = String(mimeType || "").split("/")[1] || "";
+  const ext = sub.split(/[+;]/)[0].trim().toLowerCase().replace(/^jpeg$/, "jpg") || "jpg";
+  return `bourbon-cup-${item?.mediaId || item?.id || "photo"}.${ext}`;
+};
 
 // ── Deletion ───────────────────────────────────────────────────────
 // Who may remove a photo, decided here so the gallery and firestore.rules
