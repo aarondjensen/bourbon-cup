@@ -38,9 +38,33 @@
 // is the most reliable delivery to an installed iOS PWA).
 
 const admin = require("firebase-admin");
+const { setGlobalOptions } = require("firebase-functions/v2");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
+
+// ── A ceiling on how much this can ever cost ────────────────────────
+// Cloud Functions bill per instance-second and scale out on demand. The
+// default ceiling is 100 concurrent instances, which is sized for an app with
+// real traffic — this one serves sixteen phones for three days a year.
+//
+// What that default actually buys is a much larger bill for a bug. A trigger
+// that starts erroring and retrying, or a burst of writes from an import
+// script, can fan out to a hundred instances that each run to their timeout.
+// Nothing here needs more than a handful at once: the busiest moment in this
+// app's life is a round being finalized, which is one document write and one
+// broadcast.
+//
+// Ten is generous for that and still bounds the damage to a tenth of the
+// default. Functions do not fail when the ceiling is reached — Cloud Run
+// queues the events and works through them, which for a push notification is
+// entirely fine.
+//
+// minInstances stays at its default of ZERO, which is the other half of this:
+// a warm instance bills whether or not anybody uses it, and this app is idle
+// 362 days a year. Cold starts on a notification nobody is watching for are
+// the right trade.
+setGlobalOptions({ maxInstances: 10 });
 
 admin.initializeApp();
 const db = admin.firestore();
