@@ -24,7 +24,7 @@ import {
   calcCH, calcCHForCourse, fmtScore,
   getEffectiveHI, buildStrokeMap, resolveHolePars, resolveHoleHcps,
   computeMatchResult,
-  getRoundCH, getRoundHI, getRoundTee, lockForRound,
+  getRoundCH, lockForRound,
   totalUnit, segmentState, segmentOptsFor, holeFormatFor,
 } from "./scoring";
 import { holeFill } from "./lib/holeFill";
@@ -164,18 +164,6 @@ const NAV_SAFE_PAD = `max(0px, calc(max(${NAV_MIN_PAD}px, env(safe-area-inset-bo
 // edition — TOURNAMENT_ID is a live binding (firebase.js reassigns it when
 // the edition changes), so this is read at call time, never captured once.
 const finalizeSnoozeKey = () => `bc_finalize_snooze_${TOURNAMENT_ID}`;
-
-// First+last initials from a player's full name. "Aaron Jensen" → "AJ".
-// Single-name fallback grabs the first two letters (e.g. "Joe" → "JO") so a
-// missing surname doesn't produce a one-character badge that breaks the
-// 2-char width alignment elsewhere.
-const getInitials = (name) => {
-  if (!name) return "??";
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return "??";
-  if (parts.length === 1) return (parts[0].slice(0, 2) || "??").toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-};
 
 // ── ScoreCell ──
 // Single-cell rendering of a player's score on one hole, used in the full
@@ -981,8 +969,6 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
 
   if (!course) return empty("⛳", `Round ${match.round} course not configured yet`);
 
-  const { A: tA, B: tB } = teams;
-
   // ── Closest-to-the-pin ───────────────────────────────────────────────
   // The hole's standing tag, live from Firestore. `null` until some group
   // has claimed it.
@@ -1572,17 +1558,14 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           "Net ±X thru N" right-aligned — then a row of par-relative score
           buttons. Tap a saved score again to clear. */}
       <div style={{ flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: fit.cardGap }}>
-        {[...match.teamA, "DIVIDER", ...match.teamB].map((pid, idx) => {
+        {[...match.teamA, "DIVIDER", ...match.teamB].map((pid) => {
           if (pid === "DIVIDER") return <div key="div" style={{ borderTop: `1px dashed ${BC.bdr}`, flexShrink: 0, margin: `${fit.cardGap}px 0` }} />;
           const tp = tPlayers.find(t => t.player_id === pid);
           const team = match.teamA.includes(pid) ? "A" : "B";
-          const tc = team === "A" ? tA : tB;
           const cur = getScore(pid, activeHole);
           const strokes = strokeMaps[pid]?.[activeHole] || 0;
           // CH for display — per-player tee assignment overrides round default,
           // matching the strokeMaps memo above and computeMatchResult.
-          const hi = getRoundHI({ roundLocks, round: match.round, pid, players: tPlayers });
-          const playerTee = getRoundTee({ roundLocks, round: match.round, pid, teeAssignments, roundTee });
           const fullCH = getRoundCH({
             roundLocks, round: match.round, pid, players: tPlayers,
             course, chOverrides: hcpOverrides, teeAssignments, roundTee,
@@ -2604,11 +2587,11 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
           try {
             const r3 = await fetch(`/api/courses2?search=${encodeURIComponent(q)}`);
             if (r3.ok) { const d3 = await r3.json(); const raw3 = Array.isArray(d3)?d3:(d3.courses||d3.data||[]); results = [...results, ...parseRapidAPI(raw3, stateFilter)]; }
-          } catch(e) {}
+          } catch { /* a fallback search that fails simply adds nothing */ }
           try {
             const r4 = await fetch(`/api/courses?search=${encodeURIComponent(q)}`);
             if (r4.ok) { const d4 = await r4.json(); const gc4 = parseGolfCourseAPI(d4).filter(c => stateMatches(c.state, stateFilter)); for (const gc of gc4) { if (!results.find(r => r.name.toLowerCase() === gc.name.toLowerCase())) results.push(gc); } }
-          } catch(e) {}
+          } catch { /* likewise — the results already gathered still stand */ }
         }
 
         return results.map(c => ({ ...c, _incompleteData: !hasRealSlope(c) }));
@@ -4458,7 +4441,7 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                           tee_boxes: (draft.tee_boxes||[]).map(tb => ({...tb, rating:parseFloat(tb.rating)||72.0, slope:parseInt(tb.slope)||113, par:parseInt(tb.par)||72, yardage:parseInt(tb.yardage)||0})),
                         };
                         // Strip all undefined fields — Firestore rejects them
-                        const finalCourse = Object.fromEntries(Object.entries(rawCourse).filter(([_, v]) => v !== undefined));
+                        const finalCourse = Object.fromEntries(Object.entries(rawCourse).filter(([, v]) => v !== undefined));
                         await onAddCourse(finalCourse);
                         // A course added while picking one for a round was
                         // added FOR that round — putting it there is the whole
@@ -5703,7 +5686,7 @@ export default function App() {
   modeRef.current = darkMode;
   const toggleTheme = useCallback(() => {
     const newMode = darkMode ? "light" : "dark";
-    try { localStorage.setItem("bc_theme", newMode); } catch {}
+    try { localStorage.setItem("bc_theme", newMode); } catch { /* private mode */ }
     applyBCTheme(newMode, brand);
     setDarkMode(!darkMode);
   }, [darkMode, brand]);

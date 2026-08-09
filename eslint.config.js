@@ -27,9 +27,31 @@ export default defineConfig([
     },
   },
   {
-    // Runs in Node, not the browser: the Vite config and the Vercel
-    // serverless handlers, which read secrets off `process.env`.
-    files: ['vite.config.js', 'api/**/*.js'],
+    // Runs in Node, not the browser: the Vite config, the Vercel serverless
+    // handlers (which read secrets off `process.env`), the sheet pipeline and
+    // the history import script.
+    files: ['vite.config.js', 'api/**/*.js', 'pipeline/**/*.mjs', 'scripts/**/*.mjs'],
     languageOptions: { globals: globals.node },
+  },
+  {
+    // Cloud Functions — Node, and CommonJS rather than ESM, so `require` and
+    // `exports` are globals rather than syntax. Without this block the file
+    // reported twelve `no-undef` errors for doing exactly what a Cloud
+    // Function is supposed to do, and those twelve were most of the noise the
+    // repo's real findings were hiding behind.
+    files: ['functions/**/*.js'],
+    languageOptions: {
+      globals: globals.node,
+      sourceType: 'commonjs',
+    },
+  },
+  {
+    // The push service worker. Not a page and not Node: it has the worker
+    // globals, `importScripts`, and the compat `firebase` object those scripts
+    // define on self.
+    files: ['public/firebase-messaging-sw.js'],
+    languageOptions: {
+      globals: { ...globals.serviceworker, firebase: 'readonly' },
+    },
   },
 ])
