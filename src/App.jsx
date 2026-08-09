@@ -73,6 +73,7 @@ import {
 } from "./lib/groups";
 import { groupKey, tagAheadOfPlay } from "./lib/ctp";
 import { holesEntered, roundScoreProgress } from "./lib/scoreGuard";
+import { scheduledRounds, editableRounds } from "./lib/rounds";
 import {
   cardSigBareId, sigForMatch, cardComplete, missingForCard,
   nonSignerPids, isFullyAttested, cardState,
@@ -2187,10 +2188,24 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
   const searchTimerRef = useRef(null);
 
   const [editRound, setEditRound] = useState(1);
+  // Every round on the schedule plus one empty slot past the end — which is
+  // how a fifth round gets built and why a three-round trip stops showing a
+  // fourth pill nobody plays. See lib/rounds.
+  const roundOptions = useMemo(
+    () => editableRounds({ tRounds, matches, roundLocks }),
+    [tRounds, matches, roundLocks]
+  );
   const [roundFormat, setRoundFormat] = useState("");
   const [roundTeeTime, setRoundTeeTime] = useState("");
   const [hcpOverrides, setHcpOverrides] = useState({});
-  const [handicapMode, setHandicapMode] = useState({ 1: "low_man", 2: "low_man", 3: "low_man", 4: "full" }); // per round
+  // Per round, and seeded EMPTY. It used to open as
+  // `{1:"low_man",2:"low_man",3:"low_man",4:"full"}` — the retired
+  // `round === 4 ? "full"` heuristic written out longhand, which was only ever
+  // a stand-in for "round 4 is the Team Best Ball round" and stopped being
+  // true the moment a director moved that format somewhere else. An absent
+  // entry falls through to defaultHandicapMode(format), which asks the format
+  // itself; see the hydration effect and formRound below.
+  const [handicapMode, setHandicapMode] = useState({}); // per round
   const [chDeltas, setChDeltas] = useState({});
   const [editingPlayer, setEditingPlayer] = useState(null); // { pid, first, last, nick, hi, ov, dir }
   const [teeAssignments, setTeeAssignments] = useState({}); // { round: { pid: teeName } }
@@ -3065,7 +3080,7 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                 the previous round's settings on screen. */}
             <SegmentedToggle
               variant="pills"
-              options={[1,2,3,4].map(r => [r, `Rd ${r}`])}
+              options={roundOptions.map(r => [r, `Rd ${r}`])}
               value={editRound}
               onChange={setEditRound}
               style={{ flex: 1 }}
@@ -6256,7 +6271,19 @@ export default function App() {
   const enrichedRounds = useMemo(() => tRounds.map(r => ({
     ...r,
     nassau: { front: r.nassau_front ?? 1, back: r.nassau_back ?? 1, overall: r.nassau_overall ?? 1 },
-    handicap_mode: r.handicap_mode || (r.round_number === 4 ? 'full' : 'low_man'),
+    // The FORMAT's default, not the round number's. This used to read
+    // `r.round_number === 4 ? 'full' : 'low_man'` — the same stand-in
+    // scoring.getRoundHandicapMode retired, on the grounds that it was only
+    // ever shorthand for "round 4 is the Team Best Ball round" and went
+    // silently wrong the moment a director moved the format.
+    //
+    // Worse than a stale copy: it was the copy that WON. Every scoring path
+    // reads rounds through this memo, so `tr.handicap_mode` was always filled
+    // by the time getRoundHandicapMode looked at it, and the corrected
+    // format-derived fallback underneath was unreachable. A Team Best Ball
+    // round anywhere but 4 scored off the low man, and a Singles round on 4
+    // gave everybody their whole figure.
+    handicap_mode: r.handicap_mode || handicapModeFor(r.format),
     // Both scoring axes, normalized here so nothing downstream has to know
     // that a legacy round packed them into one field.
     scoring_type: resolveScoring(r).formOfPlay,
@@ -6852,8 +6879,6 @@ export default function App() {
     return cleared;
   }, []);
 
-  const availableRounds = useMemo(() => [...new Set(enrichedMatches.map(m => m.round))].sort(), [enrichedMatches]);
-
   // ── Tournament progression ───────────────────────────────────────────
   // Every round the director has set up OR drawn matches for — the same
   // union the Matches tab lists, so a round can't be live for scoring and
@@ -6868,14 +6893,10 @@ export default function App() {
   // on to the next round while scores sat in the one they were standing on.
   // A round with scores in it stays on the schedule until somebody finalizes
   // it, which is the only way out that anybody chose.
-  const tournamentRounds = useMemo(() => {
-    const seen = new Set([
-      ...tRounds.map(t => t.round_number),
-      ...enrichedMatches.map(m => m.round),
-      ...Object.keys(roundLocksData).filter(r => roundLocksData[r]?.locked).map(Number),
-    ]);
-    return [...seen].filter(r => r != null && !Number.isNaN(r)).sort((a, b) => a - b);
-  }, [tRounds, enrichedMatches, roundLocksData]);
+  const tournamentRounds = useMemo(
+    () => scheduledRounds({ tRounds, matches: enrichedMatches, roundLocks: roundLocksData }),
+    [tRounds, enrichedMatches, roundLocksData]
+  );
   // The one round open for score entry. null = nothing open (no schedule
   // yet, or the last round has been finalized).
   const currentRound = useMemo(
@@ -7246,7 +7267,6 @@ export default function App() {
             courses={courses}
             tRounds={enrichedRounds}
             tPlayers={tPlayers}
-            rounds={availableRounds.length ? availableRounds : [1,2,3,4]}
             teams={teams}
             hcpOverrides={hcpOverridesData}
             teeAssignments={teeAssignmentsData}

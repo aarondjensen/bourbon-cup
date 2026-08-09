@@ -142,7 +142,20 @@ function SyncChip({ pending = 0, failed = 0 }) {
   );
 }
 
+// How much of the band each side needs when the chip is up. The chip is
+// absolutely positioned, so it is invisible to the caption's layout and will
+// happily print straight through it — which is exactly what "12 UNSAVED" did
+// to "2025 · GRAND RAPIDS, MICHIGAN".
+//
+// Reserved on BOTH sides rather than just the left, because the caption is
+// centred: taking room off one end alone would slide it off-centre, which is
+// the thing this header's whole comment is about not doing. So a place name
+// long enough to reach the chip ellipsises instead, and an ellipsised city is
+// a much better failure than two lines of type on top of each other.
+const CHIP_GUTTER = 170;
+
 export function AppHeader({ location, pendingWrites = 0, failedWrites = 0 }) {
+  const hasChip = pendingWrites > 0 || failedWrites > 0;
   return (
     // Sized for a band that is now on EVERY screen rather than one: the mark
     // came down from 30×34 and the caption from 11px, which buys back ~12px
@@ -171,7 +184,8 @@ export function AppHeader({ location, pendingWrites = 0, failedWrites = 0 }) {
 
       <div style={{
         fontSize: FS.label, fontWeight: 800, letterSpacing: 2.2, color: BC.t2,
-        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        maxWidth: hasChip ? `calc(100% - ${CHIP_GUTTER}px)` : "100%",
       }}>{getTournamentYear()} · {(location || TOURNAMENT_LOCATION).toUpperCase()}</div>
 
       {/* Left-hand chip — mirrors the slot below, same baseline. */}

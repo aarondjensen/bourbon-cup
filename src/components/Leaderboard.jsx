@@ -50,10 +50,9 @@ import { HoleStrip } from "./HoleStrip";
 import { FullScorecard } from "./FullScorecard";
 import { StickyTop } from "./ui";
 import { isRoundFinal } from "../lib/roundLocks";
+import { scheduledRounds } from "../lib/rounds";
 import { HOLE_COUNT, revealState, revealSummary, stepReveal, COUNTDOWN_HASH } from "../lib/reveal";
 import { FinalCountdown } from "./FinalCountdown";
-
-const ALL_ROUNDS = [1, 2, 3, 4];
 
 // ── Small helpers ────────────────────────────────────────────────
 
@@ -807,7 +806,7 @@ function RoundSection({
 // numbers gets them, indexes them by `viewer`, and never looks at the other
 // column. Everything else on this screen is handed `holeData`.
 export function TeamLeaderboard({
-  matches, holeData, ownHoleData, courses, tRounds, tPlayers, rounds, teams,
+  matches, holeData, ownHoleData, courses, tRounds, tPlayers, teams,
   hcpOverrides, teeAssignments, roundLocks, viewer,
   canReveal = false, onSetReveal, autoCountdown = false,
 }) {
@@ -826,10 +825,18 @@ export function TeamLeaderboard({
     return { match: m, result: res, format: fmt };
   }), [matches, holeData, courses, tRounds, tPlayers, hcpOverrides, teeAssignments, roundLocks]);
 
-  const roundNumbers = useMemo(
-    () => ALL_ROUNDS.filter((r) => matches.some((m) => m.round === r)),
-    [matches]
-  );
+  // Every round with a draw, in order — derived, not a fixed list of four.
+  //
+  // The literal it replaces was the one place on this screen that could
+  // disagree with the rest of it: `totals`, `pending` and `cupPointsOnOffer`
+  // are all summed over EVERY match, so a fifth round's points counted toward
+  // the cup and toward the clinch line from a round that had no section on
+  // the board to explain them.
+  //
+  // Rounds with no matches are still left out, as they always have been —
+  // see the note in RoundSection about a draw-less round being a row of
+  // "THRU 0" against a tee time.
+  const roundNumbers = useMemo(() => scheduledRounds({ matches }), [matches]);
 
   // Per-round rollup: points, points on offer, and play state.
   const roundMeta = useMemo(() => {

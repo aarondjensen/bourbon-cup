@@ -68,6 +68,7 @@
 // it does not depend on the director remembering to press anything
 // before the group tees off.
 import { calcCHForCourse, getEffectiveHI } from "../scoring";
+import { handicapModeFor } from "../constants";
 import { editionDocId } from "../firebase";
 
 export const ROUND_LOCKS_COL = "bc_round_locks";
@@ -238,7 +239,12 @@ export function buildRoundLockDoc({
     // Frozen round context
     course_id: tr.course_id || null,
     course_name: course?.name || null,
-    handicap_mode: tr.handicap_mode || (round === 4 ? "full" : "low_man"),
+    // The FORMAT's default when the round names none — the same answer
+    // scoring.getRoundHandicapMode and the admin form both give. It used to be
+    // `round === 4 ? "full" : "low_man"`, which froze the retired round-number
+    // heuristic into the snapshot permanently: a lock is the one copy nothing
+    // later can correct.
+    handicap_mode: tr.handicap_mode || handicapModeFor(tr.format),
     format: tr.format || null,
     // Stored raw ({pct} or {low,high}) rather than resolved, so it reads back
     // as exactly what the director set. scoring.getRoundAllowance re-resolves

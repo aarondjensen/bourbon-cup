@@ -43,8 +43,7 @@ import {
 import {
   matchScoreImpact, orphanedScores, incomingScores, describeScored,
 } from "../lib/scoreGuard";
-
-const ROUNDS = [1, 2, 3, 4];
+import { editableRounds } from "../lib/rounds";
 
 const cardStyle = { background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}` };
 const miniBtn = {
@@ -618,7 +617,7 @@ export function MatchSetup({
       <SegmentedToggle
         variant="pills"
         style={{ marginBottom: 10 }}
-        options={ROUNDS.map(r => [r, `Rd ${r}`])}
+        options={editableRounds({ tRounds, matches, roundLocks }).map(r => [r, `Rd ${r}`])}
         value={round}
         onChange={(r) => { setRound(r); setTeamASel([]); setTeamBSel([]); setHeld(null); }}
       />
