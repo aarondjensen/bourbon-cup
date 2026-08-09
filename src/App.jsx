@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, HOLE_BANNER, FS, segThumb, segTrack, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor, VP_BAND } from "./theme";
 import { playerLookup, realPlayers } from "./lib/players";
@@ -49,7 +49,15 @@ import { CtpPrompt } from "./components/CtpPrompt";
 import { DirectorFinalizeAlert, FinalizeRoundSheet } from "./components/FinalizeRound";
 import { MissingCardNote, SignCardSheet, SignedCardPanel } from "./components/CardSignature";
 import { AccountView } from "./components/AccountView";
-import { PhotosView } from "./components/PhotosView";
+// ── Split off the main bundle ─────────────────────────────────────
+// The gallery is the one screen whose weight nobody else should pay for: it
+// carries the image pipeline, it is opened by a minority of the field, and it
+// is never the screen somebody is standing on a tee holding. Its Firestore
+// index is already subscribed on first open rather than at startup, for the
+// same reason and with the same latch — this is that decision applied to the
+// code as well as to the data.
+const PhotosView = lazy(() =>
+  import("./components/PhotosView").then(m => ({ default: m.PhotosView })));
 import { photoUploadsAllowed, uploadsDisabledReason, CONFIG_COL, PHOTOS_CONFIG_ID } from "./lib/media";
 import { initForegroundNotifications, syncAppBadge } from "./lib/notifications";
 import { SegmentedToggle, SegRule, StickyTop, Banner, PlayerName, Toast, HoleNavigator, ScoreButtonRow } from "./components/ui";
@@ -5232,6 +5240,22 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   );
 }
 
+// What a lazily-loaded screen shows while its chunk arrives. Deliberately
+// quiet and deliberately the full height of the content area: a spinner that
+// reflows the page when it resolves reads as a glitch, and on a fast
+// connection this is one frame.
+function LoadingPanel({ label }) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: "80px 20px", color: BC.t3, fontFamily: FONT,
+      fontSize: FS.small, letterSpacing: 1, fontWeight: 700,
+    }}>
+      {(label || "").toUpperCase()}…
+    </div>
+  );
+}
+
 // ── Settle ────────────────────────────────────────────────────────────
 // What the whole weekend comes to, one row per player. The other three tabs
 // each answer "who is winning this one"; this is the question the trip
@@ -7586,6 +7610,7 @@ export default function App() {
              they only ask for a membership; not offering it is the same judgement
              the claim screen makes, that a year you are only looking at is not
              one you add to. */
+          <Suspense fallback={<LoadingPanel label="Photos" />}>
           <PhotosView
             items={media}
             year={getTournamentYear()}
@@ -7597,6 +7622,7 @@ export default function App() {
             onDelete={onDeletePhoto}
             notify={notify}
           />
+          </Suspense>
         )}
         {view === "admin" && (
           <AdminView

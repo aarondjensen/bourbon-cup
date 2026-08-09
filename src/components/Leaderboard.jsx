@@ -32,7 +32,7 @@
 //  cannot describe a match differently from how it was scored, or from how
 //  the Scoring tab describes the same match.
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { BC, FONT, ALPHA, FS, ink, teamColor } from "../theme";
 import { playerLookup, realPlayers } from "../lib/players";
@@ -52,7 +52,12 @@ import { StickyTop } from "./ui";
 import { isRoundFinal } from "../lib/roundLocks";
 import { scheduledRounds } from "../lib/rounds";
 import { HOLE_COUNT, revealState, revealSummary, stepReveal, COUNTDOWN_HASH } from "../lib/reveal";
-import { FinalCountdown } from "./FinalCountdown";
+// The television screen, and nothing else opens it. Sixteen phones load the
+// scoreboard every few minutes all weekend; one of them, once, opens the
+// countdown — so it has no business riding in the bundle the other fifteen
+// are waiting on. See the note over the countdown state below.
+const FinalCountdown = lazy(() =>
+  import("./FinalCountdown").then(m => ({ default: m.FinalCountdown })));
 
 // ── Small helpers ────────────────────────────────────────────────
 
@@ -1013,6 +1018,10 @@ export function TeamLeaderboard({
     if (!entry) return null;
     const { course, holePars, holeHcps } = getRoundCourseCtx({ roundLocks, round: rnd, tRounds, courses });
     return createPortal(
+      // The fallback is a black screen, because that is what the countdown
+      // opens onto anyway — the television goes dark and then the round is
+      // there, rather than flashing a spinner in front of the room.
+      <Suspense fallback={<div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 9999 }} />}>
       <FinalCountdown
         match={entry.match}
         result={entry.result}
@@ -1030,7 +1039,8 @@ export function TeamLeaderboard({
         canAdvance={canReveal && !!onSetReveal}
         onAdvance={(n) => onSetReveal(rnd, n)}
         onClose={closeCountdown}
-      />,
+      />
+      </Suspense>,
       document.body,
     );
   })();
