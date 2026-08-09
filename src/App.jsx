@@ -5827,7 +5827,16 @@ export default function App() {
   // bc_config/photos — the budget circuit breaker's flag. Null until read.
   const [photoConfig, setPhotoConfig] = useState(null);
   const [notif, setNotif] = useState(null);
-  const [syncing, setSyncing] = useState(false);
+  // ── What the app owes the database ───────────────────────────────────
+  // `pending` is writes queued but not yet acknowledged by the server —
+  // normally zero for the length of a heartbeat, and a growing number for as
+  // long as a phone is out of signal. `failed` is writes the server REFUSED,
+  // which is a different and much worse thing: those are not coming back.
+  //
+  // This replaces a `syncing` boolean that was set on every save and rendered
+  // nowhere at all, so the app had no way to say either of these out loud.
+  // See trackWrite below, and the chip in components/AppHeader.
+  const [writeState, setWriteState] = useState({ pending: 0, failed: 0 });
   const [hcpOverridesData, setHcpOverridesData] = useState({}); // { round: { pid: value } }
   const [teeAssignmentsData, setTeeAssignmentsData] = useState({});
   // ── Playing groups ── { round: [ [pid, …], … ] }. Who tees off together;
@@ -5873,6 +5882,9 @@ export default function App() {
   // it saw when it was created — silently dropping the attestation that
   // landed in between.
   const cardSigsRef = useRef([]);
+  // And for the cards themselves, so the save path can name the score a
+  // failed write is reverting FROM without reading through React state.
+  const holeDataRef = useRef({});
   // And for the CTP records, which confirming appends to the same way.
   const ctpDataRef = useRef({});
   const lockInputsRef = useRef({ players: [], tRounds: [], courses: [], hcpOverrides: {}, teeAssignments: {} });
@@ -5997,6 +6009,36 @@ export default function App() {
     setNotif({ msg, type });
     setTimeout(() => setNotif(null), 2800);
   }, []);
+
+  // ── trackWrite ───────────────────────────────────────────────────────
+  // Wrap a write that must not fail quietly. Hand it a promise that REJECTS
+  // on refusal (db.upsertStrict, not db.upsert) and a line to say if it does.
+  //
+  // Two states come out of it, and keeping them apart is the point:
+  //
+  //   pending  queued, unacknowledged. Offline this is every write since the
+  //            signal went, and every one of them is fine — Firestore replays
+  //            them on reconnect. The chip says so rather than claiming a
+  //            problem, because "3 saving" on the 14th tee is not an error,
+  //            it is the phone telling the truth about where it is.
+  //   failed   refused outright. Firestore rolls its own local mutation back,
+  //            so the subscription repaints the cell with what is really
+  //            stored; all this adds is somebody being TOLD.
+  //
+  // A success clears `failed`, because a write getting through is proof the
+  // path works and whatever refused the last one is no longer refusing.
+  const trackWrite = useCallback((promise, failMessage) => {
+    setWriteState(s => ({ ...s, pending: s.pending + 1 }));
+    promise.then(
+      () => setWriteState(s => ({ pending: Math.max(0, s.pending - 1), failed: 0 })),
+      (e) => {
+        console.error("[write refused]", failMessage, e);
+        setWriteState(s => ({ pending: Math.max(0, s.pending - 1), failed: s.failed + 1 }));
+        notify(`${failMessage} — tap it again.`, "error");
+      },
+    );
+    return promise;
+  }, [notify]);
 
   // Keep popupOpenRef in sync with the non-<Popup> overlays so touch
   // handlers see "an overlay is open" without having to participate in
@@ -6173,6 +6215,7 @@ export default function App() {
         if (!hd[key]) hd[key] = {};
         hd[key][r.hole_number - 1] = r.score;
       });
+      holeDataRef.current = hd;   // keep the ref hot for the save path
       setHoleData(hd);
     }));
     // Whether photo uploads are switched on. One tiny document, subscribed
@@ -6300,6 +6343,21 @@ export default function App() {
   //      four players entering scores at once is the expected case here).
   // A lock is never overwritten once it exists; that is what makes this
   // safe to call on every single hole.
+  //
+  // ── Nothing here waits on the network ─────────────────────────────
+  // The lock's own write is NOT awaited, and that is load-bearing. Firestore
+  // does not settle a setDoc promise until the SERVER acknowledges it, so in
+  // a dead spot an awaited write simply never returns — and this function is
+  // awaited by the score path. The symptom was one lost hole per round, and
+  // only ever the first one: the very first tap of a round hung here, so its
+  // optimistic paint and its own score write never ran, while every later tap
+  // sailed past on the in-flight flag. On a course with holes out of signal
+  // that is exactly the tap nobody would think to check.
+  //
+  // Not awaiting costs nothing that matters. The snapshot is built from live
+  // data synchronously, the local refs are updated the moment it exists, and
+  // Firestore queues the write and replays it on reconnect. A lock is a
+  // record of what was frozen, not a permission the score has to wait for.
   const ensureRoundLock = useCallback(async (rnd) => {
     if (!rnd) return null;
     const existing = roundLocksRef.current?.[rnd];
@@ -6333,7 +6391,9 @@ export default function App() {
         lockedBy: userRef.current?.name || null,
         reason: "auto",
       });
-      await db.upsert(ROUND_LOCKS_COL, lock);
+      // Deliberately not awaited — see the note above. The refs below are what
+      // the next tap reads, and they are true the moment the doc is built.
+      db.upsert(ROUND_LOCKS_COL, lock);
       roundLocksRef.current = { ...roundLocksRef.current, [rnd]: lock };
       setRoundLocksData(prev => ({ ...prev, [rnd]: lock }));
       return lock;
@@ -6345,11 +6405,35 @@ export default function App() {
     }
   }, []);
 
+  // ── Saving a hole ────────────────────────────────────────────────────
+  // The order below is the whole point, and it is not the order this used to
+  // run in.
+  //
+  //   1. PAINT. The optimistic update happens first, before anything that can
+  //      touch the network. A tap on a score button is answered by the screen
+  //      in the same frame, in a dead spot or not.
+  //   2. FREEZE. The round lock, which no longer blocks on its own write.
+  //   3. WRITE, and watch it. The write is queued, not awaited: Firestore
+  //      applies it to the local cache immediately and replays it on
+  //      reconnect, so awaiting it would mean waiting for signal to answer a
+  //      tap. What IS attached is a rejection handler, because a write that
+  //      is REFUSED — rules, quota, a malformed document — is a different
+  //      thing entirely from one that is merely queued.
+  //
+  // That last distinction is what this function exists to make honest. It
+  // used to write through `db.upsert`, which swallows its error and returns
+  // null, and then ignore the return — so a refused score stayed on screen,
+  // looking saved, until somebody reloaded and found the hole empty. A
+  // scoreboard that shows a number nobody stored is the one failure this app
+  // cannot recover from on its own, because there is nothing to see.
+  //
+  // On a rejection Firestore rolls its own local mutation back and the
+  // subscription re-fires with the truth, which repaints the cell by itself.
+  // All this has to do is say so, loudly enough to be acted on.
   const onSaveHole = useCallback(async (pid, rnd, holeIdx, score, courseId) => {
-    setSyncing(true);
     // Freeze BEFORE the score lands, so the very first hole of a round is
     // already scoring off the snapshot.
-    await ensureRoundLock(rnd);
+    ensureRoundLock(rnd);
     // ── Edition scoping ──
     // Scores and matches were the last two collections still building their
     // document ids by hand instead of through editionDocId. Nothing has
@@ -6377,11 +6461,15 @@ export default function App() {
       score,
       course_id: courseId || "",
     };
-    // Optimistic update
-    setHoleData(prev => {
-      const key = `${pid}_${rnd}`;
-      return { ...prev, [key]: { ...prev[key], [holeIdx]: score } };
-    });
+    // Optimistic update — the ref as well as the state, so a second tap on
+    // the same hole knows what it is replacing even before Firestore has
+    // echoed the first one back.
+    const key = `${pid}_${rnd}`;
+    holeDataRef.current = {
+      ...holeDataRef.current,
+      [key]: { ...holeDataRef.current[key], [holeIdx]: score },
+    };
+    setHoleData(prev => ({ ...prev, [key]: { ...prev[key], [holeIdx]: score } }));
     // A namespaced edition that already has scores has them under the OLD
     // bare id, and this writer rebuilds the id from scratch every save rather
     // than reusing the stored one — so without this the same hole would exist
@@ -6390,10 +6478,15 @@ export default function App() {
     // last. Dropping the superseded document first means there is never a
     // moment where both exist. Safe against other editions because the id
     // embeds this edition's player id, which no other edition uses.
-    if (id !== bareId) await db.delete("bc_hole_scores", bareId);
-    await db.upsert("bc_hole_scores", data);
-    setSyncing(false);
-  }, [ensureRoundLock]);
+    if (id !== bareId) db.delete("bc_hole_scores", bareId);
+    // `upsertStrict` rather than `upsert`: same merge write, rejection left
+    // in. The id is passed separately by its signature and also rides in
+    // `data`, which is what keeps `r.id` readable by onDiscardRoundScores.
+    trackWrite(
+      db.upsertStrict("bc_hole_scores", id, data),
+      `Hole ${holeIdx + 1} didn't save`,
+    );
+  }, [ensureRoundLock, trackWrite]);
 
   const onAddPlayer = useCallback(async (p) => { await db.upsert("bc_players", p); }, []);
   const onUpdatePlayer = useCallback(async (p) => { await db.upsert("bc_players", p); }, []);
@@ -7073,7 +7166,11 @@ export default function App() {
           total pins directly beneath it instead of fighting it for the top
           of the screen. flexShrink is pinned on the header itself so a tall
           tab can't squeeze it. */}
-      <AppHeader location={tournamentLocation} />
+      <AppHeader
+        location={tournamentLocation}
+        pendingWrites={writeState.pending}
+        failedWrites={writeState.failed}
+      />
 
       {/* Ready-to-finalize notification — app chrome, like the header above
           it, so it reaches the director on whichever tab they are on rather

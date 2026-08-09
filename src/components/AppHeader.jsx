@@ -69,7 +69,7 @@
 //  flexShrink: 0 is not optional — the shell is a flex column with
 //  overflow: hidden, so without it a tall tab could compress this band and the
 //  clipped remainder would look like the header failing to fit.
-import { BC, FONT, FS } from "../theme";
+import { BC, FONT, FS, ALPHA } from "../theme";
 import { TROPHY_SILHOUETTE, TOURNAMENT_LOCATION } from "../constants";
 import { getTournamentYear } from "../firebase";
 
@@ -97,7 +97,52 @@ export const HEADER_SLOT_ID = "bc-header-slot";
 // reach" is a real constraint and it belongs to the thing that sets it.
 export const HEADER_TOAST_TOP = "calc(env(safe-area-inset-top, 0px) + 17px)";
 
-export function AppHeader({ location }) {
+// ── The sync chip ─────────────────────────────────────────────────────
+// The left-hand counterpart to the slot on the right, and the app's answer to
+// "did that score actually go anywhere?".
+//
+// Silent when there is nothing to say, which is almost always. It speaks in
+// exactly two situations, and they mean opposite things:
+//
+//   SAVING n   writes queued and unacknowledged. On a course this is a dead
+//              spot and nothing more — Firestore is holding them and will
+//              replay them on reconnect. Muted, because it is not a problem;
+//              it exists so a group standing in a hollow on 12 can see that
+//              the app knows it is behind, instead of guessing.
+//   n UNSAVED  writes the server REFUSED. Those scores are gone and the cells
+//              have already repainted without them. Danger-coloured, because
+//              this one needs somebody to do something.
+//
+// The band it sits in is 51px of chrome that was otherwise empty on the left,
+// so this costs no screen anywhere. Absolute for the same reason the right
+// slot is: an in-flow item would shove the trophy off-centre every time a
+// write went out.
+function SyncChip({ pending = 0, failed = 0 }) {
+  if (!pending && !failed) return null;
+  const bad = failed > 0;
+  const accent = bad ? BC.danger : BC.t3;
+  return (
+    <div
+      title={bad
+        ? "Some scores were refused by the server and are not saved."
+        : "Waiting for signal — these will send themselves when it returns."}
+      style={{
+        display: "flex", alignItems: "center", gap: 4,
+        fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.6,
+        color: accent, whiteSpace: "nowrap",
+        border: `1px solid ${accent}${ALPHA.line}`,
+        borderRadius: 999, padding: "1px 6px",
+      }}
+    >
+      <span style={{
+        width: 5, height: 5, borderRadius: "50%", background: accent, flexShrink: 0,
+      }} />
+      {bad ? `${failed} UNSAVED` : `SAVING${pending > 1 ? ` ${pending}` : ""}`}
+    </div>
+  );
+}
+
+export function AppHeader({ location, pendingWrites = 0, failedWrites = 0 }) {
   return (
     // Sized for a band that is now on EVERY screen rather than one: the mark
     // came down from 30×34 and the caption from 11px, which buys back ~12px
@@ -128,6 +173,14 @@ export function AppHeader({ location }) {
         fontSize: FS.label, fontWeight: 800, letterSpacing: 2.2, color: BC.t2,
         whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
       }}>{getTournamentYear()} · {(location || TOURNAMENT_LOCATION).toUpperCase()}</div>
+
+      {/* Left-hand chip — mirrors the slot below, same baseline. */}
+      <div style={{
+        position: "absolute", left: 10, bottom: 7,
+        display: "flex", alignItems: "flex-end",
+      }}>
+        <SyncChip pending={pendingWrites} failed={failedWrites} />
+      </div>
 
       {/* Right-hand slot — see the note at the top. Bottom-aligned with the
           caption rather than centred on the band, so the chip sits level with
