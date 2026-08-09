@@ -4907,10 +4907,18 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                   // first render, and another director can change it while this
                   // screen is open. Seeding at mount meant a director who tapped
                   // in and straight back out saved a stale pot over the real one.
-                  <div onClick={() => { if (user?.isDirector) { setPotInput(String(skinsPot)); setEditPot(true); } }}
-                    style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold, cursor: user?.isDirector ? "pointer" : "default" }}>
+                  <button
+                    type="button"
+                    disabled={!user?.isDirector}
+                    aria-label={user?.isDirector ? "Edit the skins pot" : undefined}
+                    onClick={() => { setPotInput(String(skinsPot)); setEditPot(true); }}
+                    style={{
+                      fontSize: FS.title, fontWeight: 800, color: BC.gold, fontFamily: FONT,
+                      background: "transparent", border: "none", padding: 0, textAlign: "left",
+                      cursor: user?.isDirector ? "pointer" : "default",
+                    }}>
                     ${skinsPot.toFixed(2)}
-                  </div>
+                  </button>
                 )}
               </div>
               <div style={{ textAlign: "right" }}>
@@ -4919,9 +4927,11 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
               </div>
             </div>
             {user?.isDirector && (
-              <div
+              <button
+                type="button"
+                aria-expanded={editBuyIns === "skins"}
                 onClick={() => setEditBuyIns(v => (v === "skins" ? null : "skins"))}
-                style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "8px 14px", borderTop: `1px solid ${BC.bdr}` }}
+                style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "8px 14px", borderTop: `1px solid ${BC.bdr}`, width: "100%", background: "transparent", borderLeft: "none", borderRight: "none", borderBottom: "none", fontFamily: FONT }}
               >
                 <span style={{ flex: 1, fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.6 }}>
                   {skinsField.length} IN{skinsCounted ? ` · $${buyIns.skinsAmount} EACH` : ""}
@@ -4929,7 +4939,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                 <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.amberInk, letterSpacing: 0.6 }}>
                   BUY-INS {editBuyIns === "skins" ? "▾" : "▸"}
                 </span>
-              </div>
+              </button>
             )}
           </div>
 
@@ -5578,6 +5588,17 @@ function SlideMenu({ open, onClose, onNavigate, user, view, finalize, onEditions
   const dragRef = useRef(null);
   const startYRef = useRef(null);
   const [dragY, setDragY] = useState(0);
+
+  // The way out for anybody not using a thumb. The menu is dismissed by a
+  // swipe down or by tapping the scrim, and both of those want a finger — on
+  // the laptop or the television this thing also runs on, there was no way to
+  // close it but to find the 8px of page beside it with a mouse.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
 
   const handleTouchStart = (e) => { startYRef.current = e.touches[0].clientY; setDragY(0); };
   const handleTouchMove = (e) => {
