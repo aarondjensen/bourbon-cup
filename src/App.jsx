@@ -22,7 +22,7 @@ import {
 } from "./constants";
 import {
   calcCH, calcCHForCourse, fmtScore, fmtPts,
-  getEffectiveHI, buildStrokeMap, resolveHolePars, resolveHoleHcps,
+  getEffectiveHI, resolveHolePars, resolveHoleHcps,
   computeMatchResult,
   getRoundCH, lockForRound,
   totalUnit, segmentState, segmentOptsFor, holeFormatFor,
@@ -76,6 +76,9 @@ import { holesEntered, roundScoreProgress } from "./lib/scoreGuard";
 import { scheduledRounds, editableRounds } from "./lib/rounds";
 import { summarizeEdition, sameSummary } from "./lib/editionSummary";
 import { playerTable } from "./lib/playerStats";
+import {
+  inField, roundSetup, strokeMapsFor, computeSkins, lowNetRows, ctpTags, settle,
+} from "./lib/betting";
 import { EDITIONS_COL, switchEdition } from "./lib/editions";
 import {
   cardSigBareId, sigForMatch, cardComplete, missingForCard,
@@ -4689,11 +4692,10 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // ── Who is playing for what ──
   // A null list means the director has never tagged anybody, and that means
   // EVERYBODY — so a tournament that never opens the buy-in panel behaves
-  // exactly as it did before buy-ins existed.
-  const inField = (ids) => (ids == null ? realPlayers(tPlayers) : realPlayers(tPlayers).filter(p => ids.includes(p.player_id)));
-  const skinsField = inField(buyIns?.skinsIn);
-  const ctpField = inField(buyIns?.ctpIn);
-  const ctpInSet = new Set(ctpField.map(p => p.player_id));
+  // exactly as it did before buy-ins existed. See lib/betting.
+  const roster = realPlayers(tPlayers);
+  const skinsField = inField(roster, buyIns?.skinsIn);
+  const ctpField = inField(roster, buyIns?.ctpIn);
 
   // The pot is COUNTED from the buy-ins once a buy-in price exists. Until one
   // does, the hand-typed pot stands and stays editable — which is the only
@@ -4701,7 +4703,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   const skinsCounted = (buyIns?.skinsAmount || 0) > 0;
   const skinsPotValue = skinsCounted ? skinsField.length * buyIns.skinsAmount : skinsPot;
   const ctpPotValue = (buyIns?.ctpAmount || 0) > 0 ? ctpField.length * buyIns.ctpAmount : 0;
-  const lowNetField = inField(buyIns?.lowNetIn);
+  const lowNetField = inField(roster, buyIns?.lowNetIn);
   const lowNetPotValue = (buyIns?.lowNetAmount || 0) > 0 ? lowNetField.length * buyIns.lowNetAmount : 0;
 
   // The rounds that actually exist, not a hardcoded 1-4: a two-round
@@ -4745,78 +4747,40 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // Both tabs go through this. The CTP grid used to read `course.hole_pars`
   // raw, which meant it could offer a different set of par 3s than the ones
   // the Scoring tab actually prompted on.
-  const roundSetup = (round) => {
-    const tr2 = tRounds.find(t => t.round_number === round);
-    const bLock = lockForRound(roundLocks, round);
-    const course2 = courses.find(c => c.id === (bLock?.course_id || tr2?.course_id));
-    return {
-      tr: tr2, lock: bLock, course: course2,
-      pars: resolveHolePars(course2, bLock),
-      hcps: resolveHoleHcps(course2, bLock),
-    };
-  };
+  // Every derivation below is lib/betting's, bound to this view's data once.
+  // They used to be defined inline here, which was fine while the only
+  // question was "who is winning this one" — the Settle tab asks a question
+  // that needs the same numbers, and two copies of a payout is how a board and
+  // a settlement come to disagree about the same pot.
+  const ctx = { tPlayers, tRounds, courses, roundLocks, hcpOverrides, teeAssignments };
+  const setupFor = (round) => roundSetup({ round, tRounds, courses, roundLocks });
+  const strokeMapsForRound = (round) => strokeMapsFor({ round, field: skinsField, ...ctx });
 
-  // Every player's stroke allocation for a round, built once.
-  //
-  // Net skins are handicap-derived, so they answer to the round lock too — a
-  // settled skin must not change hands because someone synced a GHIN index the
-  // next morning. Uses the canonical buildStrokeMap so handicaps over 18 wrap
-  // correctly (a hole can get 2+ strokes); the old inline lookup capped every
-  // hole at 1.
-  //
-  // The field card reads the SAME maps to draw its stroke dots, so a dot
-  // printed on a cell is always the stroke the skin was decided with.
-  const strokeMapsFor = (round) => {
-    const { tr: tr2, course: course2, hcps } = roundSetup(round);
-    const maps = {};
-    skinsField.forEach(p => {
-      const ch = getRoundCH({
-        roundLocks, round, pid: p.player_id, players: tPlayers,
-        course: course2, chOverrides: hcpOverrides, teeAssignments, roundTee: tr2?.tee_box,
-      });
-      maps[p.player_id] = buildStrokeMap(ch, hcps);
-    });
-    return maps;
-  };
+  const skinsFor = (round, gross) => computeSkins({
+    round, gross, field: skinsField, holeData,
+    pars: setupFor(round).pars,
+    maps: gross ? null : strokeMapsForRound(round),
+  });
 
-  // Compute skins for a round
-  const computeSkins = (round, gross) => {
-    const { pars } = roundSetup(round);
-    const maps = gross ? null : strokeMapsFor(round);
-
-    const skins = [];
-    for (let h = 0; h < 18; h++) {
-      const scores = skinsField.map(p => {
-        const raw = (holeData[`${p.player_id}_${round}`] || {})[h];
-        if (raw == null) return null;
-        if (gross) return { pid: p.player_id, name: p.name, score: raw };
-        const strokes = maps[p.player_id]?.[h] || 0;
-        return { pid: p.player_id, name: p.name, score: raw - strokes };
-      }).filter(Boolean);
-
-      if (scores.length < 2) { skins.push({ hole: h, winner: null, tied: false, par: pars[h] }); continue; }
-      const min = Math.min(...scores.map(s => s.score));
-      const winners = scores.filter(s => s.score === min);
-      if (winners.length === 1) skins.push({ hole: h, winner: winners[0], score: min, par: pars[h] });
-      else skins.push({ hole: h, winner: null, tied: true, score: min, par: pars[h] });
-    }
-    return skins;
-  };
-
-  const allSkins = roundList.flatMap(r => computeSkins(r, grossMode).filter(s => s.winner).map(s => ({ ...s, round: r })));
+  const allSkins = roundList.flatMap(r => skinsFor(r, grossMode).filter(s => s.winner).map(s => ({ ...s, round: r })));
   const skinCount = {};
   allSkins.forEach(s => { skinCount[s.winner.pid] = (skinCount[s.winner.pid] || 0) + 1; });
   const totalSkins = allSkins.length;
-  const perSkin = totalSkins > 0 ? (skinsPotValue / totalSkins).toFixed(2) : "0.00";
+  // Exact, and rounded only where it prints. It used to be rounded to the cent
+  // HERE and then multiplied by a player's skin count, which is how this row
+  // came to disagree with the Settle tab about the same money: a $80 pot over
+  // 36 skins is $2.2222 a skin, and ten of them are $22.22 — not ten times
+  // $2.22, which is $22.20.
+  const perSkin = totalSkins > 0 ? skinsPotValue / totalSkins : 0;
 
   // ── What the field card is drawn from ──
   // The shown round's setup, skins and stroke maps, resolved once. Every one
   // of these is safe with a null round (no schedule yet): roundSetup falls
   // back to a par-4 course, and a scoreless round yields no skins.
-  const shownSetup = roundSetup(shownRound);
-  const shownSkins = computeSkins(shownRound, grossMode);
+  const shownSetup = setupFor(shownRound);
+  const shownSkins = skinsFor(shownRound, grossMode);
   // Gross mode draws no dots, so it needs no maps.
-  const shownStrokeMaps = grossMode ? {} : strokeMapsFor(shownRound);
+  const shownStrokeMaps = grossMode ? {} : strokeMapsForRound(shownRound);
   // Team, then name. Skins is an individual game and the sides mean nothing
   // to it, but the roster is grouped this way on every other screen, and a
   // player looking for their own row among sixteen finds it faster in the
@@ -4834,32 +4798,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   //
   // Equal lowest cards are CO-WINNERS, not a push. A skin pushes because the
   // hole carries; low net has nowhere to carry to, so the round's share splits.
-  const lowNetRows = (round) => {
-    const { tr: tr2, course: course2 } = roundSetup(round);
-    const rows = lowNetField.map(p => {
-      const card = holeData[`${p.player_id}_${round}`] || {};
-      const played = Object.keys(card).filter(h => card[h] > 0);
-      const gross = played.reduce((a, h) => a + card[h], 0);
-      const ch = getRoundCH({
-        roundLocks, round, pid: p.player_id, players: tPlayers,
-        course: course2, chOverrides: hcpOverrides, teeAssignments, roundTee: tr2?.tee_box,
-      });
-      return {
-        pid: p.player_id, name: p.name, team: p.team,
-        thru: played.length, complete: played.length === 18,
-        gross, ch, net: gross - ch,
-      };
-    });
-    const done = rows.filter(r => r.complete);
-    const best = done.length ? Math.min(...done.map(r => r.net)) : null;
-    rows.forEach(r => { r.won = r.complete && r.net === best; });
-    // Finished cards first, ranked; the unfinished trail behind in play order.
-    return rows.sort((a, b) =>
-      (b.complete ? 1 : 0) - (a.complete ? 1 : 0) ||
-      (a.complete ? a.net - b.net : b.thru - a.thru) ||
-      String(a.name).localeCompare(String(b.name))
-    );
-  };
+  const lowNetFor = (round) => lowNetRows({ round, field: lowNetField, holeData, ...ctx });
 
   // The pot is divided by the ROUNDS, not by the wins. Each round is worth the
   // same share, and a tied round splits ITS share between the co-winners — so
@@ -4867,7 +4806,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // dividing by wins would have done.
   const lowNetRoundShare = roundList.length ? lowNetPotValue / roundList.length : 0;
   const lowNetWins = roundList.flatMap(r => {
-    const winners = lowNetRows(r).filter(x => x.won);
+    const winners = lowNetFor(r).filter(x => x.won);
     return winners.map(w => ({ ...w, round: r, share: lowNetRoundShare / winners.length }));
   });
   const lowNetDecided = new Set(lowNetWins.map(w => w.round)).size;
@@ -4882,7 +4821,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // ── The CTP tab ──
   const ctpShownRound = roundList.includes(ctpRound) ? ctpRound : defaultRound;
   const lowNetShownRound = roundList.includes(lowNetRound) ? lowNetRound : defaultRound;
-  const noPar3s = roundList.every(r => !roundSetup(r).pars.some(p => p === 3));
+  const noPar3s = roundList.every(r => !setupFor(r).pars.some(p => p === 3));
 
   // Every standing tag, read through each round's OWN par table rather than
   // straight off ctpData: a record left on a hole that is no longer a par 3 —
@@ -4892,18 +4831,9 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // An unsettled tag still counts. The document is the hole's current answer
   // and not a log of attempts, which is exactly what the rows below display;
   // a leaderboard that ignored pending tags would disagree with them.
-  const ctpTags = roundList.flatMap(r => {
-    const { pars } = roundSetup(r);
-    return pars.flatMap((p, h) => {
-      if (p !== 3) return [];
-      const rec = ctpData[`${r}_${h}`];
-      // A tag naming somebody who is not in the CTP game does not score. It
-      // still shows on its hole — the document is the hole's answer — but the
-      // board and the payout are for the players who bought in.
-      return rec?.player_id && ctpInSet.has(rec.player_id) ? [{ round: r, hole: h, ...rec }] : [];
-    });
-  });
-  const ctpLeaders = Object.values(ctpTags.reduce((acc, t) => {
+  const tags = ctpTags({ rounds: roundList, field: ctpField, ctpData, tRounds, courses, roundLocks });
+
+  const ctpLeaders = Object.values(tags.reduce((acc, t) => {
     const e = acc[t.player_id] || (acc[t.player_id] = { pid: t.player_id, count: 0, best: null });
     e.count += 1;
     if (t.distance_ft != null && (e.best == null || t.distance_ft < e.best)) e.best = t.distance_ft;
@@ -4938,7 +4868,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
           rather than taking it away. */}
       <StickyTop>
         <SegmentedToggle
-          options={[["skins", "Skins"], ["ctp", "CTP"], ["lownet", "Low Net"]]}
+          options={[["skins", "Skins"], ["ctp", "CTP"], ["lownet", "Low Net"], ["settle", "Settle"]]}
           value={activeTab} onChange={setActiveTab} letterSpacing={0.5}
         />
       </StickyTop>
@@ -4977,7 +4907,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
               </div>
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontSize: FS.label, color: BC.t3 }}>{totalSkins} skins won</div>
-                <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>${perSkin} / skin</div>
+                <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>${perSkin.toFixed(2)} / skin</div>
               </div>
             </div>
             {user?.isDirector && (
@@ -5026,7 +4956,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                     <div style={{ width: 8, height: 8, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
                     <span style={{ flex: 1, fontSize: FS.body, fontWeight: 600, color: BC.t1 }}>{p?.name || pid}</span>
                     <span style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>{count} skin{count !== 1 ? "s" : ""}</span>
-                    <span style={{ fontSize: FS.small, color: BC.t3 }}>${(count * parseFloat(perSkin)).toFixed(2)}</span>
+                    <span style={{ fontSize: FS.small, color: BC.t3 }}>${(count * perSkin).toFixed(2)}</span>
                   </div>
                 );
               })}
@@ -5079,9 +5009,9 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                       <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold }}>${ctpPotValue.toFixed(2)}</div>
                     </div>
                     <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: FS.label, color: BC.t3 }}>{ctpTags.length} pin{ctpTags.length !== 1 ? "s" : ""} taken</div>
+                      <div style={{ fontSize: FS.label, color: BC.t3 }}>{tags.length} pin{tags.length !== 1 ? "s" : ""} taken</div>
                       <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>
-                        ${(ctpTags.length > 0 ? ctpPotValue / ctpTags.length : 0).toFixed(2)} / pin
+                        ${(tags.length > 0 ? ctpPotValue / tags.length : 0).toFixed(2)} / pin
                       </div>
                     </div>
                   </div>
@@ -5145,7 +5075,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                 />
 
                 {(() => {
-                  const { course: course2, pars: pars2 } = roundSetup(ctpShownRound);
+                  const { course: course2, pars: pars2 } = setupFor(ctpShownRound);
                   const par3holes = pars2.map((p, i) => ({ hole: i, par: p })).filter(h => h.par === 3);
                   if (par3holes.length === 0) {
                     return (
@@ -5284,9 +5214,122 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
             onChange={setLowNetRound}
           />
 
-          <LowNetCard rows={lowNetRows(lowNetShownRound)} />
+          <LowNetCard rows={lowNetFor(lowNetShownRound)} />
         </div>
       )}
+
+      {roundList.length > 0 && activeTab === "settle" && (
+        <SettleCard
+          settlement={settle({
+            players: roster, rounds: roundList, holeData, ctpData,
+            buyIns, skinsPot, grossSkins: grossMode, ...ctx,
+          })}
+          teams={teams}
+          gross={grossMode}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Settle ────────────────────────────────────────────────────────────
+// What the whole weekend comes to, one row per player. The other three tabs
+// each answer "who is winning this one"; this is the question the trip
+// actually ends on, and until now the only way to it was three boards and a
+// pen.
+//
+// Up first, down last, and the middle of the list is where somebody breaks
+// even. The three games are shown broken out beneath each name because a
+// player can be up on skins and still down overall, and being told only the
+// total invites exactly one question.
+//
+// ── When it will not give a net ───────────────────────────────────────
+// A skins pot that was TYPED rather than bought into records no stake for
+// anybody, so what a player is up cannot be worked out — only what they won.
+// The card says that instead of showing a net that quietly assumes everybody
+// put in an equal share. Setting a skins buy-in price is what fixes it, and
+// the card says so too.
+function SettleCard({ settlement, teams, gross }) {
+  const { rows, pots, staked, totalSkins, totalPins } = settlement;
+  const playing = rows.filter(r => r.playing);
+  const money = (n) => `$${Math.abs(n).toFixed(2)}`;
+  const signed = (n) => (n > 0.004 ? `+${money(n)}` : n < -0.004 ? `−${money(n)}` : "$0.00");
+  const potTotal = pots.skins + pots.ctp + pots.lowNet;
+
+  if (!playing.length) {
+    return (
+      <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: "60px 20px", textAlign: "center" }}>
+        <div style={{ fontSize: FS.jumbo, marginBottom: 12, opacity: 0.4 }}>🧾</div>
+        <div style={{ fontSize: FS.lead, fontWeight: 700, color: BC.t1, marginBottom: 6 }}>Nothing to settle</div>
+        <div style={{ fontSize: FS.small, color: BC.t3, maxWidth: 280, margin: "0 auto", lineHeight: 1.5 }}>
+          Set a buy-in on Skins, CTP or Low Net and everybody&apos;s position shows up here.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: "12px 14px", marginBottom: 12 }}>
+        <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>ON THE TABLE</div>
+        <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold }}>${potTotal.toFixed(2)}</div>
+        <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 2 }}>
+          {totalSkins} skin{totalSkins === 1 ? "" : "s"} ({gross ? "gross" : "net"}) · {totalPins} pin{totalPins === 1 ? "" : "s"}
+        </div>
+      </div>
+
+      {!staked && (
+        <div style={{
+          background: BC.card, borderRadius: 12, border: `1px solid ${BC.warn}${ALPHA.line}`,
+          padding: "10px 14px", marginBottom: 12, fontSize: FS.small, color: BC.t2, lineHeight: 1.45,
+        }}>
+          The skins pot was typed in rather than bought into, so nobody&apos;s stake is
+          recorded and these are <strong>winnings, not net positions</strong>. Set a
+          skins buy-in to settle it properly.
+        </div>
+      )}
+
+      <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
+        {playing.map((r, i) => {
+          const team = teams[r.team];
+          const up = r.net > 0.004, down = r.net < -0.004;
+          // A game with no pot still has a WINNER — somebody took those pins —
+          // so the count is worth printing. What is not worth printing is the
+          // "$0.00" beside it, which reads as a payout that went wrong rather
+          // than as a game nobody put money on.
+          const part = (n, label, amount) =>
+            (n ? `${n} ${label}${n === 1 ? "" : "s"}${amount > 0 ? ` ${money(amount)}` : ""}` : null);
+          const parts = [
+            part(r.skins, "skin", r.won.skins),
+            part(r.pins, "CTP", r.won.ctp),
+            r.lowNet ? `${r.lowNet} low net${r.won.lowNet > 0 ? ` ${money(r.won.lowNet)}` : ""}` : null,
+          ].filter(Boolean);
+          return (
+            <div key={r.pid} style={{
+              padding: "9px 14px",
+              borderBottom: i < playing.length - 1 ? `1px solid ${BC.bdr}${ALPHA.hair}` : "none",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
+                <span style={{
+                  flex: 1, minWidth: 0, fontSize: FS.body, fontWeight: 600, color: BC.t1,
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                }}>{r.name}</span>
+                <span style={{
+                  fontSize: FS.body, fontWeight: 800,
+                  color: up ? BC.green : down ? BC.danger : BC.t3,
+                }}>{staked ? signed(r.net) : money(r.total)}</span>
+              </div>
+              {/* Where it came from, and what it cost. A total with no
+                  breakdown under it invites exactly one question. */}
+              <div style={{ fontSize: FS.micro, color: BC.t3, marginTop: 2, marginLeft: 16, letterSpacing: 0.3 }}>
+                {parts.length ? parts.join(" · ") : "nothing won"}
+                {staked && r.paid > 0 ? ` · in ${money(r.paid)}` : ""}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
