@@ -44,7 +44,7 @@ import {
 import {
   computeMatchResult, getRoundCourseCtx, holeFormatFor,
   segmentState, statusText, segmentLeader,
-  segmentOptsFor,
+  segmentOptsFor, fmtPts,
 } from "../scoring";
 import { HoleStrip } from "./HoleStrip";
 import { FullScorecard } from "./FullScorecard";
@@ -55,9 +55,6 @@ import { HOLE_COUNT, revealState, revealSummary, stepReveal, COUNTDOWN_HASH } fr
 import { FinalCountdown } from "./FinalCountdown";
 
 // ── Small helpers ────────────────────────────────────────────────
-
-// Points print without a pointless ".0" — 3 → "3", 3.5 → "3.5".
-const fmtPts = (n) => (n == null ? "—" : Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10));
 
 // Max points on offer in a single match. A points-per-hole match is worth
 // every hole added up (9 + 18 = 27 at the usual 1-and-2), which is a different

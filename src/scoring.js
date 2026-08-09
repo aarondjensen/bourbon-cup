@@ -62,6 +62,13 @@ export const calcCHForCourse = (hi, course, teeName) => {
 // math and isn't used outside scoring contexts.
 export const fmtScore = (n) => n == null ? "—" : n === 0 ? "E" : n > 0 ? `+${n}` : `${n}`;
 
+// A points total, without a pointless ".0" — 3 → "3", 3.5 → "3.5". Halves are
+// real here (a halved segment splits its pot) so they have to print, but three
+// quarters of a point is not a thing this app can produce and a long decimal
+// tail would only ever be float noise.
+export const fmtPts = (n) =>
+  n == null ? "—" : Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10);
+
 // ── Shared scoring helpers ──
 // Get a player's effective Handicap Index, applying any per-round override.
 // Used by every scoring path so override semantics stay identical

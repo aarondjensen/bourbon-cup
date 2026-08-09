@@ -297,17 +297,29 @@ await check("a director can, and photos come back", async () => {
 await check("everyone can read whether uploads are on, signed in or not", () =>
   assertSucceeds(getDoc(doc(anonDb(), "bc_config/photos"))));
 
-// ── Reads stay open, and the archive stays append-only ──────────────
+// ── Reads stay open, and the archive is director-owned ──────────────
 await check("anon can still read the leaderboard data", () =>
   assertSucceeds(getDoc(doc(anonDb(), "bc_hole_scores/x"))));
 
 await check("anon can read the roster", () =>
   assertSucceeds(getDoc(doc(anonDb(), "bc_players/p1"))));
 
-await check("member cannot rewrite an archived year", async () => {
-  await assertSucceeds(setDoc(doc(aliceDb(), "bc_historical/2019"), { year: 2019 }));
-  await assertFails(setDoc(doc(aliceDb(), "bc_historical/2019"), { year: 2019, pot: 999 }));
-});
+// The archive used to be bc_historical, append-only so a world-writable
+// client could not rewrite a year once it was in. It is now the `result` on
+// an edition document, which is director-write — a stronger guarantee than
+// append-only, since a member cannot add a year either.
+await check("anyone can read the archive", () =>
+  assertSucceeds(getDoc(doc(anonDb(), "bc_editions/bc_2019"))));
+
+await check("a member cannot write a year's result", () =>
+  assertFails(setDoc(doc(peteDb(), "bc_editions/bc_2019"), {
+    year: 2019, result: { scoreA: 99, scoreB: 0 },
+  })));
+
+await check("a director can write a year's result", () =>
+  assertSucceeds(setDoc(doc(aliceDb(), "bc_editions/bc_2019"), {
+    year: 2019, result: { scoreA: 14, scoreB: 10 },
+  })));
 
 await check("unlisted collections stay denied", () =>
   assertFails(setDoc(doc(aliceDb(), "bc_whatever/x"), { v: 1 })));

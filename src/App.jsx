@@ -21,7 +21,7 @@ import {
   resolveParPoints, parPointsDefaultFor, formatUsesParPoints, parResultsFor, parResultLabel,
 } from "./constants";
 import {
-  calcCH, calcCHForCourse, fmtScore,
+  calcCH, calcCHForCourse, fmtScore, fmtPts,
   getEffectiveHI, buildStrokeMap, resolveHolePars, resolveHoleHcps,
   computeMatchResult,
   getRoundCH, lockForRound,
@@ -74,6 +74,8 @@ import {
 import { groupKey, tagAheadOfPlay } from "./lib/ctp";
 import { holesEntered, roundScoreProgress } from "./lib/scoreGuard";
 import { scheduledRounds, editableRounds } from "./lib/rounds";
+import { summarizeEdition, sameSummary } from "./lib/editionSummary";
+import { EDITIONS_COL, switchEdition } from "./lib/editions";
 import {
   cardSigBareId, sigForMatch, cardComplete, missingForCard,
   nonSignerPids, isFullyAttested, cardState,
@@ -5288,9 +5290,106 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   );
 }
 
+// ── History ──
+// One row per year, off the SAME edition list the Tournaments picker reads —
+// so the summary of a year and the way into it can never be two different sets
+// of years. The rows are tappable for that reason: the whole tournament is one
+// switch away, and the menu already describes the pair as "that row is the
+// summary of the past, this one walks into it."
+//
+// The numbers come from the cards (lib/editionSummary), not from anything
+// anybody typed. A year with no `result` yet has simply never been opened by a
+// director since this landed — the app records it the first time one does, so
+// the empty state says that rather than pretending the year is missing.
+function HistoryList({ editions, activeSummary, teams, isDirector }) {
+  const rows = [...editions]
+    .filter(e => e.year)
+    .sort((a, b) => (b.year || 0) - (a.year || 0))
+    // The running year is computed live rather than read back, so it has a
+    // score the moment it has a match — it does not have to be over, and it
+    // does not have to have been written down, to show up here.
+    .map(e => ({ ...e, summary: e.id === TOURNAMENT_ID ? activeSummary : e.result || null }));
+
+  if (!rows.length) {
+    return (
+      <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>
+        <div style={{ fontSize: FS.display, marginBottom: 12 }}>📊</div>
+        <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.t2, marginBottom: 8 }}>No years yet</div>
+        <div style={{ fontSize: FS.small }}>Every tournament on the Tournaments list shows its result here.</div>
+      </div>
+    );
+  }
+
+  const side = (name, score, accent, align) => (
+    <div style={{ flex: 1, minWidth: 0, textAlign: align }}>
+      <div style={{
+        fontSize: FS.label, fontWeight: 800, color: accent, letterSpacing: 0.4,
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+      }}>{name || "—"}</div>
+      <div style={{ fontSize: FS.lead, fontWeight: 800, color: BC.t1 }}>{fmtPts(score)}</div>
+    </div>
+  );
+
+  return (
+    <div>
+      {rows.map(e => {
+        const s = e.summary;
+        const live = e.id === TOURNAMENT_ID;
+        const won = s?.winner || null;
+        return (
+          <button
+            key={e.id}
+            onClick={() => { if (e.id !== TOURNAMENT_ID) switchEdition(e.id, { namespaced: !!e.namespaced }); }}
+            style={{
+              display: "block", width: "100%", textAlign: "left",
+              background: BC.card, borderRadius: 12, padding: 14, marginBottom: 12,
+              border: `1px solid ${live ? BC.amber + ALPHA.line : BC.bdr}`,
+              fontFamily: FONT, cursor: e.id === TOURNAMENT_ID ? "default" : "pointer",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: FS.body, fontWeight: 700, color: BC.gold }}>{e.year}</span>
+              <span style={{
+                flex: 1, minWidth: 0, fontSize: FS.label, color: BC.t3,
+                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+              }}>{(s?.location || "").toUpperCase()}</span>
+              {live && <span style={{ fontSize: FS.micro, fontWeight: 800, color: BC.amberInk, letterSpacing: 0.6 }}>THIS YEAR</span>}
+            </div>
+
+            {s ? (
+              <>
+                <div style={{ display: "flex", alignItems: "flex-end", gap: 10 }}>
+                  {side(s.teamA, s.scoreA, teams.A.accent, "left")}
+                  {side(s.teamB, s.scoreB, teams.B.accent, "right")}
+                </div>
+                <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.amberInk, marginTop: 8 }}>
+                  {s.halved ? "🏆 The cup was halved"
+                    : !s.complete ? `In progress · ${s.rounds} round${s.rounds === 1 ? "" : "s"}`
+                      : won ? `🏆 ${won} won the Bourbon Cup` : "—"}
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize: FS.small, color: BC.t3 }}>
+                {isDirector
+                  ? "Not summarised yet — open this year once and it records itself."
+                  : "Not summarised yet."}
+              </div>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Analytics View ──
-function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historicalData, user, hcpOverrides, teeAssignments, roundLocks, teams }) {
-  const [analyticsTab, setAnalyticsTab] = useState("current");
+// `tab` is which half opens, and it comes from the caller because the menu
+// offers the two halves as two separate rows. It used to be seeded "current"
+// unconditionally, so tapping Historical Data landed on this year's stats and
+// the History it named was one more tap away — a destination that did not go
+// where it said.
+function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, editions, activeSummary, user, hcpOverrides, teeAssignments, roundLocks, teams, tab = "current" }) {
+  const [analyticsTab, setAnalyticsTab] = useState(tab);
 
   // Compute current year player stats from match results
   const playerStats = useMemo(() => {
@@ -5356,31 +5455,7 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
       )}
 
       {analyticsTab === "history" && (
-        <div>
-          {historicalData.length === 0 ? (
-            <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>
-              <div style={{ fontSize: FS.display, marginBottom: 12 }}>📊</div>
-              <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.t2, marginBottom: 8 }}>No Historical Data Yet</div>
-              <div style={{ fontSize: FS.small }}>Past tournament results will appear here after each year's event is archived.</div>
-            </div>
-          ) : (
-            historicalData.sort((a,b) => b.year - a.year).map(yr => (
-              <div key={yr.id} style={{ background: BC.card, borderRadius: 12, padding: 14, marginBottom: 12, border: `1px solid ${BC.bdr}` }}>
-                <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.gold, marginBottom: 8 }}>{yr.year} · {yr.location}</div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                  <div style={{ fontSize: FS.small, color: BC.t1 }}><span style={{ color: teams.A.accent, fontWeight: 700 }}>{yr.teamAName}</span> {yr.teamAScore}</div>
-                  <div style={{ fontSize: FS.small, color: BC.t1 }}><span style={{ color: teams.B.accent, fontWeight: 700 }}>{yr.teamBName}</span> {yr.teamBScore}</div>
-                </div>
-                {yr.winner && <div style={{ fontSize: FS.small, color: BC.amberInk, fontWeight: 700 }}>🏆 {yr.winner} won the Bourbon Cup</div>}
-              </div>
-            ))
-          )}
-          {user?.isDirector && (
-            <div style={{ textAlign: "center", marginTop: 16 }}>
-              <div style={{ fontSize: FS.label, color: BC.t3 }}>Historical data can be added by directors via Firestore directly for now.</div>
-            </div>
-          )}
-        </div>
+        <HistoryList editions={editions} activeSummary={activeSummary} teams={teams} isDirector={!!user?.isDirector} />
       )}
     </div>
   );
@@ -5656,7 +5731,11 @@ export default function App() {
   // An empty array is a different answer (nobody), so the two must not be
   // collapsed. See components/BuyIns.
   const [buyIns, setBuyIns] = useState({ skinsAmount: 0, skinsIn: null, ctpAmount: 0, ctpIn: null, lowNetAmount: 0, lowNetIn: null });
-  const [historicalData, setHistoricalData] = useState([]);
+  // Every year the cup has been played — the SAME collection the Tournaments
+  // picker reads, which is what makes the History tab and the edition switcher
+  // two views of one list instead of two lists. Tiny (one document a year) and
+  // not tournament-scoped, because it IS the index of tournaments.
+  const [editions, setEditions] = useState([]);
   // The saved team-name overrides (from the bc_settings/team_names doc).
   // Defaults come from constants so the fallback names live in one place.
   const [teamNames, setTeamNames] = useState(DEFAULT_TEAM_NAMES);
@@ -6047,15 +6126,13 @@ export default function App() {
   // Reconcile the edition doc-id namespacing flag from the canonical edition
   // doc, in case localStorage (which seeds it synchronously in firebase.js)
   // was cleared. Cheap insurance so writes use the right doc-id scheme.
+  // Off the subscription above rather than a read of its own — same documents,
+  // one fewer round trip, and it re-runs if the edition doc is corrected while
+  // the app is open.
   useEffect(() => {
-    (async () => {
-      try {
-        const eds = await db.get("bc_editions", []);
-        const active = eds.find(e => e.id === TOURNAMENT_ID);
-        if (active) setActiveTournamentId(TOURNAMENT_ID, !!active.namespaced);
-      } catch { /* ignore */ }
-    })();
-  }, []);
+    const active = editions.find(e => e.id === TOURNAMENT_ID);
+    if (active) setActiveTournamentId(TOURNAMENT_ID, !!active.namespaced);
+  }, [editions]);
 
   // hasNewBundle — checks whether a new app build has been deployed since
   // the running client loaded. Vite produces hashed asset URLs on each
@@ -6174,7 +6251,15 @@ export default function App() {
         lowNetIn: Array.isArray(s?.lownet_in) ? s.lownet_in : null,
       });
     }));
-    unsubs.push(db.subscribe("bc_historical", [{ field: "type", op: "==", value: "year" }], setHistoricalData));
+    // The edition index. Subscribed rather than fetched once because it now
+    // feeds two things — the doc-id namespacing reconcile below, and the
+    // History tab — and because a summary this app writes back should appear
+    // on the tab that asked for it without a reload.
+    //
+    // withId for the same reason bc_accounts uses it: the first edition
+    // document can be typed into the Firebase console by hand, and a document
+    // made that way has whatever fields whoever typed it thought to add.
+    unsubs.push(db.subscribe(EDITIONS_COL, [], setEditions, { withId: true }));
     unsubs.push(db.subscribe("bc_tee_assignments", f, rows => {
       const data = {};
       rows.forEach(r => { if (r.round_number) data[r.round_number] = r.assignments || {}; });
@@ -6887,6 +6972,59 @@ export default function App() {
     [roundLocksData, tournamentRounds]
   );
 
+  // ── This edition's row in the archive ────────────────────────────────
+  // Computed from the cards by the same engine the leaderboard uses (see
+  // lib/editionSummary) and written back onto the edition document, which is
+  // what the History tab reads.
+  //
+  // Three conditions, and each one is doing a job:
+  //
+  //   complete    only a FINISHED tournament is written down. A cup mid-round
+  //               has a score but not a result, and writing on every hole
+  //               would put a Firestore write behind every score the director
+  //               is standing next to.
+  //   revealed    nothing is still sealed. See below — this one is the one
+  //               that could do damage.
+  //   isDirector  bc_editions is director-write in the rules, so nobody else
+  //               could land this anyway. Asking first keeps a player's phone
+  //               from firing a write it will only be refused.
+  //   changed     a row that already says the right thing is left alone.
+  //
+  // Which together mean this fires roughly once per tournament, plus once the
+  // first time a director opens each imported year — the data is already
+  // subscribed by then, so the summary costs a single write and no reads.
+  //
+  // ── The seal, twice over ──────────────────────────────────────────
+  // Computed off the CONCEALED map, like the scoreboard and the analytics
+  // tab, because this is one more surface that can state a sealed round's
+  // result — and a spoiler on the History tab would be exactly the kind
+  // nobody thinks to check for.
+  //
+  // But concealed is not enough on its own here, and this is the subtle part.
+  // A round can be FINAL and still sealed: that is what the Final Countdown
+  // is, a finished round turned over hole by hole in front of the room. So
+  // `complete` can be true while the scores this is reading are blanked, and
+  // writing then would archive a half-scored cup as the year's result — and
+  // unlike a screen, a stored row does not correct itself when the reveal
+  // finishes.
+  //
+  // `concealHoleData` returns the map UNCHANGED when nothing is sealed, so
+  // reference equality is the whole test, and it is exact.
+  const nothingSealed = revealedHoleData === holeData;
+  const editionSummary = useMemo(() => summarizeEdition({
+    matches: enrichedMatches, holeData: revealedHoleData, courses, tRounds: enrichedRounds,
+    tPlayers, hcpOverrides: hcpOverridesData, teeAssignments: teeAssignmentsData,
+    roundLocks: roundLocksData, teamNames, location: tournamentLocation,
+  }), [enrichedMatches, revealedHoleData, courses, enrichedRounds, tPlayers,
+    hcpOverridesData, teeAssignmentsData, roundLocksData, teamNames, tournamentLocation]);
+
+  useEffect(() => {
+    if (!isDirectorUser || !editionSummary.complete || !nothingSealed) return;
+    const row = editions.find(e => e.id === TOURNAMENT_ID);
+    if (!row || sameSummary(row.result, editionSummary)) return;
+    db.upsert(EDITIONS_COL, { id: TOURNAMENT_ID, result: editionSummary });
+  }, [isDirectorUser, editionSummary, editions, nothingSealed]);
+
   // ── Ready to finalize ────────────────────────────────────────────────
   // Lives at the app level, not inside a tab, because that is the whole
   // point of the change: the director learns the round is done wherever
@@ -7348,9 +7486,19 @@ export default function App() {
              check. */
           <AnalyticsView
             tPlayers={tPlayers} matches={enrichedMatches} holeData={revealedHoleData}
-            tRounds={enrichedRounds} courses={courses} historicalData={historicalData} user={user}
+            tRounds={enrichedRounds} courses={courses} user={user}
             hcpOverrides={hcpOverridesData} teeAssignments={teeAssignmentsData}
             roundLocks={roundLocksData} teams={teams}
+            editions={editions}
+            /* The running year's row, computed live rather than read back —
+               see the summary memo. Off the CONCEALED map like everything else
+               on this tab, so a sealed round cannot leak its result through the
+               archive either. */
+            activeSummary={editionSummary}
+            /* Which half opens. The menu offers these as two rows, so the row
+               that says History has to arrive on History. */
+            tab={view === "history" ? "history" : "current"}
+            key={view}
           />
         )}
         {view === "photos" && (

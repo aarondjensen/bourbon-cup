@@ -295,28 +295,23 @@ service cloud.firestore {
                                          allow write: if isDirector(); }
     match /bc_tournament_settings/{doc} { allow read: if isOpen();
                                          allow write: if isDirector(); }
+    // ── The archive ───────────────────────────────────────────────
+    // An edition document now carries its own `result` — the two team
+    // names and the two scores, computed from that year's cards by the
+    // app's own engine (src/lib/editionSummary) and written back by a
+    // director once the tournament is complete. So the History tab and
+    // the Tournaments picker read one list, and the summary of a year
+    // cannot disagree with the year itself.
+    //
+    // That replaces bc_historical, which was a parallel record of the
+    // same fact typed by hand — the app used to tell its own director to
+    // add years "via Firestore directly for now". Its rules block is gone
+    // with it, and nothing is stranded: the collection was never loaded.
+    // The ten years of results live in the repo under
+    // data/historical sheets and reach Firestore as whole editions, which
+    // is what the History tab now summarises.
     match /bc_editions/{doc}           { allow read: if isOpen();
                                          allow write: if isDirector(); }
-
-    // ── The archive ───────────────────────────────────────────────
-    // Past tournaments, one document per year. APPEND-ONLY: a signed-in
-    // account may add a year, nobody may change or remove one.
-    //
-    // The app only ever subscribes to this collection (App.jsx, the
-    // bc_historical listener) and has no code path that writes it, so the
-    // restriction costs the running app nothing. The collection is also
-    // empty today — the ten years of results live in the repo, under
-    // data/historical sheets, and have never been loaded into Firestore.
-    // That is exactly why `create` stays open: the next thing anyone does
-    // here is that import, and a blanket write:false would have rejected
-    // it. What append-only buys is that once a year IS archived, a
-    // world-writable client cannot quietly rewrite or delete it.
-    //
-    // To correct a year already loaded, allow update for the one run:
-    //   allow update: if isSignedIn();
-    match /bc_historical/{doc}         { allow read: if isOpen();
-                                         allow create: if isMember();
-                                         allow update, delete: if false; }
 
     // ── Live scoring ──────────────────────────────────────────────
     // Written by players from the Scoring tab, so these can never be
