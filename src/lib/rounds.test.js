@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { scheduledRounds, nextRoundSlot, editableRounds } from "./rounds";
+import {
+  scheduledRounds, resolveRoundCount, allRounds, roundsBeyondCount, clampRoundCount,
+  DEFAULT_ROUND_COUNT, MAX_ROUND_COUNT,
+} from "./rounds";
 
 describe("scheduledRounds", () => {
   it("is empty for a tournament with nothing set up", () => {
@@ -61,35 +64,97 @@ describe("scheduledRounds", () => {
   });
 });
 
-describe("nextRoundSlot", () => {
-  it("starts a fresh edition at 1", () => {
-    expect(nextRoundSlot([])).toBe(1);
+describe("resolveRoundCount", () => {
+  const four = { tRounds: [1, 2, 3, 4].map(round_number => ({ round_number })) };
+
+  it("uses the number the director set", () => {
+    expect(resolveRoundCount({ roundCount: 3, ...four })).toBe(3);
   });
 
-  it("follows the last round", () => {
-    expect(nextRoundSlot([1, 2, 3, 4])).toBe(5);
+  // An edition that predates the setting must read exactly as it did before
+  // it existed — nobody re-enters a four they already implied.
+  it("falls back to the schedule when nothing is set", () => {
+    expect(resolveRoundCount(four)).toBe(4);
+    expect(resolveRoundCount({ matches: [{ round: 3 }] })).toBe(3);
   });
 
-  // A director who deleted round 2 of four is not asking for it back.
-  it("goes past the end rather than filling a gap", () => {
-    expect(nextRoundSlot([1, 3, 4])).toBe(5);
+  it("seeds a brand-new edition", () => {
+    expect(resolveRoundCount({})).toBe(DEFAULT_ROUND_COUNT);
+  });
+
+  it("ignores a nonsense setting", () => {
+    expect(resolveRoundCount({ roundCount: 0, ...four })).toBe(4);
+    expect(resolveRoundCount({ roundCount: "", ...four })).toBe(4);
+    expect(resolveRoundCount({ roundCount: null, ...four })).toBe(4);
+  });
+
+  it("caps a runaway setting", () => {
+    expect(resolveRoundCount({ roundCount: 400 })).toBe(MAX_ROUND_COUNT);
   });
 });
 
-describe("editableRounds", () => {
-  it("offers one empty slot on a fresh edition", () => {
-    expect(editableRounds({})).toEqual([1]);
+describe("clampRoundCount", () => {
+  it("keeps a legal number", () => {
+    expect(clampRoundCount("3")).toBe(3);
+  });
+  it("floors a fraction and clamps the ends", () => {
+    expect(clampRoundCount("3.7")).toBe(3);
+    expect(clampRoundCount(0)).toBe(1);
+    expect(clampRoundCount(999)).toBe(MAX_ROUND_COUNT);
+  });
+  // The box shares its Save with the name and the venue, so an empty field
+  // must not fail the save.
+  it("lands anything unreadable on the seed", () => {
+    expect(clampRoundCount("")).toBe(DEFAULT_ROUND_COUNT);
+    expect(clampRoundCount("abc")).toBe(DEFAULT_ROUND_COUNT);
+  });
+});
+
+describe("allRounds", () => {
+  it("is the configured count, counted from 1", () => {
+    expect(allRounds({ roundCount: 3 })).toEqual([1, 2, 3]);
+    expect(allRounds({ roundCount: 6 })).toEqual([1, 2, 3, 4, 5, 6]);
   });
 
-  it("offers a fifth round to a four-round tournament", () => {
-    expect(editableRounds({
-      tRounds: [1, 2, 3, 4].map(round_number => ({ round_number })),
-    })).toEqual([1, 2, 3, 4, 5]);
+  it("reads an unconfigured tournament off its schedule", () => {
+    expect(allRounds({ tRounds: [1, 2, 3].map(round_number => ({ round_number })) }))
+      .toEqual([1, 2, 3]);
   });
 
-  it("stops at four for a three-round trip", () => {
-    expect(editableRounds({
-      tRounds: [1, 2, 3].map(round_number => ({ round_number })),
-    })).toEqual([1, 2, 3, 4]);
+  // The safety catch. Shortening the count must never take a round somebody
+  // has played off the schedule — the live round is the lowest unfinalized
+  // round in this list, so doing that mid-tournament would move the whole
+  // field backwards onto a round they had already signed off.
+  it("keeps a played round past the configured count", () => {
+    expect(allRounds({ roundCount: 3, roundLocks: { 4: { locked: true } } }))
+      .toEqual([1, 2, 3, 4]);
+  });
+
+  it("keeps a round that has a draw past the count", () => {
+    expect(allRounds({ roundCount: 2, matches: [{ round: 5 }] })).toEqual([1, 2, 5]);
+  });
+
+  it("adds rounds freely when the count grows", () => {
+    expect(allRounds({ roundCount: 5, tRounds: [{ round_number: 1 }] }))
+      .toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it("drops an empty round when the count shrinks", () => {
+    const setUp = { tRounds: [1, 2, 3, 4].map(round_number => ({ round_number })) };
+    // Round 4 exists as setup only — no draw, no scores — so it goes.
+    expect(allRounds({ roundCount: 3, tRounds: [{ round_number: 1 }] })).toEqual([1, 2, 3]);
+    // But once it is set up it is on the schedule, so it stays.
+    expect(allRounds({ roundCount: 3, ...setUp })).toEqual([1, 2, 3, 4]);
+  });
+});
+
+describe("roundsBeyondCount", () => {
+  it("names what the schedule is holding on to", () => {
+    expect(roundsBeyondCount({ roundCount: 2, roundLocks: { 3: { locked: true }, 4: { locked: true } } }))
+      .toEqual([3, 4]);
+  });
+
+  it("is empty when the count covers everything", () => {
+    expect(roundsBeyondCount({ roundCount: 4, matches: [{ round: 2 }] })).toEqual([]);
   });
 });

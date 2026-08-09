@@ -81,7 +81,9 @@ import {
 } from "./lib/groups";
 import { groupKey, tagAheadOfPlay } from "./lib/ctp";
 import { holesEntered, roundScoreProgress } from "./lib/scoreGuard";
-import { scheduledRounds, editableRounds } from "./lib/rounds";
+import {
+  allRounds, resolveRoundCount, roundsBeyondCount, clampRoundCount, MAX_ROUND_COUNT,
+} from "./lib/rounds";
 import { summarizeEdition, sameSummary } from "./lib/editionSummary";
 import { playerTable } from "./lib/playerStats";
 import {
@@ -2073,7 +2075,7 @@ function ChDeltaBadge({ delta }) {
   );
 }
 
-function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks }) {
+function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, roundCount, tournamentRounds, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks }) {
   const [tab, setTab] = useState("players");
   const [editTeamNames, setEditTeamNames] = useState({ A: "", B: "" });
   const [editingTeam, setEditingTeam] = useState(null);
@@ -2094,6 +2096,10 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
   const [brandBusy, setBrandBusy] = useState(null); // team id mid-extraction
   const [editTournamentName, setEditTournamentName] = useState(tournamentName || "");
   const [editTournamentLocation, setEditTournamentLocation] = useState(tournamentLocation || "");
+  // Seeded from the RESOLVED count, not the raw setting, so an edition that
+  // predates the field opens showing the four rounds it already has rather
+  // than an empty box.
+  const [editRoundCount, setEditRoundCount] = useState("");
   // The input always starts empty and always means "the NEW one" — unlike
   // its neighbours it is never seeded from the saved value, because typing
   // over a pre-filled password is how you change it by accident. The
@@ -2110,6 +2116,15 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
   }, []);
   useEffect(() => { setEditTournamentName(tournamentName || ""); }, [tournamentName]);
   useEffect(() => { setEditTournamentLocation(tournamentLocation || ""); }, [tournamentLocation]);
+  useEffect(() => {
+    setEditRoundCount(String(resolveRoundCount({ roundCount, tRounds, matches, roundLocks })));
+  }, [roundCount, tRounds, matches, roundLocks]);
+  // Rounds the schedule would hold on to at the number CURRENTLY TYPED, so
+  // the hint answers while the director is still typing rather than after
+  // they save and wonder why the pills did not change.
+  const heldRounds = roundsBeyondCount({
+    roundCount: clampRoundCount(editRoundCount), tRounds, matches, roundLocks,
+  });
   useEffect(() => {
     setBrandEdit({ A: brand?.teamA?.color || "", B: brand?.teamB?.color || "" });
     setBrandLogoEdit({ A: brand?.teamA?.logo || null, B: brand?.teamB?.logo || null });
@@ -2185,13 +2200,14 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
   const searchTimerRef = useRef(null);
 
   const [editRound, setEditRound] = useState(1);
-  // Every round on the schedule plus one empty slot past the end — which is
-  // how a fifth round gets built and why a three-round trip stops showing a
-  // fourth pill nobody plays. See lib/rounds.
-  const roundOptions = useMemo(
-    () => editableRounds({ tRounds, matches, roundLocks }),
-    [tRounds, matches, roundLocks]
-  );
+  // A director who shortens the tournament while standing on the round they
+  // just removed would otherwise be editing a round with no pill to return
+  // to. Falls back to the last one that is left.
+  useEffect(() => {
+    if (tournamentRounds.length && !tournamentRounds.includes(editRound)) {
+      setEditRound(tournamentRounds[tournamentRounds.length - 1]);
+    }
+  }, [tournamentRounds, editRound]);
   const [roundFormat, setRoundFormat] = useState("");
   const [roundTeeTime, setRoundTeeTime] = useState("");
   const [hcpOverrides, setHcpOverrides] = useState({});
@@ -3077,7 +3093,7 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                 the previous round's settings on screen. */}
             <SegmentedToggle
               variant="pills"
-              options={roundOptions.map(r => [r, `Rd ${r}`])}
+              options={tournamentRounds.map(r => [r, `Rd ${r}`])}
               value={editRound}
               onChange={setEditRound}
               style={{ flex: 1 }}
@@ -4150,6 +4166,7 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
         <MatchSetup
           round={matchRound}
           setRound={setMatchRound}
+          tournamentRounds={tournamentRounds}
           tRounds={tRounds}
           courses={courses}
           tPlayers={tPlayers}
@@ -4504,6 +4521,11 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                 onClick={() => onSaveTournament({
                   name: editTournamentName.trim() || TOURNAMENT_TITLE,
                   location: editTournamentLocation.trim() || TOURNAMENT_LOCATION,
+                  // Clamped rather than refused. A blank box or a slipped
+                  // keystroke should not be able to fail a save that also
+                  // carries the name and the venue, so it lands on the nearest
+                  // legal number and the row below says what that is.
+                  rounds: clampRoundCount(editRoundCount),
                 })}
                 style={{ flexShrink: 0, fontSize: FS.small, fontWeight: 700, color: ON_AMBER, background: BC.amber, border: "none", borderRadius: 6, padding: "8px 14px", cursor: "pointer" }}
               >Save</button>
@@ -4530,6 +4552,33 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                   />
                 </div>
               ))}
+              {/* ── How long the tournament is ──────────────────────────
+                  It used to be four everywhere it was asked, in four
+                  different files. It belongs here: how many rounds a trip is
+                  is something the director knows before anybody packs a bag,
+                  not something the app should infer from what has been
+                  entered so far.
+
+                  The list it drives can only ever GROW past this number, never
+                  shrink below a round somebody has played — see lib/rounds. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.5, width: 58, flexShrink: 0, textTransform: "uppercase" }}>Rounds</span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={MAX_ROUND_COUNT}
+                  value={editRoundCount}
+                  onChange={e => setEditRoundCount(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                  style={{ width: 74, boxSizing: "border-box", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.lead, fontWeight: 700, outline: "none", fontFamily: FONT }}
+                />
+                <span style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.35 }}>
+                  {heldRounds.length
+                    ? `Round ${heldRounds.join(", ")} ${heldRounds.length === 1 ? "has" : "have"} been played, so the schedule keeps ${heldRounds.length === 1 ? "it" : "them"}.`
+                    : "Sets the round pills on every tab."}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -5871,6 +5920,12 @@ export default function App() {
   // firebase.getTournamentYear), so it can't disagree with the data on screen.
   const [tournamentName, setTournamentName] = useState(() => readTournamentIdentity()?.name || TOURNAMENT_TITLE);
   const [tournamentLocation, setTournamentLocation] = useState(() => readTournamentIdentity()?.location || TOURNAMENT_LOCATION);
+  // How many rounds this tournament is, set in Admin → Tournament. Null until
+  // the document lands (or forever, on an edition set up before the field
+  // existed) — lib/rounds reads the schedule instead in that case, so an
+  // existing tournament is unchanged and nobody has to re-enter a number they
+  // already implied by building the rounds.
+  const [roundCount, setRoundCount] = useState(null);
   // Theme state — toggled via the More menu. The actual color values live in
   // the module-level BC object (mutated by applyBCTheme); this state's only
   // job is to trigger a top-level re-render so children re-read fresh BC
@@ -6314,6 +6369,7 @@ export default function App() {
       const tLocation = tourn?.location?.trim() || TOURNAMENT_LOCATION;
       setTournamentName(tName);
       setTournamentLocation(tLocation);
+      setRoundCount(tourn?.round_count ?? null);
       // Remember it for the next cold start, so the splash opens on this.
       writeTournamentIdentity({ name: tName, location: tLocation });
       // Branding: apply to the live BC theme immediately (using the current
@@ -7084,8 +7140,8 @@ export default function App() {
   // A round with scores in it stays on the schedule until somebody finalizes
   // it, which is the only way out that anybody chose.
   const tournamentRounds = useMemo(
-    () => scheduledRounds({ tRounds, matches: enrichedMatches, roundLocks: roundLocksData }),
-    [tRounds, enrichedMatches, roundLocksData]
+    () => allRounds({ roundCount, tRounds, matches: enrichedMatches, roundLocks: roundLocksData }),
+    [roundCount, tRounds, enrichedMatches, roundLocksData]
   );
   // The one round open for score entry. null = nothing open (no schedule
   // yet, or the last round has been finalized).
@@ -7679,10 +7735,16 @@ export default function App() {
             }}
             tournamentName={tournamentName}
             tournamentLocation={tournamentLocation}
-            onSaveTournament={async ({ name, location }) => {
+            roundCount={roundCount}
+            tournamentRounds={tournamentRounds}
+            onSaveTournament={async ({ name, location, rounds }) => {
               setTournamentName(name);
               setTournamentLocation(location);
-              await db.upsert("bc_settings", { id: editionDocId("tournament"), tournament_id: TOURNAMENT_ID, name, location });
+              setRoundCount(rounds);
+              await db.upsert("bc_settings", {
+                id: editionDocId("tournament"), tournament_id: TOURNAMENT_ID,
+                name, location, round_count: rounds,
+              });
             }}
             hcpOverridesFromDb={hcpOverridesData}
             teeAssignmentsFromDb={teeAssignmentsData}
