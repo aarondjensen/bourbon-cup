@@ -75,6 +75,7 @@ import { groupKey, tagAheadOfPlay } from "./lib/ctp";
 import { holesEntered, roundScoreProgress } from "./lib/scoreGuard";
 import { scheduledRounds, editableRounds } from "./lib/rounds";
 import { summarizeEdition, sameSummary } from "./lib/editionSummary";
+import { playerTable } from "./lib/playerStats";
 import { EDITIONS_COL, switchEdition } from "./lib/editions";
 import {
   cardSigBareId, sigForMatch, cardComplete, missingForCard,
@@ -5382,6 +5383,80 @@ function HistoryList({ editions, activeSummary, teams, isDirector }) {
   );
 }
 
+// ── Player stats table ──
+// Two things about a player, side by side, because they are genuinely
+// different facts and the tab used to show only one of them.
+//
+//   W / L / H / PTS   what their MATCHES did. A team result — a four-ball is
+//                     won by two people and both of them won it — which is
+//                     how a cup record has always been read.
+//   RDS / AVG / BEST  what their CARD did. Theirs alone, and true whatever
+//                     format the round was played in.
+//
+// A player with nothing posted shows "—" rather than a zero. The old table
+// seeded every counter at 0 and printed them identically, so somebody who had
+// not teed off looked like somebody who had played four rounds badly.
+//
+// Two rows per player, not eight columns: eight numbers across a phone is
+// either unreadable or a horizontal scroll, and the second row is the quieter
+// half by design — the record is what people came for.
+function PlayerStatsTable({ rows, teams }) {
+  if (!rows.length) {
+    return (
+      <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>
+        <div style={{ fontSize: FS.display, marginBottom: 12 }}>📊</div>
+        <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.t2 }}>No players yet</div>
+      </div>
+    );
+  }
+  const COLS = "1fr 38px 38px 38px 50px";
+  const head = { fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1, textAlign: "center" };
+  const cell = { fontSize: FS.small, fontWeight: 600, textAlign: "center" };
+  return (
+    <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
+      <div style={{ display: "grid", gridTemplateColumns: COLS, padding: "8px 12px", borderBottom: `1px solid ${BC.bdr}`, ...head, textAlign: "left" }}>
+        <div>PLAYER</div>
+        <div style={head}>W</div><div style={head}>L</div><div style={head}>H</div>
+        <div style={{ ...head, textAlign: "right" }}>PTS</div>
+      </div>
+      {rows.map((p, i) => {
+        const team = teams[p.team];
+        return (
+          <div key={p.pid} style={{
+            padding: "8px 12px",
+            borderBottom: i < rows.length - 1 ? `1px solid ${BC.bdr}${ALPHA.hair}` : "none",
+          }}>
+            <div style={{ display: "grid", gridTemplateColumns: COLS, alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
+                <span style={{
+                  fontSize: FS.small, fontWeight: 600, color: playerNameColor(),
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                }}>{p.name}</span>
+              </div>
+              <div style={{ ...cell, color: BC.green }}>{p.wins}</div>
+              <div style={{ ...cell, color: BC.danger }}>{p.losses}</div>
+              <div style={{ ...cell, color: BC.t3 }}>{p.halves}</div>
+              <div style={{ ...cell, textAlign: "right", fontWeight: 700, color: BC.amberInk }}>{fmtPts(p.pts)}</div>
+            </div>
+            {/* The card. Quieter, and it says nothing at all rather than
+                zeroes when there is no complete round to speak for. */}
+            <div style={{ display: "flex", gap: 12, marginTop: 3, marginLeft: 12, fontSize: FS.micro, color: BC.t3, letterSpacing: 0.4 }}>
+              <span>{p.rounds ? `${p.rounds} RD${p.rounds === 1 ? "" : "S"}` : "NO CARD"}</span>
+              {p.avgToPar != null && (
+                <span>AVG <strong style={{ color: BC.t2, fontWeight: 700 }}>{fmtScore(Math.round(p.avgToPar * 10) / 10)}</strong></span>
+              )}
+              {p.best && (
+                <span>BEST <strong style={{ color: BC.t2, fontWeight: 700 }}>{p.best.gross}</strong> ({fmtScore(p.best.toPar)}) R{p.best.round}</span>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Analytics View ──
 // `tab` is which half opens, and it comes from the caller because the menu
 // offers the two halves as two separate rows. It used to be seeded "current"
@@ -5391,32 +5466,12 @@ function HistoryList({ editions, activeSummary, teams, isDirector }) {
 function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, editions, activeSummary, user, hcpOverrides, teeAssignments, roundLocks, teams, tab = "current" }) {
   const [analyticsTab, setAnalyticsTab] = useState(tab);
 
-  // Compute current year player stats from match results
-  const playerStats = useMemo(() => {
-    const stats = {};
-    tPlayers.forEach(p => { stats[p.player_id] = { name: p.name, team: p.team, wins: 0, losses: 0, halves: 0, pts: 0, skinsWon: 0 }; });
-
-    matches.forEach(m => {
-      const fmt = tRounds.find(t => t.round_number === m.round)?.format || DEFAULT_FORMAT;
-      const res = computeMatchResult(m, holeData, courses, tRounds, tPlayers, fmt, hcpOverrides || {}, undefined, teeAssignments, roundLocks);
-      const aTotal = res.totalPts.A, bTotal = res.totalPts.B;
-      [...m.teamA].forEach(pid => {
-        if (!stats[pid]) return;
-        stats[pid].pts += aTotal;
-        if (aTotal > bTotal) stats[pid].wins++;
-        else if (bTotal > aTotal) stats[pid].losses++;
-        else stats[pid].halves++;
-      });
-      [...m.teamB].forEach(pid => {
-        if (!stats[pid]) return;
-        stats[pid].pts += bTotal;
-        if (bTotal > aTotal) stats[pid].wins++;
-        else if (aTotal > bTotal) stats[pid].losses++;
-        else stats[pid].halves++;
-      });
-    });
-    return Object.values(stats).sort((a, b) => b.pts - a.pts);
-  }, [tPlayers, matches, holeData, tRounds, courses, hcpOverrides, teeAssignments, roundLocks]);
+  // Both halves of a player's tournament, from lib/playerStats: the match
+  // record off the matches, and how they actually went round off the cards.
+  const playerStats = useMemo(() => playerTable({
+    tPlayers, matches, holeData, tRounds, courses,
+    hcpOverrides: hcpOverrides || {}, teeAssignments, roundLocks,
+  }), [tPlayers, matches, holeData, tRounds, courses, hcpOverrides, teeAssignments, roundLocks]);
 
   return (
     <div style={{ fontFamily: FONT }}>
@@ -5430,28 +5485,7 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, editions
       </StickyTop>
 
       {analyticsTab === "current" && (
-        <div>
-          <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 44px 44px 44px 52px", padding: "8px 12px", borderBottom: `1px solid ${BC.bdr}`, fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1 }}>
-              <div>PLAYER</div><div style={{textAlign:"center"}}>W</div><div style={{textAlign:"center"}}>L</div><div style={{textAlign:"center"}}>H</div><div style={{textAlign:"right"}}>PTS</div>
-            </div>
-            {playerStats.map((p, i) => {
-              const team = teams[p.team];
-              return (
-                <div key={p.name} style={{ display: "grid", gridTemplateColumns: "1fr 44px 44px 44px 52px", padding: "9px 12px", borderBottom: i < playerStats.length-1 ? `1px solid ${BC.bdr}${ALPHA.hair}` : "none", alignItems: "center" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <div style={{ width: 6, height: 6, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
-                    <span style={{ fontSize: FS.small, fontWeight: 600, color: playerNameColor() }}>{p.name}</span>
-                  </div>
-                  <div style={{ textAlign: "center", fontSize: FS.small, color: BC.green, fontWeight: 600 }}>{p.wins}</div>
-                  <div style={{ textAlign: "center", fontSize: FS.small, color: BC.danger, fontWeight: 600 }}>{p.losses}</div>
-                  <div style={{ textAlign: "center", fontSize: FS.small, color: BC.t3 }}>{p.halves}</div>
-                  <div style={{ textAlign: "right", fontSize: FS.small, fontWeight: 700, color: BC.amberInk }}>{p.pts.toFixed(1)}</div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <PlayerStatsTable rows={playerStats} teams={teams} />
       )}
 
       {analyticsTab === "history" && (
