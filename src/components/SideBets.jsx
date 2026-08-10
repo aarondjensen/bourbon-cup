@@ -17,7 +17,8 @@ import { BC, FONT, ALPHA, FS, ON_AMBER, teamColor } from "../theme";
 import { Popup } from "./Popup";
 import { SegmentedToggle } from "./ui";
 import {
-  sideBetError, sortSideBets, sideBetTotals, canDeleteSideBet, inSideBet, MAX_DETAIL,
+  sideBetError, sortSideBets, sideBetTotals, canDeleteSideBet, inSideBet,
+  settleState, hasSettled, MAX_DETAIL,
 } from "../lib/sideBets";
 
 const money = (n) => `$${(Number(n) || 0).toFixed(2)}`;
@@ -25,13 +26,18 @@ const money = (n) => `$${(Number(n) || 0).toFixed(2)}`;
 // phone — the same call the skins pot makes, for the same reason.
 const potMoney = (n) => `$${Math.round(Number(n) || 0).toLocaleString()}`;
 
-export function SideBets({ players, bets, user, authUid, teams, onAddBet, onDeleteBet, confirm }) {
+export function SideBets({ players, bets, user, authUid, teams, onAddBet, onDeleteBet, onSettleBet, confirm }) {
   const [adding, setAdding] = useState(false);
   // ALL is the default and the left-hand option. The ledger is the field's,
   // not yours — and a player who has not made a bet yet would otherwise open
   // this tab to an empty list that looks like the feature is broken rather
   // than like they have nothing on.
   const [mineOnly, setMineOnly] = useState(false);
+  // Which row is mid-write, and the last failure. A settlement mark is a
+  // claim about money; if the write did not land, the row must not go on
+  // showing it as though it did.
+  const [busyId, setBusyId] = useState(null);
+  const [err, setErr] = useState(null);
 
   const myPid = user?.player_id || null;
   const all = sortSideBets(bets);
@@ -47,6 +53,12 @@ export function SideBets({ players, bets, user, authUid, teams, onAddBet, onDele
   // by construction, and an option that can only ever show nothing is worse
   // than no option.
   const canFilter = !!myPid;
+  // The one side that has claimed it, when exactly one has. Null when both
+  // have (it is settled and says so) or neither (there is nothing to name).
+  const soleMarker = (b) => {
+    const a = hasSettled(b, b.player_a), z = hasSettled(b, b.player_b);
+    return a === z ? null : (a ? b.player_a : b.player_b);
+  };
   const byId = (pid) => players.find(p => p.player_id === pid) || null;
   const nameOf = (pid) => byId(pid)?.name || "—";
   const dotColor = (pid) => {
@@ -58,6 +70,25 @@ export function SideBets({ players, bets, user, authUid, teams, onAddBet, onDele
   // looking at 2019 from the Tournaments picker cannot, and gets told that
   // rather than a button whose write the rules would refuse.
   const canAdd = !!authUid;
+
+  // A "paid" mark is one tap and it is reversible, so it gets no confirm
+  // dialog — a dialog on a tee box is friction on a claim you can withdraw by
+  // tapping again. What it does need is a way to say the write failed, since
+  // the whole point of the mark is that it was recorded.
+  const settle = async (b) => {
+    setBusyId(b.id);
+    setErr(null);
+    try {
+      await onSettleBet(b, myPid);
+    } catch (e) {
+      console.error("side bet settle", e);
+      setErr(e?.code === "permission-denied"
+        ? "Couldn't record that — this account can't write to this tournament."
+        : "Couldn't record that. Check your connection and try again.");
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const remove = async (b) => {
     const ok = await confirm({
@@ -126,6 +157,16 @@ export function SideBets({ players, bets, user, authUid, teams, onAddBet, onDele
         />
       )}
 
+      {err && (
+        <div style={{
+          background: BC.card, borderRadius: 12, border: `1px solid ${BC.danger}${ALPHA.line}`,
+          padding: "10px 14px", marginBottom: 10, fontSize: FS.small, color: BC.danger,
+          fontWeight: 600, lineHeight: 1.4,
+        }}>
+          {err}
+        </div>
+      )}
+
       {rows.length === 0 ? (
         <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: "60px 20px", textAlign: "center" }}>
           <div style={{ fontSize: FS.jumbo, marginBottom: 12, opacity: 0.4 }}>🤝</div>
@@ -148,14 +189,19 @@ export function SideBets({ players, bets, user, authUid, teams, onAddBet, onDele
           {rows.map((b, i) => {
             const mine = inSideBet(b, myPid);
             const deletable = canDeleteSideBet(b, { uid: authUid, isDirector: user?.isDirector === true });
+            const state = settleState(b, myPid);
+            const done = state === "settled";
             return (
               <div key={b.id} style={{
                 padding: "10px 14px",
                 borderBottom: i < rows.length - 1 ? `1px solid ${BC.bdr}${ALPHA.hair}` : "none",
                 // A bet you are in gets a rail down its edge. Sixteen people
                 // making bets all weekend is a long list to read your own name
-                // out of one row at a time.
-                borderLeft: mine ? `3px solid ${BC.amber}` : "3px solid transparent",
+                // out of one row at a time. A SETTLED bet keeps the rail but
+                // loses the row: it is history, and history should not compete
+                // with what is still owed.
+                borderLeft: mine ? `3px solid ${done ? BC.green : BC.amber}` : "3px solid transparent",
+                opacity: done ? 0.6 : 1,
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
@@ -192,6 +238,19 @@ export function SideBets({ players, bets, user, authUid, teams, onAddBet, onDele
                     {b.detail}
                   </div>
                 )}
+                <SettleStrip
+                  state={state}
+                  otherName={nameOf(b.player_a === myPid ? b.player_b : b.player_a)}
+                  /* Only meaningful when exactly ONE side has claimed it —
+                     which is the only time a name is what the row needs to
+                     say. Both or neither, and the state itself says it. */
+                  markerName={soleMarker(b) ? nameOf(soleMarker(b)) : null}
+                  /* Acting on a bet needs to be IN it and signed in. A
+                     spectator reading last year's ledger is neither. */
+                  canAct={mine && !!authUid}
+                  onToggle={() => settle(b)}
+                  busy={busyId === b.id}
+                />
               </div>
             );
           })}
@@ -205,6 +264,60 @@ export function SideBets({ players, bets, user, authUid, teams, onAddBet, onDele
           onCancel={() => setAdding(false)}
           onSave={async (form) => { await onAddBet(form); setAdding(false); }}
         />
+      )}
+    </div>
+  );
+}
+
+// ── Where a bet has got to, and the one tap that moves it ─────────
+// A bet is paid when BOTH players say so. One player marking it is a CLAIM;
+// the other agreeing is the record. That is why this is two marks rather than
+// a settled flag — a flag would let whoever tapped first close the bet on the
+// other's behalf, and "I paid you" / "no you didn't" is the argument the
+// whole feature exists to keep off the tee box.
+//
+// Only `confirm` gets a filled button, because it is the only state that asks
+// the reader for something. Everything else is either a claim they already
+// made or somebody else's business.
+function SettleStrip({ state, otherName, markerName, canAct, onToggle, busy }) {
+  const chip = (bg, fg, border) => ({
+    fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.6, padding: "4px 9px",
+    borderRadius: 6, fontFamily: FONT, cursor: busy ? "default" : "pointer",
+    background: bg, color: fg, border: border || "1px solid transparent",
+    flexShrink: 0, opacity: busy ? 0.5 : 1,
+  });
+
+  // [ status text, button label, button style ] per state. `settled` is the
+  // one state a bystander also sees, so its button is gated on canAct below
+  // rather than on the state — a spectator must not be offered a REOPEN whose
+  // write the rules would refuse.
+  const [status, label, style] = {
+    open:     ["", "MARK PAID", chip("transparent", BC.amberInk, `1px solid ${BC.bdr}`)],
+    confirm:  [`${markerName} SAYS PAID`, "CONFIRM", chip(BC.amber, ON_AMBER)],
+    waiting:  [`WAITING ON ${otherName}`, "UNDO", chip("transparent", BC.t3, `1px solid ${BC.bdr}`)],
+    settled:  ["SETTLED ✓", "REOPEN", chip("transparent", BC.t3, `1px solid ${BC.bdr}`)],
+    // Not your bet. You are told where it got to and asked for nothing —
+    // including, when one side has claimed it, WHO claimed it, because that
+    // is the half of the record an onlooker might be asked to remember.
+    watching: [markerName ? `${markerName} SAYS PAID` : "", null, null],
+  }[state] || ["", null, null];
+
+  const showButton = canAct && !!label;
+  if (!status && !showButton) return null;
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 7 }}>
+      <span style={{
+        flex: 1, minWidth: 0, fontSize: FS.micro, fontWeight: 700, letterSpacing: 0.5,
+        color: state === "settled" ? BC.green : BC.t3,
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      }}>
+        {status}
+      </span>
+      {showButton && (
+        <button type="button" disabled={busy} onClick={onToggle} style={style}>
+          {busy ? "…" : label}
+        </button>
       )}
     </div>
   );

@@ -340,6 +340,38 @@ await check("anon can read the side-bet ledger but not write to it", async () =>
   await assertFails(setDoc(doc(anonDb(), "bc_side_bets/sb6"), sideBet("nobody")));
 });
 
+// ── Settling: the third update clause ───────────────────────────────
+// A bet is paid when BOTH players say so, so the player who did NOT log it
+// has to be able to write `settled_by` — and nothing else.
+await check("the other player can mark a bet settled without owning it", async () => {
+  await seed("bc_side_bets/sb7", sideBet("alice", { player_b: "pete", settled_by: [] }));
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_side_bets/sb7"), { settled_by: ["p2"] }, { merge: true }));
+});
+
+// hasOnly() is what makes widening update safe: the mark is the ONLY thing a
+// non-author may touch.
+await check("...but cannot ride anything else in on the same write", async () => {
+  await assertFails(setDoc(doc(peteDb(), "bc_side_bets/sb7"),
+    { settled_by: ["p2"], amount: 1 }, { merge: true }));
+  await assertFails(setDoc(doc(peteDb(), "bc_side_bets/sb7"),
+    { settled_by: ["p2"], detail: "different bet now" }, { merge: true }));
+  await assertFails(setDoc(doc(peteDb(), "bc_side_bets/sb7"),
+    { settled_by: ["p2"], player_b: "mallory" }, { merge: true }));
+  await assertFails(setDoc(doc(peteDb(), "bc_side_bets/sb7"),
+    { settled_by: ["p2"], created_by: "pete" }, { merge: true }));
+});
+
+await check("a non-member cannot mark anything settled", async () => {
+  const bob = env.authenticatedContext("bob").firestore();
+  await assertFails(setDoc(doc(bob, "bc_side_bets/sb7"), { settled_by: ["p2"] }, { merge: true }));
+  await assertFails(setDoc(doc(anonDb(), "bc_side_bets/sb7"), { settled_by: ["p2"] }, { merge: true }));
+});
+
+// Withdrawing your own mark is the same write in reverse, so it needs no rule
+// of its own — but it is worth pinning that it is allowed.
+await check("a mark can be withdrawn again", () =>
+  assertSucceeds(setDoc(doc(peteDb(), "bc_side_bets/sb7"), { settled_by: [] }, { merge: true })));
+
 // ── Reads stay open, and the archive is director-owned ──────────────
 await check("anon can still read the leaderboard data", () =>
   assertSucceeds(getDoc(doc(anonDb(), "bc_hole_scores/x"))));

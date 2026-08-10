@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   sideBetId, sideBetError, buildSideBet, sortSideBets,
   inSideBet, sideBetTotals, canDeleteSideBet, MAX_DETAIL,
+  settledBy, hasSettled, isSettled, toggleSettled, settleState,
 } from "./sideBets";
 
 const bet = (over = {}) => ({
@@ -75,6 +76,85 @@ describe("sortSideBets", () => {
     const rows = [bet({ id: "a", created_at: 1 }), bet({ id: "b", created_at: 9 })];
     sortSideBets(rows);
     expect(rows.map(b => b.id)).toEqual(["a", "b"]);
+  });
+  // A ledger is read for what is still owed. A squared-up bet is history.
+  it("sinks settled bets below open ones, newest first within each", () => {
+    const rows = [
+      bet({ id: "settled_new", created_at: 9, settled_by: ["p1", "p2"] }),
+      bet({ id: "open_old", created_at: 1 }),
+      bet({ id: "settled_old", created_at: 0, settled_by: ["p1", "p2"] }),
+      bet({ id: "open_new", created_at: 5 }),
+    ];
+    expect(sortSideBets(rows).map(b => b.id))
+      .toEqual(["open_new", "open_old", "settled_new", "settled_old"]);
+  });
+});
+
+describe("settling", () => {
+  // Bets written before settling existed carry no field at all.
+  it("reads a missing mark list as nobody", () => {
+    expect(settledBy(bet({ settled_by: undefined }))).toEqual([]);
+    expect(isSettled(bet({ settled_by: undefined }))).toBe(false);
+  });
+
+  it("knows who has marked", () => {
+    const b = bet({ settled_by: ["p1"] });
+    expect(hasSettled(b, "p1")).toBe(true);
+    expect(hasSettled(b, "p2")).toBe(false);
+    expect(hasSettled(b, null)).toBe(false);
+  });
+
+  // The whole point: one player cannot close a bet on the other's behalf.
+  it("is not settled until BOTH sides have marked", () => {
+    expect(isSettled(bet({ settled_by: ["p1"] }))).toBe(false);
+    expect(isSettled(bet({ settled_by: ["p2"] }))).toBe(false);
+    expect(isSettled(bet({ settled_by: ["p1", "p2"] }))).toBe(true);
+  });
+
+  // A stray id left by an edit must not settle a bet by itself.
+  it("ignores marks from players who are not in the bet", () => {
+    expect(isSettled(bet({ settled_by: ["p1", "p9"] }))).toBe(false);
+    expect(toggleSettled(bet({ settled_by: ["p1", "p9"] }), "p2")).toEqual(["p1", "p2"]);
+  });
+
+  describe("toggleSettled", () => {
+    it("adds a player's own mark", () => {
+      expect(toggleSettled(bet(), "p1")).toEqual(["p1"]);
+    });
+    it("withdraws it again, leaving nothing behind", () => {
+      expect(toggleSettled(bet({ settled_by: ["p1", "p2"] }), "p1")).toEqual(["p2"]);
+    });
+    it("cannot stack a mark twice", () => {
+      const once = toggleSettled(bet(), "p1");
+      expect(toggleSettled(bet({ settled_by: once }), "p2")).toEqual(["p1", "p2"]);
+    });
+    it("refuses a player who is not in the bet", () => {
+      expect(toggleSettled(bet({ settled_by: ["p1"] }), "p9")).toEqual(["p1"]);
+    });
+  });
+
+  describe("settleState", () => {
+    it("is open when neither side has marked", () => {
+      expect(settleState(bet(), "p1")).toBe("open");
+    });
+    it("waits on the other side once you have marked", () => {
+      expect(settleState(bet({ settled_by: ["p1"] }), "p1")).toBe("waiting");
+    });
+    // The only state that asks the reader for anything.
+    it("asks you to confirm when they marked first", () => {
+      expect(settleState(bet({ settled_by: ["p2"] }), "p1")).toBe("confirm");
+    });
+    it("is settled once both have", () => {
+      expect(settleState(bet({ settled_by: ["p1", "p2"] }), "p1")).toBe("settled");
+    });
+    // A bystander sees where it got to and is asked for nothing.
+    it("says watching for somebody not in the bet", () => {
+      expect(settleState(bet({ settled_by: ["p1"] }), "p3")).toBe("watching");
+      expect(settleState(bet(), null)).toBe("watching");
+    });
+    it("says settled to a bystander too", () => {
+      expect(settleState(bet({ settled_by: ["p1", "p2"] }), "p3")).toBe("settled");
+    });
   });
 });
 
