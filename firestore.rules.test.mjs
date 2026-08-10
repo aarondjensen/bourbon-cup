@@ -90,7 +90,6 @@ await check("an ordinary member cannot touch what Admin owns", async () => {
 await check("an ordinary member CAN still do everything a player does", async () => {
   await assertSucceeds(setDoc(doc(peteDb(), "bc_hole_scores/p9h1"), { v: 4 }));
   await assertSucceeds(setDoc(doc(peteDb(), "bc_ctp/r1h7"), { player_id: "p9" }));
-  await assertSucceeds(setDoc(doc(peteDb(), "bc_skins/r1h3"), { player_id: "p9" }));
   await assertSucceeds(setDoc(doc(peteDb(), "bc_card_sigs/r1m1"), { signed_by: "p9" }));
   // The auto-lock fires on the first score of a round, from a player's phone.
   await assertSucceeds(setDoc(doc(peteDb(), "bc_round_locks/r1"), { state: "open" }));
@@ -323,6 +322,13 @@ await check("a director can write a year's result", () =>
 
 await check("unlisted collections stay denied", () =>
   assertFails(setDoc(doc(aliceDb(), "bc_whatever/x"), { v: 1 })));
+
+// bc_skins is retired. Skins were never stored — they are derived from the
+// cards every time they are shown (src/lib/betting) — and the collection was
+// only ever written, never read. It held nothing in production, so this is
+// the "unlisted" case above pointed at a name that used to be listed.
+await check("the retired skins collection is denied like any other", () =>
+  assertFails(setDoc(doc(aliceDb(), "bc_skins/r1h3"), { player_id: "p9" })));
 
 await env.cleanup();
 

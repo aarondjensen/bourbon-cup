@@ -318,8 +318,6 @@ service cloud.firestore {
     // director-only even once sign-in exists.
     match /bc_hole_scores/{doc}        { allow read: if isOpen();
                                          allow write: if isMember(); }
-    match /bc_skins/{doc}              { allow read: if isOpen();
-                                         allow write: if isMember(); }
     match /bc_ctp/{doc}                { allow read: if isOpen();
                                          allow write: if isMember(); }
     // Card signatures and attestations — one document per signed card. See

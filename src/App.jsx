@@ -4724,8 +4724,9 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
 // SKINS ARE DERIVED, never stored. Low score on a hole takes it, a tie pushes
 // it, and the pot divides by however many were won. There is no skins editor
 // anywhere in the app on purpose — a stored winner is a second answer that can
-// disagree with the card, and the card is the one the field signed. (`bc_skins`
-// predates this; nothing writes it and nothing reads it.)
+// disagree with the card, and the card is the one the field signed. (There was
+// once a `bc_skins` collection; it was only ever written, never read, and it
+// has been retired — see the note on the subscription list in App.)
 //
 // CTP IS CAPTURED, because it is the one thing here the card does not record.
 // Groups tag their own par 3s from the Scoring tab as they walk off the green
@@ -6382,9 +6383,11 @@ export default function App() {
       setBrand(b);
     }));
     unsubs.push(db.subscribe("bc_rounds", f, rows => setTRounds(rows)));
-    // No bc_skins listener: skins are derived from the cards in BettingView,
-    // never stored. The collection is legacy — it was only ever written, and
-    // subscribing to it cost a live listener to fill a map nothing read.
+    // No skins listener, because skins are not stored: they are derived from
+    // the cards in BettingView every time they are shown (see lib/betting).
+    // There was a `bc_skins` collection that was only ever written and never
+    // read; it held nothing in production and has been retired from the rules
+    // and from the edition teardown list.
     unsubs.push(db.subscribe("bc_ctp", f, rows => {
       const cd = {};
       // The value is the RECORD, not just the winner's id: the scoring
