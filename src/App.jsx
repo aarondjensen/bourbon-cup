@@ -40,6 +40,7 @@ import { Popup, ConfirmModal } from "./components/Popup";
 import { CtpPrompt } from "./components/CtpPrompt";
 import { DirectorFinalizeAlert, FinalizeRoundSheet } from "./components/FinalizeRound";
 import { MissingCardNote, SignCardSheet, SignedCardPanel } from "./components/CardSignature";
+import { SideBets } from "./components/SideBets";
 import { AccountView } from "./components/AccountView";
 // ── Split off the main bundle ─────────────────────────────────────
 // The gallery is the one screen whose weight nobody else should pay for: it
@@ -84,8 +85,9 @@ import {
 import { summarizeEdition, sameSummary } from "./lib/editionSummary";
 import { playerTable } from "./lib/playerStats";
 import {
-  inField, roundSetup, strokeMapsFor, computeSkins, lowNetRows, ctpTags, settle,
+  inField, roundSetup, strokeMapsFor, computeSkins, lowNetRows, ctpTags,
 } from "./lib/betting";
+import { SIDE_BETS_COL, sideBetId, buildSideBet } from "./lib/sideBets";
 import { EDITIONS_COL, switchEdition } from "./lib/editions";
 import {
   cardSigBareId, sigForMatch, cardComplete, missingForCard,
@@ -1898,7 +1900,14 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
 // Groups tag their own par 3s from the Scoring tab as they walk off the green
 // — provisional, `approved: false` — and the director settles each hole from
 // this screen. See onSetCtp for why that split exists.
-function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeData, ctpData, skinsPot, buyIns, onSetCtp, onUpdatePot, onUpdateBuyIns, user, roundLocks, hcpOverrides, teeAssignments, teams }) {
+//
+// SIDE BETS ARE NEITHER. The fourth tab is a ledger of wagers the app does not
+// run and cannot score — see components/SideBets. It replaced Settle, which
+// summed the three scored games into a net position per player; that was
+// arithmetic already readable off the three tabs it summarised, and the thing
+// with genuinely nowhere to live was the bet two players make on the first
+// tee.
+function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeData, ctpData, skinsPot, buyIns, onSetCtp, onUpdatePot, onUpdateBuyIns, user, authUid, sideBets, onAddSideBet, onDeleteSideBet, confirm, roundLocks, hcpOverrides, teeAssignments, teams }) {
   const [activeTab, setActiveTab] = useState("skins");
   const [activeRound, setActiveRound] = useState(null);
   const [editPot, setEditPot] = useState(false);
@@ -2100,12 +2109,16 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
           rather than taking it away. */}
       <StickyTop>
         <SegmentedToggle
-          options={[["skins", "Skins"], ["ctp", "CTP"], ["lownet", "Low Net"], ["settle", "Settle"]]}
+          options={[["skins", "Skins"], ["ctp", "CTP"], ["lownet", "Low Net"], ["sidebet", "Side Bet"]]}
           value={activeTab} onChange={setActiveTab} letterSpacing={0.5}
         />
       </StickyTop>
 
-      {roundList.length === 0 && empty("🥃", "No bets yet", "Skins and closest-to-the-pin open once the tournament has a round on the schedule.")}
+      {/* Side bets are exempt: the three scored games need a round to score,
+          but a wager gets made on the first tee — often before anybody has
+          put a round on the schedule — and telling somebody to come back
+          later is how it ends up on a napkin instead. */}
+      {roundList.length === 0 && activeTab !== "sidebet" && empty("🥃", "No bets yet", "Skins and closest-to-the-pin open once the tournament has a round on the schedule.")}
 
       {roundList.length > 0 && activeTab === "skins" && (
         <div>
@@ -2472,14 +2485,20 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
         </div>
       )}
 
-      {roundList.length > 0 && activeTab === "settle" && (
-        <SettleCard
-          settlement={settle({
-            players: roster, rounds: roundList, holeData, ctpData,
-            buyIns, skinsPot, grossSkins: grossMode, ...ctx,
-          })}
+      {activeTab === "sidebet" && (
+        <SideBets
+          players={roster}
+          bets={sideBets}
+          user={user}
+          /* The AUTH UID, not the roster id. It is what the security rules
+             pin `created_by` to and what the delete rule compares against, so
+             the screen has to decide who may remove a bet off the same field
+             the rules will judge it by. */
+          authUid={authUid}
           teams={teams}
-          gross={grossMode}
+          onAddBet={onAddSideBet}
+          onDeleteBet={onDeleteSideBet}
+          confirm={confirm}
         />
       )}
     </div>
@@ -2498,108 +2517,6 @@ function LoadingPanel({ label }) {
       fontSize: FS.small, letterSpacing: 1, fontWeight: 700,
     }}>
       {(label || "").toUpperCase()}…
-    </div>
-  );
-}
-
-// ── Settle ────────────────────────────────────────────────────────────
-// What the whole weekend comes to, one row per player. The other three tabs
-// each answer "who is winning this one"; this is the question the trip
-// actually ends on, and until now the only way to it was three boards and a
-// pen.
-//
-// Up first, down last, and the middle of the list is where somebody breaks
-// even. The three games are shown broken out beneath each name because a
-// player can be up on skins and still down overall, and being told only the
-// total invites exactly one question.
-//
-// ── When it will not give a net ───────────────────────────────────────
-// A skins pot that was TYPED rather than bought into records no stake for
-// anybody, so what a player is up cannot be worked out — only what they won.
-// The card says that instead of showing a net that quietly assumes everybody
-// put in an equal share. Setting a skins buy-in price is what fixes it, and
-// the card says so too.
-function SettleCard({ settlement, teams, gross }) {
-  const { rows, pots, staked, totalSkins, totalPins } = settlement;
-  const playing = rows.filter(r => r.playing);
-  const money = (n) => `$${Math.abs(n).toFixed(2)}`;
-  const signed = (n) => (n > 0.004 ? `+${money(n)}` : n < -0.004 ? `−${money(n)}` : "$0.00");
-  const potTotal = pots.skins + pots.ctp + pots.lowNet;
-
-  if (!playing.length) {
-    return (
-      <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: "60px 20px", textAlign: "center" }}>
-        <div style={{ fontSize: FS.jumbo, marginBottom: 12, opacity: 0.4 }}>🧾</div>
-        <div style={{ fontSize: FS.lead, fontWeight: 700, color: BC.t1, marginBottom: 6 }}>Nothing to settle</div>
-        <div style={{ fontSize: FS.small, color: BC.t3, maxWidth: 280, margin: "0 auto", lineHeight: 1.5 }}>
-          Set a buy-in on Skins, CTP or Low Net and everybody&apos;s position shows up here.
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: "12px 14px", marginBottom: 12 }}>
-        <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>ON THE TABLE</div>
-        <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold }}>${potTotal.toFixed(2)}</div>
-        <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 2 }}>
-          {totalSkins} skin{totalSkins === 1 ? "" : "s"} ({gross ? "gross" : "net"}) · {totalPins} pin{totalPins === 1 ? "" : "s"}
-        </div>
-      </div>
-
-      {!staked && (
-        <div style={{
-          background: BC.card, borderRadius: 12, border: `1px solid ${BC.warn}${ALPHA.line}`,
-          padding: "10px 14px", marginBottom: 12, fontSize: FS.small, color: BC.t2, lineHeight: 1.45,
-        }}>
-          The skins pot was typed in rather than bought into, so nobody&apos;s stake is
-          recorded and these are <strong>winnings, not net positions</strong>. Set a
-          skins buy-in to settle it properly.
-        </div>
-      )}
-
-      <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
-        {playing.map((r, i) => {
-          const team = teams[r.team];
-          const up = r.net > 0.004, down = r.net < -0.004;
-          // A game with no pot still has a WINNER — somebody took those pins —
-          // so the count is worth printing. What is not worth printing is the
-          // "$0.00" beside it, which reads as a payout that went wrong rather
-          // than as a game nobody put money on.
-          const part = (n, label, amount) =>
-            (n ? `${n} ${label}${n === 1 ? "" : "s"}${amount > 0 ? ` ${money(amount)}` : ""}` : null);
-          const parts = [
-            part(r.skins, "skin", r.won.skins),
-            part(r.pins, "CTP", r.won.ctp),
-            r.lowNet ? `${r.lowNet} low net${r.won.lowNet > 0 ? ` ${money(r.won.lowNet)}` : ""}` : null,
-          ].filter(Boolean);
-          return (
-            <div key={r.pid} style={{
-              padding: "9px 14px",
-              borderBottom: i < playing.length - 1 ? `1px solid ${BC.bdr}${ALPHA.hair}` : "none",
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
-                <span style={{
-                  flex: 1, minWidth: 0, fontSize: FS.body, fontWeight: 600, color: BC.t1,
-                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                }}>{r.name}</span>
-                <span style={{
-                  fontSize: FS.body, fontWeight: 800,
-                  color: up ? BC.green : down ? BC.danger : BC.t3,
-                }}>{staked ? signed(r.net) : money(r.total)}</span>
-              </div>
-              {/* Where it came from, and what it cost. A total with no
-                  breakdown under it invites exactly one question. */}
-              <div style={{ fontSize: FS.micro, color: BC.t3, marginTop: 2, marginLeft: 16, letterSpacing: 0.3 }}>
-                {parts.length ? parts.join(" · ") : "nothing won"}
-                {staked && r.paid > 0 ? ` · in ${money(r.paid)}` : ""}
-              </div>
-            </div>
-          );
-        })}
-      </div>
     </div>
   );
 }
@@ -3029,6 +2946,9 @@ export default function App() {
   // An empty array is a different answer (nobody), so the two must not be
   // collapsed. See components/BuyIns.
   const [buyIns, setBuyIns] = useState({ skinsAmount: 0, skinsIn: null, ctpAmount: 0, ctpIn: null, lowNetAmount: 0, lowNetIn: null });
+  // Player-to-player wagers the app records but does not run. One document
+  // per bet; see lib/sideBets for why nothing here scores or settles them.
+  const [sideBets, setSideBets] = useState([]);
   // Every year the cup has been played — the SAME collection the Tournaments
   // picker reads, which is what makes the History tab and the edition switcher
   // two views of one list instead of two lists. Tiny (one document a year) and
@@ -3592,6 +3512,10 @@ export default function App() {
       roundLocksRef.current = data;   // keep the ref hot for the save path
       setRoundLocksData(data);
     }));
+    // Side bets. Bounded like everything else here — a bet per pair of players
+    // at most, and in practice a handful a weekend — so it belongs in this
+    // block rather than being deferred like the photo index.
+    unsubs.push(db.subscribe(SIDE_BETS_COL, f, setSideBets));
     unsubs.push(db.subscribe("bc_courses", f, setCourses));
     unsubs.push(db.subscribe("bc_matches", f, setMatches));
     unsubs.push(db.subscribe("bc_card_sigs", f, rows => {
@@ -3982,6 +3906,37 @@ export default function App() {
       tournament_id: TOURNAMENT_ID,
       confirmed_by: [...new Set([...(rec.confirmed_by || []), pid])],
     });
+  }, []);
+
+  // ── Side bets ────────────────────────────────────────────────────────
+  // A ledger, not a game: the app records the wager and scores nothing. See
+  // lib/sideBets for the shape and for what the rules can and cannot check.
+  //
+  // `db.create` rather than `db.upsert`, and the rejection is left in. Every
+  // other write here is a correction to something already on screen, where
+  // swallowing a failure and letting the next snapshot win is the right
+  // trade. This one is a person tapping Add and watching for their bet to
+  // appear — a silent failure there is the app agreeing to a bet it did not
+  // record, which is the one thing a ledger must never do. The sheet stays
+  // open on a throw so the typing is not lost.
+  //
+  // NOT edition-namespaced through editionDocId: the id is minted fresh with
+  // a random tail, so it cannot collide with a cloned edition's the way a
+  // derived id like `bc_ctp_r1_h7` would. `tournament_id` is what scopes it.
+  const onAddSideBet = useCallback(async ({ playerA, playerB, amount, detail }) => {
+    const uid = authUser?.uid;
+    if (!uid) return;
+    await db.create(SIDE_BETS_COL, buildSideBet({
+      id: sideBetId(Date.now(), Math.random()),
+      tournamentId: TOURNAMENT_ID,
+      createdBy: uid,
+      playerA, playerB, amount, detail,
+      now: Date.now(),
+    }));
+  }, [authUser]);
+
+  const onDeleteSideBet = useCallback(async (bet) => {
+    if (bet?.id) await db.delete(SIDE_BETS_COL, bet.id);
   }, []);
 
   // ── The photo library's two writes ───────────────────────────────────
@@ -4760,6 +4715,14 @@ export default function App() {
             onUpdatePot={onUpdatePot}
             onUpdateBuyIns={onUpdateBuyIns}
             user={user}
+            /* The auth uid, separate from the roster identity above: it is
+               what the side-bet rules pin authorship to, and a spectator or a
+               signed-out reader has one without the other. */
+            authUid={authUser?.uid || null}
+            sideBets={sideBets}
+            onAddSideBet={onAddSideBet}
+            onDeleteSideBet={onDeleteSideBet}
+            confirm={confirm}
             roundLocks={roundLocksData}
             hcpOverrides={hcpOverridesData}
             teeAssignments={teeAssignmentsData}

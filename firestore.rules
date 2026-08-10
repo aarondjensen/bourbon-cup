@@ -389,6 +389,41 @@ service cloud.firestore {
                         && resource.data.host == 'storage');
     }
 
+    // ── Side bets ─────────────────────────────────────────────────
+    // One document per player-to-player wager. The app records these and
+    // scores nothing — see src/lib/sideBets.js.
+    //
+    // Same shape as bc_media, and for the same reason: `create` pins
+    // created_by to the caller's own uid, because that field is what the
+    // delete rule below trusts, so it has to be unforgeable at the moment it
+    // is written. `update` cannot reassign authorship — fixing a typo in the
+    // terms must not be able to become a change of author.
+    //
+    // What these rules deliberately do NOT check is that `player_a` is the
+    // caller. They cannot: finding the roster row whose auth_uid is yours
+    // needs a query, and rules only fetch paths they can construct — the same
+    // limit that keeps the roster crown from granting anything. So a member
+    // can log a bet naming two other people. That is a feature at the bar and
+    // a nuisance nowhere: the record is public to the whole field, and a bet
+    // somebody did not agree to is a bet with their name on it in front of
+    // everybody who would know better.
+    //
+    // Delete is the author's or a director's. NOT the other player's — the
+    // side of a bet you dispute is not yours to erase, and the director is
+    // who settles that here as everywhere else. src/lib/sideBets.js
+    // canDeleteSideBet() mirrors this exactly, and sideBets.test.js pins it.
+    match /bc_side_bets/{doc} {
+      allow read: if isOpen();
+      allow create: if isMember()
+                    && request.resource.data.created_by == request.auth.uid;
+      allow update: if isDirector()
+                    || (isMember()
+                        && resource.data.created_by == request.auth.uid
+                        && request.resource.data.created_by == resource.data.created_by);
+      allow delete: if isDirector()
+                    || (isMember() && resource.data.created_by == request.auth.uid);
+    }
+
     // ── Runtime switches ──────────────────────────────────────────
     // Today this holds exactly one document: bc_config/photos, the photo
     // library's budget circuit breaker. It is written by the onBudgetAlert

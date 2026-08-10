@@ -1,28 +1,28 @@
 // ══════════════════════════════════════════════════════════════════
-//  betting — the three side games, and what everybody ends up owing.
+//  betting — the three side games the app actually scores.
 // ══════════════════════════════════════════════════════════════════
 //
 // Skins, closest-to-the-pin and low net were each worked out inline inside
-// BettingView, which was fine while the only question was "who is winning
-// this one". It stopped being fine at the question the trip actually ends on:
-// what does each player NET across all three.
+// BettingView. They live here so the derivation has one author, and so a
+// screen that lists the winners and a screen that counts them cannot come to
+// different totals.
 //
 // Nothing here is stored. A skin is whoever is lowest on the hole, worked out
 // from the cards every time it is asked for — see the note over onSetCtp in
-// App about why there is no onSetSkin. This module is that derivation, moved
-// somewhere two screens can share it, so the tab that lists the skins and the
-// tab that pays them out cannot come to different totals.
+// App about why there is no onSetSkin.
+//
+// The fourth Betting tab is not in this file and never will be: a side bet is
+// a wager between two players on terms the app cannot read, so it is recorded
+// rather than derived. See lib/sideBets.
 //
 // ── What a pot is worth ───────────────────────────────────────────────
-// Two shapes, and the difference matters at settlement:
+// Two shapes:
 //
 //   COUNTED   a buy-in price is set, so the pot is the price times the number
-//             of players in. Every player's stake is known, so the game can be
-//             settled — won minus paid.
+//             of players in, and every player's stake is known.
 //   TYPED     no price, just a figure somebody entered for the skins pot. It
 //             is a real pot and it still pays out, but nobody's stake is
-//             recorded, so a net position cannot be computed and this module
-//             says so rather than assuming everybody put in an equal share.
+//             recorded.
 import { getRoundCH, buildStrokeMap, resolveHolePars, resolveHoleHcps, lockForRound } from "../scoring";
 
 export const HOLES = 18;
@@ -143,107 +143,3 @@ export const ctpTags = ({ rounds, field, ctpData, tRounds, courses, roundLocks }
   });
 };
 
-// ── Settlement ────────────────────────────────────────────────────────
-// One row per player: what they staked, what each game paid them, and the
-// difference. This is the number the trip actually ends on.
-//
-// The three games are summed but never mixed — a player can be up on skins and
-// down overall, and the row shows both — and a game with no buy-in price
-// contributes winnings without a stake, which is flagged rather than guessed
-// at. See the note on pot shapes at the top.
-//
-// Money is carried as exact numbers and rounded only where it is printed. A
-// pot divided three ways does not come out even, and rounding each share on
-// the way in is how a settlement ends up a cent short of its own pot.
-export const settle = ({
-  players, rounds, holeData, ctpData, tPlayers, tRounds, courses, roundLocks,
-  hcpOverrides, teeAssignments, buyIns = {}, skinsPot = 0, grossSkins = true,
-}) => {
-  const skinsField = inField(players, buyIns.skinsIn);
-  const ctpField = inField(players, buyIns.ctpIn);
-  const lowNetField = inField(players, buyIns.lowNetIn);
-
-  const skinsPriced = (buyIns.skinsAmount || 0) > 0;
-  const skinsPotValue = skinsPriced ? skinsField.length * buyIns.skinsAmount : skinsPot;
-  const ctpPotValue = (buyIns.ctpAmount || 0) > 0 ? ctpField.length * buyIns.ctpAmount : 0;
-  const lowNetPotValue = (buyIns.lowNetAmount || 0) > 0 ? lowNetField.length * buyIns.lowNetAmount : 0;
-
-  // Skins won, across every round.
-  const skinsWon = {};
-  let totalSkins = 0;
-  rounds.forEach(round => {
-    const { pars } = roundSetup({ round, tRounds, courses, roundLocks });
-    const maps = grossSkins ? null : strokeMapsFor({
-      round, field: skinsField, tPlayers, tRounds, courses, roundLocks, hcpOverrides, teeAssignments,
-    });
-    computeSkins({ round, gross: grossSkins, field: skinsField, holeData, pars, maps })
-      .filter(s => s.winner)
-      .forEach(s => { skinsWon[s.winner.pid] = (skinsWon[s.winner.pid] || 0) + 1; totalSkins += 1; });
-  });
-  const perSkin = totalSkins ? skinsPotValue / totalSkins : 0;
-
-  // Pins taken.
-  const pins = {};
-  const tags = ctpTags({ rounds, field: ctpField, ctpData, tRounds, courses, roundLocks });
-  tags.forEach(t => { pins[t.player_id] = (pins[t.player_id] || 0) + 1; });
-  const perPin = tags.length ? ctpPotValue / tags.length : 0;
-
-  // Low net, a share per ROUND rather than per win — so a tied round cannot
-  // pay out more in total than a clean one, which dividing by wins would do.
-  const lowNetMoney = {};
-  const lowNetWins = {};
-  const roundShare = rounds.length ? lowNetPotValue / rounds.length : 0;
-  rounds.forEach(round => {
-    const winners = lowNetRows({
-      round, field: lowNetField, holeData, tPlayers, tRounds, courses, roundLocks,
-      hcpOverrides, teeAssignments,
-    }).filter(r => r.won);
-    winners.forEach(w => {
-      lowNetMoney[w.pid] = (lowNetMoney[w.pid] || 0) + roundShare / winners.length;
-      lowNetWins[w.pid] = (lowNetWins[w.pid] || 0) + 1;
-    });
-  });
-
-  const has = (field, pid) => field.some(p => p.player_id === pid);
-  const rows = players.map(p => {
-    const pid = p.player_id;
-    const inSkins = has(skinsField, pid), inCtp = has(ctpField, pid), inLowNet = has(lowNetField, pid);
-    const won = {
-      skins: (skinsWon[pid] || 0) * perSkin,
-      ctp: (pins[pid] || 0) * perPin,
-      lowNet: lowNetMoney[pid] || 0,
-    };
-    const paid =
-      (inSkins && skinsPriced ? buyIns.skinsAmount : 0)
-      + (inCtp ? (buyIns.ctpAmount || 0) : 0)
-      + (inLowNet ? (buyIns.lowNetAmount || 0) : 0);
-    const total = won.skins + won.ctp + won.lowNet;
-    return {
-      pid, name: p.name, team: p.team,
-      skins: skinsWon[pid] || 0, pins: pins[pid] || 0, lowNet: lowNetWins[pid] || 0,
-      won, total, paid, net: total - paid,
-      // In the settlement means having money in it — a stake down or a
-      // payout coming — NOT merely being in a field.
-      //
-      // Those come apart because an untagged buy-in list means everybody, so
-      // a tournament that priced only skins still has all sixteen players
-      // "in" CTP and low net at nought a head. Reading membership would have
-      // listed the whole roster on a card about money, most of them with no
-      // money in it.
-      playing: paid > 0 || total > 0,
-    };
-  })
-    // Up first, then down — a settlement is read from the top by whoever is
-    // owed, and by everybody else to find out what they owe.
-    .sort((a, b) => b.net - a.net || String(a.name || "").localeCompare(String(b.name || "")));
-
-  return {
-    rows,
-    pots: { skins: skinsPotValue, ctp: ctpPotValue, lowNet: lowNetPotValue },
-    // Whether every game in play has a recorded stake. False means the skins
-    // pot was typed rather than bought into, so `paid` is incomplete and the
-    // screen has to say so instead of showing a net that is quietly wrong.
-    staked: !skinsPotValue || skinsPriced,
-    totalSkins, totalPins: tags.length,
-  };
-};
