@@ -2075,6 +2075,14 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
     onUpdatePot(Number.isFinite(amt) && amt > 0 ? amt : 0);
   };
 
+  // A POT is always whole money — a buy-in times a head count — so its cents
+  // are two characters of noise on the largest figure on the screen, and the
+  // header now runs three numbers across a phone. A SHARE of one is not
+  // whole: $250 across seven skins is $35.71, and rounding that would be
+  // rounding somebody's money. Display only — the editor still seeds from,
+  // and writes, the exact value.
+  const potMoney = (n) => `$${Math.round(n || 0).toLocaleString()}`;
+
   const empty = (icon, title, sub) => (
     <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 20px", textAlign: "center" }}>
@@ -2104,14 +2112,14 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
           {/* Pot */}
           <div style={{ background: BC.card, borderRadius: 12, marginBottom: editBuyIns === "skins" ? 0 : 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
             <div style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>SKINS POT</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>POT</div>
                 {/* Once a buy-in price is set the pot is COUNTED, not typed, so
                     the inline editor gives way — the way to change it is to
                     change who is in. A tournament with no buy-in price keeps
                     the hand-typed pot exactly as it was. */}
                 {skinsCounted ? (
-                  <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold }}>${skinsPotValue.toFixed(2)}</div>
+                  <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold }}>{potMoney(skinsPotValue)}</div>
                 ) : editPot ? (
                   <input autoFocus type="number" inputMode="decimal" value={potInput} onChange={e => setPotInput(e.target.value)}
                     onBlur={commitPot}
@@ -2133,13 +2141,25 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                       background: "transparent", border: "none", padding: 0, textAlign: "left",
                       cursor: user?.isDirector ? "pointer" : "default",
                     }}>
-                    ${skinsPot.toFixed(2)}
+                    {potMoney(skinsPot)}
                   </button>
                 )}
               </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: FS.label, color: BC.t3 }}>{totalSkins} skins won</div>
-                <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>${perSkin.toFixed(2)} / skin</div>
+              {/* THREE COLUMNS, because skins has three numbers of equal
+                  standing rather than one headline and one derived figure:
+                  the pot, how many were won, and what one is worth. Stacked
+                  in a right-hand corner, "12 skins won / $20.83 / skin" made
+                  the middle number read as a caption on the third. The pot
+                  keeps the left column so the inline editor and the gold stay
+                  where they were, and the three tracks run left, centre,
+                  right so none of them reads as a stray beside the others. */}
+              <div style={{ flex: 1, minWidth: 0, textAlign: "center" }}>
+                <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>SKINS</div>
+                <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.amberInk, overflow: "hidden", textOverflow: "ellipsis" }}>{totalSkins}</div>
+              </div>
+              <div style={{ flex: 1, minWidth: 0, textAlign: "right" }}>
+                <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>EACH</div>
+                <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.amberInk, overflow: "hidden", textOverflow: "ellipsis" }}>${perSkin.toFixed(2)}</div>
               </div>
             </div>
             {user?.isDirector && (
