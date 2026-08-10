@@ -296,6 +296,50 @@ await check("a director can, and photos come back", async () => {
 await check("everyone can read whether uploads are on, signed in or not", () =>
   assertSucceeds(getDoc(doc(anonDb(), "bc_config/photos"))));
 
+// ── Side bets ───────────────────────────────────────────────────────
+// A ledger the app records and does not run. See the bc_side_bets block in
+// firestore.rules; src/lib/sideBets.js canDeleteSideBet mirrors the delete
+// rule and sideBets.test.js pins that half.
+const sideBet = (uid, over = {}) =>
+  ({ tournament_id: "bc_2026", created_by: uid, player_a: "p1", player_b: "p2",
+     amount: 20, detail: "closest on 17", created_at: 1, ...over });
+
+await check("a member can log a side bet under their own uid", () =>
+  assertSucceeds(setDoc(doc(peteDb(), "bc_side_bets/sb1"), sideBet("pete"))));
+
+// created_by is what the delete rule trusts, so it has to be unforgeable at
+// the moment it is written.
+await check("...but not under somebody else's name", () =>
+  assertFails(setDoc(doc(peteDb(), "bc_side_bets/sb2"), sideBet("alice"))));
+
+await check("a non-member cannot log a side bet", () => {
+  const bob = env.authenticatedContext("bob").firestore();
+  return assertFails(setDoc(doc(bob, "bc_side_bets/sb3"), sideBet("bob")));
+});
+
+await check("a member can fix their own terms but cannot reassign the bet", async () => {
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_side_bets/sb1"), { detail: "closest on 7" }, { merge: true }));
+  await assertFails(setDoc(doc(peteDb(), "bc_side_bets/sb1"), { created_by: "mallory" }, { merge: true }));
+});
+
+// The other side of a bet you dispute is not yours to erase.
+await check("the opponent cannot edit or delete a bet they did not log", async () => {
+  await seed("bc_side_bets/sb4", sideBet("alice", { player_b: "pete" }));
+  await assertFails(setDoc(doc(peteDb(), "bc_side_bets/sb4"), { amount: 1 }, { merge: true }));
+  await assertFails(deleteDoc(doc(peteDb(), "bc_side_bets/sb4")));
+});
+
+await check("a member can remove a bet they logged, and a director anybody's", async () => {
+  await assertSucceeds(deleteDoc(doc(peteDb(), "bc_side_bets/sb1")));
+  await assertSucceeds(deleteDoc(doc(aliceDb(), "bc_side_bets/sb4")));
+});
+
+await check("anon can read the side-bet ledger but not write to it", async () => {
+  await seed("bc_side_bets/sb5", sideBet("pete"));
+  await assertSucceeds(getDoc(doc(anonDb(), "bc_side_bets/sb5")));
+  await assertFails(setDoc(doc(anonDb(), "bc_side_bets/sb6"), sideBet("nobody")));
+});
+
 // ── Reads stay open, and the archive is director-owned ──────────────
 await check("anon can still read the leaderboard data", () =>
   assertSucceeds(getDoc(doc(anonDb(), "bc_hole_scores/x"))));
