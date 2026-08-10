@@ -15,6 +15,7 @@
 import { useMemo, useState } from "react";
 import { BC, FONT, ALPHA, FS, ON_AMBER, teamColor } from "../theme";
 import { Popup } from "./Popup";
+import { SegmentedToggle } from "./ui";
 import {
   sideBetError, sortSideBets, sideBetTotals, canDeleteSideBet, inSideBet, MAX_DETAIL,
 } from "../lib/sideBets";
@@ -26,10 +27,26 @@ const potMoney = (n) => `$${Math.round(Number(n) || 0).toLocaleString()}`;
 
 export function SideBets({ players, bets, user, authUid, teams, onAddBet, onDeleteBet, confirm }) {
   const [adding, setAdding] = useState(false);
+  // ALL is the default and the left-hand option. The ledger is the field's,
+  // not yours — and a player who has not made a bet yet would otherwise open
+  // this tab to an empty list that looks like the feature is broken rather
+  // than like they have nothing on.
+  const [mineOnly, setMineOnly] = useState(false);
 
   const myPid = user?.player_id || null;
-  const rows = sortSideBets(bets);
-  const totals = sideBetTotals(rows, myPid);
+  const all = sortSideBets(bets);
+  const rows = mineOnly ? all.filter(b => inSideBet(b, myPid)) : all;
+  // The header counts the WHOLE tournament regardless of the filter. Me/All
+  // changes which rows you are reading, not what is true — unlike Gross/Net
+  // on the skins tab, which changes who actually won what and so moves the
+  // numbers above it. `YOURS` is already the answer to "how much of this is
+  // mine", so a headline that shrank when you filtered would be saying the
+  // same thing twice and contradicting itself the first time.
+  const totals = sideBetTotals(all, myPid);
+  // No toggle for somebody with no roster row — a spectator's "Me" is empty
+  // by construction, and an option that can only ever show nothing is worse
+  // than no option.
+  const canFilter = !!myPid;
   const byId = (pid) => players.find(p => p.player_id === pid) || null;
   const nameOf = (pid) => byId(pid)?.name || "—";
   const dotColor = (pid) => {
@@ -97,14 +114,33 @@ export function SideBets({ players, bets, user, authUid, teams, onAddBet, onDele
         </button>
       )}
 
+      {/* Whose bets you are reading. The same control the skins tab uses for
+          Gross/Net, in the same place and at the same width, because it is
+          the same kind of question — one list, two ways of looking at it. */}
+      {canFilter && all.length > 0 && (
+        <SegmentedToggle
+          options={[[false, "All"], [true, "Me"]]}
+          value={mineOnly}
+          onChange={setMineOnly}
+          style={{ marginBottom: 10, width: 160, marginLeft: "auto", marginRight: "auto" }}
+        />
+      )}
+
       {rows.length === 0 ? (
         <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: "60px 20px", textAlign: "center" }}>
           <div style={{ fontSize: FS.jumbo, marginBottom: 12, opacity: 0.4 }}>🤝</div>
-          <div style={{ fontSize: FS.lead, fontWeight: 700, color: BC.t1, marginBottom: 6 }}>No side bets yet</div>
+          {/* Filtered-to-empty is a different answer from nothing-exists, and
+              saying "No side bets yet" over a tournament with nine of them
+              reads as the tab having lost them. */}
+          <div style={{ fontSize: FS.lead, fontWeight: 700, color: BC.t1, marginBottom: 6 }}>
+            {mineOnly ? "None of these are yours" : "No side bets yet"}
+          </div>
           <div style={{ fontSize: FS.small, color: BC.t3, maxWidth: 280, margin: "0 auto", lineHeight: 1.5 }}>
-            {canAdd
-              ? "Anything you have going with somebody else — a press, closest on 17, first to break 90. Write it down here and everybody can see the terms."
-              : "Bets players have going with each other show up here."}
+            {mineOnly
+              ? "You are not in any of the bets on the board. Switch to All to see everybody else's."
+              : canAdd
+                ? "Anything you have going with somebody else — a press, closest on 17, first to break 90. Write it down here and everybody can see the terms."
+                : "Bets players have going with each other show up here."}
           </div>
         </div>
       ) : (
