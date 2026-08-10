@@ -32,6 +32,35 @@ export const isBorrowedBall = (p) => !!p?.borrowed;
 // The roster, minus anything that isn't a golfer.
 export const realPlayers = (players) => (players || []).filter((p) => !isBorrowedBall(p));
 
+// ── The names on one side of a match ──────────────────────────────
+// Current first, stored second, id last.
+//
+// A match document carries `teamANames` alongside `teamA`, written when the
+// draw was made. Three screens read one and three read the other, and until
+// this function they disagreed the moment a director fixed a typo in
+// somebody's name: the Leaderboard's match card re-joined the roster and
+// showed the correction, while the Full Scorecard that unfolds out of that
+// very card — and the Admin draw — still showed the name as it was when the
+// match was created. One tap apart, contradicting each other.
+//
+// So the ROSTER is the source. But the stored copy is not redundant, and
+// deleting it would trade one bug for another: it is the only record of who
+// played once a roster row is gone, and `nameOf` answers a deleted player
+// with their raw id (`bc_player_1773595975465`), which is not a name anybody
+// wants on a scorecard. Same shape as a round lock — live data wins, the
+// snapshot covers what live data can no longer answer.
+//
+// `nameOf` returning the pid unchanged IS the "not on the roster" signal;
+// that is its documented fallback, so the test costs nothing extra.
+export const sideNames = (match, side, nameOf) => {
+  const pids = (side === "B" ? match?.teamB : match?.teamA) || [];
+  const stored = (side === "B" ? match?.teamBNames : match?.teamANames) || [];
+  return pids.map((pid, i) => {
+    const live = nameOf(pid);
+    return live === pid ? (stored[i] || pid) : live;
+  });
+};
+
 export function playerLookup(players) {
   const find = (pid) => (players || []).find((p) => p.player_id === pid);
   const nameOf = (pid) => find(pid)?.name || pid;

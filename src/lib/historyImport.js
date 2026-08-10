@@ -300,9 +300,13 @@ export const roundDocFor = ({ year, round }) => {
   return doc;
 };
 
-// bc_matches — the draw. `teamANames` rides along because every screen that
-// shows a match reads the names off the match rather than re-joining the
-// roster, exactly as MatchSetup writes them.
+// bc_matches — the draw. `teamANames` rides along as the FALLBACK name for a
+// player the roster can no longer answer for (see lib/players.sideNames);
+// every screen now reads the live roster first and drops back to these. It
+// used to say "every screen reads the names off the match rather than
+// re-joining the roster", which had quietly stopped being true — the
+// Leaderboard re-joined and the Full Scorecard did not, so a renamed player
+// was corrected on one and not the other.
 export const matchDocFor = ({ year, match, nameOf }) => {
   const tid = editionIdForYear(year);
   const A = match.teamA.map((p) => historyPlayerId(year, p));

@@ -35,7 +35,7 @@
 import { useState, useMemo, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { BC, FONT, ALPHA, FS, ink, teamColor } from "../theme";
-import { playerLookup, realPlayers } from "../lib/players";
+import { playerLookup, realPlayers, sideNames } from "../lib/players";
 import {
   FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT,
   POINT_METHOD_TRADITIONAL, TROPHY_SILHOUETTE, CUP_POINTS_TO_WIN,
@@ -322,8 +322,11 @@ function MatchCard({
 
   const overallSt = segmentState(result.holes, opts);
   const { nameOf } = playerLookup(tPlayers);
-  const aNames = (match.teamA || []).map(nameOf);
-  const bNames = (match.teamB || []).map(nameOf);
+  // Through the shared helper rather than a bare map: this card was already
+  // reading the roster (which is what made it disagree with the scorecard it
+  // opens), but a player dropped from the roster printed as a raw id here.
+  const aNames = sideNames(match, "A", nameOf);
+  const bNames = sideNames(match, "B", nameOf);
 
   const ptsA = result.totalPts.A, ptsB = result.totalPts.B;
   const leader = segmentLeader(overallSt);
