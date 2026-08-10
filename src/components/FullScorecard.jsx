@@ -61,6 +61,7 @@
 //  worked out.
 // ══════════════════════════════════════════════════════════════════
 
+import { playerLookup, sideNames } from "../lib/players";
 import { BC, FONT, ALPHA, FS, ON_AMBER, teamColor } from "../theme";
 import {
   FORMATS, HOLE_METHOD_LABELS, UNIT_DOTS, UNIT_POINTS,
@@ -243,6 +244,15 @@ export function FullScorecard({
 }) {
   if (!result) return null;
 
+  // Current names off the roster, falling back to the ones stored on the
+  // match for anybody the roster no longer has. See lib/players.sideNames —
+  // this header used to read the stored names only, so a renamed player was
+  // corrected on the leaderboard card and not inside the scorecard it opens.
+  //
+  // Through playerLookup rather than the hand-rolled `nameOf` that used to sit
+  // further down this file — same find, same pid fallback, one copy.
+  const { nameOf } = playerLookup(tPlayers);
+
   // One question, asked in six places below. `conceal.through` is a count of
   // holes, `h` a 0-based index, so hole `through` is the first sealed one.
   const sealedHole = (h) => !!conceal && h >= conceal.through;
@@ -272,7 +282,6 @@ export function FullScorecard({
   const runLabel = total ? "LEAD" : perHole ? "PTS" : "MATCH";
 
   const strokesFor = (pid, h) => result.strokeMaps?.[pid]?.[h] || 0;
-  const nameOf = (pid) => tPlayers.find((p) => p.player_id === pid)?.name || pid;
 
   // ── The running line, computed once over all 18 ──
   // Same currency as the row that prints it, from A's perspective, and
@@ -571,14 +580,14 @@ export function FullScorecard({
           all, and this is the only place the four are spelled out. */}
       {showHeader && <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
         <span style={{ flex: 1, minWidth: 0, fontSize: FS.label, fontWeight: 800, lineHeight: 1.3, color: BC.teamA }}>
-          {(match.teamANames || []).join(" / ")}
+          {sideNames(match, "A", nameOf).join(" / ")}
         </span>
         <span style={{
           flexShrink: 0, fontSize: FS.small, fontWeight: 800,
           color: conceal ? BC.amberInk : overallLeader ? teamColor(overallLeader) : BC.t3,
         }}>{conceal ? "🔒 SEALED" : statusText(overall)}</span>
         <span style={{ flex: 1, minWidth: 0, fontSize: FS.label, fontWeight: 800, lineHeight: 1.3, color: BC.teamB, textAlign: "right" }}>
-          {(match.teamBNames || []).join(" / ")}
+          {sideNames(match, "B", nameOf).join(" / ")}
         </span>
       </div>}
 

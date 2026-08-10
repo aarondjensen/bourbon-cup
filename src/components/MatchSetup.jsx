@@ -27,7 +27,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { BC, FONT, SCRIM, ALPHA, ON_AMBER, FS } from "../theme";
 import { SegmentedToggle } from "./ui";
-import { playerLookup } from "../lib/players";
+import { playerLookup, sideNames } from "../lib/players";
 import { FORMATS } from "../constants";
 import { TOURNAMENT_ID, editionDocId } from "../firebase";
 import { getRoundCH, getRoundHandicapMode, lockForRound } from "../scoring";
@@ -401,7 +401,7 @@ export function MatchSetup({
     }
     const impact = matchScoreImpact({ match: m, holeData });
     const label = `M${m.matchNumber ?? "?"}`;
-    const vs = `${m.teamANames?.join(" / ")} vs ${m.teamBNames?.join(" / ")}`;
+    const vs = `${sideNames(m, "A", nameOf).join(" / ")} vs ${sideNames(m, "B", nameOf).join(" / ")}`;
     const ok = await confirm(impact.hasScores ? {
       eyebrow: `${label} · Round ${round}`,
       title: `Delete a match with ${impact.holes} hole${impact.holes === 1 ? "" : "s"} scored?`,
@@ -597,14 +597,14 @@ export function MatchSetup({
               M{m.matchNumber ?? "?"}
             </span>
           </div>
-          {nameStack(m.teamANames, teams.A.accent, "left")}
+          {nameStack(sideNames(m, "A", nameOf), teams.A.accent, "left")}
         </div>
         {/* One rung down from the names, and grey: punctuation between them,
             not one of them. It is also the row's axis, so it never moves. */}
         <span style={{ fontSize: FS.small, color: BC.t3 }}>vs</span>
         {/* Right track, mirrored: team B reading toward the axis, then the ✕. */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, justifyContent: "flex-end" }}>
-          {nameStack(m.teamBNames, teams.B.accent, "right")}
+          {nameStack(sideNames(m, "B", nameOf), teams.B.accent, "right")}
           <button onClick={() => deleteMatch(m)} style={xBtn}>✕</button>
         </div>
       </div>
@@ -1005,7 +1005,7 @@ export function MatchSetup({
           <div style={{ fontSize: FS.label, fontWeight: 800, color: BC.amberInk, letterSpacing: 1, marginBottom: 6 }}>CHECK</div>
           {issues.split.map(m => (
             <div key={m.id} style={{ fontSize: FS.label, color: BC.t2, marginBottom: 3 }}>
-              · {m.teamANames?.join("/")} vs {m.teamBNames?.join("/")} is split across groups — opponents tee off together.
+              · {sideNames(m, "A", nameOf).join("/")} vs {sideNames(m, "B", nameOf).join("/")} is split across groups — opponents tee off together.
             </div>
           ))}
           {issues.duplicated.map(pid => (
