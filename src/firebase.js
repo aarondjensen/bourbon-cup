@@ -324,6 +324,10 @@ const _db = (() => {
 // builds the Auth instance from it. Everything else goes through `db`.
 export const firebaseApp = _app;
 
+// How long to wait before each reattach of a failed listener, and — by
+// running out — how long to keep trying at all. See db.subscribe.
+const SUBSCRIBE_RETRY_MS = [1000, 2000, 4000, 8000, 15000, 30000, 60000];
+
 export const db = {
   _q: (col, filters = []) => {
     const ref = collection(_db, col);
@@ -348,11 +352,73 @@ export const db = {
   // Firebase console (that is how the first director is made) and will
   // then have only the fields whoever typed it thought to add. The id is
   // the one thing such a document always has.
+  //
+  // ── A listener that does not die quietly ──────────────────────────
+  // onSnapshot's error callback is TERMINAL. Firestore detaches the listener
+  // when it fires and never retries; going offline is handled internally and
+  // does not come through here, so what reaches it is a rules refusal.
+  //
+  // The refusal that actually happens is a collection whose rules have not
+  // been deployed yet. Rules are deployed by hand and the app is not, and the
+  // ordering is deliberately app-first (see firestore.rules), so every new
+  // collection has a window where its reads are denied by the default-deny
+  // rule at the bottom of that file.
+  //
+  // Before this, a listener that hit that window was dead for the life of the
+  // tab, and nothing said so — the screen went on showing a working, EMPTY
+  // list. That is how a side bet written moments after the rules landed saved
+  // correctly, sat in Firestore with every field right, and never appeared on
+  // the phone that wrote it. An empty list and a broken one must not look the
+  // same, and of the two ways to fix that this is the one that needs no
+  // screen to grow an error state.
+  //
+  // So it reattaches on a backoff, and the backoff RUNS OUT rather than
+  // looping forever: a collection that is genuinely denied to this reader
+  // should not log once a minute until the tab closes. The schedule spans
+  // about two minutes, which covers a director deploying rules with the app
+  // open in front of them. Past that, a reload is the answer and the console
+  // says so.
+  //
+  // The counter resets on every good snapshot, so a listener that works for
+  // an hour and then blips gets a full budget rather than the tail of an old
+  // one.
   subscribe: (col, filters = [], cb, { withId = false } = {}) => {
     const rows = (snap) => snap.docs.map(d => (withId ? { ...d.data(), id: d.id } : d.data()));
-    try {
-      return onSnapshot(db._q(col, filters), snap => cb(rows(snap)), e => console.error("subscribe", e));
-    } catch(e) { console.error("subscribe setup", e); return () => {}; }
+    let stopped = false, detach = null, timer = null, attempt = 0;
+
+    const attach = () => {
+      if (stopped) return;
+      try {
+        detach = onSnapshot(
+          db._q(col, filters),
+          snap => { attempt = 0; cb(rows(snap)); },
+          e => {
+            // Firestore has already detached by the time this runs, so the
+            // handle is stale — clearing it keeps the unsubscribe below from
+            // calling a dead one.
+            detach = null;
+            const wait = SUBSCRIBE_RETRY_MS[attempt];
+            if (wait == null) {
+              console.error(`subscribe ${col}: gave up after ${SUBSCRIBE_RETRY_MS.length} retries — reload to try again`, e);
+              return;
+            }
+            console.error(`subscribe ${col}: failed, retrying in ${wait}ms`, e);
+            attempt += 1;
+            timer = setTimeout(attach, wait);
+          },
+        );
+      } catch (e) { console.error("subscribe setup", col, e); }
+    };
+    attach();
+
+    // Idempotent, and safe whether it lands before a retry, during one, or
+    // after the schedule has run out. StrictMode unmounts every effect once
+    // in development, so this is exercised on every dev reload.
+    return () => {
+      stopped = true;
+      if (timer) { clearTimeout(timer); timer = null; }
+      if (detach) { detach(); detach = null; }
+    };
   },
   // db.get with the error left in. Every other reader here swallows a failed
   // query into `[]`, which is the right default for a screen that would
