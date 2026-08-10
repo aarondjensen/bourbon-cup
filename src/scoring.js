@@ -62,6 +62,13 @@ export const calcCHForCourse = (hi, course, teeName) => {
 // math and isn't used outside scoring contexts.
 export const fmtScore = (n) => n == null ? "—" : n === 0 ? "E" : n > 0 ? `+${n}` : `${n}`;
 
+// A points total, without a pointless ".0" — 3 → "3", 3.5 → "3.5". Halves are
+// real here (a halved segment splits its pot) so they have to print, but three
+// quarters of a point is not a thing this app can produce and a long decimal
+// tail would only ever be float noise.
+export const fmtPts = (n) =>
+  n == null ? "—" : Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10);
+
 // ── Shared scoring helpers ──
 // Get a player's effective Handicap Index, applying any per-round override.
 // Used by every scoring path so override semantics stay identical
@@ -541,11 +548,24 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
   const playingCH = {};
   allPids.forEach(pid => { playingCH[pid] = Math.round(exactCH[pid] ?? 0); });
   const minCH = Math.min(...allPids.map(pid => playingCH[pid] ?? 0));
-  const getAdjustedStrokeMap = (pid) => {
-    if (roundHandicapMode === "full") return getStrokeMap(playingCH[pid] ?? 0);
-    // Play off the low man: low man gets 0, others get the difference
-    return getStrokeMap((playingCH[pid] ?? 0) - minCH);
-  };
+  // ── Built once per player, not once per player per hole ──────────────
+  // A stroke map is a pure function of (playing handicap, hole handicaps),
+  // and neither moves inside a match — so there is exactly one map per player
+  // here and the hole loop below reads it.
+  //
+  // It used to be a function called from inside that loop, and buildStrokeMap
+  // sorts all eighteen hole handicaps on every call. On a Team Best Ball round
+  // with sixteen players that is 288 sorts to score one match, and the
+  // Leaderboard re-scores every match in the tournament whenever any hole
+  // changes — so a single tap on a score button was paying for thousands of
+  // sorts of the same unchanging array.
+  const adjustedStrokeMaps = {};
+  allPids.forEach(pid => {
+    const ch = playingCH[pid] ?? 0;
+    // Play off the low man: low man gets 0, others get the difference.
+    adjustedStrokeMaps[pid] = getStrokeMap(roundHandicapMode === "full" ? ch : ch - minCH);
+  });
+  const getAdjustedStrokeMap = (pid) => adjustedStrokeMaps[pid] || getStrokeMap(0);
 
   // ── Shared-ball team handicaps ──
   // A side that plays ONE ball has one handicap: the sum of its players'
@@ -570,7 +590,15 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
   // the other side, so there is no low-man difference to take: the full playing
   // handicap is used and the round's MODE does not enter into it. The allowance
   // still applies — it decided the playing handicap itself.
-  const parStrokeMap = (pid) => getStrokeMap(playingCH[pid] ?? 0);
+  // Same reasoning as the adjusted maps above — one per player, read eighteen
+  // times — but built on FIRST USE rather than up front. Only Stableford and
+  // Tilt ever ask for these, so eagerly building sixteen of them would move
+  // the cost off the hole loop and onto every other format instead.
+  const parStrokeMaps = {};
+  const parStrokeMap = (pid) => {
+    if (!parStrokeMaps[pid]) parStrokeMaps[pid] = getStrokeMap(playingCH[pid] ?? 0);
+    return parStrokeMaps[pid];
+  };
   // Classified on the LADDER of the format being scored — Stableford prices a
   // hole four under and a triple bogey, Tilt stops at albatross and double —
   // so the rung handed back is always one this round's table has a value for.

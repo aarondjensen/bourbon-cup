@@ -44,7 +44,6 @@ import {
   matchScoreImpact, orphanedScores, incomingScores, describeScored,
 } from "../lib/scoreGuard";
 
-const ROUNDS = [1, 2, 3, 4];
 
 const cardStyle = { background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}` };
 const miniBtn = {
@@ -58,6 +57,11 @@ const xBtn = {
 
 export function MatchSetup({
   round, setRound,
+  // The tournament's rounds, resolved once by App from the setup count — not
+  // derived here and not a literal. This tab used to hold its own
+  // `[1, 2, 3, 4]`, which is how a three-round trip got a dead fourth pill
+  // and a five-round one could not draw its fifth.
+  tournamentRounds,
   tRounds, courses, tPlayers, matches, teams, teamNames,
   hcpOverrides, teeAssignments, roundLocks,
   storedGroups, onSaveGroups,
@@ -618,7 +622,7 @@ export function MatchSetup({
       <SegmentedToggle
         variant="pills"
         style={{ marginBottom: 10 }}
-        options={ROUNDS.map(r => [r, `Rd ${r}`])}
+        options={tournamentRounds.map(r => [r, `Rd ${r}`])}
         value={round}
         onChange={(r) => { setRound(r); setTeamASel([]); setTeamBSel([]); setHeld(null); }}
       />

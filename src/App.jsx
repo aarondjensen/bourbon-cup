@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, HOLE_BANNER, FS, segThumb, segTrack, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor, VP_BAND } from "./theme";
 import { playerLookup, realPlayers } from "./lib/players";
@@ -21,10 +21,10 @@ import {
   resolveParPoints, parPointsDefaultFor, formatUsesParPoints, parResultsFor, parResultLabel,
 } from "./constants";
 import {
-  calcCH, calcCHForCourse, fmtScore,
-  getEffectiveHI, buildStrokeMap, resolveHolePars, resolveHoleHcps,
+  calcCH, calcCHForCourse, fmtScore, fmtPts,
+  getEffectiveHI, resolveHolePars, resolveHoleHcps,
   computeMatchResult,
-  getRoundCH, getRoundHI, getRoundTee, lockForRound,
+  getRoundCH, lockForRound,
   totalUnit, segmentState, segmentOptsFor, holeFormatFor,
 } from "./scoring";
 import { holeFill } from "./lib/holeFill";
@@ -49,7 +49,15 @@ import { CtpPrompt } from "./components/CtpPrompt";
 import { DirectorFinalizeAlert, FinalizeRoundSheet } from "./components/FinalizeRound";
 import { MissingCardNote, SignCardSheet, SignedCardPanel } from "./components/CardSignature";
 import { AccountView } from "./components/AccountView";
-import { PhotosView } from "./components/PhotosView";
+// ── Split off the main bundle ─────────────────────────────────────
+// The gallery is the one screen whose weight nobody else should pay for: it
+// carries the image pipeline, it is opened by a minority of the field, and it
+// is never the screen somebody is standing on a tee holding. Its Firestore
+// index is already subscribed on first open rather than at startup, for the
+// same reason and with the same latch — this is that decision applied to the
+// code as well as to the data.
+const PhotosView = lazy(() =>
+  import("./components/PhotosView").then(m => ({ default: m.PhotosView })));
 import { photoUploadsAllowed, uploadsDisabledReason, CONFIG_COL, PHOTOS_CONFIG_ID } from "./lib/media";
 import { initForegroundNotifications, syncAppBadge } from "./lib/notifications";
 import { SegmentedToggle, SegRule, StickyTop, Banner, PlayerName, Toast, HoleNavigator, ScoreButtonRow } from "./components/ui";
@@ -73,6 +81,15 @@ import {
 } from "./lib/groups";
 import { groupKey, tagAheadOfPlay } from "./lib/ctp";
 import { holesEntered, roundScoreProgress } from "./lib/scoreGuard";
+import {
+  allRounds, resolveRoundCount, roundsBeyondCount, clampRoundCount, MAX_ROUND_COUNT,
+} from "./lib/rounds";
+import { summarizeEdition, sameSummary } from "./lib/editionSummary";
+import { playerTable } from "./lib/playerStats";
+import {
+  inField, roundSetup, strokeMapsFor, computeSkins, lowNetRows, ctpTags, settle,
+} from "./lib/betting";
+import { EDITIONS_COL, switchEdition } from "./lib/editions";
 import {
   cardSigBareId, sigForMatch, cardComplete, missingForCard,
   nonSignerPids, isFullyAttested, cardState,
@@ -163,18 +180,6 @@ const NAV_SAFE_PAD = `max(0px, calc(max(${NAV_MIN_PAD}px, env(safe-area-inset-bo
 // edition — TOURNAMENT_ID is a live binding (firebase.js reassigns it when
 // the edition changes), so this is read at call time, never captured once.
 const finalizeSnoozeKey = () => `bc_finalize_snooze_${TOURNAMENT_ID}`;
-
-// First+last initials from a player's full name. "Aaron Jensen" → "AJ".
-// Single-name fallback grabs the first two letters (e.g. "Joe" → "JO") so a
-// missing surname doesn't produce a one-character badge that breaks the
-// 2-char width alignment elsewhere.
-const getInitials = (name) => {
-  if (!name) return "??";
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return "??";
-  if (parts.length === 1) return (parts[0].slice(0, 2) || "??").toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-};
 
 // ── ScoreCell ──
 // Single-cell rendering of a player's score on one hole, used in the full
@@ -980,8 +985,6 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
 
   if (!course) return empty("⛳", `Round ${match.round} course not configured yet`);
 
-  const { A: tA, B: tB } = teams;
-
   // ── Closest-to-the-pin ───────────────────────────────────────────────
   // The hole's standing tag, live from Firestore. `null` until some group
   // has claimed it.
@@ -1571,17 +1574,14 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           "Net ±X thru N" right-aligned — then a row of par-relative score
           buttons. Tap a saved score again to clear. */}
       <div style={{ flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: fit.cardGap }}>
-        {[...match.teamA, "DIVIDER", ...match.teamB].map((pid, idx) => {
+        {[...match.teamA, "DIVIDER", ...match.teamB].map((pid) => {
           if (pid === "DIVIDER") return <div key="div" style={{ borderTop: `1px dashed ${BC.bdr}`, flexShrink: 0, margin: `${fit.cardGap}px 0` }} />;
           const tp = tPlayers.find(t => t.player_id === pid);
           const team = match.teamA.includes(pid) ? "A" : "B";
-          const tc = team === "A" ? tA : tB;
           const cur = getScore(pid, activeHole);
           const strokes = strokeMaps[pid]?.[activeHole] || 0;
           // CH for display — per-player tee assignment overrides round default,
           // matching the strokeMaps memo above and computeMatchResult.
-          const hi = getRoundHI({ roundLocks, round: match.round, pid, players: tPlayers });
-          const playerTee = getRoundTee({ roundLocks, round: match.round, pid, teeAssignments, roundTee });
           const fullCH = getRoundCH({
             roundLocks, round: match.round, pid, players: tPlayers,
             course, chOverrides: hcpOverrides, teeAssignments, roundTee,
@@ -2075,7 +2075,7 @@ function ChDeltaBadge({ delta }) {
   );
 }
 
-function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks }) {
+function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, roundCount, tournamentRounds, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks }) {
   const [tab, setTab] = useState("players");
   const [editTeamNames, setEditTeamNames] = useState({ A: "", B: "" });
   const [editingTeam, setEditingTeam] = useState(null);
@@ -2096,6 +2096,10 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
   const [brandBusy, setBrandBusy] = useState(null); // team id mid-extraction
   const [editTournamentName, setEditTournamentName] = useState(tournamentName || "");
   const [editTournamentLocation, setEditTournamentLocation] = useState(tournamentLocation || "");
+  // Seeded from the RESOLVED count, not the raw setting, so an edition that
+  // predates the field opens showing the four rounds it already has rather
+  // than an empty box.
+  const [editRoundCount, setEditRoundCount] = useState("");
   // The input always starts empty and always means "the NEW one" — unlike
   // its neighbours it is never seeded from the saved value, because typing
   // over a pre-filled password is how you change it by accident. The
@@ -2112,6 +2116,15 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
   }, []);
   useEffect(() => { setEditTournamentName(tournamentName || ""); }, [tournamentName]);
   useEffect(() => { setEditTournamentLocation(tournamentLocation || ""); }, [tournamentLocation]);
+  useEffect(() => {
+    setEditRoundCount(String(resolveRoundCount({ roundCount, tRounds, matches, roundLocks })));
+  }, [roundCount, tRounds, matches, roundLocks]);
+  // Rounds the schedule would hold on to at the number CURRENTLY TYPED, so
+  // the hint answers while the director is still typing rather than after
+  // they save and wonder why the pills did not change.
+  const heldRounds = roundsBeyondCount({
+    roundCount: clampRoundCount(editRoundCount), tRounds, matches, roundLocks,
+  });
   useEffect(() => {
     setBrandEdit({ A: brand?.teamA?.color || "", B: brand?.teamB?.color || "" });
     setBrandLogoEdit({ A: brand?.teamA?.logo || null, B: brand?.teamB?.logo || null });
@@ -2187,10 +2200,25 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
   const searchTimerRef = useRef(null);
 
   const [editRound, setEditRound] = useState(1);
+  // A director who shortens the tournament while standing on the round they
+  // just removed would otherwise be editing a round with no pill to return
+  // to. Falls back to the last one that is left.
+  useEffect(() => {
+    if (tournamentRounds.length && !tournamentRounds.includes(editRound)) {
+      setEditRound(tournamentRounds[tournamentRounds.length - 1]);
+    }
+  }, [tournamentRounds, editRound]);
   const [roundFormat, setRoundFormat] = useState("");
   const [roundTeeTime, setRoundTeeTime] = useState("");
   const [hcpOverrides, setHcpOverrides] = useState({});
-  const [handicapMode, setHandicapMode] = useState({ 1: "low_man", 2: "low_man", 3: "low_man", 4: "full" }); // per round
+  // Per round, and seeded EMPTY. It used to open as
+  // `{1:"low_man",2:"low_man",3:"low_man",4:"full"}` — the retired
+  // `round === 4 ? "full"` heuristic written out longhand, which was only ever
+  // a stand-in for "round 4 is the Team Best Ball round" and stopped being
+  // true the moment a director moved that format somewhere else. An absent
+  // entry falls through to defaultHandicapMode(format), which asks the format
+  // itself; see the hydration effect and formRound below.
+  const [handicapMode, setHandicapMode] = useState({}); // per round
   const [chDeltas, setChDeltas] = useState({});
   const [editingPlayer, setEditingPlayer] = useState(null); // { pid, first, last, nick, hi, ov, dir }
   const [teeAssignments, setTeeAssignments] = useState({}); // { round: { pid: teeName } }
@@ -2589,11 +2617,11 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
           try {
             const r3 = await fetch(`/api/courses2?search=${encodeURIComponent(q)}`);
             if (r3.ok) { const d3 = await r3.json(); const raw3 = Array.isArray(d3)?d3:(d3.courses||d3.data||[]); results = [...results, ...parseRapidAPI(raw3, stateFilter)]; }
-          } catch(e) {}
+          } catch { /* a fallback search that fails simply adds nothing */ }
           try {
             const r4 = await fetch(`/api/courses?search=${encodeURIComponent(q)}`);
             if (r4.ok) { const d4 = await r4.json(); const gc4 = parseGolfCourseAPI(d4).filter(c => stateMatches(c.state, stateFilter)); for (const gc of gc4) { if (!results.find(r => r.name.toLowerCase() === gc.name.toLowerCase())) results.push(gc); } }
-          } catch(e) {}
+          } catch { /* likewise — the results already gathered still stand */ }
         }
 
         return results.map(c => ({ ...c, _incompleteData: !hasRealSlope(c) }));
@@ -3065,7 +3093,7 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                 the previous round's settings on screen. */}
             <SegmentedToggle
               variant="pills"
-              options={[1,2,3,4].map(r => [r, `Rd ${r}`])}
+              options={tournamentRounds.map(r => [r, `Rd ${r}`])}
               value={editRound}
               onChange={setEditRound}
               style={{ flex: 1 }}
@@ -4138,6 +4166,7 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
         <MatchSetup
           round={matchRound}
           setRound={setMatchRound}
+          tournamentRounds={tournamentRounds}
           tRounds={tRounds}
           courses={courses}
           tPlayers={tPlayers}
@@ -4443,7 +4472,7 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                           tee_boxes: (draft.tee_boxes||[]).map(tb => ({...tb, rating:parseFloat(tb.rating)||72.0, slope:parseInt(tb.slope)||113, par:parseInt(tb.par)||72, yardage:parseInt(tb.yardage)||0})),
                         };
                         // Strip all undefined fields — Firestore rejects them
-                        const finalCourse = Object.fromEntries(Object.entries(rawCourse).filter(([_, v]) => v !== undefined));
+                        const finalCourse = Object.fromEntries(Object.entries(rawCourse).filter(([, v]) => v !== undefined));
                         await onAddCourse(finalCourse);
                         // A course added while picking one for a round was
                         // added FOR that round — putting it there is the whole
@@ -4492,6 +4521,11 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                 onClick={() => onSaveTournament({
                   name: editTournamentName.trim() || TOURNAMENT_TITLE,
                   location: editTournamentLocation.trim() || TOURNAMENT_LOCATION,
+                  // Clamped rather than refused. A blank box or a slipped
+                  // keystroke should not be able to fail a save that also
+                  // carries the name and the venue, so it lands on the nearest
+                  // legal number and the row below says what that is.
+                  rounds: clampRoundCount(editRoundCount),
                 })}
                 style={{ flexShrink: 0, fontSize: FS.small, fontWeight: 700, color: ON_AMBER, background: BC.amber, border: "none", borderRadius: 6, padding: "8px 14px", cursor: "pointer" }}
               >Save</button>
@@ -4518,6 +4552,33 @@ function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, course
                   />
                 </div>
               ))}
+              {/* ── How long the tournament is ──────────────────────────
+                  It used to be four everywhere it was asked, in four
+                  different files. It belongs here: how many rounds a trip is
+                  is something the director knows before anybody packs a bag,
+                  not something the app should infer from what has been
+                  entered so far.
+
+                  The list it drives can only ever GROW past this number, never
+                  shrink below a round somebody has played — see lib/rounds. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.5, width: 58, flexShrink: 0, textTransform: "uppercase" }}>Rounds</span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={MAX_ROUND_COUNT}
+                  value={editRoundCount}
+                  onChange={e => setEditRoundCount(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                  style={{ width: 74, boxSizing: "border-box", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.lead, fontWeight: 700, outline: "none", fontFamily: FONT }}
+                />
+                <span style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.35 }}>
+                  {heldRounds.length
+                    ? `Round ${heldRounds.join(", ")} ${heldRounds.length === 1 ? "has" : "have"} been played, so the schedule keeps ${heldRounds.length === 1 ? "it" : "them"}.`
+                    : "Sets the round pills on every tab."}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -4688,11 +4749,10 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // ── Who is playing for what ──
   // A null list means the director has never tagged anybody, and that means
   // EVERYBODY — so a tournament that never opens the buy-in panel behaves
-  // exactly as it did before buy-ins existed.
-  const inField = (ids) => (ids == null ? realPlayers(tPlayers) : realPlayers(tPlayers).filter(p => ids.includes(p.player_id)));
-  const skinsField = inField(buyIns?.skinsIn);
-  const ctpField = inField(buyIns?.ctpIn);
-  const ctpInSet = new Set(ctpField.map(p => p.player_id));
+  // exactly as it did before buy-ins existed. See lib/betting.
+  const roster = realPlayers(tPlayers);
+  const skinsField = inField(roster, buyIns?.skinsIn);
+  const ctpField = inField(roster, buyIns?.ctpIn);
 
   // The pot is COUNTED from the buy-ins once a buy-in price exists. Until one
   // does, the hand-typed pot stands and stays editable — which is the only
@@ -4700,7 +4760,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   const skinsCounted = (buyIns?.skinsAmount || 0) > 0;
   const skinsPotValue = skinsCounted ? skinsField.length * buyIns.skinsAmount : skinsPot;
   const ctpPotValue = (buyIns?.ctpAmount || 0) > 0 ? ctpField.length * buyIns.ctpAmount : 0;
-  const lowNetField = inField(buyIns?.lowNetIn);
+  const lowNetField = inField(roster, buyIns?.lowNetIn);
   const lowNetPotValue = (buyIns?.lowNetAmount || 0) > 0 ? lowNetField.length * buyIns.lowNetAmount : 0;
 
   // The rounds that actually exist, not a hardcoded 1-4: a two-round
@@ -4744,78 +4804,40 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // Both tabs go through this. The CTP grid used to read `course.hole_pars`
   // raw, which meant it could offer a different set of par 3s than the ones
   // the Scoring tab actually prompted on.
-  const roundSetup = (round) => {
-    const tr2 = tRounds.find(t => t.round_number === round);
-    const bLock = lockForRound(roundLocks, round);
-    const course2 = courses.find(c => c.id === (bLock?.course_id || tr2?.course_id));
-    return {
-      tr: tr2, lock: bLock, course: course2,
-      pars: resolveHolePars(course2, bLock),
-      hcps: resolveHoleHcps(course2, bLock),
-    };
-  };
+  // Every derivation below is lib/betting's, bound to this view's data once.
+  // They used to be defined inline here, which was fine while the only
+  // question was "who is winning this one" — the Settle tab asks a question
+  // that needs the same numbers, and two copies of a payout is how a board and
+  // a settlement come to disagree about the same pot.
+  const ctx = { tPlayers, tRounds, courses, roundLocks, hcpOverrides, teeAssignments };
+  const setupFor = (round) => roundSetup({ round, tRounds, courses, roundLocks });
+  const strokeMapsForRound = (round) => strokeMapsFor({ round, field: skinsField, ...ctx });
 
-  // Every player's stroke allocation for a round, built once.
-  //
-  // Net skins are handicap-derived, so they answer to the round lock too — a
-  // settled skin must not change hands because someone synced a GHIN index the
-  // next morning. Uses the canonical buildStrokeMap so handicaps over 18 wrap
-  // correctly (a hole can get 2+ strokes); the old inline lookup capped every
-  // hole at 1.
-  //
-  // The field card reads the SAME maps to draw its stroke dots, so a dot
-  // printed on a cell is always the stroke the skin was decided with.
-  const strokeMapsFor = (round) => {
-    const { tr: tr2, course: course2, hcps } = roundSetup(round);
-    const maps = {};
-    skinsField.forEach(p => {
-      const ch = getRoundCH({
-        roundLocks, round, pid: p.player_id, players: tPlayers,
-        course: course2, chOverrides: hcpOverrides, teeAssignments, roundTee: tr2?.tee_box,
-      });
-      maps[p.player_id] = buildStrokeMap(ch, hcps);
-    });
-    return maps;
-  };
+  const skinsFor = (round, gross) => computeSkins({
+    round, gross, field: skinsField, holeData,
+    pars: setupFor(round).pars,
+    maps: gross ? null : strokeMapsForRound(round),
+  });
 
-  // Compute skins for a round
-  const computeSkins = (round, gross) => {
-    const { pars } = roundSetup(round);
-    const maps = gross ? null : strokeMapsFor(round);
-
-    const skins = [];
-    for (let h = 0; h < 18; h++) {
-      const scores = skinsField.map(p => {
-        const raw = (holeData[`${p.player_id}_${round}`] || {})[h];
-        if (raw == null) return null;
-        if (gross) return { pid: p.player_id, name: p.name, score: raw };
-        const strokes = maps[p.player_id]?.[h] || 0;
-        return { pid: p.player_id, name: p.name, score: raw - strokes };
-      }).filter(Boolean);
-
-      if (scores.length < 2) { skins.push({ hole: h, winner: null, tied: false, par: pars[h] }); continue; }
-      const min = Math.min(...scores.map(s => s.score));
-      const winners = scores.filter(s => s.score === min);
-      if (winners.length === 1) skins.push({ hole: h, winner: winners[0], score: min, par: pars[h] });
-      else skins.push({ hole: h, winner: null, tied: true, score: min, par: pars[h] });
-    }
-    return skins;
-  };
-
-  const allSkins = roundList.flatMap(r => computeSkins(r, grossMode).filter(s => s.winner).map(s => ({ ...s, round: r })));
+  const allSkins = roundList.flatMap(r => skinsFor(r, grossMode).filter(s => s.winner).map(s => ({ ...s, round: r })));
   const skinCount = {};
   allSkins.forEach(s => { skinCount[s.winner.pid] = (skinCount[s.winner.pid] || 0) + 1; });
   const totalSkins = allSkins.length;
-  const perSkin = totalSkins > 0 ? (skinsPotValue / totalSkins).toFixed(2) : "0.00";
+  // Exact, and rounded only where it prints. It used to be rounded to the cent
+  // HERE and then multiplied by a player's skin count, which is how this row
+  // came to disagree with the Settle tab about the same money: a $80 pot over
+  // 36 skins is $2.2222 a skin, and ten of them are $22.22 — not ten times
+  // $2.22, which is $22.20.
+  const perSkin = totalSkins > 0 ? skinsPotValue / totalSkins : 0;
 
   // ── What the field card is drawn from ──
   // The shown round's setup, skins and stroke maps, resolved once. Every one
   // of these is safe with a null round (no schedule yet): roundSetup falls
   // back to a par-4 course, and a scoreless round yields no skins.
-  const shownSetup = roundSetup(shownRound);
-  const shownSkins = computeSkins(shownRound, grossMode);
+  const shownSetup = setupFor(shownRound);
+  const shownSkins = skinsFor(shownRound, grossMode);
   // Gross mode draws no dots, so it needs no maps.
-  const shownStrokeMaps = grossMode ? {} : strokeMapsFor(shownRound);
+  const shownStrokeMaps = grossMode ? {} : strokeMapsForRound(shownRound);
   // Team, then name. Skins is an individual game and the sides mean nothing
   // to it, but the roster is grouped this way on every other screen, and a
   // player looking for their own row among sixteen finds it faster in the
@@ -4833,32 +4855,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   //
   // Equal lowest cards are CO-WINNERS, not a push. A skin pushes because the
   // hole carries; low net has nowhere to carry to, so the round's share splits.
-  const lowNetRows = (round) => {
-    const { tr: tr2, course: course2 } = roundSetup(round);
-    const rows = lowNetField.map(p => {
-      const card = holeData[`${p.player_id}_${round}`] || {};
-      const played = Object.keys(card).filter(h => card[h] > 0);
-      const gross = played.reduce((a, h) => a + card[h], 0);
-      const ch = getRoundCH({
-        roundLocks, round, pid: p.player_id, players: tPlayers,
-        course: course2, chOverrides: hcpOverrides, teeAssignments, roundTee: tr2?.tee_box,
-      });
-      return {
-        pid: p.player_id, name: p.name, team: p.team,
-        thru: played.length, complete: played.length === 18,
-        gross, ch, net: gross - ch,
-      };
-    });
-    const done = rows.filter(r => r.complete);
-    const best = done.length ? Math.min(...done.map(r => r.net)) : null;
-    rows.forEach(r => { r.won = r.complete && r.net === best; });
-    // Finished cards first, ranked; the unfinished trail behind in play order.
-    return rows.sort((a, b) =>
-      (b.complete ? 1 : 0) - (a.complete ? 1 : 0) ||
-      (a.complete ? a.net - b.net : b.thru - a.thru) ||
-      String(a.name).localeCompare(String(b.name))
-    );
-  };
+  const lowNetFor = (round) => lowNetRows({ round, field: lowNetField, holeData, ...ctx });
 
   // The pot is divided by the ROUNDS, not by the wins. Each round is worth the
   // same share, and a tied round splits ITS share between the co-winners — so
@@ -4866,7 +4863,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // dividing by wins would have done.
   const lowNetRoundShare = roundList.length ? lowNetPotValue / roundList.length : 0;
   const lowNetWins = roundList.flatMap(r => {
-    const winners = lowNetRows(r).filter(x => x.won);
+    const winners = lowNetFor(r).filter(x => x.won);
     return winners.map(w => ({ ...w, round: r, share: lowNetRoundShare / winners.length }));
   });
   const lowNetDecided = new Set(lowNetWins.map(w => w.round)).size;
@@ -4881,7 +4878,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // ── The CTP tab ──
   const ctpShownRound = roundList.includes(ctpRound) ? ctpRound : defaultRound;
   const lowNetShownRound = roundList.includes(lowNetRound) ? lowNetRound : defaultRound;
-  const noPar3s = roundList.every(r => !roundSetup(r).pars.some(p => p === 3));
+  const noPar3s = roundList.every(r => !setupFor(r).pars.some(p => p === 3));
 
   // Every standing tag, read through each round's OWN par table rather than
   // straight off ctpData: a record left on a hole that is no longer a par 3 —
@@ -4891,18 +4888,9 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // An unsettled tag still counts. The document is the hole's current answer
   // and not a log of attempts, which is exactly what the rows below display;
   // a leaderboard that ignored pending tags would disagree with them.
-  const ctpTags = roundList.flatMap(r => {
-    const { pars } = roundSetup(r);
-    return pars.flatMap((p, h) => {
-      if (p !== 3) return [];
-      const rec = ctpData[`${r}_${h}`];
-      // A tag naming somebody who is not in the CTP game does not score. It
-      // still shows on its hole — the document is the hole's answer — but the
-      // board and the payout are for the players who bought in.
-      return rec?.player_id && ctpInSet.has(rec.player_id) ? [{ round: r, hole: h, ...rec }] : [];
-    });
-  });
-  const ctpLeaders = Object.values(ctpTags.reduce((acc, t) => {
+  const tags = ctpTags({ rounds: roundList, field: ctpField, ctpData, tRounds, courses, roundLocks });
+
+  const ctpLeaders = Object.values(tags.reduce((acc, t) => {
     const e = acc[t.player_id] || (acc[t.player_id] = { pid: t.player_id, count: 0, best: null });
     e.count += 1;
     if (t.distance_ft != null && (e.best == null || t.distance_ft < e.best)) e.best = t.distance_ft;
@@ -4937,7 +4925,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
           rather than taking it away. */}
       <StickyTop>
         <SegmentedToggle
-          options={[["skins", "Skins"], ["ctp", "CTP"], ["lownet", "Low Net"]]}
+          options={[["skins", "Skins"], ["ctp", "CTP"], ["lownet", "Low Net"], ["settle", "Settle"]]}
           value={activeTab} onChange={setActiveTab} letterSpacing={0.5}
         />
       </StickyTop>
@@ -4968,21 +4956,31 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                   // first render, and another director can change it while this
                   // screen is open. Seeding at mount meant a director who tapped
                   // in and straight back out saved a stale pot over the real one.
-                  <div onClick={() => { if (user?.isDirector) { setPotInput(String(skinsPot)); setEditPot(true); } }}
-                    style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold, cursor: user?.isDirector ? "pointer" : "default" }}>
+                  <button
+                    type="button"
+                    disabled={!user?.isDirector}
+                    aria-label={user?.isDirector ? "Edit the skins pot" : undefined}
+                    onClick={() => { setPotInput(String(skinsPot)); setEditPot(true); }}
+                    style={{
+                      fontSize: FS.title, fontWeight: 800, color: BC.gold, fontFamily: FONT,
+                      background: "transparent", border: "none", padding: 0, textAlign: "left",
+                      cursor: user?.isDirector ? "pointer" : "default",
+                    }}>
                     ${skinsPot.toFixed(2)}
-                  </div>
+                  </button>
                 )}
               </div>
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontSize: FS.label, color: BC.t3 }}>{totalSkins} skins won</div>
-                <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>${perSkin} / skin</div>
+                <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>${perSkin.toFixed(2)} / skin</div>
               </div>
             </div>
             {user?.isDirector && (
-              <div
+              <button
+                type="button"
+                aria-expanded={editBuyIns === "skins"}
                 onClick={() => setEditBuyIns(v => (v === "skins" ? null : "skins"))}
-                style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "8px 14px", borderTop: `1px solid ${BC.bdr}` }}
+                style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "8px 14px", borderTop: `1px solid ${BC.bdr}`, width: "100%", background: "transparent", borderLeft: "none", borderRight: "none", borderBottom: "none", fontFamily: FONT }}
               >
                 <span style={{ flex: 1, fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.6 }}>
                   {skinsField.length} IN{skinsCounted ? ` · $${buyIns.skinsAmount} EACH` : ""}
@@ -4990,7 +4988,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                 <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.amberInk, letterSpacing: 0.6 }}>
                   BUY-INS {editBuyIns === "skins" ? "▾" : "▸"}
                 </span>
-              </div>
+              </button>
             )}
           </div>
 
@@ -5025,7 +5023,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                     <div style={{ width: 8, height: 8, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
                     <span style={{ flex: 1, fontSize: FS.body, fontWeight: 600, color: BC.t1 }}>{p?.name || pid}</span>
                     <span style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>{count} skin{count !== 1 ? "s" : ""}</span>
-                    <span style={{ fontSize: FS.small, color: BC.t3 }}>${(count * parseFloat(perSkin)).toFixed(2)}</span>
+                    <span style={{ fontSize: FS.small, color: BC.t3 }}>${(count * perSkin).toFixed(2)}</span>
                   </div>
                 );
               })}
@@ -5078,9 +5076,9 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                       <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold }}>${ctpPotValue.toFixed(2)}</div>
                     </div>
                     <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: FS.label, color: BC.t3 }}>{ctpTags.length} pin{ctpTags.length !== 1 ? "s" : ""} taken</div>
+                      <div style={{ fontSize: FS.label, color: BC.t3 }}>{tags.length} pin{tags.length !== 1 ? "s" : ""} taken</div>
                       <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>
-                        ${(ctpTags.length > 0 ? ctpPotValue / ctpTags.length : 0).toFixed(2)} / pin
+                        ${(tags.length > 0 ? ctpPotValue / tags.length : 0).toFixed(2)} / pin
                       </div>
                     </div>
                   </div>
@@ -5144,7 +5142,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                 />
 
                 {(() => {
-                  const { course: course2, pars: pars2 } = roundSetup(ctpShownRound);
+                  const { course: course2, pars: pars2 } = setupFor(ctpShownRound);
                   const par3holes = pars2.map((p, i) => ({ hole: i, par: p })).filter(h => h.par === 3);
                   if (par3holes.length === 0) {
                     return (
@@ -5283,43 +5281,323 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
             onChange={setLowNetRound}
           />
 
-          <LowNetCard rows={lowNetRows(lowNetShownRound)} />
+          <LowNetCard rows={lowNetFor(lowNetShownRound)} />
         </div>
+      )}
+
+      {roundList.length > 0 && activeTab === "settle" && (
+        <SettleCard
+          settlement={settle({
+            players: roster, rounds: roundList, holeData, ctpData,
+            buyIns, skinsPot, grossSkins: grossMode, ...ctx,
+          })}
+          teams={teams}
+          gross={grossMode}
+        />
       )}
     </div>
   );
 }
 
+// What a lazily-loaded screen shows while its chunk arrives. Deliberately
+// quiet and deliberately the full height of the content area: a spinner that
+// reflows the page when it resolves reads as a glitch, and on a fast
+// connection this is one frame.
+function LoadingPanel({ label }) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: "80px 20px", color: BC.t3, fontFamily: FONT,
+      fontSize: FS.small, letterSpacing: 1, fontWeight: 700,
+    }}>
+      {(label || "").toUpperCase()}…
+    </div>
+  );
+}
+
+// ── Settle ────────────────────────────────────────────────────────────
+// What the whole weekend comes to, one row per player. The other three tabs
+// each answer "who is winning this one"; this is the question the trip
+// actually ends on, and until now the only way to it was three boards and a
+// pen.
+//
+// Up first, down last, and the middle of the list is where somebody breaks
+// even. The three games are shown broken out beneath each name because a
+// player can be up on skins and still down overall, and being told only the
+// total invites exactly one question.
+//
+// ── When it will not give a net ───────────────────────────────────────
+// A skins pot that was TYPED rather than bought into records no stake for
+// anybody, so what a player is up cannot be worked out — only what they won.
+// The card says that instead of showing a net that quietly assumes everybody
+// put in an equal share. Setting a skins buy-in price is what fixes it, and
+// the card says so too.
+function SettleCard({ settlement, teams, gross }) {
+  const { rows, pots, staked, totalSkins, totalPins } = settlement;
+  const playing = rows.filter(r => r.playing);
+  const money = (n) => `$${Math.abs(n).toFixed(2)}`;
+  const signed = (n) => (n > 0.004 ? `+${money(n)}` : n < -0.004 ? `−${money(n)}` : "$0.00");
+  const potTotal = pots.skins + pots.ctp + pots.lowNet;
+
+  if (!playing.length) {
+    return (
+      <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: "60px 20px", textAlign: "center" }}>
+        <div style={{ fontSize: FS.jumbo, marginBottom: 12, opacity: 0.4 }}>🧾</div>
+        <div style={{ fontSize: FS.lead, fontWeight: 700, color: BC.t1, marginBottom: 6 }}>Nothing to settle</div>
+        <div style={{ fontSize: FS.small, color: BC.t3, maxWidth: 280, margin: "0 auto", lineHeight: 1.5 }}>
+          Set a buy-in on Skins, CTP or Low Net and everybody&apos;s position shows up here.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: "12px 14px", marginBottom: 12 }}>
+        <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>ON THE TABLE</div>
+        <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold }}>${potTotal.toFixed(2)}</div>
+        <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 2 }}>
+          {totalSkins} skin{totalSkins === 1 ? "" : "s"} ({gross ? "gross" : "net"}) · {totalPins} pin{totalPins === 1 ? "" : "s"}
+        </div>
+      </div>
+
+      {!staked && (
+        <div style={{
+          background: BC.card, borderRadius: 12, border: `1px solid ${BC.warn}${ALPHA.line}`,
+          padding: "10px 14px", marginBottom: 12, fontSize: FS.small, color: BC.t2, lineHeight: 1.45,
+        }}>
+          The skins pot was typed in rather than bought into, so nobody&apos;s stake is
+          recorded and these are <strong>winnings, not net positions</strong>. Set a
+          skins buy-in to settle it properly.
+        </div>
+      )}
+
+      <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
+        {playing.map((r, i) => {
+          const team = teams[r.team];
+          const up = r.net > 0.004, down = r.net < -0.004;
+          // A game with no pot still has a WINNER — somebody took those pins —
+          // so the count is worth printing. What is not worth printing is the
+          // "$0.00" beside it, which reads as a payout that went wrong rather
+          // than as a game nobody put money on.
+          const part = (n, label, amount) =>
+            (n ? `${n} ${label}${n === 1 ? "" : "s"}${amount > 0 ? ` ${money(amount)}` : ""}` : null);
+          const parts = [
+            part(r.skins, "skin", r.won.skins),
+            part(r.pins, "CTP", r.won.ctp),
+            r.lowNet ? `${r.lowNet} low net${r.won.lowNet > 0 ? ` ${money(r.won.lowNet)}` : ""}` : null,
+          ].filter(Boolean);
+          return (
+            <div key={r.pid} style={{
+              padding: "9px 14px",
+              borderBottom: i < playing.length - 1 ? `1px solid ${BC.bdr}${ALPHA.hair}` : "none",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
+                <span style={{
+                  flex: 1, minWidth: 0, fontSize: FS.body, fontWeight: 600, color: BC.t1,
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                }}>{r.name}</span>
+                <span style={{
+                  fontSize: FS.body, fontWeight: 800,
+                  color: up ? BC.green : down ? BC.danger : BC.t3,
+                }}>{staked ? signed(r.net) : money(r.total)}</span>
+              </div>
+              {/* Where it came from, and what it cost. A total with no
+                  breakdown under it invites exactly one question. */}
+              <div style={{ fontSize: FS.micro, color: BC.t3, marginTop: 2, marginLeft: 16, letterSpacing: 0.3 }}>
+                {parts.length ? parts.join(" · ") : "nothing won"}
+                {staked && r.paid > 0 ? ` · in ${money(r.paid)}` : ""}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── History ──
+// One row per year, off the SAME edition list the Tournaments picker reads —
+// so the summary of a year and the way into it can never be two different sets
+// of years. The rows are tappable for that reason: the whole tournament is one
+// switch away, and the menu already describes the pair as "that row is the
+// summary of the past, this one walks into it."
+//
+// The numbers come from the cards (lib/editionSummary), not from anything
+// anybody typed. A year with no `result` yet has simply never been opened by a
+// director since this landed — the app records it the first time one does, so
+// the empty state says that rather than pretending the year is missing.
+function HistoryList({ editions, activeSummary, teams, isDirector }) {
+  const rows = [...editions]
+    .filter(e => e.year)
+    .sort((a, b) => (b.year || 0) - (a.year || 0))
+    // The running year is computed live rather than read back, so it has a
+    // score the moment it has a match — it does not have to be over, and it
+    // does not have to have been written down, to show up here.
+    .map(e => ({ ...e, summary: e.id === TOURNAMENT_ID ? activeSummary : e.result || null }));
+
+  if (!rows.length) {
+    return (
+      <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>
+        <div style={{ fontSize: FS.display, marginBottom: 12 }}>📊</div>
+        <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.t2, marginBottom: 8 }}>No years yet</div>
+        <div style={{ fontSize: FS.small }}>Every tournament on the Tournaments list shows its result here.</div>
+      </div>
+    );
+  }
+
+  const side = (name, score, accent, align) => (
+    <div style={{ flex: 1, minWidth: 0, textAlign: align }}>
+      <div style={{
+        fontSize: FS.label, fontWeight: 800, color: accent, letterSpacing: 0.4,
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+      }}>{name || "—"}</div>
+      <div style={{ fontSize: FS.lead, fontWeight: 800, color: BC.t1 }}>{fmtPts(score)}</div>
+    </div>
+  );
+
+  return (
+    <div>
+      {rows.map(e => {
+        const s = e.summary;
+        const live = e.id === TOURNAMENT_ID;
+        const won = s?.winner || null;
+        return (
+          <button
+            key={e.id}
+            onClick={() => { if (e.id !== TOURNAMENT_ID) switchEdition(e.id, { namespaced: !!e.namespaced }); }}
+            style={{
+              display: "block", width: "100%", textAlign: "left",
+              background: BC.card, borderRadius: 12, padding: 14, marginBottom: 12,
+              border: `1px solid ${live ? BC.amber + ALPHA.line : BC.bdr}`,
+              fontFamily: FONT, cursor: e.id === TOURNAMENT_ID ? "default" : "pointer",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: FS.body, fontWeight: 700, color: BC.gold }}>{e.year}</span>
+              <span style={{
+                flex: 1, minWidth: 0, fontSize: FS.label, color: BC.t3,
+                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+              }}>{(s?.location || "").toUpperCase()}</span>
+              {live && <span style={{ fontSize: FS.micro, fontWeight: 800, color: BC.amberInk, letterSpacing: 0.6 }}>THIS YEAR</span>}
+            </div>
+
+            {s ? (
+              <>
+                <div style={{ display: "flex", alignItems: "flex-end", gap: 10 }}>
+                  {side(s.teamA, s.scoreA, teams.A.accent, "left")}
+                  {side(s.teamB, s.scoreB, teams.B.accent, "right")}
+                </div>
+                <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.amberInk, marginTop: 8 }}>
+                  {s.halved ? "🏆 The cup was halved"
+                    : !s.complete ? `In progress · ${s.rounds} round${s.rounds === 1 ? "" : "s"}`
+                      : won ? `🏆 ${won} won the Bourbon Cup` : "—"}
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize: FS.small, color: BC.t3 }}>
+                {isDirector
+                  ? "Not summarised yet — open this year once and it records itself."
+                  : "Not summarised yet."}
+              </div>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Player stats table ──
+// Two things about a player, side by side, because they are genuinely
+// different facts and the tab used to show only one of them.
+//
+//   W / L / H / PTS   what their MATCHES did. A team result — a four-ball is
+//                     won by two people and both of them won it — which is
+//                     how a cup record has always been read.
+//   RDS / AVG / BEST  what their CARD did. Theirs alone, and true whatever
+//                     format the round was played in.
+//
+// A player with nothing posted shows "—" rather than a zero. The old table
+// seeded every counter at 0 and printed them identically, so somebody who had
+// not teed off looked like somebody who had played four rounds badly.
+//
+// Two rows per player, not eight columns: eight numbers across a phone is
+// either unreadable or a horizontal scroll, and the second row is the quieter
+// half by design — the record is what people came for.
+function PlayerStatsTable({ rows, teams }) {
+  if (!rows.length) {
+    return (
+      <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>
+        <div style={{ fontSize: FS.display, marginBottom: 12 }}>📊</div>
+        <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.t2 }}>No players yet</div>
+      </div>
+    );
+  }
+  const COLS = "1fr 38px 38px 38px 50px";
+  const head = { fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1, textAlign: "center" };
+  const cell = { fontSize: FS.small, fontWeight: 600, textAlign: "center" };
+  return (
+    <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
+      <div style={{ display: "grid", gridTemplateColumns: COLS, padding: "8px 12px", borderBottom: `1px solid ${BC.bdr}`, ...head, textAlign: "left" }}>
+        <div>PLAYER</div>
+        <div style={head}>W</div><div style={head}>L</div><div style={head}>H</div>
+        <div style={{ ...head, textAlign: "right" }}>PTS</div>
+      </div>
+      {rows.map((p, i) => {
+        const team = teams[p.team];
+        return (
+          <div key={p.pid} style={{
+            padding: "8px 12px",
+            borderBottom: i < rows.length - 1 ? `1px solid ${BC.bdr}${ALPHA.hair}` : "none",
+          }}>
+            <div style={{ display: "grid", gridTemplateColumns: COLS, alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
+                <span style={{
+                  fontSize: FS.small, fontWeight: 600, color: playerNameColor(),
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                }}>{p.name}</span>
+              </div>
+              <div style={{ ...cell, color: BC.green }}>{p.wins}</div>
+              <div style={{ ...cell, color: BC.danger }}>{p.losses}</div>
+              <div style={{ ...cell, color: BC.t3 }}>{p.halves}</div>
+              <div style={{ ...cell, textAlign: "right", fontWeight: 700, color: BC.amberInk }}>{fmtPts(p.pts)}</div>
+            </div>
+            {/* The card. Quieter, and it says nothing at all rather than
+                zeroes when there is no complete round to speak for. */}
+            <div style={{ display: "flex", gap: 12, marginTop: 3, marginLeft: 12, fontSize: FS.micro, color: BC.t3, letterSpacing: 0.4 }}>
+              <span>{p.rounds ? `${p.rounds} RD${p.rounds === 1 ? "" : "S"}` : "NO CARD"}</span>
+              {p.avgToPar != null && (
+                <span>AVG <strong style={{ color: BC.t2, fontWeight: 700 }}>{fmtScore(Math.round(p.avgToPar * 10) / 10)}</strong></span>
+              )}
+              {p.best && (
+                <span>BEST <strong style={{ color: BC.t2, fontWeight: 700 }}>{p.best.gross}</strong> ({fmtScore(p.best.toPar)}) R{p.best.round}</span>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Analytics View ──
-function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historicalData, user, hcpOverrides, teeAssignments, roundLocks, teams }) {
-  const [analyticsTab, setAnalyticsTab] = useState("current");
+// `tab` is which half opens, and it comes from the caller because the menu
+// offers the two halves as two separate rows. It used to be seeded "current"
+// unconditionally, so tapping Historical Data landed on this year's stats and
+// the History it named was one more tap away — a destination that did not go
+// where it said.
+function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, editions, activeSummary, user, hcpOverrides, teeAssignments, roundLocks, teams, tab = "current" }) {
+  const [analyticsTab, setAnalyticsTab] = useState(tab);
 
-  // Compute current year player stats from match results
-  const playerStats = useMemo(() => {
-    const stats = {};
-    tPlayers.forEach(p => { stats[p.player_id] = { name: p.name, team: p.team, wins: 0, losses: 0, halves: 0, pts: 0, skinsWon: 0 }; });
-
-    matches.forEach(m => {
-      const fmt = tRounds.find(t => t.round_number === m.round)?.format || DEFAULT_FORMAT;
-      const res = computeMatchResult(m, holeData, courses, tRounds, tPlayers, fmt, hcpOverrides || {}, undefined, teeAssignments, roundLocks);
-      const aTotal = res.totalPts.A, bTotal = res.totalPts.B;
-      [...m.teamA].forEach(pid => {
-        if (!stats[pid]) return;
-        stats[pid].pts += aTotal;
-        if (aTotal > bTotal) stats[pid].wins++;
-        else if (bTotal > aTotal) stats[pid].losses++;
-        else stats[pid].halves++;
-      });
-      [...m.teamB].forEach(pid => {
-        if (!stats[pid]) return;
-        stats[pid].pts += bTotal;
-        if (bTotal > aTotal) stats[pid].wins++;
-        else if (aTotal > bTotal) stats[pid].losses++;
-        else stats[pid].halves++;
-      });
-    });
-    return Object.values(stats).sort((a, b) => b.pts - a.pts);
-  }, [tPlayers, matches, holeData, tRounds, courses, hcpOverrides, teeAssignments, roundLocks]);
+  // Both halves of a player's tournament, from lib/playerStats: the match
+  // record off the matches, and how they actually went round off the cards.
+  const playerStats = useMemo(() => playerTable({
+    tPlayers, matches, holeData, tRounds, courses,
+    hcpOverrides: hcpOverrides || {}, teeAssignments, roundLocks,
+  }), [tPlayers, matches, holeData, tRounds, courses, hcpOverrides, teeAssignments, roundLocks]);
 
   return (
     <div style={{ fontFamily: FONT }}>
@@ -5333,56 +5611,11 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, historic
       </StickyTop>
 
       {analyticsTab === "current" && (
-        <div>
-          <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 44px 44px 44px 52px", padding: "8px 12px", borderBottom: `1px solid ${BC.bdr}`, fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1 }}>
-              <div>PLAYER</div><div style={{textAlign:"center"}}>W</div><div style={{textAlign:"center"}}>L</div><div style={{textAlign:"center"}}>H</div><div style={{textAlign:"right"}}>PTS</div>
-            </div>
-            {playerStats.map((p, i) => {
-              const team = teams[p.team];
-              return (
-                <div key={p.name} style={{ display: "grid", gridTemplateColumns: "1fr 44px 44px 44px 52px", padding: "9px 12px", borderBottom: i < playerStats.length-1 ? `1px solid ${BC.bdr}${ALPHA.hair}` : "none", alignItems: "center" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <div style={{ width: 6, height: 6, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
-                    <span style={{ fontSize: FS.small, fontWeight: 600, color: playerNameColor() }}>{p.name}</span>
-                  </div>
-                  <div style={{ textAlign: "center", fontSize: FS.small, color: BC.green, fontWeight: 600 }}>{p.wins}</div>
-                  <div style={{ textAlign: "center", fontSize: FS.small, color: BC.danger, fontWeight: 600 }}>{p.losses}</div>
-                  <div style={{ textAlign: "center", fontSize: FS.small, color: BC.t3 }}>{p.halves}</div>
-                  <div style={{ textAlign: "right", fontSize: FS.small, fontWeight: 700, color: BC.amberInk }}>{p.pts.toFixed(1)}</div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <PlayerStatsTable rows={playerStats} teams={teams} />
       )}
 
       {analyticsTab === "history" && (
-        <div>
-          {historicalData.length === 0 ? (
-            <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>
-              <div style={{ fontSize: FS.display, marginBottom: 12 }}>📊</div>
-              <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.t2, marginBottom: 8 }}>No Historical Data Yet</div>
-              <div style={{ fontSize: FS.small }}>Past tournament results will appear here after each year's event is archived.</div>
-            </div>
-          ) : (
-            historicalData.sort((a,b) => b.year - a.year).map(yr => (
-              <div key={yr.id} style={{ background: BC.card, borderRadius: 12, padding: 14, marginBottom: 12, border: `1px solid ${BC.bdr}` }}>
-                <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.gold, marginBottom: 8 }}>{yr.year} · {yr.location}</div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                  <div style={{ fontSize: FS.small, color: BC.t1 }}><span style={{ color: teams.A.accent, fontWeight: 700 }}>{yr.teamAName}</span> {yr.teamAScore}</div>
-                  <div style={{ fontSize: FS.small, color: BC.t1 }}><span style={{ color: teams.B.accent, fontWeight: 700 }}>{yr.teamBName}</span> {yr.teamBScore}</div>
-                </div>
-                {yr.winner && <div style={{ fontSize: FS.small, color: BC.amberInk, fontWeight: 700 }}>🏆 {yr.winner} won the Bourbon Cup</div>}
-              </div>
-            ))
-          )}
-          {user?.isDirector && (
-            <div style={{ textAlign: "center", marginTop: 16 }}>
-              <div style={{ fontSize: FS.label, color: BC.t3 }}>Historical data can be added by directors via Firestore directly for now.</div>
-            </div>
-          )}
-        </div>
+        <HistoryList editions={editions} activeSummary={activeSummary} teams={teams} isDirector={!!user?.isDirector} />
       )}
     </div>
   );
@@ -5404,6 +5637,17 @@ function SlideMenu({ open, onClose, onNavigate, user, view, finalize, onEditions
   const dragRef = useRef(null);
   const startYRef = useRef(null);
   const [dragY, setDragY] = useState(0);
+
+  // The way out for anybody not using a thumb. The menu is dismissed by a
+  // swipe down or by tapping the scrim, and both of those want a finger — on
+  // the laptop or the television this thing also runs on, there was no way to
+  // close it but to find the 8px of page beside it with a mouse.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
 
   const handleTouchStart = (e) => { startYRef.current = e.touches[0].clientY; setDragY(0); };
   const handleTouchMove = (e) => {
@@ -5658,7 +5902,11 @@ export default function App() {
   // An empty array is a different answer (nobody), so the two must not be
   // collapsed. See components/BuyIns.
   const [buyIns, setBuyIns] = useState({ skinsAmount: 0, skinsIn: null, ctpAmount: 0, ctpIn: null, lowNetAmount: 0, lowNetIn: null });
-  const [historicalData, setHistoricalData] = useState([]);
+  // Every year the cup has been played — the SAME collection the Tournaments
+  // picker reads, which is what makes the History tab and the edition switcher
+  // two views of one list instead of two lists. Tiny (one document a year) and
+  // not tournament-scoped, because it IS the index of tournaments.
+  const [editions, setEditions] = useState([]);
   // The saved team-name overrides (from the bc_settings/team_names doc).
   // Defaults come from constants so the fallback names live in one place.
   const [teamNames, setTeamNames] = useState(DEFAULT_TEAM_NAMES);
@@ -5672,6 +5920,12 @@ export default function App() {
   // firebase.getTournamentYear), so it can't disagree with the data on screen.
   const [tournamentName, setTournamentName] = useState(() => readTournamentIdentity()?.name || TOURNAMENT_TITLE);
   const [tournamentLocation, setTournamentLocation] = useState(() => readTournamentIdentity()?.location || TOURNAMENT_LOCATION);
+  // How many rounds this tournament is, set in Admin → Tournament. Null until
+  // the document lands (or forever, on an edition set up before the field
+  // existed) — lib/rounds reads the schedule instead in that case, so an
+  // existing tournament is unchanged and nobody has to re-enter a number they
+  // already implied by building the rounds.
+  const [roundCount, setRoundCount] = useState(null);
   // Theme state — toggled via the More menu. The actual color values live in
   // the module-level BC object (mutated by applyBCTheme); this state's only
   // job is to trigger a top-level re-render so children re-read fresh BC
@@ -5688,7 +5942,7 @@ export default function App() {
   modeRef.current = darkMode;
   const toggleTheme = useCallback(() => {
     const newMode = darkMode ? "light" : "dark";
-    try { localStorage.setItem("bc_theme", newMode); } catch {}
+    try { localStorage.setItem("bc_theme", newMode); } catch { /* private mode */ }
     applyBCTheme(newMode, brand);
     setDarkMode(!darkMode);
   }, [darkMode, brand]);
@@ -5827,7 +6081,16 @@ export default function App() {
   // bc_config/photos — the budget circuit breaker's flag. Null until read.
   const [photoConfig, setPhotoConfig] = useState(null);
   const [notif, setNotif] = useState(null);
-  const [syncing, setSyncing] = useState(false);
+  // ── What the app owes the database ───────────────────────────────────
+  // `pending` is writes queued but not yet acknowledged by the server —
+  // normally zero for the length of a heartbeat, and a growing number for as
+  // long as a phone is out of signal. `failed` is writes the server REFUSED,
+  // which is a different and much worse thing: those are not coming back.
+  //
+  // This replaces a `syncing` boolean that was set on every save and rendered
+  // nowhere at all, so the app had no way to say either of these out loud.
+  // See trackWrite below, and the chip in components/AppHeader.
+  const [writeState, setWriteState] = useState({ pending: 0, failed: 0 });
   const [hcpOverridesData, setHcpOverridesData] = useState({}); // { round: { pid: value } }
   const [teeAssignmentsData, setTeeAssignmentsData] = useState({});
   // ── Playing groups ── { round: [ [pid, …], … ] }. Who tees off together;
@@ -5873,6 +6136,9 @@ export default function App() {
   // it saw when it was created — silently dropping the attestation that
   // landed in between.
   const cardSigsRef = useRef([]);
+  // And for the cards themselves, so the save path can name the score a
+  // failed write is reverting FROM without reading through React state.
+  const holeDataRef = useRef({});
   // And for the CTP records, which confirming appends to the same way.
   const ctpDataRef = useRef({});
   const lockInputsRef = useRef({ players: [], tRounds: [], courses: [], hcpOverrides: {}, teeAssignments: {} });
@@ -5998,6 +6264,36 @@ export default function App() {
     setTimeout(() => setNotif(null), 2800);
   }, []);
 
+  // ── trackWrite ───────────────────────────────────────────────────────
+  // Wrap a write that must not fail quietly. Hand it a promise that REJECTS
+  // on refusal (db.upsertStrict, not db.upsert) and a line to say if it does.
+  //
+  // Two states come out of it, and keeping them apart is the point:
+  //
+  //   pending  queued, unacknowledged. Offline this is every write since the
+  //            signal went, and every one of them is fine — Firestore replays
+  //            them on reconnect. The chip says so rather than claiming a
+  //            problem, because "3 saving" on the 14th tee is not an error,
+  //            it is the phone telling the truth about where it is.
+  //   failed   refused outright. Firestore rolls its own local mutation back,
+  //            so the subscription repaints the cell with what is really
+  //            stored; all this adds is somebody being TOLD.
+  //
+  // A success clears `failed`, because a write getting through is proof the
+  // path works and whatever refused the last one is no longer refusing.
+  const trackWrite = useCallback((promise, failMessage) => {
+    setWriteState(s => ({ ...s, pending: s.pending + 1 }));
+    promise.then(
+      () => setWriteState(s => ({ pending: Math.max(0, s.pending - 1), failed: 0 })),
+      (e) => {
+        console.error("[write refused]", failMessage, e);
+        setWriteState(s => ({ pending: Math.max(0, s.pending - 1), failed: s.failed + 1 }));
+        notify(`${failMessage} — tap it again.`, "error");
+      },
+    );
+    return promise;
+  }, [notify]);
+
   // Keep popupOpenRef in sync with the non-<Popup> overlays so touch
   // handlers see "an overlay is open" without having to participate in
   // React's render cycle. A new modal built on <Popup> needs nothing here;
@@ -6007,15 +6303,13 @@ export default function App() {
   // Reconcile the edition doc-id namespacing flag from the canonical edition
   // doc, in case localStorage (which seeds it synchronously in firebase.js)
   // was cleared. Cheap insurance so writes use the right doc-id scheme.
+  // Off the subscription above rather than a read of its own — same documents,
+  // one fewer round trip, and it re-runs if the edition doc is corrected while
+  // the app is open.
   useEffect(() => {
-    (async () => {
-      try {
-        const eds = await db.get("bc_editions", []);
-        const active = eds.find(e => e.id === TOURNAMENT_ID);
-        if (active) setActiveTournamentId(TOURNAMENT_ID, !!active.namespaced);
-      } catch { /* ignore */ }
-    })();
-  }, []);
+    const active = editions.find(e => e.id === TOURNAMENT_ID);
+    if (active) setActiveTournamentId(TOURNAMENT_ID, !!active.namespaced);
+  }, [editions]);
 
   // hasNewBundle — checks whether a new app build has been deployed since
   // the running client loaded. Vite produces hashed asset URLs on each
@@ -6075,6 +6369,7 @@ export default function App() {
       const tLocation = tourn?.location?.trim() || TOURNAMENT_LOCATION;
       setTournamentName(tName);
       setTournamentLocation(tLocation);
+      setRoundCount(tourn?.round_count ?? null);
       // Remember it for the next cold start, so the splash opens on this.
       writeTournamentIdentity({ name: tName, location: tLocation });
       // Branding: apply to the live BC theme immediately (using the current
@@ -6134,7 +6429,15 @@ export default function App() {
         lowNetIn: Array.isArray(s?.lownet_in) ? s.lownet_in : null,
       });
     }));
-    unsubs.push(db.subscribe("bc_historical", [{ field: "type", op: "==", value: "year" }], setHistoricalData));
+    // The edition index. Subscribed rather than fetched once because it now
+    // feeds two things — the doc-id namespacing reconcile below, and the
+    // History tab — and because a summary this app writes back should appear
+    // on the tab that asked for it without a reload.
+    //
+    // withId for the same reason bc_accounts uses it: the first edition
+    // document can be typed into the Firebase console by hand, and a document
+    // made that way has whatever fields whoever typed it thought to add.
+    unsubs.push(db.subscribe(EDITIONS_COL, [], setEditions, { withId: true }));
     unsubs.push(db.subscribe("bc_tee_assignments", f, rows => {
       const data = {};
       rows.forEach(r => { if (r.round_number) data[r.round_number] = r.assignments || {}; });
@@ -6173,6 +6476,7 @@ export default function App() {
         if (!hd[key]) hd[key] = {};
         hd[key][r.hole_number - 1] = r.score;
       });
+      holeDataRef.current = hd;   // keep the ref hot for the save path
       setHoleData(hd);
     }));
     // Whether photo uploads are switched on. One tiny document, subscribed
@@ -6213,7 +6517,19 @@ export default function App() {
   const enrichedRounds = useMemo(() => tRounds.map(r => ({
     ...r,
     nassau: { front: r.nassau_front ?? 1, back: r.nassau_back ?? 1, overall: r.nassau_overall ?? 1 },
-    handicap_mode: r.handicap_mode || (r.round_number === 4 ? 'full' : 'low_man'),
+    // The FORMAT's default, not the round number's. This used to read
+    // `r.round_number === 4 ? 'full' : 'low_man'` — the same stand-in
+    // scoring.getRoundHandicapMode retired, on the grounds that it was only
+    // ever shorthand for "round 4 is the Team Best Ball round" and went
+    // silently wrong the moment a director moved the format.
+    //
+    // Worse than a stale copy: it was the copy that WON. Every scoring path
+    // reads rounds through this memo, so `tr.handicap_mode` was always filled
+    // by the time getRoundHandicapMode looked at it, and the corrected
+    // format-derived fallback underneath was unreachable. A Team Best Ball
+    // round anywhere but 4 scored off the low man, and a Singles round on 4
+    // gave everybody their whole figure.
+    handicap_mode: r.handicap_mode || handicapModeFor(r.format),
     // Both scoring axes, normalized here so nothing downstream has to know
     // that a legacy round packed them into one field.
     scoring_type: resolveScoring(r).formOfPlay,
@@ -6300,6 +6616,21 @@ export default function App() {
   //      four players entering scores at once is the expected case here).
   // A lock is never overwritten once it exists; that is what makes this
   // safe to call on every single hole.
+  //
+  // ── Nothing here waits on the network ─────────────────────────────
+  // The lock's own write is NOT awaited, and that is load-bearing. Firestore
+  // does not settle a setDoc promise until the SERVER acknowledges it, so in
+  // a dead spot an awaited write simply never returns — and this function is
+  // awaited by the score path. The symptom was one lost hole per round, and
+  // only ever the first one: the very first tap of a round hung here, so its
+  // optimistic paint and its own score write never ran, while every later tap
+  // sailed past on the in-flight flag. On a course with holes out of signal
+  // that is exactly the tap nobody would think to check.
+  //
+  // Not awaiting costs nothing that matters. The snapshot is built from live
+  // data synchronously, the local refs are updated the moment it exists, and
+  // Firestore queues the write and replays it on reconnect. A lock is a
+  // record of what was frozen, not a permission the score has to wait for.
   const ensureRoundLock = useCallback(async (rnd) => {
     if (!rnd) return null;
     const existing = roundLocksRef.current?.[rnd];
@@ -6333,7 +6664,9 @@ export default function App() {
         lockedBy: userRef.current?.name || null,
         reason: "auto",
       });
-      await db.upsert(ROUND_LOCKS_COL, lock);
+      // Deliberately not awaited — see the note above. The refs below are what
+      // the next tap reads, and they are true the moment the doc is built.
+      db.upsert(ROUND_LOCKS_COL, lock);
       roundLocksRef.current = { ...roundLocksRef.current, [rnd]: lock };
       setRoundLocksData(prev => ({ ...prev, [rnd]: lock }));
       return lock;
@@ -6345,11 +6678,35 @@ export default function App() {
     }
   }, []);
 
+  // ── Saving a hole ────────────────────────────────────────────────────
+  // The order below is the whole point, and it is not the order this used to
+  // run in.
+  //
+  //   1. PAINT. The optimistic update happens first, before anything that can
+  //      touch the network. A tap on a score button is answered by the screen
+  //      in the same frame, in a dead spot or not.
+  //   2. FREEZE. The round lock, which no longer blocks on its own write.
+  //   3. WRITE, and watch it. The write is queued, not awaited: Firestore
+  //      applies it to the local cache immediately and replays it on
+  //      reconnect, so awaiting it would mean waiting for signal to answer a
+  //      tap. What IS attached is a rejection handler, because a write that
+  //      is REFUSED — rules, quota, a malformed document — is a different
+  //      thing entirely from one that is merely queued.
+  //
+  // That last distinction is what this function exists to make honest. It
+  // used to write through `db.upsert`, which swallows its error and returns
+  // null, and then ignore the return — so a refused score stayed on screen,
+  // looking saved, until somebody reloaded and found the hole empty. A
+  // scoreboard that shows a number nobody stored is the one failure this app
+  // cannot recover from on its own, because there is nothing to see.
+  //
+  // On a rejection Firestore rolls its own local mutation back and the
+  // subscription re-fires with the truth, which repaints the cell by itself.
+  // All this has to do is say so, loudly enough to be acted on.
   const onSaveHole = useCallback(async (pid, rnd, holeIdx, score, courseId) => {
-    setSyncing(true);
     // Freeze BEFORE the score lands, so the very first hole of a round is
     // already scoring off the snapshot.
-    await ensureRoundLock(rnd);
+    ensureRoundLock(rnd);
     // ── Edition scoping ──
     // Scores and matches were the last two collections still building their
     // document ids by hand instead of through editionDocId. Nothing has
@@ -6377,11 +6734,15 @@ export default function App() {
       score,
       course_id: courseId || "",
     };
-    // Optimistic update
-    setHoleData(prev => {
-      const key = `${pid}_${rnd}`;
-      return { ...prev, [key]: { ...prev[key], [holeIdx]: score } };
-    });
+    // Optimistic update — the ref as well as the state, so a second tap on
+    // the same hole knows what it is replacing even before Firestore has
+    // echoed the first one back.
+    const key = `${pid}_${rnd}`;
+    holeDataRef.current = {
+      ...holeDataRef.current,
+      [key]: { ...holeDataRef.current[key], [holeIdx]: score },
+    };
+    setHoleData(prev => ({ ...prev, [key]: { ...prev[key], [holeIdx]: score } }));
     // A namespaced edition that already has scores has them under the OLD
     // bare id, and this writer rebuilds the id from scratch every save rather
     // than reusing the stored one — so without this the same hole would exist
@@ -6390,10 +6751,15 @@ export default function App() {
     // last. Dropping the superseded document first means there is never a
     // moment where both exist. Safe against other editions because the id
     // embeds this edition's player id, which no other edition uses.
-    if (id !== bareId) await db.delete("bc_hole_scores", bareId);
-    await db.upsert("bc_hole_scores", data);
-    setSyncing(false);
-  }, [ensureRoundLock]);
+    if (id !== bareId) db.delete("bc_hole_scores", bareId);
+    // `upsertStrict` rather than `upsert`: same merge write, rejection left
+    // in. The id is passed separately by its signature and also rides in
+    // `data`, which is what keeps `r.id` readable by onDiscardRoundScores.
+    trackWrite(
+      db.upsertStrict("bc_hole_scores", id, data),
+      `Hole ${holeIdx + 1} didn't save`,
+    );
+  }, [ensureRoundLock, trackWrite]);
 
   const onAddPlayer = useCallback(async (p) => { await db.upsert("bc_players", p); }, []);
   const onUpdatePlayer = useCallback(async (p) => { await db.upsert("bc_players", p); }, []);
@@ -6759,8 +7125,6 @@ export default function App() {
     return cleared;
   }, []);
 
-  const availableRounds = useMemo(() => [...new Set(enrichedMatches.map(m => m.round))].sort(), [enrichedMatches]);
-
   // ── Tournament progression ───────────────────────────────────────────
   // Every round the director has set up OR drawn matches for — the same
   // union the Matches tab lists, so a round can't be live for scoring and
@@ -6775,20 +7139,69 @@ export default function App() {
   // on to the next round while scores sat in the one they were standing on.
   // A round with scores in it stays on the schedule until somebody finalizes
   // it, which is the only way out that anybody chose.
-  const tournamentRounds = useMemo(() => {
-    const seen = new Set([
-      ...tRounds.map(t => t.round_number),
-      ...enrichedMatches.map(m => m.round),
-      ...Object.keys(roundLocksData).filter(r => roundLocksData[r]?.locked).map(Number),
-    ]);
-    return [...seen].filter(r => r != null && !Number.isNaN(r)).sort((a, b) => a - b);
-  }, [tRounds, enrichedMatches, roundLocksData]);
+  const tournamentRounds = useMemo(
+    () => allRounds({ roundCount, tRounds, matches: enrichedMatches, roundLocks: roundLocksData }),
+    [roundCount, tRounds, enrichedMatches, roundLocksData]
+  );
   // The one round open for score entry. null = nothing open (no schedule
   // yet, or the last round has been finalized).
   const currentRound = useMemo(
     () => currentRoundNumber(roundLocksData, tournamentRounds),
     [roundLocksData, tournamentRounds]
   );
+
+  // ── This edition's row in the archive ────────────────────────────────
+  // Computed from the cards by the same engine the leaderboard uses (see
+  // lib/editionSummary) and written back onto the edition document, which is
+  // what the History tab reads.
+  //
+  // Three conditions, and each one is doing a job:
+  //
+  //   complete    only a FINISHED tournament is written down. A cup mid-round
+  //               has a score but not a result, and writing on every hole
+  //               would put a Firestore write behind every score the director
+  //               is standing next to.
+  //   revealed    nothing is still sealed. See below — this one is the one
+  //               that could do damage.
+  //   isDirector  bc_editions is director-write in the rules, so nobody else
+  //               could land this anyway. Asking first keeps a player's phone
+  //               from firing a write it will only be refused.
+  //   changed     a row that already says the right thing is left alone.
+  //
+  // Which together mean this fires roughly once per tournament, plus once the
+  // first time a director opens each imported year — the data is already
+  // subscribed by then, so the summary costs a single write and no reads.
+  //
+  // ── The seal, twice over ──────────────────────────────────────────
+  // Computed off the CONCEALED map, like the scoreboard and the analytics
+  // tab, because this is one more surface that can state a sealed round's
+  // result — and a spoiler on the History tab would be exactly the kind
+  // nobody thinks to check for.
+  //
+  // But concealed is not enough on its own here, and this is the subtle part.
+  // A round can be FINAL and still sealed: that is what the Final Countdown
+  // is, a finished round turned over hole by hole in front of the room. So
+  // `complete` can be true while the scores this is reading are blanked, and
+  // writing then would archive a half-scored cup as the year's result — and
+  // unlike a screen, a stored row does not correct itself when the reveal
+  // finishes.
+  //
+  // `concealHoleData` returns the map UNCHANGED when nothing is sealed, so
+  // reference equality is the whole test, and it is exact.
+  const nothingSealed = revealedHoleData === holeData;
+  const editionSummary = useMemo(() => summarizeEdition({
+    matches: enrichedMatches, holeData: revealedHoleData, courses, tRounds: enrichedRounds,
+    tPlayers, hcpOverrides: hcpOverridesData, teeAssignments: teeAssignmentsData,
+    roundLocks: roundLocksData, teamNames, location: tournamentLocation,
+  }), [enrichedMatches, revealedHoleData, courses, enrichedRounds, tPlayers,
+    hcpOverridesData, teeAssignmentsData, roundLocksData, teamNames, tournamentLocation]);
+
+  useEffect(() => {
+    if (!isDirectorUser || !editionSummary.complete || !nothingSealed) return;
+    const row = editions.find(e => e.id === TOURNAMENT_ID);
+    if (!row || sameSummary(row.result, editionSummary)) return;
+    db.upsert(EDITIONS_COL, { id: TOURNAMENT_ID, result: editionSummary });
+  }, [isDirectorUser, editionSummary, editions, nothingSealed]);
 
   // ── Ready to finalize ────────────────────────────────────────────────
   // Lives at the app level, not inside a tab, because that is the whole
@@ -7073,7 +7486,11 @@ export default function App() {
           total pins directly beneath it instead of fighting it for the top
           of the screen. flexShrink is pinned on the header itself so a tall
           tab can't squeeze it. */}
-      <AppHeader location={tournamentLocation} />
+      <AppHeader
+        location={tournamentLocation}
+        pendingWrites={writeState.pending}
+        failedWrites={writeState.failed}
+      />
 
       {/* Ready-to-finalize notification — app chrome, like the header above
           it, so it reaches the director on whichever tab they are on rather
@@ -7149,7 +7566,6 @@ export default function App() {
             courses={courses}
             tRounds={enrichedRounds}
             tPlayers={tPlayers}
-            rounds={availableRounds.length ? availableRounds : [1,2,3,4]}
             teams={teams}
             hcpOverrides={hcpOverridesData}
             teeAssignments={teeAssignmentsData}
@@ -7248,9 +7664,19 @@ export default function App() {
              check. */
           <AnalyticsView
             tPlayers={tPlayers} matches={enrichedMatches} holeData={revealedHoleData}
-            tRounds={enrichedRounds} courses={courses} historicalData={historicalData} user={user}
+            tRounds={enrichedRounds} courses={courses} user={user}
             hcpOverrides={hcpOverridesData} teeAssignments={teeAssignmentsData}
             roundLocks={roundLocksData} teams={teams}
+            editions={editions}
+            /* The running year's row, computed live rather than read back —
+               see the summary memo. Off the CONCEALED map like everything else
+               on this tab, so a sealed round cannot leak its result through the
+               archive either. */
+            activeSummary={editionSummary}
+            /* Which half opens. The menu offers these as two rows, so the row
+               that says History has to arrive on History. */
+            tab={view === "history" ? "history" : "current"}
+            key={view}
           />
         )}
         {view === "photos" && (
@@ -7261,6 +7687,7 @@ export default function App() {
              they only ask for a membership; not offering it is the same judgement
              the claim screen makes, that a year you are only looking at is not
              one you add to. */
+          <Suspense fallback={<LoadingPanel label="Photos" />}>
           <PhotosView
             items={media}
             year={getTournamentYear()}
@@ -7272,6 +7699,7 @@ export default function App() {
             onDelete={onDeletePhoto}
             notify={notify}
           />
+          </Suspense>
         )}
         {view === "admin" && (
           <AdminView
@@ -7307,10 +7735,16 @@ export default function App() {
             }}
             tournamentName={tournamentName}
             tournamentLocation={tournamentLocation}
-            onSaveTournament={async ({ name, location }) => {
+            roundCount={roundCount}
+            tournamentRounds={tournamentRounds}
+            onSaveTournament={async ({ name, location, rounds }) => {
               setTournamentName(name);
               setTournamentLocation(location);
-              await db.upsert("bc_settings", { id: editionDocId("tournament"), tournament_id: TOURNAMENT_ID, name, location });
+              setRoundCount(rounds);
+              await db.upsert("bc_settings", {
+                id: editionDocId("tournament"), tournament_id: TOURNAMENT_ID,
+                name, location, round_count: rounds,
+              });
             }}
             hcpOverridesFromDb={hcpOverridesData}
             teeAssignmentsFromDb={teeAssignmentsData}

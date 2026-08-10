@@ -32,7 +32,7 @@
 //  cannot describe a match differently from how it was scored, or from how
 //  the Scoring tab describes the same match.
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { BC, FONT, ALPHA, FS, ink, teamColor } from "../theme";
 import { playerLookup, realPlayers } from "../lib/players";
@@ -44,21 +44,22 @@ import {
 import {
   computeMatchResult, getRoundCourseCtx, holeFormatFor,
   segmentState, statusText, segmentLeader,
-  segmentOptsFor,
+  segmentOptsFor, fmtPts,
 } from "../scoring";
 import { HoleStrip } from "./HoleStrip";
 import { FullScorecard } from "./FullScorecard";
 import { StickyTop } from "./ui";
 import { isRoundFinal } from "../lib/roundLocks";
+import { scheduledRounds } from "../lib/rounds";
 import { HOLE_COUNT, revealState, revealSummary, stepReveal, COUNTDOWN_HASH } from "../lib/reveal";
-import { FinalCountdown } from "./FinalCountdown";
-
-const ALL_ROUNDS = [1, 2, 3, 4];
+// The television screen, and nothing else opens it. Sixteen phones load the
+// scoreboard every few minutes all weekend; one of them, once, opens the
+// countdown — so it has no business riding in the bundle the other fifteen
+// are waiting on. See the note over the countdown state below.
+const FinalCountdown = lazy(() =>
+  import("./FinalCountdown").then(m => ({ default: m.FinalCountdown })));
 
 // ── Small helpers ────────────────────────────────────────────────
-
-// Points print without a pointless ".0" — 3 → "3", 3.5 → "3.5".
-const fmtPts = (n) => (n == null ? "—" : Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10));
 
 // Max points on offer in a single match. A points-per-hole match is worth
 // every hole added up (9 + 18 = 27 at the usual 1-and-2), which is a different
@@ -807,7 +808,7 @@ function RoundSection({
 // numbers gets them, indexes them by `viewer`, and never looks at the other
 // column. Everything else on this screen is handed `holeData`.
 export function TeamLeaderboard({
-  matches, holeData, ownHoleData, courses, tRounds, tPlayers, rounds, teams,
+  matches, holeData, ownHoleData, courses, tRounds, tPlayers, teams,
   hcpOverrides, teeAssignments, roundLocks, viewer,
   canReveal = false, onSetReveal, autoCountdown = false,
 }) {
@@ -826,10 +827,18 @@ export function TeamLeaderboard({
     return { match: m, result: res, format: fmt };
   }), [matches, holeData, courses, tRounds, tPlayers, hcpOverrides, teeAssignments, roundLocks]);
 
-  const roundNumbers = useMemo(
-    () => ALL_ROUNDS.filter((r) => matches.some((m) => m.round === r)),
-    [matches]
-  );
+  // Every round with a draw, in order — derived, not a fixed list of four.
+  //
+  // The literal it replaces was the one place on this screen that could
+  // disagree with the rest of it: `totals`, `pending` and `cupPointsOnOffer`
+  // are all summed over EVERY match, so a fifth round's points counted toward
+  // the cup and toward the clinch line from a round that had no section on
+  // the board to explain them.
+  //
+  // Rounds with no matches are still left out, as they always have been —
+  // see the note in RoundSection about a draw-less round being a row of
+  // "THRU 0" against a tee time.
+  const roundNumbers = useMemo(() => scheduledRounds({ matches }), [matches]);
 
   // Per-round rollup: points, points on offer, and play state.
   const roundMeta = useMemo(() => {
@@ -1009,6 +1018,10 @@ export function TeamLeaderboard({
     if (!entry) return null;
     const { course, holePars, holeHcps } = getRoundCourseCtx({ roundLocks, round: rnd, tRounds, courses });
     return createPortal(
+      // The fallback is a black screen, because that is what the countdown
+      // opens onto anyway — the television goes dark and then the round is
+      // there, rather than flashing a spinner in front of the room.
+      <Suspense fallback={<div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 9999 }} />}>
       <FinalCountdown
         match={entry.match}
         result={entry.result}
@@ -1026,7 +1039,8 @@ export function TeamLeaderboard({
         canAdvance={canReveal && !!onSetReveal}
         onAdvance={(n) => onSetReveal(rnd, n)}
         onClose={closeCountdown}
-      />,
+      />
+      </Suspense>,
       document.body,
     );
   })();

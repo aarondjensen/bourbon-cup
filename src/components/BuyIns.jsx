@@ -78,27 +78,32 @@ export function BuyInEditor({ players, amount, ids, onChange }) {
       {/* Bulk, because tagging sixteen people one at a time is the actual
           job on a Friday morning. */}
       <div style={{ display: "flex", gap: 8, padding: "8px 12px", borderBottom: `1px solid ${BC.bdr}${ALPHA.hair}` }}>
-        <div onClick={() => onChange({ ids: players.map(p => p.player_id) })} style={btn(false)}>ALL IN</div>
-        <div onClick={() => onChange({ ids: [] })} style={btn(false)}>NONE</div>
+        <button type="button" onClick={() => onChange({ ids: players.map(p => p.player_id) })} style={btn(false)}>ALL IN</button>
+        <button type="button" onClick={() => onChange({ ids: [] })} style={btn(false)}>NONE</button>
       </div>
 
       {players.map(p => {
         const on = inSet.has(p.player_id);
         return (
-          <div
+          <button
             key={p.player_id}
+            type="button"
+            role="switch"
+            aria-checked={on}
             onClick={() => toggle(p.player_id)}
             style={{
               display: "flex", alignItems: "center", gap: 8, cursor: "pointer",
               padding: "7px 12px", borderBottom: `1px solid ${BC.bdr}${ALPHA.hair}`,
+              width: "100%", textAlign: "left", background: "transparent",
+              border: "none", borderRadius: 0, fontFamily: FONT,
             }}
           >
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: teamColor(p.team), flexShrink: 0 }} />
             <span style={{ flex: 1, minWidth: 0, fontSize: FS.small, fontWeight: 600, color: on ? BC.t1 : BC.t3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {p.name}
             </span>
-            <div style={btn(on)}>{on ? "IN" : "OUT"}</div>
-          </div>
+            <span style={btn(on)}>{on ? "IN" : "OUT"}</span>
+          </button>
         );
       })}
     </div>
