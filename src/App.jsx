@@ -3925,7 +3925,11 @@ export default function App() {
   // derived id like `bc_ctp_r1_h7` would. `tournament_id` is what scopes it.
   const onAddSideBet = useCallback(async ({ playerA, playerB, amount, detail }) => {
     const uid = authUser?.uid;
-    if (!uid) return;
+    // Throws rather than returning quietly. The button is hidden without a
+    // uid so this is unreachable from the UI — but a silent return here would
+    // close the sheet on a bet that was never written, which is the one thing
+    // this screen must never do.
+    if (!uid) throw new Error("Not signed in");
     await db.create(SIDE_BETS_COL, buildSideBet({
       id: sideBetId(Date.now(), Math.random()),
       tournamentId: TOURNAMENT_ID,

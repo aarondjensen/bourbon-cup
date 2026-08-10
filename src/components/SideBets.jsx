@@ -12,7 +12,7 @@
 //  the three tabs it summarised; this is the thing that genuinely had nowhere
 //  to live but a napkin.
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { BC, FONT, ALPHA, FS, ON_AMBER, teamColor } from "../theme";
 import { Popup } from "./Popup";
 import {
@@ -174,6 +174,15 @@ export function SideBets({ players, bets, user, authUid, teams, onAddBet, onDele
 // with no roster row, or a player writing down two other people's bet at the
 // bar. Somebody has to be able to record it or it goes back on the napkin.
 function AddBetSheet({ players, me, onCancel, onSave }) {
+  // Alphabetical, not roster order. The roster is ordered by team and then by
+  // whenever the director typed somebody in, which is an order nobody picking
+  // a name off a list can predict — so finding a player meant reading all
+  // sixteen. `localeCompare` rather than `<` so accented names sort where a
+  // person would look for them.
+  const byName = useMemo(
+    () => [...players].sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""))),
+    [players],
+  );
   const [playerA, setPlayerA] = useState(me || "");
   const [playerB, setPlayerB] = useState("");
   const [amount, setAmount] = useState("");
@@ -185,15 +194,36 @@ function AddBetSheet({ players, me, onCancel, onSave }) {
     const problem = sideBetError({ playerA, playerB, amount });
     if (problem) { setErr(problem); return; }
     setSaving(true);
-    try { await onSave({ playerA, playerB, amount, detail }); }
-    finally { setSaving(false); }
+    setErr(null);
+    try {
+      await onSave({ playerA, playerB, amount, detail });
+    } catch (e) {
+      // A REFUSED WRITE HAS TO SAY SO. The save deliberately keeps the sheet
+      // open on a failure so the typing is not lost — but without this the
+      // only thing that happened on screen was the button flickering back
+      // from "Saving…", which reads as a dead button and not as a refusal.
+      // A ledger that appears to accept a bet it never recorded is the one
+      // failure this screen must not have, and a silent no-op is a quieter
+      // version of exactly that.
+      console.error("side bet save", e);
+      setErr(e?.code === "permission-denied"
+        ? "Couldn't save — this account can't write to this tournament."
+        : "Couldn't save. Check your connection and try again.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const label = (t) => (
     <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1, marginBottom: 5 }}>{t}</div>
   );
+  // FS.lead, and it is not a style choice — see the note under the scale in
+  // theme.js. A form control below 16px makes iOS Safari zoom the page on
+  // focus and never zoom back out, so tapping the player picker left the
+  // whole app enlarged. Condense these with padding if they ever need to be
+  // shorter, never by dropping a rung.
   const field = {
-    width: "100%", boxSizing: "border-box", fontFamily: FONT, fontSize: FS.body,
+    width: "100%", boxSizing: "border-box", fontFamily: FONT, fontSize: FS.lead,
     padding: "9px 10px", borderRadius: 8, border: `1px solid ${BC.bdr}`,
     background: BC.bg, color: BC.t1, outline: "none",
   };
@@ -201,7 +231,7 @@ function AddBetSheet({ players, me, onCancel, onSave }) {
   const picker = (value, onChange, exclude) => (
     <select value={value} onChange={e => { setErr(null); onChange(e.target.value); }} style={field}>
       <option value="">Select a player…</option>
-      {players.filter(p => p.player_id !== exclude).map(p => (
+      {byName.filter(p => p.player_id !== exclude).map(p => (
         <option key={p.player_id} value={p.player_id}>{p.name}</option>
       ))}
     </select>
