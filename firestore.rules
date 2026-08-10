@@ -412,6 +412,23 @@ service cloud.firestore {
     // side of a bet you dispute is not yours to erase, and the director is
     // who settles that here as everywhere else. src/lib/sideBets.js
     // canDeleteSideBet() mirrors this exactly, and sideBets.test.js pins it.
+    //
+    // ── The settlement mark, and why it widens update ──────────────
+    // A bet is paid when BOTH players say so, which means the player who did
+    // NOT log it has to be able to write to it — and author-only update made
+    // that impossible. So there is a third update clause: any member may
+    // change `settled_by` AND NOTHING ELSE. hasOnly() is what makes that
+    // safe. It cannot touch the amount, the terms, who is in the bet, or who
+    // wrote it, so the widest thing a stranger to the bet can do is add or
+    // remove a name in a list the screen renders as a claim.
+    //
+    // The rules cannot check that the mark is the caller's own — that would
+    // need the roster row whose auth_uid is yours, which needs a query, the
+    // same limit that keeps the crown from granting anything. The app writes
+    // only your own id. This is the trade the whole file already makes and
+    // says so at the top: within membership there is no per-document
+    // ownership, because scoring is communal and "only your own rows" would
+    // break the workflow before it stopped anybody.
     match /bc_side_bets/{doc} {
       allow read: if isOpen();
       allow create: if isMember()
@@ -419,7 +436,10 @@ service cloud.firestore {
       allow update: if isDirector()
                     || (isMember()
                         && resource.data.created_by == request.auth.uid
-                        && request.resource.data.created_by == resource.data.created_by);
+                        && request.resource.data.created_by == resource.data.created_by)
+                    || (isMember()
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['settled_by']));
       allow delete: if isDirector()
                     || (isMember() && resource.data.created_by == request.auth.uid);
     }

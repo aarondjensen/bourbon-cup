@@ -87,7 +87,7 @@ import { playerTable } from "./lib/playerStats";
 import {
   inField, roundSetup, strokeMapsFor, computeSkins, lowNetRows, ctpTags,
 } from "./lib/betting";
-import { SIDE_BETS_COL, sideBetId, buildSideBet } from "./lib/sideBets";
+import { SIDE_BETS_COL, sideBetId, buildSideBet, toggleSettled } from "./lib/sideBets";
 import { EDITIONS_COL, switchEdition } from "./lib/editions";
 import {
   cardSigBareId, sigForMatch, cardComplete, missingForCard,
@@ -1907,7 +1907,7 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
 // arithmetic already readable off the three tabs it summarised, and the thing
 // with genuinely nowhere to live was the bet two players make on the first
 // tee.
-function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeData, ctpData, skinsPot, buyIns, onSetCtp, onUpdatePot, onUpdateBuyIns, user, authUid, sideBets, onAddSideBet, onDeleteSideBet, confirm, roundLocks, hcpOverrides, teeAssignments, teams }) {
+function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeData, ctpData, skinsPot, buyIns, onSetCtp, onUpdatePot, onUpdateBuyIns, user, authUid, sideBets, onAddSideBet, onDeleteSideBet, onSettleSideBet, confirm, roundLocks, hcpOverrides, teeAssignments, teams }) {
   const [activeTab, setActiveTab] = useState("skins");
   const [activeRound, setActiveRound] = useState(null);
   const [editPot, setEditPot] = useState(false);
@@ -2498,6 +2498,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
           teams={teams}
           onAddBet={onAddSideBet}
           onDeleteBet={onDeleteSideBet}
+          onSettleBet={onSettleSideBet}
           confirm={confirm}
         />
       )}
@@ -3943,6 +3944,22 @@ export default function App() {
     if (bet?.id) await db.delete(SIDE_BETS_COL, bet.id);
   }, []);
 
+  // A player's own "paid" mark, toggled. Both players marking is what settles
+  // a bet; see lib/sideBets.
+  //
+  // `upsertStrict` rather than `upsert`, and that is load-bearing: the rule
+  // that lets the OTHER player write to a bet they do not own allows exactly
+  // one key to change, and `upsert`'s habit of writing `id` into the document
+  // as well would put a second key in the diff and get the whole write
+  // refused. Same reason the director appointment uses it.
+  //
+  // The rejection is left in for the same reason the create leaves it in: the
+  // screen has to be able to say a claim was not recorded.
+  const onSettleSideBet = useCallback(async (bet, pid) => {
+    if (!bet?.id || !pid) return;
+    await db.upsertStrict(SIDE_BETS_COL, bet.id, { settled_by: toggleSettled(bet, pid) });
+  }, []);
+
   // ── The photo library's two writes ───────────────────────────────────
   // Both go through lib/mediaUpload.js, which owns the canvas work and the
   // bucket; this pair owns the Firestore side, because `db` lives here and a
@@ -4726,6 +4743,7 @@ export default function App() {
             sideBets={sideBets}
             onAddSideBet={onAddSideBet}
             onDeleteSideBet={onDeleteSideBet}
+            onSettleSideBet={onSettleSideBet}
             confirm={confirm}
             roundLocks={roundLocksData}
             hcpOverrides={hcpOverridesData}

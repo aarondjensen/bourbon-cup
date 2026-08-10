@@ -72,13 +72,78 @@ export const buildSideBet = ({
   // that eventually arrives as a wall on a phone screen, and the terms of a
   // golf bet have never needed a second paragraph.
   detail: String(detail || "").trim().slice(0, MAX_DETAIL),
+  // Nobody has said it is paid yet, and a new bet says so explicitly rather
+  // than by omission. Bets written before settling existed have no field at
+  // all; settledBy() reads both as the same empty answer.
+  settled_by: [],
   created_at: now,
 });
 
-// Newest first. A side-bet list is read to find the one just made, or the one
-// being argued about, and both of those are recent.
+// ── Settling ──────────────────────────────────────────────────────
+// A bet is settled when BOTH players say it is, and not before. One player
+// marking it paid is a claim; the other agreeing is the record.
+//
+// That asymmetry is the whole reason this is a two-sided mark rather than a
+// `settled: true` boolean. A boolean would let whoever tapped first close the
+// bet on the other's behalf, and the argument this feature exists to prevent
+// is exactly "I paid you" / "no you didn't". With two marks the disagreement
+// stays visible on the row instead of being resolved by whoever was quicker.
+//
+// The marks are ROSTER ids, not auth uids. `created_by` is a uid because the
+// rules have to check it; these the rules cannot check at all (they cannot map
+// a uid to a roster row — see the note at the top), so they are stored in the
+// form the screen actually reasons about.
+export const settledBy = (bet) =>
+  Array.isArray(bet?.settled_by) ? bet.settled_by : [];
+
+export const hasSettled = (bet, pid) => !!pid && settledBy(bet).includes(pid);
+
+// Both sides, and only the two sides. A stray id — from a player swapped out
+// of a bet that was edited, say — must not be able to settle it on its own.
+export const isSettled = (bet) =>
+  !!bet && hasSettled(bet, bet.player_a) && hasSettled(bet, bet.player_b);
+
+// A player's own mark, toggled. Returns the next array, deduped, and never
+// carrying an id that is not one of the two players — so a withdrawn mark
+// leaves nothing behind and a re-mark cannot stack.
+export const toggleSettled = (bet, pid) => {
+  const sides = [bet?.player_a, bet?.player_b];
+  const current = settledBy(bet).filter(id => sides.includes(id));
+  if (!sides.includes(pid)) return current;
+  return current.includes(pid)
+    ? current.filter(id => id !== pid)
+    : [...current, pid];
+};
+
+// What the row should say to THIS reader, in one word the screen can switch
+// on. Kept here rather than in the component so the states are enumerable and
+// testable, and so a new one cannot be added on screen without being named.
+//
+//   settled   both sides have marked it — done
+//   waiting   you marked it, the other player has not
+//   confirm   they marked it, it is your turn — the only state that asks
+//             anything of the reader
+//   open      neither side has marked it
+//   watching  you are not in this bet; the states above are not yours to act
+//             on, and it still says where the bet has got to
+export const settleState = (bet, pid) => {
+  if (isSettled(bet)) return "settled";
+  if (!inSideBet(bet, pid)) return "watching";
+  const other = bet.player_a === pid ? bet.player_b : bet.player_a;
+  if (hasSettled(bet, pid)) return "waiting";
+  if (hasSettled(bet, other)) return "confirm";
+  return "open";
+};
+
+// Newest first, but SETTLED BETS SINK. A ledger is read for what is still
+// owed, and a weekend's worth of squared-up bets sitting between the live
+// ones is the pile of paper this replaces. Within each group it is still
+// newest first, so the one just made is still at the top of the list that
+// matters.
 export const sortSideBets = (bets) =>
-  [...bets].sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+  [...bets].sort((a, b) =>
+    (isSettled(a) ? 1 : 0) - (isSettled(b) ? 1 : 0)
+    || (b.created_at || 0) - (a.created_at || 0));
 
 // Is this player in this bet? Both sides, because "my bets" means bets I am
 // ON, not bets I typed in.
