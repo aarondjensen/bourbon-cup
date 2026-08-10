@@ -74,21 +74,28 @@ export function SideBets({ players, bets, user, authUid, teams, onAddBet, onDele
             <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.amberInk, overflow: "hidden", textOverflow: "ellipsis" }}>{potMoney(totals.mine)}</div>
           </div>
         </div>
-        {canAdd && (
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            style={{
-              display: "block", width: "100%", padding: "9px 14px", cursor: "pointer",
-              borderTop: `1px solid ${BC.bdr}`, borderLeft: "none", borderRight: "none",
-              borderBottom: "none", background: "transparent", fontFamily: FONT,
-              fontSize: FS.label, fontWeight: 700, color: BC.amberInk, letterSpacing: 0.6,
-            }}
-          >
-            + ADD BET
-          </button>
-        )}
       </div>
+
+      {/* ITS OWN CARD, AND FILLED. As a strip under the totals it read as a
+          footnote on them — the same weight the skins card gives BUY-INS,
+          which is a disclosure and not the thing you came to do. Here it is
+          the primary action of the whole tab, so it gets the accent fill the
+          app reserves for exactly that (ON_AMBER ink, never BC.bg — which ink
+          sits on amber is decided by the fill, not by the theme). */}
+      {canAdd && (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          style={{
+            display: "block", width: "100%", padding: "13px 14px", marginBottom: 12,
+            cursor: "pointer", border: "none", borderRadius: 12, background: BC.amber,
+            fontFamily: FONT, fontSize: FS.body, fontWeight: 800, color: ON_AMBER,
+            letterSpacing: 0.8,
+          }}
+        >
+          + ADD BET
+        </button>
+      )}
 
       {rows.length === 0 ? (
         <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: "60px 20px", textAlign: "center" }}>
