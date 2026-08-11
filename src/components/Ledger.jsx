@@ -11,7 +11,7 @@
 //                 man standing in a parking lot with his phone out, so the
 //                 balance is the biggest thing on it and the history under it
 //                 is a list of receipts.
-//   LedgerAdmin   is Admin → $ → Accounting, and answers the director's
+//   LedgerAdmin   is Admin → Budget → Accounting, and answers the director's
 //                 question, which is the opposite one: who has NOT paid. So
 //                 it leads with three totals and a roster sorted by who owes
 //                 the most, and logging a payment is two taps from any row.

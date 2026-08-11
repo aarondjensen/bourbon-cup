@@ -4526,7 +4526,7 @@ export default function App() {
   // Derived, never stored — see the top of lib/ledger. It feeds three things
   // that must agree: the BALANCE DUE card on My Account, the red dot on the
   // My Account row in More, and the red dot on More itself. One computation
-  // means they cannot disagree with each other or with Admin → $.
+  // means they cannot disagree with each other or with Admin → Budget.
   const myLedger = useMemo(
     () => (user?.player_id
       ? balanceFor({
@@ -5104,7 +5104,7 @@ export default function App() {
             groupsFromDb={groupsData}
             onSaveGroups={onSaveGroups}
             roundLocks={roundLocksData}
-            /* Admin → $. Director-only by construction: this whole view
+            /* Admin → Budget. Director-only by construction: this whole view
                is, and the rules say the same thing for bc_ledger. */
             payments={payments}
             duesAmount={duesAmount}

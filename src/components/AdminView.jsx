@@ -1070,13 +1070,16 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
           control. See StickyTop for how the seam is painted. */}
       <StickyTop style={{ marginBottom: 4 }}>
       <SegmentedToggle
-        /* "Event" rather than "Tournament", and "$" rather than "Money":
-           five tabs is what this bar holds on a phone, and the two longest
-           labels were the whole reason it needed shrinking to fit. `fit`
-           stays as the guard — it costs nothing now that nothing is close
-           to the edge, and it is what stops the next tab from pushing the
-           bar off the screen instead of narrowing it. */
-        options={[["players","Players"],["rounds","Rounds"],["matches","Matches"],["money","$"],["tournament","Event"]]}
+        /* "Event" rather than "Tournament": five tabs is what this bar holds
+           on a phone, and that was the label that made it not fit. "Budget"
+           is a rung longer than the "$" that stood here and still shorter
+           than "Players", so the bar is no tighter than it already was — a
+           sixth tab is what would break it, not this word.
+
+           The key stays `money`. It names what the tab is FOR, which is a
+           wider thing than the sub-tab that shares its label, and renaming
+           it would churn every reference for a string nobody sees. */
+        options={[["players","Players"],["rounds","Rounds"],["matches","Matches"],["money","Budget"],["tournament","Event"]]}
         value={tab}
         onChange={setTab}
       />

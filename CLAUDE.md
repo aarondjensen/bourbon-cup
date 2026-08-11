@@ -469,11 +469,16 @@ writes first, applies nothing unless the write landed, and toasts either way.
 
 ## The money tab
 
-**Admin → $**, two sub-tabs, one question asked from both ends. **Budget** is
-what the trip costs; **Accounting** is what each man owes against it and what
-he has paid. They are sub-tabs rather than two tabs because the join between
-them is the only interesting number either one has, and splitting them would
-put that comparison nowhere:
+**Admin → Budget**, two sub-tabs, one question asked from both ends. The outer
+**Budget** and the inner **Budget** are the same word doing two jobs — the tab
+is the money as a whole, the sub-tab is the spending half of it — and that is
+worth knowing before writing "Admin → Budget" and meaning either one. The tab
+was `$` until it was renamed; the state key is still `money`.
+
+The sub-tab **Budget** is what the trip costs; **Accounting** is what each man
+owes against it and what he has paid. They are sub-tabs rather than two tabs
+because the join between them is the only interesting number either one has,
+and splitting them would put that comparison nowhere:
 
 > SHORT $270 — the trip costs $816.88 a man and you're charging $800.
 
@@ -514,7 +519,7 @@ in installments across the summer.
 Three pieces, and only the third is a collection:
 
 - **The tournament figure** — `bc_settings/<edition>__dues`, set in
-  **Admin → $ → Accounting**. Zero (or never set) means there is no ledger, and the
+  **Admin → Budget → Accounting**. Zero (or never set) means there is no ledger, and the
   BALANCE DUE card disappears from every My Account.
 - **The per-player override** — `bc_players.dues_amount`, for the man coming
   for one night or the one being comped. A written **0 is an override**, not an
