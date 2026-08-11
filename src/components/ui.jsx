@@ -51,10 +51,16 @@ export function SegRule({ compact = false }) {
 // is the default), so the longest label decides the track's minimum width and
 // anything past that runs off the screen edge rather than narrowing. There is
 // no clever fix here on purpose — the Admin bar carried a `fit` prop that
-// dropped a type rung and ellipsised, and it only existed because two tabs
-// were called "Tournament" and "Money". Renaming them to "Event" and "$" made
-// five tabs fit at the normal size down to a 320pt phone, which is the better
-// answer: SHORTEN THE LABEL, don't shrink the type.
+// dropped a type rung and ellipsised, and it only existed because a tab was
+// called "Tournament". Renaming it to "Event" made five tabs fit at the normal
+// size down to a 320pt phone, which is the better answer: SHORTEN THE LABEL,
+// don't shrink the type.
+//
+// "Money" went to "$" in the same pass and has since gone to "Budget", which
+// is the label that says what the tab is. None of those three ever set the
+// width: "Players" and "Matches" are the longest labels on that bar and were
+// there the whole time. The ceiling to watch is a SIXTH tab, or a label
+// longer than seven characters — not this one.
 export function SegmentedToggle({ options, value, onChange, variant = "segmented", letterSpacing, style }) {
   const tracked = variant === "segmented";
   // The track is the sunken one so its thumb has something to be raised out

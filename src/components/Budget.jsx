@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════════
-//  Admin → $ → Budget — what the trip costs
+//  Admin → Budget, the Budget sub-tab — what the trip costs
 // ══════════════════════════════════════════════════════════════════
 //
 // The other half of the Money screen. Accounting next door is money coming IN

@@ -2,7 +2,7 @@
 //  The budget — what the trip COSTS, before anybody is billed for it
 // ══════════════════════════════════════════════════════════════════
 //
-// The other half of Admin → $. The ledger next door records money coming IN
+// The other half of Admin → Budget. The ledger next door records money coming IN
 // from the field; this records what is going OUT, and it is the thing the
 // director actually works out first: four nights of a house, sixteen greens
 // fees, carts, the Saturday steaks, a trophy. Divide by the field and that is
