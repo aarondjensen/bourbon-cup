@@ -2715,14 +2715,29 @@ function PlayerStatsTable({ rows, teams }) {
   );
 }
 
-// ── Analytics View ──
-// `tab` is which half opens, and it comes from the caller because the menu
-// offers the two halves as two separate rows. It used to be seeded "current"
-// unconditionally, so tapping Historical Data landed on this year's stats and
-// the History it named was one more tap away — a destination that did not go
-// where it said.
-function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, editions, activeSummary, user, hcpOverrides, teeAssignments, roundLocks, teams, tab = "current" }) {
-  const [analyticsTab, setAnalyticsTab] = useState(tab);
+// ── Data View ──
+// Was two menu rows — Player Analytics and Historical Data — each opening one
+// half of this screen, with the halves split NOW vs THEN. That axis is the
+// wrong one to cut on. "How has Weezy done" is one question, and the split
+// answered it for this year on one row and never for the other ten; "who won
+// 2019" and "what is this year at" are also one question, and they sat on
+// opposite rows.
+//
+// One row now, cut by SUBJECT:
+//
+//   TOURNAMENT   the cup itself — every year it has been played, this one
+//                included and computed live.
+//   PLAYER       the people in it — what their matches did and what their
+//                cards did.
+//
+// Neither half is pinned to a year by the toggle any more, which is what
+// leaves room for the Player side to grow a career record without needing a
+// third tab to put it on. Today it is still this year's field; the Tournament
+// side already spans 2016 on.
+function DataView({ tPlayers, matches, holeData, tRounds, courses, editions, activeSummary, user, hcpOverrides, teeAssignments, roundLocks, teams }) {
+  // Tournament opens. It is the half that already spans every year, and it is
+  // the one the row's own name answers first — the cup, then the people in it.
+  const [dataTab, setDataTab] = useState("tournament");
 
   // Both halves of a player's tournament, from lib/playerStats: the match
   // record off the matches, and how they actually went round off the cards.
@@ -2733,21 +2748,24 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, editions
 
   return (
     <div style={{ fontFamily: FONT }}>
-      {/* Stats / History switch — pinned, same as every other tab's lead
-          control, so it sits where the eye already expects a tab switcher. */}
+      {/* Tournament / Player switch — pinned, same as every other tab's lead
+          control, so it sits where the eye already expects a tab switcher.
+          The labels name a SUBJECT, not a year: neither side is "this year"
+          or "the old ones", which is the distinction the old Stats/History
+          pair got wrong. */}
       <StickyTop padBottom={14}>
         <SegmentedToggle
-          options={[["current", `${getTournamentYear()} Stats`], ["history", "History"]]}
-          value={analyticsTab} onChange={setAnalyticsTab}
+          options={[["tournament", "Tournament"], ["player", "Player"]]}
+          value={dataTab} onChange={setDataTab}
         />
       </StickyTop>
 
-      {analyticsTab === "current" && (
-        <PlayerStatsTable rows={playerStats} teams={teams} />
+      {dataTab === "tournament" && (
+        <HistoryList editions={editions} activeSummary={activeSummary} teams={teams} isDirector={!!user?.isDirector} />
       )}
 
-      {analyticsTab === "history" && (
-        <HistoryList editions={editions} activeSummary={activeSummary} teams={teams} isDirector={!!user?.isDirector} />
+      {dataTab === "player" && (
+        <PlayerStatsTable rows={playerStats} teams={teams} />
       )}
     </div>
   );
@@ -2806,12 +2824,17 @@ function SlideMenu({ open, onClose, onNavigate, user, view, alerts, onEditions, 
     // BEFORE the tournament — when is it, where are we staying, what are we
     // playing — and the only one anybody opens in June.
     { key: "trip",      label: "Trip Info",        icon: "🏡" },
-    { key: "analytics", label: "Player Analytics", icon: "📊" },
-    { key: "history",   label: "Historical Data",  icon: "📅" },
+    // One row, two subjects. This was Player Analytics and Historical Data,
+    // and the split was along the wrong axis: it cut NOW from THEN, so the
+    // same question — how has this player done — lived on one row for this
+    // year and nowhere at all for the other ten. Data cuts by SUBJECT
+    // instead, the cup or the people, and each side is free to span every
+    // year the cup has been played. See DataView.
+    { key: "data",      label: "Data",             icon: "📊" },
     // Every year the cup has been played, each one a whole tournament you can
     // open — the leaderboard, the draw and all sixty-four cards of it. It sits
-    // under Historical Data because they answer the same question from two
-    // sides: that row is the summary of the past, this one walks into it.
+    // under Data because they answer the same question from two sides: that
+    // row is the summary of the past, this one walks into it.
     // The active year rides on the row so the menu says which tournament is on
     // screen without opening anything.
     { key: "editions",  label: "Tournaments",      icon: "🏆", action: onEditions, value: String(getTournamentYear()) },
@@ -3016,8 +3039,8 @@ export default function App() {
   // the one thing a cloned edition must not inherit.
   const [tripDates_, setTripDates] = useState({ start_date: "", end_date: "" });
   // Every year the cup has been played — the SAME collection the Tournaments
-  // picker reads, which is what makes the History tab and the edition switcher
-  // two views of one list instead of two lists. Tiny (one document a year) and
+  // picker reads, which is what makes Data → Tournament and the edition
+  // switcher two views of one list instead of two lists. Tiny (one document a year) and
   // not tournament-scoped, because it IS the index of tournaments.
   const [editions, setEditions] = useState([]);
   // The saved team-name overrides (from the bc_settings/team_names doc).
@@ -3557,8 +3580,8 @@ export default function App() {
     }));
     // The edition index. Subscribed rather than fetched once because it now
     // feeds two things — the doc-id namespacing reconcile below, and the
-    // History tab — and because a summary this app writes back should appear
-    // on the tab that asked for it without a reload.
+    // Tournament half of Data — and because a summary this app writes back
+    // should appear on the tab that asked for it without a reload.
     //
     // withId for the same reason bc_accounts uses it: the first edition
     // document can be typed into the Firebase console by hand, and a document
@@ -3673,7 +3696,7 @@ export default function App() {
 
   // ── The blackout, applied once, at the source ────────────────────
   // Every hole past a sealed round's reveal, removed (see lib/reveal.js).
-  // The read-only surfaces — the scoreboard and the analytics tab — are
+  // The read-only surfaces — the scoreboard and the Data tab — are
   // handed THIS map rather than the real one, so a round nobody has turned
   // over yet is not a round they are trusted to draw carefully: it is a
   // round with no scores in it, and every point, strip, status and total
@@ -4430,7 +4453,7 @@ export default function App() {
   // ── This edition's row in the archive ────────────────────────────────
   // Computed from the cards by the same engine the leaderboard uses (see
   // lib/editionSummary) and written back onto the edition document, which is
-  // what the History tab reads.
+  // what Data → Tournament reads.
   //
   // Three conditions, and each one is doing a job:
   //
@@ -4450,9 +4473,9 @@ export default function App() {
   // subscribed by then, so the summary costs a single write and no reads.
   //
   // ── The seal, twice over ──────────────────────────────────────────
-  // Computed off the CONCEALED map, like the scoreboard and the analytics
-  // tab, because this is one more surface that can state a sealed round's
-  // result — and a spoiler on the History tab would be exactly the kind
+  // Computed off the CONCEALED map, like the scoreboard and the Data tab,
+  // because this is one more surface that can state a sealed round's
+  // result — and a spoiler on Data → Tournament would be exactly the kind
   // nobody thinks to check for.
   //
   // But concealed is not enough on its own here, and this is the subtle part.
@@ -4927,7 +4950,7 @@ export default function App() {
             rounds={tournamentRounds}
             currentRound={currentRound}
             courses={courses}
-            /* Concealed hole data, same as the scoreboard and the analytics
+            /* Concealed hole data, same as the scoreboard and the Data
                tab: skins are derived hole by hole off these scores, so the
                real map here would read out a sealed round's card one skin at
                a time from a tab nobody thought to check. */
@@ -4992,12 +5015,12 @@ export default function App() {
             isDirector={isDirector}
           />
         )}
-        {(view === "analytics" || view === "history") && (
+        {view === "data" && (
           /* Concealed hole data, same as the scoreboard: this tab's per-player
              W/L/PTS is the cup total sliced a different way, so a sealed round
              left in it would give the ending away from a tab nobody thought to
              check. */
-          <AnalyticsView
+          <DataView
             tPlayers={tPlayers} matches={enrichedMatches} holeData={revealedHoleData}
             tRounds={enrichedRounds} courses={courses} user={user}
             hcpOverrides={hcpOverridesData} teeAssignments={teeAssignmentsData}
@@ -5008,10 +5031,6 @@ export default function App() {
                on this tab, so a sealed round cannot leak its result through the
                archive either. */
             activeSummary={editionSummary}
-            /* Which half opens. The menu offers these as two rows, so the row
-               that says History has to arrive on History. */
-            tab={view === "history" ? "history" : "current"}
-            key={view}
           />
         )}
         {view === "photos" && (
