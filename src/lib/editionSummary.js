@@ -2,17 +2,17 @@
 //  editionSummary — what a finished cup reads as, in one row.
 // ══════════════════════════════════════════════════════════════════
 //
-// The History tab used to render `bc_historical`: one hand-typed document per
-// year, carrying the two team names and the two scores, with the app telling
-// its own director that "historical data can be added by directors via
-// Firestore directly for now."
+// The Data tab's Tournament half used to render `bc_historical`: one
+// hand-typed document per year, carrying the two team names and the two
+// scores, with the app telling its own director that "historical data can be
+// added by directors via Firestore directly for now."
 //
 // That was a second answer to "who won 2019", and the weaker one. Every year
 // from 2016 on now exists as a whole edition — the roster, the draw, the round
 // setup and all sixty-four cards of it — and src/lib/historyVerify re-scores
 // each of them against three independent records on every `npm test`. So the
 // cards are checked and the summary was not, and nothing reconciled them: a
-// typo in a hand-entered score would have shown one number on the History tab
+// typo in a hand-entered score would have shown one number on that tab
 // and a different one on that year's own leaderboard, with nothing to say
 // which was right.
 //

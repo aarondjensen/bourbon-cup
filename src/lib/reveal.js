@@ -28,7 +28,7 @@
 // ------------------
 // By subtraction at the source, not by asking each screen to remember. App
 // passes `concealHoleData(holeData, tRounds)` to the read-only surfaces —
-// the scoreboard and the analytics tab — and everything downstream of that
+// the scoreboard and the Data tab — and everything downstream of that
 // is scored off a round that genuinely has no scores past the reveal. There
 // is no code path where a screen has the numbers and is trusted not to draw
 // them, which is what a per-component `if (sealed)` would have been.
