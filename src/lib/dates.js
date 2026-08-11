@@ -35,6 +35,45 @@ export const todayISO = (d = new Date()) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
+// ── Calendar arithmetic ───────────────────────────────────────────
+// The one place a Date object is allowed near a calendar date, and it is safe
+// for a specific reason: both ends are UTC. `Date.UTC` builds from the three
+// numbers with no timezone applied, and the getUTC* readers take them back
+// out the same way, so the local zone never enters the calculation. The bug
+// this file exists to prevent needs a LOCAL reading of a UTC instant (or the
+// reverse), and there is not one here.
+const DAY_MS = 86400000;
+
+// `iso` shifted by n days. Returns "" for something it cannot read, so a
+// caller never gets a plausible-looking wrong date out of a typo.
+export const addDays = (iso, n) => {
+  if (!isISODate(iso)) return "";
+  const [y, m, d] = String(iso).split("-").map(Number);
+  const t = Date.UTC(y, m - 1, d) + n * DAY_MS;
+  const out = new Date(t);
+  const pad = (v) => String(v).padStart(2, "0");
+  return `${out.getUTCFullYear()}-${pad(out.getUTCMonth() + 1)}-${pad(out.getUTCDate())}`;
+};
+
+// Whole days from `from` to `to`, signed. Null when either end is unreadable.
+export const daysBetween = (from, to) => {
+  if (!isISODate(from) || !isISODate(to)) return null;
+  const at = (iso) => { const [y, m, d] = iso.split("-").map(Number); return Date.UTC(y, m - 1, d); };
+  return Math.round((at(to) - at(from)) / DAY_MS);
+};
+
+// Every day from `from` to `to` inclusive, as ISO strings. This is what turns
+// a trip's two dates into the list of days a round can be played on.
+//
+// `max` is a guard rather than a feature: a mistyped year ("2026" to "2126")
+// would otherwise build thirty-six thousand strings to fill a dropdown with.
+// A golf trip is a long weekend; anything past a month is a typo.
+export const rangeDays = (from, to, { max = 31 } = {}) => {
+  const span = daysBetween(from, to);
+  if (span == null || span < 0 || span >= max) return isISODate(from) ? [from] : [];
+  return Array.from({ length: span + 1 }, (_, i) => addDays(from, i));
+};
+
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 

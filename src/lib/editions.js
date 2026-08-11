@@ -107,10 +107,17 @@ export const cloneEdition = async (sourceId, { year, name, id }, options = {}) =
   if (options.teams || options.tournamentName) {
     const settings = await db.get("bc_settings", f(sourceId));
     const find = (key) => settings.find((s) => s.id === key || String(s.id).endsWith(`__${key}`));
+    // `start_date` / `end_date` are dropped from the tournament document for
+    // the same reason `dues_amount` is dropped from a roster row: they are
+    // facts about THIS trip, and last year's weekend carried into a new
+    // edition would date every round wrong on a screen nobody would re-check.
+    // bc_settings/<edition>__trip — the house — is not copied at all.
+    const DROP = { tournament: ["start_date", "end_date"] };
     const copy = async (key) => {
       const s = find(key);
       if (!s) return;
       const { id: _old, ...rest } = s;
+      (DROP[key] || []).forEach(field => { delete rest[field]; });
       await db.upsert("bc_settings", { ...rest, id: editionDocId(key, newTid, true), tournament_id: newTid });
     };
     if (options.teams) { await copy("team_names"); await copy("branding"); }

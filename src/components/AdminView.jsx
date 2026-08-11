@@ -119,8 +119,11 @@ import {
   holesEntered,
 } from "../lib/scoreGuard";
 import {
-  safeHouseUrl,
+  safeHouseUrl, tripDateFields, tripDatesError, tripDayOptions,
 } from "../lib/tripInfo";
+import {
+  formatISODate,
+} from "../lib/dates";
 import {
   useConfirm,
 } from "../lib/useConfirm";
@@ -416,7 +419,7 @@ function ChDeltaBadge({ delta }) {
   );
 }
 
-export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, roundCount, tournamentRounds, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks, payments, duesAmount, onLogPayment, onDeletePayment, onSaveDues, onSetPlayerDues, onOpenFinalize, finalizeRound, finalizeReady, trip, onSaveTrip }) {
+export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, roundCount, tournamentRounds, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks, payments, duesAmount, onLogPayment, onDeletePayment, onSaveDues, onSetPlayerDues, onOpenFinalize, finalizeRound, finalizeReady, trip, onSaveTrip, startDate, endDate }) {
   const [tab, setTab] = useState("players");
   const [editTeamNames, setEditTeamNames] = useState({ A: "", B: "" });
   const [editingTeam, setEditingTeam] = useState(null);
@@ -438,6 +441,12 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
   // The house, seeded from what is STORED rather than from the normalized
   // form: a link lib/tripInfo would refuse still has to be visible in the
   // box so the director can see what they pasted and fix it.
+  // The trip's first and last day — the SOURCE OF TRUTH for every date in
+  // the app (see lib/tripInfo). Seeded from what is stored, never from a
+  // fallback, so an end date the director has not filled in yet stays an
+  // empty box rather than quietly becoming the start date.
+  const [editStartDate, setEditStartDate] = useState("");
+  const [editEndDate, setEditEndDate] = useState("");
   const [editHouseName, setEditHouseName] = useState("");
   const [editHouseUrl, setEditHouseUrl] = useState("");
   const [editTournamentName, setEditTournamentName] = useState(tournamentName || "");
@@ -460,6 +469,8 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
     setAccessCodeError(res.ok ? "" : res.error);
     setShowAccessCode(true);
   }, []);
+  useEffect(() => { setEditStartDate(tripDateFields({ start_date: startDate }).start); }, [startDate]);
+  useEffect(() => { setEditEndDate(tripDateFields({ end_date: endDate }).end); }, [endDate]);
   useEffect(() => { setEditHouseName(trip?.house_name || ""); }, [trip?.house_name]);
   useEffect(() => { setEditHouseUrl(trip?.house_url || ""); }, [trip?.house_url]);
   useEffect(() => { setEditTournamentName(tournamentName || ""); }, [tournamentName]);
@@ -1022,6 +1033,22 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
     ? courses.filter(c => (c.name || "").toLowerCase().includes(courseQuery) || (c.city || "").toLowerCase().includes(courseQuery))
     : courses;
 
+  // ── The Tournament tab's fields ──────────────────────────────────
+  // Condensed by PADDING and WEIGHT, not by dropping a type rung. The tab was
+  // five cards of chunky boxes and took two screens of scrolling to read; it
+  // is now about two thirds the height.
+  //
+  // The 16px is load-bearing and stays: mobile Safari zooms the whole page in
+  // when a focused input's font-size is under 16px, and it does not zoom back
+  // out — so a smaller box here would trade a scroll for a viewport the
+  // director has to pinch their way out of on every field. See the note on
+  // the FS scale in theme.js, which says the same thing.
+  const TournFieldStyle = { flex: 1, minWidth: 0, boxSizing: "border-box", padding: "6px 10px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 7, color: BC.t1, fontSize: FS.lead, fontWeight: 600, outline: "none", fontFamily: FONT };
+  const TournLabelStyle = { fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.5, width: 52, flexShrink: 0, textTransform: "uppercase" };
+  const TournCardStyle = { background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: "10px 12px", marginBottom: 10 };
+  const TournHeadStyle = { fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase" };
+  const TournSaveStyle = { flexShrink: 0, fontSize: FS.label, fontWeight: 800, color: ON_AMBER, background: BC.amber, border: "none", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontFamily: FONT };
+
   const InputStyle = { width: "100%", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.body, boxSizing: "border-box", outline: "none", fontFamily: FONT };
   const LabelStyle = { fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1, marginBottom: 4, display: "block" };
   const BtnStyle = { padding: "10px 20px", borderRadius: 10, border: "none", fontSize: FS.body, fontWeight: 700, cursor: "pointer", background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`, color: ON_AMBER };
@@ -1573,23 +1600,53 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
                 what a four-ball is, and a paragraph restating it sat between
                 the format and the tee times on every visit. */}
 
-            {/* Date — the day this round is played.
-                Here, beside the round's course and its tee times, because it
-                is a fact about THIS round and this is where a director already
-                comes to set the other two. Trip Info derives the whole trip's
-                dates from these (lib/tripInfo), so there is no separate pair
-                of trip-date fields anywhere and therefore nothing that can
-                disagree with the schedule once it moves. Clearing it is a
-                real edit — an undated round simply reads as undated. */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>DATE</div>
-              <input
-                type="date"
-                value={roundDate || ""}
-                onChange={e => setRoundDate(e.target.value)}
-                style={{ ...InputStyle, marginBottom: 0, fontSize: FS.small, padding: "6px 8px", flex: 1, minWidth: 0 }}
-              />
-            </div>
+            {/* Date — WHICH DAY OF THE TRIP this round is played.
+                It PULLS FROM Admin → Tournament rather than opening the whole
+                calendar: the trip's first and last day are set there and are
+                the source of truth, so this offers the days between them and a
+                round cannot be dated outside the trip it belongs to. Set the
+                trip's dates and this becomes a four-tap decision instead of a
+                date picker per round.
+
+                It falls back to a plain date box when the tournament has no
+                dates yet — an empty dropdown would be a dead end, and an
+                edition set up before that field existed still has to be
+                editable. Clearing is a real edit either way; an undated round
+                reads as undated. */}
+            {(() => {
+              const days = tripDayOptions({ start_date: startDate, end_date: endDate });
+              return (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>DATE</div>
+                  {days.length ? (
+                    <select
+                      value={days.includes(roundDate) ? roundDate : ""}
+                      onChange={e => setRoundDate(e.target.value)}
+                      style={{ ...InputStyle, marginBottom: 0, fontSize: FS.small, padding: "6px 8px", flex: 1, minWidth: 0 }}
+                    >
+                      <option value="">Not set</option>
+                      {days.map(d => (
+                        <option key={d} value={d}>{formatISODate(d, { weekday: true })}</option>
+                      ))}
+                      {/* A round dated outside the trip — the trip moved after
+                          the schedule was built. Kept as an option so it shows
+                          what is actually stored instead of silently reading
+                          as "Not set". */}
+                      {roundDate && !days.includes(roundDate) && (
+                        <option value={roundDate}>{formatISODate(roundDate, { weekday: true, withYear: true })} — outside the trip</option>
+                      )}
+                    </select>
+                  ) : (
+                    <input
+                      type="date"
+                      value={roundDate || ""}
+                      onChange={e => setRoundDate(e.target.value)}
+                      style={{ ...InputStyle, marginBottom: 0, fontSize: FS.small, padding: "6px 8px", flex: 1, minWidth: 0 }}
+                    />
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Tee Times */}
 
@@ -2938,62 +2995,90 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
       {tab === "tournament" && (
         <div>
           {/* Active edition — switch year or create a new edition */}
-          <div style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Active Edition</div>
+          <div style={{ ...TournHeadStyle, marginBottom: 6 }}>Active Edition</div>
           <button onClick={() => setShowEditions(true)} style={{
-            width: "100%", marginBottom: 16, padding: "12px 14px", borderRadius: 10,
+            width: "100%", marginBottom: 10, padding: "9px 12px", borderRadius: 10,
             background: BC.card, border: `1px solid ${BC.bdr}`, color: BC.t1,
-            fontSize: FS.body, fontWeight: 700, letterSpacing: 0.3, cursor: "pointer",
+            fontSize: FS.small, fontWeight: 700, letterSpacing: 0.3, cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "space-between",
+            fontFamily: FONT,
           }}>
             <span>Edition · <span style={{ color: BC.amberInk }}>{TOURNAMENT_ID}</span></span>
-            <span style={{ fontSize: FS.small, color: BC.t3 }}>Switch / new ›</span>
+            <span style={{ fontSize: FS.label, color: BC.t3 }}>Switch / new ›</span>
           </button>
 
-          {/* Tournament identity — name and location.
-              One card and one Save for both: they're the same sentence on
+          {/* Tournament identity — name, location, dates, length.
+              One card and one Save for all of it: they're the same sentence on
               every screen that shows them ("The Bourbon Cup · 2025 · Grand
               Rapids, MI"), and a director renaming the tournament for a venue
               would otherwise have to remember two separate saves. An empty
-              field falls back to its constant rather than saving blank, so
-              the header can't end up with a hole in it. */}
-          <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: 14, marginBottom: 16 }}>
+              name or location falls back to its constant rather than saving
+              blank, so the header can't end up with a hole in it.
+
+              ── The dates are the SOURCE OF TRUTH ─────────────────────
+              Not derived from the rounds, which is how they started. A
+              director knows the weekend in February and the draw in July, so
+              deriving made the app unable to answer "when is it" for exactly
+              the months everybody asks. Everything downstream reads from this
+              pair: the round date picker below offers the days between them,
+              and Trip Info's banner is them. See lib/tripInfo. */}
+          <div style={TournCardStyle}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
-              <div style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase" }}>Tournament</div>
+              <div style={TournHeadStyle}>Tournament</div>
               <button
-                onClick={() => onSaveTournament({
-                  name: editTournamentName.trim() || TOURNAMENT_TITLE,
-                  location: editTournamentLocation.trim() || TOURNAMENT_LOCATION,
-                  // Clamped rather than refused. A blank box or a slipped
-                  // keystroke should not be able to fail a save that also
-                  // carries the name and the venue, so it lands on the nearest
-                  // legal number and the row below says what that is.
-                  rounds: clampRoundCount(editRoundCount),
-                })}
-                style={{ flexShrink: 0, fontSize: FS.small, fontWeight: 700, color: ON_AMBER, background: BC.amber, border: "none", borderRadius: 6, padding: "8px 14px", cursor: "pointer" }}
+                onClick={() => {
+                  const err = tripDatesError({ start: editStartDate, end: editEndDate });
+                  if (err) { notify?.(err, "error"); return; }
+                  onSaveTournament({
+                    name: editTournamentName.trim() || TOURNAMENT_TITLE,
+                    location: editTournamentLocation.trim() || TOURNAMENT_LOCATION,
+                    // Clamped rather than refused. A blank box or a slipped
+                    // keystroke should not be able to fail a save that also
+                    // carries the name and the venue, so it lands on the nearest
+                    // legal number and the row below says what that is.
+                    rounds: clampRoundCount(editRoundCount),
+                    startDate: editStartDate,
+                    endDate: editEndDate,
+                  });
+                }}
+                style={TournSaveStyle}
               >Save</button>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {[
                 { key: "name", val: editTournamentName, set: setEditTournamentName, ph: TOURNAMENT_TITLE, lbl: "Name" },
                 { key: "location", val: editTournamentLocation, set: setEditTournamentLocation, ph: TOURNAMENT_LOCATION, lbl: "Location" },
               ].map(f => (
                 <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  {/* 58 is the width of the longest label ("LOCATION") at
-                      FS.label/700 with this tracking, rounded up. The gutter
-                      is fixed so the two inputs share a left edge. */}
-                  <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.5, width: 58, flexShrink: 0, textTransform: "uppercase" }}>{f.lbl}</span>
+                  <span style={TournLabelStyle}>{f.lbl}</span>
                   <input
                     value={f.val}
                     onChange={e => f.set(e.target.value)}
                     onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
                     placeholder={f.ph}
-                    // FS.lead for the same reason as the Access field
-                    // below — these are free-text inputs, and under 16px
-                    // iOS zooms in on focus and never comes back out.
-                    style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.lead, fontWeight: 700, outline: "none", fontFamily: FONT }}
+                    style={TournFieldStyle}
                   />
                 </div>
               ))}
+              {/* First and last day of the trip. Two boxes on one row because
+                  they are one fact — nobody sets an end date without a start. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={TournLabelStyle}>Dates</span>
+                <input
+                  type="date"
+                  value={editStartDate}
+                  onChange={e => setEditStartDate(e.target.value)}
+                  style={{ ...TournFieldStyle, fontSize: FS.small }}
+                />
+                <span style={{ fontSize: FS.label, color: BC.t3, flexShrink: 0 }}>to</span>
+                <input
+                  type="date"
+                  value={editEndDate}
+                  min={editStartDate || undefined}
+                  onChange={e => setEditEndDate(e.target.value)}
+                  style={{ ...TournFieldStyle, fontSize: FS.small }}
+                />
+              </div>
               {/* ── How long the tournament is ──────────────────────────
                   It used to be four everywhere it was asked, in four
                   different files. It belongs here: how many rounds a trip is
@@ -3004,7 +3089,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
                   The list it drives can only ever GROW past this number, never
                   shrink below a round somebody has played — see lib/rounds. */}
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.5, width: 58, flexShrink: 0, textTransform: "uppercase" }}>Rounds</span>
+                <span style={TournLabelStyle}>Rounds</span>
                 <input
                   type="number"
                   inputMode="numeric"
@@ -3013,9 +3098,9 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
                   value={editRoundCount}
                   onChange={e => setEditRoundCount(e.target.value)}
                   onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
-                  style={{ width: 74, boxSizing: "border-box", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.lead, fontWeight: 700, outline: "none", fontFamily: FONT }}
+                  style={{ ...TournFieldStyle, flex: "0 0 58px", width: 58 }}
                 />
-                <span style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.35 }}>
+                <span style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.35, minWidth: 0 }}>
                   {heldRounds.length
                     ? `Round ${heldRounds.join(", ")} ${heldRounds.length === 1 ? "has" : "have"} been played, so the schedule keeps ${heldRounds.length === 1 ? "it" : "them"}.`
                     : "Sets the round pills on every tab."}
@@ -3025,18 +3110,20 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
           </div>
 
           {/* ── The house ──
-              The one fact Trip Info stores of its own. Its dates and its
-              courses are read off the rounds (see lib/tripInfo), which is why
-              there is nothing else to fill in here — and why this card sits in
-              Tournament rather than being a Trip Info tab of its own.
+              The one fact Trip Info stores of its own. Its dates come from the
+              card above and its courses off each round, which is why there is
+              nothing else to fill in here. Its own settings document rather
+              than a couple more fields above, and deliberately: cloneEdition
+              copies the tournament document, and last year's rental link on
+              this year's Trip Info would send the field to the wrong house.
 
               The link is checked before it saves, not after: a director who
               pastes something that will not open should hear about it here,
               standing in front of the box, rather than from a player tapping a
               dead button in June. */}
-          <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: 14, marginBottom: 16 }}>
+          <div style={TournCardStyle}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
-              <div style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase" }}>The House</div>
+              <div style={TournHeadStyle}>The House</div>
               <button
                 onClick={async () => {
                   const url = editHouseUrl.trim();
@@ -3047,16 +3134,16 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
                   const ok = await onSaveTrip({ houseName: editHouseName, houseUrl: url });
                   notify?.(ok ? "The house is saved" : "Could not save that — try again", ok ? "success" : "error");
                 }}
-                style={{ flexShrink: 0, fontSize: FS.small, fontWeight: 700, color: ON_AMBER, background: BC.amber, border: "none", borderRadius: 6, padding: "8px 14px", cursor: "pointer" }}
+                style={TournSaveStyle}
               >Save</button>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {[
                 { key: "name", val: editHouseName, set: setEditHouseName, ph: "The lake house", lbl: "Name" },
                 { key: "link", val: editHouseUrl, set: setEditHouseUrl, ph: "vrbo.com/1234567", lbl: "Link" },
               ].map(f => (
                 <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.5, width: 58, flexShrink: 0, textTransform: "uppercase" }}>{f.lbl}</span>
+                  <span style={TournLabelStyle}>{f.lbl}</span>
                   <input
                     value={f.val}
                     onChange={e => f.set(e.target.value)}
@@ -3065,14 +3152,10 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
                     inputMode={f.key === "link" ? "url" : "text"}
                     autoCapitalize={f.key === "link" ? "none" : undefined}
                     autoCorrect={f.key === "link" ? "off" : undefined}
-                    style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.lead, fontWeight: 700, outline: "none", fontFamily: FONT }}
+                    style={TournFieldStyle}
                   />
                 </div>
               ))}
-              <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5 }}>
-                Shown on ☰ → Trip Info, along with the dates and courses off each round&apos;s setup.
-                Leave both blank and the section doesn&apos;t appear.
-              </div>
             </div>
           </div>
 
@@ -3082,9 +3165,9 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
               other people often enough (handicaps, tee times) that leaving
               a password sitting on it would undo the point of having one.
               Saving an empty field takes the password off. */}
-          <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: 14, marginBottom: 16 }}>
+          <div style={TournCardStyle}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
-              <div style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase" }}>Access</div>
+              <div style={TournHeadStyle}>Access</div>
               <button
                 onClick={async () => {
                   const next = editAccessCode.trim();
@@ -3103,28 +3186,28 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
                   setAccessCodeError("");
                   notify(next ? "Password changed" : "Password removed", "success");
                 }}
-                style={{ flexShrink: 0, fontSize: FS.small, fontWeight: 700, color: ON_AMBER, background: BC.amber, border: "none", borderRadius: 6, padding: "8px 14px", cursor: "pointer" }}
+                style={TournSaveStyle}
               >Save</button>
             </div>
 
             {/* The current one. Fetched on demand — the read is a members-
                 only round trip to Firestore, so there is no reason to make
                 it on every visit to this tab. */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, minHeight: 34 }}>
-              <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.5, width: 58, flexShrink: 0, textTransform: "uppercase" }}>Current</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, minHeight: 28 }}>
+              <span style={TournLabelStyle}>Current</span>
               {showAccessCode ? (
                 <span style={{ flex: 1, minWidth: 0, fontSize: accessCodeError ? FS.label : FS.body, fontWeight: accessCodeError ? 600 : 800, lineHeight: 1.35, color: accessCodeError ? BC.danger : (savedAccessCode ? BC.amberInk : BC.t3), wordBreak: "break-all" }}>
                   {accessCodeError || savedAccessCode || "None"}
                 </span>
               ) : (
                 <button type="button" onClick={loadAccessCode} style={{
-                  fontSize: FS.small, fontWeight: 700, padding: "6px 12px", borderRadius: 6,
+                  fontSize: FS.label, fontWeight: 700, padding: "5px 10px", borderRadius: 6, fontFamily: FONT,
                   border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t2, cursor: "pointer",
                 }}>Show</button>
               )}
               {showAccessCode && (
                 <button type="button" onClick={() => setShowAccessCode(false)} style={{
-                  flexShrink: 0, fontSize: FS.small, fontWeight: 700, padding: "6px 12px", borderRadius: 6,
+                  flexShrink: 0, fontSize: FS.label, fontWeight: 700, padding: "5px 10px", borderRadius: 6, fontFamily: FONT,
                   border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer",
                 }}>Hide</button>
               )}
@@ -3140,27 +3223,27 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
               // focused input is under 16px and does not zoom back out on
               // blur, leaving the director stranded at 2x on a form they
               // have to finish. See the note on the scale in theme.js.
-              style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.lead, fontWeight: 700, outline: "none", fontFamily: FONT }}
+              style={{ ...TournFieldStyle, width: "100%", flex: "none" }}
             />
             {/* All that survives of a four-sentence explanation. The other
                 three described what a password is; this one is the only thing
                 the field cannot show — that emptying it is how you remove it,
                 which nobody would try on a control called "New password". */}
-            <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 6, lineHeight: 1.4 }}>
+            <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 5, lineHeight: 1.4 }}>
               Save blank to remove.
             </div>
           </div>
 
           {/* Teams — name, imported logo, brand color */}
-          <div style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Teams</div>
+          <div style={{ ...TournHeadStyle, marginBottom: 6 }}>Teams</div>
           {[teams.A, teams.B].map(team => {
             const previewLogo = brandLogoEdit[team.id] || team.logo;
             const dirty = teamDirty(team.id);
             return (
-              <div key={team.id} style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: 12, marginBottom: 10 }}>
+              <div key={team.id} style={{ ...TournCardStyle, padding: "10px 10px" }}>
                 {/* Name row — the card's header, with its Save on the right */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                  <div style={{ width: 34, height: 34, borderRadius: 8, background: brandSwatch(team.id) + "22", border: `1px solid ${brandSwatch(team.id)}${ALPHA.line}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <div style={{ width: 30, height: 30, borderRadius: 8, background: brandSwatch(team.id) + "22", border: `1px solid ${brandSwatch(team.id)}${ALPHA.line}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
                     {previewLogo
                       ? <img src={previewLogo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
                       : <span style={{ fontSize: FS.body, fontWeight: 800, color: brandSwatch(team.id) }}>{team.id}</span>}
@@ -3170,13 +3253,13 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
                     onChange={e => setEditTeamNames(n => ({ ...n, [team.id]: e.target.value }))}
                     onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
                     placeholder={`Team ${team.id}`}
-                    style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "9px 10px", background: BC.inp, border: `1px solid ${brandSwatch(team.id)}${ALPHA.line}`, borderRadius: 8, color: BC.t1, fontSize: FS.body, fontWeight: 800, letterSpacing: 0.5, outline: "none", fontFamily: FONT }}
+                    style={{ ...TournFieldStyle, border: `1px solid ${brandSwatch(team.id)}${ALPHA.line}`, fontWeight: 700, letterSpacing: 0.3 }}
                   />
                   <button
                     onClick={() => saveTeam(team.id)}
                     disabled={!dirty}
                     style={{
-                      flexShrink: 0, fontSize: FS.small, fontWeight: 700, borderRadius: 6, padding: "8px 14px", whiteSpace: "nowrap",
+                      flexShrink: 0, fontSize: FS.label, fontWeight: 800, borderRadius: 6, padding: "6px 12px", whiteSpace: "nowrap", fontFamily: FONT,
                       color: dirty ? ON_AMBER : BC.t3,
                       background: dirty ? BC.amber : BC.inp,
                       border: dirty ? "none" : `1px solid ${BC.bdr}`,
@@ -3187,14 +3270,14 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
 
                 {/* Logo import + color row */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ width: 26, height: 26, borderRadius: "50%", background: brandSwatch(team.id), border: `2px solid ${BC.bdr}`, flexShrink: 0 }} />
+                  <div style={{ width: 22, height: 22, borderRadius: "50%", background: brandSwatch(team.id), border: `2px solid ${BC.bdr}`, flexShrink: 0 }} />
                   <input
                     value={brandEdit[team.id]}
                     onChange={e => setBrandEdit(b => ({ ...b, [team.id]: e.target.value }))}
                     placeholder="#rrggbb"
-                    style={{ width: 100, boxSizing: "border-box", padding: "8px 8px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, color: BC.t1, fontSize: FS.small, fontWeight: 600, outline: "none", fontFamily: FONT }}
+                    style={{ ...TournFieldStyle, flex: "0 0 96px", width: 96, fontSize: FS.small, padding: "5px 8px" }}
                   />
-                  <label style={{ marginLeft: "auto", fontSize: FS.small, fontWeight: 700, color: BC.t2, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, padding: "8px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>
+                  <label style={{ marginLeft: "auto", fontSize: FS.label, fontWeight: 700, color: BC.t2, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, padding: "6px 10px", cursor: "pointer", whiteSpace: "nowrap", fontFamily: FONT }}>
                     {brandBusy === team.id ? "Reading…" : "Import logo"}
                     <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => { pickLogo(team.id, e.target.files?.[0]); e.target.value = ""; }} />
                   </label>
