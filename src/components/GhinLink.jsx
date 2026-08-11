@@ -377,7 +377,7 @@ export function GhinSyncButton({ players, onUpdatePlayer, notify, confirm, compa
         // "Both teams" is stated because this button now lives in team A's
         // header, where it heads the handicap COLUMN rather than that team —
         // the one thing about it that isn't self-evident from where it sits.
-        message: `This pulls the current Handicap Index for all ${n} GHIN-linked player${n !== 1 ? "s" : ""} in the tournament — both teams — from the USGA GHIN database, and overwrites their stored index.\n\n• Director overrides are kept (they still win).\n• Manual (non-linked) players are untouched.`,
+        message: `Overwrites the stored index for all ${n} GHIN-linked player${n !== 1 ? "s" : ""} — both teams.\n\n• Director overrides are kept (they still win).\n• Manual (non-linked) players are untouched.`,
         confirmLabel: `Re-sync ${n}`,
       });
       if (!ok) return;

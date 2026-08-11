@@ -197,7 +197,7 @@ export function SignedCardPanel({
       message: [
         `${nameOf(sig.signed_by)}'s signature is removed and every attestation on it is cleared.`,
         "",
-        "The scores go back to being editable by anyone in the match. Nothing already posted is deleted — the card just stops being final.",
+        "The scores go back to being editable by anyone in the match. Nothing posted is deleted.",
         ...(asDirector ? [
           "",
           final
