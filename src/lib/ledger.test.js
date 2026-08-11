@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   paymentId, paymentError, buildPayment, MAX_NOTE,
-  round2, money, todayISO, formatPaymentDate,
+  round2, money,
   hasDuesOverride, duesFor, paymentsFor, paidBy, balanceFor,
   owesMoney, hasLedger, ledgerRows, ledgerTotals, methodLabel,
 } from "./ledger";
@@ -40,22 +40,6 @@ describe("round2 and money", () => {
   });
   it("signs an overpayment refund", () => {
     expect(money(-25)).toBe("-$25");
-  });
-});
-
-describe("dates", () => {
-  it("stamps today in local time, not UTC", () => {
-    // 11pm on the 1st in a negative-offset zone is still the 1st. A Date
-    // round-trip through toISOString would say the 2nd.
-    expect(todayISO(new Date(2026, 6, 1, 23, 30))).toBe("2026-07-01");
-  });
-  it("formats without dragging the day backwards", () => {
-    expect(formatPaymentDate("2026-07-01")).toBe("Jul 1");
-    expect(formatPaymentDate("2026-07-01", { withYear: true })).toBe("Jul 1, 2026");
-  });
-  it("leaves something it cannot read alone", () => {
-    expect(formatPaymentDate("")).toBe("");
-    expect(formatPaymentDate("later")).toBe("later");
   });
 });
 

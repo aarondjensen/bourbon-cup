@@ -119,6 +119,9 @@ import {
   holesEntered,
 } from "../lib/scoreGuard";
 import {
+  safeHouseUrl,
+} from "../lib/tripInfo";
+import {
   useConfirm,
 } from "../lib/useConfirm";
 import {
@@ -249,7 +252,7 @@ const sameRoundMap = (a, b) => JSON.stringify(liveEntries(a)) === JSON.stringify
 // absent — it is set in the Courses tab and only rides along on the write
 // so a round save cannot drop it.
 const roundSettingsSignature = (r) => JSON.stringify([
-  r.format, r.handicap_mode, r.tee_time, r.scoring_type, r.hole_scoring,
+  r.format, r.handicap_mode, r.date, r.tee_time, r.scoring_type, r.hole_scoring,
   r.nassau_front, r.nassau_back, r.nassau_overall, r.allowance, r.counting_scores,
   r.hole_points, r.par_points, r.sealed,
 ]);
@@ -413,7 +416,7 @@ function ChDeltaBadge({ delta }) {
   );
 }
 
-export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, roundCount, tournamentRounds, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks, payments, duesAmount, onLogPayment, onDeletePayment, onSaveDues, onSetPlayerDues, onOpenFinalize, finalizeRound, finalizeReady }) {
+export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, roundCount, tournamentRounds, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks, payments, duesAmount, onLogPayment, onDeletePayment, onSaveDues, onSetPlayerDues, onOpenFinalize, finalizeRound, finalizeReady, trip, onSaveTrip }) {
   const [tab, setTab] = useState("players");
   const [editTeamNames, setEditTeamNames] = useState({ A: "", B: "" });
   const [editingTeam, setEditingTeam] = useState(null);
@@ -432,6 +435,11 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
   const [brandEdit, setBrandEdit] = useState({ A: "", B: "" });        // hex color per team
   const [brandLogoEdit, setBrandLogoEdit] = useState({ A: null, B: null }); // uploaded logo data URL per team
   const [brandBusy, setBrandBusy] = useState(null); // team id mid-extraction
+  // The house, seeded from what is STORED rather than from the normalized
+  // form: a link lib/tripInfo would refuse still has to be visible in the
+  // box so the director can see what they pasted and fix it.
+  const [editHouseName, setEditHouseName] = useState("");
+  const [editHouseUrl, setEditHouseUrl] = useState("");
   const [editTournamentName, setEditTournamentName] = useState(tournamentName || "");
   const [editTournamentLocation, setEditTournamentLocation] = useState(tournamentLocation || "");
   // Seeded from the RESOLVED count, not the raw setting, so an edition that
@@ -452,6 +460,8 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
     setAccessCodeError(res.ok ? "" : res.error);
     setShowAccessCode(true);
   }, []);
+  useEffect(() => { setEditHouseName(trip?.house_name || ""); }, [trip?.house_name]);
+  useEffect(() => { setEditHouseUrl(trip?.house_url || ""); }, [trip?.house_url]);
   useEffect(() => { setEditTournamentName(tournamentName || ""); }, [tournamentName]);
   useEffect(() => { setEditTournamentLocation(tournamentLocation || ""); }, [tournamentLocation]);
   useEffect(() => {
@@ -548,6 +558,10 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
   }, [tournamentRounds, editRound]);
   const [roundFormat, setRoundFormat] = useState("");
   const [roundTeeTime, setRoundTeeTime] = useState("");
+  // The day this round is played, YYYY-MM-DD. Trip Info derives the whole
+  // weekend's dates from these — see lib/tripInfo — so this is the only
+  // place a date is typed and there is no trip-level pair to drift from it.
+  const [roundDate, setRoundDate] = useState("");
   const [hcpOverrides, setHcpOverrides] = useState({});
   // Per round, and seeded EMPTY. It used to open as
   // `{1:"low_man",2:"low_man",3:"low_man",4:"full"}` — the retired
@@ -676,6 +690,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
       course_id: tr.course_id || "",
       format: fmt,
       handicap_mode: tr.handicap_mode || defaultHandicapMode(fmt),
+      date: tr.date || "",
       tee_time: tr.tee_time || "",
       nassau_front: tr.nassau_front ?? 1,
       nassau_back: tr.nassau_back ?? 1,
@@ -710,6 +725,11 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
       course_id: storedRound.course_id,
       format: fmt,
       handicap_mode: handicapMode[editRound] || defaultHandicapMode(fmt),
+      // Straight through, unlike tee_time above: a date has to be CLEARABLE,
+      // and `|| storedRound.date` would make an emptied box read as no edit.
+      // Safe because the auto-save is gated on `formSeeded`, so the blank
+      // this state holds before hydration is never diffed against Firestore.
+      date: roundDate,
       tee_time: roundTeeTime || storedRound.tee_time,
       nassau_front: nassau.front,
       nassau_back: nassau.back,
@@ -724,7 +744,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
       ch_overrides: hcpOverrides[editRound] || {},
       tee_assignments: teeAssignments[editRound] || {},
     };
-  }, [storedRound, roundFormat, handicapMode, editRound, roundTeeTime, nassau, scoringType, holeScoring, allowance, counting, holePoints, parPoints, sealed, hcpOverrides, teeAssignments]);
+  }, [storedRound, roundFormat, handicapMode, editRound, roundDate, roundTeeTime, nassau, scoringType, holeScoring, allowance, counting, holePoints, parPoints, sealed, hcpOverrides, teeAssignments]);
 
   const storedSettingsSig = roundSettingsSignature(storedRound);
   const hcpDocSig = JSON.stringify(hcpOverridesFromDb ?? null);
@@ -754,6 +774,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
     const written = lastWrittenRef.current;
     if (written && written.round === editRound && roundSettingsSignature(written.payload) === storedSettingsSig) return;
     setRoundFormat(storedRound.format);
+    setRoundDate(storedRound.date);
     setRoundTeeTime(storedRound.tee_time);
     setNassau({ front: storedRound.nassau_front, back: storedRound.nassau_back, overall: storedRound.nassau_overall });
     setScoringType(storedRound.scoring_type);
@@ -817,6 +838,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
         course_id: payload.course_id,
         format: payload.format,
         handicap_mode: payload.handicap_mode,
+        date: payload.date,
         tee_time: payload.tee_time,
         nassau_front: payload.nassau_front,
         nassau_back: payload.nassau_back,
@@ -1016,6 +1038,10 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
         options={[["players","Players"],["rounds","Rounds"],["matches","Matches"],["money","Money"],["tournament","Tournament"]]}
         value={tab}
         onChange={setTab}
+        /* Five tabs since Money arrived, and "Tournament" is wider than a
+           fifth of a phone. Without this the flex row refuses to shrink it and
+           the whole bar runs past the right edge. */
+        fit
       />
       </StickyTop>
 
@@ -1546,6 +1572,24 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
                 anyone who wants it — but a director choosing "Four-Ball" knows
                 what a four-ball is, and a paragraph restating it sat between
                 the format and the tee times on every visit. */}
+
+            {/* Date — the day this round is played.
+                Here, beside the round's course and its tee times, because it
+                is a fact about THIS round and this is where a director already
+                comes to set the other two. Trip Info derives the whole trip's
+                dates from these (lib/tripInfo), so there is no separate pair
+                of trip-date fields anywhere and therefore nothing that can
+                disagree with the schedule once it moves. Clearing it is a
+                real edit — an undated round simply reads as undated. */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>DATE</div>
+              <input
+                type="date"
+                value={roundDate || ""}
+                onChange={e => setRoundDate(e.target.value)}
+                style={{ ...InputStyle, marginBottom: 0, fontSize: FS.small, padding: "6px 8px", flex: 1, minWidth: 0 }}
+              />
+            </div>
 
             {/* Tee Times */}
 
@@ -2976,6 +3020,58 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
                     ? `Round ${heldRounds.join(", ")} ${heldRounds.length === 1 ? "has" : "have"} been played, so the schedule keeps ${heldRounds.length === 1 ? "it" : "them"}.`
                     : "Sets the round pills on every tab."}
                 </span>
+              </div>
+            </div>
+          </div>
+
+          {/* ── The house ──
+              The one fact Trip Info stores of its own. Its dates and its
+              courses are read off the rounds (see lib/tripInfo), which is why
+              there is nothing else to fill in here — and why this card sits in
+              Tournament rather than being a Trip Info tab of its own.
+
+              The link is checked before it saves, not after: a director who
+              pastes something that will not open should hear about it here,
+              standing in front of the box, rather than from a player tapping a
+              dead button in June. */}
+          <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: 14, marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+              <div style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase" }}>The House</div>
+              <button
+                onClick={async () => {
+                  const url = editHouseUrl.trim();
+                  if (url && !safeHouseUrl(url)) {
+                    notify?.("That link doesn't look like a web address", "error");
+                    return;
+                  }
+                  const ok = await onSaveTrip({ houseName: editHouseName, houseUrl: url });
+                  notify?.(ok ? "The house is saved" : "Could not save that — try again", ok ? "success" : "error");
+                }}
+                style={{ flexShrink: 0, fontSize: FS.small, fontWeight: 700, color: ON_AMBER, background: BC.amber, border: "none", borderRadius: 6, padding: "8px 14px", cursor: "pointer" }}
+              >Save</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {[
+                { key: "name", val: editHouseName, set: setEditHouseName, ph: "The lake house", lbl: "Name" },
+                { key: "link", val: editHouseUrl, set: setEditHouseUrl, ph: "vrbo.com/1234567", lbl: "Link" },
+              ].map(f => (
+                <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.5, width: 58, flexShrink: 0, textTransform: "uppercase" }}>{f.lbl}</span>
+                  <input
+                    value={f.val}
+                    onChange={e => f.set(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                    placeholder={f.ph}
+                    inputMode={f.key === "link" ? "url" : "text"}
+                    autoCapitalize={f.key === "link" ? "none" : undefined}
+                    autoCorrect={f.key === "link" ? "off" : undefined}
+                    style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.lead, fontWeight: 700, outline: "none", fontFamily: FONT }}
+                  />
+                </div>
+              ))}
+              <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5 }}>
+                Shown on ☰ → Trip Info, along with the dates and courses off each round&apos;s setup.
+                Leave both blank and the section doesn&apos;t appear.
               </div>
             </div>
           </div>

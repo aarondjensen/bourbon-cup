@@ -42,6 +42,7 @@ import { DirectorFinalizeAlert, FinalizeRoundSheet } from "./components/Finalize
 import { MissingCardNote, SignCardSheet, SignedCardPanel } from "./components/CardSignature";
 import { SideBets } from "./components/SideBets";
 import { AccountView } from "./components/AccountView";
+import { TripInfo } from "./components/TripInfo";
 // ── Split off the main bundle ─────────────────────────────────────
 // The gallery is the one screen whose weight nobody else should pay for: it
 // carries the image pipeline, it is opened by a minority of the field, and it
@@ -93,6 +94,7 @@ import {
   balanceFor, owesMoney, round2,
 } from "./lib/ledger";
 import { EDITIONS_COL, switchEdition } from "./lib/editions";
+import { TRIP_SETTINGS_ID, houseFrom, tripSchedule } from "./lib/tripInfo";
 import {
   cardSigBareId, sigForMatch, cardComplete, missingForCard,
   nonSignerPids, isFullyAttested, cardState,
@@ -2793,6 +2795,10 @@ function SlideMenu({ open, onClose, onNavigate, user, view, alerts, onEditions, 
 
   if (!open) return null;
   const items = [
+    // Trip Info leads: it is the one row here that answers a question asked
+    // BEFORE the tournament — when is it, where are we staying, what are we
+    // playing — and the only one anybody opens in June.
+    { key: "trip",      label: "Trip Info",        icon: "🏡" },
     { key: "analytics", label: "Player Analytics", icon: "📊" },
     { key: "history",   label: "Historical Data",  icon: "📅" },
     // Every year the cup has been played, each one a whole tournament you can
@@ -2989,6 +2995,10 @@ export default function App() {
   // reason set out at the top of that file.
   const [payments, setPayments] = useState([]);
   const [duesAmount, setDuesAmount] = useState(0);
+  // The house, and the ONLY thing Trip Info stores of its own — its dates and
+  // its courses are read off the rounds. See lib/tripInfo for why that is a
+  // constraint rather than an economy.
+  const [tripDoc, setTripDoc] = useState(null);
   // Every year the cup has been played — the SAME collection the Tournaments
   // picker reads, which is what makes the History tab and the edition switcher
   // two views of one list instead of two lists. Tiny (one document a year) and
@@ -3473,6 +3483,7 @@ export default function App() {
       // card off every My Account screen — see lib/ledger's hasLedger.
       const dues = rows.find(r => r.id === editionDocId(DUES_SETTINGS_ID));
       setDuesAmount(round2(dues?.amount ?? 0));
+      setTripDoc(rows.find(r => r.id === editionDocId(TRIP_SETTINGS_ID)) || null);
     }));
     unsubs.push(db.subscribe("bc_rounds", f, rows => setTRounds(rows)));
     // No skins listener, because skins are not stored: they are derived from
@@ -4041,6 +4052,21 @@ export default function App() {
     return !!(await db.delete(LEDGER_COL, payment.id));
   }, []);
 
+  // ── The house ────────────────────────────────────────────────────────
+  // Trip Info's one stored fact. Its own settings document rather than a
+  // couple of fields on bc_settings/tournament, and deliberately: cloneEdition
+  // copies that document when the director asks for the tournament name, and
+  // last year's rental link on this year's Trip Info would send the field to
+  // the wrong house.
+  const onSaveTrip = useCallback(async ({ houseName, houseUrl }) => {
+    const res = await db.upsert("bc_settings", {
+      id: editionDocId(TRIP_SETTINGS_ID), tournament_id: TOURNAMENT_ID,
+      house_name: String(houseName || "").trim(),
+      house_url: String(houseUrl || "").trim(),
+    });
+    return !!res;
+  }, []);
+
   const onSaveDues = useCallback(async (amount) => {
     const res = await db.upsert("bc_settings", {
       id: editionDocId(DUES_SETTINGS_ID), tournament_id: TOURNAMENT_ID,
@@ -4464,6 +4490,17 @@ export default function App() {
     [tPlayers, payments, duesAmount, user?.player_id]
   );
   const balanceDue = owesMoney(myLedger);
+
+  // ── Trip Info ────────────────────────────────────────────────────────
+  // Assembled here rather than inside the view, because both of its halves
+  // are things this component already holds and neither is its own record:
+  // the schedule is the rounds crossed with the courses, and the house is one
+  // settings document. See lib/tripInfo.
+  const house = useMemo(() => houseFrom(tripDoc), [tripDoc]);
+  const schedule = useMemo(
+    () => tripSchedule({ rounds: tournamentRounds, tRounds, courses }),
+    [tournamentRounds, tRounds, courses]
+  );
 
   const isDirector = !!user?.isDirector;
   // Which of the two finalize prompts, if either, this round has earned.
@@ -4890,6 +4927,17 @@ export default function App() {
             notify={notify}
           />
         )}
+        {view === "trip" && (
+          /* Read-only for everybody, director included — every fact on it is
+             edited where it already lived. See components/TripInfo. */
+          <TripInfo
+            tournamentName={tournamentName}
+            tournamentLocation={tournamentLocation}
+            house={house}
+            schedule={schedule}
+            isDirector={isDirector}
+          />
+        )}
         {(view === "analytics" || view === "history") && (
           /* Concealed hole data, same as the scoreboard: this tab's per-player
              W/L/PTS is the cup total sliced a different way, so a sealed round
@@ -4999,6 +5047,11 @@ export default function App() {
             onOpenFinalize={canFinalize ? () => setFinalizeOpen(true) : null}
             finalizeRound={currentRound}
             finalizeReady={finalizeReady}
+            /* The RAW trip document, not the normalized house: a link
+               lib/tripInfo would refuse still has to appear in the box so the
+               director can see what they pasted. */
+            trip={tripDoc}
+            onSaveTrip={onSaveTrip}
             notify={notify}
           />
           </Suspense>

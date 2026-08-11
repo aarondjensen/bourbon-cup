@@ -39,6 +39,11 @@
 // Amounts are dollars stored as numbers. Every sum here goes through round2,
 // because three payments of 283.33 add to 849.9899999999999 and a balance of
 // $0.01 owed by a man who has paid in full is a support call.
+//
+// Dates are `YYYY-MM-DD` strings and never Date objects — see lib/dates.js,
+// which owns that decision for the whole app.
+
+import { isISODate } from "./dates";
 
 export const LEDGER_COL = "bc_ledger";
 
@@ -76,30 +81,6 @@ export const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 // tail costs nothing and makes "close to" unnecessary.
 export const paymentId = (now, rand) =>
   `bc_pay_${now}_${Math.floor(rand * 1e6).toString(36)}`;
-
-// A date with no timezone in it. `new Date("2025-07-14")` is UTC midnight,
-// which in Michigan is the evening of the 13th — a payment logged on the 1st
-// of the month reading as the last day of the previous one is the kind of bug
-// that only shows up in the accounts. So dates are stored and compared as
-// YYYY-MM-DD strings and never parsed back into a Date.
-export const todayISO = (d = new Date()) => {
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-};
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-
-// "Jul 14" — the year is dropped because every payment on screen belongs to
-// the edition being looked at. A malformed or missing date reads as itself
-// rather than as "Invalid Date".
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-export const formatPaymentDate = (iso, { withYear = false } = {}) => {
-  if (!ISO_DATE.test(String(iso || ""))) return String(iso || "");
-  const [y, m, d] = String(iso).split("-").map(Number);
-  const mon = MONTHS[m - 1];
-  if (!mon) return String(iso);
-  return withYear ? `${mon} ${d}, ${y}` : `${mon} ${d}`;
-};
 
 // "$850", "$412.50", "-$25". Cents are shown only when there are any, because
 // almost every figure here is a round number and "$850.00" reads as a form
@@ -209,7 +190,7 @@ export const paymentError = ({ playerId, amount, date }) => {
   if (!playerId) return "Pick a player.";
   const amt = Number(amount);
   if (!Number.isFinite(amt) || amt <= 0) return "Enter an amount.";
-  if (!ISO_DATE.test(String(date || ""))) return "Pick a date.";
+  if (!isISODate(date)) return "Pick a date.";
   return null;
 };
 

@@ -46,7 +46,13 @@ export function SegRule({ compact = false }) {
 // The track owns its background and its buttons are borderless; the pills
 // have no track and each button carries its own edge. That is the whole
 // difference — the selected state is the same object in both.
-export function SegmentedToggle({ options, value, onChange, variant = "segmented", letterSpacing, style }) {
+// `fit` is for a bar with more labels than a phone has room for — the Admin
+// tab bar, which went to five when Money arrived. Without it a flex row will
+// not shrink a button below its own text (`min-width: auto` is the default),
+// so the longest label pushes the whole track past the screen edge and the
+// last tab is cut off rather than narrowed. It drops the type a rung, lets the
+// buttons shrink, and clips with an ellipsis if it still has to.
+export function SegmentedToggle({ options, value, onChange, variant = "segmented", letterSpacing, fit = false, style }) {
   const tracked = variant === "segmented";
   // The track is the sunken one so its thumb has something to be raised out
   // of. Free-standing pills get the same recess per button instead.
@@ -64,8 +70,19 @@ export function SegmentedToggle({ options, value, onChange, variant = "segmented
             onClick={onChange ? () => onChange(k) : undefined}
             style={{
               flex: 1, padding: tracked ? "8px 0" : "8px 4px",
-              fontSize: FS.small, fontWeight: 700, cursor: "pointer",
+              fontSize: fit ? FS.label : FS.small, fontWeight: 700, cursor: "pointer",
               fontFamily: FONT, ...btn(on),
+              ...(fit ? {
+                minWidth: 0, overflow: "hidden",
+                textOverflow: "ellipsis", whiteSpace: "nowrap",
+                // Four pixels across the longest label, which is the whole
+                // difference between "TOURNAMENT" and "TOURNAME…" on a 375pt
+                // phone. Measured with the webfont loaded, not the fallback —
+                // Montserrat is wider than the system stack, so a bar that fits
+                // before it lands does not fit after. Overridden by an explicit
+                // letterSpacing below.
+                letterSpacing: -0.4,
+              } : null),
               ...(letterSpacing != null ? { letterSpacing } : {}),
             }}
           >

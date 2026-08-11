@@ -24,11 +24,11 @@ import { BC, FONT, ALPHA, FS, ON_AMBER } from "../theme";
 import { Popup, ConfirmModal } from "./Popup";
 import { useConfirm } from "../lib/useConfirm";
 import {
-  PAYMENT_METHODS, DEFAULT_METHOD, MAX_NOTE, methodLabel,
-  money, todayISO, formatPaymentDate,
+  PAYMENT_METHODS, DEFAULT_METHOD, MAX_NOTE, methodLabel, money,
   paymentsFor, balanceFor, owesMoney, hasLedger,
   ledgerRows, ledgerTotals, paymentError, hasDuesOverride, round2,
 } from "../lib/ledger";
+import { todayISO, formatISODate } from "../lib/dates";
 
 const Card = ({ children, style }) => (
   <div style={{
@@ -75,7 +75,7 @@ function PaymentRow({ payment, onDelete }) {
     }}>
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ fontSize: FS.small, color: BC.t1, fontWeight: 700 }}>
-          {formatPaymentDate(payment.date)}
+          {formatISODate(payment.date)}
           <span style={{ color: BC.t3, fontWeight: 500 }}> · {methodLabel(payment.method)}</span>
         </div>
         {payment.note && (
@@ -203,7 +203,7 @@ function PlayerLedgerSheet({
       eyebrow: row.player?.name || "Payment",
       title: `Delete this ${money(p.amount)} payment?`,
       message: [
-        `${formatPaymentDate(p.date, { withYear: true })} · ${methodLabel(p.method)}`,
+        `${formatISODate(p.date, { withYear: true })} · ${methodLabel(p.method)}`,
         "",
         "It comes straight off their balance. Delete it only if it was logged in error — a refund is its own conversation, not a deletion.",
       ].join("\n"),

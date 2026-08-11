@@ -379,6 +379,44 @@ Things that will bite you:
   secret — leaving it reachable on a set-up tournament would hand Admin to
   anyone who reads the JavaScript.
 
+## Trip Info
+
+**☰ → Trip Info**, read-only for everybody including the director. The three
+questions in the group text the week before: when is it, where are we staying,
+what are we playing.
+
+**Nothing on it is a second copy**, and that is the whole design:
+
+- **Courses** come off the rounds — `bc_rounds.course_id` → `bc_courses`, where
+  the director already picks them.
+- **Dates** come off the rounds too. `bc_rounds.date` is new (`YYYY-MM-DD`, set
+  in Admin → Rounds beside that round's course and tee times), and the TRIP's
+  dates are the first and last of them, derived. There is deliberately no
+  trip-level pair of date fields, so a schedule that moves cannot disagree with
+  a banner that didn't.
+- **The house** is the one genuinely new fact and the only thing typed for this
+  screen: `bc_settings/<edition>__trip` (`house_name`, `house_url`), set in
+  Admin → Tournament. Not cloned into a new edition — last year's rental link
+  on this year's Trip Info sends the field to the wrong house.
+
+`safeHouseUrl` in `src/lib/tripInfo.js` decides what counts as a link: **http
+and https only**. A `javascript:` URL in an href runs with the app's own
+origin, and "only a director can write it" is the argument behind every stored
+XSS there has ever been. A bare `vrbo.com/1234` gets `https://` put on the
+front, because that is what somebody actually pastes off a phone.
+
+Dates are `YYYY-MM-DD` strings end to end — see `src/lib/dates.js`, which owns
+that decision for the app. `new Date("2026-07-01")` is UTC midnight, which in
+Michigan is the evening of June 30th, so a round on the 1st would read as the
+last day of the previous month on the phone of somebody standing on its first
+tee. Nothing here parses a date; the weekday is worked out arithmetically.
+
+Adding Money made the Admin tab bar five wide, which "Tournament" does not fit
+in on a phone. `SegmentedToggle` grew a `fit` prop for it — a flex row will not
+shrink a button below its own text, so without it the longest label pushes the
+whole track past the screen edge. Measure that kind of thing **with Montserrat
+loaded**, not the fallback.
+
 ## The trip ledger
 
 What each man owes the director for the weekend, and what he has paid so far.
