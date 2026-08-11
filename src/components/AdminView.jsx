@@ -159,6 +159,7 @@ import {
   ConfirmModal,
   Popup,
 } from "./Popup";
+import { DateRangeField } from "./DateRangePicker";
 import {
   SegRule,
   SegmentedToggle,
@@ -3073,11 +3074,19 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
           <div style={TournCardStyle}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
               <div style={TournHeadStyle}>Tournament</div>
+              {/* It SAYS whether it saved, same as the house below it. This
+                  card used to fire and forget: `db.upsert` swallows a
+                  rejection and returns null, and the handler applied the typed
+                  values to local state either way — so a refused write left
+                  the form showing exactly what the director had typed, with no
+                  toast, and the change was gone on the next reload. "It
+                  doesn't seem to be saving" is what that looks like from the
+                  outside, and it looks the same when the save worked. */}
               <button
-                onClick={() => {
+                onClick={async () => {
                   const err = tripDatesError({ start: editStartDate, end: editEndDate });
                   if (err) { notify?.(err, "error"); return; }
-                  onSaveTournament({
+                  const ok = await onSaveTournament({
                     name: editTournamentName.trim() || TOURNAMENT_TITLE,
                     location: editTournamentLocation.trim() || TOURNAMENT_LOCATION,
                     // Clamped rather than refused. A blank box or a slipped
@@ -3088,6 +3097,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
                     startDate: editStartDate,
                     endDate: editEndDate,
                   });
+                  notify?.(ok ? "The tournament is saved" : "Could not save that — try again", ok ? "success" : "error");
                 }}
                 style={TournSaveStyle}
               >Save</button>
@@ -3108,23 +3118,16 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
                   />
                 </div>
               ))}
-              {/* First and last day of the trip. Two boxes on one row because
-                  they are one fact — nobody sets an end date without a start. */}
+              {/* First and last day of the trip. ONE control, not two boxes
+                  with "to" between them: it is one fact, and two native date
+                  inputs opened two calendars neither of which could see the
+                  other's answer. See DateRangePicker. */}
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={TournLabelStyle}>Dates</span>
-                <input
-                  type="date"
-                  value={editStartDate}
-                  onChange={e => setEditStartDate(e.target.value)}
-                  style={{ ...TournFieldStyle, fontSize: FS.small }}
-                />
-                <span style={{ fontSize: FS.label, color: BC.t3, flexShrink: 0 }}>to</span>
-                <input
-                  type="date"
-                  value={editEndDate}
-                  min={editStartDate || undefined}
-                  onChange={e => setEditEndDate(e.target.value)}
-                  style={{ ...TournFieldStyle, fontSize: FS.small }}
+                <DateRangeField
+                  start={editStartDate}
+                  end={editEndDate}
+                  onChange={({ start, end }) => { setEditStartDate(start); setEditEndDate(end); }}
                 />
               </div>
               {/* ── How long the tournament is ──────────────────────────

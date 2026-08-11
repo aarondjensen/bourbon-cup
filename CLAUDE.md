@@ -439,6 +439,34 @@ rung.** Its inputs stay at 16px on purpose: mobile Safari zooms the page in
 when a focused input is under 16px and does not zoom back out, so a smaller box
 trades a scroll for a viewport the director has to pinch out of on every field.
 
+**The trip's dates are picked on one calendar**, hotel-style —
+`src/components/DateRangePicker.jsx`, opened from the row labelled Dates. First
+tap is the first day, second is the last, a third starts over, and a tap before
+the current start reads as "no, THIS is the first day" rather than as a request
+to drag the start back. The days between fill in, so the length of the weekend
+is on screen rather than something you count.
+
+It replaced two `<input type="date">` boxes, and the reasons are worth keeping:
+a range asked as two unrelated questions opens two calendars neither of which
+can see the other's answer, `type="date"` is a wheel on iOS and a spin-button
+on desktop Firefox so it can't be sized to a row, and squeezing it to 12px to
+fit walked straight into the zoom trap above. A button focuses nothing, so
+nothing zooms.
+
+The arithmetic is all in `lib/dates` and tested there — `monthGrid` (always six
+rows, so paging doesn't change the popup's height under your thumb),
+`addMonths` (counted in total months, because `new Date(2026, 0, 31)` moved on
+a month is March 3rd), `nextRangeSelection` and `rangePosition`. The component
+is the drawing of it; nothing in either file constructs a `Date` from a stored
+date.
+
+**The Tournament card says whether it saved.** It used to apply the typed name,
+location, dates and round count to local state and *then* fire the write —
+and `db.upsert` swallows a rejection and returns null. A refused write left
+every screen showing exactly what the director had typed, with no toast and
+nothing to disagree with, and the change was gone on the next reload. It now
+writes first, applies nothing unless the write landed, and toasts either way.
+
 ## The money tab
 
 **Admin → $**, two sub-tabs, one question asked from both ends. **Budget** is

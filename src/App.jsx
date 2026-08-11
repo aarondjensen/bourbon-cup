@@ -5073,12 +5073,15 @@ export default function App() {
             tournamentLocation={tournamentLocation}
             roundCount={roundCount}
             tournamentRounds={tournamentRounds}
+            /* Returns whether it landed, and applies nothing until it has.
+               It used to set all four pieces of local state FIRST and then
+               fire the write — which meant a rejected write (no membership,
+               offline, rules) left the whole app showing the new name, the
+               new dates and the new round count, with the old ones still in
+               Firestore. Nothing on screen disagreed with anything, so the
+               only way to find out was to reload and watch it revert. */
             onSaveTournament={async ({ name, location, rounds, startDate, endDate }) => {
-              setTournamentName(name);
-              setTournamentLocation(location);
-              setRoundCount(rounds);
-              setTripDates({ start_date: startDate || "", end_date: endDate || "" });
-              await db.upsert("bc_settings", {
+              const res = await db.upsert("bc_settings", {
                 id: editionDocId("tournament"), tournament_id: TOURNAMENT_ID,
                 name, location, round_count: rounds,
                 // Written even when blank: clearing the dates has to be a real
@@ -5086,6 +5089,15 @@ export default function App() {
                 // old pair standing while the form showed empty boxes.
                 start_date: startDate || "", end_date: endDate || "",
               });
+              if (!res) return false;
+              // The subscription will deliver the same values a moment later;
+              // these are only so the header changes on the tap rather than on
+              // the round trip.
+              setTournamentName(name);
+              setTournamentLocation(location);
+              setRoundCount(rounds);
+              setTripDates({ start_date: startDate || "", end_date: endDate || "" });
+              return true;
             }}
             hcpOverridesFromDb={hcpOverridesData}
             teeAssignmentsFromDb={teeAssignmentsData}
