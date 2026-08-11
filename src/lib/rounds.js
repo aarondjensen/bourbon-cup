@@ -21,7 +21,7 @@
 // three-round trip should say three and stop, rather than always showing one
 // more round than exists and never being finished being set up.
 //
-// So the count lives in tournament setup (Admin → Tournament, stored on the
+// So the count lives in tournament setup (Admin → Event, stored on the
 // bc_settings/tournament document beside the name and the venue), and this
 // module turns it into the list every picker and the round gate read.
 //

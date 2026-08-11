@@ -469,6 +469,13 @@ service cloud.firestore {
     match /bc_ledger/{doc}             { allow read: if isOpen();
                                          allow write: if isDirector(); }
 
+    // The other half of Admin → $: what the trip COSTS, one document per
+    // line. Same rule as the ledger above and for a simpler reason — what
+    // the weekend costs is not a thing a player has an opinion about, so
+    // there is no member clause to argue over.
+    match /bc_budget/{doc}             { allow read: if isOpen();
+                                         allow write: if isDirector(); }
+
     // ── Runtime switches ──────────────────────────────────────────
     // Today this holds exactly one document: bc_config/photos, the photo
     // library's budget circuit breaker. It is written by the onBudgetAlert

@@ -46,13 +46,16 @@ export function SegRule({ compact = false }) {
 // The track owns its background and its buttons are borderless; the pills
 // have no track and each button carries its own edge. That is the whole
 // difference — the selected state is the same object in both.
-// `fit` is for a bar with more labels than a phone has room for — the Admin
-// tab bar, which went to five when Money arrived. Without it a flex row will
-// not shrink a button below its own text (`min-width: auto` is the default),
-// so the longest label pushes the whole track past the screen edge and the
-// last tab is cut off rather than narrowed. It drops the type a rung, lets the
-// buttons shrink, and clips with an ellipsis if it still has to.
-export function SegmentedToggle({ options, value, onChange, variant = "segmented", letterSpacing, fit = false, style }) {
+// ── Labels have to FIT ──────────────────────────────────────────────
+// A flex row will not shrink a button below its own text (`min-width: auto`
+// is the default), so the longest label decides the track's minimum width and
+// anything past that runs off the screen edge rather than narrowing. There is
+// no clever fix here on purpose — the Admin bar carried a `fit` prop that
+// dropped a type rung and ellipsised, and it only existed because two tabs
+// were called "Tournament" and "Money". Renaming them to "Event" and "$" made
+// five tabs fit at the normal size down to a 320pt phone, which is the better
+// answer: SHORTEN THE LABEL, don't shrink the type.
+export function SegmentedToggle({ options, value, onChange, variant = "segmented", letterSpacing, style }) {
   const tracked = variant === "segmented";
   // The track is the sunken one so its thumb has something to be raised out
   // of. Free-standing pills get the same recess per button instead.
@@ -70,19 +73,8 @@ export function SegmentedToggle({ options, value, onChange, variant = "segmented
             onClick={onChange ? () => onChange(k) : undefined}
             style={{
               flex: 1, padding: tracked ? "8px 0" : "8px 4px",
-              fontSize: fit ? FS.label : FS.small, fontWeight: 700, cursor: "pointer",
+              fontSize: FS.small, fontWeight: 700, cursor: "pointer",
               fontFamily: FONT, ...btn(on),
-              ...(fit ? {
-                minWidth: 0, overflow: "hidden",
-                textOverflow: "ellipsis", whiteSpace: "nowrap",
-                // Four pixels across the longest label, which is the whole
-                // difference between "TOURNAMENT" and "TOURNAME…" on a 375pt
-                // phone. Measured with the webfont loaded, not the fallback —
-                // Montserrat is wider than the system stack, so a bar that fits
-                // before it lands does not fit after. Overridden by an explicit
-                // letterSpacing below.
-                letterSpacing: -0.4,
-              } : null),
               ...(letterSpacing != null ? { letterSpacing } : {}),
             }}
           >

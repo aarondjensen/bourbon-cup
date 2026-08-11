@@ -425,6 +425,31 @@ await check("anon can read the ledger", async () => {
   await assertSucceeds(getDoc(doc(anonDb(), "bc_ledger/pay9")));
 });
 
+// ── The budget ──────────────────────────────────────────────────────
+// The other half of Admin → $, and the simplest block in the file: what the
+// trip costs is not a thing a player has an opinion about.
+const budgetLine = (over = {}) =>
+  ({ tournament_id: "bc_2026", category: "lodging", label: "The house",
+     amount: 3400, note: "", created_by: "alice", created_at: 1, ...over });
+
+await check("a director can budget a line, and edit and delete it", async () => {
+  await assertSucceeds(setDoc(doc(aliceDb(), "bc_budget/bl1"), budgetLine()));
+  await assertSucceeds(setDoc(doc(aliceDb(), "bc_budget/bl1"), { amount: 3600 }, { merge: true }));
+  await assertSucceeds(deleteDoc(doc(aliceDb(), "bc_budget/bl1")));
+});
+
+await check("a member cannot touch the budget", async () => {
+  await seed("bc_budget/bl2", budgetLine());
+  await assertFails(setDoc(doc(peteDb(), "bc_budget/bl3"), budgetLine({ created_by: "pete" })));
+  await assertFails(setDoc(doc(peteDb(), "bc_budget/bl2"), { amount: 1 }, { merge: true }));
+  await assertFails(deleteDoc(doc(peteDb(), "bc_budget/bl2")));
+});
+
+await check("anon can read the budget but not write it", async () => {
+  await assertSucceeds(getDoc(doc(anonDb(), "bc_budget/bl2")));
+  await assertFails(setDoc(doc(anonDb(), "bc_budget/bl4"), budgetLine()));
+});
+
 // ── Reads stay open, and the archive is director-owned ──────────────
 await check("anon can still read the leaderboard data", () =>
   assertSucceeds(getDoc(doc(anonDb(), "bc_hole_scores/x"))));

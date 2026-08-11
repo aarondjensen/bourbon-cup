@@ -151,6 +151,7 @@ const EDITION_DATA_COLS = [
   "bc_hole_scores", "bc_ctp", "bc_round_locks",
   "bc_hcp_overrides", "bc_tee_assignments", "bc_groups",
   "bc_tournament_settings", "bc_card_sigs", "bc_side_bets", "bc_ledger",
+  "bc_budget",
 ];
 // bc_notification_tokens is deliberately NOT in that list. A push token is a
 // property of a player's DEVICE, not of an edition — deleting last year's

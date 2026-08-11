@@ -12,7 +12,7 @@
 //                        cards, who won — is the whole reason the old cups
 //                        were imported, and reading is open to every member
 //                        in firestore.rules.
-//   Admin → Tournament   the DIRECTOR, who also builds next year here.
+//   Admin → Event        the DIRECTOR, who also builds next year here.
 //
 // `canManage` is the difference: without it this is a list of years and a
 // Switch button. It is not a security boundary — firestore.rules is, and it

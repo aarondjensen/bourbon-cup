@@ -357,7 +357,7 @@ export function TripInfo({ tournamentName, tournamentLocation, house, schedule, 
         <Card style={{ borderStyle: "dashed" }}>
           <div style={{ fontSize: FS.small, color: BC.t2, lineHeight: 1.5 }}>
             {isDirector
-              ? "Nothing to show yet. Set the dates and the house in Admin → Tournament, and each round's course in Admin → Rounds."
+              ? "Nothing to show yet. Set the dates and the house in Admin → Event, and each round's course in Admin → Rounds."
               : "The director hasn't set the trip up yet. Dates, courses and the house will show up here once they do."}
           </div>
         </Card>
@@ -369,7 +369,7 @@ export function TripInfo({ tournamentName, tournamentLocation, house, schedule, 
           for an edit button on this screen and not find one. */}
       {isDirector && anything && (
         <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.6, padding: "0 2px" }}>
-          The dates and the house come from Admin → Tournament; the courses and each
+          The dates and the house come from Admin → Event; the courses and each
           round&apos;s day from Admin → Rounds. Nothing here is typed twice.
         </div>
       )}

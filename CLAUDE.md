@@ -144,7 +144,7 @@ eventually editing while the other is running a round.
 ## The old cups
 
 2016–2024 are editions like any other. Switch to one in **☰ → Tournaments**
-(anybody) or **Admin → Tournament → Editions** (a director, who also builds
+(anybody) or **Admin → Event → Editions** (a director, who also builds
 next year there) and the leaderboard, the draw, the scorecards and the round
 detail all work, because nothing about those years is special-cased.
 
@@ -247,7 +247,7 @@ never serve. So it holds against someone reading the bundle or skipping the
 app and talking to Firestore directly, which a client-side password check
 would not.
 
-- Set or change it in Admin → Tournament → Access, where **Show** reveals the
+- Set or change it in Admin → Event → Access, where **Show** reveals the
   current one. Saving it blank turns the requirement off. Directors only, read
   and write.
 - **Compared without case** — it gets read aloud and typed into a phone by
@@ -388,7 +388,7 @@ what are we playing.
 **Nothing on it is a second copy**, and that is the whole design:
 
 - **Dates** are the tournament's own pair — `start_date` / `end_date` on
-  `bc_settings/<edition>__tournament`, set in **Admin → Tournament**. That pair
+  `bc_settings/<edition>__tournament`, set in **Admin → Event**. That pair
   is the **source of truth** and everything else reads down from it: the day
   picker on each round offers the days between them, so a round cannot be dated
   outside the trip it belongs to. They started out derived from the round dates
@@ -404,7 +404,7 @@ what are we playing.
   **scorecard** — par, stroke index and yardage per hole, with a tee picker.
   Read-only, same numbers the director edits in Admin → Courses.
 - **The house** is the one genuinely new fact typed for this screen:
-  `bc_settings/<edition>__trip` (`house_name`, `house_url`).
+  `bc_settings/<edition>__trip` (`house_name`, `house_url`), set in Admin → Event.
 
 Schedule and Courses used to be two sections and the second was the first
 restated — every course on it was already named on a schedule row. One list
@@ -434,19 +434,48 @@ tee. The weekday is worked out arithmetically; the only `Date` in the file is
 inside `addDays`, where **both ends are UTC** so the local zone never enters
 the calculation.
 
-Adding Money made the Admin tab bar five wide, which "Tournament" does not fit
-in on a phone. `SegmentedToggle` grew a `fit` prop for it — a flex row will not
-shrink a button below its own text, so without it the longest label pushes the
-whole track past the screen edge. Measure that kind of thing **with Montserrat
-loaded**, not the fallback.
+**The Event tab is condensed by padding and weight, never by dropping a type
+rung.** Its inputs stay at 16px on purpose: mobile Safari zooms the page in
+when a focused input is under 16px and does not zoom back out, so a smaller box
+trades a scroll for a viewport the director has to pinch out of on every field.
 
-**The Tournament tab is condensed by padding and weight, never by dropping a
-type rung.** Its inputs stay at 16px on purpose: mobile Safari zooms the page
-in when a focused input is under 16px and does not zoom back out, so a smaller
-box trades a scroll for a viewport the director has to pinch out of on every
-field.
+## The money tab
 
-## The trip ledger
+**Admin → $**, two sub-tabs, one question asked from both ends. **Budget** is
+what the trip costs; **Accounting** is what each man owes against it and what
+he has paid. They are sub-tabs rather than two tabs because the join between
+them is the only interesting number either one has, and splitting them would
+put that comparison nowhere:
+
+> SHORT $270 — the trip costs $816.88 a man and you're charging $800.
+
+A director who prices the trip and then books a bigger house has no other way
+to notice; the ledger would go on collecting the old figure and come up short
+in October. `budgetVsDues` in `src/lib/budget.js` is that line, and it reads
+the ledger's own `billed` total so per-player overrides count properly — a
+comped man contributes nothing rather than an average.
+
+### The budget
+
+One document per line in `bc_budget`, not one document with an array of lines:
+two phones editing that array both write the whole thing and the last one
+silently drops the other's line. A line carries its category rather than living
+under one, so re-filing it is a field edit. Categories are a fixed catalog
+(`BUDGET_CATEGORIES`) for the same reason payment methods are — "what is the
+golf costing us" needs a value you can group by, not sixteen spellings of
+greens fees. A line whose category was retired shows up under **Other** rather
+than vanishing with its money still in the total.
+
+**Estimates and actuals are deliberately not modelled.** A line is one number
+and the director decides whether it is a quote or a receipt; two columns would
+double the typing on every line for a distinction that matters on three of
+them, and a half-filled actuals column reads as a budget that is under by
+whatever nobody has entered yet.
+
+A $0 line is legal (something comped, a quote that hasn't come back); a
+negative one is not — that is a refund, and refunds belong in the ledger.
+
+### The ledger
 
 What each man owes the director for the weekend, and what he has paid so far.
 Nothing to do with the golf, and nothing to do with the Betting tab either —
@@ -457,7 +486,7 @@ in installments across the summer.
 Three pieces, and only the third is a collection:
 
 - **The tournament figure** — `bc_settings/<edition>__dues`, set in
-  **Admin → Money**. Zero (or never set) means there is no ledger, and the
+  **Admin → $ → Accounting**. Zero (or never set) means there is no ledger, and the
   BALANCE DUE card disappears from every My Account.
 - **The per-player override** — `bc_players.dues_amount`, for the man coming
   for one night or the one being comped. A written **0 is an override**, not an
@@ -489,9 +518,9 @@ A player who owes anything gets a **red dot** on the More tab and on the My
 Account row inside it. The finalize dot is amber and wins when both are lit —
 it has a deadline, the money will still be owed after the round is in.
 
-**It needs `firestore.rules` deployed** to work: `bc_ledger` is a new
-collection, and until the rules land the default-deny at the bottom of that
-file refuses every read of it. App first, rules second, as always.
+**Both need `firestore.rules` deployed** to work: `bc_ledger` and `bc_budget`
+are new collections, and until the rules land the default-deny at the bottom of
+that file refuses every read of them. App first, rules second, as always.
 
 ## The api/ handlers during local dev
 

@@ -11,10 +11,13 @@
 //                 man standing in a parking lot with his phone out, so the
 //                 balance is the biggest thing on it and the history under it
 //                 is a list of receipts.
-//   LedgerAdmin   is Admin → Money, and answers the director's question,
-//                 which is the opposite one: who has NOT paid. So it leads
-//                 with three totals and a roster sorted by who owes the most,
-//                 and logging a payment is two taps from any row.
+//   LedgerAdmin   is Admin → $ → Accounting, and answers the director's
+//                 question, which is the opposite one: who has NOT paid. So
+//                 it leads with three totals and a roster sorted by who owes
+//                 the most, and logging a payment is two taps from any row.
+//                 Its other half is BUDGET (components/Budget) — what the
+//                 trip costs, which is where the figure it collects against
+//                 comes from.
 //
 // Neither of them is a place to argue with. There is no "mark as paid" for a
 // player, because a player saying they paid is a claim and the director
