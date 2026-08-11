@@ -165,6 +165,10 @@ import {
   StickyTop,
 } from "./ui";
 import { LedgerAdmin } from "./Ledger";
+import { BudgetAdmin } from "./Budget";
+import {
+  ledgerRows, ledgerTotals,
+} from "../lib/ledger";
 
 // ── Tee colours ───────────────────────────────────────────────────
 // One map, one resolver, one ring rule, one component. There used to be two
@@ -419,8 +423,12 @@ function ChDeltaBadge({ delta }) {
   );
 }
 
-export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, roundCount, tournamentRounds, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks, payments, duesAmount, onLogPayment, onDeletePayment, onSaveDues, onSetPlayerDues, onOpenFinalize, finalizeRound, finalizeReady, trip, onSaveTrip, startDate, endDate }) {
+export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, roundCount, tournamentRounds, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks, payments, duesAmount, onLogPayment, onDeletePayment, onSaveDues, onSetPlayerDues, onOpenFinalize, finalizeRound, finalizeReady, trip, onSaveTrip, startDate, endDate, budgetLines, onSaveBudgetLine, onDeleteBudgetLine }) {
   const [tab, setTab] = useState("players");
+  // Which half of the $ tab. Budget leads because it is the half a director
+  // fills in first — you cannot say what to charge until you know what the
+  // weekend costs.
+  const [moneyTab, setMoneyTab] = useState("budget");
   const [editTeamNames, setEditTeamNames] = useState({ A: "", B: "" });
   const [editingTeam, setEditingTeam] = useState(null);
   // Themed confirmations (replaces window.confirm). Host rendered at the
@@ -1062,13 +1070,15 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
           control. See StickyTop for how the seam is painted. */}
       <StickyTop style={{ marginBottom: 4 }}>
       <SegmentedToggle
-        options={[["players","Players"],["rounds","Rounds"],["matches","Matches"],["money","Money"],["tournament","Tournament"]]}
+        /* "Event" rather than "Tournament", and "$" rather than "Money":
+           five tabs is what this bar holds on a phone, and the two longest
+           labels were the whole reason it needed shrinking to fit. `fit`
+           stays as the guard — it costs nothing now that nothing is close
+           to the edge, and it is what stops the next tab from pushing the
+           bar off the screen instead of narrowing it. */
+        options={[["players","Players"],["rounds","Rounds"],["matches","Matches"],["money","$"],["tournament","Event"]]}
         value={tab}
         onChange={setTab}
-        /* Five tabs since Money arrived, and "Tournament" is wider than a
-           fifth of a phone. Without this the flex row refuses to shrink it and
-           the whole bar runs past the right edge. */
-        fit
       />
       </StickyTop>
 
@@ -1601,7 +1611,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
                 the format and the tee times on every visit. */}
 
             {/* Date — WHICH DAY OF THE TRIP this round is played.
-                It PULLS FROM Admin → Tournament rather than opening the whole
+                It PULLS FROM Admin → Event rather than opening the whole
                 calendar: the trip's first and last day are set there and are
                 the source of truth, so this offers the days between them and a
                 round cannot be dated outside the trip it belongs to. Set the
@@ -2972,24 +2982,59 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
             );
           })()}
 
-      {/* ── Money ──
-          The trip ledger: what each man owes for the weekend and what he has
-          paid so far. Nothing to do with the golf, and nothing to do with the
-          betting tab either — skins and side bets are settled between players,
-          this is what is owed to the DIRECTOR, who fronted the whole cost
-          months ago. See lib/ledger. */}
+      {/* ── $ ──
+          One screen, two halves of the same question. BUDGET is what the trip
+          costs — the house, the greens fees, the carts — and ACCOUNTING is
+          what each man owes against it and what he has paid so far.
+          Deliberately sub-tabs of one tab rather than two tabs: the join
+          between them is the only interesting number either one has (does the
+          trip cost cover the budget?), and splitting them would put that
+          comparison nowhere.
+
+          Nothing here has anything to do with the golf, or with the Betting
+          tab — skins and side bets are settled between players. This is money
+          owed to the DIRECTOR, who fronted the whole thing months ago. See
+          lib/budget and lib/ledger. */}
       {tab === "money" && (
-        <LedgerAdmin
-          tPlayers={realPlayers(tPlayers)}
-          teams={teams}
-          payments={payments || []}
-          duesAmount={duesAmount || 0}
-          onSaveDues={onSaveDues}
-          onLogPayment={onLogPayment}
-          onDeletePayment={onDeletePayment}
-          onSetPlayerDues={onSetPlayerDues}
-          notify={notify}
-        />
+        <div>
+          <SegmentedToggle
+            options={[["budget", "Budget"], ["accounting", "Accounting"]]}
+            value={moneyTab}
+            onChange={setMoneyTab}
+            style={{ marginBottom: 12 }}
+          />
+          {moneyTab === "budget" ? (
+            <BudgetAdmin
+              lines={budgetLines || []}
+              playerCount={realPlayers(tPlayers).length}
+              /* What the field is actually being billed IN TOTAL, taken from
+                 the ledger's own arithmetic so per-player overrides are
+                 counted properly — a comped man contributes nothing rather
+                 than an average. */
+              charged={ledgerTotals(ledgerRows({
+                players: realPlayers(tPlayers),
+                payments: payments || [],
+                defaultAmount: duesAmount || 0,
+              })).billed}
+              duesAmount={duesAmount || 0}
+              onSaveLine={onSaveBudgetLine}
+              onDeleteLine={onDeleteBudgetLine}
+              notify={notify}
+            />
+          ) : (
+            <LedgerAdmin
+              tPlayers={realPlayers(tPlayers)}
+              teams={teams}
+              payments={payments || []}
+              duesAmount={duesAmount || 0}
+              onSaveDues={onSaveDues}
+              onLogPayment={onLogPayment}
+              onDeletePayment={onDeletePayment}
+              onSetPlayerDues={onSetPlayerDues}
+              notify={notify}
+            />
+          )}
+        </div>
       )}
 
       {tab === "tournament" && (

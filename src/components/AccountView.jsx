@@ -199,7 +199,7 @@ export function AccountView({
           charged for looks exactly as it did before this existed.
 
           It shows only THIS reader's position. Who else owes what is the
-          director's screen (Admin → Money), not a leaderboard. */}
+          director's screen (Admin → $), not a leaderboard. */}
       <BalanceCard player={player} payments={payments} duesAmount={duesAmount} />
 
       {/* ── Appearance ── */}

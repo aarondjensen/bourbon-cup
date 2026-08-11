@@ -20,7 +20,7 @@
 //  The year comes from the active edition, not the calendar — the same
 //  getTournamentYear() the login screen uses — so a director browsing 2024
 //  data can't be shown a header that says 2026. The location is the
-//  director's, set in Admin → Tournament and passed down; the constant is
+//  director's, set in Admin → Event and passed down; the constant is
 //  only the fallback for an edition that hasn't been through that screen.
 //
 //  The mark is drawn as a CSS mask rather than an <img> for the same reason

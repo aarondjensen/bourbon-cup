@@ -17,7 +17,7 @@
 //   COURSES  come off the rounds (`bc_rounds.course_id` → `bc_courses`), which
 //            is where the director already picks them, one per round.
 //   DATES    come off the TOURNAMENT — one pair, `start_date` / `end_date` on
-//            bc_settings/<edition>__tournament, set in Admin → Tournament.
+//            bc_settings/<edition>__tournament, set in Admin → Event.
 //            Everything downstream reads from it: the round date picker offers
 //            the days between them, so a round cannot be dated outside the
 //            trip, and this screen's banner is that pair.
@@ -120,7 +120,7 @@ export const tripSchedule = ({ rounds, tRounds, courses }) =>
 
 // ── The trip's dates ──────────────────────────────────────────────
 // THE TOURNAMENT'S OWN PAIR IS THE SOURCE OF TRUTH — `start_date` and
-// `end_date` on bc_settings/<edition>__tournament, set in Admin → Tournament.
+// `end_date` on bc_settings/<edition>__tournament, set in Admin → Event.
 // Everything else that shows a date reads down from it: the round picker in
 // Admin → Rounds offers the days between them, and Trip Info's banner is them.
 //

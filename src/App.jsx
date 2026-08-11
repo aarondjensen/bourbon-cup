@@ -93,6 +93,9 @@ import {
   LEDGER_COL, DUES_SETTINGS_ID, paymentId, buildPayment, paymentError,
   balanceFor, owesMoney, round2,
 } from "./lib/ledger";
+import {
+  BUDGET_COL, budgetLineId, buildBudgetLine, budgetLineError,
+} from "./lib/budget";
 import { EDITIONS_COL, switchEdition } from "./lib/editions";
 import { TRIP_SETTINGS_ID, houseFrom, tripSchedule, tripDates } from "./lib/tripInfo";
 import {
@@ -2995,6 +2998,10 @@ export default function App() {
   // reason set out at the top of that file.
   const [payments, setPayments] = useState([]);
   const [duesAmount, setDuesAmount] = useState(0);
+  // What the trip COSTS, one document per line — the other half of Admin →
+  // $. Director-only to read on screen, but subscribed here like everything
+  // else because there is one subscription block and one place state lives.
+  const [budgetLines, setBudgetLines] = useState([]);
   // The house, and the ONLY thing Trip Info stores of its own — its dates and
   // its courses are read off the rounds. See lib/tripInfo for why that is a
   // constraint rather than an economy.
@@ -3017,12 +3024,12 @@ export default function App() {
   // right place instead of lettering the splash from the constants and then
   // correcting itself when the document lands (see firebase.identityKey).
   // The constants are the last resort — an edition never opened here, or one
-  // that has never been through Admin → Tournament. The YEAR is deliberately
+  // that has never been through Admin → Event. The YEAR is deliberately
   // not one of these: it follows the active edition (see
   // firebase.getTournamentYear), so it can't disagree with the data on screen.
   const [tournamentName, setTournamentName] = useState(() => readTournamentIdentity()?.name || TOURNAMENT_TITLE);
   const [tournamentLocation, setTournamentLocation] = useState(() => readTournamentIdentity()?.location || TOURNAMENT_LOCATION);
-  // How many rounds this tournament is, set in Admin → Tournament. Null until
+  // How many rounds this tournament is, set in Admin → Event. Null until
   // the document lands (or forever, on an edition set up before the field
   // existed) — lib/rounds reads the schedule instead in that case, so an
   // existing tournament is unchanged and nobody has to re-enter a number they
@@ -3586,6 +3593,7 @@ export default function App() {
     // man across one summer — and every phone needs it, because the balance
     // badge on More has to be right before anybody opens a menu.
     unsubs.push(db.subscribe(LEDGER_COL, f, setPayments));
+    unsubs.push(db.subscribe(BUDGET_COL, f, setBudgetLines));
     unsubs.push(db.subscribe("bc_courses", f, setCourses));
     unsubs.push(db.subscribe("bc_matches", f, setMatches));
     unsubs.push(db.subscribe("bc_card_sigs", f, rows => {
@@ -4076,6 +4084,32 @@ export default function App() {
     return !!res;
   }, []);
 
+  // ── The budget ───────────────────────────────────────────────────────
+  // Director-only, same as the ledger beside it and for a simpler reason:
+  // what the trip costs is not a thing a player has an opinion about.
+  //
+  // One handler for add AND edit. A line is four fields; a separate update
+  // path would be a second place to normalize them, and `buildBudgetLine` is
+  // where that decision lives. An existing id is reused so the edit lands on
+  // the same document; a new one is minted with a random tail so two phones
+  // adding a line in the same millisecond cannot collide.
+  const onSaveBudgetLine = useCallback(async ({ id, category, label, amount, note }) => {
+    if (budgetLineError({ label, amount })) return false;
+    const now = Date.now();
+    const res = await db.upsert(BUDGET_COL, buildBudgetLine({
+      id: id || budgetLineId(now, Math.random()),
+      tournamentId: TOURNAMENT_ID,
+      createdBy: authUser?.uid || null,
+      category, label, amount, note, now,
+    }));
+    return !!res;
+  }, [authUser]);
+
+  const onDeleteBudgetLine = useCallback(async (line) => {
+    if (!line?.id) return false;
+    return !!(await db.delete(BUDGET_COL, line.id));
+  }, []);
+
   const onSaveDues = useCallback(async (amount) => {
     const res = await db.upsert("bc_settings", {
       id: editionDocId(DUES_SETTINGS_ID), tournament_id: TOURNAMENT_ID,
@@ -4488,7 +4522,7 @@ export default function App() {
   // Derived, never stored — see the top of lib/ledger. It feeds three things
   // that must agree: the BALANCE DUE card on My Account, the red dot on the
   // My Account row in More, and the red dot on More itself. One computation
-  // means they cannot disagree with each other or with Admin → Money.
+  // means they cannot disagree with each other or with Admin → $.
   const myLedger = useMemo(
     () => (user?.player_id
       ? balanceFor({
@@ -5054,7 +5088,7 @@ export default function App() {
             groupsFromDb={groupsData}
             onSaveGroups={onSaveGroups}
             roundLocks={roundLocksData}
-            /* Admin → Money. Director-only by construction: this whole view
+            /* Admin → $. Director-only by construction: this whole view
                is, and the rules say the same thing for bc_ledger. */
             payments={payments}
             duesAmount={duesAmount}
@@ -5062,6 +5096,9 @@ export default function App() {
             onDeletePayment={onDeletePayment}
             onSaveDues={onSaveDues}
             onSetPlayerDues={onSetPlayerDues}
+            budgetLines={budgetLines}
+            onSaveBudgetLine={onSaveBudgetLine}
+            onDeleteBudgetLine={onDeleteBudgetLine}
             /* Admin → Rounds' route to the Finalize sheet — the early-finalize
                path that used to be a row in the More menu. Null when there is
                no round to finalize, which is what hides the control. */
@@ -5073,7 +5110,7 @@ export default function App() {
                director can see what they pasted. */
             trip={tripDoc}
             onSaveTrip={onSaveTrip}
-            /* The trip's dates, which Admin → Tournament owns and Admin →
+            /* The trip's dates, which Admin → Event owns and Admin →
                Rounds reads down from for its per-round day picker. */
             startDate={tripDates_.start_date}
             endDate={tripDates_.end_date}
@@ -5111,7 +5148,7 @@ export default function App() {
 
       {/* Every year the cup has been played. Opened from the menu by anybody;
           `canManage` is what adds the create/delete half for a director, who
-          also reaches the same modal from Admin → Tournament. */}
+          also reaches the same modal from Admin → Event. */}
       <EditionSwitcher open={editionsOpen} onClose={() => setEditionsOpen(false)} canManage={!!user?.isDirector} />
 
       {/* The Finalize sheet — everything the removed Scoring card held, at
