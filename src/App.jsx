@@ -94,7 +94,7 @@ import {
   balanceFor, owesMoney, round2,
 } from "./lib/ledger";
 import { EDITIONS_COL, switchEdition } from "./lib/editions";
-import { TRIP_SETTINGS_ID, houseFrom, tripSchedule } from "./lib/tripInfo";
+import { TRIP_SETTINGS_ID, houseFrom, tripSchedule, tripDates } from "./lib/tripInfo";
 import {
   cardSigBareId, sigForMatch, cardComplete, missingForCard,
   nonSignerPids, isFullyAttested, cardState,
@@ -2999,6 +2999,11 @@ export default function App() {
   // its courses are read off the rounds. See lib/tripInfo for why that is a
   // constraint rather than an economy.
   const [tripDoc, setTripDoc] = useState(null);
+  // The trip's first and last day, off bc_settings/tournament. Separate from
+  // tripDoc above because they live on different documents for different
+  // reasons — the dates belong to the tournament's identity, the house is
+  // the one thing a cloned edition must not inherit.
+  const [tripDates_, setTripDates] = useState({ start_date: "", end_date: "" });
   // Every year the cup has been played — the SAME collection the Tournaments
   // picker reads, which is what makes the History tab and the edition switcher
   // two views of one list instead of two lists. Tiny (one document a year) and
@@ -3468,6 +3473,10 @@ export default function App() {
       setTournamentName(tName);
       setTournamentLocation(tLocation);
       setRoundCount(tourn?.round_count ?? null);
+      // The trip's first and last day — the source of truth for every date
+      // in the app. Trip Info's banner is this pair, and Admin → Rounds
+      // offers the days between them. See lib/tripInfo.
+      setTripDates({ start_date: tourn?.start_date || "", end_date: tourn?.end_date || "" });
       // Remember it for the next cold start, so the splash opens on this.
       writeTournamentIdentity({ name: tName, location: tLocation });
       // Branding: apply to the live BC theme immediately (using the current
@@ -4501,6 +4510,12 @@ export default function App() {
     () => tripSchedule({ rounds: tournamentRounds, tRounds, courses }),
     [tournamentRounds, tRounds, courses]
   );
+  // The banner's dates. The stored pair wins; the round dates are only the
+  // fallback for an edition set up before that pair existed. See lib/tripInfo.
+  const dates = useMemo(
+    () => tripDates({ trip: tripDates_, schedule }),
+    [tripDates_, schedule]
+  );
 
   const isDirector = !!user?.isDirector;
   // Which of the two finalize prompts, if either, this round has earned.
@@ -4935,6 +4950,7 @@ export default function App() {
             tournamentLocation={tournamentLocation}
             house={house}
             schedule={schedule}
+            dates={dates}
             isDirector={isDirector}
           />
         )}
@@ -5019,13 +5035,18 @@ export default function App() {
             tournamentLocation={tournamentLocation}
             roundCount={roundCount}
             tournamentRounds={tournamentRounds}
-            onSaveTournament={async ({ name, location, rounds }) => {
+            onSaveTournament={async ({ name, location, rounds, startDate, endDate }) => {
               setTournamentName(name);
               setTournamentLocation(location);
               setRoundCount(rounds);
+              setTripDates({ start_date: startDate || "", end_date: endDate || "" });
               await db.upsert("bc_settings", {
                 id: editionDocId("tournament"), tournament_id: TOURNAMENT_ID,
                 name, location, round_count: rounds,
+                // Written even when blank: clearing the dates has to be a real
+                // edit, and `upsert` merges — an omitted field would leave the
+                // old pair standing while the form showed empty boxes.
+                start_date: startDate || "", end_date: endDate || "",
               });
             }}
             hcpOverridesFromDb={hcpOverridesData}
@@ -5052,6 +5073,10 @@ export default function App() {
                director can see what they pasted. */
             trip={tripDoc}
             onSaveTrip={onSaveTrip}
+            /* The trip's dates, which Admin → Tournament owns and Admin →
+               Rounds reads down from for its per-round day picker. */
+            startDate={tripDates_.start_date}
+            endDate={tripDates_.end_date}
             notify={notify}
           />
           </Suspense>

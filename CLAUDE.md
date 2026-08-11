@@ -387,17 +387,33 @@ what are we playing.
 
 **Nothing on it is a second copy**, and that is the whole design:
 
+- **Dates** are the tournament's own pair — `start_date` / `end_date` on
+  `bc_settings/<edition>__tournament`, set in **Admin → Tournament**. That pair
+  is the **source of truth** and everything else reads down from it: the day
+  picker on each round offers the days between them, so a round cannot be dated
+  outside the trip it belongs to. They started out derived from the round dates
+  and that was backwards — a director knows the weekend in February and the
+  draw in July, so deriving left the app unable to answer "when is it" for
+  exactly the months everybody asks.
+- **Each round's day** is `bc_rounds.date`, picked in Admin → Rounds beside
+  that round's course and tee times. It is a *choice from the trip's days*, not
+  a free calendar; the plain date box only appears when the tournament has no
+  dates set yet.
 - **Courses** come off the rounds — `bc_rounds.course_id` → `bc_courses`, where
-  the director already picks them.
-- **Dates** come off the rounds too. `bc_rounds.date` is new (`YYYY-MM-DD`, set
-  in Admin → Rounds beside that round's course and tee times), and the TRIP's
-  dates are the first and last of them, derived. There is deliberately no
-  trip-level pair of date fields, so a schedule that moves cannot disagree with
-  a banner that didn't.
-- **The house** is the one genuinely new fact and the only thing typed for this
-  screen: `bc_settings/<edition>__trip` (`house_name`, `house_url`), set in
-  Admin → Tournament. Not cloned into a new edition — last year's rental link
-  on this year's Trip Info sends the field to the wrong house.
+  the director already picks them. Tapping a schedule row opens that course's
+  **scorecard** — par, stroke index and yardage per hole, with a tee picker.
+  Read-only, same numbers the director edits in Admin → Courses.
+- **The house** is the one genuinely new fact typed for this screen:
+  `bc_settings/<edition>__trip` (`house_name`, `house_url`).
+
+Schedule and Courses used to be two sections and the second was the first
+restated — every course on it was already named on a schedule row. One list
+now, and the detail moved behind the tap.
+
+**A new edition inherits none of it.** `cloneEdition` does not copy the trip
+document, and it strips `start_date` / `end_date` off the tournament document
+it does copy. Last year's rental link and last year's weekend on this year's
+Trip Info are the quiet kind of wrong.
 
 `safeHouseUrl` in `src/lib/tripInfo.js` decides what counts as a link: **http
 and https only**. A `javascript:` URL in an href runs with the app's own
@@ -405,17 +421,30 @@ origin, and "only a director can write it" is the argument behind every stored
 XSS there has ever been. A bare `vrbo.com/1234` gets `https://` put on the
 front, because that is what somebody actually pastes off a phone.
 
+`coursePar` prefers the **scorecard** over the stored `par` field. The two can
+disagree — one came from the import, the other from a director correcting holes
+since — and showing both is how a sheet says "Par 71" at the top and totals 72
+at the bottom.
+
 Dates are `YYYY-MM-DD` strings end to end — see `src/lib/dates.js`, which owns
 that decision for the app. `new Date("2026-07-01")` is UTC midnight, which in
 Michigan is the evening of June 30th, so a round on the 1st would read as the
 last day of the previous month on the phone of somebody standing on its first
-tee. Nothing here parses a date; the weekday is worked out arithmetically.
+tee. The weekday is worked out arithmetically; the only `Date` in the file is
+inside `addDays`, where **both ends are UTC** so the local zone never enters
+the calculation.
 
 Adding Money made the Admin tab bar five wide, which "Tournament" does not fit
 in on a phone. `SegmentedToggle` grew a `fit` prop for it — a flex row will not
 shrink a button below its own text, so without it the longest label pushes the
 whole track past the screen edge. Measure that kind of thing **with Montserrat
 loaded**, not the fallback.
+
+**The Tournament tab is condensed by padding and weight, never by dropping a
+type rung.** Its inputs stay at 16px on purpose: mobile Safari zooms the page
+in when a focused input is under 16px and does not zoom back out, so a smaller
+box trades a scroll for a viewport the director has to pinch out of on every
+field.
 
 ## The trip ledger
 

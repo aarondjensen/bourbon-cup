@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   safeHouseUrl, linkHost, houseFrom, hasHouse, MAX_HOUSE_NAME,
-  tripSchedule, tripDates, scheduleDayLabel, tripCourses,
-  courseYardage, courseWhere, hasTripInfo,
+  tripSchedule, tripDates, tripDayOptions, tripDateFields, tripDatesError, scheduleDayLabel,
+  courseTees, courseScorecard, coursePar, courseYardage, courseWhere, hasTripInfo,
 } from "./tripInfo";
 
 const course = (over = {}) => ({
@@ -123,24 +123,65 @@ describe("tripSchedule", () => {
 
 describe("tripDates", () => {
   const s = (...dates) => dates.map((date, i) => ({ round: i + 1, date }));
-  it("spans the first and last round dates", () => {
-    expect(tripDates(s("2026-08-13", "2026-08-14", "2026-08-16")).label).toBe("Aug 13 – 16, 2026");
+
+  // The tournament's own pair is the source of truth — a director knows the
+  // weekend in February and the draw in July, so a banner that waited for the
+  // schedule could not answer "when is it" for the months people ask.
+  it("is the tournament's own pair when it has one", () => {
+    const d = tripDates({ trip: { start_date: "2026-08-13", end_date: "2026-08-16" }, schedule: s("2026-09-01") });
+    expect(d).toMatchObject({ from: "2026-08-13", to: "2026-08-16", label: "Aug 13 – 16, 2026", derived: false });
   });
-  // Derived, so a schedule entered out of order still reads correctly — the
-  // whole point of not having a separate pair of trip-date fields.
-  it("does not care what order the rounds carry them in", () => {
-    expect(tripDates(s("2026-08-16", "2026-08-13")).label).toBe("Aug 13 – 16, 2026");
+  it("takes one end alone as a real answer", () => {
+    expect(tripDates({ trip: { start_date: "2026-08-13" } }))
+      .toMatchObject({ from: "2026-08-13", to: "2026-08-13", label: "Aug 13, 2026" });
   });
-  it("ignores the rounds that have no date yet", () => {
-    const d = tripDates(s("2026-08-13", null, null, "2026-08-16"));
-    expect(d).toMatchObject({ from: "2026-08-13", to: "2026-08-16", count: 2 });
+  // Not a second source of truth — what an edition set up before the field
+  // existed still reads as, until a director saves the pair.
+  it("falls back to the round dates when the pair is unset", () => {
+    const d = tripDates({ trip: null, schedule: s("2026-08-13", "2026-08-14", "2026-08-16") });
+    expect(d).toMatchObject({ from: "2026-08-13", to: "2026-08-16", label: "Aug 13 – 16, 2026", derived: true });
   });
-  it("is one day when only one round is dated", () => {
-    expect(tripDates(s(null, "2026-08-14")).label).toBe("Aug 14, 2026");
+  it("ignores a stored date it cannot read", () => {
+    const d = tripDates({ trip: { start_date: "8/13/26" }, schedule: s("2026-08-14") });
+    expect(d).toMatchObject({ from: "2026-08-14", derived: true });
   });
-  it("says nothing when nothing is dated", () => {
-    expect(tripDates(s(null, null))).toMatchObject({ from: null, label: "", count: 0 });
-    expect(tripDates([])).toMatchObject({ label: "" });
+  it("says nothing when there is nothing at all", () => {
+    expect(tripDates({ trip: null, schedule: s(null, null) })).toMatchObject({ from: null, label: "", derived: false });
+    expect(tripDates()).toMatchObject({ label: "" });
+  });
+});
+
+describe("tripDayOptions", () => {
+  // What "Rounds pulls from Tournament" means concretely: the round date
+  // picker offers these rather than the whole calendar.
+  it("is every day of the trip", () => {
+    expect(tripDayOptions({ start_date: "2026-08-13", end_date: "2026-08-16" }))
+      .toEqual(["2026-08-13", "2026-08-14", "2026-08-15", "2026-08-16"]);
+  });
+  it("is the one day when only a start is set", () => {
+    expect(tripDayOptions({ start_date: "2026-08-13" })).toEqual(["2026-08-13"]);
+  });
+  // Empty is what tells the round form to fall back to a plain date box
+  // rather than showing an empty dropdown.
+  it("is empty when the trip has no dates", () => {
+    expect(tripDayOptions(null)).toEqual([]);
+    expect(tripDayOptions({ end_date: "2026-08-16" })).toEqual([]);
+  });
+});
+
+describe("tripDateFields and tripDatesError", () => {
+  it("gives the form what was typed, not a fallback", () => {
+    expect(tripDateFields({ start_date: "2026-08-13" })).toEqual({ start: "2026-08-13", end: "" });
+    expect(tripDateFields(null)).toEqual({ start: "", end: "" });
+  });
+  it("accepts a well-formed pair, or an empty one", () => {
+    expect(tripDatesError({ start: "2026-08-13", end: "2026-08-16" })).toBeNull();
+    expect(tripDatesError({ start: "", end: "" })).toBeNull();
+    expect(tripDatesError({ start: "2026-08-13", end: "2026-08-13" })).toBeNull();
+  });
+  // Backwards makes the day list empty and the banner read backwards.
+  it("refuses an end before the start", () => {
+    expect(tripDatesError({ start: "2026-08-16", end: "2026-08-13" })).toMatch(/before/i);
   });
 });
 
@@ -150,24 +191,6 @@ describe("scheduleDayLabel", () => {
   });
   it("is empty for an undated round", () => {
     expect(scheduleDayLabel({ date: null })).toBe("");
-  });
-});
-
-describe("tripCourses", () => {
-  const a = course(), b = course({ id: "c2", name: "The Loop" });
-  // A trip that plays the same course twice is one card saying "Rounds 1 & 3",
-  // not the same card printed twice.
-  it("is distinct, and remembers which rounds are played on each", () => {
-    const out = tripCourses([
-      { round: 1, course: a }, { round: 2, course: b },
-      { round: 3, course: a }, { round: 4, course: null },
-    ]);
-    expect(out).toHaveLength(2);
-    expect(out[0]).toMatchObject({ rounds: [1, 3] });
-    expect(out[1]).toMatchObject({ rounds: [2] });
-  });
-  it("is empty when no round has a course", () => {
-    expect(tripCourses([{ round: 1, course: null }])).toEqual([]);
   });
 });
 
@@ -202,5 +225,94 @@ describe("hasTripInfo", () => {
     expect(hasTripInfo({ ...empty, schedule: [{ round: 1, date: "2026-08-13" }] })).toBe(true);
     expect(hasTripInfo({ ...empty, schedule: [{ round: 1, course: course() }] })).toBe(true);
     expect(hasTripInfo({ ...empty, schedule: [{ round: 1, teeTime: "8:30" }] })).toBe(true);
+  });
+});
+
+describe("courseTees", () => {
+  it("normalizes each tee, padding its holes to eighteen", () => {
+    const t = courseTees(course({
+      tee_boxes: [{ name: " Blue ", color: "#2d8fd4", rating: "71.2", slope: "135", yardage: "6399", hole_yards: [355, 410] }],
+    }))[0];
+    expect(t).toMatchObject({ index: 0, name: "Blue", rating: 71.2, slope: 135, yardage: 6399 });
+    expect(t.holeYards).toHaveLength(18);
+    expect(t.holeYards.slice(0, 3)).toEqual([355, 410, 0]);
+  });
+  it("names a tee that has none", () => {
+    expect(courseTees({ tee_boxes: [{}, {}] }).map(t => t.name)).toEqual(["Tee 1", "Tee 2"]);
+  });
+  it("is empty for a course with no tees", () => {
+    expect(courseTees(course({ tee_boxes: [] }))).toEqual([]);
+    expect(courseTees(null)).toEqual([]);
+  });
+});
+
+describe("courseScorecard", () => {
+  const withCard = course({
+    hole_pars: [4, 5, 3, 4, 4, 4, 5, 3, 4, 4, 4, 3, 5, 4, 4, 3, 4, 5],
+    hole_handicaps: [7, 1, 17, 5, 11, 3, 9, 15, 13, 8, 2, 18, 6, 12, 4, 16, 10, 14],
+    tee_boxes: [
+      { name: "Blue", yardage: 6399, hole_yards: Array(18).fill(355) },
+      { name: "White", yardage: 5900, hole_yards: Array(18).fill(327) },
+    ],
+  });
+
+  it("lays out eighteen holes with par, index and the chosen tee's yardage", () => {
+    const sc = courseScorecard(withCard, 0);
+    expect(sc.holes).toHaveLength(18);
+    expect(sc.holes[1]).toEqual({ hole: 2, par: 5, hcp: 1, yards: 355 });
+    expect(sc.front).toHaveLength(9);
+    expect(sc.back[0].hole).toBe(10);
+  });
+  it("follows the tee that was picked", () => {
+    expect(courseScorecard(withCard, 1).holes[0].yards).toBe(327);
+    expect(courseScorecard(withCard, 1).tee.name).toBe("White");
+  });
+  it("totals out, in and the whole card", () => {
+    const { totals } = courseScorecard(withCard, 0);
+    expect(totals.out).toEqual({ par: 36, yards: 9 * 355 });
+    expect(totals.in).toEqual({ par: 36, yards: 9 * 355 });
+    expect(totals.total).toEqual({ par: 72, yards: 18 * 355 });
+  });
+  // A course imported with a total but no per-hole breakdown would otherwise
+  // print a real yardage as zero.
+  it("falls back to the tee's own total when the holes carry none", () => {
+    const noHoleYards = course({
+      hole_pars: Array(18).fill(4),
+      tee_boxes: [{ name: "Blue", yardage: 6399, hole_yards: [] }],
+    });
+    expect(courseScorecard(noHoleYards, 0).totals.total).toEqual({ par: 72, yards: 6399 });
+  });
+  // 0 is what the import writes when the source had no stroke index. It is
+  // "not recorded", not a rung, so it reads as blank rather than as zero.
+  it("reads an unrecorded stroke index as nothing", () => {
+    const sc = courseScorecard(course({ hole_pars: Array(18).fill(4), hole_handicaps: Array(18).fill(0) }), 0);
+    expect(sc.holes[0].hcp).toBeNull();
+  });
+  it("is null for a course with no hole data at all", () => {
+    expect(courseScorecard(course({ hole_pars: [] }), 0)).toBeNull();
+    expect(courseScorecard(course({ hole_pars: Array(18).fill(0) }), 0)).toBeNull();
+    expect(courseScorecard(null, 0)).toBeNull();
+  });
+  it("survives a tee index that does not exist", () => {
+    const sc = courseScorecard(course({ hole_pars: Array(18).fill(4), tee_boxes: [] }), 3);
+    expect(sc.tee).toBeNull();
+    expect(sc.holes[0].yards).toBe(0);
+  });
+});
+
+describe("coursePar", () => {
+  // The stored `par` and the scorecard can disagree — one came from the
+  // import, the other from a director correcting holes since. Showing both is
+  // how a sheet says "Par 71" at the top and totals 72 at the bottom.
+  it("prefers the card over the stored summary", () => {
+    expect(coursePar(course({ par: 71, hole_pars: Array(18).fill(4) }))).toBe(72);
+  });
+  it("falls back to the stored summary with no card", () => {
+    expect(coursePar(course({ par: 71, hole_pars: [] }))).toBe(71);
+    expect(coursePar(course({ par: 71, hole_pars: Array(18).fill(0) }))).toBe(71);
+  });
+  it("is null when the course knows neither", () => {
+    expect(coursePar(course({ par: 0, hole_pars: [] }))).toBeNull();
+    expect(coursePar(null)).toBeNull();
   });
 });
