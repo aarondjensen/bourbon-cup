@@ -33,7 +33,8 @@
 // The ORDER still holds, because it comes off each file's own date.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BC, FONT, FS, ALPHA, ON_ACCENT, ON_AMBER } from "../theme";
-import { Popup } from "./Popup";
+import { Popup, ConfirmModal } from "./Popup";
+import { useConfirm } from "../lib/useConfirm";
 import { PHOTO_LIBRARY_URL } from "../constants";
 import { sortByTaken, canDelete, validateSource, uploadFailureMessage, UPLOAD_PHASE } from "../lib/media";
 import { savePhoto, saveMessage } from "../lib/mediaSave";
@@ -255,6 +256,7 @@ export function PhotosView({
 }) {
   const [open, setOpen] = useState(null);
   const [busy, setBusy] = useState(false);
+  const { confirm, confirmModal } = useConfirm();
   // Photos that have been PICKED but not yet stored. Each carries a local
   // object URL so it can be on screen instantly — see PendingTile for why that
   // matters more than a spinner does.
@@ -344,7 +346,31 @@ export function PhotosView({
     notify?.(`${done ? `${done} added. ` : ""}${uploadFailureMessage(failures[0], failures.length)}`, "error");
   };
 
+  // The only destructive act on this screen, and the only one in the app that
+  // used to go straight through on one tap. It deletes the bytes out of
+  // Storage, not just the index row, so there is nothing to re-draw it from
+  // afterwards — and Remove photo sits directly under Save to phone, which is
+  // the tap somebody actually meant.
+  //
+  // Whose photo it is gets named only when it isn't the reader's. A director
+  // clearing their own bad shot does not need telling who took it; a director
+  // clearing somebody else's is removing a thing that person put up, which is
+  // the fact the dialog exists to put in front of them. Same shape as the
+  // director branch on CardSignature's unsign.
   const remove = async (item) => {
+    const theirs = item.uploadedBy !== uid;
+    const who = item.uploadedByName;
+    const ok = await confirm({
+      eyebrow: "Photos",
+      title: "Remove this photo?",
+      message: [
+        "It goes for everybody, and the file goes with it. This can't be undone.",
+        ...(theirs ? ["", `${who || "Somebody else"} posted it.`] : []),
+      ].join("\n"),
+      confirmLabel: "Remove",
+      destructive: true,
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       await onDelete(item);
@@ -477,6 +503,10 @@ export function PhotosView({
           notify={notify}
         />
       )}
+
+      {/* Portals to <body> at the modal rung, so it stacks over the
+          lightbox it is raised from rather than under it. */}
+      <ConfirmModal modal={confirmModal} />
     </div>
   );
 }
