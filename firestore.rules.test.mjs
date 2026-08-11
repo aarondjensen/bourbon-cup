@@ -372,6 +372,59 @@ await check("a non-member cannot mark anything settled", async () => {
 await check("a mark can be withdrawn again", () =>
   assertSucceeds(setDoc(doc(peteDb(), "bc_side_bets/sb7"), { settled_by: [] }, { merge: true })));
 
+// ── The trip ledger ─────────────────────────────────────────────────
+// The opposite shape to the side bets above, and the contrast is the point.
+// A side bet is between two equals, so a member logs it and the other side
+// gets one narrow write. A trip payment has no equals in it: the money went
+// to the director, and only the director knows it arrived. So there is no
+// member clause at all. See src/lib/ledger.js.
+const payment = (over = {}) =>
+  ({ tournament_id: "bc_2026", player_id: "p1", amount: 250, date: "2026-06-01",
+     method: "venmo", note: "", created_by: "alice", created_at: 1, ...over });
+
+await check("a director can log a payment", () =>
+  assertSucceeds(setDoc(doc(aliceDb(), "bc_ledger/pay1"), payment())));
+
+// The whole authorization model: a player saying they paid is a claim, not a
+// record. Pete is a full member — this is not about membership.
+await check("a member cannot log a payment, not even their own", async () => {
+  await assertFails(setDoc(doc(peteDb(), "bc_ledger/pay2"), payment({ created_by: "pete" })));
+  await assertFails(setDoc(doc(anonDb(), "bc_ledger/pay3"), payment()));
+});
+
+// The balance is due minus paid, so editing either half is editing the
+// balance. Both have to be shut to a member, not just the create.
+await check("a member cannot edit or delete a payment", async () => {
+  await assertFails(setDoc(doc(peteDb(), "bc_ledger/pay1"), { amount: 850 }, { merge: true }));
+  await assertFails(deleteDoc(doc(peteDb(), "bc_ledger/pay1")));
+});
+
+// The other half of what a balance is made of: the per-player override lives
+// on the roster row, which is already director-only apart from the claim
+// update — and that update's hasOnly() is what stops a player writing their
+// own trip cost while claiming their name.
+await check("a member cannot set their own trip cost on the roster", async () => {
+  await seed("bc_players/p1", { tournament_id: "bc_2026", name: "Pete", auth_uid: "pete" });
+  await assertFails(setDoc(doc(peteDb(), "bc_players/p1"), { dues_amount: 0 }, { merge: true }));
+  await assertFails(setDoc(doc(peteDb(), "bc_players/p1"),
+    { auth_uid: "pete", dues_amount: 0 }, { merge: true }));
+});
+
+await check("a director can, and so can they set the tournament figure", async () => {
+  await assertSucceeds(setDoc(doc(aliceDb(), "bc_players/p1"), { dues_amount: 400 }, { merge: true }));
+  await assertSucceeds(setDoc(doc(aliceDb(), "bc_settings/bc_2026__dues"), { amount: 850 }));
+});
+
+await check("a director can delete a payment logged in error", () =>
+  assertSucceeds(deleteDoc(doc(aliceDb(), "bc_ledger/pay1"))));
+
+// Open like every other read in this file — see the note in the rules about
+// what that concedes.
+await check("anon can read the ledger", async () => {
+  await seed("bc_ledger/pay9", payment());
+  await assertSucceeds(getDoc(doc(anonDb(), "bc_ledger/pay9")));
+});
+
 // ── Reads stay open, and the archive is director-owned ──────────────
 await check("anon can still read the leaderboard data", () =>
   assertSucceeds(getDoc(doc(anonDb(), "bc_hole_scores/x"))));

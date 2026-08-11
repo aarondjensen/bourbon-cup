@@ -76,11 +76,19 @@ export const cloneEdition = async (sourceId, { year, name, id }, options = {}) =
   });
 
   // Players — fresh unique ids (id === player_id), roster/team/HI/GHIN kept.
+  //
+  // `dues_amount` is the one field deliberately dropped. It is a per-player
+  // override on THIS trip's cost (see lib/ledger) — last year's "$400,
+  // coming Saturday only" carried into a new edition would bill that man
+  // wrong on a screen nobody would think to re-check, which is precisely the
+  // kind of quiet wrongness the ledger exists to end. A cloned roster starts
+  // everybody on the new tournament's figure.
   if (options.players) {
     const players = await db.get("bc_players", f(sourceId));
     for (let i = 0; i < players.length; i++) {
       const pid = `p_${stamp}_${i}`;
-      await db.upsert("bc_players", { ...players[i], id: pid, player_id: pid, tournament_id: newTid });
+      const { dues_amount: _dues, ...player } = players[i];
+      await db.upsert("bc_players", { ...player, id: pid, player_id: pid, tournament_id: newTid });
     }
   }
 
@@ -135,7 +143,7 @@ const EDITION_DATA_COLS = [
   "bc_players", "bc_courses", "bc_settings", "bc_rounds", "bc_matches",
   "bc_hole_scores", "bc_ctp", "bc_round_locks",
   "bc_hcp_overrides", "bc_tee_assignments", "bc_groups",
-  "bc_tournament_settings", "bc_card_sigs", "bc_side_bets",
+  "bc_tournament_settings", "bc_card_sigs", "bc_side_bets", "bc_ledger",
 ];
 // bc_notification_tokens is deliberately NOT in that list. A push token is a
 // property of a player's DEVICE, not of an edition — deleting last year's
