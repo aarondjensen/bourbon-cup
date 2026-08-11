@@ -188,11 +188,6 @@ export function BudgetAdmin({ lines, playerCount, charged, duesAmount, onSaveLin
                 : `Covered exactly at ${money(duesAmount)} a man.`}
           </div>
         )}
-        {!v.comparable && v.total > 0 && (
-          <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5, marginTop: 8 }}>
-            Set a trip cost in Accounting and this will say whether it covers the budget.
-          </div>
-        )}
       </div>
 
       <button onClick={() => setOpen({})} style={{

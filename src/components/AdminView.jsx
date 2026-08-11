@@ -920,7 +920,6 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
     <div style={{ textAlign: "center", padding: 40 }}>
       <div style={{ fontSize: FS.jumbo, marginBottom: 12 }}>🔒</div>
       <div style={{ fontSize: FS.lead, fontWeight: 700, color: BC.t1 }}>Directors Only</div>
-      <div style={{ fontSize: FS.small, color: BC.t3, marginTop: 8 }}>Only tournament directors can manage settings.</div>
     </div>
   );
 
@@ -2173,8 +2172,13 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
                   {/* What ON actually does, stated as the three separate
                       guarantees it makes rather than as "it hides things" —
                       a director turning this on is promising the field a
-                      blackout, and needs to know exactly how wide it is. */}
-                  {sealed ? (
+                      blackout, and needs to know exactly how wide it is.
+                      Only under ON. The OFF branch used to print "scored and
+                      shown live, like every other round", which is what every
+                      round on the schedule already does — a line describing
+                      the absence of a feature, on every round that doesn't
+                      use it. */}
+                  {sealed && (
                     <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.6 }}>
                       <div style={{ color: BC.amberInk, fontWeight: 800, letterSpacing: 0.5, marginBottom: 3 }}>
                         ACTIVE — this round is sealed
@@ -2182,10 +2186,6 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
                       · Each side sees only its own numbers, on the board and on the scoring screen.<br />
                       · The leaderboard does not move — the cup total leaves this round out until it is revealed.<br />
                       · The countdown is queued up: a director opens it from the Leaderboard and turns the holes over one at a time.
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5 }}>
-                      Scored and shown live, like every other round.
                     </div>
                   )}
                   {/* Only once the round is actually sealed in Firestore — a
@@ -3145,11 +3145,15 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
                   onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
                   style={{ ...TournFieldStyle, flex: "0 0 58px", width: 58 }}
                 />
-                <span style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.35, minWidth: 0 }}>
-                  {heldRounds.length
-                    ? `Round ${heldRounds.join(", ")} ${heldRounds.length === 1 ? "has" : "have"} been played, so the schedule keeps ${heldRounds.length === 1 ? "it" : "them"}.`
-                    : "Sets the round pills on every tab."}
-                </span>
+                {/* Only the floor. "Sets the round pills on every tab" used to
+                    print beside it — a description of what a box labelled
+                    Rounds does. This one reports state the box cannot: why
+                    the number will not go lower than it does. */}
+                {heldRounds.length > 0 && (
+                  <span style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.35, minWidth: 0 }}>
+                    {`Round ${heldRounds.join(", ")} ${heldRounds.length === 1 ? "has" : "have"} been played, so the schedule keeps ${heldRounds.length === 1 ? "it" : "them"}.`}
+                  </span>
+                )}
               </div>
             </div>
           </div>

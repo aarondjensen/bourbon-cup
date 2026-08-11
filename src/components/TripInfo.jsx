@@ -50,7 +50,7 @@ const formatLabel = (id) => FORMATS.find(f => f.id === id)?.label || "";
 //
 // It costs nothing until a row is tapped, which is what lets it be the full
 // eighteen rather than the summary a row could afford.
-function CourseSheet({ course, rounds, onClose }) {
+function CourseSheet({ course, rounds, onClose, isDirector }) {
   const tees = courseTees(course);
   const [teeIndex, setTeeIndex] = useState(0);
   const card = courseScorecard(course, teeIndex);
@@ -169,9 +169,11 @@ function CourseSheet({ course, rounds, onClose }) {
             </div>
           </>
         ) : (
+          // Where to fix it, only to somebody who can. A player reading
+          // "the director can add the pars" learns nothing they can act on.
           <div style={{ fontSize: FS.small, color: BC.t3, lineHeight: 1.5 }}>
-            No scorecard saved for this course yet. The director can add the pars and
-            stroke indexes in Admin → Rounds, on the course picker.
+            No scorecard saved for this course yet.
+            {isDirector && " Add the pars and stroke indexes in Admin → Rounds, on the course picker."}
           </div>
         )}
       </div>
@@ -347,6 +349,7 @@ export function TripInfo({ tournamentName, tournamentLocation, house, schedule, 
         <CourseSheet
           course={openRow.course}
           rounds={`ROUND ${openRow.round}`}
+          isDirector={isDirector}
           onClose={() => setOpenRound(null)}
         />
       )}
@@ -369,8 +372,7 @@ export function TripInfo({ tournamentName, tournamentLocation, house, schedule, 
           for an edit button on this screen and not find one. */}
       {isDirector && anything && (
         <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.6, padding: "0 2px" }}>
-          The dates and the house come from Admin → Event; the courses and each
-          round&apos;s day from Admin → Rounds. Nothing here is typed twice.
+          Dates and the house: Admin → Event. Courses and each round&apos;s day: Admin → Rounds.
         </div>
       )}
     </div>

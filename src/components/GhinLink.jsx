@@ -282,8 +282,10 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
               {!busy && searched && results.length === 0 && (
                 <div style={muted}>No golfers found.<br />Try a different spelling, add a last name, or enter the 7-digit GHIN number.</div>
               )}
+              {/* The tip, not the instruction — the field above is labelled
+                  GOLFER NAME OR GHIN # and the button beside it says Search. */}
               {!busy && !searched && (
-                <div style={muted}>Type a name or GHIN number above, then tap Search.<br />The GHIN number is the surest match when golfers share a name.</div>
+                <div style={muted}>The GHIN number is the surest match when golfers share a name.</div>
               )}
 
               {results.map(g => {

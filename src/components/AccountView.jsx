@@ -205,14 +205,7 @@ export function AccountView({
       {/* ── Appearance ── */}
       <SectionLabel>APPEARANCE</SectionLabel>
       <Card style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: FS.body, fontWeight: 800, color: BC.t1 }}>Theme</div>
-            <div style={{ fontSize: FS.small, color: BC.t2, lineHeight: 1.5, marginTop: 2 }}>
-              Dark reads better on the course; light reads better in the sun.
-            </div>
-          </div>
-        </div>
+        <div style={{ fontSize: FS.body, fontWeight: 800, color: BC.t1, marginBottom: 10 }}>Theme</div>
         <SegmentedToggle
           options={[["light", "☀️  Light"], ["dark", "🌙  Dark"]]}
           value={darkMode ? "dark" : "light"}
@@ -220,9 +213,6 @@ export function AccountView({
           // re-picking the mode already on is a no-op, not a flip.
           onChange={(k) => { if ((k === "dark") !== !!darkMode) onToggleTheme(); }}
         />
-        <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.6, marginTop: 10 }}>
-          Saved on this device, so it survives a reload — set it again on any other phone or browser you use.
-        </div>
       </Card>
 
       {/* ── Notifications ──
@@ -248,11 +238,11 @@ export function AccountView({
           one control here that cannot be undone by doing it again. */}
       <SectionLabel style={{ color: BC.danger }}>DELETE ACCOUNT</SectionLabel>
       <Card style={{ border: `1px solid ${BC.danger}${ALPHA.line}` }}>
+        {/* One line. The confirm behind the button says the rest — twice —
+            and it says it at the moment it matters. */}
         <div style={{ fontSize: FS.small, color: BC.t2, lineHeight: 1.5, marginBottom: 12 }}>
-          Permanently deletes your {signInWith === "account" ? "" : `${signInWith} `}sign-in and turns off push
-          notifications everywhere. {claimed
-            ? `${name} stays on the roster — your scores and signed cards are part of the tournament's record — but nothing links it to you any more.`
-            : "Nothing on the roster is linked to this account."}
+          Permanently deletes your {signInWith === "account" ? "" : `${signInWith} `}sign-in
+          {claimed ? `. ${name} stays on the roster.` : "."}
         </div>
         <button onClick={handleDelete} disabled={deleting} style={{
           width: "100%", padding: "12px 0", borderRadius: 10,
