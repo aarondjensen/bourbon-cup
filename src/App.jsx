@@ -439,8 +439,11 @@ function GateScreen({ tournamentName, tournamentLocation, authUser, onPassed, on
   return (
     <LoginChrome tournamentName={tournamentName} tournamentLocation={tournamentLocation}>
       <form onSubmit={submit} style={{ width: "100%", maxWidth: 340, display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
+        {/* Which account, because the way out of a wrong one is the Sign out
+            below. "Enter the tournament password" used to follow it, over a
+            box placeheld Password. */}
         <div style={{ textAlign: "center", fontSize: FS.small, color: BC.t3, lineHeight: 1.4 }}>
-          Signed in as {authUser?.email || "your account"}.<br />Enter the tournament password.
+          Signed in as {authUser?.email || "your account"}.
         </div>
         <input
           value={code}
@@ -2281,7 +2284,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
       {roundList.length > 0 && activeTab === "ctp" && (
         <div>
           {noPar3s
-            ? empty("🎯", "No par 3s yet", "Closest-to-the-pin holes come from the course. They appear here once a round has a course with a par 3 on it.")
+            ? empty("🎯", "No par 3s yet", "CTP holes appear once a round has a course with a par 3 on it.")
             : (
               <>
                 {/* CTP POT — the same card as the skins pot, minus the typed
@@ -2569,8 +2572,7 @@ function HistoryList({ editions, activeSummary, teams, isDirector }) {
     return (
       <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>
         <div style={{ fontSize: FS.display, marginBottom: 12 }}>📊</div>
-        <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.t2, marginBottom: 8 }}>No years yet</div>
-        <div style={{ fontSize: FS.small }}>Every tournament on the Tournaments list shows its result here.</div>
+        <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.t2 }}>No years yet</div>
       </div>
     );
   }

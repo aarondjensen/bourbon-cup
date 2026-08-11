@@ -128,11 +128,13 @@ export function GroupSwitcher({ matches, current, currentRound, roundLocks, tPla
             <div style={{ fontSize: FS.lead, fontWeight: 800, color: BC.t1, letterSpacing: 0.5 }}>
               Score another group
             </div>
+            {/* The consequence, once. The second half — that a score fixed in
+                an older round moves the board straight away — is said again by
+                the banner on the scoring screen you land on, in front of the
+                round it applies to. */}
             <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.45, marginTop: 3 }}>
               Anything you enter is posted as that group&apos;s score, exactly as
-              if they had entered it themselves. Rounds other than the live one
-              are open to you and to nobody else — a score you fix there moves
-              the leaderboard straight away.
+              if they had entered it themselves.
             </div>
           </div>
           <div style={{ padding: "0 10px 14px", maxHeight: "60vh", overflowY: "auto", overscrollBehavior: "contain" }}>

@@ -86,10 +86,7 @@ export function EditionSwitcher({ open, onClose, canManage = false }) {
   return (
     <>
       <Popup onClose={onClose} maxWidth={400} padding={18} showClose>
-        <div style={{ fontSize: FS.lead, fontWeight: 800, color: BC.t1, letterSpacing: 0.5, marginBottom: 3 }}>Tournaments</div>
-        <div style={{ fontSize: FS.small, color: BC.t3, marginBottom: 14 }}>
-          {canManage ? "Open a year, or start the next one." : "Open any year the cup has been played."}
-        </div>
+        <div style={{ fontSize: FS.lead, fontWeight: 800, color: BC.t1, letterSpacing: 0.5, marginBottom: 14 }}>Tournaments</div>
 
         {loading ? (
           <div style={{ fontSize: FS.small, color: BC.t3, padding: "10px 0 16px" }}>Loading…</div>

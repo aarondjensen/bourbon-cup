@@ -135,13 +135,16 @@ export function BalanceCard({ player, payments, duesAmount }) {
           </div>
         </div>
 
-        <div style={{ fontSize: FS.small, color: BC.t2, lineHeight: 1.5, marginTop: 10 }}>
-          {owes
-            ? "Pay the director whenever suits — most guys send it in pieces across the summer. Every payment they log shows up here."
-            : overpaid
-              ? "You have sent more than the trip cost. The director owes you the difference back."
-              : "You're square with the director. Nothing owing."}
-        </div>
+        {/* Only the state the numbers can't state. BALANCE DUE over a red
+            figure says "you owe this" and PAID IN FULL over a green zero says
+            "you don't"; both used to carry a sentence saying it again.
+            OVERPAID is the one that doesn't speak for itself — it is the only
+            one where the money moves back the other way. */}
+        {overpaid && (
+          <div style={{ fontSize: FS.small, color: BC.t2, lineHeight: 1.5, marginTop: 10 }}>
+            You have sent more than the trip cost. The director owes you the difference back.
+          </div>
+        )}
 
         {mine.length > 0 && (
           <div style={{ marginTop: 12 }}>
@@ -330,8 +333,11 @@ function PlayerLedgerSheet({
               cursor: busy || !dueDirty ? "default" : "pointer",
             }}>Save</button>
           </div>
+          {/* The placeholder already reads "$800 (tournament)", so blank
+              explains itself. The 0 does not — a written zero is an override,
+              not an absence, and it is the only way to comp somebody. */}
           <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5, marginTop: 6 }}>
-            Leave it blank to use the tournament figure. Set 0 for somebody who isn&apos;t paying.
+            0 means they&apos;re not paying.
           </div>
         </div>
 
@@ -407,9 +413,11 @@ export function LedgerAdmin({
             cursor: savingDues || !duesDirty ? "default" : "pointer",
           }}>Save</button>
         </div>
+        {/* The field's own label says what it is, and the roster under it
+            demonstrates the per-player override. This is the only part the
+            screen cannot show: the figure is also the ledger's on/off switch. */}
         <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5, marginTop: 6 }}>
-          What each man owes for the trip. Anybody paying something different gets an override on their own row.
-          Set it to 0 and the whole ledger disappears from everyone&apos;s My Account.
+          Set it to 0 and the ledger disappears from everyone&apos;s My Account.
         </div>
       </div>
 

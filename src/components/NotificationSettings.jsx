@@ -196,13 +196,8 @@ export function NotificationSettings({ user, notify }) {
           </>
         ) : (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: FS.body, fontWeight: 800, color: subscribed ? BC.green : BC.t1 }}>
-                {subscribed ? "Notifications on" : "Notifications off"}
-              </div>
-              <div style={{ fontSize: FS.small, color: BC.t2, lineHeight: 1.5, marginTop: 2 }}>
-                {subscribed ? "You'll get the alerts below." : "Turn on to get the alerts below."}
-              </div>
+            <div style={{ fontSize: FS.body, fontWeight: 800, color: subscribed ? BC.green : BC.t1, minWidth: 0 }}>
+              {subscribed ? "Notifications on" : "Notifications off"}
             </div>
             <Toggle on={subscribed} busy={busy} onChange={handleToggle} />
           </div>
@@ -237,9 +232,7 @@ export function NotificationSettings({ user, notify }) {
       {/* The one thing people get wrong. A phone and a laptop are separate
           subscriptions; turning it on here does not turn it on there. */}
       <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.6, marginTop: 12, padding: "0 2px" }}>
-        Notifications are per device. Turning them on here covers this phone or browser only —
-        turn them on separately anywhere else you use the app. Turning them OFF switches off
-        every device at once.
+        Notifications are per device — turn them on separately on each phone or browser.
       </div>
     </>
   );
