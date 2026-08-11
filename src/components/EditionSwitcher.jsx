@@ -182,7 +182,7 @@ export function EditionSwitcher({ open, onClose, canManage = false }) {
           message={pending.status === "archived"
             // Said plainly, because it is the thing somebody opening 2019
             // notices first and would otherwise read as being logged out.
-            ? "The app will reload onto that year. It's finished, so it opens read-only — every card and result, nothing to change. Come back here to return to this year."
+            ? "It's finished, so it opens read-only — every card and result, nothing to change. Come back here to return to this year."
             : "The app will reload to load this edition's data."}
           confirmLabel="Open"
           onConfirm={() => switchEdition(pending.id, { namespaced: !!pending.namespaced })}

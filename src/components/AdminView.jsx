@@ -1315,9 +1315,12 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
                   ? `\n\nRound ${drawn.join(", ")} already has them drawn into a match on their old side. Moving them here does not redraw it — sort that out on the Matches tab.`
                   : "\n\nNo match has been drawn for them yet, so there is nothing else to change.";
               }
+              // What CHANGES, not what the role is. Granting it used to
+              // recite the nine things Admin contains — a definition of the
+              // tab, appended to a list of edits about one player.
               if (dirChanged) impact += newDir
-                ? "\n\nA director can do everything in Admin: the roster, rounds, matches, courses, groups, tee times, settings, editions and the access password."
-                : "\n\nThey keep their name and everything a player does — scores, skins, signatures. They lose the Admin tab.";
+                ? "\n\nThey get the Admin tab and everything in it."
+                : "\n\nThey lose the Admin tab. Everything a player does — scores, skins, signatures — is untouched.";
               if (await confirm({ title: "Confirm changes", message: changes.join("\n") + impact })) {
                 onUpdatePlayer({ ...p, team: newTeam, name: newName, first_name: first, last_name: last, handicap_index: parseFloat(editingPlayer.hi) || 0, hi_override: newOv, ...ghinFields, ...(cutSignIn ? unlinkPatch() : {}) });
                 // A separate document, and one the rules police, so it is
@@ -3222,8 +3225,11 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
                   const next = editAccessCode.trim();
                   const ok = await confirm({
                     title: next ? "Change the password?" : "Remove the password?",
+                    // The half a director gets wrong. Setting a password is
+                    // what the button says; that rotating it evicts nobody
+                    // is the part no control on the panel shows.
                     message: next
-                      ? `Anyone signing in from now on needs "${next}" before they can claim a name or post a score.\n\nNobody already through the door is affected — this does not sign anybody out.`
+                      ? `New sign-ins will need "${next}".\n\nNobody already through the door is affected — this does not sign anybody out.`
                       : "Anybody who signs in with Google or Apple will be able to claim a name and post scores.",
                     destructive: !next,
                   });

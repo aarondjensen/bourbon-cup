@@ -1128,10 +1128,12 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     return confirm({
       eyebrow: `Round ${match.round} · ${state}`,
       title: "Change a score in a closed round?",
+      // The eyebrow says which round and that it is closed; the title says
+      // it again. "This is not the round being played" made three.
       message: [
         `${who}, hole ${h + 1}: ${was} → ${now}.`,
         "",
-        "This is not the round being played. The change posts immediately and moves the leaderboard, and the players in this match are not asked.",
+        "It posts immediately and moves the leaderboard. The players in this match are not asked.",
         "",
         "Editing stays on for this group until you leave it.",
       ].join("\n"),
@@ -1428,7 +1430,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
               eyebrow: `Round ${match.round} · ${state}`,
               title: "Edit scores in a closed round?",
               message: [
-                "This is not the round being played. Anything you change posts immediately and moves the leaderboard, and the players in this match are not asked.",
+                "Anything you change posts immediately and moves the leaderboard. The players in this match are not asked.",
                 "",
                 "Editing stays on for this group until you tap Done or leave it.",
               ].join("\n"),

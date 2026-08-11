@@ -114,9 +114,12 @@ export function AccountView({
       ...(claimed ? [`• ${name} is unlinked, and free for someone to claim`] : []),
       "• push notifications stop on every device",
       "",
+      // Compressed, not cut. This is the one thing somebody deleting an
+      // account does not expect, and the reason is what stops it reading as
+      // arbitrary — the cards are part of rounds other people signed.
       ...(claimed
-        ? [`${name} STAYS on the roster, with your handicap, your scores and the cards you signed — they're part of rounds other players signed too. Ask the director if the name itself needs to go.`]
-        : ["Nothing on the roster is linked to this account, so nothing there changes."]),
+        ? [`${name} STAYS on the roster, with your scores and the cards you signed — other players signed those rounds too. Ask the director if the name itself needs to go.`]
+        : ["Nothing on the roster is linked to this account."]),
     ];
 
     if (!await confirm({

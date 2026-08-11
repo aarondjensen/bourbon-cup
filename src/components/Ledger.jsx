@@ -211,7 +211,7 @@ function PlayerLedgerSheet({
       message: [
         `${formatISODate(p.date, { withYear: true })} · ${methodLabel(p.method)}`,
         "",
-        "It comes straight off their balance. Delete it only if it was logged in error — a refund is its own conversation, not a deletion.",
+        "It comes straight off their balance. A refund is its own conversation, not a deletion.",
       ].join("\n"),
       confirmLabel: "Delete",
       destructive: true,

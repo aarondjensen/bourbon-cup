@@ -218,12 +218,11 @@ export function FinalizeRoundSheet({
       const ok = await confirm({
         eyebrow: `Round ${round}`,
         title: `Finalize Round ${round} with scores missing?`,
-        message: [
-          `${progress.missing} score${progress.missing === 1 ? " is" : "s are"} still missing:\n${outList}`,
-          "",
-          `Finalizing freezes Round ${round}'s handicaps and results, and ${nextRound ? `opens Round ${nextRound} for scoring.` : "closes out the tournament."}`,
-          "You can reopen it afterwards if you need to.",
-        ].join("\n"),
+        // Only what this dialog is for. What finalizing does is printed on
+        // the sheet directly behind it, three inches above the button that
+        // opened this — repeating it here pushed the missing-score list,
+        // the one thing the director has to actually read, off the top.
+        message: `${progress.missing} score${progress.missing === 1 ? " is" : "s are"} still missing:\n${outList}`,
         confirmLabel: "Finalize anyway",
         destructive: true,
       });
@@ -240,7 +239,7 @@ export function FinalizeRoundSheet({
           `Every score is in, but ${cards.total - cards.attested} of ${cards.total} card${cards.total === 1 ? "" : "s"} ${cards.total - cards.attested === 1 ? "has" : "have"} not been attested:`,
           cardIssues(),
           "",
-          "Finalizing does not sign them — they stay on record as unattested. If you just need the round moved along, Attest All Signed does that properly for the cards that were signed.",
+          "Finalizing does not sign them — they stay on record as unattested. Attest All Signed does it properly for the cards that were signed.",
         ].join("\n"),
         confirmLabel: "Finalize anyway",
         destructive: true,
@@ -301,10 +300,13 @@ export function FinalizeRoundSheet({
     const ok = await confirm({
       eyebrow: `Round ${round}`,
       title: `Attest ${n} signed card${n === 1 ? "" : "s"}?`,
+      // What it does and what it does NOT reach. "Use it when the players
+      // who owe an attestation have gone" was advice on when to tap a button
+      // already tapped.
       message: [
         "This puts your name behind the second signature on every signed card in the round that is still waiting on one.",
         "",
-        "Use it when the players who owe an attestation have gone. Cards nobody signed are left alone — those still need signing.",
+        "Cards nobody signed are left alone — those still need signing.",
       ].join("\n"),
       confirmLabel: "Attest all signed",
     });

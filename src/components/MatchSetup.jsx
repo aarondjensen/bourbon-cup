@@ -354,9 +354,9 @@ export function MatchSetup({
       message: [
         `${describeScored(carried, nameOf)} — holes already posted in Round ${round}.`,
         "",
-        "Scores belong to the player and the round, not to the match, so this match opens with those holes already on it.",
+        "Scores belong to the player and the round, not to the match, so this match opens with those holes on it.",
         "",
-        "That is what you want re-drawing a match you deleted. If this is a different pairing, discard the stale card first — see “Scores with no match” below.",
+        "If this is a different pairing, discard the stale card first — see “Scores with no match” below.",
       ].join("\n"),
       confirmLabel: "Create anyway",
     }))) return;
@@ -409,7 +409,7 @@ export function MatchSetup({
         `${vs}`,
         `Scored: ${describeScored(impact.scored, nameOf)}.`,
         "",
-        "The scores are NOT erased — they are keyed to the player and the round, not to this match. Deleting hides them from the leaderboard, the cards and the round's progress while leaving every one of them in place.",
+        "The scores are NOT erased — they are keyed to the player and the round, not to this match. Deleting hides them from the leaderboard, the cards and the round's progress.",
         "",
         "Re-draw the same pairing and they all come back. Re-draw these players differently and the holes follow them into whatever match they land in.",
       ].join("\n"),
