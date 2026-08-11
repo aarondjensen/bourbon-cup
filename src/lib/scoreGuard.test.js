@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   holesEntered, roundScoreProgress, scoredAmong,
   matchScoreImpact, orphanedScores, incomingScores,
-  describeScored, totalHoles,
+  describeScored, totalHoles, finalizeStage,
 } from "./scoreGuard";
 
 // These functions are what stands between a director and a draw edit that
@@ -229,5 +229,44 @@ describe("describeScored / totalHoles", () => {
 
   it("sums the holes across a list", () => {
     expect(totalHoles([{ pid: "a", holes: 12 }, { pid: "b", holes: 7 }])).toBe(19);
+  });
+});
+
+// ── finalizeStage ──
+// The director's notification fires off this, and its whole value is that
+// "the golf is finished" and "the round is over" are different answers.
+describe("finalizeStage", () => {
+  const progress = (over = {}) => ({ total: 72, entered: 72, complete: true, ...over });
+  const cards = (over = {}) => ({ total: 4, attested: 4, complete: true, ...over });
+
+  it("is ready once every card is attested", () => {
+    expect(finalizeStage({ progress: progress(), cards: cards() })).toBe("ready");
+  });
+  it("is scores when the golf is typed in but the cards are not settled", () => {
+    expect(finalizeStage({ progress: progress(), cards: cards({ attested: 1, complete: false }) }))
+      .toBe("scores");
+  });
+  it("says nothing while the round is still being played", () => {
+    expect(finalizeStage({ progress: progress({ entered: 40, complete: false }), cards: cards({ attested: 0, complete: false }) }))
+      .toBeNull();
+  });
+  // A round with no matches drawn has nothing to be complete about, so the
+  // bar must not appear over an empty schedule.
+  it("says nothing about an empty round", () => {
+    expect(finalizeStage({ progress: progress({ total: 0, entered: 0, complete: false }), cards: cards() })).toBeNull();
+    expect(finalizeStage({ progress: null, cards: cards() })).toBeNull();
+  });
+  // An edition whose matches carry no card documents at all — an imported
+  // year, or a format nobody signed. The score count is the only signal it
+  // has, so a complete round is ready rather than permanently stuck.
+  it("falls back to the score count when there are no cards", () => {
+    expect(finalizeStage({ progress: progress(), cards: { total: 0, attested: 0, complete: false } })).toBe("ready");
+    expect(finalizeStage({ progress: progress(), cards: null })).toBe("ready");
+    expect(finalizeStage({ progress: progress({ complete: false }), cards: null })).toBeNull();
+  });
+  // The director's force-attest can settle cards over a hole nobody posted.
+  // Cards are the finer measure, so that still reads as ready.
+  it("trusts the cards over the score count when they disagree", () => {
+    expect(finalizeStage({ progress: progress({ entered: 71, complete: false }), cards: cards() })).toBe("ready");
   });
 });

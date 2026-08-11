@@ -158,6 +158,7 @@ import {
   SegmentedToggle,
   StickyTop,
 } from "./ui";
+import { LedgerAdmin } from "./Ledger";
 
 // ── Tee colours ───────────────────────────────────────────────────
 // One map, one resolver, one ring rule, one component. There used to be two
@@ -412,7 +413,7 @@ function ChDeltaBadge({ delta }) {
   );
 }
 
-export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, roundCount, tournamentRounds, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks }) {
+export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, roundCount, tournamentRounds, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks, payments, duesAmount, onLogPayment, onDeletePayment, onSaveDues, onSetPlayerDues, onOpenFinalize, finalizeRound, finalizeReady }) {
   const [tab, setTab] = useState("players");
   const [editTeamNames, setEditTeamNames] = useState({ A: "", B: "" });
   const [editingTeam, setEditingTeam] = useState(null);
@@ -1012,7 +1013,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
           control. See StickyTop for how the seam is painted. */}
       <StickyTop style={{ marginBottom: 4 }}>
       <SegmentedToggle
-        options={[["players","Players"],["rounds","Rounds"],["matches","Matches"],["tournament","Tournament"]]}
+        options={[["players","Players"],["rounds","Rounds"],["matches","Matches"],["money","Money"],["tournament","Tournament"]]}
         value={tab}
         onChange={setTab}
       />
@@ -1423,6 +1424,46 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
 
       {tab === "rounds" && (
         <div>
+          {/* ── Finalize ──
+              The director's always-available route to the Finalize sheet, and
+              the ONLY one that does not wait for the round to be ready: a
+              withdrawal or a conceded match leaves holes that will never be
+              filled, so the notification in the app shell — which fires on a
+              complete round — would never fire for it. It is also the way
+              back, since the sheet carries Reopen.
+
+              It sits above the round pills rather than inside the form below
+              them because it acts on the round the FIELD is playing, not on
+              the round this form happens to be editing. Those are different
+              questions and putting the button inside the form would conflate
+              them.
+
+              This used to be a row in the More menu. It moved here because
+              More is a place a player goes, and this is the one act on the
+              live tournament that only a director can perform. */}
+          {onOpenFinalize && (
+            <button onClick={onOpenFinalize} style={{
+              width: "100%", marginBottom: 12, padding: "11px 14px", borderRadius: 10,
+              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+              background: finalizeReady ? BC.amberGlow : BC.card,
+              border: `1px solid ${BC.amber}${finalizeReady ? ALPHA.line : ALPHA.hair}`,
+              color: finalizeReady ? BC.amberInk : BC.t1,
+              fontSize: FS.body, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
+              textAlign: "left",
+            }}>
+              <span style={{ minWidth: 0 }}>
+                {finalizeRound != null ? `Finalize Round ${finalizeRound}` : "Reopen last round"}
+                <span style={{ display: "block", fontSize: FS.label, fontWeight: 500, color: BC.t3, marginTop: 2 }}>
+                  {finalizeRound == null
+                    ? "Every round is final — scoring is closed"
+                    : finalizeReady
+                      ? "Every card is in and attested"
+                      : "Freeze it early, or reopen the last one"}
+                </span>
+              </span>
+              <span style={{ color: finalizeReady ? BC.amberInk : BC.t3, fontSize: FS.lead, flexShrink: 0 }}>›</span>
+            </button>
+          )}
           <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
             {/* Switching round is all these do. The hydration effect re-seeds
                 the form from Firestore — including for a round with no
@@ -2829,6 +2870,26 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
               </Popup>
             );
           })()}
+
+      {/* ── Money ──
+          The trip ledger: what each man owes for the weekend and what he has
+          paid so far. Nothing to do with the golf, and nothing to do with the
+          betting tab either — skins and side bets are settled between players,
+          this is what is owed to the DIRECTOR, who fronted the whole cost
+          months ago. See lib/ledger. */}
+      {tab === "money" && (
+        <LedgerAdmin
+          tPlayers={realPlayers(tPlayers)}
+          teams={teams}
+          payments={payments || []}
+          duesAmount={duesAmount || 0}
+          onSaveDues={onSaveDues}
+          onLogPayment={onLogPayment}
+          onDeletePayment={onDeletePayment}
+          onSetPlayerDues={onSetPlayerDues}
+          notify={notify}
+        />
+      )}
 
       {tab === "tournament" && (
         <div>

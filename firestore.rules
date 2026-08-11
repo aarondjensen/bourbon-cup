@@ -444,6 +444,31 @@ service cloud.firestore {
                     || (isMember() && resource.data.created_by == request.auth.uid);
     }
 
+    // ── The trip ledger ───────────────────────────────────────────
+    // One document per PAYMENT a player has made to the director for the
+    // trip — see src/lib/ledger.js. What is owed is not here: the
+    // tournament-wide figure is a bc_settings document and a per-player
+    // override is a field on the roster row, both already director-only
+    // above. So director-only write covers the whole feature.
+    //
+    // The simplest block in this file, and deliberately so. There is no
+    // member-write clause because a player logging their own payment would
+    // be a CLAIM, not a record — the person who received the money is the
+    // one who knows it arrived. That is the same reasoning that keeps a
+    // side bet unsettled until both players mark it, arrived at from the
+    // other end: here the two parties are not equals, so there is no
+    // handshake to build.
+    //
+    // Read is open, like everything else in this file, which means a member
+    // could read another man's balance by talking to Firestore directly.
+    // That is the same trade the roster, the handicaps and the side bets
+    // already make (see the note at the top), and the screens only ever
+    // show a player their own. If reads are ever tightened, this belongs in
+    // the same pass as bc_notification_tokens — it is the second collection
+    // here that holds something a reader has no business enumerating.
+    match /bc_ledger/{doc}             { allow read: if isOpen();
+                                         allow write: if isDirector(); }
+
     // ── Runtime switches ──────────────────────────────────────────
     // Today this holds exactly one document: bc_config/photos, the photo
     // library's budget circuit breaker. It is written by the onBudgetAlert

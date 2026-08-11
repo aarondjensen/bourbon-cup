@@ -24,25 +24,46 @@
 //
 //   • DirectorFinalizeAlert — an app-level notification, above the tab
 //     content and visible on every tab, that appears only when the round
-//     is actually ready and only for a director. "Ready" now means every
-//     card SIGNED AND ATTESTED (see lib/cardSigs), not merely every score
-//     typed: a complete card is what makes a signature possible, and the
-//     field agreeing is what makes the round over. This is
-//     the mechanism that used to be missing: a director no longer has to
-//     be standing on the Scoring tab, scrolled to the bottom, to learn
-//     that the round is done. It is dismissible, and dismissal is
-//     remembered per round, so postponing it is not a decision the app
-//     asks about twice.
+//     has something to say and only for a director. This is the mechanism
+//     that used to be missing: a director no longer has to be standing on
+//     the Scoring tab, scrolled to the bottom, to learn that the round is
+//     done.
 //   • FinalizeRoundSheet — the card's full contents, moved into a modal.
 //     It costs nothing until it is opened, which is what lets the details
 //     (per-player missing counts, the consequence line, the way back) be
 //     as complete as they need to be rather than as short as the scoring
 //     screen could afford.
 //
-// The sheet is reachable at any time from More › Finalize Round N, which
-// is the early-finalize path — a withdrawal or a conceded match leaves
-// holes that will never be filled, and the notification, which waits for a
-// complete round, would never fire for it.
+// ── The alert fires TWICE, and that is the point ───────────────────
+// It used to fire once, on the fully-settled round: every card signed AND
+// attested. That is the correct condition for "this round is over", and it
+// was the wrong condition for the only thing the director can act on ahead
+// of time. The gap between the last score being typed and the last card
+// being attested is not a moment — it is a foursome walking to the cart, a
+// phone in a pocket, sometimes a group that has driven home. The director
+// spent that gap with no idea the round was waiting on four taps rather
+// than on somebody's back nine.
+//
+// So there are two stages, and they carry different weight:
+//
+//   scores  every score in the round is entered, cards still outstanding.
+//           An amber bar naming what is missing. This is the EARLY prompt
+//           and it is the one that says the golf is finished.
+//   ready   every card signed and attested. The loud one — finalizing is
+//           now the routine end of the round rather than an override.
+//
+// DISMISSAL IS PER STAGE, not per round, which is the whole reason the
+// stages are named rather than being a boolean. Putting away "all scores
+// are in" must not also swallow "the round is ready" twenty minutes later;
+// that would be the app taking one answer and applying it to a different
+// question. See finalizeSnoozeKey in App.jsx for how it is remembered.
+//
+// The sheet is also reachable at any time from Admin › Rounds, which is
+// the early-finalize path — a withdrawal or a conceded match leaves holes
+// that will never be filled, so neither stage above would ever fire for
+// it. It used to be a row in the More menu; More is where a PLAYER goes,
+// and finalizing is the one act on the tournament only a director can
+// perform, so it now lives with everything else in that category.
 //
 // FINALIZING WITH SCORES MISSING IS ALLOWED, behind a confirm that names
 // who is out. A hard block reads as safer than it is: a gate with no way
@@ -62,18 +83,42 @@ import { playerLookup } from "../lib/players";
 // A slim actionable bar in the app shell, under the header and above the
 // tab content, so it reaches a director wherever they are standing. Two
 // targets, deliberately separate: the bar itself opens the sheet, the ✕
-// puts it away for this round.
+// puts it away for this stage of this round.
 //
 // It is not a toast. A toast is 2.8 seconds long and finalizing is the one
 // action that cannot be missed — a director walking off 18 with a phone in
 // their pocket has to still find it there.
-export function DirectorFinalizeAlert({ round, nextRound, progress, cards, onOpen, onDismiss }) {
+//
+// `stage` is lib/scoreGuard's finalizeStage — "ready" or "scores". The two
+// differ in weight as well as wording: the ready bar is a filled amber bar
+// with a pulsing dot, the scores bar is the same frame drawn quieter, with
+// a still dot. A director glancing at the top of the screen should be able
+// to tell "the round is done" from "the golf is done" without reading it.
+export function DirectorFinalizeAlert({ round, nextRound, progress, cards, stage = "ready", onOpen, onDismiss }) {
+  const ready = stage === "ready";
+  const outstanding = cards?.total ? cards.total - cards.attested : 0;
+
+  const headline = ready
+    ? `Round ${round} is ready to finalize`
+    : `Round ${round} — all ${progress.total} scores are in`;
+
+  // The subhead carries the actionable half, and on the early rung that is
+  // the COUNT OF WHAT IS MISSING rather than a restatement of the headline.
+  // "Waiting on 3 cards" is a thing a director can go and do something about;
+  // "the round is nearly done" is not.
+  const subhead = ready
+    ? `${cards?.total
+      ? `All ${cards.total} card${cards.total === 1 ? "" : "s"} signed and attested`
+      : `All ${progress.total} scores are in`} — ${nextRound ? `opens Round ${nextRound}` : "closes the tournament"}`
+    : `Waiting on ${outstanding} card${outstanding === 1 ? "" : "s"} — finalize or attest for them`;
+
   return (
     <div style={{ flexShrink: 0, padding: "0 10px 6px", fontFamily: FONT }}>
       <style>{`@keyframes bcFinalizePulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(.8); } }`}</style>
       <div style={{
         display: "flex", alignItems: "stretch",
-        background: BC.amberGlow, border: `1px solid ${BC.amber}${ALPHA.line}`,
+        background: ready ? BC.amberGlow : BC.card,
+        border: `1px solid ${BC.amber}${ready ? ALPHA.line : ALPHA.hair}`,
         borderRadius: 10, overflow: "hidden",
       }}>
         <button onClick={onOpen} style={{
@@ -82,15 +127,19 @@ export function DirectorFinalizeAlert({ round, nextRound, progress, cards, onOpe
           padding: "7px 4px 7px 10px", textAlign: "left", fontFamily: FONT,
         }}>
           <span style={{
-            width: 7, height: 7, borderRadius: "50%", background: BC.amber, flexShrink: 0,
-            animation: "bcFinalizePulse 1.8s ease-in-out infinite",
+            width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
+            background: ready ? BC.amber : "transparent",
+            border: ready ? "none" : `1.5px solid ${BC.amber}${ALPHA.soft}`,
+            boxSizing: "border-box",
+            animation: ready ? "bcFinalizePulse 1.8s ease-in-out infinite" : "none",
           }} />
           <span style={{ flex: 1, minWidth: 0 }}>
             <span style={{
-              display: "block", fontSize: FS.small, fontWeight: 800, color: BC.amberInk,
+              display: "block", fontSize: FS.small, fontWeight: 800,
+              color: ready ? BC.amberInk : BC.t1,
               letterSpacing: 0.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
             }}>
-              Round {round} is ready to finalize
+              {headline}
             </span>
             {/* One line, clipped rather than wrapped: the bar sits above
                 every tab's content, so its height is a fixed cost and a
@@ -100,13 +149,10 @@ export function DirectorFinalizeAlert({ round, nextRound, progress, cards, onOpe
               display: "block", fontSize: FS.label, color: BC.t2, lineHeight: 1.35,
               whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
             }}>
-              {cards?.total
-                ? `All ${cards.total} card${cards.total === 1 ? "" : "s"} signed and attested`
-                : `All ${progress.total} scores are in`}
-              {" — "}{nextRound ? `opens Round ${nextRound}` : "closes the tournament"}
+              {subhead}
             </span>
           </span>
-          <span style={{ color: BC.amberInk, fontSize: FS.lead, fontWeight: 700, flexShrink: 0, paddingRight: 4 }}>›</span>
+          <span style={{ color: ready ? BC.amberInk : BC.t3, fontSize: FS.lead, fontWeight: 700, flexShrink: 0, paddingRight: 4 }}>›</span>
         </button>
         {/* Sibling, not nested: a button inside a button is invalid markup
             and iOS resolves the tap to whichever it feels like. */}
@@ -129,7 +175,7 @@ export function DirectorFinalizeAlert({ round, nextRound, progress, cards, onOpe
 // The complete-round path finalizes straight off this sheet's button, with
 // no second confirm behind it. The sheet is not somewhere anybody lands by
 // accident — it takes a deliberate tap on the notification or a trip
-// through the More menu — and it states the consequence in full above the
+// through Admin › Rounds — and it states the consequence in full above the
 // button. Stacking a confirm on top of a modal that already IS the confirm
 // trains the reflex that defeats both. The two paths that are NOT routine
 // keep theirs: finalizing over missing scores, and reopening a round the

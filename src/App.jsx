@@ -78,7 +78,7 @@ import {
   roundPlaySetup, orderMatchesForRound, numberMatches, groupIndexForMatch,
 } from "./lib/groups";
 import { groupKey, tagAheadOfPlay } from "./lib/ctp";
-import { roundScoreProgress } from "./lib/scoreGuard";
+import { roundScoreProgress, finalizeStage } from "./lib/scoreGuard";
 import {
   allRounds, MAX_ROUND_COUNT,
 } from "./lib/rounds";
@@ -88,6 +88,10 @@ import {
   inField, roundSetup, strokeMapsFor, computeSkins, lowNetRows, ctpTags,
 } from "./lib/betting";
 import { SIDE_BETS_COL, sideBetId, buildSideBet, toggleSettled } from "./lib/sideBets";
+import {
+  LEDGER_COL, DUES_SETTINGS_ID, paymentId, buildPayment, paymentError,
+  balanceFor, owesMoney, round2,
+} from "./lib/ledger";
 import { EDITIONS_COL, switchEdition } from "./lib/editions";
 import {
   cardSigBareId, sigForMatch, cardComplete, missingForCard,
@@ -175,10 +179,24 @@ const NAV_MIN_PAD = 8;
 const NAV_SAFE_PAD = `max(0px, calc(max(${NAV_MIN_PAD}px, env(safe-area-inset-bottom, 0px)) - ${VP_BAND}))`;
 
 
-// Where a dismissed "ready to finalize" notification is remembered, per
-// edition — TOURNAMENT_ID is a live binding (firebase.js reassigns it when
-// the edition changes), so this is read at call time, never captured once.
+// Where a dismissed finalize notification is remembered, per edition —
+// TOURNAMENT_ID is a live binding (firebase.js reassigns it when the edition
+// changes), so this is read at call time, never captured once.
 const finalizeSnoozeKey = () => `bc_finalize_snooze_${TOURNAMENT_ID}`;
+
+// The stored value is `${round}:${stage}` — see the two-stage note in
+// components/FinalizeRound. Dismissal has to be remembered per STAGE, not
+// per round: putting away "all scores are in" must not also swallow "the
+// round is ready" twenty minutes later, because they are answers to
+// different questions.
+//
+// A bare number is what this key held before stages existed, and it meant a
+// dismissed READY alert. Reading it as such costs one line and stops a
+// director mid-tournament from being re-prompted about a round they already
+// put away.
+const finalizeSnoozeTag = (round, stage) => `${round}:${stage}`;
+const normalizeSnooze = (raw) =>
+  raw == null || raw === "" ? null : (/^\d+$/.test(raw) ? `${raw}:ready` : raw);
 
 // ── ScoreCell ──
 // Single-cell rendering of a player's score on one hole, used in the full
@@ -2727,18 +2745,25 @@ function AnalyticsView({ tPlayers, matches, holeData, tRounds, courses, editions
 }
 
 // ── Slide-up Menu ──
-// `finalize` is the director's always-available route to the Finalize sheet:
-// { label, ready, onOpen }, or null for a player / an event with no rounds.
-// The notification only fires on a COMPLETE round, so this is the path to
-// finalizing early — a withdrawal or a conceded match leaves holes the
-// notification would wait forever for.
+// Every row here is a PLACE TO GO. It held one exception for a while — a
+// Finalize Round N action that raised a sheet and navigated nowhere — and
+// that row is gone: finalizing is the one act on the live tournament, only a
+// director can do it, and it now lives with the rest of that in Admin →
+// Rounds. What prompts a director at the right moment is the alert bar in the
+// app shell (components/FinalizeRound), which is a better answer than a row
+// buried two taps deep that nobody would open on spec.
+//
+// `alerts` is what the menu has to BADGE: { finalize, balance }, both
+// booleans. A badge here is never decoration — it is the trail from the dot
+// on the More tab to the row that answers it, so every flag set must lead
+// somewhere that resolves it.
 // `navH` is the bottom nav's MEASURED height — the menu seats itself on the
 // bar, and the bar is not a constant: its labels grow with the OS text-size
 // setting, and its padding grows with the home-indicator inset. The 62px
 // that used to be hardcoded here was only ever right at the default text
 // size on a phone whose nav was exactly that tall; anywhere else the menu
 // sank into the bar or floated off it.
-function SlideMenu({ open, onClose, onNavigate, user, view, finalize, onEditions, navH }) {
+function SlideMenu({ open, onClose, onNavigate, user, view, alerts, onEditions, navH }) {
   const dragRef = useRef(null);
   const startYRef = useRef(null);
   const [dragY, setDragY] = useState(0);
@@ -2768,10 +2793,6 @@ function SlideMenu({ open, onClose, onNavigate, user, view, finalize, onEditions
 
   if (!open) return null;
   const items = [
-    // Finalize leads: it is the only item here that is an ACTION on the live
-    // tournament rather than a place to go, and the only one that is ever
-    // time-critical.
-    ...(finalize ? [{ key: "finalize", label: finalize.label, icon: "🏁", action: finalize.onOpen, flag: finalize.ready }] : []),
     { key: "analytics", label: "Player Analytics", icon: "📊" },
     { key: "history",   label: "Historical Data",  icon: "📅" },
     // Every year the cup has been played, each one a whole tournament you can
@@ -2786,12 +2807,19 @@ function SlideMenu({ open, onClose, onNavigate, user, view, finalize, onEditions
     // phone that took it. The site is still where the older years live, and
     // the tab links out to it — see components/PhotosView.
     { key: "photos",    label: "Photos",            icon: "📸" },
-    ...(user?.isDirector ? [{ key: "admin", label: "Admin Settings", icon: "⚙️" }] : []),
+    // Admin carries the finalize flag now that the Finalize row is gone: the
+    // sheet lives under Admin → Rounds, so the trail from the amber dot on
+    // the More tab has to end there rather than at a row that no longer
+    // exists.
+    ...(user?.isDirector ? [{ key: "admin", label: "Admin Settings", icon: "⚙️", flag: alerts?.finalize }] : []),
     // Last, and set apart below: everything above is the EVENT, this is the
     // person. Notifications, the theme switch and Logout all used to be
     // rows in this menu; they are now sections of that one screen, so a
     // preference has one home instead of two.
-    { key: "account",   label: "My Account",        icon: "👤" },
+    // The balance badge is RED rather than amber, and deliberately not the
+    // same mark as the finalize flag above: one is a thing to do this
+    // afternoon, the other is money owed since May.
+    { key: "account",   label: "My Account",        icon: "👤", due: alerts?.balance },
   ];
   return (
     <>
@@ -2836,14 +2864,17 @@ function SlideMenu({ open, onClose, onNavigate, user, view, finalize, onEditions
               // rest: the break is what says "this one isn't the event".
               borderTop: idx === 0 ? "none" : `1px solid ${BC.bdr}${item.key === "account" ? "" : ALPHA.hair}`,
               borderLeft: "none", borderRight: "none", borderBottom: "none",
-              color: isActive || item.flag ? BC.amberInk : BC.t1,
-              fontSize: FS.body, fontWeight: isActive || item.flag ? 700 : 500,
+              color: item.due ? BC.danger : (isActive || item.flag) ? BC.amberInk : BC.t1,
+              fontSize: FS.body, fontWeight: isActive || item.flag || item.due ? 700 : 500,
               cursor: "pointer", textAlign: "left",
               display: "flex", alignItems: "center", justifyContent: "space-between",
             }}>
               <span>{item.label}</span>
               {item.value && <span style={{ fontSize: FS.small, fontWeight: 700, color: BC.t3 }}>{item.value}</span>}
-              {(isActive || item.flag) && <span style={{ width: 6, height: 6, borderRadius: "50%", background: BC.amber, flexShrink: 0 }} />}
+              {(isActive || item.flag || item.due) && <span style={{
+                width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                background: item.due ? BC.danger : BC.amber,
+              }} />}
             </button>
           );
         })}
@@ -2950,6 +2981,14 @@ export default function App() {
   // Player-to-player wagers the app records but does not run. One document
   // per bet; see lib/sideBets for why nothing here scores or settles them.
   const [sideBets, setSideBets] = useState([]);
+  // What each man owes the director for the trip, and what he has paid so far.
+  // Two pieces, because they come from two places: `duesAmount` is the
+  // tournament-wide figure off bc_settings/dues (a per-player override lives on
+  // the roster row), and `payments` is one document per installment. Nothing
+  // here is a balance — that is derived every time, in lib/ledger, for the
+  // reason set out at the top of that file.
+  const [payments, setPayments] = useState([]);
+  const [duesAmount, setDuesAmount] = useState(0);
   // Every year the cup has been played — the SAME collection the Tournaments
   // picker reads, which is what makes the History tab and the edition switcher
   // two views of one list instead of two lists. Tiny (one document a year) and
@@ -3151,25 +3190,26 @@ export default function App() {
 
   // ── Finalize: the sheet, and the notification's snooze ────────────
   // `finalizeOpen` raises components/FinalizeRound's sheet. `finalizeSnoozed`
-  // is the round whose ready-to-finalize notification the director has
-  // dismissed — a round number, not a boolean, so the next round's
-  // notification is a NEW one and shows on its own merits.
+  // is the `round:stage` tag the director has dismissed — a tag rather than a
+  // boolean so that the next round's notification is a NEW one and shows on
+  // its own merits, and rather than a bare round number so that dismissing
+  // the early "all scores are in" bar does not also swallow the "ready to
+  // finalize" one that follows it. See finalizeSnoozeTag above.
   //
   // Persisted, because the alternative is nagging: the director who taps ✕
-  // has decided to finalize later, and a refresh (or the pull-to-refresh
+  // has decided to deal with it later, and a refresh (or the pull-to-refresh
   // this app encourages, or an iOS PWA reloading itself in the background)
   // would otherwise put the bar straight back. The dot on More survives the
   // dismissal, so nothing is actually lost by remembering it.
   const [finalizeOpen, setFinalizeOpen] = useState(false);
   const [finalizeSnoozed, setFinalizeSnoozed] = useState(() => {
-    try {
-      const v = localStorage.getItem(finalizeSnoozeKey());
-      return v == null ? null : Number(v);
-    } catch { return null; }
+    try { return normalizeSnooze(localStorage.getItem(finalizeSnoozeKey())); }
+    catch { return null; }
   });
-  const snoozeFinalizeAlert = useCallback((rnd) => {
-    setFinalizeSnoozed(rnd);
-    try { localStorage.setItem(finalizeSnoozeKey(), String(rnd)); } catch { /* private mode */ }
+  const snoozeFinalizeAlert = useCallback((rnd, stage) => {
+    const tag = finalizeSnoozeTag(rnd, stage);
+    setFinalizeSnoozed(tag);
+    try { localStorage.setItem(finalizeSnoozeKey(), tag); } catch { /* private mode */ }
   }, []);
 
   // Refs mirroring the live data the auto-lock needs. The save path runs
@@ -3428,6 +3468,11 @@ export default function App() {
         : null;
       applyBCTheme(modeRef.current ? "dark" : "light", b);
       setBrand(b);
+      // The trip cost, one number for the whole field. Absent means no ledger
+      // has ever been set up, which resolves to 0 and takes the BALANCE DUE
+      // card off every My Account screen — see lib/ledger's hasLedger.
+      const dues = rows.find(r => r.id === editionDocId(DUES_SETTINGS_ID));
+      setDuesAmount(round2(dues?.amount ?? 0));
     }));
     unsubs.push(db.subscribe("bc_rounds", f, rows => setTRounds(rows)));
     // No skins listener, because skins are not stored: they are derived from
@@ -3517,6 +3562,10 @@ export default function App() {
     // at most, and in practice a handful a weekend — so it belongs in this
     // block rather than being deferred like the photo index.
     unsubs.push(db.subscribe(SIDE_BETS_COL, f, setSideBets));
+    // The payment ledger. Bounded the same way — a handful of installments per
+    // man across one summer — and every phone needs it, because the balance
+    // badge on More has to be right before anybody opens a menu.
+    unsubs.push(db.subscribe(LEDGER_COL, f, setPayments));
     unsubs.push(db.subscribe("bc_courses", f, setCourses));
     unsubs.push(db.subscribe("bc_matches", f, setMatches));
     unsubs.push(db.subscribe("bc_card_sigs", f, rows => {
@@ -3960,6 +4009,56 @@ export default function App() {
     await db.upsertStrict(SIDE_BETS_COL, bet.id, { settled_by: toggleSettled(bet, pid) });
   }, []);
 
+  // ── The trip ledger ──────────────────────────────────────────────────
+  // Director-only, all four of these, and that is the authorization model in
+  // full — a player logging their own payment would be a claim rather than a
+  // record. The rules say the same thing; see bc_ledger in firestore.rules.
+  //
+  // Every one returns a boolean rather than throwing, because the caller is a
+  // form with a Save button on it: the screen has to be able to say "that
+  // didn't save" and leave the typing where it is. Same reason the side-bet
+  // create leaves its rejection in, arrived at from the other direction.
+  //
+  // NOT edition-namespaced through editionDocId, for the same reason a side
+  // bet isn't: the id is minted fresh with a random tail, so it cannot collide
+  // with a cloned edition's. `tournament_id` is what scopes it — which also
+  // means a new edition starts with an empty ledger rather than inheriting
+  // last year's balances, which is the right answer.
+  const onLogPayment = useCallback(async ({ playerId, amount, date, method, note }) => {
+    if (paymentError({ playerId, amount, date })) return false;
+    const now = Date.now();
+    const res = await db.upsert(LEDGER_COL, buildPayment({
+      id: paymentId(now, Math.random()),
+      tournamentId: TOURNAMENT_ID,
+      createdBy: authUser?.uid || null,
+      playerId, amount, date, method, note, now,
+    }));
+    return !!res;
+  }, [authUser]);
+
+  const onDeletePayment = useCallback(async (payment) => {
+    if (!payment?.id) return false;
+    return !!(await db.delete(LEDGER_COL, payment.id));
+  }, []);
+
+  const onSaveDues = useCallback(async (amount) => {
+    const res = await db.upsert("bc_settings", {
+      id: editionDocId(DUES_SETTINGS_ID), tournament_id: TOURNAMENT_ID,
+      amount: round2(amount),
+    });
+    return !!res;
+  }, []);
+
+  // A single player's own figure, or null to put them back on the tournament
+  // one. Null rather than a delete: `db.upsert` merges, so removing the field
+  // entirely would need a different write, and lib/ledger already reads null
+  // as "no override" — which is also what an untouched roster row has.
+  const onSetPlayerDues = useCallback(async (player, amount) => {
+    if (!player?.player_id) return false;
+    const res = await db.upsert("bc_players", { id: player.player_id, dues_amount: amount });
+    return !!res;
+  }, []);
+
   // ── The photo library's two writes ───────────────────────────────────
   // Both go through lib/mediaUpload.js, which owns the canvas work and the
   // bucket; this pair owns the Firestore side, because `db` lives here and a
@@ -4350,20 +4449,32 @@ export default function App() {
   );
   useEffect(() => { syncAppBadge(myPendingAttest.length); }, [myPendingAttest.length]);
 
+  // ── What this reader owes the director ───────────────────────────────
+  // Derived, never stored — see the top of lib/ledger. It feeds three things
+  // that must agree: the BALANCE DUE card on My Account, the red dot on the
+  // My Account row in More, and the red dot on More itself. One computation
+  // means they cannot disagree with each other or with Admin → Money.
+  const myLedger = useMemo(
+    () => (user?.player_id
+      ? balanceFor({
+        player: tPlayers.find(p => p.player_id === user.player_id) || { player_id: user.player_id },
+        payments, defaultAmount: duesAmount,
+      })
+      : null),
+    [tPlayers, payments, duesAmount, user?.player_id]
+  );
+  const balanceDue = owesMoney(myLedger);
+
   const isDirector = !!user?.isDirector;
-  // "Ready" is the blunt, complete-round definition, and deliberately so: a
-  // notification that fired on a guess ("looks about done") would be the
-  // same accident the round gate exists to prevent, pointed at the one
-  // action that moves the whole field. Everything else goes through More.
-  //
-  // What counts as complete moved with the signature workflow: every card
-  // ATTESTED, not merely every score typed. All eighteen holes being in is
-  // now the condition for the last card being signable, not for the round
-  // being over — the round is over when the field agrees it is. Attestation
-  // implies completeness (a card cannot be signed with a hole missing) with
-  // one exception, the director's force-attest, and that is a deliberate
-  // human override rather than a gap.
-  const finalizeReady = isDirector && currentRound != null && roundCards.complete;
+  // Which of the two finalize prompts, if either, this round has earned.
+  // "Ready" is still the blunt, fully-settled definition — every card
+  // ATTESTED, not merely every score typed, because the round is over when
+  // the field agrees it is. What is new is the rung below it: every score in
+  // with cards outstanding, which is the state a director can actually do
+  // something about. See lib/scoreGuard's finalizeStage for both, and the
+  // header of components/FinalizeRound for why it fires twice.
+  const roundStage = currentRound == null ? null : finalizeStage({ progress: roundProgress, cards: roundCards });
+  const finalizeReady = isDirector && roundStage === "ready";
   const finalizeNextRound = useMemo(
     () => nextRoundNumber(roundLocksData, tournamentRounds),
     [roundLocksData, tournamentRounds]
@@ -4417,16 +4528,17 @@ export default function App() {
   // roster rather than the stored session, which predates any team change.
   const viewerTeam = tPlayers.find(p => p.player_id === user.player_id)?.team || user.team || "A";
 
-  // The director's always-available route to the sheet, surfaced in More.
-  // Null for a player, and for an event with no rounds to finalize.
-  const finalizeMenu = isDirector && tournamentRounds.length > 0 ? {
-    label: currentRound != null ? `Finalize Round ${currentRound}` : "Reopen last round",
-    ready: finalizeReady,
-    onOpen: () => setFinalizeOpen(true),
-  } : null;
-  // The notification itself: only when the round is genuinely ready, and
-  // only until the director puts it away for that round.
-  const showFinalizeAlert = finalizeReady && finalizeSnoozed !== currentRound;
+  // Whether there is a round to finalize at all. Was a More-menu row; it is
+  // now only the guard on the sheet and on Admin → Rounds' control, since
+  // More is where a PLAYER goes and finalizing is the one act on the
+  // tournament that only a director can perform.
+  const canFinalize = isDirector && tournamentRounds.length > 0;
+  // The notification itself: whichever stage the round has reached, and only
+  // until the director puts THAT STAGE away. Dismissing "all scores are in"
+  // leaves the "ready to finalize" bar still to come.
+  const alertStage = isDirector && roundStage ? roundStage : null;
+  const showFinalizeAlert = !!alertStage
+    && finalizeSnoozed !== finalizeSnoozeTag(currentRound, alertStage);
 
   // Bottom-nav items.
   const navItems = [
@@ -4609,8 +4721,9 @@ export default function App() {
           nextRound={finalizeNextRound}
           progress={roundProgress}
           cards={roundCards}
+          stage={alertStage}
           onOpen={() => setFinalizeOpen(true)}
-          onDismiss={() => snoozeFinalizeAlert(currentRound)}
+          onDismiss={() => snoozeFinalizeAlert(currentRound, alertStage)}
         />
       )}
 
@@ -4764,6 +4877,12 @@ export default function App() {
             // or a team change the director has made since.
             player={linkedPlayer(tPlayers, authUser?.uid)}
             teams={teams}
+            /* The trip ledger's player-facing half. Both halves of the
+               subtraction go down, not the balance: My Account has to be able
+               to show the working, because "what do I still owe" is only
+               believable next to the payments it was worked out from. */
+            payments={payments}
+            duesAmount={duesAmount}
             darkMode={darkMode}
             onToggleTheme={toggleTheme}
             onLogout={() => { doSignOut(); setView("leaderboard"); }}
@@ -4866,6 +4985,20 @@ export default function App() {
             groupsFromDb={groupsData}
             onSaveGroups={onSaveGroups}
             roundLocks={roundLocksData}
+            /* Admin → Money. Director-only by construction: this whole view
+               is, and the rules say the same thing for bc_ledger. */
+            payments={payments}
+            duesAmount={duesAmount}
+            onLogPayment={onLogPayment}
+            onDeletePayment={onDeletePayment}
+            onSaveDues={onSaveDues}
+            onSetPlayerDues={onSetPlayerDues}
+            /* Admin → Rounds' route to the Finalize sheet — the early-finalize
+               path that used to be a row in the More menu. Null when there is
+               no round to finalize, which is what hides the control. */
+            onOpenFinalize={canFinalize ? () => setFinalizeOpen(true) : null}
+            finalizeRound={currentRound}
+            finalizeReady={finalizeReady}
             notify={notify}
           />
           </Suspense>
@@ -4895,7 +5028,8 @@ export default function App() {
       </div>
 
       <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} user={user} view={view}
-        finalize={finalizeMenu} onEditions={() => setEditionsOpen(true)} navH={navH} />
+        alerts={{ finalize: finalizeReady, balance: balanceDue }}
+        onEditions={() => setEditionsOpen(true)} navH={navH} />
 
       {/* Every year the cup has been played. Opened from the menu by anybody;
           `canManage` is what adds the create/delete half for a director, who
@@ -4904,7 +5038,7 @@ export default function App() {
 
       {/* The Finalize sheet — everything the removed Scoring card held, at
           zero cost until it is opened. */}
-      {finalizeOpen && finalizeMenu && (
+      {finalizeOpen && canFinalize && (
         <FinalizeRoundSheet
           round={currentRound}
           nextRound={finalizeNextRound}
@@ -4964,11 +5098,19 @@ export default function App() {
         {navItems.map(item => {
           const active = view === item.key;
           const clr = active ? BC.amberInk : BC.t3;
-          // The notification's persistent half. The bar above can be
-          // dismissed; this dot cannot, and it stays lit until the round is
-          // actually finalized — pointing at More, which is where the sheet
-          // is. Dismissing a reminder should quiet it, not delete the fact.
-          const badge = item.key === "menu" && finalizeReady;
+          // The notification's persistent half, and the balance's only half.
+          // The bar above can be dismissed; this dot cannot, and it stays lit
+          // until the fact behind it changes — the round is finalized, or the
+          // money is paid. Dismissing a reminder should quiet it, not delete
+          // the fact.
+          //
+          // Two facts, one dot, and finalize wins when both are true: it is
+          // the one with a deadline, and the money will still be owed after
+          // the round is in. Both trails end inside this menu — finalize on
+          // the Admin row, the balance on My Account — so the colour is what
+          // says which row to look for.
+          const badge = item.key === "menu" && (finalizeReady || balanceDue);
+          const badgeColor = finalizeReady ? BC.amber : BC.danger;
           return (
             <button key={item.key} onClick={() => {
               if (item.key === "menu") { setMenuOpen(true); return; }
@@ -4987,7 +5129,7 @@ export default function App() {
                 {renderIcon(item.icon, active)}
                 {badge && <span style={{
                   position: "absolute", top: 1, right: "50%", marginRight: -14,
-                  width: 8, height: 8, borderRadius: "50%", background: BC.amber,
+                  width: 8, height: 8, borderRadius: "50%", background: badgeColor,
                   border: `1.5px solid ${BC.card}`, boxSizing: "content-box",
                 }} />}
               </div>

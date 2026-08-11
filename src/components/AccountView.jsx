@@ -35,6 +35,7 @@ import { useConfirm } from "../lib/useConfirm";
 import { providerLabel } from "../lib/auth";
 import { BOOTSTRAP_DIRECTOR } from "../firebase";
 import { NotificationSettings } from "./NotificationSettings";
+import { BalanceCard } from "./Ledger";
 
 const Card = ({ children, style }) => (
   <div style={{
@@ -60,7 +61,8 @@ const initialsOf = (name) => String(name || "?")
   .filter(Boolean).slice(0, 2).join("").toUpperCase() || "?";
 
 export function AccountView({
-  user, authUser, player, teams, darkMode, onToggleTheme, onLogout, onDeleteAccount, notify,
+  user, authUser, player, teams, payments, duesAmount,
+  darkMode, onToggleTheme, onLogout, onDeleteAccount, notify,
 }) {
   const { confirm, confirmModal } = useConfirm();
   const [deleting, setDeleting] = useState(false);
@@ -188,6 +190,17 @@ export function AccountView({
           </div>
         )}
       </Card>
+
+      {/* ── Balance due ──
+          Directly under the identity card, above the preferences, because it
+          is the only thing on this screen that is ever OUTSTANDING — the rest
+          is settings, and settings can wait behind a debt. It renders nothing
+          at all when the tournament has no ledger, so a year that nobody
+          charged for looks exactly as it did before this existed.
+
+          It shows only THIS reader's position. Who else owes what is the
+          director's screen (Admin → Money), not a leaderboard. */}
+      <BalanceCard player={player} payments={payments} duesAmount={duesAmount} />
 
       {/* ── Appearance ── */}
       <SectionLabel>APPEARANCE</SectionLabel>

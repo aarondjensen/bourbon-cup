@@ -65,6 +65,36 @@ export function roundScoreProgress(matches, holeData, round) {
   };
 }
 
+// ── How far along the round is, as one word ─────────────────────────
+// The director's notification fires off this, and it has two rungs rather
+// than one because the two things it can announce are genuinely different
+// events (see the header of components/FinalizeRound):
+//
+//   "ready"   every card signed and attested. The round is OVER — the field
+//             agrees — and finalizing it is the routine next step.
+//   "scores"  every score is typed but the cards are not settled. The GOLF
+//             is over; what is left is signatures. This is the rung that was
+//             missing, and it is the one the director can actually act on:
+//             chase four taps, or force-attest and move the field along.
+//   null      nothing to say. A round still being played, an empty round, or
+//             no round at all.
+//
+// Cards are the finer measure and win when they exist, because attestation
+// implies completeness — a card cannot be signed with a hole missing. A round
+// whose matches carry no cards at all (an old edition, a format nobody signed)
+// falls back to the score count, which is the only signal it has.
+export function finalizeStage({ progress, cards }) {
+  if (!progress || progress.total === 0) return null;
+  if (cards?.total > 0) {
+    if (cards.complete) return "ready";
+    // Deliberately NOT "every card is signed but unattested" — a signed card
+    // still needs its second name, and that gap is exactly what the "scores"
+    // rung exists to surface.
+    return progress.complete ? "scores" : null;
+  }
+  return progress.complete ? "ready" : null;
+}
+
 // [{ pid, holes }] for the given players, heaviest card first, silent players
 // dropped. The order matters: when this list is read out in a confirmation
 // it should open with the player who has the most to lose.

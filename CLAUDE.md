@@ -379,6 +379,53 @@ Things that will bite you:
   secret — leaving it reachable on a set-up tournament would hand Admin to
   anyone who reads the JavaScript.
 
+## The trip ledger
+
+What each man owes the director for the weekend, and what he has paid so far.
+Nothing to do with the golf, and nothing to do with the Betting tab either —
+skins and side bets are settled between players; this is money owed to the
+person who fronted the rooms and the greens fees months ago, usually paid back
+in installments across the summer.
+
+Three pieces, and only the third is a collection:
+
+- **The tournament figure** — `bc_settings/<edition>__dues`, set in
+  **Admin → Money**. Zero (or never set) means there is no ledger, and the
+  BALANCE DUE card disappears from every My Account.
+- **The per-player override** — `bc_players.dues_amount`, for the man coming
+  for one night or the one being comped. A written **0 is an override**, not an
+  absence; `hasDuesOverride` is the test, and blank means "use the tournament
+  figure". `cloneEdition` deliberately DROPS this field, because last year's
+  "$400, Saturday only" carried into a new edition bills somebody wrong on a
+  screen nobody would think to re-check.
+- **The payments** — `bc_ledger`, one document per installment: amount, date,
+  method, note. Dates are `YYYY-MM-DD` strings and are never parsed into a
+  `Date`; `new Date("2026-07-01")` is UTC midnight, which in Michigan is the
+  evening of June 30th.
+
+**The balance is never stored.** It is `due - paid`, derived every time in
+`src/lib/ledger.js`, because a stored third number can disagree with the two it
+came from — and that disagreement always surfaces as "the app says I owe $150
+and the payments add to $700", which is the argument the ledger exists to end.
+It goes negative on an overpayment rather than clamping, and the director's
+totals never net one man's overpayment against another's debt.
+
+**Writes are director-only, all of them**, which is the whole authorization
+model: a player logging their own payment is a claim, the director receiving it
+is the record. That is the opposite shape to `bc_side_bets`, where the two
+parties are equals and both get a write — worth noticing before anybody
+"consistency-fixes" one to match the other. Reads are open like everything else
+in the project, so a member could read another man's balance by talking to
+Firestore directly; the screens only ever show a player their own.
+
+A player who owes anything gets a **red dot** on the More tab and on the My
+Account row inside it. The finalize dot is amber and wins when both are lit —
+it has a deadline, the money will still be owed after the round is in.
+
+**It needs `firestore.rules` deployed** to work: `bc_ledger` is a new
+collection, and until the rules land the default-deny at the bottom of that
+file refuses every read of it. App first, rules second, as always.
+
 ## The api/ handlers during local dev
 
 `api/*.js` are Vercel serverless functions and do not run under `npm run dev`.
