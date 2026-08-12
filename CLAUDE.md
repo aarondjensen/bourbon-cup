@@ -499,6 +499,14 @@ golf costing us" needs a value you can group by, not sixteen spellings of
 greens fees. A line whose category was retired shows up under **Other** rather
 than vanishing with its money still in the total.
 
+**A line is priced whichever way the director knows it** — `basis` is `total`
+or `per_man`, and everything downstream expands it. The house is one number off
+a listing; golf is what the course quotes a man. The typed figure is stored as
+typed, so a per-man line stays readable as "$90 a man" and its total moves on
+its own when the field grows. An absent `basis` is a total, which is what every
+line written before it existed is. The DETAIL is optional — a Lodging line for
+the house needs no elaboration, and `lineTitle` falls back to the category.
+
 **Estimates and actuals are deliberately not modelled.** A line is one number
 and the director decides whether it is a quote or a receipt; two columns would
 double the typing on every line for a distinction that matters on three of
@@ -587,3 +595,12 @@ Two rules for it:
 Note that the theme locks `html/body` to `overflow: hidden`, so the page itself
 does not scroll — screenshot with `fullPage: true` or scroll the app's own
 scroll container from JS.
+
+**`Toast` is portaled to `<body>`, and it has to stay that way.** In Chromium
+`position: fixed` ALWAYS creates a stacking context, z-index or not. The app
+shell is `position: fixed`, so anything rendered inside it is confined to the
+shell's layer and a portaled `Popup` (z-index 500) paints above ALL of it — the
+toast was at z-index 1000 and still lost. Every toast raised while any popup
+was open was invisible underneath it. If a fixed overlay ever goes missing,
+that is the first thing to check, and `elementFromPoint` at its centre is how
+to prove it.

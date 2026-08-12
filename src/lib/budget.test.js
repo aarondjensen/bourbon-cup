@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   BUDGET_CATEGORIES, categoryLabel, categoryIcon, normalizeCategory,
-  budgetLineId, budgetLineError, buildBudgetLine, MAX_LABEL, MAX_NOTE,
+  budgetLineId, budgetLineError, buildBudgetLine, MAX_LABEL,
+  BUDGET_BASES, normalizeBasis, isPerMan, lineTotal, lineTitle,
   budgetGroups, budgetTotal, budgetPerPlayer, budgetVsDues,
 } from "./budget";
 
@@ -42,8 +43,11 @@ describe("budgetLineError", () => {
   it("accepts a complete line", () => {
     expect(budgetLineError(ok)).toBeNull();
   });
-  it("wants a name", () => {
-    expect(budgetLineError({ ...ok, label: "  " })).toMatch(/name/i);
+  // A Lodging line for the house needs no elaboration — demanding one means
+  // typing the word "Lodging" twice.
+  it("does not need a detail", () => {
+    expect(budgetLineError({ amount: "3400" })).toBeNull();
+    expect(budgetLineError({ label: "  ", amount: "3400" })).toBeNull();
   });
   // A $0 line is a real thing to write down — something comped, or a
   // placeholder for a quote that has not come back.
@@ -58,19 +62,60 @@ describe("budgetLineError", () => {
 describe("buildBudgetLine", () => {
   const built = buildBudgetLine({
     id: "b1", tournamentId: "bc_2026", category: "golf",
-    label: "  Greens fees  ", amount: "2880.004", note: "  4 rounds x 16  ",
+    label: "  Greens fees  ", amount: "2880.004",
     createdBy: "uid_a", now: 1000,
   });
   it("trims and rounds", () => {
-    expect(built).toMatchObject({ label: "Greens fees", amount: 2880, note: "4 rounds x 16" });
+    expect(built).toMatchObject({ label: "Greens fees", amount: 2880 });
   });
-  it("caps the free text", () => {
-    const long = buildBudgetLine({ ...built, label: "x".repeat(200), note: "y".repeat(500) });
-    expect(long.label.length).toBe(MAX_LABEL);
-    expect(long.note.length).toBe(MAX_NOTE);
+  it("caps the detail", () => {
+    expect(buildBudgetLine({ ...built, label: "x".repeat(200) }).label.length).toBe(MAX_LABEL);
   });
   it("normalizes a category it does not know", () => {
     expect(buildBudgetLine({ ...built, category: "caddies" }).category).toBe("other");
+  });
+  it("defaults to a total and keeps a per-man basis", () => {
+    expect(built.basis).toBe("total");
+    expect(buildBudgetLine({ ...built, basis: "per_man" }).basis).toBe("per_man");
+    expect(buildBudgetLine({ ...built, basis: "nonsense" }).basis).toBe("total");
+  });
+  // A second optional free-text field beside an optional label is one more
+  // than a budget line needs. Not writing it means a note typed before the
+  // change survives the next edit rather than being blanked.
+  it("does not write a note field at all", () => {
+    expect(buildBudgetLine({ ...built, note: "leftover" })).not.toHaveProperty("note");
+  });
+});
+
+describe("basis", () => {
+  it("offers exactly the two ways a director knows a price", () => {
+    expect(BUDGET_BASES.map(b => b.id)).toEqual(["total", "per_man"]);
+  });
+  // Every line written before `basis` existed is a total.
+  it("reads an absent basis as a total", () => {
+    expect(normalizeBasis(undefined)).toBe("total");
+    expect(isPerMan(line({ basis: undefined }))).toBe(false);
+    expect(isPerMan(line({ basis: "per_man" }))).toBe(true);
+  });
+  it("expands a per-man line by the field", () => {
+    expect(lineTotal(line({ amount: 90, basis: "per_man" }), 16)).toBe(1440);
+    expect(lineTotal(line({ amount: 3400, basis: "total" }), 16)).toBe(3400);
+  });
+  // Guessing a field size would put an invented number in the total.
+  it("contributes nothing per-man against an empty roster", () => {
+    expect(lineTotal(line({ amount: 90, basis: "per_man" }), 0)).toBe(0);
+    expect(lineTotal(line({ amount: 3400 }), 0)).toBe(3400);
+  });
+});
+
+describe("lineTitle", () => {
+  it("is the detail when there is one", () => {
+    expect(lineTitle(line({ label: "Greens fees" }))).toBe("Greens fees");
+  });
+  // Leaving it blank on a Lodging line means "Lodging", and that is true.
+  it("falls back to the category", () => {
+    expect(lineTitle(line({ label: "", category: "lodging" }))).toBe("Lodging");
+    expect(lineTitle(line({ label: "   ", category: "caddies" }))).toBe("Other");
   });
 });
 
@@ -81,7 +126,7 @@ describe("budgetGroups", () => {
     line({ id: "c", category: "golf", label: "Carts", amount: 640 }),
     line({ id: "d", category: "caddies", label: "Forecaddie", amount: 200 }),
   ];
-  const groups = budgetGroups(lines);
+  const groups = budgetGroups(lines, 16);
 
   it("is in the catalog's order, not the data's", () => {
     expect(groups.map(g => g.id)).toEqual(["lodging", "golf", "other"]);
@@ -101,19 +146,38 @@ describe("budgetGroups", () => {
     expect(groups.map(g => g.id)).not.toContain("prizes");
   });
   it("handles no lines at all", () => {
-    expect(budgetGroups([])).toEqual([]);
-    expect(budgetGroups(undefined)).toEqual([]);
+    expect(budgetGroups([], 16)).toEqual([]);
+    expect(budgetGroups(undefined, 16)).toEqual([]);
+  });
+  // A $90-a-man line is bigger than a $350 cleaning fee and has to sort like
+  // it — the comparable number is what the line costs the TRIP.
+  it("sorts on what a line costs the trip, not the number typed on it", () => {
+    const g = budgetGroups([
+      line({ id: "x", category: "golf", label: "Cleaning", amount: 350 }),
+      line({ id: "y", category: "golf", label: "Greens fees", amount: 90, basis: "per_man" }),
+    ], 16);
+    expect(g[0].lines.map(l => l.id)).toEqual(["y", "x"]);
+    expect(g[0].total).toBe(1790);
   });
 });
 
 describe("budgetTotal and budgetPerPlayer", () => {
   const lines = [line({ amount: 3400 }), line({ id: "b", amount: 2880 }), line({ id: "c", amount: 640 })];
   it("adds every line", () => {
-    expect(budgetTotal(lines)).toBe(6920);
-    expect(budgetTotal([])).toBe(0);
+    expect(budgetTotal(lines, 16)).toBe(6920);
+    expect(budgetTotal([], 16)).toBe(0);
+  });
+  it("expands the per-man lines before adding", () => {
+    expect(budgetTotal([line({ amount: 3400 }), line({ id: "b", amount: 90, basis: "per_man" })], 16))
+      .toBe(3400 + 1440);
   });
   it("divides by the field", () => {
     expect(budgetPerPlayer(lines, 16)).toBe(432.5);
+  });
+  // The round trip a per-man line has to survive: type $90 a man, get $90 a
+  // man back out of the per-player figure.
+  it("returns a per-man line's own number when it is the only line", () => {
+    expect(budgetPerPlayer([line({ amount: 90, basis: "per_man" })], 16)).toBe(90);
   });
   // Dividing by nobody has no answer, and "$0 a man" would read as a free trip.
   it("is null for an empty roster", () => {
