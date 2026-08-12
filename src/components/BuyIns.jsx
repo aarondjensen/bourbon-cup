@@ -59,15 +59,23 @@ export function BuyInEditor({ players, amount, ids, onChange }) {
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderBottom: `1px solid ${BC.bdr}` }}>
         <span style={{ fontSize: FS.label, fontWeight: 800, color: BC.t3, letterSpacing: 0.8 }}>BUY-IN</span>
         <span style={{ fontSize: FS.body, fontWeight: 800, color: BC.gold }}>$</span>
+        {/* FS.lead, and it has to stay at or above it. At FS.body mobile
+            Safari zoomed the page in the moment this field took focus and did
+            not zoom back out — on this app it CANNOT, because the theme locks
+            html/body to overflow:hidden and the shell is position:fixed, so
+            there is nothing to pan or scroll that would restore the scale.
+            The director was left pinching at a viewport that would not go
+            back. See the note under FS in theme.js: condense a field with
+            padding, never by dropping a type rung. */}
         <input
           type="number" inputMode="decimal" value={amt} placeholder="0"
           onChange={e => setAmt(e.target.value)}
           onBlur={commitAmount}
           onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
           style={{
-            width: 70, fontSize: FS.body, fontWeight: 800, color: BC.gold,
+            width: 76, fontSize: FS.lead, fontWeight: 800, color: BC.gold,
             background: "transparent", border: "none", borderBottom: `1px solid ${BC.amber}`,
-            outline: "none", fontFamily: FONT,
+            outline: "none", fontFamily: FONT, padding: 0, minWidth: 0,
           }}
         />
         <span style={{ flex: 1, fontSize: FS.small, color: BC.t3, textAlign: "right" }}>

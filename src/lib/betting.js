@@ -143,3 +143,39 @@ export const ctpTags = ({ rounds, field, ctpData, tRounds, courses, roundLocks }
   });
 };
 
+// ── How many pins the tournament will play ────────────────────────────
+// Every par 3 on every round's scorecard. This is what a CTP pot divides by,
+// and it is a different question from how many pins have been TAKEN.
+//
+// The tab used to divide the pot by the tags standing, which made the first
+// pin of the week worth the entire pot and then shrank every man's share each
+// time somebody else took one. The number moved all weekend for a reason that
+// had nothing to do with the money: the pot is fixed the moment the field is,
+// and so is the number of par 3s, so a pin is worth the same on Friday morning
+// as it is on Sunday afternoon and the tab should say so from the start.
+//
+// A round with NO COURSE contributes nothing rather than a guess.
+// `resolveHolePars` falls back to eighteen par 4s when the course is missing,
+// which would read as "no par 3s on this one" by accident; requiring the
+// course makes it deliberate, and `scheduled` is what lets a screen say the
+// count is not final yet — a draw with two courses picked is still going to
+// grow pins when the other two are set.
+export const ctpPinTotal = ({ rounds, tRounds, courses, roundLocks }) => {
+  const list = rounds || [];
+  const perRound = list.map(r => {
+    const { course, pars } = roundSetup({ round: r, tRounds, courses, roundLocks });
+    return { round: r, course, pins: course ? pars.filter(p => p === 3).length : null };
+  });
+  const scheduled = perRound.filter(x => x.pins != null);
+  return {
+    pins: scheduled.reduce((n, x) => n + x.pins, 0),
+    scheduled: scheduled.length,
+    rounds: list.length,
+    // True while a round is still without a course, so the total can only go
+    // up. A screen that prints a per-pin share off a provisional total is
+    // printing a number that will fall, and should say which it has.
+    partial: scheduled.length < list.length,
+    perRound,
+  };
+};
+
