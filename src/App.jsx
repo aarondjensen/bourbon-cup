@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } fro
 import { createPortal } from "react-dom";
 import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, HOLE_BANNER, FS, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor, VP_BAND } from "./theme";
 import { playerLookup, realPlayers } from "./lib/players";
-import { db, TOURNAMENT_ID, getTournamentYear, getActiveTournamentId, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, readTournamentIdentity, writeTournamentIdentity, BOOTSTRAP_DIRECTOR, SPECTATOR_ID } from "./firebase";
+import { db, writeFailure, TOURNAMENT_ID, getTournamentYear, getActiveTournamentId, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, readTournamentIdentity, writeTournamentIdentity, BOOTSTRAP_DIRECTOR, SPECTATOR_ID } from "./firebase";
 import { PROVIDERS, signIn, signOutUser, onAuthUser, consumeRedirectResult, isCancelled, whenAuthReady } from "./lib/auth";
 import { claimPlayer, linkedPlayer, isClaimed, readMembership, isDirectorAccount, joinWithCode, setDirector, ACCOUNTS_COL, deleteAccount } from "./lib/accounts";
 import {
@@ -4079,21 +4079,32 @@ export default function App() {
   // with a cloned edition's. `tournament_id` is what scopes it — which also
   // means a new edition starts with an empty ledger rather than inheriting
   // last year's balances, which is the right answer.
-  const onLogPayment = useCallback(async ({ playerId, amount, date, method, note }) => {
-    if (paymentError({ playerId, amount, date })) return false;
+  // Same shape and same reasoning as onSaveBudgetLine below: the form's
+  // object goes through whole so no field can be dropped in the middle, and
+  // the rejection is left in so "the rules aren't deployed" does not reach
+  // the director as "try again".
+  const onLogPayment = useCallback(async (form) => {
+    if (paymentError(form)) return { ok: false };
     const now = Date.now();
-    const res = await db.upsert(LEDGER_COL, buildPayment({
-      id: paymentId(now, Math.random()),
-      tournamentId: TOURNAMENT_ID,
-      createdBy: authUser?.uid || null,
-      playerId, amount, date, method, note, now,
-    }));
-    return !!res;
+    try {
+      await db.upsert(LEDGER_COL, buildPayment({
+        ...form,
+        id: paymentId(now, Math.random()),
+        tournamentId: TOURNAMENT_ID,
+        createdBy: authUser?.uid || null,
+        now,
+      }), { loud: true });
+      return { ok: true };
+    } catch (e) {
+      console.error("payment save", e);
+      return { ok: false, error: writeFailure(e, "Could not log that payment — try again") };
+    }
   }, [authUser]);
 
   const onDeletePayment = useCallback(async (payment) => {
-    if (!payment?.id) return false;
-    return !!(await db.delete(LEDGER_COL, payment.id));
+    if (!payment?.id) return { ok: false };
+    const done = await db.delete(LEDGER_COL, payment.id);
+    return done ? { ok: true } : { ok: false, error: "Could not delete that payment — try again" };
   }, []);
 
   // ── The house ────────────────────────────────────────────────────────
@@ -4120,29 +4131,56 @@ export default function App() {
   // where that decision lives. An existing id is reused so the edit lands on
   // the same document; a new one is minted with a random tail so two phones
   // adding a line in the same millisecond cannot collide.
-  const onSaveBudgetLine = useCallback(async ({ id, category, label, amount, note }) => {
-    if (budgetLineError({ label, amount })) return false;
+  // THE FORM'S OBJECT GOES THROUGH WHOLE, and that is deliberate rather than
+  // lazy. This used to name each field — `{ id, category, label, amount }` —
+  // and when the form grew a `basis` toggle this layer silently dropped it:
+  // the sheet worked out "$90 x 16 = $1,440 on the trip" in front of the
+  // director and then stored a flat $90 total. The screen said one thing and
+  // the database held another, which is the one class of bug a director
+  // cannot catch by looking.
+  //
+  // Spreading closes it for good. `buildBudgetLine` picks the fields it
+  // knows and ignores the rest, so a field can be added to the form and to
+  // the builder without this middle layer being a place it can fall out of.
+  //
+  // `loud` so the rejection reaches the form. This collection is new, its
+  // rules are deployed by hand, and "could not save — try again" is a lie
+  // when the answer is "and it never will until the rules land".
+  const onSaveBudgetLine = useCallback(async (form) => {
+    if (budgetLineError(form)) return { ok: false };
     const now = Date.now();
-    const res = await db.upsert(BUDGET_COL, buildBudgetLine({
-      id: id || budgetLineId(now, Math.random()),
-      tournamentId: TOURNAMENT_ID,
-      createdBy: authUser?.uid || null,
-      category, label, amount, note, now,
-    }));
-    return !!res;
+    try {
+      await db.upsert(BUDGET_COL, buildBudgetLine({
+        ...form,
+        id: form.id || budgetLineId(now, Math.random()),
+        tournamentId: TOURNAMENT_ID,
+        createdBy: authUser?.uid || null,
+        now,
+      }), { loud: true });
+      return { ok: true };
+    } catch (e) {
+      console.error("budget line save", e);
+      return { ok: false, error: writeFailure(e, "Could not save that line — try again") };
+    }
   }, [authUser]);
 
   const onDeleteBudgetLine = useCallback(async (line) => {
-    if (!line?.id) return false;
-    return !!(await db.delete(BUDGET_COL, line.id));
+    if (!line?.id) return { ok: false };
+    const done = await db.delete(BUDGET_COL, line.id);
+    return done ? { ok: true } : { ok: false, error: "Could not delete that line — try again" };
   }, []);
 
   const onSaveDues = useCallback(async (amount) => {
-    const res = await db.upsert("bc_settings", {
-      id: editionDocId(DUES_SETTINGS_ID), tournament_id: TOURNAMENT_ID,
-      amount: round2(amount),
-    });
-    return !!res;
+    try {
+      await db.upsert("bc_settings", {
+        id: editionDocId(DUES_SETTINGS_ID), tournament_id: TOURNAMENT_ID,
+        amount: round2(amount),
+      }, { loud: true });
+      return { ok: true };
+    } catch (e) {
+      console.error("dues save", e);
+      return { ok: false, error: writeFailure(e, "Could not save that — try again") };
+    }
   }, []);
 
   // A single player's own figure, or null to put them back on the tournament
@@ -4150,9 +4188,14 @@ export default function App() {
   // entirely would need a different write, and lib/ledger already reads null
   // as "no override" — which is also what an untouched roster row has.
   const onSetPlayerDues = useCallback(async (player, amount) => {
-    if (!player?.player_id) return false;
-    const res = await db.upsert("bc_players", { id: player.player_id, dues_amount: amount });
-    return !!res;
+    if (!player?.player_id) return { ok: false };
+    try {
+      await db.upsert("bc_players", { id: player.player_id, dues_amount: amount }, { loud: true });
+      return { ok: true };
+    } catch (e) {
+      console.error("player dues save", e);
+      return { ok: false, error: writeFailure(e, "Could not save that — try again") };
+    }
   }, []);
 
   // ── The photo library's two writes ───────────────────────────────────

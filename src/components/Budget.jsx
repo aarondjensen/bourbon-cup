@@ -60,8 +60,8 @@ function BudgetLineSheet({ line, playerCount, onSave, onDelete, onClose, notify 
     if (err) { notify?.(err, "error"); return; }
     setBusy(true);
     try {
-      const ok = await onSave({ id: line?.id, category, label, amount, basis });
-      if (!ok) { notify?.("Could not save that line — try again", "error"); return; }
+      const res = await onSave({ id: line?.id, category, label, amount, basis });
+      if (!res?.ok) { notify?.(res?.error || "Could not save that line — try again", "error"); return; }
       notify?.(editing ? "Line saved" : `${lineTitle({ label, category })} added`, "success");
       onClose();
     } finally { setBusy(false); }
@@ -79,8 +79,9 @@ function BudgetLineSheet({ line, playerCount, onSave, onDelete, onClose, notify 
     setBusy(true);
     try {
       const done = await onDelete(line);
-      notify?.(done ? "Line deleted" : "Could not delete that line — try again", done ? "success" : "error");
-      if (done) onClose();
+      notify?.(done?.ok ? "Line deleted" : (done?.error || "Could not delete that line — try again"),
+        done?.ok ? "success" : "error");
+      if (done?.ok) onClose();
     } finally { setBusy(false); }
   };
 

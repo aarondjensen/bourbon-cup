@@ -559,6 +559,17 @@ A player who owes anything gets a **red dot** on the More tab and on the My
 Account row inside it. The finalize dot is amber and wins when both are lit —
 it has a deadline, the money will still be owed after the round is in.
 
+**A write that is refused says so.** `db.upsert(col, data, { loud: true })`
+leaves the rejection in, and `writeFailure` in `src/firebase.js` turns
+`permission-denied` into "the security rules may not be deployed yet" instead
+of "try again" — which is a lie when the answer is "and it never will until
+somebody deploys". Every money write goes through it, and they all return
+`{ ok, error }` rather than a boolean. **A form's object is passed through
+WHOLE** (`buildBudgetLine({ ...form, … })`) rather than re-listed field by
+field: the handler used to name each one, and when the form grew a `basis`
+toggle it silently dropped it — the sheet showed "$90 × 16 = $1,440" and the
+database got a flat $90 total.
+
 **Both need `firestore.rules` deployed** to work: `bc_ledger` and `bc_budget`
 are new collections, and until the rules land the default-deny at the bottom of
 that file refuses every read of them. App first, rules second, as always.
