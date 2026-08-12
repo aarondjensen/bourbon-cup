@@ -11,6 +11,7 @@
 //    • Toast           — the transient "slides down from the top" toast.
 //    • ScoreButtonRow  — the tappable par-relative score entry row.
 
+import { createPortal } from "react-dom";
 import { BC, FONT, ON_ACCENT, BROWN, HOLE_BANNER, SHADOW, ALPHA, dimHex, teamColor, FS, segThumb, segTrack } from "../theme";
 
 
@@ -199,7 +200,20 @@ const TOAST_ACCENT = { error: "danger", warn: "warn", success: "green" };
 export function Toast({ message, type = "success", top = 30, oneLine = false }) {
   if (!message) return null;
   const accent = BC[TOAST_ACCENT[type] || "green"];
-  return (
+  // ── PORTALED, and that is the whole reason a toast is ever visible ──
+  // In Chromium `position: fixed` ALWAYS creates a stacking context, z-index
+  // or not. The app shell is position:fixed, so everything rendered inside it
+  // — this toast included — is confined to the shell's context and paints as
+  // one layer. A portaled Popup is a sibling of that shell with z-index 500,
+  // which puts the entire popup above the entire shell no matter what z-index
+  // the toast carries. It was 1000 and it still lost.
+  //
+  // So the toast goes to <body> too, where its z-index competes with the
+  // popup ladder for real: content 500, modal 900, this 1000. Without it,
+  // every toast raised while any popup is open is painted underneath it — a
+  // validation message the user cannot see, on the one screen where they
+  // needed it.
+  return createPortal(
     <>
       <style>{`@keyframes bcToastDown { 0% { transform: translateX(-50%) translateY(-20px); opacity: 0; } 100% { transform: translateX(-50%) translateY(0); opacity: 1; } }`}</style>
       <div style={{
@@ -220,7 +234,8 @@ export function Toast({ message, type = "success", top = 30, oneLine = false }) 
       }}>
         {message}
       </div>
-    </>
+    </>,
+    document.body,
   );
 }
 

@@ -16,8 +16,10 @@ import { BC, FONT, ALPHA, FS, ON_AMBER } from "../theme";
 import { Popup, ConfirmModal } from "./Popup";
 import { useConfirm } from "../lib/useConfirm";
 import { money } from "../lib/ledger";
+import { SegmentedToggle } from "./ui";
 import {
-  BUDGET_CATEGORIES, DEFAULT_CATEGORY, MAX_LABEL, MAX_NOTE,
+  BUDGET_CATEGORIES, DEFAULT_CATEGORY, MAX_LABEL,
+  BUDGET_BASES, BASIS_PER_MAN, normalizeBasis, isPerMan, lineTitle,
   budgetGroups, budgetVsDues, budgetLineError,
 } from "../lib/budget";
 
@@ -37,23 +39,30 @@ const fieldLabel = () => ({
 
 // The add / edit sheet. One shape for both, because a line has four fields and
 // a second read-only view of them would be a second thing to keep in step.
-function BudgetLineSheet({ line, onSave, onDelete, onClose, notify }) {
+function BudgetLineSheet({ line, playerCount, onSave, onDelete, onClose, notify }) {
   const { confirm, confirmModal } = useConfirm();
   const editing = !!line?.id;
   const [category, setCategory] = useState(line?.category || DEFAULT_CATEGORY);
   const [label, setLabel] = useState(line?.label || "");
   const [amount, setAmount] = useState(line?.amount != null ? String(line.amount) : "");
-  const [note, setNote] = useState(line?.note || "");
+  const [basis, setBasis] = useState(normalizeBasis(line?.basis));
   const [busy, setBusy] = useState(false);
 
+  // What the line will actually cost the trip, worked out live under the
+  // amount. A per-man figure is the one number a director cannot check in
+  // their head against the total at the top, so the form does it for them.
+  const perMan = basis === BASIS_PER_MAN;
+  const typed = Number(amount);
+  const expanded = Number.isFinite(typed) && perMan && playerCount ? typed * playerCount : null;
+
   const save = async () => {
-    const err = budgetLineError({ label, amount });
+    const err = budgetLineError({ amount });
     if (err) { notify?.(err, "error"); return; }
     setBusy(true);
     try {
-      const ok = await onSave({ id: line?.id, category, label, amount, note });
+      const ok = await onSave({ id: line?.id, category, label, amount, basis });
       if (!ok) { notify?.("Could not save that line — try again", "error"); return; }
-      notify?.(editing ? "Line saved" : `${label.trim()} added`, "success");
+      notify?.(editing ? "Line saved" : `${lineTitle({ label, category })} added`, "success");
       onClose();
     } finally { setBusy(false); }
   };
@@ -61,7 +70,7 @@ function BudgetLineSheet({ line, onSave, onDelete, onClose, notify }) {
   const remove = async () => {
     const ok = await confirm({
       eyebrow: "Budget",
-      title: `Delete ${line.label}?`,
+      title: `Delete ${lineTitle(line)}?`,
       message: `${money(line.amount)} comes off the trip's total. Nothing about what anybody has paid changes — that is the Accounting tab.`,
       confirmLabel: "Delete",
       destructive: true,
@@ -89,22 +98,43 @@ function BudgetLineSheet({ line, onSave, onDelete, onClose, notify }) {
             {BUDGET_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
           </select>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 110px", gap: 8, marginBottom: 8 }}>
-          <div>
-            <label style={fieldLabel()} htmlFor="bc-budget-label">WHAT IT IS</label>
-            <input id="bc-budget-label" style={inputStyle()} maxLength={MAX_LABEL} placeholder="Greens fees"
-              value={label} onChange={e => setLabel(e.target.value)} />
-          </div>
-          <div>
-            <label style={fieldLabel()} htmlFor="bc-budget-amount">AMOUNT</label>
-            <input id="bc-budget-amount" style={inputStyle()} inputMode="decimal" placeholder="0.00"
-              value={amount} onChange={e => setAmount(e.target.value)} />
-          </div>
+        {/* ── Total, or per man ──
+            Whichever way the director actually knows the price. The house is
+            one number off a listing; golf is what the course quotes a man.
+            Making them multiply in their head is how a budget ends up with
+            "greens fees 1440" that nobody can check a month later. */}
+        <div style={{ marginBottom: 8 }}>
+          <label style={fieldLabel()}>AMOUNT IS A</label>
+          <SegmentedToggle
+            options={BUDGET_BASES.map(b => [b.id, b.label])}
+            value={basis}
+            onChange={setBasis}
+          />
         </div>
+        <div style={{ marginBottom: 8 }}>
+          <label style={fieldLabel()} htmlFor="bc-budget-amount">
+            {perMan ? "AMOUNT PER MAN" : "TOTAL AMOUNT"}
+          </label>
+          <input id="bc-budget-amount" style={inputStyle()} inputMode="decimal" placeholder="0.00"
+            value={amount} onChange={e => setAmount(e.target.value)} />
+          {perMan && (
+            <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 5, lineHeight: 1.4 }}>
+              {playerCount
+                ? expanded != null
+                  ? `× ${playerCount} on the roster = ${money(expanded)} on the trip.`
+                  : `Multiplied by the ${playerCount} on the roster.`
+                : "Nobody on the roster yet, so this adds nothing to the total until there is."}
+            </div>
+          )}
+        </div>
+        {/* Optional, and that is the point of the rename. A Lodging line for
+            the house needs no elaboration — its category is the whole story,
+            and requiring one means typing "Lodging" twice. */}
         <div style={{ marginBottom: 12 }}>
-          <label style={fieldLabel()} htmlFor="bc-budget-note">NOTE (OPTIONAL)</label>
-          <input id="bc-budget-note" style={inputStyle()} maxLength={MAX_NOTE} placeholder="4 rounds × 16 men"
-            value={note} onChange={e => setNote(e.target.value)} />
+          <label style={fieldLabel()} htmlFor="bc-budget-label">DETAIL (OPTIONAL)</label>
+          <input id="bc-budget-label" style={inputStyle()} maxLength={MAX_LABEL}
+            placeholder={`e.g. ${category === "golf" ? "Greens fees" : "4 nights"}`}
+            value={label} onChange={e => setLabel(e.target.value)} />
         </div>
 
         <button onClick={save} disabled={busy} style={{
@@ -135,7 +165,7 @@ function BudgetLineSheet({ line, onSave, onDelete, onClose, notify }) {
 
 export function BudgetAdmin({ lines, playerCount, charged, duesAmount, onSaveLine, onDeleteLine, notify }) {
   const [open, setOpen] = useState(null);   // a line, or {} for a new one
-  const groups = useMemo(() => budgetGroups(lines), [lines]);
+  const groups = useMemo(() => budgetGroups(lines, playerCount), [lines, playerCount]);
   const v = useMemo(
     () => budgetVsDues({ lines, charged, playerCount }),
     [lines, charged, playerCount]
@@ -236,7 +266,9 @@ export function BudgetAdmin({ lines, playerCount, charged, duesAmount, onSaveLin
                   <span style={{
                     display: "block", fontSize: FS.small, fontWeight: 700, color: BC.t1,
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                  }}>{l.label}</span>
+                  }}>{lineTitle(l)}</span>
+                  {/* A note typed before the form dropped that field. Still
+                      shown so nothing anybody wrote disappears. */}
                   {l.note && (
                     <span style={{
                       display: "block", fontSize: FS.label, color: BC.t3, marginTop: 2,
@@ -244,8 +276,20 @@ export function BudgetAdmin({ lines, playerCount, charged, duesAmount, onSaveLin
                     }}>{l.note}</span>
                   )}
                 </span>
-                <span style={{ flexShrink: 0, fontSize: FS.small, fontWeight: 800, color: BC.t1 }}>
-                  {money(l.amount)}
+                {/* The line's cost TO THE TRIP, always — that is the figure
+                    that is comparable across lines and that adds up to the
+                    subtotal beside the group heading. A per-man line says
+                    what was typed underneath, because "$90 × 16" is the thing
+                    a director wants to check. */}
+                <span style={{ flexShrink: 0, textAlign: "right" }}>
+                  <span style={{ display: "block", fontSize: FS.small, fontWeight: 800, color: BC.t1 }}>
+                    {money(l.total)}
+                  </span>
+                  {isPerMan(l) && (
+                    <span style={{ display: "block", fontSize: FS.label, color: BC.t3, marginTop: 1 }}>
+                      {money(l.amount)}/man
+                    </span>
+                  )}
                 </span>
                 <span style={{ flexShrink: 0, color: BC.t3, fontSize: FS.lead, fontWeight: 700 }}>›</span>
               </button>
@@ -257,6 +301,7 @@ export function BudgetAdmin({ lines, playerCount, charged, duesAmount, onSaveLin
       {open && (
         <BudgetLineSheet
           line={open.id ? open : null}
+          playerCount={playerCount}
           onSave={onSaveLine}
           onDelete={onDeleteLine}
           onClose={() => setOpen(null)}
