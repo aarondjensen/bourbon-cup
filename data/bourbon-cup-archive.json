@@ -1,0 +1,12228 @@
+{
+ "source": "pipeline/archive.mjs",
+ "years": [
+  2016,
+  2017,
+  2018,
+  2019,
+  2020,
+  2021,
+  2022,
+  2023,
+  2024,
+  2025
+ ],
+ "players": [
+  {
+   "id": "andy",
+   "name": "Andy H",
+   "aka": [
+    "andrewharris",
+    "andy",
+    "andyh",
+    "andyharris"
+   ]
+  },
+  {
+   "id": "bent",
+   "name": "Ben T",
+   "aka": [
+    "bent",
+    "telly"
+   ]
+  },
+  {
+   "id": "daveb",
+   "name": "Dave B",
+   "aka": [
+    "daveb"
+   ]
+  },
+  {
+   "id": "dk",
+   "name": "Dave K",
+   "aka": [
+    "davek",
+    "davekelley",
+    "davidkelley",
+    "dk"
+   ]
+  },
+  {
+   "id": "elger",
+   "name": "Joe E",
+   "aka": [
+    "elger",
+    "joee",
+    "joeelger"
+   ]
+  },
+  {
+   "id": "grants",
+   "name": "Grant S",
+   "aka": [
+    "grants"
+   ]
+  },
+  {
+   "id": "jensen",
+   "name": "Aaron J",
+   "aka": [
+    "aaronj",
+    "aaronjensen",
+    "jensen"
+   ]
+  },
+  {
+   "id": "jimh",
+   "name": "Jim H",
+   "aka": [
+    "hile",
+    "jimh",
+    "jimhile"
+   ]
+  },
+  {
+   "id": "joeo",
+   "name": "Joe O",
+   "aka": [
+    "joeo",
+    "joeoconnell"
+   ]
+  },
+  {
+   "id": "johns",
+   "name": "John S",
+   "aka": [
+    "johns"
+   ]
+  },
+  {
+   "id": "juliusp",
+   "name": "Julius P",
+   "aka": [
+    "juliusp"
+   ]
+  },
+  {
+   "id": "kj",
+   "name": "Kevin J",
+   "aka": [
+    "kevinj",
+    "kevinjensen",
+    "kj"
+   ]
+  },
+  {
+   "id": "kylem",
+   "name": "Kyle M",
+   "aka": [
+    "kylem"
+   ]
+  },
+  {
+   "id": "matth",
+   "name": "Matt H",
+   "aka": [
+    "matth"
+   ]
+  },
+  {
+   "id": "nicks",
+   "name": "Nick S",
+   "aka": [
+    "cuznick",
+    "nicks"
+   ]
+  },
+  {
+   "id": "pace",
+   "name": "Adam P",
+   "aka": [
+    "adamp",
+    "adampace",
+    "pace"
+   ]
+  },
+  {
+   "id": "paulw",
+   "name": "Paul W",
+   "aka": [
+    "paulw",
+    "weezy"
+   ]
+  },
+  {
+   "id": "petec",
+   "name": "Pete C",
+   "aka": [
+    "carp",
+    "petec"
+   ]
+  },
+  {
+   "id": "rmac",
+   "name": "Ryan M",
+   "aka": [
+    "rmac",
+    "ryanm"
+   ]
+  },
+  {
+   "id": "saugy",
+   "name": "Paul S",
+   "aka": [
+    "pauls",
+    "paulsauter",
+    "saugy"
+   ]
+  },
+  {
+   "id": "scottr",
+   "name": "Scott R",
+   "aka": [
+    "scottr"
+   ]
+  },
+  {
+   "id": "shaunw",
+   "name": "Shaun W",
+   "aka": [
+    "house",
+    "shaunw"
+   ]
+  },
+  {
+   "id": "timc",
+   "name": "Tim C",
+   "aka": [
+    "timc",
+    "tmo"
+   ]
+  },
+  {
+   "id": "tjsc",
+   "name": "TJ C",
+   "aka": [
+    "tj",
+    "tjc",
+    "tjcrawforth",
+    "tjsc"
+   ]
+  }
+ ],
+ "editions": [
+  {
+   "year": 2016,
+   "name": "The Bourbon Cup 2016",
+   "teamA": "BIRDS",
+   "teamB": "SHOOTERS",
+   "roster": [
+    {
+     "p": "andy",
+     "t": "B"
+    },
+    {
+     "p": "bent",
+     "t": "A"
+    },
+    {
+     "p": "daveb",
+     "t": "A"
+    },
+    {
+     "p": "dk",
+     "t": "A"
+    },
+    {
+     "p": "jimh",
+     "t": "B"
+    },
+    {
+     "p": "joeo",
+     "t": "A"
+    },
+    {
+     "p": "johns",
+     "t": "B"
+    },
+    {
+     "p": "kj",
+     "t": "B"
+    },
+    {
+     "p": "pace",
+     "t": "A"
+    },
+    {
+     "p": "paulw",
+     "t": "A"
+    },
+    {
+     "p": "petec",
+     "t": "B"
+    },
+    {
+     "p": "rmac",
+     "t": "B"
+    },
+    {
+     "p": "saugy",
+     "t": "A"
+    },
+    {
+     "p": "timc",
+     "t": "A"
+    },
+    {
+     "p": "tjsc",
+     "t": "B"
+    }
+   ]
+  },
+  {
+   "year": 2017,
+   "name": "The Bourbon Cup 2017",
+   "teamA": "G-MEN",
+   "teamB": "B9B",
+   "roster": [
+    {
+     "p": "andy",
+     "t": "A"
+    },
+    {
+     "p": "bent",
+     "t": "B"
+    },
+    {
+     "p": "daveb",
+     "t": "B"
+    },
+    {
+     "p": "grants",
+     "t": "B"
+    },
+    {
+     "p": "jensen",
+     "t": "A"
+    },
+    {
+     "p": "jimh",
+     "t": "A"
+    },
+    {
+     "p": "kj",
+     "t": "B"
+    },
+    {
+     "p": "kylem",
+     "t": "A"
+    },
+    {
+     "p": "matth",
+     "t": "A"
+    },
+    {
+     "p": "nicks",
+     "t": "B"
+    },
+    {
+     "p": "pace",
+     "t": "A"
+    },
+    {
+     "p": "paulw",
+     "t": "B"
+    },
+    {
+     "p": "petec",
+     "t": "A"
+    },
+    {
+     "p": "rmac",
+     "t": "A"
+    },
+    {
+     "p": "saugy",
+     "t": "B"
+    },
+    {
+     "p": "tjsc",
+     "t": "B"
+    }
+   ]
+  },
+  {
+   "year": 2018,
+   "name": "The Bourbon Cup 2018",
+   "teamA": "TEE'S CO.",
+   "teamB": "BEASTS",
+   "roster": [
+    {
+     "p": "andy",
+     "t": "B"
+    },
+    {
+     "p": "bent",
+     "t": "A"
+    },
+    {
+     "p": "daveb",
+     "t": "B"
+    },
+    {
+     "p": "dk",
+     "t": "B"
+    },
+    {
+     "p": "grants",
+     "t": "B"
+    },
+    {
+     "p": "jensen",
+     "t": "B"
+    },
+    {
+     "p": "jimh",
+     "t": "A"
+    },
+    {
+     "p": "kj",
+     "t": "B"
+    },
+    {
+     "p": "nicks",
+     "t": "A"
+    },
+    {
+     "p": "paulw",
+     "t": "A"
+    },
+    {
+     "p": "petec",
+     "t": "B"
+    },
+    {
+     "p": "rmac",
+     "t": "B"
+    },
+    {
+     "p": "saugy",
+     "t": "A"
+    },
+    {
+     "p": "shaunw",
+     "t": "A"
+    },
+    {
+     "p": "timc",
+     "t": "A"
+    },
+    {
+     "p": "tjsc",
+     "t": "A"
+    }
+   ]
+  },
+  {
+   "year": 2019,
+   "name": "The Bourbon Cup 2019",
+   "teamA": "DefCon8",
+   "teamB": "BulleitProof",
+   "roster": [
+    {
+     "p": "andy",
+     "t": "B"
+    },
+    {
+     "p": "bent",
+     "t": "A"
+    },
+    {
+     "p": "dk",
+     "t": "A"
+    },
+    {
+     "p": "grants",
+     "t": "B"
+    },
+    {
+     "p": "jensen",
+     "t": "A"
+    },
+    {
+     "p": "jimh",
+     "t": "A"
+    },
+    {
+     "p": "johns",
+     "t": "B"
+    },
+    {
+     "p": "kj",
+     "t": "B"
+    },
+    {
+     "p": "kylem",
+     "t": "B"
+    },
+    {
+     "p": "pace",
+     "t": "B"
+    },
+    {
+     "p": "paulw",
+     "t": "A"
+    },
+    {
+     "p": "petec",
+     "t": "B"
+    },
+    {
+     "p": "rmac",
+     "t": "B"
+    },
+    {
+     "p": "saugy",
+     "t": "A"
+    },
+    {
+     "p": "timc",
+     "t": "A"
+    },
+    {
+     "p": "tjsc",
+     "t": "A"
+    }
+   ]
+  },
+  {
+   "year": 2020,
+   "name": "The Bourbon Cup 2020",
+   "teamA": "Family Biz",
+   "teamB": "TeeHawks",
+   "roster": [
+    {
+     "p": "andy",
+     "t": "B"
+    },
+    {
+     "p": "bent",
+     "t": "B"
+    },
+    {
+     "p": "dk",
+     "t": "B"
+    },
+    {
+     "p": "jensen",
+     "t": "A"
+    },
+    {
+     "p": "joeo",
+     "t": "A"
+    },
+    {
+     "p": "juliusp",
+     "t": "A"
+    },
+    {
+     "p": "kj",
+     "t": "A"
+    },
+    {
+     "p": "kylem",
+     "t": "B"
+    },
+    {
+     "p": "nicks",
+     "t": "A"
+    },
+    {
+     "p": "pace",
+     "t": "A"
+    },
+    {
+     "p": "petec",
+     "t": "B"
+    },
+    {
+     "p": "scottr",
+     "t": "B"
+    },
+    {
+     "p": "shaunw",
+     "t": "B"
+    },
+    {
+     "p": "timc",
+     "t": "A"
+    },
+    {
+     "p": "tjsc",
+     "t": "A"
+    }
+   ]
+  },
+  {
+   "year": 2021,
+   "name": "The Bourbon Cup 2021",
+   "teamA": "Choy's Boyz",
+   "teamB": "Tall Boys",
+   "roster": [
+    {
+     "p": "andy",
+     "t": "B"
+    },
+    {
+     "p": "bent",
+     "t": "A"
+    },
+    {
+     "p": "dk",
+     "t": "A"
+    },
+    {
+     "p": "jensen",
+     "t": "A"
+    },
+    {
+     "p": "jimh",
+     "t": "A"
+    },
+    {
+     "p": "joeo",
+     "t": "B"
+    },
+    {
+     "p": "kj",
+     "t": "A"
+    },
+    {
+     "p": "nicks",
+     "t": "A"
+    },
+    {
+     "p": "pace",
+     "t": "B"
+    },
+    {
+     "p": "paulw",
+     "t": "B"
+    },
+    {
+     "p": "petec",
+     "t": "B"
+    },
+    {
+     "p": "rmac",
+     "t": "B"
+    },
+    {
+     "p": "saugy",
+     "t": "A"
+    },
+    {
+     "p": "shaunw",
+     "t": "B"
+    },
+    {
+     "p": "timc",
+     "t": "B"
+    },
+    {
+     "p": "tjsc",
+     "t": "A"
+    }
+   ]
+  },
+  {
+   "year": 2022,
+   "name": "The Bourbon Cup 2022",
+   "teamA": "Sautering Irons",
+   "teamB": "HileDrivers",
+   "roster": [
+    {
+     "p": "andy",
+     "t": "A"
+    },
+    {
+     "p": "bent",
+     "t": "B"
+    },
+    {
+     "p": "dk",
+     "t": "A"
+    },
+    {
+     "p": "jensen",
+     "t": "A"
+    },
+    {
+     "p": "jimh",
+     "t": "B"
+    },
+    {
+     "p": "joeo",
+     "t": "B"
+    },
+    {
+     "p": "kj",
+     "t": "B"
+    },
+    {
+     "p": "nicks",
+     "t": "A"
+    },
+    {
+     "p": "pace",
+     "t": "A"
+    },
+    {
+     "p": "paulw",
+     "t": "B"
+    },
+    {
+     "p": "petec",
+     "t": "A"
+    },
+    {
+     "p": "rmac",
+     "t": "B"
+    },
+    {
+     "p": "saugy",
+     "t": "A"
+    },
+    {
+     "p": "shaunw",
+     "t": "A"
+    },
+    {
+     "p": "timc",
+     "t": "B"
+    },
+    {
+     "p": "tjsc",
+     "t": "B"
+    }
+   ]
+  },
+  {
+   "year": 2023,
+   "name": "The Bourbon Cup 2023",
+   "teamA": "Master Tees",
+   "teamB": "Weezervoir Dogs",
+   "roster": [
+    {
+     "p": "andy",
+     "t": "B"
+    },
+    {
+     "p": "bent",
+     "t": "A"
+    },
+    {
+     "p": "dk",
+     "t": "A"
+    },
+    {
+     "p": "elger",
+     "t": "B"
+    },
+    {
+     "p": "jensen",
+     "t": "B"
+    },
+    {
+     "p": "jimh",
+     "t": "B"
+    },
+    {
+     "p": "joeo",
+     "t": "B"
+    },
+    {
+     "p": "kj",
+     "t": "A"
+    },
+    {
+     "p": "nicks",
+     "t": "A"
+    },
+    {
+     "p": "pace",
+     "t": "B"
+    },
+    {
+     "p": "paulw",
+     "t": "B"
+    },
+    {
+     "p": "rmac",
+     "t": "A"
+    },
+    {
+     "p": "saugy",
+     "t": "A"
+    },
+    {
+     "p": "shaunw",
+     "t": "A"
+    },
+    {
+     "p": "timc",
+     "t": "B"
+    },
+    {
+     "p": "tjsc",
+     "t": "A"
+    }
+   ]
+  },
+  {
+   "year": 2024,
+   "name": "The Bourbon Cup 2024",
+   "teamA": "Silver Foxes",
+   "teamB": "The Administration",
+   "roster": [
+    {
+     "p": "andy",
+     "t": "A"
+    },
+    {
+     "p": "bent",
+     "t": "A"
+    },
+    {
+     "p": "dk",
+     "t": "A"
+    },
+    {
+     "p": "jensen",
+     "t": "B"
+    },
+    {
+     "p": "jimh",
+     "t": "B"
+    },
+    {
+     "p": "joeo",
+     "t": "B"
+    },
+    {
+     "p": "kj",
+     "t": "B"
+    },
+    {
+     "p": "nicks",
+     "t": "A"
+    },
+    {
+     "p": "pace",
+     "t": "A"
+    },
+    {
+     "p": "paulw",
+     "t": "B"
+    },
+    {
+     "p": "petec",
+     "t": "A"
+    },
+    {
+     "p": "rmac",
+     "t": "B"
+    },
+    {
+     "p": "saugy",
+     "t": "A"
+    },
+    {
+     "p": "shaunw",
+     "t": "B"
+    },
+    {
+     "p": "timc",
+     "t": "B"
+    },
+    {
+     "p": "tjsc",
+     "t": "A"
+    }
+   ]
+  },
+  {
+   "year": 2025,
+   "name": "The Bourbon Cup 2025",
+   "teamA": "Mash Brothers",
+   "teamB": "Shot Callers",
+   "roster": [
+    {
+     "p": "andy",
+     "t": "A"
+    },
+    {
+     "p": "bent",
+     "t": "B"
+    },
+    {
+     "p": "dk",
+     "t": "B"
+    },
+    {
+     "p": "jensen",
+     "t": "A"
+    },
+    {
+     "p": "jimh",
+     "t": "A"
+    },
+    {
+     "p": "joeo",
+     "t": "B"
+    },
+    {
+     "p": "kj",
+     "t": "A"
+    },
+    {
+     "p": "nicks",
+     "t": "B"
+    },
+    {
+     "p": "pace",
+     "t": "B"
+    },
+    {
+     "p": "paulw",
+     "t": "B"
+    },
+    {
+     "p": "petec",
+     "t": "A"
+    },
+    {
+     "p": "rmac",
+     "t": "A"
+    },
+    {
+     "p": "saugy",
+     "t": "B"
+    },
+    {
+     "p": "shaunw",
+     "t": "A"
+    },
+    {
+     "p": "timc",
+     "t": "B"
+    },
+    {
+     "p": "tjsc",
+     "t": "A"
+    }
+   ]
+  }
+ ],
+ "rounds": [
+  {
+   "year": 2016,
+   "round": 1,
+   "format": "best_ball",
+   "course": "Arthur Hills - Orange",
+   "par": 73,
+   "rating": 71.2,
+   "slope": 130
+  },
+  {
+   "year": 2016,
+   "round": 2,
+   "format": "double_dot",
+   "course": "The Heather - Orange",
+   "par": 72,
+   "rating": 70.3,
+   "slope": 139
+  },
+  {
+   "year": 2016,
+   "round": 3,
+   "format": "singles",
+   "course": "Crooked Tree - Purple",
+   "par": 71,
+   "rating": 71.4,
+   "slope": 135
+  },
+  {
+   "year": 2016,
+   "round": 4,
+   "format": "team_best_ball",
+   "course": "Bay Harbor (Quarry/Links) - Blue",
+   "par": 72,
+   "rating": 71.2,
+   "slope": 142
+  },
+  {
+   "year": 2017,
+   "round": 1,
+   "format": "best_ball",
+   "course": "NEVEL MEADE - Blue",
+   "par": 72,
+   "rating": 70.1,
+   "slope": 124
+  },
+  {
+   "year": 2017,
+   "round": 2,
+   "format": "singles",
+   "course": "COVERED BRIDGE - Gold",
+   "par": 72,
+   "rating": 70.9,
+   "slope": 129
+  },
+  {
+   "year": 2017,
+   "round": 3,
+   "format": "pinehurst",
+   "course": "CHAMPIONS POINTE - White",
+   "par": 72,
+   "rating": 71.3,
+   "slope": 130
+  },
+  {
+   "year": 2017,
+   "round": 4,
+   "format": "team_best_ball",
+   "course": "GLENOAKS CC - Black",
+   "par": 72,
+   "rating": 71.5,
+   "slope": 125
+  },
+  {
+   "year": 2018,
+   "round": 1,
+   "format": "shamble",
+   "course": "Katke - Crimson/Silver",
+   "par": 72,
+   "rating": 69.7,
+   "slope": 131
+  },
+  {
+   "year": 2018,
+   "round": 2,
+   "format": "singles",
+   "course": "St. Ives - Blue/White",
+   "par": 72,
+   "rating": 69.4,
+   "slope": 129
+  },
+  {
+   "year": 2018,
+   "round": 3,
+   "format": "best_ball",
+   "course": "Tullymore - Blue/White",
+   "par": 72,
+   "rating": 69.6,
+   "slope": 136
+  },
+  {
+   "year": 2018,
+   "round": 4,
+   "format": "team_best_ball",
+   "course": "Katke - Crimson/Silver",
+   "par": 72,
+   "rating": 69.7,
+   "slope": 131
+  },
+  {
+   "year": 2019,
+   "round": 1,
+   "format": "scramble",
+   "course": "HIDDEN RIVER - Blue",
+   "par": 72,
+   "rating": 72.1,
+   "slope": 131
+  },
+  {
+   "year": 2019,
+   "round": 2,
+   "format": "singles",
+   "course": "HARBOR POINT - Black",
+   "par": 71,
+   "rating": 68.8,
+   "slope": 131
+  },
+  {
+   "year": 2019,
+   "round": 3,
+   "format": "best_ball",
+   "course": "LITTLE TRAVERSE BAY - White",
+   "par": 72,
+   "rating": 70.3,
+   "slope": 130
+  },
+  {
+   "year": 2019,
+   "round": 4,
+   "format": "team_best_ball",
+   "course": "BAY HARBOR - P/L - Blue gam",
+   "par": 70,
+   "rating": 71.5,
+   "slope": 140
+  },
+  {
+   "year": 2020,
+   "round": 1,
+   "format": "double_dot",
+   "course": "Lake Mich Hills - Blue 2",
+   "par": 72,
+   "rating": 71.2,
+   "slope": 130
+  },
+  {
+   "year": 2020,
+   "round": 2,
+   "format": "singles",
+   "course": "Harbor Shores - Gray",
+   "par": 71,
+   "rating": 70.8,
+   "slope": 137
+  },
+  {
+   "year": 2020,
+   "round": 3,
+   "format": "best_ball",
+   "course": "Harbor Shores - Gray",
+   "par": 71,
+   "rating": 70.8,
+   "slope": 137
+  },
+  {
+   "year": 2020,
+   "round": 4,
+   "format": "team_best_ball",
+   "course": "HawksHead - White",
+   "par": 72,
+   "rating": 70.2,
+   "slope": 124
+  },
+  {
+   "year": 2021,
+   "round": 1,
+   "format": "best_ball",
+   "course": "Bear Slide - White",
+   "par": 71,
+   "rating": 69.3,
+   "slope": 125
+  },
+  {
+   "year": 2021,
+   "round": 2,
+   "format": "singles",
+   "course": "Purgatory - White",
+   "par": 72,
+   "rating": 72,
+   "slope": 135
+  },
+  {
+   "year": 2021,
+   "round": 3,
+   "format": "scramble",
+   "course": "Purgatory - White",
+   "par": 72,
+   "rating": 72,
+   "slope": 135
+  },
+  {
+   "year": 2021,
+   "round": 4,
+   "format": "team_best_ball",
+   "course": "Prairie View - White",
+   "par": 72,
+   "rating": 70.7,
+   "slope": 129
+  },
+  {
+   "year": 2022,
+   "round": 1,
+   "format": "best_ball",
+   "course": "GVSU Meadows - Blue",
+   "par": 71,
+   "rating": 71.5,
+   "slope": 132
+  },
+  {
+   "year": 2022,
+   "round": 2,
+   "format": "singles",
+   "course": "Ravines GC - White",
+   "par": 72,
+   "rating": 68.1,
+   "slope": 129
+  },
+  {
+   "year": 2022,
+   "round": 3,
+   "format": "tilt",
+   "course": "Ravines GC - White",
+   "par": 72,
+   "rating": 68.1,
+   "slope": 129
+  },
+  {
+   "year": 2022,
+   "round": 4,
+   "format": "team_best_ball",
+   "course": "American Dunes - Freedom/WH",
+   "par": 72,
+   "rating": 70.3,
+   "slope": 133
+  },
+  {
+   "year": 2023,
+   "round": 1,
+   "format": "double_dot",
+   "course": "Sundance - Blue",
+   "par": 72,
+   "rating": 71.4,
+   "slope": 131
+  },
+  {
+   "year": 2023,
+   "round": 2,
+   "format": "singles",
+   "course": "The Wolverine - White",
+   "par": 72,
+   "rating": 68.7,
+   "slope": 134
+  },
+  {
+   "year": 2023,
+   "round": 3,
+   "format": "scramble",
+   "course": "The Wolverine - Blue",
+   "par": 72,
+   "rating": 71.8,
+   "slope": 138
+  },
+  {
+   "year": 2023,
+   "round": 4,
+   "format": "team_best_ball",
+   "course": "The Bear - White",
+   "par": 72,
+   "rating": 71.1,
+   "slope": 139
+  },
+  {
+   "year": 2024,
+   "round": 1,
+   "format": "stableford",
+   "course": "The Loop Red - Middle",
+   "par": 70,
+   "rating": 68.7,
+   "slope": 117
+  },
+  {
+   "year": 2024,
+   "round": 2,
+   "format": "singles",
+   "course": "The Nightmare - Blue/White",
+   "par": 72,
+   "rating": 69.3,
+   "slope": 128
+  },
+  {
+   "year": 2024,
+   "round": 3,
+   "format": "scramble",
+   "course": "The Dream - Blue",
+   "par": 72,
+   "rating": 71,
+   "slope": 128
+  },
+  {
+   "year": 2024,
+   "round": 4,
+   "format": "team_best_ball",
+   "course": "Forest Dunes - ii/iii",
+   "par": 72,
+   "rating": 71.3,
+   "slope": 140
+  },
+  {
+   "year": 2025,
+   "round": 1,
+   "format": "double_dot",
+   "course": "Kaufman - White",
+   "par": 72,
+   "rating": 70.8,
+   "slope": 134
+  },
+  {
+   "year": 2025,
+   "round": 2,
+   "format": "singles",
+   "course": "Quail Ridge - White",
+   "par": 72,
+   "rating": 70,
+   "slope": 129
+  },
+  {
+   "year": 2025,
+   "round": 3,
+   "format": "scramble",
+   "course": "Quail Ridge - Blue",
+   "par": 72,
+   "rating": 71.9,
+   "slope": 136
+  },
+  {
+   "year": 2025,
+   "round": 4,
+   "format": "team_best_ball",
+   "course": "Thornapple Pointe - White",
+   "par": 72,
+   "rating": 71.9,
+   "slope": 139
+  }
+ ],
+ "matches": [
+  {
+   "year": 2016,
+   "round": 1,
+   "A": [
+    "bent",
+    "daveb"
+   ],
+   "B": [
+    "andy",
+    "tjsc"
+   ],
+   "ptsA": 2,
+   "ptsB": 1
+  },
+  {
+   "year": 2016,
+   "round": 1,
+   "A": [
+    "dk",
+    "timc"
+   ],
+   "B": [
+    "jimh",
+    "rmac"
+   ],
+   "ptsA": 0,
+   "ptsB": 3
+  },
+  {
+   "year": 2016,
+   "round": 1,
+   "A": [
+    "joeo",
+    "pace"
+   ],
+   "B": [
+    "johns",
+    "kj"
+   ],
+   "ptsA": 1,
+   "ptsB": 2
+  },
+  {
+   "year": 2016,
+   "round": 1,
+   "A": [
+    "paulw",
+    "saugy"
+   ],
+   "B": [
+    "petec",
+    "rmac"
+   ],
+   "ptsA": 0.5,
+   "ptsB": 2.5
+  },
+  {
+   "year": 2016,
+   "round": 2,
+   "A": [
+    "bent",
+    "dk"
+   ],
+   "B": [
+    "johns",
+    "petec"
+   ],
+   "ptsA": 1.5,
+   "ptsB": 1.5
+  },
+  {
+   "year": 2016,
+   "round": 2,
+   "A": [
+    "daveb",
+    "joeo"
+   ],
+   "B": [
+    "kj",
+    "petec"
+   ],
+   "ptsA": 3,
+   "ptsB": 0
+  },
+  {
+   "year": 2016,
+   "round": 2,
+   "A": [
+    "pace",
+    "saugy"
+   ],
+   "B": [
+    "jimh",
+    "tjsc"
+   ],
+   "ptsA": 2,
+   "ptsB": 1
+  },
+  {
+   "year": 2016,
+   "round": 2,
+   "A": [
+    "paulw",
+    "timc"
+   ],
+   "B": [
+    "andy",
+    "rmac"
+   ],
+   "ptsA": 3,
+   "ptsB": 0
+  },
+  {
+   "year": 2016,
+   "round": 3,
+   "A": [
+    "bent"
+   ],
+   "B": [
+    "tjsc"
+   ],
+   "ptsA": 3,
+   "ptsB": 0
+  },
+  {
+   "year": 2016,
+   "round": 3,
+   "A": [
+    "daveb"
+   ],
+   "B": [
+    "jimh"
+   ],
+   "ptsA": 1,
+   "ptsB": 2
+  },
+  {
+   "year": 2016,
+   "round": 3,
+   "A": [
+    "dk"
+   ],
+   "B": [
+    "andy"
+   ],
+   "ptsA": 0.5,
+   "ptsB": 2.5
+  },
+  {
+   "year": 2016,
+   "round": 3,
+   "A": [
+    "joeo"
+   ],
+   "B": [
+    "johns"
+   ],
+   "ptsA": 0,
+   "ptsB": 3
+  },
+  {
+   "year": 2016,
+   "round": 3,
+   "A": [
+    "pace"
+   ],
+   "B": [
+    "kj"
+   ],
+   "ptsA": 2.5,
+   "ptsB": 0.5
+  },
+  {
+   "year": 2016,
+   "round": 3,
+   "A": [
+    "paulw"
+   ],
+   "B": [
+    "tjsc"
+   ],
+   "ptsA": 2,
+   "ptsB": 1
+  },
+  {
+   "year": 2016,
+   "round": 3,
+   "A": [
+    "saugy"
+   ],
+   "B": [
+    "petec"
+   ],
+   "ptsA": 0,
+   "ptsB": 3
+  },
+  {
+   "year": 2016,
+   "round": 3,
+   "A": [
+    "timc"
+   ],
+   "B": [
+    "rmac"
+   ],
+   "ptsA": 0,
+   "ptsB": 0
+  },
+  {
+   "year": 2016,
+   "round": 4,
+   "A": [
+    "bent",
+    "daveb",
+    "dk",
+    "joeo",
+    "pace",
+    "paulw",
+    "saugy",
+    "timc"
+   ],
+   "B": [
+    "andy",
+    "jimh",
+    "johns",
+    "kj",
+    "petec",
+    "rmac",
+    "tjsc"
+   ],
+   "ptsA": 18.5,
+   "ptsB": 8.5
+  },
+  {
+   "year": 2017,
+   "round": 1,
+   "A": [
+    "andy",
+    "pace"
+   ],
+   "B": [
+    "bent",
+    "saugy"
+   ],
+   "ptsA": 0,
+   "ptsB": 3
+  },
+  {
+   "year": 2017,
+   "round": 1,
+   "A": [
+    "jensen",
+    "petec"
+   ],
+   "B": [
+    "daveb",
+    "tjsc"
+   ],
+   "ptsA": 1,
+   "ptsB": 2
+  },
+  {
+   "year": 2017,
+   "round": 1,
+   "A": [
+    "jimh",
+    "rmac"
+   ],
+   "B": [
+    "kj",
+    "nicks"
+   ],
+   "ptsA": 0.5,
+   "ptsB": 2.5
+  },
+  {
+   "year": 2017,
+   "round": 1,
+   "A": [
+    "kylem",
+    "matth"
+   ],
+   "B": [
+    "grants",
+    "paulw"
+   ],
+   "ptsA": 0.5,
+   "ptsB": 2.5
+  },
+  {
+   "year": 2017,
+   "round": 2,
+   "A": [
+    "andy"
+   ],
+   "B": [
+    "kj"
+   ],
+   "ptsA": 2.5,
+   "ptsB": 0.5
+  },
+  {
+   "year": 2017,
+   "round": 2,
+   "A": [
+    "jensen"
+   ],
+   "B": [
+    "nicks"
+   ],
+   "ptsA": 1.5,
+   "ptsB": 1.5
+  },
+  {
+   "year": 2017,
+   "round": 2,
+   "A": [
+    "jimh"
+   ],
+   "B": [
+    "paulw"
+   ],
+   "ptsA": 1,
+   "ptsB": 2
+  },
+  {
+   "year": 2017,
+   "round": 2,
+   "A": [
+    "kylem"
+   ],
+   "B": [
+    "saugy"
+   ],
+   "ptsA": 1,
+   "ptsB": 2
+  },
+  {
+   "year": 2017,
+   "round": 2,
+   "A": [
+    "matth"
+   ],
+   "B": [
+    "bent"
+   ],
+   "ptsA": 1,
+   "ptsB": 2
+  },
+  {
+   "year": 2017,
+   "round": 2,
+   "A": [
+    "pace"
+   ],
+   "B": [
+    "grants"
+   ],
+   "ptsA": 3,
+   "ptsB": 0
+  },
+  {
+   "year": 2017,
+   "round": 2,
+   "A": [
+    "petec"
+   ],
+   "B": [
+    "tjsc"
+   ],
+   "ptsA": 3,
+   "ptsB": 0
+  },
+  {
+   "year": 2017,
+   "round": 2,
+   "A": [
+    "rmac"
+   ],
+   "B": [
+    "daveb"
+   ],
+   "ptsA": 2,
+   "ptsB": 1
+  },
+  {
+   "year": 2017,
+   "round": 3,
+   "A": [
+    "andy",
+    "kylem"
+   ],
+   "B": [
+    "daveb",
+    "paulw"
+   ],
+   "ptsA": 2,
+   "ptsB": 1
+  },
+  {
+   "year": 2017,
+   "round": 3,
+   "A": [
+    "jensen",
+    "matth"
+   ],
+   "B": [
+    "grants",
+    "saugy"
+   ],
+   "ptsA": 2.5,
+   "ptsB": 0.5
+  },
+  {
+   "year": 2017,
+   "round": 3,
+   "A": [
+    "jimh",
+    "pace"
+   ],
+   "B": [
+    "nicks",
+    "tjsc"
+   ],
+   "ptsA": 1.5,
+   "ptsB": 1.5
+  },
+  {
+   "year": 2017,
+   "round": 3,
+   "A": [
+    "petec",
+    "rmac"
+   ],
+   "B": [
+    "bent",
+    "kj"
+   ],
+   "ptsA": 2.5,
+   "ptsB": 0.5
+  },
+  {
+   "year": 2017,
+   "round": 4,
+   "A": [
+    "andy",
+    "jensen",
+    "jimh",
+    "kylem",
+    "matth",
+    "pace",
+    "petec",
+    "rmac"
+   ],
+   "B": [
+    "bent",
+    "daveb",
+    "grants",
+    "kj",
+    "nicks",
+    "paulw",
+    "saugy",
+    "tjsc"
+   ],
+   "ptsA": 13,
+   "ptsB": 14
+  },
+  {
+   "year": 2018,
+   "round": 1,
+   "A": [
+    "bent",
+    "paulw"
+   ],
+   "B": [
+    "andy",
+    "dk"
+   ],
+   "ptsA": 0,
+   "ptsB": 3
+  },
+  {
+   "year": 2018,
+   "round": 1,
+   "A": [
+    "jimh",
+    "saugy"
+   ],
+   "B": [
+    "daveb",
+    "grants"
+   ],
+   "ptsA": 1,
+   "ptsB": 2
+  },
+  {
+   "year": 2018,
+   "round": 1,
+   "A": [
+    "nicks",
+    "shaunw"
+   ],
+   "B": [
+    "jensen",
+    "kj"
+   ],
+   "ptsA": 0,
+   "ptsB": 3
+  },
+  {
+   "year": 2018,
+   "round": 1,
+   "A": [
+    "timc",
+    "tjsc"
+   ],
+   "B": [
+    "petec",
+    "rmac"
+   ],
+   "ptsA": 2.5,
+   "ptsB": 0.5
+  },
+  {
+   "year": 2018,
+   "round": 2,
+   "A": [
+    "bent"
+   ],
+   "B": [
+    "grants"
+   ],
+   "ptsA": 2.5,
+   "ptsB": 0.5
+  },
+  {
+   "year": 2018,
+   "round": 2,
+   "A": [
+    "jimh"
+   ],
+   "B": [
+    "petec"
+   ],
+   "ptsA": 0,
+   "ptsB": 3
+  },
+  {
+   "year": 2018,
+   "round": 2,
+   "A": [
+    "nicks"
+   ],
+   "B": [
+    "rmac"
+   ],
+   "ptsA": 3,
+   "ptsB": 0
+  },
+  {
+   "year": 2018,
+   "round": 2,
+   "A": [
+    "paulw"
+   ],
+   "B": [
+    "daveb"
+   ],
+   "ptsA": 1.5,
+   "ptsB": 1.5
+  },
+  {
+   "year": 2018,
+   "round": 2,
+   "A": [
+    "saugy"
+   ],
+   "B": [
+    "kj"
+   ],
+   "ptsA": 0,
+   "ptsB": 3
+  },
+  {
+   "year": 2018,
+   "round": 2,
+   "A": [
+    "shaunw"
+   ],
+   "B": [
+    "andy"
+   ],
+   "ptsA": 3,
+   "ptsB": 0
+  },
+  {
+   "year": 2018,
+   "round": 2,
+   "A": [
+    "timc"
+   ],
+   "B": [
+    "jensen"
+   ],
+   "ptsA": 2,
+   "ptsB": 1
+  },
+  {
+   "year": 2018,
+   "round": 2,
+   "A": [
+    "tjsc"
+   ],
+   "B": [
+    "dk"
+   ],
+   "ptsA": 2,
+   "ptsB": 1
+  },
+  {
+   "year": 2018,
+   "round": 3,
+   "A": [
+    "bent",
+    "timc"
+   ],
+   "B": [
+    "kj",
+    "rmac"
+   ],
+   "ptsA": 2.5,
+   "ptsB": 0.5
+  },
+  {
+   "year": 2018,
+   "round": 3,
+   "A": [
+    "jimh",
+    "tjsc"
+   ],
+   "B": [
+    "daveb",
+    "jensen"
+   ],
+   "ptsA": 1,
+   "ptsB": 2
+  },
+  {
+   "year": 2018,
+   "round": 3,
+   "A": [
+    "nicks",
+    "saugy"
+   ],
+   "B": [
+    "andy",
+    "grants"
+   ],
+   "ptsA": 1,
+   "ptsB": 2
+  },
+  {
+   "year": 2018,
+   "round": 3,
+   "A": [
+    "paulw",
+    "shaunw"
+   ],
+   "B": [
+    "dk",
+    "petec"
+   ],
+   "ptsA": 1.5,
+   "ptsB": 1.5
+  },
+  {
+   "year": 2018,
+   "round": 4,
+   "A": [
+    "bent",
+    "jimh",
+    "nicks",
+    "paulw",
+    "saugy",
+    "shaunw",
+    "timc",
+    "tjsc"
+   ],
+   "B": [
+    "andy",
+    "daveb",
+    "dk",
+    "grants",
+    "jensen",
+    "kj",
+    "petec",
+    "rmac"
+   ],
+   "ptsA": 15,
+   "ptsB": 12
+  },
+  {
+   "year": 2019,
+   "round": 1,
+   "A": [
+    "bent",
+    "jensen"
+   ],
+   "B": [
+    "andy",
+    "johns"
+   ],
+   "ptsA": 1,
+   "ptsB": 2
+  },
+  {
+   "year": 2019,
+   "round": 1,
+   "A": [
+    "dk",
+    "tjsc"
+   ],
+   "B": [
+    "kj",
+    "rmac"
+   ],
+   "ptsA": 1,
+   "ptsB": 2
+  },
+  {
+   "year": 2019,
+   "round": 1,
+   "A": [
+    "jimh",
+    "saugy"
+   ],
+   "B": [
+    "kylem",
+    "petec"
+   ],
+   "ptsA": 0,
+   "ptsB": 3
+  },
+  {
+   "year": 2019,
+   "round": 1,
+   "A": [
+    "paulw",
+    "timc"
+   ],
+   "B": [
+    "grants",
+    "pace"
+   ],
+   "ptsA": 1,
+   "ptsB": 2
+  },
+  {
+   "year": 2019,
+   "round": 2,
+   "A": [
+    "bent"
+   ],
+   "B": [
+    "rmac"
+   ],
+   "ptsA": 2.5,
+   "ptsB": 0.5
+  },
+  {
+   "year": 2019,
+   "round": 2,
+   "A": [
+    "dk"
+   ],
+   "B": [
+    "johns"
+   ],
+   "ptsA": 2.5,
+   "ptsB": 0.5
+  },
+  {
+   "year": 2019,
+   "round": 2,
+   "A": [
+    "jensen"
+   ],
+   "B": [
+    "kj"
+   ],
+   "ptsA": 1.5,
+   "ptsB": 1.5
+  },
+  {
+   "year": 2019,
+   "round": 2,
+   "A": [
+    "jimh"
+   ],
+   "B": [
+    "andy"
+   ],
+   "ptsA": 1,
+   "ptsB": 2
+  },
+  {
+   "year": 2019,
+   "round": 2,
+   "A": [
+    "paulw"
+   ],
+   "B": [
+    "grants"
+   ],
+   "ptsA": 0.5,
+   "ptsB": 2.5
+  },
+  {
+   "year": 2019,
+   "round": 2,
+   "A": [
+    "saugy"
+   ],
+   "B": [
+    "petec"
+   ],
+   "ptsA": 0,
+   "ptsB": 3
+  },
+  {
+   "year": 2019,
+   "round": 2,
+   "A": [
+    "timc"
+   ],
+   "B": [
+    "kylem"
+   ],
+   "ptsA": 2.5,
+   "ptsB": 0.5
+  },
+  {
+   "year": 2019,
+   "round": 2,
+   "A": [
+    "tjsc"
+   ],
+   "B": [
+    "pace"
+   ],
+   "ptsA": 2,
+   "ptsB": 1
+  },
+  {
+   "year": 2019,
+   "round": 3,
+   "A": [
+    "bent",
+    "paulw"
+   ],
+   "B": [
+    "johns",
+    "pace"
+   ],
+   "ptsA": 0,
+   "ptsB": 3
+  },
+  {
+   "year": 2019,
+   "round": 3,
+   "A": [
+    "dk",
+    "jimh"
+   ],
+   "B": [
+    "andy",
+    "rmac"
+   ],
+   "ptsA": 1.5,
+   "ptsB": 1.5
+  },
+  {
+   "year": 2019,
+   "round": 3,
+   "A": [
+    "jensen",
+    "saugy"
+   ],
+   "B": [
+    "grants",
+    "kylem"
+   ],
+   "ptsA": 0,
+   "ptsB": 3
+  },
+  {
+   "year": 2019,
+   "round": 3,
+   "A": [
+    "timc",
+    "tjsc"
+   ],
+   "B": [
+    "kj",
+    "petec"
+   ],
+   "ptsA": 0,
+   "ptsB": 3
+  },
+  {
+   "year": 2019,
+   "round": 4,
+   "A": [
+    "bent",
+    "dk",
+    "jensen",
+    "jimh",
+    "paulw",
+    "saugy",
+    "timc",
+    "tjsc"
+   ],
+   "B": [
+    "andy",
+    "grants",
+    "johns",
+    "kj",
+    "kylem",
+    "pace",
+    "petec",
+    "rmac"
+   ],
+   "ptsA": 17,
+   "ptsB": 10
+  },
+  {
+   "year": 2020,
+   "round": 1,
+   "A": [
+    "jensen",
+    "kj"
+   ],
+   "B": [
+    "petec"
+   ],
+   "ptsA": 4,
+   "ptsB": 0
+  },
+  {
+   "year": 2020,
+   "round": 1,
+   "A": [
+    "joeo",
+    "pace"
+   ],
+   "B": [
+    "kylem",
+    "scottr"
+   ],
+   "ptsA": 4,
+   "ptsB": 0
+  },
+  {
+   "year": 2020,
+   "round": 1,
+   "A": [
+    "juliusp",
+    "timc"
+   ],
+   "B": [
+    "dk",
+    "shaunw"
+   ],
+   "ptsA": 0.5,
+   "ptsB": 3.5
+  },
+  {
+   "year": 2020,
+   "round": 1,
+   "A": [
+    "nicks",
+    "tjsc"
+   ],
+   "B": [
+    "andy",
+    "bent"
+   ],
+   "ptsA": 4,
+   "ptsB": 0
+  },
+  {
+   "year": 2020,
+   "round": 2,
+   "A": [
+    "jensen"
+   ],
+   "B": [
+    "petec"
+   ],
+   "ptsA": 1,
+   "ptsB": 2
+  },
+  {
+   "year": 2020,
+   "round": 2,
+   "A": [
+    "joeo"
+   ],
+   "B": [
+    "andy"
+   ],
+   "ptsA": 0,
+   "ptsB": 3
+  },
+  {
+   "year": 2020,
+   "round": 2,
+   "A": [
+    "juliusp"
+   ],
+   "B": [
+    "andy"
+   ],
+   "ptsA": 3,
+   "ptsB": 0
+  },
+  {
+   "year": 2020,
+   "round": 2,
+   "A": [
+    "kj"
+   ],
+   "B": [
+    "dk"
+   ],
+   "ptsA": 0,
+   "ptsB": 3
+  },
+  {
+   "year": 2020,
+   "round": 2,
+   "A": [
+    "nicks"
+   ],
+   "B": [
+    "scottr"
+   ],
+   "ptsA": 1,
+   "ptsB": 2
+  },
+  {
+   "year": 2020,
+   "round": 2,
+   "A": [
+    "pace"
+   ],
+   "B": [
+    "bent"
+   ],
+   "ptsA": 3,
+   "ptsB": 0
+  },
+  {
+   "year": 2020,
+   "round": 2,
+   "A": [
+    "timc"
+   ],
+   "B": [
+    "shaunw"
+   ],
+   "ptsA": 3,
+   "ptsB": 0
+  },
+  {
+   "year": 2020,
+   "round": 2,
+   "A": [
+    "tjsc"
+   ],
+   "B": [
+    "kylem"
+   ],
+   "ptsA": 3,
+   "ptsB": 0
+  },
+  {
+   "year": 2020,
+   "round": 3,
+   "A": [
+    "jensen",
+    "joeo"
+   ],
+   "B": [
+    "petec"
+   ],
+   "ptsA": 4,
+   "ptsB": 0
+  },
+  {
+   "year": 2020,
+   "round": 3,
+   "A": [
+    "juliusp",
+    "tjsc"
+   ],
+   "B": [
+    "bent",
+    "dk"
+   ],
+   "ptsA": 2,
+   "ptsB": 2
+  },
+  {
+   "year": 2020,
+   "round": 3,
+   "A": [
+    "kj",
+    "timc"
+   ],
+   "B": [
+    "andy",
+    "kylem"
+   ],
+   "ptsA": 4,
+   "ptsB": 0
+  },
+  {
+   "year": 2020,
+   "round": 3,
+   "A": [
+    "nicks",
+    "pace"
+   ],
+   "B": [
+    "scottr",
+    "shaunw"
+   ],
+   "ptsA": 0.5,
+   "ptsB": 3.5
+  },
+  {
+   "year": 2020,
+   "round": 4,
+   "A": [
+    "jensen",
+    "joeo",
+    "juliusp",
+    "kj",
+    "nicks",
+    "pace",
+    "timc",
+    "tjsc"
+   ],
+   "B": [
+    "andy",
+    "bent",
+    "dk",
+    "kylem",
+    "petec",
+    "scottr",
+    "shaunw"
+   ],
+   "ptsA": 7.5,
+   "ptsB": 19.5
+  },
+  {
+   "year": 2021,
+   "round": 1,
+   "A": [
+    "bent",
+    "kj"
+   ],
+   "B": [
+    "andy",
+    "pace"
+   ],
+   "ptsA": 0,
+   "ptsB": 4
+  },
+  {
+   "year": 2021,
+   "round": 1,
+   "A": [
+    "dk",
+    "tjsc"
+   ],
+   "B": [
+    "paulw",
+    "petec"
+   ],
+   "ptsA": 3.5,
+   "ptsB": 0.5
+  },
+  {
+   "year": 2021,
+   "round": 1,
+   "A": [
+    "jensen",
+    "nicks"
+   ],
+   "B": [
+    "rmac",
+    "shaunw"
+   ],
+   "ptsA": 0,
+   "ptsB": 4
+  },
+  {
+   "year": 2021,
+   "round": 1,
+   "A": [
+    "jimh",
+    "saugy"
+   ],
+   "B": [
+    "joeo",
+    "timc"
+   ],
+   "ptsA": 0.5,
+   "ptsB": 3.5
+  },
+  {
+   "year": 2021,
+   "round": 2,
+   "A": [
+    "bent"
+   ],
+   "B": [
+    "timc"
+   ],
+   "ptsA": 2,
+   "ptsB": 1
+  },
+  {
+   "year": 2021,
+   "round": 2,
+   "A": [
+    "dk"
+   ],
+   "B": [
+    "petec"
+   ],
+   "ptsA": 0.5,
+   "ptsB": 2.5
+  },
+  {
+   "year": 2021,
+   "round": 2,
+   "A": [
+    "jensen"
+   ],
+   "B": [
+    "andy"
+   ],
+   "ptsA": 2.5,
+   "ptsB": 0.5
+  },
+  {
+   "year": 2021,
+   "round": 2,
+   "A": [
+    "jimh"
+   ],
+   "B": [
+    "pace"
+   ],
+   "ptsA": 1,
+   "ptsB": 2
+  },
+  {
+   "year": 2021,
+   "round": 2,
+   "A": [
+    "kj"
+   ],
+   "B": [
+    "rmac"
+   ],
+   "ptsA": 3,
+   "ptsB": 0
+  },
+  {
+   "year": 2021,
+   "round": 2,
+   "A": [
+    "nicks"
+   ],
+   "B": [
+    "paulw"
+   ],
+   "ptsA": 0,
+   "ptsB": 3
+  },
+  {
+   "year": 2021,
+   "round": 2,
+   "A": [
+    "saugy"
+   ],
+   "B": [
+    "joeo"
+   ],
+   "ptsA": 0,
+   "ptsB": 3
+  },
+  {
+   "year": 2021,
+   "round": 2,
+   "A": [
+    "tjsc"
+   ],
+   "B": [
+    "shaunw"
+   ],
+   "ptsA": 0,
+   "ptsB": 3
+  },
+  {
+   "year": 2021,
+   "round": 3,
+   "A": [
+    "bent",
+    "saugy"
+   ],
+   "B": [
+    "rmac",
+    "timc"
+   ],
+   "ptsA": 0,
+   "ptsB": 4
+  },
+  {
+   "year": 2021,
+   "round": 3,
+   "A": [
+    "dk",
+    "jimh"
+   ],
+   "B": [
+    "paulw",
+    "petec"
+   ],
+   "ptsA": 4,
+   "ptsB": 0
+  },
+  {
+   "year": 2021,
+   "round": 3,
+   "A": [
+    "jensen",
+    "kj"
+   ],
+   "B": [
+    "andy",
+    "joeo"
+   ],
+   "ptsA": 0,
+   "ptsB": 4
+  },
+  {
+   "year": 2021,
+   "round": 3,
+   "A": [
+    "nicks",
+    "tjsc"
+   ],
+   "B": [
+    "pace",
+    "shaunw"
+   ],
+   "ptsA": 3.5,
+   "ptsB": 0.5
+  },
+  {
+   "year": 2021,
+   "round": 4,
+   "A": [
+    "bent",
+    "dk",
+    "jensen",
+    "jimh",
+    "kj",
+    "nicks",
+    "saugy",
+    "tjsc"
+   ],
+   "B": [
+    "andy",
+    "joeo",
+    "pace",
+    "paulw",
+    "petec",
+    "rmac",
+    "shaunw",
+    "timc"
+   ],
+   "ptsA": 10,
+   "ptsB": 17
+  },
+  {
+   "year": 2022,
+   "round": 1,
+   "A": [
+    "andy",
+    "pace"
+   ],
+   "B": [
+    "rmac",
+    "timc"
+   ],
+   "ptsA": 4,
+   "ptsB": 0
+  },
+  {
+   "year": 2022,
+   "round": 1,
+   "A": [
+    "dk",
+    "jensen"
+   ],
+   "B": [
+    "bent",
+    "jimh"
+   ],
+   "ptsA": 3.5,
+   "ptsB": 0.5
+  },
+  {
+   "year": 2022,
+   "round": 1,
+   "A": [
+    "nicks",
+    "saugy"
+   ],
+   "B": [
+    "joeo",
+    "tjsc"
+   ],
+   "ptsA": 4,
+   "ptsB": 0
+  },
+  {
+   "year": 2022,
+   "round": 1,
+   "A": [
+    "petec",
+    "shaunw"
+   ],
+   "B": [
+    "kj",
+    "paulw"
+   ],
+   "ptsA": 0,
+   "ptsB": 4
+  },
+  {
+   "year": 2022,
+   "round": 2,
+   "A": [
+    "andy"
+   ],
+   "B": [
+    "rmac"
+   ],
+   "ptsA": 0.5,
+   "ptsB": 2.5
+  },
+  {
+   "year": 2022,
+   "round": 2,
+   "A": [
+    "dk"
+   ],
+   "B": [
+    "tjsc"
+   ],
+   "ptsA": 3,
+   "ptsB": 0
+  },
+  {
+   "year": 2022,
+   "round": 2,
+   "A": [
+    "jensen"
+   ],
+   "B": [
+    "kj"
+   ],
+   "ptsA": 1,
+   "ptsB": 2
+  },
+  {
+   "year": 2022,
+   "round": 2,
+   "A": [
+    "nicks"
+   ],
+   "B": [
+    "bent"
+   ],
+   "ptsA": 1.5,
+   "ptsB": 1.5
+  },
+  {
+   "year": 2022,
+   "round": 2,
+   "A": [
+    "pace"
+   ],
+   "B": [
+    "paulw"
+   ],
+   "ptsA": 0.5,
+   "ptsB": 2.5
+  },
+  {
+   "year": 2022,
+   "round": 2,
+   "A": [
+    "petec"
+   ],
+   "B": [
+    "joeo"
+   ],
+   "ptsA": 0,
+   "ptsB": 3
+  },
+  {
+   "year": 2022,
+   "round": 2,
+   "A": [
+    "saugy"
+   ],
+   "B": [
+    "jimh"
+   ],
+   "ptsA": 0,
+   "ptsB": 3
+  },
+  {
+   "year": 2022,
+   "round": 2,
+   "A": [
+    "shaunw"
+   ],
+   "B": [
+    "timc"
+   ],
+   "ptsA": 0,
+   "ptsB": 3
+  },
+  {
+   "year": 2022,
+   "round": 3,
+   "A": [
+    "andy",
+    "shaunw"
+   ],
+   "B": [
+    "timc",
+    "tjsc"
+   ],
+   "ptsA": 0,
+   "ptsB": 4
+  },
+  {
+   "year": 2022,
+   "round": 3,
+   "A": [
+    "dk",
+    "nicks"
+   ],
+   "B": [
+    "joeo",
+    "kj"
+   ],
+   "ptsA": 4,
+   "ptsB": 0
+  },
+  {
+   "year": 2022,
+   "round": 3,
+   "A": [
+    "jensen",
+    "petec"
+   ],
+   "B": [
+    "bent",
+    "paulw"
+   ],
+   "ptsA": 4,
+   "ptsB": 0
+  },
+  {
+   "year": 2022,
+   "round": 3,
+   "A": [
+    "pace",
+    "saugy"
+   ],
+   "B": [
+    "jimh",
+    "rmac"
+   ],
+   "ptsA": 0,
+   "ptsB": 4
+  },
+  {
+   "year": 2022,
+   "round": 4,
+   "A": [
+    "andy",
+    "dk",
+    "jensen",
+    "nicks",
+    "pace",
+    "petec",
+    "saugy",
+    "shaunw"
+   ],
+   "B": [
+    "bent",
+    "jimh",
+    "joeo",
+    "kj",
+    "paulw",
+    "rmac",
+    "timc",
+    "tjsc"
+   ],
+   "ptsA": 10.5,
+   "ptsB": 16.5
+  },
+  {
+   "year": 2023,
+   "round": 1,
+   "A": [
+    "bent",
+    "dk"
+   ],
+   "B": [
+    "andy",
+    "joeo"
+   ],
+   "ptsA": 3,
+   "ptsB": 1
+  },
+  {
+   "year": 2023,
+   "round": 1,
+   "A": [
+    "kj",
+    "tjsc"
+   ],
+   "B": [
+    "jensen",
+    "jimh"
+   ],
+   "ptsA": 3.5,
+   "ptsB": 0.5
+  },
+  {
+   "year": 2023,
+   "round": 1,
+   "A": [
+    "nicks",
+    "saugy"
+   ],
+   "B": [
+    "pace",
+    "paulw"
+   ],
+   "ptsA": 1,
+   "ptsB": 3
+  },
+  {
+   "year": 2023,
+   "round": 1,
+   "A": [
+    "rmac",
+    "shaunw"
+   ],
+   "B": [
+    "elger",
+    "timc"
+   ],
+   "ptsA": 3,
+   "ptsB": 1
+  },
+  {
+   "year": 2023,
+   "round": 2,
+   "A": [
+    "bent"
+   ],
+   "B": [
+    "pace"
+   ],
+   "ptsA": 3,
+   "ptsB": 0
+  },
+  {
+   "year": 2023,
+   "round": 2,
+   "A": [
+    "dk"
+   ],
+   "B": [
+    "andy"
+   ],
+   "ptsA": 3,
+   "ptsB": 0
+  },
+  {
+   "year": 2023,
+   "round": 2,
+   "A": [
+    "kj"
+   ],
+   "B": [
+    "timc"
+   ],
+   "ptsA": 3,
+   "ptsB": 0
+  },
+  {
+   "year": 2023,
+   "round": 2,
+   "A": [
+    "nicks"
+   ],
+   "B": [
+    "jensen"
+   ],
+   "ptsA": 0.5,
+   "ptsB": 2.5
+  },
+  {
+   "year": 2023,
+   "round": 2,
+   "A": [
+    "rmac"
+   ],
+   "B": [
+    "joeo"
+   ],
+   "ptsA": 3,
+   "ptsB": 0
+  },
+  {
+   "year": 2023,
+   "round": 2,
+   "A": [
+    "saugy"
+   ],
+   "B": [
+    "jimh"
+   ],
+   "ptsA": 1.5,
+   "ptsB": 1.5
+  },
+  {
+   "year": 2023,
+   "round": 2,
+   "A": [
+    "shaunw"
+   ],
+   "B": [
+    "elger"
+   ],
+   "ptsA": 3,
+   "ptsB": 0
+  },
+  {
+   "year": 2023,
+   "round": 2,
+   "A": [
+    "tjsc"
+   ],
+   "B": [
+    "paulw"
+   ],
+   "ptsA": 0,
+   "ptsB": 3
+  },
+  {
+   "year": 2023,
+   "round": 3,
+   "A": [
+    "bent",
+    "kj"
+   ],
+   "B": [
+    "andy",
+    "elger"
+   ],
+   "ptsA": 3,
+   "ptsB": 1
+  },
+  {
+   "year": 2023,
+   "round": 3,
+   "A": [
+    "dk",
+    "saugy"
+   ],
+   "B": [
+    "jimh",
+    "paulw"
+   ],
+   "ptsA": 4,
+   "ptsB": 0
+  },
+  {
+   "year": 2023,
+   "round": 3,
+   "A": [
+    "nicks",
+    "rmac"
+   ],
+   "B": [
+    "jensen",
+    "pace"
+   ],
+   "ptsA": 0,
+   "ptsB": 4
+  },
+  {
+   "year": 2023,
+   "round": 3,
+   "A": [
+    "shaunw",
+    "tjsc"
+   ],
+   "B": [
+    "joeo",
+    "timc"
+   ],
+   "ptsA": 3,
+   "ptsB": 1
+  },
+  {
+   "year": 2023,
+   "round": 4,
+   "A": [
+    "bent",
+    "dk",
+    "kj",
+    "nicks",
+    "rmac",
+    "saugy",
+    "shaunw",
+    "tjsc"
+   ],
+   "B": [
+    "andy",
+    "elger",
+    "jensen",
+    "jimh",
+    "joeo",
+    "pace",
+    "paulw",
+    "timc"
+   ],
+   "ptsA": 10.5,
+   "ptsB": 16.5
+  },
+  {
+   "year": 2024,
+   "round": 1,
+   "A": [
+    "andy",
+    "dk"
+   ],
+   "B": [
+    "rmac",
+    "timc"
+   ],
+   "ptsA": 4,
+   "ptsB": 0
+  },
+  {
+   "year": 2024,
+   "round": 1,
+   "A": [
+    "bent",
+    "tjsc"
+   ],
+   "B": [
+    "jensen",
+    "joeo"
+   ],
+   "ptsA": 4,
+   "ptsB": 0
+  },
+  {
+   "year": 2024,
+   "round": 1,
+   "A": [
+    "nicks",
+    "saugy"
+   ],
+   "B": [
+    "kj",
+    "paulw"
+   ],
+   "ptsA": 4,
+   "ptsB": 0
+  },
+  {
+   "year": 2024,
+   "round": 1,
+   "A": [
+    "pace",
+    "petec"
+   ],
+   "B": [
+    "jimh",
+    "shaunw"
+   ],
+   "ptsA": 4,
+   "ptsB": 0
+  },
+  {
+   "year": 2024,
+   "round": 2,
+   "A": [
+    "andy"
+   ],
+   "B": [
+    "jensen"
+   ],
+   "ptsA": 2.5,
+   "ptsB": 0.5
+  },
+  {
+   "year": 2024,
+   "round": 2,
+   "A": [
+    "bent"
+   ],
+   "B": [
+    "rmac"
+   ],
+   "ptsA": 3,
+   "ptsB": 0
+  },
+  {
+   "year": 2024,
+   "round": 2,
+   "A": [
+    "dk"
+   ],
+   "B": [
+    "kj"
+   ],
+   "ptsA": 1.5,
+   "ptsB": 1.5
+  },
+  {
+   "year": 2024,
+   "round": 2,
+   "A": [
+    "nicks"
+   ],
+   "B": [
+    "shaunw"
+   ],
+   "ptsA": 0.5,
+   "ptsB": 2.5
+  },
+  {
+   "year": 2024,
+   "round": 2,
+   "A": [
+    "pace"
+   ],
+   "B": [
+    "timc"
+   ],
+   "ptsA": 0.5,
+   "ptsB": 2.5
+  },
+  {
+   "year": 2024,
+   "round": 2,
+   "A": [
+    "petec"
+   ],
+   "B": [
+    "paulw"
+   ],
+   "ptsA": 2.5,
+   "ptsB": 0.5
+  },
+  {
+   "year": 2024,
+   "round": 2,
+   "A": [
+    "saugy"
+   ],
+   "B": [
+    "jimh"
+   ],
+   "ptsA": 1.5,
+   "ptsB": 1.5
+  },
+  {
+   "year": 2024,
+   "round": 2,
+   "A": [
+    "tjsc"
+   ],
+   "B": [
+    "joeo"
+   ],
+   "ptsA": 1,
+   "ptsB": 2
+  },
+  {
+   "year": 2024,
+   "round": 3,
+   "A": [
+    "andy",
+    "petec"
+   ],
+   "B": [
+    "joeo",
+    "shaunw"
+   ],
+   "ptsA": 0,
+   "ptsB": 4
+  },
+  {
+   "year": 2024,
+   "round": 3,
+   "A": [
+    "bent",
+    "pace"
+   ],
+   "B": [
+    "kj",
+    "timc"
+   ],
+   "ptsA": 3,
+   "ptsB": 1
+  },
+  {
+   "year": 2024,
+   "round": 3,
+   "A": [
+    "dk",
+    "saugy"
+   ],
+   "B": [
+    "jimh",
+    "rmac"
+   ],
+   "ptsA": 0.5,
+   "ptsB": 3.5
+  },
+  {
+   "year": 2024,
+   "round": 3,
+   "A": [
+    "nicks",
+    "tjsc"
+   ],
+   "B": [
+    "jensen",
+    "paulw"
+   ],
+   "ptsA": 3.5,
+   "ptsB": 0.5
+  },
+  {
+   "year": 2024,
+   "round": 4,
+   "A": [
+    "andy",
+    "bent",
+    "dk",
+    "nicks",
+    "pace",
+    "petec",
+    "saugy",
+    "tjsc"
+   ],
+   "B": [
+    "jensen",
+    "jimh",
+    "joeo",
+    "kj",
+    "paulw",
+    "rmac",
+    "shaunw",
+    "timc"
+   ],
+   "ptsA": 17.5,
+   "ptsB": 9.5
+  },
+  {
+   "year": 2025,
+   "round": 1,
+   "A": [
+    "andy",
+    "kj"
+   ],
+   "B": [
+    "bent",
+    "joeo"
+   ],
+   "ptsA": 0.5,
+   "ptsB": 3.5
+  },
+  {
+   "year": 2025,
+   "round": 1,
+   "A": [
+    "jensen",
+    "tjsc"
+   ],
+   "B": [
+    "dk",
+    "timc"
+   ],
+   "ptsA": 3,
+   "ptsB": 1
+  },
+  {
+   "year": 2025,
+   "round": 1,
+   "A": [
+    "jimh",
+    "petec"
+   ],
+   "B": [
+    "nicks",
+    "paulw"
+   ],
+   "ptsA": 0,
+   "ptsB": 4
+  },
+  {
+   "year": 2025,
+   "round": 1,
+   "A": [
+    "rmac",
+    "shaunw"
+   ],
+   "B": [
+    "pace",
+    "saugy"
+   ],
+   "ptsA": 0,
+   "ptsB": 4
+  },
+  {
+   "year": 2025,
+   "round": 2,
+   "A": [
+    "andy"
+   ],
+   "B": [
+    "pace"
+   ],
+   "ptsA": 3,
+   "ptsB": 0
+  },
+  {
+   "year": 2025,
+   "round": 2,
+   "A": [
+    "jensen"
+   ],
+   "B": [
+    "nicks"
+   ],
+   "ptsA": 2,
+   "ptsB": 1
+  },
+  {
+   "year": 2025,
+   "round": 2,
+   "A": [
+    "jimh"
+   ],
+   "B": [
+    "saugy"
+   ],
+   "ptsA": 0.5,
+   "ptsB": 2.5
+  },
+  {
+   "year": 2025,
+   "round": 2,
+   "A": [
+    "kj"
+   ],
+   "B": [
+    "dk"
+   ],
+   "ptsA": 0,
+   "ptsB": 3
+  },
+  {
+   "year": 2025,
+   "round": 2,
+   "A": [
+    "petec"
+   ],
+   "B": [
+    "timc"
+   ],
+   "ptsA": 1,
+   "ptsB": 2
+  },
+  {
+   "year": 2025,
+   "round": 2,
+   "A": [
+    "rmac"
+   ],
+   "B": [
+    "bent"
+   ],
+   "ptsA": 0,
+   "ptsB": 3
+  },
+  {
+   "year": 2025,
+   "round": 2,
+   "A": [
+    "shaunw"
+   ],
+   "B": [
+    "paulw"
+   ],
+   "ptsA": 1.5,
+   "ptsB": 1.5
+  },
+  {
+   "year": 2025,
+   "round": 2,
+   "A": [
+    "tjsc"
+   ],
+   "B": [
+    "joeo"
+   ],
+   "ptsA": 3,
+   "ptsB": 0
+  },
+  {
+   "year": 2025,
+   "round": 3,
+   "A": [
+    "andy",
+    "rmac"
+   ],
+   "B": [
+    "pace",
+    "timc"
+   ],
+   "ptsA": 3.5,
+   "ptsB": 0.5
+  },
+  {
+   "year": 2025,
+   "round": 3,
+   "A": [
+    "jensen",
+    "petec"
+   ],
+   "B": [
+    "dk",
+    "saugy"
+   ],
+   "ptsA": 1,
+   "ptsB": 3
+  },
+  {
+   "year": 2025,
+   "round": 3,
+   "A": [
+    "jimh",
+    "shaunw"
+   ],
+   "B": [
+    "joeo",
+    "paulw"
+   ],
+   "ptsA": 3.5,
+   "ptsB": 0.5
+  },
+  {
+   "year": 2025,
+   "round": 3,
+   "A": [
+    "kj",
+    "tjsc"
+   ],
+   "B": [
+    "bent",
+    "nicks"
+   ],
+   "ptsA": 0,
+   "ptsB": 4
+  },
+  {
+   "year": 2025,
+   "round": 4,
+   "A": [
+    "andy",
+    "jensen",
+    "jimh",
+    "kj",
+    "petec",
+    "rmac",
+    "shaunw",
+    "tjsc"
+   ],
+   "B": [
+    "bent",
+    "dk",
+    "joeo",
+    "nicks",
+    "pace",
+    "paulw",
+    "saugy",
+    "timc"
+   ],
+   "ptsA": 20,
+   "ptsB": 7
+  }
+ ],
+ "cards": [
+  {
+   "year": 2016,
+   "round": 1,
+   "p": "andy",
+   "g": 87,
+   "ch": 9,
+   "tp": 14,
+   "e": 0,
+   "b": 1,
+   "pr": 7,
+   "bo": 6,
+   "d": 4,
+   "a9": -4
+  },
+  {
+   "year": 2016,
+   "round": 1,
+   "p": "bent",
+   "g": 88,
+   "ch": 10,
+   "tp": 15,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 8,
+   "d": 3,
+   "a9": 4
+  },
+  {
+   "year": 2016,
+   "round": 1,
+   "p": "daveb",
+   "g": 97,
+   "ch": 20,
+   "tp": 24,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 6,
+   "d": 7,
+   "a9": 4
+  },
+  {
+   "year": 2016,
+   "round": 1,
+   "p": "dk",
+   "g": 126,
+   "ch": 23,
+   "tp": 53,
+   "e": 0,
+   "b": 0,
+   "pr": 1,
+   "bo": 1,
+   "d": 16,
+   "a9": -3
+  },
+  {
+   "year": 2016,
+   "round": 1,
+   "p": "jimh",
+   "g": 114,
+   "ch": 28,
+   "tp": 41,
+   "e": 0,
+   "b": 0,
+   "pr": 0,
+   "bo": 5,
+   "d": 13,
+   "a9": 3
+  },
+  {
+   "year": 2016,
+   "round": 1,
+   "p": "joeo",
+   "g": 101,
+   "ch": 21,
+   "tp": 28,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 3,
+   "d": 8,
+   "a9": 3
+  },
+  {
+   "year": 2016,
+   "round": 1,
+   "p": "johns",
+   "g": 74,
+   "ch": -4,
+   "tp": 1,
+   "e": 0,
+   "b": 1,
+   "pr": 15,
+   "bo": 2,
+   "d": 0,
+   "a9": -3
+  },
+  {
+   "year": 2016,
+   "round": 1,
+   "p": "kj",
+   "g": 87,
+   "ch": 20,
+   "tp": 14,
+   "e": 0,
+   "b": 1,
+   "pr": 5,
+   "bo": 10,
+   "d": 2,
+   "a9": -3
+  },
+  {
+   "year": 2016,
+   "round": 1,
+   "p": "pace",
+   "g": 84,
+   "ch": 13,
+   "tp": 11,
+   "e": 0,
+   "b": 0,
+   "pr": 8,
+   "bo": 9,
+   "d": 1,
+   "a9": 3
+  },
+  {
+   "year": 2016,
+   "round": 1,
+   "p": "paulw",
+   "g": 101,
+   "ch": 14,
+   "tp": 28,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 5,
+   "d": 9,
+   "a9": -5
+  },
+  {
+   "year": 2016,
+   "round": 1,
+   "p": "petec",
+   "g": 102,
+   "ch": 24,
+   "tp": 29,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 7,
+   "d": 9,
+   "a9": 5
+  },
+  {
+   "year": 2016,
+   "round": 1,
+   "p": "rmac",
+   "g": 84,
+   "ch": 16,
+   "tp": 11,
+   "e": 0,
+   "b": 0,
+   "pr": 10,
+   "bo": 6,
+   "d": 2,
+   "a9": 3
+  },
+  {
+   "year": 2016,
+   "round": 1,
+   "p": "saugy",
+   "g": 118,
+   "ch": 36,
+   "tp": 45,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 2,
+   "d": 14,
+   "a9": -5
+  },
+  {
+   "year": 2016,
+   "round": 1,
+   "p": "timc",
+   "g": 98,
+   "ch": 14,
+   "tp": 25,
+   "e": 0,
+   "b": 0,
+   "pr": 0,
+   "bo": 14,
+   "d": 4,
+   "a9": -3
+  },
+  {
+   "year": 2016,
+   "round": 1,
+   "p": "tjsc",
+   "g": 97,
+   "ch": 15,
+   "tp": 24,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 6,
+   "d": 7,
+   "a9": -4
+  },
+  {
+   "year": 2016,
+   "round": 2,
+   "p": "andy",
+   "g": 90,
+   "ch": 10,
+   "tp": 18,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 9,
+   "d": 4,
+   "a9": -1
+  },
+  {
+   "year": 2016,
+   "round": 2,
+   "p": "bent",
+   "g": 87,
+   "ch": 10,
+   "tp": 15,
+   "e": 0,
+   "b": 3,
+   "pr": 4,
+   "bo": 7,
+   "d": 4,
+   "a9": 2
+  },
+  {
+   "year": 2016,
+   "round": 2,
+   "p": "daveb",
+   "g": 102,
+   "ch": 22,
+   "tp": 30,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 8,
+   "d": 8,
+   "a9": 3
+  },
+  {
+   "year": 2016,
+   "round": 2,
+   "p": "dk",
+   "g": 122,
+   "ch": 25,
+   "tp": 50,
+   "e": 0,
+   "b": 0,
+   "pr": 0,
+   "bo": 2,
+   "d": 16,
+   "a9": 2
+  },
+  {
+   "year": 2016,
+   "round": 2,
+   "p": "jimh",
+   "g": 107,
+   "ch": 30,
+   "tp": 35,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 5,
+   "d": 11,
+   "a9": 2
+  },
+  {
+   "year": 2016,
+   "round": 2,
+   "p": "joeo",
+   "g": 103,
+   "ch": 23,
+   "tp": 31,
+   "e": 0,
+   "b": 1,
+   "pr": 0,
+   "bo": 5,
+   "d": 12,
+   "a9": 3
+  },
+  {
+   "year": 2016,
+   "round": 2,
+   "p": "johns",
+   "g": 76,
+   "ch": -5,
+   "tp": 4,
+   "e": 0,
+   "b": 4,
+   "pr": 9,
+   "bo": 2,
+   "d": 3,
+   "a9": -2
+  },
+  {
+   "year": 2016,
+   "round": 2,
+   "p": "kj",
+   "g": 104,
+   "ch": 21,
+   "tp": 32,
+   "e": 0,
+   "b": 0,
+   "pr": 1,
+   "bo": 5,
+   "d": 12,
+   "a9": -3
+  },
+  {
+   "year": 2016,
+   "round": 2,
+   "p": "pace",
+   "g": 89,
+   "ch": 14,
+   "tp": 17,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 9,
+   "d": 4,
+   "a9": -2
+  },
+  {
+   "year": 2016,
+   "round": 2,
+   "p": "paulw",
+   "g": 95,
+   "ch": 15,
+   "tp": 23,
+   "e": 0,
+   "b": 1,
+   "pr": 4,
+   "bo": 8,
+   "d": 5,
+   "a9": 1
+  },
+  {
+   "year": 2016,
+   "round": 2,
+   "p": "petec",
+   "g": 113,
+   "ch": 26,
+   "tp": 41,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 3,
+   "d": 13,
+   "a9": -2
+  },
+  {
+   "year": 2016,
+   "round": 2,
+   "p": "rmac",
+   "g": 99,
+   "ch": 17,
+   "tp": 27,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 4,
+   "d": 9,
+   "a9": -1
+  },
+  {
+   "year": 2016,
+   "round": 2,
+   "p": "saugy",
+   "g": 116,
+   "ch": 39,
+   "tp": 44,
+   "e": 0,
+   "b": 0,
+   "pr": 0,
+   "bo": 6,
+   "d": 12,
+   "a9": -2
+  },
+  {
+   "year": 2016,
+   "round": 2,
+   "p": "timc",
+   "g": 93,
+   "ch": 15,
+   "tp": 21,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 6,
+   "d": 7,
+   "a9": 1
+  },
+  {
+   "year": 2016,
+   "round": 2,
+   "p": "tjsc",
+   "g": 96,
+   "ch": 16,
+   "tp": 24,
+   "e": 0,
+   "b": 1,
+   "pr": 3,
+   "bo": 8,
+   "d": 6,
+   "a9": 2
+  },
+  {
+   "year": 2016,
+   "round": 3,
+   "p": "andy",
+   "g": 83,
+   "ch": 9,
+   "tp": 12,
+   "e": 0,
+   "b": 1,
+   "pr": 7,
+   "bo": 7,
+   "d": 3,
+   "a9": 1
+  },
+  {
+   "year": 2016,
+   "round": 3,
+   "p": "bent",
+   "g": 74,
+   "ch": 10,
+   "tp": 3,
+   "e": 0,
+   "b": 3,
+   "pr": 9,
+   "bo": 6,
+   "d": 0,
+   "a9": 3
+  },
+  {
+   "year": 2016,
+   "round": 3,
+   "p": "daveb",
+   "g": 102,
+   "ch": 21,
+   "tp": 31,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 3,
+   "d": 12,
+   "a9": -2
+  },
+  {
+   "year": 2016,
+   "round": 3,
+   "p": "dk",
+   "g": 98,
+   "ch": 24,
+   "tp": 27,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 8,
+   "d": 8,
+   "a9": -1
+  },
+  {
+   "year": 2016,
+   "round": 3,
+   "p": "jimh",
+   "g": 106,
+   "ch": 29,
+   "tp": 35,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 4,
+   "d": 12,
+   "a9": 2
+  },
+  {
+   "year": 2016,
+   "round": 3,
+   "p": "joeo",
+   "g": 107,
+   "ch": 22,
+   "tp": 36,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 5,
+   "d": 11,
+   "a9": -8
+  },
+  {
+   "year": 2016,
+   "round": 3,
+   "p": "johns",
+   "g": 65,
+   "ch": -4,
+   "tp": -6,
+   "e": 1,
+   "b": 5,
+   "pr": 11,
+   "bo": 1,
+   "d": 0,
+   "a9": 8
+  },
+  {
+   "year": 2016,
+   "round": 3,
+   "p": "kj",
+   "g": 106,
+   "ch": 20,
+   "tp": 35,
+   "e": 0,
+   "b": 0,
+   "pr": 1,
+   "bo": 8,
+   "d": 9,
+   "a9": -2
+  },
+  {
+   "year": 2016,
+   "round": 3,
+   "p": "pace",
+   "g": 93,
+   "ch": 14,
+   "tp": 22,
+   "e": 0,
+   "b": 1,
+   "pr": 4,
+   "bo": 7,
+   "d": 6,
+   "a9": 2
+  },
+  {
+   "year": 2016,
+   "round": 3,
+   "p": "paulw",
+   "g": 88,
+   "ch": 15,
+   "tp": 17,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 12,
+   "d": 2,
+   "a9": -2
+  },
+  {
+   "year": 2016,
+   "round": 3,
+   "p": "petec",
+   "g": 116,
+   "ch": 25,
+   "tp": 45,
+   "e": 0,
+   "b": 0,
+   "pr": 0,
+   "bo": 6,
+   "d": 12,
+   "a9": 1
+  },
+  {
+   "year": 2016,
+   "round": 3,
+   "p": "rmac",
+   "g": 86,
+   "ch": 16,
+   "tp": 15,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 7,
+   "d": 4
+  },
+  {
+   "year": 2016,
+   "round": 3,
+   "p": "saugy",
+   "g": 122,
+   "ch": 37,
+   "tp": 51,
+   "e": 0,
+   "b": 0,
+   "pr": 1,
+   "bo": 2,
+   "d": 15,
+   "a9": -1
+  },
+  {
+   "year": 2016,
+   "round": 3,
+   "p": "tjsc",
+   "g": 91,
+   "ch": 16,
+   "tp": 20,
+   "e": 0,
+   "b": 0,
+   "pr": 1,
+   "bo": 15,
+   "d": 2,
+   "a9": -3
+  },
+  {
+   "year": 2016,
+   "round": 4,
+   "p": "andy",
+   "g": 89,
+   "ch": 10,
+   "tp": 17,
+   "e": 0,
+   "b": 1,
+   "pr": 4,
+   "bo": 8,
+   "d": 5
+  },
+  {
+   "year": 2016,
+   "round": 4,
+   "p": "bent",
+   "g": 88,
+   "ch": 10,
+   "tp": 16,
+   "e": 1,
+   "b": 2,
+   "pr": 6,
+   "bo": 3,
+   "d": 6
+  },
+  {
+   "year": 2016,
+   "round": 4,
+   "p": "daveb",
+   "g": 100,
+   "ch": 22,
+   "tp": 28,
+   "e": 0,
+   "b": 1,
+   "pr": 1,
+   "bo": 8,
+   "d": 8
+  },
+  {
+   "year": 2016,
+   "round": 4,
+   "p": "dk",
+   "g": 115,
+   "ch": 26,
+   "tp": 43,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 5,
+   "d": 11
+  },
+  {
+   "year": 2016,
+   "round": 4,
+   "p": "jimh",
+   "g": 112,
+   "ch": 31,
+   "tp": 40,
+   "e": 0,
+   "b": 0,
+   "pr": 1,
+   "bo": 6,
+   "d": 11
+  },
+  {
+   "year": 2016,
+   "round": 4,
+   "p": "joeo",
+   "g": 91,
+   "ch": 23,
+   "tp": 19,
+   "e": 0,
+   "b": 2,
+   "pr": 4,
+   "bo": 6,
+   "d": 6
+  },
+  {
+   "year": 2016,
+   "round": 4,
+   "p": "johns",
+   "g": 68,
+   "ch": -5,
+   "tp": -4,
+   "e": 1,
+   "b": 6,
+   "pr": 7,
+   "bo": 4,
+   "d": 0
+  },
+  {
+   "year": 2016,
+   "round": 4,
+   "p": "kj",
+   "g": 101,
+   "ch": 22,
+   "tp": 29,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 5,
+   "d": 8
+  },
+  {
+   "year": 2016,
+   "round": 4,
+   "p": "pace",
+   "g": 87,
+   "ch": 15,
+   "tp": 15,
+   "e": 0,
+   "b": 2,
+   "pr": 5,
+   "bo": 7,
+   "d": 4
+  },
+  {
+   "year": 2016,
+   "round": 4,
+   "p": "paulw",
+   "g": 100,
+   "ch": 16,
+   "tp": 28,
+   "e": 0,
+   "b": 2,
+   "pr": 1,
+   "bo": 5,
+   "d": 10
+  },
+  {
+   "year": 2016,
+   "round": 4,
+   "p": "petec",
+   "g": 117,
+   "ch": 26,
+   "tp": 45,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 3,
+   "d": 13
+  },
+  {
+   "year": 2016,
+   "round": 4,
+   "p": "rmac",
+   "g": 92,
+   "ch": 18,
+   "tp": 20,
+   "e": 0,
+   "b": 4,
+   "pr": 3,
+   "bo": 4,
+   "d": 7
+  },
+  {
+   "year": 2016,
+   "round": 4,
+   "p": "saugy",
+   "g": 119,
+   "ch": 40,
+   "tp": 47,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 2,
+   "d": 13
+  },
+  {
+   "year": 2016,
+   "round": 4,
+   "p": "tjsc",
+   "g": 95,
+   "ch": 17,
+   "tp": 23,
+   "e": 0,
+   "b": 3,
+   "pr": 3,
+   "bo": 4,
+   "d": 8
+  },
+  {
+   "year": 2017,
+   "round": 1,
+   "p": "andy",
+   "g": 85,
+   "ch": 10,
+   "tp": 13,
+   "e": 0,
+   "b": 1,
+   "pr": 6,
+   "bo": 8,
+   "d": 3,
+   "a9": -1
+  },
+  {
+   "year": 2017,
+   "round": 1,
+   "p": "bent",
+   "g": 86,
+   "ch": 10,
+   "tp": 14,
+   "e": 0,
+   "b": 0,
+   "pr": 8,
+   "bo": 6,
+   "d": 4,
+   "a9": 1
+  },
+  {
+   "year": 2017,
+   "round": 1,
+   "p": "daveb",
+   "g": 88,
+   "ch": 20,
+   "tp": 16,
+   "e": 0,
+   "b": 1,
+   "pr": 4,
+   "bo": 9,
+   "d": 4,
+   "a9": 2
+  },
+  {
+   "year": 2017,
+   "round": 1,
+   "p": "grants",
+   "g": 93,
+   "ch": 16,
+   "tp": 21,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 9,
+   "d": 5,
+   "a9": 5
+  },
+  {
+   "year": 2017,
+   "round": 1,
+   "p": "jensen",
+   "g": 92,
+   "ch": 8,
+   "tp": 20,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 12,
+   "d": 3,
+   "a9": -2
+  },
+  {
+   "year": 2017,
+   "round": 1,
+   "p": "jimh",
+   "g": 113,
+   "ch": 28,
+   "tp": 41,
+   "e": 0,
+   "b": 0,
+   "pr": 1,
+   "bo": 7,
+   "d": 10,
+   "a9": 0
+  },
+  {
+   "year": 2017,
+   "round": 1,
+   "p": "kj",
+   "g": 86,
+   "ch": 19,
+   "tp": 14,
+   "e": 0,
+   "b": 1,
+   "pr": 5,
+   "bo": 10,
+   "d": 2,
+   "a9": 0
+  },
+  {
+   "year": 2017,
+   "round": 1,
+   "p": "kylem",
+   "g": 106,
+   "ch": 22,
+   "tp": 34,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 5,
+   "d": 11,
+   "a9": -5
+  },
+  {
+   "year": 2017,
+   "round": 1,
+   "p": "matth",
+   "g": 103,
+   "ch": 19,
+   "tp": 31,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 3,
+   "d": 12,
+   "a9": -5
+  },
+  {
+   "year": 2017,
+   "round": 1,
+   "p": "nicks",
+   "g": 84,
+   "ch": 9,
+   "tp": 12,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 10,
+   "d": 1,
+   "a9": 0
+  },
+  {
+   "year": 2017,
+   "round": 1,
+   "p": "pace",
+   "g": 84,
+   "ch": 13,
+   "tp": 12,
+   "e": 0,
+   "b": 2,
+   "pr": 8,
+   "bo": 4,
+   "d": 4,
+   "a9": -1
+  },
+  {
+   "year": 2017,
+   "round": 1,
+   "p": "paulw",
+   "g": 94,
+   "ch": 16,
+   "tp": 22,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 7,
+   "d": 6,
+   "a9": 5
+  },
+  {
+   "year": 2017,
+   "round": 1,
+   "p": "petec",
+   "g": 94,
+   "ch": 24,
+   "tp": 22,
+   "e": 0,
+   "b": 2,
+   "pr": 5,
+   "bo": 3,
+   "d": 8,
+   "a9": -2
+  },
+  {
+   "year": 2017,
+   "round": 1,
+   "p": "rmac",
+   "g": 83,
+   "ch": 15,
+   "tp": 11,
+   "e": 0,
+   "b": 0,
+   "pr": 9,
+   "bo": 7,
+   "d": 2,
+   "a9": 0
+  },
+  {
+   "year": 2017,
+   "round": 1,
+   "p": "saugy",
+   "g": 97,
+   "ch": 34,
+   "tp": 25,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 10,
+   "d": 6,
+   "a9": 1
+  },
+  {
+   "year": 2017,
+   "round": 1,
+   "p": "tjsc",
+   "g": 91,
+   "ch": 14,
+   "tp": 19,
+   "e": 0,
+   "b": 1,
+   "pr": 3,
+   "bo": 9,
+   "d": 5,
+   "a9": 2
+  },
+  {
+   "year": 2017,
+   "round": 2,
+   "p": "andy",
+   "g": 82,
+   "ch": 11,
+   "tp": 10,
+   "e": 0,
+   "b": 0,
+   "pr": 9,
+   "bo": 8,
+   "d": 1,
+   "a9": 0
+  },
+  {
+   "year": 2017,
+   "round": 2,
+   "p": "bent",
+   "g": 84,
+   "ch": 10,
+   "tp": 12,
+   "e": 0,
+   "b": 0,
+   "pr": 8,
+   "bo": 8,
+   "d": 2,
+   "a9": -1
+  },
+  {
+   "year": 2017,
+   "round": 2,
+   "p": "daveb",
+   "g": 95,
+   "ch": 19,
+   "tp": 23,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 5,
+   "d": 7,
+   "a9": 3
+  },
+  {
+   "year": 2017,
+   "round": 2,
+   "p": "grants",
+   "g": 86,
+   "ch": 17,
+   "tp": 14,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 12,
+   "d": 1,
+   "a9": -3
+  },
+  {
+   "year": 2017,
+   "round": 2,
+   "p": "jensen",
+   "g": 76,
+   "ch": 8,
+   "tp": 4,
+   "e": 0,
+   "b": 3,
+   "pr": 10,
+   "bo": 3,
+   "d": 2,
+   "a9": -3
+  },
+  {
+   "year": 2017,
+   "round": 2,
+   "p": "jimh",
+   "g": 110,
+   "ch": 29,
+   "tp": 38,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 3,
+   "d": 13,
+   "a9": -3
+  },
+  {
+   "year": 2017,
+   "round": 2,
+   "p": "kj",
+   "g": 97,
+   "ch": 19,
+   "tp": 25,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 8,
+   "d": 7,
+   "a9": 0
+  },
+  {
+   "year": 2017,
+   "round": 2,
+   "p": "kylem",
+   "g": 103,
+   "ch": 23,
+   "tp": 31,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 7,
+   "d": 9,
+   "a9": 2
+  },
+  {
+   "year": 2017,
+   "round": 2,
+   "p": "matth",
+   "g": 101,
+   "ch": 20,
+   "tp": 29,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 7,
+   "d": 9,
+   "a9": 1
+  },
+  {
+   "year": 2017,
+   "round": 2,
+   "p": "nicks",
+   "g": 79,
+   "ch": 10,
+   "tp": 7,
+   "e": 0,
+   "b": 3,
+   "pr": 6,
+   "bo": 8,
+   "d": 1,
+   "a9": 3
+  },
+  {
+   "year": 2017,
+   "round": 2,
+   "p": "pace",
+   "g": 78,
+   "ch": 14,
+   "tp": 6,
+   "e": 0,
+   "b": 1,
+   "pr": 11,
+   "bo": 5,
+   "d": 1,
+   "a9": 3
+  },
+  {
+   "year": 2017,
+   "round": 2,
+   "p": "paulw",
+   "g": 94,
+   "ch": 17,
+   "tp": 22,
+   "e": 0,
+   "b": 1,
+   "pr": 4,
+   "bo": 6,
+   "d": 7,
+   "a9": 3
+  },
+  {
+   "year": 2017,
+   "round": 2,
+   "p": "petec",
+   "g": 90,
+   "ch": 26,
+   "tp": 18,
+   "e": 0,
+   "b": 2,
+   "pr": 3,
+   "bo": 9,
+   "d": 4,
+   "a9": 4
+  },
+  {
+   "year": 2017,
+   "round": 2,
+   "p": "rmac",
+   "g": 83,
+   "ch": 15,
+   "tp": 11,
+   "e": 0,
+   "b": 1,
+   "pr": 7,
+   "bo": 8,
+   "d": 2,
+   "a9": -3
+  },
+  {
+   "year": 2017,
+   "round": 2,
+   "p": "saugy",
+   "g": 106,
+   "ch": 34,
+   "tp": 34,
+   "e": 0,
+   "b": 0,
+   "pr": 1,
+   "bo": 6,
+   "d": 11,
+   "a9": -2
+  },
+  {
+   "year": 2017,
+   "round": 2,
+   "p": "tjsc",
+   "g": 89,
+   "ch": 15,
+   "tp": 17,
+   "e": 0,
+   "b": 1,
+   "pr": 4,
+   "bo": 8,
+   "d": 5,
+   "a9": -4
+  },
+  {
+   "year": 2017,
+   "round": 3,
+   "p": "andy",
+   "g": 84,
+   "ch": 15.8,
+   "tp": 12,
+   "e": 0,
+   "b": 1,
+   "pr": 7,
+   "bo": 7,
+   "d": 3,
+   "a9": 2
+  },
+  {
+   "year": 2017,
+   "round": 3,
+   "p": "bent",
+   "g": 81,
+   "ch": 13.6,
+   "tp": 9,
+   "e": 0,
+   "b": 2,
+   "pr": 8,
+   "bo": 6,
+   "d": 2,
+   "a9": -4
+  },
+  {
+   "year": 2017,
+   "round": 3,
+   "p": "daveb",
+   "g": 89,
+   "ch": 17.8,
+   "tp": 17,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 6,
+   "d": 5,
+   "a9": -2
+  },
+  {
+   "year": 2017,
+   "round": 3,
+   "p": "grants",
+   "g": 99,
+   "ch": 23.8,
+   "tp": 27,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 6,
+   "d": 9,
+   "a9": -1
+  },
+  {
+   "year": 2017,
+   "round": 3,
+   "p": "jensen",
+   "g": 87,
+   "ch": 12.8,
+   "tp": 15,
+   "e": 0,
+   "b": 1,
+   "pr": 4,
+   "bo": 10,
+   "d": 3,
+   "a9": 1
+  },
+  {
+   "year": 2017,
+   "round": 3,
+   "p": "jimh",
+   "g": 88,
+   "ch": 20,
+   "tp": 16,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 6,
+   "d": 5,
+   "a9": -2
+  },
+  {
+   "year": 2017,
+   "round": 3,
+   "p": "kj",
+   "g": 81,
+   "ch": 13.6,
+   "tp": 9,
+   "e": 0,
+   "b": 2,
+   "pr": 8,
+   "bo": 6,
+   "d": 2,
+   "a9": -4
+  },
+  {
+   "year": 2017,
+   "round": 3,
+   "p": "kylem",
+   "g": 84,
+   "ch": 15.8,
+   "tp": 12,
+   "e": 0,
+   "b": 1,
+   "pr": 7,
+   "bo": 7,
+   "d": 3,
+   "a9": 2
+  },
+  {
+   "year": 2017,
+   "round": 3,
+   "p": "matth",
+   "g": 87,
+   "ch": 12.8,
+   "tp": 15,
+   "e": 0,
+   "b": 1,
+   "pr": 4,
+   "bo": 10,
+   "d": 3,
+   "a9": 1
+  },
+  {
+   "year": 2017,
+   "round": 3,
+   "p": "nicks",
+   "g": 79,
+   "ch": 12,
+   "tp": 7,
+   "e": 0,
+   "b": 1,
+   "pr": 10,
+   "bo": 6,
+   "d": 1,
+   "a9": 2
+  },
+  {
+   "year": 2017,
+   "round": 3,
+   "p": "pace",
+   "g": 88,
+   "ch": 20,
+   "tp": 16,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 6,
+   "d": 5,
+   "a9": -2
+  },
+  {
+   "year": 2017,
+   "round": 3,
+   "p": "paulw",
+   "g": 89,
+   "ch": 17.8,
+   "tp": 17,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 6,
+   "d": 5,
+   "a9": -2
+  },
+  {
+   "year": 2017,
+   "round": 3,
+   "p": "petec",
+   "g": 76,
+   "ch": 19.4,
+   "tp": 4,
+   "e": 0,
+   "b": 1,
+   "pr": 12,
+   "bo": 5,
+   "d": 0,
+   "a9": 4
+  },
+  {
+   "year": 2017,
+   "round": 3,
+   "p": "rmac",
+   "g": 76,
+   "ch": 19.4,
+   "tp": 4,
+   "e": 0,
+   "b": 1,
+   "pr": 12,
+   "bo": 5,
+   "d": 0,
+   "a9": 4
+  },
+  {
+   "year": 2017,
+   "round": 3,
+   "p": "saugy",
+   "g": 99,
+   "ch": 23.8,
+   "tp": 27,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 6,
+   "d": 9,
+   "a9": -1
+  },
+  {
+   "year": 2017,
+   "round": 3,
+   "p": "tjsc",
+   "g": 79,
+   "ch": 12,
+   "tp": 7,
+   "e": 0,
+   "b": 1,
+   "pr": 10,
+   "bo": 6,
+   "d": 1,
+   "a9": 2
+  },
+  {
+   "year": 2017,
+   "round": 4,
+   "p": "andy",
+   "g": 88,
+   "ch": 10,
+   "tp": 16,
+   "e": 0,
+   "b": 0,
+   "pr": 8,
+   "bo": 5,
+   "d": 5
+  },
+  {
+   "year": 2017,
+   "round": 4,
+   "p": "bent",
+   "g": 93,
+   "ch": 10,
+   "tp": 21,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 5,
+   "d": 7
+  },
+  {
+   "year": 2017,
+   "round": 4,
+   "p": "daveb",
+   "g": 107,
+   "ch": 18,
+   "tp": 35,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 3,
+   "d": 11
+  },
+  {
+   "year": 2017,
+   "round": 4,
+   "p": "grants",
+   "g": 102,
+   "ch": 16,
+   "tp": 30,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 6,
+   "d": 8
+  },
+  {
+   "year": 2017,
+   "round": 4,
+   "p": "jensen",
+   "g": 96,
+   "ch": 7,
+   "tp": 24,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 13,
+   "d": 3
+  },
+  {
+   "year": 2017,
+   "round": 4,
+   "p": "jimh",
+   "g": 112,
+   "ch": 29,
+   "tp": 40,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 4,
+   "d": 12
+  },
+  {
+   "year": 2017,
+   "round": 4,
+   "p": "kj",
+   "g": 104,
+   "ch": 18,
+   "tp": 32,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 5,
+   "d": 9
+  },
+  {
+   "year": 2017,
+   "round": 4,
+   "p": "kylem",
+   "g": 118,
+   "ch": 22,
+   "tp": 46,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 2,
+   "d": 14
+  },
+  {
+   "year": 2017,
+   "round": 4,
+   "p": "matth",
+   "g": 103,
+   "ch": 20,
+   "tp": 31,
+   "e": 0,
+   "b": 0,
+   "pr": 1,
+   "bo": 9,
+   "d": 8
+  },
+  {
+   "year": 2017,
+   "round": 4,
+   "p": "nicks",
+   "g": 96,
+   "ch": 9,
+   "tp": 24,
+   "e": 0,
+   "b": 1,
+   "pr": 5,
+   "bo": 2,
+   "d": 10
+  },
+  {
+   "year": 2017,
+   "round": 4,
+   "p": "pace",
+   "g": 90,
+   "ch": 13,
+   "tp": 18,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 6,
+   "d": 5
+  },
+  {
+   "year": 2017,
+   "round": 4,
+   "p": "paulw",
+   "g": 90,
+   "ch": 16,
+   "tp": 18,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 8,
+   "d": 4
+  },
+  {
+   "year": 2017,
+   "round": 4,
+   "p": "petec",
+   "g": 103,
+   "ch": 24,
+   "tp": 31,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 6,
+   "d": 10
+  },
+  {
+   "year": 2017,
+   "round": 4,
+   "p": "rmac",
+   "g": 93,
+   "ch": 14,
+   "tp": 21,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 5,
+   "d": 7
+  },
+  {
+   "year": 2017,
+   "round": 4,
+   "p": "saugy",
+   "g": 118,
+   "ch": 33,
+   "tp": 46,
+   "e": 0,
+   "b": 0,
+   "pr": 0,
+   "bo": 5,
+   "d": 13
+  },
+  {
+   "year": 2017,
+   "round": 4,
+   "p": "tjsc",
+   "g": 100,
+   "ch": 14,
+   "tp": 28,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 6,
+   "d": 9
+  },
+  {
+   "year": 2018,
+   "round": 1,
+   "p": "andy",
+   "g": 73,
+   "ch": 6,
+   "tp": 1,
+   "e": 1,
+   "b": 3,
+   "pr": 9,
+   "bo": 4,
+   "d": 1,
+   "a9": 1
+  },
+  {
+   "year": 2018,
+   "round": 1,
+   "p": "bent",
+   "g": 78,
+   "ch": 4,
+   "tp": 6,
+   "e": 0,
+   "b": 1,
+   "pr": 11,
+   "bo": 5,
+   "d": 1,
+   "a9": -1
+  },
+  {
+   "year": 2018,
+   "round": 1,
+   "p": "daveb",
+   "g": 85,
+   "ch": 14,
+   "tp": 13,
+   "e": 0,
+   "b": 1,
+   "pr": 7,
+   "bo": 7,
+   "d": 3,
+   "a9": -3
+  },
+  {
+   "year": 2018,
+   "round": 1,
+   "p": "dk",
+   "g": 87,
+   "ch": 15,
+   "tp": 15,
+   "e": 0,
+   "b": 0,
+   "pr": 10,
+   "bo": 3,
+   "d": 5,
+   "a9": 1
+  },
+  {
+   "year": 2018,
+   "round": 1,
+   "p": "grants",
+   "g": 82,
+   "ch": 9,
+   "tp": 10,
+   "e": 1,
+   "b": 1,
+   "pr": 6,
+   "bo": 7,
+   "d": 3,
+   "a9": -3
+  },
+  {
+   "year": 2018,
+   "round": 1,
+   "p": "jensen",
+   "g": 83,
+   "ch": 5,
+   "tp": 11,
+   "e": 0,
+   "b": 2,
+   "pr": 6,
+   "bo": 7,
+   "d": 3,
+   "a9": 1
+  },
+  {
+   "year": 2018,
+   "round": 1,
+   "p": "jimh",
+   "g": 102,
+   "ch": 22,
+   "tp": 30,
+   "e": 0,
+   "b": 1,
+   "pr": 3,
+   "bo": 3,
+   "d": 11,
+   "a9": 3
+  },
+  {
+   "year": 2018,
+   "round": 1,
+   "p": "kj",
+   "g": 74,
+   "ch": 12,
+   "tp": 2,
+   "e": 1,
+   "b": 1,
+   "pr": 11,
+   "bo": 5,
+   "d": 0,
+   "a9": 1
+  },
+  {
+   "year": 2018,
+   "round": 1,
+   "p": "nicks",
+   "g": 79,
+   "ch": 7,
+   "tp": 7,
+   "e": 0,
+   "b": 2,
+   "pr": 9,
+   "bo": 5,
+   "d": 2,
+   "a9": -1
+  },
+  {
+   "year": 2018,
+   "round": 1,
+   "p": "paulw",
+   "g": 81,
+   "ch": 10,
+   "tp": 9,
+   "e": 0,
+   "b": 1,
+   "pr": 9,
+   "bo": 6,
+   "d": 2,
+   "a9": -1
+  },
+  {
+   "year": 2018,
+   "round": 1,
+   "p": "petec",
+   "g": 90,
+   "ch": 18,
+   "tp": 18,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 9,
+   "d": 4,
+   "a9": -3
+  },
+  {
+   "year": 2018,
+   "round": 1,
+   "p": "rmac",
+   "g": 91,
+   "ch": 11,
+   "tp": 19,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 6,
+   "d": 6,
+   "a9": -3
+  },
+  {
+   "year": 2018,
+   "round": 1,
+   "p": "saugy",
+   "g": 96,
+   "ch": 21,
+   "tp": 24,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 7,
+   "d": 7,
+   "a9": 3
+  },
+  {
+   "year": 2018,
+   "round": 1,
+   "p": "shaunw",
+   "g": 80,
+   "ch": 9,
+   "tp": 8,
+   "e": 0,
+   "b": 1,
+   "pr": 9,
+   "bo": 7,
+   "d": 1,
+   "a9": -1
+  },
+  {
+   "year": 2018,
+   "round": 1,
+   "p": "timc",
+   "g": 80,
+   "ch": 13,
+   "tp": 8,
+   "e": 0,
+   "b": 2,
+   "pr": 9,
+   "bo": 5,
+   "d": 2,
+   "a9": 3
+  },
+  {
+   "year": 2018,
+   "round": 1,
+   "p": "tjsc",
+   "g": 90,
+   "ch": 10,
+   "tp": 18,
+   "e": 0,
+   "b": 0,
+   "pr": 8,
+   "bo": 4,
+   "d": 6,
+   "a9": 3
+  },
+  {
+   "year": 2018,
+   "round": 2,
+   "p": "andy",
+   "g": 88,
+   "ch": 8,
+   "tp": 16,
+   "e": 0,
+   "b": 2,
+   "pr": 5,
+   "bo": 8,
+   "d": 3,
+   "a9": -2
+  },
+  {
+   "year": 2018,
+   "round": 2,
+   "p": "bent",
+   "g": 80,
+   "ch": 5,
+   "tp": 8,
+   "e": 0,
+   "b": 1,
+   "pr": 8,
+   "bo": 9,
+   "d": 0,
+   "a9": 4
+  },
+  {
+   "year": 2018,
+   "round": 2,
+   "p": "daveb",
+   "g": 96,
+   "ch": 20,
+   "tp": 24,
+   "e": 0,
+   "b": 1,
+   "pr": 4,
+   "bo": 4,
+   "d": 9,
+   "a9": 2
+  },
+  {
+   "year": 2018,
+   "round": 2,
+   "p": "dk",
+   "g": 102,
+   "ch": 22,
+   "tp": 30,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 9,
+   "d": 7,
+   "a9": -2
+  },
+  {
+   "year": 2018,
+   "round": 2,
+   "p": "grants",
+   "g": 96,
+   "ch": 13,
+   "tp": 24,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 6,
+   "d": 8,
+   "a9": -4
+  },
+  {
+   "year": 2018,
+   "round": 2,
+   "p": "jensen",
+   "g": 83,
+   "ch": 7,
+   "tp": 11,
+   "e": 0,
+   "b": 1,
+   "pr": 8,
+   "bo": 6,
+   "d": 3,
+   "a9": -3
+  },
+  {
+   "year": 2018,
+   "round": 2,
+   "p": "jimh",
+   "g": 109,
+   "ch": 30,
+   "tp": 37,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 2,
+   "d": 14,
+   "a9": -2
+  },
+  {
+   "year": 2018,
+   "round": 2,
+   "p": "kj",
+   "g": 88,
+   "ch": 17,
+   "tp": 16,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 9,
+   "d": 3,
+   "a9": 1
+  },
+  {
+   "year": 2018,
+   "round": 2,
+   "p": "nicks",
+   "g": 90,
+   "ch": 10,
+   "tp": 18,
+   "e": 0,
+   "b": 1,
+   "pr": 2,
+   "bo": 11,
+   "d": 4,
+   "a9": 1
+  },
+  {
+   "year": 2018,
+   "round": 2,
+   "p": "paulw",
+   "g": 88,
+   "ch": 14,
+   "tp": 16,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 8,
+   "d": 3,
+   "a9": -2
+  },
+  {
+   "year": 2018,
+   "round": 2,
+   "p": "petec",
+   "g": 100,
+   "ch": 26,
+   "tp": 28,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 6,
+   "d": 8,
+   "a9": 2
+  },
+  {
+   "year": 2018,
+   "round": 2,
+   "p": "rmac",
+   "g": 97,
+   "ch": 16,
+   "tp": 25,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 6,
+   "d": 8,
+   "a9": -1
+  },
+  {
+   "year": 2018,
+   "round": 2,
+   "p": "saugy",
+   "g": 104,
+   "ch": 30,
+   "tp": 32,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 6,
+   "d": 9,
+   "a9": -1
+  },
+  {
+   "year": 2018,
+   "round": 2,
+   "p": "shaunw",
+   "g": 90,
+   "ch": 13,
+   "tp": 18,
+   "e": 0,
+   "b": 1,
+   "pr": 7,
+   "bo": 5,
+   "d": 5,
+   "a9": 2
+  },
+  {
+   "year": 2018,
+   "round": 2,
+   "p": "timc",
+   "g": 92,
+   "ch": 18,
+   "tp": 20,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 8,
+   "d": 5,
+   "a9": 3
+  },
+  {
+   "year": 2018,
+   "round": 2,
+   "p": "tjsc",
+   "g": 92,
+   "ch": 14,
+   "tp": 20,
+   "e": 0,
+   "b": 1,
+   "pr": 4,
+   "bo": 8,
+   "d": 5,
+   "a9": 2
+  },
+  {
+   "year": 2018,
+   "round": 3,
+   "p": "andy",
+   "g": 82,
+   "ch": 8,
+   "tp": 10,
+   "e": 0,
+   "b": 2,
+   "pr": 8,
+   "bo": 4,
+   "d": 4,
+   "a9": 4
+  },
+  {
+   "year": 2018,
+   "round": 3,
+   "p": "bent",
+   "g": 80,
+   "ch": 5,
+   "tp": 8,
+   "e": 0,
+   "b": 2,
+   "pr": 7,
+   "bo": 8,
+   "d": 1,
+   "a9": 1
+  },
+  {
+   "year": 2018,
+   "round": 3,
+   "p": "daveb",
+   "g": 88,
+   "ch": 21,
+   "tp": 16,
+   "e": 0,
+   "b": 0,
+   "pr": 10,
+   "bo": 4,
+   "d": 4,
+   "a9": 4
+  },
+  {
+   "year": 2018,
+   "round": 3,
+   "p": "dk",
+   "g": 93,
+   "ch": 23,
+   "tp": 21,
+   "e": 0,
+   "b": 1,
+   "pr": 3,
+   "bo": 8,
+   "d": 6,
+   "a9": 1
+  },
+  {
+   "year": 2018,
+   "round": 3,
+   "p": "grants",
+   "g": 88,
+   "ch": 14,
+   "tp": 16,
+   "e": 0,
+   "b": 2,
+   "pr": 6,
+   "bo": 4,
+   "d": 6,
+   "a9": 4
+  },
+  {
+   "year": 2018,
+   "round": 3,
+   "p": "jensen",
+   "g": 84,
+   "ch": 7,
+   "tp": 12,
+   "e": 0,
+   "b": 1,
+   "pr": 8,
+   "bo": 6,
+   "d": 3,
+   "a9": 4
+  },
+  {
+   "year": 2018,
+   "round": 3,
+   "p": "jimh",
+   "g": 104,
+   "ch": 32,
+   "tp": 32,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 3,
+   "d": 12,
+   "a9": -4
+  },
+  {
+   "year": 2018,
+   "round": 3,
+   "p": "kj",
+   "g": 96,
+   "ch": 18,
+   "tp": 24,
+   "e": 0,
+   "b": 1,
+   "pr": 6,
+   "bo": 4,
+   "d": 7,
+   "a9": -1
+  },
+  {
+   "year": 2018,
+   "round": 3,
+   "p": "nicks",
+   "g": 78,
+   "ch": 11,
+   "tp": 6,
+   "e": 0,
+   "b": 1,
+   "pr": 11,
+   "bo": 5,
+   "d": 1,
+   "a9": -4
+  },
+  {
+   "year": 2018,
+   "round": 3,
+   "p": "paulw",
+   "g": 89,
+   "ch": 15,
+   "tp": 17,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 9,
+   "d": 4,
+   "a9": -1
+  },
+  {
+   "year": 2018,
+   "round": 3,
+   "p": "petec",
+   "g": 105,
+   "ch": 27,
+   "tp": 33,
+   "e": 0,
+   "b": 1,
+   "pr": 1,
+   "bo": 4,
+   "d": 12,
+   "a9": 1
+  },
+  {
+   "year": 2018,
+   "round": 3,
+   "p": "rmac",
+   "g": 92,
+   "ch": 17,
+   "tp": 20,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 6,
+   "d": 6,
+   "a9": -1
+  },
+  {
+   "year": 2018,
+   "round": 3,
+   "p": "saugy",
+   "g": 100,
+   "ch": 31,
+   "tp": 28,
+   "e": 0,
+   "b": 1,
+   "pr": 2,
+   "bo": 5,
+   "d": 10,
+   "a9": -4
+  },
+  {
+   "year": 2018,
+   "round": 3,
+   "p": "shaunw",
+   "g": 83,
+   "ch": 14,
+   "tp": 11,
+   "e": 0,
+   "b": 1,
+   "pr": 8,
+   "bo": 6,
+   "d": 3,
+   "a9": -1
+  },
+  {
+   "year": 2018,
+   "round": 3,
+   "p": "timc",
+   "g": 86,
+   "ch": 19,
+   "tp": 14,
+   "e": 0,
+   "b": 1,
+   "pr": 6,
+   "bo": 9,
+   "d": 2,
+   "a9": 1
+  },
+  {
+   "year": 2018,
+   "round": 3,
+   "p": "tjsc",
+   "g": 106,
+   "ch": 15,
+   "tp": 34,
+   "e": 0,
+   "b": 1,
+   "pr": 2,
+   "bo": 4,
+   "d": 11,
+   "a9": -4
+  },
+  {
+   "year": 2018,
+   "round": 4,
+   "p": "andy",
+   "g": 83,
+   "ch": 8,
+   "tp": 11,
+   "e": 0,
+   "b": 0,
+   "pr": 11,
+   "bo": 4,
+   "d": 3
+  },
+  {
+   "year": 2018,
+   "round": 4,
+   "p": "bent",
+   "g": 89,
+   "ch": 5,
+   "tp": 17,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 5,
+   "d": 6
+  },
+  {
+   "year": 2018,
+   "round": 4,
+   "p": "daveb",
+   "g": 95,
+   "ch": 21,
+   "tp": 23,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 11,
+   "d": 4
+  },
+  {
+   "year": 2018,
+   "round": 4,
+   "p": "dk",
+   "g": 99,
+   "ch": 23,
+   "tp": 27,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 9,
+   "d": 7
+  },
+  {
+   "year": 2018,
+   "round": 4,
+   "p": "grants",
+   "g": 85,
+   "ch": 13,
+   "tp": 13,
+   "e": 0,
+   "b": 2,
+   "pr": 5,
+   "bo": 7,
+   "d": 4
+  },
+  {
+   "year": 2018,
+   "round": 4,
+   "p": "jensen",
+   "g": 76,
+   "ch": 7,
+   "tp": 4,
+   "e": 0,
+   "b": 1,
+   "pr": 13,
+   "bo": 3,
+   "d": 1
+  },
+  {
+   "year": 2018,
+   "round": 4,
+   "p": "jimh",
+   "g": 101,
+   "ch": 31,
+   "tp": 29,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 7,
+   "d": 8
+  },
+  {
+   "year": 2018,
+   "round": 4,
+   "p": "kj",
+   "g": 93,
+   "ch": 17,
+   "tp": 21,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 11,
+   "d": 4
+  },
+  {
+   "year": 2018,
+   "round": 4,
+   "p": "nicks",
+   "g": 82,
+   "ch": 11,
+   "tp": 10,
+   "e": 0,
+   "b": 1,
+   "pr": 9,
+   "bo": 6,
+   "d": 2
+  },
+  {
+   "year": 2018,
+   "round": 4,
+   "p": "paulw",
+   "g": 88,
+   "ch": 14,
+   "tp": 16,
+   "e": 0,
+   "b": 1,
+   "pr": 6,
+   "bo": 5,
+   "d": 6
+  },
+  {
+   "year": 2018,
+   "round": 4,
+   "p": "petec",
+   "g": 97,
+   "ch": 26,
+   "tp": 25,
+   "e": 0,
+   "b": 1,
+   "pr": 1,
+   "bo": 8,
+   "d": 8
+  },
+  {
+   "year": 2018,
+   "round": 4,
+   "p": "rmac",
+   "g": 83,
+   "ch": 16,
+   "tp": 11,
+   "e": 0,
+   "b": 1,
+   "pr": 8,
+   "bo": 6,
+   "d": 3
+  },
+  {
+   "year": 2018,
+   "round": 4,
+   "p": "saugy",
+   "g": 104,
+   "ch": 30,
+   "tp": 32,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 6,
+   "d": 10
+  },
+  {
+   "year": 2018,
+   "round": 4,
+   "p": "shaunw",
+   "g": 85,
+   "ch": 13,
+   "tp": 13,
+   "e": 0,
+   "b": 2,
+   "pr": 6,
+   "bo": 6,
+   "d": 4
+  },
+  {
+   "year": 2018,
+   "round": 4,
+   "p": "timc",
+   "g": 84,
+   "ch": 18,
+   "tp": 12,
+   "e": 0,
+   "b": 1,
+   "pr": 7,
+   "bo": 7,
+   "d": 3
+  },
+  {
+   "year": 2018,
+   "round": 4,
+   "p": "tjsc",
+   "g": 93,
+   "ch": 14,
+   "tp": 21,
+   "e": 0,
+   "b": 1,
+   "pr": 3,
+   "bo": 7,
+   "d": 7
+  },
+  {
+   "year": 2019,
+   "round": 1,
+   "p": "andy",
+   "g": 62,
+   "ch": 3.3,
+   "tp": -10,
+   "e": 1,
+   "b": 9,
+   "pr": 7,
+   "bo": 1,
+   "d": 0,
+   "a9": 0
+  },
+  {
+   "year": 2019,
+   "round": 1,
+   "p": "bent",
+   "g": 67,
+   "ch": 5.6,
+   "tp": -5,
+   "e": 0,
+   "b": 6,
+   "pr": 11,
+   "bo": 1,
+   "d": 0,
+   "a9": 0
+  },
+  {
+   "year": 2019,
+   "round": 1,
+   "p": "dk",
+   "g": 79,
+   "ch": 10.1,
+   "tp": 7,
+   "e": 0,
+   "b": 1,
+   "pr": 9,
+   "bo": 8,
+   "d": 0,
+   "a9": -4
+  },
+  {
+   "year": 2019,
+   "round": 1,
+   "p": "grants",
+   "g": 72,
+   "ch": 5.6,
+   "tp": 0,
+   "e": 0,
+   "b": 3,
+   "pr": 12,
+   "bo": 3,
+   "d": 0,
+   "a9": 3
+  },
+  {
+   "year": 2019,
+   "round": 1,
+   "p": "jensen",
+   "g": 67,
+   "ch": 5.6,
+   "tp": -5,
+   "e": 0,
+   "b": 6,
+   "pr": 11,
+   "bo": 1,
+   "d": 0,
+   "a9": 0
+  },
+  {
+   "year": 2019,
+   "round": 1,
+   "p": "jimh",
+   "g": 93,
+   "ch": 15.4,
+   "tp": 21,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 8,
+   "d": 6,
+   "a9": -2
+  },
+  {
+   "year": 2019,
+   "round": 1,
+   "p": "johns",
+   "g": 62,
+   "ch": 3.3,
+   "tp": -10,
+   "e": 1,
+   "b": 9,
+   "pr": 7,
+   "bo": 1,
+   "d": 0,
+   "a9": 0
+  },
+  {
+   "year": 2019,
+   "round": 1,
+   "p": "kj",
+   "g": 76,
+   "ch": 8,
+   "tp": 4,
+   "e": 0,
+   "b": 2,
+   "pr": 10,
+   "bo": 6,
+   "d": 0,
+   "a9": 4
+  },
+  {
+   "year": 2019,
+   "round": 1,
+   "p": "kylem",
+   "g": 80,
+   "ch": 12.8,
+   "tp": 8,
+   "e": 0,
+   "b": 1,
+   "pr": 8,
+   "bo": 9,
+   "d": 0,
+   "a9": 2
+  },
+  {
+   "year": 2019,
+   "round": 1,
+   "p": "pace",
+   "g": 72,
+   "ch": 5.6,
+   "tp": 0,
+   "e": 0,
+   "b": 3,
+   "pr": 12,
+   "bo": 3,
+   "d": 0,
+   "a9": 3
+  },
+  {
+   "year": 2019,
+   "round": 1,
+   "p": "paulw",
+   "g": 74,
+   "ch": 7.9,
+   "tp": 2,
+   "e": 0,
+   "b": 2,
+   "pr": 12,
+   "bo": 4,
+   "d": 0,
+   "a9": -3
+  },
+  {
+   "year": 2019,
+   "round": 1,
+   "p": "petec",
+   "g": 80,
+   "ch": 12.8,
+   "tp": 8,
+   "e": 0,
+   "b": 1,
+   "pr": 8,
+   "bo": 9,
+   "d": 0,
+   "a9": 2
+  },
+  {
+   "year": 2019,
+   "round": 1,
+   "p": "rmac",
+   "g": 76,
+   "ch": 8,
+   "tp": 4,
+   "e": 0,
+   "b": 2,
+   "pr": 10,
+   "bo": 6,
+   "d": 0,
+   "a9": 4
+  },
+  {
+   "year": 2019,
+   "round": 1,
+   "p": "saugy",
+   "g": 93,
+   "ch": 15.4,
+   "tp": 21,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 8,
+   "d": 6,
+   "a9": -2
+  },
+  {
+   "year": 2019,
+   "round": 1,
+   "p": "timc",
+   "g": 74,
+   "ch": 7.9,
+   "tp": 2,
+   "e": 0,
+   "b": 2,
+   "pr": 12,
+   "bo": 4,
+   "d": 0,
+   "a9": -3
+  },
+  {
+   "year": 2019,
+   "round": 1,
+   "p": "tjsc",
+   "g": 79,
+   "ch": 10.1,
+   "tp": 7,
+   "e": 0,
+   "b": 1,
+   "pr": 9,
+   "bo": 8,
+   "d": 0,
+   "a9": -4
+  },
+  {
+   "year": 2019,
+   "round": 2,
+   "p": "andy",
+   "g": 82,
+   "ch": 10,
+   "tp": 11,
+   "e": 0,
+   "b": 3,
+   "pr": 6,
+   "bo": 5,
+   "d": 4,
+   "a9": 5
+  },
+  {
+   "year": 2019,
+   "round": 2,
+   "p": "bent",
+   "g": 80,
+   "ch": 8,
+   "tp": 9,
+   "e": 0,
+   "b": 2,
+   "pr": 9,
+   "bo": 4,
+   "d": 3,
+   "a9": 2
+  },
+  {
+   "year": 2019,
+   "round": 2,
+   "p": "dk",
+   "g": 92,
+   "ch": 23,
+   "tp": 21,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 7,
+   "d": 7,
+   "a9": 0
+  },
+  {
+   "year": 2019,
+   "round": 2,
+   "p": "grants",
+   "g": 82,
+   "ch": 11,
+   "tp": 11,
+   "e": 0,
+   "b": 2,
+   "pr": 6,
+   "bo": 8,
+   "d": 2,
+   "a9": 0
+  },
+  {
+   "year": 2019,
+   "round": 2,
+   "p": "jensen",
+   "g": 82,
+   "ch": 8,
+   "tp": 11,
+   "e": 0,
+   "b": 2,
+   "pr": 5,
+   "bo": 10,
+   "d": 1,
+   "a9": 3
+  },
+  {
+   "year": 2019,
+   "round": 2,
+   "p": "jimh",
+   "g": 118,
+   "ch": 30,
+   "tp": 47,
+   "e": 0,
+   "b": 0,
+   "pr": 0,
+   "bo": 5,
+   "d": 13,
+   "a9": -5
+  },
+  {
+   "year": 2019,
+   "round": 2,
+   "p": "johns",
+   "g": 69,
+   "ch": -3,
+   "tp": -2,
+   "e": 1,
+   "b": 5,
+   "pr": 7,
+   "bo": 5,
+   "d": 0,
+   "a9": 0
+  },
+  {
+   "year": 2019,
+   "round": 2,
+   "p": "kj",
+   "g": 92,
+   "ch": 18,
+   "tp": 21,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 8,
+   "d": 6,
+   "a9": -3
+  },
+  {
+   "year": 2019,
+   "round": 2,
+   "p": "kylem",
+   "g": 108,
+   "ch": 25,
+   "tp": 37,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 1,
+   "d": 13,
+   "a9": 0
+  },
+  {
+   "year": 2019,
+   "round": 2,
+   "p": "pace",
+   "g": 88,
+   "ch": 11,
+   "tp": 17,
+   "e": 0,
+   "b": 2,
+   "pr": 3,
+   "bo": 9,
+   "d": 4,
+   "a9": 1
+  },
+  {
+   "year": 2019,
+   "round": 2,
+   "p": "paulw",
+   "g": 98,
+   "ch": 16,
+   "tp": 27,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 5,
+   "d": 9,
+   "a9": 0
+  },
+  {
+   "year": 2019,
+   "round": 2,
+   "p": "petec",
+   "g": 89,
+   "ch": 26,
+   "tp": 18,
+   "e": 0,
+   "b": 0,
+   "pr": 8,
+   "bo": 7,
+   "d": 3,
+   "a9": 3
+  },
+  {
+   "year": 2019,
+   "round": 2,
+   "p": "rmac",
+   "g": 91,
+   "ch": 14,
+   "tp": 20,
+   "e": 1,
+   "b": 0,
+   "pr": 3,
+   "bo": 8,
+   "d": 6,
+   "a9": -2
+  },
+  {
+   "year": 2019,
+   "round": 2,
+   "p": "saugy",
+   "g": 109,
+   "ch": 32,
+   "tp": 38,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 5,
+   "d": 10,
+   "a9": -3
+  },
+  {
+   "year": 2019,
+   "round": 2,
+   "p": "timc",
+   "g": 89,
+   "ch": 15,
+   "tp": 18,
+   "e": 0,
+   "b": 0,
+   "pr": 8,
+   "bo": 5,
+   "d": 5,
+   "a9": 0
+  },
+  {
+   "year": 2019,
+   "round": 2,
+   "p": "tjsc",
+   "g": 88,
+   "ch": 17,
+   "tp": 17,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 9,
+   "d": 4,
+   "a9": -1
+  },
+  {
+   "year": 2019,
+   "round": 3,
+   "p": "andy",
+   "g": 90,
+   "ch": 10,
+   "tp": 18,
+   "e": 0,
+   "b": 2,
+   "pr": 3,
+   "bo": 8,
+   "d": 5,
+   "a9": 1
+  },
+  {
+   "year": 2019,
+   "round": 3,
+   "p": "bent",
+   "g": 87,
+   "ch": 8,
+   "tp": 15,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 10,
+   "d": 2,
+   "a9": -3
+  },
+  {
+   "year": 2019,
+   "round": 3,
+   "p": "dk",
+   "g": 101,
+   "ch": 23,
+   "tp": 29,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 6,
+   "d": 9,
+   "a9": -1
+  },
+  {
+   "year": 2019,
+   "round": 3,
+   "p": "grants",
+   "g": 86,
+   "ch": 11,
+   "tp": 14,
+   "e": 0,
+   "b": 1,
+   "pr": 6,
+   "bo": 7,
+   "d": 4,
+   "a9": 1
+  },
+  {
+   "year": 2019,
+   "round": 3,
+   "p": "jensen",
+   "g": 90,
+   "ch": 8,
+   "tp": 18,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 9,
+   "d": 4,
+   "a9": -1
+  },
+  {
+   "year": 2019,
+   "round": 3,
+   "p": "jimh",
+   "g": 102,
+   "ch": 30,
+   "tp": 30,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 5,
+   "d": 11,
+   "a9": -1
+  },
+  {
+   "year": 2019,
+   "round": 3,
+   "p": "johns",
+   "g": 64,
+   "ch": -3,
+   "tp": -8,
+   "e": 1,
+   "b": 7,
+   "pr": 9,
+   "bo": 1,
+   "d": 0,
+   "a9": 3
+  },
+  {
+   "year": 2019,
+   "round": 3,
+   "p": "kj",
+   "g": 94,
+   "ch": 18,
+   "tp": 22,
+   "e": 0,
+   "b": 1,
+   "pr": 4,
+   "bo": 6,
+   "d": 7,
+   "a9": 1
+  },
+  {
+   "year": 2019,
+   "round": 3,
+   "p": "kylem",
+   "g": 123,
+   "ch": 25,
+   "tp": 51,
+   "e": 0,
+   "b": 0,
+   "pr": 1,
+   "bo": 2,
+   "d": 15,
+   "a9": 1
+  },
+  {
+   "year": 2019,
+   "round": 3,
+   "p": "pace",
+   "g": 87,
+   "ch": 11,
+   "tp": 15,
+   "e": 0,
+   "b": 0,
+   "pr": 8,
+   "bo": 5,
+   "d": 5,
+   "a9": 3
+  },
+  {
+   "year": 2019,
+   "round": 3,
+   "p": "paulw",
+   "g": 105,
+   "ch": 16,
+   "tp": 33,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 3,
+   "d": 13,
+   "a9": -3
+  },
+  {
+   "year": 2019,
+   "round": 3,
+   "p": "petec",
+   "g": 111,
+   "ch": 26,
+   "tp": 39,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 6,
+   "d": 9,
+   "a9": 1
+  },
+  {
+   "year": 2019,
+   "round": 3,
+   "p": "rmac",
+   "g": 89,
+   "ch": 14,
+   "tp": 17,
+   "e": 0,
+   "b": 1,
+   "pr": 6,
+   "bo": 7,
+   "d": 4,
+   "a9": 1
+  },
+  {
+   "year": 2019,
+   "round": 3,
+   "p": "saugy",
+   "g": 120,
+   "ch": 31,
+   "tp": 48,
+   "e": 0,
+   "b": 0,
+   "pr": 1,
+   "bo": 3,
+   "d": 14,
+   "a9": -1
+  },
+  {
+   "year": 2019,
+   "round": 3,
+   "p": "timc",
+   "g": 94,
+   "ch": 15,
+   "tp": 22,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 11,
+   "d": 5,
+   "a9": -1
+  },
+  {
+   "year": 2019,
+   "round": 3,
+   "p": "tjsc",
+   "g": 92,
+   "ch": 17,
+   "tp": 20,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 5,
+   "d": 6,
+   "a9": -1
+  },
+  {
+   "year": 2019,
+   "round": 4,
+   "p": "andy",
+   "g": 82,
+   "ch": 11,
+   "tp": 12,
+   "e": 0,
+   "b": 0,
+   "pr": 10,
+   "bo": 4,
+   "d": 4
+  },
+  {
+   "year": 2019,
+   "round": 4,
+   "p": "bent",
+   "g": 89,
+   "ch": 9,
+   "tp": 19,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 7,
+   "d": 4
+  },
+  {
+   "year": 2019,
+   "round": 4,
+   "p": "dk",
+   "g": 91,
+   "ch": 24,
+   "tp": 21,
+   "e": 0,
+   "b": 1,
+   "pr": 4,
+   "bo": 6,
+   "d": 7
+  },
+  {
+   "year": 2019,
+   "round": 4,
+   "p": "grants",
+   "g": 89,
+   "ch": 13,
+   "tp": 19,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 7,
+   "d": 4
+  },
+  {
+   "year": 2019,
+   "round": 4,
+   "p": "jensen",
+   "g": 91,
+   "ch": 9,
+   "tp": 21,
+   "e": 0,
+   "b": 1,
+   "pr": 4,
+   "bo": 7,
+   "d": 6
+  },
+  {
+   "year": 2019,
+   "round": 4,
+   "p": "jimh",
+   "g": 94,
+   "ch": 33,
+   "tp": 24,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 6,
+   "d": 7
+  },
+  {
+   "year": 2019,
+   "round": 4,
+   "p": "johns",
+   "g": 78,
+   "ch": -3,
+   "tp": 8,
+   "e": 0,
+   "b": 1,
+   "pr": 9,
+   "bo": 7,
+   "d": 1
+  },
+  {
+   "year": 2019,
+   "round": 4,
+   "p": "kj",
+   "g": 96,
+   "ch": 20,
+   "tp": 26,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 6,
+   "d": 8
+  },
+  {
+   "year": 2019,
+   "round": 4,
+   "p": "kylem",
+   "g": 117,
+   "ch": 27,
+   "tp": 47,
+   "e": 0,
+   "b": 0,
+   "pr": 0,
+   "bo": 4,
+   "d": 14
+  },
+  {
+   "year": 2019,
+   "round": 4,
+   "p": "pace",
+   "g": 87,
+   "ch": 13,
+   "tp": 17,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 5,
+   "d": 6
+  },
+  {
+   "year": 2019,
+   "round": 4,
+   "p": "paulw",
+   "g": 98,
+   "ch": 18,
+   "tp": 28,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 7,
+   "d": 8
+  },
+  {
+   "year": 2019,
+   "round": 4,
+   "p": "petec",
+   "g": 111,
+   "ch": 28,
+   "tp": 41,
+   "e": 0,
+   "b": 0,
+   "pr": 1,
+   "bo": 4,
+   "d": 13
+  },
+  {
+   "year": 2019,
+   "round": 4,
+   "p": "rmac",
+   "g": 94,
+   "ch": 15,
+   "tp": 24,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 6,
+   "d": 8
+  },
+  {
+   "year": 2019,
+   "round": 4,
+   "p": "saugy",
+   "g": 117,
+   "ch": 35,
+   "tp": 47,
+   "e": 0,
+   "b": 0,
+   "pr": 1,
+   "bo": 4,
+   "d": 13
+  },
+  {
+   "year": 2019,
+   "round": 4,
+   "p": "timc",
+   "g": 92,
+   "ch": 16,
+   "tp": 22,
+   "e": 0,
+   "b": 1,
+   "pr": 3,
+   "bo": 7,
+   "d": 7
+  },
+  {
+   "year": 2019,
+   "round": 4,
+   "p": "tjsc",
+   "g": 98,
+   "ch": 19,
+   "tp": 28,
+   "e": 0,
+   "b": 0,
+   "pr": 1,
+   "bo": 10,
+   "d": 7
+  },
+  {
+   "year": 2020,
+   "round": 1,
+   "p": "andy",
+   "g": 93,
+   "ch": 7,
+   "tp": 21,
+   "e": 0,
+   "b": 1,
+   "pr": 4,
+   "bo": 5,
+   "d": 8,
+   "a9": -6
+  },
+  {
+   "year": 2020,
+   "round": 1,
+   "p": "bent",
+   "g": 94,
+   "ch": 4,
+   "tp": 22,
+   "e": 0,
+   "b": 1,
+   "pr": 4,
+   "bo": 7,
+   "d": 6,
+   "a9": -6
+  },
+  {
+   "year": 2020,
+   "round": 1,
+   "p": "dk",
+   "g": 102,
+   "ch": 21,
+   "tp": 30,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 6,
+   "d": 9,
+   "a9": 2
+  },
+  {
+   "year": 2020,
+   "round": 1,
+   "p": "jensen",
+   "g": 87,
+   "ch": 7,
+   "tp": 15,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 9,
+   "d": 2,
+   "a9": 7
+  },
+  {
+   "year": 2020,
+   "round": 1,
+   "p": "joeo",
+   "g": 101,
+   "ch": 15,
+   "tp": 29,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 8,
+   "d": 8,
+   "a9": 1
+  },
+  {
+   "year": 2020,
+   "round": 1,
+   "p": "juliusp",
+   "g": 91,
+   "ch": 10,
+   "tp": 19,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 6,
+   "d": 5,
+   "a9": -2
+  },
+  {
+   "year": 2020,
+   "round": 1,
+   "p": "kj",
+   "g": 89,
+   "ch": 11,
+   "tp": 17,
+   "e": 0,
+   "b": 1,
+   "pr": 6,
+   "bo": 7,
+   "d": 4,
+   "a9": 7
+  },
+  {
+   "year": 2020,
+   "round": 1,
+   "p": "kylem",
+   "g": 118,
+   "ch": 24,
+   "tp": 46,
+   "e": 0,
+   "b": 0,
+   "pr": 0,
+   "bo": 6,
+   "d": 12,
+   "a9": -1
+  },
+  {
+   "year": 2020,
+   "round": 1,
+   "p": "nicks",
+   "g": 88,
+   "ch": 7,
+   "tp": 16,
+   "e": 0,
+   "b": 1,
+   "pr": 6,
+   "bo": 6,
+   "d": 5,
+   "a9": 6
+  },
+  {
+   "year": 2020,
+   "round": 1,
+   "p": "pace",
+   "g": 93,
+   "ch": 10,
+   "tp": 21,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 10,
+   "d": 5,
+   "a9": 1
+  },
+  {
+   "year": 2020,
+   "round": 1,
+   "p": "petec",
+   "g": 99,
+   "ch": 20,
+   "tp": 27,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 6,
+   "d": 9,
+   "a9": -7
+  },
+  {
+   "year": 2020,
+   "round": 1,
+   "p": "scottr",
+   "g": 84,
+   "ch": 3,
+   "tp": 12,
+   "e": 0,
+   "b": 0,
+   "pr": 10,
+   "bo": 5,
+   "d": 3,
+   "a9": -1
+  },
+  {
+   "year": 2020,
+   "round": 1,
+   "p": "shaunw",
+   "g": 92,
+   "ch": 10,
+   "tp": 20,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 9,
+   "d": 5,
+   "a9": 2
+  },
+  {
+   "year": 2020,
+   "round": 1,
+   "p": "timc",
+   "g": 91,
+   "ch": 8,
+   "tp": 19,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 8,
+   "d": 4,
+   "a9": -2
+  },
+  {
+   "year": 2020,
+   "round": 1,
+   "p": "tjsc",
+   "g": 96,
+   "ch": 14,
+   "tp": 24,
+   "e": 0,
+   "b": 2,
+   "pr": 0,
+   "bo": 8,
+   "d": 8,
+   "a9": 6
+  },
+  {
+   "year": 2020,
+   "round": 2,
+   "p": "andy",
+   "g": 88,
+   "ch": 8,
+   "tp": 17,
+   "e": 0,
+   "b": 2,
+   "pr": 5,
+   "bo": 5,
+   "d": 6,
+   "a9": -4
+  },
+  {
+   "year": 2020,
+   "round": 2,
+   "p": "bent",
+   "g": 97,
+   "ch": 5,
+   "tp": 26,
+   "e": 0,
+   "b": 0,
+   "pr": 0,
+   "bo": 12,
+   "d": 6,
+   "a9": -1
+  },
+  {
+   "year": 2020,
+   "round": 2,
+   "p": "dk",
+   "g": 107,
+   "ch": 23,
+   "tp": 36,
+   "e": 0,
+   "b": 1,
+   "pr": 4,
+   "bo": 4,
+   "d": 9,
+   "a9": 1
+  },
+  {
+   "year": 2020,
+   "round": 2,
+   "p": "jensen",
+   "g": 96,
+   "ch": 8,
+   "tp": 25,
+   "e": 0,
+   "b": 1,
+   "pr": 4,
+   "bo": 6,
+   "d": 7,
+   "a9": -2
+  },
+  {
+   "year": 2020,
+   "round": 2,
+   "p": "joeo",
+   "g": 115,
+   "ch": 17,
+   "tp": 44,
+   "e": 0,
+   "b": 0,
+   "pr": 1,
+   "bo": 3,
+   "d": 14,
+   "a9": -4
+  },
+  {
+   "year": 2020,
+   "round": 2,
+   "p": "juliusp",
+   "g": 80,
+   "ch": 11,
+   "tp": 9,
+   "e": 0,
+   "b": 3,
+   "pr": 6,
+   "bo": 6,
+   "d": 3,
+   "a9": 4
+  },
+  {
+   "year": 2020,
+   "round": 2,
+   "p": "kj",
+   "g": 94,
+   "ch": 12,
+   "tp": 23,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 8,
+   "d": 6,
+   "a9": -1
+  },
+  {
+   "year": 2020,
+   "round": 2,
+   "p": "kylem",
+   "g": 131,
+   "ch": 26,
+   "tp": 60,
+   "e": 0,
+   "b": 0,
+   "pr": 0,
+   "bo": 3,
+   "d": 15,
+   "a9": -2
+  },
+  {
+   "year": 2020,
+   "round": 2,
+   "p": "nicks",
+   "g": 96,
+   "ch": 8,
+   "tp": 25,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 5,
+   "d": 8,
+   "a9": 1
+  },
+  {
+   "year": 2020,
+   "round": 2,
+   "p": "pace",
+   "g": 104,
+   "ch": 12,
+   "tp": 33,
+   "e": 0,
+   "b": 1,
+   "pr": 2,
+   "bo": 6,
+   "d": 9,
+   "a9": 1
+  },
+  {
+   "year": 2020,
+   "round": 2,
+   "p": "petec",
+   "g": 109,
+   "ch": 22,
+   "tp": 38,
+   "e": 0,
+   "b": 0,
+   "pr": 1,
+   "bo": 10,
+   "d": 7,
+   "a9": 2
+  },
+  {
+   "year": 2020,
+   "round": 2,
+   "p": "scottr",
+   "g": 90,
+   "ch": 4,
+   "tp": 19,
+   "e": 0,
+   "b": 1,
+   "pr": 6,
+   "bo": 6,
+   "d": 5,
+   "a9": -1
+  },
+  {
+   "year": 2020,
+   "round": 2,
+   "p": "shaunw",
+   "g": 102,
+   "ch": 11,
+   "tp": 31,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 5,
+   "d": 9,
+   "a9": -1
+  },
+  {
+   "year": 2020,
+   "round": 2,
+   "p": "timc",
+   "g": 88,
+   "ch": 9,
+   "tp": 17,
+   "e": 0,
+   "b": 1,
+   "pr": 4,
+   "bo": 8,
+   "d": 5,
+   "a9": 1
+  },
+  {
+   "year": 2020,
+   "round": 2,
+   "p": "tjsc",
+   "g": 106,
+   "ch": 15,
+   "tp": 35,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 5,
+   "d": 10,
+   "a9": 2
+  },
+  {
+   "year": 2020,
+   "round": 3,
+   "p": "andy",
+   "g": 91,
+   "ch": 8,
+   "tp": 20,
+   "e": 0,
+   "b": 3,
+   "pr": 2,
+   "bo": 5,
+   "d": 8,
+   "a9": -1
+  },
+  {
+   "year": 2020,
+   "round": 3,
+   "p": "bent",
+   "g": 91,
+   "ch": 5,
+   "tp": 20,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 7,
+   "d": 5,
+   "a9": 1
+  },
+  {
+   "year": 2020,
+   "round": 3,
+   "p": "dk",
+   "g": 96,
+   "ch": 23,
+   "tp": 25,
+   "e": 0,
+   "b": 1,
+   "pr": 4,
+   "bo": 4,
+   "d": 9,
+   "a9": 1
+  },
+  {
+   "year": 2020,
+   "round": 3,
+   "p": "jensen",
+   "g": 99,
+   "ch": 8,
+   "tp": 28,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 6,
+   "d": 8,
+   "a9": 0
+  },
+  {
+   "year": 2020,
+   "round": 3,
+   "p": "joeo",
+   "g": 110,
+   "ch": 17,
+   "tp": 39,
+   "e": 0,
+   "b": 0,
+   "pr": 1,
+   "bo": 5,
+   "d": 12,
+   "a9": 0
+  },
+  {
+   "year": 2020,
+   "round": 3,
+   "p": "juliusp",
+   "g": 83,
+   "ch": 11,
+   "tp": 12,
+   "e": 0,
+   "b": 2,
+   "pr": 7,
+   "bo": 7,
+   "d": 2,
+   "a9": -1
+  },
+  {
+   "year": 2020,
+   "round": 3,
+   "p": "kj",
+   "g": 101,
+   "ch": 12,
+   "tp": 30,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 7,
+   "d": 8,
+   "a9": 1
+  },
+  {
+   "year": 2020,
+   "round": 3,
+   "p": "kylem",
+   "g": 128,
+   "ch": 26,
+   "tp": 57,
+   "e": 0,
+   "b": 0,
+   "pr": 1,
+   "bo": 1,
+   "d": 16,
+   "a9": -1
+  },
+  {
+   "year": 2020,
+   "round": 3,
+   "p": "nicks",
+   "g": 102,
+   "ch": 8,
+   "tp": 31,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 6,
+   "d": 10,
+   "a9": 0
+  },
+  {
+   "year": 2020,
+   "round": 3,
+   "p": "pace",
+   "g": 98,
+   "ch": 12,
+   "tp": 27,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 7,
+   "d": 8,
+   "a9": 0
+  },
+  {
+   "year": 2020,
+   "round": 3,
+   "p": "petec",
+   "g": 126,
+   "ch": 22,
+   "tp": 55,
+   "e": 0,
+   "b": 0,
+   "pr": 0,
+   "bo": 3,
+   "d": 15,
+   "a9": 0
+  },
+  {
+   "year": 2020,
+   "round": 3,
+   "p": "scottr",
+   "g": 91,
+   "ch": 4,
+   "tp": 20,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 6,
+   "d": 6,
+   "a9": 0
+  },
+  {
+   "year": 2020,
+   "round": 3,
+   "p": "shaunw",
+   "g": 88,
+   "ch": 11,
+   "tp": 17,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 9,
+   "d": 4,
+   "a9": 0
+  },
+  {
+   "year": 2020,
+   "round": 3,
+   "p": "timc",
+   "g": 93,
+   "ch": 9,
+   "tp": 22,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 7,
+   "d": 7,
+   "a9": 1
+  },
+  {
+   "year": 2020,
+   "round": 3,
+   "p": "tjsc",
+   "g": 101,
+   "ch": 16,
+   "tp": 30,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 6,
+   "d": 9,
+   "a9": -1
+  },
+  {
+   "year": 2020,
+   "round": 4,
+   "p": "andy",
+   "g": 74,
+   "ch": 6,
+   "tp": 2,
+   "e": 1,
+   "b": 4,
+   "pr": 5,
+   "bo": 8,
+   "d": 0
+  },
+  {
+   "year": 2020,
+   "round": 4,
+   "p": "bent",
+   "g": 81,
+   "ch": 3,
+   "tp": 9,
+   "e": 0,
+   "b": 1,
+   "pr": 10,
+   "bo": 5,
+   "d": 2
+  },
+  {
+   "year": 2020,
+   "round": 4,
+   "p": "dk",
+   "g": 86,
+   "ch": 19,
+   "tp": 14,
+   "e": 0,
+   "b": 1,
+   "pr": 5,
+   "bo": 9,
+   "d": 3
+  },
+  {
+   "year": 2020,
+   "round": 4,
+   "p": "jensen",
+   "g": 82,
+   "ch": 6,
+   "tp": 10,
+   "e": 0,
+   "b": 1,
+   "pr": 8,
+   "bo": 7,
+   "d": 2
+  },
+  {
+   "year": 2020,
+   "round": 4,
+   "p": "joeo",
+   "g": 95,
+   "ch": 14,
+   "tp": 23,
+   "e": 0,
+   "b": 2,
+   "pr": 3,
+   "bo": 3,
+   "d": 10
+  },
+  {
+   "year": 2020,
+   "round": 4,
+   "p": "juliusp",
+   "g": 78,
+   "ch": 8,
+   "tp": 6,
+   "e": 0,
+   "b": 2,
+   "pr": 9,
+   "bo": 6,
+   "d": 1
+  },
+  {
+   "year": 2020,
+   "round": 4,
+   "p": "kj",
+   "g": 86,
+   "ch": 9,
+   "tp": 14,
+   "e": 0,
+   "b": 0,
+   "pr": 8,
+   "bo": 8,
+   "d": 2
+  },
+  {
+   "year": 2020,
+   "round": 4,
+   "p": "kylem",
+   "g": 105,
+   "ch": 22,
+   "tp": 33,
+   "e": 0,
+   "b": 1,
+   "pr": 1,
+   "bo": 6,
+   "d": 10
+  },
+  {
+   "year": 2020,
+   "round": 4,
+   "p": "nicks",
+   "g": 86,
+   "ch": 5,
+   "tp": 14,
+   "e": 0,
+   "b": 1,
+   "pr": 7,
+   "bo": 5,
+   "d": 5
+  },
+  {
+   "year": 2020,
+   "round": 4,
+   "p": "pace",
+   "g": 83,
+   "ch": 10,
+   "tp": 11,
+   "e": 0,
+   "b": 2,
+   "pr": 5,
+   "bo": 9,
+   "d": 2
+  },
+  {
+   "year": 2020,
+   "round": 4,
+   "p": "petec",
+   "g": 89,
+   "ch": 18,
+   "tp": 17,
+   "e": 0,
+   "b": 2,
+   "pr": 5,
+   "bo": 7,
+   "d": 4
+  },
+  {
+   "year": 2020,
+   "round": 4,
+   "p": "scottr",
+   "g": 84,
+   "ch": 3,
+   "tp": 12,
+   "e": 0,
+   "b": 0,
+   "pr": 10,
+   "bo": 5,
+   "d": 3
+  },
+  {
+   "year": 2020,
+   "round": 4,
+   "p": "shaunw",
+   "g": 84,
+   "ch": 8,
+   "tp": 12,
+   "e": 0,
+   "b": 0,
+   "pr": 10,
+   "bo": 5,
+   "d": 3
+  },
+  {
+   "year": 2020,
+   "round": 4,
+   "p": "timc",
+   "g": 81,
+   "ch": 7,
+   "tp": 9,
+   "e": 0,
+   "b": 0,
+   "pr": 13,
+   "bo": 3,
+   "d": 2
+  },
+  {
+   "year": 2020,
+   "round": 4,
+   "p": "tjsc",
+   "g": 97,
+   "ch": 12,
+   "tp": 25,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 7,
+   "d": 7
+  },
+  {
+   "year": 2021,
+   "round": 1,
+   "p": "andy",
+   "g": 81,
+   "ch": 6,
+   "tp": 10,
+   "e": 0,
+   "b": 3,
+   "pr": 5,
+   "bo": 7,
+   "d": 3,
+   "a9": 3
+  },
+  {
+   "year": 2021,
+   "round": 1,
+   "p": "bent",
+   "g": 89,
+   "ch": 5,
+   "tp": 18,
+   "e": 0,
+   "b": 1,
+   "pr": 5,
+   "bo": 7,
+   "d": 5,
+   "a9": -3
+  },
+  {
+   "year": 2021,
+   "round": 1,
+   "p": "dk",
+   "g": 101,
+   "ch": 16,
+   "tp": 30,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 6,
+   "d": 10,
+   "a9": 0
+  },
+  {
+   "year": 2021,
+   "round": 1,
+   "p": "jensen",
+   "g": 81,
+   "ch": 5,
+   "tp": 10,
+   "e": 0,
+   "b": 2,
+   "pr": 8,
+   "bo": 5,
+   "d": 3,
+   "a9": -2
+  },
+  {
+   "year": 2021,
+   "round": 1,
+   "p": "jimh",
+   "g": 100,
+   "ch": 26,
+   "tp": 29,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 6,
+   "d": 8,
+   "a9": 0
+  },
+  {
+   "year": 2021,
+   "round": 1,
+   "p": "joeo",
+   "g": 89,
+   "ch": 15,
+   "tp": 18,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 8,
+   "d": 4,
+   "a9": 0
+  },
+  {
+   "year": 2021,
+   "round": 1,
+   "p": "kj",
+   "g": 82,
+   "ch": 9,
+   "tp": 11,
+   "e": 0,
+   "b": 1,
+   "pr": 8,
+   "bo": 7,
+   "d": 2,
+   "a9": -3
+  },
+  {
+   "year": 2021,
+   "round": 1,
+   "p": "nicks",
+   "g": 81,
+   "ch": 6,
+   "tp": 10,
+   "e": 0,
+   "b": 1,
+   "pr": 8,
+   "bo": 7,
+   "d": 2,
+   "a9": -2
+  },
+  {
+   "year": 2021,
+   "round": 1,
+   "p": "pace",
+   "g": 80,
+   "ch": 9,
+   "tp": 9,
+   "e": 0,
+   "b": 0,
+   "pr": 12,
+   "bo": 4,
+   "d": 2,
+   "a9": 3
+  },
+  {
+   "year": 2021,
+   "round": 1,
+   "p": "paulw",
+   "g": 96,
+   "ch": 13,
+   "tp": 25,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 4,
+   "d": 8,
+   "a9": 0
+  },
+  {
+   "year": 2021,
+   "round": 1,
+   "p": "petec",
+   "g": 89,
+   "ch": 17,
+   "tp": 18,
+   "e": 0,
+   "b": 1,
+   "pr": 6,
+   "bo": 7,
+   "d": 4,
+   "a9": 0
+  },
+  {
+   "year": 2021,
+   "round": 1,
+   "p": "rmac",
+   "g": 96,
+   "ch": 10,
+   "tp": 25,
+   "e": 0,
+   "b": 1,
+   "pr": 3,
+   "bo": 8,
+   "d": 6,
+   "a9": 2
+  },
+  {
+   "year": 2021,
+   "round": 1,
+   "p": "saugy",
+   "g": 118,
+   "ch": 30,
+   "tp": 47,
+   "e": 0,
+   "b": 0,
+   "pr": 0,
+   "bo": 3,
+   "d": 15,
+   "a9": 0
+  },
+  {
+   "year": 2021,
+   "round": 1,
+   "p": "shaunw",
+   "g": 71,
+   "ch": 8,
+   "tp": 0,
+   "e": 0,
+   "b": 6,
+   "pr": 6,
+   "bo": 6,
+   "d": 0,
+   "a9": 2
+  },
+  {
+   "year": 2021,
+   "round": 1,
+   "p": "timc",
+   "g": 88,
+   "ch": 10,
+   "tp": 17,
+   "e": 0,
+   "b": 0,
+   "pr": 8,
+   "bo": 4,
+   "d": 6,
+   "a9": 0
+  },
+  {
+   "year": 2021,
+   "round": 1,
+   "p": "tjsc",
+   "g": 81,
+   "ch": 12,
+   "tp": 10,
+   "e": 0,
+   "b": 3,
+   "pr": 4,
+   "bo": 10,
+   "d": 1,
+   "a9": 0
+  },
+  {
+   "year": 2021,
+   "round": 2,
+   "p": "andy",
+   "g": 84,
+   "ch": 8,
+   "tp": 12,
+   "e": 0,
+   "b": 2,
+   "pr": 6,
+   "bo": 6,
+   "d": 4,
+   "a9": -3
+  },
+  {
+   "year": 2021,
+   "round": 2,
+   "p": "bent",
+   "g": 76,
+   "ch": 7,
+   "tp": 4,
+   "e": 0,
+   "b": 1,
+   "pr": 12,
+   "bo": 5,
+   "d": 0,
+   "a9": 5
+  },
+  {
+   "year": 2021,
+   "round": 2,
+   "p": "dk",
+   "g": 94,
+   "ch": 19,
+   "tp": 22,
+   "e": 0,
+   "b": 1,
+   "pr": 4,
+   "bo": 6,
+   "d": 7,
+   "a9": -3
+  },
+  {
+   "year": 2021,
+   "round": 2,
+   "p": "jensen",
+   "g": 80,
+   "ch": 7,
+   "tp": 8,
+   "e": 0,
+   "b": 1,
+   "pr": 9,
+   "bo": 7,
+   "d": 1,
+   "a9": 3
+  },
+  {
+   "year": 2021,
+   "round": 2,
+   "p": "jimh",
+   "g": 107,
+   "ch": 30,
+   "tp": 35,
+   "e": 0,
+   "b": 0,
+   "pr": 1,
+   "bo": 7,
+   "d": 10,
+   "a9": 2
+  },
+  {
+   "year": 2021,
+   "round": 2,
+   "p": "joeo",
+   "g": 89,
+   "ch": 18,
+   "tp": 17,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 6,
+   "d": 5,
+   "a9": 4
+  },
+  {
+   "year": 2021,
+   "round": 2,
+   "p": "kj",
+   "g": 82,
+   "ch": 12,
+   "tp": 10,
+   "e": 0,
+   "b": 2,
+   "pr": 6,
+   "bo": 8,
+   "d": 2,
+   "a9": 3
+  },
+  {
+   "year": 2021,
+   "round": 2,
+   "p": "nicks",
+   "g": 85,
+   "ch": 8,
+   "tp": 13,
+   "e": 0,
+   "b": 0,
+   "pr": 9,
+   "bo": 6,
+   "d": 3,
+   "a9": -1
+  },
+  {
+   "year": 2021,
+   "round": 2,
+   "p": "pace",
+   "g": 85,
+   "ch": 11,
+   "tp": 13,
+   "e": 0,
+   "b": 4,
+   "pr": 3,
+   "bo": 8,
+   "d": 3,
+   "a9": -2
+  },
+  {
+   "year": 2021,
+   "round": 2,
+   "p": "paulw",
+   "g": 89,
+   "ch": 16,
+   "tp": 17,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 7,
+   "d": 4,
+   "a9": 1
+  },
+  {
+   "year": 2021,
+   "round": 2,
+   "p": "petec",
+   "g": 94,
+   "ch": 20,
+   "tp": 22,
+   "e": 0,
+   "b": 2,
+   "pr": 2,
+   "bo": 7,
+   "d": 7,
+   "a9": 3
+  },
+  {
+   "year": 2021,
+   "round": 2,
+   "p": "rmac",
+   "g": 93,
+   "ch": 13,
+   "tp": 21,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 12,
+   "d": 3,
+   "a9": -3
+  },
+  {
+   "year": 2021,
+   "round": 2,
+   "p": "saugy",
+   "g": 116,
+   "ch": 34,
+   "tp": 44,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 3,
+   "d": 13,
+   "a9": -4
+  },
+  {
+   "year": 2021,
+   "round": 2,
+   "p": "shaunw",
+   "g": 78,
+   "ch": 10,
+   "tp": 6,
+   "e": 0,
+   "b": 1,
+   "pr": 12,
+   "bo": 3,
+   "d": 2,
+   "a9": 3
+  },
+  {
+   "year": 2021,
+   "round": 2,
+   "p": "timc",
+   "g": 85,
+   "ch": 12,
+   "tp": 13,
+   "e": 0,
+   "b": 3,
+   "pr": 5,
+   "bo": 5,
+   "d": 5,
+   "a9": -5
+  },
+  {
+   "year": 2021,
+   "round": 2,
+   "p": "tjsc",
+   "g": 89,
+   "ch": 15,
+   "tp": 17,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 10,
+   "d": 3,
+   "a9": -3
+  },
+  {
+   "year": 2021,
+   "round": 3,
+   "p": "andy",
+   "g": 67,
+   "ch": 5.5,
+   "tp": -5,
+   "e": 0,
+   "b": 7,
+   "pr": 9,
+   "bo": 2,
+   "d": 0,
+   "a9": 1
+  },
+  {
+   "year": 2021,
+   "round": 3,
+   "p": "bent",
+   "g": 74,
+   "ch": 7.7,
+   "tp": 2,
+   "e": 0,
+   "b": 2,
+   "pr": 12,
+   "bo": 4,
+   "d": 0,
+   "a9": -1
+  },
+  {
+   "year": 2021,
+   "round": 3,
+   "p": "dk",
+   "g": 77,
+   "ch": 11,
+   "tp": 5,
+   "e": 0,
+   "b": 0,
+   "pr": 13,
+   "bo": 5,
+   "d": 0,
+   "a9": 4
+  },
+  {
+   "year": 2021,
+   "round": 3,
+   "p": "jensen",
+   "g": 71,
+   "ch": 4.3,
+   "tp": -1,
+   "e": 0,
+   "b": 4,
+   "pr": 11,
+   "bo": 3,
+   "d": 0,
+   "a9": -1
+  },
+  {
+   "year": 2021,
+   "round": 3,
+   "p": "jimh",
+   "g": 77,
+   "ch": 11,
+   "tp": 5,
+   "e": 0,
+   "b": 0,
+   "pr": 13,
+   "bo": 5,
+   "d": 0,
+   "a9": 4
+  },
+  {
+   "year": 2021,
+   "round": 3,
+   "p": "joeo",
+   "g": 67,
+   "ch": 5.5,
+   "tp": -5,
+   "e": 0,
+   "b": 7,
+   "pr": 9,
+   "bo": 2,
+   "d": 0,
+   "a9": 1
+  },
+  {
+   "year": 2021,
+   "round": 3,
+   "p": "kj",
+   "g": 71,
+   "ch": 4.3,
+   "tp": -1,
+   "e": 0,
+   "b": 4,
+   "pr": 11,
+   "bo": 3,
+   "d": 0,
+   "a9": -1
+  },
+  {
+   "year": 2021,
+   "round": 3,
+   "p": "nicks",
+   "g": 67,
+   "ch": 5.2,
+   "tp": -5,
+   "e": 0,
+   "b": 7,
+   "pr": 9,
+   "bo": 2,
+   "d": 0,
+   "a9": 0
+  },
+  {
+   "year": 2021,
+   "round": 3,
+   "p": "pace",
+   "g": 69,
+   "ch": 5.3,
+   "tp": -3,
+   "e": 0,
+   "b": 6,
+   "pr": 9,
+   "bo": 3,
+   "d": 0,
+   "a9": 0
+  },
+  {
+   "year": 2021,
+   "round": 3,
+   "p": "paulw",
+   "g": 83,
+   "ch": 8.7,
+   "tp": 11,
+   "e": 0,
+   "b": 0,
+   "pr": 9,
+   "bo": 7,
+   "d": 2,
+   "a9": -4
+  },
+  {
+   "year": 2021,
+   "round": 3,
+   "p": "petec",
+   "g": 83,
+   "ch": 8.7,
+   "tp": 11,
+   "e": 0,
+   "b": 0,
+   "pr": 9,
+   "bo": 7,
+   "d": 2,
+   "a9": -4
+  },
+  {
+   "year": 2021,
+   "round": 3,
+   "p": "rmac",
+   "g": 66,
+   "ch": 6.2,
+   "tp": -6,
+   "e": 2,
+   "b": 4,
+   "pr": 10,
+   "bo": 2,
+   "d": 0,
+   "a9": 1
+  },
+  {
+   "year": 2021,
+   "round": 3,
+   "p": "saugy",
+   "g": 74,
+   "ch": 7.7,
+   "tp": 2,
+   "e": 0,
+   "b": 2,
+   "pr": 12,
+   "bo": 4,
+   "d": 0,
+   "a9": -1
+  },
+  {
+   "year": 2021,
+   "round": 3,
+   "p": "shaunw",
+   "g": 69,
+   "ch": 5.3,
+   "tp": -3,
+   "e": 0,
+   "b": 6,
+   "pr": 9,
+   "bo": 3,
+   "d": 0,
+   "a9": 0
+  },
+  {
+   "year": 2021,
+   "round": 3,
+   "p": "timc",
+   "g": 66,
+   "ch": 6.2,
+   "tp": -6,
+   "e": 2,
+   "b": 4,
+   "pr": 10,
+   "bo": 2,
+   "d": 0,
+   "a9": 1
+  },
+  {
+   "year": 2021,
+   "round": 3,
+   "p": "tjsc",
+   "g": 67,
+   "ch": 5.2,
+   "tp": -5,
+   "e": 0,
+   "b": 7,
+   "pr": 9,
+   "bo": 2,
+   "d": 0,
+   "a9": 0
+  },
+  {
+   "year": 2021,
+   "round": 4,
+   "p": "andy",
+   "g": 88,
+   "ch": 6,
+   "tp": 16,
+   "e": 0,
+   "b": 1,
+   "pr": 6,
+   "bo": 7,
+   "d": 4
+  },
+  {
+   "year": 2021,
+   "round": 4,
+   "p": "bent",
+   "g": 91,
+   "ch": 6,
+   "tp": 19,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 8,
+   "d": 4
+  },
+  {
+   "year": 2021,
+   "round": 4,
+   "p": "dk",
+   "g": 101,
+   "ch": 17,
+   "tp": 29,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 5,
+   "d": 9
+  },
+  {
+   "year": 2021,
+   "round": 4,
+   "p": "jensen",
+   "g": 83,
+   "ch": 6,
+   "tp": 11,
+   "e": 0,
+   "b": 2,
+   "pr": 7,
+   "bo": 6,
+   "d": 3
+  },
+  {
+   "year": 2021,
+   "round": 4,
+   "p": "jimh",
+   "g": 105,
+   "ch": 27,
+   "tp": 33,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 3,
+   "d": 11
+  },
+  {
+   "year": 2021,
+   "round": 4,
+   "p": "joeo",
+   "g": 85,
+   "ch": 16,
+   "tp": 13,
+   "e": 0,
+   "b": 0,
+   "pr": 9,
+   "bo": 5,
+   "d": 4
+  },
+  {
+   "year": 2021,
+   "round": 4,
+   "p": "kj",
+   "g": 93,
+   "ch": 10,
+   "tp": 21,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 7,
+   "d": 6
+  },
+  {
+   "year": 2021,
+   "round": 4,
+   "p": "nicks",
+   "g": 90,
+   "ch": 7,
+   "tp": 18,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 8,
+   "d": 5
+  },
+  {
+   "year": 2021,
+   "round": 4,
+   "p": "pace",
+   "g": 97,
+   "ch": 10,
+   "tp": 25,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 7,
+   "d": 8
+  },
+  {
+   "year": 2021,
+   "round": 4,
+   "p": "paulw",
+   "g": 88,
+   "ch": 14,
+   "tp": 16,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 9,
+   "d": 3
+  },
+  {
+   "year": 2021,
+   "round": 4,
+   "p": "petec",
+   "g": 87,
+   "ch": 18,
+   "tp": 15,
+   "e": 0,
+   "b": 0,
+   "pr": 9,
+   "bo": 4,
+   "d": 5
+  },
+  {
+   "year": 2021,
+   "round": 4,
+   "p": "rmac",
+   "g": 85,
+   "ch": 11,
+   "tp": 13,
+   "e": 0,
+   "b": 0,
+   "pr": 10,
+   "bo": 5,
+   "d": 3
+  },
+  {
+   "year": 2021,
+   "round": 4,
+   "p": "saugy",
+   "g": 115,
+   "ch": 31,
+   "tp": 43,
+   "e": 0,
+   "b": 1,
+   "pr": 1,
+   "bo": 4,
+   "d": 12
+  },
+  {
+   "year": 2021,
+   "round": 4,
+   "p": "shaunw",
+   "g": 87,
+   "ch": 8,
+   "tp": 15,
+   "e": 0,
+   "b": 1,
+   "pr": 4,
+   "bo": 11,
+   "d": 2
+  },
+  {
+   "year": 2021,
+   "round": 4,
+   "p": "timc",
+   "g": 100,
+   "ch": 11,
+   "tp": 28,
+   "e": 0,
+   "b": 1,
+   "pr": 2,
+   "bo": 7,
+   "d": 8
+  },
+  {
+   "year": 2021,
+   "round": 4,
+   "p": "tjsc",
+   "g": 95,
+   "ch": 13,
+   "tp": 23,
+   "e": 0,
+   "b": 1,
+   "pr": 4,
+   "bo": 6,
+   "d": 7
+  },
+  {
+   "year": 2022,
+   "round": 1,
+   "p": "andy",
+   "g": 87,
+   "ch": 9,
+   "tp": 16,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 7,
+   "d": 4,
+   "a9": 3
+  },
+  {
+   "year": 2022,
+   "round": 1,
+   "p": "bent",
+   "g": 87,
+   "ch": 7,
+   "tp": 16,
+   "e": 0,
+   "b": 1,
+   "pr": 6,
+   "bo": 7,
+   "d": 4,
+   "a9": -4
+  },
+  {
+   "year": 2022,
+   "round": 1,
+   "p": "dk",
+   "g": 92,
+   "ch": 15,
+   "tp": 21,
+   "e": 0,
+   "b": 0,
+   "pr": 9,
+   "bo": 1,
+   "d": 8,
+   "a9": 4
+  },
+  {
+   "year": 2022,
+   "round": 1,
+   "p": "jensen",
+   "g": 85,
+   "ch": 9,
+   "tp": 14,
+   "e": 0,
+   "b": 2,
+   "pr": 6,
+   "bo": 6,
+   "d": 4,
+   "a9": 4
+  },
+  {
+   "year": 2022,
+   "round": 1,
+   "p": "jimh",
+   "g": 113,
+   "ch": 28,
+   "tp": 42,
+   "e": 0,
+   "b": 0,
+   "pr": 0,
+   "bo": 6,
+   "d": 12,
+   "a9": -4
+  },
+  {
+   "year": 2022,
+   "round": 1,
+   "p": "joeo",
+   "g": 108,
+   "ch": 17,
+   "tp": 37,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 5,
+   "d": 11,
+   "a9": -7
+  },
+  {
+   "year": 2022,
+   "round": 1,
+   "p": "kj",
+   "g": 85,
+   "ch": 10,
+   "tp": 14,
+   "e": 0,
+   "b": 1,
+   "pr": 6,
+   "bo": 8,
+   "d": 3,
+   "a9": 1
+  },
+  {
+   "year": 2022,
+   "round": 1,
+   "p": "nicks",
+   "g": 78,
+   "ch": 9,
+   "tp": 7,
+   "e": 0,
+   "b": 2,
+   "pr": 8,
+   "bo": 7,
+   "d": 1,
+   "a9": 7
+  },
+  {
+   "year": 2022,
+   "round": 1,
+   "p": "pace",
+   "g": 84,
+   "ch": 11,
+   "tp": 13,
+   "e": 0,
+   "b": 1,
+   "pr": 8,
+   "bo": 6,
+   "d": 3,
+   "a9": 3
+  },
+  {
+   "year": 2022,
+   "round": 1,
+   "p": "paulw",
+   "g": 90,
+   "ch": 15,
+   "tp": 19,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 4,
+   "d": 7,
+   "a9": 1
+  },
+  {
+   "year": 2022,
+   "round": 1,
+   "p": "petec",
+   "g": 111,
+   "ch": 19,
+   "tp": 40,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 4,
+   "d": 12,
+   "a9": -1
+  },
+  {
+   "year": 2022,
+   "round": 1,
+   "p": "rmac",
+   "g": 94,
+   "ch": 12,
+   "tp": 23,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 8,
+   "d": 6,
+   "a9": -3
+  },
+  {
+   "year": 2022,
+   "round": 1,
+   "p": "saugy",
+   "g": 111,
+   "ch": 36,
+   "tp": 40,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 6,
+   "d": 10,
+   "a9": 7
+  },
+  {
+   "year": 2022,
+   "round": 1,
+   "p": "shaunw",
+   "g": 86,
+   "ch": 12,
+   "tp": 15,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 9,
+   "d": 3,
+   "a9": -1
+  },
+  {
+   "year": 2022,
+   "round": 1,
+   "p": "timc",
+   "g": 90,
+   "ch": 13,
+   "tp": 19,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 5,
+   "d": 7,
+   "a9": -3
+  },
+  {
+   "year": 2022,
+   "round": 1,
+   "p": "tjsc",
+   "g": 91,
+   "ch": 15,
+   "tp": 20,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 9,
+   "d": 5,
+   "a9": -7
+  },
+  {
+   "year": 2022,
+   "round": 2,
+   "p": "andy",
+   "g": 87,
+   "ch": 5,
+   "tp": 15,
+   "e": 0,
+   "b": 0,
+   "pr": 9,
+   "bo": 5,
+   "d": 4,
+   "a9": 0
+  },
+  {
+   "year": 2022,
+   "round": 2,
+   "p": "bent",
+   "g": 84,
+   "ch": 2,
+   "tp": 12,
+   "e": 0,
+   "b": 2,
+   "pr": 5,
+   "bo": 9,
+   "d": 2,
+   "a9": -1
+  },
+  {
+   "year": 2022,
+   "round": 2,
+   "p": "dk",
+   "g": 88,
+   "ch": 10,
+   "tp": 16,
+   "e": 0,
+   "b": 1,
+   "pr": 6,
+   "bo": 5,
+   "d": 6,
+   "a9": 1
+  },
+  {
+   "year": 2022,
+   "round": 2,
+   "p": "jensen",
+   "g": 79,
+   "ch": 5,
+   "tp": 7,
+   "e": 0,
+   "b": 1,
+   "pr": 10,
+   "bo": 6,
+   "d": 1,
+   "a9": 3
+  },
+  {
+   "year": 2022,
+   "round": 2,
+   "p": "jimh",
+   "g": 95,
+   "ch": 23,
+   "tp": 23,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 5,
+   "d": 8,
+   "a9": 3
+  },
+  {
+   "year": 2022,
+   "round": 2,
+   "p": "joeo",
+   "g": 87,
+   "ch": 13,
+   "tp": 15,
+   "e": 0,
+   "b": 0,
+   "pr": 8,
+   "bo": 7,
+   "d": 3,
+   "a9": 1
+  },
+  {
+   "year": 2022,
+   "round": 2,
+   "p": "kj",
+   "g": 78,
+   "ch": 5,
+   "tp": 6,
+   "e": 0,
+   "b": 4,
+   "pr": 7,
+   "bo": 5,
+   "d": 2,
+   "a9": -3
+  },
+  {
+   "year": 2022,
+   "round": 2,
+   "p": "nicks",
+   "g": 84,
+   "ch": 4,
+   "tp": 12,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 12,
+   "d": 0,
+   "a9": 1
+  },
+  {
+   "year": 2022,
+   "round": 2,
+   "p": "pace",
+   "g": 91,
+   "ch": 6,
+   "tp": 19,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 6,
+   "d": 5,
+   "a9": -1
+  },
+  {
+   "year": 2022,
+   "round": 2,
+   "p": "paulw",
+   "g": 95,
+   "ch": 10,
+   "tp": 23,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 5,
+   "d": 7,
+   "a9": 1
+  },
+  {
+   "year": 2022,
+   "round": 2,
+   "p": "petec",
+   "g": 91,
+   "ch": 14,
+   "tp": 19,
+   "e": 0,
+   "b": 1,
+   "pr": 5,
+   "bo": 5,
+   "d": 7,
+   "a9": -1
+  },
+  {
+   "year": 2022,
+   "round": 2,
+   "p": "rmac",
+   "g": 84,
+   "ch": 7,
+   "tp": 12,
+   "e": 0,
+   "b": 1,
+   "pr": 7,
+   "bo": 8,
+   "d": 2,
+   "a9": 0
+  },
+  {
+   "year": 2022,
+   "round": 2,
+   "p": "saugy",
+   "g": 122,
+   "ch": 30,
+   "tp": 50,
+   "e": 0,
+   "b": 0,
+   "pr": 0,
+   "bo": 5,
+   "d": 13,
+   "a9": -3
+  },
+  {
+   "year": 2022,
+   "round": 2,
+   "p": "shaunw",
+   "g": 89,
+   "ch": 7,
+   "tp": 17,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 9,
+   "d": 4,
+   "a9": -1
+  },
+  {
+   "year": 2022,
+   "round": 2,
+   "p": "timc",
+   "g": 92,
+   "ch": 9,
+   "tp": 20,
+   "e": 0,
+   "b": 0,
+   "pr": 8,
+   "bo": 4,
+   "d": 6,
+   "a9": 1
+  },
+  {
+   "year": 2022,
+   "round": 2,
+   "p": "tjsc",
+   "g": 90,
+   "ch": 10,
+   "tp": 18,
+   "e": 0,
+   "b": 0,
+   "pr": 8,
+   "bo": 6,
+   "d": 4,
+   "a9": -1
+  },
+  {
+   "year": 2022,
+   "round": 3,
+   "p": "andy",
+   "g": 79,
+   "ch": 5,
+   "tp": 7,
+   "e": 0,
+   "b": 1,
+   "pr": 10,
+   "bo": 6,
+   "d": 1
+  },
+  {
+   "year": 2022,
+   "round": 3,
+   "p": "bent",
+   "g": 85,
+   "ch": 2,
+   "tp": 13,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 9,
+   "d": 2
+  },
+  {
+   "year": 2022,
+   "round": 3,
+   "p": "dk",
+   "g": 77,
+   "ch": 10,
+   "tp": 5,
+   "e": 0,
+   "b": 1,
+   "pr": 13,
+   "bo": 3,
+   "d": 1
+  },
+  {
+   "year": 2022,
+   "round": 3,
+   "p": "jensen",
+   "g": 85,
+   "ch": 5,
+   "tp": 13,
+   "e": 0,
+   "b": 0,
+   "pr": 10,
+   "bo": 3,
+   "d": 5
+  },
+  {
+   "year": 2022,
+   "round": 3,
+   "p": "jimh",
+   "g": 98,
+   "ch": 23,
+   "tp": 26,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 5,
+   "d": 9
+  },
+  {
+   "year": 2022,
+   "round": 3,
+   "p": "joeo",
+   "g": 85,
+   "ch": 13,
+   "tp": 13,
+   "e": 0,
+   "b": 1,
+   "pr": 8,
+   "bo": 5,
+   "d": 4
+  },
+  {
+   "year": 2022,
+   "round": 3,
+   "p": "kj",
+   "g": 90,
+   "ch": 5,
+   "tp": 18,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 9,
+   "d": 4
+  },
+  {
+   "year": 2022,
+   "round": 3,
+   "p": "nicks",
+   "g": 81,
+   "ch": 4,
+   "tp": 9,
+   "e": 0,
+   "b": 2,
+   "pr": 8,
+   "bo": 5,
+   "d": 3
+  },
+  {
+   "year": 2022,
+   "round": 3,
+   "p": "pace",
+   "g": 89,
+   "ch": 6,
+   "tp": 17,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 9,
+   "d": 4
+  },
+  {
+   "year": 2022,
+   "round": 3,
+   "p": "paulw",
+   "g": 91,
+   "ch": 10,
+   "tp": 19,
+   "e": 0,
+   "b": 1,
+   "pr": 5,
+   "bo": 6,
+   "d": 6
+  },
+  {
+   "year": 2022,
+   "round": 3,
+   "p": "petec",
+   "g": 89,
+   "ch": 14,
+   "tp": 17,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 5,
+   "d": 6
+  },
+  {
+   "year": 2022,
+   "round": 3,
+   "p": "rmac",
+   "g": 81,
+   "ch": 7,
+   "tp": 9,
+   "e": 0,
+   "b": 2,
+   "pr": 10,
+   "bo": 3,
+   "d": 3
+  },
+  {
+   "year": 2022,
+   "round": 3,
+   "p": "saugy",
+   "g": 107,
+   "ch": 30,
+   "tp": 35,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 4,
+   "d": 12
+  },
+  {
+   "year": 2022,
+   "round": 3,
+   "p": "shaunw",
+   "g": 92,
+   "ch": 7,
+   "tp": 20,
+   "e": 0,
+   "b": 1,
+   "pr": 3,
+   "bo": 10,
+   "d": 4
+  },
+  {
+   "year": 2022,
+   "round": 3,
+   "p": "timc",
+   "g": 83,
+   "ch": 9,
+   "tp": 11,
+   "e": 0,
+   "b": 0,
+   "pr": 10,
+   "bo": 5,
+   "d": 3
+  },
+  {
+   "year": 2022,
+   "round": 3,
+   "p": "tjsc",
+   "g": 88,
+   "ch": 10,
+   "tp": 16,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 10,
+   "d": 3
+  },
+  {
+   "year": 2022,
+   "round": 4,
+   "p": "andy",
+   "g": 85,
+   "ch": 8,
+   "tp": 13,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 9,
+   "d": 2
+  },
+  {
+   "year": 2022,
+   "round": 4,
+   "p": "bent",
+   "g": 82,
+   "ch": 6,
+   "tp": 10,
+   "e": 1,
+   "b": 0,
+   "pr": 9,
+   "bo": 4,
+   "d": 4
+  },
+  {
+   "year": 2022,
+   "round": 4,
+   "p": "dk",
+   "g": 90,
+   "ch": 12,
+   "tp": 18,
+   "e": 0,
+   "b": 1,
+   "pr": 3,
+   "bo": 10,
+   "d": 4
+  },
+  {
+   "year": 2022,
+   "round": 4,
+   "p": "jensen",
+   "g": 79,
+   "ch": 8,
+   "tp": 7,
+   "e": 0,
+   "b": 2,
+   "pr": 9,
+   "bo": 5,
+   "d": 2
+  },
+  {
+   "year": 2022,
+   "round": 4,
+   "p": "jimh",
+   "g": 99,
+   "ch": 26,
+   "tp": 27,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 4,
+   "d": 9
+  },
+  {
+   "year": 2022,
+   "round": 4,
+   "p": "joeo",
+   "g": 99,
+   "ch": 15,
+   "tp": 27,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 8,
+   "d": 7
+  },
+  {
+   "year": 2022,
+   "round": 4,
+   "p": "kj",
+   "g": 79,
+   "ch": 8,
+   "tp": 7,
+   "e": 0,
+   "b": 3,
+   "pr": 6,
+   "bo": 8,
+   "d": 1
+  },
+  {
+   "year": 2022,
+   "round": 4,
+   "p": "nicks",
+   "g": 94,
+   "ch": 8,
+   "tp": 22,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 8,
+   "d": 5
+  },
+  {
+   "year": 2022,
+   "round": 4,
+   "p": "pace",
+   "g": 95,
+   "ch": 9,
+   "tp": 23,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 5,
+   "d": 7
+  },
+  {
+   "year": 2022,
+   "round": 4,
+   "p": "paulw",
+   "g": 93,
+   "ch": 14,
+   "tp": 21,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 7,
+   "d": 6
+  },
+  {
+   "year": 2022,
+   "round": 4,
+   "p": "petec",
+   "g": 98,
+   "ch": 18,
+   "tp": 26,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 5,
+   "d": 8
+  },
+  {
+   "year": 2022,
+   "round": 4,
+   "p": "rmac",
+   "g": 90,
+   "ch": 9,
+   "tp": 18,
+   "e": 0,
+   "b": 1,
+   "pr": 5,
+   "bo": 7,
+   "d": 5
+  },
+  {
+   "year": 2022,
+   "round": 4,
+   "p": "saugy",
+   "g": 106,
+   "ch": 34,
+   "tp": 34,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 2,
+   "d": 11
+  },
+  {
+   "year": 2022,
+   "round": 4,
+   "p": "shaunw",
+   "g": 92,
+   "ch": 10,
+   "tp": 20,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 6,
+   "d": 5
+  },
+  {
+   "year": 2022,
+   "round": 4,
+   "p": "timc",
+   "g": 95,
+   "ch": 11,
+   "tp": 23,
+   "e": 0,
+   "b": 1,
+   "pr": 1,
+   "bo": 10,
+   "d": 6
+  },
+  {
+   "year": 2022,
+   "round": 4,
+   "p": "tjsc",
+   "g": 89,
+   "ch": 13,
+   "tp": 17,
+   "e": 0,
+   "b": 2,
+   "pr": 6,
+   "bo": 5,
+   "d": 5
+  },
+  {
+   "year": 2023,
+   "round": 1,
+   "p": "andy",
+   "g": 87,
+   "ch": 6,
+   "tp": 15,
+   "e": 0,
+   "b": 1,
+   "pr": 6,
+   "bo": 6,
+   "d": 5
+  },
+  {
+   "year": 2023,
+   "round": 1,
+   "p": "bent",
+   "g": 87,
+   "ch": 8,
+   "tp": 15,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 8,
+   "d": 3
+  },
+  {
+   "year": 2023,
+   "round": 1,
+   "p": "dk",
+   "g": 91,
+   "ch": 15,
+   "tp": 19,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 7,
+   "d": 5
+  },
+  {
+   "year": 2023,
+   "round": 1,
+   "p": "elger",
+   "g": 88,
+   "ch": 5,
+   "tp": 16,
+   "e": 0,
+   "b": 1,
+   "pr": 7,
+   "bo": 6,
+   "d": 4
+  },
+  {
+   "year": 2023,
+   "round": 1,
+   "p": "jensen",
+   "g": 85,
+   "ch": 7,
+   "tp": 13,
+   "e": 0,
+   "b": 2,
+   "pr": 7,
+   "bo": 6,
+   "d": 3
+  },
+  {
+   "year": 2023,
+   "round": 1,
+   "p": "jimh",
+   "g": 97,
+   "ch": 17,
+   "tp": 25,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 8,
+   "d": 6
+  },
+  {
+   "year": 2023,
+   "round": 1,
+   "p": "joeo",
+   "g": 91,
+   "ch": 14,
+   "tp": 19,
+   "e": 0,
+   "b": 2,
+   "pr": 5,
+   "bo": 3,
+   "d": 8
+  },
+  {
+   "year": 2023,
+   "round": 1,
+   "p": "kj",
+   "g": 81,
+   "ch": 8,
+   "tp": 9,
+   "e": 0,
+   "b": 2,
+   "pr": 8,
+   "bo": 5,
+   "d": 3
+  },
+  {
+   "year": 2023,
+   "round": 1,
+   "p": "nicks",
+   "g": 85,
+   "ch": 9,
+   "tp": 13,
+   "e": 0,
+   "b": 1,
+   "pr": 8,
+   "bo": 5,
+   "d": 4
+  },
+  {
+   "year": 2023,
+   "round": 1,
+   "p": "pace",
+   "g": 89,
+   "ch": 10,
+   "tp": 17,
+   "e": 0,
+   "b": 1,
+   "pr": 7,
+   "bo": 4,
+   "d": 6
+  },
+  {
+   "year": 2023,
+   "round": 1,
+   "p": "paulw",
+   "g": 93,
+   "ch": 17,
+   "tp": 21,
+   "e": 0,
+   "b": 1,
+   "pr": 6,
+   "bo": 4,
+   "d": 7
+  },
+  {
+   "year": 2023,
+   "round": 1,
+   "p": "rmac",
+   "g": 87,
+   "ch": 9,
+   "tp": 15,
+   "e": 0,
+   "b": 0,
+   "pr": 9,
+   "bo": 4,
+   "d": 5
+  },
+  {
+   "year": 2023,
+   "round": 1,
+   "p": "saugy",
+   "g": 114,
+   "ch": 33,
+   "tp": 42,
+   "e": 0,
+   "b": 0,
+   "pr": 1,
+   "bo": 6,
+   "d": 11
+  },
+  {
+   "year": 2023,
+   "round": 1,
+   "p": "shaunw",
+   "g": 83,
+   "ch": 10,
+   "tp": 11,
+   "e": 0,
+   "b": 4,
+   "pr": 5,
+   "bo": 5,
+   "d": 4
+  },
+  {
+   "year": 2023,
+   "round": 1,
+   "p": "timc",
+   "g": 87,
+   "ch": 11,
+   "tp": 15,
+   "e": 1,
+   "b": 2,
+   "pr": 5,
+   "bo": 5,
+   "d": 5
+  },
+  {
+   "year": 2023,
+   "round": 1,
+   "p": "tjsc",
+   "g": 81,
+   "ch": 14,
+   "tp": 9,
+   "e": 0,
+   "b": 2,
+   "pr": 6,
+   "bo": 9,
+   "d": 1
+  },
+  {
+   "year": 2023,
+   "round": 2,
+   "p": "andy",
+   "g": 89,
+   "ch": 4,
+   "tp": 17,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 10,
+   "d": 3,
+   "a9": -1
+  },
+  {
+   "year": 2023,
+   "round": 2,
+   "p": "bent",
+   "g": 75,
+   "ch": 6,
+   "tp": 3,
+   "e": 0,
+   "b": 2,
+   "pr": 11,
+   "bo": 5,
+   "d": 0,
+   "a9": 4
+  },
+  {
+   "year": 2023,
+   "round": 2,
+   "p": "dk",
+   "g": 91,
+   "ch": 13,
+   "tp": 19,
+   "e": 0,
+   "b": 2,
+   "pr": 3,
+   "bo": 8,
+   "d": 5,
+   "a9": 1
+  },
+  {
+   "year": 2023,
+   "round": 2,
+   "p": "elger",
+   "g": 84,
+   "ch": 3,
+   "tp": 12,
+   "e": 0,
+   "b": 0,
+   "pr": 10,
+   "bo": 5,
+   "d": 3,
+   "a9": -3
+  },
+  {
+   "year": 2023,
+   "round": 2,
+   "p": "jensen",
+   "g": 79,
+   "ch": 5,
+   "tp": 7,
+   "e": 0,
+   "b": 1,
+   "pr": 10,
+   "bo": 6,
+   "d": 1,
+   "a9": 0
+  },
+  {
+   "year": 2023,
+   "round": 2,
+   "p": "jimh",
+   "g": 94,
+   "ch": 14,
+   "tp": 22,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 10,
+   "d": 6,
+   "a9": -1
+  },
+  {
+   "year": 2023,
+   "round": 2,
+   "p": "joeo",
+   "g": 89,
+   "ch": 12,
+   "tp": 17,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 7,
+   "d": 5,
+   "a9": -3
+  },
+  {
+   "year": 2023,
+   "round": 2,
+   "p": "kj",
+   "g": 80,
+   "ch": 6,
+   "tp": 8,
+   "e": 0,
+   "b": 2,
+   "pr": 9,
+   "bo": 4,
+   "d": 3,
+   "a9": 2
+  },
+  {
+   "year": 2023,
+   "round": 2,
+   "p": "nicks",
+   "g": 87,
+   "ch": 7,
+   "tp": 15,
+   "e": 0,
+   "b": 0,
+   "pr": 9,
+   "bo": 5,
+   "d": 4,
+   "a9": 0
+  },
+  {
+   "year": 2023,
+   "round": 2,
+   "p": "pace",
+   "g": 84,
+   "ch": 7,
+   "tp": 12,
+   "e": 0,
+   "b": 2,
+   "pr": 5,
+   "bo": 8,
+   "d": 3,
+   "a9": -4
+  },
+  {
+   "year": 2023,
+   "round": 2,
+   "p": "paulw",
+   "g": 89,
+   "ch": 15,
+   "tp": 17,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 6,
+   "d": 5,
+   "a9": 2
+  },
+  {
+   "year": 2023,
+   "round": 2,
+   "p": "rmac",
+   "g": 77,
+   "ch": 7,
+   "tp": 5,
+   "e": 0,
+   "b": 2,
+   "pr": 10,
+   "bo": 5,
+   "d": 1,
+   "a9": 3
+  },
+  {
+   "year": 2023,
+   "round": 2,
+   "p": "saugy",
+   "g": 109,
+   "ch": 31,
+   "tp": 37,
+   "e": 0,
+   "b": 1,
+   "pr": 4,
+   "bo": 1,
+   "d": 12,
+   "a9": 1
+  },
+  {
+   "year": 2023,
+   "round": 2,
+   "p": "shaunw",
+   "g": 84,
+   "ch": 7,
+   "tp": 12,
+   "e": 0,
+   "b": 0,
+   "pr": 12,
+   "bo": 4,
+   "d": 2,
+   "a9": 3
+  },
+  {
+   "year": 2023,
+   "round": 2,
+   "p": "timc",
+   "g": 84,
+   "ch": 8,
+   "tp": 12,
+   "e": 0,
+   "b": 0,
+   "pr": 10,
+   "bo": 5,
+   "d": 3,
+   "a9": -2
+  },
+  {
+   "year": 2023,
+   "round": 2,
+   "p": "tjsc",
+   "g": 91,
+   "ch": 11,
+   "tp": 19,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 9,
+   "d": 4,
+   "a9": -2
+  },
+  {
+   "year": 2023,
+   "round": 3,
+   "p": "andy",
+   "g": 71,
+   "ch": 3.2,
+   "tp": -1,
+   "e": 0,
+   "b": 3,
+   "pr": 13,
+   "bo": 2,
+   "d": 0,
+   "a9": -4
+  },
+  {
+   "year": 2023,
+   "round": 3,
+   "p": "bent",
+   "g": 72,
+   "ch": 4.5,
+   "tp": 0,
+   "e": 0,
+   "b": 5,
+   "pr": 9,
+   "bo": 3,
+   "d": 1,
+   "a9": 4
+  },
+  {
+   "year": 2023,
+   "round": 3,
+   "p": "dk",
+   "g": 73,
+   "ch": 10.9,
+   "tp": 1,
+   "e": 0,
+   "b": 2,
+   "pr": 13,
+   "bo": 3,
+   "d": 0,
+   "a9": 2
+  },
+  {
+   "year": 2023,
+   "round": 3,
+   "p": "elger",
+   "g": 71,
+   "ch": 3.2,
+   "tp": -1,
+   "e": 0,
+   "b": 3,
+   "pr": 13,
+   "bo": 2,
+   "d": 0,
+   "a9": -4
+  },
+  {
+   "year": 2023,
+   "round": 3,
+   "p": "jensen",
+   "g": 67,
+   "ch": 4.4,
+   "tp": -5,
+   "e": 0,
+   "b": 7,
+   "pr": 9,
+   "bo": 2,
+   "d": 0,
+   "a9": 1
+  },
+  {
+   "year": 2023,
+   "round": 3,
+   "p": "jimh",
+   "g": 74,
+   "ch": 9.1,
+   "tp": 2,
+   "e": 0,
+   "b": 1,
+   "pr": 14,
+   "bo": 3,
+   "d": 0,
+   "a9": -2
+  },
+  {
+   "year": 2023,
+   "round": 3,
+   "p": "joeo",
+   "g": 73,
+   "ch": 6.3,
+   "tp": 1,
+   "e": 0,
+   "b": 2,
+   "pr": 13,
+   "bo": 3,
+   "d": 0,
+   "a9": 3
+  },
+  {
+   "year": 2023,
+   "round": 3,
+   "p": "kj",
+   "g": 72,
+   "ch": 4.5,
+   "tp": 0,
+   "e": 0,
+   "b": 5,
+   "pr": 9,
+   "bo": 3,
+   "d": 1,
+   "a9": 4
+  },
+  {
+   "year": 2023,
+   "round": 3,
+   "p": "nicks",
+   "g": 76,
+   "ch": 5.1,
+   "tp": 4,
+   "e": 0,
+   "b": 3,
+   "pr": 8,
+   "bo": 7,
+   "d": 0,
+   "a9": -1
+  },
+  {
+   "year": 2023,
+   "round": 3,
+   "p": "pace",
+   "g": 67,
+   "ch": 4.4,
+   "tp": -5,
+   "e": 0,
+   "b": 7,
+   "pr": 9,
+   "bo": 2,
+   "d": 0,
+   "a9": 1
+  },
+  {
+   "year": 2023,
+   "round": 3,
+   "p": "paulw",
+   "g": 74,
+   "ch": 9.1,
+   "tp": 2,
+   "e": 0,
+   "b": 1,
+   "pr": 14,
+   "bo": 3,
+   "d": 0,
+   "a9": -2
+  },
+  {
+   "year": 2023,
+   "round": 3,
+   "p": "rmac",
+   "g": 76,
+   "ch": 5.1,
+   "tp": 4,
+   "e": 0,
+   "b": 3,
+   "pr": 8,
+   "bo": 7,
+   "d": 0,
+   "a9": -1
+  },
+  {
+   "year": 2023,
+   "round": 3,
+   "p": "saugy",
+   "g": 73,
+   "ch": 10.9,
+   "tp": 1,
+   "e": 0,
+   "b": 2,
+   "pr": 13,
+   "bo": 3,
+   "d": 0,
+   "a9": 2
+  },
+  {
+   "year": 2023,
+   "round": 3,
+   "p": "shaunw",
+   "g": 71,
+   "ch": 5.9,
+   "tp": -1,
+   "e": 0,
+   "b": 3,
+   "pr": 13,
+   "bo": 2,
+   "d": 0,
+   "a9": -3
+  },
+  {
+   "year": 2023,
+   "round": 3,
+   "p": "timc",
+   "g": 73,
+   "ch": 6.3,
+   "tp": 1,
+   "e": 0,
+   "b": 2,
+   "pr": 13,
+   "bo": 3,
+   "d": 0,
+   "a9": 3
+  },
+  {
+   "year": 2023,
+   "round": 3,
+   "p": "tjsc",
+   "g": 71,
+   "ch": 5.9,
+   "tp": -1,
+   "e": 0,
+   "b": 3,
+   "pr": 13,
+   "bo": 2,
+   "d": 0,
+   "a9": -3
+  },
+  {
+   "year": 2023,
+   "round": 4,
+   "p": "andy",
+   "g": 82,
+   "ch": 6,
+   "tp": 10,
+   "e": 0,
+   "b": 3,
+   "pr": 6,
+   "bo": 6,
+   "d": 3
+  },
+  {
+   "year": 2023,
+   "round": 4,
+   "p": "bent",
+   "g": 84,
+   "ch": 8,
+   "tp": 12,
+   "e": 0,
+   "b": 1,
+   "pr": 8,
+   "bo": 5,
+   "d": 4
+  },
+  {
+   "year": 2023,
+   "round": 4,
+   "p": "dk",
+   "g": 89,
+   "ch": 16,
+   "tp": 17,
+   "e": 0,
+   "b": 2,
+   "pr": 3,
+   "bo": 8,
+   "d": 5
+  },
+  {
+   "year": 2023,
+   "round": 4,
+   "p": "elger",
+   "g": 87,
+   "ch": 5,
+   "tp": 15,
+   "e": 0,
+   "b": 1,
+   "pr": 6,
+   "bo": 7,
+   "d": 4
+  },
+  {
+   "year": 2023,
+   "round": 4,
+   "p": "jensen",
+   "g": 76,
+   "ch": 7,
+   "tp": 4,
+   "e": 1,
+   "b": 3,
+   "pr": 8,
+   "bo": 4,
+   "d": 2
+  },
+  {
+   "year": 2023,
+   "round": 4,
+   "p": "jimh",
+   "g": 99,
+   "ch": 18,
+   "tp": 27,
+   "e": 0,
+   "b": 0,
+   "pr": 1,
+   "bo": 8,
+   "d": 9
+  },
+  {
+   "year": 2023,
+   "round": 4,
+   "p": "joeo",
+   "g": 103,
+   "ch": 15,
+   "tp": 31,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 6,
+   "d": 9
+  },
+  {
+   "year": 2023,
+   "round": 4,
+   "p": "kj",
+   "g": 105,
+   "ch": 9,
+   "tp": 33,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 1,
+   "d": 12
+  },
+  {
+   "year": 2023,
+   "round": 4,
+   "p": "nicks",
+   "g": 89,
+   "ch": 10,
+   "tp": 17,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 8,
+   "d": 3
+  },
+  {
+   "year": 2023,
+   "round": 4,
+   "p": "pace",
+   "g": 92,
+   "ch": 10,
+   "tp": 20,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 7,
+   "d": 6
+  },
+  {
+   "year": 2023,
+   "round": 4,
+   "p": "paulw",
+   "g": 94,
+   "ch": 18,
+   "tp": 22,
+   "e": 0,
+   "b": 2,
+   "pr": 1,
+   "bo": 8,
+   "d": 7
+  },
+  {
+   "year": 2023,
+   "round": 4,
+   "p": "rmac",
+   "g": 89,
+   "ch": 9,
+   "tp": 17,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 11,
+   "d": 2
+  },
+  {
+   "year": 2023,
+   "round": 4,
+   "p": "saugy",
+   "g": 114,
+   "ch": 35,
+   "tp": 42,
+   "e": 0,
+   "b": 0,
+   "pr": 1,
+   "bo": 5,
+   "d": 12
+  },
+  {
+   "year": 2023,
+   "round": 4,
+   "p": "shaunw",
+   "g": 92,
+   "ch": 9,
+   "tp": 20,
+   "e": 0,
+   "b": 2,
+   "pr": 6,
+   "bo": 3,
+   "d": 7
+  },
+  {
+   "year": 2023,
+   "round": 4,
+   "p": "timc",
+   "g": 91,
+   "ch": 11,
+   "tp": 19,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 6,
+   "d": 6
+  },
+  {
+   "year": 2023,
+   "round": 4,
+   "p": "tjsc",
+   "g": 96,
+   "ch": 14,
+   "tp": 24,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 7,
+   "d": 8
+  },
+  {
+   "year": 2024,
+   "round": 1,
+   "p": "andy",
+   "g": 82,
+   "ch": 6,
+   "tp": 12,
+   "e": 0,
+   "b": 2,
+   "pr": 7,
+   "bo": 6,
+   "d": 3
+  },
+  {
+   "year": 2024,
+   "round": 1,
+   "p": "bent",
+   "g": 80,
+   "ch": 7,
+   "tp": 10,
+   "e": 0,
+   "b": 2,
+   "pr": 5,
+   "bo": 10,
+   "d": 1
+  },
+  {
+   "year": 2024,
+   "round": 1,
+   "p": "dk",
+   "g": 88,
+   "ch": 15,
+   "tp": 18,
+   "e": 0,
+   "b": 2,
+   "pr": 6,
+   "bo": 6,
+   "d": 4
+  },
+  {
+   "year": 2024,
+   "round": 1,
+   "p": "jensen",
+   "g": 82,
+   "ch": 6,
+   "tp": 12,
+   "e": 0,
+   "b": 0,
+   "pr": 10,
+   "bo": 5,
+   "d": 3
+  },
+  {
+   "year": 2024,
+   "round": 1,
+   "p": "jimh",
+   "g": 97,
+   "ch": 13,
+   "tp": 27,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 7,
+   "d": 7
+  },
+  {
+   "year": 2024,
+   "round": 1,
+   "p": "joeo",
+   "g": 91,
+   "ch": 11,
+   "tp": 21,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 8,
+   "d": 6
+  },
+  {
+   "year": 2024,
+   "round": 1,
+   "p": "kj",
+   "g": 86,
+   "ch": 7,
+   "tp": 16,
+   "e": 0,
+   "b": 2,
+   "pr": 6,
+   "bo": 6,
+   "d": 4
+  },
+  {
+   "year": 2024,
+   "round": 1,
+   "p": "nicks",
+   "g": 80,
+   "ch": 6,
+   "tp": 10,
+   "e": 0,
+   "b": 0,
+   "pr": 9,
+   "bo": 8,
+   "d": 1
+  },
+  {
+   "year": 2024,
+   "round": 1,
+   "p": "pace",
+   "g": 84,
+   "ch": 10,
+   "tp": 14,
+   "e": 0,
+   "b": 0,
+   "pr": 8,
+   "bo": 7,
+   "d": 3
+  },
+  {
+   "year": 2024,
+   "round": 1,
+   "p": "paulw",
+   "g": 86,
+   "ch": 11,
+   "tp": 16,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 12,
+   "d": 2
+  },
+  {
+   "year": 2024,
+   "round": 1,
+   "p": "petec",
+   "g": 92,
+   "ch": 18,
+   "tp": 22,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 8,
+   "d": 6
+  },
+  {
+   "year": 2024,
+   "round": 1,
+   "p": "rmac",
+   "g": 87,
+   "ch": 9,
+   "tp": 17,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 7,
+   "d": 4
+  },
+  {
+   "year": 2024,
+   "round": 1,
+   "p": "saugy",
+   "g": 101,
+   "ch": 28,
+   "tp": 31,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 7,
+   "d": 9
+  },
+  {
+   "year": 2024,
+   "round": 1,
+   "p": "shaunw",
+   "g": 86,
+   "ch": 7,
+   "tp": 16,
+   "e": 0,
+   "b": 1,
+   "pr": 6,
+   "bo": 6,
+   "d": 5
+  },
+  {
+   "year": 2024,
+   "round": 1,
+   "p": "timc",
+   "g": 89,
+   "ch": 10,
+   "tp": 19,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 7,
+   "d": 5
+  },
+  {
+   "year": 2024,
+   "round": 1,
+   "p": "tjsc",
+   "g": 89,
+   "ch": 12,
+   "tp": 19,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 7,
+   "d": 5
+  },
+  {
+   "year": 2024,
+   "round": 2,
+   "p": "andy",
+   "g": 79,
+   "ch": 5,
+   "tp": 7,
+   "e": 0,
+   "b": 1,
+   "pr": 10,
+   "bo": 6,
+   "d": 1,
+   "a9": 0
+  },
+  {
+   "year": 2024,
+   "round": 2,
+   "p": "bent",
+   "g": 78,
+   "ch": 6,
+   "tp": 6,
+   "e": 0,
+   "b": 2,
+   "pr": 9,
+   "bo": 6,
+   "d": 1,
+   "a9": 1
+  },
+  {
+   "year": 2024,
+   "round": 2,
+   "p": "dk",
+   "g": 95,
+   "ch": 15,
+   "tp": 23,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 7,
+   "d": 7,
+   "a9": -2
+  },
+  {
+   "year": 2024,
+   "round": 2,
+   "p": "jensen",
+   "g": 85,
+   "ch": 5,
+   "tp": 13,
+   "e": 0,
+   "b": 2,
+   "pr": 8,
+   "bo": 4,
+   "d": 4,
+   "a9": 0
+  },
+  {
+   "year": 2024,
+   "round": 2,
+   "p": "jimh",
+   "g": 95,
+   "ch": 13,
+   "tp": 23,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 8,
+   "d": 7,
+   "a9": -1
+  },
+  {
+   "year": 2024,
+   "round": 2,
+   "p": "joeo",
+   "g": 90,
+   "ch": 11,
+   "tp": 18,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 8,
+   "d": 5,
+   "a9": -2
+  },
+  {
+   "year": 2024,
+   "round": 2,
+   "p": "kj",
+   "g": 86,
+   "ch": 6,
+   "tp": 14,
+   "e": 0,
+   "b": 1,
+   "pr": 5,
+   "bo": 9,
+   "d": 3,
+   "a9": 2
+  },
+  {
+   "year": 2024,
+   "round": 2,
+   "p": "nicks",
+   "g": 84,
+   "ch": 5,
+   "tp": 12,
+   "e": 0,
+   "b": 2,
+   "pr": 5,
+   "bo": 8,
+   "d": 3,
+   "a9": 0
+  },
+  {
+   "year": 2024,
+   "round": 2,
+   "p": "pace",
+   "g": 95,
+   "ch": 9,
+   "tp": 23,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 8,
+   "d": 7,
+   "a9": 0
+  },
+  {
+   "year": 2024,
+   "round": 2,
+   "p": "paulw",
+   "g": 87,
+   "ch": 10,
+   "tp": 15,
+   "e": 0,
+   "b": 1,
+   "pr": 6,
+   "bo": 8,
+   "d": 3,
+   "a9": 0
+  },
+  {
+   "year": 2024,
+   "round": 2,
+   "p": "petec",
+   "g": 93,
+   "ch": 18,
+   "tp": 21,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 5,
+   "d": 6,
+   "a9": 0
+  },
+  {
+   "year": 2024,
+   "round": 2,
+   "p": "rmac",
+   "g": 91,
+   "ch": 8,
+   "tp": 19,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 5,
+   "d": 6,
+   "a9": -1
+  },
+  {
+   "year": 2024,
+   "round": 2,
+   "p": "saugy",
+   "g": 111,
+   "ch": 29,
+   "tp": 39,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 6,
+   "d": 10,
+   "a9": 1
+  },
+  {
+   "year": 2024,
+   "round": 2,
+   "p": "shaunw",
+   "g": 89,
+   "ch": 7,
+   "tp": 17,
+   "e": 0,
+   "b": 0,
+   "pr": 8,
+   "bo": 6,
+   "d": 4,
+   "a9": 0
+  },
+  {
+   "year": 2024,
+   "round": 2,
+   "p": "timc",
+   "g": 92,
+   "ch": 10,
+   "tp": 20,
+   "e": 0,
+   "b": 1,
+   "pr": 2,
+   "bo": 9,
+   "d": 6,
+   "a9": 0
+  },
+  {
+   "year": 2024,
+   "round": 2,
+   "p": "tjsc",
+   "g": 93,
+   "ch": 12,
+   "tp": 21,
+   "e": 0,
+   "b": 1,
+   "pr": 4,
+   "bo": 6,
+   "d": 7,
+   "a9": 2
+  },
+  {
+   "year": 2024,
+   "round": 3,
+   "p": "andy",
+   "g": 75,
+   "ch": 5.4,
+   "tp": 3,
+   "e": 0,
+   "b": 4,
+   "pr": 7,
+   "bo": 7,
+   "d": 0,
+   "a9": 0
+  },
+  {
+   "year": 2024,
+   "round": 3,
+   "p": "bent",
+   "g": 68,
+   "ch": 4.3,
+   "tp": -4,
+   "e": 0,
+   "b": 5,
+   "pr": 12,
+   "bo": 1,
+   "d": 0,
+   "a9": 4
+  },
+  {
+   "year": 2024,
+   "round": 3,
+   "p": "dk",
+   "g": 82,
+   "ch": 10.3,
+   "tp": 10,
+   "e": 0,
+   "b": 1,
+   "pr": 8,
+   "bo": 8,
+   "d": 1,
+   "a9": 0
+  },
+  {
+   "year": 2024,
+   "round": 3,
+   "p": "jensen",
+   "g": 76,
+   "ch": 4.3,
+   "tp": 4,
+   "e": 0,
+   "b": 3,
+   "pr": 9,
+   "bo": 5,
+   "d": 1,
+   "a9": -7
+  },
+  {
+   "year": 2024,
+   "round": 3,
+   "p": "jimh",
+   "g": 72,
+   "ch": 5.7,
+   "tp": 0,
+   "e": 1,
+   "b": 2,
+   "pr": 11,
+   "bo": 4,
+   "d": 0,
+   "a9": 0
+  },
+  {
+   "year": 2024,
+   "round": 3,
+   "p": "joeo",
+   "g": 68,
+   "ch": 4.8,
+   "tp": -4,
+   "e": 1,
+   "b": 3,
+   "pr": 13,
+   "bo": 1,
+   "d": 0,
+   "a9": 0
+  },
+  {
+   "year": 2024,
+   "round": 3,
+   "p": "kj",
+   "g": 70,
+   "ch": 4.4,
+   "tp": -2,
+   "e": 0,
+   "b": 3,
+   "pr": 14,
+   "bo": 1,
+   "d": 0,
+   "a9": -4
+  },
+  {
+   "year": 2024,
+   "round": 3,
+   "p": "nicks",
+   "g": 66,
+   "ch": 4.4,
+   "tp": -6,
+   "e": 1,
+   "b": 5,
+   "pr": 11,
+   "bo": 1,
+   "d": 0,
+   "a9": 7
+  },
+  {
+   "year": 2024,
+   "round": 3,
+   "p": "pace",
+   "g": 68,
+   "ch": 4.3,
+   "tp": -4,
+   "e": 0,
+   "b": 5,
+   "pr": 12,
+   "bo": 1,
+   "d": 0,
+   "a9": 4
+  },
+  {
+   "year": 2024,
+   "round": 3,
+   "p": "paulw",
+   "g": 76,
+   "ch": 4.3,
+   "tp": 4,
+   "e": 0,
+   "b": 3,
+   "pr": 9,
+   "bo": 5,
+   "d": 1,
+   "a9": -7
+  },
+  {
+   "year": 2024,
+   "round": 3,
+   "p": "petec",
+   "g": 75,
+   "ch": 5.4,
+   "tp": 3,
+   "e": 0,
+   "b": 4,
+   "pr": 7,
+   "bo": 7,
+   "d": 0,
+   "a9": 0
+  },
+  {
+   "year": 2024,
+   "round": 3,
+   "p": "rmac",
+   "g": 72,
+   "ch": 5.7,
+   "tp": 0,
+   "e": 1,
+   "b": 2,
+   "pr": 11,
+   "bo": 4,
+   "d": 0,
+   "a9": 0
+  },
+  {
+   "year": 2024,
+   "round": 3,
+   "p": "saugy",
+   "g": 82,
+   "ch": 10.3,
+   "tp": 10,
+   "e": 0,
+   "b": 1,
+   "pr": 8,
+   "bo": 8,
+   "d": 1,
+   "a9": 0
+  },
+  {
+   "year": 2024,
+   "round": 3,
+   "p": "shaunw",
+   "g": 68,
+   "ch": 4.8,
+   "tp": -4,
+   "e": 1,
+   "b": 3,
+   "pr": 13,
+   "bo": 1,
+   "d": 0,
+   "a9": 0
+  },
+  {
+   "year": 2024,
+   "round": 3,
+   "p": "timc",
+   "g": 70,
+   "ch": 4.4,
+   "tp": -2,
+   "e": 0,
+   "b": 3,
+   "pr": 14,
+   "bo": 1,
+   "d": 0,
+   "a9": -4
+  },
+  {
+   "year": 2024,
+   "round": 3,
+   "p": "tjsc",
+   "g": 66,
+   "ch": 4.4,
+   "tp": -6,
+   "e": 1,
+   "b": 5,
+   "pr": 11,
+   "bo": 1,
+   "d": 0,
+   "a9": 7
+  },
+  {
+   "year": 2024,
+   "round": 4,
+   "p": "andy",
+   "g": 87,
+   "ch": 8,
+   "tp": 15,
+   "e": 0,
+   "b": 1,
+   "pr": 8,
+   "bo": 5,
+   "d": 4
+  },
+  {
+   "year": 2024,
+   "round": 4,
+   "p": "bent",
+   "g": 91,
+   "ch": 8,
+   "tp": 19,
+   "e": 0,
+   "b": 1,
+   "pr": 4,
+   "bo": 7,
+   "d": 6
+  },
+  {
+   "year": 2024,
+   "round": 4,
+   "p": "dk",
+   "g": 103,
+   "ch": 18,
+   "tp": 31,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 7,
+   "d": 9
+  },
+  {
+   "year": 2024,
+   "round": 4,
+   "p": "jensen",
+   "g": 86,
+   "ch": 8,
+   "tp": 14,
+   "e": 0,
+   "b": 0,
+   "pr": 9,
+   "bo": 5,
+   "d": 4
+  },
+  {
+   "year": 2024,
+   "round": 4,
+   "p": "jimh",
+   "g": 94,
+   "ch": 17,
+   "tp": 22,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 9,
+   "d": 5
+  },
+  {
+   "year": 2024,
+   "round": 4,
+   "p": "joeo",
+   "g": 94,
+   "ch": 14,
+   "tp": 22,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 7,
+   "d": 5
+  },
+  {
+   "year": 2024,
+   "round": 4,
+   "p": "kj",
+   "g": 92,
+   "ch": 9,
+   "tp": 20,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 8,
+   "d": 5
+  },
+  {
+   "year": 2024,
+   "round": 4,
+   "p": "nicks",
+   "g": 84,
+   "ch": 8,
+   "tp": 12,
+   "e": 0,
+   "b": 3,
+   "pr": 6,
+   "bo": 6,
+   "d": 3
+  },
+  {
+   "year": 2024,
+   "round": 4,
+   "p": "pace",
+   "g": 98,
+   "ch": 13,
+   "tp": 26,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 6,
+   "d": 8
+  },
+  {
+   "year": 2024,
+   "round": 4,
+   "p": "paulw",
+   "g": 104,
+   "ch": 14,
+   "tp": 32,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 8,
+   "d": 8
+  },
+  {
+   "year": 2024,
+   "round": 4,
+   "p": "petec",
+   "g": 101,
+   "ch": 22,
+   "tp": 29,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 6,
+   "d": 9
+  },
+  {
+   "year": 2024,
+   "round": 4,
+   "p": "rmac",
+   "g": 91,
+   "ch": 11,
+   "tp": 19,
+   "e": 0,
+   "b": 1,
+   "pr": 5,
+   "bo": 6,
+   "d": 6
+  },
+  {
+   "year": 2024,
+   "round": 4,
+   "p": "saugy",
+   "g": 109,
+   "ch": 35,
+   "tp": 37,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 6,
+   "d": 10
+  },
+  {
+   "year": 2024,
+   "round": 4,
+   "p": "shaunw",
+   "g": 91,
+   "ch": 10,
+   "tp": 19,
+   "e": 0,
+   "b": 1,
+   "pr": 5,
+   "bo": 6,
+   "d": 6
+  },
+  {
+   "year": 2024,
+   "round": 4,
+   "p": "timc",
+   "g": 89,
+   "ch": 14,
+   "tp": 17,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 9,
+   "d": 4
+  },
+  {
+   "year": 2024,
+   "round": 4,
+   "p": "tjsc",
+   "g": 88,
+   "ch": 16,
+   "tp": 16,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 10,
+   "d": 3
+  },
+  {
+   "year": 2025,
+   "round": 1,
+   "p": "andy",
+   "g": 84,
+   "ch": 8,
+   "tp": 12,
+   "e": 0,
+   "b": 1,
+   "pr": 6,
+   "bo": 10,
+   "d": 1
+  },
+  {
+   "year": 2025,
+   "round": 1,
+   "p": "bent",
+   "g": 78,
+   "ch": 7,
+   "tp": 6,
+   "e": 0,
+   "b": 1,
+   "pr": 10,
+   "bo": 7,
+   "d": 0
+  },
+  {
+   "year": 2025,
+   "round": 1,
+   "p": "dk",
+   "g": 91,
+   "ch": 18,
+   "tp": 19,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 8,
+   "d": 5
+  },
+  {
+   "year": 2025,
+   "round": 1,
+   "p": "jensen",
+   "g": 79,
+   "ch": 7,
+   "tp": 7,
+   "e": 0,
+   "b": 2,
+   "pr": 9,
+   "bo": 6,
+   "d": 1
+  },
+  {
+   "year": 2025,
+   "round": 1,
+   "p": "jimh",
+   "g": 95,
+   "ch": 21,
+   "tp": 23,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 9,
+   "d": 6
+  },
+  {
+   "year": 2025,
+   "round": 1,
+   "p": "joeo",
+   "g": 94,
+   "ch": 13,
+   "tp": 22,
+   "e": 0,
+   "b": 1,
+   "pr": 3,
+   "bo": 8,
+   "d": 6
+  },
+  {
+   "year": 2025,
+   "round": 1,
+   "p": "kj",
+   "g": 86,
+   "ch": 8,
+   "tp": 14,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 8,
+   "d": 3
+  },
+  {
+   "year": 2025,
+   "round": 1,
+   "p": "nicks",
+   "g": 85,
+   "ch": 10,
+   "tp": 13,
+   "e": 0,
+   "b": 0,
+   "pr": 9,
+   "bo": 6,
+   "d": 3
+  },
+  {
+   "year": 2025,
+   "round": 1,
+   "p": "pace",
+   "g": 83,
+   "ch": 11,
+   "tp": 11,
+   "e": 0,
+   "b": 1,
+   "pr": 8,
+   "bo": 7,
+   "d": 2
+  },
+  {
+   "year": 2025,
+   "round": 1,
+   "p": "paulw",
+   "g": 86,
+   "ch": 16,
+   "tp": 14,
+   "e": 0,
+   "b": 1,
+   "pr": 5,
+   "bo": 9,
+   "d": 3
+  },
+  {
+   "year": 2025,
+   "round": 1,
+   "p": "petec",
+   "g": 100,
+   "ch": 21,
+   "tp": 28,
+   "e": 0,
+   "b": 1,
+   "pr": 2,
+   "bo": 4,
+   "d": 11
+  },
+  {
+   "year": 2025,
+   "round": 1,
+   "p": "rmac",
+   "g": 89,
+   "ch": 9,
+   "tp": 17,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 9,
+   "d": 4
+  },
+  {
+   "year": 2025,
+   "round": 1,
+   "p": "saugy",
+   "g": 93,
+   "ch": 31,
+   "tp": 21,
+   "e": 0,
+   "b": 0,
+   "pr": 0,
+   "bo": 15,
+   "d": 3
+  },
+  {
+   "year": 2025,
+   "round": 1,
+   "p": "shaunw",
+   "g": 84,
+   "ch": 10,
+   "tp": 12,
+   "e": 0,
+   "b": 0,
+   "pr": 9,
+   "bo": 6,
+   "d": 3
+  },
+  {
+   "year": 2025,
+   "round": 1,
+   "p": "timc",
+   "g": 102,
+   "ch": 13,
+   "tp": 30,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 8,
+   "d": 6
+  },
+  {
+   "year": 2025,
+   "round": 1,
+   "p": "tjsc",
+   "g": 93,
+   "ch": 13,
+   "tp": 21,
+   "e": 0,
+   "b": 0,
+   "pr": 5,
+   "bo": 8,
+   "d": 5
+  },
+  {
+   "year": 2025,
+   "round": 2,
+   "p": "andy",
+   "g": 76,
+   "ch": 7,
+   "tp": 4,
+   "e": 0,
+   "b": 1,
+   "pr": 13,
+   "bo": 3,
+   "d": 1,
+   "a9": 5
+  },
+  {
+   "year": 2025,
+   "round": 2,
+   "p": "bent",
+   "g": 80,
+   "ch": 6,
+   "tp": 8,
+   "e": 0,
+   "b": 2,
+   "pr": 8,
+   "bo": 6,
+   "d": 2,
+   "a9": 4
+  },
+  {
+   "year": 2025,
+   "round": 2,
+   "p": "dk",
+   "g": 89,
+   "ch": 17,
+   "tp": 17,
+   "e": 0,
+   "b": 2,
+   "pr": 5,
+   "bo": 5,
+   "d": 6,
+   "a9": 2
+  },
+  {
+   "year": 2025,
+   "round": 2,
+   "p": "jensen",
+   "g": 83,
+   "ch": 6,
+   "tp": 11,
+   "e": 0,
+   "b": 3,
+   "pr": 5,
+   "bo": 6,
+   "d": 4,
+   "a9": 3
+  },
+  {
+   "year": 2025,
+   "round": 2,
+   "p": "jimh",
+   "g": 103,
+   "ch": 19,
+   "tp": 31,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 6,
+   "d": 9,
+   "a9": 0
+  },
+  {
+   "year": 2025,
+   "round": 2,
+   "p": "joeo",
+   "g": 96,
+   "ch": 11,
+   "tp": 24,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 7,
+   "d": 8,
+   "a9": -4
+  },
+  {
+   "year": 2025,
+   "round": 2,
+   "p": "kj",
+   "g": 85,
+   "ch": 7,
+   "tp": 13,
+   "e": 0,
+   "b": 1,
+   "pr": 6,
+   "bo": 9,
+   "d": 2,
+   "a9": -2
+  },
+  {
+   "year": 2025,
+   "round": 2,
+   "p": "nicks",
+   "g": 86,
+   "ch": 9,
+   "tp": 14,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 8,
+   "d": 3,
+   "a9": -3
+  },
+  {
+   "year": 2025,
+   "round": 2,
+   "p": "pace",
+   "g": 87,
+   "ch": 10,
+   "tp": 15,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 8,
+   "d": 3,
+   "a9": -5
+  },
+  {
+   "year": 2025,
+   "round": 2,
+   "p": "paulw",
+   "g": 91,
+   "ch": 14,
+   "tp": 19,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 11,
+   "d": 4,
+   "a9": 1
+  },
+  {
+   "year": 2025,
+   "round": 2,
+   "p": "petec",
+   "g": 97,
+   "ch": 19,
+   "tp": 25,
+   "e": 0,
+   "b": 1,
+   "pr": 0,
+   "bo": 11,
+   "d": 6,
+   "a9": 2
+  },
+  {
+   "year": 2025,
+   "round": 2,
+   "p": "rmac",
+   "g": 96,
+   "ch": 8,
+   "tp": 24,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 5,
+   "d": 9,
+   "a9": -4
+  },
+  {
+   "year": 2025,
+   "round": 2,
+   "p": "saugy",
+   "g": 109,
+   "ch": 27,
+   "tp": 37,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 3,
+   "d": 13,
+   "a9": 0
+  },
+  {
+   "year": 2025,
+   "round": 2,
+   "p": "shaunw",
+   "g": 87,
+   "ch": 9,
+   "tp": 15,
+   "e": 0,
+   "b": 1,
+   "pr": 8,
+   "bo": 4,
+   "d": 5,
+   "a9": -1
+  },
+  {
+   "year": 2025,
+   "round": 2,
+   "p": "timc",
+   "g": 89,
+   "ch": 12,
+   "tp": 17,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 6,
+   "d": 5,
+   "a9": -2
+  },
+  {
+   "year": 2025,
+   "round": 2,
+   "p": "tjsc",
+   "g": 86,
+   "ch": 11,
+   "tp": 14,
+   "e": 0,
+   "b": 0,
+   "pr": 9,
+   "bo": 5,
+   "d": 4,
+   "a9": 4
+  },
+  {
+   "year": 2025,
+   "round": 3,
+   "p": "andy",
+   "g": 68,
+   "ch": 4.8,
+   "tp": -4,
+   "e": 0,
+   "b": 7,
+   "pr": 8,
+   "bo": 3,
+   "d": 0,
+   "a9": 0
+  },
+  {
+   "year": 2025,
+   "round": 3,
+   "p": "bent",
+   "g": 66,
+   "ch": 4.5,
+   "tp": -6,
+   "e": 0,
+   "b": 8,
+   "pr": 8,
+   "bo": 2,
+   "d": 0,
+   "a9": 2
+  },
+  {
+   "year": 2025,
+   "round": 3,
+   "p": "dk",
+   "g": 76,
+   "ch": 11.5,
+   "tp": 4,
+   "e": 0,
+   "b": 2,
+   "pr": 10,
+   "bo": 6,
+   "d": 0,
+   "a9": -2
+  },
+  {
+   "year": 2025,
+   "round": 3,
+   "p": "jensen",
+   "g": 72,
+   "ch": 6.2,
+   "tp": 0,
+   "e": 0,
+   "b": 3,
+   "pr": 12,
+   "bo": 3,
+   "d": 0,
+   "a9": 2
+  },
+  {
+   "year": 2025,
+   "round": 3,
+   "p": "jimh",
+   "g": 75,
+   "ch": 7.2,
+   "tp": 3,
+   "e": 0,
+   "b": 1,
+   "pr": 13,
+   "bo": 4,
+   "d": 0,
+   "a9": 0
+  },
+  {
+   "year": 2025,
+   "round": 3,
+   "p": "joeo",
+   "g": 76,
+   "ch": 7.4,
+   "tp": 4,
+   "e": 0,
+   "b": 2,
+   "pr": 10,
+   "bo": 6,
+   "d": 0,
+   "a9": 0
+  },
+  {
+   "year": 2025,
+   "round": 3,
+   "p": "kj",
+   "g": 74,
+   "ch": 5.3,
+   "tp": 2,
+   "e": 0,
+   "b": 1,
+   "pr": 14,
+   "bo": 3,
+   "d": 0,
+   "a9": -2
+  },
+  {
+   "year": 2025,
+   "round": 3,
+   "p": "nicks",
+   "g": 66,
+   "ch": 4.5,
+   "tp": -6,
+   "e": 0,
+   "b": 8,
+   "pr": 8,
+   "bo": 2,
+   "d": 0,
+   "a9": 2
+  },
+  {
+   "year": 2025,
+   "round": 3,
+   "p": "pace",
+   "g": 73,
+   "ch": 6.5,
+   "tp": 1,
+   "e": 0,
+   "b": 1,
+   "pr": 15,
+   "bo": 2,
+   "d": 0,
+   "a9": 0
+  },
+  {
+   "year": 2025,
+   "round": 3,
+   "p": "paulw",
+   "g": 76,
+   "ch": 7.4,
+   "tp": 4,
+   "e": 0,
+   "b": 2,
+   "pr": 10,
+   "bo": 6,
+   "d": 0,
+   "a9": 0
+  },
+  {
+   "year": 2025,
+   "round": 3,
+   "p": "petec",
+   "g": 72,
+   "ch": 6.2,
+   "tp": 0,
+   "e": 0,
+   "b": 3,
+   "pr": 12,
+   "bo": 3,
+   "d": 0,
+   "a9": 2
+  },
+  {
+   "year": 2025,
+   "round": 3,
+   "p": "rmac",
+   "g": 68,
+   "ch": 4.8,
+   "tp": -4,
+   "e": 0,
+   "b": 7,
+   "pr": 8,
+   "bo": 3,
+   "d": 0,
+   "a9": 0
+  },
+  {
+   "year": 2025,
+   "round": 3,
+   "p": "saugy",
+   "g": 76,
+   "ch": 11.5,
+   "tp": 4,
+   "e": 0,
+   "b": 2,
+   "pr": 10,
+   "bo": 6,
+   "d": 0,
+   "a9": -2
+  },
+  {
+   "year": 2025,
+   "round": 3,
+   "p": "shaunw",
+   "g": 75,
+   "ch": 7.2,
+   "tp": 3,
+   "e": 0,
+   "b": 1,
+   "pr": 13,
+   "bo": 4,
+   "d": 0,
+   "a9": 0
+  },
+  {
+   "year": 2025,
+   "round": 3,
+   "p": "timc",
+   "g": 73,
+   "ch": 6.5,
+   "tp": 1,
+   "e": 0,
+   "b": 1,
+   "pr": 15,
+   "bo": 2,
+   "d": 0,
+   "a9": 0
+  },
+  {
+   "year": 2025,
+   "round": 3,
+   "p": "tjsc",
+   "g": 74,
+   "ch": 5.3,
+   "tp": 2,
+   "e": 0,
+   "b": 1,
+   "pr": 14,
+   "bo": 3,
+   "d": 0,
+   "a9": -2
+  },
+  {
+   "year": 2025,
+   "round": 4,
+   "p": "andy",
+   "g": 85,
+   "ch": 9,
+   "tp": 13,
+   "e": 0,
+   "b": 1,
+   "pr": 7,
+   "bo": 7,
+   "d": 3
+  },
+  {
+   "year": 2025,
+   "round": 4,
+   "p": "bent",
+   "g": 86,
+   "ch": 8,
+   "tp": 14,
+   "e": 0,
+   "b": 1,
+   "pr": 6,
+   "bo": 7,
+   "d": 4
+  },
+  {
+   "year": 2025,
+   "round": 4,
+   "p": "dk",
+   "g": 97,
+   "ch": 20,
+   "tp": 25,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 6,
+   "d": 8
+  },
+  {
+   "year": 2025,
+   "round": 4,
+   "p": "jensen",
+   "g": 81,
+   "ch": 8,
+   "tp": 9,
+   "e": 0,
+   "b": 1,
+   "pr": 10,
+   "bo": 5,
+   "d": 2
+  },
+  {
+   "year": 2025,
+   "round": 4,
+   "p": "jimh",
+   "g": 94,
+   "ch": 23,
+   "tp": 22,
+   "e": 0,
+   "b": 0,
+   "pr": 3,
+   "bo": 9,
+   "d": 6
+  },
+  {
+   "year": 2025,
+   "round": 4,
+   "p": "joeo",
+   "g": 99,
+   "ch": 14,
+   "tp": 27,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 9,
+   "d": 7
+  },
+  {
+   "year": 2025,
+   "round": 4,
+   "p": "kj",
+   "g": 80,
+   "ch": 9,
+   "tp": 8,
+   "e": 0,
+   "b": 2,
+   "pr": 6,
+   "bo": 10,
+   "d": 0
+  },
+  {
+   "year": 2025,
+   "round": 4,
+   "p": "nicks",
+   "g": 94,
+   "ch": 12,
+   "tp": 22,
+   "e": 0,
+   "b": 1,
+   "pr": 4,
+   "bo": 9,
+   "d": 4
+  },
+  {
+   "year": 2025,
+   "round": 4,
+   "p": "pace",
+   "g": 89,
+   "ch": 13,
+   "tp": 17,
+   "e": 0,
+   "b": 1,
+   "pr": 6,
+   "bo": 5,
+   "d": 6
+  },
+  {
+   "year": 2025,
+   "round": 4,
+   "p": "paulw",
+   "g": 93,
+   "ch": 17,
+   "tp": 21,
+   "e": 0,
+   "b": 0,
+   "pr": 4,
+   "bo": 10,
+   "d": 4
+  },
+  {
+   "year": 2025,
+   "round": 4,
+   "p": "petec",
+   "g": 117,
+   "ch": 23,
+   "tp": 45,
+   "e": 0,
+   "b": 0,
+   "pr": 2,
+   "bo": 2,
+   "d": 14
+  },
+  {
+   "year": 2025,
+   "round": 4,
+   "p": "rmac",
+   "g": 81,
+   "ch": 11,
+   "tp": 9,
+   "e": 0,
+   "b": 1,
+   "pr": 10,
+   "bo": 4,
+   "d": 3
+  },
+  {
+   "year": 2025,
+   "round": 4,
+   "p": "saugy",
+   "g": 116,
+   "ch": 31,
+   "tp": 44,
+   "e": 0,
+   "b": 0,
+   "pr": 0,
+   "bo": 5,
+   "d": 13
+  },
+  {
+   "year": 2025,
+   "round": 4,
+   "p": "shaunw",
+   "g": 93,
+   "ch": 11,
+   "tp": 21,
+   "e": 0,
+   "b": 0,
+   "pr": 6,
+   "bo": 8,
+   "d": 4
+  },
+  {
+   "year": 2025,
+   "round": 4,
+   "p": "timc",
+   "g": 87,
+   "ch": 15,
+   "tp": 15,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 7,
+   "d": 4
+  },
+  {
+   "year": 2025,
+   "round": 4,
+   "p": "tjsc",
+   "g": 90,
+   "ch": 14,
+   "tp": 18,
+   "e": 0,
+   "b": 0,
+   "pr": 7,
+   "bo": 6,
+   "d": 5
+  }
+ ]
+}

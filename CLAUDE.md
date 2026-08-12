@@ -184,6 +184,10 @@ byte-comparable with what is committed and "does this still reproduce?" has an
 answer. `pipeline/export-csv.mjs` rebuilds `data/holes.csv`, `rounds.csv` and
 `matches.csv`, which used to be hand-exported and therefore drifted.
 
+A fourth layer answers the questions that span years — **`pipeline/archive.mjs`**
+(`npm run build:archive`) writes `data/bourbon-cup-archive.json`, which is what
+the **Data** tab reads. See "The Data tab" below.
+
 **The team colours come off the SCOREBOARD banner** — `pipeline/team-brand.mjs`,
 run as part of `build:editions`. It is the only place a sheet records them: the
 Master Input's team cell is highlighted yellow because it is an input cell, and
@@ -378,6 +382,81 @@ Things that will bite you:
   when the roster IS empty. It is a constant in the bundle, so it is not a
   secret — leaving it reachable on a set-up tournament would hand Admin to
   anyone who reads the JavaScript.
+
+## The Data tab
+
+**☰ → Data**, one row where Player Analytics and Historical Data used to be two.
+The toggle inside is **Tournament** / **Player**, and the axis matters: the old
+split cut NOW from THEN, so "how has Weezy done" was answered for this year on
+one row and nowhere at all for the other ten. Cutting by SUBJECT lets either
+half span every year.
+
+- **Tournament** — cup records, every year round by round (tap a year to see the
+  running total after each round, and a button inside it to switch editions),
+  where the cup turns, and the course passport: 36 courses over 40 rounds, none
+  ever played in two different years.
+- **Player** — a career table across all ten cups, each row opening onto that
+  man's years, formats, partners, singles head-to-heads, scoring profile and
+  comebacks. The `Career` / `<year>` chips are a scope, not a second time axis:
+  the same table, one man's whole record or one week of it.
+
+### How it loads, and why that way
+
+The app subscribes to ONE edition on purpose — a year is roughly a thousand
+documents — so "career records" cannot be answered by opening ten of them. The
+years that are over cannot change, so they are precomputed at build time and
+**shipped with the app**: `data/bourbon-cup-archive.json`, imported dynamically
+by `src/lib/useArchive.js`. Vite gives it a content-hashed chunk of its own,
+about **12 KB gzipped**, cached until its bytes change and separate from the
+screen's own chunk so restyling the tab does not invalidate a decade of history.
+Zero Firestore reads, no security rule, no deploy step. Opening the More menu
+prefetches it.
+
+The three alternatives were all worse: ten subscriptions (~10,000 reads a tap),
+a precomputed Firestore collection (a read per open, rules to deploy, and a
+second copy of the history a console edit could disagree with), or a Cloud
+Function (a cold start in front of a tab).
+
+### The one rule that keeps it honest
+
+**The archive holds only years that are over. The running year is live.**
+`src/lib/archiveLive.js` turns the active edition into rows of the same shape
+and `src/lib/archiveFold.js` folds both together — so this year's matches are
+added to last year's record by the code that computed last year's record. There
+is no second implementation of "what is a win".
+
+Consequences worth knowing:
+
+- **The live year replaces the archive's copy of itself**, so nothing is counted
+  twice when the app is open on a year the archive also has (2025 is both).
+  Except when the live year has no matches yet: subscriptions arrive over
+  several frames, and letting a half-loaded edition replace a finished year
+  would blank a decade of records on screen and then fill them back in.
+- **Every number is the app's own engine's.** `pipeline/archive.mjs` scores each
+  year through `buildVerified` + `computeMatchResult` — the same path
+  `historyVerify` takes and the same one the leaderboard takes when you switch
+  into 2019. The archive is a cache of the cards in the sense `editionSummary`
+  is; nothing is typed.
+- **Rebuild it when the scoring engine or the sheets change** (`npm run
+  build:archive`). It is sorted, so a rebuild is byte-comparable and a diff is
+  a real answer to "did this change anything".
+- **Birdies are GROSS and computed from the holes.** The backbone's own
+  eagles/birdies/pars/bogies/doubles are NET — for 2016 R1 they reconstruct
+  Andy H's net 78 exactly and his gross 87 not at all — and only the gross ones
+  can also be computed for the live year. Two definitions of a birdie on one
+  screen is worse than either.
+- **Who is who** goes through `canonicalId`: an explicit `career_id`, else the
+  canonical id inside an imported row's document id (`hist_2019_paulw`), else
+  the registry's every known spelling of the name. A golfer the registry has
+  never heard of gets a `live:` id and a career one year long, which is right.
+  Nothing writes `career_id` today; it is the escape hatch for two men who
+  genuinely share a display name.
+- **Partnerships count two-man sides only**, and head-to-heads count singles
+  only. Round 4 puts seven men against seven; twenty-one "partnerships" a round
+  would bury the four-ball record under teammates who never shared a hole.
+- **An unfinished cup is not a record.** It still counts towards careers — those
+  matches were played — but not towards closest-ever, biggest-ever, or a best
+  week.
 
 ## Trip Info
 

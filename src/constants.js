@@ -285,6 +285,11 @@ export const FORMATS = [
   },
 ];
 
+// The catalog's own name for a format. Trip Info and the Data tab both render
+// one, and they used to hold a copy each — two definitions of "what is
+// best_ball called" is one more than the number that can stay right.
+export const formatLabel = (id) => FORMATS.find((f) => f.id === id)?.label || "";
+
 // ── Handicap allowances ──
 // The format decides how many balls a side plays. The ALLOWANCE decides how
 // much of each player's Course Handicap actually comes to the tee, and it is
