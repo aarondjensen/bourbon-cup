@@ -1940,10 +1940,16 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   const [activeRound, setActiveRound] = useState(null);
   const [editPot, setEditPot] = useState(false);
   const [potInput, setPotInput] = useState("");
-  // Gross is the default, and the left-hand option. Skins are a gross game
-  // here; net is the deviation, and it should take a deliberate tap to get to
-  // rather than being what the tab quietly opens on.
-  const [grossMode, setGrossMode] = useState(true);
+  // NET is the default. Skins here are played off the handicaps, so net is the
+  // game and gross is the deviation — the tab used to open on gross and every
+  // player had to tap across before the board showed the money they were
+  // actually playing for.
+  //
+  // Gross stays the LEFT-hand option even though it is no longer the default:
+  // the pair reads gross-then-net everywhere else in golf, and reordering a
+  // two-way toggle to match its default is how somebody taps the side they
+  // have always tapped and gets the other answer.
+  const [grossMode, setGrossMode] = useState(false);
   // The CTP tab keeps its own round and its own open state. Sharing them with
   // the skins card would mean opening one tab silently rearranged the other.
   const [ctpRound, setCtpRound] = useState(null);
