@@ -86,7 +86,7 @@ import {
 import { summarizeEdition, sameSummary } from "./lib/editionSummary";
 import { playerTable } from "./lib/playerStats";
 import {
-  inField, roundSetup, strokeMapsFor, computeSkins, lowNetRows, ctpTags,
+  inField, roundSetup, strokeMapsFor, computeSkins, lowNetRows, ctpTags, ctpPinTotal,
 } from "./lib/betting";
 import { SIDE_BETS_COL, sideBetId, buildSideBet, toggleSettled } from "./lib/sideBets";
 import {
@@ -2082,7 +2082,15 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // ── The CTP tab ──
   const ctpShownRound = roundList.includes(ctpRound) ? ctpRound : defaultRound;
   const lowNetShownRound = roundList.includes(lowNetRound) ? lowNetRound : defaultRound;
-  const noPar3s = roundList.every(r => !setupFor(r).pars.some(p => p === 3));
+
+  // How many pins the WEEK holds, off the rounds' own scorecards — see
+  // lib/betting. It is what the pot divides by, and it is also the answer to
+  // "how many of these are there" on a Friday morning when none have been
+  // taken yet. `noPar3s` is read off the same count, so the empty state and
+  // the arithmetic can never disagree about whether there is a game here.
+  const ctpPins = ctpPinTotal({ rounds: roundList, tRounds, courses, roundLocks });
+  const noPar3s = ctpPins.pins === 0;
+  const perPin = ctpPins.pins > 0 ? ctpPotValue / ctpPins.pins : 0;
 
   // Every standing tag, read through each round's OWN par table rather than
   // straight off ctpData: a record left on a hole that is no longer a par 3 —
@@ -2303,13 +2311,32 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                       <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>CTP POT</div>
                       <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold }}>${ctpPotValue.toFixed(2)}</div>
                     </div>
+                    {/* N OF M, and the share divided by M — the par 3s the
+                        week actually holds, not the ones already won. See
+                        ctpPinTotal: dividing by the tags standing made a pin
+                        worth less every time somebody else took one, and made
+                        the first one of the week worth the whole pot. */}
                     <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: FS.label, color: BC.t3 }}>{tags.length} pin{tags.length !== 1 ? "s" : ""} taken</div>
+                      <div style={{ fontSize: FS.label, color: BC.t3 }}>
+                        {tags.length} of {ctpPins.pins} pin{ctpPins.pins !== 1 ? "s" : ""} taken
+                      </div>
                       <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>
-                        ${(tags.length > 0 ? ctpPotValue / tags.length : 0).toFixed(2)} / pin
+                        ${perPin.toFixed(2)} / pin
                       </div>
                     </div>
                   </div>
+
+                  {/* A round with no course yet holds pins nobody has counted,
+                      so the total above can only go up and the share can only
+                      come down. Said out loud, because a director who prices
+                      the pot in February off six pins and plays eight has told
+                      the field a number that was never going to hold. */}
+                  {ctpPins.partial && (
+                    <div style={{ padding: "0 14px 10px", fontSize: FS.label, color: BC.t3, lineHeight: 1.4 }}>
+                      {ctpPins.rounds - ctpPins.scheduled} round{ctpPins.rounds - ctpPins.scheduled !== 1 ? "s" : ""} without a course yet — more pins to come.
+                    </div>
+                  )}
+
                   {user?.isDirector && (
                     <div
                       onClick={() => setEditBuyIns(v => (v === "ctp" ? null : "ctp"))}
@@ -2371,18 +2398,35 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
 
                 {(() => {
                   const { course: course2, pars: pars2 } = setupFor(ctpShownRound);
-                  const par3holes = pars2.map((p, i) => ({ hole: i, par: p })).filter(h => h.par === 3);
+                  const par3holes = course2 ? pars2.map((p, i) => ({ hole: i, par: p })).filter(h => h.par === 3) : [];
                   if (par3holes.length === 0) {
                     return (
                       <div style={{ background: BC.card, borderRadius: 8, border: `1px solid ${BC.bdr}`, padding: "14px 12px", fontSize: FS.small, color: BC.t3, textAlign: "center" }}>
-                        No par 3s on {course2?.name || "this course"}.
+                        {/* "No par 3s on this course" was said of a round with
+                            no course at all, because resolveHolePars hands back
+                            eighteen par 4s when there is nothing to read. That
+                            reads as a course with no short holes on it, which
+                            is a different and settled answer — this one is
+                            waiting on the draw. */}
+                        {course2
+                          ? `No par 3s on ${course2.name}.`
+                          : `Round ${ctpShownRound} has no course yet.`}
                       </div>
                     );
                   }
                   return (
                     <>
-                      <div style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1, marginBottom: 6 }}>
-                        {(course2?.name || "TBD").toUpperCase()}
+                      {/* The round's own par-3 count beside its course, and
+                          the week's beside it on a multi-round draw. Both come
+                          off the scorecards, so this is the same number the
+                          pot is divided by rather than a second count of it. */}
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 8, fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1, marginBottom: 6 }}>
+                        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {(course2?.name || "TBD").toUpperCase()} · {par3holes.length} PAR 3{par3holes.length !== 1 ? "S" : ""}
+                        </span>
+                        {roundList.length > 1 && (
+                          <span style={{ flexShrink: 0, color: BC.amberInk }}>{ctpPins.pins} ALL WEEK</span>
+                        )}
                       </div>
                       {par3holes.map(({ hole }) => {
                         const rec = ctpData[`${ctpShownRound}_${hole}`];

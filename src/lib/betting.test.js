@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { inField, computeSkins, lowNetRows, ctpTags } from "./betting";
+import { inField, computeSkins, lowNetRows, ctpTags, ctpPinTotal } from "./betting";
 
 const course = {
   id: "c1",
@@ -114,6 +114,54 @@ describe("ctpTags", () => {
     const t = ctpTags({ rounds: [1], field: inField(players, ["p2"]), ctpData, ...ctx });
     expect(t).toHaveLength(1);
     expect(t[0].player_id).toBe("p2");
+  });
+});
+
+describe("ctpPinTotal", () => {
+  // c1 has three par 3s: holes 0, 6 and 13.
+  const two = { ...course, id: "c2", hole_pars: [3, 4, 4, 4, 5, 4, 4, 4, 4, 4, 4, 5, 4, 3, 4, 4, 4, 4] };
+
+  it("counts every par 3 on the schedule, played or not", () => {
+    const r = ctpPinTotal({ rounds: [1], tRounds, courses: [course], roundLocks: {} });
+    expect(r.pins).toBe(3);
+    expect(r.partial).toBe(false);
+  });
+
+  it("adds the rounds together", () => {
+    const rs = [
+      { round_number: 1, course_id: "c1" },
+      { round_number: 2, course_id: "c2" },
+    ];
+    const r = ctpPinTotal({ rounds: [1, 2], tRounds: rs, courses: [course, two], roundLocks: {} });
+    expect(r.pins).toBe(5);           // 3 + 2
+    expect(r.scheduled).toBe(2);
+    expect(r.partial).toBe(false);
+  });
+
+  // resolveHolePars falls back to eighteen par 4s with no course, which would
+  // read as a real "no par 3s here" — it has to say the count is unfinished
+  // instead, because the pot's per-pin share will fall when the course lands.
+  it("does not count a round with no course, and says the total is partial", () => {
+    const rs = [{ round_number: 1, course_id: "c1" }, { round_number: 2 }];
+    const r = ctpPinTotal({ rounds: [1, 2], tRounds: rs, courses: [course], roundLocks: {} });
+    expect(r.pins).toBe(3);
+    expect(r.scheduled).toBe(1);
+    expect(r.rounds).toBe(2);
+    expect(r.partial).toBe(true);
+  });
+
+  // A locked round froze its course. Reading the live round doc instead would
+  // re-count the pins of a settled round if the director re-pointed it after.
+  it("reads a locked round through its lock", () => {
+    const rs = [{ round_number: 1, course_id: "c2" }];
+    const locks = { 1: { locked: true, course_id: "c1", hole_pars: course.hole_pars } };
+    const r = ctpPinTotal({ rounds: [1], tRounds: rs, courses: [course, two], roundLocks: locks });
+    expect(r.pins).toBe(3);
+  });
+
+  it("is zero on an empty schedule", () => {
+    expect(ctpPinTotal({ rounds: [], tRounds, courses: [course], roundLocks: {} }).pins).toBe(0);
+    expect(ctpPinTotal({ rounds: null, tRounds, courses: [course], roundLocks: {} }).pins).toBe(0);
   });
 });
 
