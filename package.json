@@ -11,6 +11,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "build:editions": "node pipeline/editions.mjs",
+    "build:archive": "node pipeline/archive.mjs",
     "team-brand": "node pipeline/team-brand.mjs",
     "import:history": "node scripts/import-history.mjs"
   },

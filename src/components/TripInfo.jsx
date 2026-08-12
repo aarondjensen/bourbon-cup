@@ -15,7 +15,7 @@
 // would make this a second round-setup screen.
 import { useState } from "react";
 import { BC, FONT, ALPHA, FS } from "../theme";
-import { FORMATS } from "../constants";
+import { formatLabel } from "../constants";
 import { Popup } from "./Popup";
 import {
   scheduleDayLabel, courseTees, courseScorecard, coursePar,
@@ -35,8 +35,6 @@ const Card = ({ children, style }) => (
     padding: "14px 16px", marginBottom: 16, ...style,
   }}>{children}</div>
 );
-
-const formatLabel = (id) => FORMATS.find(f => f.id === id)?.label || "";
 
 // ══════════════════════════════════════════════════════════════════
 //  The course sheet — what a schedule row opens

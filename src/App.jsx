@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
-import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, HOLE_BANNER, FS, applyBCTheme, initialBCMode, bcGlobalCSS, playerNameColor, teamColor, VP_BAND } from "./theme";
+import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, HOLE_BANNER, FS, applyBCTheme, initialBCMode, bcGlobalCSS, teamColor, VP_BAND } from "./theme";
 import { playerLookup, realPlayers } from "./lib/players";
 import { db, TOURNAMENT_ID, getTournamentYear, getActiveTournamentId, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, readTournamentIdentity, writeTournamentIdentity, BOOTSTRAP_DIRECTOR, SPECTATOR_ID } from "./firebase";
 import { PROVIDERS, signIn, signOutUser, onAuthUser, consumeRedirectResult, isCancelled, whenAuthReady } from "./lib/auth";
@@ -15,7 +15,7 @@ import {
   HOLE_METHOD_LABELS, HOLE_METHOD_DESCRIPTIONS,
   handicapModeFor, } from "./constants";
 import {
-  fmtScore, fmtPts,
+  fmtScore,
   resolveHolePars, resolveHoleHcps,
   computeMatchResult,
   getRoundCH, lockForRound,
@@ -59,6 +59,13 @@ const PhotosView = lazy(() =>
 // most of the field had no use for. See components/AdminView.
 const AdminView = lazy(() =>
   import("./components/AdminView").then(m => ({ default: m.AdminView })));
+// ── The Data tab ──────────────────────────────────────────────────
+// Split for a second reason on top of the usual one: this chunk carries the
+// ARCHIVE as well as the screen — ten finished years of matches and cards
+// (data/bourbon-cup-archive.json, built by pipeline/archive.mjs). A phone
+// that never opens the tab downloads neither. See lib/useArchive for why the
+// history is a static asset rather than ten Firestore subscriptions.
+const DataView = lazy(() => import("./components/DataView"));
 import { photoUploadsAllowed, uploadsDisabledReason, CONFIG_COL, PHOTOS_CONFIG_ID } from "./lib/media";
 import { initForegroundNotifications, syncAppBadge } from "./lib/notifications";
 import { SegmentedToggle, SegRule, StickyTop, Banner, PlayerName, Toast, HoleNavigator, ScoreButtonRow } from "./components/ui";
@@ -84,7 +91,6 @@ import {
   allRounds, MAX_ROUND_COUNT,
 } from "./lib/rounds";
 import { summarizeEdition, sameSummary } from "./lib/editionSummary";
-import { playerTable } from "./lib/playerStats";
 import {
   inField, roundSetup, strokeMapsFor, computeSkins, lowNetRows, ctpTags,
 } from "./lib/betting";
@@ -96,7 +102,8 @@ import {
 import {
   BUDGET_COL, budgetLineId, buildBudgetLine, budgetLineError,
 } from "./lib/budget";
-import { EDITIONS_COL, switchEdition } from "./lib/editions";
+import { EDITIONS_COL } from "./lib/editions";
+import { prefetchArchive } from "./lib/useArchive";
 import { TRIP_SETTINGS_ID, houseFrom, tripSchedule, tripDates } from "./lib/tripInfo";
 import {
   cardSigBareId, sigForMatch, cardComplete, missingForCard,
@@ -2550,227 +2557,6 @@ function LoadingPanel({ label }) {
   );
 }
 
-// ── History ──
-// One row per year, off the SAME edition list the Tournaments picker reads —
-// so the summary of a year and the way into it can never be two different sets
-// of years. The rows are tappable for that reason: the whole tournament is one
-// switch away, and the menu already describes the pair as "that row is the
-// summary of the past, this one walks into it."
-//
-// The numbers come from the cards (lib/editionSummary), not from anything
-// anybody typed. A year with no `result` yet has simply never been opened by a
-// director since this landed — the app records it the first time one does, so
-// the empty state says that rather than pretending the year is missing.
-function HistoryList({ editions, activeSummary, teams, isDirector }) {
-  const rows = [...editions]
-    .filter(e => e.year)
-    .sort((a, b) => (b.year || 0) - (a.year || 0))
-    // The running year is computed live rather than read back, so it has a
-    // score the moment it has a match — it does not have to be over, and it
-    // does not have to have been written down, to show up here.
-    .map(e => ({ ...e, summary: e.id === TOURNAMENT_ID ? activeSummary : e.result || null }));
-
-  if (!rows.length) {
-    return (
-      <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>
-        <div style={{ fontSize: FS.display, marginBottom: 12 }}>📊</div>
-        <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.t2 }}>No years yet</div>
-      </div>
-    );
-  }
-
-  const side = (name, score, accent, align) => (
-    <div style={{ flex: 1, minWidth: 0, textAlign: align }}>
-      <div style={{
-        fontSize: FS.label, fontWeight: 800, color: accent, letterSpacing: 0.4,
-        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-      }}>{name || "—"}</div>
-      <div style={{ fontSize: FS.lead, fontWeight: 800, color: BC.t1 }}>{fmtPts(score)}</div>
-    </div>
-  );
-
-  return (
-    <div>
-      {rows.map(e => {
-        const s = e.summary;
-        const live = e.id === TOURNAMENT_ID;
-        const won = s?.winner || null;
-        return (
-          <button
-            key={e.id}
-            onClick={() => { if (e.id !== TOURNAMENT_ID) switchEdition(e.id, { namespaced: !!e.namespaced }); }}
-            style={{
-              display: "block", width: "100%", textAlign: "left",
-              background: BC.card, borderRadius: 12, padding: 14, marginBottom: 12,
-              border: `1px solid ${live ? BC.amber + ALPHA.line : BC.bdr}`,
-              fontFamily: FONT, cursor: e.id === TOURNAMENT_ID ? "default" : "pointer",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
-              <span style={{ fontSize: FS.body, fontWeight: 700, color: BC.gold }}>{e.year}</span>
-              <span style={{
-                flex: 1, minWidth: 0, fontSize: FS.label, color: BC.t3,
-                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-              }}>{(s?.location || "").toUpperCase()}</span>
-              {live && <span style={{ fontSize: FS.micro, fontWeight: 800, color: BC.amberInk, letterSpacing: 0.6 }}>THIS YEAR</span>}
-            </div>
-
-            {s ? (
-              <>
-                <div style={{ display: "flex", alignItems: "flex-end", gap: 10 }}>
-                  {side(s.teamA, s.scoreA, teams.A.accent, "left")}
-                  {side(s.teamB, s.scoreB, teams.B.accent, "right")}
-                </div>
-                <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.amberInk, marginTop: 8 }}>
-                  {s.halved ? "🏆 The cup was halved"
-                    : !s.complete ? `In progress · ${s.rounds} round${s.rounds === 1 ? "" : "s"}`
-                      : won ? `🏆 ${won} won the Bourbon Cup` : "—"}
-                </div>
-              </>
-            ) : (
-              <div style={{ fontSize: FS.small, color: BC.t3 }}>
-                {isDirector
-                  ? "Not summarised yet — open this year once and it records itself."
-                  : "Not summarised yet."}
-              </div>
-            )}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Player stats table ──
-// Two things about a player, side by side, because they are genuinely
-// different facts and the tab used to show only one of them.
-//
-//   W / L / H / PTS   what their MATCHES did. A team result — a four-ball is
-//                     won by two people and both of them won it — which is
-//                     how a cup record has always been read.
-//   RDS / AVG / BEST  what their CARD did. Theirs alone, and true whatever
-//                     format the round was played in.
-//
-// A player with nothing posted shows "—" rather than a zero. The old table
-// seeded every counter at 0 and printed them identically, so somebody who had
-// not teed off looked like somebody who had played four rounds badly.
-//
-// Two rows per player, not eight columns: eight numbers across a phone is
-// either unreadable or a horizontal scroll, and the second row is the quieter
-// half by design — the record is what people came for.
-function PlayerStatsTable({ rows, teams }) {
-  if (!rows.length) {
-    return (
-      <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>
-        <div style={{ fontSize: FS.display, marginBottom: 12 }}>📊</div>
-        <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.t2 }}>No players yet</div>
-      </div>
-    );
-  }
-  const COLS = "1fr 38px 38px 38px 50px";
-  const head = { fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1, textAlign: "center" };
-  const cell = { fontSize: FS.small, fontWeight: 600, textAlign: "center" };
-  return (
-    <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
-      <div style={{ display: "grid", gridTemplateColumns: COLS, padding: "8px 12px", borderBottom: `1px solid ${BC.bdr}`, ...head, textAlign: "left" }}>
-        <div>PLAYER</div>
-        <div style={head}>W</div><div style={head}>L</div><div style={head}>H</div>
-        <div style={{ ...head, textAlign: "right" }}>PTS</div>
-      </div>
-      {rows.map((p, i) => {
-        const team = teams[p.team];
-        return (
-          <div key={p.pid} style={{
-            padding: "8px 12px",
-            borderBottom: i < rows.length - 1 ? `1px solid ${BC.bdr}${ALPHA.hair}` : "none",
-          }}>
-            <div style={{ display: "grid", gridTemplateColumns: COLS, alignItems: "center" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                <div style={{ width: 6, height: 6, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
-                <span style={{
-                  fontSize: FS.small, fontWeight: 600, color: playerNameColor(),
-                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                }}>{p.name}</span>
-              </div>
-              <div style={{ ...cell, color: BC.green }}>{p.wins}</div>
-              <div style={{ ...cell, color: BC.danger }}>{p.losses}</div>
-              <div style={{ ...cell, color: BC.t3 }}>{p.halves}</div>
-              <div style={{ ...cell, textAlign: "right", fontWeight: 700, color: BC.amberInk }}>{fmtPts(p.pts)}</div>
-            </div>
-            {/* The card. Quieter, and it says nothing at all rather than
-                zeroes when there is no complete round to speak for. */}
-            <div style={{ display: "flex", gap: 12, marginTop: 3, marginLeft: 12, fontSize: FS.micro, color: BC.t3, letterSpacing: 0.4 }}>
-              <span>{p.rounds ? `${p.rounds} RD${p.rounds === 1 ? "" : "S"}` : "NO CARD"}</span>
-              {p.avgToPar != null && (
-                <span>AVG <strong style={{ color: BC.t2, fontWeight: 700 }}>{fmtScore(Math.round(p.avgToPar * 10) / 10)}</strong></span>
-              )}
-              {p.best && (
-                <span>BEST <strong style={{ color: BC.t2, fontWeight: 700 }}>{p.best.gross}</strong> ({fmtScore(p.best.toPar)}) R{p.best.round}</span>
-              )}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Data View ──
-// Was two menu rows — Player Analytics and Historical Data — each opening one
-// half of this screen, with the halves split NOW vs THEN. That axis is the
-// wrong one to cut on. "How has Weezy done" is one question, and the split
-// answered it for this year on one row and never for the other ten; "who won
-// 2019" and "what is this year at" are also one question, and they sat on
-// opposite rows.
-//
-// One row now, cut by SUBJECT:
-//
-//   TOURNAMENT   the cup itself — every year it has been played, this one
-//                included and computed live.
-//   PLAYER       the people in it — what their matches did and what their
-//                cards did.
-//
-// Neither half is pinned to a year by the toggle any more, which is what
-// leaves room for the Player side to grow a career record without needing a
-// third tab to put it on. Today it is still this year's field; the Tournament
-// side already spans 2016 on.
-function DataView({ tPlayers, matches, holeData, tRounds, courses, editions, activeSummary, user, hcpOverrides, teeAssignments, roundLocks, teams }) {
-  // Tournament opens. It is the half that already spans every year, and it is
-  // the one the row's own name answers first — the cup, then the people in it.
-  const [dataTab, setDataTab] = useState("tournament");
-
-  // Both halves of a player's tournament, from lib/playerStats: the match
-  // record off the matches, and how they actually went round off the cards.
-  const playerStats = useMemo(() => playerTable({
-    tPlayers, matches, holeData, tRounds, courses,
-    hcpOverrides: hcpOverrides || {}, teeAssignments, roundLocks,
-  }), [tPlayers, matches, holeData, tRounds, courses, hcpOverrides, teeAssignments, roundLocks]);
-
-  return (
-    <div style={{ fontFamily: FONT }}>
-      {/* Tournament / Player switch — pinned, same as every other tab's lead
-          control, so it sits where the eye already expects a tab switcher.
-          The labels name a SUBJECT, not a year: neither side is "this year"
-          or "the old ones", which is the distinction the old Stats/History
-          pair got wrong. */}
-      <StickyTop padBottom={14}>
-        <SegmentedToggle
-          options={[["tournament", "Tournament"], ["player", "Player"]]}
-          value={dataTab} onChange={setDataTab}
-        />
-      </StickyTop>
-
-      {dataTab === "tournament" && (
-        <HistoryList editions={editions} activeSummary={activeSummary} teams={teams} isDirector={!!user?.isDirector} />
-      )}
-
-      {dataTab === "player" && (
-        <PlayerStatsTable rows={playerStats} teams={teams} />
-      )}
-    </div>
-  );
-}
-
 // ── Slide-up Menu ──
 // Every row here is a PLACE TO GO. It held one exception for a while — a
 // Finalize Round N action that raised a sheet and navigated nowhere — and
@@ -5019,19 +4805,22 @@ export default function App() {
           /* Concealed hole data, same as the scoreboard: this tab's per-player
              W/L/PTS is the cup total sliced a different way, so a sealed round
              left in it would give the ending away from a tab nobody thought to
-             check. */
+             check. The ten finished years are not concealable and do not need
+             to be — a sealed round is this year's, and this year is the only
+             one the tab computes rather than reads. */
+          <Suspense fallback={<LoadingPanel label="Data" />}>
           <DataView
             tPlayers={tPlayers} matches={enrichedMatches} holeData={revealedHoleData}
-            tRounds={enrichedRounds} courses={courses} user={user}
+            tRounds={enrichedRounds} courses={courses}
             hcpOverrides={hcpOverridesData} teeAssignments={teeAssignmentsData}
-            roundLocks={roundLocksData} teams={teams}
+            roundLocks={roundLocksData} teams={teams} teamNames={teamNames}
             editions={editions}
-            /* The running year's row, computed live rather than read back —
-               see the summary memo. Off the CONCEALED map like everything else
-               on this tab, so a sealed round cannot leak its result through the
-               archive either. */
-            activeSummary={editionSummary}
+            activeYear={getTournamentYear()}
+            /* Which row on the career table is yours. Resolved to a canonical
+               golfer inside the tab — a roster row is one year of one man. */
+            myPlayerId={user?.player_id || null}
           />
+          </Suspense>
         )}
         {view === "photos" && (
           /* `canPost` is membership, not a role: everybody who has been through
@@ -5263,7 +5052,12 @@ export default function App() {
           const badgeColor = finalizeReady ? BC.amber : BC.danger;
           return (
             <button key={item.key} onClick={() => {
-              if (item.key === "menu") { setMenuOpen(true); return; }
+              // Opening the menu warms the Data tab's chunk — the component
+              // and ten years of archive in one file. By the time a thumb has
+              // travelled from the bar to the row it is usually already there.
+              // A hint, not a dependency: if it fails the tab shows a spinner
+              // and fetches it itself.
+              if (item.key === "menu") { setMenuOpen(true); prefetchArchive(); return; }
               setView(item.key);
             }} style={{
               // 6px at the bottom, not 10. The bar's excess height was here, not
