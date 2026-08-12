@@ -192,8 +192,8 @@ function PlayerLedgerSheet({
     if (err) { notify?.(err, "error"); return; }
     setBusy(true);
     try {
-      const ok = await onLogPayment({ playerId: pid, amount, date, method, note });
-      if (!ok) { notify?.("Could not log that payment — try again", "error"); return; }
+      const res = await onLogPayment({ playerId: pid, amount, date, method, note });
+      if (!res?.ok) { notify?.(res?.error || "Could not log that payment — try again", "error"); return; }
       notify?.(`${money(amount)} logged for ${row.player?.name || "player"}`, "success");
       // The form stays open and only the amount and note clear: the director
       // is usually working down a stack of Venmos, and re-picking the date and
@@ -218,7 +218,8 @@ function PlayerLedgerSheet({
     });
     if (!ok) return;
     const done = await onDeletePayment(p);
-    notify?.(done ? "Payment deleted" : "Could not delete that payment — try again", done ? "success" : "error");
+    notify?.(done?.ok ? "Payment deleted" : (done?.error || "Could not delete that payment — try again"),
+      done?.ok ? "success" : "error");
   };
 
   // Blank means "no override, use the tournament figure", which is why an
@@ -232,10 +233,10 @@ function PlayerLedgerSheet({
     }
     setBusy(true);
     try {
-      const ok = await onSetPlayerDues(row.player, raw === "" ? null : round2(raw));
-      notify?.(ok
+      const res = await onSetPlayerDues(row.player, raw === "" ? null : round2(raw));
+      notify?.(res?.ok
         ? (raw === "" ? "Back on the tournament figure" : `Trip cost set to ${money(raw)}`)
-        : "Could not save that — try again", ok ? "success" : "error");
+        : (res?.error || "Could not save that — try again"), res?.ok ? "success" : "error");
     } finally { setBusy(false); }
   };
 
@@ -369,8 +370,9 @@ export function LedgerAdmin({
     if (!Number.isFinite(n) || n < 0) { notify?.("Enter a trip cost.", "error"); return; }
     setSavingDues(true);
     try {
-      const ok = await onSaveDues(round2(n));
-      notify?.(ok ? `Trip cost set to ${money(n)} a man` : "Could not save that — try again", ok ? "success" : "error");
+      const res = await onSaveDues(round2(n));
+      notify?.(res?.ok ? `Trip cost set to ${money(n)} a man` : (res?.error || "Could not save that — try again"),
+        res?.ok ? "success" : "error");
     } finally { setSavingDues(false); }
   };
 

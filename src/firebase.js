@@ -337,10 +337,22 @@ export const db = {
     try { const s = await getDocs(db._q(col, filters)); return s.docs.map(d => d.data()); }
     catch(e) { console.error("db.get", col, e); return []; }
   },
-  upsert: async (col, data) => {
-    if (!data.id) return null;
+  // `loud` leaves the rejection in. The default swallows it into `null`,
+  // which is right for a screen that would rather render stale than blow up —
+  // but it makes "the rules refused this" and "something went wrong"
+  // indistinguishable, and those have very different fixes. A form with a
+  // Save button on it wants the difference; see writeFailure below.
+  upsert: async (col, data, { loud = false } = {}) => {
+    if (!data.id) {
+      if (loud) throw new Error("upsert needs an id");
+      return null;
+    }
     try { await setDoc(doc(_db, col, String(data.id)), data, { merge: true }); return data; }
-    catch(e) { console.error("db.upsert", col, e); return null; }
+    catch(e) {
+      if (loud) throw e;
+      console.error("db.upsert", col, e);
+      return null;
+    }
   },
   delete: async (col, id) => {
     try { await deleteDoc(doc(_db, col, String(id))); return true; }
@@ -462,6 +474,25 @@ export const db = {
     await setDoc(doc(_db, col, String(id)), data, { merge: true });
     return data;
   },
+};
+
+// ── Why a write was refused, in words ───────────────────────────────
+// "Could not save — try again" is the worst thing a form can say when the
+// answer is "and it never will, until somebody deploys the rules". Rules are
+// deployed BY HAND in this project and the app is not (see firestore.rules),
+// so every new collection has a window where its writes are denied — and the
+// only person who ever sees that window is the director, who is also the
+// person who can end it.
+//
+// So permission-denied gets named. The other two codes worth telling apart
+// are a device that is offline and a payload Firestore will not take.
+// Everything else falls back to the generic line the caller supplies.
+export const writeFailure = (e, fallback = "That didn't save — try again") => {
+  const code = e?.code || "";
+  if (code === "permission-denied") return "Firestore refused that — the security rules may not be deployed yet";
+  if (code === "unavailable" || code === "failed-precondition") return "No connection — that didn't save";
+  if (code === "invalid-argument") return "Firestore wouldn't take that — check the values";
+  return fallback;
 };
 
 // ── Firebase Cloud Messaging (lazy-loaded) ──────────────────────────
