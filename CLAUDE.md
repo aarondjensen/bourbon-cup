@@ -265,6 +265,46 @@ would not.
   Firebase console. Rotating the password does not evict anybody already
   through; existing memberships are never re-checked.
 
+### The guest door
+
+**Sign-in screen → "Look around as a guest"**, `src/lib/guest.js`. It exists
+for the store review queues: Google Play's closed test wants a dozen people
+tapping around the app for two weeks, and every one of them would otherwise
+need the tournament password (which is the one thing the password exists to
+withhold) and a roster row (which a director then has to unlink).
+
+A guest is **not signed in to Firebase at all** — no anonymous account, no
+uid, no membership document. That is the design, not an economy, because it
+makes read-only structural rather than a promise the UI makes:
+
+- Reads in `firestore.rules` are open to everybody (`isOpen()`), which is
+  already what lets a spouse open a shared leaderboard link.
+- Every write rule in the project starts at `isMember()`, which starts at
+  `request.auth != null`. **A guest has no auth token, so a guest cannot write
+  a single document** — not a score, not a push token, not a photo, not a bet.
+  It is not that the app declines to offer it; the database would refuse it.
+
+Which is also why it needs **no rules deploy and no Firebase console setting**
+to work — the two by-hand steps everything else here waits on. Anonymous auth
+was the obvious alternative and is the worse one: it hands a guest a uid, and
+a uid is one loosened rule away from being a membership.
+
+The identity (`GUEST_USER`, `player_id: "guest"`) matches no roster row, which
+is what keeps a guest out of every match, card and ledger row without a single
+extra check. Deliberately NOT the spectator id — a spectator is a signed-in
+member looking at a year they are not in, and one id for both would let each
+one's allowances leak onto the other.
+
+The flag is a localStorage key (`bc_guest`), so a tester who opened the app on
+day three of fourteen is still inside it. Signing in for real clears it; **My
+Account → Exit Guest Mode** is the way back to the sign-in screen.
+
+What the app withholds rather than lets fail: the Scoring tab says so instead
+of showing an empty draw, and My Account drops Notifications (a token write
+needs a membership) and Delete Account (there is no account to delete —
+guideline 5.1.1(v) is about accounts the app lets you CREATE). Photos and side
+bets were already gated on a uid and needed no change.
+
 ### Deleting an account
 
 **My Account → Delete Account**, which calls the `deleteAccount` callable in
