@@ -13,7 +13,8 @@
     "build:editions": "node pipeline/editions.mjs",
     "build:archive": "node pipeline/archive.mjs",
     "team-brand": "node pipeline/team-brand.mjs",
-    "import:history": "node scripts/import-history.mjs"
+    "import:history": "node scripts/import-history.mjs",
+    "send:push": "node scripts/send-push.mjs"
   },
   "dependencies": {
     "firebase": "^12.10.0",
