@@ -40,10 +40,14 @@ const Card = ({ children, style }) => (
   }}>{children}</div>
 );
 
+// Centred, and only BalanceCard uses it — which is My Account's screen, where
+// every other head is centred too. LedgerAdmin's own headings are separate and
+// stay where they are: Admin → Budget is a screen you operate, not one you
+// read.
 const SectionLabel = ({ children, style }) => (
   <div style={{
     fontSize: FS.label, fontWeight: 800, letterSpacing: 1.5,
-    color: BC.amberInk, marginBottom: 10, ...style,
+    color: BC.amberInk, marginBottom: 10, textAlign: "center", ...style,
   }}>{children}</div>
 );
 

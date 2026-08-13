@@ -138,7 +138,13 @@ export function NotificationSettings({ user, notify }) {
 
   const wrap = (children) => (
     <div style={{ fontFamily: FONT, padding: "4px 2px 20px", overflowY: "auto" }}>
-      <div style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 1.5, color: BC.amberInk, marginBottom: 10 }}>
+      {/* Centred, like every other head on My Account — this section is
+          embedded in that screen and nowhere else, so it has to match the
+          ones above and below it. */}
+      <div style={{
+        fontSize: FS.label, fontWeight: 800, letterSpacing: 1.5,
+        color: BC.amberInk, marginBottom: 10, textAlign: "center",
+      }}>
         NOTIFICATIONS
       </div>
       {children}
