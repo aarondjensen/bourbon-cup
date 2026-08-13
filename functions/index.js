@@ -78,7 +78,7 @@ const TOKENS_COL = "bc_notification_tokens";
 // tells you by rejecting a send — so this is the only place the cleanup
 // can happen, and skipping it means retrying dead devices forever.
 async function sendToPlayer(playerId, payload) {
-  if (!playerId) return { sent: 0, failed: 0, cleaned: 0, errors: ["missing_playerId"] };
+  if (!playerId) return { sent: 0, failed: 0, cleaned: 0, muted: 0, errors: ["missing_playerId"] };
 
   let snap;
   try {
@@ -87,7 +87,7 @@ async function sendToPlayer(playerId, payload) {
     logger.error("token query failed", { playerId, err: err?.message });
     throw new HttpsError("internal", `Firestore query failed: ${err?.message || err}`);
   }
-  if (snap.empty) return { sent: 0, failed: 0, cleaned: 0, errors: ["no_tokens_registered"] };
+  if (snap.empty) return { sent: 0, failed: 0, cleaned: 0, muted: 0, errors: ["no_tokens_registered"] };
 
   // Every value in an FCM data block must be a string — a number silently
   // fails the whole send rather than being coerced.
@@ -101,12 +101,29 @@ async function sendToPlayer(playerId, payload) {
     body: payload.body || "",
   };
 
-  let sent = 0, failed = 0, cleaned = 0;
+  let sent = 0, failed = 0, cleaned = 0, muted = 0;
   const errors = [];
 
   for (const doc of snap.docs) {
     const token = doc.data().token;
     if (!token) continue;
+    // ── The per-type switches ────────────────────────────────────────
+    // Set in My Account → Notifications and stored on this row (see
+    // lib/notifications for why they live here rather than in a document
+    // of their own). The gate is HERE rather than in the three triggers
+    // above, so a type added later cannot be added without one.
+    //
+    // An ABSENT map is all-on: every token registered before the switches
+    // existed has no `types` at all, and the honest reading of that is
+    // "never turned anything off". Only an explicit false mutes.
+    //
+    // `test` is deliberately ungated. The test button exists to answer
+    // "is push working on this phone at all", and a diagnostic that a
+    // preference can silence answers the wrong question.
+    if (data.type && data.type !== "test" && doc.data().types?.[data.type] === false) {
+      muted++;
+      continue;
+    }
     try {
       await messaging.send({
         token,
@@ -132,7 +149,11 @@ async function sendToPlayer(playerId, payload) {
       }
     }
   }
-  return { sent, failed, cleaned, errors };
+  // `muted` is reported rather than folded into `sent` or `failed`: a push
+  // that nobody was sent because everybody switched that type off is a
+  // working system, and reading it as a failure would send somebody hunting
+  // for a bug in FCM.
+  return { sent, failed, cleaned, muted, errors };
 }
 
 // Fan out, and log once for the whole fan rather than once per player —

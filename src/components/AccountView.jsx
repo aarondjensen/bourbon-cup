@@ -190,8 +190,17 @@ export function AccountView({
             marginTop: 12, paddingTop: 10, borderTop: `1px solid ${BC.bdr}${ALPHA.hair}`,
             fontSize: FS.small, color: BC.t2, lineHeight: 1.5,
           }}>
-            Signed in with <strong style={{ color: BC.t1 }}>{signInWith}</strong>
-            {signInAs && <> as <span style={{ color: BC.t1, wordBreak: "break-all" }}>{signInAs}</span></>}
+            {/* Two lines, not one sentence. "Signed in with Google as
+                aarondjensen@gmail.com" wrapped mid-address on every phone,
+                so the provider — the thing that answers "which button do I
+                press next time" — was the half that got pushed around by
+                however long somebody's email happens to be. Split, the
+                provider always reads on one line and the address gets the
+                full width to break in. */}
+            <div>Signed in with <strong style={{ color: BC.t1 }}>{signInWith}</strong></div>
+            {signInAs && (
+              <div style={{ color: BC.t1, wordBreak: "break-all", marginTop: 2 }}>{signInAs}</div>
+            )}
             {!claimed && (
               <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 4 }}>
                 This account hasn&apos;t claimed a name on the roster.
@@ -212,11 +221,19 @@ export function AccountView({
           director's screen (Admin → Budget), not a leaderboard. */}
       <BalanceCard player={player} payments={payments} duesAmount={duesAmount} />
 
-      {/* ── Appearance ── */}
+      {/* ── Appearance ──
+          A pill the width it needs and no wider, centred under the head.
+          It was full-bleed with a "Theme" label over it, and both were
+          doing the head's job a second time: the card says APPEARANCE, the
+          two buttons say Light and Dark, and a stretched control reads as
+          something with more settings inside it than it has. Sized to sit
+          level with the notification switches below rather than dwarfing
+          them — this is a preference, the same weight as those. */}
       <SectionLabel>APPEARANCE</SectionLabel>
-      <Card style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: FS.body, fontWeight: 800, color: BC.t1, marginBottom: 10 }}>Theme</div>
+      <Card style={{ marginBottom: 16, display: "flex", justifyContent: "center" }}>
         <SegmentedToggle
+          dense
+          style={{ width: 172 }}
           options={[["light", "☀️  Light"], ["dark", "🌙  Dark"]]}
           value={darkMode ? "dark" : "light"}
           // The toggle is a two-state switch behind a two-option control:
@@ -232,28 +249,30 @@ export function AccountView({
           is no back button in this app to return from a separate route. */}
       <NotificationSettings user={user} notify={notify} />
 
-      {/* ── Session ── */}
-      <SectionLabel style={{ marginTop: 4 }}>SESSION</SectionLabel>
-      <button onClick={handleLogout} style={{
-        width: "100%", padding: "12px 0", borderRadius: 10, marginBottom: 16,
-        background: BC.inp, border: `1px solid ${BC.bdr}`,
-        color: BC.t1, fontSize: FS.body, fontWeight: 800,
-        cursor: "pointer", fontFamily: FONT,
-      }}>
-        Log Out
-      </button>
+      {/* ── The two ways out ──
+          One card, because they are the same question asked at two
+          strengths: leave, and leave for good. They were two sections with a
+          head apiece and a line of explanation between them, which put three
+          rungs of chrome around two buttons.
 
-      {/* ── Delete ──
-          Last on the page and in its own bordered zone, because it is the
-          one control here that cannot be undone by doing it again. */}
-      <SectionLabel style={{ color: BC.danger }}>DELETE ACCOUNT</SectionLabel>
-      <Card style={{ border: `1px solid ${BC.danger}${ALPHA.line}` }}>
-        {/* One line. The confirm behind the button says the rest — twice —
-            and it says it at the moment it matters. */}
-        <div style={{ fontSize: FS.small, color: BC.t2, lineHeight: 1.5, marginBottom: 12 }}>
-          Permanently deletes your {signInWith === "account" ? "" : `${signInWith} `}sign-in
-          {claimed ? `. ${name} stays on the roster.` : "."}
-        </div>
+          The description under Delete is gone. It said less than the two
+          confirms behind the button already say, and it said it to everybody
+          who ever opened this screen rather than to the one person about to
+          tap — see handleDelete, which spells out every consequence and then
+          asks again. A caption cannot be the safeguard when a dialog is.
+
+          Delete keeps the danger colour and stays LAST. It is still the one
+          control on this screen that doing twice does not undo. */}
+      <SectionLabel style={{ marginTop: 4 }}>ACCOUNT ACTIONS</SectionLabel>
+      <Card style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <button onClick={handleLogout} style={{
+          width: "100%", padding: "12px 0", borderRadius: 10,
+          background: BC.inp, border: `1px solid ${BC.bdr}`,
+          color: BC.t1, fontSize: FS.body, fontWeight: 800,
+          cursor: "pointer", fontFamily: FONT,
+        }}>
+          Log Out
+        </button>
         <button onClick={handleDelete} disabled={deleting} style={{
           width: "100%", padding: "12px 0", borderRadius: 10,
           background: BC.danger, border: "none",
