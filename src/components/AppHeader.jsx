@@ -66,12 +66,21 @@
 //  The portal fills it from a screen further down the tree, so anything in it
 //  unmounts with that screen — nothing here has to know which tab is open.
 //
+//  ── The countdown ─────────────────────────────────────────────────────
+//  Given `countdownAt` — the moment round one's field tees off — the mark gets
+//  the clock wrapped around it, days and hours to its left, minutes and
+//  seconds to its right. See components/HeaderCountdown for why the digits
+//  flank the trophy when the year and the city deliberately do not. Given
+//  null, or once it has run out, this band is exactly the band it has always
+//  been.
+//
 //  flexShrink: 0 is not optional — the shell is a flex column with
 //  overflow: hidden, so without it a tall tab could compress this band and the
 //  clipped remainder would look like the header failing to fit.
 import { BC, FONT, FS, ALPHA } from "../theme";
 import { TROPHY_SILHOUETTE, TOURNAMENT_LOCATION } from "../constants";
 import { getTournamentYear } from "../firebase";
+import { HeaderCountdown } from "./HeaderCountdown";
 
 // The single knob for how far the header sits from the top of the screen.
 // 5px above the platform's inset: on an installed iOS app with
@@ -154,8 +163,15 @@ function SyncChip({ pending = 0, failed = 0 }) {
 // a much better failure than two lines of type on top of each other.
 const CHIP_GUTTER = 170;
 
-export function AppHeader({ location, pendingWrites = 0, failedWrites = 0 }) {
+export function AppHeader({ location, pendingWrites = 0, failedWrites = 0, countdownAt = null }) {
   const hasChip = pendingWrites > 0 || failedWrites > 0;
+  const mark = (
+    <div style={{
+      width: 25, height: 28, background: BC.amber, flexShrink: 0,
+      WebkitMask: `url(${TROPHY_SILHOUETTE}) center/contain no-repeat`,
+      mask: `url(${TROPHY_SILHOUETTE}) center/contain no-repeat`,
+    }} />
+  );
   return (
     // Sized for a band that is now on EVERY screen rather than one: the mark
     // came down from 30×34 and the caption from 11px, which buys back ~12px
@@ -176,11 +192,7 @@ export function AppHeader({ location, pendingWrites = 0, failedWrites = 0 }) {
       position: "relative", zIndex: 2,
       fontFamily: FONT,
     }}>
-      <div style={{
-        width: 25, height: 28, background: BC.amber, flexShrink: 0,
-        WebkitMask: `url(${TROPHY_SILHOUETTE}) center/contain no-repeat`,
-        mask: `url(${TROPHY_SILHOUETTE}) center/contain no-repeat`,
-      }} />
+      {countdownAt != null ? <HeaderCountdown at={countdownAt}>{mark}</HeaderCountdown> : mark}
 
       <div style={{
         fontSize: FS.label, fontWeight: 800, letterSpacing: 2.2, color: BC.t2,

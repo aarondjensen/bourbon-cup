@@ -85,6 +85,7 @@ import {
   teeTimeForMatch, parseTeeTime, formatTeeTime, DEFAULT_TEE_INTERVAL, TEE_SLOTS,
   roundPlaySetup, orderMatchesForRound, numberMatches, groupIndexForMatch,
 } from "./lib/groups";
+import { firstTeeAt } from "./lib/countdown";
 import { groupKey, tagAheadOfPlay } from "./lib/ctp";
 import { roundScoreProgress, finalizeStage } from "./lib/scoreGuard";
 import {
@@ -4476,6 +4477,16 @@ export default function App() {
     [roundLocksData, tournamentRounds]
   );
 
+  // ── The countdown in the header ───────────────────────────────────
+  // When the field tees off — round one's date and the earliest slot on its
+  // tee sheet, off lib/countdown. Null until the director has set both, which
+  // is what keeps a clock off a tournament nobody has scheduled yet, and null
+  // again the moment the first group goes out.
+  //
+  // Derived here rather than inside AppHeader because the header is handed
+  // what it draws: it has no rounds and no business subscribing to any.
+  const countdownAt = useMemo(() => firstTeeAt(tRounds), [tRounds]);
+
   // ── The ways in ───────────────────────────────────────────────────
   // Sign in → password → claim a name, each one skipped once it has been
   // answered, which for almost everybody means none of them appear again
@@ -4699,6 +4710,7 @@ export default function App() {
         location={tournamentLocation}
         pendingWrites={writeState.pending}
         failedWrites={writeState.failed}
+        countdownAt={countdownAt}
       />
 
       {/* Ready-to-finalize notification — app chrome, like the header above
