@@ -51,3 +51,23 @@ data/bourbon-cup-*-full.json
 # directory, so it cannot be added by accident.
 *firebase-adminsdk*.json
 serviceAccount*.json
+
+# ── The Android build (see docs/play-store.md) ──
+# `twa-manifest.json` IS tracked — it is the configuration, and it is what
+# makes `bubblewrap build` reproducible on another machine. Everything
+# Bubblewrap generates FROM it is not: the Gradle project is a build artifact
+# and regenerating it is one command.
+android.keystore
+*.keystore
+*.jks
+app-release-bundle.aab
+app-release-signed.apk
+/app/
+/gradle/
+gradlew
+gradlew.bat
+build.gradle
+settings.gradle
+gradle.properties
+store_icon.png
+

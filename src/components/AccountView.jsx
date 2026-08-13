@@ -340,6 +340,29 @@ export function AccountView({
         </button>}
       </Card>
 
+      {/* ── The two pages the stores want a URL to ──
+          Static HTML in public/, not routes in this app: Google fetches them
+          and a reviewer opens them in situations where the app itself may be
+          what is in question, so they have to render with no JavaScript and
+          no Firebase behind them.
+
+          target="_blank" is load-bearing rather than habit. Both are
+          same-origin, so an ordinary link navigates the installed app AWAY
+          from itself — and a standalone iOS home-screen window has no back
+          button to return with, which strands somebody on a privacy policy
+          until they force-quit. Opening in the browser leaves the app where
+          it was. */}
+      <div style={{
+        marginTop: 18, textAlign: "center", fontSize: FS.label, color: BC.t3,
+        display: "flex", justifyContent: "center", alignItems: "center", gap: 8,
+      }}>
+        <a href="/privacy.html" target="_blank" rel="noopener noreferrer"
+          style={{ color: BC.t3, textDecoration: "underline" }}>Privacy Policy</a>
+        <span aria-hidden="true" style={{ opacity: 0.5 }}>·</span>
+        <a href="/account-deletion.html" target="_blank" rel="noopener noreferrer"
+          style={{ color: BC.t3, textDecoration: "underline" }}>Deleting your account</a>
+      </div>
+
       <ConfirmModal modal={confirmModal} />
     </div>
   );
