@@ -36,6 +36,10 @@
 // Dynamic imports keep it contained to the call.
 
 import { db, TOURNAMENT_ID, getMessagingInstance } from "../firebase";
+import { normalizeTypePrefs } from "./notificationTypes";
+
+// Re-exported so callers take the whole preference API off one module.
+export { NOTIFICATION_TYPES, normalizeTypePrefs } from "./notificationTypes";
 
 // ── VAPID public key ────────────────────────────────────────────────
 // Firebase Console → Project Settings → Cloud Messaging → Web Push
@@ -49,6 +53,93 @@ import { db, TOURNAMENT_ID, getMessagingInstance } from "../firebase";
 const VAPID_PUBLIC_KEY = import.meta.env?.VITE_FCM_VAPID_KEY || "";
 
 const TOKENS_COL = "bc_notification_tokens";
+
+// ── Per-type preferences ────────────────────────────────────────────
+// Which of the three pushes this player wants. The keys are the `type`
+// values the Cloud Functions stamp into each payload's data block
+// (functions/index.js), and they are the join between this file and the
+// gate over there — rename one and the other silently stops matching, which
+// is why they are listed here once rather than spelled out at each use.
+//
+// STORED ON THE TOKEN ROWS, one copy per device, rather than in a document
+// of their own. Two reasons, and the second is the load-bearing one:
+//
+//   • `bc_notification_tokens` is already a collection a member may write
+//     (see firestore.rules) — it is the one thing a player owns about their
+//     own push. A new collection would need a new rule, and a preference
+//     screen that cannot save until somebody deploys rules is worse than
+//     no preference screen.
+//   • sendToPlayer already has the token document in its hand when it
+//     decides whether to send. Reading the preference off the row it is
+//     already looking at means no second query per push and no way for the
+//     two to disagree.
+//
+// Written to EVERY device of that player, so it reads as a personal
+// preference rather than a per-device one — the same call the master
+// unsubscribe makes.
+//
+// The keys and "absent means on" live in lib/notificationTypes, which is
+// Firebase-free so both halves of that rule can be tested.
+
+// Mirrored per device for the same reason the subscription status is: the
+// token read is a Firestore round-trip, and three switches that paint ON and
+// then flick OFF a moment later look broken.
+const TYPES_CACHE_PREFIX = "bc_notif_types_";
+
+export const getCachedTypePrefs = (playerId) => {
+  if (!playerId || typeof localStorage === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(TYPES_CACHE_PREFIX + playerId);
+    return raw ? normalizeTypePrefs(JSON.parse(raw)) : null;
+  } catch { return null; }
+};
+
+const setCachedTypePrefs = (playerId, prefs) => {
+  if (!playerId || typeof localStorage === "undefined") return;
+  try { localStorage.setItem(TYPES_CACHE_PREFIX + playerId, JSON.stringify(prefs)); } catch { /* private mode */ }
+};
+
+// The server's answer, off any one of this player's token rows — they are
+// written together and therefore agree. Null when the read failed or there
+// is nothing registered, so a caller can keep showing the cached answer
+// instead of resetting somebody's switches on a dropped connection.
+export const readTypePrefs = async (playerId) => {
+  if (!playerId) return null;
+  try {
+    const docs = await db.getStrict(TOKENS_COL, [{ field: "player_id", op: "==", value: playerId }]);
+    const withTypes = docs.find(d => d.types) || docs[0];
+    if (!withTypes) return null;
+    const prefs = normalizeTypePrefs(withTypes.types);
+    setCachedTypePrefs(playerId, prefs);
+    return prefs;
+  } catch (e) {
+    console.warn("readTypePrefs failed:", e);
+    return null;
+  }
+};
+
+// Cache first, then every device. The cache is what makes the preference
+// survive turning push off and back on: with no token rows there is nowhere
+// on the server to keep it, and registerForPush reads it back out when a new
+// token is minted. So a player who muted "a round is final", switched
+// notifications off for a week and switched them back on stays muted.
+export const saveTypePrefs = async (playerId, prefs) => {
+  const clean = normalizeTypePrefs(prefs);
+  setCachedTypePrefs(playerId, clean);
+  if (!playerId) return { ok: false, error: "missing playerId" };
+  try {
+    const docs = await db.getStrict(TOKENS_COL, [{ field: "player_id", op: "==", value: playerId }]);
+    const writes = await Promise.all(docs.map(d => db.upsert(TOKENS_COL, { id: d.id, types: clean })));
+    // A refused write returns null from upsert, and silence here is the
+    // failure this screen must not have: a switch that stays where it was
+    // put while the push keeps arriving.
+    if (writes.some(w => w === null)) return { ok: false, error: "Couldn't save that — try again" };
+    return { ok: true };
+  } catch (e) {
+    console.warn("saveTypePrefs failed:", e);
+    return { ok: false, error: e?.message || "Couldn't save that — try again" };
+  }
+};
 
 // ── Permission state ────────────────────────────────────────────────
 //   "unsupported" — no Notification API or no service worker
@@ -140,6 +231,11 @@ export const registerForPush = async (playerId) => {
     is_standalone: isStandalonePWA(),
     registered_at: Date.now(),
     last_seen_at: Date.now(),
+    // Carried onto the new row from this device's cache, so a player who
+    // muted a type before switching push off is still muted when they
+    // switch it back on. All-on when nothing was ever chosen, which is what
+    // a first-time subscriber means by tapping the switch.
+    types: normalizeTypePrefs(getCachedTypePrefs(playerId)),
   });
   setCachedSubscriptionStatus(playerId, true);
 

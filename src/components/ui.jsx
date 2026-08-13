@@ -62,11 +62,17 @@ export function SegRule({ compact = false }) {
 // width: "Players" and "Matches" are the longest labels on that bar and were
 // there the whole time. The ceiling to watch is a SIXTH tab, or a label
 // longer than seven characters — not this one.
-export function SegmentedToggle({ options, value, onChange, variant = "segmented", letterSpacing, style }) {
+// `dense` is the 30px build, sized to stand level with the 30px switches in
+// NotificationSettings — My Account puts a theme pill and three of those on
+// one screen, and a control eight pixels taller than its neighbours reads as
+// more important than they are rather than as the same kind of thing. It is
+// the padding that shrinks, never the type: FS.small stays, so the labels are
+// as legible as anywhere else in the app.
+export function SegmentedToggle({ options, value, onChange, variant = "segmented", letterSpacing, dense = false, style }) {
   const tracked = variant === "segmented";
   // The track is the sunken one so its thumb has something to be raised out
   // of. Free-standing pills get the same recess per button instead.
-  const track = tracked ? segTrack() : { gap: 6 };
+  const track = tracked ? segTrack({ compact: dense }) : { gap: 6 };
   const btn = (on) => (tracked
     ? segThumb(on)
     : { ...segThumb(on, { sunken: true }), borderRadius: 8, border: `1px solid ${on ? "transparent" : BC.bdr}` });
@@ -79,7 +85,7 @@ export function SegmentedToggle({ options, value, onChange, variant = "segmented
             key={k}
             onClick={onChange ? () => onChange(k) : undefined}
             style={{
-              flex: 1, padding: tracked ? "8px 0" : "8px 4px",
+              flex: 1, padding: dense ? "5px 0" : tracked ? "8px 0" : "8px 4px",
               fontSize: FS.small, fontWeight: 700, cursor: "pointer",
               fontFamily: FONT, ...btn(on),
               ...(letterSpacing != null ? { letterSpacing } : {}),

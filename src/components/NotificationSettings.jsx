@@ -28,17 +28,27 @@ import { BC, FONT, ALPHA, FS } from "../theme";
 import {
   registerForPush, unsubscribeFromPush, getNotificationPermissionState,
   isStandalonePWA, isIOSPushCapable, checkSubscriptionStatus,
-  getCachedSubscriptionStatus,
+  getCachedSubscriptionStatus, readTypePrefs, saveTypePrefs,
+  getCachedTypePrefs, normalizeTypePrefs,
 } from "../lib/notifications";
 
-// What actually gets sent, kept in step with functions/index.js. A user
-// deciding whether to allow notifications is entitled to know what they are
-// agreeing to receive, and "golf app would like to send you notifications"
-// does not tell them.
+// What actually gets sent, and now what each one can be switched off from.
+// A user deciding whether to allow notifications is entitled to know what
+// they are agreeing to receive, and "golf app would like to send you
+// notifications" does not tell them.
+//
+// `key` is the `type` the Cloud Functions stamp into the payload and the
+// value sendToPlayer gates on — the list of keys lives in lib/notifications,
+// which is the one place the two halves agree.
+//
+// THE EMOJI ARE GONE. They were decoration on a row that had nothing to do:
+// three glyphs in three different visual styles, doing the work a heading
+// already did. Now the row has a control on the right, and the icon was
+// competing with it for the same job of saying which line you are looking at.
 const TYPES = [
-  { icon: "✍️", title: "Time to attest your card", sub: "Someone in your match signed it" },
-  { icon: "✅", title: "Your card is final", sub: "Everyone has attested" },
-  { icon: "🏁", title: "A round is final", sub: "Handicaps frozen, next round open" },
+  { key: "attest_ready", title: "Time to attest your card", sub: "Someone in your match signed it" },
+  { key: "card_final", title: "Your card is final", sub: "Everyone has attested" },
+  { key: "round_final", title: "A round is final", sub: "Handicaps frozen, next round open" },
 ];
 
 const Card = ({ children, style }) => (
@@ -48,17 +58,28 @@ const Card = ({ children, style }) => (
   }}>{children}</div>
 );
 
-function Toggle({ on, busy, onChange }) {
+// `small` is the per-type row's switch. A step down from the master's,
+// because it IS a step down from it: the three types are gated by the one
+// above them, and two switches at identical weight would read as three peers
+// where one of them silently overrules the others.
+//
+// `disabled` and `busy` look the same and mean different things — nothing to
+// act on versus a write in flight — so they share the dimming but only busy
+// is temporary.
+function Toggle({ on, busy, disabled, small, onChange, label }) {
+  const w = small ? 42 : 52, h = small ? 24 : 30, k = h - 6;
+  const off = disabled || busy;
   return (
-    <button type="button" role="switch" aria-checked={on} onClick={onChange} disabled={busy}
+    <button type="button" role="switch" aria-checked={on} aria-label={label}
+      onClick={off ? undefined : onChange} disabled={off}
       style={{
-        width: 52, height: 30, borderRadius: 15, border: "none", padding: 0,
+        width: w, height: h, borderRadius: h / 2, border: "none", padding: 0,
         background: on ? BC.green : BC.bdr, position: "relative", flexShrink: 0,
-        cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1,
-        transition: "background .2s ease",
+        cursor: off ? "default" : "pointer", opacity: off ? 0.5 : 1,
+        transition: "background .2s ease, opacity .2s ease",
       }}>
       <span style={{
-        position: "absolute", top: 3, left: on ? 25 : 3, width: 24, height: 24,
+        position: "absolute", top: 3, left: on ? w - k - 3 : 3, width: k, height: k,
         borderRadius: "50%", background: "#fff", transition: "left .2s ease",
         boxShadow: "0 1px 3px rgba(0,0,0,.3)",
       }} />
@@ -73,6 +94,10 @@ export function NotificationSettings({ user, notify }) {
   const [standalone, setStandalone] = useState(true);
   const [iosOk, setIosOk] = useState(true);
   const [testing, setTesting] = useState(false);
+  // Which pushes this player wants. All on until something says otherwise —
+  // see normalizeTypePrefs, which is where "absent means on" is decided.
+  const [types, setTypes] = useState(() => normalizeTypePrefs(null));
+  const [typeBusy, setTypeBusy] = useState(null);
 
   const pid = user?.player_id;
 
@@ -88,7 +113,30 @@ export function NotificationSettings({ user, notify }) {
     const cached = getCachedSubscriptionStatus(pid);
     if (cached !== null) setSubscribed(cached);
     checkSubscriptionStatus(pid).then(sub => { if (sub !== null) setSubscribed(sub); });
+    // Same two-step for the three switches, and for the same reason: three
+    // controls that paint ON and flick OFF a moment later look broken.
+    const cachedTypes = getCachedTypePrefs(pid);
+    if (cachedTypes) setTypes(cachedTypes);
+    readTypePrefs(pid).then(p => { if (p) setTypes(p); });
   }, [pid]);
+
+  // Optimistic, and it PUTS IT BACK if the write is refused. A preference
+  // switch that stays where it was flicked while the push keeps arriving is
+  // the one failure this screen cannot have — there is nothing on screen to
+  // disagree with, so nobody would ever find out by looking.
+  const handleType = async (key) => {
+    if (typeBusy || !pid) return;
+    const before = types;
+    const next = { ...types, [key]: !types[key] };
+    setTypeBusy(key);
+    setTypes(next);
+    const res = await saveTypePrefs(pid, next);
+    if (!res?.ok) {
+      setTypes(before);
+      notify?.(res?.error || "Couldn't save that — try again", "error");
+    }
+    setTypeBusy(null);
+  };
 
   const handleToggle = async () => {
     if (busy || !pid) return;
@@ -210,15 +258,35 @@ export function NotificationSettings({ user, notify }) {
         )}
       </Card>
 
+      {/* One row per push, each with its own switch. The list used to be a
+          read-only manifest — here is what we will send you — and the switch
+          is what turns it into a choice: the man who wants to know his round
+          is final but not that a partner signed a card can now say so,
+          instead of taking all three or none.
+
+          DISABLED, NOT HIDDEN, while the master is off. The rows still show
+          what this player has chosen, so switching push back on holds no
+          surprise; they simply cannot be moved while there is nothing to
+          receive. Hiding them would make the choices look forgotten. */}
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {TYPES.map((t, i) => (
-          <Card key={i} style={{ padding: "10px 14px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ fontSize: FS.lead, lineHeight: 1, flexShrink: 0 }}>{t.icon}</div>
+        {TYPES.map((t) => (
+          <Card key={t.key} style={{ padding: "10px 14px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.t1 }}>{t.title}</div>
+                <div style={{
+                  fontSize: FS.small, fontWeight: 700,
+                  color: subscribed ? BC.t1 : BC.t2,
+                }}>{t.title}</div>
                 <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 1 }}>{t.sub}</div>
               </div>
+              <Toggle
+                small
+                label={t.title}
+                on={types[t.key]}
+                busy={typeBusy === t.key}
+                disabled={!subscribed}
+                onChange={() => handleType(t.key)}
+              />
             </div>
           </Card>
         ))}
