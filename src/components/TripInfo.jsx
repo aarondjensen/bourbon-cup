@@ -10,9 +10,18 @@
 // READ-ONLY, for a director as much as for anybody. Nothing on it is typed
 // here — the dates and the house come off two settings documents and the
 // courses off each round (see lib/tripInfo for why none of it is a copy).
-// A director who wants to change something is told where, once, at the
-// bottom, rather than being given an edit affordance on each section that
-// would make this a second round-setup screen.
+// It carries no edit affordance on any section, which is what stops it
+// becoming a second round-setup screen. A director who has set nothing up at
+// all is told where to start, on the empty-state card and nowhere else: a
+// standing "this is edited in Admin → Event" footer under a screen that is
+// already showing the answer is a caption about the app rather than about
+// the trip, and it was the only left-aligned thing left on a centred page.
+//
+// CENTRED, top to bottom. This is the one screen that is read rather than
+// operated — it is the group text, not a control panel — so the cards are
+// posters and their type is centred on them. The schedule keeps its
+// left-aligned rows, because those are a table and a column of dates that
+// does not share a left edge is unreadable.
 import { useState } from "react";
 import { BC, FONT, ALPHA, FS } from "../theme";
 import { formatLabel } from "../constants";
@@ -22,10 +31,14 @@ import {
   courseYardage, courseWhere, hasHouse, hasTripInfo, linkHost,
 } from "../lib/tripInfo";
 
+// Centred, like everything else on this screen. Both callers want it, so it
+// lives here rather than being passed in twice — a section head that sits over
+// the middle of its card and one that sits over the left edge of it would read
+// as two different kinds of heading.
 const SectionLabel = ({ children, style }) => (
   <div style={{
     fontSize: FS.label, fontWeight: 800, letterSpacing: 1.5,
-    color: BC.amberInk, marginBottom: 8, ...style,
+    color: BC.amberInk, marginBottom: 8, textAlign: "center", ...style,
   }}>{children}</div>
 );
 
@@ -194,7 +207,7 @@ export function TripInfo({ tournamentName, tournamentLocation, house, schedule, 
           loud. The dates are the tournament's own pair, set in Admin →
           Tournament — the source of truth every other date in the app reads
           down from, including the day picker on each round. */}
-      <Card style={{ borderColor: `${BC.amber}${ALPHA.line}` }}>
+      <Card style={{ borderColor: `${BC.amber}${ALPHA.line}`, textAlign: "center" }}>
         <div style={{ fontSize: FS.lead, fontWeight: 800, color: BC.t1, lineHeight: 1.2 }}>
           {tournamentName}
         </div>
@@ -211,14 +224,19 @@ export function TripInfo({ tournamentName, tournamentLocation, house, schedule, 
 
       {/* ── The house ──
           Only when there is one. A section reading "no house yet" is chrome
-          about nothing, and the director is told at the bottom where to put
-          it. `href` is lib/tripInfo's safeHouseUrl, which is null for
-          anything that is not an http(s) link — so the button below either
-          points somewhere real or is not a link at all. */}
+          about nothing. `href` is lib/tripInfo's safeHouseUrl, which is null
+          for anything that is not an http(s) link — so the button below
+          either points somewhere real or is not a link at all.
+
+          The name is centred with the head above it; the link is NOT, because
+          it is a control rather than a line of type. It stays a full-width row
+          with the host on its right edge, which is what makes "Open the
+          listing … vrbo.com ↗" read as one button with a destination on it
+          instead of two centred fragments. */}
       {hasHouse(house) && (
         <>
           <SectionLabel>THE HOUSE</SectionLabel>
-          <Card>
+          <Card style={{ textAlign: "center" }}>
             <div style={{ fontSize: FS.body, fontWeight: 800, color: BC.t1, overflowWrap: "anywhere" }}>
               {house.label}
             </div>
@@ -362,16 +380,6 @@ export function TripInfo({ tournamentName, tournamentLocation, house, schedule, 
               : "The director hasn't set the trip up yet. Dates, courses and the house will show up here once they do."}
           </div>
         </Card>
-      )}
-
-      {/* Where it comes from, said once, at the bottom, and only to somebody
-          who can act on it. Every fact above is edited somewhere else on
-          purpose (see lib/tripInfo); without this line a director would look
-          for an edit button on this screen and not find one. */}
-      {isDirector && anything && (
-        <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.6, padding: "0 2px" }}>
-          Dates and the house: Admin → Event. Courses and each round&apos;s day: Admin → Rounds.
-        </div>
       )}
     </div>
   );
