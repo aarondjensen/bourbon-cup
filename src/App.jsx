@@ -458,7 +458,14 @@ function SignInScreen({ tournamentName, tournamentLocation, initialError, onGues
 // carrying the typed code, and the database rejects it if the code is
 // wrong (see lib/accounts.js and firestore.rules). Nothing on this screen
 // knows the password, so nothing on this screen can leak it.
-function GateScreen({ tournamentName, tournamentLocation, authUser, onPassed, onSignOut }) {
+//
+// It also carries the guest door a second time, and that is the point of
+// putting it here: the two provider buttons are the biggest thing on the
+// sign-in screen and the guest link is deliberately not, so a tester who
+// took the obvious one arrives HERE — at a password they were never given,
+// with "Sign out" as the only way forward. That is the dead end this
+// screen would otherwise be for everybody the guest door was built for.
+function GateScreen({ tournamentName, tournamentLocation, authUser, onPassed, onSignOut, onGuest }) {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -507,10 +514,21 @@ function GateScreen({ tournamentName, tournamentLocation, authUser, onPassed, on
 
       <LoginNote text={err} />
 
-      <button onClick={onSignOut} style={{
-        background: "transparent", border: "none", color: BC.t3,
-        fontSize: FS.small, fontFamily: FONT, textDecoration: "underline", cursor: "pointer", padding: "4px",
-      }}>Sign out</button>
+      {/* Two ways back, on one line. Signing out returns to the providers;
+          the guest link signs out AND takes the guest door in one tap, so
+          somebody without the password never has to work out that the way
+          forward is backwards. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
+        <button onClick={onSignOut} style={{
+          background: "transparent", border: "none", color: BC.t3,
+          fontSize: FS.small, fontFamily: FONT, textDecoration: "underline", cursor: "pointer", padding: "4px",
+        }}>Sign out</button>
+        <span aria-hidden="true" style={{ color: BC.t3, fontSize: FS.small, opacity: 0.5 }}>·</span>
+        <button onClick={onGuest} style={{
+          background: "transparent", border: "none", color: BC.t3,
+          fontSize: FS.small, fontFamily: FONT, textDecoration: "underline", cursor: "pointer", padding: "4px",
+        }}>Look around as a guest</button>
+      </div>
     </LoginChrome>
   );
 }
@@ -3094,20 +3112,32 @@ export default function App() {
     writeUserSession(entry);
   }, [user, authUser, playersLoaded]);
 
-  const doSignOut = useCallback(async () => {
+  // Leaving, whoever you are. `toGuest` is what the password screen's guest
+  // link needs: dropping a session and taking the guest door has to happen in
+  // ONE act, because doing it as two would sign out, render the sign-in
+  // screen for a frame, and only then flip the flag.
+  //
+  // The flag is set here rather than left alone deliberately — a plain logout
+  // clears it, so My Account's exit button and a real sign-out are the same
+  // control and both land on the sign-in screen, which is the only place
+  // either of them has to go.
+  //
+  // Called straight from onClick in two places, so the first argument may be
+  // a click event; destructuring a default off it reads as false, which is
+  // the answer a logout wants.
+  const doSignOut = useCallback(async ({ toGuest = false } = {}) => {
     writeUserSession(null);
     cachedSession.current = null;
     setBootstrapDirector(false);
-    // The one way out of guest mode, and it is the same control: My Account's
-    // exit button and a real logout both land on the sign-in screen, which is
-    // the only place either of them has to go.
-    writeGuestMode(false);
-    setGuestMode(false);
+    writeGuestMode(toGuest);
+    setGuestMode(toGuest);
+    if (toGuest) setView("leaderboard");
     await signOutUser();
   }, []);
 
-  // Taking the guest door. Nothing is signed in and nothing is written to
-  // Firestore — the flag and a re-render are the whole of it.
+  // Taking the guest door from the sign-in screen, where there is no session
+  // to drop. Nothing is signed in and nothing is written to Firestore — the
+  // flag and a re-render are the whole of it.
   const enterGuest = useCallback(() => {
     writeGuestMode(true);
     setGuestMode(true);
@@ -4596,6 +4626,7 @@ export default function App() {
       // set in the console before the first sign-in would be missed by a
       // locally-invented one.
       <GateScreen {...chrome} authUser={authUser} onSignOut={doSignOut}
+        onGuest={() => doSignOut({ toGuest: true })}
         onPassed={async () => { const { doc } = await loadMembership(authUser.uid); setMembership(doc || { uid: authUser.uid }); }} />
     );
     if (!user) return (
