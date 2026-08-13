@@ -5,6 +5,7 @@ import { playerLookup, realPlayers } from "./lib/players";
 import { db, writeFailure, TOURNAMENT_ID, getTournamentYear, getActiveTournamentId, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, readTournamentIdentity, writeTournamentIdentity, BOOTSTRAP_DIRECTOR, SPECTATOR_ID } from "./firebase";
 import { PROVIDERS, signIn, signOutUser, onAuthUser, consumeRedirectResult, isCancelled, whenAuthReady } from "./lib/auth";
 import { claimPlayer, linkedPlayer, isClaimed, readMembership, isDirectorAccount, joinWithCode, setDirector, ACCOUNTS_COL, deleteAccount } from "./lib/accounts";
+import { GUEST_USER, isGuest, readGuestMode, writeGuestMode } from "./lib/guest";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
   resolveTeams, DEFAULT_TEAM_NAMES, TOURNAMENT_TITLE, TOURNAMENT_LOCATION,
@@ -366,7 +367,13 @@ const AppleMark = ({ size = 18, color = "#FFFFFF" }) => (
 );
 
 // ── Screen 1: sign in ───────────────────────────────────────────────
-function SignInScreen({ tournamentName, tournamentLocation, initialError }) {
+// Two providers and a guest door. The guest door is deliberately the
+// quietest thing on the screen — a link under a hairline, not a third
+// button of the same weight — because it is not the way in for anybody
+// playing in the tournament, and a player who takes it lands somewhere
+// they cannot post a score from. See lib/guest.js for why it grants
+// nothing at all and needs no rules of its own.
+function SignInScreen({ tournamentName, tournamentLocation, initialError, onGuest }) {
   const [busy, setBusy] = useState(null);
   // Whether a popup can actually be opened yet — see lib/auth.js. On a
   // fresh home-screen install the auth iframe is a cold network fetch, and
@@ -418,6 +425,28 @@ function SignInScreen({ tournamentName, tournamentLocation, initialError }) {
         {PROVIDERS.map(btn)}
       </div>
       <LoginNote text={shownErr} />
+
+      {/* ── The guest door ────────────────────────────────────────────
+          Not disabled by `ready`: that flag is about whether a popup can
+          be opened yet, and this opens nothing. It is a local flag and a
+          re-render, so it works the instant the screen is painted.
+
+          The line under it is the whole contract, said before the tap
+          rather than discovered after it. "Read-only" is not a policy this
+          screen is choosing — a guest has no Firebase account, so every
+          write rule in the project refuses them at `request.auth != null`
+          without ever reaching a membership check. */}
+      <div style={{ width: "100%", maxWidth: 340, marginTop: 2, paddingTop: 14, borderTop: `1px solid ${BC.bdr}${ALPHA.hair}`, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+        <button onClick={onGuest} disabled={!!busy} style={{
+          background: "transparent", border: "none", color: BC.t2,
+          fontFamily: FONT, fontSize: FS.small, fontWeight: 700, letterSpacing: 0.3,
+          textDecoration: "underline", textUnderlineOffset: 3,
+          cursor: busy ? "default" : "pointer", padding: "4px 8px",
+        }}>Look around as a guest</button>
+        <div style={{ textAlign: "center", fontSize: FS.label, color: BC.t3, lineHeight: 1.45, maxWidth: 300 }}>
+          No account, read-only. Nothing you tap can change the tournament.
+        </div>
+      </div>
     </LoginChrome>
   );
 }
@@ -1007,6 +1036,17 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   if (viewRound == null) return rounds.length === 0
     ? empty("⛳", "No rounds set up yet", "The tournament schedule hasn't been built.")
     : empty("🏆", "The tournament is over", `Every round is final. Head to the Leaderboard for the result.${viaCrown}`);
+
+  // A guest is nobody on the roster, so they are in no match and never will
+  // be — telling them they are "not in a Round 2 match" reads as something
+  // the draw could fix. It cannot; they have no account. Said once, here,
+  // rather than as a banner on every tab, because this is the only screen
+  // in the app a guest cannot use.
+  if (!match && isGuest(user)) return empty(
+    "👀",
+    "Scoring needs an account",
+    "You're looking around as a guest, so there's no card with your name on it. Everything else is live — the Leaderboard, the draw on Matches, and ten years of it under More → Data."
+  );
 
   if (!match) return empty(
     "⛳",
@@ -2781,6 +2821,13 @@ export default function App() {
   // Signed in and deliberately not on the roster: the director bootstrapping
   // an edition that has no players to tap yet.
   const [bootstrapDirector, setBootstrapDirector] = useState(false);
+  // NOT signed in, and deliberately so — somebody who took the guest door on
+  // the sign-in screen. It is a local flag rather than a fourth auth layer
+  // because that is exactly what it is: a guest has no Firebase session, no
+  // uid and no membership, which is what makes them structurally read-only.
+  // See lib/guest.js. Read from localStorage at mount so a tester who opened
+  // the app last week arrives back inside it.
+  const [guestMode, setGuestMode] = useState(readGuestMode);
   // Whether the roster subscription has delivered anything at all. "No link
   // found" means nothing until it has.
   const [playersLoaded, setPlayersLoaded] = useState(false);
@@ -2806,6 +2853,11 @@ export default function App() {
     return onAuthUser(u => {
       setAuthUser(u || null);
       if (!u) setBootstrapDirector(false);
+      // A real account always wins over the guest flag. This is the tester
+      // who looked around first and then signed in properly, and the phone
+      // that was handed to somebody who did — leaving the flag set would
+      // hold the app in guest mode behind a perfectly good session.
+      if (u) { writeGuestMode(false); setGuestMode(false); }
     });
   }, []);
 
@@ -2984,6 +3036,12 @@ export default function App() {
   }, []);
 
   const user = useMemo(() => {
+    // The guest, before anything else. It is the only identity here that
+    // does NOT come from an account, so it is resolved without one — and
+    // resolved first, so a cold start goes straight into the app rather than
+    // through the splash that waits for Firebase to answer about a session
+    // a guest does not have.
+    if (guestMode && !authUser) return GUEST_USER;
     if (!authUser) return null;
     const linked = linkedPlayer(tPlayers, authUser.uid);
     if (linked) return { ...linked, isDirector: isDirectorUser };
@@ -3014,7 +3072,12 @@ export default function App() {
     // The cached crown is not trusted either — same reason.
     if (!playersLoaded && mine) return { ...mine, isDirector: isDirectorUser };
     return null;
-  }, [authUser, tPlayers, playersLoaded, bootstrapDirector, isDirectorUser]);
+  }, [authUser, tPlayers, playersLoaded, bootstrapDirector, isDirectorUser, guestMode]);
+
+  // Is the app running as a guest right now? Derived from the identity rather
+  // than from the flag, so there is one answer and it is the same one every
+  // screen below is drawing from.
+  const guesting = isGuest(user);
 
   // Keep that cache current. What gets written is the live roster row, so
   // it can never be staler than what is on screen — and it is cleared the
@@ -3035,7 +3098,20 @@ export default function App() {
     writeUserSession(null);
     cachedSession.current = null;
     setBootstrapDirector(false);
+    // The one way out of guest mode, and it is the same control: My Account's
+    // exit button and a real logout both land on the sign-in screen, which is
+    // the only place either of them has to go.
+    writeGuestMode(false);
+    setGuestMode(false);
     await signOutUser();
+  }, []);
+
+  // Taking the guest door. Nothing is signed in and nothing is written to
+  // Firestore — the flag and a re-render are the whole of it.
+  const enterGuest = useCallback(() => {
+    writeGuestMode(true);
+    setGuestMode(true);
+    setView("leaderboard");
   }, []);
 
   const [tRounds, setTRounds] = useState([]);
@@ -4430,15 +4506,21 @@ export default function App() {
   // that must agree: the BALANCE DUE card on My Account, the red dot on the
   // My Account row in More, and the red dot on More itself. One computation
   // means they cannot disagree with each other or with Admin → Budget.
-  const myLedger = useMemo(
-    () => (user?.player_id
-      ? balanceFor({
-        player: tPlayers.find(p => p.player_id === user.player_id) || { player_id: user.player_id },
-        payments, defaultAmount: duesAmount,
-      })
-      : null),
-    [tPlayers, payments, duesAmount, user?.player_id]
-  );
+  //
+  // It needs a REAL ROSTER ROW, not just an identity with a player id. The
+  // three player-less identities — a guest, a spectator on a year they are
+  // not in, a director bootstrapping an empty edition — all carry an id that
+  // matches nobody, and the invented `{ player_id }` row this used to fall
+  // back to picked up the tournament's default dues and read as a debt. The
+  // BALANCE DUE card is drawn from the linked roster row and renders nothing
+  // without one, so the dot was the half that could be wrong: a red mark on
+  // More telling a guest they owe $800, with no card behind it to say what
+  // for. Requiring the row is what makes the three agree, which is the whole
+  // point of computing this once.
+  const myLedger = useMemo(() => {
+    const row = user?.player_id ? tPlayers.find(p => p.player_id === user.player_id) : null;
+    return row ? balanceFor({ player: row, payments, defaultAmount: duesAmount }) : null;
+  }, [tPlayers, payments, duesAmount, user?.player_id]);
   const balanceDue = owesMoney(myLedger);
 
   // ── Trip Info ────────────────────────────────────────────────────────
@@ -4495,34 +4577,45 @@ export default function App() {
   // the roster that says which player this account is — because any of
   // them resolving to "no" too early puts a signed-in player back on a
   // login screen, which is the bug this whole feature exists to kill.
+  //
+  // A GUEST skips all three, because all three are questions about an
+  // account and a guest does not have one (lib/guest.js). Not a fourth
+  // screen and not a shortcut past the password: the password gates
+  // WRITING, which a guest cannot do at all — every write rule in
+  // firestore.rules begins at `request.auth != null`, and a guest has no
+  // auth token to satisfy it with. Skipping the splash too is deliberate:
+  // there is no persisted session to wait for, so waiting would only mean
+  // "…" on screen for the length of a Firebase round trip.
   const chrome = { tournamentName, tournamentLocation };
-  if (authUser === undefined || (authUser && member === undefined) || (authUser && member && !user && !playersLoaded)) return <LoginSplash {...chrome} />;
-  if (!authUser) return <SignInScreen {...chrome} initialError={authError} />;
-  if (!member) return (
-    // Re-read rather than assume: the membership document that was just
-    // created is also where Admin access is read from, and a director flag
-    // set in the console before the first sign-in would be missed by a
-    // locally-invented one.
-    <GateScreen {...chrome} authUser={authUser} onSignOut={doSignOut}
-      onPassed={async () => { const { doc } = await loadMembership(authUser.uid); setMembership(doc || { uid: authUser.uid }); }} />
-  );
-  if (!user) return (
-    <ClaimScreen
-      {...chrome}
-      players={realPlayers(tPlayers)} teams={teams} darkMode={darkMode} authUser={authUser}
-      onClaimed={p => {
-        // The roster snapshot delivers this write back to us immediately
-        // (Firestore fires listeners on local mutations), so `user` is
-        // about to resolve on its own. Priming the cache here is for the
-        // NEXT cold start, not for this render.
-        const entry = { ...p, isDirector: !!p.isDirector, auth_uid: authUser.uid };
-        cachedSession.current = entry;
-        writeUserSession(entry);
-      }}
-      onDirector={() => setBootstrapDirector(true)}
-      onSignOut={doSignOut}
-    />
-  );
+  if (!guesting) {
+    if (authUser === undefined || (authUser && member === undefined) || (authUser && member && !user && !playersLoaded)) return <LoginSplash {...chrome} />;
+    if (!authUser) return <SignInScreen {...chrome} initialError={authError} onGuest={enterGuest} />;
+    if (!member) return (
+      // Re-read rather than assume: the membership document that was just
+      // created is also where Admin access is read from, and a director flag
+      // set in the console before the first sign-in would be missed by a
+      // locally-invented one.
+      <GateScreen {...chrome} authUser={authUser} onSignOut={doSignOut}
+        onPassed={async () => { const { doc } = await loadMembership(authUser.uid); setMembership(doc || { uid: authUser.uid }); }} />
+    );
+    if (!user) return (
+      <ClaimScreen
+        {...chrome}
+        players={realPlayers(tPlayers)} teams={teams} darkMode={darkMode} authUser={authUser}
+        onClaimed={p => {
+          // The roster snapshot delivers this write back to us immediately
+          // (Firestore fires listeners on local mutations), so `user` is
+          // about to resolve on its own. Priming the cache here is for the
+          // NEXT cold start, not for this render.
+          const entry = { ...p, isDirector: !!p.isDirector, auth_uid: authUser.uid };
+          cachedSession.current = entry;
+          writeUserSession(entry);
+        }}
+        onDirector={() => setBootstrapDirector(true)}
+        onSignOut={doSignOut}
+      />
+    );
+  }
 
   // Which side of the cup the reader is on. This is a two-team event, so a
   // player belongs to one team for its whole length and the answer holds for
@@ -4880,6 +4973,10 @@ export default function App() {
             // written at the last snapshot and does not know about a rename
             // or a team change the director has made since.
             player={linkedPlayer(tPlayers, authUser?.uid)}
+            // No account to sign out of, delete, or take a push token —
+            // this screen is about the person, and a guest is the one
+            // reader it has almost nothing to say to. See lib/guest.js.
+            isGuest={guesting}
             teams={teams}
             /* The trip ledger's player-facing half. Both halves of the
                subtraction go down, not the balance: My Account has to be able

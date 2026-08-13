@@ -67,8 +67,20 @@ const initialsOf = (name) => String(name || "?")
   .map(w => w.replace(/[^\p{L}\p{N}]/gu, "")[0] || "")
   .filter(Boolean).slice(0, 2).join("").toUpperCase() || "?";
 
+// ── The guest ──────────────────────────────────────────────────────
+// Somebody who took the guest door on the sign-in screen (src/lib/guest.js).
+// They have no Firebase account, so three of this screen's four sections
+// are about things they do not have: there is nothing to sign out of, no
+// account to delete, and no membership document, which means a push token
+// they registered would be refused by the rules with nothing on screen to
+// explain it. Appearance is the one preference that is genuinely theirs —
+// it is a localStorage flag, the same as the guest flag itself.
+//
+// What replaces the rest is one card that says what guest mode IS and one
+// button out of it, because "why can't I post a score" is the question a
+// guest arrives at this screen holding.
 export function AccountView({
-  user, authUser, player, teams, payments, duesAmount,
+  user, authUser, player, teams, payments, duesAmount, isGuest = false,
   darkMode, onToggleTheme, onLogout, onDeleteAccount, notify,
 }) {
   const { confirm, confirmModal } = useConfirm();
@@ -95,10 +107,18 @@ export function AccountView({
   // session note in firebase.js). Either one means a name has been claimed;
   // reading only the live row would flash "no name claimed" at somebody who
   // has had one for a year, on a cold start with bad signal.
-  const claimed = !!player
-    || (!!user?.player_id && user.player_id !== BOOTSTRAP_DIRECTOR.player_id);
+  // A guest is never claimed — the identity they run on matches no roster
+  // row by construction (lib/guest.js), so it must not read as one here.
+  const claimed = !isGuest
+    && (!!player
+      || (!!user?.player_id && user.player_id !== BOOTSTRAP_DIRECTOR.player_id));
 
   const handleLogout = async () => {
+    // A guest has nothing to log out OF, so the question is a different one:
+    // this drops the guest flag and puts the sign-in screen back. No confirm
+    // — nothing is lost by it, and it is the only way forward for a tester
+    // who has been given a real account since.
+    if (isGuest) { onLogout(); return; }
     if (await confirm({
       title: "Log out?",
       message: `Nothing is deleted — sign back in with ${signInWith === "account" ? "the same account" : signInWith} and you'll come straight back to ${name}.`,
@@ -158,7 +178,7 @@ export function AccountView({
 
   return (
     <div style={{ fontFamily: FONT, padding: "4px 2px 20px" }}>
-      <SectionLabel>MY ACCOUNT</SectionLabel>
+      <SectionLabel>{isGuest ? "GUEST" : "MY ACCOUNT"}</SectionLabel>
 
       {/* Who you are signed in as — the roster name on top, the account it
           is signed in with under it. Both, because they are separate things
@@ -182,9 +202,33 @@ export function AccountView({
                   background: `${BC.amber}${ALPHA.wash}`, color: BC.amberInk, letterSpacing: 0.5,
                 }}>DIRECTOR</span>
               )}
+              {/* Same slot as the crown, and the same job: the one word that
+                  explains what this identity can and cannot do. Neutral
+                  rather than danger-coloured — being a guest is not a
+                  problem, it is a choice made on the sign-in screen. */}
+              {isGuest && (
+                <span style={{
+                  padding: "1px 6px", borderRadius: 4, fontSize: FS.label, fontWeight: 800,
+                  background: `${BC.t3}${ALPHA.wash}`, color: BC.t2, letterSpacing: 0.5,
+                }}>READ-ONLY</span>
+              )}
             </div>
           </div>
         </div>
+        {/* What guest mode is, where the identity card can explain it — next
+            to the word READ-ONLY rather than in a caption further down the
+            screen that nobody scrolls to. It names the two things a guest
+            will actually notice missing (scoring, photos) and the way out. */}
+        {isGuest && (
+          <div style={{
+            marginTop: 12, paddingTop: 10, borderTop: `1px solid ${BC.bdr}${ALPHA.hair}`,
+            fontSize: FS.small, color: BC.t2, lineHeight: 1.5,
+          }}>
+            You&apos;re looking around without an account. Every screen is live and
+            nothing you tap can change the tournament — posting scores, photos and
+            bets needs a sign-in and the tournament password.
+          </div>
+        )}
         {authUser && (
           <div style={{
             marginTop: 12, paddingTop: 10, borderTop: `1px solid ${BC.bdr}${ALPHA.hair}`,
@@ -247,7 +291,13 @@ export function AccountView({
           four-way permission dance (iOS version, home-screen install,
           browser denial, unsupported) that has one correct home, and there
           is no back button in this app to return from a separate route. */}
-      <NotificationSettings user={user} notify={notify} />
+      {/* Withheld from a guest, not disabled for one. Registering a push
+          token is a write, and bc_notification_tokens requires a membership
+          — so the switch would flick on, the write would be refused, and the
+          card would sit there saying SUBSCRIBED at somebody who will never
+          get a notification. A control that cannot work is worse than a
+          control that is not there. */}
+      {!isGuest && <NotificationSettings user={user} notify={notify} />}
 
       {/* ── The two ways out ──
           One card, because they are the same question asked at two
@@ -263,7 +313,7 @@ export function AccountView({
 
           Delete keeps the danger colour and stays LAST. It is still the one
           control on this screen that doing twice does not undo. */}
-      <SectionLabel style={{ marginTop: 4 }}>ACCOUNT ACTIONS</SectionLabel>
+      <SectionLabel style={{ marginTop: 4 }}>{isGuest ? "GUEST MODE" : "ACCOUNT ACTIONS"}</SectionLabel>
       <Card style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <button onClick={handleLogout} style={{
           width: "100%", padding: "12px 0", borderRadius: 10,
@@ -271,9 +321,15 @@ export function AccountView({
           color: BC.t1, fontSize: FS.body, fontWeight: 800,
           cursor: "pointer", fontFamily: FONT,
         }}>
-          Log Out
+          {isGuest ? "Exit Guest Mode" : "Log Out"}
         </button>
-        <button onClick={handleDelete} disabled={deleting} style={{
+        {/* No Delete Account for a guest. There is no Firebase user, no
+            membership document and no roster row to unlink — the callable
+            would find nothing and the button would be a promise about an
+            account that was never created. App Store guideline 5.1.1(v) is
+            about accounts you can CREATE in the app; guest mode creates
+            none, which is the point of it. */}
+        {!isGuest && <button onClick={handleDelete} disabled={deleting} style={{
           width: "100%", padding: "12px 0", borderRadius: 10,
           background: BC.danger, border: "none",
           color: ON_ACCENT, fontSize: FS.body, fontWeight: 800,
@@ -281,7 +337,7 @@ export function AccountView({
           fontFamily: FONT,
         }}>
           {deleting ? "Deleting…" : "Delete Account"}
-        </button>
+        </button>}
       </Card>
 
       <ConfirmModal modal={confirmModal} />
