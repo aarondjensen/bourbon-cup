@@ -1,6 +1,11 @@
 {
-  "name": "Bourbon Cup",
+  "id": "/",
+  "name": "The Bourbon Cup",
   "short_name": "Bourbon Cup",
+  "description": "Live scoring, the draw, and forty rounds of history for The Bourbon Cup — the annual match-play tournament in Gaylord, Michigan.",
+  "lang": "en-US",
+  "dir": "ltr",
+  "categories": ["sports"],
   "icons": [
     {
       "src": "/favicon/web-app-manifest-192x192.png",
@@ -30,7 +35,9 @@
   "theme_color": "#0a0a0b",
   "background_color": "#161618",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait",
   "start_url": "/",
-  "scope": "/"
+  "scope": "/",
+  "prefer_related_applications": false
 }

@@ -1,0 +1,43 @@
+{
+  "packageId": "com.thebourboncup.app",
+  "host": "thebourboncup.com",
+  "name": "The Bourbon Cup",
+  "launcherName": "Bourbon Cup",
+  "display": "standalone",
+  "orientation": "portrait",
+  "themeColor": "#0a0a0b",
+  "themeColorDark": "#0a0a0b",
+  "navigationColor": "#0a0a0b",
+  "navigationColorDark": "#0a0a0b",
+  "navigationDividerColor": "#0a0a0b",
+  "navigationDividerColorDark": "#0a0a0b",
+  "backgroundColor": "#161618",
+  "enableNotifications": true,
+  "startUrl": "/",
+  "iconUrl": "https://thebourboncup.com/favicon/web-app-manifest-512x512.png",
+  "maskableIconUrl": "https://thebourboncup.com/favicon/maskable-512x512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "android"
+  },
+  "appVersion": "1.0.0",
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://thebourboncup.com/favicon/site.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://thebourboncup.com/",
+  "minSdkVersion": 21,
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": []
+}
