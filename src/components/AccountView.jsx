@@ -44,10 +44,17 @@ const Card = ({ children, style }) => (
   }}>{children}</div>
 );
 
+// Centred, matching Trip Info. These heads name the card under them rather
+// than starting a line of prose, and a head over the middle of one card and
+// over the left edge of the next reads as two different kinds of heading —
+// which is what the two screens looked like side by side. The CONTENTS of
+// each card keep their own alignment: the identity row is an avatar beside a
+// name, the balance is a figure opposite its breakdown, and both are
+// two-column layouts that centring would only smear.
 const SectionLabel = ({ children, style }) => (
   <div style={{
     fontSize: FS.label, fontWeight: 800, letterSpacing: 1.5,
-    color: BC.amberInk, marginBottom: 10, ...style,
+    color: BC.amberInk, marginBottom: 10, textAlign: "center", ...style,
   }}>{children}</div>
 );
 
