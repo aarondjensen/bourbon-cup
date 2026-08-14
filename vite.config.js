@@ -8,6 +8,48 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
 
+    build: {
+      rollupOptions: {
+        output: {
+          // ── Splitting the vendor code out of the app's ──
+          //
+          // React used to ship inside the app chunk, which meant every deploy
+          // — a copy change, a colour, a one-line fix — invalidated all of it.
+          // A phone on a course with one bar re-downloaded React to pick up a
+          // reworded button. React moves on its own clock and the app moves
+          // constantly, so split apart a routine deploy re-fetches only the
+          // app chunk and the rest comes off disk. WBC and MNQ both already
+          // split this way; this brings BC in line with them.
+          //
+          // Split by SOURCE PATH rather than by named package: `firebase/app`,
+          // `firebase/firestore` and `@firebase/*` all resolve into the same
+          // node_modules tree, and listing package names by hand misses the
+          // transitive half — which is most of it.
+          manualChunks(id) {
+            if (!id.includes("node_modules")) return;
+            // ── The deferred Firebase entry points, each on its own ──
+            // None of these is imported statically: messaging is dynamic in
+            // firebase.js and lib/notifications.js, functions in lib/accounts
+            // and NotificationSettings, storage in lib/mediaUpload. A dynamic
+            // import still lands in whatever chunk it is ASSIGNED to, so
+            // folding them into the `firebase` catch-all below would undo the
+            // deferral and ship all three to every phone anyway — the
+            // deliberate `import()` would buy nothing.
+            //
+            // Split out, they are fetched by the phone that registers for
+            // push, the one that deletes its account, and the one that posts a
+            // photo — and never by somebody opening a leaderboard.
+            if (/[\\/]node_modules[\\/](@firebase|firebase)[\\/]messaging[\\/]/.test(id)) return "firebase-messaging";
+            if (/[\\/]node_modules[\\/](@firebase|firebase)[\\/]functions[\\/]/.test(id)) return "firebase-functions";
+            if (/[\\/]node_modules[\\/](@firebase|firebase)[\\/]storage[\\/]/.test(id)) return "firebase-storage";
+            if (/[\\/]node_modules[\\/](@firebase|firebase|idb)[\\/]/.test(id)) return "firebase";
+            if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return "react";
+            return "vendor";
+          },
+        },
+      },
+    },
+
     // ── Unit tests (`npm test` / `npm run test:run`) ──
     // Only the pure modules under src/. firestore.rules.test.mjs at the repo
     // root is deliberately left out: it is an INTEGRATION test that needs the

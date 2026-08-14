@@ -25,6 +25,13 @@ export function useConfirm() {
   const confirm = useCallback((options) => {
     const o = typeof options === "string" ? { message: options } : (options || {});
     return new Promise((resolve) => {
+      // A confirm raised while another is already open would otherwise strand
+      // the first promise unresolved forever, and any `await confirm(...)`
+      // sitting behind it never returns — the caller's code after the await
+      // simply never runs, with nothing on screen to suggest why. Settle the
+      // outgoing one as a cancel before taking its place. (Came back from WBC,
+      // which hit it first.)
+      if (resolver.current) resolver.current(false);
       resolver.current = resolve;
       setOpts(o);
     });
