@@ -6,7 +6,7 @@
 // year (the dangerous case, and the one the director will not notice, because
 // directors are exempt), and the bulk button's two directions.
 import { describe, it, expect } from "vitest";
-import { isEditionLocked, lockVerdict, bulkLockVerdict, lockBadge, lockNotice } from "./editionLock";
+import { isEditionLocked, lockVerdict, bulkLockVerdict, lockBadge, lockNotice, isDemoEdition } from "./editionLock";
 
 const ed = (id, year, locked) => ({ id, year, ...(locked === undefined ? {} : { locked }) });
 
@@ -121,5 +121,48 @@ describe("lockNotice", () => {
   it("says nothing about an unlocked year", () => {
     expect(lockNotice(ed("bc_2026", 2026))).toBeNull();
     expect(lockNotice(null)).toBeNull();
+  });
+});
+
+// ── Demo tournaments are not "other years" ──────────────────────────
+// Added when the demo edition landed. The two features were built separately
+// and interact badly: "Lock all but 2026" means every other edition, and the
+// demo IS another edition — so one tap would freeze the tournament the twelve
+// Play testers are supposed to be posting scores in. Invisibly, because a
+// director is exempt from the lock they just set, so the person best placed to
+// notice is the one person who cannot.
+describe("a demo tournament", () => {
+  const real = { id: "bc_2025", year: 2025 };
+  const live = { id: "bc_2026", year: 2026 };
+  const demo = { id: "bc_demo", year: 2026, is_demo: true };
+
+  it("is recognised only by an explicit flag", () => {
+    expect(isDemoEdition(demo)).toBe(true);
+    expect(isDemoEdition(real)).toBe(false);
+    expect(isDemoEdition({ id: "bc_demo" })).toBe(false);   // the id proves nothing
+    expect(isDemoEdition({ is_demo: "true" })).toBe(false); // not truthiness
+    expect(isDemoEdition(null)).toBe(false);
+  });
+
+  it("is left out of a bulk lock", () => {
+    const v = bulkLockVerdict([real, live, demo], "bc_2026");
+    expect(v.next).toBe(true);
+    expect(v.ids).toEqual(["bc_2025"]);
+    expect(v.ids).not.toContain("bc_demo");
+  });
+
+  it("does not make a bulk lock look available when it is the only other year", () => {
+    // Active year plus a demo and nothing else: there is genuinely nothing to
+    // lock, and offering the control would be offering a no-op.
+    expect(bulkLockVerdict([live, demo], "bc_2026")).toBeNull();
+  });
+
+  it("is not counted as already-locked either", () => {
+    // The other branch: with every real year locked, the verdict flips to
+    // "unlock". A demo in the list must not appear in that set — unlocking it
+    // is meaningless and naming it in the confirm is confusing.
+    const v = bulkLockVerdict([{ ...real, locked: true }, live, demo], "bc_2026");
+    expect(v.next).toBe(false);
+    expect(v.ids).not.toContain("bc_demo");
   });
 });

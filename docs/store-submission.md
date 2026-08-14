@@ -110,6 +110,59 @@ Testers claim the other eleven. Nothing in the seed is claimed, and it creates
 no memberships — those are minted by presenting the password, which is a thing
 a person does.
 
+### Adding a tester
+
+A thirteenth golfer, for somebody who would rather see their own name than
+claim "Pete V":
+
+```sh
+GOOGLE_APPLICATION_CREDENTIALS=/path/key.json \
+  npm run seed:demo -- --add "Aaron J" --team A --index 12.4 --write
+```
+
+One row, stamped like the rest so `--undo` still takes it out, unclaimed so
+they can claim it, and **not** in the draw — put them in a match in
+Admin → Matches, or leave them to watch. A director switched to the demo can
+do the same thing in **Admin → Players**, which is easier for one person; the
+flag is for a handful at once.
+
+### Why they cannot appear in a real tournament
+
+Not the `tournament_id` filter — that only covers the screens that read one
+edition. The app deliberately reaches ACROSS editions in exactly two places,
+and both would have surfaced the invented field:
+
+- **The Data tab** folds whichever edition is open into ten years of career
+  records (`lib/archiveLive`). Left alone, a tester on the demo would see Dave
+  R in the career table beside the real men, two courses nobody has played in
+  the passport, and a **2026 cup that was never contested** in the tournament
+  records.
+- **`cloneEdition`** copies a roster forward. Build 2026 from the demo with
+  COPY PLAYERS ticked and next year's real tournament opens with twelve men
+  nobody invited — who read as people somebody forgot to remove.
+
+Both now read `isDemoEdition` off the edition document's `is_demo` flag, which
+the seed writes and `createEdition` never does. The Data tab shows the ten real
+years and says so on screen; the clone picker does not offer a demo, and
+`cloneEdition` refuses one even if something else asks. A flag rather than a
+hardcoded `bc_demo`, because the next scratch edition will not be called that.
+
+### The other direction: keeping testers out of the real cup
+
+The demo stops test golfers reaching a real tournament. **Edition locking** is
+the half that stops testers reaching one — a membership is not edition-scoped,
+so a tester can switch into the live year and post a score in it. Lock the real
+editions in **Admin → Event → Editions** and leave the demo unlocked. That is
+the complete answer, and the two halves are independent: one is about invented
+players leaking out, the other about real people writing in.
+
+`bulkLockVerdict` ("Lock all but 2026") **skips demo editions**, and it has to.
+Sweeping the demo in with the finished cups would freeze the tournament the
+twelve testers are meant to be posting scores in — and it would do it
+invisibly, because a director is exempt from the lock they just set, so the one
+person able to reproduce it is the one person who cannot see it. The seed also
+writes `locked: false` explicitly rather than relying on the default.
+
 Hand over three facts: the Google address, its password, and the tournament
 password from **Admin → Event → Access**.
 

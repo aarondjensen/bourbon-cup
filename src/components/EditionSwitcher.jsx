@@ -22,7 +22,7 @@ import { useState, useEffect } from "react";
 import { BC, FS, FONT, ON_AMBER } from "../theme";
 import { Popup, ConfirmModal } from "./Popup";
 import { getActiveTournamentId } from "../firebase";
-import { loadEditions, createEdition, cloneEdition, updateEdition, setEditionLocked, deleteEdition, switchEdition, ensureActiveEditionDoc, editionIdFor, EDITION_STATUSES } from "../lib/editions";
+import { loadEditions, createEdition, cloneEdition, updateEdition, setEditionLocked, deleteEdition, switchEdition, ensureActiveEditionDoc, editionIdFor, isDemoEdition, EDITION_STATUSES } from "../lib/editions";
 import { isEditionLocked, lockVerdict, bulkLockVerdict, lockBadge } from "../lib/editionLock";
 
 // FS.lead, not FS.body, and that is functional rather than cosmetic: iOS
@@ -386,7 +386,13 @@ export function EditionSwitcher({ open, onClose, canManage = false }) {
           <span style={lbl}>Build from</span>
           <select value={cloneFrom} onChange={(e) => setCloneFrom(e.target.value)} style={{ ...fieldStyle(), marginBottom: 10, cursor: "pointer" }}>
             <option value="">Start blank (no clone)</option>
-            {editions.map((e) => (
+            {/* Demo tournaments are not offered. Their roster is twelve
+                invented golfers seeded for the store testers, and a clone with
+                COPY PLAYERS ticked would put them on next year's real roster,
+                where they read as men somebody forgot to remove. cloneEdition
+                refuses one too — this list is the courtesy, that is the
+                guarantee. */}
+            {editions.filter(e => !isDemoEdition(e)).map((e) => (
               <option key={e.id} value={e.id}>Clone from {e.year} · {e.name}</option>
             ))}
           </select>

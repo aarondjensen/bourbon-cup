@@ -232,6 +232,20 @@ export const buildDemo = () => {
     status: "published",
     namespaced: true,
     created_from: null,
+    // The flag that keeps the invented field out of the real record. Both
+    // places the app reaches across editions read it — the Data tab's fold
+    // and cloneEdition — see `isDemoEdition` in lib/editions. Without it a
+    // tester switching to the demo would see Dave R in the career table
+    // beside ten years of the actual field, and a 2026 cup that was never
+    // played sitting in the tournament records.
+    is_demo: true,
+    // Said out loud, though false is already the default everywhere (see
+    // isEditionLocked and firestore.rules). A locked demo is a demo nobody can
+    // test in — the twelve testers would find every score refused, and the one
+    // person who could not reproduce it is the director, who is exempt from
+    // the lock. `bulkLockVerdict` now leaves demos alone for the same reason;
+    // this is the belt to that brace.
+    locked: false,
     seeded_from: DEMO_MARK,
   });
 
@@ -409,3 +423,52 @@ export const buildDemo = () => {
 
 export const countDemoDocs = (built) =>
   DEMO_COLLECTIONS.reduce((n, c) => n + (built?.[c]?.length || 0), 0);
+
+// ── Adding a tester ─────────────────────────────────────────────────
+// The twelve seeded golfers are enough for the Play closed test, but a real
+// tester often wants to see their OWN name on the leaderboard rather than
+// claim "Pete V" — and a thirteenth man is one row, not a re-seed.
+//
+// A director can do the same thing from Admin → Players while switched to the
+// demo, and that is the easier path for one person. This exists for a handful
+// at once, and because a row added here is STAMPED — so `--undo` takes it back
+// out with everything else, and the writer's "does this edition hold anything
+// I did not write" check keeps passing.
+//
+// The row lands unclaimed, like the seeded twelve: claiming is something the
+// person does on the claim screen, and a row carrying somebody else's uid is
+// a row they cannot claim and the director cannot unclaim.
+export const demoPlayerSlug = (name) =>
+  String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 24);
+
+export const buildDemoPlayer = ({ name, team, index }) => {
+  const clean = String(name || "").trim();
+  if (!clean) return { ok: false, error: "A player needs a name." };
+  const slug = demoPlayerSlug(clean);
+  if (!slug) return { ok: false, error: `\`${clean}\` has no letters or digits in it to build an id from.` };
+  const side = String(team || "").toUpperCase() === "B" ? "B" : "A";
+  const hi = Number(index);
+  if (!Number.isFinite(hi) || hi < -10 || hi > 54) {
+    return { ok: false, error: `\`${index}\` is not a handicap index. Plus handicaps are negative here (see lib/ghin).` };
+  }
+  // The display form the whole app renders — first name, last initial — is
+  // whatever was typed; there is no roster to reconcile against on a demo.
+  const [first, ...rest] = clean.split(/\s+/);
+  return {
+    ok: true,
+    player: stamp({
+      id: `demo_${slug}`,
+      player_id: `demo_${slug}`,
+      name: clean,
+      first_name: first,
+      ...(rest.length ? { last_name: rest.join(" ") } : {}),
+      team: side,
+      handicap_index: hi,
+      auth_uid: null,
+    }),
+  };
+};
+
+// The ids the seed itself owns, so the writer can tell a tester's added row
+// from one of the twelve and refuse to overwrite the wrong thing.
+export const SEEDED_PLAYER_IDS = FIELD.map(p => demoPlayerId(p.key));
