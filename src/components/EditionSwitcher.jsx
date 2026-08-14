@@ -22,7 +22,7 @@ import { useState, useEffect } from "react";
 import { BC, FS, FONT, ON_AMBER } from "../theme";
 import { Popup, ConfirmModal } from "./Popup";
 import { getActiveTournamentId } from "../firebase";
-import { loadEditions, createEdition, cloneEdition, deleteEdition, switchEdition, ensureActiveEditionDoc, editionIdFor } from "../lib/editions";
+import { loadEditions, createEdition, cloneEdition, updateEdition, deleteEdition, switchEdition, ensureActiveEditionDoc, editionIdFor, EDITION_STATUSES } from "../lib/editions";
 
 // FS.lead, not FS.body, and that is functional rather than cosmetic: iOS
 // Safari zooms the page in when a focused input is under 16px and does not
@@ -55,12 +55,13 @@ const DEFAULT_CLONE_OPTS = { players: true, teams: true, tournamentName: true, c
 export function EditionSwitcher({ open, onClose, canManage = false }) {
   const [editions, setEditions] = useState([]);
   const [loading, setLoading] = useState(true);
-  // "list" | "new". The composer used to sit under the list of every year the
-  // cup has been played, which put its one button at the very bottom of a tall
-  // scroll — i.e. in the strip an iPhone gives to the home indicator and the
-  // side-button gestures, where aiming for Clone gets you Siri. Its own view
-  // is short, so the button lands where a thumb is.
+  // "list" | "new" | "edit". The composer used to sit under the list of every
+  // year the cup has been played, which put its one button at the very bottom
+  // of a tall scroll — i.e. in the strip an iPhone gives to the home indicator
+  // and the side-button gestures, where aiming for Clone gets you Siri. Its own
+  // view is short, so the button lands where a thumb is.
   const [mode, setMode] = useState("list");
+  const [editing, setEditing] = useState(null);
   const [year, setYear] = useState("");
   const [name, setName] = useState("");
   const [label, setLabel] = useState("");
@@ -119,6 +120,27 @@ export function EditionSwitcher({ open, onClose, canManage = false }) {
     } finally { setBusy(false); }
   };
 
+  const openEdit = (e) => {
+    setEditing({ id: e.id, name: e.name || "", status: e.status || "draft" });
+    setErr(null);
+    setMode("edit");
+  };
+
+  const doSave = async () => {
+    if (!editing?.name.trim() || busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await updateEdition(editing.id, { name: editing.name, status: editing.status });
+      if (!res?.ok) { setErr(res?.error || "That didn't save."); return; }
+      setEditions(await loadEditions());
+      setEditing(null);
+      setMode("list");
+    } finally { setBusy(false); }
+  };
+
+  const leaveForm = () => { setMode("list"); setEditing(null); setErr(null); };
+
   const statusColor = (s) => s === "published" ? BC.amberInk : s === "archived" ? BC.t3 : BC.gold;
 
   const headerBtn = {
@@ -142,12 +164,12 @@ export function EditionSwitcher({ open, onClose, canManage = false }) {
           flexShrink: 0, display: "flex", alignItems: "center", gap: 9,
           padding: "12px 14px", borderBottom: `1px solid ${BC.bdr}`,
         }}>
-          {mode === "new" && (
-            <button onClick={() => { setMode("list"); setErr(null); }} aria-label="Back"
+          {mode !== "list" && (
+            <button onClick={leaveForm} aria-label="Back"
               style={{ ...headerBtn, fontSize: FS.title }}>‹</button>
           )}
           <div style={{ flex: 1, minWidth: 0, fontSize: FS.lead, fontWeight: 800, color: BC.t1, letterSpacing: 0.5 }}>
-            {mode === "new" ? "New tournament" : "Tournaments"}
+            {mode === "new" ? "New tournament" : mode === "edit" ? "Rename tournament" : "Tournaments"}
           </div>
           {mode === "list" && canManage && !loading && (
             <button onClick={() => { resetForm(); setMode("new"); }} style={{
@@ -179,6 +201,16 @@ export function EditionSwitcher({ open, onClose, canManage = false }) {
                       color: statusColor(e.status), marginTop: 2,
                     }}>{e.status}</div>
                   </div>
+                  {/* Rename is offered on the ACTIVE row too, and that is the
+                      point of it: the edition a collision renamed is the one
+                      you are standing in. */}
+                  {canManage && (
+                    <button onClick={() => openEdit(e)} title="Rename" style={{
+                      fontSize: FS.small, fontWeight: 700, color: BC.t3, background: "transparent",
+                      border: "none", borderRadius: 8, padding: "5px 6px", cursor: "pointer",
+                      flexShrink: 0, lineHeight: 1,
+                    }}>✎</button>
+                  )}
                   {isActive ? (
                     <span style={{
                       fontSize: FS.label, fontWeight: 800, letterSpacing: 0.5, color: ON_AMBER,
@@ -204,6 +236,31 @@ export function EditionSwitcher({ open, onClose, canManage = false }) {
           </div>
         )}
 
+        </>) : mode === "edit" ? (<>
+          {/* Only the name and the status. The id is the tournament_id every
+              other collection filters on, so making it editable here would
+              orphan an entire edition while the picker went on looking right. */}
+          <div style={{ fontSize: FS.label, color: BC.t3, marginBottom: 12, lineHeight: 1.45 }}>
+            <b style={{ color: BC.t2 }}>{editing?.id}</b> · {editing?.id?.replace(/\D/g, "") || "—"}.
+            The id and the year are fixed — every score, match and card in this tournament is filed under them.
+          </div>
+          <div style={{ marginBottom: 10 }}>
+            <span style={lbl}>Name</span>
+            <input value={editing?.name || ""} autoFocus placeholder="The Bourbon Cup 2026"
+              onChange={(e) => { setErr(null); setEditing((s) => ({ ...s, name: e.target.value })); }}
+              style={fieldStyle()} />
+          </div>
+          <div style={{ marginBottom: 10 }}>
+            <span style={lbl}>Status</span>
+            <select value={editing?.status || "draft"}
+              onChange={(e) => setEditing((s) => ({ ...s, status: e.target.value }))}
+              style={{ ...fieldStyle(), cursor: "pointer" }}>
+              {EDITION_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          {err && (
+            <div style={{ fontSize: FS.small, fontWeight: 600, color: BC.danger, lineHeight: 1.45 }}>{err}</div>
+          )}
         </>) : (<>
           <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
             <div style={{ flex: "none", width: 92 }}>
@@ -273,33 +330,38 @@ export function EditionSwitcher({ open, onClose, canManage = false }) {
         {/* The action bar. Fixed rather than the last thing in a long scroll,
             and padded out past the home indicator so the tap that lands just
             below Clone is still Clone and not a system gesture. */}
-        {mode === "new" && (
-          <div style={{
-            flexShrink: 0, display: "flex", gap: 8, background: BC.bg,
-            padding: "10px 14px calc(env(safe-area-inset-bottom, 0px) + 12px)",
-            borderTop: `1px solid ${BC.bdr}`,
-          }}>
-            <button onClick={() => { setMode("list"); setErr(null); }} style={{
-              flex: "none", padding: "11px 16px", borderRadius: 10, fontFamily: FONT,
-              background: BC.inp, border: `1px solid ${BC.bdr}`, color: BC.t2,
-              fontSize: FS.body, fontWeight: 700, cursor: "pointer",
-            }}>Cancel</button>
-            {/* The label carries the disabled state. It used to be a dead amber
-                bar that said "Clone into new edition" whether or not it would,
-                leaving the missing year to be guessed at. */}
-            <button onClick={doCreate} disabled={!ready} style={{
-              flex: 1, padding: 11, borderRadius: 10, border: "none", fontFamily: FONT,
-              cursor: ready ? "pointer" : "not-allowed",
-              background: ready ? BC.amber : BC.inp, color: ready ? ON_AMBER : BC.t3,
-              fontSize: FS.body, fontWeight: 800, letterSpacing: 0.5,
+        {mode !== "list" && (() => {
+          const editReady = mode === "edit" && !!editing?.name.trim() && !busy;
+          const on = mode === "edit" ? editReady : ready;
+          return (
+            <div style={{
+              flexShrink: 0, display: "flex", gap: 8, background: BC.bg,
+              padding: "10px 14px calc(env(safe-area-inset-bottom, 0px) + 12px)",
+              borderTop: `1px solid ${BC.bdr}`,
             }}>
-              {busy ? "Working…"
-                : !year ? "Enter a year first"
-                : taken ? "Add a label first"
-                : cloneFrom ? "Clone into new tournament" : "Create draft tournament"}
-            </button>
-          </div>
-        )}
+              <button onClick={leaveForm} style={{
+                flex: "none", padding: "11px 16px", borderRadius: 10, fontFamily: FONT,
+                background: BC.inp, border: `1px solid ${BC.bdr}`, color: BC.t2,
+                fontSize: FS.body, fontWeight: 700, cursor: "pointer",
+              }}>Cancel</button>
+              {/* The label carries the disabled state. It used to be a dead amber
+                  bar that said "Clone into new edition" whether or not it would,
+                  leaving the missing year to be guessed at. */}
+              <button onClick={mode === "edit" ? doSave : doCreate} disabled={!on} style={{
+                flex: 1, padding: 11, borderRadius: 10, border: "none", fontFamily: FONT,
+                cursor: on ? "pointer" : "not-allowed",
+                background: on ? BC.amber : BC.inp, color: on ? ON_AMBER : BC.t3,
+                fontSize: FS.body, fontWeight: 800, letterSpacing: 0.5,
+              }}>
+                {busy ? "Working…"
+                  : mode === "edit" ? (editReady ? "Save" : "Name it first")
+                  : !year ? "Enter a year first"
+                  : taken ? "Add a label first"
+                  : cloneFrom ? "Clone into new tournament" : "Create draft tournament"}
+              </button>
+            </div>
+          );
+        })()}
       </Popup>
 
       {pending && (
