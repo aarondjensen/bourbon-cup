@@ -170,12 +170,21 @@ export function Popup({
           // back to the browser default. Declare it here so every popup
           // matches the app no matter where it's mounted.
           fontFamily: FONT,
-          padding,
           width: "100%",
           maxWidth,
           // viewportFit cards fill the rect and scroll internally.
           maxHeight: viewportFit ? "100%" : "calc(100vh - 32px)",
-          overflowY: viewportFit ? "hidden" : "auto",
+          // ── The card is a FRAME. The scroller is inside it. ──
+          // This used to be the scroller itself, with the ✕ absolutely
+          // positioned in it — and an absolute box inside a scrolling
+          // container scrolls with the content, so on a popup tall enough to
+          // overflow (the finalize panel, the group switcher on a big
+          // tournament) the close button scrolled off the top and left no way
+          // to shut it. MNQ hit that first on its leaderboard and fixed it
+          // this way; this is that fix.
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
           overscrollBehavior: "contain",
           position: "relative",
           boxShadow: `0 12px 40px ${SHADOW}`,
@@ -193,7 +202,12 @@ export function Popup({
               width: 32,
               height: 32,
               borderRadius: 8,
-              background: "transparent",
+              // Opaque, not transparent. The content now scrolls UNDERNEATH
+              // this button rather than carrying it away, which is the fix —
+              // but a transparent button means rows slide visibly through the
+              // glyph on their way past. MNQ landed on the same background for
+              // the same reason.
+              background: BC.bg,
               border: "none",
               color: BC.t3,
               fontSize: FS.lead,
@@ -202,14 +216,47 @@ export function Popup({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              zIndex: 1,
+              // Above the scroller, which is its own stacking context — see
+              // the note on the scroller below.
+              zIndex: 2,
               lineHeight: 1,
             }}
           >
             ✕
           </button>
         )}
-        {children}
+        {/* Scrolling happens HERE, not on the card, so the ✕ stays pinned to a
+            frame that never moves and the content travels underneath it.
+
+            position:relative + zIndex:0 makes this its own stacking context,
+            which keeps the ✕ VISIBLE as well as present: a popup whose content
+            sticks a header at a high z-index would otherwise paint straight
+            over the button as a plain sibling. Isolating the scroller caps
+            every z-index inside the content below the close affordance, so no
+            child can bury it.
+
+            Layout intent from innerStyle is carried through rather than left
+            on the card. Several callers pass display:flex + flexDirection to
+            size their children against the popup; with the children now a
+            level deeper, that flex context has to come with them or those
+            popups lose their sizing. Everything else in innerStyle — the
+            background, the border, the radius — belongs to the frame and
+            stays there. */}
+        <div style={{
+          padding,
+          // viewportFit cards don't scroll themselves; their content manages
+          // its own scrolling against the keyboard-aware rect.
+          overflowY: viewportFit ? "hidden" : "auto",
+          overscrollBehavior: "contain",
+          flex: 1,
+          minHeight: 0,
+          position: "relative",
+          zIndex: 0,
+          ...(innerStyle?.display ? { display: innerStyle.display } : null),
+          ...(innerStyle?.flexDirection ? { flexDirection: innerStyle.flexDirection } : null),
+        }}>
+          {children}
+        </div>
       </div>
     </div>
   );
