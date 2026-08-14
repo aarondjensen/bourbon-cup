@@ -1,5 +1,21 @@
 # Getting The Bourbon Cup into the Play Store
 
+> ## The route is INTERNAL TESTING
+>
+> Decided, for this app and for WBC both. Up to 100 testers, live in minutes,
+> exempt from the Data safety form, and no closed test at all — no twelve
+> testers, no fourteen days, no production-access application.
+>
+> **§8 does not apply.** It is kept because it is the right instructions if
+> this app ever wants a public listing, and because the reasoning in it about
+> tester engagement is what makes a closed test survivable. Until then it is
+> reference, not the plan. §7 is why.
+>
+> Play has no Unlisted track — that is an Apple mechanism — but internal
+> testing is already the shape it suggests: the opt-in URL goes on
+> `thebourboncup.com`, a tester taps it, and Play installs the app. Nobody
+> searches for anything, and the app never appears in the store to be found.
+
 Read [`store-submission.md`](./store-submission.md) first — the reviewer
 account, the data disclosures, the age rating and the deploy prerequisites live
 there and are not repeated here. The iOS half is [`app-store.md`](./app-store.md),
@@ -277,6 +293,46 @@ One consequence worth knowing either way: internal testing contributes
 leaves the production checklist at zero. The two tracks are separate roads,
 not a sequence, so choosing internal now costs nothing later except starting
 the fourteen days when you decide you want production.
+
+### Setting it up
+
+**Testing → Internal testing → Create new release**, upload the AAB, roll out.
+Then **Testers**, paste the email addresses, and copy the opt-in URL.
+
+You still owe some of App content even on this track — a privacy policy URL,
+the content rating questionnaire (§4), App access (§3), ads and target
+audience. What you skip is the **Data safety form**, which is the long one:
+apps active only on internal testing are exempt from it.
+
+### The message to send, and the one line that has to be in it
+
+The failure mode of internal testing is not a broken app, it is a tester who
+never gets one. **The account that opts in has to be the account signed into
+the Play Store on the phone**, and a man with a work Google account on his
+phone and a personal one on your list sees "item not found" — or nothing at
+all. He has no way to diagnose that, and it looks like your app is broken.
+
+So say it before it happens:
+
+```
+The Bourbon Cup is on Android now. Two things, in this order:
+
+1. Reply with the Google account your phone uses for the Play Store.
+   Settings → Google → check the address at the top. It has to be that
+   one — if you send me a different address the link will tell you the
+   app doesn't exist.
+
+2. Once I've added you I'll send a link. Tap it, tap "Become a tester",
+   then tap the Play Store link underneath. It installs like any other
+   app and updates itself from then on.
+
+You won't find it by searching the Play Store. That's deliberate — it's
+only for us.
+```
+
+Collect the addresses first and add them all at once. A tester added after
+they have already tapped the link has to tap it again, which is one more
+message than it is worth.
 
 ---
 
