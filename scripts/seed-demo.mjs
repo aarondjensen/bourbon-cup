@@ -145,14 +145,6 @@ if (!WRITE) {
   process.exit(0);
 }
 
-// ── Connect ─────────────────────────────────────────────────────────
-let admin;
-try {
-  admin = (await import("firebase-admin")).default;
-} catch {
-  die("firebase-admin is not installed. `npm i --no-save firebase-admin`, or run this from functions/.");
-}
-
 // ── The key, however this shell likes to say it ─────────────────────
 // `--key` exists because `GOOGLE_APPLICATION_CREDENTIALS=… node …` is bash
 // syntax and this repo has a Windows developer. In PowerShell that line is not
@@ -172,22 +164,19 @@ if (!existsSync(KEY)) {
     + `  That is the path to the JSON the Firebase console downloads —\n`
     + `  Project Settings → Service accounts → Generate new private key.`);
 }
-// The admin SDK's applicationDefault() reads this variable, so a --key is
-// promoted into it rather than threaded through a second code path.
-process.env.GOOGLE_APPLICATION_CREDENTIALS = KEY;
-
-// Rail 3, BEFORE initializeApp — the key itself names the project, and a key
-// for the wrong one is how a seed ends up in somebody else's database. Read it
-// off the file rather than off the initialized app so the check happens before
-// anything can connect.
+// Rail 3, BEFORE anything connects — the key itself names the project, and a
+// key for the wrong one is how a seed ends up in somebody else's database. Read
+// it off the file rather than off an initialized app, so the check happens
+// before a connection is possible rather than after.
 const expected = (() => {
   try { return JSON.parse(readFileSync(join(ROOT, ".firebaserc"), "utf8"))?.projects?.default || null; }
   catch { return null; }
 })();
-const actual = (() => {
-  try { return JSON.parse(readFileSync(KEY, "utf8")).project_id || null; }
+const serviceAccount = (() => {
+  try { return JSON.parse(readFileSync(KEY, "utf8")); }
   catch { return null; }
 })();
+const actual = serviceAccount?.project_id || null;
 if (!actual) die(`\`${KEY}\` is not a service-account key — no project_id in it.`);
 if (expected && actual !== expected && actual !== allowProject) {
   die(`the key is for \`${actual}\`, and .firebaserc says \`${expected}\`.\n`
@@ -195,8 +184,75 @@ if (expected && actual !== expected && actual !== allowProject) {
 }
 console.log(`  Project: ${actual}\n`);
 
-admin.initializeApp({ credential: admin.credential.applicationDefault() });
-const db = admin.firestore();
+// ── Connect ─────────────────────────────────────────────────────────
+// The MODULAR subpath API, matching scripts/import-history.mjs and
+// scripts/undo-clone.mjs. Not `(await import("firebase-admin")).default` and
+// the old `admin.credential.applicationDefault()` namespace: under ESM,
+// firebase-admin v13's default export does not carry `credential`, so that
+// form dies with "Cannot read properties of undefined" AFTER printing the
+// project line — i.e. at the exact moment it looks like it is about to work.
+//
+// Imported lazily so a dry run needs neither credentials nor firebase-admin
+// installed, which is what makes the preview above runnable by anybody.
+//
+// `cert(serviceAccount)` rather than applicationDefault(): the key is already
+// parsed above for the project check, so the credential comes from the same
+// object the check passed. Nothing depends on the environment variable having
+// been set, which is the whole point of --key.
+let initializeApp, cert, getFirestore;
+try {
+  ({ initializeApp, cert } = await import("firebase-admin/app"));
+  ({ getFirestore } = await import("firebase-admin/firestore"));
+} catch {
+  die("firebase-admin is not installed. `npm i --no-save firebase-admin`, or run this from functions/.");
+}
+
+// A key whose JSON is fine but whose private_key is truncated, re-wrapped by a
+// copy-paste, or simply not a key throws out of `cert()` as an unhandled
+// OpenSSL decoder error — four lines of asn1 stack that say nothing about
+// which file is wrong or what to do. Everything else in this script dies with
+// a sentence; so does this.
+let db;
+try {
+  initializeApp({ projectId: actual, credential: cert(serviceAccount) });
+  db = getFirestore();
+} catch (e) {
+  die(`\`${KEY}\` was not accepted as a service-account key.\n`
+    + `  ${e?.message || e}\n\n`
+    + `  The JSON parsed and named the right project, so the file is a key of some\n`
+    + `  kind — most likely its private_key was mangled in transit. Download a fresh\n`
+    + `  one: Firebase Console → Project Settings → Service accounts →\n`
+    + `  Generate new private key, and save it without opening it in an editor.`);
+}
+
+// ── Firestore failures, said in a sentence ──────────────────────────
+// The admin SDK throws rich objects — a rejected credential comes back as a
+// multi-screen dump of response headers and a tracking id, with the actual
+// cause somewhere in the middle. Every other failure in this script is one
+// line; these are the ones most likely to be hit, so they get the same
+// treatment. `partial` matters: a query that fails wrote nothing, and a batch
+// that fails halfway through did not.
+const firestoreDied = (e, what, { partial = false } = {}) => {
+  const msg = String(e?.message || e);
+  const hint =
+    /invalid_grant|Invalid JWT|invalid_client|UNAUTHENTICATED|Getting metadata|credential/i.test(msg)
+      ? "The key was structurally fine but the server refused it. It may have been revoked,\n"
+        + "  or it may belong to a deleted service account — generate a fresh one in the console."
+    : /PERMISSION_DENIED|Missing or insufficient/i.test(msg)
+      ? "The key authenticated but is not allowed to do this. A service-account key normally\n"
+        + "  bypasses security rules, so check the account still has a Firebase/Datastore role."
+    : /ENOTFOUND|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|network|fetch failed/i.test(msg)
+      ? "That looks like a network problem rather than a credentials one. Check the connection\n"
+        + "  and run it again — the seed is idempotent, so a re-run is safe."
+      : "";
+  die(`${what} failed.\n  ${msg.split("\n")[0]}\n`
+    + (hint ? `\n  ${hint}\n` : "")
+    + (partial
+      ? `\n  SOME DOCUMENTS MAY ALREADY BE WRITTEN. Re-running is safe — every id is\n`
+        + `  derived, so a second run overwrites rather than duplicating. To clear it\n`
+        + `  out instead: --undo --write.`
+      : `\n  Nothing was written.`));
+};
 
 // ── --add needs a tournament to add to ──────────────────────────────
 // Adding a golfer to an edition that was never seeded leaves a roster row
@@ -209,7 +265,8 @@ const db = admin.firestore();
 //
 // Cheap to check and impossible to diagnose from the app, so it is checked.
 if (ADD) {
-  const edition = await db.collection("bc_editions").doc(DEMO_EDITION_ID).get();
+  const edition = await db.collection("bc_editions").doc(DEMO_EDITION_ID).get()
+    .catch((e) => firestoreDied(e, "Reading the demo edition"));
   if (!edition.exists) {
     die(`there is no \`${DEMO_EDITION_ID}\` tournament to add them to.\n`
       + `  Seed it first:\n`
@@ -229,7 +286,8 @@ if (ADD) {
 const foreign = [];
 for (const col of ADD ? [] : DEMO_COLLECTIONS) {
   if (col === "bc_editions") continue;
-  const snap = await db.collection(col).where("tournament_id", "==", DEMO_EDITION_ID).get();
+  const snap = await db.collection(col).where("tournament_id", "==", DEMO_EDITION_ID).get()
+    .catch((e) => firestoreDied(e, `Reading ${col}`));
   for (const d of snap.docs) if (d.data().seeded_from !== DEMO_MARK) foreign.push(`${col}/${d.id}`);
 }
 if (foreign.length) {
@@ -245,7 +303,7 @@ const commitInChunks = async (ops) => {
   for (let i = 0; i < ops.length; i += 400) {
     const batch = db.batch();
     for (const op of ops.slice(i, i + 400)) op(batch);
-    await batch.commit();
+    await batch.commit().catch((e) => firestoreDied(e, "Writing", { partial: i > 0 }));
     process.stdout.write(`\r  ${Math.min(i + 400, ops.length)}/${ops.length}`);
   }
   process.stdout.write("\n");
@@ -259,7 +317,9 @@ if (UNDO) {
   for (const col of DEMO_COLLECTIONS) {
     const snap = col === "bc_editions"
       ? await db.collection(col).where("seeded_from", "==", DEMO_MARK).get()
-      : await db.collection(col).where("tournament_id", "==", DEMO_EDITION_ID).get();
+        .catch((e) => firestoreDied(e, `Reading ${col}`))
+      : await db.collection(col).where("tournament_id", "==", DEMO_EDITION_ID).get()
+        .catch((e) => firestoreDied(e, `Reading ${col}`));
     for (const d of snap.docs) {
       if (d.data().seeded_from !== DEMO_MARK) continue;
       ops.push((b) => b.delete(d.ref));
