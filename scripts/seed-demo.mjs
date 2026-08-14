@@ -198,6 +198,27 @@ console.log(`  Project: ${actual}\n`);
 admin.initializeApp({ credential: admin.credential.applicationDefault() });
 const db = admin.firestore();
 
+// ── --add needs a tournament to add to ──────────────────────────────
+// Adding a golfer to an edition that was never seeded leaves a roster row
+// carrying `tournament_id: bc_demo` and no bc_editions document behind it. The
+// write SUCCEEDS, and the result is invisible: the picker lists editions, so
+// ☰ → Tournaments shows nothing new and there is no way to switch to the
+// tournament the row is in. Worse, `editionExists` counts roster rows as well
+// as documents, so the id then reads as taken — a later `createEdition` for it
+// is refused with no clue why.
+//
+// Cheap to check and impossible to diagnose from the app, so it is checked.
+if (ADD) {
+  const edition = await db.collection("bc_editions").doc(DEMO_EDITION_ID).get();
+  if (!edition.exists) {
+    die(`there is no \`${DEMO_EDITION_ID}\` tournament to add them to.\n`
+      + `  Seed it first:\n`
+      + `      npm run seed:demo -- --write --key <path to key>\n\n`
+      + `  Adding a player to an edition that does not exist writes a roster row\n`
+      + `  nothing can reach — the picker lists editions, and there would not be one.`);
+  }
+}
+
 // ── Rail 4 — is there anything real in there? ───────────────────────
 // Skipped for --add, and the distinction is the point of the rail rather than
 // an exception to it. The check exists because a full seed OVERWRITES 371
