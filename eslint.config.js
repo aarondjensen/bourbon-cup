@@ -25,7 +25,15 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      // ── Two things core no-unused-vars gets wrong on its own ──
+      // ignoreRestSiblings: `const { a, b, ...rest } = obj` is the idiomatic way
+      // to OMIT keys. Without it the omitted names read as dead variables, and
+      // the "fix" is to delete them — which puts the omitted keys straight back
+      // into rest and changes what gets written.
+      //
+      // jsx-uses-vars (below) is the other half: core ESLint does not count a
+      // JSX reference as a use.
+      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]', ignoreRestSiblings: true }],
       // ── A component that isn't imported ──
       // `no-undef` does not see JSX element names, so `<StickyTop>` with no
       // import lints perfectly clean, builds perfectly clean, and throws
@@ -38,6 +46,11 @@ export default defineConfig([
       // This is the rule that catches it, and it is the only reason
       // eslint-plugin-react is a dependency — nothing else from it is on.
       'react/jsx-no-undef': 'error',
+      // The companion. Counts a JSX reference as a USE, which core ESLint does
+      // not — so a component or namespace only ever reached from JSX reads as an
+      // unused variable, and deleting one to satisfy the lint takes the screen
+      // with it. MnQ had six of those, all rendering scorecards.
+      'react/jsx-uses-vars': 'error',
       // `catch {}` is a deliberate shape here: browser APIs that are absent or
       // permission-blocked on some platforms should degrade quietly, not crash.
       'no-empty': ['error', { allowEmptyCatch: true }],
