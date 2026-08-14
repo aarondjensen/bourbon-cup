@@ -74,6 +74,9 @@
 //  null, or once it has run out, this band is exactly the band it has always
 //  been.
 //
+//  The clock and the caption share a column, so the clock is exactly as wide
+//  as the line beneath it — see "The measure" below.
+//
 //  flexShrink: 0 is not optional — the shell is a flex column with
 //  overflow: hidden, so without it a tall tab could compress this band and the
 //  clipped remainder would look like the header failing to fit.
@@ -192,13 +195,33 @@ export function AppHeader({ location, pendingWrites = 0, failedWrites = 0, count
       position: "relative", zIndex: 2,
       fontFamily: FONT,
     }}>
-      {countdownAt != null ? <HeaderCountdown at={countdownAt}>{mark}</HeaderCountdown> : mark}
+      {/* ── The measure ──────────────────────────────────────────────────
+          The clock and the caption are one column so that the clock is
+          exactly as wide as the line beneath it — DAYS starting where the
+          year starts, SEC ending where the state ends. Nothing here is a
+          fixed width: the column shrink-wraps to its widest child, which is
+          the caption, and HeaderCountdown stretches itself to fill it.
+          A longer city widens both together.
 
+          The chip gutter moved up here with it, because the ellipsis has to
+          happen to the thing that SETS the width — capping the caption alone
+          would leave this column, and therefore the clock, still reaching
+          under the sync chip. */}
       <div style={{
-        fontSize: FS.label, fontWeight: 800, letterSpacing: 2.2, color: BC.t2,
-        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        display: "flex", flexDirection: "column", alignItems: "center",
+        gap: 4, minWidth: 0,
         maxWidth: hasChip ? `calc(100% - ${CHIP_GUTTER}px)` : "100%",
-      }}>{getTournamentYear()} · {(location || TOURNAMENT_LOCATION).toUpperCase()}</div>
+      }}>
+        {countdownAt != null ? <HeaderCountdown at={countdownAt}>{mark}</HeaderCountdown> : mark}
+
+        <div style={{
+          fontSize: FS.label, fontWeight: 800, letterSpacing: 2.2, color: BC.t2,
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          // Stretched rather than shrink-wrapped now — it is the child that
+          // defines the column's width, so it has to centre its own type.
+          alignSelf: "stretch", textAlign: "center",
+        }}>{getTournamentYear()} · {(location || TOURNAMENT_LOCATION).toUpperCase()}</div>
+      </div>
 
       {/* Left-hand chip — mirrors the slot below, same baseline. */}
       <div style={{

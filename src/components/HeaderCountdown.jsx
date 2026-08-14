@@ -72,19 +72,31 @@ export function HeaderCountdown({ at, children }) {
 
   if (done) return children;
   return (
-    // Tight on purpose. Keeping the four cells close reads as one object
-    // either side of the trophy rather than four scattered numbers, and on a
-    // 320px phone a loose cluster runs SEC up against the band's padding.
+    // Stretched to the MEASURE, not to the band. The parent column in
+    // AppHeader shrink-wraps to the caption underneath, so `alignSelf:
+    // stretch` here makes this row exactly as wide as "2025 · GAYLORD, MI"
+    // and the clock and the caption share two edges.
+    //
+    // Which is why the flanks push OUTWARD — flex-start on the left, flex-end
+    // on the right — rather than hugging the trophy: DAYS lands on the
+    // caption's first character and SEC on its last. The cells were kept
+    // tight against the mark when this row spanned the whole band, where
+    // spreading them would have run SEC into the band's padding on a 320px
+    // phone. Against the caption there is no such edge to hit, and the
+    // alignment is what makes the two lines read as one block.
+    //
+    // Both flanks stay `flex: 1 1 0`, so the trophy still holds the centre no
+    // matter what the digits do.
     <div style={{
       alignSelf: "stretch", display: "flex",
       alignItems: "center", justifyContent: "center", gap: 8,
     }}>
-      <div style={{ flex: "1 1 0", minWidth: 0, display: "flex", justifyContent: "flex-end", gap: 6 }}>
+      <div style={{ flex: "1 1 0", minWidth: 0, display: "flex", justifyContent: "flex-start", gap: 6 }}>
         <Unit value={c.days} label="DAYS" urgent={c.urgent} />
         <Unit value={c.hours} label="HRS" urgent={c.urgent} />
       </div>
       {children}
-      <div style={{ flex: "1 1 0", minWidth: 0, display: "flex", justifyContent: "flex-start", gap: 6 }}>
+      <div style={{ flex: "1 1 0", minWidth: 0, display: "flex", justifyContent: "flex-end", gap: 6 }}>
         <Unit value={c.mins} label="MIN" urgent={c.urgent} />
         <Unit value={c.secs} label="SEC" urgent={c.urgent} />
       </div>
