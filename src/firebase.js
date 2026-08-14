@@ -8,6 +8,7 @@
 // they're shipped to the browser. Real access control happens through
 // Firestore Security Rules, not by hiding the key.
 import { initializeApp } from "firebase/app";
+import { resolveFirebaseConfig } from "./lib/firebaseConfig";
 import {
   getFirestore, initializeFirestore,
   persistentLocalCache, persistentMultipleTabManager,
@@ -28,51 +29,27 @@ const PROD_FIREBASE_CONFIG = {
 };
 
 // ── Pointing a dev server at a different project ────────────────────
-// `AdminView` auto-saves to Firestore on edit, so with more than one person
-// working, a stray click on a local dev server mutates a real round. Copy
-// .env.example to .env.local and fill in every VITE_FIREBASE_* var to aim that
-// machine at a scratch Firebase project instead.
+// The decision itself lives in lib/firebaseConfig.js, which is pure and tested
+// — this file imports the Firebase SDK at module scope, so anything decided in
+// here can only be checked by booting the app against a real project. See that
+// file for why the override is all-or-nothing.
 //
-// The override is deliberately all-or-nothing: a partial set throws at startup
-// rather than silently pairing a dev project id with the prod API key, which
-// would look like it worked and write to production anyway.
-const FIREBASE_ENV_KEYS = {
-  apiKey: "VITE_FIREBASE_API_KEY",
-  authDomain: "VITE_FIREBASE_AUTH_DOMAIN",
-  projectId: "VITE_FIREBASE_PROJECT_ID",
-  storageBucket: "VITE_FIREBASE_STORAGE_BUCKET",
-  messagingSenderId: "VITE_FIREBASE_MESSAGING_SENDER_ID",
-  appId: "VITE_FIREBASE_APP_ID",
-};
-
+// The logging stays here on purpose: it lets the warning name real tournament
+// data without the shared module knowing anything about tournaments, so all
+// three apps can carry the same resolver.
 const _resolveFirebaseConfig = () => {
-  const env = import.meta.env || {};
-  const entries = Object.entries(FIREBASE_ENV_KEYS);
-  const missing = entries.filter(([, key]) => !env[key]).map(([, key]) => key);
-
-  if (missing.length === entries.length) {
-    if (env.DEV) {
-      console.warn(
-        `[firebase] No VITE_FIREBASE_* override — this dev server is on the LIVE ` +
-        `project "${PROD_FIREBASE_CONFIG.projectId}". Edits reach real tournament ` +
-        `data. See .env.example to point at a scratch project.`
-      );
-    }
-    return PROD_FIREBASE_CONFIG;
-  }
-  if (missing.length) {
-    // Logged as well as thrown: this throws during module evaluation, before
+  let verdict;
+  try {
+    verdict = resolveFirebaseConfig(import.meta.env, PROD_FIREBASE_CONFIG, "real tournament data");
+  } catch (e) {
+    // Logged as well as re-thrown: this throws during module evaluation, before
     // React (and ErrorBoundary) exist, so the only symptom is a blank page.
-    const msg =
-      `[firebase] Partial VITE_FIREBASE_* override — also set: ${missing.join(", ")}. ` +
-      `Unset them all to use the production project. See .env.example.`;
-    console.error(msg);
-    throw new Error(msg);
+    console.error(e.message);
+    throw e;
   }
-
-  const cfg = Object.fromEntries(entries.map(([field, key]) => [field, env[key]]));
-  console.info(`[firebase] Using project "${cfg.projectId}" from env.`);
-  return cfg;
+  if (verdict.warn) console.warn(verdict.warn);
+  if (verdict.source === "env") console.info(`[firebase] Using project "${verdict.config.projectId}" from env.`);
+  return verdict.config;
 };
 
 // ── The auth handler's origin ───────────────────────────────────────
