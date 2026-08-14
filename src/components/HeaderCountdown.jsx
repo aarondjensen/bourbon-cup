@@ -38,9 +38,21 @@ import { countdown } from "../lib/countdown";
 // the seconds turn over — the one thing that makes a running clock in a fixed
 // header look broken. `minWidth` holds the cell open at "09" so the trophy
 // does not shuffle sideways when a two-digit value drops to one.
-function Unit({ value, label, urgent }) {
+//
+// `align` is how the row's two END cells reach the caption's edges. A cell is
+// as wide as its LABEL — "DAYS" is wider than "34" at every value — so a
+// centred cell leaves its digits ~4px inside its own box. That box already
+// lines up with "2026 · GAYLORD, MI"; the digits did not, and the digits are
+// what the eye reads as the clock. 12px of amber against 8px of grey wins,
+// so lining up the labels and not the numbers still looked inset.
+//
+// So DAYS aligns left and SEC aligns right, which puts each one's number AND
+// its label on the caption's edge together. The two inside cells stay centred
+// — they have no edge to meet, and centring keeps their digits over their own
+// labels.
+function Unit({ value, label, urgent, align = "center" }) {
   return (
-    <div style={{ textAlign: "center", minWidth: 20 }}>
+    <div style={{ textAlign: align, minWidth: 20 }}>
       <div style={{
         fontSize: FS.small, fontWeight: 800, lineHeight: 1,
         fontVariantNumeric: "tabular-nums",
@@ -92,13 +104,13 @@ export function HeaderCountdown({ at, children }) {
       alignItems: "center", justifyContent: "center", gap: 8,
     }}>
       <div style={{ flex: "1 1 0", minWidth: 0, display: "flex", justifyContent: "flex-start", gap: 6 }}>
-        <Unit value={c.days} label="DAYS" urgent={c.urgent} />
+        <Unit value={c.days} label="DAYS" urgent={c.urgent} align="left" />
         <Unit value={c.hours} label="HRS" urgent={c.urgent} />
       </div>
       {children}
       <div style={{ flex: "1 1 0", minWidth: 0, display: "flex", justifyContent: "flex-end", gap: 6 }}>
         <Unit value={c.mins} label="MIN" urgent={c.urgent} />
-        <Unit value={c.secs} label="SEC" urgent={c.urgent} />
+        <Unit value={c.secs} label="SEC" urgent={c.urgent} align="right" />
       </div>
     </div>
   );
