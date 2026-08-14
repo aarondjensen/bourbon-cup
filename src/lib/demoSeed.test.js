@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   buildDemo, countDemoDocs, DEMO_COLLECTIONS, DEMO_EDITION_ID, DEMO_MARK,
-  demoPlayerId, DEMO_START, DEMO_END, buildDemoPlayer, SEEDED_PLAYER_IDS,
+  demoPlayerId, DEMO_START, DEMO_END, DEMO_YEAR, buildDemoPlayer, SEEDED_PLAYER_IDS,
 } from "./demoSeed";
+import { todayISO, addDays } from "./dates";
 import { isDemoEdition } from "./editions";
 import { courseScorecard, coursePar } from "./tripInfo";
 import { computeMatchResult } from "../scoring";
@@ -141,6 +142,35 @@ describe("the week", () => {
   it("points every round at a course that exists", () => {
     const ids = new Set(built.bc_courses.map(c => c.id));
     for (const r of built.bc_rounds) expect(ids.has(r.course_id)).toBe(true);
+  });
+
+  it("puts the trip around today, so the demo is never stale", () => {
+    // The first cut pinned this to a fixed weekend in July 2026, which went
+    // past — and the demo then advertised a trip that had finished a month
+    // earlier on the one screen a reviewer opens to ask "when is this".
+    const today = todayISO();
+    expect(DEMO_START).toBe(addDays(today, -1));
+    expect(DEMO_END).toBe(addDays(today, 1));
+    expect(DEMO_START < today && today < DEMO_END).toBe(true);
+  });
+
+  it("dates the rounds so the seeded scores tell the truth about them", () => {
+    // R1 is complete and R2 is nine holes in (see SCORED). If R1 were dated
+    // tomorrow the demo would show a finished round that has not been played,
+    // and if R2 were dated yesterday it would show a round abandoned at the
+    // turn rather than one in progress.
+    const on = (n) => built.bc_rounds.find(r => r.round_number === n).date;
+    expect(on(1)).toBe(addDays(todayISO(), -1));   // played out
+    expect(on(2)).toBe(todayISO());                // half done — where a tester comes in
+    expect(on(3)).toBe(todayISO());                // this afternoon, empty
+    expect(on(4)).toBe(addDays(todayISO(), 1));    // tomorrow, empty
+  });
+
+  it("files the edition under the year its rounds are in", () => {
+    // Hardcoding 2026 meant a demo seeded in January would sort into last year
+    // in the picker while its rounds were dated this one.
+    expect(String(DEMO_YEAR)).toBe(todayISO().slice(0, 4));
+    expect(built.bc_editions[0].year).toBe(DEMO_YEAR);
   });
 
   it("keeps dates as strings, never Date objects", () => {

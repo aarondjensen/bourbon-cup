@@ -38,10 +38,15 @@
 // person does; a roster row with an invented `auth_uid` would be a row nobody
 // can claim and nobody can unclaim.
 import { editionDocId } from "./historyImport.js";
+import { todayISO, addDays } from "./dates.js";
 
 export const DEMO_EDITION_ID = "bc_demo";
 export const DEMO_MARK = "demo-seed";
-export const DEMO_YEAR = 2026;
+// From the same clock as the dates below. Hardcoding it meant a demo seeded in
+// January would file itself under last year while its rounds were dated this
+// one — and the picker sorts on the year, so it would sit in the wrong place
+// in the list of tournaments.
+export const DEMO_YEAR = Number(todayISO().slice(0, 4));
 export const DEMO_NAME = "DEMO — Testers";
 
 // Collections this touches, in the order it writes them. Editions first so a
@@ -124,18 +129,41 @@ const total = (yards) => yards.reduce((a, b) => a + b, 0);
 const shorter = (y) => Math.round(y * (y > 480 ? 0.93 : y < 200 ? 0.86 : 0.94) / 5) * 5;
 
 // ── The week ────────────────────────────────────────────────────────
-// Dates are YYYY-MM-DD strings end to end — see lib/dates for why nothing here
-// constructs a Date. Deliberately a fixed weekend rather than "next Friday":
-// a seed whose output depends on the day it ran is a seed that cannot be
-// diffed, and the trip dates are something the tester is meant to LOOK at on
-// Trip Info, not something the app does arithmetic on.
-export const DEMO_START = "2026-07-17";
-export const DEMO_END = "2026-07-19";
+// Dates are YYYY-MM-DD strings end to end — see lib/dates, which owns that
+// decision and supplies both helpers here, so nothing in this file constructs
+// a Date of its own.
+//
+// AROUND TODAY, not a fixed weekend. The first cut pinned this to a date in
+// July 2026 and argued that a seed whose output depends on the day it ran
+// cannot be diffed. That was the wrong thing to optimise: July went past, and
+// the demo then advertised a trip that had finished a month earlier, on the
+// one screen a reviewer opens to ask "when is this". A stale demo reads as an
+// abandoned one.
+//
+// The determinism that actually matters is the SCORES — 324 hole documents
+// that must not churn on a re-run, and do not: they are seeded from the round
+// and the player, never from the date. Three date fields refreshing when the
+// seed is re-run is not drift, it is the demo staying current.
+//
+// The span is chosen so the seeded scores TELL THE TRUTH about it:
+//
+//   yesterday   round 1, played out
+//   today       round 2, nine holes in — which is where a tester comes in
+//               round 3, this afternoon, empty
+//   tomorrow    round 4, empty
+//
+// A tournament in progress, which is both the most useful thing to hand a
+// reviewer and the state that gives a tester something to finish. The header
+// countdown stays dark because the first tee was yesterday; that is correct
+// for a cup already under way, not a missing feature.
+export const DEMO_START = addDays(todayISO(), -1);
+export const DEMO_MIDDLE = todayISO();
+export const DEMO_END = addDays(todayISO(), 1);
 
 const ROUNDS = [
   { round: 1, format: "best_ball", course: "pinecrest", date: DEMO_START, tee: "8:00 AM", perSide: 2 },
-  { round: 2, format: "scramble",  course: "harbor",    date: "2026-07-18", tee: "8:30 AM", perSide: 2 },
-  { round: 3, format: "pinehurst", course: "pinecrest", date: "2026-07-18", tee: "2:00 PM", perSide: 2 },
+  { round: 2, format: "scramble",  course: "harbor",    date: DEMO_MIDDLE,  tee: "8:30 AM", perSide: 2 },
+  { round: 3, format: "pinehurst", course: "pinecrest", date: DEMO_MIDDLE,  tee: "2:00 PM", perSide: 2 },
   { round: 4, format: "singles",   course: "harbor",    date: DEMO_END,     tee: "9:00 AM", perSide: 1 },
 ];
 
