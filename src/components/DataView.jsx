@@ -630,17 +630,26 @@ function PlayerHalf({ data, activeYear, myId, teams }) {
 // ══════════════════════════════════════════════════════════════════
 export default function DataView({
   tPlayers, matches, holeData, tRounds, courses, hcpOverrides, teeAssignments,
-  roundLocks, teamNames, editions, activeYear, teams, myPlayerId,
+  roundLocks, teamNames, editions, activeYear, teams, myPlayerId, isDemo = false,
 }) {
   const [tab, setTab] = useState("tournament");
 
   // The running edition, handed over raw. useArchive turns it into archive
   // rows itself, because that conversion needs the player registry and the
   // registry is inside the chunk it is fetching.
-  const input = useMemo(() => ({
+  //
+  // NULL ON A DEMO TOURNAMENT, which switches the fold off entirely and leaves
+  // this tab showing the ten real years alone. A demo's field and courses are
+  // invented (lib/demoSeed), and folding it would add twelve golfers who do
+  // not exist to the career table, two courses nobody has played to the
+  // passport, and a cup to the tournament records that was never contested.
+  // The record is the one screen in the app where a made-up row is not
+  // recoverable by looking — every number on it is an aggregate, so a wrong
+  // one just reads as history.
+  const input = useMemo(() => (isDemo ? null : {
     year: activeYear, tPlayers, matches, holeData, tRounds, courses,
     hcpOverrides, teeAssignments, roundLocks, teamNames,
-  }), [activeYear, tPlayers, matches, holeData, tRounds, courses,
+  }), [isDemo, activeYear, tPlayers, matches, holeData, tRounds, courses,
     hcpOverrides, teeAssignments, roundLocks, teamNames]);
 
   const { data, live, loading, error } = useArchive(input);
@@ -662,6 +671,21 @@ export default function DataView({
       </StickyTop>
 
       {loading && <Empty icon="⏳">Loading ten years…</Empty>}
+
+      {/* Said, rather than left as an absence. A director on the demo who
+          posts a round and then finds it nowhere in the records would
+          reasonably read that as the tab being broken. One line is cheaper
+          than that support question, and it is only ever on screen for
+          somebody who is deliberately inside a demo. */}
+      {isDemo && !loading && !error && (
+        <div style={{
+          margin: "0 0 14px", padding: "9px 12px", borderRadius: 8,
+          background: `${BC.bg}${ALPHA.panel}`, border: `1px solid ${BC.bdr}`,
+          fontSize: FS.label, color: BC.t3, lineHeight: 1.45, textAlign: "center",
+        }}>
+          You&apos;re in a demo tournament. Nothing played here counts towards these records.
+        </div>
+      )}
 
       {error && (
         <Empty icon="📵">

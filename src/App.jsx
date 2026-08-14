@@ -105,7 +105,7 @@ import {
 import {
   BUDGET_COL, budgetLineId, buildBudgetLine, budgetLineError,
 } from "./lib/budget";
-import { EDITIONS_COL } from "./lib/editions";
+import { EDITIONS_COL, isDemoEdition } from "./lib/editions";
 import { lockNotice } from "./lib/editionLock";
 import { prefetchArchive } from "./lib/useArchive";
 import { TRIP_SETTINGS_ID, houseFrom, tripSchedule, tripDates } from "./lib/tripInfo";
@@ -5106,6 +5106,11 @@ export default function App() {
             roundLocks={roundLocksData} teams={teams} teamNames={teamNames}
             editions={editions}
             activeYear={getTournamentYear()}
+            /* A demo tournament contributes nothing to the record. Its field
+               and its courses are invented, so folding it would put twelve
+               golfers who do not exist into the career table beside the real
+               ones — see isDemoEdition in lib/editions. */
+            isDemo={isDemoEdition(editions.find(e => e.id === TOURNAMENT_ID))}
             /* Which row on the career table is yours. Resolved to a canonical
                golfer inside the tab — a roster row is one year of one man. */
             myPlayerId={user?.player_id || null}

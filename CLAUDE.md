@@ -141,6 +141,53 @@ eventually editing while the other is running a round.
   `.claude/settings.local.json` are gitignored; the secrets in `api/*.js` are
   set in Vercel, not in the repo.
 
+## The demo edition
+
+`bc_demo` — "DEMO — Testers" — is a whole tournament for the store reviewers
+and the twelve Play testers: an invented field, invented courses, and generated
+scores. `npm run seed:demo` builds it (dry run by default, `--write` to land it,
+`--undo --write` to remove it), and `--add "Name" --team A --index 12.4` adds a
+tester. `src/lib/demoSeed.js` decides every document and is unit-tested through
+the app's own scoring engine — the demo is not seeded unless it provably
+renders. See `docs/store-submission.md` §1.4.
+
+**A demo is not a cup, and that has to be enforced in two places.** The
+`tournament_id` filter only covers the screens that read one edition; the app
+reaches ACROSS editions in exactly two, and both would otherwise surface twelve
+golfers who do not exist:
+
+- **The Data tab** folds whichever edition is open into ten years of career
+  records (`lib/archiveLive`). Unchecked, that puts Dave R in the career table
+  beside the real field and adds a 2026 cup that was never contested.
+- **`cloneEdition`** copies a roster forward, so next year's real tournament
+  would open with a dozen men nobody invited.
+
+There is a third, and it is the one that bites hardest: **`bulkLockVerdict`**
+("Lock all but 2026") means every OTHER edition, and the demo is another
+edition. Sweeping it in freezes the tournament the testers are posting scores
+in, and does it invisibly — a director is exempt from the lock they just set,
+so the one person able to reproduce it is the one person who cannot see it. The
+seed writes `locked: false` explicitly as well.
+
+All three read **`isDemoEdition`**, which lives in `lib/editionLock` (the pure
+module — `editions.js` imports firebase and so cannot be imported by anything
+unit-tested) and is re-exported from `lib/editions`, where callers reach for it.
+The seed writes the flag; `createEdition` never does, so an edition a director
+makes is real unless somebody says otherwise. A flag rather than a check on the
+id, because the next scratch edition will not be called `bc_demo`. **Anything
+else that ever spans editions has to consult it too.**
+
+The demo and the lock are two halves of one problem and neither is the other:
+the demo keeps invented players from leaking OUT into a real tournament, the
+lock keeps real testers from writing IN to one. Lock the real editions, leave
+the demo unlocked.
+
+The writer refuses to touch any other edition: the id is a constant with no
+flag to typo, every document is re-checked before a connection opens, the
+service-account key is checked against `.firebaserc`, and a full seed aborts if
+`bc_demo` holds a document it did not write. `--undo` deletes by the
+`seeded_from` mark, so a card a tester signed survives it.
+
 ## The old cups
 
 2016–2024 are editions like any other. Switch to one in **☰ → Tournaments**

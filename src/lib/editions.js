@@ -120,6 +120,18 @@ export const createEdition = async ({ year, name, label, id }) => {
 // — the exact shape of failure this whole area has already had once.
 export const EDITION_STATUSES = ["draft", "published", "archived"];
 
+// ── A demo is not a cup ─────────────────────────────────────────────
+// Defined in lib/editionLock (the pure module — this one imports firebase and
+// so cannot be imported by anything unit-tested) and re-exported here, because
+// this is where callers reach for anything about an edition document. One
+// predicate, three places that must agree: the Data tab's fold, `cloneEdition`
+// below, and `bulkLockVerdict`. The reasoning is in editionLock.js.
+//
+// Imported AND re-exported, not `export … from`: that form re-exports without
+// binding the name locally, and `cloneEdition` below calls it.
+import { isDemoEdition } from "./editionLock";
+export { isDemoEdition };
+
 export const updateEdition = async (id, { name, status }) => {
   if (!id) return { ok: false, error: "No edition to rename." };
   const trimmed = String(name ?? "").trim();
@@ -169,6 +181,22 @@ export const cloneEdition = async (sourceId, { year, name, label, id }, options 
   // this module can damage a tournament nobody asked it to touch, and the
   // damage is invisible on screen — see the note above editionIdFor.
   if (await editionExists(newTid)) return { ok: false, error: TAKEN(newTid) };
+
+  // A demo is not a source. Its roster is twelve invented golfers seeded for
+  // the store testers (see lib/demoSeed), and a clone with `players` ticked
+  // would put Dave R and Marty K on next year's real roster — where they
+  // would look exactly like men somebody forgot to remove, and where the
+  // first person to notice is whoever reads the draw. The picker in
+  // EditionSwitcher already leaves demo editions out; this is the half that
+  // is a guarantee rather than an omission.
+  // Read the whole (tiny) collection and match in memory, the way
+  // `editionExists` above does — `id` is the document id rather than a field
+  // this collection is guaranteed to carry, so a where() on it is the kind of
+  // query that returns nothing and looks like a pass.
+  const source = sourceId ? (await db.get(EDITIONS_COL)).find(e => e.id === sourceId) : null;
+  if (isDemoEdition(source)) {
+    return { ok: false, error: `\`${sourceId}\` is a demo tournament — its roster and courses are invented, so it cannot be cloned into a real one.` };
+  }
 
   await db.upsert(EDITIONS_COL, {
     id: newTid,

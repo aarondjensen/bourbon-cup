@@ -59,6 +59,25 @@
 // eleven years of tournaments the moment it deployed.
 export const isEditionLocked = (edition) => edition?.locked === true;
 
+// ── A demo is not a cup ────────────────────────────────────────────
+// `bc_demo` is a whole invented tournament seeded for the store reviewers and
+// the twelve Play testers (lib/demoSeed). It lives here, in the pure module,
+// rather than in editions.js — which imports firebase.js and therefore cannot
+// be imported by anything that wants to be unit-tested. `editions.js`
+// re-exports it, so every call site reads the one predicate.
+//
+// It matters in three places, and the third is the one this file owns:
+//
+//   the Data tab   would fold the invented field into ten years of career
+//                  records (see lib/archiveLive).
+//   cloneEdition   would copy that roster into next year's real tournament.
+//   bulkLockVerdict — below. "Lock all but 2026" means every OTHER year, and
+//                  the demo is another year. Locking it is never what the
+//                  director means: it silently stops the twelve testers
+//                  posting scores, and the one member who cannot notice is
+//                  the director, who is exempt from the lock they just set.
+export const isDemoEdition = (edition) => edition?.is_demo === true;
+
 // ── What the director is about to do, in words ─────────────────────
 // Returned rather than written inline at the call site so the dangerous case
 // can be tested, because it is the one that is easy to get wrong and expensive
@@ -127,7 +146,12 @@ export const lockVerdict = (edition, { isActive = false } = {}) => {
 // Null when there is nothing to offer — one edition, or none — so the caller
 // renders no button rather than a disabled one.
 export const bulkLockVerdict = (editions = [], activeId = null) => {
-  const others = (editions || []).filter((e) => e?.id && e.id !== activeId);
+  // Demo tournaments are not "other years" for this purpose — see
+  // isDemoEdition above. A director on the real 2026 tapping "Lock all but
+  // 2026" wants the finished cups frozen; sweeping the demo in with them
+  // stops the closed test dead, and stops it invisibly, because the person
+  // who set the lock is exempt from it.
+  const others = (editions || []).filter((e) => e?.id && e.id !== activeId && !isDemoEdition(e));
   if (!others.length) return null;
 
   const activeYear = (editions || []).find((e) => e?.id === activeId)?.year ?? null;

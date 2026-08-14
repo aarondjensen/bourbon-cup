@@ -14,6 +14,14 @@
 //   node scripts/seed-demo.mjs --write          # actually write
 //   node scripts/seed-demo.mjs --undo --write   # take it back out
 //
+// A thirteenth golfer, for a tester who would rather see their own name than
+// claim "Pete V" — one row, no re-seed, and stamped so --undo still gets it:
+//
+//   node scripts/seed-demo.mjs --add "Aaron J" --team A --index 12.4 --write
+//
+// A director can do the same from Admin → Players while switched to the demo,
+// which is easier for one person. This is for a handful at once.
+//
 // Credentials: the Firebase ADMIN SDK, which bypasses firestore.rules — the
 // roster, courses and rounds are director-only there and a bulk seed is not a
 // signed-in phone.
@@ -47,7 +55,8 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  buildDemo, countDemoDocs, DEMO_COLLECTIONS, DEMO_EDITION_ID, DEMO_MARK, DEMO_NAME,
+  buildDemo, buildDemoPlayer, countDemoDocs,
+  DEMO_COLLECTIONS, DEMO_EDITION_ID, DEMO_MARK, DEMO_NAME, SEEDED_PLAYER_IDS,
 } from "../src/lib/demoSeed.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -57,13 +66,32 @@ const valueOf = (f) => (args.indexOf(f) >= 0 ? args[args.indexOf(f) + 1] : null)
 
 const WRITE = has("--write");
 const UNDO = has("--undo");
+const ADD = valueOf("--add");
 const allowProject = valueOf("--allow-project");
 
 const die = (msg) => { console.error(`\n✖ ${msg}\n`); process.exit(1); };
 
+if (ADD && UNDO) die("--add and --undo do opposite things. Pick one.");
+
 // ── Build, then check what was built ────────────────────────────────
-const built = buildDemo();
-const total = countDemoDocs(built);
+// --add builds ONE roster row instead of the whole tournament, and goes
+// through the same rails below: same mark, same containment checks, same
+// project check. There is no second write path.
+let built, total;
+if (ADD) {
+  const res = buildDemoPlayer({ name: ADD, team: valueOf("--team"), index: valueOf("--index") });
+  if (!res.ok) die(res.error);
+  if (SEEDED_PLAYER_IDS.includes(res.player.id)) {
+    die(`\`${res.player.id}\` is one of the twelve the seed owns. Pick another name, or re-run the seed to change it.`);
+  }
+  built = Object.fromEntries(DEMO_COLLECTIONS.map(c => [c, []]));
+  built.bc_players = [res.player];
+  total = 1;
+  console.log(`\n  + ${res.player.name}  ·  Team ${res.player.team}  ·  ${res.player.handicap_index}  ·  ${res.player.id}`);
+} else {
+  built = buildDemo();
+  total = countDemoDocs(built);
+}
 
 // Rail 2. The builder is unit-tested and this is still here, because the cost
 // of the two disagreeing is a stray roster row inside the live cup and the
@@ -93,8 +121,9 @@ console.log(`  ${"─".repeat(46)}`);
 console.log(`  ${String(total).padStart(4)}  documents total\n`);
 
 if (!WRITE) {
-  console.log(UNDO
-    ? "  Dry run. Pass --undo --write to delete what this seed wrote.\n"
+  console.log(
+    UNDO ? "  Dry run. Pass --undo --write to delete what this seed wrote.\n"
+    : ADD ? "  Dry run. Pass --write to add them.\n"
     : "  Dry run. Pass --write to create it.\n");
   process.exit(0);
 }
@@ -134,8 +163,14 @@ admin.initializeApp({ credential: admin.credential.applicationDefault() });
 const db = admin.firestore();
 
 // ── Rail 4 — is there anything real in there? ───────────────────────
+// Skipped for --add, and the distinction is the point of the rail rather than
+// an exception to it. The check exists because a full seed OVERWRITES 371
+// documents, so anything a person built in the demo would be flattened by it.
+// --add writes one new row under an id nothing else can be using — it cannot
+// flatten anything, and a director who added a player by hand should not find
+// that adding a second one is now refused.
 const foreign = [];
-for (const col of DEMO_COLLECTIONS) {
+for (const col of ADD ? [] : DEMO_COLLECTIONS) {
   if (col === "bc_editions") continue;
   const snap = await db.collection(col).where("tournament_id", "==", DEMO_EDITION_ID).get();
   for (const d of snap.docs) if (d.data().seeded_from !== DEMO_MARK) foreign.push(`${col}/${d.id}`);
@@ -194,7 +229,13 @@ for (const col of DEMO_COLLECTIONS) {
 console.log(`  Writing ${ops.length} document(s)…`);
 await commitInChunks(ops);
 
-console.log(`\n  ${DEMO_NAME} is live.`);
-console.log(`  Switch to it in ☰ → Tournaments, or Admin → Event → Editions.`);
-console.log(`  Testers claim any of the twelve names on the roster screen.`);
-console.log(`  Take it back out with: node scripts/seed-demo.mjs --undo --write\n`);
+if (ADD) {
+  console.log(`\n  Added to ${DEMO_NAME}. They can claim the name on the roster screen.`);
+  console.log(`  They are NOT in the draw — put them in a match in Admin → Matches,`);
+  console.log(`  or leave them to watch. Either way they are only in ${DEMO_EDITION_ID}.\n`);
+} else {
+  console.log(`\n  ${DEMO_NAME} is live.`);
+  console.log(`  Switch to it in ☰ → Tournaments, or Admin → Event → Editions.`);
+  console.log(`  Testers claim any of the twelve names on the roster screen.`);
+  console.log(`  Take it back out with: node scripts/seed-demo.mjs --undo --write\n`);
+}

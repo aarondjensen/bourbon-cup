@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   buildDemo, countDemoDocs, DEMO_COLLECTIONS, DEMO_EDITION_ID, DEMO_MARK,
-  demoPlayerId, DEMO_START, DEMO_END,
+  demoPlayerId, DEMO_START, DEMO_END, buildDemoPlayer, SEEDED_PLAYER_IDS,
 } from "./demoSeed";
+import { isDemoEdition } from "./editions";
 import { courseScorecard, coursePar } from "./tripInfo";
 import { computeMatchResult } from "../scoring";
 
@@ -325,6 +326,79 @@ describe("it scores through the app's own engine", () => {
       expect(res.holes).toHaveLength(18);
       expect(res.holes.filter(h => h && h.decided).length).toBeLessThanOrEqual(9);
     }
+  });
+});
+
+describe("the test golfers cannot reach a real tournament", () => {
+  // The guarantee, and it is NOT the tournament_id filter — that only covers
+  // the screens that read one edition. The two places the app deliberately
+  // reaches ACROSS editions are where invented golfers would surface:
+  //
+  //   the Data tab   folds whichever edition is open into ten years of career
+  //                  records (lib/archiveLive), so Dave R would appear in the
+  //                  career table beside the real field and a 2026 cup that
+  //                  was never played would join the tournament records.
+  //   cloneEdition   copies a roster forward, so next year's real tournament
+  //                  would open with twelve men nobody invited.
+  //
+  // Both read `isDemoEdition`, and the edition document is what carries it.
+  it("marks the edition as a demo", () => {
+    const edition = built.bc_editions[0];
+    expect(edition.is_demo).toBe(true);
+    expect(isDemoEdition(edition)).toBe(true);
+  });
+
+  it("does not mark a real edition by accident", () => {
+    // The flag has to be opt-in, or a missing field somewhere turns a real
+    // tournament into one that contributes nothing to its own records.
+    expect(isDemoEdition({ id: "bc_2025", year: 2025 })).toBe(false);
+    expect(isDemoEdition({ id: "bc_2026", is_demo: false })).toBe(false);
+    expect(isDemoEdition(null)).toBe(false);
+    expect(isDemoEdition(undefined)).toBe(false);
+    // Not truthiness — a stray string would otherwise silently qualify.
+    expect(isDemoEdition({ is_demo: "yes" })).toBe(false);
+  });
+});
+
+describe("adding a tester", () => {
+  it("builds a claimable row scoped to the demo", () => {
+    const { ok, player } = buildDemoPlayer({ name: "Aaron J", team: "A", index: 12.4 });
+    expect(ok).toBe(true);
+    expect(player.id).toBe("demo_aaronj");
+    expect(player.tournament_id).toBe(DEMO_EDITION_ID);
+    expect(player.seeded_from).toBe(DEMO_MARK);   // so --undo still gets them
+    expect(player.auth_uid).toBeNull();           // so they can claim it
+    expect(player.team).toBe("A");
+    expect(player.handicap_index).toBe(12.4);
+  });
+
+  it("defaults to team A rather than inventing a third side", () => {
+    expect(buildDemoPlayer({ name: "X Y", team: "", index: 5 }).player.team).toBe("A");
+    expect(buildDemoPlayer({ name: "X Y", team: "b", index: 5 }).player.team).toBe("B");
+    expect(buildDemoPlayer({ name: "X Y", team: "purple", index: 5 }).player.team).toBe("A");
+  });
+
+  it("refuses input that would write a broken row", () => {
+    expect(buildDemoPlayer({ name: "", index: 5 }).ok).toBe(false);
+    expect(buildDemoPlayer({ name: "   ", index: 5 }).ok).toBe(false);
+    // A name with nothing to slug would collide on `demo_` with the next one.
+    expect(buildDemoPlayer({ name: "!!!", index: 5 }).ok).toBe(false);
+    expect(buildDemoPlayer({ name: "A B", index: "abc" }).ok).toBe(false);
+    expect(buildDemoPlayer({ name: "A B", index: 99 }).ok).toBe(false);
+  });
+
+  it("accepts a plus handicap, which this app stores negative", () => {
+    // GHIN writes "+2.1" for better than scratch and the app models it as
+    // -2.1 (see lib/ghin). A validator that rejected negatives would refuse
+    // the best golfer in the field.
+    expect(buildDemoPlayer({ name: "Scratch M", index: -2.1 }).ok).toBe(true);
+  });
+
+  it("cannot silently replace one of the seeded twelve", () => {
+    // The script refuses this, but the ids have to be knowable for it to.
+    expect(SEEDED_PLAYER_IDS).toContain("demo_dave");
+    expect(SEEDED_PLAYER_IDS).toHaveLength(12);
+    expect(buildDemoPlayer({ name: "dave", index: 5 }).player.id).toBe("demo_dave");
   });
 });
 
