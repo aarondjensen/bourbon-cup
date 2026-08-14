@@ -271,9 +271,11 @@ is filling out the roster of twelve.
 
 **Time it against the tournament, or against something.** Fourteen days of an
 app with nothing happening in it is fourteen days of nobody opening it. If the
-window cannot cover a live round, give it something to do — run the practice
-edition, put a real draw in it, post the trip dates and the house, and ask each
-man to do three specific things:
+window cannot cover a live round, the demo edition is what fills it —
+`npm run seed:demo` (see `store-submission.md` §1.4) leaves the cup tied 6–6
+with round 2 stopped at the turn and twelve unclaimed names, so there is a
+scorecard waiting for whoever opens it. Then ask each man to do three specific
+things:
 
 1. Sign in, claim your name, and check your handicap is right.
 2. Post a score for a made-up round and sign the card.

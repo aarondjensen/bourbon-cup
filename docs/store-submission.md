@@ -72,16 +72,43 @@ Both stores want to reach everything, and guest mode is read-only by design, so
 guest mode alone is **not** an answer to either store's access question. It is a
 very good answer to half of it.
 
-Set up **one** account and give it to both stores:
+**The demo edition is seeded, not built by hand.**
 
-1. Create a throwaway edition in **Admin → Event → Editions** — not the live
-   cup. A reviewer will tap things.
-2. Add a roster row for the reviewer in that edition.
-3. Sign in as the demo Google account, present the tournament password, claim
-   that row.
-4. Make it a director (**Admin → Players**, crown toggle) so the Admin tabs are
+```sh
+npm i --no-save firebase-admin
+npm run seed:demo                                   # dry run — builds and counts
+GOOGLE_APPLICATION_CREDENTIALS=/path/key.json npm run seed:demo -- --write
+```
+
+`bc_demo` — "DEMO — Testers" — is 371 documents: twelve invented golfers six a
+side, two invented courses with full cards and two tees, four rounds over a
+July weekend, a draw in which nobody meets the same opponent twice, round 1
+played out and **round 2 stopped at the turn**, a settled CTP, a skins pot, a
+budget and a rental house. The cup sits **6–6** when a tester opens it, with
+nine holes left to post — which is the entire point: a tester who can only
+look generates nothing (§ `play-store.md` §7).
+
+`src/lib/demoSeed.js` decides every document and is unit-tested, including
+against the app's own scoring engine — the demo is not seeded unless it
+provably renders a leaderboard. `scripts/seed-demo.mjs` writes it, dry-run by
+default, and refuses to touch anything but `bc_demo`: the edition id is a
+constant with no flag to typo, every document is re-checked for its
+`tournament_id` before a connection is opened, the service-account key is
+checked against `.firebaserc`, and it aborts if `bc_demo` holds a document it
+did not write. Take it back out with `--undo --write`, which deletes by the
+`seeded_from` mark, so anything a tester made in there survives.
+
+Then, for the reviewer specifically:
+
+1. Sign in as the demo Google account, present the tournament password, and
+   claim any of the twelve names on the roster screen.
+2. Make it a director (**Admin → Players**, crown toggle) so the Admin tabs are
    reachable. Both stores will otherwise report a section of the app they could
    not enter.
+
+Testers claim the other eleven. Nothing in the seed is claimed, and it creates
+no memberships — those are minted by presenting the password, which is a thing
+a person does.
 
 Hand over three facts: the Google address, its password, and the tournament
 password from **Admin → Event → Access**.
