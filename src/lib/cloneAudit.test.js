@@ -6,8 +6,8 @@
 // scorecard still points at.
 import { describe, it, expect } from "vitest";
 import {
-  clonedIdStamp, referencesId, planCloneRemoval, originalRows,
-  duplicatedLogins, overwritableDocIds,
+  clonedIdStamp, referencesId, planCloneRemoval, planDuplicateRemoval, contentKey,
+  originalRows, duplicatedLogins, overwritableDocIds,
 } from "./cloneAudit";
 
 const STAMP = 1755093742318;
@@ -149,6 +149,100 @@ describe("duplicatedLogins", () => {
 
   it("ignores rows nobody has claimed", () => {
     expect(duplicatedLogins([{ id: "a" }, { id: "b" }])).toEqual([]);
+  });
+});
+
+describe("contentKey", () => {
+  it("ignores the three fields two copies of a row must differ on", () => {
+    expect(contentKey({ id: "a", tournament_id: "bc_2026", player_id: "a", name: "Aaron J" }))
+      .toBe(contentKey({ id: "b", tournament_id: "bc_2026", player_id: "b", name: "Aaron J" }));
+  });
+
+  it("does not care what order Firestore hands back the keys", () => {
+    expect(contentKey({ name: "Treetops", par: 72, tees: [{ name: "Blue", yards: 6800 }] }))
+      .toBe(contentKey({ tees: [{ yards: 6800, name: "Blue" }], par: 72, name: "Treetops" }));
+  });
+
+  it("separates rows that genuinely differ", () => {
+    expect(contentKey({ id: "a", name: "Treetops", par: 72 }))
+      .not.toBe(contentKey({ id: "b", name: "Treetops", par: 71 }));
+  });
+});
+
+describe("planDuplicateRemoval", () => {
+  // The 2026 shape: the clone copied the courses AND the rounds, and the round
+  // documents merged in place, so they came out pointing at the COPIES. Two
+  // courses called Gaylord CC, and the wired-in one is the clone.
+  const rows = {
+    bc_courses: [
+      { id: "bc_course_1712345678901", tournament_id: "bc_2026", name: "Gaylord CC", par: 72 },
+      { id: `bc_course_${STAMP}_0`, tournament_id: "bc_2026", name: "Gaylord CC", par: 72 },
+    ],
+  };
+  const scan = [{ col: "bc_rounds", id: "r1", doc: { course_id: `bc_course_${STAMP}_0` } }];
+
+  it("keeps the copy something points at and drops the spare", () => {
+    const [t] = planDuplicateRemoval({ rows, scan });
+    expect(t.keep.id).toBe(`bc_course_${STAMP}_0`);
+    expect(t.drop.map((d) => d.id)).toEqual(["bc_course_1712345678901"]);
+    expect(t.blocked).toHaveLength(0);
+  });
+
+  it("prefers the app's own id when neither twin is referenced", () => {
+    const [t] = planDuplicateRemoval({ rows });
+    expect(t.keep.id).toBe("bc_course_1712345678901");
+    expect(t.drop.map((d) => d.id)).toEqual([`bc_course_${STAMP}_0`]);
+  });
+
+  it("never drops a row something points at", () => {
+    // Two referenced twins is a merge decision, not a tidy-up: something
+    // points at each, and picking one silently repoints the other's reference.
+    const [t] = planDuplicateRemoval({
+      rows,
+      scan: [...scan, { col: "bc_rounds", id: "r2", doc: { course_id: "bc_course_1712345678901" } }],
+    });
+    expect(t.drop).toHaveLength(0);
+    expect(t.blocked.map((b) => b.id)).toEqual([`bc_course_${STAMP}_0`]);
+  });
+
+  it("picks the same keeper whichever order the rows arrive in", () => {
+    // The rank is explicit for this reason — Firestore's ordering is not part
+    // of the decision, so a dry run and the write after it always agree.
+    const forward = planDuplicateRemoval({ rows, scan })[0];
+    const backward = planDuplicateRemoval({ rows: { bc_courses: [...rows.bc_courses].reverse() }, scan })[0];
+    expect(backward.keep.id).toBe(forward.keep.id);
+    expect(backward.drop.map((d) => d.id)).toEqual(forward.drop.map((d) => d.id));
+  });
+
+  it("leaves rows that only look alike alone", () => {
+    const out = planDuplicateRemoval({
+      rows: {
+        bc_courses: [
+          { id: "a", name: "Gaylord CC", par: 72 },
+          { id: "b", name: "Gaylord CC", par: 71 },   // a director corrected one
+        ],
+      },
+    });
+    expect(out).toEqual([]);
+  });
+
+  it("finds a duplicated roster row the same way", () => {
+    const [t] = planDuplicateRemoval({
+      rows: {
+        bc_players: [
+          { id: "bc_player_1", player_id: "bc_player_1", name: "Aaron J", auth_uid: "uid-a" },
+          { id: `p_${STAMP}_0`, player_id: `p_${STAMP}_0`, name: "Aaron J", auth_uid: "uid-a" },
+        ],
+      },
+      scan: [{ col: "bc_ledger", id: "l1", doc: { player_id: "bc_player_1", amount: 200 } }],
+    });
+    // The money is on the original, so the original stays.
+    expect(t.keep.id).toBe("bc_player_1");
+    expect(t.drop.map((d) => d.id)).toEqual([`p_${STAMP}_0`]);
+  });
+
+  it("is empty when nothing is duplicated", () => {
+    expect(planDuplicateRemoval({ rows: { bc_courses: [{ id: "a", name: "Gaylord CC" }] } })).toEqual([]);
   });
 });
 

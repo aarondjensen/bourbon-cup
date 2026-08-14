@@ -124,6 +124,81 @@ export const planCloneRemoval = ({ rows = {}, scan = [] }) => {
   return out;
 };
 
+// ── The other half of the mess: identical twins ───────────────────
+// Deleting a clone batch leaves behind whatever the batch's rows had been
+// wired into in the meantime. In the 2026 collision that was three courses:
+// the clone copied them AND copied the rounds, and the round documents — which
+// share the edition's id, so they merged in place — came out pointing at the
+// COPIES. Delete the batch and the copies are held; leave it and the edition
+// carries two of each course under the same name.
+//
+// Either set is correct, because one is a byte copy of the other. That is what
+// makes this safe to automate and impossible to do by eye: Admin → Courses
+// shows two rows reading "Gaylord CC" and nothing to choose between them.
+//
+// So the rule is not "delete the clone" — it is "where two rows in the same
+// edition are the same row, keep the one that is wired in and drop the spare".
+// A row is only ever dropped when a twin with identical content survives it,
+// which is what makes the deletion a no-op on every screen.
+const stable = (v) => {
+  if (Array.isArray(v)) return `[${v.map(stable).join(",")}]`;
+  if (v && typeof v === "object") {
+    return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${stable(v[k])}`).join(",")}}`;
+  }
+  return JSON.stringify(v ?? null);
+};
+
+// Identity is everything except the three fields that MUST differ between two
+// copies of the same row. `player_id` mirrors `id` on a roster row, so leaving
+// it in would make every twin unique and the pass would never fire.
+export const contentKey = (row) =>
+  stable(Object.fromEntries(Object.entries(row).filter(([k]) => !["id", "tournament_id", "player_id"].includes(k))));
+
+// Only the collections a clone duplicates. Narrow on purpose: this is the one
+// pass that can delete an id the APP minted, so it gets the smallest blast
+// radius that covers the damage.
+export const DUPLICATE_COLS = ["bc_players", "bc_courses"];
+
+export const planDuplicateRemoval = ({ rows = {}, scan = [], cols = DUPLICATE_COLS }) => {
+  const out = [];
+  for (const col of cols) {
+    const groups = new Map();
+    for (const row of rows[col] || []) {
+      const key = contentKey(row);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(row);
+    }
+    for (const group of groups.values()) {
+      if (group.length < 2) continue;
+      const marked = group.map((row) => {
+        const refs = scan.filter((d) => d.id !== row.id && referencesId(d.doc, row.id));
+        return { col, id: row.id, row, refs: refs.map((r) => ({ col: r.col, id: r.id })), referenced: refs.length > 0 };
+      });
+      // Which twin survives, ranked rather than taken in the order the rows
+      // arrived: something points at it (so no reference has to be repaired),
+      // then the app minted it (so an edition ends up holding its own ids),
+      // then the lower id — arbitrary, but it means a dry run and the write
+      // that follows it can never disagree about which row was the keeper.
+      const rank = (m) => [m.referenced ? 0 : 1, clonedIdStamp(m.id) ? 1 : 0, String(m.id)];
+      const keep = [...marked].sort((a, b) => {
+        const [x, y] = [rank(a), rank(b)];
+        return (x[0] - y[0]) || (x[1] - y[1]) || x[2].localeCompare(y[2]);
+      })[0];
+      out.push({
+        col,
+        label: group[0].name || group[0].id,
+        keep,
+        drop: marked.filter((m) => m !== keep && !m.referenced),
+        // A second twin that is ALSO referenced is never dropped: two things
+        // point at two different rows and merging them is a decision, not a
+        // tidy-up.
+        blocked: marked.filter((m) => m !== keep && m.referenced),
+      });
+    }
+  }
+  return out;
+};
+
 // The rows the tournament had BEFORE any clone — everything without a clone id
 // shape. Printed beside the batches so "8 originals + 8 clones" is on screen
 // rather than arithmetic the reader does themselves.
