@@ -166,6 +166,14 @@ function SyncChip({ pending = 0, failed = 0 }) {
 // a much better failure than two lines of type on top of each other.
 const CHIP_GUTTER = 170;
 
+// The caption's tracking, named because it gets cancelled again below.
+// letter-spacing is applied AFTER the last glyph as well as between glyphs, so
+// a tracked line's box runs 2.2px past the last thing you can see. That box is
+// what the countdown above measures itself against, so uncancelled it hangs
+// the clock's right-hand edge into whitespace — SEC overshot the "I" of
+// "GAYLORD, MI" by exactly this much while every box in the header agreed.
+const CAPTION_TRACKING = 2.2;
+
 export function AppHeader({ location, pendingWrites = 0, failedWrites = 0, countdownAt = null }) {
   const hasChip = pendingWrites > 0 || failedWrites > 0;
   const mark = (
@@ -215,12 +223,22 @@ export function AppHeader({ location, pendingWrites = 0, failedWrites = 0, count
         {countdownAt != null ? <HeaderCountdown at={countdownAt}>{mark}</HeaderCountdown> : mark}
 
         <div style={{
-          fontSize: FS.label, fontWeight: 800, letterSpacing: 2.2, color: BC.t2,
+          fontSize: FS.label, fontWeight: 800, letterSpacing: CAPTION_TRACKING, color: BC.t2,
           whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
           // Stretched rather than shrink-wrapped now — it is the child that
           // defines the column's width, so it has to centre its own type.
           alignSelf: "stretch", textAlign: "center",
-        }}>{getTournamentYear()} · {(location || TOURNAMENT_LOCATION).toUpperCase()}</div>
+        }}>
+          {/* The negative margin eats the trailing tracking, so this span is
+              exactly as wide as its glyphs and the column measures the type
+              rather than the type plus a space. It goes on an inner span
+              rather than on the div: the div is the ellipsis container, and
+              pulling ITS edge in by 2.2px would leave the text overflowing its
+              own box by 2.2px and put a "…" on every caption in the app. */}
+          <span style={{ marginRight: -CAPTION_TRACKING }}>
+            {getTournamentYear()} · {(location || TOURNAMENT_LOCATION).toUpperCase()}
+          </span>
+        </div>
       </div>
 
       {/* Left-hand chip — mirrors the slot below, same baseline. */}
