@@ -215,7 +215,20 @@ between 320px and 3840px. A 412×915 viewport at device scale 2 gives 824×1830,
 comfortably inside them.
 
 Play also wants a **1024×500 feature graphic** and a **512×512 icon**, neither
-of which the App Store asks for.
+of which the App Store asks for. Both exist:
+
+| Asset | Where |
+| --- | --- |
+| 512×512 icon | `public/favicon/web-app-manifest-512x512.png` — the one the PWA already uses |
+| 1024×500 feature graphic | `store/play-feature-graphic.png`, from `npm run build:store-graphics` |
+
+The feature graphic is composed from the mark and the two gradient stops
+inside `public/BC ICON-01.svg`, so it cannot drift away from the icon sitting
+next to it in the listing. It needs **Montserrat installed on the machine** to
+regenerate — that is `FONT` in `src/theme.js`, and a listing set in something
+else reads as a different product. The script says so and falls back rather
+than rendering something quietly off-brand; the header of
+`scripts/store-graphics.mjs` has the one-line install.
 
 ---
 

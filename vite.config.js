@@ -24,7 +24,16 @@ export default defineConfig(({ mode }) => {
       // wrong in a way nothing downstream can notice — a split identity gives
       // each half a complete, plausible record. It is a pure module like the
       // ones under src/, and it wants the same suite.
-      include: ['{src,pipeline}/**/*.{test,spec}.{js,jsx,mjs}'],
+      //
+      // scripts/ is in for one suite and a different reason. `ios/` is a
+      // committed, hand-edited Xcode project that nothing in this repo can
+      // compile — no Mac in CI — so scripts/ios-project.test.js reads its
+      // plists and its pbxproj as files and asserts the settings are still
+      // there. It needs no emulator and no network, so unlike the rules suite
+      // it belongs in the default run: the failure it exists to catch is a
+      // regenerate or a merge quietly dropping a key, and that is only useful
+      // caught on the commit that does it.
+      include: ['{src,pipeline,scripts}/**/*.{test,spec}.{js,jsx,mjs}'],
     },
 
     server: {
