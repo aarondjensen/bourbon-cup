@@ -472,17 +472,38 @@ export const initForegroundNotifications = async () => {
 // IndexedDB and increments on a background push), so the app tells it what
 // the truth is rather than setting the badge behind its back. That keeps a
 // later background increment counting up from the right number.
+//
+// ── Native, and the one thing it cannot do ──────────────────────────
+// `navigator.setAppBadge` does not exist in a WKWebView and there is no
+// service worker to postMessage to, so native goes through the Badge plugin
+// instead. What it does NOT do is the service worker's other job: increment
+// on a background push. iOS runs no JavaScript for this app while it is
+// closed, so a card signed overnight does not move the badge until the app
+// is next opened, at which point the live subscription recomputes and this
+// is called with the true number.
+//
+// The alternative was an absolute badge count in the APNs payload, set by
+// `sendToPlayer` in functions/index.js. It was rejected on purpose. That
+// count would be a SECOND implementation of "what does this player still
+// owe" — `pendingAttestations` in lib/cardSigs is the first — and the two
+// would be scoped differently the moment either changed, which surfaces as
+// a badge that jumps to a different number when the app opens. A badge that
+// is late is a smaller lie than a badge that disagrees with the screen
+// behind it.
 export const syncAppBadge = async (count) => {
-  if (typeof navigator === "undefined") return;
-  // KNOWN GAP ON NATIVE. `navigator.setAppBadge` does not exist in a
-  // WKWebView and there is no service worker to postMessage to, so the iOS
-  // build carries no badge today. The fix is not another plugin — it is the
-  // APNs payload: `sendToPlayer` in functions/index.js would set the badge
-  // count server-side, which is the only place that knows the number when
-  // the app is closed anyway. Returning early is honest; pretending the two
-  // lines below did something would not be.
-  if (isNative()) return;
   const n = Math.max(0, count | 0);
+  if (isNative()) {
+    try {
+      const { Badge } = await import("@capawesome/capacitor-badge");
+      // The badge permission rides along with the notification one, so a
+      // player who never enabled push has nothing to set and this throws.
+      // Swallowed: a missing badge is not worth a console error a round.
+      if (n > 0) await Badge.set({ count: n });
+      else await Badge.clear();
+    } catch { /* no permission, or no badge on this OS */ }
+    return;
+  }
+  if (typeof navigator === "undefined") return;
   try {
     if (n > 0) await navigator.setAppBadge?.(n);
     else await navigator.clearAppBadge?.();

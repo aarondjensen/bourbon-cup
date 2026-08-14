@@ -87,11 +87,21 @@ Two consequences that are real and not bugs:
 - **Foreground banners are drawn by iOS**, from `presentationOptions` in
   `capacitor.config.json`, so `initForegroundNotifications` returns early on
   native. Re-rendering would show every push twice.
-- **The app badge does not work on native.** `navigator.setAppBadge` does not
-  exist in a WKWebView and there is no service worker to message. `syncAppBadge`
-  returns early and says so. The fix is the APNs payload — `sendToPlayer` setting
-  the badge server-side, which is the only place that knows the count when the
-  app is closed. **Not done.** It is the one feature the iOS build is missing.
+- **The app badge is set by the app, not by the push.** `navigator.setAppBadge`
+  does not exist in a WKWebView, so `syncAppBadge` goes through
+  `@capawesome/capacitor-badge` on native. It counts with
+  `pendingAttestations` — the same function the web badge and the Scoring
+  screen count with.
+
+  What it does not do is the service worker's other job: increment while the
+  app is closed. iOS runs no JavaScript for this app in the background, so a
+  card signed overnight moves the badge only when the app is next opened. The
+  alternative — an absolute count in the APNs payload from `sendToPlayer` —
+  was rejected deliberately: that count would be a **second implementation**
+  of "what does this player still owe", and the two would be scoped
+  differently the moment either changed. It would show up as a badge that
+  jumps to a different number when the app opens. A badge that is late is a
+  smaller lie than a badge that disagrees with the screen behind it.
 
 ### 2.3 The `/api` calls — `src/lib/platform.js`
 
@@ -228,6 +238,8 @@ hardware:
   banner, not two.
 - Open the house link from Trip Info and get back.
 - Take a photo with the 📷 button and watch it upload.
+- Leave a card unattested, force-quit the app, reopen it — the badge should
+  arrive then, not before (§2.2).
 - Search for a course in Admin → Courses (that is the `/api` path, §2.3).
 - Flip the theme pill and watch the status bar follow.
 - Delete the account, and check the three outcomes in the Firebase console.
