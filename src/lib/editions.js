@@ -105,6 +105,34 @@ export const createEdition = async ({ year, name, label, id }) => {
   return { ok: true, edition: doc };
 };
 
+// ── Renaming one ──────────────────────────────────────────────────
+// The name and the status are the only two fields on an edition document a
+// director has any business changing, and until this existed neither could be
+// changed at all: an edition could be created and deleted, and nothing in
+// between. That gap is not theoretical — a clone that landed in an occupied id
+// merged its own name and status over the tournament that was there, so the
+// real 2026 came back calling itself "2026 Demo" with no way to say otherwise
+// short of a console edit.
+//
+// `id`, `year` and `namespaced` are deliberately NOT touchable. The id IS the
+// tournament_id every other collection filters on, so editing it here would
+// orphan every document in the edition while leaving the picker looking right
+// — the exact shape of failure this whole area has already had once.
+export const EDITION_STATUSES = ["draft", "published", "archived"];
+
+export const updateEdition = async (id, { name, status }) => {
+  if (!id) return { ok: false, error: "No edition to rename." };
+  const trimmed = String(name ?? "").trim();
+  if (!trimmed) return { ok: false, error: "A tournament needs a name." };
+  if (status && !EDITION_STATUSES.includes(status)) return { ok: false, error: `Unknown status \`${status}\`.` };
+  const written = await db.upsert(EDITIONS_COL, { id, name: trimmed, ...(status ? { status } : {}) }, { loud: false });
+  // db.upsert swallows a rejection and returns null, and bc_editions is
+  // director-only in the rules — so a refused write must not come back as
+  // success and leave the new name on screen until the next reload.
+  if (!written) return { ok: false, error: "That didn't save. The security rules may not be deployed yet." };
+  return { ok: true, edition: written };
+};
+
 // ── Clone an existing edition into a new (namespaced) draft ──────────
 // Copies only the STRUCTURAL data the caller opts into; never the actual
 // results (scores, matches, skins/ctp, round locks, handicap overrides, tee

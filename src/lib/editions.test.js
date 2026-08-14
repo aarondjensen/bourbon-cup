@@ -32,7 +32,7 @@ vi.mock("../firebase", () => ({
   spectatorSession: (id) => ({ id }),
 }));
 
-const { editionSlug, editionIdFor, editionExists, createEdition, cloneEdition } =
+const { editionSlug, editionIdFor, editionExists, createEdition, cloneEdition, updateEdition } =
   await import("./editions");
 
 beforeEach(() => {
@@ -73,6 +73,46 @@ describe("editionExists", () => {
     // the picker was removed by hand while its tournament is still on disk.
     rows.bc_players = [{ id: "p1", tournament_id: "bc_2026" }];
     expect(await editionExists("bc_2026")).toBe(true);
+  });
+});
+
+describe("updateEdition", () => {
+  it("writes the name and the status, and nothing else", () => {
+    // The id, year and namespaced flag are absent from the payload on purpose:
+    // the id IS the tournament_id every other collection filters on, so an
+    // edit here would orphan the whole edition while the picker looked right.
+    return updateEdition("bc_2026", { name: "  The Bourbon Cup 2026  ", status: "published" }).then((res) => {
+      expect(res.ok).toBe(true);
+      expect(upserts).toEqual([["bc_editions", { id: "bc_2026", name: "The Bourbon Cup 2026", status: "published" }]]);
+    });
+  });
+
+  it("leaves the status alone when none is given", async () => {
+    await updateEdition("bc_2026", { name: "Renamed" });
+    expect(upserts[0][1]).toEqual({ id: "bc_2026", name: "Renamed" });
+  });
+
+  it("refuses a blank name rather than writing one", async () => {
+    const res = await updateEdition("bc_2026", { name: "   " });
+    expect(res.ok).toBe(false);
+    expect(upserts).toHaveLength(0);
+  });
+
+  it("refuses a status that is not one of the three", async () => {
+    const res = await updateEdition("bc_2026", { name: "x", status: "retired" });
+    expect(res.ok).toBe(false);
+    expect(upserts).toHaveLength(0);
+  });
+
+  it("reports a refused write instead of returning success", async () => {
+    // db.upsert swallows a rejection and returns null, and bc_editions is
+    // director-only — so without this the new name sits on screen until the
+    // next reload takes it away again.
+    const { db } = await import("../firebase");
+    db.upsert.mockImplementationOnce(async () => null);
+    const res = await updateEdition("bc_2026", { name: "Renamed" });
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/rules/);
   });
 });
 
