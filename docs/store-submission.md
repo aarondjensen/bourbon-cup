@@ -76,9 +76,16 @@ very good answer to half of it.
 
 ```sh
 npm i --no-save firebase-admin
-npm run seed:demo                                   # dry run — builds and counts
-GOOGLE_APPLICATION_CREDENTIALS=/path/key.json npm run seed:demo -- --write
+npm run seed:demo                                       # dry run — builds and counts
+npm run seed:demo -- --write --key /path/to/key.json    # any shell
 ```
+
+`--key` rather than an environment variable in front of the command:
+`GOOGLE_APPLICATION_CREDENTIALS=… npm run …` is bash syntax, and in PowerShell
+it is read as a command *named* `GOOGLE_APPLICATION_CREDENTIALS=…`, which fails
+in a way that reads as the script being broken. The flag works the same
+everywhere. `GOOGLE_APPLICATION_CREDENTIALS` is still honoured when it is
+already set.
 
 `bc_demo` — "DEMO — Testers" — is 371 documents: twelve invented golfers six a
 side, two invented courses with full cards and two tees, four rounds over a
@@ -116,9 +123,11 @@ A thirteenth golfer, for somebody who would rather see their own name than
 claim "Pete V":
 
 ```sh
-GOOGLE_APPLICATION_CREDENTIALS=/path/key.json \
-  npm run seed:demo -- --add "Aaron J" --team A --index 12.4 --write
+npm run seed:demo -- --add "Aaron J" --team A --index 12.4 --write --key /path/to/key.json
 ```
+
+(On Windows npm strips the quotes before node sees them, so `--add` reads every
+word up to the next flag — "Aaron J" survives either way.)
 
 One row, stamped like the rest so `--undo` still takes it out, unclaimed so
 they can claim it, and **not** in the draw — put them in a match in
