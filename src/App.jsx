@@ -69,6 +69,7 @@ const AdminView = lazy(() =>
 const DataView = lazy(() => import("./components/DataView"));
 import { photoUploadsAllowed, uploadsDisabledReason, CONFIG_COL, PHOTOS_CONFIG_ID } from "./lib/media";
 import { initForegroundNotifications, syncAppBadge } from "./lib/notifications";
+import { tapFeedback, commitFeedback, applyNativeChrome } from "./lib/platform";
 import { SegmentedToggle, SegRule, StickyTop, Banner, PlayerName, Toast, HoleNavigator, ScoreButtonRow } from "./components/ui";
 import { GroupSwitcher } from "./components/GroupSwitcher";
 import { useConfirm } from "./lib/useConfirm";
@@ -1178,6 +1179,10 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
       if (!ok) return;
       setArmedMatchId(match.id);
     }
+    // A stroke landing, felt rather than only seen. No-op on the web, and
+    // never awaited — the score posts whether or not the taptic engine
+    // answered. See lib/platform.
+    tapFeedback();
     await onSaveHole(pid, match.round, h, score || null, tr?.course_id);
     maybePromptCtp(pid, h, score || 0, prior);
   };
@@ -4218,6 +4223,9 @@ export default function App() {
       attested_by: [],
       attested: others.length === 0,
     };
+    // A signature is the one act on this screen that the next tap cannot
+    // undo, so it gets the heavier of the two haptics. Web: nothing.
+    commitFeedback();
     return db.upsert("bc_card_sigs", doc);
   }, []);
 
@@ -4511,6 +4519,15 @@ export default function App() {
   // notification" to be true. Idempotent, and a no-op on a device that
   // never enabled push.
   useEffect(() => { initForegroundNotifications(); }, []);
+
+  // ── The native status bar ────────────────────────────────────────────
+  // index.html's `apple-mobile-web-app-status-bar-style` block is a Safari
+  // home-screen mechanism and does nothing inside the iOS app's WKWebView —
+  // see lib/platform. This is the same decision restated where the native
+  // build can hear it, and it re-runs on the theme pill because light text
+  // on the light theme's near-white bar is a status bar with nothing
+  // readable in it. A no-op in every browser.
+  useEffect(() => { applyNativeChrome(darkMode); }, [darkMode]);
 
   // The badge counts what this player still OWES — cards signed by someone
   // else in their match and not yet attested by them. That is why it is

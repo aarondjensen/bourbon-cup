@@ -26,7 +26,7 @@
 import { useState, useEffect } from "react";
 import { BC, FONT, ALPHA, FS } from "../theme";
 import {
-  registerForPush, unsubscribeFromPush, getNotificationPermissionState,
+  registerForPush, unsubscribeFromPush, getNotificationPermissionState, refreshPermissionState,
   isStandalonePWA, isIOSPushCapable, checkSubscriptionStatus,
   getCachedSubscriptionStatus, readTypePrefs, saveTypePrefs,
   getCachedTypePrefs, normalizeTypePrefs,
@@ -103,9 +103,16 @@ export function NotificationSettings({ user, notify }) {
 
   useEffect(() => {
     setPermission(getNotificationPermissionState());
+    // On the web the line above is already the final answer. On the native
+    // build the permission state lives in the OS and cannot be read
+    // synchronously, so the call above returns a cache that this refreshes —
+    // see the note in lib/notifications. Resolves to the same value it just
+    // set on the web, so there is no platform branch here.
+    let live = true;
+    refreshPermissionState().then(p => { if (live) setPermission(p); });
     setStandalone(isStandalonePWA());
     setIosOk(isIOSPushCapable());
-    if (!pid) return;
+    if (!pid) return () => { live = false; };
     // Paint the device's last known answer first so the card does not read
     // "Off" for the length of a Firestore round-trip at someone who is on,
     // then correct from the server. A null result means the READ failed —
@@ -118,6 +125,7 @@ export function NotificationSettings({ user, notify }) {
     const cachedTypes = getCachedTypePrefs(pid);
     if (cachedTypes) setTypes(cachedTypes);
     readTypePrefs(pid).then(p => { if (p) setTypes(p); });
+    return () => { live = false; };
   }, [pid]);
 
   // Optimistic, and it PUTS IT BACK if the write is refused. A preference

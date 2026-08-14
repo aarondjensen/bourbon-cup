@@ -52,6 +52,21 @@ data/bourbon-cup-*-full.json
 *firebase-adminsdk*.json
 serviceAccount*.json
 
+# ── The iOS build (see docs/app-store.md) ──
+# `ios/` IS tracked, unlike the Android project, and the difference is that
+# this one is edited by hand. Info.plist carries the usage strings and the
+# export-compliance flag, App.entitlements carries push and Sign in with
+# Apple, PrivacyInfo.xcprivacy is the privacy manifest, and the pbxproj holds
+# iPhone-only and the entitlements path. Regenerating it would lose all of
+# that; `ios/.gitignore` already covers the parts that ARE generated (the
+# copied web build, the derived data, the config files Capacitor writes).
+#
+# GoogleService-Info.plist is not tracked. It is downloaded from the Firebase
+# console and dragged into Xcode, which is also what creates its project
+# reference — so committing the file without the reference would look present
+# and do nothing. Without it the app builds and push silently never works.
+ios/App/App/GoogleService-Info.plist
+
 # ── The Android build (see docs/play-store.md) ──
 # `twa-manifest.json` IS tracked — it is the configuration, and it is what
 # makes `bubblewrap build` reproducible on another machine. Everything

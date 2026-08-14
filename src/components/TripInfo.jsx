@@ -30,6 +30,7 @@ import {
   scheduleDayLabel, courseTees, courseScorecard, coursePar,
   courseYardage, courseWhere, hasHouse, hasTripInfo, linkHost,
 } from "../lib/tripInfo";
+import { isNative, openExternal } from "../lib/platform";
 
 // Centred, like everything else on this screen. Both callers want it, so it
 // lives here rather than being passed in twice — a section head that sits over
@@ -244,8 +245,21 @@ export function TripInfo({ tournamentName, tournamentLocation, house, schedule, 
               <>
                 {/* rel is load-bearing, not boilerplate: a target=_blank link
                     hands the opened page a `window.opener` handle to this one
-                    unless noopener says otherwise. */}
-                <a href={house.url} target="_blank" rel="noopener noreferrer" style={{
+                    unless noopener says otherwise.
+
+                    It stays a real anchor — long-press to copy, the host
+                    visible in the status bar, everything a link should do —
+                    and the click handler only PREEMPTS it on the native
+                    build. There, target=_blank opens VRBO inside the app's
+                    own webview with no address bar and no back button, which
+                    is both a dead end for the user and the clearest
+                    "repackaged website" tell guideline 4.2 looks for.
+                    `openExternal` is a no-op passthrough on the web. */}
+                <a href={house.url} target="_blank" rel="noopener noreferrer" onClick={(e) => {
+                  if (!isNative()) return;
+                  e.preventDefault();
+                  openExternal(house.url);
+                }} style={{
                   display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
                   marginTop: 10, padding: "10px 12px", borderRadius: 8,
                   background: `${BC.amber}${ALPHA.wash}`, border: `1px solid ${BC.amber}${ALPHA.line}`,

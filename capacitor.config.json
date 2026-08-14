@@ -1,0 +1,31 @@
+{
+  "appId": "com.thebourboncup.app",
+  "appName": "The Bourbon Cup",
+  "webDir": "dist",
+  "backgroundColor": "#161618",
+  "ios": {
+    "contentInset": "never",
+    "scrollEnabled": false,
+    "limitsNavigationsToAppBoundDomains": false,
+    "backgroundColor": "#161618"
+  },
+  "plugins": {
+    "FirebaseAuthentication": {
+      "skipNativeAuth": true,
+      "providers": ["apple.com", "google.com"]
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0a0a0b",
+      "overlaysWebView": false
+    },
+    "Keyboard": {
+      "resize": "native",
+      "style": "DARK",
+      "resizeOnFullScreen": true
+    },
+    "FirebaseMessaging": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
+}

@@ -10,6 +10,13 @@
 //
 // Field naming matches the proxy + player docs: `ghin_number` is the stored
 // link; `handicap_index` is the value that flows back into the roster.
+//
+// The paths go through `apiUrl` rather than being fetched raw, and that is
+// entirely about the iOS build: it runs from `capacitor://localhost`, where a
+// relative "/api/ghin" resolves inside the app bundle and 404s instead of
+// reaching Vercel. On the web `apiUrl` returns the path unchanged, so this is
+// the same same-origin call it has always been. See lib/platform.
+import { apiUrl } from "./platform";
 
 // GHIN encodes plus-handicaps as "+2.1" (a better-than-scratch player). The
 // app models those as NEGATIVE indexes (see scoring.js / John S), so convert
@@ -36,7 +43,7 @@ export function fmtHI(v) {
 export async function searchGhinGolfers(query, state) {
   const params = new URLSearchParams({ search: query });
   if (state && String(state).trim()) params.set("state", String(state).trim());
-  const r = await fetch(`/api/ghin?${params.toString()}`);
+  const r = await fetch(apiUrl(`/api/ghin?${params.toString()}`));
   if (!r.ok) {
     const body = await r.json().catch(() => ({}));
     throw new Error(body?.error || `GHIN search failed (${r.status})`);
@@ -53,7 +60,7 @@ export async function syncGhinNumbers(numbers) {
   const list = (numbers || []).map(n => String(n).trim()).filter(Boolean);
   if (!list.length) return {};
 
-  const r = await fetch("/api/ghin", {
+  const r = await fetch(apiUrl("/api/ghin"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ghin_numbers: list }),

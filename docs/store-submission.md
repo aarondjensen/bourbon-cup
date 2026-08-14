@@ -15,13 +15,20 @@ the packaging.
 |  | Play Store | App Store |
 | --- | --- | --- |
 | What ships | A Trusted Web Activity — a thin shell over `https://thebourboncup.com` | A Capacitor app with the build **bundled inside it** |
-| Codebase | None. The site is the app. | Still one codebase, but four subsystems need a native branch |
-| Engineering left | Roughly none | Roughly two sessions — see `app-store.md` §2 |
+| Codebase | None. The site is the app. | Still one codebase; four subsystems carry a native branch |
+| Shipping a change | A Vercel deploy | A new build and a new review |
+| Engineering left | None | None — **but none of it has been compiled**, see `app-store.md` |
+| What is left | A keystore, a fingerprint, and 14 days | Console setup and a Mac — `app-store.md` §5 |
 | The thing that holds it up | 12 testers actually using it for 14 days | Guideline 4.2, and the four things WKWebView breaks |
 | Distribution | Public, closed testing first | **Unlisted**, same as Maize N Que |
 
 The asymmetry is the point: Android can accept a web app as a web app, and iOS
 cannot. Do not plan them as one piece of work.
+
+One thing the table understates. On Android the site *is* the app, so a fix
+lands the moment Vercel deploys. On iOS the build is inside the binary, so the
+two can drift — and after the first App Store release, "I pushed a fix" stops
+being true for everyone carrying the iPhone build until a new one is reviewed.
 
 ---
 

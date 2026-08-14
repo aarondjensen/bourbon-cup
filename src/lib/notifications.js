@@ -35,8 +35,24 @@
 // context, and that failure would take the whole importing chunk with it.
 // Dynamic imports keep it contained to the call.
 
+// ── The native branch is back ───────────────────────────────────────
+// The note above says this file was ported from MnQ minus its Capacitor
+// branch, because the Bourbon Cup shipped as a web app and an iOS
+// home-screen PWA. It now also ships as an iOS app, and inside a WKWebView
+// every single step of the lifecycle above is unavailable: there is no
+// service worker, no Notification API, no Web Push, and the VAPID key is
+// meaningless. Apple does not implement any of it in a webview, on purpose,
+// so that a native app uses APNs.
+//
+// So each exported function below now forks. The native side goes through
+// @capacitor-firebase/messaging, which swizzles APNs underneath and returns
+// an **FCM token** rather than a raw APNs one — which is the detail that
+// keeps this cheap. The row written to `bc_notification_tokens` has the same
+// shape, `sendToPlayer` in functions/index.js sends the same way, and there
+// is no second delivery path to keep in step. See docs/app-store.md §2.2.
 import { db, TOURNAMENT_ID, getMessagingInstance } from "../firebase";
 import { normalizeTypePrefs } from "./notificationTypes";
+import { isNative } from "./platform";
 
 // Re-exported so callers take the whole preference API off one module.
 export { NOTIFICATION_TYPES, normalizeTypePrefs } from "./notificationTypes";
@@ -147,10 +163,45 @@ export const saveTypePrefs = async (playerId, prefs) => {
 //   "granted"     — yes
 //   "denied"      — no, and the browser will not re-prompt; the user has to
 //                   undo it in their own settings
+//
+// ── Why native needs a cache to answer a synchronous question ───────
+// Two screens read this during render, so it has to stay synchronous. The
+// browser can do that because `Notification.permission` is a property. iOS
+// cannot: the plugin's checkPermissions() is a round trip to the OS.
+//
+// So the native answer is cached, seeded by `refreshPermissionState()` and
+// re-stamped by every call below that could have changed it. It starts at
+// "default", which is the honest answer before anybody has asked, and is
+// also what the browser says in the same situation.
+let _nativePermission = "default";
+
+const NATIVE_PERMISSION = {
+  granted: "granted",
+  denied: "denied",
+  prompt: "default",
+  "prompt-with-rationale": "default",
+};
+
 export const getNotificationPermissionState = () => {
+  if (isNative()) return _nativePermission;
   if (typeof window === "undefined") return "unsupported";
   if (!("Notification" in window) || !("serviceWorker" in navigator)) return "unsupported";
   return Notification.permission;
+};
+
+// Bring the cache up to date and hand back the result. On the web this is
+// the same synchronous read wrapped in a promise, so a caller can await it
+// unconditionally rather than branching on platform itself.
+export const refreshPermissionState = async () => {
+  if (!isNative()) return getNotificationPermissionState();
+  try {
+    const { FirebaseMessaging } = await import("@capacitor-firebase/messaging");
+    const { receive } = await FirebaseMessaging.checkPermissions();
+    _nativePermission = NATIVE_PERMISSION[receive] || "default";
+  } catch (e) {
+    console.warn("[push] native checkPermissions:", e?.message || e);
+  }
+  return _nativePermission;
 };
 
 // ── Service worker ──────────────────────────────────────────────────
@@ -177,8 +228,88 @@ const registerServiceWorker = async () => {
 // ── Register ────────────────────────────────────────────────────────
 // Returns { success, state, error? }. Call it from a tap: iOS Safari
 // suppresses a requestPermission() that no gesture asked for.
+//
+// ── The row, written once for both platforms ────────────────────────
+// The web path and the native path differ entirely in how they get a token
+// and not at all in what they do with it. Pulled out here so that stays
+// true: a field added for one platform cannot be forgotten on the other,
+// and `sendToPlayer` in functions/index.js only ever sees one shape.
+//
+// The device context is a point-in-time snapshot, kept because the one
+// support question this feature generates is "why didn't I get it" and the
+// answer used to be "iOS, not installed to the home screen". On the native
+// build that answer is gone — it is always installed, and `platform` says
+// which kind of thing wrote the row.
+const writeTokenRow = async (playerId, token) => {
+  const ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
+  await db.upsert(TOKENS_COL, {
+    id: `p${playerId}_${await sha256Short(token)}`,
+    player_id: playerId,
+    token,
+    // Stamped for the record, not for filtering — a token is not
+    // edition-scoped and the functions never query on this.
+    registered_for: TOURNAMENT_ID,
+    user_agent: ua.slice(0, 200),
+    is_ios: isNative() ? true : /iPhone|iPad|iPod/.test(ua),
+    is_standalone: isNative() ? true : isStandalonePWA(),
+    // "web" for a browser or the Android TWA, "ios" for the App Store build.
+    // The one field this refactor adds, and it is the field that answers
+    // "which build is this man actually carrying" without inferring it from
+    // a user-agent string.
+    platform: isNative() ? "ios" : "web",
+    registered_at: Date.now(),
+    last_seen_at: Date.now(),
+    // Carried onto the new row from this device's cache, so a player who
+    // muted a type before switching push off is still muted when they
+    // switch it back on. All-on when nothing was ever chosen, which is what
+    // a first-time subscriber means by tapping the switch.
+    types: normalizeTypePrefs(getCachedTypePrefs(playerId)),
+  });
+  setCachedSubscriptionStatus(playerId, true);
+};
+
+// The native half asks the OS and then asks FCM, and that is the whole of
+// it: no service worker to register, no VAPID key to be missing, and no
+// "install it to the home screen first" — it IS installed.
+const nativeRegister = async (playerId) => {
+  let FirebaseMessaging;
+  try {
+    ({ FirebaseMessaging } = await import("@capacitor-firebase/messaging"));
+  } catch (e) {
+    return { success: false, state: "error", error: e?.message || "messaging plugin unavailable" };
+  }
+
+  let receive;
+  try {
+    // Returns the existing answer without prompting if one was already
+    // given, exactly like Notification.requestPermission().
+    ({ receive } = await FirebaseMessaging.requestPermissions());
+  } catch (e) {
+    return { success: false, state: "error", error: e?.message || String(e) };
+  }
+  _nativePermission = NATIVE_PERMISSION[receive] || "default";
+  if (_nativePermission !== "granted") return { success: false, state: _nativePermission };
+
+  let token;
+  try {
+    ({ token } = await FirebaseMessaging.getToken());
+  } catch (e) {
+    // The overwhelmingly likely cause, and the one worth naming: no APNs
+    // authentication key uploaded to Firebase → Project Settings → Cloud
+    // Messaging. Without it iOS hands over an APNs token that FCM cannot
+    // exchange, and every send silently no-ops.
+    console.error("[push] native getToken failed:", e);
+    return { success: false, state: "error", error: e?.message || String(e) };
+  }
+  if (!token) return { success: false, state: "no_token" };
+
+  await writeTokenRow(playerId, token);
+  return { success: true, state: "granted", token };
+};
+
 export const registerForPush = async (playerId) => {
   if (!playerId) return { success: false, state: "error", error: "missing playerId" };
+  if (isNative()) return nativeRegister(playerId);
   if (getNotificationPermissionState() === "unsupported") return { success: false, state: "unsupported" };
 
   let permission;
@@ -215,30 +346,7 @@ export const registerForPush = async (playerId) => {
   }
   if (!token) return { success: false, state: "no_token" };
 
-  // The device context is a point-in-time snapshot, kept because the one
-  // support question this feature generates is "why didn't I get it" and
-  // the answer is usually "iOS, not installed to the home screen".
-  const ua = navigator.userAgent || "";
-  await db.upsert(TOKENS_COL, {
-    id: `p${playerId}_${await sha256Short(token)}`,
-    player_id: playerId,
-    token,
-    // Stamped for the record, not for filtering — a token is not
-    // edition-scoped and the functions never query on this.
-    registered_for: TOURNAMENT_ID,
-    user_agent: ua.slice(0, 200),
-    is_ios: /iPhone|iPad|iPod/.test(ua),
-    is_standalone: isStandalonePWA(),
-    registered_at: Date.now(),
-    last_seen_at: Date.now(),
-    // Carried onto the new row from this device's cache, so a player who
-    // muted a type before switching push off is still muted when they
-    // switch it back on. All-on when nothing was ever chosen, which is what
-    // a first-time subscriber means by tapping the switch.
-    types: normalizeTypePrefs(getCachedTypePrefs(playerId)),
-  });
-  setCachedSubscriptionStatus(playerId, true);
-
+  await writeTokenRow(playerId, token);
   return { success: true, state: "granted", token };
 };
 
@@ -292,12 +400,19 @@ const setCachedSubscriptionStatus = (playerId, subscribed) => {
 // for this player goes, not just this one — the toggle reads as a personal
 // preference, not a per-device one, and MnQ made the same call.
 export const unsubscribeFromPush = async (playerId) => {
-  const messaging = await getMessagingInstance();
-  if (messaging) {
+  if (isNative()) {
     try {
-      const { deleteToken } = await import("firebase/messaging");
-      await deleteToken(messaging);
-    } catch (e) { console.warn("deleteToken failed:", e); }
+      const { FirebaseMessaging } = await import("@capacitor-firebase/messaging");
+      await FirebaseMessaging.deleteToken();
+    } catch (e) { console.warn("native deleteToken failed:", e?.message || e); }
+  } else {
+    const messaging = await getMessagingInstance();
+    if (messaging) {
+      try {
+        const { deleteToken } = await import("firebase/messaging");
+        await deleteToken(messaging);
+      } catch (e) { console.warn("deleteToken failed:", e); }
+    }
   }
   if (playerId) {
     const docs = await db.get(TOKENS_COL, [{ field: "player_id", op: "==", value: playerId }]);
@@ -317,6 +432,11 @@ export const unsubscribeFromPush = async (playerId) => {
 let _foregroundUnsub = null;
 export const initForegroundNotifications = async () => {
   if (_foregroundUnsub) return;
+  // Native needs none of this, and that is a real difference rather than a
+  // gap. iOS decides whether a notification is shown while the app is in
+  // the foreground from `presentationOptions` in capacitor.config.json, and
+  // it draws the banner itself. Re-rendering it here would show it twice.
+  if (isNative()) return;
   const messaging = await getMessagingInstance();
   if (!messaging) return;
   // The SW registration is needed to display; if push was never enabled on
@@ -354,6 +474,14 @@ export const initForegroundNotifications = async () => {
 // later background increment counting up from the right number.
 export const syncAppBadge = async (count) => {
   if (typeof navigator === "undefined") return;
+  // KNOWN GAP ON NATIVE. `navigator.setAppBadge` does not exist in a
+  // WKWebView and there is no service worker to postMessage to, so the iOS
+  // build carries no badge today. The fix is not another plugin — it is the
+  // APNs payload: `sendToPlayer` in functions/index.js would set the badge
+  // count server-side, which is the only place that knows the number when
+  // the app is closed anyway. Returning early is honest; pretending the two
+  // lines below did something would not be.
+  if (isNative()) return;
   const n = Math.max(0, count | 0);
   try {
     if (n > 0) await navigator.setAppBadge?.(n);
@@ -366,6 +494,11 @@ export const syncAppBadge = async (count) => {
 // iOS grants push only to an app launched from the home screen, never to a
 // Safari tab. This drives the "install it first" onboarding.
 export const isStandalonePWA = () => {
+  // The native build is not a PWA and is not standalone in the sense this
+  // function was written to test — but every caller uses it to ask "can this
+  // thing receive a push", and the App Store build is the one case where the
+  // answer is unconditionally yes.
+  if (isNative()) return true;
   if (typeof window === "undefined") return false;
   return (
     window.navigator.standalone === true ||
@@ -376,6 +509,10 @@ export const isStandalonePWA = () => {
 // Push on iOS needs 16.4+. Below that no amount of installing helps and the
 // onboarding should say so instead of walking someone through a dead end.
 export const isIOSPushCapable = () => {
+  // The 16.4 floor is Safari's Web Push floor. The native build does not use
+  // Web Push at all — it uses APNs, which every iOS this app's deployment
+  // target allows supports — so the version check does not apply to it.
+  if (isNative()) return true;
   if (typeof navigator === "undefined") return false;
   const ua = navigator.userAgent;
   if (!/iPhone|iPad|iPod/.test(ua)) return true;   // everyone else is pre-qualified
