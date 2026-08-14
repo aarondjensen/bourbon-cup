@@ -130,6 +130,11 @@ import {
 import {
   useStableCallback,
 } from "../lib/useStableCallback";
+// The course lookup below is the other half of the /api problem lib/ghin
+// describes: relative paths resolve inside the app bundle on the iOS build.
+import {
+  apiUrl,
+} from "../lib/platform";
 import {
   calcCH,
   calcCHForCourse,
@@ -973,13 +978,13 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
 
         // 1. RapidAPI
         try {
-          const r = await fetch(`/api/courses2?search=${encodeURIComponent(q)}${stateParam}`);
+          const r = await fetch(apiUrl(`/api/courses2?search=${encodeURIComponent(q)}${stateParam}`));
           if (r.ok) { const data = await r.json(); const raw = Array.isArray(data)?data:(data.courses||data.data||[]); results = [...results, ...parseRapidAPI(raw, stateFilter)]; }
         } catch(e) { console.log("[RapidAPI] failed:", e); }
 
         // 2. GolfCourseAPI
         try {
-          const r2 = await fetch(`/api/courses?search=${encodeURIComponent(q)}${stateParam}`);
+          const r2 = await fetch(apiUrl(`/api/courses?search=${encodeURIComponent(q)}${stateParam}`));
           if (r2.ok) {
             const data2 = await r2.json();
             const gcParsed = parseGolfCourseAPI(data2);
@@ -994,11 +999,11 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
         // If no results with state filter, retry without state param but still filter client-side
         if (results.length === 0 && stateFilter) {
           try {
-            const r3 = await fetch(`/api/courses2?search=${encodeURIComponent(q)}`);
+            const r3 = await fetch(apiUrl(`/api/courses2?search=${encodeURIComponent(q)}`));
             if (r3.ok) { const d3 = await r3.json(); const raw3 = Array.isArray(d3)?d3:(d3.courses||d3.data||[]); results = [...results, ...parseRapidAPI(raw3, stateFilter)]; }
           } catch { /* a fallback search that fails simply adds nothing */ }
           try {
-            const r4 = await fetch(`/api/courses?search=${encodeURIComponent(q)}`);
+            const r4 = await fetch(apiUrl(`/api/courses?search=${encodeURIComponent(q)}`));
             if (r4.ok) { const d4 = await r4.json(); const gc4 = parseGolfCourseAPI(d4).filter(c => stateMatches(c.state, stateFilter)); for (const gc of gc4) { if (!results.find(r => r.name.toLowerCase() === gc.name.toLowerCase())) results.push(gc); } }
           } catch { /* likewise — the results already gathered still stand */ }
         }

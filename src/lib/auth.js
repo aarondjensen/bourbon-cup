@@ -36,12 +36,26 @@
 // under Authentication → Settings → Authorized domains, or the sign-in
 // call comes back as auth/unauthorized-domain. The error text below says
 // so in as many words, because that one is otherwise a guessing game.
+//
+// ── The native build takes none of the above ────────────────────────
+// Everything in this header describes a browser. Inside the iOS app's
+// WKWebView none of it applies and, more to the point, none of it WORKS:
+// Google refuses OAuth to an embedded webview outright and answers
+// `403 disallowed_useragent`, which kills signInWithPopup and its redirect
+// fallback together. There is no user-agent trick worth shipping.
+//
+// So native takes a different road entirely — a system sign-in sheet, via
+// @capacitor-firebase/authentication, which hands back a provider credential
+// that the JS SDK below turns into the SAME Firebase user it would have got
+// from a popup. Same uid, same bc_accounts document, same claim screen,
+// same everything downstream. See `nativeSignIn` and docs/app-store.md §2.1.
 import {
   getAuth,
   GoogleAuthProvider, OAuthProvider, signInWithPopup, signInWithRedirect,
-  getRedirectResult, onAuthStateChanged, signOut,
+  getRedirectResult, onAuthStateChanged, signOut, signInWithCredential,
 } from "firebase/auth";
 import { firebaseApp } from "../firebase";
+import { isNative } from "./platform";
 
 // ── The two providers ───────────────────────────────────────────────
 // Exported as data rather than as two functions so the login screen can
@@ -110,6 +124,11 @@ let _warm = null;
 
 const warmAuth = () => {
   if (_warm) return _warm;
+  // Nothing to warm on native. There is no popup to keep inside a gesture
+  // and no redirect to collect — and `getRedirectResult` would load the auth
+  // iframe from <project>.firebaseapp.com over the network to answer a
+  // question that cannot have an answer here. Resolve empty and skip it.
+  if (isNative()) return (_warm = Promise.resolve({ user: null, error: null }));
   const attempted = takeRedirectMark();
   _warm = getRedirectResult(authInstance()).then(
     (res) => {
@@ -224,7 +243,16 @@ const CANCELLED = new Set([
   "auth/user-cancelled",
 ]);
 
-export const isCancelled = (err) => CANCELLED.has(err?.code);
+// Native sheets report a cancel as a plain thrown Error rather than as a
+// Firebase code — Apple raises AuthorizationError 1001, Google words it.
+// Both mean the same thing the three codes above do: the person changed
+// their mind, and a red banner for it reads as a fault.
+const cancelledNatively = (err) =>
+  err?.code === 1001
+  || /cancell?ed|canceled by user|1001/i.test(String(err?.message || ""));
+
+export const isCancelled = (err) =>
+  CANCELLED.has(err?.code) || (isNative() && cancelledNatively(err));
 
 // Firebase's own messages are written for the developer ("The popup has
 // been closed by the user before finalizing the operation"). These are
@@ -260,8 +288,65 @@ const friendly = (err) => {
 // on user activation above. Everything this needs (the auth instance, the
 // provider) is built synchronously so the popup call happens inside the
 // tap that asked for it.
+// ── Signing in on native ────────────────────────────────────────────
+// The plugin opens the system sheet — Face ID for Apple, the account picker
+// for Google — and hands back a PROVIDER credential. It does not sign us in.
+// That is deliberate: `skipNativeAuth: true` in capacitor.config.json tells
+// it to leave the session alone, because the session this app runs on is the
+// JS SDK's. Firestore, the security rules and every screen read their token
+// from the JS SDK, and two SDKs each holding half a login is the bug that
+// shape invites.
+//
+// So the plugin authenticates the PERSON and `signInWithCredential` below
+// turns that into the Firebase user. From that line onward this is the same
+// code path a popup would have produced, which is the whole reason nothing
+// else in the app needed changing.
+//
+// Apple's rawNonce is load-bearing and easy to drop. The plugin generates a
+// nonce, sends its SHA-256 to Apple, and returns the RAW one; Firebase hashes
+// it again and compares. Pass the hashed one, or none, and the credential is
+// rejected with an error that says nothing about nonces.
+const nativeSignIn = async (providerId) => {
+  const { FirebaseAuthentication } = await import("@capacitor-firebase/authentication");
+  const auth = authInstance();
+
+  if (providerId === "apple") {
+    const res = await FirebaseAuthentication.signInWithApple({ scopes: ["email", "name"] });
+    const { idToken, nonce } = res?.credential || {};
+    if (!idToken) throw new Error("Apple sign-in came back without a token. Try again.");
+    const cred = new OAuthProvider("apple.com").credential({ idToken, rawNonce: nonce });
+    return (await signInWithCredential(auth, cred)).user || null;
+  }
+
+  const res = await FirebaseAuthentication.signInWithGoogle();
+  const { idToken, accessToken } = res?.credential || {};
+  if (!idToken) throw new Error("Google sign-in came back without a token. Try again.");
+  const cred = GoogleAuthProvider.credential(idToken, accessToken);
+  return (await signInWithCredential(auth, cred)).user || null;
+};
+
 export function signIn(providerId) {
   const auth = authInstance();
+
+  // Native first, and it does not fall through to the web flow on failure.
+  // There is nothing to fall through TO — the popup and the redirect are
+  // both refused by Google inside a webview, so retrying them would turn a
+  // legible error into a 403 page. See docs/app-store.md §2.1.
+  //
+  // A cancel is RE-THROWN rather than resolved as null, which looks like the
+  // long way round and is not. The sign-in screen leaves its buttons in the
+  // busy state on a resolved call, because a resolved call means the screen
+  // is about to be replaced; it re-arms them in the catch, after asking
+  // `isCancelled`. Resolving null on a cancelled sheet would therefore leave
+  // every button dead until the app was restarted.
+  if (isNative()) {
+    return nativeSignIn(providerId).catch((e) => {
+      const out = new Error(e?.message || "Sign-in failed. Try again.");
+      out.code = e?.code;
+      throw out;
+    });
+  }
+
   const provider = makeProvider(providerId);
   const fail = (e) => {
     const out = new Error(friendly(e));
@@ -326,6 +411,16 @@ export function onAuthUser(cb) {
 export async function signOutUser() {
   try { await signOut(authInstance()); }
   catch (e) { console.error("[auth] signOut", e); }
+  // The plugin keeps its own provider session, and the JS SDK's signOut
+  // knows nothing about it. Leave it and the next tap on "Continue with
+  // Google" signs straight back in as whoever just left — which on a phone
+  // handed around at this event is the exact accident `prompt:
+  // select_account` exists to prevent on the web.
+  if (!isNative()) return;
+  try {
+    const { FirebaseAuthentication } = await import("@capacitor-firebase/authentication");
+    await FirebaseAuthentication.signOut();
+  } catch (e) { console.warn("[auth] native signOut", e?.message || e); }
 }
 
 // ── Telling Apple to forget us ──────────────────────────────────────
@@ -355,6 +450,27 @@ export async function revokeProviderAccess() {
   // Google issues no token this call can revoke; Firebase's
   // revokeAccessToken supports Apple and nothing else today.
   if (u.providerData?.[0]?.providerId !== "apple.com") return { revoked: false, reason: "not_apple" };
+
+  // Native takes the same shape by a different door: there is no popup to
+  // reauthenticate through, so the fresh authorization comes from the system
+  // sheet instead. Everything after that is identical — a token, handed to
+  // Firebase's revoke endpoint — and the whole thing stays best-effort,
+  // because the App Store requires the revocation and the USER asked for a
+  // deletion, and the deletion is the promise that must not break.
+  if (isNative()) {
+    try {
+      const { FirebaseAuthentication } = await import("@capacitor-firebase/authentication");
+      const res = await FirebaseAuthentication.signInWithApple({ scopes: ["email", "name"] });
+      const token = res?.credential?.accessToken;
+      if (!token) return { revoked: false, reason: "no_token" };
+      const { revokeAccessToken } = await import("firebase/auth");
+      await revokeAccessToken(auth, token);
+      return { revoked: true };
+    } catch (e) {
+      console.warn("[auth] Apple token revocation skipped:", e?.code || e?.message || e);
+      return { revoked: false, reason: e?.code || "failed" };
+    }
+  }
 
   try {
     const { reauthenticateWithPopup, revokeAccessToken, OAuthProvider: OAP } =

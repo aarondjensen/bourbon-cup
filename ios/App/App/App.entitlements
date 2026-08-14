@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Push Notifications. "development" is correct here and is NOT what
+	     ships: Xcode rewrites it to "production" when the app is archived
+	     for the App Store or TestFlight. Setting it to production by hand
+	     breaks push on every debug build off a cable. -->
+	<key>aps-environment</key>
+	<string>development</string>
+
+	<!-- Sign in with Apple. This is the entitlement the NATIVE sheet needs,
+	     and it is a different thing from the Services ID the web flow uses —
+	     both have to exist, and the App ID in the developer portal has to
+	     have the capability switched on or signing fails with an entitlement
+	     mismatch rather than anything about Apple sign-in. -->
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
+</dict>
+</plist>
