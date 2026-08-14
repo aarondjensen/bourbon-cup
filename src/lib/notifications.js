@@ -35,24 +35,29 @@
 // context, and that failure would take the whole importing chunk with it.
 // Dynamic imports keep it contained to the call.
 
-// ── The native branch is back ───────────────────────────────────────
+// ── The native branch is back, on both platforms ────────────────────
 // The note above says this file was ported from MnQ minus its Capacitor
 // branch, because the Bourbon Cup shipped as a web app and an iOS
-// home-screen PWA. It now also ships as an iOS app, and inside a WKWebView
-// every single step of the lifecycle above is unavailable: there is no
-// service worker, no Notification API, no Web Push, and the VAPID key is
-// meaningless. Apple does not implement any of it in a webview, on purpose,
-// so that a native app uses APNs.
+// home-screen PWA. It now ships as a Capacitor app on iOS AND Android, and a
+// webview has none of the lifecycle above: no service worker, no Notification
+// API, no Web Push, and a meaningless VAPID key. Apple leaves all of it out of
+// WKWebView on purpose, so that a native app uses APNs.
 //
-// So each exported function below now forks. The native side goes through
-// @capacitor-firebase/messaging, which swizzles APNs underneath and returns
-// an **FCM token** rather than a raw APNs one — which is the detail that
-// keeps this cheap. The row written to `bc_notification_tokens` has the same
-// shape, `sendToPlayer` in functions/index.js sends the same way, and there
-// is no second delivery path to keep in step. See docs/app-store.md §2.2.
+// So each exported function below forks. The native side goes through
+// @capacitor-firebase/messaging, which returns an **FCM token** on both
+// platforms — swizzling APNs underneath on iOS, and talking to FCM directly on
+// Android. That is the detail that keeps this cheap: the row written to
+// `bc_notification_tokens` has one shape, `sendToPlayer` in functions/index.js
+// sends one way, and there is no second delivery path to keep in step.
+// See docs/app-store.md §2.2 and docs/play-store.md.
+//
+// WHAT CHANGED WHEN ANDROID STOPPED BEING A TWA. A Trusted Web Activity is a
+// browser: `isNative()` was false inside it and it took the web path above,
+// which worked. Now it does not, and the difference matters in `writeTokenRow`
+// — see the note on `platform` there.
 import { db, TOURNAMENT_ID, getMessagingInstance } from "../firebase";
 import { normalizeTypePrefs } from "./notificationTypes";
-import { isNative } from "./platform";
+import { isNative, isNativeIOS, platformName } from "./platform";
 
 // Re-exported so callers take the whole preference API off one module.
 export { NOTIFICATION_TYPES, normalizeTypePrefs } from "./notificationTypes";
@@ -250,13 +255,18 @@ const writeTokenRow = async (playerId, token) => {
     // edition-scoped and the functions never query on this.
     registered_for: TOURNAMENT_ID,
     user_agent: ua.slice(0, 200),
-    is_ios: isNative() ? true : /iPhone|iPad|iPod/.test(ua),
+    // `platformName()` rather than `isNative()`. These two lines said "native
+    // means iOS", which was true for exactly as long as the Android app was a
+    // Trusted Web Activity — a browser, which reported itself as web. Android
+    // is a Capacitor app now, so that shorthand would have filed every Android
+    // phone as an iPhone, in the one field somebody would consult to work out
+    // why a push did not arrive.
+    is_ios: isNativeIOS() || (!isNative() && /iPhone|iPad|iPod/.test(ua)),
     is_standalone: isNative() ? true : isStandalonePWA(),
-    // "web" for a browser or the Android TWA, "ios" for the App Store build.
-    // The one field this refactor adds, and it is the field that answers
-    // "which build is this man actually carrying" without inferring it from
-    // a user-agent string.
-    platform: isNative() ? "ios" : "web",
+    // "web" for a browser, "ios" or "android" for a store build. The field
+    // that answers "which build is this man actually carrying" without
+    // inferring it from a user-agent string.
+    platform: platformName(),
     registered_at: Date.now(),
     last_seen_at: Date.now(),
     // Carried onto the new row from this device's cache, so a player who

@@ -13,8 +13,12 @@ starting line.
 
 ## 1. Why there is a native shell at all
 
-Android has a Trusted Web Activity: a supported, first-party way to ship a web
-app as an app, which is what `play-store.md` uses. **iOS has no equivalent.**
+Android *has* a first-party way to ship a web app as an app — a Trusted Web
+Activity — and this repo used to use it. **iOS has no equivalent**, which is
+why Capacitor arrived here first. Android has since moved to Capacitor as well,
+so the two platforms are now one shape (see `play-store.md`); this section is
+about why the shell had to exist at all.
+
 The App Store takes a signed `.ipa` built from an Xcode project, so a native
 shell has to exist, and the shell has to hold a `WKWebView`.
 
@@ -27,7 +31,8 @@ Two consequences, and the second is the expensive one:
   content is a remote website is the exact thing 4.2 was written for. So
   `capacitor.config.json` has no `server` block, and **Vercel is no longer the
   release channel for iOS**: shipping a change there means a new build and a
-  new App Store review, exactly unlike the TWA.
+  new App Store review. Android is the same now that it is Capacitor too — the
+  difference used to be real and is not any more.
 - **A bundled build runs from `capacitor://localhost`.** Four subsystems in
   this repo assumed `https://thebourboncup.com`, and all four broke. That is §2.
 
@@ -78,9 +83,11 @@ meaningless. Native goes through `@capacitor-firebase/messaging`, which
 swizzles APNs underneath and returns an **FCM token** rather than a raw APNs
 one — the detail that keeps this cheap. `writeTokenRow` is now shared by both
 paths, so `bc_notification_tokens` gets one shape and `sendToPlayer` in
-`functions/index.js` is untouched. Rows gain a `platform` field (`"web"` /
-`"ios"`); the rule is `allow write: if isMember()` with no field list, so **no
-rules change is needed.**
+`functions/index.js` is untouched. Rows carry a `platform` field — `"web"`,
+`"ios"` or `"android"`, off `platformName()` rather than off `isNative()`,
+which mattered the moment Android stopped being a browser. The rule is
+`allow write: if isMember()` with no field list, so **no rules change is
+needed.**
 
 Two consequences that are real and not bugs:
 
@@ -184,10 +191,10 @@ hand. `ios/.gitignore` covers what Capacitor generates.
 | `App/App.entitlements` | `aps-environment` (Xcode rewrites it to `production` on archive — do not set it by hand) and `com.apple.developer.applesignin`. |
 | `App/PrivacyInfo.xcprivacy` | The privacy manifest. Required since May 2024; the **upload** is rejected without one. Declares the same data as `store-submission.md` §2, plus required-reason APIs for UserDefaults (`CA92.1`), file timestamps (`C617.1`), disk space (`E174.1`) and boot time (`35F9.1`). Registered in the Resources build phase, or it would sit in the repo and never ship. |
 | `App.xcodeproj` | `CODE_SIGN_ENTITLEMENTS`, and `TARGETED_DEVICE_FAMILY = "1"` — **iPhone only**. Declaring iPad means a reviewer opens it on an iPad, and every layout call in this app was made for a phone held one-handed on a tee box. |
-| `Assets.xcassets` | The real icon and launch image, from `npm run build:ios-icons`. |
+| `Assets.xcassets` | The real icon and launch image, from `npm run build:app-icons`. |
 
 **None of it can be compiled here, so it is tested as files.**
-`scripts/ios-project.test.js` runs in the ordinary `npm test` suite and reads
+`scripts/native-projects.test.js` runs in the ordinary `npm test` suite and reads
 the plists, the pbxproj and the icon's PNG header, asserting that each setting
 in the table above is still there. It cannot tell you the app builds; it tells
 you that a `cap add ios`, a merge or a well-meant simplification has not
@@ -195,10 +202,10 @@ quietly dropped a key whose absence you would otherwise discover on an upload
 days later. The 4.2 trap is in there too: **the suite fails if
 `capacitor.config.json` grows a `server.url`.**
 
-**`npm run build:ios-icons`** (`scripts/ios-icons.mjs`) renders
+**`npm run build:app-icons`** (`scripts/app-icons.mjs`) renders
 `public/BC ICON-01.svg` — the same mark the PWA and the Play listing use — to a
 1024×1024 icon and three 2732×2732 splash images. Run it after any
-`cap add ios`, because that command seeds the catalog with **Capacitor's own
+`cap add`, because both platforms seed their icon slots with **Capacitor's own
 logo**, which looks close enough to a real icon in the Xcode navigator to ship.
 The script asserts the icon comes out with **no alpha channel**: Apple rejects
 the upload for the channel being present, not for any pixel being transparent.

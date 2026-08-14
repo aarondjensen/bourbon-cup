@@ -9,10 +9,17 @@
     "limitsNavigationsToAppBoundDomains": false,
     "backgroundColor": "#161618"
   },
+  "android": {
+    "backgroundColor": "#161618",
+    "allowMixedContent": false
+  },
   "plugins": {
     "FirebaseAuthentication": {
       "skipNativeAuth": true,
-      "providers": ["apple.com", "google.com"]
+      "providers": [
+        "apple.com",
+        "google.com"
+      ]
     },
     "StatusBar": {
       "style": "DARK",
@@ -25,7 +32,11 @@
       "resizeOnFullScreen": true
     },
     "FirebaseMessaging": {
-      "presentationOptions": ["badge", "sound", "alert"]
+      "presentationOptions": [
+        "badge",
+        "sound",
+        "alert"
+      ]
     }
   }
 }

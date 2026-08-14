@@ -12,7 +12,7 @@
     "test:run": "vitest run",
     "build:editions": "node pipeline/editions.mjs",
     "build:archive": "node pipeline/archive.mjs",
-    "build:ios-icons": "node scripts/ios-icons.mjs",
+    "build:app-icons": "node scripts/app-icons.mjs",
     "build:store-graphics": "node scripts/store-graphics.mjs",
     "team-brand": "node pipeline/team-brand.mjs",
     "import:history": "node scripts/import-history.mjs",
@@ -23,6 +23,7 @@
   "dependencies": {
     "@capacitor-firebase/authentication": "^8.4.0",
     "@capacitor-firebase/messaging": "^8.4.0",
+    "@capacitor/android": "^8.5.0",
     "@capacitor/app": "^8.1.1",
     "@capacitor/browser": "^8.0.4",
     "@capacitor/camera": "^8.2.2",

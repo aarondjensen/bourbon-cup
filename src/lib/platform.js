@@ -40,14 +40,18 @@ export const isNative = () => {
   try { return Capacitor.isNativePlatform() === true; } catch { return false; }
 };
 
-// "ios" | "android" | "web". Android is listed for completeness and is not
-// expected: the Android app is a Trusted Web Activity, which is a browser
-// and reports itself as "web" (see docs/play-store.md).
+// "ios" | "android" | "web", and all three are now real. Android used to be a
+// Trusted Web Activity — a browser, reporting itself as "web" — so everything
+// here could treat native as a synonym for iOS. It is a Capacitor app now
+// (docs/play-store.md), which makes that shorthand wrong rather than merely
+// imprecise: anything recording WHICH platform a device is has to ask this
+// rather than infer it from `isNative()`.
 export const platformName = () => {
   try { return Capacitor.getPlatform() || "web"; } catch { return "web"; }
 };
 
 export const isNativeIOS = () => isNative() && platformName() === "ios";
+export const isNativeAndroid = () => isNative() && platformName() === "android";
 
 // ── Where /api lives ────────────────────────────────────────────────
 // On the web this is the empty string, so `fetch("/api/ghin")` stays the

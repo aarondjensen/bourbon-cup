@@ -22,13 +22,22 @@ there and are not repeated here. The iOS half is [`app-store.md`](./app-store.md
 and it is a much larger job; start this one first, because its long pole is
 calendar time rather than work.
 
-The app is a PWA. The Android app is a **Trusted Web Activity** — a thin native
-shell that opens `https://thebourboncup.com` full-screen, with no browser
-chrome, sharing the same session and the same service worker as the site. There
-is no second codebase and no second release to keep in step: shipping a change
-is a Vercel deploy, exactly as it is today. A new **bundle** is only needed when
-something in `twa-manifest.json` changes — the name, the icon, the colours, the
-version.
+The app is a PWA, and the Android app is a **Capacitor** build of it — the same
+shell as iOS (`app-store.md`), with the web build bundled inside the APK rather
+than loaded off the network.
+
+**It used to be a Trusted Web Activity**, and the reasoning for that was good:
+a TWA is a hollow shell that opens `https://thebourboncup.com` full-screen, so
+shipping a change was a Vercel deploy and there was never a second release to
+keep in step. What it cost was a second architecture. Once iOS needed Capacitor
+— Apple has no TWA equivalent — this repo was running two different shells with
+two different toolchains, two different sets of native branches to reason
+about, and only one of them shared with WBC.
+
+So Android is Capacitor too, and the whole estate is now one shape: two apps,
+two platforms each, one build command. The price is that a web fix no longer
+reaches Android by Vercel alone — it needs a new bundle and an upload. On the
+internal-testing track that is minutes, and it buys a single mental model.
 
 Everything below is either already in this repo or a step somebody has to take
 by hand in a console. The by-hand ones are marked **BY HAND**, and they are the
@@ -40,64 +49,95 @@ ones that will hold the submission up.
 
 | File | What it is |
 | --- | --- |
-| `twa-manifest.json` | Bubblewrap's configuration. The Android project is generated from this; it is not committed, because regenerating it is one command. |
-| `public/.well-known/assetlinks.json` | The site's half of the Digital Asset Links handshake that removes the URL bar. **Carries a placeholder fingerprint** — see below. |
-| `public/.well-known/README.md` | Why that file matters and how to verify it. |
-| `public/favicon/site.webmanifest` | The web manifest Bubblewrap reads for the name, icons and colours. |
+| `capacitor.config.json` | One config, both platforms. The `android` block sits beside the `ios` one. |
+| `android/` | **Tracked**, like `ios/` and like both of WBC's — the signing block, the manifest and the launcher icons are all edited by hand. `android/.gitignore` covers what is generated. |
+| `android/app/build.gradle` | Release signing, read from `keystore.properties` or the environment. Deliberately the same shape as WBC's. |
+| `android/keystore.properties.example` | The template. The real file is gitignored. |
+| `scripts/app-icons.mjs` | Every launcher icon on both platforms, from `public/BC ICON-01.svg`. |
 | `public/privacy.html` | The privacy policy URL the Play listing requires. |
 | `public/account-deletion.html` | The account-deletion URL the Data safety section requires. |
 | `public/legal.css` | The look of those two pages. No JavaScript on either. |
+
+Gone with the TWA: `twa-manifest.json`, and `public/.well-known/assetlinks.json`
+with its placeholder fingerprint. A Capacitor app is a real native app — there
+is no browser chrome to hide, so there is no Digital Asset Links handshake to
+get right and no round-trip through Play to collect a signing fingerprint.
 
 ---
 
 ## 1. Build the bundle
 
-Bubblewrap needs a JDK 17 and the Android SDK; it will offer to download both
-the first time.
+Same three commands as iOS, one platform along. No JDK to download, no Android
+SDK to fetch, no global CLI — Capacitor uses the Gradle wrapper in `android/`.
 
 ```sh
-npm install -g @bubblewrap/cli
-
-# From the repo root, where twa-manifest.json already is.
-# It reads the existing config rather than asking twenty questions.
-bubblewrap update        # regenerates the Android project from twa-manifest.json
-bubblewrap build         # produces app-release-bundle.aab and app-release-signed.apk
+npm run build
+npx cap sync android
+cd android && ./gradlew bundleRelease     # → app/build/outputs/bundle/release/
 ```
 
-The first `build` asks for a signing keystore. Let it create `android.keystore`
-in the repo root — `.gitignore` already covers it.
+`npx cap open android` opens Android Studio if you would rather build there.
 
-> **BY HAND, and it cannot be recovered:** back up `android.keystore` and its
+### Signing — **BY HAND, once**
+
+Create a keystore and tell Gradle where it is:
+
+```sh
+keytool -genkey -v -keystore android/bourbon-cup.keystore \
+  -alias bourbon-cup -keyalg RSA -keysize 2048 -validity 10000
+
+cp android/keystore.properties.example android/keystore.properties
+# fill in storePassword and keyPassword
+```
+
+Both the keystore and `keystore.properties` are gitignored. `BC_KEYSTORE_FILE`,
+`BC_KEYSTORE_PASSWORD`, `BC_KEY_ALIAS` and `BC_KEY_PASSWORD` override the file,
+which is how CI would sign without one on disk.
+
+A release build with signing unconfigured **still succeeds** and produces an
+unsigned bundle Play refuses. `build.gradle` warns loudly at task-graph time
+rather than letting that be discovered at upload — but the warning scrolls past,
+so check the bundle is signed before you upload the first one.
+
+> **BY HAND, and it cannot be recovered:** back up the keystore and its
 > passwords somewhere that is not this laptop. With Play App Signing enabled
 > (it is, for any new app) losing the upload key is recoverable through Google
 > support; losing it *without* Play App Signing means the app can never be
 > updated again. Do it before the first upload, not after.
 
-`bubblewrap doctor` diagnoses a broken toolchain. `bubblewrap validate` checks
-the deployed site against the PWA criteria Play expects.
-
 ### Version bumps
 
-`appVersionCode` in `twa-manifest.json` must increase on every upload;
-`appVersionName` is what humans see. `bubblewrap update` picks up both.
+`versionCode` in `android/app/build.gradle` must increase on every upload;
+`versionName` is what humans see. Play rejects a re-used `versionCode` with a
+message that says exactly that, so this one at least fails loudly.
+
+### Icons
+
+`npm run build:app-icons` renders every launcher icon on both platforms from
+`public/BC ICON-01.svg`. Run it after any `cap add`, because **both** platforms
+seed their icon slots with Capacitor's own logo and it looks close enough to a
+real icon in the tooling to ship.
+
+The Android adaptive icon is the fussy one: its foreground is the bare mark on
+transparency over a flat colour, not the square artwork. A launcher masks the
+outer ring away, so the full tile rendered there reads as a sticker inside a
+circle rather than as an icon.
 
 ---
 
-## 2. Remove the URL bar — **BY HAND**
+## 2. What used to be here: removing the URL bar
 
-This is the step that most often gets a TWA rejected, and it cannot be
-completed until after the first upload, because the fingerprint it needs is
-Google's, not yours.
+Nothing to do. This section was the Digital Asset Links handshake — the step
+that most often got a TWA rejected, and the one that could not be completed
+until after the first upload because the fingerprint it needed was Google's
+re-signing certificate rather than yours.
 
-1. Upload the AAB to any track (internal testing is fine and fastest).
-2. **Release → Setup → App integrity → App signing key certificate**.
-3. Copy the **SHA-256 certificate fingerprint**.
-4. Paste it over the placeholder in `public/.well-known/assetlinks.json`.
-5. Commit and let Vercel deploy.
-6. Verify — see `public/.well-known/README.md` for the two commands.
+A Capacitor app is a real native app with no browser chrome to hide, so the
+handshake does not apply and `public/.well-known/assetlinks.json` is gone.
 
-Until this is right the app opens with an address bar across the top. It runs
-fine, which is exactly why it slips through internal testing.
+Kept as a heading because the sections below are numbered and referenced, and
+because "why is there no assetlinks file any more" is a question worth one
+paragraph.
 
 ---
 
@@ -158,13 +198,30 @@ question is **no** (the app moves no money and has no purchases).
 
 ## 5. Notifications on Android
 
-Web push works inside a TWA, delegated to the Android notification system.
-`twa-manifest.json` sets `enableNotifications: true`, which is what makes
-Bubblewrap request `POST_NOTIFICATIONS` on Android 13 and above.
+**Push on Android is now native, and that is a change.** Inside a TWA it was
+web push — the site's own service worker, the VAPID key, delegated to the
+Android notification system. A Capacitor build has no service worker, so
+`lib/notifications` takes its native branch here exactly as it does on iOS, and
+`@capacitor-firebase/messaging` talks to FCM directly.
 
-This needs `VITE_FCM_VAPID_KEY` set in Vercel or the app reports push as
-unconfigured. Nothing about the TWA changes that — it is the same web push the
-site already uses.
+The good news is that FCM is FCM: the token is the same kind of token, the
+`bc_notification_tokens` row is the same shape, and `sendToPlayer` in
+`functions/index.js` is untouched. The `platform` field on the row now reads
+`"android"` rather than `"web"`, which is the point of it.
+
+Two by-hand consequences:
+
+- **`google-services.json`** from the Firebase console, into
+  `android/app/`. Gitignored, like its iOS counterpart, and **without it native
+  sign-in and push both silently do nothing**.
+- **The signing SHA-1 and SHA-256** registered against the Android app in
+  Firebase, or native Google sign-in fails. Take them from the keystore
+  (`keytool -list -v -keystore …`) and, once Play App Signing is on, from
+  **Release → Setup → App integrity** as well — Play re-signs, so the
+  fingerprint a shipped build presents is Google's, not yours.
+
+`VITE_FCM_VAPID_KEY` is still needed, but only for the **web** app now. It has
+nothing to do with either store build.
 
 ---
 
@@ -421,19 +478,22 @@ the testers named, looks like testing — because it is.
 Steps 1–3 are in `store-submission.md` §1 and are shared with the iOS
 submission. Do them once.
 
-**If §7 sent you to internal testing, stop after step 4** — add the testers,
-send the link, done. Steps 5 to 7 are the production road.
+**Internal testing is the route (§7), so stop after step 6** — add the testers,
+send the link, done. Steps 7 and 8 are the production road, kept for reference.
 
 1. Everything in `store-submission.md` §1 — functions deployed, rules deployed,
-   VAPID key set, reviewer account built. **BY HAND**
+   reviewer account built. **BY HAND**
 2. Deploy the site, so both static pages and the guest door are live. (Vercel
-   does this on merge.)
-3. `bubblewrap build`, back up the keystore. **BY HAND**
-4. Upload to internal testing, read the signing fingerprint, fill in
-   `assetlinks.json`, commit, verify the URL bar is gone. **BY HAND**
-5. Fill in App access, Data safety, content rating, the privacy policy URL and
-   the listing. **BY HAND**
-6. Promote to closed testing, open it to the field **with the tournament
-   password**, and run the fourteen days as §8 describes — with things to do,
-   more than one build, and feedback written down. **BY HAND**
-7. Apply for production access, quoting the feedback. **BY HAND**
+   does this on merge.) The store builds no longer depend on this, but the web
+   app and the privacy URLs do.
+3. `google-services.json` into `android/app/`, and the signing fingerprints
+   into Firebase — §5. **BY HAND**
+4. Create the keystore, `./gradlew bundleRelease`, back up the keystore. **BY HAND**
+5. Upload to internal testing, fill in App access, content rating and the
+   privacy policy URL. **BY HAND**
+6. Collect the sixteen Google accounts, add them all at once, send the opt-in
+   link — §7. **BY HAND**
+7. *(Production only)* Promote to closed testing and run the fourteen days as
+   §8 describes — with things to do, more than one build, and feedback written
+   down. **BY HAND**
+8. *(Production only)* Apply for production access, quoting the feedback. **BY HAND**
