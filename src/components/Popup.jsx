@@ -118,12 +118,21 @@ export function Popup({
   const alignItems = align === "start" ? "flex-start" : "center";
 
   // ESC closes unless disabled. Only registers when onClose exists.
+  //
+  // `noBackdropClose` implies it. A modal that refuses a stray click outside
+  // itself is a blocking or destructive one — the CTP prompt here, WBC's
+  // withdrawal confirm and scorecard sheet — and every reason it refuses the
+  // click applies to a stray keypress. The CTP prompt has to be answered, and
+  // until this rule existed a keystroke dismissed it. Both flags stay because
+  // the reverse is not true: a popup can want ESC off while still dismissing on
+  // the backdrop. All three apps share this rule.
+  const escCloses = !noEscClose && !noBackdropClose;
   useEffect(() => {
-    if (!onClose || noEscClose) return;
+    if (!onClose || !escCloses) return;
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, noEscClose]);
+  }, [onClose, escCloses]);
 
   const handleBackdrop = () => {
     if (!noBackdropClose && onClose) onClose();
