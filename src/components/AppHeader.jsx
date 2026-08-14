@@ -75,7 +75,9 @@
 //  been.
 //
 //  The clock and the caption share a column, so the clock is exactly as wide
-//  as the line beneath it — see "The measure" below.
+//  as the line beneath it — see "The measure" below. The clock's own internal
+//  symmetry is HeaderCountdown's problem, not this file's; all this one owes
+//  it is an honest measure to sit in.
 //
 //  flexShrink: 0 is not optional — the shell is a flex column with
 //  overflow: hidden, so without it a tall tab could compress this band and the
