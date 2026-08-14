@@ -221,8 +221,8 @@ for (const b of batches) {
   const selected = !stampArg || b.stamp === stampArg;
   console.log(`CLONE BATCH ${b.stamp} — ${when(b.stamp)}${selected ? "" : "   (not selected)"}`);
   for (const r of b.rows) {
-    const label = r.row.name || r.row.first || "(no name)";
-    console.log(`  ${r.col.replace("bc_", "").padEnd(8)} ${r.id.padEnd(24)} ${String(label).padEnd(22)}` +
+    const label = String(r.row.name || r.row.first || "(no name)");
+    console.log(`  ${r.col.replace("bc_", "").padEnd(8)} ${r.id.padEnd(25)} ${label.padEnd(25).slice(0, 25)}  ` +
       (r.safe ? "nothing points at it" : `HELD — ${plural(r.refs.length, "reference")}: ` +
         [...new Set(r.refs.map((x) => x.col))].join(", ")));
   }
@@ -270,7 +270,7 @@ if (!WRITE) {
   console.log(`--write would delete ${plural(doomed.length, "document")}` +
     (held.length ? `, and keep ${plural(held.length, "row")} something still points at.` : "."));
   if (batches.length > 1 && !stampArg) {
-    console.log(`\n${plural(batches.length, "batch")} found. To take one at a time:`);
+    console.log(`\n${plural(batches.length, "batch", "batches")} found. To take one at a time:`);
     console.log(`  node scripts/undo-clone.mjs --edition ${edition.id} --stamp ${batches[0].stamp} --write`);
   }
   process.exit(0);
