@@ -137,7 +137,7 @@ if (!editionArg) {
   // No edition named: survey every one of them. Cheap (two collections each),
   // and it answers "did this happen anywhere else" without anybody having to
   // guess which years to check.
-  console.log("edition            year   players  courses  cloned rows  created_from");
+  console.log("edition            year   players  courses  cloned rows       created_from");
   for (const e of editions) {
     const rows = {};
     for (const col of CLONE_ID_COLLECTIONS) {
@@ -151,7 +151,7 @@ if (!editionArg) {
       String(e.year ?? "").padEnd(7) +
       String(rows.bc_players.length).padEnd(9) +
       String(rows.bc_courses.length).padEnd(9) +
-      (cloned ? `${cloned} in ${plural(batches.length, "batch", "batches")}` : "—").padEnd(13) +
+      (cloned ? `${cloned} in ${plural(batches.length, "batch", "batches")}` : "—").padEnd(18) +
       (e.created_from || "—"));
   }
   console.log("\nName one to see it in full:  node scripts/undo-clone.mjs --edition bc_2026");
