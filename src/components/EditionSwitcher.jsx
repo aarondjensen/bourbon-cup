@@ -22,7 +22,8 @@ import { useState, useEffect } from "react";
 import { BC, FS, FONT, ON_AMBER } from "../theme";
 import { Popup, ConfirmModal } from "./Popup";
 import { getActiveTournamentId } from "../firebase";
-import { loadEditions, createEdition, cloneEdition, updateEdition, deleteEdition, switchEdition, ensureActiveEditionDoc, editionIdFor, EDITION_STATUSES } from "../lib/editions";
+import { loadEditions, createEdition, cloneEdition, updateEdition, setEditionLocked, deleteEdition, switchEdition, ensureActiveEditionDoc, editionIdFor, EDITION_STATUSES } from "../lib/editions";
+import { isEditionLocked, lockVerdict, bulkLockVerdict, lockBadge } from "../lib/editionLock";
 
 // FS.lead, not FS.body, and that is functional rather than cosmetic: iOS
 // Safari zooms the page in when a focused input is under 16px and does not
@@ -71,6 +72,7 @@ export function EditionSwitcher({ open, onClose, canManage = false }) {
   const [err, setErr] = useState(null);
   const [pending, setPending] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
+  const [pendingLock, setPendingLock] = useState(null);
   const activeId = getActiveTournamentId();
 
   useEffect(() => {
@@ -141,6 +143,24 @@ export function EditionSwitcher({ open, onClose, canManage = false }) {
 
   const leaveForm = () => { setMode("list"); setEditing(null); setErr(null); };
 
+  // ── The padlock ────────────────────────────────────────────────────
+  // Locking asks; unlocking does not — see lockVerdict, which decides both the
+  // question and whether there is one. A verdict with no confirm goes straight
+  // through rather than raising an empty dialog.
+  const applyLock = async (ids, next) => {
+    setBusy(true);
+    try {
+      await Promise.all(ids.map((id) => setEditionLocked(id, next)));
+      setEditions(await loadEditions());
+    } finally { setBusy(false); }
+  };
+
+  const tapLock = (e) => {
+    const v = lockVerdict(e, { isActive: e.id === activeId });
+    if (v.confirm) setPendingLock({ ...v, ids: [e.id] });
+    else applyLock([e.id], v.next);
+  };
+
   const statusColor = (s) => s === "published" ? BC.amberInk : s === "archived" ? BC.t3 : BC.gold;
 
   const headerBtn = {
@@ -195,11 +215,37 @@ export function EditionSwitcher({ open, onClose, canManage = false }) {
                   background: BC.inp, border: `1px solid ${isActive ? BC.amber : BC.bdr}`,
                 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: FS.body, fontWeight: 800, color: BC.t1 }}>{e.name}</div>
+                    {/* Truncated, not wrapped. A director-side row now carries
+                        four controls, and letting the name take a second line
+                        makes the list's row height depend on how long somebody
+                        typed — which is how a picker you scan turns into one
+                        you read. */}
                     <div style={{
+                      fontSize: FS.body, fontWeight: 800, color: BC.t1,
+                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                    }}>{e.name}</div>
+                    <div style={{
+                      display: "flex", alignItems: "center", gap: 6, marginTop: 2,
                       fontSize: FS.label, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase",
-                      color: statusColor(e.status), marginTop: 2,
-                    }}>{e.status}</div>
+                    }}>
+                      {/* The YEAR lives down here, not only inside the name.
+                          A name long enough to truncate ("The Bourbon Cup
+                          2026") loses its year to the ellipsis, and the year
+                          is the one thing anybody picks a tournament by. Four
+                          characters, never truncated. */}
+                      <span style={{ color: BC.t2 }}>{e.year}</span>
+                      <span style={{ color: BC.t3 }}>·</span>
+                      <span style={{ color: statusColor(e.status) }}>{e.status}</span>
+                      {/* Status and lock are different questions — one is what
+                          this year IS, the other is who may write to it — so
+                          they sit side by side rather than one replacing the
+                          other. See lib/editionLock. */}
+                      {lockBadge(e) && (
+                        <span style={{ color: BC.t3, display: "flex", alignItems: "center", gap: 3 }}>
+                          <span aria-hidden>🔒</span>{lockBadge(e)}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   {/* Rename is offered on the ACTIVE row too, and that is the
                       point of it: the edition a collision renamed is the one
@@ -210,6 +256,28 @@ export function EditionSwitcher({ open, onClose, canManage = false }) {
                       border: "none", borderRadius: 8, padding: "5px 6px", cursor: "pointer",
                       flexShrink: 0, lineHeight: 1,
                     }}>✎</button>
+                  )}
+                  {/* The padlock is offered on the ACTIVE row too. Freezing the
+                      year being played is a real thing a director wants — the
+                      moment the cup is over — and it is the one lock that asks
+                      the sharper question, because the person tapping it is the
+                      one member who will not notice: directors are exempt. */}
+                  {canManage && (
+                    // ONE glyph in two brightnesses, not 🔒 against 🔓. Both of
+                    // those render as a yellow padlock and the only difference
+                    // is whether a small shackle is tilted — at 12px on a phone
+                    // they are the same picture, and emoji ignore `color`, so
+                    // the state cannot be carried by tint either. Lit vs dimmed
+                    // reads as a switch at a glance; the LOCKED badge on the row
+                    // says it in words for anyone who wants certainty.
+                    <button onClick={() => tapLock(e)} disabled={busy}
+                      title={lockVerdict(e, { isActive }).title} style={{
+                        fontSize: FS.small, background: "transparent", border: "none",
+                        borderRadius: 8, padding: "5px 6px", lineHeight: 1, flexShrink: 0,
+                        opacity: isEditionLocked(e) ? 1 : 0.3,
+                        filter: isEditionLocked(e) ? "none" : "grayscale(1)",
+                        cursor: busy ? "default" : "pointer",
+                      }}>🔒</button>
                   )}
                   {isActive ? (
                     <span style={{
@@ -236,6 +304,25 @@ export function EditionSwitcher({ open, onClose, canManage = false }) {
           </div>
         )}
 
+        {/* ── Every other year at once ──
+            Eleven editions is eleven taps, and the padlock's real use is a
+            setup done ONCE before handing the app to store testers: freeze the
+            history, leave the year being played open. One row at a time is the
+            kind of chore that gets abandoned halfway, which leaves exactly the
+            hole the lock was for. Null when there is nothing to offer, so this
+            is absent rather than disabled. See bulkLockVerdict. */}
+        {canManage && !loading && (() => {
+          const v = bulkLockVerdict(editions, activeId);
+          if (!v) return null;
+          return (
+            <button onClick={() => setPendingLock(v)} disabled={busy} style={{
+              width: "100%", marginTop: 12, padding: "10px 12px", borderRadius: 10, fontFamily: FONT,
+              background: "transparent", border: `1px solid ${BC.bdr}`, color: BC.t2,
+              fontSize: FS.small, fontWeight: 800, letterSpacing: 0.5,
+              cursor: busy ? "default" : "pointer",
+            }}>{v.next ? "🔒" : "🔓"} {v.label}</button>
+          );
+        })()}
         </>) : mode === "edit" ? (<>
           {/* Only the name and the status. The id is the tournament_id every
               other collection filters on, so making it editable here would
@@ -376,6 +463,25 @@ export function EditionSwitcher({ open, onClose, canManage = false }) {
           confirmLabel="Open"
           onConfirm={() => switchEdition(pending.id, { namespaced: !!pending.namespaced })}
           onCancel={() => setPending(null)}
+        />
+      )}
+
+      {/* Locking asks; unlocking a single year does not — lockVerdict returns
+          no confirm for that one and tapLock applies it straight away. The
+          bulk action asks in both directions, because it has no tap-again
+          undo: nothing remembers which years were frozen a moment ago. */}
+      {pendingLock?.confirm && (
+        <ConfirmModal
+          eyebrow={pendingLock.next ? "Lock" : "Unlock"}
+          title={pendingLock.confirm.title}
+          message={pendingLock.confirm.body}
+          confirmLabel={pendingLock.confirm.confirmLabel}
+          onConfirm={async () => {
+            const v = pendingLock;
+            setPendingLock(null);
+            await applyLock(v.ids, v.next);
+          }}
+          onCancel={() => setPendingLock(null)}
         />
       )}
 

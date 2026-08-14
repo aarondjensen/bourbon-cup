@@ -106,6 +106,7 @@ import {
   BUDGET_COL, budgetLineId, buildBudgetLine, budgetLineError,
 } from "./lib/budget";
 import { EDITIONS_COL } from "./lib/editions";
+import { lockNotice } from "./lib/editionLock";
 import { prefetchArchive } from "./lib/useArchive";
 import { TRIP_SETTINGS_ID, houseFrom, tripSchedule, tripDates } from "./lib/tripInfo";
 import {
@@ -3164,6 +3165,11 @@ export default function App() {
   const [media, setMedia] = useState([]);
   // bc_config/photos — the budget circuit breaker's flag. Null until read.
   const [photoConfig, setPhotoConfig] = useState(null);
+  // The active edition's row, for `locked`. Null until the subscription lands,
+  // and null is UNLOCKED — see lib/editionLock, which defaults that way on
+  // purpose: a strip that flashed "this year is frozen" on every cold start
+  // would train people to ignore it.
+  const [activeEdition, setActiveEdition] = useState(null);
   const [notif, setNotif] = useState(null);
   // ── What the app owes the database ───────────────────────────────────
   // `pending` is writes queued but not yet acknowledged by the server —
@@ -3593,6 +3599,15 @@ export default function App() {
     unsubs.push(db.subscribe(CONFIG_COL, [], rows => {
       setPhotoConfig(rows.find(r => r.id === PHOTOS_CONFIG_ID) || null);
     }, { withId: true }));
+    // The active edition's own row, for one field on it: `locked`. Subscribed
+    // rather than fetched so a director freezing the year reaches every phone
+    // in the field without a reload — which matters, because from that moment
+    // their writes are being refused and the strip is the only thing that says
+    // so. Eleven small documents; bc_editions is not tournament-scoped (it IS
+    // the index of tournaments) so there is no filter to apply.
+    unsubs.push(db.subscribe(EDITIONS_COL, [], rows => {
+      setActiveEdition(rows.find(r => r.id === TOURNAMENT_ID) || null);
+    }));
     return () => unsubs.forEach(u => u());
   }, []);
 
@@ -4853,6 +4868,31 @@ export default function App() {
         failedWrites={writeState.failed}
         countdownAt={countdownAt}
       />
+
+      {/* ── The frozen-year strip ──
+          A write that will never land has to say so BEFORE somebody spends a
+          round typing into it. A locked edition refuses members in
+          firestore.rules, so this is not the enforcement — it is the only
+          place the enforcement is visible.
+
+          App chrome rather than a banner inside Scoring, for the same reason
+          the header is: the refusal reaches signing, betting and photos too.
+
+          Not shown to a director, who is exempt and would be reading a wall
+          that is not there for them, and not to a guest, who has no Firebase
+          account at all and is already refused at `request.auth != null`
+          without a membership check ever running. */}
+      {!isGuest(user) && lockNotice(activeEdition, { isDirector: !!user?.isDirector }) && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10, padding: "7px 20px",
+          background: BC.t3 + ALPHA.wash, borderBottom: `1px solid ${BC.t3}${ALPHA.hair}`,
+        }}>
+          <span aria-hidden style={{ flexShrink: 0, fontSize: FS.label }}>🔒</span>
+          <span style={{ flex: 1, minWidth: 0, fontSize: FS.label, fontWeight: 600, color: BC.t2, lineHeight: 1.4 }}>
+            {lockNotice(activeEdition, { isDirector: !!user?.isDirector })}
+          </span>
+        </div>
+      )}
 
       {/* Ready-to-finalize notification — app chrome, like the header above
           it, so it reaches the director on whichever tab they are on rather

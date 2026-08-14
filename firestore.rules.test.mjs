@@ -484,6 +484,92 @@ await check("unlisted collections stay denied", () =>
 await check("the retired skins collection is denied like any other", () =>
   assertFails(setDoc(doc(aliceDb(), "bc_skins/r1h3"), { player_id: "p9" })));
 
+// ── A LOCKED EDITION ────────────────────────────────────────────────
+// `locked: true` on an edition freezes that year against everybody but a
+// director. See src/lib/editionLock.js for what it means and canWriteEdition()
+// in the rules for what makes it true.
+//
+// What these pin, in order of how expensive they are to get wrong:
+//   • the DEFAULT is unlocked — three ways, because eleven years of edition
+//     rows predate the field and a default of locked freezes all of them
+//   • a locked year refuses a member's writes, on every collection they own
+//   • a director is exempt, so a locked year is never stranded
+//   • reading is untouched
+//   • BOTH ends of an update are checked, so a row cannot be carried out of a
+//     locked year into an open one
+await seed("bc_editions/bc_2019", { id: "bc_2019", year: 2019, locked: true });
+await seed("bc_editions/bc_2026", { id: "bc_2026", year: 2026, locked: false });
+await seed("bc_editions/bc_2025", { id: "bc_2025", year: 2025 });   // no field at all
+await seed("bc_hole_scores/hs_locked", { tournament_id: "bc_2019", strokes: 4 });
+await seed("bc_side_bets/sb_locked", { tournament_id: "bc_2019", created_by: "pete" });
+
+await check("a member can still write to an UNLOCKED year", () =>
+  assertSucceeds(setDoc(doc(peteDb(), "bc_hole_scores/hs_open"), { tournament_id: "bc_2026", strokes: 4 })));
+
+await check("an edition with no `locked` field is unlocked", () =>
+  assertSucceeds(setDoc(doc(peteDb(), "bc_hole_scores/hs_nofield"), { tournament_id: "bc_2025", strokes: 4 })));
+
+await check("an edition with no document at all is unlocked", () =>
+  // ensureActiveEditionDoc seeds the row lazily, so there is a real window in
+  // which a phone is pointed at a year whose index document does not exist.
+  // Failing open there means a new tournament can start.
+  assertSucceeds(setDoc(doc(peteDb(), "bc_hole_scores/hs_noedition"), { tournament_id: "bc_2099", strokes: 4 })));
+
+await check("a member CANNOT post a score in a locked year", () =>
+  assertFails(setDoc(doc(peteDb(), "bc_hole_scores/hs_new"), { tournament_id: "bc_2019", strokes: 4 })));
+
+await check("a member CANNOT change a score already in a locked year", () =>
+  assertFails(setDoc(doc(peteDb(), "bc_hole_scores/hs_locked"), { tournament_id: "bc_2019", strokes: 9 })));
+
+await check("a member CANNOT delete out of a locked year", () =>
+  // `request.resource` is null on delete, so this is the half of editionOpen()
+  // that reads `resource` instead.
+  assertFails(deleteDoc(doc(peteDb(), "bc_hole_scores/hs_locked"))));
+
+await check("a member CANNOT sign a card, tag a CTP or lock a round in a locked year", async () => {
+  await assertFails(setDoc(doc(peteDb(), "bc_card_sigs/sig_locked"), { tournament_id: "bc_2019", round: 1 }));
+  await assertFails(setDoc(doc(peteDb(), "bc_ctp/ctp_locked"), { tournament_id: "bc_2019", hole: 7 }));
+  await assertFails(setDoc(doc(peteDb(), "bc_round_locks/rl_locked"), { tournament_id: "bc_2019", locked: true }));
+});
+
+await check("a member CANNOT place a side bet in a locked year", () =>
+  assertFails(setDoc(doc(peteDb(), "bc_side_bets/sb_new"), { tournament_id: "bc_2019", created_by: "pete" })));
+
+await check("a member CANNOT settle their own side bet in a locked year", () =>
+  assertFails(setDoc(doc(peteDb(), "bc_side_bets/sb_locked"), { settled_by: "pete" }, { merge: true })));
+
+await check("a member CANNOT claim a roster name in a locked year", () =>
+  assertFails(setDoc(doc(peteDb(), "bc_players/p_locked"), { auth_uid: "pete" }, { merge: true })));
+
+// The attack the `request.resource` half of editionOpen() exists for: without
+// it, a member could pick a document up out of a frozen year and set it down
+// in an open one, which is an edit to the locked tournament by another name.
+await check("a member CANNOT carry a row out of a locked year into an open one", () =>
+  assertFails(setDoc(doc(peteDb(), "bc_hole_scores/hs_locked"), { tournament_id: "bc_2026", strokes: 9 })));
+
+await check("nor carry one INTO a locked year", () =>
+  assertFails(setDoc(doc(peteDb(), "bc_hole_scores/hs_open"), { tournament_id: "bc_2019", strokes: 9 })));
+
+await check("a DIRECTOR can still write to a locked year", () =>
+  // Somebody has to be able to correct one. A flag that can strand a
+  // tournament beyond repair is a worse bug than the one it fixes.
+  assertSucceeds(setDoc(doc(aliceDb(), "bc_hole_scores/hs_locked"), { tournament_id: "bc_2019", strokes: 5 })));
+
+await check("reading a locked year is untouched", () =>
+  // Freezing a tournament is not the same as hiding it — every leaderboard,
+  // card and photo stays visible to everybody, guests included.
+  assertSucceeds(getDoc(doc(peteDb(), "bc_hole_scores/hs_locked"))));
+
+await check("a member cannot lift the lock, and a director can", async () => {
+  // bc_editions is deliberately NOT gated on canWriteEdition: a lock that
+  // blocked its own removal would be a one-way door.
+  await assertFails(setDoc(doc(peteDb(), "bc_editions/bc_2019"), { locked: false }, { merge: true }));
+  await assertSucceeds(setDoc(doc(aliceDb(), "bc_editions/bc_2019"), { locked: false }, { merge: true }));
+});
+
+await check("and once unlocked, a member can write to it again", () =>
+  assertSucceeds(setDoc(doc(peteDb(), "bc_hole_scores/hs_unlocked"), { tournament_id: "bc_2019", strokes: 4 })));
+
 await env.cleanup();
 
 let failed = 0;
