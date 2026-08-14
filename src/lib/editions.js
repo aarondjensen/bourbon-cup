@@ -22,6 +22,52 @@ export const EDITIONS_COL = "bc_editions";
 
 const byYearDesc = (rows) => [...rows].sort((a, b) => (b.year || 0) - (a.year || 0));
 
+// ── An edition's id, and why it needs more than a year ──────────────
+//
+// The id IS the tournament_id every other collection filters on, and it used
+// to be a pure function of the year (`bc_${year}`). So a second edition for a
+// year that already had one did not land beside it — it landed ON it. That is
+// how a demo edition typed as 2026 walked into the 2026 that was already being
+// built for the real tournament.
+//
+// Nothing was deleted, which made it worse rather than better. `db.upsert`
+// merges, so the collision split two ways: the roster and courses arrived
+// under FRESH ids against the same tournament_id, giving the year two of every
+// player, while the documents whose ids ARE derived from the edition — the
+// tournament settings, team names, each round's setup — were merged over by
+// the source's copies. Half duplicated, half overwritten, and the app has no
+// way to tell either apart from data a director typed.
+//
+// `label` is the fix at the naming end: an optional slug on the id, so a
+// second tournament for an occupied year is `bc_2026_demo` and cannot reach
+// `bc_2026`. `editionExists` is the fix at the writing end, and it is checked
+// down here rather than in the picker, because the picker is not the thing
+// that loses the data.
+export const editionSlug = (s) =>
+  String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 24);
+
+export const editionIdFor = (year, label) => {
+  const y = String(year ?? "").replace(/\D/g, "");
+  const slug = editionSlug(label);
+  return `bc_${y}${slug ? `_${slug}` : ""}`;
+};
+
+// Is `id` already somebody's tournament? Both halves of this matter. The
+// edition document is how the picker knows a year exists; the roster is what a
+// write into an occupied id would actually corrupt. An edition whose document
+// was removed by hand but whose data is still filed under it is exactly the
+// case a document-only check would wave through.
+export const editionExists = async (id) => {
+  if (!id) return false;
+  const rows = await db.get(EDITIONS_COL);
+  if (rows.some((e) => e.id === id)) return true;
+  const players = await db.get("bc_players", [{ field: "tournament_id", op: "==", value: id }]);
+  return players.length > 0;
+};
+
+const TAKEN = (id) =>
+  `${id} already exists. Nothing was written — give the new one a label so it gets an id of its own.`;
+
 export const loadEditions = async () => byYearDesc(await db.get(EDITIONS_COL));
 
 export const subscribeEditions = (cb) =>
@@ -42,8 +88,11 @@ export const ensureActiveEditionDoc = async (name = "The Bourbon Cup") => {
 };
 
 // Create a new (namespaced) draft edition — empty. Cloning is `cloneEdition`.
-export const createEdition = async ({ year, name, id }) => {
-  const eid = id || `bc_${year}`;
+// Returns { ok, edition } or { ok: false, error } — it refuses to write into
+// an id that is already a tournament, rather than merging into it.
+export const createEdition = async ({ year, name, label, id }) => {
+  const eid = id || editionIdFor(year, label);
+  if (await editionExists(eid)) return { ok: false, error: TAKEN(eid) };
   const doc = {
     id: eid,
     year: Number(year),
@@ -53,7 +102,7 @@ export const createEdition = async ({ year, name, id }) => {
     created_from: null,
   };
   await db.upsert(EDITIONS_COL, doc);
-  return doc;
+  return { ok: true, edition: doc };
 };
 
 // ── Clone an existing edition into a new (namespaced) draft ──────────
@@ -61,10 +110,15 @@ export const createEdition = async ({ year, name, id }) => {
 // results (scores, matches, skins/ctp, round locks, handicap overrides, tee
 // assignments) — those always start fresh. options = { players, teams,
 // tournamentName, courses, rounds } booleans.
-export const cloneEdition = async (sourceId, { year, name, id }, options = {}) => {
-  const newTid = id || `bc_${year}`;
+export const cloneEdition = async (sourceId, { year, name, label, id }, options = {}) => {
+  const newTid = id || editionIdFor(year, label);
   const f = (tid) => [{ field: "tournament_id", op: "==", value: tid }];
   const stamp = Date.now();
+
+  // Before anything is written. A clone into an occupied id is the one way
+  // this module can damage a tournament nobody asked it to touch, and the
+  // damage is invisible on screen — see the note above editionIdFor.
+  if (await editionExists(newTid)) return { ok: false, error: TAKEN(newTid) };
 
   await db.upsert(EDITIONS_COL, {
     id: newTid,
@@ -139,7 +193,7 @@ export const cloneEdition = async (sourceId, { year, name, id }, options = {}) =
     }
   }
 
-  return { id: newTid, year: Number(year), name, namespaced: true, created_from: sourceId };
+  return { ok: true, edition: { id: newTid, year: Number(year), name, namespaced: true, created_from: sourceId } };
 };
 
 // Every tournament-scoped collection — purged when an edition is deleted.
