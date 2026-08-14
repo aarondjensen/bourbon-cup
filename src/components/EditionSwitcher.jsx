@@ -19,16 +19,28 @@
 // allows bc_editions writes to a director only — it is there so a player is
 // not shown controls whose every tap comes back refused.
 import { useState, useEffect } from "react";
-import { BC, FS, ON_AMBER } from "../theme";
+import { BC, FS, FONT, ON_AMBER } from "../theme";
 import { Popup, ConfirmModal } from "./Popup";
 import { getActiveTournamentId } from "../firebase";
-import { loadEditions, createEdition, cloneEdition, deleteEdition, switchEdition, ensureActiveEditionDoc } from "../lib/editions";
+import { loadEditions, createEdition, cloneEdition, deleteEdition, switchEdition, ensureActiveEditionDoc, editionIdFor } from "../lib/editions";
 
+// FS.lead, not FS.body, and that is functional rather than cosmetic: iOS
+// Safari zooms the page in when a focused input is under 16px and does not
+// zoom back out when the field is done with — so the director finished typing
+// a year and was left holding a viewport they had to pinch out of. See the
+// note under the FS scale in theme.js; condense with padding, never by
+// dropping a rung.
 const fieldStyle = (w) => ({
   width: w || "100%", flex: w ? "none" : 1, padding: "9px 11px", borderRadius: 8,
+  boxSizing: "border-box", fontFamily: FONT,
   background: BC.inp, border: `1px solid ${BC.bdr}`, color: BC.t1,
-  fontSize: FS.body, fontWeight: 600, outline: "none",
+  fontSize: FS.lead, fontWeight: 600, outline: "none",
 });
+
+const lbl = {
+  display: "block", fontSize: FS.label, fontWeight: 800, letterSpacing: 1,
+  textTransform: "uppercase", color: BC.t3, marginBottom: 4,
+};
 
 // What a clone can copy. Scores/matches/skins/locks are NEVER cloned.
 const CLONE_ITEMS = [
@@ -43,11 +55,19 @@ const DEFAULT_CLONE_OPTS = { players: true, teams: true, tournamentName: true, c
 export function EditionSwitcher({ open, onClose, canManage = false }) {
   const [editions, setEditions] = useState([]);
   const [loading, setLoading] = useState(true);
+  // "list" | "new". The composer used to sit under the list of every year the
+  // cup has been played, which put its one button at the very bottom of a tall
+  // scroll — i.e. in the strip an iPhone gives to the home indicator and the
+  // side-button gestures, where aiming for Clone gets you Siri. Its own view
+  // is short, so the button lands where a thumb is.
+  const [mode, setMode] = useState("list");
   const [year, setYear] = useState("");
   const [name, setName] = useState("");
+  const [label, setLabel] = useState("");
   const [cloneFrom, setCloneFrom] = useState("");
   const [cloneOpts, setCloneOpts] = useState(DEFAULT_CLONE_OPTS);
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
   const [pending, setPending] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
   const activeId = getActiveTournamentId();
@@ -70,28 +90,81 @@ export function EditionSwitcher({ open, onClose, canManage = false }) {
 
   if (!open) return null;
 
+  // What the year (plus any label) would name. Shown while typing, because the
+  // id is the thing that decides whether this is a new tournament or a write
+  // into an existing one, and it used to be invisible until it was too late.
+  const targetId = year ? editionIdFor(year, label) : "";
+  const taken = targetId ? editions.find((e) => e.id === targetId) : null;
+  const ready = !!year && !taken && !busy;
+
+  const resetForm = () => {
+    setYear(""); setName(""); setLabel(""); setCloneFrom("");
+    setCloneOpts(DEFAULT_CLONE_OPTS); setErr(null);
+  };
+
   const doCreate = async () => {
-    if (!year || busy) return;
+    if (!ready) return;
     setBusy(true);
+    setErr(null);
     try {
-      if (cloneFrom) await cloneEdition(cloneFrom, { year, name }, cloneOpts);
-      else await createEdition({ year, name });
-      setYear(""); setName(""); setCloneFrom(""); setCloneOpts(DEFAULT_CLONE_OPTS);
+      // Both refuse an id that is already a tournament and say so. The check
+      // above is the one the director sees; this is the one that holds.
+      const res = cloneFrom
+        ? await cloneEdition(cloneFrom, { year, name, label }, cloneOpts)
+        : await createEdition({ year, name, label });
+      if (!res?.ok) { setErr(res?.error || "Could not create that tournament."); return; }
+      resetForm();
       setEditions(await loadEditions());
+      setMode("list");
     } finally { setBusy(false); }
   };
 
   const statusColor = (s) => s === "published" ? BC.amberInk : s === "archived" ? BC.t3 : BC.gold;
 
+  const headerBtn = {
+    flexShrink: 0, width: 32, height: 32, borderRadius: 9, border: `1px solid ${BC.bdr}`,
+    background: "transparent", color: BC.t2, fontSize: FS.lead, fontWeight: 600,
+    cursor: "pointer", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center",
+  };
+
   return (
     <>
-      <Popup onClose={onClose} maxWidth={400} padding={18} showClose>
-        <div style={{ fontSize: FS.lead, fontWeight: 800, color: BC.t1, letterSpacing: 0.5, marginBottom: 14 }}>Tournaments</div>
+      {/* viewportFit + align start: this popup has text fields in it, and the
+          classic centred overlay puts them (and the button under them) behind
+          the on-screen keyboard. padding 0 + a flex column so the header and
+          the action bar stay put while only the middle scrolls. */}
+      <Popup
+        onClose={onClose} portal viewportFit align="start"
+        maxWidth={420} padding={0} outerPadding={12}
+        innerStyle={{ display: "flex", flexDirection: "column", fontFamily: FONT }}
+      >
+        <div style={{
+          flexShrink: 0, display: "flex", alignItems: "center", gap: 9,
+          padding: "12px 14px", borderBottom: `1px solid ${BC.bdr}`,
+        }}>
+          {mode === "new" && (
+            <button onClick={() => { setMode("list"); setErr(null); }} aria-label="Back"
+              style={{ ...headerBtn, fontSize: FS.title }}>‹</button>
+          )}
+          <div style={{ flex: 1, minWidth: 0, fontSize: FS.lead, fontWeight: 800, color: BC.t1, letterSpacing: 0.5 }}>
+            {mode === "new" ? "New tournament" : "Tournaments"}
+          </div>
+          {mode === "list" && canManage && !loading && (
+            <button onClick={() => { resetForm(); setMode("new"); }} style={{
+              flexShrink: 0, padding: "7px 12px", borderRadius: 9, fontFamily: FONT,
+              border: `1px solid ${BC.amber}`, background: "transparent", color: BC.amberInk,
+              fontSize: FS.small, fontWeight: 800, letterSpacing: 0.5, cursor: "pointer",
+            }}>+ New</button>
+          )}
+          <button onClick={onClose} aria-label="Close" style={headerBtn}>✕</button>
+        </div>
 
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", padding: 14 }}>
+        {mode === "list" ? (<>
         {loading ? (
           <div style={{ fontSize: FS.small, color: BC.t3, padding: "10px 0 16px" }}>Loading…</div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {editions.map((e) => {
               const isActive = e.id === activeId;
               return (
@@ -131,18 +204,43 @@ export function EditionSwitcher({ open, onClose, canManage = false }) {
           </div>
         )}
 
-        {canManage && (
-        <div style={{ borderTop: `1px solid ${BC.bdr}`, paddingTop: 14 }}>
-          <div style={{ fontSize: FS.small, fontWeight: 800, letterSpacing: 1.5, color: BC.t3, marginBottom: 9 }}>NEW EDITION</div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-            <input value={year} onChange={(e) => setYear(e.target.value.replace(/\D/g, "").slice(0, 4))}
-              placeholder="Year" inputMode="numeric" style={fieldStyle(78)} />
-            <input value={name} onChange={(e) => setName(e.target.value)}
-              placeholder="Name (optional)" style={fieldStyle()} />
+        </>) : (<>
+          <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+            <div style={{ flex: "none", width: 92 }}>
+              <span style={lbl}>Year *</span>
+              <input value={year} autoFocus inputMode="numeric" placeholder="2026"
+                onChange={(e) => { setErr(null); setYear(e.target.value.replace(/\D/g, "").slice(0, 4)); }}
+                style={fieldStyle()} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <span style={lbl}>Name</span>
+              <input value={name} placeholder={`The Bourbon Cup ${year || "…"}`}
+                onChange={(e) => setName(e.target.value)} style={fieldStyle()} />
+            </div>
+          </div>
+
+          {/* The label is what makes a demo or test tournament possible at all.
+              Without it the id is the year and nothing else, so a second 2026
+              is not a second tournament — it is the first one, written into. */}
+          <div style={{ marginBottom: 8 }}>
+            <span style={lbl}>Label — for a demo or test copy</span>
+            <input value={label} placeholder="demo, test — leave blank for the real one"
+              onChange={(e) => { setErr(null); setLabel(e.target.value); }} style={fieldStyle()} />
+          </div>
+
+          {/* What this will be called in the database, while there is still
+              time to change it. Red when it names a tournament that exists. */}
+          <div style={{ fontSize: FS.label, lineHeight: 1.45, marginBottom: 12, color: taken ? BC.danger : BC.t3 }}>
+            {!year
+              ? "Enter a year to name the new tournament."
+              : taken
+                ? `${targetId} is already "${taken.name}". Give this one a label — the clone would land inside that tournament, not beside it.`
+                : <>Creates <b style={{ color: BC.t2 }}>{targetId}</b>, separate from every other tournament.</>}
           </div>
 
           {/* Clone from a prior edition (optional) */}
-          <select value={cloneFrom} onChange={(e) => setCloneFrom(e.target.value)} style={{ ...fieldStyle(), marginBottom: 8, cursor: "pointer" }}>
+          <span style={lbl}>Build from</span>
+          <select value={cloneFrom} onChange={(e) => setCloneFrom(e.target.value)} style={{ ...fieldStyle(), marginBottom: 10, cursor: "pointer" }}>
             <option value="">Start blank (no clone)</option>
             {editions.map((e) => (
               <option key={e.id} value={e.id}>Clone from {e.year} · {e.name}</option>
@@ -151,13 +249,13 @@ export function EditionSwitcher({ open, onClose, canManage = false }) {
 
           {cloneFrom && (
             <div style={{ marginBottom: 10, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, padding: "10px 12px" }}>
-              <div style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.5, marginBottom: 8 }}>COPY INTO THE NEW EDITION</div>
-              {CLONE_ITEMS.map(({ key, label }) => (
+              <div style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.5, marginBottom: 8 }}>COPY INTO THE NEW TOURNAMENT</div>
+              {CLONE_ITEMS.map(({ key, label: text }) => (
                 <label key={key} style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 7, cursor: "pointer" }}>
                   <input type="checkbox" checked={cloneOpts[key]}
                     onChange={(e) => setCloneOpts((o) => ({ ...o, [key]: e.target.checked }))}
                     style={{ width: 16, height: 16, accentColor: BC.amber, flexShrink: 0 }} />
-                  <span style={{ fontSize: FS.small, fontWeight: 600, color: BC.t1 }}>{label}</span>
+                  <span style={{ fontSize: FS.small, fontWeight: 600, color: BC.t1 }}>{text}</span>
                 </label>
               ))}
               <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 4, lineHeight: 1.4 }}>
@@ -166,12 +264,41 @@ export function EditionSwitcher({ open, onClose, canManage = false }) {
             </div>
           )}
 
-          <button onClick={doCreate} disabled={!year || busy} style={{
-            width: "100%", padding: 11, borderRadius: 10, border: "none", cursor: (year && !busy) ? "pointer" : "not-allowed",
-            background: (year && !busy) ? BC.amber : BC.inp, color: (year && !busy) ? ON_AMBER : BC.t3,
-            fontSize: FS.body, fontWeight: 800, letterSpacing: 0.5,
-          }}>{busy ? "Working…" : (cloneFrom ? "Clone into new edition" : "Create draft edition")}</button>
+          {err && (
+            <div style={{ fontSize: FS.small, fontWeight: 600, color: BC.danger, lineHeight: 1.45, marginBottom: 4 }}>{err}</div>
+          )}
+        </>)}
         </div>
+
+        {/* The action bar. Fixed rather than the last thing in a long scroll,
+            and padded out past the home indicator so the tap that lands just
+            below Clone is still Clone and not a system gesture. */}
+        {mode === "new" && (
+          <div style={{
+            flexShrink: 0, display: "flex", gap: 8, background: BC.bg,
+            padding: "10px 14px calc(env(safe-area-inset-bottom, 0px) + 12px)",
+            borderTop: `1px solid ${BC.bdr}`,
+          }}>
+            <button onClick={() => { setMode("list"); setErr(null); }} style={{
+              flex: "none", padding: "11px 16px", borderRadius: 10, fontFamily: FONT,
+              background: BC.inp, border: `1px solid ${BC.bdr}`, color: BC.t2,
+              fontSize: FS.body, fontWeight: 700, cursor: "pointer",
+            }}>Cancel</button>
+            {/* The label carries the disabled state. It used to be a dead amber
+                bar that said "Clone into new edition" whether or not it would,
+                leaving the missing year to be guessed at. */}
+            <button onClick={doCreate} disabled={!ready} style={{
+              flex: 1, padding: 11, borderRadius: 10, border: "none", fontFamily: FONT,
+              cursor: ready ? "pointer" : "not-allowed",
+              background: ready ? BC.amber : BC.inp, color: ready ? ON_AMBER : BC.t3,
+              fontSize: FS.body, fontWeight: 800, letterSpacing: 0.5,
+            }}>
+              {busy ? "Working…"
+                : !year ? "Enter a year first"
+                : taken ? "Add a label first"
+                : cloneFrom ? "Clone into new tournament" : "Create draft tournament"}
+            </button>
+          </div>
         )}
       </Popup>
 
