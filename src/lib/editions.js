@@ -133,6 +133,28 @@ export const updateEdition = async (id, { name, status }) => {
   return { ok: true, edition: written };
 };
 
+// ── Freeze a year against everybody but a director ──────────────────
+// The one stored flag on an edition that something actually reads, and what
+// reads it is firestore.rules — see canWriteEdition() there, and
+// lib/editionLock.js for why a lock is stored and why it is not `status`.
+//
+// A single-field merge, deliberately: rewriting the whole document would mean
+// reading it first, and a stale read would put back a name or a status
+// somebody else had just changed. Nothing else on the row is this caller's
+// business.
+//
+// Only a director can land this — `bc_editions` has been director-only since
+// before the flag existed — so there is no client-side guard here. The picker
+// hides the control from a member so they are not offered a tap that comes
+// back refused, which is the same division of labour as everywhere else in
+// this app: the rules decide, the UI declines to lie about it.
+export const setEditionLocked = async (id, locked) => {
+  if (!id) return { ok: false, error: "No edition to lock." };
+  const written = await db.upsert(EDITIONS_COL, { id: String(id), locked: locked === true });
+  if (!written) return { ok: false, error: "That didn't save. The security rules may not be deployed yet." };
+  return { ok: true, edition: written };
+};
+
 // ── Clone an existing edition into a new (namespaced) draft ──────────
 // Copies only the STRUCTURAL data the caller opts into; never the actual
 // results (scores, matches, skins/ctp, round locks, handicap overrides, tee

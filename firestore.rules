@@ -152,6 +152,72 @@ service cloud.firestore {
              .data.get('is_director', false) == true;
     }
 
+    // ── A LOCKED EDITION ───────────────────────────────────────────
+    // `locked: true` on bc_editions/{id} freezes that tournament against
+    // everybody but a director. See src/lib/editionLock.js for what it means
+    // and why it is its own field rather than `status == "archived"`; this is
+    // what makes it true.
+    //
+    // Why it has to live HERE and not in the app: a membership is not
+    // edition-scoped. `isMember()` asks whether you presented the tournament
+    // password, full stop — it does not ask which year you are looking at, and
+    // ☰ → Tournaments is offered to every member, not just directors. So any
+    // member can switch to any edition and write to it. During a store beta
+    // that is a dozen strangers-to-the-data with the live tournament one tap
+    // away, and hiding the picker would not help: the app's Firebase config
+    // ships in the bundle, so anybody can talk to Firestore directly.
+    //
+    // Until this existed, the confirm on opening an archived year told people
+    // it was read-only and NOTHING enforced that. The rounds were imported
+    // LOCKED and FINAL and the UI declined to draw edit controls for one,
+    // which stops a fat finger and stops nothing else.
+    //
+    // Default UNLOCKED, three times over — a missing edition document, a
+    // missing `locked` field, and an edition id that is empty all evaluate to
+    // writable. That direction is deliberate. Eleven years of edition rows
+    // predate this field, and a default of "locked" would freeze every one of
+    // them on deploy; worse, `ensureActiveEditionDoc` seeds the row for a new
+    // year lazily, so there is a real window in which a phone is pointed at an
+    // edition whose index document does not exist yet. Failing open there
+    // means a new tournament starts; failing closed means it cannot.
+    function editionLocked(tid) {
+      return tid != ''
+        && exists(/databases/$(database)/documents/bc_editions/$(tid))
+        && get(/databases/$(database)/documents/bc_editions/$(tid))
+             .data.get('locked', false) == true;
+    }
+
+    // BOTH ends of the write are checked, which matters on update: without the
+    // `request.resource` half a member could take a document that lives in a
+    // locked year and rewrite it — tournament_id included — into an unlocked
+    // one, which is an edit to the frozen tournament by another name.
+    //
+    // `resource` is null on create and `request.resource` is null on delete,
+    // so each side is guarded before its data is touched.
+    function editionOpen() {
+      return !(resource != null && editionLocked(resource.data.get('tournament_id', '')))
+          && !(request.resource != null && editionLocked(request.resource.data.get('tournament_id', '')));
+    }
+
+    // What every edition-scoped MEMBER write is gated on. Directors are exempt
+    // — somebody has to be able to correct a locked year, and a flag that can
+    // strand a tournament beyond repair is a worse bug than the one it fixes.
+    // Unlocking is also how you get back, and bc_editions is deliberately NOT
+    // gated on this: a lock that blocked its own removal is a one-way door.
+    //
+    // Costs one document read per write, on top of the one isMember() already
+    // does. That is the whole bargain and it is worth naming: a tournament's
+    // ~1,300 hole scores make ~1,300 extra reads a weekend, and it is the only
+    // thing standing between a beta tester and a live tournament's scorecards.
+    // `exists` and `get` on the same path inside one evaluation are billed
+    // once.
+    //
+    // Order matters for that cost: editionOpen() is checked first so the
+    // common case — an unlocked year — never pays for the isDirector() read.
+    function canWriteEdition() {
+      return isMember() && (editionOpen() || isDirector());
+    }
+
     // The password, and the deliberate hole in it. `accessCode()` reads a
     // document no client may read — rules `get()` is not subject to read
     // rules, which is the whole trick: the secret can be compared without
@@ -263,7 +329,7 @@ service cloud.firestore {
     // The director's unlink is a plain director write and needs none of it.
     match /bc_players/{doc} {
       allow read: if isOpen();
-      allow update: if isMember()
+      allow update: if canWriteEdition()
         && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(['auth_uid', 'auth_email', 'auth_provider', 'auth_linked_at'])
         && request.resource.data.auth_uid == request.auth.uid
@@ -290,7 +356,7 @@ service cloud.firestore {
     // Frozen per-round handicaps. Written by the auto-lock on the first
     // score of a round as well as by the director; see src/lib/roundLocks.js.
     match /bc_round_locks/{doc}        { allow read: if isOpen();
-                                         allow write: if isMember(); }
+                                         allow write: if canWriteEdition(); }
     match /bc_settings/{doc}           { allow read: if isOpen();
                                          allow write: if isDirector(); }
     match /bc_tournament_settings/{doc} { allow read: if isOpen();
@@ -317,15 +383,15 @@ service cloud.firestore {
     // Written by players from the Scoring tab, so these can never be
     // director-only even once sign-in exists.
     match /bc_hole_scores/{doc}        { allow read: if isOpen();
-                                         allow write: if isMember(); }
+                                         allow write: if canWriteEdition(); }
     match /bc_ctp/{doc}                { allow read: if isOpen();
-                                         allow write: if isMember(); }
+                                         allow write: if canWriteEdition(); }
     // Card signatures and attestations — one document per signed card. See
     // src/lib/cardSigs. Written by players from the Scoring tab (sign,
     // attest, unsign) and by the director's force-attest, so it belongs in
     // this half of the list rather than with the director-owned data.
     match /bc_card_sigs/{doc}          { allow read: if isOpen();
-                                         allow write: if isMember(); }
+                                         allow write: if canWriteEdition(); }
 
     // ── The photo library ─────────────────────────────────────────
     // One document per photo. Not the photo — the INDEX of it: where the
@@ -376,15 +442,15 @@ service cloud.firestore {
 
     match /bc_media/{doc} {
       allow read: if isOpen();
-      allow create: if isMember()
+      allow create: if canWriteEdition()
                     && photoUploadsOn()
                     && request.resource.data.uploadedBy == request.auth.uid;
       allow update: if isDirector()
-                    || (isMember()
+                    || (canWriteEdition()
                         && resource.data.uploadedBy == request.auth.uid
                         && request.resource.data.uploadedBy == resource.data.uploadedBy);
       allow delete: if isDirector()
-                    || (isMember()
+                    || (canWriteEdition()
                         && resource.data.uploadedBy == request.auth.uid
                         && resource.data.host == 'storage');
     }
@@ -431,17 +497,17 @@ service cloud.firestore {
     // break the workflow before it stopped anybody.
     match /bc_side_bets/{doc} {
       allow read: if isOpen();
-      allow create: if isMember()
+      allow create: if canWriteEdition()
                     && request.resource.data.created_by == request.auth.uid;
       allow update: if isDirector()
-                    || (isMember()
+                    || (canWriteEdition()
                         && resource.data.created_by == request.auth.uid
                         && request.resource.data.created_by == resource.data.created_by)
-                    || (isMember()
+                    || (canWriteEdition()
                         && request.resource.data.diff(resource.data).affectedKeys()
                              .hasOnly(['settled_by']));
       allow delete: if isDirector()
-                    || (isMember() && resource.data.created_by == request.auth.uid);
+                    || (canWriteEdition() && resource.data.created_by == request.auth.uid);
     }
 
     // ── The trip ledger ───────────────────────────────────────────
