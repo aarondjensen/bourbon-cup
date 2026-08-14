@@ -24,10 +24,13 @@
 //
 // Credentials: the Firebase ADMIN SDK, which bypasses firestore.rules — the
 // roster, courses and rounds are director-only there and a bulk seed is not a
-// signed-in phone.
+// signed-in phone. Point --key at a service-account key; it works the same in
+// PowerShell and in bash, which `VAR=value command` does not:
 //
-//   GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json \
-//   node scripts/seed-demo.mjs --write
+//   node scripts/seed-demo.mjs --write --key C:\path\to\key.json
+//
+// GOOGLE_APPLICATION_CREDENTIALS is still read when it is set, for anyone who
+// already has it in their environment.
 //
 // The key is Firebase Console → Project Settings → Service accounts →
 // Generate new private key. It has full database access: do not commit it
@@ -51,7 +54,7 @@
 //      the mark is that this seed only ever owns what it wrote.
 //   5. --undo deletes by the mark, not by the collection. A document a human
 //      added to the demo survives an undo.
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -64,9 +67,23 @@ const args = process.argv.slice(2);
 const has = (f) => args.includes(f);
 const valueOf = (f) => (args.indexOf(f) >= 0 ? args[args.indexOf(f) + 1] : null);
 
+// Everything after a flag up to the next one, joined. `--add "Aaron J"` should
+// be one name, and on Windows it is not: `npm run seed:demo -- --add "Aaron J"`
+// arrives as `--add Aaron J`, because npm hands the arguments to cmd and the
+// quotes are gone by the time node sees them. Reading a single token there
+// would create a golfer called "Aaron" and silently drop the surname — a
+// result that looks like it worked.
+const phraseAfter = (f) => {
+  const i = args.indexOf(f);
+  if (i < 0) return null;
+  const words = [];
+  for (let j = i + 1; j < args.length && !args[j].startsWith("--"); j++) words.push(args[j]);
+  return words.length ? words.join(" ") : null;
+};
+
 const WRITE = has("--write");
 const UNDO = has("--undo");
-const ADD = valueOf("--add");
+const ADD = phraseAfter("--add");
 const allowProject = valueOf("--allow-project");
 
 const die = (msg) => { console.error(`\n✖ ${msg}\n`); process.exit(1); };
@@ -136,9 +153,28 @@ try {
   die("firebase-admin is not installed. `npm i --no-save firebase-admin`, or run this from functions/.");
 }
 
-if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-  die("GOOGLE_APPLICATION_CREDENTIALS is not set. Point it at a service-account key.");
+// ── The key, however this shell likes to say it ─────────────────────
+// `--key` exists because `GOOGLE_APPLICATION_CREDENTIALS=… node …` is bash
+// syntax and this repo has a Windows developer. In PowerShell that line is not
+// a command with an environment override in front of it, it is a command whose
+// NAME is `GOOGLE_APPLICATION_CREDENTIALS=…`, and the error says so in those
+// terms — which reads as the script being broken rather than the shell being
+// different. A flag works identically in both.
+const KEY = phraseAfter("--key") || process.env.GOOGLE_APPLICATION_CREDENTIALS;
+if (!KEY) {
+  die("No service-account key.\n"
+    + "      --key C:\\path\\to\\key.json        (any shell)\n"
+    + "      $env:GOOGLE_APPLICATION_CREDENTIALS = \"C:\\path\\to\\key.json\"   (PowerShell)\n"
+    + "      GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json               (bash/zsh)");
 }
+if (!existsSync(KEY)) {
+  die(`no file at \`${KEY}\`.\n`
+    + `  That is the path to the JSON the Firebase console downloads —\n`
+    + `  Project Settings → Service accounts → Generate new private key.`);
+}
+// The admin SDK's applicationDefault() reads this variable, so a --key is
+// promoted into it rather than threaded through a second code path.
+process.env.GOOGLE_APPLICATION_CREDENTIALS = KEY;
 
 // Rail 3, BEFORE initializeApp — the key itself names the project, and a key
 // for the wrong one is how a seed ends up in somebody else's database. Read it
@@ -149,10 +185,10 @@ const expected = (() => {
   catch { return null; }
 })();
 const actual = (() => {
-  try { return JSON.parse(readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS, "utf8")).project_id || null; }
+  try { return JSON.parse(readFileSync(KEY, "utf8")).project_id || null; }
   catch { return null; }
 })();
-if (!actual) die(`could not read a project_id out of ${process.env.GOOGLE_APPLICATION_CREDENTIALS}`);
+if (!actual) die(`\`${KEY}\` is not a service-account key — no project_id in it.`);
 if (expected && actual !== expected && actual !== allowProject) {
   die(`the key is for \`${actual}\`, and .firebaserc says \`${expected}\`.\n`
     + `  If that is deliberate: --allow-project ${actual}`);
