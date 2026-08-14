@@ -13,6 +13,7 @@
     "build:editions": "node pipeline/editions.mjs",
     "build:archive": "node pipeline/archive.mjs",
     "build:ios-icons": "node scripts/ios-icons.mjs",
+    "build:store-graphics": "node scripts/store-graphics.mjs",
     "team-brand": "node pipeline/team-brand.mjs",
     "import:history": "node scripts/import-history.mjs",
     "undo:clone": "node scripts/undo-clone.mjs",

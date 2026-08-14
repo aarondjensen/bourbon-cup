@@ -186,6 +186,15 @@ hand. `ios/.gitignore` covers what Capacitor generates.
 | `App.xcodeproj` | `CODE_SIGN_ENTITLEMENTS`, and `TARGETED_DEVICE_FAMILY = "1"` — **iPhone only**. Declaring iPad means a reviewer opens it on an iPad, and every layout call in this app was made for a phone held one-handed on a tee box. |
 | `Assets.xcassets` | The real icon and launch image, from `npm run build:ios-icons`. |
 
+**None of it can be compiled here, so it is tested as files.**
+`scripts/ios-project.test.js` runs in the ordinary `npm test` suite and reads
+the plists, the pbxproj and the icon's PNG header, asserting that each setting
+in the table above is still there. It cannot tell you the app builds; it tells
+you that a `cap add ios`, a merge or a well-meant simplification has not
+quietly dropped a key whose absence you would otherwise discover on an upload
+days later. The 4.2 trap is in there too: **the suite fails if
+`capacitor.config.json` grows a `server.url`.**
+
 **`npm run build:ios-icons`** (`scripts/ios-icons.mjs`) renders
 `public/BC ICON-01.svg` — the same mark the PWA and the Play listing use — to a
 1024×1024 icon and three 2732×2732 splash images. Run it after any

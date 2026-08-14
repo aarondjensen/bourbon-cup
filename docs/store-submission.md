@@ -193,6 +193,12 @@ uses it.
 4. **Data → Player career table** — ten years of record. Nothing else in the
    listing says "this is not a weekend project" as fast.
 
+**These have to be taken somewhere that can reach the app.** Not a Claude
+session: the sandbox's network policy denies `thebourboncup.com`, and a local
+dev server has no Firebase credentials, so there is no route to a screen with
+real scores on it from there. Any laptop with a browser will do it in ten
+minutes. Guest mode gets you three of the four without signing in.
+
 Drive the deployed site in a phone viewport and photograph real screens rather
 than mocking them up:
 
