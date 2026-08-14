@@ -56,7 +56,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { BC, FONT, ON_ACCENT, ON_AMBER, SHADOW, SCRIM, FS } from "../theme";
+import { BC, FONT, ON_ACCENT, ON_AMBER, SHADOW, SCRIM, FS, R } from "../theme";
 
 const Z_MAP = { content: 500, modal: 900 };
 const STD_BACKDROP = SCRIM;
@@ -173,7 +173,7 @@ export function Popup({
         style={{
           background: BC.bg,
           border: `1px solid ${BC.bdr}`,
-          borderRadius: 14,
+          borderRadius: R.modal,
           // The app's font is set inline on each view root, not globally, so
           // a portaled popup (a direct <body> child) would otherwise fall
           // back to the browser default. Declare it here so every popup
@@ -210,7 +210,7 @@ export function Popup({
               right: 8,
               width: 32,
               height: 32,
-              borderRadius: 8,
+              borderRadius: R.md,
               // Opaque, not transparent. The content now scrolls UNDERNEATH
               // this button rather than carrying it away, which is the fix —
               // but a transparent button means rows slide visibly through the
@@ -357,7 +357,7 @@ function ConfirmModalInner({ m }) {
           <button
             onClick={handleCancel}
             style={{
-              flex: 1, padding: 12, borderRadius: 10,
+              flex: 1, padding: 12, borderRadius: R.lg,
               background: BC.inp, border: `1px solid ${BC.bdr}`,
               color: BC.t2, fontSize: FS.body, fontWeight: 700,
               cursor: "pointer",
@@ -369,7 +369,7 @@ function ConfirmModalInner({ m }) {
         <button
           onClick={m.onConfirm}
           style={{
-            flex: 1, padding: 12, borderRadius: 10,
+            flex: 1, padding: 12, borderRadius: R.lg,
             background: confirmBg, border: "none",
             color: confirmFg, fontSize: FS.body, fontWeight: 700,
             cursor: "pointer",

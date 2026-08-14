@@ -12,7 +12,7 @@
 //    • ScoreButtonRow  — the tappable par-relative score entry row.
 
 import { createPortal } from "react-dom";
-import { BC, FONT, ON_ACCENT, BROWN, HOLE_BANNER, SHADOW, ALPHA, dimHex, teamColor, FS, segThumb, segTrack } from "../theme";
+import { BC, FONT, ON_ACCENT, BROWN, HOLE_BANNER, SHADOW, ALPHA, dimHex, teamColor, FS, segThumb, segTrack, R } from "../theme";
 
 
 // The rule that marks the thumb. A child rather than a border because it is
@@ -75,7 +75,7 @@ export function SegmentedToggle({ options, value, onChange, variant = "segmented
   const track = tracked ? segTrack({ compact: dense }) : { gap: 6 };
   const btn = (on) => (tracked
     ? segThumb(on)
-    : { ...segThumb(on, { sunken: true }), borderRadius: 8, border: `1px solid ${on ? "transparent" : BC.bdr}` });
+    : { ...segThumb(on, { sunken: true }), borderRadius: R.md, border: `1px solid ${on ? "transparent" : BC.bdr}` });
   return (
     <div style={{ display: "flex", ...track, ...style }}>
       {options.map(([k, label]) => {
@@ -226,7 +226,7 @@ export function Toast({ message, type = "success", top = 30, oneLine = false }) 
         position: "fixed", top, left: "50%", transform: "translateX(-50%)",
         background: dimHex(accent, 0.42), border: `1px solid ${accent}`,
         color: ON_ACCENT,
-        borderRadius: oneLine ? 999 : 12,
+        borderRadius: oneLine ? R.pill : R.xl,
         padding: oneLine ? "5px 14px" : "10px 22px",
         fontSize: oneLine ? FS.small : FS.body,
         lineHeight: oneLine ? 1.2 : undefined,
@@ -263,7 +263,7 @@ export function HoleNavigator({ hole, par, hcp, onGo, sizes = HOLE_NAV_SIZES }) 
         onClick={() => onGo(Math.max(0, Math.min(17, hole + dir)))}
         disabled={at}
         style={{
-          width: 28, height: sizes.nav, borderRadius: 8, background: "none", border: "none",
+          width: 28, height: sizes.nav, borderRadius: R.md, background: "none", border: "none",
           cursor: at ? "default" : "pointer",
           color: at ? `${ink}${ALPHA.line}` : ink,
           fontSize: FS.title, fontWeight: 700,
@@ -276,7 +276,7 @@ export function HoleNavigator({ hole, par, hcp, onGo, sizes = HOLE_NAV_SIZES }) 
   const val = { fontSize: sizes.side, fontWeight: 800, color: ink };
   return (
     <div style={{
-      background: fill, borderRadius: 10, padding: sizes.pad, marginBottom: sizes.gap,
+      background: fill, borderRadius: R.lg, padding: sizes.pad, marginBottom: sizes.gap,
       display: "flex", alignItems: "center", flexShrink: 0,
     }}>
       {arrow(-1)}
@@ -350,7 +350,7 @@ export function ScoreButtonRow({ par, score, onScore, fill = false, minHeight = 
   // under the 3:1 floor for a graphical control, never mind text. t2 keeps
   // them quieter than the score numbers (t1) without making them a guess.
   const nudge = {
-    width: 30, borderRadius: 8, background: BC.inp, border: "none",
+    width: 30, borderRadius: R.md, background: BC.inp, border: "none",
     color: BC.t2, fontSize: FS.body, fontWeight: 700, cursor: "pointer", flexShrink: 0,
     ...btnBox,
   };
@@ -387,7 +387,7 @@ export function ScoreButtonRow({ par, score, onScore, fill = false, minHeight = 
         return (
           <div key={btn} style={{ ...column, flex: 1 }}>
             <button onClick={() => onScore(isCur ? 0 : btn)} style={{
-              width: "100%", ...btnBox, borderRadius: 8, cursor: "pointer", fontSize, fontWeight: 800,
+              width: "100%", ...btnBox, borderRadius: R.md, cursor: "pointer", fontSize, fontWeight: 800,
               // INVERTED — the chip is the page turned inside out: a light
               // fill on a dark page and a dark one on a light page, with the
               // page's own colour written back on it. The loudest thing on
