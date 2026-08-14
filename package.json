@@ -14,6 +14,7 @@
     "build:archive": "node pipeline/archive.mjs",
     "team-brand": "node pipeline/team-brand.mjs",
     "import:history": "node scripts/import-history.mjs",
+    "undo:clone": "node scripts/undo-clone.mjs",
     "send:push": "node scripts/send-push.mjs"
   },
   "dependencies": {
