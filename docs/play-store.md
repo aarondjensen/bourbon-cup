@@ -1,5 +1,11 @@
 # Getting The Bourbon Cup into the Play Store
 
+Read [`store-submission.md`](./store-submission.md) first — the reviewer
+account, the data disclosures, the age rating and the deploy prerequisites live
+there and are not repeated here. The iOS half is [`app-store.md`](./app-store.md),
+and it is a much larger job; start this one first, because its long pole is
+calendar time rather than work.
+
 The app is a PWA. The Android app is a **Trusted Web Activity** — a thin native
 shell that opens `https://thebourboncup.com` full-screen, with no browser
 chrome, sharing the same session and the same service worker as the site. There
@@ -109,68 +115,32 @@ Choose **All or some functionality is restricted** and add two entries:
 > Password: `<its Google password>`
 > Any other instructions: Tournament password: `<from Admin → Event → Access>`
 
-> **Set the demo account up first**, and point it at a scratch year rather than
-> the live cup: create a throwaway edition in **Admin → Event → Editions**,
-> add a roster row for the reviewer, sign in as the demo account and claim it.
-> The tournament password is project-wide rather than per-edition, so that
-> account can write to any year — revoke it after review by deleting its
-> `bc_accounts` document in the Firebase console.
+The account itself is built once and used by both stores — see
+`store-submission.md` §1.4.
 
 Guest mode alone is **not** enough for this section. Play wants reviewers to
 reach all functionality, and guest mode is read-only by design.
 
 ---
 
-## 4. Data safety — **BY HAND**
+## 4. Data safety and age rating — **BY HAND**
 
-**App content → Data safety.** What the app actually collects, from
-`src/lib/accounts.js`, `src/lib/notifications.js`, `src/lib/mediaUpload.js` and
-the roster:
+**App content → Data safety.** The collection table is in
+`store-submission.md` §2, in the same vocabulary Play's form uses. Every row
+there maps to App functionality, and Email / User IDs additionally to Account
+management.
 
-| Data type | Collected | Shared | Required | Purpose |
-| --- | --- | --- | --- | --- |
-| Email address | Yes | No | Yes | App functionality, Account management |
-| Name | Yes | No | Yes | App functionality |
-| User IDs | Yes | No | Yes | App functionality, Account management |
-| Photos | Yes | No | Optional | App functionality |
-| Device or other IDs | Yes | No | Optional | App functionality (push notification token) |
-| Other user-generated content | Yes | No | Yes | App functionality (scores, matches, card signatures) |
-| Other financial info | Yes | No | Optional | App functionality (trip payments the director records — amounts and dates only, no card or bank details) |
-
-Answer these as follows:
-
-- **Is all data encrypted in transit?** Yes.
-- **Do you provide a way for users to request data deletion?** Yes —
-  `https://thebourboncup.com/account-deletion.html`
-- **Data collected is processed ephemerally?** No.
-- **Location, contacts, calendar, messages, health, financial account info,
-  audio, files, app activity, crash logs, diagnostics, advertising ID?** Not
-  collected. The app has no analytics and no advertising SDKs at all.
+**App content → Content ratings** is the IARC questionnaire, and it is the one
+that is easy to answer wrong in a way that survives review and gets the app
+pulled later. `store-submission.md` §3 has both answers: the alcohol reference
+is **yes, mild** (the app is named after bourbon), and the real-money gambling
+question is **no** (the app moves no money and has no purchases).
 
 **Privacy policy URL:** `https://thebourboncup.com/privacy.html`
 
 ---
 
-## 5. Deploy the account-deletion function — **BY HAND**
-
-Play requires deletion to work from inside the app, and a reviewer will tap the
-button. `deleteAccount` is a Cloud Function and Cloud Functions are deployed by
-hand:
-
-```sh
-firebase deploy --only functions
-```
-
-Until that runs, **My Account → Delete Account** reports that deletion is not
-deployed yet. That is an honest message and a failed requirement.
-
-Verify on a throwaway account and check all three outcomes in the Firebase
-console: the `bc_accounts` document gone, the roster row surviving with
-`auth_uid: null`, the Auth user gone.
-
----
-
-## 6. Notifications on Android
+## 5. Notifications on Android
 
 Web push works inside a TWA, delegated to the Android notification system.
 `twa-manifest.json` sets `enableNotifications: true`, which is what makes
@@ -182,7 +152,7 @@ site already uses.
 
 ---
 
-## 7. Store listing
+## 6. Store listing
 
 Play wants, at minimum: an app name (30 chars), a short description (80), a
 full description (4000), a 512×512 icon, a 1024×500 feature graphic, and at
@@ -239,53 +209,109 @@ reviewer who can open the app without waiting for credentials.
 
 ### Screenshots
 
-The fastest honest way to get them is to drive the deployed site in a phone
-viewport and photograph the real screens:
+Which four screens, and how to photograph them, is in `store-submission.md` §4.
+Play's own limits: at least two phone screenshots, 16:9 or 9:16, each side
+between 320px and 3840px. A 412×915 viewport at device scale 2 gives 824×1830,
+comfortably inside them.
 
-```js
-// Chromium is at /opt/pw-browsers/chromium-*/chrome-linux/chrome in CI.
-const ctx = await browser.newContext({
-  viewport: { width: 412, height: 915 },  // 9:19.5, a Pixel
-  deviceScaleFactor: 2,                   // → 824×1830, inside Play's limits
-});
-```
-
-Leaderboard, a scorecard mid-round, the draw, and the Data tab's career table
-are the four that show what the app is. Take them on a year with scores in it —
-`bc_2025` or any imported cup — rather than on an empty new edition.
+Play also wants a **1024×500 feature graphic** and a **512×512 icon**, neither
+of which the App Store asks for.
 
 ---
 
-## 8. The closed-testing requirement
+## 7. The closed-testing requirement — the part that failed last time
 
 A **personal** Play developer account must run a closed test before it can apply
-for production access: a number of testers opted in continuously for a number of
-days, and then an application form. Organisation accounts are exempt. Both
-numbers have moved more than once — read them off the Console rather than
-trusting any figure written down here, including this one.
+for production access: **12 testers opted in continuously for 14 days**, then an
+application form. Organisation accounts are exempt. Both numbers have moved
+before — read them off the Console rather than trusting this line.
 
-What matters in practice:
+### What went wrong on Maize N Que, and why
+
+Twelve people installed the app and that was the whole of it. The count was met
+and the application was still refused.
+
+That is not bad luck. **Since April 2026 Google rejects production-access
+applications for insufficient testing engagement** — testers who opted in but
+never used the app. The 12-and-14 figures are a floor Google checks
+automatically; the application is then read by a human who looks at what the
+testers actually did and at what the developer says came back from them. An
+application whose answer to "what feedback did you receive" is thin is the
+application that gets refused, and the refusal costs another 14 days.
+
+So the count is the easy half. Plan the other half.
+
+### Running a test that passes
+
+**Recruit for real use, not for headcount.** The field is sixteen men who are
+going on this trip. They are the best testers available anywhere and they have
+an actual reason to open the app. Do not pad the list with people who will
+install and forget — an inactive tester is worse than no tester, because they
+count toward twelve and drag the engagement picture down.
+
+**Give them the password.** This is the one place guest mode is the wrong tool.
+Guest mode exists so a stranger can look around; the field are not strangers.
+A tester who can post a score, sign a card and settle a skin generates the
+engagement Google is looking for, and a tester in read-only mode taps four
+screens and closes the app. Use guest mode for anyone outside the sixteen who
+is filling out the roster of twelve.
+
+**Time it against the tournament, or against something.** Fourteen days of an
+app with nothing happening in it is fourteen days of nobody opening it. If the
+window cannot cover a live round, give it something to do — run the practice
+edition, put a real draw in it, post the trip dates and the house, and ask each
+man to do three specific things:
+
+1. Sign in, claim your name, and check your handicap is right.
+2. Post a score for a made-up round and sign the card.
+3. Open Trip Info and tell me if the dates and the house are wrong.
+
+Three concrete asks produce three concrete answers, and those answers are
+literally what the application form wants pasted into it.
+
+**Collect the feedback somewhere you can quote.** A group text is fine — the
+form asks what you learned and what you changed. Screenshot it. "Two testers
+reported the header countdown was cut off on a small screen; fixed in build 4"
+is an application that gets approved. "Testers said it worked well" is not.
+
+**Ship a build or two during the window.** A test with one build looks like a
+distribution exercise. A test with three builds, where the later ones fix things
+the testers named, looks like testing — because it is.
+
+### Mechanics that bite
 
 - Google counts testers **opted in**, not taps. Each tester needs a Google
   account on the closed-test list (an email list or a Google Group), and each
-  has to accept the opt-in link and install from Play.
-- The production-access form asks how testers were recruited and what feedback
-  came back. Guest mode is what makes that answerable: a tester can open the
-  app and use it without the tournament password, so there is something real to
-  give feedback about.
-- Uninstalling does not remove a tester from the count, but leaving the tester
-  list does. Do not prune it mid-test.
+  has to accept the opt-in link **and install from Play**. Sideloading does not
+  count and neither does opting in without installing.
+- The account that opts in must be the account signed into the Play Store on
+  the device. This is the single most common failure: a man with a work Google
+  account on his phone and a personal one on the invite list.
+- **Uninstalling does not remove a tester from the count, but leaving the tester
+  list does.** Do not prune the list mid-test — it resets the clock.
+- The 14 days are **continuous**. Dropping below twelve opted-in testers at any
+  point starts them again.
+- Allow roughly three weeks end to end: 14 days of testing, up to a couple of
+  days for the production-access decision, and up to 7 more for the production
+  review itself.
 
 ---
 
 ## The order to do this in
 
-1. Deploy the Cloud Functions, so deletion works. **BY HAND**
-2. Deploy the site with this commit, so both static pages and the guest door are
-   live. (Vercel does this on merge.)
+Steps 1–3 are in `store-submission.md` §1 and are shared with the iOS
+submission. Do them once.
+
+1. Everything in `store-submission.md` §1 — functions deployed, rules deployed,
+   VAPID key set, reviewer account built. **BY HAND**
+2. Deploy the site, so both static pages and the guest door are live. (Vercel
+   does this on merge.)
 3. `bubblewrap build`, back up the keystore. **BY HAND**
 4. Upload to internal testing, read the signing fingerprint, fill in
    `assetlinks.json`, commit, verify the URL bar is gone. **BY HAND**
-5. Fill in App access, Data safety, the privacy policy URL and the listing.
-   **BY HAND**
-6. Promote to closed testing and open it to the field.
+5. Fill in App access, Data safety, content rating, the privacy policy URL and
+   the listing. **BY HAND**
+6. Promote to closed testing, open it to the field **with the tournament
+   password**, and run the fourteen days as §7 describes — with things to do,
+   more than one build, and feedback written down. **BY HAND**
+7. Apply for production access, quoting the feedback. **BY HAND**
