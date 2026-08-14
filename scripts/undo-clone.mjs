@@ -21,6 +21,16 @@
 //   node scripts/undo-clone.mjs --edition bc_2026      # one edition, in full
 //   node scripts/undo-clone.mjs --edition bc_2026 --write
 //   node scripts/undo-clone.mjs --edition bc_2026 --stamp 1755093742318 --write
+//   node scripts/undo-clone.mjs --edition bc_2026 --orphans        # and the spares
+//
+// --orphans is the second pass, and the only one that can delete an id the APP
+// minted. Removing a clone batch does not finish the job when something got
+// wired into it first: a clone that copied the courses AND the rounds leaves
+// the rounds — merged in place, same id — pointing at the COPIES, so deleting
+// the batch strands nothing and clears nothing. What is left is two of every
+// course under one name, which no screen can tell apart. The pass drops a row
+// only when a twin with identical content survives it, so every deletion it
+// makes is a no-op on every screen.
 //
 // UNLIKE import-history, the DRY RUN needs credentials too — there is no local
 // copy of what a clone did, so every word of the report comes off the live
@@ -51,7 +61,8 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  planCloneRemoval, originalRows, duplicatedLogins, overwritableDocIds, CLONE_ID_COLLECTIONS,
+  planCloneRemoval, planDuplicateRemoval, originalRows, duplicatedLogins,
+  overwritableDocIds, CLONE_ID_COLLECTIONS,
 } from "../src/lib/cloneAudit.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -60,6 +71,10 @@ const args = process.argv.slice(2);
 const has = (flag) => args.includes(flag);
 const valueOf = (flag) => (args.indexOf(flag) >= 0 ? args[args.indexOf(flag) + 1] : null);
 const WRITE = has("--write");
+// The second pass, and a separate flag rather than part of the first, because
+// it is the only one that can delete an id the APP minted. Asking for it is
+// how that stays a decision instead of a side effect.
+const ORPHANS = has("--orphans");
 const editionArg = valueOf("--edition");
 const stampArg = valueOf("--stamp") ? Number(valueOf("--stamp")) : null;
 const allowProject = valueOf("--allow-project");
@@ -262,13 +277,48 @@ if (present.length) {
   console.log("\n  Check these against what you set up, in Admin → Event and Admin → Rounds.\n");
 }
 
+// ── The spare twins ───────────────────────────────────────────────
+// Off unless asked for. Removing a clone batch does not finish the job when
+// something got wired into it first: the 2026 collision copied the courses AND
+// the rounds, and the rounds — merged in place, same id — came out pointing at
+// the copies. What is left is two of every course under one name, which no
+// screen can tell apart and neither can a director.
+const twins = ORPHANS ? planDuplicateRemoval({ rows, scan }) : [];
+if (ORPHANS) {
+  if (!twins.length) {
+    console.log("No duplicate rows — every player and course in this edition is unique.\n");
+  } else {
+    console.log("DUPLICATE ROWS — same content, two ids. Keeping the one that is wired in:\n");
+    for (const t of twins) {
+      console.log(`  ${t.col.replace("bc_", "")} · ${t.label}`);
+      console.log(`    keep  ${String(t.keep.id).padEnd(25)} ${t.keep.referenced
+        ? `${plural(t.keep.refs.length, "reference")}: ${[...new Set(t.keep.refs.map((r) => r.col))].join(", ")}`
+        : "nothing points at it"}`);
+      for (const d of t.drop) console.log(`    DROP  ${String(d.id).padEnd(25)} nothing points at it`);
+      for (const b of t.blocked) {
+        console.log(`    kept  ${String(b.id).padEnd(25)} ALSO referenced (${[...new Set(b.refs.map((r) => r.col))].join(", ")}) — not a tidy-up`);
+      }
+    }
+    console.log("\n  Every DROP has an identical twin surviving it, so nothing changes on screen.\n");
+  }
+}
+
 // ── Delete ────────────────────────────────────────────────────────
-const doomed = chosen.flatMap((b) => b.safeRows);
+// Deduped: an unreferenced cloned row whose original survives is named by both
+// passes, and a doubled batch.delete on one ref is a silent no-op that would
+// still be counted twice in the total.
+const seen = new Set();
+const doomed = [...chosen.flatMap((b) => b.safeRows), ...twins.flatMap((t) => t.drop)]
+  .filter((r) => !seen.has(`${r.col}/${r.id}`) && seen.add(`${r.col}/${r.id}`));
 const held = chosen.flatMap((b) => b.heldRows);
 
 if (!WRITE) {
   console.log(`--write would delete ${plural(doomed.length, "document")}` +
     (held.length ? `, and keep ${plural(held.length, "row")} something still points at.` : "."));
+  if (!ORPHANS) {
+    console.log("\nAdd --orphans to also clear rows a clone left duplicated under the same name,");
+    console.log("keeping whichever copy is wired in. Shown before anything is deleted.");
+  }
   if (batches.length > 1 && !stampArg) {
     console.log(`\n${plural(batches.length, "batch", "batches")} found. To take one at a time:`);
     console.log(`  node scripts/undo-clone.mjs --edition ${edition.id} --stamp ${batches[0].stamp} --write`);
@@ -277,11 +327,17 @@ if (!WRITE) {
 }
 
 if (!doomed.length) {
-  die("Nothing to delete — every cloned row is still referenced. Nothing was written.", "",
-      "Clear what points at them first, in the app, where what is being lost is on screen:",
-      "a cloned COURSE is usually held by the round that was cloned alongside it (Admin →",
-      "Rounds, pick the real course), and a cloned PLAYER by a match or a posted card.",
-      "Then run this again.");
+  die("Nothing to delete. Nothing was written.", "",
+      held.length
+        ? "Every cloned row is still referenced. Clear what points at them first, in the app,"
+        : "There is nothing left in this edition that either pass would remove.",
+      ...(held.length ? [
+        "where what is being lost is on screen: a cloned COURSE is usually held by the round",
+        "cloned alongside it, and a cloned PLAYER by a match or a posted card.",
+        "",
+        ORPHANS ? "" : "If the held rows are duplicates of rows already there, --orphans keeps whichever",
+        ORPHANS ? "" : "copy is wired in and drops the spare, which needs no repointing at all.",
+      ].filter(Boolean) : []));
 }
 
 const BATCH = 400;   // 500 is Firestore's hard limit; 400 leaves room.
