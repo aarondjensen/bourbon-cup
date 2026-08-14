@@ -141,6 +141,38 @@ eventually editing while the other is running a round.
   `.claude/settings.local.json` are gitignored; the secrets in `api/*.js` are
   set in Vercel, not in the repo.
 
+## The two shells
+
+The app ships three ways off one codebase: the **web app** at
+thebourboncup.com, and **Capacitor** builds for iOS and Android. Both stores
+get the same shell, the same plugins and the same native branches, and so does
+WBC — that symmetry is the point, and it was bought deliberately.
+
+Android used to be a **Trusted Web Activity**: a hollow shell opening the live
+site, so a Vercel deploy WAS the Android release. That was a good trade while
+it was the only native shell. It stopped being one when iOS arrived, because
+Apple has no TWA equivalent — the repo was then running two architectures, two
+toolchains, and two sets of things to remember, with only one of them shared
+with WBC. Android is Capacitor now and `twa-manifest.json`,
+`public/.well-known/assetlinks.json` and bubblewrap are all gone.
+
+What that costs, and it is worth knowing before promising anybody a fix: **the
+web build lives inside the binary.** A Vercel deploy no longer reaches an
+installed app on either platform. Minutes on Play's internal track, a review
+on iOS.
+
+`src/lib/platform.js` is the only file that knows which of the three it is in,
+and everything in it is a **no-op on the web by default** — the browser and its
+sixteen users are the production app; the store builds are the new thing. The
+four subsystems that fork are auth, push, `/api` and the status bar; see
+`docs/app-store.md` §2, which explains each and why.
+
+**`isNative()` is not a synonym for iOS.** It was, for exactly as long as
+Android was a TWA — a browser, which reported itself as web. Anything recording
+WHICH platform a device is has to ask `platformName()`, or every Android phone
+files itself as an iPhone in the one field somebody would consult to work out
+why a push never arrived.
+
 ## The demo edition
 
 `bc_demo` — "DEMO — Testers" — is a whole tournament for the store reviewers

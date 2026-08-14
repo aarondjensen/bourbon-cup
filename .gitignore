@@ -68,21 +68,20 @@ serviceAccount*.json
 ios/App/App/GoogleService-Info.plist
 
 # ── The Android build (see docs/play-store.md) ──
-# `twa-manifest.json` IS tracked — it is the configuration, and it is what
-# makes `bubblewrap build` reproducible on another machine. Everything
-# Bubblewrap generates FROM it is not: the Gradle project is a build artifact
-# and regenerating it is one command.
+# `android/` IS tracked, like `ios/` and like both of WBC's, because both are
+# edited by hand — the signing block, the manifest, the launcher icons. What is
+# NOT tracked is inside `android/.gitignore`: the copied web assets, the
+# generated config, and the keystore.
+#
+# This used to be a bubblewrap TWA, whose generated Gradle project was a build
+# artifact and correctly ignored. It is a Capacitor app now (see
+# docs/play-store.md), so the project is source.
 android.keystore
 *.keystore
 *.jks
-app-release-bundle.aab
-app-release-signed.apk
-/app/
-/gradle/
-gradlew
-gradlew.bat
-build.gradle
-settings.gradle
-gradle.properties
-store_icon.png
+
+# google-services.json is not tracked, for the same reason its iOS counterpart
+# above is not: it comes out of the Firebase console per app, and without it
+# native sign-in and push silently do nothing. See docs/play-store.md.
+android/app/google-services.json
 

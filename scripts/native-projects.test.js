@@ -1,15 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 
 // ══════════════════════════════════════════════════════════════════
-//  The iOS project, guarded — because nothing else here can compile it.
+//  The native projects, guarded — nothing here can compile either one.
 // ══════════════════════════════════════════════════════════════════
 //
-// `ios/` is committed and hand-edited, and every file in it is a plist or a
-// pbxproj that no test, type checker or build step in this repo reads. The
-// feedback loop on getting one of them wrong runs through a Mac, an archive,
-// an upload and sometimes a human reviewer — days, in the worst case, for a
-// deleted line.
+// `ios/` and `android/` are both committed and both hand-edited, and every
+// file in them is a plist, a pbxproj or a Gradle script that no test, type
+// checker or build step in this repo reads. The feedback loop on getting one
+// of them wrong runs through a Mac or a Gradle daemon, an archive, an upload
+// and sometimes a human reviewer — days, in the worst case, for a deleted line.
 //
 // So this suite reads them as files. It cannot tell you the app compiles;
 // nothing on Linux can. It can tell you that the settings somebody worked out
@@ -43,6 +43,8 @@ const stringValue = (xml, key) => {
 };
 
 const INFO = read("ios/App/App/Info.plist");
+const GRADLE = read("android/app/build.gradle");
+const MANIFEST = read("android/app/src/main/AndroidManifest.xml");
 const ENTITLEMENTS = read("ios/App/App/App.entitlements");
 const PRIVACY = read("ios/App/App/PrivacyInfo.xcprivacy");
 const PBXPROJ = read("ios/App/App.xcodeproj/project.pbxproj");
@@ -227,5 +229,119 @@ describe("the app icon", () => {
     // The placeholder is a small, mostly-flat PNG; the rendered brand mark is
     // a full-bleed gradient and an order of magnitude larger.
     expect(png.length).toBeGreaterThan(60_000);
+  });
+});
+
+
+// ══════════════════════════════════════════════════════════════════
+//  Android
+// ══════════════════════════════════════════════════════════════════
+//
+// Newer than the iOS half: Android was a bubblewrap TWA until the two shells
+// were unified, and a TWA had no project to guard — the Gradle it generated
+// was a build artifact. This one is source.
+
+describe("capacitor.config.json, Android", () => {
+  it("configures Android at all", () => {
+    // The whole point of the unification. A missing block means `cap sync`
+    // still works and the app still builds — with Capacitor's defaults for the
+    // background colour, which flashes white behind a near-black app on every
+    // cold start.
+    expect(CAP.android).toBeTruthy();
+    expect(CAP.android.backgroundColor).toBe("#161618");
+  });
+});
+
+describe("the Gradle build", () => {
+  it("reads signing from keystore.properties or the environment", () => {
+    // Same shape as WBC's on purpose. Two apps with two different answers to
+    // "how does this get signed" is two things to remember at the wrong moment.
+    expect(GRADLE).toContain("keystore.properties");
+    for (const v of ["BC_KEYSTORE_FILE", "BC_KEYSTORE_PASSWORD", "BC_KEY_ALIAS", "BC_KEY_PASSWORD"]) {
+      expect(GRADLE, `${v} is not read`).toContain(v);
+    }
+  });
+
+  it("applies the release signing config to release builds", () => {
+    // Present but unwired is the quiet failure: the build succeeds and Play
+    // rejects the unsigned bundle without mentioning signing.
+    expect(GRADLE).toContain("signingConfig signingConfigs.findByName('release')");
+  });
+
+  it("warns rather than silently producing an unsigned release", () => {
+    expect(GRADLE).toContain("UNSIGNED");
+  });
+
+  it("ships the keystore template and not the keystore", () => {
+    expect(existsSync("android/keystore.properties.example")).toBe(true);
+    expect(existsSync("android/keystore.properties"), "a real keystore.properties is committed").toBe(false);
+    expect(read("android/.gitignore")).toContain("keystore.properties");
+  });
+});
+
+describe("the Android manifest", () => {
+  it("asks for the internet and nothing else", () => {
+    // Every extra permission is a line on the Play listing and a question at
+    // review. The camera and photo picker both go through system intents, so
+    // neither needs one.
+    const perms = [...MANIFEST.matchAll(/android:name="android\.permission\.([A-Z_]+)"/g)].map(m => m[1]);
+    expect(perms).toEqual(["INTERNET"]);
+  });
+});
+
+describe("the Android launcher icons", () => {
+  const png = (p) => readFileSync(p);
+  const dims = (b) => [b.readUInt32BE(16), b.readUInt32BE(20)];
+  const RES = "android/app/src/main/res";
+
+  it.each([["mdpi", 48], ["hdpi", 72], ["xhdpi", 96], ["xxhdpi", 144], ["xxxhdpi", 192]])(
+    "has a %s icon at %ipx", (density, size) => {
+      expect(dims(png(`${RES}/mipmap-${density}/ic_launcher.png`))).toEqual([size, size]);
+      expect(dims(png(`${RES}/mipmap-${density}/ic_launcher_round.png`))).toEqual([size, size]);
+      // The adaptive foreground is a 108dp canvas for a 48dp icon.
+      const canvas = Math.round(size * 108 / 48);
+      expect(dims(png(`${RES}/mipmap-${density}/ic_launcher_foreground.png`))).toEqual([canvas, canvas]);
+    }
+  );
+
+  it("is not still Capacitor's placeholder", async () => {
+    // By COLOUR, not by file size. The first cut of this test asserted the
+    // file was bigger than the placeholder and failed on a correct icon: a
+    // 192px gradient compresses to almost exactly the same size as a blue X on
+    // white, so size says nothing.
+    //
+    // Capacitor's placeholder is near-white in the corners. The mark is
+    // full-bleed gradient, green at the top left.
+    const sharp = (await import("sharp")).default;
+    const { data } = await sharp(`${RES}/mipmap-xxxhdpi/ic_launcher.png`)
+      .extract({ left: 4, top: 4, width: 8, height: 8 })
+      .raw().toBuffer({ resolveWithObject: true });
+    const [r, g, b] = [data[0], data[1], data[2]];
+    expect(r + g + b, `top-left is rgb(${r},${g},${b}) — that is the placeholder`).toBeLessThan(600);
+    expect(g, "top-left should be the gradient's green end").toBeGreaterThan(r + 40);
+  });
+
+  it("puts the app's own colour behind the adaptive icon", () => {
+    // Capacitor seeds #FFFFFF, which rings a mark designed for near-black in
+    // white on every launcher that masks to a circle.
+    const bg = read(`${RES}/values/ic_launcher_background.xml`);
+    expect(bg).not.toMatch(/#FFFFFF/i);
+    expect(bg).toMatch(/#008f88/i);
+  });
+
+  it("keeps alpha on the adaptive foreground", () => {
+    // It is a LAYER — the background colour has to show through it. Colour
+    // type 6 is RGBA; flattening it to RGB would hide the background entirely.
+    const b = png(`${RES}/mipmap-xxxhdpi/ic_launcher_foreground.png`);
+    expect([4, 6]).toContain(b[25]);
+  });
+});
+
+describe("the TWA is really gone", () => {
+  // Half-removed is the bad state: a stale assetlinks file claiming a package
+  // whose signing certificate no longer matches is a live wrong answer served
+  // from the website, not merely dead weight.
+  it.each(["twa-manifest.json", "public/.well-known/assetlinks.json"])("%s is removed", (f) => {
+    expect(existsSync(f)).toBe(false);
   });
 });

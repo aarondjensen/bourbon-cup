@@ -1,0 +1,115 @@
+apply plugin: 'com.android.application'
+
+// ── Release signing ────────────────────────────────────────────────
+// Deliberately the same shape as WBC's, down to the env-var fallback: two
+// Firebase projects with two different answers to "how does this get signed"
+// is two things to remember at the wrong moment.
+//
+// Values come from android/keystore.properties (gitignored — see
+// keystore.properties.example) or from the environment, so CI can sign
+// without a file on disk. The environment wins, because that is the one a
+// build server can set.
+def keystoreProps = new Properties()
+def keystorePropsFile = rootProject.file('keystore.properties')
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+
+def signingValue = { String key, String envVar ->
+    def fromEnv = System.getenv(envVar)
+    (fromEnv?.trim()) ?: keystoreProps.getProperty(key)?.trim()
+}
+
+def keystorePath = signingValue('storeFile', 'BC_KEYSTORE_FILE')
+def keystorePassword = signingValue('storePassword', 'BC_KEYSTORE_PASSWORD')
+def keystoreAlias = signingValue('keyAlias', 'BC_KEY_ALIAS')
+def keystoreAliasPassword = signingValue('keyPassword', 'BC_KEY_PASSWORD')
+
+// A relative storeFile resolves against android/, so keystore.properties can
+// name a key sitting beside it without hardcoding a home directory.
+def keystoreFile = keystorePath ? rootProject.file(keystorePath) : null
+def releaseSigningReady = keystoreFile != null && keystorePassword && keystoreAlias && keystoreAliasPassword
+
+// Configured, but the key is not where it says it is. Treated as unconfigured
+// so debug builds carry on, and named loudly — a typo'd path would otherwise
+// surface as an unsigned bundle that Play rejects without mentioning a path.
+if (releaseSigningReady && !keystoreFile.exists()) {
+    logger.warn("BC: keystore not found at ${keystoreFile.absolutePath} — release builds will be UNSIGNED.")
+    releaseSigningReady = false
+}
+
+gradle.taskGraph.whenReady { graph ->
+    if (releaseSigningReady) return
+    if (graph.allTasks.any { it.name.toLowerCase().contains('release') }) {
+        logger.warn("BC: no release signing configured — this artifact will be UNSIGNED and Play will refuse it. " +
+                    "Fill in android/keystore.properties (see keystore.properties.example) or set BC_KEYSTORE_FILE, " +
+                    "BC_KEYSTORE_PASSWORD, BC_KEY_ALIAS and BC_KEY_PASSWORD.")
+    }
+}
+
+android {
+    namespace = "com.thebourboncup.app"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "com.thebourboncup.app"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        if (releaseSigningReady) {
+            release {
+                storeFile keystoreFile
+                storePassword keystorePassword
+                keyAlias keystoreAlias
+                keyPassword keystoreAliasPassword
+            }
+        }
+    }
+    buildTypes {
+        release {
+            // findByName rather than signingConfigs.release: it answers null
+            // instead of throwing when the block above was never created, so
+            // an unsigned debug-only checkout still configures.
+            signingConfig signingConfigs.findByName('release')
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

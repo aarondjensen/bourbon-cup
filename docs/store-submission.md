@@ -14,21 +14,24 @@ the packaging.
 
 |  | Play Store | App Store |
 | --- | --- | --- |
-| What ships | A Trusted Web Activity — a thin shell over `https://thebourboncup.com` | A Capacitor app with the build **bundled inside it** |
-| Codebase | None. The site is the app. | Still one codebase; four subsystems carry a native branch |
-| Shipping a change | A Vercel deploy | A new build and a new review |
+| What ships | A Capacitor app with the build **bundled inside it** | The same, one platform along |
+| Codebase | One, with four subsystems carrying a native branch | The same four |
+| Shipping a change | A new bundle, uploaded — minutes on internal testing | A new build and a new review |
 | Engineering left | None | None — **but none of it has been compiled**, see `app-store.md` |
-| What is left | A keystore, a fingerprint, and 14 days | Console setup and a Mac — `app-store.md` §5 |
-| The thing that holds it up | 12 testers actually using it for 14 days | Guideline 4.2, and the four things WKWebView breaks |
-| Distribution | Public, closed testing first | **Unlisted**, same as Maize N Que |
+| What is left | A keystore and a `google-services.json` | Console setup and a Mac — `app-store.md` §5 |
+| The thing that holds it up | Collecting sixteen Google accounts | Guideline 4.2, and the four things WKWebView breaks |
+| Distribution | **Internal testing** — link only, never in search | **Unlisted**, same as Maize N Que |
 
-The asymmetry is the point: Android can accept a web app as a web app, and iOS
-cannot. Do not plan them as one piece of work.
+There used to be an asymmetry here worth planning around — Android accepted the
+web app as a web app through a Trusted Web Activity, and iOS could not. Android
+is a Capacitor build now, so the two are one shape and one set of native
+branches, matching WBC.
 
-One thing the table understates. On Android the site *is* the app, so a fix
-lands the moment Vercel deploys. On iOS the build is inside the binary, so the
-two can drift — and after the first App Store release, "I pushed a fix" stops
-being true for everyone carrying the iPhone build until a new one is reviewed.
+What that costs, and it applies to both platforms now: **the web build lives
+inside the binary.** A Vercel deploy no longer reaches anybody's installed app.
+After the first release, "I pushed a fix" is not true for anyone carrying a
+store build until a new one ships — minutes on Play's internal track, a review
+on iOS.
 
 ---
 
@@ -63,8 +66,9 @@ sees an app that is broken. App first, rules second, as always.
 
 ### 1.3 `VITE_FCM_VAPID_KEY` must be set in Vercel
 
-Or the app reports push as unconfigured, on the web and inside the TWA both.
-(The iOS app does not use it — see `app-store.md` §2.2.)
+Or the **web** app reports push as unconfigured. Neither store build uses it:
+both are Capacitor now and take the native FCM path (`app-store.md` §2.2,
+`play-store.md` §5), so this is about the browser and nothing else.
 
 ### 1.4 A reviewer account must exist
 
