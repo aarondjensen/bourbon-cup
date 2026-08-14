@@ -232,7 +232,55 @@ than rendering something quietly off-brand; the header of
 
 ---
 
-## 7. The closed-testing requirement — the part that failed last time
+## 7. Do you need production at all? — read this before §8
+
+**This section can delete the whole of §8, and for this app it probably
+should.** It was missing from the first cut of this file, which went straight
+to the closed test as though production were the only destination. WBC's own
+submission doc got here first; this is the same reasoning.
+
+Play has three testing tracks above nothing, and they are not steps on a
+ladder:
+
+| Track | Testers | Wait | Counts toward production access |
+| --- | --- | --- | --- |
+| **Internal** | up to 100 | minutes, no review queue | **No** |
+| Closed | unlimited | full review | **Yes** — 12 for 14 days |
+| Open | unlimited | full review | Yes |
+
+**Internal testing installs through the Play Store, updates automatically, and
+needs no minimum tester count, no 14-day wait and no production-access
+application.** You can start one before the store listing is finished.
+
+For this app that is not a shortcut, it is the correct destination. The
+Bourbon Cup is sixteen men behind a tournament password. A public production
+listing makes it findable by strangers who can do nothing with it, in exchange
+for three weeks of grind. **Internal testing is the Android counterpart of the
+Unlisted route already chosen on iOS** (`app-store.md` §8) — private
+distribution by link, to people you name.
+
+So:
+
+- **If the field just needs the app on their phones** — internal testing.
+  Upload, add sixteen email addresses, send the link. Same day. Skip §8
+  entirely, and skip §6's listing copy until you actually want a listing.
+- **Only if you want The Bourbon Cup publicly listed on Play** does §8 apply.
+
+**And the requirement is per app.** Production access earned by one app does
+not carry to the next: a personal account created after 13 November 2023 runs
+a fresh 12-tester, 14-day closed test for every new app it wants in
+production. Read that off the Console before planning around it — the numbers
+and the scope have both moved before.
+
+One consequence worth knowing either way: internal testing contributes
+**nothing** to the closed-testing count. A month of it with a hundred people
+leaves the production checklist at zero. The two tracks are separate roads,
+not a sequence, so choosing internal now costs nothing later except starting
+the fourteen days when you decide you want production.
+
+---
+
+## 8. The closed-testing requirement — the part that failed last time
 
 A **personal** Play developer account must run a closed test before it can apply
 for production access: **12 testers opted in continuously for 14 days**, then an
@@ -317,6 +365,9 @@ the testers named, looks like testing — because it is.
 Steps 1–3 are in `store-submission.md` §1 and are shared with the iOS
 submission. Do them once.
 
+**If §7 sent you to internal testing, stop after step 4** — add the testers,
+send the link, done. Steps 5 to 7 are the production road.
+
 1. Everything in `store-submission.md` §1 — functions deployed, rules deployed,
    VAPID key set, reviewer account built. **BY HAND**
 2. Deploy the site, so both static pages and the guest door are live. (Vercel
@@ -327,6 +378,6 @@ submission. Do them once.
 5. Fill in App access, Data safety, content rating, the privacy policy URL and
    the listing. **BY HAND**
 6. Promote to closed testing, open it to the field **with the tournament
-   password**, and run the fourteen days as §7 describes — with things to do,
+   password**, and run the fourteen days as §8 describes — with things to do,
    more than one build, and feedback written down. **BY HAND**
 7. Apply for production access, quoting the feedback. **BY HAND**
