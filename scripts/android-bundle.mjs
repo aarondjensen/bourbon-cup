@@ -71,8 +71,10 @@ if (existsSync(propsPath)) {
 if (!fromEnv && !fromFile) {
   die("no release signing configured, so this would build an UNSIGNED bundle that Play refuses.\n"
     + "  Create a keystore and fill in android/keystore.properties:\n\n"
-    + "      keytool -genkey -v -keystore android/bourbon-cup.keystore \\\n"
-    + "        -alias bourbon-cup -keyalg RSA -keysize 2048 -validity 10000\n\n"
+    // One line, no backslash continuation: that is bash, and it is a parse
+    // error in PowerShell — which is where this message is most likely to be
+    // read and pasted.
+    + "      keytool -genkey -v -keystore android/bourbon-cup.keystore -alias bourbon-cup -keyalg RSA -keysize 2048 -validity 10000\n\n"
     + "  Then copy android/keystore.properties.example to android/keystore.properties\n"
     + `  and fill it in — or set ${ENV_KEYS.join(", ")}.`);
 }

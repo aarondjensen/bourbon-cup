@@ -91,15 +91,27 @@ would find out.
 
 ### Signing — **BY HAND, once**
 
-Create a keystore and tell Gradle where it is:
+Create a keystore and tell Gradle where it is. One line, no `\` continuation —
+that is bash, and a parse error in PowerShell:
 
 ```sh
-keytool -genkey -v -keystore android/bourbon-cup.keystore \
-  -alias bourbon-cup -keyalg RSA -keysize 2048 -validity 10000
-
-cp android/keystore.properties.example android/keystore.properties
-# fill in storePassword and keyPassword
+keytool -genkey -v -keystore android/bourbon-cup.keystore -alias bourbon-cup -keyalg RSA -keysize 2048 -validity 10000
 ```
+
+`keytool` ships with the JDK, so if it is not found you do not have one on
+PATH — which Gradle will need anyway (17 or newer). It prompts for a password
+and then for name, organisation and country; **the answers to those do not
+matter and are never shown to anybody**, but the password does. Use the same
+one for the store and the key, which is what the prompts assume when you press
+return at "key password".
+
+Then copy the template and fill in the two passwords:
+
+```sh
+cp android/keystore.properties.example android/keystore.properties
+```
+
+On Windows that is `copy android\keystore.properties.example android\keystore.properties`.
 
 Both the keystore and `keystore.properties` are gitignored. `BC_KEYSTORE_FILE`,
 `BC_KEYSTORE_PASSWORD`, `BC_KEY_ALIAS` and `BC_KEY_PASSWORD` override the file,
