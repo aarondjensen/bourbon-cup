@@ -71,10 +71,21 @@ Same three commands as iOS, one platform along. No JDK to download, no Android
 SDK to fetch, no global CLI — Capacitor uses the Gradle wrapper in `android/`.
 
 ```sh
-npm run build
-npx cap sync android
-cd android && ./gradlew bundleRelease     # → app/build/outputs/bundle/release/
+npm run android:bundle
 ```
+
+That is the whole thing: build, `cap sync android`, and `bundleRelease`, with
+the right Gradle wrapper for the platform. **Use the script rather than the
+three commands**, and not for brevity — `npm run build && npx cap sync android`
+is bash, and `&&` is not a statement separator in Windows PowerShell 5.1, where
+it fails on the first line. `./gradlew` is a shell script Windows cannot run at
+all; there it is `gradlew.bat`. The script spawns whichever is right and the
+shell never gets a say.
+
+It also refuses to build when signing is unconfigured, which Gradle does not:
+a release build with no keystore SUCCEEDS and emits an unsigned bundle, the
+warning scrolls past in a hundred lines of Gradle output, and Play is where you
+would find out.
 
 `npx cap open android` opens Android Studio if you would rather build there.
 
@@ -488,7 +499,7 @@ send the link, done. Steps 7 and 8 are the production road, kept for reference.
    app and the privacy URLs do.
 3. `google-services.json` into `android/app/`, and the signing fingerprints
    into Firebase — §5. **BY HAND**
-4. Create the keystore, `./gradlew bundleRelease`, back up the keystore. **BY HAND**
+4. Create the keystore, `npm run android:bundle`, back up the keystore. **BY HAND**
 5. Upload to internal testing, fill in App access, content rating and the
    privacy policy URL. **BY HAND**
 6. Collect the sixteen Google accounts, add them all at once, send the opt-in

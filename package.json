@@ -13,6 +13,8 @@
     "build:editions": "node pipeline/editions.mjs",
     "build:archive": "node pipeline/archive.mjs",
     "build:app-icons": "node scripts/app-icons.mjs",
+    "android:bundle": "node scripts/android-bundle.mjs",
+    "ios:sync": "npm run build && npx cap sync ios",
     "build:store-graphics": "node scripts/store-graphics.mjs",
     "team-brand": "node pipeline/team-brand.mjs",
     "import:history": "node scripts/import-history.mjs",

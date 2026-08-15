@@ -232,7 +232,7 @@ will run, and most of it fails silently.
    Missing it fails signing with an entitlement mismatch, which says nothing
    about Apple sign-in.
 5. **Push Notifications** capability on the App ID.
-6. On a Mac: `npm run build && npx cap sync ios && npx cap open ios`, set the
+6. On a Mac: `npm run ios:sync`, then `npx cap open ios`. Set the
    signing team, and build. Capacitor 8 uses Swift Package Manager, so there is
    no CocoaPods step.
 
