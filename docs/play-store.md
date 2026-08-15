@@ -207,7 +207,7 @@ question is **no** (the app moves no money and has no purchases).
 
 ---
 
-## 5. Notifications on Android
+## 5. Notifications and the camera on Android
 
 **Push on Android is now native, and that is a change.** Inside a TWA it was
 web push — the site's own service worker, the VAPID key, delegated to the
@@ -233,6 +233,55 @@ Two by-hand consequences:
 
 `VITE_FCM_VAPID_KEY` is still needed, but only for the **web** app now. It has
 nothing to do with either store build.
+
+### The camera, and why it declares no permission
+
+`POST_NOTIFICATIONS` is not in `AndroidManifest.xml` and does not need to be —
+`@capacitor-firebase/messaging` merges it in from its own manifest, which is
+why push can prompt on Android 13+ without the app asking for anything.
+
+The camera is the opposite case: the manifest declares **no `CAMERA`
+permission on purpose**. `@capacitor/camera` checks `isPermissionDeclared`
+first, and when the app has not declared it the plugin skips the runtime
+request entirely and fires an `IMAGE_CAPTURE` intent — the system camera app
+holds the permission, not this app. Declaring it would buy a permission dialog
+on every phone and a `uses-feature` entry to stop Play filtering the app off
+devices without a camera, in exchange for nothing.
+
+**The cost is Android 9 and below (API ≤ 28), where the 📷 button does not
+work.** `minSdkVersion` is 24, so those phones can install the app. The chain
+is worth writing down because nothing about it is guessable from the symptom:
+
+- `saveToGallery: true` needs `WRITE_EXTERNAL_STORAGE` on API ≤ 28 — on 29 and
+  up the plugin writes through MediaStore and needs no permission at all, which
+  is why this is only ever an old-phone problem.
+- The plugin asks for it, the system refuses undeclared permissions without
+  showing a dialog, and then its permission callback re-checks `CAMERA`
+  **without** the `isPermissionDeclared` guard it used on the way in — so it
+  rejects with `User denied access to camera` on a phone where nobody was asked
+  anything.
+
+It used to fail **silently**: `PhotosView`'s catch swallowed anything matching
+`/denied/`, so the button did nothing, twice, with nothing on screen to
+disagree with. It now says camera access is off and points at Settings — which
+is the truth on iOS, where a real refusal produces the same message, and is at
+least visible on an old Android.
+
+Three ways out if it ever matters, none of them taken:
+
+- `minSdkVersion = 29`, which makes the broken path unreachable. It is the
+  clean fix and the one with an **invisible** failure mode: an excluded phone
+  is told by the Play Store that the app is incompatible, and the man holding
+  it has no way to report that to anybody.
+- Declare `CAMERA` and `WRITE_EXTERNAL_STORAGE` (`maxSdkVersion="28"`), which
+  fixes ≤ 28 and adds a permission dialog for everybody else.
+- `saveToGallery: false`, which fixes ≤ 28 by dropping a feature on every
+  phone. The photo already uploads to the shared album either way; what would
+  go is the copy in the photographer's own roll.
+
+The field is sixteen men, and an Android phone that never saw Android 10 was
+last sold in 2019. Left as it is, deliberately, and recorded here so the next
+person to read a "denied" report knows it is not the permission it names.
 
 ---
 

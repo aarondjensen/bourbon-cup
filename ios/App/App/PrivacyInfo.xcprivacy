@@ -93,13 +93,36 @@
 			</array>
 		</dict>
 
-		<!-- Scores, matches, card signatures, side bets — and the trip ledger,
-		     which is amounts and dates a director typed after a payment
-		     arrived somewhere else. There is no payment processor in the app,
-		     so this is NOT NSPrivacyCollectedDataTypePaymentInfo. -->
+		<!-- Scores, matches, card signatures, side bets. -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+
+		<!-- The trip ledger: what each man owes the director for the weekend
+		     and what he has paid, as amounts and dates a director typed after
+		     a payment arrived somewhere else.
+
+		     NOT NSPrivacyCollectedDataTypePaymentInfo — there is no processor,
+		     no wallet and no card or bank detail anywhere in the app. But a
+		     record of what somebody owes IS a debt, and Apple's "Other
+		     Financial Info" is defined to include debts, so it is declared
+		     here rather than folded into Other User Content. That fold was the
+		     bug: docs/store-submission.md §2 and the Play Data safety form
+		     both answer YES to other financial info, and this manifest has to
+		     agree with them (docs/app-store.md §9.6). Under-declaring is the
+		     policy violation; the two lists disagreeing is what gets noticed. -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherFinancialInfo</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
 			<true/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>

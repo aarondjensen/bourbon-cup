@@ -158,6 +158,11 @@ describe("PrivacyInfo.xcprivacy", () => {
     // The list that must agree with App Store Connect's App Privacy answers
     // and with docs/store-submission.md §2. Disagreeing with the store form
     // is a policy problem, not a build one, so nothing else would catch it.
+    //
+    // One row per line of that table — seven of them. OtherFinancialInfo is
+    // the one that went missing: the ledger was folded into OtherUserContent
+    // on the (correct) grounds that it is not PaymentInfo, which left the
+    // manifest answering NO to a question both store forms answer YES to.
     for (const t of [
       "NSPrivacyCollectedDataTypeEmailAddress",
       "NSPrivacyCollectedDataTypeName",
@@ -165,6 +170,7 @@ describe("PrivacyInfo.xcprivacy", () => {
       "NSPrivacyCollectedDataTypePhotosorVideos",
       "NSPrivacyCollectedDataTypeDeviceID",
       "NSPrivacyCollectedDataTypeOtherUserContent",
+      "NSPrivacyCollectedDataTypeOtherFinancialInfo",
     ]) {
       expect(PRIVACY, `${t} missing from the privacy manifest`).toContain(t);
     }

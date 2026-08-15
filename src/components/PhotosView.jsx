@@ -332,10 +332,21 @@ export function PhotosView({
       const file = new File([blob], `bc_${Date.now()}.${shot.format || "jpg"}`, { type });
       await uploadFiles([file]);
     } catch (err) {
+      const message = String(err?.message || "");
       // A cancelled camera throws, and a cancel is not a failure to report.
-      if (/cancell?ed|denied/i.test(String(err?.message || ""))) return;
+      if (/cancell?ed/i.test(message)) return;
       console.error("camera capture failed:", err);
-      notify?.("Couldn't open the camera.", "error");
+      // A REFUSED one used to be swallowed by this same test, which is the
+      // one outcome that must not be silent: the button did nothing at all,
+      // twice, and there was nothing on screen to disagree with. A refusal is
+      // also the only camera failure the phone itself can fix, so it says so
+      // rather than sharing the generic wording.
+      notify?.(
+        /denied|permission/i.test(message)
+          ? "Camera access is off for The Bourbon Cup — turn it on in Settings."
+          : "Couldn't open the camera.",
+        "error",
+      );
     }
   };
 
