@@ -197,10 +197,20 @@ describe("PrivacyInfo.xcprivacy", () => {
 
 describe("the Xcode project", () => {
   it("is iPhone only", () => {
-    // "1,2" means a reviewer opens it on an iPad, and every layout decision in
-    // this app was made for a phone held one-handed on a tee box.
-    expect(PBXPROJ).toContain('TARGETED_DEVICE_FAMILY = "1";');
-    expect(PBXPROJ).not.toContain('TARGETED_DEVICE_FAMILY = "1,2";');
+    // A 2 in this list means a reviewer opens it on an iPad, and every layout
+    // decision in this app was made for a phone held one-handed on a tee box.
+    //
+    // Asserted as MEANING, not as a literal string. Xcode rewrites the value
+    // unquoted (`= 1;`) the first time it saves the project for any reason —
+    // adding GoogleService-Info.plist did it — and a test pinned to the quoted
+    // form goes red on a change that altered nothing. Once a guard cries wolf
+    // over its own formatting, the next person edits the test rather than
+    // reading it, which is the failure this whole file exists to avoid.
+    const families = [...PBXPROJ.matchAll(/TARGETED_DEVICE_FAMILY = "?([\d,\s]+?)"?;/g)]
+      .map((m) => m[1].trim());
+
+    expect(families.length).toBeGreaterThan(0);
+    for (const f of families) expect(f).toBe("1");
   });
 
   it("signs with the entitlements file", () => {
