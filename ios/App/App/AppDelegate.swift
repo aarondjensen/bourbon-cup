@@ -1,5 +1,6 @@
 import UIKit
 import Capacitor
+import FirebaseCore
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -7,7 +8,31 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // ── The native Firebase SDK ─────────────────────────────────
+        // Reads GoogleService-Info.plist and creates the default FirebaseApp.
+        // Without it the app builds, installs, launches — and then stops on
+        // the launch image, which is the whole reason this line is commented.
+        //
+        // `@capacitor-firebase/authentication` and `-messaging` both construct
+        // their native Firebase objects as the bridge loads plugins, before a
+        // line of our JavaScript runs. With no default app configured the
+        // authentication plugin raises a RuntimeError, the bridge surfaces it
+        // as "JS Eval error A JavaScript exception occurred", React never
+        // mounts, and the only thing on screen is the launch storyboard. The
+        // real cause is one line up the log: "The default Firebase app has not
+        // yet been configured."
+        //
+        // It is needed EVEN THOUGH capacitor.config.json sets
+        // `skipNativeAuth: true`. That flag decides which SDK holds the
+        // SESSION — the JS one, because Firestore and the security rules read
+        // that token — and not whether the native SDK is initialised at all.
+        // The plugin still needs a configured app to hand a credential back
+        // from the system sheet.
+        //
+        // Capacitor's stock AppDelegate does not do this and `npx cap add ios`
+        // would write the stock one again, so scripts/native-projects.test.js
+        // asserts the call is still here.
+        FirebaseApp.configure()
         return true
     }
 
