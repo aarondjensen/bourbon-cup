@@ -237,6 +237,25 @@ describe("the Xcode project", () => {
     const refs = PBXPROJ.match(/CODE_SIGN_ENTITLEMENTS = App\/App\.entitlements;/g) || [];
     expect(refs.length, "expected the entitlements path on both build configs").toBe(2);
   });
+
+  it("carries a signing team on both build configs", () => {
+    // A Team ID is not a secret — it is readable out of any shipped IPA — and
+    // committing it is what stops the next machine to open this project
+    // building unsigned, with an error that names provisioning rather than the
+    // missing team.
+    //
+    // Both configs, because a team on Debug alone builds to a device happily
+    // and then fails at the archive, which is the worst moment to find out.
+    //
+    // Asserted as a SHAPE rather than as this account's id: an Apple Developer
+    // Team ID is ten alphanumerics. Pinning the literal would make a repo
+    // somebody else signs with unbuildable and red for a reason that is not a
+    // fault — and what this file is guarding against is the key going MISSING,
+    // which is a thing `npx cap sync` and `cap add ios` both do.
+    const teams = [...PBXPROJ.matchAll(/DEVELOPMENT_TEAM = "?([A-Z0-9]{10})"?;/g)].map((m) => m[1]);
+    expect(teams.length, "expected DEVELOPMENT_TEAM on both build configs").toBe(2);
+    expect(teams[0], "the two build configs disagree about the team").toBe(teams[1]);
+  });
 });
 
 describe("the app icon", () => {
