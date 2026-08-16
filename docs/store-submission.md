@@ -38,8 +38,20 @@ on iOS.
 ## 1. The four things that must be true before either submission
 
 These are prerequisites, not steps in a submission flow. Every one of them is
-something a reviewer will personally tap, and every one of them is currently
-**not done**.
+something a reviewer will personally tap.
+
+They are no longer all outstanding, and the status below is **checked rather
+than remembered** — a list still saying "not done" long after it was done is
+how an evening gets spent redoing it:
+
+| | State | How that was established |
+| --- | --- | --- |
+| 1.1 Cloud Functions | **Deployed** | Reported in the commit that documented the discovery timeout — all six endpoints went up. Re-check by tapping My Account → Delete Account on a throwaway account; the button says so itself when the callable is missing. |
+| 1.2 `firestore.rules` | **Deployed** | `bc_ledger` and `bc_budget` both answer a public REST read. Under the older rule set the default-deny at the bottom of the file refused them. |
+| 1.3 `VITE_FCM_VAPID_KEY` | Unverified | A Vercel setting; nothing in the repo or the database can see it. Web push only — neither store build uses it. |
+| 1.4 Reviewer account | **Demo seeded**, account still to claim | `bc_demo` holds its 371 documents and all twelve roster rows, unclaimed, written by the seed. The Google account and its crown are the part a person does. |
+
+The two that remain are 1.3 and the second half of 1.4.
 
 ### 1.1 The Cloud Functions must be deployed — **BY HAND**
 
@@ -347,11 +359,30 @@ uses it.
 4. **Data → Player career table** — ten years of record. Nothing else in the
    listing says "this is not a weekend project" as fast.
 
-**These have to be taken somewhere that can reach the app.** Not a Claude
-session: the sandbox's network policy denies `thebourboncup.com`, and a local
-dev server has no Firebase credentials, so there is no route to a screen with
-real scores on it from there. Any laptop with a browser will do it in ten
-minutes. Guest mode gets you three of the four without signing in.
+**These have to be taken somewhere that can reach the app.** Any laptop with a
+browser will do it in ten minutes, and guest mode gets you three of the four
+without signing in.
+
+Not a Claude session, and the reason is worth writing down properly so nobody
+spends an afternoon rediscovering it. The reason given here before — "a local
+dev server has no Firebase credentials" — is wrong: the config is public by
+design and inline in `src/firebase.js`, so a dev server in a sandbox reaches
+the live project perfectly well, and `curl` against the Firestore REST API
+from one returns the real roster. Two other things are the wall, and neither
+can be worked around from inside:
+
+- `thebourboncup.com` is a policy denial at the egress proxy, so the deployed
+  site is unreachable. That leaves the dev server, which is fine.
+- The dev server's own Firestore calls are not. Outbound HTTPS is terminated
+  and re-signed by the sandbox's proxy, and **Chromium ships static certificate
+  pins for `*.googleapis.com`** — so every Firestore connection from the
+  browser is reset, while `curl` from the same container succeeds. Trusting the
+  proxy CA properly needs `certutil` and the NSS store, which is not installed;
+  the flags that paper over it are blanket TLS-verification-off.
+
+So the app renders, and it renders empty. A component harness with mocked props
+(`CLAUDE.md`, "Verifying UI changes") still works and is the right tool for a
+layout change — it is only real tournament data that cannot get there.
 
 Drive the deployed site in a phone viewport and photograph real screens rather
 than mocking them up:

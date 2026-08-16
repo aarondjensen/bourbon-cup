@@ -53,7 +53,13 @@ const CLONE_ITEMS = [
 ];
 const DEFAULT_CLONE_OPTS = { players: true, teams: true, tournamentName: true, courses: false, rounds: false };
 
-export function EditionSwitcher({ open, onClose, canManage = false }) {
+// `spectate` is what the switch leaves behind, and the claim screen is the one
+// caller that wants it off — see switchEdition in lib/editions. From ☰ or the
+// Data tab the reader is somebody looking AT another year, and the spectator
+// identity is what gets them past a claim screen they have no business on.
+// From the claim screen they are somebody looking FOR their year, and that
+// same identity would carry them past the question they went there to answer.
+export function EditionSwitcher({ open, onClose, canManage = false, spectate = true }) {
   const [editions, setEditions] = useState([]);
   const [loading, setLoading] = useState(true);
   // "list" | "new" | "edit". The composer used to sit under the list of every
@@ -499,7 +505,7 @@ export function EditionSwitcher({ open, onClose, canManage = false }) {
             ? "It's finished, so it opens read-only — every card and result, nothing to change. Come back here to return to this year."
             : "The app will reload to load this edition's data."}
           confirmLabel="Open"
-          onConfirm={() => switchEdition(pending.id, { namespaced: !!pending.namespaced })}
+          onConfirm={() => switchEdition(pending.id, { namespaced: !!pending.namespaced, spectate })}
           onCancel={() => setPending(null)}
         />
       )}
