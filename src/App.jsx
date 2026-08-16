@@ -790,8 +790,15 @@ function ClaimScreen({ players, teams, darkMode, tournamentName, tournamentLocat
 
       {/* canManage=false deliberately: this screen belongs to somebody who has
           not claimed a name yet, and creating or cloning an edition from here
-          is not a thing they should be able to reach. */}
-      <EditionSwitcher open={switcherOpen} onClose={() => setSwitcherOpen(false)} canManage={false} />
+          is not a thing they should be able to reach.
+
+          spectate=false for the same reason: the switch CLEARS the session
+          rather than writing the spectator (lib/editions), so the app comes up
+          on the new edition and asks the claim question again against ITS
+          roster. With the spectator it would land past that question, and
+          claimPlayer has no other call site — the door would open onto a room
+          with no exit. */}
+      <EditionSwitcher open={switcherOpen} onClose={() => setSwitcherOpen(false)} canManage={false} spectate={false} />
     </LoginChrome>
   );
 }

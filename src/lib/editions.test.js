@@ -32,8 +32,9 @@ vi.mock("../firebase", () => ({
   spectatorSession: (id) => ({ id }),
 }));
 
-const { editionSlug, editionIdFor, editionExists, createEdition, cloneEdition, updateEdition } =
+const { editionSlug, editionIdFor, editionExists, createEdition, cloneEdition, updateEdition, switchEdition } =
   await import("./editions");
+const firebase = await import("../firebase");
 
 beforeEach(() => {
   rows.bc_editions = [];
@@ -156,5 +157,31 @@ describe("the collision guard", () => {
     // Still dropped, for the reason in the module: last year's per-man
     // override bills somebody wrong on a screen nobody re-checks.
     expect(player.dues_amount).toBeUndefined();
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  What a switch leaves behind
+// ══════════════════════════════════════════════════════════════════
+//
+// The identity written across the reload decides which screen the app comes
+// up on, and the two callers want opposite answers. From ☰ → Tournaments the
+// reader is looking AT another year, and the spectator is what gets them past
+// a claim screen they have no business on. From the claim screen's "Switch
+// tournament" they are looking FOR the year their name is in — and the
+// spectator would carry them past the one question they went there to answer,
+// with no way back to it: claimPlayer has a single call site, and it is that
+// screen.
+describe("switching editions", () => {
+  it("leaves a spectator behind by default, scoped to the edition opened", () => {
+    switchEdition("bc_2019", { reload: false, namespaced: true });
+    expect(firebase.setActiveTournamentId).toHaveBeenCalledWith("bc_2019", true);
+    expect(firebase.writeUserSession).toHaveBeenCalledWith({ id: "bc_2019" });
+  });
+
+  it("clears the session instead when the switch is somebody looking for their name", () => {
+    switchEdition("bc_demo", { reload: false, namespaced: true, spectate: false });
+    expect(firebase.setActiveTournamentId).toHaveBeenCalledWith("bc_demo", true);
+    expect(firebase.writeUserSession).toHaveBeenCalledWith(null);
   });
 });

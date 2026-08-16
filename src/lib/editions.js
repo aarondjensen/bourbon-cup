@@ -316,8 +316,22 @@ export const deleteEdition = async (id) => {
 // it comes from the membership flag the rules read — so the only thing the
 // change costs is a label that said "Director (Setup)" to a player looking at
 // 2019.
-export const switchEdition = (id, { reload = true, namespaced = false } = {}) => {
+// ── …except when the point of switching is to be asked ──────────────
+// `spectate: false` is the switch made FROM the claim screen, and it wants the
+// opposite of the paragraph above.
+//
+// That screen's "Switch tournament" link is for somebody who has no identity
+// in any edition yet — that is why they are looking at it — moving to the
+// tournament whose roster does have their name on it. Handing them the
+// spectator drops them into that edition read-only and PAST the claim screen,
+// and `claimPlayer` has exactly one call site: the claim screen. So the door
+// led to a room with no exit — the year was right, the name was still not
+// theirs, and nothing on any screen offered the question again.
+//
+// So the session is CLEARED instead: no cached identity, and the app comes up
+// on the new edition and asks who you are against its roster.
+export const switchEdition = (id, { reload = true, namespaced = false, spectate = true } = {}) => {
   setActiveTournamentId(id, namespaced);
-  writeUserSession(spectatorSession(id));
+  writeUserSession(spectate ? spectatorSession(id) : null);
   if (reload && typeof window !== "undefined") window.location.reload();
 };
