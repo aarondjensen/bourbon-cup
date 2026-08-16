@@ -122,6 +122,12 @@ const FIREBASE_CONFIG = (() => {
 const _defaultEdition = () =>
   defaultEdition({ override: import.meta.env?.VITE_DEFAULT_EDITION, native: isNative() });
 
+// Where a fresh install lands, for anybody who needs it AFTER startup. The
+// "back to the cup" row is the one caller: `liveEdition` reads it to know that
+// a store build's home is the demo rather than a real year, and this is the
+// single place that decides what a store build's home is.
+export const getDefaultEditionId = () => _defaultEdition();
+
 export const ACTIVE_EDITION_KEY = "bc_active_edition";
 export const ACTIVE_EDITION_NS_KEY = "bc_active_edition_ns";
 

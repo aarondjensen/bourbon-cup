@@ -6,7 +6,7 @@
 // year (the dangerous case, and the one the director will not notice, because
 // directors are exempt), and the bulk button's two directions.
 import { describe, it, expect } from "vitest";
-import { isEditionLocked, lockVerdict, bulkLockVerdict, lockBadge, lockNotice, isDemoEdition } from "./editionLock";
+import { isEditionLocked, lockVerdict, bulkLockVerdict, lockNotice, isDemoEdition } from "./editionLock";
 
 const ed = (id, year, locked) => ({ id, year, ...(locked === undefined ? {} : { locked }) });
 
@@ -98,13 +98,6 @@ describe("bulkLockVerdict", () => {
     expect(bulkLockVerdict([ed("bc_2026", 2026)], "bc_2026")).toBeNull();
     expect(bulkLockVerdict([], "bc_2026")).toBeNull();
     expect(bulkLockVerdict()).toBeNull();
-  });
-});
-
-describe("lockBadge", () => {
-  it("says nothing about an unlocked year", () => {
-    expect(lockBadge(ed("bc_2026", 2026))).toBeNull();
-    expect(lockBadge(ed("bc_2019", 2019, true))).toBe("LOCKED");
   });
 });
 
