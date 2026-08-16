@@ -50,7 +50,7 @@
 // from a popup. Same uid, same bc_accounts document, same claim screen,
 // same everything downstream. See `nativeSignIn` and docs/app-store.md §2.1.
 import {
-  getAuth,
+  getAuth, initializeAuth, indexedDBLocalPersistence,
   GoogleAuthProvider, OAuthProvider, signInWithPopup, signInWithRedirect,
   getRedirectResult, onAuthStateChanged, signOut, signInWithCredential,
 } from "firebase/auth";
@@ -103,8 +103,34 @@ const makeProvider = (id) => {
 //
 // So this is sync, and signIn() calls signInWithPopup with nothing awaited
 // in front of it.
+// ── And why native does NOT use getAuth ─────────────────────────────
+// `getAuth` is the browser convenience wrapper. It calls `initializeAuth`
+// with a persistence chain AND with `browserPopupRedirectResolver`, and
+// that resolver is a browser thing: it reads `window.location`, expects an
+// http(s) origin, and initialises an auth iframe pointed at authDomain.
+//
+// A Capacitor build runs from `capacitor://localhost`, and there the
+// resolver's initialise never settles. Firebase's auth object is created
+// but never finishes initialising, so `onAuthStateChanged` NEVER FIRES —
+// not with a user, not with null, not with an error. `App.jsx` holds
+// `authUser` at `undefined` until that first callback and renders
+// LoginSplash meanwhile, so the app opens on the trophy screen with its
+// dots and stays there. Nothing throws and nothing is logged; the first
+// iOS build sat exactly there.
+//
+// Native therefore initialises explicitly: IndexedDB persistence, which is
+// what survives the app being killed, and NO resolver. Nothing is lost by
+// dropping it — a popup and a redirect are both refused by Google inside a
+// webview, which is the whole reason `nativeSignIn` exists. Native reaches
+// this SDK only through `signInWithCredential`, which needs no resolver.
+//
+// The web branch is untouched, deliberately: `getAuth` there is the same
+// call it has always been, with the persistence chain and the popup
+// support the browser app depends on.
 let _auth = null;
-export const authInstance = () => (_auth ||= getAuth(firebaseApp));
+export const authInstance = () => (_auth ||= isNative()
+  ? initializeAuth(firebaseApp, { persistence: indexedDBLocalPersistence })
+  : getAuth(firebaseApp));
 
 // ── Warming up ──────────────────────────────────────────────────────
 // The SDK has an await of its own that no amount of care here can remove:
