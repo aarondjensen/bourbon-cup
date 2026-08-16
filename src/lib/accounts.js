@@ -43,8 +43,9 @@
 // What this file can do is ask ("create my membership, here is the code")
 // and read the answer. A rejection comes back as permission-denied, which
 // means exactly one thing here: wrong password.
-import { db } from "../firebase";
+import { db, TOURNAMENT_ID, writeFailure } from "../firebase";
 import { bestEffort } from "./bestEffort";
+import { isEditionLocked } from "./editionLock";
 
 // The fields this module owns on a player document. Grouped so the admin
 // unlink and the claim write cannot drift apart.
@@ -351,13 +352,43 @@ export async function claimPlayer(player, authUser) {
     return { ok: false, error: `${current.name} is already claimed by another account. Ask the director to unlink it.` };
   }
 
-  const saved = await db.upsert("bc_players", {
-    id: player.player_id,
-    auth_uid: authUser.uid,
-    auth_email: authUser.email || null,
-    auth_provider: authUser.provider || null,
-    auth_linked_at: new Date().toISOString(),
-  });
-  if (!saved) return { ok: false, error: "Could not save that — check signal and try again." };
-  return { ok: true, player: { ...current, ...saved } };
+  // `loud` so a refusal arrives as a rejection rather than as null. The
+  // default swallows both a refused write and a failed one into the same
+  // nothing, and this screen then said "check signal and try again" — which
+  // is a lie in the case that actually happens, and sends somebody standing
+  // in a car park hunting for a bar of signal.
+  //
+  // The case that actually happens is the LOCK. `bc_players`'s claim rule
+  // starts at `canWriteEdition()`, which is `isMember() && (editionOpen() ||
+  // isDirector())` — so on a locked edition a claim is refused for everybody
+  // except a director, and a director is exactly who will never see it. That
+  // is the same blind spot the bulk lock has, arriving from the other end:
+  // the field can't claim, and the one person who could reproduce it writes
+  // straight through.
+  //
+  // So a denial asks the edition whether it is locked and says so plainly.
+  // Reads are open to everybody, so that question can always be answered,
+  // and if the answer is no we fall back to writeFailure — which names the
+  // undeployed-rules case, the other way this rule refuses a claim.
+  try {
+    const saved = await db.upsert("bc_players", {
+      id: player.player_id,
+      auth_uid: authUser.uid,
+      auth_email: authUser.email || null,
+      auth_provider: authUser.provider || null,
+      auth_linked_at: new Date().toISOString(),
+    }, { loud: true });
+    return { ok: true, player: { ...current, ...saved } };
+  } catch (e) {
+    if (e?.code === "permission-denied") {
+      const edition = await db.getById("bc_editions", TOURNAMENT_ID).catch(() => null);
+      if (isEditionLocked(edition)) {
+        return {
+          ok: false,
+          error: `${edition?.name || "This tournament"} is locked, so it can't take a new claim. Ask the tournament director to unlock it.`,
+        };
+      }
+    }
+    return { ok: false, error: writeFailure(e, "Could not save that — check signal and try again.") };
+  }
 }
