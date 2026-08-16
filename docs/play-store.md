@@ -246,6 +246,12 @@ Choose **All or some functionality is restricted** and add two entries:
 > roster screen (it will already be linked). This unlocks score entry, the
 > photo library upload, side bets and the director's admin tabs.
 >
+> Please use the tournament named "DEMO — Testers". If the app opens on a
+> different year, tap "Switch tournament" on the roster screen (or ☰ →
+> Tournaments) and choose it. The other years are completed tournaments,
+> closed to new entries, so a name cannot be claimed in them — the app says
+> so on screen.
+>
 > Username: `<the demo Google account>`
 > Password: `<its Google password>`
 > Any other instructions: Tournament password: `<from Admin → Event → Access>`
