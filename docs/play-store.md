@@ -128,6 +128,62 @@ so check the bundle is signed before you upload the first one.
 > support; losing it *without* Play App Signing means the app can never be
 > updated again. Do it before the first upload, not after.
 
+**Keep the keystore OUTSIDE the repo**, beside the other apps' at `C:\dev\keys\`
+rather than in `android/`. `*.keystore` is gitignored, and a gitignored file in
+a working tree is precisely what `git clean -xfd` deletes without naming. That
+is the likeliest end of this app's FIRST upload key — bubblewrap wrote it to
+`./android.keystore` at the repo root, `twa-manifest.json` pointed at it there,
+and when Android moved to Capacitor the file was gone while Play went on
+expecting it. `storeFile` takes an absolute path, so there is no cost:
+
+```properties
+storeFile=C:/dev/keys/bourbon-cup-upload.keystore
+```
+
+Forward slashes, or doubled backslashes — it is a Java properties file.
+
+### When Play refuses the bundle
+
+Two rejections cost an evening between them, and neither says what it means.
+
+**"needs to have the package name com.thebourboncup.app"** — usually true, and
+usually because the wrong file went up. Four repos on this machine build a
+Capacitor Android app, and every one of them emits
+`android\app\build\outputs\bundle\release\app-release.aab`. A browser file
+picker remembering the wrong recent folder is all it takes, and the sizes are
+the only tell (Bourbon Cup 12.1 MB, MnQ 9.8, SFGL 7.2, WBC 5.5). Confirm what
+Gradle actually built:
+
+```powershell
+Get-ChildItem android\app\build\intermediates -Recurse -Filter AndroidManifest.xml |
+  Where-Object { $_.FullName -like "*merged_manifest*" -and $_.FullName -like "*release*" } |
+  ForEach-Object { Select-String -Path $_.FullName -Pattern 'package="[^"]*"' -AllMatches }
+```
+
+If that says `com.thebourboncup.app` and Play still refuses, **Play is reading a
+different file than you are**. Copy the bundle somewhere with a name no other
+repo produces and upload that — it is faster than proving it any other way, and
+it is what finally surfaced the real error underneath.
+
+**"signed with the wrong key"** — the listing already has an upload key
+registered, from something uploaded to it long ago. A listing that once held a
+bubblewrap TWA is enrolled with bubblewrap's key, not with the keystore made
+later, and no rebuild fixes that. If the old keystore still exists, point
+`keystore.properties` at it and carry on; using it as the upload key costs
+nothing, because the key users actually install against is Google's under Play
+App Signing either way.
+
+If it is gone, it is **Test and release → App integrity → App signing →
+Request upload key reset**, attaching a PEM of the new certificate:
+
+```powershell
+keytool -export -rfc -keystore C:/dev/keys/bourbon-cup-upload.keystore -alias bourbon-cup -file upload_certificate.pem
+```
+
+A day or two, and nothing else in the submission is blocked by it — the
+functions, the rules, the demo seed, the edition locks and every App content
+section are all independent. Do them while it sits.
+
 ### Version bumps
 
 `versionCode` in `android/app/build.gradle` must increase on every upload;
