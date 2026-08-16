@@ -559,6 +559,12 @@ function GateScreen({ tournamentName, tournamentLocation, authUser, onPassed, on
 // Hence both halves: say so BEFORE the tap, and offer the way out. The
 // switcher is here for everyone, not only when locked, because "I am in the
 // wrong year" is the same problem arriving quietly.
+// Height of the claim screen's confirm bar, held open whether or not the
+// button is in it — see the slot below. A plain number rather than a clamp
+// because the space has to be reserved before anybody has picked a name,
+// and 44 is the tap target the button wants anyway.
+const CONFIRM_BAR_H = 44;
+
 function ClaimScreen({ players, teams, darkMode, tournamentName, tournamentLocation, authUser, onClaimed, onDirector, onSignOut, editionLocked = false }) {
   const [code, setCode] = useState("");
   const [picked, setPicked] = useState(null);
@@ -693,15 +699,37 @@ function ClaimScreen({ players, teams, darkMode, tournamentName, tournamentLocat
         })}
       </div>
 
-      {/* Confirm bar — only once a name is picked. */}
-      {picked && (
-        <button onClick={doClaim} disabled={busy} style={{
-          width: "100%", maxWidth: 480, marginTop: 10, padding: "12px 16px", borderRadius: 12,
-          background: BC.gold, border: "none", color: ON_AMBER,
-          fontFamily: FONT, fontSize: FS.body, fontWeight: 800, cursor: busy ? "default" : "pointer",
-        }}>
-          {busy ? "Linking…" : `I'm ${picked.name} — link this account`}
-        </button>
+      {/* ── Confirm bar ──
+          The SLOT is always here; only the button inside it comes and goes.
+          LoginChrome centres the whole panel with `margin: auto`, so a
+          control that materialises out of nowhere grows the panel and walks
+          every name up the screen — under the thumb that just tapped one,
+          which is how you tap a name, watch the grid jump, and land on the
+          wrong confirmation. Holding the height is the same trick LoginNote
+          below has always used for its error line.
+
+          Reserved only when there is a roster to pick from: on the empty
+          bootstrap screen nothing can ever appear in it, so it would be
+          44px of dead space above the director-code row.
+
+          The label never wraps — a second line would overflow the reserved
+          height and put the shift straight back. It shrinks with the
+          viewport instead, which fits the longest name on the roster down
+          to a 320px phone, and ellipsises rather than wrapping past that. */}
+      {players.length > 0 && (
+        <div style={{ width: "100%", maxWidth: 480, height: CONFIRM_BAR_H, marginTop: 10, flexShrink: 0 }}>
+          {picked && (
+            <button onClick={doClaim} disabled={busy} style={{
+              width: "100%", height: "100%", padding: "0 14px", borderRadius: 12,
+              background: BC.gold, border: "none", color: ON_AMBER,
+              fontFamily: FONT, fontSize: `clamp(11px, 3.4vw, ${FS.body}px)`, fontWeight: 800,
+              cursor: busy ? "default" : "pointer",
+              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+            }}>
+              {busy ? "Linking…" : `I'm ${picked.name} — link this account`}
+            </button>
+          )}
+        </div>
       )}
 
       <LoginNote text={err} />
