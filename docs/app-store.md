@@ -213,10 +213,18 @@ the upload for the channel being present, not for any pixel being transparent.
 
 ---
 
-## 5. The by-hand setup, all of which is still to do
+## 5. The by-hand setup
 
 Nothing here can be done from this repo. All of it is required before the app
 will run, and most of it fails silently.
+
+Step 2 is **done and committed** — the real reversed client id is in
+`Info.plist`, and the Xcode project already references
+`GoogleService-Info.plist` in Copy Bundle Resources. What step 1 leaves on a
+fresh clone is the FILE, which is gitignored and therefore per-machine: the
+project points at a path nothing has put anything at, and the build stops at
+Copy Bundle Resources with "Build input file cannot be found". Downloading it
+into place is the whole of it.
 
 1. **`GoogleService-Info.plist`** — Firebase console → Project settings →
    General → the **iOS** app → download, then put it at
@@ -241,10 +249,27 @@ will run, and most of it fails silently.
    > index is no longer subject to `.gitignore`.
 
    Without any of this, push never works.
-2. **The reversed Google client ID** into `Info.plist`, over
-   `REPLACE_WITH_REVERSED_GOOGLE_CLIENT_ID`. It is in
-   `GoogleService-Info.plist` as `REVERSED_CLIENT_ID`. Miss it and the Google
-   sheet opens and never comes back.
+2. **The reversed Google client ID** in `Info.plist` — **already there**:
+   `com.googleusercontent.apps.957218531964-c6ru1h658nj6udpbbbfd756db6jf9hb3`,
+   committed, because it is a public OAuth client identifier readable out of
+   any shipped binary. Nothing to type.
+
+   What is still worth doing once the plist from step 1 is in place is
+   **checking the two agree**. `REVERSED_CLIENT_ID` in the downloaded file must
+   be that same string; if the iOS app was ever deleted and re-registered in
+   Firebase, it is a different id and the committed one is stale. Miss that and
+   the Google sheet opens and never comes back — a failure with no error
+   message anywhere in it.
+
+   ```sh
+   plutil -p ios/App/App/GoogleService-Info.plist \
+     | grep -E 'PROJECT_ID|BUNDLE_ID|GOOGLE_APP_ID|REVERSED_CLIENT_ID'
+   ```
+
+   `PROJECT_ID` = `the-bourbon-cup`, `BUNDLE_ID` = `com.thebourboncup.app`,
+   `GOOGLE_APP_ID` beginning `1:957218531964:ios:` — an id beginning `:web:`
+   means the *web* app's file was downloaded, which carries no
+   `REVERSED_CLIENT_ID` at all and is the other way this step goes wrong.
 3. **An APNs authentication key (`.p8`)** uploaded to Firebase → Project
    Settings → Cloud Messaging. Without it iOS hands over a token FCM cannot
    exchange and **every send silently no-ops**.
