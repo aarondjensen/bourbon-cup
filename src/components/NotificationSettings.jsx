@@ -26,7 +26,7 @@
 import { useState, useEffect } from "react";
 import { BC, FONT, ALPHA, FS } from "../theme";
 import {
-  registerForPush, unsubscribeFromPush, getNotificationPermissionState, refreshPermissionState,
+  registerForPush, unsubscribeFromPush, getNotificationPermissionState, refreshPermissionState, canSubscribe,
   isStandalonePWA, isIOSPushCapable, checkSubscriptionStatus,
   getCachedSubscriptionStatus, readTypePrefs, saveTypePrefs,
   getCachedTypePrefs, normalizeTypePrefs,
@@ -205,6 +205,28 @@ export function NotificationSettings({ user, notify }) {
       </div>
       {children}
     </div>
+  );
+
+  // ── Nobody to address ──
+  // Before every device check below, because this one is about WHO is reading
+  // rather than what they are holding. A spectator and a bootstrap director
+  // are signed-in members, so the token write succeeds and everything on this
+  // screen then agrees that notifications are on — while `sendToPlayer`
+  // addresses pushes by player_id and never addresses either of them. See
+  // canSubscribe in lib/notifications.
+  //
+  // Found on a real phone, which is the only place it can be found: a test
+  // push that went nowhere, and one token row in the whole project filed under
+  // "spectator".
+  if (!canSubscribe(pid)) return wrap(
+    <Card>
+      <div style={{ fontSize: FS.body, fontWeight: 800, color: BC.t1, marginBottom: 6 }}>Claim your name first</div>
+      <div style={{ fontSize: FS.small, color: BC.t2, lineHeight: 1.5 }}>
+        Notifications are sent to a player on the roster, so this device has to
+        be linked to one. You&rsquo;re viewing a tournament you aren&rsquo;t in
+        — open yours from ☰ → Tournaments and pick your name.
+      </div>
+    </Card>
   );
 
   // ── iOS, too old ──

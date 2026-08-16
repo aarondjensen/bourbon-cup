@@ -55,9 +55,35 @@
 // browser: `isNative()` was false inside it and it took the web path above,
 // which worked. Now it does not, and the difference matters in `writeTokenRow`
 // — see the note on `platform` there.
-import { db, TOURNAMENT_ID, getMessagingInstance } from "../firebase";
+import { db, TOURNAMENT_ID, getMessagingInstance, SPECTATOR_ID, BOOTSTRAP_DIRECTOR } from "../firebase";
+import { GUEST_ID } from "./guest";
 import { normalizeTypePrefs } from "./notificationTypes";
 import { isNative, isNativeIOS, platformName } from "./platform";
+
+// ── A subscription addressed to nobody ──────────────────────────────
+// Three identities in this app carry a player id that matches no roster row:
+// the guest, the spectator looking at a year they are not in, and the director
+// bootstrapping an edition with an empty roster. The ledger already had to
+// learn this — see myLedger in App.jsx, which requires a real roster row
+// rather than inventing one from an id.
+//
+// Push is the same shape and it fails more quietly. `sendToPlayer` in
+// functions/index.js addresses every push by `player_id`, and nothing is ever
+// addressed to one of these three, so a token row filed under one is a
+// subscription that can never receive anything. The toggle that wrote it said
+// "Notifications on", the row exists, `checkSubscriptionStatus` finds it and
+// reports subscribed — every signal agrees, and no notification will ever
+// arrive. It was found the only way it can be: a real phone, a real test push,
+// and nothing happening.
+//
+// A guest could never write one (no auth token, so the rules refuse it), which
+// is exactly why the spectator is the one that got through: a spectator IS a
+// signed-in member, so the write succeeds.
+export const PLAYERLESS_IDS = [GUEST_ID, SPECTATOR_ID, BOOTSTRAP_DIRECTOR.player_id];
+
+// Can this identity hold a push subscription at all? False for the three
+// above, and for no id — the caller has somebody the functions can address.
+export const canSubscribe = (playerId) => !!playerId && !PLAYERLESS_IDS.includes(playerId);
 
 // Re-exported so callers take the whole preference API off one module.
 export { NOTIFICATION_TYPES, normalizeTypePrefs } from "./notificationTypes";
@@ -319,6 +345,11 @@ const nativeRegister = async (playerId) => {
 
 export const registerForPush = async (playerId) => {
   if (!playerId) return { success: false, state: "error", error: "missing playerId" };
+  // Before the OS is asked, and before either path can write a row. Prompting
+  // somebody for notification permission and then filing the token against an
+  // id nothing addresses spends the one prompt iOS gives you on a subscription
+  // that cannot work — and iOS does not ask twice.
+  if (!canSubscribe(playerId)) return { success: false, state: "no_player" };
   if (isNative()) return nativeRegister(playerId);
   if (getNotificationPermissionState() === "unsupported") return { success: false, state: "unsupported" };
 
