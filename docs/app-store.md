@@ -217,9 +217,29 @@ the upload for the channel being present, not for any pixel being transparent.
 Nothing here can be done from this repo. All of it is required before the app
 will run, and most of it fails silently.
 
-1. **`GoogleService-Info.plist`** — Firebase console → iOS app → download, then
-   drag into Xcode (which is what creates the project reference; the file is
-   gitignored for exactly that reason). Without it push never works.
+1. **`GoogleService-Info.plist`** — Firebase console → Project settings →
+   General → the **iOS** app → download, then put it at
+   `ios/App/App/GoogleService-Info.plist`. The project reference is committed,
+   so placing the file is enough — no drag, and no target checkbox to get
+   wrong. A missing file now fails at Copy Bundle Resources, which is loud;
+   the file itself stays gitignored.
+
+   **Check the filename.** Every app in this estate downloads a file with the
+   identical name, so a second download lands as `GoogleService-Info-2.plist`
+   and macOS keeps the older one. Firebase looks for the exact name and finds
+   nothing: the app builds, installs, launches, and fails to initialise
+   Firebase at runtime. The `-2` is also outside the gitignore, which matches
+   one exact path, so it turns up in `git status` ready to be committed.
+
+   `grep -A1 PROJECT_ID` it before trusting it — it should say
+   `the-bourbon-cup`. Same trap as the four identically-named `app-release.aab`
+   files in `play-store.md` §1, and it bit the same way.
+
+   > If Xcode's source control integration stages the plist (`A` in
+   > `git status`), unstage it — `git restore --staged`. A path already in the
+   > index is no longer subject to `.gitignore`.
+
+   Without any of this, push never works.
 2. **The reversed Google client ID** into `Info.plist`, over
    `REPLACE_WITH_REVERSED_GOOGLE_CLIENT_ID`. It is in
    `GoogleService-Info.plist` as `REVERSED_CLIENT_ID`. Miss it and the Google
