@@ -122,13 +122,17 @@ describe("Info.plist", () => {
   });
 
   it("still carries a URL scheme slot for the reversed Google client id", () => {
-    // Deliberately asserts the SLOT, not a real value. The placeholder is what
-    // is committed — the real id comes out of GoogleService-Info.plist, which
-    // is gitignored — and a test that failed on the placeholder would be red
-    // on a clean checkout, which is a test everybody learns to ignore.
+    // Deliberately asserts the SLOT, not a specific value — either the
+    // placeholder or a real id passes.
     //
-    // What it catches is the slot being deleted. Without it the Google sheet
-    // opens and never comes back. docs/app-store.md §5 step 2.
+    // The real id IS committed now. It is a public OAuth client identifier,
+    // readable out of any shipped iOS binary, so there is nothing to withhold
+    // — and leaving the placeholder in the tracked file meant every fresh
+    // clone built an app whose Google sheet opens and never comes back, fixed
+    // only by an edit nobody downstream knows to make. It is still matched
+    // loosely so a checkout that has not been through §5 step 2 is not red.
+    //
+    // What it catches is the slot being deleted. docs/app-store.md §5 step 2.
     expect(hasKey(INFO, "CFBundleURLTypes")).toBe(true);
     expect(INFO).toMatch(/REPLACE_WITH_REVERSED_GOOGLE_CLIENT_ID|com\.googleusercontent\.apps\./);
   });
