@@ -404,6 +404,23 @@ const setCachedSubscriptionStatus = (playerId, subscribed) => {
   try { localStorage.setItem(SUB_CACHE_PREFIX + playerId, subscribed ? "1" : "0"); } catch { /* private mode */ }
 };
 
+// Forget the answer entirely, rather than writing false. For when the ACCOUNT
+// goes: false is a claim about a player who still exists on this device —
+// "not subscribed" — and after a deletion there is nobody to make that claim
+// about. null is the honest state, and it means the next person to claim that
+// roster row on this phone gets a fresh answer instead of inheriting one.
+//
+// `deleteAccount` in lib/accounts has always called this. It was never
+// written, so the destructure produced undefined and calling it threw a
+// TypeError that rejected the deletion outside its own try/catch — the button
+// sat on "Deleting…" and the account survived. On EVERY platform: a dynamic
+// `await import()` destructure is not checked by the bundler or by eslint, so
+// nothing said a word until a phone did.
+export const clearCachedSubscriptionStatus = (playerId) => {
+  if (!playerId || typeof localStorage === "undefined") return;
+  try { localStorage.removeItem(SUB_CACHE_PREFIX + playerId); } catch { /* private mode */ }
+};
+
 // ── Unsubscribe ─────────────────────────────────────────────────────
 // Both halves, both best-effort: revoke at FCM so the endpoint stops
 // accepting, and delete the rows so the functions stop trying. Every device
