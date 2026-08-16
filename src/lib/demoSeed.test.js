@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  buildDemo, countDemoDocs, DEMO_COLLECTIONS, DEMO_EDITION_ID, DEMO_MARK,
+  buildDemo, countDemoDocs, demoWrites, DEMO_COLLECTIONS, DEMO_EDITION_ID, DEMO_MARK,
   demoPlayerId, DEMO_START, DEMO_END, DEMO_YEAR, buildDemoPlayer, SEEDED_PLAYER_IDS,
 } from "./demoSeed";
 import { todayISO, addDays } from "./dates";
@@ -449,5 +449,46 @@ describe("what it deliberately leaves out", () => {
     // An imported year is locked because it is over. This one is a sandbox —
     // a locked round would make the first thing a tester tries fail.
     expect(DEMO_COLLECTIONS).not.toContain("bc_round_locks");
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  What actually gets stored
+// ══════════════════════════════════════════════════════════════════
+//
+// Everything above tests the BUILDER, and the builder was never wrong. The
+// writer was: it used each document's id to name the Firestore document and
+// stored the rest, so the demo landed in the live project with no `id` field
+// on a single row. Nothing here could see that, because nothing here looked at
+// the payload the writer commits.
+//
+// `db.get` and `db.subscribe` hand back the document's data, so the id field
+// IS how the app identifies a document — the picker opens `switchEdition(e.id)`
+// and every settings and round lookup is `rows.find(r => r.id === …)`. A demo
+// written without it could not be opened at all.
+describe("the documents the writer commits", () => {
+  const writes = demoWrites(built);
+
+  it("stores every document under its own id, id field included", () => {
+    expect(writes).toHaveLength(countDemoDocs(built));
+    for (const { col, id, doc } of writes) {
+      expect(id, `${col} document has no id`).toBeTruthy();
+      // The two must agree: the field is what the app reads, the id is where
+      // Firestore files it, and a document whose field names a different
+      // document is worse than one missing the field.
+      expect(doc.id, `${col}/${id} is stored without its id`).toBe(id);
+    }
+  });
+
+  it("files the edition document where the picker looks for it", () => {
+    // The one that was found by hand: `bc_editions/bc_demo` with no `id`,
+    // which made every Open tap a `switchEdition(undefined)` no-op.
+    const edition = writes.find(w => w.col === "bc_editions");
+    expect(edition.id).toBe(DEMO_EDITION_ID);
+    expect(edition.doc.id).toBe(DEMO_EDITION_ID);
+  });
+
+  it("writes nothing outside the collections it declares", () => {
+    for (const { col } of writes) expect(DEMO_COLLECTIONS).toContain(col);
   });
 });

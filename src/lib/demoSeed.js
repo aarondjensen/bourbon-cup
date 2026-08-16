@@ -452,6 +452,29 @@ export const buildDemo = () => {
 export const countDemoDocs = (built) =>
   DEMO_COLLECTIONS.reduce((n, c) => n + (built?.[c]?.length || 0), 0);
 
+// ── What the writer stores, and why the id stays on the document ────
+// Each built document paired with the id it is filed under — and it is the
+// SAME object, not a copy with `id` taken off it.
+//
+// The writer used to destructure the id out to name the Firestore document
+// (`const { id, ...rest } = doc`), which is the one place an id is not needed
+// as a field, and stored the rest. That is not how anything else in this
+// project is written: `db.get` and `db.subscribe` hand back `d.data()` and
+// nothing else, so EVERY document in this app carries its own id as a field,
+// and `scripts/import-history.mjs` writes the whole document for that reason.
+//
+// A demo written without it is a tournament the app cannot identify. The
+// picker's Open button calls `switchEdition(e.id)` — `undefined` for the demo
+// row, so `setActiveTournamentId` bailed on the falsy id and the reload landed
+// back on the edition you were already in. Behind that, every settings, round,
+// course and match lookup is `rows.find(r => r.id === …)` and would have
+// missed as well: no tournament name, no rounds, no draw.
+//
+// Pure and exported so the payload the writer commits is the thing under test,
+// rather than the builder's output that was always right.
+export const demoWrites = (built) =>
+  DEMO_COLLECTIONS.flatMap((col) => (built?.[col] || []).map((doc) => ({ col, id: doc.id, doc })));
+
 // ── Adding a tester ─────────────────────────────────────────────────
 // The twelve seeded golfers are enough for the Play closed test, but a real
 // tester often wants to see their OWN name on the leaderboard rather than
