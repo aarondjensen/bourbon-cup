@@ -303,6 +303,12 @@ Credentials come from `store-submission.md` §1.4.
 > pre-assigned name on the roster screen. The account is a tournament director,
 > so the Admin tabs are reachable.
 >
+> **Please use the tournament named "DEMO — Testers".** If the app opens on a
+> different year, tap "Switch tournament" on the roster screen (or ☰ →
+> Tournaments) and choose it. The other years are completed tournaments and
+> are closed to new entries, so a name cannot be claimed in them — the app
+> says so on screen.
+>
 > Google account: `<demo address>` / `<password>`
 > Tournament password: `<from Admin → Event → Access>`
 >

@@ -106,7 +106,7 @@ import {
   BUDGET_COL, budgetLineId, buildBudgetLine, budgetLineError,
 } from "./lib/budget";
 import { EDITIONS_COL, isDemoEdition } from "./lib/editions";
-import { lockNotice } from "./lib/editionLock";
+import { lockNotice, isEditionLocked } from "./lib/editionLock";
 import { prefetchArchive } from "./lib/useArchive";
 import { TRIP_SETTINGS_ID, houseFrom, tripSchedule, tripDates } from "./lib/tripInfo";
 import {
@@ -539,11 +539,32 @@ function GateScreen({ tournamentName, tournamentLocation, authUser, onPassed, on
 // Shown to a signed-in account that no roster document points at. Tapping
 // a name selects it; a second tap on the confirm bar commits, because the
 // link is meant to be permanent and a mis-tap on a 12-name grid is not.
-function ClaimScreen({ players, teams, darkMode, tournamentName, tournamentLocation, authUser, onClaimed, onDirector, onSignOut }) {
+// ── Claiming into a LOCKED edition ──────────────────────────────────
+// A locked edition refuses the claim write — `bc_players`'s rule starts at
+// canWriteEdition(), which is `isMember() && (editionOpen() || isDirector())`.
+// So the roster grid was offering twelve names that could not be tapped into,
+// and the refusal only arrived after the tap.
+//
+// This is the lock's blind spot from the far end. A director writes through
+// locks, so the person who set one cannot see what it did to everybody else;
+// the first person to meet it is a member who is not a director, which on this
+// app means a new player, a Play tester, or a store reviewer. All three of
+// them arrive at this exact screen.
+//
+// It matters most on a fresh install, which lands on DEFAULT_TOURNAMENT_ID
+// rather than on anything a director chose — so somebody handed the app can
+// open it, present the password, and find a roster they are not allowed to
+// join, with no hint that another tournament exists.
+//
+// Hence both halves: say so BEFORE the tap, and offer the way out. The
+// switcher is here for everyone, not only when locked, because "I am in the
+// wrong year" is the same problem arriving quietly.
+function ClaimScreen({ players, teams, darkMode, tournamentName, tournamentLocation, authUser, onClaimed, onDirector, onSignOut, editionLocked = false }) {
   const [code, setCode] = useState("");
   const [picked, setPicked] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [switcherOpen, setSwitcherOpen] = useState(false);
 
   // Checked as it is typed rather than in an effect on the value: the
   // director typing the code is an event, and modelling it as one keeps
@@ -584,7 +605,7 @@ function ClaimScreen({ players, teams, darkMode, tournamentName, tournamentLocat
   };
 
   const PlayerBtn = ({ p, team }) => {
-    const taken = isClaimed(p);
+    const taken = isClaimed(p) || editionLocked;
     const sel = picked?.player_id === p.player_id;
     return (
       <button
@@ -610,9 +631,33 @@ function ClaimScreen({ players, teams, darkMode, tournamentName, tournamentLocat
     <LoginChrome tournamentName={tournamentName} tournamentLocation={tournamentLocation}>
       {/* Nobody to tap on an empty roster — the instruction there is the
           director-code line below the columns instead. */}
-      {players.length > 0 && (
+      {players.length > 0 && !editionLocked && (
         <div style={{ textAlign: "center", marginBottom: 10, fontSize: FS.body, fontWeight: 700, color: BC.t1 }}>
           Select Your Name
+        </div>
+      )}
+
+      {/* Said before the tap, not after it. The write would be refused either
+          way; the difference is whether somebody learns that from a sentence
+          or from a button that appears to do nothing. */}
+      {editionLocked && (
+        <div style={{
+          width: "100%", maxWidth: 480, marginBottom: 10, padding: "10px 12px", borderRadius: 10,
+          background: BC.card + ALPHA.panel, border: `1px solid ${BC.bdr}`,
+          textAlign: "center", position: "relative", zIndex: 1,
+        }}>
+          <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.t1, marginBottom: 4 }}>
+            This tournament is closed
+          </div>
+          <div style={{ fontSize: FS.small, color: BC.t3, lineHeight: 1.45 }}>
+            {tournamentName || "It"} isn&rsquo;t taking new players, so you can&rsquo;t claim a name here.
+            Open a different tournament, or ask the director to unlock this one.
+          </div>
+          <button onClick={() => setSwitcherOpen(true)} style={{
+            marginTop: 8, padding: "8px 14px", borderRadius: 8,
+            background: BC.gold, border: "none", color: ON_AMBER,
+            fontFamily: FONT, fontSize: FS.small, fontWeight: 800, cursor: "pointer",
+          }}>Choose a tournament</button>
         </div>
       )}
 
@@ -692,11 +737,24 @@ function ClaimScreen({ players, teams, darkMode, tournamentName, tournamentLocat
               fontSize: FS.lead, fontFamily: FONT, outline: "none", textAlign: "center",
             }} />
         )}
+        {/* Not only for the locked case: "I am in the wrong year" is the same
+            problem arriving without a notice to explain it. */}
+        {!editionLocked && (
+          <button onClick={() => setSwitcherOpen(true)} style={{
+            background: "transparent", border: "none", color: BC.t3,
+            fontSize: FS.small, fontFamily: FONT, textDecoration: "underline", cursor: "pointer", padding: "7px 4px",
+          }}>Switch tournament</button>
+        )}
         <button onClick={onSignOut} style={{
           background: "transparent", border: "none", color: BC.t3,
           fontSize: FS.small, fontFamily: FONT, textDecoration: "underline", cursor: "pointer", padding: "7px 4px",
         }}>Not you? Sign out</button>
       </div>
+
+      {/* canManage=false deliberately: this screen belongs to somebody who has
+          not claimed a name yet, and creating or cloning an edition from here
+          is not a thing they should be able to reach. */}
+      <EditionSwitcher open={switcherOpen} onClose={() => setSwitcherOpen(false)} canManage={false} />
     </LoginChrome>
   );
 }
@@ -4677,6 +4735,9 @@ export default function App() {
       <ClaimScreen
         {...chrome}
         players={realPlayers(tPlayers)} teams={teams} darkMode={darkMode} authUser={authUser}
+        // A director is exempt from the lock, so the roster stays tappable for
+        // them — matching the rule, which lets their claim through.
+        editionLocked={isEditionLocked(activeEdition) && !isDirectorUser}
         onClaimed={p => {
           // The roster snapshot delivers this write back to us immediately
           // (Firestore fires listeners on local mutations), so `user` is
