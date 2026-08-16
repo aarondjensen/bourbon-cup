@@ -271,8 +271,19 @@ into place is the whole of it.
    means the *web* app's file was downloaded, which carries no
    `REVERSED_CLIENT_ID` at all and is the other way this step goes wrong.
 3. **An APNs authentication key (`.p8`)** uploaded to Firebase → Project
-   Settings → Cloud Messaging. Without it iOS hands over a token FCM cannot
-   exchange and **every send silently no-ops**.
+   Settings → Cloud Messaging — **done**, key `9K7J7J2VGT`. Without it iOS
+   hands over a token FCM cannot exchange and **every send silently no-ops**.
+
+   It appears in the console under BOTH "Development APNs auth key" and
+   "Production APNs auth key" with the same Key ID, and that is correct rather
+   than a double upload: a `.p8` is environment-agnostic and covers sandbox and
+   production at once, which is the whole reason it beats the per-environment
+   certificates it replaced.
+
+   The Team ID beside it must match `DEVELOPMENT_TEAM` in
+   `App.xcodeproj/project.pbxproj` — both are `7RRL56R755`. If those two ever
+   disagree the phone still registers and still hands back a token, and every
+   send fails the APNs handshake with nothing visible at either end.
 4. **Sign in with Apple** enabled on the App ID in the Apple Developer portal.
    This is separate from the Services ID the *web* flow uses; both must exist.
    Missing it fails signing with an entitlement mismatch, which says nothing
