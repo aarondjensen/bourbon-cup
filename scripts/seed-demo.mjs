@@ -58,7 +58,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  buildDemo, buildDemoPlayer, countDemoDocs,
+  buildDemo, buildDemoPlayer, countDemoDocs, demoWrites,
   DEMO_COLLECTIONS, DEMO_EDITION_ID, DEMO_MARK, DEMO_NAME, SEEDED_PLAYER_IDS,
 } from "../src/lib/demoSeed.js";
 
@@ -333,16 +333,13 @@ if (UNDO) {
   process.exit(0);
 }
 
-const ops = [];
-for (const col of DEMO_COLLECTIONS) {
-  for (const doc of built[col]) {
-    const { id, ...rest } = doc;
-    // `set` with merge, so a re-run corrects a changed field rather than
-    // erroring, and a tester's edited score is overwritten back to the seed's
-    // value — which is what re-running a seed is FOR.
-    ops.push((b) => b.set(db.collection(col).doc(id), rest, { merge: true }));
-  }
-}
+// The document WHOLE, id field included — see demoWrites in lib/demoSeed for
+// what stripping it cost. `set` with merge, so a re-run corrects a changed
+// field rather than erroring, and a tester's edited score is overwritten back
+// to the seed's value — which is what re-running a seed is FOR. It is also
+// what repairs a demo seeded by the version that dropped the id.
+const ops = demoWrites(built).map(({ col, id, doc }) =>
+  (b) => b.set(db.collection(col).doc(id), doc, { merge: true }));
 console.log(`  Writing ${ops.length} document(s)…`);
 await commitInChunks(ops);
 

@@ -3108,6 +3108,18 @@ export default function App() {
   // moment the roster says this account has no name, which is how a
   // director's unlink reaches a phone that is not looking.
   useEffect(() => {
+    // `undefined` is "Firebase has not answered yet", not "signed out" — the
+    // same distinction `member` makes just above. Treating them alike wiped
+    // the cache on EVERY cold start, in the first effect pass, before the
+    // session it exists to cover had a chance to be used. That made the whole
+    // thing dead code, and one thing it covers is not a flicker: an edition
+    // switch writes the SPECTATOR marker and then hard-reloads (lib/editions),
+    // so the marker was destroyed a frame into the reload it was written for.
+    // The result was that opening any edition your account has no roster row
+    // in — the demo, and all ten old cups — dropped you on that edition's
+    // claim screen instead of into it read-only, asking a director to bind
+    // their account to a roster row on a finished tournament.
+    if (authUser === undefined) return;
     if (!authUser) { writeUserSession(null); cachedSession.current = null; return; }
     if (!user) {
       if (playersLoaded) { writeUserSession(null); cachedSession.current = null; }

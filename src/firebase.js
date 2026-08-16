@@ -305,13 +305,33 @@ export const firebaseApp = _app;
 // running out — how long to keep trying at all. See db.subscribe.
 const SUBSCRIBE_RETRY_MS = [1000, 2000, 4000, 8000, 15000, 30000, 60000];
 
+// ── Every row knows its own id ──────────────────────────────────────
+// Each document in this project stores its id as a FIELD as well as being
+// filed under it, and it is the field every screen reads: the settings
+// singletons are found with `rows.find(r => r.id === editionDocId("tournament"))`,
+// the edition picker opens `switchEdition(e.id)`, and `db.upsert` refuses a
+// row that has no `id` on it. Nothing enforced that invariant, and the demo
+// seed broke it — it used each document's id to NAME the Firestore document
+// and then stored everything except the id, leaving a whole tournament the app
+// could not identify. Tapping "DEMO — Testers" called `switchEdition(undefined)`,
+// which cannot switch, so the reload came back on the edition you were already
+// in. See `demoWrites` in lib/demoSeed for the writing half of that fix.
+//
+// So the document id fills the gap when the document does not carry one. The
+// STORED field still wins wherever it exists, which makes this a no-op for
+// every document the app or scripts/import-history.mjs has ever written — and
+// it means a demo already sitting in Firestore reads correctly on the next
+// deploy, rather than waiting on somebody to re-run the seed with a
+// service-account key.
+const rowOf = (d) => ({ id: d.id, ...d.data() });
+
 export const db = {
   _q: (col, filters = []) => {
     const ref = collection(_db, col);
     return filters.length ? query(ref, ...filters.map(f => where(f.field, f.op, f.value))) : ref;
   },
   get: async (col, filters = []) => {
-    try { const s = await getDocs(db._q(col, filters)); return s.docs.map(d => d.data()); }
+    try { const s = await getDocs(db._q(col, filters)); return s.docs.map(rowOf); }
     catch(e) { console.error("db.get", col, e); return []; }
   },
   // `loud` leaves the rejection in. The default swallows it into `null`,
@@ -335,12 +355,12 @@ export const db = {
     try { await deleteDoc(doc(_db, col, String(id))); return true; }
     catch(e) { console.error("db.delete", col, e); return null; }
   },
-  // `withId` stamps the DOCUMENT ID onto each row. Everything in this app
-  // stores its own id as a field as well, so nothing needed it — until
+  // `withId` makes the DOCUMENT ID win over a stored `id` field. Every row
+  // already carries one either way (see rowOf above); this is for
   // bc_accounts, where a membership can also be created by hand in the
-  // Firebase console (that is how the first director is made) and will
-  // then have only the fields whoever typed it thought to add. The id is
-  // the one thing such a document always has.
+  // Firebase console (that is how the first director is made) and whoever
+  // typed it may well have added an `id` field of their own. The document id
+  // — the uid — is the one that has to be believed there.
   //
   // ── A listener that does not die quietly ──────────────────────────
   // onSnapshot's error callback is TERMINAL. Firestore detaches the listener
@@ -372,7 +392,7 @@ export const db = {
   // an hour and then blips gets a full budget rather than the tail of an old
   // one.
   subscribe: (col, filters = [], cb, { withId = false } = {}) => {
-    const rows = (snap) => snap.docs.map(d => (withId ? { ...d.data(), id: d.id } : d.data()));
+    const rows = (snap) => snap.docs.map(d => (withId ? { ...d.data(), id: d.id } : rowOf(d)));
     let stopped = false, detach = null, timer = null, attempt = 0;
 
     const attach = () => {
