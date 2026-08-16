@@ -48,6 +48,7 @@ const MANIFEST = read("android/app/src/main/AndroidManifest.xml");
 const ENTITLEMENTS = read("ios/App/App/App.entitlements");
 const PRIVACY = read("ios/App/App/PrivacyInfo.xcprivacy");
 const PBXPROJ = read("ios/App/App.xcodeproj/project.pbxproj");
+const APPDELEGATE = read("ios/App/App/AppDelegate.swift");
 const CAP = json("capacitor.config.json");
 
 describe("capacitor.config.json", () => {
@@ -135,6 +136,23 @@ describe("Info.plist", () => {
     // What it catches is the slot being deleted. docs/app-store.md §5 step 2.
     expect(hasKey(INFO, "CFBundleURLTypes")).toBe(true);
     expect(INFO).toMatch(/REPLACE_WITH_REVERSED_GOOGLE_CLIENT_ID|com\.googleusercontent\.apps\./);
+  });
+});
+
+describe("AppDelegate.swift", () => {
+  it("configures the native Firebase SDK at launch", () => {
+    // The one that stopped the first build ever made. Capacitor's stock
+    // AppDelegate does not call this, and both capacitor-firebase plugins
+    // construct their native Firebase objects while the bridge loads plugins,
+    // before any of our JavaScript runs. With no default app the
+    // authentication plugin raises a RuntimeError, the bridge reports "JS Eval
+    // error", React never mounts, and the app sits on the launch image — a
+    // failure that names neither Firebase nor this file.
+    //
+    // `npx cap add ios` writes the stock AppDelegate back, which is exactly
+    // the kind of quiet regression this file exists to catch.
+    expect(APPDELEGATE).toContain("import FirebaseCore");
+    expect(APPDELEGATE).toMatch(/FirebaseApp\.configure\(\)/);
   });
 });
 
