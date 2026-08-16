@@ -57,6 +57,42 @@ Verify on a throwaway account and check all three outcomes in the Firebase
 console: the `bc_accounts` document gone, the roster row surviving with
 `auth_uid: null`, the Auth user gone.
 
+**If it fails with "Cannot determine backend specification. Timeout after
+10000":** widen the window and update the CLI.
+
+```powershell
+npm install -g firebase-tools
+$env:FUNCTIONS_DISCOVERY_TIMEOUT=60
+firebase deploy --only functions
+```
+
+That is not a code problem, and the error names the wrong thing twice over.
+`Serving at port NNNN` is printed by the discovery server BEFORE it loads
+`index.js` — the require only happens when the CLI fetches `/__/functions.yaml`
+off it — so the line is not evidence the code loaded. What timed out was the
+CLI's own request to its own localhost server.
+
+Prove which half is broken without guessing, by loading the code with no HTTP
+in the way at all:
+
+```powershell
+cd functions
+$env:FUNCTIONS_MANIFEST_OUTPUT_PATH="$env:TEMP\bc-manifest.json"
+node node_modules\firebase-functions\lib\bin\firebase-functions.js .
+Remove-Item Env:\FUNCTIONS_MANIFEST_OUTPUT_PATH
+(Get-Content "$env:TEMP\bc-manifest.json" -Raw | ConvertFrom-Json).endpoints.PSObject.Properties.Name
+```
+
+That branch writes the manifest and prints a real stack trace on failure. If it
+lists all six endpoints, the code is fine and the problem is local networking —
+check `HTTP_PROXY`/`HTTPS_PROXY` (a proxy variable routes the CLI's own
+`localhost` request through something that cannot reach the machine), then the
+firewall. Setting the timeout permanently avoids the whole thing recurring:
+
+```powershell
+[Environment]::SetEnvironmentVariable("FUNCTIONS_DISCOVERY_TIMEOUT","60","User")
+```
+
 ### 1.2 `firestore.rules` must be deployed
 
 Not because the stores ask, but because `bc_ledger` and `bc_budget` are newer
