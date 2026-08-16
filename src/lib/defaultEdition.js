@@ -24,7 +24,7 @@
 // Pure, and its own module, because firebase.js initialises Firebase on
 // import and so cannot be unit-tested — the same split as editionLock.js and
 // editions.js. What a reviewer sees first is worth pinning.
-import { DEMO_EDITION_ID } from "./editionLock.js";
+import { DEMO_EDITION_ID, isDemoEdition } from "./editionLock.js";
 
 // The web app's own year. Not "the latest edition": there is no server-side
 // flag saying which year is current — the active pointer is per-device — and
@@ -45,4 +45,49 @@ export const defaultEdition = ({ override, native = false } = {}) => {
   const cleaned = typeof override === "string" ? override.trim() : "";
   if (cleaned) return cleaned;
   return native ? DEMO_EDITION_ID : WEB_DEFAULT_EDITION_ID;
+};
+
+// ══════════════════════════════════════════════════════════════════
+//  liveEdition — the tournament that is actually on, as opposed to the
+//  one you happen to be looking at.
+// ══════════════════════════════════════════════════════════════════
+//
+// Two different questions wear the word "active" in this app and they must not
+// be confused: `getActiveTournamentId()` is WHICH EDITION THIS DEVICE HAS
+// OPEN — a per-device pointer, and the thing the picker paints ACTIVE — while
+// this is WHICH EDITION IS THE CUP. They are the same id until somebody opens
+// 2019, and the whole reason this exists is the moment they part: the way back
+// has to be one tap, and one tap needs a destination.
+//
+// Read off `status`, which is the field that already carries this fact:
+//
+//   archived   the finished cups. Every imported year is written this way
+//              (historyImport), and a year that is over ought to become one.
+//   published  the tournament being played. `ensureActiveEditionDoc` writes it
+//              and a director sets it in ☰ → Tournaments → ✎.
+//   draft      next year, still being built. Not somewhere to send anybody
+//              back TO — it has no draw and possibly no roster.
+//
+// Newest published wins, so the day a director publishes 2026 the row starts
+// pointing at 2026 with no code change. Deliberately NOT the device default:
+// that is a build-time constant answering a different question (where a device
+// with no pointer starts), and it would go on naming last year's cup forever.
+//
+// The demo is the one exception and it is the device default that decides it —
+// a store build's home IS `bc_demo`, because that is where a fresh install
+// lands and where the tester's claimable roster row is. On the web the demo is
+// never the way home, even though the seed publishes it.
+//
+// Returns "" when there is nothing to point at — no editions loaded yet, or a
+// project with no published year — so the caller renders no row rather than a
+// row that goes nowhere.
+export const liveEdition = (editions = [], deviceDefault = "") => {
+  const rows = (editions || []).filter((e) => e?.id);
+  const home = rows.find((e) => e.id === deviceDefault);
+  if (isDemoEdition(home)) return home.id;
+  const published = rows
+    .filter((e) => e.status === "published" && !isDemoEdition(e))
+    .sort((a, b) => (Number(b.year) || 0) - (Number(a.year) || 0));
+  if (published.length) return published[0].id;
+  return home ? home.id : "";
 };

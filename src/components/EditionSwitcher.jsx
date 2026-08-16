@@ -19,11 +19,11 @@
 // allows bc_editions writes to a director only — it is there so a player is
 // not shown controls whose every tap comes back refused.
 import { useState, useEffect } from "react";
-import { BC, FS, FONT, ON_AMBER } from "../theme";
+import { BC, FS, FONT, ALPHA, ON_AMBER } from "../theme";
 import { Popup, ConfirmModal } from "./Popup";
 import { getActiveTournamentId } from "../firebase";
 import { loadEditions, createEdition, cloneEdition, updateEdition, setEditionLocked, deleteEdition, switchEdition, ensureActiveEditionDoc, editionIdFor, isDemoEdition, EDITION_STATUSES } from "../lib/editions";
-import { isEditionLocked, lockVerdict, bulkLockVerdict, lockBadge } from "../lib/editionLock";
+import { isEditionLocked, lockVerdict, bulkLockVerdict } from "../lib/editionLock";
 
 // FS.lead, not FS.body, and that is functional rather than cosmetic: iOS
 // Safari zooms the page in when a focused input is under 16px and does not
@@ -161,7 +161,20 @@ export function EditionSwitcher({ open, onClose, canManage = false }) {
     else applyLock([e.id], v.next);
   };
 
-  const statusColor = (s) => s === "published" ? BC.amberInk : s === "archived" ? BC.t3 : BC.gold;
+  // ── What a status is worth saying ──────────────────────────────────
+  // Two of the three, and the third is the reason. Ten of the eleven editions
+  // are finished cups, so ARCHIVED on ten rows is not a label — it is the
+  // background, repeated ten times, against which the one row that matters has
+  // to be found. Anything not draft or published (including a status a future
+  // release adds and this one has never heard of) reads as a year that is over,
+  // which is what an edition in this list is unless it says otherwise.
+  //
+  // Neither of the two it does draw is decoration: PUBLISHED is the cup being
+  // played and DRAFT is next year, half built, with a draw that may not exist.
+  const statusChip = (s) =>
+    s === "published" ? { label: "PUBLISHED", color: BC.amberInk }
+      : s === "draft" ? { label: "DRAFT", color: BC.gold }
+        : null;
 
   const headerBtn = {
     flexShrink: 0, width: 32, height: 32, borderRadius: 9, border: `1px solid ${BC.bdr}`,
@@ -211,41 +224,60 @@ export function EditionSwitcher({ open, onClose, canManage = false }) {
               const isActive = e.id === activeId;
               return (
                 <div key={e.id} style={{
-                  display: "flex", alignItems: "center", gap: 10, padding: "11px 12px", borderRadius: 10,
+                  display: "flex", alignItems: "center", gap: 7, padding: "11px 12px", borderRadius: 10,
                   background: BC.inp, border: `1px solid ${isActive ? BC.amber : BC.bdr}`,
                 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    {/* Truncated, not wrapped. A director-side row now carries
+                  {/* ONE LINE. The name, the padlock if it is set, and the
+                      status only when the status is news — see statusChip.
+                      This used to be two rows, the second of which restated
+                      the year already inside the name ("The Bourbon Cup
+                      2019" · 2019) and spelled out ARCHIVED on the ten rows
+                      out of eleven that are archived. Eleven editions is a
+                      list you scan, and half of what it carried was true of
+                      every row on it. */}
+                  <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 7 }}>
+                    {/* Truncated, not wrapped. A director-side row carries
                         four controls, and letting the name take a second line
                         makes the list's row height depend on how long somebody
                         typed — which is how a picker you scan turns into one
-                        you read. */}
-                    <div style={{
-                      fontSize: FS.body, fontWeight: 800, color: BC.t1,
+                        you read.
+
+                        Truncated at the FRONT, though, and that is the whole
+                        reason this row can afford to drop the separate year it
+                        used to carry. Every edition is "The Bourbon Cup ####",
+                        so an ordinary tail ellipsis eats the four characters
+                        that differ and leaves eleven rows all reading "The
+                        Bourb…" — it cuts exactly the token you are scanning
+                        for. `direction: rtl` moves the ellipsis to the start;
+                        the <bdi> re-isolates the name so Latin text still
+                        renders left to right inside it. "…on Cup 2019" reads
+                        slightly oddly and always tells you which year it is.
+                        Nothing is clipped at all until the name is genuinely
+                        too long for the row, and the span is sized to its own
+                        content (flex `0 1 auto`, not `1`) so an rtl box never
+                        pushes a short name to the right. */}
+                    <span style={{
+                      minWidth: 0, fontSize: FS.body, fontWeight: 800, color: BC.t1,
                       whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                    }}>{e.name}</div>
-                    <div style={{
-                      display: "flex", alignItems: "center", gap: 6, marginTop: 2,
-                      fontSize: FS.label, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase",
-                    }}>
-                      {/* The YEAR lives down here, not only inside the name.
-                          A name long enough to truncate ("The Bourbon Cup
-                          2026") loses its year to the ellipsis, and the year
-                          is the one thing anybody picks a tournament by. Four
-                          characters, never truncated. */}
-                      <span style={{ color: BC.t2 }}>{e.year}</span>
-                      <span style={{ color: BC.t3 }}>·</span>
-                      <span style={{ color: statusColor(e.status) }}>{e.status}</span>
-                      {/* Status and lock are different questions — one is what
-                          this year IS, the other is who may write to it — so
-                          they sit side by side rather than one replacing the
-                          other. See lib/editionLock. */}
-                      {lockBadge(e) && (
-                        <span style={{ color: BC.t3, display: "flex", alignItems: "center", gap: 3 }}>
-                          <span aria-hidden>🔒</span>{lockBadge(e)}
-                        </span>
-                      )}
-                    </div>
+                      direction: "rtl",
+                    }}><bdi>{e.name}</bdi></span>
+                    {/* Beside the name rather than under it: the lock is the
+                        first thing a director looks for when a member says a
+                        score would not save, and it was the last thing on the
+                        row. Status and lock stay two marks, because they are
+                        two questions — one is what this year IS, the other is
+                        who may write to it. See lib/editionLock. */}
+                    {isEditionLocked(e) && (
+                      <span role="img" aria-label="Locked" title={`${e.year || e.id} is locked — only a director can change it`}
+                        style={{ flexShrink: 0, fontSize: FS.small, lineHeight: 1 }}>🔒</span>
+                    )}
+                    {statusChip(e.status) && (
+                      <span style={{
+                        flexShrink: 0, fontSize: FS.micro, fontWeight: 800, letterSpacing: 1,
+                        color: statusChip(e.status).color, border: `1px solid ${statusChip(e.status).color}${ALPHA.line}`,
+                        borderRadius: 5, padding: "2px 5px", lineHeight: 1.2,
+                      }}>{statusChip(e.status).label}</span>
+                    )}
                   </div>
                   {/* Rename is offered on the ACTIVE row too, and that is the
                       point of it: the edition a collision renamed is the one
@@ -253,7 +285,7 @@ export function EditionSwitcher({ open, onClose, canManage = false }) {
                   {canManage && (
                     <button onClick={() => openEdit(e)} title="Rename" style={{
                       fontSize: FS.small, fontWeight: 700, color: BC.t3, background: "transparent",
-                      border: "none", borderRadius: 8, padding: "5px 6px", cursor: "pointer",
+                      border: "none", borderRadius: 8, padding: "5px 4px", cursor: "pointer",
                       flexShrink: 0, lineHeight: 1,
                     }}>✎</button>
                   )}
@@ -273,7 +305,7 @@ export function EditionSwitcher({ open, onClose, canManage = false }) {
                     <button onClick={() => tapLock(e)} disabled={busy}
                       title={lockVerdict(e, { isActive }).title} style={{
                         fontSize: FS.small, background: "transparent", border: "none",
-                        borderRadius: 8, padding: "5px 6px", lineHeight: 1, flexShrink: 0,
+                        borderRadius: 8, padding: "5px 4px", lineHeight: 1, flexShrink: 0,
                         opacity: isEditionLocked(e) ? 1 : 0.3,
                         filter: isEditionLocked(e) ? "none" : "grayscale(1)",
                         cursor: busy ? "default" : "pointer",
@@ -288,12 +320,12 @@ export function EditionSwitcher({ open, onClose, canManage = false }) {
                     <>
                       <button onClick={() => setPending(e)} style={{
                         fontSize: FS.small, fontWeight: 800, letterSpacing: 0.5, color: BC.t2, background: BC.card,
-                        border: `1px solid ${BC.bdr}`, borderRadius: 8, padding: "7px 12px", cursor: "pointer",
+                        border: `1px solid ${BC.bdr}`, borderRadius: 8, padding: "7px 10px", cursor: "pointer", flexShrink: 0,
                       }}>Open</button>
                       {canManage && (
                         <button onClick={() => setPendingDelete(e)} title="Delete edition" style={{
                           fontSize: FS.body, fontWeight: 700, color: BC.t3, background: "transparent",
-                          border: "none", borderRadius: 8, padding: "5px 6px", cursor: "pointer", flexShrink: 0, lineHeight: 1,
+                          border: "none", borderRadius: 8, padding: "5px 4px", cursor: "pointer", flexShrink: 0, lineHeight: 1,
                         }}>🗑</button>
                       )}
                     </>

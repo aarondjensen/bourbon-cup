@@ -200,9 +200,10 @@ export const bulkLockVerdict = (editions = [], activeId = null) => {
   };
 };
 
-// The one-word state for a row in the list. Null when there is nothing to say,
-// so a caller can render nothing rather than an empty badge.
-export const lockBadge = (edition) => (isEditionLocked(edition) ? "LOCKED" : null);
+// (There was a `lockBadge` here that returned the word "LOCKED" for a row in
+// the picker. The picker draws the padlock glyph beside the name now — one
+// line per edition, and the word was the second half of a two-line row that
+// mostly restated itself. `isEditionLocked` is what the row asks.)
 
 // Shown on the tournament itself, not in the picker: what a member should be
 // told when the year they are looking at will not accept their writes. Null

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } fro
 import { createPortal } from "react-dom";
 import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, HOLE_BANNER, FS, applyBCTheme, initialBCMode, bcGlobalCSS, teamColor, VP_BAND } from "./theme";
 import { playerLookup, realPlayers } from "./lib/players";
-import { db, writeFailure, TOURNAMENT_ID, getTournamentYear, getActiveTournamentId, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, readTournamentIdentity, writeTournamentIdentity, BOOTSTRAP_DIRECTOR, SPECTATOR_ID } from "./firebase";
+import { db, writeFailure, TOURNAMENT_ID, getTournamentYear, getActiveTournamentId, getDefaultEditionId, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, readTournamentIdentity, writeTournamentIdentity, BOOTSTRAP_DIRECTOR, SPECTATOR_ID } from "./firebase";
 import { PROVIDERS, signIn, signOutUser, onAuthUser, consumeRedirectResult, isCancelled, whenAuthReady } from "./lib/auth";
 import { claimPlayer, linkedPlayer, isClaimed, readMembership, isDirectorAccount, joinWithCode, setDirector, ACCOUNTS_COL, deleteAccount } from "./lib/accounts";
 import { GUEST_USER, isGuest, readGuestMode, writeGuestMode } from "./lib/guest";
@@ -75,6 +75,7 @@ import { GroupSwitcher } from "./components/GroupSwitcher";
 import { useConfirm } from "./lib/useConfirm";
 import { useStableCallback } from "./lib/useStableCallback";
 import { EditionSwitcher } from "./components/EditionSwitcher";
+import { EditionBanner } from "./components/EditionBanner";
 import { GhinLinkButton, GhinSyncButton } from "./components/GhinLink";
 import { TeamLeaderboard } from "./components/Leaderboard";
 import { FullScorecard } from "./components/FullScorecard";
@@ -107,6 +108,7 @@ import {
 } from "./lib/budget";
 import { EDITIONS_COL, isDemoEdition } from "./lib/editions";
 import { lockNotice, isEditionLocked } from "./lib/editionLock";
+import { liveEdition } from "./lib/defaultEdition";
 import { prefetchArchive } from "./lib/useArchive";
 import { TRIP_SETTINGS_ID, houseFrom, tripSchedule, tripDates } from "./lib/tripInfo";
 import {
@@ -3270,11 +3272,26 @@ export default function App() {
   const [media, setMedia] = useState([]);
   // bc_config/photos — the budget circuit breaker's flag. Null until read.
   const [photoConfig, setPhotoConfig] = useState(null);
-  // The active edition's row, for `locked`. Null until the subscription lands,
-  // and null is UNLOCKED — see lib/editionLock, which defaults that way on
-  // purpose: a strip that flashed "this year is frozen" on every cold start
-  // would train people to ignore it.
-  const [activeEdition, setActiveEdition] = useState(null);
+  // Every edition, from the one subscription — eleven small documents. Two
+  // things read it: `locked` on the row this device has open, and the row that
+  // says which year IS the cup (see liveEdition). Empty until the subscription
+  // lands, and both consumers are written to render nothing in that moment —
+  // a strip that flashed "this year is frozen", or "you're viewing 2019", on
+  // every cold start would train people to ignore it.
+  const [editionRows, setEditionRows] = useState([]);
+  // Derived rather than a second piece of state: two states filled from one
+  // callback can disagree for a frame, and one of them decides whether the app
+  // says the year is locked.
+  const activeEdition = useMemo(
+    () => editionRows.find(r => r.id === TOURNAMENT_ID) || null,
+    [editionRows],
+  );
+  // Where "Back to <year>" goes, and whether there is such a row at all: null
+  // once this device is already on the cup, which is the ordinary case.
+  const liveEditionRow = useMemo(() => {
+    const id = liveEdition(editionRows, getDefaultEditionId());
+    return id && id !== TOURNAMENT_ID ? editionRows.find(r => r.id === id) || null : null;
+  }, [editionRows]);
   const [notif, setNotif] = useState(null);
   // ── What the app owes the database ───────────────────────────────────
   // `pending` is writes queued but not yet acknowledged by the server —
@@ -3704,15 +3721,16 @@ export default function App() {
     unsubs.push(db.subscribe(CONFIG_COL, [], rows => {
       setPhotoConfig(rows.find(r => r.id === PHOTOS_CONFIG_ID) || null);
     }, { withId: true }));
-    // The active edition's own row, for one field on it: `locked`. Subscribed
-    // rather than fetched so a director freezing the year reaches every phone
-    // in the field without a reload — which matters, because from that moment
+    // The editions themselves, for two fields across them: `locked` on the one
+    // this device has open, and `status` on all of them — which is what says
+    // which year is the cup and therefore where "Back to <year>" goes.
+    // Subscribed rather than fetched so a director freezing the year, or
+    // publishing next year's, reaches every phone in the field without a
+    // reload — which matters for the first of those, because from that moment
     // their writes are being refused and the strip is the only thing that says
     // so. Eleven small documents; bc_editions is not tournament-scoped (it IS
     // the index of tournaments) so there is no filter to apply.
-    unsubs.push(db.subscribe(EDITIONS_COL, [], rows => {
-      setActiveEdition(rows.find(r => r.id === TOURNAMENT_ID) || null);
-    }));
+    unsubs.push(db.subscribe(EDITIONS_COL, [], rows => setEditionRows(rows || [])));
     return () => unsubs.forEach(u => u());
   }, []);
 
@@ -5434,6 +5452,14 @@ export default function App() {
           down to the glass and only the labels are held clear. See the constant
           at the top of this file. */}
       <div ref={navRef} style={{ flexShrink: 0, position: "relative", background: BC.card, borderTop: `1px solid ${BC.bdr}`, zIndex: 100, paddingBottom: NAV_SAFE_PAD }}>
+      {/* ── The way back from a year that is over ──────────────────────
+          Inside the nav's box, not above it, on purpose. `navH` is this box
+          measured, and the slide menu seats itself on that figure — a sibling
+          row would be covered by the menu the moment it opened. Being in here
+          also means it is reserved by the same flex layout as the bar, so the
+          scroll area shortens by exactly its height with nothing to predict.
+          Null while this device is on the cup, which is nearly always. */}
+      <EditionBanner viewing={activeEdition} live={liveEditionRow} />
       {/* padding matches the content column's `0 4px` so the five tabs line up
           with the cards above them instead of being 4px wider on each side. */}
       <div style={{ maxWidth: 520, margin: "0 auto", display: "flex", padding: "0 4px" }}>
