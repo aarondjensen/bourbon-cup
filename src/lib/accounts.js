@@ -44,6 +44,7 @@
 // and read the answer. A rejection comes back as permission-denied, which
 // means exactly one thing here: wrong password.
 import { db } from "../firebase";
+import { bestEffort } from "./bestEffort";
 
 // The fields this module owns on a player document. Grouped so the admin
 // unlink and the claim write cannot drift apart.
@@ -273,18 +274,32 @@ export const unlinkPatch = () => ({
 // The FCM revocation stays on the client because only the browser can do it
 // — the admin SDK can delete the row, but it cannot tell this device's push
 // service to stop honouring the subscription.
+// Both steps before the callable are calls into somebody else's SDK across a
+// network, and both are declared optional. `bestEffort` is what makes that
+// true against a call that never settles rather than only against one that
+// rejects — see the module, and the iOS deletion that hung forever inside a
+// try/catch written to prevent exactly this.
+//
+// Account deletion is a store requirement in both queues (App Store 5.1.1(v),
+// Play's Data safety), so it is the one flow that must never be blockable by
+// a subsystem it does not need.
 export async function deleteAccount({ playerId } = {}) {
   // Order: revoke at Apple while the account still exists — revocation
   // reauthenticates, and there is nothing to reauthenticate afterwards.
+  //
+  // Timed out like the push cleanup below, and for the same reason: on native
+  // this opens a system sheet, and a sheet that is never answered must not
+  // strand a deletion the user has already confirmed.
   const { revokeProviderAccess } = await import("./auth");
-  await revokeProviderAccess();
+  await bestEffort(revokeProviderAccess(), "Apple token revocation", 30000);
 
   if (playerId) {
     const { unsubscribeFromPush, clearCachedSubscriptionStatus } = await import("./notifications");
-    // Best-effort: a device that cannot reach FCM must not block the
-    // deletion. The function deletes the rows either way.
-    try { await unsubscribeFromPush(playerId); }
-    catch (e) { console.warn("[account] push cleanup failed", e); }
+    // The deletion's own row cleanup happens server-side either way: the
+    // callable removes every push token for these player ids, so what is lost
+    // when this times out is only telling THIS device's push service to stop
+    // honouring a subscription whose rows are about to vanish.
+    await bestEffort(unsubscribeFromPush(playerId), "push cleanup");
     clearCachedSubscriptionStatus(playerId);
   }
 
