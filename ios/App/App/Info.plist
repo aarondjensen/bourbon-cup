@@ -68,7 +68,7 @@
 		<dict>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>REPLACE_WITH_REVERSED_GOOGLE_CLIENT_ID</string>
+				<string>com.googleusercontent.apps.957218531964-c6ru1h658nj6udpbbbfd756db6jf9hb3</string>
 			</array>
 		</dict>
 	</array>
