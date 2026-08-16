@@ -48,10 +48,16 @@ how an evening gets spent redoing it:
 | --- | --- | --- |
 | 1.1 Cloud Functions | **Deployed** | Reported in the commit that documented the discovery timeout — all six endpoints went up. Re-check by tapping My Account → Delete Account on a throwaway account; the button says so itself when the callable is missing. |
 | 1.2 `firestore.rules` | **Deployed** | `bc_ledger` and `bc_budget` both answer a public REST read. Under the older rule set the default-deny at the bottom of the file refused them. |
-| 1.3 `VITE_FCM_VAPID_KEY` | Unverified | A Vercel setting; nothing in the repo or the database can see it. Web push only — neither store build uses it. |
+| 1.3 `VITE_FCM_VAPID_KEY` | **Set** | Confirmed in Vercel against the Web Push key pair in Firebase → Cloud Messaging. Nothing in the repo or the database can see this one, so it is the one item here that can only ever be checked by looking. Web push only — neither store build uses it. |
 | 1.4 Reviewer account | **Demo seeded**, account still to claim | `bc_demo` holds its 371 documents and all twelve roster rows, unclaimed, written by the seed. The Google account and its crown are the part a person does. |
 
-The two that remain are 1.3 and the second half of 1.4.
+What remains is the second half of 1.4: signing the demo Google account in,
+claiming one of the twelve names **inside the demo edition**, and crowning it.
+That one cannot be done from a repo or a console — it is a person tapping
+through the app once.
+
+`VITE_*` is baked in at build time, so if 1.3 is ever changed it needs a Vercel
+redeploy to take, not just a saved variable.
 
 ### 1.1 The Cloud Functions must be deployed — **BY HAND**
 
