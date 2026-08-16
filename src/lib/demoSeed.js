@@ -40,7 +40,14 @@
 import { editionDocId } from "./historyImport.js";
 import { todayISO, addDays } from "./dates.js";
 
-export const DEMO_EDITION_ID = "bc_demo";
+// Defined in lib/editionLock and re-exported here, so the seed and its tests
+// go on reading one constant. It moved because firebase.js needs it — to
+// decide where a store build starts — and firebase.js pulling this whole
+// module in for one string would put the entire seed on the critical path for
+// a leaderboard.
+export { DEMO_EDITION_ID } from "./editionLock.js";
+import { DEMO_EDITION_ID } from "./editionLock.js";
+
 export const DEMO_MARK = "demo-seed";
 // From the same clock as the dates below. Hardcoding it meant a demo seeded in
 // January would file itself under last year while its rounds were dated this

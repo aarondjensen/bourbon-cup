@@ -157,6 +157,31 @@ Testers claim the other eleven. Nothing in the seed is claimed, and it creates
 no memberships — those are minted by presenting the password, which is a thing
 a person does.
 
+### A store build opens on the demo
+
+Not by instruction — by default. A fresh install has no edition pointer, and
+`lib/defaultEdition` answers **`bc_demo` on native and `bc_2025` on the web**.
+The web app is the sixteen men and must never open on an invented tournament;
+a store build today is a tester or a review queue, and they are handed the app
+to try rather than to navigate.
+
+It matters more than it sounds. The real editions are locked, so a tester who
+lands on one gets a roster they cannot claim — `canWriteEdition()` refuses
+every write — and their first act in the app is a refusal. The claim screen
+now says so and offers a switcher, but "find the right tournament first" is
+not an instruction a tester should need.
+
+**`VITE_DEFAULT_EDITION` overrides both**, and that is the way out of this
+being a special case. When the FIELD starts installing store builds rather
+than twelve testers, set it to that year's edition — otherwise sixteen men
+open the app on a demo. It is the one thing here that will look wrong later
+and be nobody's obvious fault, so it is worth a note wherever the release is
+built.
+
+Locking is what actually confines a tester to the demo, not this. The default
+decides where they LAND; `firestore.rules` decides where they can WRITE, and
+every real edition being locked is what makes the second one true.
+
 ### Adding a tester
 
 A thirteenth golfer, for somebody who would rather see their own name than

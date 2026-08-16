@@ -59,6 +59,19 @@
 // eleven years of tournaments the moment it deployed.
 export const isEditionLocked = (edition) => edition?.locked === true;
 
+// The id the seed writes. It lives HERE rather than in lib/demoSeed with the
+// rest of the seed, for the same reason isDemoEdition does: demoSeed imports
+// `editionDocId` from firebase.js, so anything firebase.js needs cannot come
+// from there without a cycle. firebase.js reads this to decide where a store
+// build starts. `demoSeed` re-exports it, so the seed and its tests carry on
+// reading one constant.
+//
+// Note this is the ID, and `isDemoEdition` below is deliberately NOT a
+// comparison against it — an edition is a demo because it says so, not
+// because of what it is called. The next scratch edition will have a
+// different id and still need the same treatment.
+export const DEMO_EDITION_ID = "bc_demo";
+
 // ── A demo is not a cup ────────────────────────────────────────────
 // `bc_demo` is a whole invented tournament seeded for the store reviewers and
 // the twelve Play testers (lib/demoSeed). It lives here, in the pure module,

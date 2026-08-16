@@ -9,6 +9,8 @@
 // Firestore Security Rules, not by hiding the key.
 import { initializeApp } from "firebase/app";
 import { resolveFirebaseConfig } from "./lib/firebaseConfig";
+import { defaultEdition } from "./lib/defaultEdition";
+import { isNative } from "./lib/platform";
 import {
   getFirestore, initializeFirestore,
   persistentLocalCache, persistentMultipleTabManager,
@@ -89,20 +91,47 @@ const FIREBASE_CONFIG = (() => {
 // at access time — no call sites had to change. New code should prefer
 // getActiveTournamentId() / tournamentFilter() for clarity; both read the
 // same source. The pointer persists per-device in localStorage; the
-// canonical edition list will live in the `bc_editions` collection once
-// the edition picker is built. Defaults to bc_2025, so behavior is
-// unchanged until an edition is chosen.
-const DEFAULT_TOURNAMENT_ID = "bc_2025";
+// canonical edition list lives in the `bc_editions` collection. What a
+// device with no pointer starts on is decided just below.
+
+// ── Where a device with no pointer starts ───────────────────────────
+// Only ever used on a FRESH install — one tap in ☰ → Tournaments writes
+// localStorage and this is never consulted again. So it decides one thing:
+// what somebody sees the first time they open the app, before they know the
+// app has years in it at all.
+//
+// On the WEB that is the sixteen men, and it stays bc_2025.
+//
+// On a STORE BUILD it is a tester or a store reviewer, and it must be the
+// demo. They are handed the app to try, not to navigate: landing them on a
+// finished cup means a roster they cannot claim (it is locked, and
+// `canWriteEdition()` refuses every write), so their first act in the app is
+// a refusal. Being told to go and find the right tournament is not better —
+// a tester who has to be instructed where to start is a tester who reports
+// the app as broken.
+//
+// `VITE_DEFAULT_EDITION` overrides both, which is how this stops being a
+// special case: when the field is installing the store builds rather than
+// twelve testers, set it to that year's edition (or change the line below)
+// and the fork is gone. See docs/store-submission.md §1.4.
+//
+// Deliberately NOT the "active" edition from bc_editions: that is a
+// per-device pointer, not a server-side flag, so there is nothing to read.
+// And a Firestore round trip cannot answer this — TOURNAMENT_ID is needed
+// synchronously, before the first query is built.
+const _defaultEdition = () =>
+  defaultEdition({ override: import.meta.env?.VITE_DEFAULT_EDITION, native: isNative() });
+
 export const ACTIVE_EDITION_KEY = "bc_active_edition";
 export const ACTIVE_EDITION_NS_KEY = "bc_active_edition_ns";
 
 const _readInitialEdition = () => {
   try {
     if (typeof localStorage !== "undefined") {
-      return localStorage.getItem(ACTIVE_EDITION_KEY) || DEFAULT_TOURNAMENT_ID;
+      return localStorage.getItem(ACTIVE_EDITION_KEY) || _defaultEdition();
     }
   } catch { /* blocked storage / SSR */ }
-  return DEFAULT_TOURNAMENT_ID;
+  return _defaultEdition();
 };
 
 // Live binding — reassigned by setActiveTournamentId below.
