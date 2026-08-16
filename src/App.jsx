@@ -611,13 +611,20 @@ function ClaimScreen({ players, teams, darkMode, tournamentName, tournamentLocat
   };
 
   const PlayerBtn = ({ p, team }) => {
-    const taken = isClaimed(p) || editionLocked;
+    // Two different reasons a name can't be tapped, and they must not share a
+    // sentence. A locked edition greys the WHOLE roster, so telling somebody
+    // that all sixteen names are "already linked to an account" is sixteen
+    // false statements on a screen whose banner has just told them the truth —
+    // and it points the one person who might fix it at the wrong problem.
+    const claimed = isClaimed(p);
+    const taken = claimed || editionLocked;
     const sel = picked?.player_id === p.player_id;
     return (
       <button
         onClick={() => !taken && setPicked(sel ? null : p)}
         disabled={taken || busy}
-        title={taken ? `${p.name} is already linked to an account` : undefined}
+        title={claimed ? `${p.name} is already linked to an account`
+          : editionLocked ? "This tournament isn't taking new players" : undefined}
         style={{
           width: "100%", padding: "clamp(8px, 2.5vw, 12px) clamp(10px, 3vw, 14px)",
           background: sel ? team.accent : (taken ? "transparent" : team.color + ALPHA.tint),
