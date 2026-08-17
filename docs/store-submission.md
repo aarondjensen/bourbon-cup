@@ -47,14 +47,12 @@ how an evening gets spent redoing it:
 | | State | How that was established |
 | --- | --- | --- |
 | 1.1 Cloud Functions | **Deployed** | Reported in the commit that documented the discovery timeout — all six endpoints went up. Re-check by tapping My Account → Delete Account on a throwaway account; the button says so itself when the callable is missing. |
-| 1.2 `firestore.rules` | **Deployed** | `bc_ledger` and `bc_budget` both answer a public REST read. Under the older rule set the default-deny at the bottom of the file refused them. |
+| 1.2 `firestore.rules` | **Re-deploy needed** | `bc_ledger` and `bc_budget` answer a public REST read, so the last deploy landed — but `canAdminEdition()` (Admin inside a demo, §1.4) is newer than it. Until it goes up, a reviewer gets an Admin tab whose every save is refused. |
 | 1.3 `VITE_FCM_VAPID_KEY` | **Set** | Confirmed in Vercel against the Web Push key pair in Firebase → Cloud Messaging. Nothing in the repo or the database can see this one, so it is the one item here that can only ever be checked by looking. Web push only — neither store build uses it. |
-| 1.4 Reviewer account | **Demo seeded**, account still to claim | `bc_demo` holds its 371 documents and all twelve roster rows, unclaimed, written by the seed. The Google account and its crown are the part a person does. |
+| 1.4 Reviewer account | **Not needed** | No credentials are handed to either store. `bc_demo` holds its 371 documents and all twelve roster rows, unclaimed; a reviewer signs in with their own Apple ID or Google account, presents the tournament password, claims a name, and gets the Admin tabs because the edition is a demo. |
 
-What remains is the second half of 1.4: signing the demo Google account in,
-claiming one of the twelve names **inside the demo edition**, and crowning it.
-That one cannot be done from a repo or a console — it is a person tapping
-through the app once.
+What remains is 1.2: `firebase deploy --only firestore:rules`, after the build
+carrying `canAdminEdition` is live. App first, rules second, as always.
 
 `VITE_*` is baked in at build time, so if 1.3 is ever changed it needs a Vercel
 redeploy to take, not just a saved variable.
@@ -140,6 +138,13 @@ than the deployed rules and the default-deny at the bottom of the file refuses
 every read of them. A reviewer opening the Budget tab on an undeployed rule set
 sees an app that is broken. App first, rules second, as always.
 
+**And now because Admin-in-the-demo is a rules change** (§1.4). The app decides
+whether to DRAW the Admin tab from `canAdminEdition` in `src/lib/editionLock.js`;
+whether the writes behind it land is decided by `canAdminEdition()` in
+`firestore.rules`. Ship the app without deploying the rules and a reviewer gets
+an Admin tab whose every save is refused — the exact failure the two-sided
+mirror exists to prevent.
+
 ### 1.3 `VITE_FCM_VAPID_KEY` must be set in Vercel
 
 Or the **web** app reports push as unconfigured. Neither store build uses it:
@@ -156,8 +161,9 @@ Three things need the account rather than the guest door, and the third is the
 one that decides it:
 
 - **The write half of the app.** Scoring, photos, side bets and the Admin tabs
-  are all behind a membership. A reviewer who can only read has not seen what
-  the app is for.
+  are all behind a membership — the Admin tabs included, since a demo
+  administrator is a MEMBER of the demo and a guest is not a member of
+  anything. A reviewer who can only read has not seen what the app is for.
 - **App Review Information asks directly.** Apple's form has a sign-in toggle
   with a username and password beside it. Answering "no sign-in required"
   because guest mode exists, and then having a reviewer meet the password
@@ -180,55 +186,58 @@ Two things that look like ways round it and are not:
 - **Handing over a personal account.** It is a director on the live cup, and
   the reviewer's first documented instruction is to delete an account.
 
-The real options, cheapest first:
+#### What is actually submitted: no account at all
 
-1. **Hand over nothing.** Sign in with Apple works with the Apple ID already on
-   the reviewer's device, and the tournament password is the only secret
-   involved — see the review notes in `app-store.md` §7, which offer this
-   alongside the Google account. It reaches everything except the Admin tabs,
-   for the structural reason above: the crown lives on a membership that does
-   not exist until they sign in.
+**Hand over nothing.** Sign in with Apple works with the Apple ID already on the
+reviewer's device, and the tournament password is the only secret involved — see
+the review notes in `app-store.md` §7. Apple's App Review Information sign-in
+toggle is answered by naming the password; there is no username and password to
+type because this app has no email-and-password sign-in.
 
-   Which makes the question "does the review need Admin", and the honest answer
-   is that it is a ROLE, not a feature behind a paywall — one person in a
-   sixteen-man tournament has it. Say so in the notes, describe what is behind
-   it, and offer a walkthrough if they want one. A reviewer who asks is a
-   reply, not a rejection; a reviewer who finds a promised tab missing is worse.
+That used to reach everything EXCEPT the Admin tabs, and the gap was structural:
+the crown is a flag on a membership document that does not exist until they sign
+in, so nobody could set it in advance for an account nobody had created yet.
 
-2. **A Google account on `thebourboncup.com`.** Cloud Identity Free gives real
-   Google accounts on a domain you already own, free for a few dozen users, and
-   none of them touch the per-phone cap. `demo@thebourboncup.com` also reads
-   better in a review form than a numbered Gmail. Check the current free-tier
-   user limit before relying on it.
+**The gap is closed, from the other end.** Inside a DEMO edition every member is
+an administrator — `canAdminEdition()` in `firestore.rules`, mirrored by
+`canAdminEdition` in `src/lib/editionLock.js`. So a reviewer who signs in with
+their own Apple ID, presents the password and claims a name in "DEMO — Testers"
+gets the Admin tabs on the way in, with nothing granted by hand. Three cards are
+not there, because they are project-wide rather than scoped to a tournament and
+the rules keep them director-only: **Editions** (creating, deleting or unlocking
+a tournament), **Access** (the password) and the **crown** itself. They are
+hidden rather than shown-and-refused — AdminView auto-saves on edit and
+`db.upsert` swallows a rejection, so a decorative Admin would let a reviewer
+type a name, watch it appear, and find it gone on the next load.
 
-3. **A Google account verified with a different phone number.** Quickest if one
-   is to hand — the cap is per number, not per person.
+What that costs: a reviewer can rename an invented golfer, redraw the demo's
+matches, or edit a demo course. All of it is inside `bc_demo` and
+`npm run seed:demo -- --undo --write` followed by a re-seed puts it back.
 
-**What goes in Apple's username and password fields.** This app has no
-email-and-password sign-in at all — the two buttons are Google and Apple — so
-the "account" being handed over is a Google account, and its address and
-password are what those two fields take. That is ordinary for a social-login
-app and Apple accepts it.
+#### Why there is no Google account here
 
-Sign in with Apple is the escape hatch worth naming in the review notes rather
-than relying on: a reviewer can tap it with the Apple ID already on their test
-device, present the tournament password, and claim one of the twelve names — no
-credentials from us at all, and nothing for Google's risk checks to challenge.
-What they cannot get that way is the Admin tabs, because the crown is a flag on
-a membership document that does not exist until they sign in, and nobody can
-set it in advance for an account nobody has created yet. So: the Google account
-is the path that shows everything, and Apple's own button is the path that
-always works. Offer both.
+Kept because it is the reasoning, not the leftovers. Google caps accounts per
+verification phone number and that cap is reachable; two things that look like
+ways round it are not:
 
-> **The demo account has to be able to sign in from Apple's network.** This is
-> the failure that reads as a broken app and is not one: a fresh Google account
-> signed into from an unfamiliar device in another country is exactly what
-> Google's risk checks are built to challenge, and a reviewer who is asked to
+- **A `+tag` or dotted alias is the same account.** Gmail ignores both, Google
+  OAuth returns the same canonical address and the same subject id, so Firebase
+  mints the same uid. `you+demo@gmail.com` signs in as you, with your crown and
+  your roster row.
+- **Handing over a personal account.** It is a director on the live cup, and
+  the reviewer's first documented instruction is to delete an account.
+
+If a fresh Google account is ever wanted anyway, the two routes that do not
+touch the cap are Cloud Identity Free on `thebourboncup.com` (real Google
+accounts on a domain you already own, free for a few dozen users — check the
+current limit) and a different verification phone number.
+
+> **Any handed-over account has to be able to sign in from Apple's network.**
+> This is the failure that reads as a broken app and is not one: a fresh Google
+> account signed into from an unfamiliar device in another country is exactly
+> what Google's risk checks are built to challenge, and a reviewer asked to
 > confirm a code sent to a phone they do not have reports that they could not
-> log in. Before submitting, sign into it from a device that is not yours and
-> confirm it goes straight through — no 2FA prompt, no "verify it's you", no
-> recovery-email challenge. An account that challenges once will challenge
-> again.
+> log in. This is the other half of why the submitted answer is "no account".
 
 **The demo edition is seeded, not built by hand.**
 

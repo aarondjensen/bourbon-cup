@@ -107,7 +107,7 @@ import {
   BUDGET_COL, budgetLineId, buildBudgetLine, budgetLineError,
 } from "./lib/budget";
 import { EDITIONS_COL, isDemoEdition } from "./lib/editions";
-import { lockNotice, isEditionLocked } from "./lib/editionLock";
+import { lockNotice, isEditionLocked, demoOnlyAdmin } from "./lib/editionLock";
 import { liveEdition } from "./lib/defaultEdition";
 import { prefetchArchive } from "./lib/useArchive";
 import { TRIP_SETTINGS_ID, houseFrom, tripSchedule, tripDates } from "./lib/tripInfo";
@@ -3139,6 +3139,30 @@ export default function App() {
   // app from ever offering an Admin tab whose every write would be refused.
   const isDirectorUser = isDirectorAccount(membership);
 
+  // ── Admin inside the demo ─────────────────────────────────────────
+  // Every member administers a DEMO edition, and nothing else. The rules say
+  // the same thing (canAdminEdition in firestore.rules), which is the only
+  // reason this can be offered at all — an Admin tab the rules would refuse is
+  // the one thing this file has always refused to draw.
+  //
+  // It exists for the store queues: App Review and the twelve Play testers get
+  // no account of their own and no password, so the roster, the draw and the
+  // courses would otherwise be a tab that says Directors Only. The blast radius
+  // is an invented tournament that `npm run seed:demo --undo --write` removes.
+  //
+  // `membership` is undefined while it is being read and null when there is
+  // none, so a truthy check is the membership test — and a guest, who has no
+  // account at all, is neither this nor a director.
+  const demoAdmin = demoOnlyAdmin({
+    isDirector: isDirectorUser,
+    isMember: !!membership,
+    edition: editions.find(e => e.id === TOURNAMENT_ID),
+  });
+  // What every screen means by "can open Admin". The REAL flag stays
+  // `isDirectorUser` and is what the three project-wide things below still ask
+  // for; this is the edition-scoped one.
+  const adminHere = isDirectorUser || demoAdmin;
+
   // Every membership, but only for a director — the rules allow the listing
   // to nobody else, and nobody else has a screen that needs it. It is what
   // draws the crown in Admin → Players, so that badge shows the same flag
@@ -3170,7 +3194,7 @@ export default function App() {
     if (guestMode && !authUser) return GUEST_USER;
     if (!authUser) return null;
     const linked = linkedPlayer(tPlayers, authUser.uid);
-    if (linked) return { ...linked, isDirector: isDirectorUser };
+    if (linked) return { ...linked, isDirector: adminHere };
 
     // The cache is only usable if it belongs to THIS account. The one
     // exception is the marker an edition switch writes just before
@@ -3184,21 +3208,21 @@ export default function App() {
     // when you arrive. Otherwise the code would offer a tab whose every
     // write the rules would refuse.
     if (bootstrapDirector || mine?.player_id === BOOTSTRAP_DIRECTOR.player_id) {
-      return { ...BOOTSTRAP_DIRECTOR, isDirector: isDirectorUser };
+      return { ...BOOTSTRAP_DIRECTOR, isDirector: adminHere };
     }
     // Looking at another year. Written by an edition switch and good only for
     // the edition it names (see firebase.spectatorSession), so a player who
     // has never claimed a name still meets the claim screen on the tournament
     // being played. The crown is not trusted from the cache here either.
     if (mine?.player_id === SPECTATOR_ID && mine.edition === getActiveTournamentId()) {
-      return { ...mine, isDirector: isDirectorUser };
+      return { ...mine, isDirector: adminHere };
     }
     // Roster still in flight: hold the last known identity rather than
     // flash the claim screen at somebody who claimed a name months ago.
     // The cached crown is not trusted either — same reason.
-    if (!playersLoaded && mine) return { ...mine, isDirector: isDirectorUser };
+    if (!playersLoaded && mine) return { ...mine, isDirector: adminHere };
     return null;
-  }, [authUser, tPlayers, playersLoaded, bootstrapDirector, isDirectorUser, guestMode]);
+  }, [authUser, tPlayers, playersLoaded, bootstrapDirector, adminHere, guestMode]);
 
   // Is the app running as a guest right now? Derived from the identity rather
   // than from the flag, so there is one answer and it is the same one every
@@ -5015,14 +5039,14 @@ export default function App() {
           that is not there for them, and not to a guest, who has no Firebase
           account at all and is already refused at `request.auth != null`
           without a membership check ever running. */}
-      {!isGuest(user) && lockNotice(activeEdition, { isDirector: !!user?.isDirector }) && (
+      {!isGuest(user) && lockNotice(activeEdition, { isDirector: isDirectorUser }) && (
         <div style={{
           display: "flex", alignItems: "center", gap: 10, padding: "7px 20px",
           background: BC.t3 + ALPHA.wash, borderBottom: `1px solid ${BC.t3}${ALPHA.hair}`,
         }}>
           <span aria-hidden style={{ flexShrink: 0, fontSize: FS.label }}>🔒</span>
           <span style={{ flex: 1, minWidth: 0, fontSize: FS.label, fontWeight: 600, color: BC.t2, lineHeight: 1.4 }}>
-            {lockNotice(activeEdition, { isDirector: !!user?.isDirector })}
+            {lockNotice(activeEdition, { isDirector: isDirectorUser })}
           </span>
         </div>
       )}
@@ -5263,7 +5287,12 @@ export default function App() {
             items={media}
             year={getTournamentYear()}
             uid={authUser?.uid || null}
-            isDirector={!!user?.isDirector}
+            /* The REAL flag, not the demo's. This one is "may delete somebody
+               else's photo", and bc_media keeps that director-only in the
+               rules: a photo graduated out of the bucket to the public library
+               is no longer edition-scoped, so `is_demo` cannot contain it. A
+               demo administrator still deletes their own, like any member. */
+            isDirector={isDirectorUser}
             canPost={!!authUser?.uid && user?.player_id !== SPECTATOR_ID && photoUploadsAllowed(photoConfig)}
             uploadsBlockedReason={photoUploadsAllowed(photoConfig) ? "" : uploadsDisabledReason(photoConfig)}
             onUpload={onUploadPhoto}
@@ -5276,6 +5305,12 @@ export default function App() {
           <Suspense fallback={<LoadingPanel label="Admin" />}>
           <AdminView
             user={user}
+            /* Administering the demo on a membership alone. Three cards come
+               off for them — Editions, Access and the crown — because those
+               three are project-wide rather than scoped to a tournament, so no
+               `is_demo` flag could contain them. See canAdminEdition in
+               firestore.rules and lib/editionLock. */
+            isDemoAdmin={demoAdmin}
             tPlayers={tPlayers}
             tRounds={enrichedRounds}
             courses={courses}
@@ -5401,7 +5436,7 @@ export default function App() {
       {/* Every year the cup has been played. Opened from the menu by anybody;
           `canManage` is what adds the create/delete half for a director, who
           also reaches the same modal from Admin → Event. */}
-      <EditionSwitcher open={editionsOpen} onClose={() => setEditionsOpen(false)} canManage={!!user?.isDirector} />
+      <EditionSwitcher open={editionsOpen} onClose={() => setEditionsOpen(false)} canManage={isDirectorUser} />
 
       {/* The Finalize sheet — everything the removed Scoring card held, at
           zero cost until it is opened. */}

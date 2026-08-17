@@ -209,6 +209,32 @@ makes is real unless somebody says otherwise. A flag rather than a check on the
 id, because the next scratch edition will not be called `bc_demo`. **Anything
 else that ever spans editions has to consult it too.**
 
+**Inside a demo, every member is an administrator.** `canAdminEdition()` in
+`firestore.rules` grants the edition-scoped admin collections — roster, courses,
+rounds, matches, groups, tee sheet, handicap overrides, settings, budget and
+ledger — to any member whose write has `is_demo` on the edition at BOTH ends, and
+`canAdminEdition` in `lib/editionLock` is the app's mirror of it, which is what
+stops the app ever drawing an Admin tab whose writes would be refused.
+
+It exists for the store queues: App Review and the twelve Play testers get no
+account of ours and no crown, so the roster and the draw would otherwise be a
+tab reading "Directors Only". The alternative on the table was an Admin that
+renders and refuses, and it is worse — AdminView auto-saves on edit and
+`db.upsert` swallows a rejection, so a reviewer would type a name, watch it
+appear, and find it gone on the next load.
+
+Three things stay director-only, because they are project-wide and no
+`tournament_id` could scope them: **`bc_editions`** (creating, deleting or
+unlocking a tournament — and it is where `is_demo` itself lives, so a write
+there would let a member mark the real cup as a demo), **`bc_secrets`** (the
+password — reading it would hand every reviewer the key to the live cup), and
+the **crown** on `bc_accounts`. `demoOnlyAdmin` is what hides those three cards
+rather than showing them and having the rules refuse. `bc_media`'s director
+clause is left alone too: "delete somebody else's photo" reaches a public
+library that is not edition-scoped.
+
+**This needs `firebase deploy --only firestore:rules`**, app first as always.
+
 The demo and the lock are two halves of one problem and neither is the other:
 the demo keeps invented players from leaking OUT into a real tournament, the
 lock keeps real testers from writing IN to one. Lock the real editions, leave

@@ -6,7 +6,7 @@
 // year (the dangerous case, and the one the director will not notice, because
 // directors are exempt), and the bulk button's two directions.
 import { describe, it, expect } from "vitest";
-import { isEditionLocked, lockVerdict, bulkLockVerdict, lockNotice, isDemoEdition } from "./editionLock";
+import { isEditionLocked, lockVerdict, bulkLockVerdict, lockNotice, isDemoEdition, canAdminEdition, demoOnlyAdmin } from "./editionLock";
 
 const ed = (id, year, locked) => ({ id, year, ...(locked === undefined ? {} : { locked }) });
 
@@ -135,6 +135,51 @@ describe("a demo tournament", () => {
     expect(isDemoEdition({ id: "bc_demo" })).toBe(false);   // the id proves nothing
     expect(isDemoEdition({ is_demo: "true" })).toBe(false); // not truthiness
     expect(isDemoEdition(null)).toBe(false);
+  });
+
+  // ── Who administers it ──
+  // The mirror of canAdminEdition() in firestore.rules. If these two ever
+  // disagree the app draws an Admin tab whose writes come back refused, which
+  // is the one failure this whole arrangement exists to avoid.
+  const director = { isDirector: true, isMember: true };
+  const memberOnly = { isDirector: false, isMember: true };
+  const guest = { isDirector: false, isMember: false };
+
+  it("is administered by any member", () => {
+    expect(canAdminEdition({ ...memberOnly, edition: demo })).toBe(true);
+    expect(canAdminEdition({ ...director, edition: demo })).toBe(true);
+  });
+
+  it("...but a real edition is not", () => {
+    expect(canAdminEdition({ ...memberOnly, edition: real })).toBe(false);
+    expect(canAdminEdition({ ...memberOnly, edition: live })).toBe(false);
+    // An edition the app has not loaded yet is a real one. The opposite
+    // default to the lock, deliberately — see the note in editionLock.
+    expect(canAdminEdition({ ...memberOnly, edition: null })).toBe(false);
+    expect(canAdminEdition({ ...memberOnly, edition: undefined })).toBe(false);
+    // The flag, not the id, and not truthiness.
+    expect(canAdminEdition({ ...memberOnly, edition: { id: "bc_demo" } })).toBe(false);
+    expect(canAdminEdition({ ...memberOnly, edition: { is_demo: "true" } })).toBe(false);
+  });
+
+  it("a director administers everything, demo or not", () => {
+    expect(canAdminEdition({ ...director, edition: real })).toBe(true);
+    expect(canAdminEdition({ ...director, edition: null })).toBe(true);
+  });
+
+  it("a guest administers nothing — there is no account to be a member of", () => {
+    expect(canAdminEdition({ ...guest, edition: demo })).toBe(false);
+    expect(canAdminEdition({ ...guest, edition: real })).toBe(false);
+    expect(canAdminEdition()).toBe(false);
+  });
+
+  // What hides Editions, Access and the crown: those three are project-wide,
+  // so a demo cannot scope them and the rules keep them director-only.
+  it("tells a demo administrator apart from a real director", () => {
+    expect(demoOnlyAdmin({ ...memberOnly, edition: demo })).toBe(true);
+    expect(demoOnlyAdmin({ ...director, edition: demo })).toBe(false);
+    expect(demoOnlyAdmin({ ...memberOnly, edition: real })).toBe(false);
+    expect(demoOnlyAdmin({ ...guest, edition: demo })).toBe(false);
   });
 
   it("is left out of a bulk lock", () => {
