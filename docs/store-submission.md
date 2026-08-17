@@ -412,6 +412,25 @@ So the app renders, and it renders empty. A component harness with mocked props
 (`CLAUDE.md`, "Verifying UI changes") still works and is the right tool for a
 layout change — it is only real tournament data that cannot get there.
 
+**There is a script for it now**, because this is a job that gets redone from
+scratch every time a layout changes and therefore gets skipped:
+
+```sh
+npm i --no-save playwright && npx playwright install chromium
+npm run shots:store                 # dry run — names the four and the size
+npm run shots:store -- --write      # drives the site, writes store/ios/*.png
+```
+
+It runs in guest mode, so it signs into nothing and — since every write rule
+begins at `request.auth != null` — it *cannot* touch the tournament even by
+accident. `--edition`, `--url`, `--out` and `--light` are all overridable, and
+it prints the text it photographed on each screen so an empty one is visible in
+the output rather than at upload time.
+
+One of the four comes out anywhere, including a sandbox with no Firestore: the
+Data tab's career table reads `bourbon-cup-archive.json` out of the bundle, so
+`04-career.png` needs no database at all. The other three need real scores.
+
 Drive the deployed site in a phone viewport and photograph real screens rather
 than mocking them up:
 

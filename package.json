@@ -16,6 +16,7 @@
     "android:bundle": "node scripts/android-bundle.mjs",
     "ios:sync": "npm run build && npx cap sync ios",
     "build:store-graphics": "node scripts/store-graphics.mjs",
+    "shots:store": "node scripts/store-screenshots.mjs",
     "team-brand": "node pipeline/team-brand.mjs",
     "import:history": "node scripts/import-history.mjs",
     "seed:demo": "node scripts/seed-demo.mjs",
