@@ -316,6 +316,21 @@ hardware:
 - Search for a course in Admin → Courses (that is the `/api` path, §2.3).
 - Flip the theme pill and watch the status bar follow.
 - Delete the account, and check the three outcomes in the Firebase console.
+  **Do this one LAST, and on the account you are willing to lose.** It works —
+  verified on a device: the membership document goes, the roster row survives
+  unlinked with `auth_uid: null`, and the player's push tokens are deleted with
+  it. What that costs is everything the account had: signing in again means
+  presenting the tournament password to mint a NEW membership, on a NEW uid,
+  **without the director flag** — because the crown lives on the membership
+  document that was just deleted. If it was the only director, nobody can
+  restore it from inside the app and the way back is a console edit
+  (`is_director: true` on the new `bc_accounts/{uid}`), exactly as for the
+  first one.
+
+  It is also the proof that the CALLABLE TRANSPORT works from a Capacitor
+  build. `deleteAccount` and `sendTestPush` are both v2 callables invoked from
+  `capacitor://localhost`; if one of them completes, a CORS or origin problem
+  is not what is wrong with the other.
 
 Builds expire after 90 days. Do not start TestFlight until §5 is done, or the
 field tests a broken build and stops trusting the next one.
@@ -357,6 +372,11 @@ Credentials come from `store-submission.md` §1.4.
 > authentication account, the membership record and all personal identifiers.
 > The tournament roster entry survives, unlinked, because it carries scores
 > other players attested to.
+>
+> If you test deletion, please do it **last**. It is a real deletion: signing
+> in again creates a new account, which needs the tournament password above
+> and does not carry the tournament-director role, so the Admin tabs will no
+> longer be reachable from it.
 >
 > The app is iPhone-only by design and is used one-handed on a golf course.
 
