@@ -13,7 +13,7 @@
 // notification ever arrived. It was found on a real phone with a real test
 // push and one row in the whole project filed under "spectator".
 import { describe, it, expect } from "vitest";
-import { canSubscribe, PLAYERLESS_IDS, subscribedOnThisDevice } from "./notifications";
+import { canSubscribe, PLAYERLESS_IDS, subscribedOnThisDevice, testPushOutcome } from "./notifications";
 import { SPECTATOR_ID, BOOTSTRAP_DIRECTOR } from "../firebase";
 import { GUEST_ID } from "./guest";
 
@@ -82,5 +82,52 @@ describe("subscribedOnThisDevice", () => {
   it("is false when there are no rows at all", () => {
     expect(subscribedOnThisDevice([], mine.id)).toBe(false);
     expect(subscribedOnThisDevice(undefined, mine.id)).toBe(false);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  What the test button says
+// ══════════════════════════════════════════════════════════════════
+//
+// The callable returns a REPORT rather than throwing — sendToPlayer catches
+// every delivery failure and hands back { sent, failed, errors }. The screen
+// read only `sent`, so a phone holding a registered iOS token was told "No
+// devices registered" while the report in its hand said
+//
+//     failed: 1, errors: ["messaging/third-party-auth-error: Invalid APNs
+//     credential."]
+//
+// The cause was found by reading Cloud Functions logs on a laptop. The point
+// of a test button is that it IS the diagnostic.
+describe("testPushOutcome", () => {
+  it("reports a delivery", () => {
+    expect(testPushOutcome({ sent: 1, failed: 0, errors: [] }))
+      .toEqual({ tone: "success", text: "Test sent to 1 device" });
+    expect(testPushOutcome({ sent: 3, failed: 0, errors: [] }).text)
+      .toBe("Test sent to 3 devices");
+  });
+
+  it("names the APNs credential, which is the one that cost an evening", () => {
+    const out = testPushOutcome({
+      sent: 0, failed: 1,
+      errors: ["messaging/third-party-auth-error: Invalid APNs credential."],
+    });
+    expect(out.tone).toBe("error");
+    expect(out.text).toMatch(/APNs key/);
+    expect(out.text).toMatch(/Cloud Messaging/);
+    // And explicitly NOT the old answer, which sent somebody looking for a
+    // device that was sitting in their hand.
+    expect(out.text).not.toMatch(/No devices/);
+  });
+
+  it("hands back an unrecognised code rather than swallowing it", () => {
+    expect(testPushOutcome({ sent: 0, failed: 1, errors: ["messaging/quota-exceeded: slow down"] }).text)
+      .toBe("Push refused: messaging/quota-exceeded: slow down");
+  });
+
+  it("says no devices only when nothing was actually attempted", () => {
+    expect(testPushOutcome({ sent: 0, failed: 0, errors: ["no_tokens_registered"] }).text)
+      .toMatch(/No devices registered/);
+    expect(testPushOutcome(undefined).tone).toBe("error");
   });
 });

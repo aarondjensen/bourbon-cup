@@ -26,7 +26,7 @@
 import { useState, useEffect } from "react";
 import { BC, FONT, ALPHA, FS } from "../theme";
 import {
-  registerForPush, unsubscribeFromPush, getNotificationPermissionState, refreshPermissionState, canSubscribe,
+  registerForPush, unsubscribeFromPush, getNotificationPermissionState, refreshPermissionState, canSubscribe, testPushOutcome,
   isStandalonePWA, isIOSPushCapable, checkSubscriptionStatus,
   getCachedSubscriptionStatus, readTypePrefs, saveTypePrefs,
   getCachedTypePrefs, normalizeTypePrefs,
@@ -185,8 +185,11 @@ export function NotificationSettings({ user, notify }) {
         import("firebase/app"),
       ]);
       const res = await httpsCallable(getFunctions(getApp()), "sendTestPush")({ playerId: pid });
-      const sent = res?.data?.sent ?? 0;
-      notify(sent > 0 ? `Test sent to ${sent} device${sent === 1 ? "" : "s"}` : "No devices registered", sent > 0 ? "success" : "error");
+      // The report is read WHOLE — see testPushOutcome. Reading only `sent`
+      // reported a refused delivery as an absent device, which sends somebody
+      // looking for the cause in the one place it isn't.
+      const { tone, text } = testPushOutcome(res?.data);
+      notify(text, tone);
     } catch (e) {
       notify(`Test failed: ${e?.message || e}`, "error");
     } finally { setTesting(false); }
