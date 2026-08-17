@@ -13,7 +13,7 @@
 // notification ever arrived. It was found on a real phone with a real test
 // push and one row in the whole project filed under "spectator".
 import { describe, it, expect } from "vitest";
-import { canSubscribe, PLAYERLESS_IDS } from "./notifications";
+import { canSubscribe, PLAYERLESS_IDS, subscribedOnThisDevice } from "./notifications";
 import { SPECTATOR_ID, BOOTSTRAP_DIRECTOR } from "../firebase";
 import { GUEST_ID } from "./guest";
 
@@ -45,5 +45,42 @@ describe("canSubscribe", () => {
     expect(canSubscribe(undefined)).toBe(false);
     expect(canSubscribe(null)).toBe(false);
     expect(canSubscribe("")).toBe(false);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  Subscribed HERE, not subscribed somewhere
+// ══════════════════════════════════════════════════════════════════
+//
+// The card asks "will this phone buzz" and was answered with "does this player
+// have a token row anywhere". Two devices is everybody, so the second question
+// says yes on a phone that has never registered — which is exactly what a real
+// iPhone showed: NOTIFICATIONS ON, in green, over a collection whose only row
+// was written by a browser on a laptop.
+//
+// The screen's own footer promises the opposite ("per device — turn them on
+// separately on each phone or browser"), and so does the cache this overwrote.
+describe("subscribedOnThisDevice", () => {
+  const mine = { id: "pdemo_dave_a1b2c3", token: "t1" };
+  const laptop = { id: "pdemo_dave_9z8y7x", token: "t2" };
+
+  it("is true when this device's row is among them", () => {
+    expect(subscribedOnThisDevice([laptop, mine], mine.id)).toBe(true);
+  });
+
+  it("is FALSE when another device subscribed and this one did not", () => {
+    // The whole bug, in one assertion.
+    expect(subscribedOnThisDevice([laptop], mine.id)).toBe(false);
+  });
+
+  it("is false when this device never recorded a row", () => {
+    // Including a device that subscribed before the id was recorded. Wrong in
+    // the direction that costs one tap, rather than a season of silence.
+    expect(subscribedOnThisDevice([laptop, mine], null)).toBe(false);
+  });
+
+  it("is false when there are no rows at all", () => {
+    expect(subscribedOnThisDevice([], mine.id)).toBe(false);
+    expect(subscribedOnThisDevice(undefined, mine.id)).toBe(false);
   });
 });
