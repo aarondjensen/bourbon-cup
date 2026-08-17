@@ -429,7 +429,7 @@ function ChDeltaBadge({ delta }) {
   );
 }
 
-export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, roundCount, tournamentRounds, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks, payments, duesAmount, onLogPayment, onDeletePayment, onSaveDues, onSetPlayerDues, onOpenFinalize, finalizeRound, finalizeReady, trip, onSaveTrip, startDate, endDate, budgetLines, onSaveBudgetLine, onDeleteBudgetLine }) {
+export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAdmin = false, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, roundCount, tournamentRounds, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks, payments, duesAmount, onLogPayment, onDeletePayment, onSaveDues, onSetPlayerDues, onOpenFinalize, finalizeRound, finalizeReady, trip, onSaveTrip, startDate, endDate, budgetLines, onSaveBudgetLine, onDeleteBudgetLine }) {
   const [tab, setTab] = useState("players");
   // Which half of the $ tab. Budget leads because it is the half a director
   // fills in first — you cannot say what to charge until you know what the
@@ -1229,7 +1229,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
             // would come back refused.
             const theirMembership = isNew ? null : membershipFor(memberships, p);
             const isSelf = !!theirMembership && theirMembership.uid === user?.auth_uid;
-            const canGrantDirector = !isNew && !!theirMembership && !isSelf;
+            const canGrantDirector = !isNew && !isDemoAdmin && !!theirMembership && !isSelf;
             // Four different reasons the toggle can be unavailable, and
             // they want four different actions from the director. Telling
             // them apart matters most for the last one: an empty accounts
@@ -1237,6 +1237,13 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
             // is nothing to do with the player on screen.
             const directorHint = isNew
               ? "Add them first, then they sign in and claim this name."
+              // Administering a demo on a membership alone. The crown lives on
+              // a bc_accounts document, which is not scoped to any edition, so
+              // granting it here would be a project-wide power handed out by
+              // an invented tournament. The rules refuse it; this says so
+              // instead of offering a toggle that would come back denied.
+              : isDemoAdmin
+                ? "This is the demo tournament, so there are no directors to appoint — the crown is real access to the real cup and is granted by a director there."
               : accountsUnreadable(memberships)
                 ? "Can't read the accounts list, so no crown can be changed. The rules deployed to Firebase are probably older than this app — re-publish firestore.rules, then reopen this."
                 : !theirMembership
@@ -3084,7 +3091,14 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
 
       {tab === "tournament" && (
         <div>
-          {/* Active edition — switch year or create a new edition */}
+          {/* Active edition — switch year or create a new edition.
+              HIDDEN for somebody administering a demo on a membership alone:
+              bc_editions is the list of tournaments, not a thing inside one, so
+              the rules keep it director-only and creating, deleting or
+              unlocking a year from inside the demo would reach straight out of
+              it. Hidden rather than shown-and-refused, for the same reason the
+              app never draws an Admin tab whose writes would bounce. */}
+          {!isDemoAdmin && (<>
           <div style={{ ...TournHeadStyle, marginBottom: 6 }}>Active Edition</div>
           <button onClick={() => setShowEditions(true)} style={{
             width: "100%", marginBottom: 10, padding: "9px 12px", borderRadius: 10,
@@ -3096,6 +3110,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
             <span>Edition · <span style={{ color: BC.amberInk }}>{TOURNAMENT_ID}</span></span>
             <span style={{ fontSize: FS.label, color: BC.t3 }}>Switch / new ›</span>
           </button>
+          </>)}
 
           {/* Tournament identity — name, location, dates, length.
               One card and one Save for all of it: they're the same sentence on
@@ -3260,7 +3275,15 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
               behind a tap rather than on screen: this panel gets shown to
               other people often enough (handicaps, tee times) that leaving
               a password sitting on it would undo the point of having one.
-              Saving an empty field takes the password off. */}
+              Saving an empty field takes the password off.
+
+              HIDDEN for a demo administrator, and this is the one that would
+              matter most: the password is project-wide, so reading it here
+              would hand every store reviewer the key to the real cup. The
+              rules refuse both the read and the write — `bc_secrets` is
+              director-only — so a shown card would report an error it could
+              not explain. */}
+          {!isDemoAdmin && (
           <div style={TournCardStyle}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
               <div style={TournHeadStyle}>Access</div>
@@ -3332,6 +3355,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
               Save blank to remove.
             </div>
           </div>
+          )}
 
           {/* Teams — name, imported logo, brand color */}
           <div style={{ ...TournHeadStyle, marginBottom: 6 }}>Teams</div>

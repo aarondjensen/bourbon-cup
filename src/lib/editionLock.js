@@ -91,6 +91,36 @@ export const DEMO_EDITION_ID = "bc_demo";
 //                  the director, who is exempt from the lock they just set.
 export const isDemoEdition = (edition) => edition?.is_demo === true;
 
+// ── Who administers THIS edition ───────────────────────────────────
+// A director anywhere, or any member inside a demo. The mirror of
+// `canAdminEdition()` in firestore.rules, and it has to stay a mirror: the app
+// must never draw an Admin tab whose every write the rules would refuse, which
+// is the same rule that keeps the crown off the roster document.
+//
+// Why a member gets REAL admin in a demo rather than a read-only Admin drawn
+// for them: App Review and a dozen Play testers need to see what the app is,
+// and the roster, the draw, the courses and the rounds are half of it. An
+// Admin that rendered and refused would be worse than either — AdminView
+// auto-saves on edit and `db.upsert` swallows a rejection, so a reviewer would
+// type a name, watch it appear, and find it gone on the next load.
+//
+// `isMember` and `isDirector` are passed in rather than derived, because
+// this module is pure and both come from the bc_accounts document that only
+// firebase.js can read. A GUEST is neither: no account, no membership, and
+// no write the rules would take.
+//
+// What it deliberately does NOT cover is everything project-wide — the list of
+// tournaments, the password, and the crown. Those are not scoped by any
+// edition, so `demoOnlyAdmin` below is what the screens use to hide them.
+export const canAdminEdition = ({ isDirector, isMember, edition } = {}) =>
+  isDirector === true || (isMember === true && isDemoEdition(edition));
+
+// The half of the above that is NOT a director — somebody administering a demo
+// on a membership alone. The three cards that would be shown-and-refused are
+// hidden for them, which is the same no-lying rule as everything else here.
+export const demoOnlyAdmin = (args) =>
+  args?.isDirector !== true && canAdminEdition(args);
+
 // ── What the director is about to do, in words ─────────────────────
 // Returned rather than written inline at the call site so the dangerous case
 // can be tested, because it is the one that is easy to get wrong and expensive

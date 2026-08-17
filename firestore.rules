@@ -34,6 +34,12 @@ rules_version = '2';
 // their own push token, and the one narrow update that claims their own
 // name off the roster.
 //
+// With one exception, and it is scoped to a tournament that does not exist:
+// inside a DEMO edition (`is_demo` on its bc_editions row, written only by
+// `npm run seed:demo`), any member is an administrator. See canAdminEdition
+// below for why that is real access rather than a read-only Admin screen, and
+// for the three things it still cannot do.
+//
 // Within each half there is no per-document ownership, deliberately.
 // Scoring is communal — one phone posts for a group of four, the director
 // fixes anybody's card — so "only your own rows" would break the actual
@@ -218,6 +224,63 @@ service cloud.firestore {
       return isMember() && (editionOpen() || isDirector());
     }
 
+    // ── ADMIN INSIDE A DEMO ────────────────────────────────────────
+    // Is `tid` a demo tournament? The same `is_demo` flag lib/editionLock
+    // reads, off the same document editionLocked() already fetches, so within
+    // one evaluation it is billed once. Absent means NO: an edition nobody
+    // marked is a real one, which matches createEdition — it never writes the
+    // flag, so a tournament a director makes is real unless the seed said
+    // otherwise.
+    function editionIsDemo(tid) {
+      return tid != ''
+        && exists(/databases/$(database)/documents/bc_editions/$(tid))
+        && get(/databases/$(database)/documents/bc_editions/$(tid))
+             .data.get('is_demo', false) == true;
+    }
+
+    // BOTH ends, for the same reason editionOpen() checks both: without the
+    // `request.resource` half a demo administrator could take a demo document
+    // and rewrite its tournament_id into the live cup, which is a write to the
+    // real tournament by another name. `resource` is null on create and
+    // `request.resource` is null on delete, so each side is guarded before its
+    // data is touched.
+    function bothEndsDemo() {
+      return (resource == null || editionIsDemo(resource.data.get('tournament_id', '')))
+        && (request.resource == null || editionIsDemo(request.resource.data.get('tournament_id', '')));
+    }
+
+    // What the edition-scoped ADMIN collections are gated on: a director
+    // anywhere, or any member inside a demo tournament.
+    //
+    // Why a member gets real access rather than a read-only Admin drawn for
+    // them: App Review and a dozen Play testers need to see what the app IS,
+    // and the roster, the draw, the courses and the rounds are half of it. The
+    // alternative on the table was an Admin that renders and refuses — but
+    // AdminView auto-saves on edit and `db.upsert` swallows a rejection, so a
+    // decorative Admin would let a reviewer type a name, watch it appear, and
+    // find it gone on the next load. An app that lies about a save is a worse
+    // thing to hand Apple than an app that lets a tester rename an invented
+    // golfer.
+    //
+    // The blast radius is the demo edition and nothing else. Every document in
+    // it was written by `npm run seed:demo`, `--undo --write` rebuilds it, and
+    // `bothEndsDemo()` above is what stops anything reaching out of it.
+    //
+    // Three things stay director-only on purpose, because they are
+    // project-wide rather than edition-scoped and no `tournament_id` on a
+    // document could scope them: bc_editions (creating and deleting
+    // tournaments — including the demo's own row, and including `locked` on
+    // the real cup), bc_secrets (the password), and the crown on bc_accounts.
+    // The app hides those two cards for a demo administrator rather than
+    // showing them and having the rules refuse, for the same no-lying reason.
+    //
+    // Order matters for cost: isDirector() is asked first, off the membership
+    // document isMember() has already read, so a real director writing a real
+    // edition never pays for the bc_editions read that bothEndsDemo() does.
+    function canAdminEdition() {
+      return isDirector() || (isMember() && bothEndsDemo());
+    }
+
     // The password, and the deliberate hole in it. `accessCode()` reads a
     // document no client may read — rules `get()` is not subject to read
     // rules, which is the whole trick: the secret can be compared without
@@ -336,31 +399,31 @@ service cloud.firestore {
         && (!('auth_uid' in resource.data)
             || resource.data.auth_uid == null
             || resource.data.auth_uid == request.auth.uid);
-      allow write: if isDirector();
+      allow write: if canAdminEdition();
     }
     match /bc_courses/{doc}            { allow read: if isOpen();
-                                         allow write: if isDirector(); }
+                                         allow write: if canAdminEdition(); }
     match /bc_rounds/{doc}             { allow read: if isOpen();
-                                         allow write: if isDirector(); }
+                                         allow write: if canAdminEdition(); }
     match /bc_matches/{doc}            { allow read: if isOpen();
-                                         allow write: if isDirector(); }
+                                         allow write: if canAdminEdition(); }
     // Playing groups — who tees off together, one document per round.
     // Group i goes off at slot i of that round's `tee_time` list; see
     // src/lib/groups.js.
     match /bc_groups/{doc}             { allow read: if isOpen();
-                                         allow write: if isDirector(); }
+                                         allow write: if canAdminEdition(); }
     match /bc_tee_assignments/{doc}    { allow read: if isOpen();
-                                         allow write: if isDirector(); }
+                                         allow write: if canAdminEdition(); }
     match /bc_hcp_overrides/{doc}      { allow read: if isOpen();
-                                         allow write: if isDirector(); }
+                                         allow write: if canAdminEdition(); }
     // Frozen per-round handicaps. Written by the auto-lock on the first
     // score of a round as well as by the director; see src/lib/roundLocks.js.
     match /bc_round_locks/{doc}        { allow read: if isOpen();
                                          allow write: if canWriteEdition(); }
     match /bc_settings/{doc}           { allow read: if isOpen();
-                                         allow write: if isDirector(); }
+                                         allow write: if canAdminEdition(); }
     match /bc_tournament_settings/{doc} { allow read: if isOpen();
-                                         allow write: if isDirector(); }
+                                         allow write: if canAdminEdition(); }
     // ── The archive ───────────────────────────────────────────────
     // An edition document now carries its own `result` — the two team
     // names and the two scores, computed from that year's cards by the
@@ -376,6 +439,13 @@ service cloud.firestore {
     // The ten years of results live in the repo under
     // data/historical sheets and reach Firestore as whole editions, which
     // is what the History tab now summarises.
+    //
+    // DIRECTOR-ONLY, and deliberately not canAdminEdition(). This collection is
+    // the list of tournaments, so a demo administrator writing it could create
+    // an edition, delete a real one, or clear `locked` on the live cup — none
+    // of which is scoped to the demo even though the demo is where they are
+    // standing. It is also the document editionIsDemo() reads, so a write here
+    // could mark a real edition as a demo and unlock everything else in one go.
     match /bc_editions/{doc}           { allow read: if isOpen();
                                          allow write: if isDirector(); }
 
@@ -532,15 +602,21 @@ service cloud.firestore {
     // show a player their own. If reads are ever tightened, this belongs in
     // the same pass as bc_notification_tokens — it is the second collection
     // here that holds something a reader has no business enumerating.
+    //
+    // canAdminEdition() rather than isDirector() for the demo's sake — Budget
+    // is a tab a reviewer will open, both halves of it are edition-scoped, and
+    // a money write is `loud` so a refused one toasts rather than vanishing.
+    // That makes it the one collection here where the failure would be VISIBLE
+    // and it is still the wrong thing to show somebody reviewing the app.
     match /bc_ledger/{doc}             { allow read: if isOpen();
-                                         allow write: if isDirector(); }
+                                         allow write: if canAdminEdition(); }
 
     // The other half of Admin → $: what the trip COSTS, one document per
     // line. Same rule as the ledger above and for a simpler reason — what
     // the weekend costs is not a thing a player has an opinion about, so
     // there is no member clause to argue over.
     match /bc_budget/{doc}             { allow read: if isOpen();
-                                         allow write: if isDirector(); }
+                                         allow write: if canAdminEdition(); }
 
     // ── Runtime switches ──────────────────────────────────────────
     // Today this holds exactly one document: bc_config/photos, the photo

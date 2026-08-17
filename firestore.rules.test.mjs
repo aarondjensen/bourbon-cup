@@ -570,6 +570,108 @@ await check("a member cannot lift the lock, and a director can", async () => {
 await check("and once unlocked, a member can write to it again", () =>
   assertSucceeds(setDoc(doc(peteDb(), "bc_hole_scores/hs_unlocked"), { tournament_id: "bc_2019", strokes: 4 })));
 
+// ── ADMIN INSIDE A DEMO EDITION ─────────────────────────────────────
+// `is_demo: true` on an edition makes every MEMBER an administrator of that
+// tournament and of nothing else. See canAdminEdition() in firestore.rules for
+// why the access is real rather than a read-only Admin screen.
+//
+// What these pin, in order of how expensive they are to get wrong:
+//   • a member administers the demo — the whole point
+//   • a member administers NOTHING else, locked or unlocked, which is the
+//     property the live tournament depends on
+//   • the flag is what decides it, not the edition id, and absent means real
+//   • BOTH ends of an update are checked, so a document cannot be carried out
+//     of the demo into the cup or dragged into the demo out of it
+//   • bc_editions, bc_secrets and the crown stay director-only, because they
+//     are project-wide and no tournament_id could scope them
+await seed("bc_editions/bc_demo", { id: "bc_demo", year: 2026, is_demo: true, locked: false });
+await seed("bc_editions/bc_notdemo", { id: "bc_notdemo", year: 2026, is_demo: "true" });
+await seed("bc_players/demo_p1", { tournament_id: "bc_demo", player_id: "demo_p1", name: "Dave R" });
+await seed("bc_players/real_p1", { tournament_id: "bc_2026", player_id: "real_p1", name: "Aaron J" });
+
+await check("a member administers the demo roster, rounds and draw", async () => {
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_players/demo_p2"),
+    { tournament_id: "bc_demo", player_id: "demo_p2", name: "Ringer" }));
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_players/demo_p1"),
+    { tournament_id: "bc_demo", handicap_index: 4.2 }, { merge: true }));
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_rounds/demo_r1"), { tournament_id: "bc_demo", par: 72 }));
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_matches/demo_m1"), { tournament_id: "bc_demo", teamA: [] }));
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_courses/demo_c1"), { tournament_id: "bc_demo", name: "Otsego" }));
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_groups/demo_g1"), { tournament_id: "bc_demo", players: [] }));
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_tee_assignments/demo_t1"), { tournament_id: "bc_demo", tee: "white" }));
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_hcp_overrides/demo_h1"), { tournament_id: "bc_demo", ch: 9 }));
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_settings/bc_demo__team_names"), { tournament_id: "bc_demo", teamA: "Mash" }));
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_tournament_settings/demo_s"), { tournament_id: "bc_demo", skins_pot: 240 }));
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_budget/demo_b1"), { tournament_id: "bc_demo", amount: 90 }));
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_ledger/demo_l1"), { tournament_id: "bc_demo", amount: 100 }));
+});
+
+await check("...and can delete inside it", () =>
+  // `request.resource` is null on delete, so this is the half of bothEndsDemo()
+  // that reads `resource` instead.
+  assertSucceeds(deleteDoc(doc(peteDb(), "bc_players/demo_p2"))));
+
+await check("a member administers NOTHING in a real edition", async () => {
+  await assertFails(setDoc(doc(peteDb(), "bc_players/real_p2"),
+    { tournament_id: "bc_2026", player_id: "real_p2", name: "Ringer" }));
+  await assertFails(setDoc(doc(peteDb(), "bc_players/real_p1"), { tournament_id: "bc_2026", handicap_index: 0 }, { merge: true }));
+  await assertFails(setDoc(doc(peteDb(), "bc_rounds/real_r1"), { tournament_id: "bc_2026", par: 72 }));
+  await assertFails(setDoc(doc(peteDb(), "bc_courses/real_c1"), { tournament_id: "bc_2026", name: "Pete's" }));
+  await assertFails(setDoc(doc(peteDb(), "bc_settings/bc_2026__team_names"), { tournament_id: "bc_2026", teamA: "x" }));
+  await assertFails(setDoc(doc(peteDb(), "bc_budget/real_b1"), { tournament_id: "bc_2026", amount: 5000 }));
+  await assertFails(setDoc(doc(peteDb(), "bc_ledger/real_l1"), { tournament_id: "bc_2026", amount: 800 }));
+  await assertFails(deleteDoc(doc(peteDb(), "bc_players/real_p1")));
+});
+
+await check("nor in one with no edition document at all", () =>
+  // The opposite default to editionLocked(), deliberately: a missing edition
+  // row fails OPEN for scoring (a new tournament has to be able to start) and
+  // CLOSED for admin (an unmarked tournament is a real one).
+  assertFails(setDoc(doc(peteDb(), "bc_rounds/ghost_r1"), { tournament_id: "bc_2099", par: 72 })));
+
+await check("the FLAG decides it, not the id, and it must be a boolean", async () => {
+  // `is_demo: "true"` is a string. Truthiness is not the test.
+  await assertFails(setDoc(doc(peteDb(), "bc_rounds/nd_r1"), { tournament_id: "bc_notdemo", par: 72 }));
+  // bc_2025 has an edition row with no is_demo field at all.
+  await assertFails(setDoc(doc(peteDb(), "bc_rounds/r2025"), { tournament_id: "bc_2025", par: 72 }));
+});
+
+await check("a demo administrator cannot carry a row OUT of the demo", () =>
+  assertFails(setDoc(doc(peteDb(), "bc_players/demo_p1"), { tournament_id: "bc_2026" }, { merge: true })));
+
+await check("...nor drag one INTO it out of the cup", () =>
+  assertFails(setDoc(doc(peteDb(), "bc_players/real_p1"), { tournament_id: "bc_demo" }, { merge: true })));
+
+await check("a demo administrator cannot touch the list of tournaments", async () => {
+  // Not even the demo's own row: bc_editions is where `is_demo` and `locked`
+  // live, so a write here would let a member mark the live cup as a demo.
+  await assertFails(setDoc(doc(peteDb(), "bc_editions/bc_demo"), { name: "Mine" }, { merge: true }));
+  await assertFails(setDoc(doc(peteDb(), "bc_editions/bc_2026"), { is_demo: true }, { merge: true }));
+  await assertFails(setDoc(doc(peteDb(), "bc_editions/bc_2027"), { year: 2027, is_demo: true }));
+  await assertFails(deleteDoc(doc(peteDb(), "bc_editions/bc_2026")));
+});
+
+await check("a demo administrator cannot read or set the password", async () => {
+  await assertFails(getDoc(doc(peteDb(), "bc_secrets/access")));
+  await assertFails(setDoc(doc(peteDb(), "bc_secrets/access"), { code: "petes" }));
+});
+
+await check("a demo administrator cannot crown anybody, themselves included", async () => {
+  await assertFails(setDoc(doc(peteDb(), "bc_accounts/pete"), { is_director: true }, { merge: true }));
+  await assertFails(setDoc(doc(peteDb(), "bc_accounts/mallory"), { is_director: true }, { merge: true }));
+});
+
+await check("a signed-in NON-member gets none of it", () => {
+  const bob = env.authenticatedContext("bob").firestore();
+  return assertFails(setDoc(doc(bob, "bc_rounds/demo_r2"), { tournament_id: "bc_demo", par: 72 }));
+});
+
+await check("a guest — no auth at all — gets none of it", () =>
+  assertFails(setDoc(doc(anonDb(), "bc_rounds/demo_r3"), { tournament_id: "bc_demo", par: 72 })));
+
+await check("a director still administers the demo like anywhere else", () =>
+  assertSucceeds(setDoc(doc(aliceDb(), "bc_rounds/demo_r1"), { tournament_id: "bc_demo", par: 71 }, { merge: true })));
+
 await env.cleanup();
 
 let failed = 0;

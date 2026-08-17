@@ -241,23 +241,27 @@ Choose **All or some functionality is restricted** and add two entries:
 
 > Name: Full access
 >
-> Instructions: Sign in with the Google account below, then enter the
-> tournament password when prompted, then tap the pre-assigned name on the
-> roster screen (it will already be linked). This unlocks score entry, the
-> photo library upload, side bets and the director's admin tabs.
+> Instructions: Sign in with any Google account of your own, enter the
+> tournament password below when prompted, then tap any unclaimed name on the
+> roster screen. This unlocks score entry, the photo library upload, side bets
+> and the Admin tabs.
 >
 > Please use the tournament named "DEMO — Testers". If the app opens on a
 > different year, tap "Switch tournament" on the roster screen (or ☰ →
 > Tournaments) and choose it. The other years are completed tournaments,
 > closed to new entries, so a name cannot be claimed in them — the app says
-> so on screen.
+> so on screen. Inside the demo tournament every signed-in account gets the
+> Admin tabs, so nothing needs granting; changes there affect only the demo.
 >
-> Username: `<the demo Google account>`
-> Password: `<its Google password>`
+> Username: `<none — no credentials are handed over>`
+> Password: `<none>`
 > Any other instructions: Tournament password: `<from Admin → Event → Access>`
 
-The account itself is built once and used by both stores — see
-`store-submission.md` §1.4.
+**No account is handed over, on purpose** — see `store-submission.md` §1.4 for
+why (Google's per-phone cap, and a fresh account signed into from an unfamiliar
+network is exactly what Google's risk checks challenge). The Admin tabs used to
+be the one thing this could not reach; a demo edition grants them to any member
+now, which is what makes "sign in with your own account" a complete answer.
 
 Guest mode alone is **not** enough for this section. Play wants reviewers to
 reach all functionality, and guest mode is read-only by design.

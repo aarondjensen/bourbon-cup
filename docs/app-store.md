@@ -358,7 +358,15 @@ hardware:
 - Receive a push with the app closed, and one with it open — exactly one
   banner, not two.
 - Open the house link from Trip Info and get back.
-- Take a photo with the 📷 button and watch it upload.
+- Upload a photo from the library and watch it land.
+- **Sign in on a SECOND account, switch to "DEMO — Testers", and open Admin.**
+  That is the path the reviewer takes (`store-submission.md` §1.4): every member
+  administers a demo, so the tab should be there without anybody granting a
+  crown, and a save should stick after a reload rather than reverting. Three
+  cards should be ABSENT — Editions, Access and the crown toggle in the player
+  modal. Then switch to a real year on the same account and check the Admin tab
+  is gone again. If the tab is there and saves revert, the rules have not been
+  deployed (§1.2 in `store-submission.md`).
 - Leave a card unattested, force-quit the app, reopen it — the badge should
   arrive then, not before (§2.2).
 - Search for a course in Admin → Courses (that is the `/api` path, §2.3).
@@ -387,7 +395,8 @@ field tests a broken build and stops trusting the next one.
 
 ## 7. Review notes to submit with the build
 
-Credentials come from `store-submission.md` §1.4.
+No credentials are handed over — see `store-submission.md` §1.4 for why, and
+for how the Admin tabs are reachable without one.
 
 > The Bourbon Cup is the scoring app for one private annual golf tournament.
 > It is submitted for unlisted distribution.
@@ -411,14 +420,13 @@ Credentials come from `store-submission.md` §1.4.
 >
 > Tournament password: `<from Admin → Event → Access>`
 >
-> **About the Admin tabs.** One person in this sixteen-man tournament is its
-> director, and the Admin tabs are that role's tools — the roster, the draw,
-> the courses, the tee sheet and the trip's budget. The role is a flag on an
-> account, granted by an existing director from inside the app, so it cannot be
-> pre-attached to an account that does not exist yet. If you would like to see
-> those screens we will gladly provide a recorded walkthrough or arrange access
-> on request; nothing behind them is a purchase, a subscription, or a different
-> app.
+> **The Admin tab is open to you inside "DEMO — Testers".** One person in a real
+> tournament is its director, and the Admin tabs are that role's tools — the
+> roster, the draw, the courses, the tee sheet and the trip's budget. In the
+> demo tournament every signed-in account gets them, so you can open and edit
+> all of it without us granting anything. Changes you make there affect only
+> the demo; the completed tournaments are unaffected. Nothing behind those
+> screens is a purchase, a subscription, or a different app.
 >
 > **On the Betting tab:** the app records wagers players agree with each other
 > in person, and settles them in person. It processes no payments, contains no
