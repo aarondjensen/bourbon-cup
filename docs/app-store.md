@@ -116,8 +116,26 @@ Six relative fetches (`lib/ghin.js` ×2, `AdminView.jsx` ×4) resolve against th
 app bundle under `capacitor://localhost` and 404 — not as a network error,
 which is what made it hard to recognise. All six now go through `apiUrl()`,
 which returns the path unchanged on web and prefixes
-`https://thebourboncup.com` on native. Overridable with `VITE_API_BASE`, for
-the same reason `VITE_API_PROXY` exists.
+`https://www.thebourboncup.com` on native. Overridable with `VITE_API_BASE`,
+for the same reason `VITE_API_PROXY` exists.
+
+**The `www.` is load-bearing, and it was missing.** The apex redirects:
+
+```
+$ curl -s -o /dev/null -w '%{http_code} -> %{redirect_url}\n' \
+    https://thebourboncup.com/api/courses?search=oak
+307 -> https://www.thebourboncup.com/api/courses?search=oak
+```
+
+`fetch` follows a redirect happily, but a CROSS-ORIGIN fetch applies CORS to
+every hop, and Vercel's domain redirect carries no `Access-Control-Allow-Origin`.
+So the request died on the first hop and never reached the handler — which also
+means the CORS headers added to `api/courses.js` below were never consulted.
+Every course search and every GHIN lookup, on every phone, came back empty,
+while the identical call worked on the web where nothing redirects.
+
+An absolute base for a cross-origin API has to be the CANONICAL host, not
+whichever name the domain also answers to.
 
 `api/courses.js` also grew CORS headers. It had been setting
 `Access-Control-Allow-Origin` **on the success path only**, so a 400 or a 500
