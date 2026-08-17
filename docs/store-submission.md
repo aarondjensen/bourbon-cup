@@ -152,6 +152,32 @@ Both stores want to reach everything, and guest mode is read-only by design, so
 guest mode alone is **not** an answer to either store's access question. It is a
 very good answer to half of it.
 
+Three things need the account rather than the guest door, and the third is the
+one that decides it:
+
+- **The write half of the app.** Scoring, photos, side bets and the Admin tabs
+  are all behind a membership. A reviewer who can only read has not seen what
+  the app is for.
+- **App Review Information asks directly.** Apple's form has a sign-in toggle
+  with a username and password beside it. Answering "no sign-in required"
+  because guest mode exists, and then having a reviewer meet the password
+  screen on the Scoring tab, is a rejection for the review information rather
+  than for the app.
+- **Account deletion cannot be tested without an account.** Guideline 5.1.1(v)
+  is checked by hand, and My Account → Delete Account does not exist for a
+  guest — there is no account to delete. So the one requirement that most needs
+  demonstrating is the one guest mode structurally cannot demonstrate.
+
+> **The demo account has to be able to sign in from Apple's network.** This is
+> the failure that reads as a broken app and is not one: a fresh Google account
+> signed into from an unfamiliar device in another country is exactly what
+> Google's risk checks are built to challenge, and a reviewer who is asked to
+> confirm a code sent to a phone they do not have reports that they could not
+> log in. Before submitting, sign into it from a device that is not yours and
+> confirm it goes straight through — no 2FA prompt, no "verify it's you", no
+> recovery-email challenge. An account that challenges once will challenge
+> again.
+
 **The demo edition is seeded, not built by hand.**
 
 ```sh
