@@ -397,10 +397,11 @@ Credentials come from `store-submission.md` §1.4.
 > scorecards, trip schedule, and ten years of tournament history — with no
 > account. It is not a limited demo; it is the whole app without write access.
 >
-> **To reach scoring, photos and the admin tools:** sign in with the Google
-> account below, enter the tournament password when prompted, then tap the
-> pre-assigned name on the roster screen. The account is a tournament director,
-> so the Admin tabs are reachable.
+> **To reach scoring, photos and everything a player does:** tap **Sign in with
+> Apple** and use the Apple ID already on your device, enter the tournament
+> password below when prompted, then tap any unclaimed name on the roster
+> screen. There is no separate demo account to request — this app has no
+> email-and-password sign-in, and Sign in with Apple needs nothing from us.
 >
 > **Please use the tournament named "DEMO — Testers".** If the app opens on a
 > different year, tap "Switch tournament" on the roster screen (or ☰ →
@@ -408,15 +409,16 @@ Credentials come from `store-submission.md` §1.4.
 > are closed to new entries, so a name cannot be claimed in them — the app
 > says so on screen.
 >
-> Google account: `<demo address>` / `<password>`
 > Tournament password: `<from Admin → Event → Access>`
 >
-> **Sign in with Apple also works, with your own Apple ID.** This app has no
-> email-and-password sign-in — the two buttons are Google and Apple — so if the
-> Google account above gives you any trouble, tap Sign in with Apple, enter the
-> tournament password, and claim any unclaimed name on the roster screen. That
-> reaches everything except the Admin tabs, which are tied to the Google
-> account above.
+> **About the Admin tabs.** One person in this sixteen-man tournament is its
+> director, and the Admin tabs are that role's tools — the roster, the draw,
+> the courses, the tee sheet and the trip's budget. The role is a flag on an
+> account, granted by an existing director from inside the app, so it cannot be
+> pre-attached to an account that does not exist yet. If you would like to see
+> those screens we will gladly provide a recorded walkthrough or arrange access
+> on request; nothing behind them is a purchase, a subscription, or a different
+> app.
 >
 > **On the Betting tab:** the app records wagers players agree with each other
 > in person, and settles them in person. It processes no payments, contains no
@@ -429,9 +431,8 @@ Credentials come from `store-submission.md` §1.4.
 > other players attested to.
 >
 > If you test deletion, please do it **last**. It is a real deletion: signing
-> in again creates a new account, which needs the tournament password above
-> and does not carry the tournament-director role, so the Admin tabs will no
-> longer be reachable from it.
+> in again creates a new account and needs the tournament password above, and
+> the roster name you claimed becomes free for somebody else.
 >
 > The app is iPhone-only by design and is used one-handed on a golf course.
 
