@@ -115,32 +115,14 @@ export async function joinWithCode(authUser, code) {
       if (e?.code === "permission-denied") return { ok: false, error: STALE_RULES };
       throw e;
     }
-    const membership = {
+    await db.create(ACCOUNTS_COL, {
       id: authUser.uid,
       uid: authUser.uid,
       code: (code || "").trim(),
       email: authUser.email || null,
       joined_at: new Date().toISOString(),
-    };
-    // ── Two doors, and the client cannot tell them apart ─────────────
-    // There are two passwords: the tournament's own, and the TESTER one that
-    // mints a membership scoped to the demo (see `demo_code` in
-    // firestore.rules). Only the rules can compare a presented code against
-    // either — that is the whole trick of keeping the secret in a document no
-    // client may read — so this asks for the ordinary membership first and
-    // asks again for a demo one if that is refused.
-    //
-    // The cost of being wrong is one refused write and one round trip, on a
-    // screen somebody sees once. The alternative is shipping the codes to the
-    // client to choose between, which is the thing the design exists to avoid.
-    try {
-      await db.create(ACCOUNTS_COL, membership);
-      return { ok: true };
-    } catch (e) {
-      if (e?.code !== "permission-denied") throw e;
-      await db.create(ACCOUNTS_COL, { ...membership, scope: "demo" });
-      return { ok: true, scope: "demo" };
-    }
+    });
+    return { ok: true };
   } catch (e) {
     if (e?.code === "permission-denied") {
       return { ok: false, error: "That password isn't right." };
@@ -210,7 +192,7 @@ export const playerIsDirector = (memberships, player) =>
 export async function readAccessCode() {
   try {
     const doc = await db.getById(SECRETS_COL, ACCESS_DOC);
-    return { ok: true, code: doc?.code || null, demoCode: doc?.demo_code || null };
+    return { ok: true, code: doc?.code || null };
   } catch (e) {
     if (e?.code === "permission-denied") {
       return { ok: false, error: "Can't read it — the rules deployed to Firebase are older than this app. Re-publish firestore.rules." };
@@ -223,48 +205,12 @@ export async function readAccessCode() {
 // Saving an empty value removes the requirement — the rules treat a blank
 // or missing code as an open door, which is also what makes the very first
 // setup possible before any code exists.
-// MERGED, not written whole, and that is now load-bearing: this document
-// holds two passwords, and `db.create` is a plain setDoc — saving one with it
-// would silently delete the other. The failure would be invisible from here
-// (the field it emptied is on a different row of the same card) and would show
-// up as a dozen testers who can no longer get in.
 export async function setAccessCode(code) {
   try {
-    const written = await db.upsert(SECRETS_COL, { id: ACCESS_DOC, code: (code || "").trim() || null }, { loud: true });
-    return written ? { ok: true } : { ok: false, error: "Could not save the password." };
+    await db.create(SECRETS_COL, { id: ACCESS_DOC, code: (code || "").trim() || null });
+    return { ok: true };
   } catch {
     return { ok: false, error: "Could not save the password." };
-  }
-}
-
-// ── The tester's password ───────────────────────────────────────────
-// A second door, minting a membership scoped to the demo tournament — see
-// `demo_code` in firestore.rules for what that scope refuses, and why the
-// edition lock was not enough on its own.
-//
-// It must DIFFER from the tournament's own. One string that opens both doors
-// would mint whichever scope the rules happened to test first, so the rules
-// refuse the demo branch when the two match — and refusing it here as well
-// means the director is told, rather than finding out when a tester cannot
-// get in.
-export async function setDemoCode(code) {
-  const clean = (code || "").trim();
-  // Read the tournament's own rather than trusting what the screen happens to
-  // be holding: it is only populated after somebody taps Show, so a director
-  // who never did would have this check pass on a null and save a tester
-  // password the rules will never honour — testers locked out, nothing on
-  // screen saying why. One round trip, on an action taken twice a year.
-  if (clean) {
-    const current = await readAccessCode();
-    if (current.ok && current.code && clean.toLowerCase() === String(current.code).toLowerCase()) {
-      return { ok: false, error: "That is the tournament password. The tester one has to be different." };
-    }
-  }
-  try {
-    const written = await db.upsert(SECRETS_COL, { id: ACCESS_DOC, demo_code: clean || null }, { loud: true });
-    return written ? { ok: true } : { ok: false, error: "Could not save the tester password." };
-  } catch {
-    return { ok: false, error: "Could not save the tester password." };
   }
 }
 

@@ -333,21 +333,6 @@ would not.
 - Set or change it in Admin → Event → Access, where **Show** reveals the
   current one. Saving it blank turns the requirement off. Directors only, read
   and write.
-- **There is a second one on that card: the TESTER password** (`demo_code` on
-  the same document). It mints a membership carrying `scope: "demo"`, and
-  `canWriteEdition` in the rules refuses that membership on any edition whose
-  `is_demo` flag is not set. It exists because the password is handed to a
-  dozen Play testers and to two review queues, and the thing that made that
-  survivable — every real edition being locked — **expires the week the cup is
-  played**. Without the scope, unlocking 2026 to play it turns every membership
-  ever minted for a store review into a writer on the live tournament, silently.
-  A membership with no `scope` is a full one, which is what every membership
-  written before this is, so deploying the rules evicts nobody. The two codes
-  must differ; one string opening both doors would mint whichever scope the
-  rules tested first, and both the rules and `setDemoCode` refuse it.
-  A demo member can still write their own push token — that is not
-  edition-scoped, and a tester who cannot receive a notification generates
-  nothing.
 - **Compared without case** — it gets read aloud and typed into a phone by
   somebody who never saw it written down. The stored value keeps whatever
   casing was typed, so Show still displays it as written; only the comparison
