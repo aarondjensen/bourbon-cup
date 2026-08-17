@@ -27,6 +27,7 @@
 // write in firestore.rules.
 import { BC, FS, FONT, ALPHA, ON_AMBER } from "../theme";
 import { switchEdition } from "../lib/editions";
+import { isDemoEdition } from "../lib/editionLock";
 
 /**
  * @param {object} props
@@ -43,7 +44,31 @@ export function EditionBanner({ viewing, live }) {
   // word. Four characters, never truncated, and the year is what anybody
   // names a cup by anyway. Falls back to the name for an edition whose id
   // carries no year at all.
-  const label = (e) => e.year || e.name || e.id;
+  //
+  // ── Except a year does not always identify one ──
+  // Two editions can carry the same year, and one pair always does: the demo
+  // is seeded with the year it was made in, and on a store build the demo is
+  // HOME (see liveEdition). So a director who switched to the real cup got
+  //
+  //     You're viewing 2026            [ Back to 2026 ]
+  //
+  // — a button naming the year it was already in, which went somewhere else
+  // entirely. The demo is named rather than dated for that reason, and it is
+  // named in two words because this row is still one line tall.
+  //
+  // A collision between two REAL editions falls back to the name, which is the
+  // only thing left that can tell them apart. That pair does not exist today
+  // — `bc_2026_demo` is a draft, and the picker is the only way to reach it —
+  // but a year is not a key and this row should not go on assuming it is.
+  // Only when BOTH are dated: once the demo is named, the year on the other
+  // side identifies it perfectly well, and "Back to The Bourbon Cup 2026" is
+  // three words of nothing on a row that is one line tall.
+  const clash = !isDemoEdition(viewing) && !isDemoEdition(live)
+    && String(viewing.year || "") === String(live.year || "");
+  const label = (e) =>
+    isDemoEdition(e) ? "the demo"
+    : clash ? (e.name || e.year || e.id)
+    : (e.year || e.name || e.id);
 
   return (
     <div style={{
