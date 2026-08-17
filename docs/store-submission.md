@@ -75,6 +75,28 @@ Verify on a throwaway account and check all three outcomes in the Firebase
 console: the `bc_accounts` document gone, the roster row surviving with
 `auth_uid: null`, the Auth user gone.
 
+**If it fails with "An unexpected error has occurred":** look one line ABOVE
+it, at the warning the CLI buries:
+
+```
+⚠  functions: Couldn't find firebase-functions package in your source code.
+   Have you run 'npm install'?
+```
+
+`functions/` has its own `package.json` and its own dependencies, and they are
+NOT installed by the repo root's `npm ci` — nothing in the root lockfile
+reaches into that directory. The CLI has to load the code to work out what to
+deploy, so a missing `node_modules` there kills the analysis, and the sentence
+it prints about it names nothing.
+
+```sh
+cd functions && npm ci && cd ..
+firebase deploy --only functions
+```
+
+Once per machine. It is the one step in this file that a second developer's
+laptop hits and the first developer's never does again.
+
 **If it fails with "Cannot determine backend specification. Timeout after
 10000":** widen the window and update the CLI.
 
