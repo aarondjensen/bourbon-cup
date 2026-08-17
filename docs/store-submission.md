@@ -255,12 +255,24 @@ invisibly, because a director is exempt from the lock they just set, so the one
 person able to reproduce it is the one person who cannot see it. The seed also
 writes `locked: false` explicitly rather than relying on the default.
 
-Hand over three facts: the Google address, its password, and the tournament
-password from **Admin → Event → Access**.
+Hand over three facts: the Google address, its password, and the **TESTER
+password** from **Admin → Event → Access** — the second field on that card, not
+the first.
 
-> The tournament password is project-wide rather than per-edition, so that
-> account can write to any year, including the live one. Revoke it after both
-> reviews by deleting its `bc_accounts` document in the Firebase console.
+That distinction is the point of the field. The tester password mints a
+membership scoped to the demo tournament, so it can be given to a dozen
+strangers and to two review queues without giving them the cup. The tournament's
+own password must not leave the sixteen.
+
+> A membership is project-wide rather than per-edition, which is why the
+> TESTER password exists: it is the one that mints a demo-scoped membership,
+> and a demo-scoped membership is refused on every real edition even when that
+> edition is unlocked. Hand out the tournament's own password and you have
+> handed out the cup — the edition lock hides that only until the week it comes
+> off to be played.
+>
+> Revoking any of them is still the same console edit: delete the
+> `bc_accounts` document. Rotating a password evicts nobody already through.
 > Rotating the tournament password does **not** evict it — memberships are
 > never re-checked.
 
