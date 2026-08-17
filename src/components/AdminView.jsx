@@ -936,6 +936,17 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
   // Query the course APIs (RapidAPI + GolfCourseAPI) and return parsed
   // results. No state writes — shared by the debounced search box AND the
   // "re-fetch tees" action in the course editor.
+  // ONE query per provider per search, and no pagination. The providers match
+  // anywhere in the name — a search for "Dunes" comes back with Kiva Dunes and
+  // Wild Dunes, so this is not a first-word search — but a broad word has more
+  // matches than one page holds, and the course somebody wanted can be absent
+  // from a screen full of results.
+  //
+  // Paging past that was considered and declined. It would spend a request per
+  // page on every debounced keystroke to make one-word searches exhaustive, on
+  // a box a director opens a few times a year to add a course. Typing another
+  // word is free and immediate. The results list says so when it is long
+  // enough for the distinction to matter.
   const fetchCourseResults = async (query, stateFilter) => {
     const q = (query || "").trim();
     if (q.length < 2) return [];
@@ -2782,6 +2793,28 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
 
               {!searchLoading && courseSearch.trim().length >= 2 && searchResults.length === 0 && (
                 <div style={{ textAlign: "center", padding: "10px 0", color: BC.t3, fontSize: FS.small }}>Nothing found for “{courseSearch}”</div>
+              )}
+
+              {/* ── A broad search is not a broken one ──
+                  One query per search, deliberately: this box is used a few
+                  times a year, and fetching page after page on every keystroke
+                  spends real quota to make one-word searches exhaustive.
+                  See the note on fetchCourseResults.
+
+                  What that costs is this line. "Dunes" returns a page of
+                  courses with Dunes somewhere in the name — Kiva Dunes, Wild
+                  Dunes, clubs whose COURSE is called the Dunes — and Forest
+                  Dunes is simply not among the ones that came back. The
+                  screen showed twenty results, which reads as a search that
+                  cannot find your course rather than one that found too many.
+                  Saying the count and what to do about it is the whole fix.
+
+                  Only on a long list: on three results there is nothing to
+                  narrow and the line would be noise. */}
+              {!searchLoading && searchResults.length >= 8 && (
+                <div style={{ textAlign: "center", padding: "2px 0 10px", color: BC.t3, fontSize: FS.label, lineHeight: 1.45 }}>
+                  {searchResults.length} matches — add more of the name to narrow it.
+                </div>
               )}
 
               {!searchLoading && searchResults.filter(c => !courses.find(ex => ex.name.toLowerCase() === c.name.toLowerCase())).map(c => (
