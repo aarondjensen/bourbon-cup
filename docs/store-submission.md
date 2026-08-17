@@ -168,6 +168,42 @@ one that decides it:
   guest — there is no account to delete. So the one requirement that most needs
   demonstrating is the one guest mode structurally cannot demonstrate.
 
+#### When there is no Google account to spare
+
+Google caps accounts per verification phone number, and that cap is reachable.
+Two things that look like ways round it and are not:
+
+- **A `+tag` or dotted alias is the same account.** Gmail ignores both, Google
+  OAuth returns the same canonical address and the same subject id, so Firebase
+  mints the same uid. `you+demo@gmail.com` signs in as you, with your crown and
+  your roster row.
+- **Handing over a personal account.** It is a director on the live cup, and
+  the reviewer's first documented instruction is to delete an account.
+
+The real options, cheapest first:
+
+1. **Hand over nothing.** Sign in with Apple works with the Apple ID already on
+   the reviewer's device, and the tournament password is the only secret
+   involved — see the review notes in `app-store.md` §7, which offer this
+   alongside the Google account. It reaches everything except the Admin tabs,
+   for the structural reason above: the crown lives on a membership that does
+   not exist until they sign in.
+
+   Which makes the question "does the review need Admin", and the honest answer
+   is that it is a ROLE, not a feature behind a paywall — one person in a
+   sixteen-man tournament has it. Say so in the notes, describe what is behind
+   it, and offer a walkthrough if they want one. A reviewer who asks is a
+   reply, not a rejection; a reviewer who finds a promised tab missing is worse.
+
+2. **A Google account on `thebourboncup.com`.** Cloud Identity Free gives real
+   Google accounts on a domain you already own, free for a few dozen users, and
+   none of them touch the per-phone cap. `demo@thebourboncup.com` also reads
+   better in a review form than a numbered Gmail. Check the current free-tier
+   user limit before relying on it.
+
+3. **A Google account verified with a different phone number.** Quickest if one
+   is to hand — the cap is per number, not per person.
+
 **What goes in Apple's username and password fields.** This app has no
 email-and-password sign-in at all — the two buttons are Google and Apple — so
 the "account" being handed over is a Google account, and its address and
