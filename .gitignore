@@ -80,6 +80,13 @@ android.keystore
 *.keystore
 *.jks
 
+# An APNs auth key. A .p8 is a real credential — it can send a push to every
+# app in the team, since the one this project uses is team-scoped — and Apple
+# hands it over EXACTLY ONCE, so a copy committed here is both a leak and the
+# only copy somebody might then rely on. It belongs beside the keystore, not in
+# a repo. Firebase → Cloud Messaging is where it goes.
+*.p8
+
 # The upload certificate exported from a keystore, for Play's upload key reset:
 #   keytool -export -rfc -keystore <key> -alias <alias> -file upload_certificate.pem
 # Not a secret — a certificate is the public half, and Play publishes it back —

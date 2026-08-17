@@ -271,8 +271,23 @@ into place is the whole of it.
    means the *web* app's file was downloaded, which carries no
    `REVERSED_CLIENT_ID` at all and is the other way this step goes wrong.
 3. **An APNs authentication key (`.p8`)** uploaded to Firebase → Project
-   Settings → Cloud Messaging — **done**, key `9K7J7J2VGT`. Without it iOS
-   hands over a token FCM cannot exchange and **every send silently no-ops**.
+   Settings → Cloud Messaging — key **`7UA9A9SR3K`** ("App APNs"), which is
+   TEAM SCOPED, so one key covers this app and the other three in the team.
+   Without it iOS hands over a token FCM cannot exchange and **every send
+   silently no-ops**.
+
+   **A Sign in with Apple key is also a `.p8`, and uploading it here fails in a
+   way that names nothing.** `9K7J7J2VGT` is this project's Apple-sign-in key;
+   it spent an evening in this slot, and every push came back
+   `messaging/third-party-auth-error: Invalid APNs credential.` — while Apple
+   sign-in went on working perfectly, because that key was busy doing its real
+   job. Apple's Keys list tells them apart in one column: an APNs key has
+   **APNS CONFIG** populated ("Team Scoped (All topics)"), and a sign-in key
+   has a dash. Check that column before uploading, not the filename.
+
+   Do not revoke `9K7J7J2VGT` while tidying up. It is configured in Firebase →
+   Authentication → Sign-in method → Apple, and revoking it breaks sign-in for
+   everybody. Removing it from Cloud Messaging is the only removal wanted.
 
    It appears in the console under BOTH "Development APNs auth key" and
    "Production APNs auth key" with the same Key ID, and that is correct rather
