@@ -38,7 +38,6 @@ import { useConfirm } from "../lib/useConfirm";
 import { PHOTO_LIBRARY_URL } from "../constants";
 import { sortByTaken, canDelete, validateSource, uploadFailureMessage, UPLOAD_PHASE } from "../lib/media";
 import { savePhoto, saveMessage } from "../lib/mediaSave";
-import { isNative } from "../lib/platform";
 
 // The same Card AccountView defines, for the same reason: this screen is a
 // page of cards and the app has no shared component for one.
@@ -296,59 +295,26 @@ export function PhotosView({
     await uploadFiles(files);
   };
 
-  // ── Take Photo, on the native build only ──────────────────────────
-  // The file input above already works inside a WKWebView, and iOS's own
-  // sheet on it does offer Take Photo — so this is not filling a hole. It is
-  // the shortest path from "something just happened on 17" to a photo of it:
-  // one tap to the camera instead of a tap, a sheet, and a choice.
+  // ── No Take Photo button, deliberately ────────────────────────────
+  // There was one, on native only, driving @capacitor/camera straight to the
+  // capture: one tap from "something just happened on 17" to a photo of it.
   //
-  // It is also the most visible piece of native adaptation in the app, which
-  // matters for guideline 4.2 (docs/app-store.md §3) — a system camera the
-  // app drives directly is exactly the thing a reviewer is looking for and a
-  // Safari tab cannot do.
+  // It is gone because it was never filling a hole. The file input above works
+  // inside a WKWebView, and iOS's own sheet on it offers Take Photo or Video
+  // right beside Photo Library — so a phone can still shoot a picture into
+  // this screen, in one more tap, through the control the OS already gives it.
+  // A second button doing a subset of what the first one does is a choice
+  // asked of somebody standing on a tee box.
   //
-  // Everything after the capture is the SAME pipeline the picker feeds: the
-  // photo becomes a File and goes through `uploadFiles`, so validation, the
-  // optimistic tiles, the per-photo progress and the failure wording are one
-  // implementation rather than two.
-  const takePhoto = async () => {
-    if (busy) return;
-    try {
-      const { Camera, CameraResultType, CameraSource } = await import("@capacitor/camera");
-      const shot = await Camera.getPhoto({
-        quality: 90,
-        // Uri rather than Base64: a 12-megapixel phone photo as a base64
-        // string is a ~9 MB JavaScript string built on the main thread, and
-        // the upload path wants a Blob at the end of it either way.
-        resultType: CameraResultType.Uri,
-        source: CameraSource.Camera,
-        allowEditing: false,
-        correctOrientation: true,
-        saveToGallery: true,
-      });
-      if (!shot?.webPath) return;
-      const blob = await (await fetch(shot.webPath)).blob();
-      const type = blob.type || `image/${shot.format || "jpeg"}`;
-      const file = new File([blob], `bc_${Date.now()}.${shot.format || "jpg"}`, { type });
-      await uploadFiles([file]);
-    } catch (err) {
-      const message = String(err?.message || "");
-      // A cancelled camera throws, and a cancel is not a failure to report.
-      if (/cancell?ed/i.test(message)) return;
-      console.error("camera capture failed:", err);
-      // A REFUSED one used to be swallowed by this same test, which is the
-      // one outcome that must not be silent: the button did nothing at all,
-      // twice, and there was nothing on screen to disagree with. A refusal is
-      // also the only camera failure the phone itself can fix, so it says so
-      // rather than sharing the generic wording.
-      notify?.(
-        /denied|permission/i.test(message)
-          ? "Camera access is off for The Bourbon Cup — turn it on in Settings."
-          : "Couldn't open the camera.",
-        "error",
-      );
-    }
-  };
+  // What it costs is an argument rather than a capability: docs/app-store.md
+  // §3 listed the camera among the native adaptations that answer guideline
+  // 4.2. Native sign-in, APNs push, haptics and the bundled offline build are
+  // still there and are still the stronger half of that case.
+  //
+  // NSCameraUsageDescription stays in Info.plist. The file input's own sheet
+  // opens the camera through the webview, and a missing usage string is a
+  // crash the first time somebody taps Take Photo — not a warning, and not
+  // ours to see first.
 
   const uploadFiles = async (files) => {
     if (!files.length) return;
@@ -472,17 +438,6 @@ export function PhotosView({
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
               {/* Native only. On the web the picker's own sheet is the whole
                   story and a second button beside it is clutter. */}
-              {isNative() && (
-                <button onClick={takePhoto} disabled={busy} aria-label="Take a photo" style={{
-                  padding: "8px 12px", borderRadius: 10,
-                  border: `1px solid ${BC.amber}${ALPHA.line}`,
-                  background: `${BC.amber}${ALPHA.wash}`,
-                  color: BC.amberInk, fontSize: FS.small, fontWeight: 800, fontFamily: FONT,
-                  cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1,
-                }}>
-                  📷
-                </button>
-              )}
               <button onClick={pick} disabled={busy} style={{
                 padding: "8px 16px", borderRadius: 10, border: "none",
                 background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`,

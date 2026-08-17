@@ -170,10 +170,16 @@ adaptation — they are not decoration added to pass review:
   Face ID, not a web form.
 - **Native push through APNs**, which Safari cannot deliver to a
   non-home-screen web app at all.
-- **A native camera.** Photos gains a 📷 button on native only, driving
-  `@capacitor/camera` straight to the capture and feeding the same upload
-  pipeline the picker feeds. One tap from "something happened on 17" to a photo
-  of it.
+- **Haptics and the system photo sheet.** There WAS a 📷 button here, on native
+  only, driving `@capacitor/camera` straight to the capture — and it was listed
+  as the most visible adaptation of the five. It is gone: the file input's own
+  iOS sheet already offers Take Photo or Video beside Photo Library, so the
+  button was a second control doing a subset of the first one's job, asked of
+  somebody standing on a tee box.
+  Worth knowing when writing review notes: the camera is no longer part of this
+  argument. What is left is stronger anyway — a system sign-in sheet, APNs, and
+  a binary that opens with no network — and none of it is a thing a Safari tab
+  can do.
 - **Haptics** — a light impact as a stroke lands, a success notification when a
   card is signed. `tapFeedback` / `commitFeedback` in `lib/platform`, both
   fire-and-forget so a score posts whether or not the taptic engine answered.
