@@ -215,7 +215,58 @@ service cloud.firestore {
     // Order matters for that cost: editionOpen() is checked first so the
     // common case — an unlocked year — never pays for the isDirector() read.
     function canWriteEdition() {
-      return isMember() && (editionOpen() || isDirector());
+      return isMember()
+        && (editionOpen() || isDirector())
+        && (memberScope() != 'demo' || bothEndsDemo());
+    }
+
+    // ── A TESTER'S MEMBERSHIP ──────────────────────────────────────
+    // `scope: 'demo'` on the membership document, written when somebody
+    // presented the TESTER password rather than the tournament's own (see
+    // codeOK below). It means: a member of the demo tournament, and of
+    // nothing else.
+    //
+    // It exists because the lock is temporary and the disclosure is not. The
+    // password goes to a dozen Play testers and to two review queues, and the
+    // reason that was survivable until now is that every real edition is
+    // locked — so a tester holding a membership could not write to one. But
+    // the cup gets UNLOCKED the week it is played. On that morning, every
+    // membership ever minted for a store review becomes a writer on the live
+    // tournament, and nothing on any screen would say so.
+    //
+    // A missing `scope` reads as 'full', which is what every membership
+    // created before this existed is, and is why this change does not evict
+    // anybody.
+    //
+    // Costs nothing extra in the common case: isMember() has already touched
+    // this document, and `exists` and `get` on one path inside one evaluation
+    // are billed once. The clause is last in canWriteEdition for the same
+    // reason isDirector() is — a full member never pays for the edition read
+    // that bothEndsDemo() would do.
+    function memberScope() {
+      return isSignedIn()
+        ? get(/databases/$(database)/documents/bc_accounts/$(request.auth.uid))
+            .data.get('scope', 'full')
+        : 'full';
+    }
+
+    // Is `tid` a demo tournament? The same flag lib/editionLock reads, off the
+    // same document editionLocked() already fetched, so it is billed once.
+    // Absent means NO: an edition nobody marked is a real one, which is the
+    // safe default here and matches createEdition, which never writes it.
+    function editionIsDemo(tid) {
+      return tid != ''
+        && exists(/databases/$(database)/documents/bc_editions/$(tid))
+        && get(/databases/$(database)/documents/bc_editions/$(tid))
+             .data.get('is_demo', false) == true;
+    }
+
+    // BOTH ends, for the reason editionOpen() checks both: without the
+    // `request.resource` half, a tester could rewrite a demo document's
+    // tournament_id into the live cup and carry it across.
+    function bothEndsDemo() {
+      return (resource == null || editionIsDemo(resource.data.get('tournament_id', '')))
+        && (request.resource == null || editionIsDemo(request.resource.data.get('tournament_id', '')));
     }
 
     // The password, and the deliberate hole in it. `accessCode()` reads a
@@ -246,11 +297,39 @@ service cloud.firestore {
     // than denying it by accident. The stored code keeps whatever casing
     // the director typed — only the comparison is flattened, so Admin can
     // still show it back the way it was written.
+    // The TESTER password, alongside it. Blank or absent means there is only
+    // one door, which is what this project had until store review needed a
+    // second one. It must also DIFFER from the tournament's own — otherwise
+    // one string opens both and the scope it mints is a coin toss.
+    function demoCode() {
+      return exists(/databases/$(database)/documents/bc_secrets/access)
+        ? get(/databases/$(database)/documents/bc_secrets/access).data.get('demo_code', null)
+        : null;
+    }
+
+    function presented() { return request.resource.data.get('code', null); }
+    function presentedScope() { return request.resource.data.get('scope', 'full'); }
+
+    // Which door was opened decides which membership is minted, and the two
+    // cannot be mixed: presenting the tournament password cannot mint a demo
+    // membership, and presenting the tester password cannot mint a full one.
+    // The client does not know which code it holds — it asks for a full
+    // membership, and asks again for a demo one if that is refused — so this
+    // is the only place the two are told apart.
+    function demoCodeUsable() {
+      return demoCode() is string
+        && demoCode() != ''
+        && demoCode().lower() != accessCode().lower();
+    }
+
     function codeOK() {
-      return accessCode() == null
-        || accessCode() == ''
-        || (request.resource.data.get('code', null) is string
-            && request.resource.data.code.lower() == accessCode().lower());
+      return (accessCode() == null || accessCode() == '')
+        ? presentedScope() == 'full'
+        : (presented() is string
+           && ((presented().lower() == accessCode().lower() && presentedScope() == 'full')
+               || (demoCodeUsable()
+                   && presented().lower() == demoCode().lower()
+                   && presentedScope() == 'demo')));
     }
 
     // ── The door ──────────────────────────────────────────────────

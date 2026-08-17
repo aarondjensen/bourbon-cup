@@ -80,6 +80,7 @@ import {
   membershipFor,
   playerIsDirector,
   readAccessCode,
+  setDemoCode,
   setAccessCode,
   unlinkPatch,
 } from "../lib/accounts";
@@ -477,9 +478,15 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
   const [savedAccessCode, setSavedAccessCode] = useState(null);
   const [accessCodeError, setAccessCodeError] = useState("");
   const [showAccessCode, setShowAccessCode] = useState(false);
+  // The tester password rides on the same document and the same Show, because
+  // it is the same question asked about a different door — two cards would
+  // invite setting one and forgetting the other.
+  const [editDemoCode, setEditDemoCode] = useState("");
+  const [savedDemoCode, setSavedDemoCode] = useState(null);
   const loadAccessCode = useCallback(async () => {
     const res = await readAccessCode();
     setSavedAccessCode(res.ok ? res.code : null);
+    setSavedDemoCode(res.ok ? res.demoCode : null);
     setAccessCodeError(res.ok ? "" : res.error);
     setShowAccessCode(true);
   }, []);
@@ -3297,6 +3304,51 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, tRounds,
                 which nobody would try on a control called "New password". */}
             <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 5, lineHeight: 1.4 }}>
               Save blank to remove.
+            </div>
+
+            {/* ── The tester's password ──
+                A second door, for the dozen Play testers and the two review
+                queues. It mints a membership scoped to the DEMO tournament —
+                see `demo_code` in firestore.rules — so it can be handed to
+                strangers without handing them the cup.
+                The edition lock is not the same protection and never was: the
+                lock comes off the week the tournament is played, and every
+                membership minted for a review would become a writer on it. */}
+            <div style={{ borderTop: `1px solid ${BC.bdr}`, marginTop: 14, paddingTop: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, minHeight: 28 }}>
+                <span style={TournLabelStyle}>Testers</span>
+                {showAccessCode && (
+                  <span style={{ flex: 1, minWidth: 0, fontSize: FS.body, fontWeight: 800, lineHeight: 1.35, color: savedDemoCode ? BC.amberInk : BC.t3, wordBreak: "break-all" }}>
+                    {savedDemoCode || "None"}
+                  </span>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  value={editDemoCode}
+                  onChange={e => setEditDemoCode(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                  placeholder="Tester password"
+                  autoCapitalize="none" autoCorrect="off" spellCheck={false}
+                  style={{ ...TournFieldStyle, flex: 1, minWidth: 0 }}
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const next = editDemoCode.trim();
+                    const res = await setDemoCode(next);
+                    if (!res.ok) { notify(res.error, "error"); return; }
+                    setEditDemoCode("");
+                    setSavedDemoCode(next || null);
+                    notify(next ? "Tester password set" : "Tester password removed", "success");
+                  }}
+                  style={TournSaveStyle}
+                >Save</button>
+              </div>
+              <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 5, lineHeight: 1.4 }}>
+                Opens the demo tournament only, and nothing else. Must differ
+                from the password above. Save blank to remove.
+              </div>
             </div>
           </div>
 

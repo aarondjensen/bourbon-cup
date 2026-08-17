@@ -254,7 +254,8 @@ Choose **All or some functionality is restricted** and add two entries:
 >
 > Username: `<the demo Google account>`
 > Password: `<its Google password>`
-> Any other instructions: Tournament password: `<from Admin → Event → Access>`
+> Any other instructions: Tournament password: `<the TESTER password — the
+> second field in Admin → Event → Access, not the first>`
 
 The account itself is built once and used by both stores — see
 `store-submission.md` §1.4.

@@ -361,7 +361,7 @@ Credentials come from `store-submission.md` §1.4.
 > says so on screen.
 >
 > Google account: `<demo address>` / `<password>`
-> Tournament password: `<from Admin → Event → Access>`
+> Tournament password: `<the TESTER password, Admin → Event → Access>`
 >
 > **On the Betting tab:** the app records wagers players agree with each other
 > in person, and settles them in person. It processes no payments, contains no
