@@ -73,15 +73,39 @@ const SHOTS = [
   {
     name: "02-scorecard",
     why: "a scorecard mid-round, hole by hole",
-    // Unfolds out of a match card on the leaderboard, so it is two taps and
-    // the second one depends on there being a match to tap.
+    // Unfolds out of a MATCH CARD on the leaderboard — `MatchCard` in
+    // components/Leaderboard is one big <button> whose expansion renders the
+    // same FullScorecard the Scoring tab opens.
+    //
+    // There is nothing distinctive to select it by: its label is whatever the
+    // players happen to be called. So this opens candidates until the PAGE
+    // proves one worked, which is the only test that means anything here. The
+    // first version guessed a selector, clicked something harmless, returned
+    // true, and the run wrote a second copy of the leaderboard with a tick
+    // beside it.
+    expect: /OUT/,
     find: async (p) => {
       if (!(await tap(p, "Leaderboard"))) return false;
-      const card = p.locator("button, [role=button]").filter({ hasText: /vs|&|—/ }).first();
-      if (!(await card.count())) return false;
-      await card.click({ timeout: 5000 }).catch(() => {});
-      await p.waitForTimeout(1200);
-      return true;
+      // Everything except the five nav buttons: clicking one of those is a
+      // navigation, and the second click that is meant to collapse a card
+      // cannot undo it — the run then photographs the wrong tab under the
+      // right name.
+      const cards = p.locator("button").filter({
+        hasNotText: new RegExp(`^\\s*(${NAV.join("|")})\\s*$`, "i"),
+      });
+      const n = Math.min(await cards.count(), 25);
+      for (let i = 0; i < n; i++) {
+        const card = cards.nth(i);
+        await card.click({ timeout: 3000 }).catch(() => {});
+        await p.waitForTimeout(900);
+        const t = await bodyText(p);
+        if (/OUT/.test(t) && /MATCH\s*\d/i.test(t)) return true;
+        // Not it — put the screen back before trying the next, or the run ends
+        // up several taps deep inside something unrelated.
+        await card.click({ timeout: 3000 }).catch(() => {});
+        await p.waitForTimeout(300);
+      }
+      return false;
     },
   },
   {
@@ -101,8 +125,20 @@ const SHOTS = [
   },
 ];
 
+const bodyText = (page) =>
+  page.evaluate(() => document.body.innerText.replace(/\s+/g, " ").trim());
+
+// The bottom nav's five labels, which are also words that appear in ordinary
+// copy on the screens themselves — "matches will appear here once…" is on the
+// empty leaderboard. A loose text match therefore clicks a paragraph and
+// reports success, and the run photographs whatever was already there.
+const NAV = ["Scoring", "Matches", "Leaderboard", "Betting", "More"];
+
+// Exact-text button first, loose text second. The nav items are buttons whose
+// entire text is the label; everything else that mentions the word is prose.
 const tap = async (page, label) => {
-  const el = page.getByText(label, { exact: false }).last();
+  const exact = page.locator("button").filter({ hasText: new RegExp(`^\\s*${label}\\s*$`, "i") });
+  const el = (await exact.count()) ? exact.last() : page.getByText(label, { exact: false }).last();
   if (!(await el.count())) { console.log(`      ! nothing labelled "${label}"`); return false; }
   await el.click({ timeout: 5000 }).catch(() => {});
   await page.waitForTimeout(1400);
@@ -164,17 +200,36 @@ await page.goto(SITE, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(6000);
 
 let written = 0;
+const seen = new Set();
 for (const s of SHOTS) {
   const ok = await s.find(page);
   if (!ok) { console.log(`  ✖ ${s.name} — could not reach it, skipped`); continue; }
   await page.waitForTimeout(600);
+  const text = await bodyText(page);
+
+  // ── Did the screen actually change? ──
+  // The failure this exists for, found on the first real run: the scorecard
+  // step clicked something harmless, nothing unfolded, and the run wrote a
+  // byte-identical copy of the leaderboard under a second name and ticked it.
+  // Four files, three screens, and the only clue was that two readback lines
+  // were identical — which nobody would notice at 1am.
+  //
+  // Two guards, because they catch different things. `expect` is what a screen
+  // must contain to BE that screen; the duplicate check covers the ones with
+  // no such marker.
+  if (s.expect && !s.expect.test(text)) {
+    console.log(`  ✖ ${s.name} — reached it, but nothing matching ${s.expect} is on it, skipped`);
+    continue;
+  }
+  if (seen.has(text.slice(0, 400))) {
+    console.log(`  ✖ ${s.name} — identical to a shot already taken, skipped`);
+    continue;
+  }
+  seen.add(text.slice(0, 400));
+
   const path = join(OUT, `${s.name}.png`);
   await page.screenshot({ path });
-  // Read back what was actually drawn: a screenshot of an empty screen is the
-  // one failure this cannot detect on its own, so it prints the text it
-  // photographed and leaves the judgement to a person.
-  const text = await page.evaluate(() => document.body.innerText.replace(/\s+/g, " ").trim().slice(0, 90));
-  console.log(`  ✔ ${s.name}.png  ${text}`);
+  console.log(`  ✔ ${s.name}.png  ${text.slice(0, 90)}`);
   written++;
 }
 
