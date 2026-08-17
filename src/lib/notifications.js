@@ -657,3 +657,47 @@ const sha256Short = async (input) => {
   return Array.from(new Uint8Array(hash)).slice(0, 8)
     .map(b => b.toString(16).padStart(2, "0")).join("");
 };
+
+// ── What the test button should say ─────────────────────────────────
+// `sendTestPush` returns a REPORT, not a throw: sendToPlayer catches every
+// delivery failure and hands back { sent, failed, errors }. The screen read
+// only `sent` and rendered anything else as "No devices registered".
+//
+// So the evening this was written, a phone with a registered iOS token said
+// "No devices registered" while the report in its hand said
+//
+//     failed: 1, errors: ["messaging/third-party-auth-error: Invalid APNs
+//     credential."]
+//
+// — which is FCM saying Apple rejected the .p8 in Firebase → Cloud Messaging.
+// The app had the answer and said something else, and the answer was only
+// found by reading Cloud Functions logs from a laptop. Nobody in the field is
+// going to do that, and the whole point of a test button is that it is the
+// diagnostic.
+//
+// The same shape as `writeFailure` in firebase.js, and for the same reason: a
+// message that names the cause is worth the twelve lines it takes, and "try
+// again" is a lie when trying again cannot work.
+const PUSH_ERROR_HINTS = [
+  [/third-party-auth-error|invalid apns/i,
+    "Apple rejected Firebase's APNs key. Re-upload the .p8 in Firebase → Cloud Messaging."],
+  [/registration-token-not-registered|invalid-registration-token/i,
+    "This device's push token has expired. Switch notifications off and on again."],
+  [/mismatched-credential|sender-id-mismatch/i,
+    "This device registered against a different Firebase project."],
+];
+
+export const testPushOutcome = (report) => {
+  const { sent = 0, failed = 0, errors = [] } = report || {};
+  if (sent > 0) return { tone: "success", text: `Test sent to ${sent} device${sent === 1 ? "" : "s"}` };
+
+  // A refused delivery is not an absent device, and telling somebody they have
+  // no devices registered when they are holding one is how a real cause gets
+  // looked for in the wrong place.
+  if (failed > 0) {
+    const raw = errors.find(Boolean) || "";
+    const hint = PUSH_ERROR_HINTS.find(([re]) => re.test(raw))?.[1];
+    return { tone: "error", text: hint || `Push refused: ${raw || "unknown error"}` };
+  }
+  return { tone: "error", text: "No devices registered — switch notifications on first" };
+};
