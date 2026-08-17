@@ -411,6 +411,13 @@ Credentials come from `store-submission.md` §1.4.
 > Google account: `<demo address>` / `<password>`
 > Tournament password: `<from Admin → Event → Access>`
 >
+> **Sign in with Apple also works, with your own Apple ID.** This app has no
+> email-and-password sign-in — the two buttons are Google and Apple — so if the
+> Google account above gives you any trouble, tap Sign in with Apple, enter the
+> tournament password, and claim any unclaimed name on the roster screen. That
+> reaches everything except the Admin tabs, which are tied to the Google
+> account above.
+>
 > **On the Betting tab:** the app records wagers players agree with each other
 > in person, and settles them in person. It processes no payments, contains no
 > in-app purchases, and has no connection to any payment provider. The dollar
