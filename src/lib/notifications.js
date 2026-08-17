@@ -273,8 +273,11 @@ const registerServiceWorker = async () => {
 // which kind of thing wrote the row.
 const writeTokenRow = async (playerId, token) => {
   const ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
+  // Derived once and remembered, because it is the only handle this device has
+  // on its own row — see subscribedOnThisDevice.
+  const rowId = `p${playerId}_${await sha256Short(token)}`;
   await db.upsert(TOKENS_COL, {
-    id: `p${playerId}_${await sha256Short(token)}`,
+    id: rowId,
     player_id: playerId,
     token,
     // Stamped for the record, not for filtering — a token is not
@@ -301,6 +304,7 @@ const writeTokenRow = async (playerId, token) => {
     // a first-time subscriber means by tapping the switch.
     types: normalizeTypePrefs(getCachedTypePrefs(playerId)),
   });
+  setDeviceRowId(playerId, rowId);
   setCachedSubscriptionStatus(playerId, true);
 };
 
@@ -399,11 +403,34 @@ export const registerForPush = async (playerId) => {
 // Returns null when the READ failed, so a caller can leave its state alone
 // instead of treating a dropped connection as "not subscribed" — hence
 // getStrict rather than get.
+// ── Subscribed HERE, not subscribed somewhere ───────────────────────
+// The question this screen asks is "will this phone buzz", and it used to be
+// answered with `docs.length > 0` — is there a token row for this player
+// anywhere. Those are different questions the moment somebody uses two
+// devices, which is everybody: the card said NOTIFICATIONS ON, in green, on a
+// phone that had never registered, because a browser on a laptop had.
+//
+// The card's own footer promises "notifications are per device — turn them on
+// separately on each phone or browser", and the cache above it says the answer
+// is "genuinely per (device, player)". Only this function disagreed, and it
+// overwrote that cache with its own wrong answer on every mount.
+//
+// So it asks whether the row THIS device wrote is among them. The row id is
+// derived from the token (`p<playerId>_<hash>`), so the device that wrote it
+// is the only one that can name it — remembered locally at write time.
+export const subscribedOnThisDevice = (docs, rowId) =>
+  !!rowId && (docs || []).some((d) => d.id === rowId);
+
 export const checkSubscriptionStatus = async (playerId) => {
   if (!playerId) return false;
   try {
     const docs = await db.getStrict(TOKENS_COL, [{ field: "player_id", op: "==", value: playerId }]);
-    const subscribed = docs.length > 0;
+    // No remembered row means no, including for a device that subscribed
+    // before this was recorded. That is the honest direction to be wrong in:
+    // it costs one tap of a switch, and re-registering derives the same id
+    // from the same token, so the row is corrected rather than duplicated.
+    // The other direction costs a season of notifications nobody receives.
+    const subscribed = subscribedOnThisDevice(docs, getDeviceRowId(playerId));
     setCachedSubscriptionStatus(playerId, subscribed);
     return subscribed;
   } catch (e) {
@@ -420,6 +447,25 @@ export const checkSubscriptionStatus = async (playerId) => {
 // Per player rather than global: this app switches identity on a shared
 // device more than most, and the answer is genuinely per (device, player).
 const SUB_CACHE_PREFIX = "bc_notif_sub_";
+
+// Which token row THIS device wrote, so `subscribedOnThisDevice` can tell it
+// from one written by a laptop. The id is `p<playerId>_<hash of token>` and is
+// derived at write time; nothing else can reconstruct it, because nothing else
+// holds this device's token.
+const ROW_CACHE_PREFIX = "bc_notif_row_";
+
+export const getDeviceRowId = (playerId) => {
+  if (!playerId || typeof localStorage === "undefined") return null;
+  try { return localStorage.getItem(ROW_CACHE_PREFIX + playerId) || null; } catch { return null; }
+};
+
+const setDeviceRowId = (playerId, rowId) => {
+  if (!playerId || typeof localStorage === "undefined") return;
+  try {
+    if (rowId) localStorage.setItem(ROW_CACHE_PREFIX + playerId, rowId);
+    else localStorage.removeItem(ROW_CACHE_PREFIX + playerId);
+  } catch { /* private mode */ }
+};
 
 // true / false / null — null meaning "no cached answer on this device".
 export const getCachedSubscriptionStatus = (playerId) => {
@@ -475,6 +521,7 @@ export const unsubscribeFromPush = async (playerId) => {
   if (playerId) {
     const docs = await db.get(TOKENS_COL, [{ field: "player_id", op: "==", value: playerId }]);
     await Promise.all(docs.map(d => db.delete(TOKENS_COL, d.id)));
+    setDeviceRowId(playerId, null);
     setCachedSubscriptionStatus(playerId, false);
   }
   return { success: true };
