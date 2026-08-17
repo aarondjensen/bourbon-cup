@@ -73,15 +73,36 @@ describe("where /api lives", () => {
     expect(apiUrl("/api/courses2?search=treetops")).toBe("/api/courses2?search=treetops");
   });
 
-  it("goes absolute on native, because the bundle has no origin to be relative to", async () => {
+  it("goes absolute on native, at the CANONICAL host", async () => {
     // Under capacitor://localhost a relative /api path resolves INSIDE the
     // app bundle and 404s — not as a network error, which is what makes it
     // hard to recognise on a phone.
+    //
+    // The `www.` is the load-bearing half and it was missing. The apex 307s to
+    // the canonical host; `fetch` follows a redirect happily, but a
+    // CROSS-ORIGIN fetch applies CORS to every hop, and Vercel's domain
+    // redirect carries no Access-Control-Allow-Origin. So the request died on
+    // the first hop and never reached the handler — every course search and
+    // every GHIN lookup, on every phone, came back empty, while the same call
+    // worked perfectly on the web where nothing redirects.
     mockPlatform(true);
     const { API_BASE, apiUrl } = await load();
-    expect(API_BASE).toBe("https://thebourboncup.com");
+    expect(API_BASE).toBe("https://www.thebourboncup.com");
     expect(apiUrl("/api/ghin?search=jensen"))
-      .toBe("https://thebourboncup.com/api/ghin?search=jensen");
+      .toBe("https://www.thebourboncup.com/api/ghin?search=jensen");
+  });
+
+  it("still lets a device build be pointed at `vercel dev`", async () => {
+    // The reason the base is a variable at all: `api/*.js` cannot be exercised
+    // from a phone any other way, because the deployed function is the one a
+    // relative call reaches.
+    mockPlatform(true);
+    vi.stubEnv("VITE_API_BASE", "http://192.168.1.20:3000");
+    try {
+      const { apiUrl } = await load();
+      expect(apiUrl("/api/courses?search=oak"))
+        .toBe("http://192.168.1.20:3000/api/courses?search=oak");
+    } finally { vi.unstubAllEnvs(); }
   });
 
   it("keeps the query string and the leading slash exactly as the call site wrote them", async () => {

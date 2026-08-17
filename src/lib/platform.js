@@ -68,8 +68,29 @@ export const isNativeAndroid = () => isNative() && platformName() === "android";
 // Overridable for the same reason `VITE_API_PROXY` is: pointing a device
 // build at `vercel dev` on a laptop is the only way to exercise a change to
 // `api/*.js` itself.
+//
+// ── The `www.` is load-bearing ─────────────────────────────────────
+// It was the bare apex, and every /api call from a phone came back empty:
+//
+//     curl -s -o /dev/null -w '%{http_code} -> %{redirect_url}' \
+//       https://thebourboncup.com/api/courses?search=oak
+//     307 -> https://www.thebourboncup.com/api/courses?search=oak
+//
+// The apex redirects to the canonical host, and `fetch` follows a redirect
+// happily — but a CROSS-ORIGIN fetch applies CORS to every hop, and a 307 from
+// Vercel's domain redirect carries no `Access-Control-Allow-Origin`. So the
+// request died on the first hop and never reached the handler, which meant the
+// carefully-added CORS headers in `api/courses.js` were never even consulted.
+//
+// Same-origin on the web, so the browser never redirects and nobody saw it;
+// cross-origin from `capacitor://localhost`, so it was every course search and
+// every GHIN lookup on every phone.
+//
+// The lesson generalises past this app: an absolute base for a cross-origin
+// API has to be the CANONICAL host, not whichever name the domain also
+// answers to. A redirect is not free once CORS is involved.
 export const API_BASE = isNative()
-  ? (import.meta.env?.VITE_API_BASE || "https://thebourboncup.com")
+  ? (import.meta.env?.VITE_API_BASE || "https://www.thebourboncup.com")
   : "";
 
 // Join a repo-relative API path onto whichever base applies. Takes the path
