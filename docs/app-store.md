@@ -82,8 +82,17 @@ No service worker, no Notification API, no Web Push, and the VAPID key is
 meaningless. Native goes through `@capacitor-firebase/messaging`, which
 swizzles APNs underneath and returns an **FCM token** rather than a raw APNs
 one — the detail that keeps this cheap. `writeTokenRow` is now shared by both
-paths, so `bc_notification_tokens` gets one shape and `sendToPlayer` in
-`functions/index.js` is untouched. Rows carry a `platform` field — `"web"`,
+paths, so `bc_notification_tokens` gets one shape.
+
+`sendToPlayer` was NOT untouched, though this file said so for a while. It sent
+**data-only** — right for the web, where the service worker reads title and body
+out of the data block and renders them itself — and a WKWebView has no service
+worker. An APNs payload with no `aps.alert` is a silent background push with
+nothing to display, so the send succeeded, FCM reported one delivery, and the
+phone stayed dark. It now carries per-platform `apns` and `android` blocks
+alongside the data, rather than a top-level `notification`, which the web SDK
+would auto-display on top of the worker's own — one push, two banners, on the
+platform that was already working. Rows carry a `platform` field — `"web"`,
 `"ios"` or `"android"`, off `platformName()` rather than off `isNative()`,
 which mattered the moment Android stopped being a browser. The rule is
 `allow write: if isMember()` with no field list, so **no rules change is

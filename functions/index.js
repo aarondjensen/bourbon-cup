@@ -32,10 +32,16 @@
 // of a tournament year. See src/lib/notifications.js.
 //
 // ── Message format ──────────────────────────────────────────────────
-// DATA-ONLY. Title and body ride in the data block and the service worker
-// renders them (see public/firebase-messaging-sw.js for why: it is the one
-// format that lets the worker decide about badges and tap targets, and it
+// THE DATA BLOCK IS CANONICAL. Title and body ride in it and the service
+// worker renders them (see public/firebase-messaging-sw.js for why: it is the
+// one format that lets the worker decide about badges and tap targets, and it
 // is the most reliable delivery to an installed iOS PWA).
+//
+// It used to be data-only, full stop, and that was right while the web was the
+// only thing receiving. The store builds have no service worker, so nothing
+// renders a data message for them — see the note at messaging.send, where the
+// APNs and Android blocks are added without a top-level `notification` that
+// would double up on the web.
 
 const admin = require("firebase-admin");
 const { setGlobalOptions } = require("firebase-functions/v2");
@@ -127,11 +133,40 @@ async function sendToPlayer(playerId, payload) {
     try {
       await messaging.send({
         token,
+        // The data block stays canonical — the web's service worker renders
+        // from it, and every platform gets it alongside whatever else is here.
         data,
         // TTL an hour: a "time to attest" that arrives the next morning is
         // worse than one that never arrives. Urgency high so a dozing
         // phone wakes for it.
         webpush: { headers: { TTL: "3600", Urgency: "high" } },
+        // ── The two transports that cannot render a data message ────────
+        // This was data-only, and on the web that is right: the service
+        // worker reads title and body out of `data` and calls
+        // showNotification itself, which is what lets it decide about badges
+        // and tap targets.
+        //
+        // A WKWebView has no service worker. Nothing on the phone is running
+        // to render anything, and an APNs payload with no `aps.alert` is not
+        // a notification — it is a silent background push with nothing to
+        // display. So the send SUCCEEDED, FCM reported one delivery, and the
+        // phone stayed dark. Android has the same hole for the same reason
+        // now that it is Capacitor rather than a Trusted Web Activity: a
+        // data-only message wakes the app instead of the tray.
+        //
+        // Per-platform blocks rather than a top-level `notification`, which
+        // is the trap next door: a notification message is auto-displayed by
+        // the web SDK as well, and the service worker would still draw its
+        // own — one push, two banners, on the platform that was working.
+        apns: {
+          headers: { "apns-priority": "10" },
+          payload: { aps: { alert: { title: data.title, body: data.body }, sound: "default" } },
+        },
+        android: {
+          ttl: 3600 * 1000,
+          priority: "high",
+          notification: { title: data.title, body: data.body },
+        },
       });
       sent++;
       try { await doc.ref.update({ last_seen_at: Date.now() }); } catch { /* swallow */ }
