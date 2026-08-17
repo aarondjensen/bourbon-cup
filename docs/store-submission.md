@@ -168,6 +168,22 @@ one that decides it:
   guest — there is no account to delete. So the one requirement that most needs
   demonstrating is the one guest mode structurally cannot demonstrate.
 
+**What goes in Apple's username and password fields.** This app has no
+email-and-password sign-in at all — the two buttons are Google and Apple — so
+the "account" being handed over is a Google account, and its address and
+password are what those two fields take. That is ordinary for a social-login
+app and Apple accepts it.
+
+Sign in with Apple is the escape hatch worth naming in the review notes rather
+than relying on: a reviewer can tap it with the Apple ID already on their test
+device, present the tournament password, and claim one of the twelve names — no
+credentials from us at all, and nothing for Google's risk checks to challenge.
+What they cannot get that way is the Admin tabs, because the crown is a flag on
+a membership document that does not exist until they sign in, and nobody can
+set it in advance for an account nobody has created yet. So: the Google account
+is the path that shows everything, and Apple's own button is the path that
+always works. Offer both.
+
 > **The demo account has to be able to sign in from Apple's network.** This is
 > the failure that reads as a broken app and is not one: a fresh Google account
 > signed into from an unfamiliar device in another country is exactly what
