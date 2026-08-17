@@ -40,7 +40,8 @@
 // Firestore connection from the browser is therefore reset — while `curl` from
 // the same container succeeds. The app loads and renders an empty tournament.
 // See docs/store-submission.md §4.
-import { mkdirSync, existsSync } from "node:fs";
+import { mkdirSync, existsSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 
 const args = process.argv.slice(2);
@@ -99,7 +100,21 @@ const SHOTS = [
         await card.click({ timeout: 3000 }).catch(() => {});
         await p.waitForTimeout(900);
         const t = await bodyText(p);
-        if (/OUT/.test(t) && /MATCH\s*\d/i.test(t)) return true;
+        if (/OUT/.test(t) && /MATCH\s*\d/i.test(t)) {
+          // Expanding it is not the same as SEEING it. The card unfolds where
+          // it sits — several hundred pixels down a board of four matches —
+          // and the viewport stays at the top, so the frame is the cup total
+          // again. Twice now that produced a "scorecard" screenshot that was
+          // the leaderboard.
+          //
+          // The theme locks html/body to overflow:hidden (see CLAUDE.md), so
+          // there is no page to scroll: this scrolls the app's own container,
+          // which is what scrollIntoViewIfNeeded does for whatever element
+          // actually holds the scroll.
+          await p.locator("text=OUT").first().scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => {});
+          await p.waitForTimeout(700);
+          return true;
+        }
         // Not it — put the screen back before trying the next, or the run ends
         // up several taps deep inside something unrelated.
         await card.click({ timeout: 3000 }).catch(() => {});
@@ -221,14 +236,21 @@ for (const s of SHOTS) {
     console.log(`  ✖ ${s.name} — reached it, but nothing matching ${s.expect} is on it, skipped`);
     continue;
   }
-  if (seen.has(text.slice(0, 400))) {
-    console.log(`  ✖ ${s.name} — identical to a shot already taken, skipped`);
+  // Compared as PIXELS, not as text. The text guard was fooled the first time
+  // it mattered: the scorecard had unfolded far enough down the board that the
+  // body text differed while the visible frame did not, so the check passed
+  // and the file written was the leaderboard again. What goes to Apple is the
+  // image, so the image is what gets compared.
+  const png = await page.screenshot();
+  const hash = createHash("sha256").update(png).digest("hex");
+  if (seen.has(hash)) {
+    console.log(`  ✖ ${s.name} — pixel-identical to a shot already taken, skipped`);
     continue;
   }
-  seen.add(text.slice(0, 400));
+  seen.add(hash);
 
   const path = join(OUT, `${s.name}.png`);
-  await page.screenshot({ path });
+  writeFileSync(path, png);
   console.log(`  ✔ ${s.name}.png  ${text.slice(0, 90)}`);
   written++;
 }
