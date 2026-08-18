@@ -81,7 +81,13 @@ export function EditionSheet({
     : edition.status.charAt(0).toUpperCase() + edition.status.slice(1);
 
   return (
-    <Popup onClose={onClose} portal maxWidth={420} padding={0} outerPadding={12}
+    // An EXPLICIT rung between the picker ("content", 500) and a ConfirmModal
+    // ("modal", 900): above the list it was opened from, below the delete and
+    // lock confirms it raises. It renders correctly on the default too, but
+    // only because this is written after the picker in the JSX — two popups at
+    // the same z-index are decided by DOM order, and that is not a thing to
+    // leave a modal's visibility resting on. See the ladder in Popup.jsx.
+    <Popup onClose={onClose} portal zIndex={700} maxWidth={420} padding={0} outerPadding={12}
       innerStyle={{ fontFamily: FONT }}>
 
       {/* The YEAR at display size, the way the row leads with it. Somebody
