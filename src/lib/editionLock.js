@@ -244,3 +244,85 @@ export const lockNotice = (edition, { isDirector = false } = {}) => {
   const year = edition?.year ?? edition?.id ?? "This tournament";
   return `${year} is locked. Scores, signatures and bets can't be changed — ask a director.`;
 };
+
+// ── What the picker draws on a row ─────────────────────────────────
+// Three tiny decisions, here rather than in the component, because each one
+// decides whether something appears at all — and "does this render?" is the
+// class of bug a screenshot catches a week late and a test catches instantly.
+//
+// The row is YEAR-FIRST: a tabular numeral that is never truncated, then
+// whatever these three say to add. That inversion is the whole fix. Every
+// earlier layout made the name flexible and the controls rigid, so pressure
+// fell on the one thing identifying the row — at 320pt with four director
+// controls the name was down to "…p 2026".
+
+// The name, but only when it says something the year does not.
+//
+// Every edition is called "The Bourbon Cup ####", so printing the name beside
+// the year is printing the year twice and eleven rows read identically. A
+// tournament somebody actually named — "DEMO — Testers", "2026 Test Copy" — is
+// the case worth the space, and it is exactly the case this detects.
+//
+// An EXACT match against the app's own title, not "does the name end in the
+// year". That looser rule was tried first and it is wrong in the direction
+// that loses information: a director who names an edition "Bandon Dunes 2024"
+// gets a row that says 2024 and nothing else. The title is passed in rather
+// than imported because this module is pure and because WBC's cup is not
+// called The Bourbon Cup — one helper, each app naming its own tournament.
+//
+// Compared case- and whitespace-insensitively: `createEdition` writes
+// `${title} ${year}` itself, but a director who retypes it by hand should not
+// get a second copy of the year for a stray double space.
+const flat = (s) => String(s ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+
+export const editionDisplayName = (edition, title = "") => {
+  const name = String(edition?.name ?? "").trim();
+  if (!name) return null;
+  const year = String(edition?.year ?? "").trim();
+  if (!year) return name;              // nothing to be redundant with
+  if (flat(name) === flat(year)) return null;
+  if (title && flat(name) === flat(`${title} ${year}`)) return null;
+  return name;
+};
+
+// The status, but only when the status is news.
+//
+// Ten editions out of twelve are finished cups. ARCHIVED on ten rows is not a
+// label, it is the background — repeated ten times — against which the one row
+// that matters has to be found. Anything that is not a draft or a published
+// year (including a status a later release invents and this one has never
+// heard of) reads as a year that is over, which is what an edition in this
+// list is unless it says otherwise.
+export const editionStatusChip = (edition) => {
+  const s = edition?.status;
+  return s === "published" ? "PUBLISHED" : s === "draft" ? "DRAFT" : null;
+};
+
+// ── What the sheet offers ──────────────────────────────────────────
+// Behind a tap on the row. Returned as data rather than written inline so the
+// two rules that are easy to get wrong are pinned:
+//
+//   • You cannot OPEN the year you are already in — there is nowhere to go.
+//   • You cannot DELETE it either, and that is not a UI nicety: `deleteEdition`
+//     refuses the active edition outright, because the running app would lose
+//     its data out from under it. Today that refusal shows up as a 🗑 that
+//     quietly is not drawn, which tells a director nothing. The sheet says it.
+//
+// `canManage` is the same flag the picker takes and the same non-boundary:
+// firestore.rules is what actually allows a bc_editions write, and this only
+// decides what a person is offered so they are not handed a tap that comes
+// back refused.
+export const editionActions = ({ edition, isActive = false, canManage = false } = {}) => ({
+  open: !isActive,
+  rename: canManage,
+  lock: canManage,
+  status: canManage,
+  // A demo is deletable like anything else; only being ACTIVE stops it.
+  delete: canManage && !isActive,
+  // Why the two that are missing are missing, in words, for the one case where
+  // their absence would otherwise be silent.
+  note: isActive
+    ? "You're in this tournament, so there's nothing to open and it can't be deleted. Switch to another year first."
+    : null,
+  locked: isEditionLocked(edition),
+});
