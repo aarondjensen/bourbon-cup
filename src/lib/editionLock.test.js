@@ -6,7 +6,8 @@
 // year (the dangerous case, and the one the director will not notice, because
 // directors are exempt), and the bulk button's two directions.
 import { describe, it, expect } from "vitest";
-import { isEditionLocked, lockVerdict, bulkLockVerdict, lockNotice, isDemoEdition, canAdminEdition, demoOnlyAdmin } from "./editionLock";
+import { isEditionLocked, lockVerdict, bulkLockVerdict, lockNotice, isDemoEdition, canAdminEdition, demoOnlyAdmin,
+  editionDisplayName, editionStatusChip, editionActions } from "./editionLock";
 
 const ed = (id, year, locked) => ({ id, year, ...(locked === undefined ? {} : { locked }) });
 
@@ -202,5 +203,105 @@ describe("a demo tournament", () => {
     const v = bulkLockVerdict([{ ...real, locked: true }, live, demo], "bc_2026");
     expect(v.next).toBe(false);
     expect(v.ids).not.toContain("bc_demo");
+  });
+});
+
+// ── What the picker draws ───────────────────────────────────────────
+// Three helpers that each decide whether something is RENDERED AT ALL, which
+// is the class of bug a screenshot catches a week late. The row is year-first:
+// the year is the rigid part and everything below is what may join it.
+describe("editionDisplayName", () => {
+  const TITLE = "The Bourbon Cup";
+
+  it("says nothing when the name is just the title and the year", () => {
+    // The whole reason the row can drop the name slot. Eleven editions called
+    // "The Bourbon Cup ####" printed beside their own year is the year twice,
+    // and eleven rows that read identically.
+    expect(editionDisplayName({ name: "The Bourbon Cup 2019", year: 2019 }, TITLE)).toBeNull();
+    expect(editionDisplayName({ name: "The Bourbon Cup 2019", year: "2019" }, TITLE)).toBeNull();
+    expect(editionDisplayName({ name: "2019", year: 2019 }, TITLE)).toBeNull();
+  });
+
+  it("forgives the casing and spacing of a name typed by hand", () => {
+    expect(editionDisplayName({ name: "  the  bourbon cup   2019 ", year: 2019 }, TITLE)).toBeNull();
+  });
+
+  it("shows a name somebody actually chose", () => {
+    // The case worth the space, and the one that keeps catching people out.
+    expect(editionDisplayName({ name: "DEMO — Testers", year: 2026 }, TITLE)).toBe("DEMO — Testers");
+    expect(editionDisplayName({ name: "2026 Test Copy", year: 2026 }, TITLE)).toBe("2026 Test Copy");
+    expect(editionDisplayName({ name: "The 2019 Do-Over", year: 2019 }, TITLE)).toBe("The 2019 Do-Over");
+  });
+
+  it("keeps a name that merely ENDS in the year", () => {
+    // The rule this replaced was "does the name end with the year", which
+    // reduced a round at Bandon to a bare numeral. Exact match, so it doesn't.
+    expect(editionDisplayName({ name: "Bandon Dunes 2024", year: 2024 }, TITLE)).toBe("Bandon Dunes 2024");
+  });
+
+  it("is not tied to one app's tournament title", () => {
+    // WBC's cup is not called The Bourbon Cup. Each app passes its own, so one
+    // helper serves both without either naming the other's tournament.
+    expect(editionDisplayName({ name: "Winter Bourbon Classic 2024", year: 2024 }, "Winter Bourbon Classic")).toBeNull();
+    expect(editionDisplayName({ name: "Winter Bourbon Classic 2024", year: 2024 }, TITLE)).toBe("Winter Bourbon Classic 2024");
+  });
+
+  it("shows whatever there is when there is no year to compare", () => {
+    expect(editionDisplayName({ name: "Scratch" }, TITLE)).toBe("Scratch");
+    expect(editionDisplayName({ name: "", year: 2019 }, TITLE)).toBeNull();
+    expect(editionDisplayName(null, TITLE)).toBeNull();
+  });
+});
+
+describe("editionStatusChip", () => {
+  it("draws nothing for a year that is over", () => {
+    // ARCHIVED on ten rows out of twelve is the background, not a label.
+    expect(editionStatusChip({ status: "archived" })).toBeNull();
+    expect(editionStatusChip({})).toBeNull();
+    expect(editionStatusChip(null)).toBeNull();
+  });
+
+  it("treats a status it has never heard of as finished", () => {
+    // A later release inventing a fourth status must not make this one paint
+    // an unrecognised word onto every row.
+    expect(editionStatusChip({ status: "retired" })).toBeNull();
+  });
+
+  it("draws the two that are news", () => {
+    expect(editionStatusChip({ status: "published" })).toBe("PUBLISHED");
+    expect(editionStatusChip({ status: "draft" })).toBe("DRAFT");
+  });
+});
+
+describe("editionActions", () => {
+  const demo = { id: "bc_demo", year: 2026, is_demo: true };
+
+  it("offers a player one thing", () => {
+    const a = editionActions({ edition: ed("bc_2019", 2019, true) });
+    expect(a).toMatchObject({ open: true, rename: false, lock: false, status: false, delete: false });
+    expect(a.locked).toBe(true);
+  });
+
+  it("will not open or delete the year you are standing in", () => {
+    // Not a nicety: deleteEdition refuses the active edition outright, because
+    // the running app would lose its data out from under it. Today that shows
+    // up as a trash icon that quietly is not drawn.
+    const a = editionActions({ edition: demo, isActive: true, canManage: true });
+    expect(a.open).toBe(false);
+    expect(a.delete).toBe(false);
+    // ...and the sheet says WHY, which the missing icon never did.
+    expect(a.note).toMatch(/can't be deleted/);
+    // The two that survive are the two a director does want on the live year.
+    expect(a.rename).toBe(true);
+    expect(a.lock).toBe(true);
+  });
+
+  it("says nothing about absences on a year you are not in", () => {
+    expect(editionActions({ edition: ed("bc_2019", 2019), canManage: true }).note).toBeNull();
+  });
+
+  it("lets a demo be deleted like anything else", () => {
+    // Only being ACTIVE stops a delete. A scratch edition has to be removable.
+    expect(editionActions({ edition: demo, canManage: true }).delete).toBe(true);
   });
 });

@@ -19,11 +19,14 @@
 // allows bc_editions writes to a director only — it is there so a player is
 // not shown controls whose every tap comes back refused.
 import { useState, useEffect } from "react";
-import { BC, FS, FONT, ALPHA, ON_AMBER } from "../theme";
+import { BC, FS, FONT, ALPHA, ON_AMBER, R } from "../theme";
 import { Popup, ConfirmModal } from "./Popup";
+import { EditionSheet } from "./EditionSheet";
+import { IconLock, IconUnlock, IconChevron } from "./Icons";
 import { getActiveTournamentId } from "../firebase";
 import { loadEditions, createEdition, cloneEdition, updateEdition, setEditionLocked, deleteEdition, switchEdition, ensureActiveEditionDoc, editionIdFor, isDemoEdition, EDITION_STATUSES } from "../lib/editions";
-import { isEditionLocked, lockVerdict, bulkLockVerdict } from "../lib/editionLock";
+import { isEditionLocked, lockVerdict, bulkLockVerdict, editionDisplayName, editionStatusChip } from "../lib/editionLock";
+import { TOURNAMENT_TITLE } from "../constants";
 
 // FS.lead, not FS.body, and that is functional rather than cosmetic: iOS
 // Safari zooms the page in when a focused input is under 16px and does not
@@ -76,9 +79,14 @@ export function EditionSwitcher({ open, onClose, canManage = false, spectate = t
   const [cloneOpts, setCloneOpts] = useState(DEFAULT_CLONE_OPTS);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
-  const [pending, setPending] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [pendingLock, setPendingLock] = useState(null);
+  // Which row's sheet is open. Null is the list.
+  //
+  // A popup rather than an expanding row: the actions are five, two of them
+  // destructive, and a row that grows buttons under your thumb moves every row
+  // below it — which is how you tap Delete on 2016 aiming for Open on 2019.
+  const [sheetFor, setSheetFor] = useState(null);
   const activeId = getActiveTournamentId();
 
   useEffect(() => {
@@ -167,20 +175,11 @@ export function EditionSwitcher({ open, onClose, canManage = false, spectate = t
     else applyLock([e.id], v.next);
   };
 
-  // ── What a status is worth saying ──────────────────────────────────
-  // Two of the three, and the third is the reason. Ten of the eleven editions
-  // are finished cups, so ARCHIVED on ten rows is not a label — it is the
-  // background, repeated ten times, against which the one row that matters has
-  // to be found. Anything not draft or published (including a status a future
-  // release adds and this one has never heard of) reads as a year that is over,
-  // which is what an edition in this list is unless it says otherwise.
-  //
-  // Neither of the two it does draw is decoration: PUBLISHED is the cup being
-  // played and DRAFT is next year, half built, with a draw that may not exist.
-  const statusChip = (s) =>
-    s === "published" ? { label: "PUBLISHED", color: BC.amberInk }
-      : s === "draft" ? { label: "DRAFT", color: BC.gold }
-        : null;
+  // Looked up by id on every render rather than stashed as an object, so the
+  // sheet redraws from the reloaded list after a lock or a rename instead of
+  // showing the row as it was when it was tapped.
+  const sheetEdition = sheetFor ? editions.find((e) => e.id === sheetFor) || null : null;
+  const closeSheet = () => setSheetFor(null);
 
   const headerBtn = {
     flexShrink: 0, width: 32, height: 32, borderRadius: 9, border: `1px solid ${BC.bdr}`,
@@ -208,7 +207,7 @@ export function EditionSwitcher({ open, onClose, canManage = false, spectate = t
               style={{ ...headerBtn, fontSize: FS.title }}>‹</button>
           )}
           <div style={{ flex: 1, minWidth: 0, fontSize: FS.lead, fontWeight: 800, color: BC.t1, letterSpacing: 0.5 }}>
-            {mode === "new" ? "New tournament" : mode === "edit" ? "Rename tournament" : "Tournaments"}
+            {mode === "new" ? "New tournament" : mode === "edit" ? "Edit tournament" : "Tournaments"}
           </div>
           {mode === "list" && canManage && !loading && (
             <button onClick={() => { resetForm(); setMode("new"); }} style={{
@@ -228,115 +227,74 @@ export function EditionSwitcher({ open, onClose, canManage = false, spectate = t
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {editions.map((e) => {
               const isActive = e.id === activeId;
+              // The three decisions about what this row draws all live in
+              // lib/editionLock, because each of them decides whether
+              // something appears AT ALL — the class of bug a screenshot
+              // catches a week late and a test catches instantly.
+              const label = editionDisplayName(e, TOURNAMENT_TITLE);
+              const chip = editionStatusChip(e);
+              const locked = isEditionLocked(e);
               return (
-                <div key={e.id} style={{
-                  display: "flex", alignItems: "center", gap: 7, padding: "11px 12px", borderRadius: 10,
-                  background: BC.inp, border: `1px solid ${isActive ? BC.amber : BC.bdr}`,
-                }}>
-                  {/* ONE LINE. The name, the padlock if it is set, and the
-                      status only when the status is news — see statusChip.
-                      This used to be two rows, the second of which restated
-                      the year already inside the name ("The Bourbon Cup
-                      2019" · 2019) and spelled out ARCHIVED on the ten rows
-                      out of eleven that are archived. Eleven editions is a
-                      list you scan, and half of what it carried was true of
-                      every row on it. */}
-                  <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 7 }}>
-                    {/* Truncated, not wrapped. A director-side row carries
-                        four controls, and letting the name take a second line
-                        makes the list's row height depend on how long somebody
-                        typed — which is how a picker you scan turns into one
-                        you read.
-
-                        Truncated at the FRONT, though, and that is the whole
-                        reason this row can afford to drop the separate year it
-                        used to carry. Every edition is "The Bourbon Cup ####",
-                        so an ordinary tail ellipsis eats the four characters
-                        that differ and leaves eleven rows all reading "The
-                        Bourb…" — it cuts exactly the token you are scanning
-                        for. `direction: rtl` moves the ellipsis to the start;
-                        the <bdi> re-isolates the name so Latin text still
-                        renders left to right inside it. "…on Cup 2019" reads
-                        slightly oddly and always tells you which year it is.
-                        Nothing is clipped at all until the name is genuinely
-                        too long for the row, and the span is sized to its own
-                        content (flex `0 1 auto`, not `1`) so an rtl box never
-                        pushes a short name to the right. */}
+                // ── YEAR FIRST, and everything else optional ──────────
+                // The row used to lead with the name and let the controls be
+                // rigid, so pressure fell on the one thing that identifies it:
+                // at a 320pt viewport with four director controls the name was
+                // down to "…p 2026". Inverted. The year is a fixed tabular
+                // numeral that is never truncated, the name absorbs whatever
+                // is left, and the controls have gone to the sheet.
+                //
+                // The whole row is the button. Five slots, three of them
+                // usually empty — an archived year is a year and a padlock,
+                // and it needs nothing else.
+                <button key={e.id} onClick={() => setSheetFor(e.id)}
+                  aria-label={`${e.year || e.id}${label ? ` — ${label}` : ""}${locked ? ", locked" : ""}`}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 7, width: "100%",
+                    padding: "11px 12px", borderRadius: R.lg, fontFamily: FONT, textAlign: "left",
+                    background: BC.inp, border: `1px solid ${isActive ? BC.amber : BC.bdr}`,
+                    cursor: "pointer",
+                  }}>
+                  <span style={{
+                    flexShrink: 0, fontSize: FS.lead, fontWeight: 800, color: BC.t1,
+                    fontVariantNumeric: "tabular-nums", letterSpacing: -0.2, lineHeight: 1.2,
+                  }}>{e.year || e.id}</span>
+                  {/* Only when the name says something the year does not.
+                      "DEMO — Testers" earns it; "The Bourbon Cup 2023" is the
+                      year twice. See editionDisplayName. */}
+                  <span style={{
+                    flex: 1, minWidth: 0, fontSize: FS.small, fontWeight: 600, color: BC.t3,
+                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                  }}>{label || ""}</span>
+                  {/* ACTIVE replaces the status chip rather than joining it —
+                      on the tightest row of the list, and the year you are
+                      standing in has nothing to prove about its status. */}
+                  {chip && !isActive && (
                     <span style={{
-                      minWidth: 0, fontSize: FS.body, fontWeight: 800, color: BC.t1,
-                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                      direction: "rtl",
-                    }}><bdi>{e.name}</bdi></span>
-                    {/* Beside the name rather than under it: the lock is the
-                        first thing a director looks for when a member says a
-                        score would not save, and it was the last thing on the
-                        row. Status and lock stay two marks, because they are
-                        two questions — one is what this year IS, the other is
-                        who may write to it. See lib/editionLock. */}
-                    {isEditionLocked(e) && (
-                      <span role="img" aria-label="Locked" title={`${e.year || e.id} is locked — only a director can change it`}
-                        style={{ flexShrink: 0, fontSize: FS.small, lineHeight: 1 }}>🔒</span>
-                    )}
-                    {statusChip(e.status) && (
-                      <span style={{
-                        flexShrink: 0, fontSize: FS.micro, fontWeight: 800, letterSpacing: 1,
-                        color: statusChip(e.status).color, border: `1px solid ${statusChip(e.status).color}${ALPHA.line}`,
-                        borderRadius: 5, padding: "2px 5px", lineHeight: 1.2,
-                      }}>{statusChip(e.status).label}</span>
-                    )}
-                  </div>
-                  {/* Rename is offered on the ACTIVE row too, and that is the
-                      point of it: the edition a collision renamed is the one
-                      you are standing in. */}
-                  {canManage && (
-                    <button onClick={() => openEdit(e)} title="Rename" style={{
-                      fontSize: FS.small, fontWeight: 700, color: BC.t3, background: "transparent",
-                      border: "none", borderRadius: 8, padding: "5px 4px", cursor: "pointer",
-                      flexShrink: 0, lineHeight: 1,
-                    }}>✎</button>
+                      flexShrink: 0, fontSize: FS.micro, fontWeight: 800, letterSpacing: 1,
+                      color: chip === "PUBLISHED" ? BC.amberInk : BC.gold,
+                      border: `1px solid ${chip === "PUBLISHED" ? BC.amberInk : BC.gold}${ALPHA.line}`,
+                      borderRadius: R.xs + 1, padding: "2px 5px", lineHeight: 1.2,
+                    }}>{chip}</span>
                   )}
-                  {/* The padlock is offered on the ACTIVE row too. Freezing the
-                      year being played is a real thing a director wants — the
-                      moment the cup is over — and it is the one lock that asks
-                      the sharper question, because the person tapping it is the
-                      one member who will not notice: directors are exempt. */}
-                  {canManage && (
-                    // ONE glyph in two brightnesses, not 🔒 against 🔓. Both of
-                    // those render as a yellow padlock and the only difference
-                    // is whether a small shackle is tilted — at 12px on a phone
-                    // they are the same picture, and emoji ignore `color`, so
-                    // the state cannot be carried by tint either. Lit vs dimmed
-                    // reads as a switch at a glance; the LOCKED badge on the row
-                    // says it in words for anyone who wants certainty.
-                    <button onClick={() => tapLock(e)} disabled={busy}
-                      title={lockVerdict(e, { isActive }).title} style={{
-                        fontSize: FS.small, background: "transparent", border: "none",
-                        borderRadius: 8, padding: "5px 4px", lineHeight: 1, flexShrink: 0,
-                        opacity: isEditionLocked(e) ? 1 : 0.3,
-                        filter: isEditionLocked(e) ? "none" : "grayscale(1)",
-                        cursor: busy ? "default" : "pointer",
-                      }}>🔒</button>
+                  {/* STATE, and only state — the toggle is in the sheet now,
+                      so the two padlocks that used to sit touching are one.
+                      SVG rather than 🔒 because a colour font paints its own
+                      palette: this one can actually be amber. */}
+                  {locked && (
+                    <span style={{ flexShrink: 0, color: BC.amberInk, display: "flex" }}>
+                      <IconLock size={16} />
+                    </span>
                   )}
-                  {isActive ? (
+                  {isActive && (
                     <span style={{
-                      fontSize: FS.label, fontWeight: 800, letterSpacing: 0.5, color: ON_AMBER,
-                      background: BC.amber, padding: "5px 10px", borderRadius: 6,
+                      flexShrink: 0, fontSize: FS.label, fontWeight: 800, letterSpacing: 0.5,
+                      color: ON_AMBER, background: BC.amber, padding: "5px 8px", borderRadius: R.sm,
                     }}>ACTIVE</span>
-                  ) : (
-                    <>
-                      <button onClick={() => setPending(e)} style={{
-                        fontSize: FS.small, fontWeight: 800, letterSpacing: 0.5, color: BC.t2, background: BC.card,
-                        border: `1px solid ${BC.bdr}`, borderRadius: 8, padding: "7px 10px", cursor: "pointer", flexShrink: 0,
-                      }}>Open</button>
-                      {canManage && (
-                        <button onClick={() => setPendingDelete(e)} title="Delete edition" style={{
-                          fontSize: FS.body, fontWeight: 700, color: BC.t3, background: "transparent",
-                          border: "none", borderRadius: 8, padding: "5px 4px", cursor: "pointer", flexShrink: 0, lineHeight: 1,
-                        }}>🗑</button>
-                      )}
-                    </>
                   )}
-                </div>
+                  <span style={{ flexShrink: 0, color: BC.t3, display: "flex" }}>
+                    <IconChevron size={16} />
+                  </span>
+                </button>
               );
             })}
           </div>
@@ -354,11 +312,17 @@ export function EditionSwitcher({ open, onClose, canManage = false, spectate = t
           if (!v) return null;
           return (
             <button onClick={() => setPendingLock(v)} disabled={busy} style={{
-              width: "100%", marginTop: 12, padding: "10px 12px", borderRadius: 10, fontFamily: FONT,
+              width: "100%", marginTop: 12, padding: "10px 12px", borderRadius: R.lg, fontFamily: FONT,
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
               background: "transparent", border: `1px solid ${BC.bdr}`, color: BC.t2,
               fontSize: FS.small, fontWeight: 800, letterSpacing: 0.5,
               cursor: busy ? "default" : "pointer",
-            }}>{v.next ? "🔒" : "🔓"} {v.label}</button>
+            }}>
+              <span style={{ display: "flex", color: BC.amberInk }}>
+                {v.next ? <IconLock size={14} /> : <IconUnlock size={14} />}
+              </span>
+              {v.label}
+            </button>
           );
         })()}
         </>) : mode === "edit" ? (<>
@@ -495,20 +459,33 @@ export function EditionSwitcher({ open, onClose, canManage = false, spectate = t
         })()}
       </Popup>
 
-      {pending && (
-        <ConfirmModal
-          eyebrow="Open tournament"
-          title={`Open ${pending.name}?`}
-          message={pending.status === "archived"
-            // Said plainly, because it is the thing somebody opening 2019
-            // notices first and would otherwise read as being logged out.
-            ? "It's finished, so it opens read-only — every card and result, nothing to change. Come back here to return to this year."
-            : "The app will reload to load this edition's data."}
-          confirmLabel="Open"
-          onConfirm={() => switchEdition(pending.id, { namespaced: !!pending.namespaced, spectate })}
-          onCancel={() => setPending(null)}
+      {/* ── Behind the tap ────────────────────────────────────────────
+          Every action the row used to carry, with a word on it. Each handler
+          closes the sheet first, because all five of them either raise a
+          confirm, leave for the edit form, or reload the app — and a sheet
+          still standing behind any of those is a layer nobody asked for. */}
+      {sheetEdition && (
+        <EditionSheet
+          edition={sheetEdition}
+          isActive={sheetEdition.id === activeId}
+          canManage={canManage}
+          busy={busy}
+          onClose={closeSheet}
+          onOpen={() => switchEdition(sheetEdition.id, { namespaced: !!sheetEdition.namespaced, spectate })}
+          onRename={() => { closeSheet(); openEdit(sheetEdition); }}
+          onStatus={() => { closeSheet(); openEdit(sheetEdition); }}
+          onLock={() => { closeSheet(); tapLock(sheetEdition); }}
+          onDelete={() => { closeSheet(); setPendingDelete(sheetEdition); }}
         />
       )}
+
+      {/* (The "Open 2019?" confirm that used to stand here has gone into the
+          sheet. It was one sentence — "it's finished, so it opens read-only" —
+          and it arrived as a second modal ON TOP of the picker, after the tap
+          rather than before it. The sheet says it above the button that does
+          it, which is the same warning one layer earlier. The DESTRUCTIVE
+          confirms below stay: delete and lock are the two a person should have
+          to answer twice.) */}
 
       {/* Locking asks; unlocking a single year does not — lockVerdict returns
           no confirm for that one and tapLock applies it straight away. The
