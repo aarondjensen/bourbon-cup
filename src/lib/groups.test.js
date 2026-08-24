@@ -6,7 +6,7 @@ import { describe, it, expect } from "vitest";
 import {
   splitEvenly, autoBuildGroups, formatGroupsByTeam, isFoursomeFormat,
   groupIssues, hasGroupIssues, sidesInRound, GROUP_TARGET,
-  assignPlayersToGroup,
+  assignPlayersToGroup, groupSizeAfter, groupFitsAfter,
 } from "./groups";
 
 const A8 = ["a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8"];
@@ -233,5 +233,67 @@ describe("assignPlayersToGroup", () => {
     expect(groups).toEqual(waves);
     const issues = groupIssues({ groups, matches: wholeSide(), formatId: "team_best_ball" });
     expect(hasGroupIssues(issues)).toBe(false);
+  });
+});
+
+// ── Four go off at a time ──────────────────────────────────────────
+// The cap the by-hand editor labels its buttons from and refuses on. It has
+// to be ONE predicate: a screen that says a tee time has room and a tap that
+// then refuses is worse than either answer on its own.
+describe("groupSizeAfter / groupFitsAfter", () => {
+  it("counts the players moving in", () => {
+    expect(groupSizeAfter({ group: ["a1", "a2"], pids: ["b1"] })).toBe(3);
+    expect(groupFitsAfter({ group: ["a1", "a2"], pids: ["b1"] })).toBe(true);
+  });
+
+  it("fills a tee time to exactly four", () => {
+    expect(groupFitsAfter({ group: [], pids: ["a1", "a2", "a3", "a4"] })).toBe(true);
+    expect(groupSizeAfter({ group: [], pids: ["a1", "a2", "a3", "a4"] })).toBe(GROUP_TARGET);
+  });
+
+  it("refuses the fifth", () => {
+    expect(groupFitsAfter({ group: ["a1", "a2", "a3", "a4"], pids: ["b1"] })).toBe(false);
+    expect(groupFitsAfter({ group: ["a1", "a2"], pids: ["b1", "b2", "b3"] })).toBe(false);
+  });
+
+  // The case a naive length + length gets wrong: re-dropping men who are
+  // already here changes nothing, so it cannot be refused.
+  it("does not double-count a player already on the time", () => {
+    expect(groupSizeAfter({ group: ["a1", "a2", "a3", "a4"], pids: ["a1", "a2"] })).toBe(4);
+    expect(groupFitsAfter({ group: ["a1", "a2", "a3", "a4"], pids: ["a1", "a2"] })).toBe(true);
+  });
+
+  it("counts a swap within one tee time as a swap", () => {
+    // Three already here, four lifted, three of them the same men: lands at 4.
+    expect(groupSizeAfter({ group: ["a1", "a2", "a3"], pids: ["a1", "a2", "a3", "b1"] })).toBe(4);
+    expect(groupFitsAfter({ group: ["a1", "a2", "a3"], pids: ["a1", "a2", "a3", "b1"] })).toBe(true);
+  });
+
+  it("is empty-safe at both ends", () => {
+    expect(groupSizeAfter({ group: undefined, pids: undefined })).toBe(0);
+    expect(groupFitsAfter({ group: [], pids: [] })).toBe(true);
+  });
+
+  // Auto-build has to produce a sheet the by-hand editor would accept, or the
+  // two halves of the tab disagree about what a tee time holds.
+  it("accepts every group Auto-build makes for a full field", () => {
+    const built = autoBuildGroups({ formatId: "team_best_ball", matches: wholeSide() });
+    built.forEach(g => expect(groupFitsAfter({ group: [], pids: g })).toBe(true));
+  });
+});
+
+describe("groupIssues — oversized", () => {
+  // Nothing in the app can build one now, so this names a group that arrived
+  // some other way: a document written before the cap, or a console edit.
+  it("names a group of five", () => {
+    const groups = [["a1", "a2", "a3", "a4", "a5"]];
+    const issues = groupIssues({ groups, matches: wholeSide(), formatId: "team_best_ball" });
+    expect(issues.oversized).toEqual([{ i: 0, n: 5 }]);
+    expect(hasGroupIssues(issues)).toBe(true);
+  });
+
+  it("says nothing about a foursome", () => {
+    const groups = [["a1", "a2", "a3", "a4"]];
+    expect(groupIssues({ groups, matches: wholeSide() }).oversized).toEqual([]);
   });
 });

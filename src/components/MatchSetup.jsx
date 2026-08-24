@@ -32,11 +32,12 @@ import { FORMATS } from "../constants";
 import { TOURNAMENT_ID, editionDocId } from "../firebase";
 import { getRoundCH, getRoundHandicapMode, lockForRound } from "../scoring";
 import {
-  GROUP_TARGET, GROUP_MAX, TEE_SLOTS,
+  GROUP_TARGET, TEE_SLOTS,
   autoBuildGroups, expandTeeTimes, teeTimeList,
   stripAMPM, teeSlotCount, padGroups, trimGroups, firstOpenGroup, groupHasRoom,
   matchPlayers, matchSeq, formatPerSide, isFoursomeFormat, formatGroupsByTeam,
   groupIndexForMatch, assignMatchToGroup, assignPlayersToGroup, swapMatchIntoGroup,
+  groupFitsAfter,
   groupIssues, hasGroupIssues, sidesInRound,
   orderMatchesForRound, canonicalMatchOrder,
 } from "../lib/groups";
@@ -189,6 +190,9 @@ export function MatchSetup({
   // whole field unplaced by definition, so "nobody has a tee time" is only
   // worth colouring red once somebody does.
   const anyPlaced = groups.some(g => g.length > 0);
+  // The next foursome off the top of the pool — what "Next 4" lifts. Capped
+  // at GROUP_TARGET because that is all a tee time will take.
+  const nextUp = unplaced.slice(0, GROUP_TARGET);
 
   // ── The score guard ──────────────────────────────────────────────
   // A finalized round's draw IS part of the result, so it is not edited from
@@ -277,13 +281,24 @@ export function MatchSetup({
   // Drop everything lifted onto one tee time. gi < 0 drops them out of the
   // draw entirely (back to the pool below).
   //
-  // Deliberately NOT refused when the foursome would overflow: a fivesome is
-  // legal (see GROUP_MAX) and a director mid-rearrangement is often over the
-  // four for a tap or two on the way to being right. Going over is said on
-  // the card and in CHECK instead, which is where every other thing wrong
-  // with a draw is said.
+  // Four go off at a time and the fifth is refused, not warned about. The
+  // whole selection is turned away rather than part of it landing: taking
+  // the first two of four and leaving the rest lifted looks identical to a
+  // move that worked, and the two left behind are exactly the men who would
+  // then be missing from the sheet without anybody noticing.
+  //
+  // The buttons are labelled from the same predicate, so a tap that gets here
+  // and is refused should not be reachable — this is the guard behind the
+  // label, not the place the rule is announced.
   const moveHeldTo = (gi) => {
     if (!heldPids.length) return;
+    if (gi >= 0 && !groupFitsAfter({ group: groups[gi], pids: heldPids })) {
+      const room = GROUP_TARGET - groups[gi].filter(p => !heldPids.includes(p)).length;
+      notify(room > 0
+        ? `${slotName(gi)} has room for ${room} more — ${heldPids.length} are lifted`
+        : `${slotName(gi)} is full — four players go off at a time`, "error");
+      return;
+    }
     saveGroups(assignPlayersToGroup({ groups, pids: heldPids, gi }));
     setHeldPids([]);
   };
@@ -857,7 +872,7 @@ export function MatchSetup({
       {matchFitsGroup && groups.map((g, gi) => {
         const rows = byGroup[gi];
         const over = drag?.over === gi;
-        const tooMany = g.length > GROUP_MAX;
+        const tooMany = g.length > GROUP_TARGET;
         // What letting go here would do, worked out while the finger is still
         // down. A full tee time trades places rather than stacking up, and
         // saying SWAP on the card before the drop is what makes that the
@@ -1024,16 +1039,20 @@ export function MatchSetup({
           </div>
 
           {groups.map((g, gi) => {
-            const over = g.length > GROUP_MAX;
+            const over = g.length > GROUP_TARGET;
             // Whose tee time this is. Only asked of a teammate format, where a
             // group belongs to one team and a group holding both is the one
             // mistake this editor can make that still looks like a draw.
             const side = teammateGroups ? groupSide(g) : null;
             const mixed = teammateGroups && g.length > 0 && !side;
             const sideTeam = side ? teams[side] : null;
-            // What dropping here would leave behind. Shown on the button so
-            // the count that matters is the one AFTER the tap, not before it.
-            const after = g.filter(p => !heldPids.includes(p)).length + heldPids.length;
+            // Whether the tee sheet will take the drop. Asked of the state
+            // AFTER the tap, not before it — see groupSizeAfter for why the
+            // two differ when a lifted player is already sitting here.
+            const fits = groupFitsAfter({ group: g, pids: heldPids });
+            // How many more this time could actually take, ignoring anybody
+            // lifted who is already sitting in it.
+            const room = GROUP_TARGET - g.filter(p => !heldPids.includes(p)).length;
             return (
               <div key={gi} style={{
                 ...cardStyle, padding: "9px 11px", marginBottom: 6,
@@ -1065,14 +1084,24 @@ export function MatchSetup({
                   </span>
                   {heldPids.length > 0 && !roundFinal
                     ? (
-                      <button onClick={() => moveHeldTo(gi)} style={{
-                        ...miniBtn, padding: "4px 8px", flexShrink: 0,
-                        // The tap that would take this tee time past a
-                        // fivesome still works — it is only ever a step on the
-                        // way somewhere — but it says so first.
-                        ...(after > GROUP_MAX ? { borderColor: `${BC.danger}${ALPHA.line}`, color: BC.danger } : null),
-                      }}>
-                        {heldPids.length === 1 ? `Move ${shortOf(heldPids[0])} here` : `Move ${heldPids.length} here`}
+                      // Four go off at a time. A time that cannot take the
+                      // whole selection says how many it CAN take rather than
+                      // going dark — "room for 1" is the number you need to
+                      // fix the selection, where a greyed button is only the
+                      // news that something is wrong.
+                      <button
+                        onClick={() => moveHeldTo(gi)}
+                        disabled={!fits}
+                        style={{
+                          ...miniBtn, padding: "4px 8px", flexShrink: 0,
+                          ...(fits ? null : {
+                            borderColor: `${BC.bdr}`, color: BC.t3, cursor: "not-allowed",
+                          }),
+                        }}
+                      >
+                        {!fits ? (room > 0 ? `Room for ${room}` : "Full")
+                          : heldPids.length === 1 ? `Move ${shortOf(heldPids[0])} here`
+                          : `Move ${heldPids.length} here`}
                       </button>
                     )
                     : g.length > 0 && !roundFinal && <button onClick={() => clearGroup(gi)} style={xBtn}>✕</button>}
@@ -1114,15 +1143,18 @@ export function MatchSetup({
               }}>
                 {anyPlaced ? "NOT ON A TEE TIME" : `THE FIELD · ${unplaced.length}`}
               </div>
-              {/* Select-all, for the same reason the team pools have one: the
-                  first move on an undrawn round is "everybody in", and
-                  sixteen taps to say it is sixteen chances to miss a man. */}
-              {unplaced.length > 1 && !roundFinal && (
+              {/* Not a select-all. Four go off at a time, so lifting all
+                  sixteen is a selection no tee time on the sheet could ever
+                  take — a button whose only outcome is every card reading
+                  FULL. This lifts the next foursome off the top of the pool
+                  instead, which is the one bulk move the cap leaves room for:
+                  fill it in the order they are listed. */}
+              {nextUp.length > 1 && !roundFinal && (
                 <button
-                  onClick={() => setHeldPids(unplaced.every(pid => heldPids.includes(pid)) ? [] : unplaced)}
+                  onClick={() => setHeldPids(heldPids.length ? [] : nextUp)}
                   style={{ ...miniBtn, padding: "4px 8px", marginBottom: 7 }}
                 >
-                  {unplaced.every(pid => heldPids.includes(pid)) ? "Clear" : `Select all ${unplaced.length}`}
+                  {heldPids.length ? "Clear" : `Next ${nextUp.length}`}
                 </button>
               )}
               <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
