@@ -326,6 +326,38 @@ export function assignMatchToGroup({ groups, match, gi }) {
   return next;
 }
 
+// Put any set of players in a group, in one move — the manual road, and the
+// one that does not go through a match at all.
+//
+// `assignMatchToGroup` above moves a MATCH, which is the right unit when the
+// match fits in a foursome ("M3 and M4 ride together off 8:40"). It is the
+// wrong unit for a format whose match is the whole side: Team Best Ball's
+// match holds sixteen men, so "move the match" can only ever mean "move
+// everybody", and the director who wants Aaron, Pete, Jim and Joe off the
+// first tee has no way to say so. This is that way.
+//
+// Players come out of whatever group they were in first, so this is a MOVE
+// rather than a copy — the same player can never end up teeing off twice.
+// `gi < 0` ungroups them. A gi past the end opens the list up to it, for the
+// same reason assignMatchToGroup does: the round HAS that tee time, this
+// document just had no occasion to mention it.
+//
+// Order within the target is arrival order, which is the order the director
+// tapped the names in. Nothing downstream reads it — everyone in a group tees
+// off together — but it is what the chips redraw as, so a wave built by hand
+// keeps the shape it was built in.
+export function assignPlayersToGroup({ groups, pids, gi }) {
+  const moving = new Set((pids || []).filter(Boolean));
+  if (!moving.size) return groups || [];
+  const next = (groups || []).map(g => g.filter(p => !moving.has(p)));
+  if (gi < 0) return next;
+  while (next.length <= gi) next.push([]);
+  // Off the caller's list, not the Set: a director who taps four names in an
+  // order gets them back in that order.
+  next[gi] = [...next[gi], ...(pids || []).filter(p => moving.has(p))];
+  return next;
+}
+
 // The matches riding in a group, in the order given. Lets a group card name
 // what is actually playing in it rather than only who is sitting in it.
 export const matchesInGroup = ({ group, matches }) =>
