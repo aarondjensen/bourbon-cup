@@ -58,10 +58,16 @@ export const decodeGroups = (raw) => (raw || [])
   .map(g => (Array.isArray(g) ? g : (g?.players || [])))
   .filter(Array.isArray);
 
-// A foursome is the target; a fivesome is tolerated (courses allow them,
-// and an odd roster sometimes forces one). Past that it isn't a group.
+// Four players go off at a time, and that is a hard cap rather than a target
+// — every path that puts somebody on a tee time refuses the fifth.
+//
+// It used to be a target with a fivesome tolerated underneath it (GROUP_MAX,
+// now gone). That tolerance only ever applied to the by-hand editor: the
+// match paths have always checked against GROUP_TARGET and traded places
+// rather than stacking up, because a starter cannot send off an eightsome.
+// Two different capacities for one tee sheet meant a draw built by hand could
+// hold a man the same draw built from matches would have refused.
 export const GROUP_TARGET = 4;
-export const GROUP_MAX = 5;
 
 // Minutes between consecutive groups when the round setup doesn't imply
 // one. Matches the spread the Rounds tab has always auto-filled.
@@ -368,6 +374,22 @@ export const matchesInGroup = ({ group, matches }) =>
 export const groupHasRoom = ({ group, need, target = GROUP_TARGET }) =>
   (group?.length || 0) + need <= target;
 
+// The size a group would be once `pids` move into it. Not `length + pids
+// .length`: a player already sitting in the target is being re-dropped where
+// they already are, and counting them twice would refuse a move that changes
+// nothing — reordering a foursome, or dropping four men back on the tee time
+// three of them are already on.
+export const groupSizeAfter = ({ group, pids }) => {
+  const moving = new Set((pids || []).filter(Boolean));
+  return (group || []).filter(p => !moving.has(p)).length + moving.size;
+};
+
+// Whether that move fits. The one predicate the by-hand editor asks before it
+// writes, and the one it labels its buttons from, so what the screen says and
+// what the tap does can never disagree.
+export const groupFitsAfter = ({ group, pids, target = GROUP_TARGET }) =>
+  groupSizeAfter({ group, pids }) <= target;
+
 // ── Dragging a match onto a tee time ───────────────────────────────
 // A tee sheet has fixed capacity: four players go off at a time. So dropping
 // a match on a FULL tee time cannot mean "add it" — a scramble foursome
@@ -547,8 +569,11 @@ export function groupIssues({ groups, matches, formatId }) {
       const idxs = new Set(pids.map(p => groupIndexForPlayer(groups, p)));
       return idxs.size > 1 && ![...idxs].every(i => i < 0);
     }),
-    // More players than will go off together.
-    oversized: groups.map((g, i) => ({ i, n: g.length })).filter(g => g.n > GROUP_MAX),
+    // More players than will go off together. Nothing in the app can build one
+    // any more, so this now names a group that arrived some other way — a
+    // document written before the cap, or a hand edit in the console — rather
+    // than a fivesome the editor allowed through.
+    oversized: groups.map((g, i) => ({ i, n: g.length })).filter(g => g.n > GROUP_TARGET),
   };
 }
 
