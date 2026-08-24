@@ -12,7 +12,11 @@
 // They come apart the moment a round isn't 2v2:
 //   • Singles      — a match is two players, so a foursome is TWO matches.
 //   • Team formats — Team Best Ball puts the whole side in one match, so a
-//                    single match spans as many foursomes as it takes.
+//                    single match spans as many foursomes as it takes — and
+//                    those foursomes are TEAMMATES, because the side plays as
+//                    a side (see `groupsByTeam` in constants.js). It is the
+//                    one format here where a group holding both teams is a
+//                    mistake rather than the point.
 // In both cases the pairing is a judgement call (who plays with whom, who
 // goes off first) that only the director can make. Hence this module.
 //
@@ -179,6 +183,35 @@ export const formatPerSide = (formatId) => FORMATS.find(f => f.id === formatId)?
 // and the director never has to think about it.
 export const isFoursomeFormat = (formatId) => formatPerSide(formatId) === 2;
 
+// True when a foursome is a team's OWN players — nobody rides with an
+// opponent. Team Best Ball is the only format that says so (see the note on
+// `groupsByTeam` in constants.js): a side of seven or eight plays as a side,
+// so the draw for it is that side split into waves, not a tee sheet of 2v2
+// foursomes. It is the ONE format question this module asks that the scoring
+// engine never does — who walked with whom changes no result, it changes the
+// tee sheet.
+export const formatGroupsByTeam = (formatId) =>
+  !!FORMATS.find(f => f.id === formatId)?.groupsByTeam;
+
+// A side split into as-even groups as its size allows, never more than a
+// foursome in one. Even rather than greedy on purpose: a side of five sliced
+// four-at-a-time leaves one man teeing off alone, where 3 + 2 is two real
+// groups. Eight is 4 + 4 and seven is 4 + 3 either way, which is the field
+// this actually runs on.
+export function splitEvenly(players, size = GROUP_TARGET) {
+  const list = (players || []).filter(Boolean);
+  if (!list.length) return [];
+  const count = Math.ceil(list.length / size);
+  const out = [];
+  let i = 0;
+  for (let g = 0; g < count; g++) {
+    const take = Math.ceil((list.length - i) / (count - g));
+    out.push(list.slice(i, i + take));
+    i += take;
+  }
+  return out;
+}
+
 // Alternate the two sides so every generated foursome is as close to 2v2
 // as the rosters allow, rather than both of one team going off together.
 function interleave(a = [], b = []) {
@@ -212,8 +245,24 @@ export function autoBuildGroups({ formatId, matches }) {
     for (let i = 0; i < matches.length; i += 2) {
       out.push(matches.slice(i, i + 2).flatMap(matchSeq));
     }
+  } else if (formatGroupsByTeam(formatId)) {
+    // Teammate foursomes (Team Best Ball). The side is the unit: each team is
+    // split into waves of its own men and NOT interleaved with the opposition,
+    // because that is how this round is played — the whole side plays the
+    // whole side, and the four men walking together are counting each other's
+    // nets, not marking an opponent's.
+    //
+    // The two sides' waves then alternate down the tee sheet (A, B, A, B) so
+    // each team is spread across the morning rather than one side going off
+    // an hour behind the other.
+    matches.forEach(m => {
+      out.push(...interleave(
+        splitEvenly(m?.teamA || []),
+        splitEvenly(m?.teamB || []),
+      ));
+    });
   } else {
-    // Team / variable-size formats: one match can hold the whole field, so
+    // Any other variable-size format: one match can hold the whole field, so
     // slice it into foursomes, keeping the sides alternating.
     matches.forEach(m => {
       const seq = matchSeq(m);
@@ -414,16 +463,44 @@ export function numberMatches({ matches, tRounds, groupsByRound }) {
   return out;
 }
 
+// Which side of the round's draw each player is on. Read off the matches
+// rather than the roster, because that is what the draw itself says — a
+// player the director moved between teams after the match was built is on
+// the side the match has him on, and it is the match that will be scored.
+export function sidesInRound(matches) {
+  const side = new Map();
+  (matches || []).forEach(m => {
+    (m?.teamA || []).forEach(pid => side.set(pid, "A"));
+    (m?.teamB || []).forEach(pid => side.set(pid, "B"));
+  });
+  return side;
+}
+
 // ── Validation ─────────────────────────────────────────────────────
 // Everything the director needs told about a round's grouping. Each entry
 // is a plain list so the caller can render whichever ones it cares about.
-export function groupIssues({ groups, matches }) {
+//
+// `formatId` is optional and only widens the checks: a format whose foursomes
+// are teammates (Team Best Ball) also wants to hear about a group holding both
+// sides, which for every other format is exactly how a group is supposed to
+// look.
+export function groupIssues({ groups, matches, formatId }) {
   const seen = new Map();          // pid → times assigned
   groups.forEach(g => g.forEach(pid => seen.set(pid, (seen.get(pid) || 0) + 1)));
 
   const inMatches = new Set(matches.flatMap(matchPlayers));
+  const side = sidesInRound(matches);
 
   return {
+    // A group with both sides in it, in a format that plays its foursomes as
+    // teammates. Silent everywhere else — a 2v2 foursome is two of each by
+    // definition — so this list is empty unless the format asks for it.
+    mixed: formatGroupsByTeam(formatId)
+      ? groups
+        .map((g, i) => ({ i, sides: new Set(g.map(pid => side.get(pid)).filter(Boolean)) }))
+        .filter(({ sides }) => sides.size > 1)
+        .map(({ i }) => i)
+      : [],
     // A player who has a match but no tee time.
     unassigned: [...inMatches].filter(pid => !seen.has(pid)),
     // The same player in two groups — they can only tee off once.
@@ -445,4 +522,4 @@ export function groupIssues({ groups, matches }) {
 
 export const hasGroupIssues = (issues) =>
   !!(issues.unassigned.length || issues.duplicated.length || issues.unmatched.length
-     || issues.split.length || issues.oversized.length);
+     || issues.split.length || issues.oversized.length || issues.mixed?.length);

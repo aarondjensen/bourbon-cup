@@ -35,9 +35,9 @@ import {
   GROUP_TARGET, GROUP_MAX, TEE_SLOTS,
   autoBuildGroups, expandTeeTimes, teeTimeList,
   stripAMPM, teeSlotCount, padGroups, trimGroups, firstOpenGroup, groupHasRoom,
-  matchPlayers, matchSeq, formatPerSide, isFoursomeFormat,
+  matchPlayers, matchSeq, formatPerSide, isFoursomeFormat, formatGroupsByTeam,
   groupIndexForMatch, assignMatchToGroup, swapMatchIntoGroup,
-  groupIssues, hasGroupIssues,
+  groupIssues, hasGroupIssues, sidesInRound,
   orderMatchesForRound, canonicalMatchOrder,
 } from "../lib/groups";
 import {
@@ -114,6 +114,15 @@ export function MatchSetup({
   const fmt = FORMATS.find(f => f.id === tr?.format);
   const perSide = formatPerSide(tr?.format);
   const autoFoursomes = isFoursomeFormat(tr?.format);
+  // Team Best Ball: the side is the unit, so a foursome is four teammates and
+  // the match is the whole side against the whole side. Both halves of this
+  // tab change shape for it — the builder takes a side at a time rather than a
+  // pairing, and the tee sheet is waves of one team rather than 2v2 groups.
+  const teammateGroups = formatGroupsByTeam(tr?.format);
+  // A format whose match takes as many players a side as the director cares to
+  // give it. The only one today is Team Best Ball, and for it "select the side"
+  // is the whole of building the match.
+  const wholeSide = perSide == null;
 
   const rndMatches = matches.filter(m => m.round === round);
 
@@ -159,7 +168,7 @@ export function MatchSetup({
   // live on the Rounds tab, which is where they are set.
   const times = expandTeeTimes(rawTimes, Math.max(groups.length, TEE_SLOTS));
 
-  const issues = groupIssues({ groups, matches: rndMatches });
+  const issues = groupIssues({ groups, matches: rndMatches, formatId: tr?.format });
   const flagged = hasGroupIssues(issues);
 
   // ── The score guard ──────────────────────────────────────────────
@@ -203,6 +212,17 @@ export function MatchSetup({
   const slotName = (gi) => (times[gi] ? stripAMPM(times[gi]) : `tee time ${gi + 1}`);
 
   const { nameOf, shortOf, teamOf } = playerLookup(tPlayers);
+
+  // The side each grouped player is on, read off the round's draw rather than
+  // the roster — see sidesInRound. Used to name (and to police) a teammate
+  // format's tee times, where a group belongs to one team.
+  const sideOfPid = sidesInRound(rndMatches);
+  // Which team a group is, or null when it holds both sides or nobody. A group
+  // with players in no match at all is `unmatched` and says so separately.
+  const groupSide = (g) => {
+    const sides = new Set((g || []).map(pid => sideOfPid.get(pid)).filter(Boolean));
+    return sides.size === 1 ? [...sides][0] : null;
+  };
 
   // CH preview, routed through the same resolver the scoring engine uses so
   // that once a round is locked this panel shows the strokes that will
@@ -690,6 +710,23 @@ export function MatchSetup({
               <div style={{ fontSize: FS.label, fontWeight: 700, color: team.accent, letterSpacing: 1, marginBottom: 5, textAlign: "center" }}>
                 {teamNames?.[tid]}
               </div>
+              {/* Whole-side formats only. Team Best Ball's match is the side,
+                  so building it is sixteen taps of "yes, him too" — and every
+                  one of them is a chance to leave a man out of the round the
+                  cup is decided in. A 2-man format gets no such button: there
+                  the selection is a judgement (who partners whom) and a
+                  select-all would only ever be a mis-tap. */}
+              {wholeSide && pool.length > 1 && (
+                <button
+                  onClick={() => setSel(sel.length >= pool.length ? [] : pool.map(p => p.player_id))}
+                  style={{
+                    ...miniBtn, width: "100%", marginBottom: 5, padding: "4px 8px",
+                    borderColor: team.accent + ALPHA.line, color: team.accent,
+                  }}
+                >
+                  {sel.length >= pool.length ? "Clear" : `All ${pool.length}`}
+                </button>
+              )}
               {pool.length === 0 && (
                 <div style={{ fontSize: FS.label, color: BC.t3, padding: "7px 8px", borderRadius: 8, border: `1px dashed ${BC.bdr}`, textAlign: "center" }}>
                   {roster.length ? `All matched in Rd ${round}` : "No players"}
@@ -757,7 +794,13 @@ export function MatchSetup({
           cursor: "pointer", background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`,
           color: ON_AMBER, marginBottom: 14, fontFamily: FONT,
         }}>
-          Create Match — {teamASel.map(shortOf).join("/")} vs {teamBSel.map(shortOf).join("/")}
+          {/* Named on a 2-man draw, counted on a whole-side one. Eight names
+              slashed together against eight more is not a label anybody reads
+              — it is a paragraph on a button, and it wraps to four lines on a
+              phone. The two columns above already show exactly who is lit. */}
+          Create Match — {wholeSide && teamASel.length + teamBSel.length > 4
+            ? `${teamASel.length} vs ${teamBSel.length}`
+            : `${teamASel.map(shortOf).join("/")} vs ${teamBSel.map(shortOf).join("/")}`}
         </button>
       )}
 
@@ -934,16 +977,29 @@ export function MatchSetup({
               Auto-build keeps its button — for these formats it is the only
               way to fill the sheet in one move, since a match spanning several
               groups has no single time to be dropped onto. */}
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16, marginBottom: 8 }}>
-            <button onClick={buildGroups} style={miniBtn}>Auto-build</button>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 16, marginBottom: 8 }}>
+            {/* One line, and only for the format that needs it. The chips are
+                team-coloured, so a mixed group is visible once you know to
+                look — this is what tells you to look. Everything else about
+                this editor is discoverable by tapping a chip. */}
+            <span style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, minWidth: 0, lineHeight: 1.35 }}>
+              {teammateGroups ? `${fmt?.label} tees off in teammate foursomes.` : ""}
+            </span>
+            <button onClick={buildGroups} style={{ ...miniBtn, flexShrink: 0 }}>Auto-build</button>
           </div>
 
           {groups.map((g, gi) => {
             const over = g.length > GROUP_MAX;
+            // Whose tee time this is. Only asked of a teammate format, where a
+            // group belongs to one team and a group holding both is the one
+            // mistake this editor can make that still looks like a draw.
+            const side = teammateGroups ? groupSide(g) : null;
+            const mixed = teammateGroups && g.length > 0 && !side;
+            const sideTeam = side ? teams[side] : null;
             return (
               <div key={gi} style={{
                 ...cardStyle, padding: "9px 11px", marginBottom: 6,
-                border: `1px solid ${held ? BC.amber + ALPHA.line : over ? BC.danger + ALPHA.line : BC.bdr}`,
+                border: `1px solid ${mixed || over ? BC.danger + ALPHA.line : held ? BC.amber + ALPHA.line : sideTeam ? sideTeam.accent + ALPHA.line : BC.bdr}`,
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: g.length ? 7 : 0 }}>
                   {/* The time this group goes off, read off the round, and the
@@ -958,10 +1014,16 @@ export function MatchSetup({
                     color: times[gi] ? BC.t1 : BC.t3,
                   }}>{times[gi] ? stripAMPM(times[gi]) : "—"}</span>
                   <span style={{
-                    fontSize: FS.label, color: over ? BC.danger : BC.t3, fontWeight: 700, flex: 1, minWidth: 0,
+                    fontSize: FS.label, color: mixed || over ? BC.danger : sideTeam ? sideTeam.accent : BC.t3,
+                    fontWeight: 700, flex: 1, minWidth: 0,
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   }}>
-                    {g.length} player{g.length !== 1 ? "s" : ""}{over ? " · too many" : ""}
+                    {/* On a teammate format the team's name leads, because it
+                        is the thing being checked — a wave of four is right or
+                        wrong by whose four it is, not by how many. */}
+                    {sideTeam ? `${teamNames?.[side] || sideTeam.name} · ` : ""}
+                    {g.length} player{g.length !== 1 ? "s" : ""}
+                    {mixed ? " · both teams" : ""}{over ? " · too many" : ""}
                   </span>
                   {held
                     ? <button onClick={() => moveHeldTo(gi)} style={{ ...miniBtn, padding: "4px 8px" }}>Move {shortOf(held)} here</button>
@@ -1016,6 +1078,14 @@ export function MatchSetup({
           ))}
           {issues.oversized.map(({ i, n }) => (
             <div key={i} style={{ fontSize: FS.label, color: BC.t2, marginBottom: 3 }}>· The {slotName(i)} group has {n} players.</div>
+          ))}
+          {/* The one that reads as a normal draw and is not. Every other format
+              puts opponents in a group on purpose, so this only ever appears
+              on a format whose foursomes are teammates. */}
+          {(issues.mixed || []).map(i => (
+            <div key={`mixed${i}`} style={{ fontSize: FS.label, color: BC.t2, marginBottom: 3 }}>
+              · The {slotName(i)} group has players from both teams — {fmt?.label} foursomes are teammates.
+            </div>
           ))}
           {issues.unassigned.length > 0 && (
             <div style={{ fontSize: FS.label, color: BC.t2 }}>
