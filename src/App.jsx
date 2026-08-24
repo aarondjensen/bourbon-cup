@@ -87,6 +87,7 @@ import {
   GROUPS_COL, groupsDocId, encodeGroups, decodeGroups,
   teeTimeForMatch, parseTeeTime, formatTeeTime, DEFAULT_TEE_INTERVAL, TEE_SLOTS,
   roundPlaySetup, orderMatchesForRound, numberMatches, groupIndexForMatch,
+  sidesInRound,
 } from "./lib/groups";
 import { firstTeeAt } from "./lib/countdown";
 import { groupKey, tagAheadOfPlay } from "./lib/ctp";
@@ -2005,6 +2006,24 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
   // their numbers were handed out in, so the cards below count up.
   const ordered = orderMatchesForRound({ matches: rndMatches, groups, times });
 
+  // ── The tee sheet ──
+  // A match card carries its own tee time whenever the match fits in one
+  // group, which is every 2-man format and Singles. It cannot for a format
+  // whose match is the whole side (Team Best Ball): those sixteen men go off
+  // in four waves, so the match has no single time and the card above shows
+  // none — which left the closing round as the one round of the week where a
+  // player could not find out when he tees off.
+  //
+  // So the groups get their own list, and only when they are the only place
+  // the times are: a round whose matches each carry a time would just be
+  // saying it twice.
+  const teeSheet = rndMatches.length > 0
+    && groups.some(g => g.length)
+    && rndMatches.every(m => groupIndexForMatch({ groups, match: m }) < 0)
+    ? groups
+    : [];
+  const sideOfPid = sidesInRound(rndMatches);
+
   return (
     <div style={{ fontFamily: FONT }}>
       {/* Round selector — pill toggle, deep Mash green for active state.
@@ -2080,6 +2099,40 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
         </div>
         );
       })}
+
+      {/* The tee sheet, for the rounds whose match cards cannot carry a time
+          of their own (see teeSheet above). One row per wave, in the order
+          they go off, each behind the colour of the side riding in it — which
+          on Team Best Ball is one team, because that round's foursomes are
+          teammates. A wave the director has not filled yet is left out
+          entirely rather than shown as an empty time. */}
+      {teeSheet.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ ...teamTagStyle, color: BC.t3, marginBottom: 8 }}>TEE TIMES</div>
+          {teeSheet.map((g, gi) => {
+            if (!g.length) return null;
+            const sides = new Set(g.map(pid => sideOfPid.get(pid)).filter(Boolean));
+            const rail = sides.size === 1 ? teamColor([...sides][0]) : BC.bdr;
+            return (
+              <div key={gi} style={{
+                background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`,
+                borderLeft: `3px solid ${rail}`, padding: "10px 12px", marginBottom: 8,
+              }}>
+                <div style={{ fontSize: FS.label, color: BC.t3, marginBottom: 6, fontWeight: 800, letterSpacing: 1 }}>
+                  {times[gi] || `WAVE ${gi + 1}`}
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", columnGap: 14, rowGap: 2 }}>
+                  {g.map(pid => (
+                    <span key={pid} style={{ fontSize: FS.body, fontWeight: 600, color: BC.t1, lineHeight: 1.35 }}>
+                      {nameOf(pid)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

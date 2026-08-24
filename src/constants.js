@@ -186,6 +186,15 @@ export const HANDICAP_MODE_FULL = "full";
 // scramble side playing one ball off two full handicaps is unbeatable, so
 // 35/15 is the round, not an adjustment to it.
 //
+// `groupsByTeam` marks a format whose FOURSOMES are teammates — nobody rides
+// with an opponent. It is a grouping fact, not a scoring one: the engine does
+// not care who walked with whom, but the draw does, and Team Best Ball is the
+// one format here where the whole side plays as a side. A 2-man match is
+// two-a-side by construction so the question never comes up; Team Best Ball is
+// a side of seven or eight against another, and it is played as teammate
+// foursomes going off in waves. See lib/groups (autoBuildGroups, groupIssues),
+// which is the only place it is read.
+//
 // Format defaults are baseline only — the director can override any value
 // in the round setup form.
 export const FORMATS = [
@@ -233,6 +242,7 @@ export const FORMATS = [
     desc: "Whole side plays; each hole is the sum of the best N net scores, set per nine.",
     hole: "The sum of the side's best N nets.",
     unit: UNIT_STROKES, perSide: null, counting: { front: 6, back: 7 },
+    groupsByTeam: true,
     forms: [SCORING_TYPE_MATCH, SCORING_TYPE_TOTAL, SCORING_TYPE_POINTS], formDefault: SCORING_TYPE_POINTS,
     nassau: { front: 1, back: 1, overall: 2 },
     allowance: { pct: 75 }, handicapMode: HANDICAP_MODE_FULL,
