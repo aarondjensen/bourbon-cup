@@ -6,6 +6,7 @@ import { describe, it, expect } from "vitest";
 import {
   splitEvenly, autoBuildGroups, formatGroupsByTeam, isFoursomeFormat,
   groupIssues, hasGroupIssues, sidesInRound, GROUP_TARGET,
+  assignPlayersToGroup,
 } from "./groups";
 
 const A8 = ["a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8"];
@@ -153,5 +154,84 @@ describe("groupIssues — mixed foursomes", () => {
   it("does not call an empty tee time mixed", () => {
     const issues = groupIssues({ groups: [[], []], matches: [], formatId: "team_best_ball" });
     expect(issues.mixed).toEqual([]);
+  });
+});
+
+// ── Filling a foursome by hand ─────────────────────────────────────
+// The manual road. Everything above builds a draw FROM the matches; this is
+// the director putting four named men on a tee time because that is who is
+// walking together, which is the only way to do it in a format whose match is
+// the whole side.
+describe("assignPlayersToGroup", () => {
+  it("fills an empty tee time with the players given", () => {
+    const out = assignPlayersToGroup({ groups: [[], []], pids: ["a1", "a2", "b1", "b2"], gi: 0 });
+    expect(out).toEqual([["a1", "a2", "b1", "b2"], []]);
+  });
+
+  it("keeps the order they were tapped in", () => {
+    const out = assignPlayersToGroup({ groups: [[]], pids: ["b2", "a1", "b1"], gi: 0 });
+    expect(out[0]).toEqual(["b2", "a1", "b1"]);
+  });
+
+  it("adds to whoever is already on the time", () => {
+    const out = assignPlayersToGroup({ groups: [["a1"]], pids: ["a2"], gi: 0 });
+    expect(out).toEqual([["a1", "a2"]]);
+  });
+
+  // The one guarantee that matters: a man tees off once. Moving him somewhere
+  // else has to take him out of where he was, or the draw quietly grows a
+  // duplicate that only groupIssues would ever mention.
+  it("moves players out of the group they were in", () => {
+    const out = assignPlayersToGroup({
+      groups: [["a1", "a2", "a3"], ["b1"]], pids: ["a1", "a3"], gi: 1,
+    });
+    expect(out).toEqual([["a2"], ["b1", "a1", "a3"]]);
+  });
+
+  it("never leaves a player in two groups", () => {
+    const out = assignPlayersToGroup({
+      groups: [["a1", "a2"], ["a3", "a4"], []], pids: ["a1", "a3"], gi: 2,
+    });
+    const all = out.flat();
+    expect(new Set(all).size).toBe(all.length);
+    expect(out[2]).toEqual(["a1", "a3"]);
+  });
+
+  it("ungroups on a negative index", () => {
+    const out = assignPlayersToGroup({ groups: [["a1", "a2"]], pids: ["a1"], gi: -1 });
+    expect(out).toEqual([["a2"]]);
+  });
+
+  // A round has the tee time whether or not this document has mentioned it
+  // yet — same rule assignMatchToGroup follows.
+  it("opens the list up to a later tee time", () => {
+    const out = assignPlayersToGroup({ groups: [["a1"]], pids: ["a2"], gi: 3 });
+    expect(out).toEqual([["a1"], [], [], ["a2"]]);
+  });
+
+  it("is a no-op with nothing selected", () => {
+    const groups = [["a1"], ["b1"]];
+    expect(assignPlayersToGroup({ groups, pids: [], gi: 0 })).toEqual(groups);
+    expect(assignPlayersToGroup({ groups, pids: undefined, gi: 0 })).toEqual(groups);
+  });
+
+  it("survives an empty draw", () => {
+    expect(assignPlayersToGroup({ groups: undefined, pids: ["a1"], gi: 0 })).toEqual([["a1"]]);
+  });
+
+  // Building a whole Team Best Ball tee sheet by hand, which is the case this
+  // exists for: four waves of four teammates, nobody riding twice.
+  it("builds a teammate tee sheet a wave at a time", () => {
+    let groups = [[], [], [], []];
+    const waves = [
+      ["a1", "a2", "a3", "a4"],
+      ["b1", "b2", "b3", "b4"],
+      ["a5", "a6", "a7", "a8"],
+      ["b5", "b6", "b7", "b8"],
+    ];
+    waves.forEach((w, i) => { groups = assignPlayersToGroup({ groups, pids: w, gi: i }); });
+    expect(groups).toEqual(waves);
+    const issues = groupIssues({ groups, matches: wholeSide(), formatId: "team_best_ball" });
+    expect(hasGroupIssues(issues)).toBe(false);
   });
 });
