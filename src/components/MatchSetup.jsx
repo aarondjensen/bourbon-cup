@@ -44,6 +44,7 @@ import {
 import {
   matchScoreImpact, orphanedScores, incomingScores, describeScored,
 } from "../lib/scoreGuard";
+import { formatTeamVsTeam, isImpliedMatch } from "../lib/impliedMatches";
 
 
 const cardStyle = { background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}` };
@@ -133,6 +134,10 @@ export function MatchSetup({
   // give it. The only one today is Team Best Ball, and for it "select the side"
   // is the whole of building the match.
   const wholeSide = perSide == null;
+  // A format whose match is not built at all: the whole side against the whole
+  // side, derived from the roster (see lib/impliedMatches). There is nothing
+  // for the two pools to ask, so this tab does not draw them.
+  const impliedRound = formatTeamVsTeam(tr?.format);
 
   const rndMatches = matches.filter(m => m.round === round);
 
@@ -667,7 +672,12 @@ export function MatchSetup({
         {/* Right track, mirrored: team B reading toward the axis, then the ✕. */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, justifyContent: "flex-end" }}>
           {nameStack(sideNames(m, "B", nameOf), teams.B.accent, "right")}
-          <button onClick={() => deleteMatch(m)} style={xBtn}>✕</button>
+          {/* No ✕ on a match the app derived. There is no document behind it
+              — a delete would remove nothing and it would be back on the next
+              render, which is a button that reports success and changes
+              nothing. The way to stop this round being team-vs-team is to
+              change its FORMAT, on the Rounds tab. */}
+          {!isImpliedMatch(m) && <button onClick={() => deleteMatch(m)} style={xBtn}>✕</button>}
         </div>
       </div>
     );
@@ -736,7 +746,14 @@ export function MatchSetup({
       {/* ── Match builder ──
           Unlabelled: the two team rosters under the round's banner are what
           this tab opens with, and picking a name from each is the only thing
-          they can do. A heading over them says nothing the pools don't. */}
+          they can do. A heading over them says nothing the pools don't.
+
+          Absent entirely on a team-vs-team format. Its match is the whole side
+          against the whole side and there is no other arrangement of the field
+          — the pools could only ever be filled one way, and a director who
+          filled them any other way would be building a match the format does
+          not have. The card below already shows it. */}
+      {!impliedRound && (
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
         {[["A", teamASel, setTeamASel], ["B", teamBSel, setTeamBSel]].map(([tid, sel, setSel]) => {
           const team = teams[tid];
@@ -796,6 +813,7 @@ export function MatchSetup({
           );
         })}
       </div>
+      )}
 
       {sizeOff && (
         <div style={{ fontSize: FS.label, color: BC.danger, marginBottom: 8, textAlign: "center" }}>

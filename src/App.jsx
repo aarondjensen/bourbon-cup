@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } fro
 import { createPortal } from "react-dom";
 import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, HOLE_BANNER, FS, applyBCTheme, initialBCMode, bcGlobalCSS, teamColor, VP_BAND } from "./theme";
 import { playerLookup, realPlayers } from "./lib/players";
+import { withImpliedMatches } from "./lib/impliedMatches";
 import { db, writeFailure, TOURNAMENT_ID, getTournamentYear, getActiveTournamentId, getDefaultEditionId, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, readTournamentIdentity, writeTournamentIdentity, BOOTSTRAP_DIRECTOR, SPECTATOR_ID } from "./firebase";
 import { PROVIDERS, signIn, signOutUser, onAuthUser, consumeRedirectResult, isCancelled, whenAuthReady } from "./lib/auth";
 import { claimPlayer, linkedPlayer, isClaimed, readMembership, isDirectorAccount, joinWithCode, setDirector, ACCOUNTS_COL, deleteAccount } from "./lib/accounts";
@@ -3898,11 +3899,24 @@ export default function App() {
   // view. Every surface then reads the one number instead of numbering the
   // matches it happens to be showing, which is what let the Matches tab and
   // the Leaderboard call the same match by two different names.
-  const matchNumbers = useMemo(
-    () => numberMatches({ matches, tRounds: enrichedRounds, groupsByRound: groupsData }),
-    [matches, enrichedRounds, groupsData]
+  // The matches a format implies, folded in before anything reads them.
+  //
+  // Team Best Ball's match is the whole side against the whole side and has no
+  // other possible shape, so it is derived from the roster rather than built
+  // (see lib/impliedMatches). Injected HERE, above numberMatches and
+  // enrichedMatches, so it reaches every consumer through the one pipeline the
+  // stored matches already come down — scoring, the leaderboard, match
+  // numbering, the tee sheet. A derivation that only the Matches tab knew
+  // about would be a match you could draw and could not score.
+  const allMatches = useMemo(
+    () => withImpliedMatches({ matches, tRounds: enrichedRounds, tPlayers }),
+    [matches, enrichedRounds, tPlayers]
   );
-  const enrichedMatches = useMemo(() => matches.map(m => {
+  const matchNumbers = useMemo(
+    () => numberMatches({ matches: allMatches, tRounds: enrichedRounds, groupsByRound: groupsData }),
+    [allMatches, enrichedRounds, groupsData]
+  );
+  const enrichedMatches = useMemo(() => allMatches.map(m => {
     const tr = enrichedRounds.find(t => t.round_number === m.round);
     return {
       ...m,
@@ -3915,7 +3929,7 @@ export default function App() {
       // is the hole values rather than any pot.
       hole_points: tr?.hole_points || m.hole_points || null,
     };
-  }), [matches, enrichedRounds, matchNumbers]);
+  }), [allMatches, enrichedRounds, matchNumbers]);
 
   // Keep the auto-lock's source data current without rebuilding onSaveHole.
   useEffect(() => {

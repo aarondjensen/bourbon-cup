@@ -186,6 +186,16 @@ export const HANDICAP_MODE_FULL = "full";
 // scramble side playing one ball off two full handicaps is unbeatable, so
 // 35/15 is the round, not an adjustment to it.
 //
+// `teamVsTeam` marks a format whose MATCH is fixed: the whole of one side
+// against the whole of the other, with nothing for a director to choose. Such
+// a match is DERIVED from the roster rather than built and stored (see
+// lib/impliedMatches) — asking somebody to select sixteen names to express the
+// only arrangement the format allows is data entry with one possible answer,
+// and a stored copy of it goes stale the moment the roster changes.
+//
+// Distinct from `groupsByTeam` below, though today one format carries both:
+// this one is about who is IN the match, that one about who walks together.
+//
 // `groupsByTeam` marks a format whose FOURSOMES are teammates — nobody rides
 // with an opponent. It is a grouping fact, not a scoring one: the engine does
 // not care who walked with whom, but the draw does, and Team Best Ball is the
@@ -242,7 +252,7 @@ export const FORMATS = [
     desc: "Whole side plays; each hole is the sum of the best N net scores, set per nine.",
     hole: "The sum of the side's best N nets.",
     unit: UNIT_STROKES, perSide: null, counting: { front: 6, back: 7 },
-    groupsByTeam: true,
+    groupsByTeam: true, teamVsTeam: true,
     forms: [SCORING_TYPE_MATCH, SCORING_TYPE_TOTAL, SCORING_TYPE_POINTS], formDefault: SCORING_TYPE_POINTS,
     nassau: { front: 1, back: 1, overall: 2 },
     allowance: { pct: 75 }, handicapMode: HANDICAP_MODE_FULL,
