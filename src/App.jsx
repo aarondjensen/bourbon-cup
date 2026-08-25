@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } fro
 import { createPortal } from "react-dom";
 import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, HOLE_BANNER, FS, applyBCTheme, initialBCMode, bcGlobalCSS, teamColor, VP_BAND } from "./theme";
 import { playerLookup, realPlayers } from "./lib/players";
-import { withImpliedMatches } from "./lib/impliedMatches";
 import { db, writeFailure, TOURNAMENT_ID, getTournamentYear, getActiveTournamentId, getDefaultEditionId, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, readTournamentIdentity, writeTournamentIdentity, BOOTSTRAP_DIRECTOR, SPECTATOR_ID } from "./firebase";
 import { PROVIDERS, signIn, signOutUser, onAuthUser, consumeRedirectResult, isCancelled, whenAuthReady } from "./lib/auth";
 import { claimPlayer, linkedPlayer, isClaimed, readMembership, isDirectorAccount, joinWithCode, setDirector, ACCOUNTS_COL, deleteAccount } from "./lib/accounts";
@@ -88,7 +87,6 @@ import {
   GROUPS_COL, groupsDocId, encodeGroups, decodeGroups,
   teeTimeForMatch, parseTeeTime, formatTeeTime, DEFAULT_TEE_INTERVAL, TEE_SLOTS,
   roundPlaySetup, orderMatchesForRound, numberMatches, groupIndexForMatch,
-  sidesInRound,
 } from "./lib/groups";
 import { firstTeeAt } from "./lib/countdown";
 import { groupKey, tagAheadOfPlay } from "./lib/ctp";
@@ -2007,24 +2005,6 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
   // their numbers were handed out in, so the cards below count up.
   const ordered = orderMatchesForRound({ matches: rndMatches, groups, times });
 
-  // ── The tee sheet ──
-  // A match card carries its own tee time whenever the match fits in one
-  // group, which is every 2-man format and Singles. It cannot for a format
-  // whose match is the whole side (Team Best Ball): those sixteen men go off
-  // in four waves, so the match has no single time and the card above shows
-  // none — which left the closing round as the one round of the week where a
-  // player could not find out when he tees off.
-  //
-  // So the groups get their own list, and only when they are the only place
-  // the times are: a round whose matches each carry a time would just be
-  // saying it twice.
-  const teeSheet = rndMatches.length > 0
-    && groups.some(g => g.length)
-    && rndMatches.every(m => groupIndexForMatch({ groups, match: m }) < 0)
-    ? groups
-    : [];
-  const sideOfPid = sidesInRound(rndMatches);
-
   return (
     <div style={{ fontFamily: FONT }}>
       {/* Round selector — pill toggle, deep Mash green for active state.
@@ -2100,40 +2080,6 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
         </div>
         );
       })}
-
-      {/* The tee sheet, for the rounds whose match cards cannot carry a time
-          of their own (see teeSheet above). One row per wave, in the order
-          they go off, each behind the colour of the side riding in it — which
-          on Team Best Ball is one team, because that round's foursomes are
-          teammates. A wave the director has not filled yet is left out
-          entirely rather than shown as an empty time. */}
-      {teeSheet.length > 0 && (
-        <div style={{ marginTop: 12 }}>
-          <div style={{ ...teamTagStyle, color: BC.t3, marginBottom: 8 }}>TEE TIMES</div>
-          {teeSheet.map((g, gi) => {
-            if (!g.length) return null;
-            const sides = new Set(g.map(pid => sideOfPid.get(pid)).filter(Boolean));
-            const rail = sides.size === 1 ? teamColor([...sides][0]) : BC.bdr;
-            return (
-              <div key={gi} style={{
-                background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`,
-                borderLeft: `3px solid ${rail}`, padding: "10px 12px", marginBottom: 8,
-              }}>
-                <div style={{ fontSize: FS.label, color: BC.t3, marginBottom: 6, fontWeight: 800, letterSpacing: 1 }}>
-                  {times[gi] || `WAVE ${gi + 1}`}
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", columnGap: 14, rowGap: 2 }}>
-                  {g.map(pid => (
-                    <span key={pid} style={{ fontSize: FS.body, fontWeight: 600, color: BC.t1, lineHeight: 1.35 }}>
-                      {nameOf(pid)}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }
@@ -3899,24 +3845,11 @@ export default function App() {
   // view. Every surface then reads the one number instead of numbering the
   // matches it happens to be showing, which is what let the Matches tab and
   // the Leaderboard call the same match by two different names.
-  // The matches a format implies, folded in before anything reads them.
-  //
-  // Team Best Ball's match is the whole side against the whole side and has no
-  // other possible shape, so it is derived from the roster rather than built
-  // (see lib/impliedMatches). Injected HERE, above numberMatches and
-  // enrichedMatches, so it reaches every consumer through the one pipeline the
-  // stored matches already come down — scoring, the leaderboard, match
-  // numbering, the tee sheet. A derivation that only the Matches tab knew
-  // about would be a match you could draw and could not score.
-  const allMatches = useMemo(
-    () => withImpliedMatches({ matches, tRounds: enrichedRounds, tPlayers }),
-    [matches, enrichedRounds, tPlayers]
-  );
   const matchNumbers = useMemo(
-    () => numberMatches({ matches: allMatches, tRounds: enrichedRounds, groupsByRound: groupsData }),
-    [allMatches, enrichedRounds, groupsData]
+    () => numberMatches({ matches, tRounds: enrichedRounds, groupsByRound: groupsData }),
+    [matches, enrichedRounds, groupsData]
   );
-  const enrichedMatches = useMemo(() => allMatches.map(m => {
+  const enrichedMatches = useMemo(() => matches.map(m => {
     const tr = enrichedRounds.find(t => t.round_number === m.round);
     return {
       ...m,
@@ -3929,7 +3862,7 @@ export default function App() {
       // is the hole values rather than any pot.
       hole_points: tr?.hole_points || m.hole_points || null,
     };
-  }), [allMatches, enrichedRounds, matchNumbers]);
+  }), [matches, enrichedRounds, matchNumbers]);
 
   // Keep the auto-lock's source data current without rebuilding onSaveHole.
   useEffect(() => {
