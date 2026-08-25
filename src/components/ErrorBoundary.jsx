@@ -72,9 +72,19 @@ export default class ErrorBoundary extends Component {
         }}>
           Reload App
         </button>
-        {/* Dev-only: show the real error so it's debuggable. Production
-            users see only the friendly message above. */}
-        {import.meta.env.DEV && this.state.error && (
+        {/* The message itself. Dev always shows it; production shows it only
+            where the caller asked for it with `showDetail`.
+
+            The top-level boundary in main.jsx asks for it, and that is
+            deliberate. A crash in App's own body takes the whole tree with
+            it, and the only place that error existed was a console nobody
+            can open on a phone at a tee box — which is how a real fault
+            reaches the director as "the app is black" and nothing more. On a
+            sixteen-man private tournament, a stack on screen that can be read
+            aloud or screenshotted is worth more than the tidiness of hiding
+            it. The view-level boundaries keep the friendly message alone,
+            because switching tabs already recovers those. */}
+        {(import.meta.env.DEV || this.props.showDetail) && this.state.error && (
           <pre style={{
             marginTop: 20, padding: 10, background: BC.card,
             border: `1px solid ${BC.bdr}`, borderRadius: 6,
