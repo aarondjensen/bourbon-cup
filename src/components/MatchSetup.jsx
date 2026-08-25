@@ -38,7 +38,7 @@ import {
   matchPlayers, matchSeq, formatPerSide, isFoursomeFormat, formatGroupsByTeam,
   assignPlayersToGroup, groupFitsAfter,
   groupIndexForMatch, assignMatchToGroup, swapMatchIntoGroup,
-  groupIssues, hasGroupIssues,
+  groupIssues, hasGroupIssues, sidesInRound,
   orderMatchesForRound, canonicalMatchOrder,
 } from "../lib/groups";
 import {
@@ -160,8 +160,26 @@ export function MatchSetup({
   // live on the Rounds tab, which is where they are set.
   const times = expandTeeTimes(rawTimes, Math.max(groups.length, TEE_SLOTS));
 
-  const issues = groupIssues({ groups, matches: rndMatches });
-  const flagged = hasGroupIssues(issues);
+  // `formatId` is what turns the mixed-foursome check on. Without it
+  // groupIssues.mixed is always empty, which is how a Team Best Ball round
+  // could hold a group of two teams, look completely normal, and be certified
+  // by the ✓ below.
+  const issues = groupIssues({ groups, matches: rndMatches, formatId: tr?.format });
+  // Two different states, and only one of them is a fault.
+  //
+  // A player with no tee time is not a problem, it is an unfinished draw —
+  // and it is already on screen twice over: their name is sitting in the pool
+  // at the top of this tab, which is the list you build FROM. Saying it a
+  // third time in red at the bottom was three answers to a question nobody
+  // asked.
+  //
+  // What CHECK is for is the rest: a group holding both teams, a man in two
+  // tee times, a group over four, a match split across groups. Those look
+  // like a finished draw and are not, which is the whole reason a panel says
+  // them out loud.
+  const flagged = hasGroupIssues({ ...issues, unassigned: [] });
+  // The draw is done when nothing is flagged AND nobody is still waiting.
+  const drawComplete = !flagged && !issues.unassigned.length;
 
   // ── The score guard ──────────────────────────────────────────────
   // A finalized round's draw IS part of the result, so it is not edited from
@@ -209,6 +227,16 @@ export function MatchSetup({
   const slotName = (gi) => (times[gi] ? stripAMPM(times[gi]) : `tee time ${gi + 1}`);
 
   const { nameOf, shortOf, teamOf } = playerLookup(tPlayers);
+
+  // The side each grouped player is on, read off the round's DRAW rather than
+  // the roster — a player moved between teams after the match was built is on
+  // the side the match has him on, and it is the match that will be scored.
+  const sideOfPid = sidesInRound(rndMatches);
+  // Which team a tee time is, or null when it holds both sides or nobody.
+  const groupSide = (g) => {
+    const sides = new Set((g || []).map(pid => sideOfPid.get(pid)).filter(Boolean));
+    return sides.size === 1 ? [...sides][0] : null;
+  };
 
   // CH preview, routed through the same resolver the scoring engine uses so
   // that once a round is locked this panel shows the strokes that will
@@ -596,14 +624,16 @@ export function MatchSetup({
   };
 
   // ── Render ───────────────────────────────────────────────────────
-  const playerChip = (pid, { dim } = {}) => {
+  // `dim` went with the "not in a group" panel — the only caller that ever
+  // passed it. Every chip left is a player standing on a tee time.
+  const playerChip = (pid) => {
     const team = teams[teamOf(pid)] || teams.B;
     const lifted = held === pid;
     return (
       <button key={pid} onClick={() => setHeld(lifted ? null : pid)} style={{
         padding: "5px 9px", borderRadius: 8, cursor: "pointer", fontFamily: FONT,
         fontSize: FS.small, fontWeight: 700, textAlign: "left",
-        background: lifted ? BC.amber : team.color + (dim ? "22" : "44"),
+        background: lifted ? BC.amber : team.color + "44",
         border: `1.5px solid ${lifted ? BC.amber : team.accent + ALPHA.line}`,
         color: lifted ? ON_AMBER : team.accent,
       }}>{shortOf(pid)}</button>
@@ -1084,10 +1114,16 @@ export function MatchSetup({
 
           {groups.map((g, gi) => {
             const over = g.length > GROUP_TARGET;
+            // Only asked of a teammate format, where a tee time belongs to one
+            // team and a group holding both is the one mistake this editor can
+            // make that still looks like a draw.
+            const side = teammateGroups ? groupSide(g) : null;
+            const mixed = teammateGroups && g.length > 0 && !side;
+            const sideTeam = side ? teams[side] : null;
             return (
               <div key={gi} style={{
                 ...cardStyle, padding: "9px 11px", marginBottom: 6,
-                border: `1px solid ${held ? BC.amber + ALPHA.line : over ? BC.danger + ALPHA.line : BC.bdr}`,
+                border: `1px solid ${mixed || over ? BC.danger + ALPHA.line : held ? BC.amber + ALPHA.line : sideTeam ? sideTeam.accent + ALPHA.line : BC.bdr}`,
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: g.length ? 7 : 0 }}>
                   {/* The time this group goes off, read off the round, and the
@@ -1102,10 +1138,16 @@ export function MatchSetup({
                     color: times[gi] ? BC.t1 : BC.t3,
                   }}>{times[gi] ? stripAMPM(times[gi]) : "—"}</span>
                   <span style={{
-                    fontSize: FS.label, color: over ? BC.danger : BC.t3, fontWeight: 700, flex: 1, minWidth: 0,
+                    fontSize: FS.label, color: mixed || over ? BC.danger : sideTeam ? sideTeam.accent : BC.t3,
+                    fontWeight: 700, flex: 1, minWidth: 0,
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   }}>
-                    {g.length} player{g.length !== 1 ? "s" : ""}{over ? " · too many" : ""}
+                    {/* On a teammate format the team's name leads, because it
+                        is the thing being checked — a wave of four is right or
+                        wrong by WHOSE four it is, not by how many. */}
+                    {sideTeam ? `${teamNames?.[side] || sideTeam.name} · ` : ""}
+                    {g.length} player{g.length !== 1 ? "s" : ""}
+                    {mixed ? " · both teams" : ""}{over ? " · too many" : ""}
                   </span>
                   {held
                     ? <button onClick={() => moveHeldTo(gi)} style={{ ...miniBtn, padding: "4px 8px" }}>Move {shortOf(held)} here</button>
@@ -1129,17 +1171,11 @@ export function MatchSetup({
             </>
           )}
 
-          {/* Players with a match but nowhere to tee off. */}
-          {issues.unassigned.length > 0 && (
-            <div style={{ ...cardStyle, padding: "9px 11px", marginBottom: 8, border: `1px solid ${BC.danger}${ALPHA.line}` }}>
-              <div style={{ fontSize: FS.label, fontWeight: 800, color: BC.danger, letterSpacing: 1, marginBottom: 7 }}>
-                NOT IN A GROUP — NO TEE TIME
-              </div>
-              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                {issues.unassigned.map(pid => playerChip(pid, { dim: true }))}
-              </div>
-            </div>
-          )}
+          {/* No "not in a group" panel. Whoever has no tee time is exactly
+              what the two pools at the top of this tab list — that is what a
+              director is picking FROM — so a red card at the bottom naming
+              them again was the same roster twice on one screen, with the
+              second copy too far from the tee times to act on. */}
         </>
       )}
 
@@ -1161,15 +1197,18 @@ export function MatchSetup({
           {issues.oversized.map(({ i, n }) => (
             <div key={i} style={{ fontSize: FS.label, color: BC.t2, marginBottom: 3 }}>· The {slotName(i)} group has {n} players.</div>
           ))}
-          {issues.unassigned.length > 0 && (
-            <div style={{ fontSize: FS.label, color: BC.t2 }}>
-              · {issues.unassigned.length} player{issues.unassigned.length !== 1 ? "s" : ""} without a tee time.
+          {/* The one that reads as a normal draw and is not. Only ever appears
+              on a format whose foursomes are teammates — every other format
+              puts opponents in a group on purpose. */}
+          {(issues.mixed || []).map(i => (
+            <div key={`mixed${i}`} style={{ fontSize: FS.label, color: BC.t2, marginBottom: 3 }}>
+              · The {slotName(i)} group has players from both teams — {fmt?.label} foursomes are teammates.
             </div>
-          )}
+          ))}
         </div>
       )}
 
-      {!flagged && groups.length > 0 && rndMatches.length > 0 && (
+      {drawComplete && groups.length > 0 && rndMatches.length > 0 && (
         <div style={{ fontSize: FS.label, color: BC.amberInk, textAlign: "center", marginBottom: 8, fontWeight: 700 }}>
           ✓ Every player has a group and a tee time.
         </div>
