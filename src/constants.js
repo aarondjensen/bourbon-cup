@@ -142,6 +142,13 @@ export const HANDICAP_MODE_FULL = "full";
 // the sum of those three (singles → 3, all others → 4) so a director who
 // flips a Nassau round to Traditional gets the same total points at stake.
 //
+// `groupsByTeam` marks a format whose FOURSOMES are teammates — nobody rides
+// with an opponent, because the side plays as a side. Team Best Ball is the
+// only one, and it is the one format here where a group holding both teams is
+// a mistake rather than the point. Read only by lib/groups and the draw: it is
+// a grouping fact, not a scoring one, and the engine does not care who walked
+// with whom.
+//
 // `perSide` is how many players from each team make up one match. It exists
 // so the leaderboard can work out how many matches a round WILL produce
 // before the director has created them, which is what lets the cup target
@@ -233,6 +240,7 @@ export const FORMATS = [
     desc: "Whole side plays; each hole is the sum of the best N net scores, set per nine.",
     hole: "The sum of the side's best N nets.",
     unit: UNIT_STROKES, perSide: null, counting: { front: 6, back: 7 },
+    groupsByTeam: true,
     forms: [SCORING_TYPE_MATCH, SCORING_TYPE_TOTAL, SCORING_TYPE_POINTS], formDefault: SCORING_TYPE_POINTS,
     nassau: { front: 1, back: 1, overall: 2 },
     allowance: { pct: 75 }, handicapMode: HANDICAP_MODE_FULL,

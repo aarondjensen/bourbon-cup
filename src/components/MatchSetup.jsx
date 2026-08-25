@@ -32,10 +32,11 @@ import { FORMATS } from "../constants";
 import { TOURNAMENT_ID, editionDocId } from "../firebase";
 import { getRoundCH, getRoundHandicapMode, lockForRound } from "../scoring";
 import {
-  GROUP_TARGET, GROUP_MAX, TEE_SLOTS,
+  GROUP_TARGET, TEE_SLOTS,
   autoBuildGroups, expandTeeTimes, teeTimeList,
   stripAMPM, teeSlotCount, padGroups, trimGroups, firstOpenGroup, groupHasRoom,
-  matchPlayers, matchSeq, formatPerSide, isFoursomeFormat,
+  matchPlayers, matchSeq, formatPerSide, isFoursomeFormat, formatGroupsByTeam,
+  assignPlayersToGroup, groupFitsAfter,
   groupIndexForMatch, assignMatchToGroup, swapMatchIntoGroup,
   groupIssues, hasGroupIssues,
   orderMatchesForRound, canonicalMatchOrder,
@@ -178,6 +179,11 @@ export function MatchSetup({
   // team format's match holds more players than a group does, so it genuinely
   // spans several and is still split player by player.
   const matchFitsGroup = perSide != null;
+  // Team Best Ball: the side plays the side, so what a director builds here is
+  // not a match at all — it is a FOURSOME of teammates. There are no opponents
+  // to pick, the match is the whole roster either way, and four men is the
+  // most that ever walks off a tee.
+  const teammateGroups = formatGroupsByTeam(tr?.format);
 
   // The round's matches in the order they go off, which is the order their
   // tournament-wide numbers run in. Only the LISTING is reordered:
@@ -388,6 +394,58 @@ export function MatchSetup({
     notify(gi >= 0 && times[gi] ? `Match created — off ${stripAMPM(times[gi])}` : "Match created!", "success");
   };
 
+  // ── Building a teammate foursome ─────────────────────────────────
+  // The Team Best Ball road, and it does not go through the match builder at
+  // all: pick four teammates, and they are on the next open tee time.
+  //
+  // The MATCH is written once, behind this, and never picked: the side plays
+  // the side, so it is the whole roster against the whole roster and there is
+  // no arrangement of the field that would make it anything else. Asking a
+  // director to select sixteen names to say so is data entry with one
+  // possible answer — and until it exists the round has nothing to score
+  // against, which is why it is written here rather than left for later.
+  const ensureTeamMatch = async () => {
+    if (rndMatches.length) return true;
+    const sideOf = (t) => tPlayers.filter(p => p.team === t).map(p => p.player_id);
+    const teamA = sideOf("A");
+    const teamB = sideOf("B");
+    if (!teamA.length || !teamB.length) {
+      notify("Both teams need players on the roster first", "error");
+      return false;
+    }
+    // Keyed on the ROUND, not the roster. A signed card stores the match id it
+    // was signed against, so an id built from the names would move the moment
+    // somebody joined and orphan every signature on the round.
+    await onSetMatch({
+      id: editionDocId(`bc_match_r${round}_teams`),
+      tournament_id: TOURNAMENT_ID,
+      round,
+      teamA, teamB,
+      teamANames: teamA.map(nameOf),
+      teamBNames: teamB.map(nameOf),
+    });
+    return true;
+  };
+
+  const createFoursome = async () => {
+    const pids = foursomeSel;
+    if (!pids.length) return;
+    if (roundFinal) { notify(`Round ${round} is final — reopen it on Scoring to change the draw`, "error"); return; }
+    const gi = firstOpenGroup({ groups, need: pids.length });
+    if (gi < 0) { notify("Every tee time is full", "error"); return; }
+    // Belt and braces behind pickPlayer's cap: the selection cannot get here
+    // over four, and if it ever did this is the write that would put five men
+    // on one tee.
+    if (!groupFitsAfter({ group: groups[gi], pids })) {
+      notify(`A tee time holds ${GROUP_TARGET}`, "error");
+      return;
+    }
+    if (!(await ensureTeamMatch())) return;
+    saveGroups(assignPlayersToGroup({ groups, pids, gi }));
+    setTeamASel([]); setTeamBSel([]);
+    notify(times[gi] ? `Off ${stripAMPM(times[gi])} — ${pids.map(shortOf).join(", ")}` : "Foursome added", "success");
+  };
+
   // Deleting a match used to be the only unconfirmed destructive control in
   // the admin console — one tap on a ✕ the size of a fingernail, sitting in a
   // list you scroll past to get to the groups. It is also the one with the
@@ -463,10 +521,18 @@ export function MatchSetup({
   // A player plays one match per round, so anyone already committed drops
   // out of the pool. An in-progress selection stays visible so it can be
   // tapped off again.
+  //
+  // On a teammate format the question is different, and so is the pool: the
+  // match holds the whole roster from the moment it exists, so "already in a
+  // match" would empty both columns after the first foursome and leave
+  // nothing to build the rest of the draw from. What is being handed out
+  // there is TEE TIMES, so the pool is whoever has not got one yet.
   const matchedPids = new Set(rndMatches.flatMap(matchPlayers));
+  const groupedPids = new Set(groups.flat());
+  const committed = teammateGroups ? groupedPids : matchedPids;
   const poolFor = (tid, sel) => tPlayers
     .filter(p => p.team === tid)
-    .filter(p => !matchedPids.has(p.player_id) || sel.includes(p.player_id));
+    .filter(p => !committed.has(p.player_id) || sel.includes(p.player_id));
 
   const strokes = (() => {
     const all = [...teamASel, ...teamBSel];
@@ -478,6 +544,37 @@ export function MatchSetup({
 
   const sizeHint = perSide ? `${perSide} per side` : "any number per side";
   const sizeOff = !!perSide && (teamASel.length > perSide || teamBSel.length > perSide);
+
+  // The players lifted for a teammate foursome, whichever column they came
+  // from. One side only — see pickPlayer.
+  const foursomeSel = teamASel.length ? teamASel : teamBSel;
+
+  // Tapping a name in a pool.
+  //
+  // Two rules, and both exist only for a teammate format:
+  //
+  //  · ONE SIDE. A Team Best Ball foursome is four teammates; there is no
+  //    opponent to add, so a tap in the other column is a change of mind
+  //    about which team you are drawing, not a second half of a pairing.
+  //    It moves the selection rather than building a mixed group the draw
+  //    would immediately flag.
+  //  · FOUR AT MOST. Four players go off at a time. This is the tee sheet
+  //    being built, so the cap belongs on the selection — refusing at the
+  //    end, after somebody has picked six men, is telling them off for
+  //    something the screen let them do.
+  const pickPlayer = (tid, pid, on) => {
+    const [sel, setSel] = tid === "A" ? [teamASel, setTeamASel] : [teamBSel, setTeamBSel];
+    const [other, setOther] = tid === "A" ? [teamBSel, setTeamBSel] : [teamASel, setTeamASel];
+    if (on) { setSel(sel.filter(x => x !== pid)); return; }
+    if (teammateGroups) {
+      if (other.length) setOther([]);
+      if (sel.length >= GROUP_TARGET) {
+        notify(`A tee time holds ${GROUP_TARGET} — tap one off first`, "error");
+        return;
+      }
+    }
+    setSel([...sel, pid]);
+  };
 
   // ── Render ───────────────────────────────────────────────────────
   const playerChip = (pid, { dim } = {}) => {
@@ -672,11 +769,20 @@ export function MatchSetup({
       )}
 
       {/* ── Match builder ──
-          Unlabelled: the two team rosters under the round's banner are what
-          this tab opens with, and picking a name from each is the only thing
-          they can do. A heading over them says nothing the pools don't. */}
+          Unlabelled for the formats that build a match: the two team rosters
+          under the round's banner are what this tab opens with, and picking a
+          name from each is the only thing they can do.
+
+          A teammate format DOES get a line, because the pools do the opposite
+          of what they look like there — two columns side by side read as "one
+          from each", and here that is the one thing they are not. */}
+      {teammateGroups && !roundFinal && (
+        <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, lineHeight: 1.35, marginBottom: 7, textAlign: "center" }}>
+          Pick up to {GROUP_TARGET} teammates — they tee off together.
+        </div>
+      )}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-        {[["A", teamASel, setTeamASel], ["B", teamBSel, setTeamBSel]].map(([tid, sel, setSel]) => {
+        {[["A", teamASel], ["B", teamBSel]].map(([tid, sel]) => {
           const team = teams[tid];
           const roster = tPlayers.filter(p => p.team === tid);
           const pool = poolFor(tid, sel);
@@ -692,13 +798,14 @@ export function MatchSetup({
               </div>
               {pool.length === 0 && (
                 <div style={{ fontSize: FS.label, color: BC.t3, padding: "7px 8px", borderRadius: 8, border: `1px dashed ${BC.bdr}`, textAlign: "center" }}>
-                  {roster.length ? `All matched in Rd ${round}` : "No players"}
+                  {!roster.length ? "No players"
+                    : teammateGroups ? `All on a tee time` : `All matched in Rd ${round}`}
                 </div>
               )}
               {pool.map(p => {
                 const on = sel.includes(p.player_id);
                 return (
-                  <button key={p.player_id} onClick={() => setSel(prev => on ? prev.filter(x => x !== p.player_id) : [...prev, p.player_id])} style={{
+                  <button key={p.player_id} onClick={() => pickPlayer(tid, p.player_id, on)} style={{
                     width: "100%", padding: "7px 8px", marginBottom: 3, borderRadius: 8, cursor: "pointer", textAlign: "left",
                     background: on ? team.color + ALPHA.line : BC.inp,
                     border: `1.5px solid ${on ? team.accent : BC.bdr}`,
@@ -751,13 +858,23 @@ export function MatchSetup({
         </div>
       )}
 
-      {teamASel.length > 0 && teamBSel.length > 0 && (
-        <button onClick={createMatch} style={{
+      {/* The one button, saying whichever of the two things this format does.
+          A teammate format needs no opponent, so it lights on the first name
+          picked rather than waiting for a second column that is never coming
+          — which is what made this button look broken on Team Best Ball. */}
+      {(teammateGroups ? foursomeSel.length > 0 : (teamASel.length > 0 && teamBSel.length > 0)) && (
+        <button onClick={teammateGroups ? createFoursome : createMatch} style={{
           width: "100%", padding: "10px 20px", borderRadius: 10, border: "none", fontSize: FS.body, fontWeight: 700,
           cursor: "pointer", background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`,
           color: ON_AMBER, marginBottom: 14, fontFamily: FONT,
         }}>
-          Create Match — {teamASel.map(shortOf).join("/")} vs {teamBSel.map(shortOf).join("/")}
+          {teammateGroups
+            ? `${foursomeSel.map(shortOf).join(", ")} — off ${
+              (() => {
+                const gi = firstOpenGroup({ groups, need: foursomeSel.length });
+                return gi >= 0 && times[gi] ? stripAMPM(times[gi]) : "the next tee";
+              })()}`
+            : `Create Match — ${teamASel.map(shortOf).join("/")} vs ${teamBSel.map(shortOf).join("/")}`}
         </button>
       )}
 
@@ -787,7 +904,7 @@ export function MatchSetup({
       {matchFitsGroup && groups.map((g, gi) => {
         const rows = byGroup[gi];
         const over = drag?.over === gi;
-        const tooMany = g.length > GROUP_MAX;
+        const tooMany = g.length > GROUP_TARGET;
         // What letting go here would do, worked out while the finger is still
         // down. A full tee time trades places rather than stacking up, and
         // saying SWAP on the card before the drop is what makes that the
@@ -939,7 +1056,7 @@ export function MatchSetup({
           </div>
 
           {groups.map((g, gi) => {
-            const over = g.length > GROUP_MAX;
+            const over = g.length > GROUP_TARGET;
             return (
               <div key={gi} style={{
                 ...cardStyle, padding: "9px 11px", marginBottom: 6,
