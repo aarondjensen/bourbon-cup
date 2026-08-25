@@ -50,10 +50,12 @@
 // -------
 // Two fields on the round document (`bc_rounds`):
 //
-//   sealed         — boolean. Set from the Rounds tab; seeded on for Team
-//                    Best Ball and off for everything else, and never
-//                    inferred at read time, so no existing round can go
-//                    dark because this shipped.
+//   sealed         — boolean. Set from the Rounds tab; on for Team Best Ball
+//                    and off for everything else. An UNSET flag falls back to
+//                    that same default while the round is still live, so a
+//                    round nobody edited is not played in the open; a round
+//                    already final is never touched, which is what keeps every
+//                    imported year visible. See resolveSealed.
 //   reveal_through — 0-18, how many holes have been turned over. Written
 //                    ONLY by the reveal control, never by the round form's
 //                    auto-save, so a director editing the tee times cannot
@@ -68,10 +70,40 @@ export const SEAL_DEFAULT_FORMATS = ["team_best_ball"];
 
 export const sealDefaultFor = (format) => SEAL_DEFAULT_FORMATS.includes(format);
 
-// Is this round played behind the blackout at all? Explicit only — a round
-// document that has never carried the flag is not sealed, whatever its
-// format, so nothing already in the books can be hidden by a deploy.
-export const isSealedRound = (tr) => !!tr?.sealed;
+// The rule, in ONE place — the Rounds tab seeds the form from it and the
+// board reads it. A stored flag always wins; an unset one falls back to the
+// format's default, but only while the round is still live.
+//
+// It used to be explicit-only at read time: a document that had never carried
+// the flag was not sealed, whatever its format. The reasoning was that
+// nothing already in the books should go dark because this shipped, and that
+// half is still right — hence `final`.
+//
+// The other half was backwards, and round 4 of the live cup is what showed
+// it. The seed only reached the document if a director happened to open that
+// round's form, so a Team Best Ball round nobody edited was played in the
+// open: opponents' scores and the match status on every phone on the course,
+// which is the one thing the reveal exists to prevent. The two failures are
+// not comparable. Sealing a finished round by mistake hides a result until
+// somebody turns it over — visible, and a toggle away. NOT sealing a live one
+// spoils the ending for the whole field, and there is no undo for what
+// sixteen people have already read.
+//
+// So an unset flag now defaults to the format. `final` is the guard on the
+// other end, and it is what keeps every imported year visible: history is
+// written locked and final (see historyImport), so none of it is reachable
+// by this fallback.
+export const resolveSealed = (format, raw, final) =>
+  raw == null ? (!final && sealDefaultFor(format)) : !!raw;
+
+// Is this round played behind the blackout at all?
+//
+// `tr.final` is not a stored field on bc_rounds — App folds each round's lock
+// state onto the round objects it hands out (see enrichedRounds), because
+// finality lives in bc_round_locks and every reader here already has the
+// round. A round object without it reads as not-final, which is the safe end:
+// a live round seals.
+export const isSealedRound = (tr) => resolveSealed(tr?.format, tr?.sealed, tr?.final);
 
 // How many holes are public. An unsealed round is all eighteen, which is
 // what makes every caller below safe to run against any round.

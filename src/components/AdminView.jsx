@@ -101,7 +101,7 @@ import {
   COUNTDOWN_HASH,
   revealState,
   revealSummary,
-  sealDefaultFor,
+  resolveSealed,
 } from "../lib/reveal";
 import {
   LOCK_FINAL,
@@ -316,8 +316,10 @@ const roundCounting = (format, raw) => {
 // flag is stored the stored value wins, which is what keeps a sealed round
 // from un-sealing itself the moment it is finalized. The reveal happens after
 // the round is over; that is the entire point of it.
-const roundSealedSeed = (format, raw, final) =>
-  raw == null ? (!final && sealDefaultFor(format)) : !!raw;
+// One rule, now shared with the board that reads it — see resolveSealed in
+// lib/reveal. It used to live here as well, which is how a form and a
+// scoreboard came to disagree about what an unwritten flag meant.
+const roundSealedSeed = (format, raw, final) => resolveSealed(format, raw, final);
 
 // Hole values, normalized the same way, and only on a round that is actually
 // settled hole by hole — a Match or Total round has no hole values to store.

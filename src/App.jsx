@@ -3809,7 +3809,16 @@ export default function App() {
     // that a legacy round packed them into one field.
     scoring_type: resolveScoring(r).formOfPlay,
     hole_scoring: resolveScoring(r).holeScoring,
-  })), [tRounds]);
+    // Whether the round is in the books. Not a stored field on bc_rounds —
+    // finality lives in bc_round_locks — but folded on here because the
+    // reveal needs it and every reader already has the round rather than the
+    // lock. It is what stops the seal's format fallback from reaching a
+    // finished year (see resolveSealed in lib/reveal).
+    //
+    // Derived, never written: the round auto-save builds an explicit payload
+    // (see AdminView), so this cannot ride back into the document.
+    final: !!lockForRound(roundLocksData, r.round_number)?.final,
+  })), [tRounds, roundLocksData]);
 
   // ── The blackout, applied once, at the source ────────────────────
   // Every hole past a sealed round's reveal, removed (see lib/reveal.js).

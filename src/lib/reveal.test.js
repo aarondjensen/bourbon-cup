@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  resolveSealed,
   HOLE_COUNT, sealDefaultFor, isSealedRound, revealedThrough, isFullyRevealed,
   isConcealing, revealState, concealedRoundNumbers, concealHoleData,
   stepReveal, revealSummary,
@@ -27,14 +28,49 @@ describe("sealDefaultFor", () => {
 });
 
 describe("isSealedRound", () => {
-  // The load-bearing one. If the format could imply a seal, every Team Best
-  // Ball round ever played would go dark the moment this shipped — including
-  // the ones whose results have been on the board for a decade.
-  it("is explicit — a format never implies it", () => {
-    expect(isSealedRound(round(4, { format: "team_best_ball" }))).toBe(false);
+  // A stored flag is the director's word and always wins, in both directions.
+  it("takes the stored flag over everything", () => {
     expect(isSealedRound(round(4, { format: "team_best_ball", sealed: true }))).toBe(true);
     expect(isSealedRound(round(4, { format: "team_best_ball", sealed: false }))).toBe(false);
+    // Even on a finished round, and even against the format.
+    expect(isSealedRound(round(4, { format: "team_best_ball", sealed: false, final: true }))).toBe(false);
+    expect(isSealedRound(round(1, { format: "best_ball", sealed: true }))).toBe(true);
+  });
+
+  // The reason this fallback exists. The seed only reaches the document when a
+  // director opens that round's form, so a Team Best Ball round nobody edited
+  // was played in the open — opponents' scores and the match status on every
+  // phone on the course, which is the one thing the reveal is for.
+  it("seals an unflagged Team Best Ball round that is still live", () => {
+    expect(isSealedRound(round(4, { format: "team_best_ball" }))).toBe(true);
+  });
+
+  // The other end, and the load-bearing one: every imported year is written
+  // locked and final, so none of a decade of results can be pulled off the
+  // board by this fallback.
+  it("never seals a finished round on the format alone", () => {
+    expect(isSealedRound(round(4, { format: "team_best_ball", final: true }))).toBe(false);
+  });
+
+  it("leaves every other format alone", () => {
+    expect(isSealedRound(round(1, { format: "best_ball" }))).toBe(false);
+    expect(isSealedRound(round(2, { format: "scramble" }))).toBe(false);
+    expect(isSealedRound(round(3, { format: undefined }))).toBe(false);
     expect(isSealedRound(null)).toBe(false);
+  });
+});
+
+describe("resolveSealed", () => {
+  // One rule, shared by the Rounds form's seed and the board that reads it.
+  // They each held their own copy, which is how a form and a scoreboard came
+  // to disagree about what an unwritten flag meant.
+  it("is the same answer the Rounds form seeds from", () => {
+    expect(resolveSealed("team_best_ball", null, false)).toBe(true);
+    expect(resolveSealed("team_best_ball", null, true)).toBe(false);
+    expect(resolveSealed("team_best_ball", undefined, false)).toBe(true);
+    expect(resolveSealed("best_ball", null, false)).toBe(false);
+    expect(resolveSealed("best_ball", true, true)).toBe(true);
+    expect(resolveSealed("team_best_ball", false, false)).toBe(false);
   });
 });
 
@@ -150,5 +186,55 @@ describe("revealSummary", () => {
   it("says nothing is out rather than '0 of 18'", () => {
     expect(revealSummary(0)).toBe("Sealed — nothing revealed yet");
     expect(revealSummary(6)).toBe("6 of 18 holes revealed");
+  });
+});
+
+// ── The whole point, end to end ────────────────────────────────────
+// isSealedRound is a predicate; what the field actually experiences is
+// concealHoleData, which is what the scoreboard and the Data tab are scored
+// off. These pin the subtraction on the shape that failed: a live cup whose
+// round 4 nobody opened the Rounds form for.
+describe("a live Team Best Ball round nobody flagged", () => {
+  const liveCup = [
+    { round_number: 1, format: "best_ball" },
+    { round_number: 4, format: "team_best_ball" },
+  ];
+  const holes = {
+    "a1_1": { 0: 4, 1: 5, 2: 3 },
+    "a1_4": { 0: 4, 1: 5, 2: 3 },
+    "b1_4": { 0: 5, 1: 4, 2: 4 },
+  };
+
+  it("takes round 4 off the board entirely and leaves round 1 alone", () => {
+    const out = concealHoleData(holes, liveCup);
+    expect(out["a1_1"]).toEqual({ 0: 4, 1: 5, 2: 3 });
+    // Nothing turned over yet, so the round has no scores at all — no side
+    // totals, no match status, nothing banked.
+    expect(out["a1_4"]).toBeUndefined();
+    expect(out["b1_4"]).toBeUndefined();
+  });
+
+  it("hands the holes back as the director turns them over", () => {
+    const through2 = [{ round_number: 4, format: "team_best_ball", reveal_through: 2 }];
+    const out = concealHoleData(holes, through2);
+    expect(out["a1_4"]).toEqual({ 0: 4, 1: 5 });
+    expect(out["b1_4"]).toEqual({ 0: 5, 1: 4 });
+  });
+
+  it("is fully open again once all eighteen are revealed", () => {
+    const done = [{ round_number: 4, format: "team_best_ball", reveal_through: HOLE_COUNT }];
+    expect(concealHoleData(holes, done)).toBe(holes);
+  });
+
+  // A decade of results must survive the deploy that turned this on.
+  it("does not touch a finished year", () => {
+    const history = [{ round_number: 4, format: "team_best_ball", final: true }];
+    expect(concealHoleData(holes, history)).toBe(holes);
+  });
+
+  // And a director who deliberately wants it live keeps that.
+  it("respects an explicit unseal", () => {
+    const open = [{ round_number: 4, format: "team_best_ball", sealed: false }];
+    expect(concealHoleData(holes, open)).toBe(holes);
   });
 });
