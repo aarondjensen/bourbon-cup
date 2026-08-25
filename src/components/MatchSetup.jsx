@@ -404,8 +404,16 @@ export function MatchSetup({
   // director to select sixteen names to say so is data entry with one
   // possible answer — and until it exists the round has nothing to score
   // against, which is why it is written here rather than left for later.
+  // Keyed on the ROUND, not the roster. A signed card stores the match id it
+  // was signed against, so an id built from the names would move the moment
+  // somebody joined and orphan every signature on the round.
+  const teamMatchId = editionDocId(`bc_match_r${round}_teams`);
+
   const ensureTeamMatch = async () => {
-    if (rndMatches.length) return true;
+    // The roster IS the two sides. Not realPlayers: the borrowed ball is not a
+    // person and no roster screen shows it, but Team Best Ball counts the best
+    // N nets on a side, and a side of seven against a side of eight is not the
+    // round being played (see isBorrowedBall in lib/players).
     const sideOf = (t) => tPlayers.filter(p => p.team === t).map(p => p.player_id);
     const teamA = sideOf("A");
     const teamB = sideOf("B");
@@ -413,11 +421,22 @@ export function MatchSetup({
       notify("Both teams need players on the roster first", "error");
       return false;
     }
-    // Keyed on the ROUND, not the roster. A signed card stores the match id it
-    // was signed against, so an id built from the names would move the moment
-    // somebody joined and orphan every signature on the round.
+    // Somebody drew this round by hand. Their draw wins and is left alone —
+    // this only ever fills a round that has nothing of its own.
+    if (rndMatches.some(m => m.id !== teamMatchId)) return true;
+
+    // Re-checked against the roster on every foursome, not written once and
+    // forgotten. This card is no longer on screen, so a stale copy is a fault
+    // with NOTHING to see: add a man in Admin → Players and a match written
+    // last week still holds the old sixteen, leaving him on the leaderboard,
+    // on a tee time, and contributing nothing to the round the cup is decided
+    // in. Same sixteen, no write.
+    const same = (a = [], b = []) => a.length === b.length && a.every((x, i) => x === b[i]);
+    const existing = rndMatches.find(m => m.id === teamMatchId);
+    if (existing && same(existing.teamA, teamA) && same(existing.teamB, teamB)) return true;
+
     await onSetMatch({
-      id: editionDocId(`bc_match_r${round}_teams`),
+      id: teamMatchId,
       tournament_id: TOURNAMENT_ID,
       round,
       teamA, teamB,
@@ -983,11 +1002,19 @@ export function MatchSetup({
         );
       })}
 
-      {/* Matches with no time of their own: a team format's (every one of
-          them, legitimately), or one whose opponents ended up in different
-          groups. Not a drop target — a match leaves here by being dragged
-          onto a time, never by being dropped back out of the draw. */}
-      {loose.length > 0 && (
+      {/* Matches with no time of their own: one whose opponents ended up in
+          different groups, or a team format's — every one of them,
+          legitimately, since a match bigger than a foursome cannot sit under
+          one tee time. Not a drop target: a match leaves here by being
+          dragged onto a time, never by being dropped back out of the draw.
+
+          Hidden entirely on a teammate format. There the match is the whole
+          side against the whole side and cannot be anything else, so the card
+          is sixteen names restating the two team columns directly above it —
+          half a phone screen spent on the one fact about this round nobody
+          has to be told, pushing the tee sheet, which IS the work, below the
+          fold. */}
+      {!teammateGroups && loose.length > 0 && (
         <div style={{
           ...cardStyle, padding: "8px 10px", marginBottom: 6,
           border: `1px solid ${matchFitsGroup ? BC.danger + ALPHA.line : BC.bdr}`,
