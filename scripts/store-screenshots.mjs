@@ -51,16 +51,41 @@ const valueOf = (f, fallback) => (args.indexOf(f) >= 0 ? args[args.indexOf(f) + 
 const WRITE = has("--write");
 const SITE = valueOf("--url", "https://www.thebourboncup.com");
 const EDITION = valueOf("--edition", "bc_2025");
-const OUT = valueOf("--out", "store/ios");
+const OUT = valueOf("--out", "store");
+const ONLY = valueOf("--only", null);
 const LIGHT = has("--light");
 
-// Apple's 6.9" iPhone slot. 430×932 is the CSS viewport of an iPhone 16 Pro
-// Max; ×3 is its device pixel ratio. The other accepted size is 1320×2868 —
-// read the required set off App Store Connect rather than trusting this line,
-// because Apple moves it and rejects on dimensions alone.
-const VIEWPORT = { width: 430, height: 932 };
-const SCALE = 3;
-const EXPECT = { width: VIEWPORT.width * SCALE, height: VIEWPORT.height * SCALE };
+// ── The two stores want two different sizes ─────────────────────────
+// And one set cannot serve both, which is the trap worth stating plainly:
+// Apple requires 1290×2796 for the 6.9" iPhone slot, and Play refuses any
+// image whose longer side is more than twice its shorter one. 2796/1290 is
+// 2.17, so the size Apple DEMANDS is a size Play REFUSES. This script wrote
+// Apple's set only for its first months, sitting next to a play-store.md that
+// named Play's viewport — every file would have been refused at Play's upload
+// screen. Both sets, every run.
+//
+// Sizes are CSS pixels × a device scale factor, because that is what the
+// browser takes and it lands on the exact number rather than near it. Read
+// Apple's required set off App Store Connect rather than trusting this line;
+// Apple moves it and rejects on dimensions alone.
+//
+//   apple  430×932 @3 = 1290×2796  the 6.9" iPhone. 1320×2868 also accepted.
+//   play   360×640 @3 = 1080×1920  Google's recommended phone size, and a 16:9
+//                                  comfortably inside the 2:1 limit.
+//
+// `flatten` is Play's other unwritten rule: it REJECTS AN ALPHA CHANNEL, and
+// the error it gives does not mention transparency. Chromium currently writes
+// these opaque (3 channels) because the app paints a solid background, so the
+// flatten is usually a no-op — it is here so that a screen which ever renders
+// a transparent pixel cannot quietly produce a file Play refuses. Composited
+// onto the app's own background, the `backgroundColor` capacitor.config.json
+// gives the native shells.
+const BG = "#161618";
+const TARGETS = [
+  { name: "apple", dir: "ios",  width: 430, height: 932, scale: 3, flatten: false },
+  { name: "play",  dir: "play", width: 360, height: 640, scale: 3, flatten: true },
+];
+const WANTED = TARGETS.filter((t) => !ONLY || t.name === ONLY);
 
 // The four, in the order §4 argues for them. `find` runs before the shot and
 // returns false to skip — a screen that cannot be reached is reported rather
@@ -160,10 +185,20 @@ const tap = async (page, label) => {
   return true;
 };
 
+if (ONLY && !WANTED.length) {
+  console.error(`\n  ✖ --only ${ONLY} matches no target. Try: ${TARGETS.map((t) => t.name).join(", ")}\n`);
+  process.exit(1);
+}
+
 console.log(`\n  ${SITE}`);
-console.log(`  edition ${EDITION} · ${LIGHT ? "light" : "dark"} · ${EXPECT.width}×${EXPECT.height} · → ${OUT}`);
+console.log(`  edition ${EDITION} · ${LIGHT ? "light" : "dark"} · → ${OUT}/`);
 console.log(`  ${"─".repeat(58)}`);
 for (const s of SHOTS) console.log(`  ${s.name}  ${s.why}`);
+console.log(`  ${"─".repeat(58)}`);
+for (const t of WANTED) {
+  console.log(`  ${t.name.padEnd(6)} ${t.width * t.scale}×${t.height * t.scale}`
+    + `  → ${OUT}/${t.dir}${t.flatten ? "  (flattened — Play refuses alpha)" : ""}`);
+}
 console.log(`  ${"─".repeat(58)}`);
 
 if (!WRITE) {
@@ -177,7 +212,7 @@ mkdirSync(OUT, { recursive: true });
 // Imported HERE rather than at the top, so the dry run above needs neither
 // playwright nor a browser download — the same reason seed-demo.mjs defers
 // firebase-admin. A preview anybody can run is a preview that gets run.
-let chromium;
+let chromium, sharp;
 try {
   ({ chromium } = await import("playwright"));
 } catch {
@@ -185,81 +220,105 @@ try {
     + "      npm i --no-save playwright && npx playwright install chromium\n");
   process.exit(1);
 }
+// sharp IS a devDependency (store-graphics.mjs renders the feature graphic
+// with it), so this only ever fails on a production install.
+if (WANTED.some((t) => t.flatten)) ({ default: sharp } = await import("sharp"));
 
 const browser = await chromium.launch();
-const ctx = await browser.newContext({
-  viewport: VIEWPORT,
-  deviceScaleFactor: SCALE,
-  isMobile: true,
-  hasTouch: true,
-  colorScheme: LIGHT ? "light" : "dark",
-});
+const totals = [];
 
-// Guest mode and the edition, set before the first line of app code runs —
-// the app reads both out of localStorage at module scope (lib/guest,
-// firebase.js), so setting them afterwards would need a reload.
-await ctx.addInitScript(({ edition, light }) => {
-  localStorage.setItem("bc_guest", "1");
-  localStorage.setItem("bc_active_edition", edition);
-  localStorage.setItem("bc_active_edition_ns", edition === "bc_2025" ? "false" : "true");
-  localStorage.setItem("bc_dark", light ? "0" : "1");
-}, { edition: EDITION, light: LIGHT });
+// One context per target rather than one resized mid-run: the app reads the
+// viewport at module scope for its breakpoints, and a context reload to pick a
+// new size up is the same cost as a new context without the state to untangle.
+for (const t of WANTED) {
+  const dir = join(OUT, t.dir);
+  mkdirSync(dir, { recursive: true });
+  console.log(`\n  ${t.name} · ${t.width * t.scale}×${t.height * t.scale} → ${dir}`);
 
-const page = await ctx.newPage();
-page.on("console", (m) => { if (m.type() === "error") console.log("      ⚠", m.text().slice(0, 120)); });
+  const ctx = await browser.newContext({
+    viewport: { width: t.width, height: t.height },
+    deviceScaleFactor: t.scale,
+    isMobile: true,
+    hasTouch: true,
+    colorScheme: LIGHT ? "light" : "dark",
+  });
 
-await page.goto(SITE, { waitUntil: "domcontentloaded" });
-// The archive chunk and a thousand hole scores arrive over several frames, and
-// a screenshot taken at first paint photographs a tournament with nothing in
-// it — which is exactly the impression the listing must not give.
-await page.waitForTimeout(6000);
+  // Guest mode and the edition, set before the first line of app code runs —
+  // the app reads both out of localStorage at module scope (lib/guest,
+  // firebase.js), so setting them afterwards would need a reload.
+  await ctx.addInitScript(({ edition, light }) => {
+    localStorage.setItem("bc_guest", "1");
+    localStorage.setItem("bc_active_edition", edition);
+    localStorage.setItem("bc_active_edition_ns", edition === "bc_2025" ? "false" : "true");
+    localStorage.setItem("bc_dark", light ? "0" : "1");
+  }, { edition: EDITION, light: LIGHT });
 
-let written = 0;
-const seen = new Set();
-for (const s of SHOTS) {
-  const ok = await s.find(page);
-  if (!ok) { console.log(`  ✖ ${s.name} — could not reach it, skipped`); continue; }
-  await page.waitForTimeout(600);
-  const text = await bodyText(page);
+  const page = await ctx.newPage();
+  page.on("console", (m) => { if (m.type() === "error") console.log("      ⚠", m.text().slice(0, 120)); });
 
-  // ── Did the screen actually change? ──
-  // The failure this exists for, found on the first real run: the scorecard
-  // step clicked something harmless, nothing unfolded, and the run wrote a
-  // byte-identical copy of the leaderboard under a second name and ticked it.
-  // Four files, three screens, and the only clue was that two readback lines
-  // were identical — which nobody would notice at 1am.
-  //
-  // Two guards, because they catch different things. `expect` is what a screen
-  // must contain to BE that screen; the duplicate check covers the ones with
-  // no such marker.
-  if (s.expect && !s.expect.test(text)) {
-    console.log(`  ✖ ${s.name} — reached it, but nothing matching ${s.expect} is on it, skipped`);
-    continue;
+  await page.goto(SITE, { waitUntil: "domcontentloaded" });
+  // The archive chunk and a thousand hole scores arrive over several frames,
+  // and a screenshot taken at first paint photographs a tournament with
+  // nothing in it — which is exactly the impression the listing must not give.
+  await page.waitForTimeout(6000);
+
+  let written = 0;
+  const seen = new Set();
+  for (const s of SHOTS) {
+    const ok = await s.find(page);
+    if (!ok) { console.log(`  ✖ ${s.name} — could not reach it, skipped`); continue; }
+    await page.waitForTimeout(600);
+    const text = await bodyText(page);
+
+    // ── Did the screen actually change? ──
+    // The failure this exists for, found on the first real run: the scorecard
+    // step clicked something harmless, nothing unfolded, and the run wrote a
+    // byte-identical copy of the leaderboard under a second name and ticked
+    // it. Four files, three screens, and the only clue was that two readback
+    // lines were identical — which nobody would notice at 1am.
+    //
+    // Two guards, because they catch different things. `expect` is what a
+    // screen must contain to BE that screen; the duplicate check covers the
+    // ones with no such marker.
+    if (s.expect && !s.expect.test(text)) {
+      console.log(`  ✖ ${s.name} — reached it, but nothing matching ${s.expect} is on it, skipped`);
+      continue;
+    }
+    // Compared as PIXELS, not as text. The text guard was fooled the first
+    // time it mattered: the scorecard had unfolded far enough down the board
+    // that the body text differed while the visible frame did not, so the
+    // check passed and the file written was the leaderboard again. What goes
+    // to a store is the image, so the image is what gets compared. Hashed
+    // BEFORE the flatten, so the comparison is of what the browser drew.
+    const shot = await page.screenshot();
+    const hash = createHash("sha256").update(shot).digest("hex");
+    if (seen.has(hash)) {
+      console.log(`  ✖ ${s.name} — pixel-identical to a shot already taken, skipped`);
+      continue;
+    }
+    seen.add(hash);
+
+    const png = t.flatten ? await sharp(shot).flatten({ background: BG }).png().toBuffer() : shot;
+    writeFileSync(join(dir, `${s.name}.png`), png);
+    console.log(`  ✔ ${s.name}.png  ${text.slice(0, 90)}`);
+    written++;
   }
-  // Compared as PIXELS, not as text. The text guard was fooled the first time
-  // it mattered: the scorecard had unfolded far enough down the board that the
-  // body text differed while the visible frame did not, so the check passed
-  // and the file written was the leaderboard again. What goes to Apple is the
-  // image, so the image is what gets compared.
-  const png = await page.screenshot();
-  const hash = createHash("sha256").update(png).digest("hex");
-  if (seen.has(hash)) {
-    console.log(`  ✖ ${s.name} — pixel-identical to a shot already taken, skipped`);
-    continue;
-  }
-  seen.add(hash);
 
-  const path = join(OUT, `${s.name}.png`);
-  writeFileSync(path, png);
-  console.log(`  ✔ ${s.name}.png  ${text.slice(0, 90)}`);
-  written++;
+  await ctx.close();
+  totals.push({ t, dir, written });
 }
 
 await browser.close();
 
-console.log(`\n  ${written}/${SHOTS.length} written to ${OUT}`);
-if (written) {
-  console.log(`  Check each one is ${EXPECT.width}×${EXPECT.height} before uploading — Apple rejects on size alone:`);
-  console.log(`      sips -g pixelWidth -g pixelHeight ${OUT}/*.png\n`);
+console.log("");
+for (const { t, dir, written } of totals) {
+  console.log(`  ${written}/${SHOTS.length} written to ${dir}`
+    + ` — check each is ${t.width * t.scale}×${t.height * t.scale} before uploading:`);
+  console.log(`      sips -g pixelWidth -g pixelHeight ${dir}/*.png`);
 }
-if (!existsSync(join(OUT, "01-leaderboard.png"))) process.exit(1);
+console.log("");
+
+// A run that reached nothing is a run that must not look like a success —
+// the leaderboard is the one shot every listing needs and the one that proves
+// the app had data in it.
+if (!totals.length || totals.some(({ dir }) => !existsSync(join(dir, "01-leaderboard.png")))) process.exit(1);
