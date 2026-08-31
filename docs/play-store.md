@@ -229,6 +229,13 @@ section are all independent. Do them while it sits.
 `versionName` is what humans see. Play rejects a re-used `versionCode` with a
 message that says exactly that, so this one at least fails loudly.
 
+**It starts at 100 rather than at 1**, because this package name is not new to
+Play — the bubblewrap TWA was uploaded to this same listing, and every
+`versionCode` it ever used is spent. Capacitor's generated project counts from
+1, which is precisely the range those uploads occupied, so the first upload of
+the new app would have been refused for a reason that has nothing to do with
+the build. The number only ever goes up, so overshooting costs nothing.
+
 ### Icons
 
 `npm run build:app-icons` renders every launcher icon on both platforms from

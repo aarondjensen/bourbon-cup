@@ -514,9 +514,18 @@ accident. `--edition`, `--url`, `--out` and `--light` are all overridable, and
 it prints the text it photographed on each screen so an empty one is visible in
 the output rather than at upload time.
 
-One of the four comes out anywhere, including a sandbox with no Firestore: the
+One of the four RENDERS anywhere, including a sandbox with no Firestore: the
 Data tab's career table reads `bourbon-cup-archive.json` out of the bundle, so
 `04-career.png` needs no database at all. The other three need real scores.
+
+It is still not a shot you can ship from there, and the reason is the same
+wall one door along: `src/theme.js` injects the Montserrat stylesheet from
+`fonts.googleapis.com` at runtime, and that host is re-signed by the proxy and
+reset exactly like Firestore is. The page comes out in a fallback grotesque —
+which looks fine until it is sitting in the listing beside a feature graphic
+set in the real thing. Both walls were re-confirmed in August 2026: from
+Chromium, `firestore.googleapis.com` and `fonts.googleapis.com` both answer
+`net::ERR_CONNECTION_RESET`, while `curl` from the same container gets both.
 
 Drive the deployed site in a phone viewport and photograph real screens rather
 than mocking them up:
@@ -538,19 +547,28 @@ and will reject on dimensions alone.
 
 The two submissions share a spine and then diverge. Do the spine once.
 
-**Shared, first:**
+**Shared, first** — three of the four prerequisites in §1 are already done, and
+that table is the record of which. What is left of the spine:
 
-1. Deploy the Cloud Functions (§1.1) and the rules (§1.2). **BY HAND**
-2. Set `VITE_FCM_VAPID_KEY` in Vercel (§1.3). **BY HAND**
-3. Build the demo edition and the reviewer account (§1.4). **BY HAND**
-4. Take the four screenshots (§4).
+1. `firebase deploy --only firestore:rules` (§1.2), after the build carrying
+   `canAdminEdition` is live. **BY HAND** — this is the only §1 item still
+   outstanding, and until it lands a reviewer inside the demo gets an Admin tab
+   whose every save is silently refused.
+2. Take the four screenshots (§4). **BY HAND, on a machine with a browser that
+   can reach Firestore** — a sandbox cannot, and the wall is a real one rather
+   than a missing credential; see §4.
 
-**Then Play**, which is ready to go and gated on calendar time rather than
-work — see `play-store.md`. Start it first for exactly that reason: the
-14 days of closed testing run while the iOS work happens.
+**Then Play**, which is ready to go and gated on nothing but the by-hand
+console work — see `play-store.md`. **The route is internal testing**, so
+there is no closed test, no twelve testers and no fourteen-day clock; an
+upload is live to the testers in minutes. Start it first anyway, because it
+is the one that can be finished in an evening.
 
 **Then iOS**, which is gated on engineering — see `app-store.md`.
 
-The one ordering constraint between them: the Play closed test wants twelve
-people using the app for two weeks, and the iOS build is not one of the things
-they can use. Do not wait for iOS to start the clock.
+There is no ordering constraint left between them. There used to be one, and
+it is worth knowing why it is gone: the plan was production on Play, which
+needs twelve people using the app for fourteen days, and the iOS build was not
+something they could use — so the clock had to start before the Mac work.
+Internal testing has no clock, so the two are independent now. `play-store.md`
+§7 is the reasoning, and §8 is the closed test kept as reference.
