@@ -920,6 +920,10 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
     // was worth on each nine.
     holePoints,
     playingCH,
+    // The unrounded, per-player allowance-adjusted figure teamCH is summed
+    // from — exposed so a shared-ball tooltip can show each partner's own
+    // share without re-deriving the low/high split (see allowanceHandicaps).
+    exactCH,
     teamCH: sharedBall ? { A: aTeamCH, B: bTeamCH } : null,
     totalPts: {
       A: (frontPts.A || 0) + (backPts.A || 0) + (overallPts.A || 0),
