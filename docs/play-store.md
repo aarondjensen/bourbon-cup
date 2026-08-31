@@ -15,6 +15,17 @@
 > testing is already the shape it suggests: the opt-in URL goes on
 > `thebourboncup.com`, a tester taps it, and Play installs the app. Nobody
 > searches for anything, and the app never appears in the store to be found.
+>
+> **The two are not the same door, and it matters on the website.** An
+> Unlisted iOS link works for ANYONE who taps it — Apple gates nothing, and
+> the tournament password is what keeps strangers out, exactly as it does on
+> the web. A Play internal-testing link works only for the accounts on the
+> tester list; everybody else is refused, in wording that does not explain
+> itself. Both links can sit on the site, but the Android one wants labelling
+> as an invitation rather than a download — "tap here if you got the invite" —
+> or a visitor who was never invited reads the refusal as the app being
+> broken. A link that works for anyone means closed or open testing, which is
+> §8's road and its fourteen days.
 
 Read [`store-submission.md`](./store-submission.md) first — the reviewer
 account, the data disclosures, the age rating and the deploy prerequisites live
