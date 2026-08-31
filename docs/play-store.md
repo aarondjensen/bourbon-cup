@@ -82,7 +82,8 @@ it fails on the first line. `./gradlew` is a shell script Windows cannot run at
 all; there it is `gradlew.bat`. The script spawns whichever is right and the
 shell never gets a say.
 
-It also refuses to build when signing is unconfigured, which Gradle does not:
+It also refuses to build when **signing** is unconfigured or when
+**`google-services.json` is missing**, neither of which Gradle does:
 a release build with no keystore SUCCEEDS and emits an unsigned bundle, the
 warning scrolls past in a hundred lines of Gradle output, and Play is where you
 would find out.
@@ -348,7 +349,11 @@ Two by-hand consequences:
 
 - **`google-services.json`** from the Firebase console, into
   `android/app/`. Gitignored, like its iOS counterpart, and **without it native
-  sign-in and push both silently do nothing**.
+  sign-in and push both silently do nothing** — `app/build.gradle` applies the
+  Google Services plugin only when the file is present and logs its absence at
+  `info`, so the bundle builds, uploads and installs with the login broken and
+  nothing anywhere saying why. `npm run android:bundle` refuses to build
+  without it for that reason; Gradle will not.
 - **The signing SHA-1 and SHA-256** registered against the Android app in
   Firebase, or native Google sign-in fails. Take them from the keystore
   (`keytool -list -v -keystore …`) and, once Play App Signing is on, from

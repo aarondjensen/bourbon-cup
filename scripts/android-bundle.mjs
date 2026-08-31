@@ -74,14 +74,44 @@ if (!fromEnv && !fromFile) {
     // One line, no backslash continuation: that is bash, and it is a parse
     // error in PowerShell — which is where this message is most likely to be
     // read and pasted.
-    + "      keytool -genkey -v -keystore android/bourbon-cup.keystore -alias bourbon-cup -keyalg RSA -keysize 2048 -validity 10000\n\n"
+    + "      keytool -genkey -v -keystore C:/dev/keys/bourbon-cup-upload.keystore -alias bourbon-cup -keyalg RSA -keysize 2048 -validity 10000\n\n"
+    + "  Outside the repo, deliberately — `git clean -xfd` deletes a gitignored\n"
+    + "  keystore without naming it, which is how the first one went.\n\n"
     + "  Then copy android/keystore.properties.example to android/keystore.properties\n"
     + `  and fill it in — or set ${ENV_KEYS.join(", ")}.`);
 }
 if (keystoreMissing) {
   die(`keystore.properties names \`${keystoreMissing}\`, and there is no file there.\n`
     + "  The path is resolved relative to android/. A key sitting beside\n"
-    + "  keystore.properties is just its filename.");
+    + "  keystore.properties is just its filename, and an absolute path is\n"
+    + "  what you want anyway — see docs/play-store.md §1, the keystore\n"
+    + "  belongs OUTSIDE this repo where `git clean -xfd` cannot reach it.\n\n"
+    + "  If a key for this app already exists, POINT AT IT rather than making\n"
+    + "  a new one: the Play listing is enrolled with a specific upload key,\n"
+    + "  and a different one is refused at the upload screen and takes a\n"
+    + "  day or two to reset.");
+}
+
+// ── Will native sign-in and push actually work in this bundle? ──────
+// google-services.json is not committed (it is per-app console output), and
+// app/build.gradle applies the Google Services plugin ONLY if the file is
+// present — logging the absence at `info`, which nobody sees. So a release
+// build without it SUCCEEDS, uploads, installs, and has no native Google
+// sign-in and no push, with nothing anywhere saying why.
+//
+// That is the same shape as the unsigned-bundle trap above and gets the same
+// treatment: refuse now, in a message that names the file, rather than let it
+// be discovered by sixteen people who cannot log in.
+const servicesJson = join(ANDROID, "app", "google-services.json");
+if (!existsSync(servicesJson)) {
+  die("there is no android/app/google-services.json, so this bundle would ship\n"
+    + "  with NO native Google sign-in and NO push — silently. Gradle applies the\n"
+    + "  Google Services plugin only when the file is there, and says so at a log\n"
+    + "  level nobody reads.\n\n"
+    + "  Firebase console → Project settings → the Android app (com.thebourboncup.app)\n"
+    + "  → download google-services.json → android/app/.\n\n"
+    + "  Check it is the right one: every app in this estate downloads a file with\n"
+    + "  the identical name, and a second download lands as google-services (1).json.");
 }
 
 console.log(`\n  Signing: ${fromEnv ? "environment variables" : "android/keystore.properties"}`);
