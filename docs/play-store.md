@@ -232,6 +232,31 @@ A day or two, and nothing else in the submission is blocked by it — the
 functions, the rules, the demo seed, the edition locks and every App content
 section are all independent. Do them while it sits.
 
+### There is no Android device on this project
+
+Worth planning around rather than discovering: neither developer here carries
+an Android phone, so **nothing about an Android release can be checked by the
+person shipping it.** Three consequences, and the first is the one that
+surprises people:
+
+- **Installing the APK yourself would not have helped anyway.** A local build
+  is signed with the upload key; a Play install is signed with Google's. The
+  certificate that reaches Google Sign-In in production is one your own device
+  could never present, so the interesting failure is invisible to a local
+  install by construction. **Play Console → Test and release → Setup → App
+  integrity** prints both certificates, which answers the fingerprint question
+  outright and needs no phone at all.
+- **The pre-launch report is free device coverage.** Play runs each
+  internal-testing build on real hardware and reports crashes and screenshots.
+  It cannot sign in — there is no account — but it catches a build that dies on
+  launch, which is otherwise reported by sixteen people simultaneously.
+- **The first testers are the smoke test.** Add two or three of the field who
+  carry Android, ask for Google sign-in and every tab (Betting, Admin and
+  Photos especially — they are lazy-loaded, so a broken import cannot fail
+  anywhere before somebody taps them), and hold the rest until they answer.
+
+None of this applies to iOS, where the Mac that builds it can run it.
+
 ### Version bumps
 
 `versionCode` in `android/app/build.gradle` must increase on every upload;
