@@ -54,7 +54,16 @@ android {
         applicationId "com.thebourboncup.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
+        // Starts at 100, not at 1, because this package name is not new to
+        // Play: a bubblewrap TWA was uploaded to the same listing years ago
+        // (its key is still registered against the package — see
+        // docs/play-store.md §1), and Play refuses a versionCode that has
+        // been used before. Bubblewrap counts from 1 upwards, so anything in
+        // three figures clears whatever it reached; the number can only ever
+        // go up, so overshooting costs nothing and a rejected upload costs a
+        // rebuild. The exact high-water mark is on Play Console's release
+        // page if it is ever worth knowing.
+        versionCode 100
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
