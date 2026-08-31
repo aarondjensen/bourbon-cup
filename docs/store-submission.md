@@ -121,7 +121,7 @@ deploy, so a missing `node_modules` there kills the analysis, and the sentence
 it prints about it names nothing.
 
 ```sh
-cd functions && npm ci && cd ..
+npm ci --prefix functions
 firebase deploy --only functions
 ```
 
@@ -533,10 +533,18 @@ So the app renders, and it renders empty. A component harness with mocked props
 layout change — it is only real tournament data that cannot get there.
 
 **There is a script for it now**, because this is a job that gets redone from
-scratch every time a layout changes and therefore gets skipped:
+scratch every time a layout changes and therefore gets skipped.
+
+**One command per line, everywhere in these files.** `&&` is not a statement
+separator in Windows PowerShell 5.1, which is the shell this gets pasted into,
+and it fails on the first character with a parser error naming nothing useful.
+`play-store.md` §1 tells the same story about `npm run android:bundle` — an npm
+script exists there precisely so the shell never gets a say. Anything written
+here as a chain has to be written as lines instead.
 
 ```sh
-npm i --no-save playwright && npx playwright install chromium
+npm i --no-save playwright
+npx playwright install chromium
 npm run shots:store                 # dry run — names the four and both sizes
 npm run shots:store -- --write      # drives the site, writes store/ios and store/play
 npm run shots:store -- --write --only play

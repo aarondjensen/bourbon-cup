@@ -68,10 +68,11 @@ land it, and let the merge remove it.
   workspace for one task, not a personal long-lived line of development. If a
   branch from a previous session is still open, either land it or abandon it
   deliberately — do not add new work on top of it.
-- **Never merge `main` into a working branch.** Rebase instead:
-  `git fetch origin && git rebase origin/main`. Back-merges are what braid the
-  history into something unreadable, and they are the reason a branch ends up
-  merged into `main` three separate times.
+- **Never merge `main` into a working branch.** Rebase instead — `git fetch
+  origin`, then `git rebase origin/main`, as two commands, because `&&` is a
+  parser error in Windows PowerShell 5.1 and one of the two developers here is
+  on it. Back-merges are what braid the history into something unreadable, and
+  they are the reason a branch ends up merged into `main` three separate times.
 - **Land through a PR, not a local merge.** `gh pr create --fill`, then
   `gh pr merge --squash --delete-branch`. A local `git merge` followed by a
   push to `main` does work, but it skips the PR record *and* it never triggers
