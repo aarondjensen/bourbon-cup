@@ -47,21 +47,45 @@ how an evening gets spent redoing it:
 | | State | How that was established |
 | --- | --- | --- |
 | 1.1 Cloud Functions | **Deployed** | Reported in the commit that documented the discovery timeout — all six endpoints went up. Re-check by tapping My Account → Delete Account on a throwaway account; the button says so itself when the callable is missing. |
-| 1.2 `firestore.rules` | **Deployed** — 31 Aug 2026 | `firebase deploy --only firestore:rules` against `the-bourbon-cup` returned `released rules firestore.rules to cloud.firestore`. It also said `latest version … already up to date, skipping upload`, which means the ruleset was byte-identical to one already uploaded — the release is what this row is about, and it happened. |
+| 1.2 `firestore.rules` | **Deployed** — 31 Aug 2026, on the second attempt | `firebase deploy --only firestore:rules` against `the-bourbon-cup` printed `uploading rules firestore.rules` and then `released rules … to cloud.firestore`. **The upload line is the one that matters**, and the first attempt did not have it — see below. |
 | 1.3 `VITE_FCM_VAPID_KEY` | **Set** | Confirmed in Vercel against the Web Push key pair in Firebase → Cloud Messaging. Nothing in the repo or the database can see this one, so it is the one item here that can only ever be checked by looking. Web push only — neither store build uses it. |
 | 1.4 Reviewer account | **Not needed** | No credentials are handed to either store. `bc_demo` holds its 371 documents and all twelve roster rows, unclaimed; a reviewer signs in with their own Apple ID or Google account, presents the tournament password, claims a name, and gets the Admin tabs because the edition is a demo. |
 
 **Nothing in §1 is outstanding.** What is left of either submission is in
 `play-store.md` and `app-store.md`, plus the screenshots in §4.
 
-One thing the deploy output does NOT establish, and it is worth a `grep` rather
-than an assumption: `firebase deploy` uploads the `firestore.rules` in the
-working copy it is run from, so "already up to date" means the released rules
-match THAT CHECKOUT. If the machine it was run from is behind `main`, what is
-live is the older file, and the symptom is precisely the one this row exists to
-prevent — a reviewer inside the demo typing into an Admin tab whose saves are
-refused, which `db.upsert` swallows. `git -C <checkout> grep -c canAdminEdition
-firestore.rules` answers it in a second; the answer should not be 0.
+**`Deploy complete!` is not evidence that the right rules are live**, and this
+is not hypothetical — it happened here on 31 Aug and is why that row says
+"second attempt".
+
+`firebase deploy` uploads the `firestore.rules` in the working copy it runs
+from. The first deploy ran from a checkout two weeks behind `main`, so the file
+it sent was the one from BEFORE `canAdminEdition` existed. It compiled, it
+released, it said `Deploy complete!` — and, because that same stale ruleset was
+already live, it also said:
+
+> `latest version of firestore.rules already up to date, skipping upload`
+
+which reads exactly like "you are current" and means "the file you just handed
+me matches what is already deployed". Both statements are true of a checkout
+that is a fortnight stale. The failure it would have shipped is the one this
+row exists to prevent: a reviewer inside the demo typing into an Admin tab
+whose every save is refused, which `db.upsert` swallows, on a build that looks
+perfect to everyone with a crown.
+
+So the check is not the deploy output. It is the file:
+
+```sh
+git -C <checkout> pull
+git -C <checkout> grep -c canAdminEdition firestore.rules   # 15, not nothing
+firebase deploy --only firestore:rules                      # must say "uploading"
+```
+
+`git grep -c` prints NOTHING when it matches nothing, which is easy to read as
+success at 1am. And on a deploy that genuinely changes the rules, `uploading
+rules firestore.rules` appears; if `skipping upload` appears instead, either
+nothing changed or you are deploying a stale file, and only the `grep` tells
+you which.
 
 `VITE_*` is baked in at build time, so if 1.3 is ever changed it needs a Vercel
 redeploy to take, not just a saved variable.
