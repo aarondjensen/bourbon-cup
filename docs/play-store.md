@@ -688,10 +688,9 @@ submission. Do them once.
 **Internal testing is the route (§7), so stop after step 7** — add the testers,
 send the link, done. Steps 8 and 9 are the production road, kept for reference.
 
-1. Everything in `store-submission.md` §1 — which is down to the rules deploy;
-   the functions, the VAPID key and the demo edition are already done, and that
-   file's status table is the record of it. No reviewer account is handed to
-   either store. **BY HAND**
+1. Everything in `store-submission.md` §1 — **all four are done**, the rules
+   deploy included (31 Aug 2026), and that file's status table is the record of
+   it. No reviewer account is handed to either store.
 2. Deploy the site, so both static pages and the guest door are live. (Vercel
    does this on merge.) The store builds no longer depend on this, but the web
    app and the privacy URLs do.
