@@ -205,7 +205,15 @@ different file than you are**. Copy the bundle somewhere with a name no other
 repo produces and upload that — it is faster than proving it any other way, and
 it is what finally surfaced the real error underneath.
 
-**"signed with the wrong key"** — the listing already has an upload key
+**"signed with the wrong key"** — **did not happen, and cannot now.** On
+31 Aug 2026 Play accepted a bundle signed with
+`C:/dev/keys/bourbon-cup-upload.keystore` (SHA-1 `44:a0:58:…`, alias
+`bourbon-cup`, created 15 Aug), which means that key IS the listing's enrolled
+upload key and bubblewrap's is not. Nothing below applies unless the keystore
+is one day lost and replaced. Kept because that is the day it will be needed,
+and because the reasoning explains why an upload key cannot simply be swapped.
+
+The situation it describes: the listing already has an upload key
 registered, from something uploaded to it long ago. A listing that once held a
 bubblewrap TWA is enrolled with bubblewrap's key, not with the keystore made
 later, and no rebuild fixes that. If the old keystore still exists, point
