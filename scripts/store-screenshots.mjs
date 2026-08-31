@@ -31,7 +31,8 @@
 // browser download, wanted by whoever is preparing a store listing and nobody
 // else. Install it for the run and leave package.json alone:
 //
-//   npm i --no-save playwright && npx playwright install chromium
+//   npm i --no-save playwright
+//   npx playwright install chromium
 //
 // ── It cannot be run from a Claude session ──────────────────────────
 // Not for want of trying, and the reason is worth keeping so nobody spends an
@@ -203,7 +204,8 @@ console.log(`  ${"─".repeat(58)}`);
 
 if (!WRITE) {
   console.log("\n  Dry run. Pass --write to drive the site and save them.");
-  console.log("  Needs:  npm i --no-save playwright && npx playwright install chromium\n");
+  console.log("  Needs:  npm i --no-save playwright");
+  console.log("          npx playwright install chromium\n");
   process.exit(0);
 }
 
@@ -216,8 +218,11 @@ let chromium, sharp;
 try {
   ({ chromium } = await import("playwright"));
 } catch {
+  // Two lines, not one chained with `&&`: this gets pasted into Windows
+  // PowerShell 5.1, where `&&` is a parser error rather than a separator.
   console.error("\n  ✖ playwright is not installed.\n"
-    + "      npm i --no-save playwright && npx playwright install chromium\n");
+    + "      npm i --no-save playwright\n"
+    + "      npx playwright install chromium\n");
   process.exit(1);
 }
 // sharp IS a devDependency (store-graphics.mjs renders the feature graphic
