@@ -345,7 +345,21 @@ The good news is that FCM is FCM: the token is the same kind of token, the
 `functions/index.js` is untouched. The `platform` field on the row now reads
 `"android"` rather than `"web"`, which is the point of it.
 
-Two by-hand consequences:
+Two by-hand consequences, **and they happen in this order**: the fingerprints
+go into Firebase FIRST, and `google-services.json` is downloaded AFTER. The
+file is generated at download time from whatever is registered against the app
+at that moment — the certificate hashes live inside it as `oauth_client`
+entries — so a file downloaded before a fingerprint is added simply does not
+contain it, native Google sign-in fails, and nothing about the file looks
+wrong. Download it again after every fingerprint change; that is what the
+re-download in the Play App Signing step below is.
+
+```sh
+keytool -list -v -keystore C:/dev/keys/bourbon-cup-upload.keystore
+```
+
+is where your own SHA-1 and SHA-256 come from. Both go in — Firebase → Project
+settings → the Android app → Add fingerprint — before the download.
 
 - **`google-services.json`** from the Firebase console, into
   `android/app/`. Gitignored, like its iOS counterpart, and **without it native
