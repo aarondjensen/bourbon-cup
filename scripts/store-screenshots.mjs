@@ -169,6 +169,23 @@ const SHOTS = [
 const bodyText = (page) =>
   page.evaluate(() => document.body.innerText.replace(/\s+/g, " ").trim());
 
+// What to print beside the tick. The first 90 characters is the wrong answer
+// for the one shot that needs checking: a match card unfolds IN PLACE on the
+// leaderboard, so the top of the body is the cup total either way and the
+// scorecard's readback comes out character-for-character identical to the
+// leaderboard's. That reads as the very failure the `expect` guard exists to
+// catch, on a run where nothing went wrong at all.
+//
+// So when a shot declares what makes it that screen, show THAT — the match and
+// the text around it — and let the first 90 serve the shots with no marker.
+const readback = (text, expect) => {
+  if (!expect) return text.slice(0, 90);
+  const m = expect.exec(text);
+  if (!m) return text.slice(0, 90);
+  const from = Math.max(0, m.index - 30);
+  return `…${text.slice(from, from + 90)}…`;
+};
+
 // The bottom nav's five labels, which are also words that appear in ordinary
 // copy on the screens themselves — "matches will appear here once…" is on the
 // empty leaderboard. A loose text match therefore clicks a paragraph and
@@ -226,8 +243,9 @@ try {
   process.exit(1);
 }
 // sharp IS a devDependency (store-graphics.mjs renders the feature graphic
-// with it), so this only ever fails on a production install.
-if (WANTED.some((t) => t.flatten)) ({ default: sharp } = await import("sharp"));
+// with it), so this only ever fails on a production install. Needed on every
+// run now, not just a flattening one: it is what measures the files afterwards.
+({ default: sharp } = await import("sharp"));
 
 const browser = await chromium.launch();
 const totals = [];
@@ -268,6 +286,7 @@ for (const t of WANTED) {
   await page.waitForTimeout(6000);
 
   let written = 0;
+  let wrong = 0;
   const seen = new Set();
   for (const s of SHOTS) {
     const ok = await s.find(page);
@@ -304,26 +323,49 @@ for (const t of WANTED) {
     seen.add(hash);
 
     const png = t.flatten ? await sharp(shot).flatten({ background: BG }).png().toBuffer() : shot;
-    writeFileSync(join(dir, `${s.name}.png`), png);
-    console.log(`  ✔ ${s.name}.png  ${text.slice(0, 90)}`);
+    const file = join(dir, `${s.name}.png`);
+    writeFileSync(file, png);
+
+    // ── Measured, not assumed ──
+    // Both stores reject on dimensions alone, and this used to end by telling
+    // you to check them yourself with `sips` — which is macOS-only, so on the
+    // Windows machine that actually builds the Play bundle the check silently
+    // was not a check. The script wrote the bytes; the script can measure
+    // them.
+    const meta = await sharp(png).metadata();
+    const want = { width: t.width * t.scale, height: t.height * t.scale };
+    const size = `${meta.width}×${meta.height}`;
+    if (meta.width !== want.width || meta.height !== want.height) {
+      console.log(`  ✖ ${s.name}.png — ${size}, but ${t.name} wants ${want.width}×${want.height}`);
+      wrong++;
+      continue;
+    }
+    if (t.flatten && meta.hasAlpha) {
+      console.log(`  ✖ ${s.name}.png — still carries an alpha channel, which Play refuses`);
+      wrong++;
+      continue;
+    }
+    console.log(`  ✔ ${s.name}.png  ${size}  ${readback(text, s.expect)}`);
     written++;
   }
 
   await ctx.close();
-  totals.push({ t, dir, written });
+  totals.push({ t, dir, written, wrong });
 }
 
 await browser.close();
 
 console.log("");
-for (const { t, dir, written } of totals) {
+for (const { t, dir, written, wrong } of totals) {
   console.log(`  ${written}/${SHOTS.length} written to ${dir}`
-    + ` — check each is ${t.width * t.scale}×${t.height * t.scale} before uploading:`);
-  console.log(`      sips -g pixelWidth -g pixelHeight ${dir}/*.png`);
+    + `, every one measured at ${t.width * t.scale}×${t.height * t.scale}`
+    + (wrong ? ` — ${wrong} REJECTED, see above` : ""));
 }
 console.log("");
 
 // A run that reached nothing is a run that must not look like a success —
 // the leaderboard is the one shot every listing needs and the one that proves
-// the app had data in it.
-if (!totals.length || totals.some(({ dir }) => !existsSync(join(dir, "01-leaderboard.png")))) process.exit(1);
+// the app had data in it. A file written at the wrong size is worse than a
+// missing one, because it looks finished, so that fails the run too.
+const missing = !totals.length || totals.some(({ dir }) => !existsSync(join(dir, "01-leaderboard.png")));
+if (missing || totals.some(({ wrong }) => wrong)) process.exit(1);
