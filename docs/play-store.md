@@ -355,6 +355,21 @@ Two by-hand consequences:
   **Release → Setup → App integrity** as well — Play re-signs, so the
   fingerprint a shipped build presents is Google's, not yours.
 
+  **Which means the first upload is a throwaway, and it has to be.** Google's
+  app-signing certificate does not exist until a bundle has been uploaded and
+  Play App Signing is enrolled, so the fingerprint cannot be in
+  `google-services.json` at the time the first bundle is built. Upload it,
+  copy both fingerprints into Firebase, **re-download `google-services.json`
+  into `android/app/`**, bump the `versionCode`, and build again. That second
+  bundle is the one testers get.
+
+  Skip it and the failure is the invisible kind: Google sign-in works
+  perfectly for whoever built the bundle — your local release build presents
+  YOUR certificate, which is registered — and fails for every single person
+  who installs from Play, because theirs presents Google's, which is not. WBC
+  learned this one the hard way; its `android/app/build.gradle` still carries
+  the note, which is why its `versionCode` starts at 2.
+
 `VITE_FCM_VAPID_KEY` is still needed, but only for the **web** app now. It has
 nothing to do with either store build.
 
@@ -467,9 +482,17 @@ reviewer who can open the app without waiting for credentials.
 ### Screenshots
 
 Which four screens, and how to photograph them, is in `store-submission.md` §4.
-Play's own limits: at least two phone screenshots, 16:9 or 9:16, each side
-between 320px and 3840px. A 412×915 viewport at device scale 2 gives 824×1830,
-comfortably inside them.
+`npm run shots:store -- --write` writes Play's set to `store/play` at
+1080×1920, alongside Apple's at `store/ios`.
+
+**Apple's set cannot be uploaded here**, which is the trap this paragraph used
+to walk into by naming a viewport nobody could reach. Play takes at least two
+phone screenshots, each side between 320px and 3840px, and refuses any image
+whose longer side is more than twice the shorter. Apple's required 1290×2796 is
+2.17:1, so every file in Apple's set is refused at Play's upload screen. Play
+also rejects an alpha channel, with an error that mentions something else.
+Both are handled in the script; neither is visible in the file you are
+holding.
 
 Play also wants a **1024×500 feature graphic** and a **512×512 icon**, neither
 of which the App Store asks for. Both exist:
@@ -662,11 +685,13 @@ the testers named, looks like testing — because it is.
 Steps 1–3 are in `store-submission.md` §1 and are shared with the iOS
 submission. Do them once.
 
-**Internal testing is the route (§7), so stop after step 6** — add the testers,
-send the link, done. Steps 7 and 8 are the production road, kept for reference.
+**Internal testing is the route (§7), so stop after step 7** — add the testers,
+send the link, done. Steps 8 and 9 are the production road, kept for reference.
 
-1. Everything in `store-submission.md` §1 — functions deployed, rules deployed,
-   reviewer account built. **BY HAND**
+1. Everything in `store-submission.md` §1 — which is down to the rules deploy;
+   the functions, the VAPID key and the demo edition are already done, and that
+   file's status table is the record of it. No reviewer account is handed to
+   either store. **BY HAND**
 2. Deploy the site, so both static pages and the guest door are live. (Vercel
    does this on merge.) The store builds no longer depend on this, but the web
    app and the privacy URLs do.
@@ -675,9 +700,14 @@ send the link, done. Steps 7 and 8 are the production road, kept for reference.
 4. Create the keystore, `npm run android:bundle`, back up the keystore. **BY HAND**
 5. Upload to internal testing, fill in App access, content rating and the
    privacy policy URL. **BY HAND**
-6. Collect the sixteen Google accounts, add them all at once, send the opt-in
+6. **Then do step 4 again.** Copy Play's app-signing SHA-1 and SHA-256 into
+   Firebase, re-download `google-services.json`, bump the `versionCode` and
+   upload the rebuilt bundle — §5. The first upload exists to mint the
+   certificate; without this, Google sign-in fails for everyone but you.
+   **BY HAND**
+7. Collect the sixteen Google accounts, add them all at once, send the opt-in
    link — §7. **BY HAND**
-7. *(Production only)* Promote to closed testing and run the fourteen days as
+8. *(Production only)* Promote to closed testing and run the fourteen days as
    §8 describes — with things to do, more than one build, and feedback written
    down. **BY HAND**
-8. *(Production only)* Apply for production access, quoting the feedback. **BY HAND**
+9. *(Production only)* Apply for production access, quoting the feedback. **BY HAND**

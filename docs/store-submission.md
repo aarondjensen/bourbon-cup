@@ -504,9 +504,16 @@ scratch every time a layout changes and therefore gets skipped:
 
 ```sh
 npm i --no-save playwright && npx playwright install chromium
-npm run shots:store                 # dry run — names the four and the size
-npm run shots:store -- --write      # drives the site, writes store/ios/*.png
+npm run shots:store                 # dry run — names the four and both sizes
+npm run shots:store -- --write      # drives the site, writes store/ios and store/play
+npm run shots:store -- --write --only play
 ```
+
+**It takes both stores' sets in one run, and it has to.** Apple requires
+1290×2796 and Play refuses any image whose longer side is more than twice the
+shorter — 2796/1290 is 2.17, so the size Apple DEMANDS is a size Play REFUSES.
+Play's set is 1080×1920 and is flattened before it is written, because Play
+also rejects an alpha channel and says something else when it does.
 
 It runs in guest mode, so it signs into nothing and — since every write rule
 begins at `request.auth != null` — it *cannot* touch the tournament even by
