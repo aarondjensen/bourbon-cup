@@ -10,7 +10,7 @@ import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
   resolveTeams, DEFAULT_TEAM_NAMES, TOURNAMENT_TITLE, TOURNAMENT_LOCATION,
   FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT, DIRECTOR_CODE,
-  describeAllowance, SCORING_TYPE_MATCH, SCORING_TYPE_TOTAL, SCORING_TYPE_POINTS,
+  describeAllowance, formatIsSharedBall, SCORING_TYPE_MATCH, SCORING_TYPE_TOTAL, SCORING_TYPE_POINTS,
   HOLE_SCORING_FORMAT, HOLE_SCORING_BEST_BALL, resolveScoring,
   HOLE_RULE_COUNTING, HOLE_RULE_FIXED,
   HOLE_METHOD_LABELS, HOLE_METHOD_DESCRIPTIONS,
@@ -1214,14 +1214,14 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   //     doesn't ask twice
   //   • never once the director has settled the hole (approved) — that tag
   //     is the result, not a running claim
-  const maybePromptCtp = (pid, h, score, priorScore) => {
+  const maybePromptCtp = (pids, h, score, priorScore) => {
     if (score <= 0) return;
     if ((holePars[h] || 4) !== 3) return;
     if (priorScore > 0) return;
     const key = `${match.round}_${h}`;
     if (promptedCtp.current[key]) return;
     if (ctpFor(h)?.approved) return;
-    if (!matchPids.every(p => p === pid || getScore(p, h) > 0)) return;
+    if (!matchPids.every(p => pids.includes(p) || getScore(p, h) > 0)) return;
     promptedCtp.current[key] = true;
     setCtpPrompt(h);
   };
@@ -1255,18 +1255,25 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
 
   // ScoreButtonRow hands back the new gross directly (0 = cleared, which it
   // sends when the active button is tapped again), so no toggle logic here.
-  const onTapScore = async (pid, score) => {
+  //
+  // `pids` is every player this one tap writes to — one, except on a
+  // shared-ball side (scramble, pinehurst), where it is both partners: they
+  // play one ball, so one tap posts the same gross to both of their
+  // individual bc_hole_scores docs (see the card-group render below). The
+  // per-player doc shape stays untouched — lib/scoreGuard is explicit that a
+  // card belongs to the player who shot it — this just writes it twice.
+  const onTapScore = async (pids, score) => {
     // A signed card is not editable. In practice this is unreachable — the
     // signed view replaces the score buttons entirely — but it is the write
     // path, and the screen it defends against is one another device can put
     // it into mid-tap. Cheap, and the alternative is a score that lands in a
     // card somebody has already sworn to.
     if (signed) return;
-    // Read the hole and the player's existing score BEFORE the write —
-    // the CTP trigger below needs to know this was a first entry, and
-    // auto-advance can move activeHole while the save is in flight.
+    // Read the hole and the (representative) existing score BEFORE the
+    // write — the CTP trigger below needs to know this was a first entry,
+    // and auto-advance can move activeHole while the save is in flight.
     const h = activeHole;
-    const prior = getScore(pid, h);
+    const prior = getScore(pids[0], h);
     // ── The catch on a closed round ──
     // The first tap does not enter a score, it asks. And it asks about THIS
     // tap by name — who, which hole, what it says now and what it would say —
@@ -1278,7 +1285,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     // as it stays armed, and walking away from the match drops it. Saying no
     // leaves the round exactly as it was.
     if (editLocked) {
-      const ok = await confirmEdit(pid, h, prior, score);
+      const ok = await confirmEdit(pids, h, prior, score);
       if (!ok) return;
       setArmedMatchId(match.id);
     }
@@ -1286,16 +1293,16 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     // never awaited — the score posts whether or not the taptic engine
     // answered. See lib/platform.
     tapFeedback();
-    await onSaveHole(pid, match.round, h, score || null, tr?.course_id);
-    maybePromptCtp(pid, h, score || 0, prior);
+    await Promise.all(pids.map(pid => onSaveHole(pid, match.round, h, score || null, tr?.course_id)));
+    maybePromptCtp(pids, h, score || 0, prior);
   };
 
   // What a tap asks. Lifted out of onTapScore only to keep the write path
   // readable — the banner's Edit button asks its own, shorter question, since
   // it is arming deliberately rather than intercepting a tap and has no score
   // to name.
-  const confirmEdit = async (pid, h, prior, next) => {
-    const who = tPlayers.find(p => p.player_id === pid)?.name || pid;
+  const confirmEdit = async (pids, h, prior, next) => {
+    const who = pids.map(pid => tPlayers.find(p => p.player_id === pid)?.name || pid).join(" / ");
     const state = LOCK_STATE_LABEL[roundLockState(roundLocks, match.round)];
     const was = prior > 0 ? String(prior) : "no score";
     const now = next > 0 ? String(next) : "no score";
@@ -1773,51 +1780,86 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
       {/* Player score cards — 4 stacked, T1 above dashed divider, T2 below.
           Each shows one header row — name, (CH), stroke dots on the left,
           "Net ±X thru N" right-aligned — then a row of par-relative score
-          buttons. Tap a saved score again to clear. */}
+          buttons. Tap a saved score again to clear.
+          On a shared-ball format (scramble, pinehurst) each SIDE gets one
+          card instead of one per player — the side plays one ball, so it
+          gets one input, joined names, and the team's summed-then-rounded
+          handicap. See onTapScore for the write side of this. */}
       <div style={{ flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: fit.cardGap }}>
-        {[...match.teamA, "DIVIDER", ...match.teamB].map((pid) => {
-          if (pid === "DIVIDER") return <div key="div" style={{ borderTop: `1px dashed ${BC.bdr}`, flexShrink: 0, margin: `${fit.cardGap}px 0` }} />;
-          const tp = tPlayers.find(t => t.player_id === pid);
-          const team = match.teamA.includes(pid) ? "A" : "B";
-          const cur = getScore(pid, activeHole);
-          const strokes = strokeMaps[pid]?.[activeHole] || 0;
+        {(() => {
+          const shared = formatIsSharedBall(format);
+          const teamACards = shared ? [match.teamA] : match.teamA.map(pid => [pid]);
+          const teamBCards = shared ? [match.teamB] : match.teamB.map(pid => [pid]);
+          return [...teamACards, "DIVIDER", ...teamBCards];
+        })().map((pids) => {
+          if (pids === "DIVIDER") return <div key="div" style={{ borderTop: `1px dashed ${BC.bdr}`, flexShrink: 0, margin: `${fit.cardGap}px 0` }} />;
+          const team = match.teamA.includes(pids[0]) ? "A" : "B";
+          const cur = getScore(pids[0], activeHole);
+          const strokes = strokeMaps[pids[0]]?.[activeHole] || 0;
           // CH for display — per-player tee assignment overrides round default,
-          // matching the strokeMaps memo above and computeMatchResult.
-          const fullCH = getRoundCH({
+          // matching the strokeMaps memo above and computeMatchResult. Fetched
+          // per pid even on a shared card: the tooltip below names each
+          // partner's own Course Handicap alongside the team's summed figure.
+          const fullCHs = pids.map(pid => getRoundCH({
             roundLocks, round: match.round, pid, players: tPlayers,
             course, chOverrides: hcpOverrides, teeAssignments, roundTee,
-          });
-          // Show the number the dots were actually allocated from. On a round
-          // with a handicap allowance that is the reduced PLAYING handicap,
-          // not the full Course Handicap — printing the full figure beside
-          // three-quarters of the dots is how a player concludes the app has
-          // shorted them. The full CH stays available on the tooltip.
-          const playingCH = result?.playingCH?.[pid];
-          const ch = playingCH ?? fullCH;
-          const reduced = playingCH != null && playingCH !== fullCH;
-          const chTitle = reduced
-            ? `Playing handicap ${ch} — ${describeAllowance(result?.allowance)} allowance off a Course Handicap of ${fullCH}`
-            : `Course Handicap ${ch}`;
-          // Running net to par for this player thru holes scored
+          }));
+
+          let ch, chTitle, reduced;
+          if (pids.length > 1) {
+            // A side that plays one ball has one handicap: computeMatchResult's
+            // own sum-then-round figure (scoring.js "Shared-ball team
+            // handicaps"), never either partner's individually-rounded
+            // playingCH. exactCH is the unrounded per-player share that sum
+            // was taken from — dividing it back by each partner's own raw CH
+            // reads off the allowance percentage that was actually applied,
+            // without re-deriving the low/high split here.
+            ch = result?.teamCH?.[team] ?? 0;
+            reduced = true;
+            const exactCH = result?.exactCH || {};
+            const terms = pids.map((pid, i) => {
+              const full = fullCHs[i];
+              const pct = full > 0 ? Math.round(((exactCH[pid] ?? 0) / full) * 100) : 0;
+              return `${pct}% of ${full}`;
+            }).join(" + ");
+            chTitle = `Team playing handicap ${ch} — ${terms}`;
+          } else {
+            // Show the number the dots were actually allocated from. On a
+            // round with a handicap allowance that is the reduced PLAYING
+            // handicap, not the full Course Handicap — printing the full
+            // figure beside three-quarters of the dots is how a player
+            // concludes the app has shorted them. The full CH stays
+            // available on the tooltip.
+            const fullCH = fullCHs[0];
+            const playingCH = result?.playingCH?.[pids[0]];
+            ch = playingCH ?? fullCH;
+            reduced = playingCH != null && playingCH !== fullCH;
+            chTitle = reduced
+              ? `Playing handicap ${ch} — ${describeAllowance(result?.allowance)} allowance off a Course Handicap of ${fullCH}`
+              : `Course Handicap ${ch}`;
+          }
+          // Running net to par thru holes scored — one shared line for a
+          // shared-ball side, since both partners' scores and strokes are
+          // identical by construction.
           let netToPar = 0, thru = 0;
           for (let h = 0; h < 18; h++) {
-            const s = getScore(pid, h);
+            const s = getScore(pids[0], h);
             if (s > 0) {
-              const st = strokeMaps[pid]?.[h] || 0;
+              const st = strokeMaps[pids[0]]?.[h] || 0;
               netToPar += (s - st) - holePars[h];
               thru = h + 1;
             }
           }
 
           return (
-            <div key={pid} style={{
+            <div key={pids.join("_")} style={{
               background: BC.card, borderRadius: 10, padding: fit.cardPad,
               flex: "1 1 0", minHeight: 0, maxHeight: fit.cardMax, display: "flex", flexDirection: "column",
               border: `1px solid ${BC.bdr}`,
             }}>
-              {/* Header row — name + (CH) + stroke dots clustered tight on
+              {/* Header row — name(s) + (CH) + stroke dots clustered tight on
                   the LEFT, so the handicap context reads as attached to the
-                  player it describes, and the running Net pushed to the far
+                  player(s) it describes, and the running Net pushed to the far
                   RIGHT of the same row. The Net used to sit on a line of its
                   own beneath; folding it up here buys back a row per card,
                   which over four cards is most of the difference between the
@@ -1827,7 +1869,12 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
                     they agree in every real draw, and the match is the thing
                     on screen. */}
                 <span style={{ fontSize: FS.body, fontWeight: 700, color: BC.t1, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>
-                  <PlayerName name={tp?.name || pid} team={team} />
+                  {pids.map((pid, i) => (
+                    <span key={pid}>
+                      {i > 0 && " / "}
+                      <PlayerName name={tPlayers.find(t => t.player_id === pid)?.name || pid} team={team} />
+                    </span>
+                  ))}
                 </span>
                 <span title={chTitle} style={{ fontSize: FS.small, fontWeight: 700, color: BC.hcpBlue, flexShrink: 0 }}>
                   ({ch}{reduced ? "*" : ""})
@@ -1849,7 +1896,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
                   as big as the device allows rather than a fixed 44. */}
               <div style={{ flex: "1 1 auto", minHeight: 0, display: "flex" }}>
                 <ScoreButtonRow
-                  par={par} score={cur} onScore={(v) => onTapScore(pid, v)}
+                  par={par} score={cur} onScore={(v) => onTapScore(pids, v)}
                   fill minHeight={fit.btnMin} fontSize={fit.btnFont} labels={fit.labels}
                 />
               </div>

@@ -128,3 +128,49 @@ describe("counted — other formats", () => {
     expect(h.counted).toBeNull();
   });
 });
+
+// ── Shared-ball team handicaps ──────────────────────────────────────
+// A 2-Man Scramble side plays one ball, so it gets one handicap: the sum of
+// each partner's allowance-adjusted Course Handicap (35% of the low man's,
+// 15% of the high man's), taken on the EXACT figures and rounded once — not
+// each player's own figure rounded first and then added. Nothing pinned this
+// down before; it was only reachable by reading scoring.js.
+describe("Shared-ball team handicaps — 2-Man Scramble", () => {
+  // Slope 113 / rating-par 0 makes Course Handicap == the index, rounded —
+  // so a 9.4/11.2 pair gives clean, checkable-by-hand inputs: CH 9 and 11,
+  // 35% of 9 (3.15) + 15% of 11 (1.65) = 4.8, rounded once to 5.
+  const players = [
+    { player_id: "p1", name: "P1", team: "A", handicap_index: 9.4 },
+    { player_id: "p2", name: "P2", team: "A", handicap_index: 11.2 },
+    { player_id: "p3", name: "P3", team: "B", handicap_index: 0 },
+    { player_id: "p4", name: "P4", team: "B", handicap_index: 0 },
+  ];
+  const tRounds = [{
+    round_number: 1, format: "scramble", course_id: "c1", tee_box: "White",
+    allowance: { enabled: true },
+  }];
+  const match = { id: "m", round: 1, teamA: ["p1", "p2"], teamB: ["p3", "p4"], scoring_type: "match" };
+  const result = () =>
+    computeMatchResult(match, {}, courses, tRounds, players, "scramble", {}, undefined, {}, {});
+
+  it("sums the unrounded per-player figures and rounds once, not the other way round", () => {
+    const r = result();
+    // Rounding each player first would give round(3.15) + round(1.65) = 3 + 2 = 5
+    // here too by coincidence — the case that actually distinguishes the two
+    // orders is any pair whose per-player roundings both go the SAME way
+    // (e.g. two low-CH players at 34%/16% would sum-then-round to a different
+    // whole number than round-then-sum). This pins the sum-first order down
+    // directly against the exact figures rather than relying on a case where
+    // the two methods happen to agree.
+    expect(r.exactCH.p1).toBeCloseTo(9 * 0.35, 5);
+    expect(r.exactCH.p2).toBeCloseTo(11 * 0.15, 5);
+    expect(r.exactCH.p1 + r.exactCH.p2).toBeCloseTo(4.8, 5);
+    expect(r.teamCH.A).toBe(5);
+  });
+
+  it("is null on a format that doesn't share a ball", () => {
+    const tr = [{ ...tRounds[0], format: "best_ball" }];
+    const r = computeMatchResult(match, {}, courses, tr, players, "best_ball", {}, undefined, {}, {});
+    expect(r.teamCH).toBeNull();
+  });
+});

@@ -33,7 +33,9 @@
 //      give.
 //    • ONE ROW PER PLAYER, initials in their team's color, with the
 //      side's scoring row directly beneath. How the side's number was
-//      made is then visible rather than asserted.
+//      made is then visible rather than asserted. On a shared-ball format
+//      (scramble, pinehurst) the side plays one ball, so it gets one row
+//      for both partners instead of one each — see `shared` below.
 //
 //  Bourbon Cup differences from MNQ, all of them forced by this app
 //  having formats MNQ does not:
@@ -65,7 +67,7 @@ import { playerLookup, sideNames } from "../lib/players";
 import { BC, FONT, ALPHA, FS, ON_AMBER, teamColor } from "../theme";
 import {
   FORMATS, HOLE_METHOD_LABELS, UNIT_DOTS, UNIT_POINTS,
-  describeHolePoints, isPointsPerHole, resolveScoring, SCORING_TYPE_TOTAL,
+  describeHolePoints, formatIsSharedBall, isPointsPerHole, resolveScoring, SCORING_TYPE_TOTAL,
 } from "../constants";
 import {
   higherIsBetter, totalUnit, holeFormatFor,
@@ -283,6 +285,14 @@ export function FullScorecard({
 
   const strokesFor = (pid, h) => result.strokeMaps?.[pid]?.[h] || 0;
 
+  // A shared-ball side (scramble, pinehurst) plays one ball, so it gets one
+  // PlayerRow for both partners instead of one each — same score, same
+  // strokes, by construction (see App.jsx onTapScore). Grouped once here
+  // rather than inside `nine()`, which runs twice (OUT and IN).
+  const shared = formatIsSharedBall(format);
+  const teamAGroups = shared ? [match.teamA] : match.teamA.map(pid => [pid]);
+  const teamBGroups = shared ? [match.teamB] : match.teamB.map(pid => [pid]);
+
   // ── The running line, computed once over all 18 ──
   // Same currency as the row that prints it, from A's perspective, and
   // undefined until the hole is complete for both sides.
@@ -391,8 +401,9 @@ export function FullScorecard({
     // row directly beneath it and the same one the names in the header are
     // in. Which side a row belongs to was never the question anyone had
     // while reading this; whose row it is, is.
-    const PlayerRow = (pid, tid) => {
+    const PlayerRow = (pids, tid) => {
       const rowH = 30;
+      const pid = pids[0]; // shared-ball partners carry identical scores/strokes
       let gross = 0;
       const cells = idx.map((h) => {
         const s = getScore(pid, h);
@@ -400,12 +411,18 @@ export function FullScorecard({
         return { h, s, st: strokesFor(pid, h) };
       });
       // The playing handicap — post-allowance, which is the number the dots
-      // on this row were actually allocated from.
-      const ch = result.playingCH?.[pid];
+      // on this row were actually allocated from. On a shared-ball side that
+      // is the team's summed-then-rounded figure (result.teamCH), never
+      // either partner's own individually-rounded playingCH.
+      const combined = pids.length > 1;
+      const ch = combined ? result.teamCH?.[tid] : result.playingCH?.[pid];
+      const label = pids.map(p => initials(nameOf(p))).join("/");
       return (
-        <div key={pid} style={{ display: "flex", alignItems: "center", borderBottom: gridLine() }}>
-          <div style={labelCell(rowH, { gap: 3, color: BC.t1, paddingTop: 8 })}>
-            <span style={{ fontSize: FS.small, fontWeight: 800, color: teamColor(tid) }}>{initials(nameOf(pid))}</span>
+        <div key={pids.join("_")} style={{ display: "flex", alignItems: "center", borderBottom: gridLine() }}>
+          <div style={labelCell(rowH, combined
+            ? { gap: 1, color: BC.t1, flexDirection: "column", alignItems: "flex-start", justifyContent: "center" }
+            : { gap: 3, color: BC.t1, paddingTop: 8 })}>
+            <span style={{ fontSize: combined ? FS.micro : FS.small, fontWeight: 800, color: teamColor(tid), lineHeight: 1.15 }}>{label}</span>
             {ch != null && <span style={{ fontSize: FS.micro, fontWeight: 700, color: BC.hcpBlue }}>{ch}</span>}
           </div>
           {cells.map((c, i) => (
@@ -557,13 +574,13 @@ export function FullScorecard({
         {HoleRow}
         {ParRow}
         {HcpRow}
-        {match.teamA.map((pid) => PlayerRow(pid, "A"))}
+        {teamAGroups.map((pids) => PlayerRow(pids, "A"))}
         {SideRow("A")}
         {MatchRow}
         {/* The MATCH row is a floating chip; without a team label under it
             Team B's first row would butt straight into its border. */}
         <div style={{ marginTop: 5 }}>
-          {match.teamB.map((pid) => PlayerRow(pid, "B"))}
+          {teamBGroups.map((pids) => PlayerRow(pids, "B"))}
           {SideRow("B")}
         </div>
       </div>
