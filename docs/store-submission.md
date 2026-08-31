@@ -47,12 +47,21 @@ how an evening gets spent redoing it:
 | | State | How that was established |
 | --- | --- | --- |
 | 1.1 Cloud Functions | **Deployed** | Reported in the commit that documented the discovery timeout — all six endpoints went up. Re-check by tapping My Account → Delete Account on a throwaway account; the button says so itself when the callable is missing. |
-| 1.2 `firestore.rules` | **Re-deploy needed** | `bc_ledger` and `bc_budget` answer a public REST read, so the last deploy landed — but `canAdminEdition()` (Admin inside a demo, §1.4) is newer than it. Until it goes up, a reviewer gets an Admin tab whose every save is refused. |
+| 1.2 `firestore.rules` | **Deployed** — 31 Aug 2026 | `firebase deploy --only firestore:rules` against `the-bourbon-cup` returned `released rules firestore.rules to cloud.firestore`. It also said `latest version … already up to date, skipping upload`, which means the ruleset was byte-identical to one already uploaded — the release is what this row is about, and it happened. |
 | 1.3 `VITE_FCM_VAPID_KEY` | **Set** | Confirmed in Vercel against the Web Push key pair in Firebase → Cloud Messaging. Nothing in the repo or the database can see this one, so it is the one item here that can only ever be checked by looking. Web push only — neither store build uses it. |
 | 1.4 Reviewer account | **Not needed** | No credentials are handed to either store. `bc_demo` holds its 371 documents and all twelve roster rows, unclaimed; a reviewer signs in with their own Apple ID or Google account, presents the tournament password, claims a name, and gets the Admin tabs because the edition is a demo. |
 
-What remains is 1.2: `firebase deploy --only firestore:rules`, after the build
-carrying `canAdminEdition` is live. App first, rules second, as always.
+**Nothing in §1 is outstanding.** What is left of either submission is in
+`play-store.md` and `app-store.md`, plus the screenshots in §4.
+
+One thing the deploy output does NOT establish, and it is worth a `grep` rather
+than an assumption: `firebase deploy` uploads the `firestore.rules` in the
+working copy it is run from, so "already up to date" means the released rules
+match THAT CHECKOUT. If the machine it was run from is behind `main`, what is
+live is the older file, and the symptom is precisely the one this row exists to
+prevent — a reviewer inside the demo typing into an Admin tab whose saves are
+refused, which `db.upsert` swallows. `git -C <checkout> grep -c canAdminEdition
+firestore.rules` answers it in a second; the answer should not be 0.
 
 `VITE_*` is baked in at build time, so if 1.3 is ever changed it needs a Vercel
 redeploy to take, not just a saved variable.
@@ -557,13 +566,11 @@ The two submissions share a spine and then diverge. Do the spine once.
 **Shared, first** — three of the four prerequisites in §1 are already done, and
 that table is the record of which. What is left of the spine:
 
-1. `firebase deploy --only firestore:rules` (§1.2), after the build carrying
-   `canAdminEdition` is live. **BY HAND** — this is the only §1 item still
-   outstanding, and until it lands a reviewer inside the demo gets an Admin tab
-   whose every save is silently refused.
+1. ~~`firebase deploy --only firestore:rules` (§1.2)~~ — **done, 31 Aug 2026.**
 2. Take the four screenshots (§4). **BY HAND, on a machine with a browser that
    can reach Firestore** — a sandbox cannot, and the wall is a real one rather
-   than a missing credential; see §4.
+   than a missing credential; see §4. This is the whole of the shared spine
+   that is left.
 
 **Then Play**, which is ready to go and gated on nothing but the by-hand
 console work — see `play-store.md`. **The route is internal testing**, so
