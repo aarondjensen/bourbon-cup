@@ -558,9 +558,22 @@ also rejects an alpha channel and says something else when it does.
 
 It runs in guest mode, so it signs into nothing and — since every write rule
 begins at `request.auth != null` — it *cannot* touch the tournament even by
-accident. `--edition`, `--url`, `--out` and `--light` are all overridable, and
-it prints the text it photographed on each screen so an empty one is visible in
-the output rather than at upload time.
+accident. `--edition`, `--url`, `--out`, `--only` and `--light` are all
+overridable.
+
+**It measures every file it writes** and fails the run on a wrong size or a
+stray alpha channel, rather than ending with a command telling you to check
+them yourself — which it used to, using `sips`, which does not exist on the
+Windows machine that builds the Play bundle. Both stores reject on dimensions
+alone, so an unchecked check is the worst of the three states.
+
+It also prints the text it photographed, so an empty screen is visible in the
+output rather than at upload time — and for a shot that declares a marker it
+prints the text AROUND THE MARKER rather than the first ninety characters.
+`02-scorecard` is why: a match card unfolds in place on the leaderboard, so the
+top of the body is the cup total on both screens and the two readbacks came out
+character-for-character identical on a run where nothing was wrong. That reads
+as exactly the failure the marker exists to catch.
 
 One of the four RENDERS anywhere, including a sandbox with no Firestore: the
 Data tab's career table reads `bourbon-cup-archive.json` out of the bundle, so
