@@ -142,6 +142,45 @@ storeFile=C:/dev/keys/bourbon-cup-upload.keystore
 
 Forward slashes, or doubled backslashes — it is a Java properties file.
 
+### Android developer verification — **registered, nothing to do**
+
+**Play Console → Android developer verification** lists every package name
+Google will let be installed on a certified Android device, and says apps not
+registered by **September 30, 2026** are removed from Play globally. It reads
+like an outstanding submission step and is not one: all four packages on this
+account — `com.mnqgolf.app`, `com.sfglgolf.app`, `com.thebourboncup.app` and
+Wannabe Cup — already show **Registered**, because Play pre-fills the page from
+the Play Console account itself. A package with a console entry is registered
+whether or not anything has ever been published to it, so Bourbon Cup and WBC
+being unsubmitted is not a gap in it, and none of it gates an upload.
+
+What is registered is a package name **plus signing keys**, and the check at
+install time is against the key the installed app is actually signed with:
+
+- **Anything installed from Play is covered permanently.** Under Play App
+  Signing the users' copy is signed by Google's key, and Google registers that
+  one itself. That is the whole internal-testing route (§7).
+- **A sideloaded build is the one that can be refused** — an APK dragged onto a
+  phone to test something is signed with the upload key or a debug key, not
+  Google's, and that certificate has to be one of the ones listed against the
+  package. Bourbon Cup and WBC carry three keys each where MnQ and SFGL carry
+  one — Google's app-signing key, the upload key and, on this app at least, the
+  bubblewrap key from the TWA era. Open the row once before sideloading
+  anything and check the certificate the current keystore produces is among
+  them.
+- **An upload key reset mints a key this page has not seen.** If the bundle is
+  ever refused for the wrong key and it goes to *Request upload key reset*
+  (above), register the new certificate here as well. Its SHA-256 comes off the
+  keystore:
+
+  ```sh
+  keytool -list -v -keystore C:/dev/keys/bourbon-cup-upload.keystore -alias bourbon-cup
+  ```
+
+Same for WBC, in its own repo — the page is per Play Console account, so the
+two apps are already both on it, but a key added for one is not a key added for
+the other.
+
 ### When Play refuses the bundle
 
 Two rejections cost an evening between them, and neither says what it means.
