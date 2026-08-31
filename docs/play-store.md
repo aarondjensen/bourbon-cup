@@ -374,7 +374,18 @@ settings → the Android app → Add fingerprint — before the download.
   **Release → Setup → App integrity** as well — Play re-signs, so the
   fingerprint a shipped build presents is Google's, not yours.
 
-  **Which means the first upload is a throwaway, and it has to be.** Google's
+  **This may already be done here.** As of 31 Aug 2026 the committed-nowhere
+  but present `android/app/google-services.json` carries TWO certificate
+  hashes — `44a058…`, which is the upload key at
+  `C:/dev/keys/bourbon-cup-upload.keystore`, and `4d82fa…`, which is neither
+  that key nor the debug keystore (`efc2a38c…`). If Play Console → Release →
+  Setup → App integrity shows `4d82fa…` as the **app signing key**, then the
+  fingerprint below was registered back in August, the file already carries
+  it, and the throwaway cycle is spent — upload once and ship it.
+  `Select-String -Path android\app\google-services.json -Pattern
+  certificate_hash` is how to see what a given download actually contains.
+
+  **Otherwise the first upload is a throwaway, and it has to be.** Google's
   app-signing certificate does not exist until a bundle has been uploaded and
   Play App Signing is enrolled, so the fingerprint cannot be in
   `google-services.json` at the time the first bundle is built. Upload it,
@@ -718,11 +729,12 @@ send the link, done. Steps 8 and 9 are the production road, kept for reference.
 4. Create the keystore, `npm run android:bundle`, back up the keystore. **BY HAND**
 5. Upload to internal testing, fill in App access, content rating and the
    privacy policy URL. **BY HAND**
-6. **Then do step 4 again.** Copy Play's app-signing SHA-1 and SHA-256 into
-   Firebase, re-download `google-services.json`, bump the `versionCode` and
-   upload the rebuilt bundle — §5. The first upload exists to mint the
-   certificate; without this, Google sign-in fails for everyone but you.
-   **BY HAND**
+6. **Then do step 4 again — unless §5 says you already have.** Copy Play's
+   app-signing SHA-1 and SHA-256 into Firebase, re-download
+   `google-services.json`, bump the `versionCode` and upload the rebuilt
+   bundle. The first upload exists to mint the certificate; without this,
+   Google sign-in fails for everyone but you. Skip it only if the file already
+   carries Play's app-signing hash — §5 says how to check. **BY HAND**
 7. Collect the sixteen Google accounts, add them all at once, send the opt-in
    link — §7. **BY HAND**
 8. *(Production only)* Promote to closed testing and run the fourteen days as
