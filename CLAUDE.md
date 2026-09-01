@@ -210,6 +210,16 @@ makes is real unless somebody says otherwise. A flag rather than a check on the
 id, because the next scratch edition will not be called `bc_demo`. **Anything
 else that ever spans editions has to consult it too.**
 
+**Nothing opens on the demo any more.** `defaultEdition` used to fork on
+`isNative()` so a store build started in `bc_demo`, because a store build meant
+Play's twelve closed-test strangers with no roster row. Internal testing retired
+that audience (`play-store.md` §7): a store build is now installed by the same
+sixteen men who use the website, and landing THEM on "DEMO — Testers" is the
+same failure the fork existed to prevent, pointed the other way. Every install
+opens on the cup; `VITE_DEFAULT_EDITION` still overrides. The demo is untouched
+and still reachable in ☰ → Tournaments — it is simply not where anybody starts,
+and a reviewer's path is the guest door rather than a claimed demo name.
+
 **Inside a demo, every member is an administrator.** `canAdminEdition()` in
 `firestore.rules` grants the edition-scoped admin collections — roster, courses,
 rounds, matches, groups, tee sheet, handicap overrides, settings, budget and
