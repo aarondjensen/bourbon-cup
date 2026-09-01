@@ -349,11 +349,39 @@ Choose **All or some functionality is restricted** and add two entries:
 > Password: `<none>`
 > Any other instructions: Tournament password: `<from Admin → Event → Access>`
 
-**No account is handed over, on purpose** — see `store-submission.md` §1.4 for
-why (Google's per-phone cap, and a fresh account signed into from an unfamiliar
-network is exactly what Google's risk checks challenge). The Admin tabs used to
-be the one thing this could not reach; a demo edition grants them to any member
-now, which is what makes "sign in with your own account" a complete answer.
+**This section used to say no account is handed over, on purpose.** Play has
+since closed that door: the Sign in details form ends with a mandatory
+checkbox — *"Sign in details in this declaration provide full access to all the
+features and content within this app"* — and it **cannot be saved unticked**.
+The same page states that reviewers cannot create accounts or use their own,
+which is exactly what "sign in with any Google account of your own" asked them
+to do. Guest mode alone cannot satisfy it either, because it is read-only by
+design.
+
+So a **dedicated Google review account** is required, and the old reasoning
+survives only as the list of things that make it fragile — Google caps accounts
+per verification phone number, and a fresh account signed into from an
+unfamiliar network is what their risk checks challenge. Build it to be
+unchallenged rather than to be quick:
+
+1. Create one Google account for this purpose. Give it a recovery phone and
+   let it sit signed in on a real device for a day if you can; an account
+   created and immediately handed to a reviewer is the profile that gets
+   challenged.
+2. **Do not enable 2-step verification on it.** Play asks for "reusable sign in
+   details that don't expire", and a 2FA prompt on a reviewer's device is an
+   access failure they cannot work around and cannot contact you about.
+3. Sign into the app with it once yourself: present the tournament password,
+   switch to **DEMO — Testers**, and claim a name. **Claim it in advance** —
+   a reviewer who has to claim one is a reviewer who can fail at that step, and
+   the account is a member either way.
+4. Put its address and password in the form's Username and Password fields,
+   the tournament password and the demo instructions in the free-text box, and
+   tick the checkbox honestly.
+
+The account is then a permanent member of the demo edition and of nothing else.
+It never needs the crown: a demo grants Admin to any member (`canAdminEdition`),
+which is still what makes this a complete answer rather than a partial one.
 
 Guest mode alone is **not** enough for this section. Play wants reviewers to
 reach all functionality, and guest mode is read-only by design.
