@@ -1618,7 +1618,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                   // it. Nothing survives the change that the new format would
                   // not have chosen for itself — a Scramble's 35/15 means
                   // nothing on a Singles round, Points means nothing off Team
-                  // Best Ball, and a Team Total's counts mean nothing anywhere.
+                  // Best Ball, and a 2-Man Agg's counts mean nothing anywhere.
                   const id = e.target.value;
                   const fmt = FORMATS.find(f => f.id === id);
                   setRoundFormat(id);
@@ -1792,7 +1792,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
             {/* ══ HOLE SCORING ══════════════════════════════════════════
                 The first of the two scoring axes: how a side's single number
                 for a hole is arrived at. The FORMAT usually answers it outright
-                — a Four-Ball takes the better ball, a Team Total adds both —
+                — a Four-Ball takes the better ball, a 2-Man Agg adds both —
                 so the section asks only where something is genuinely open, and
                 otherwise STATES the rule rather than leaving the director to
                 infer it. Three shapes, chosen by constants.holeRuleFor:
