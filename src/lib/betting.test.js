@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { inField, computeSkins, lowNetRows, ctpTags, ctpPinTotal, potHole, holePotRows, holePotWins, DEFAULT_POT_HOLE } from "./betting";
+import { inField, computeSkins, lowNetRows, ctpTags, ctpPinTotal, moneyHole, moneyHoleRows, moneyHoleWins, moneyHolePars, DEFAULT_MONEY_HOLE } from "./betting";
 
 const course = {
   id: "c1",
@@ -166,41 +166,41 @@ describe("ctpPinTotal", () => {
 });
 
 
-// ── The hole pot ──────────────────────────────────────────────────────
+// ── The money hole ──────────────────────────────────────────────────────
 // One designated hole a round. Lowest net takes it and a TIE SPLITS, which is
 // the one thing that separates it from a skin on the same hole.
-describe("potHole", () => {
+describe("moneyHole", () => {
   it("defaults anything unusable to the designated 18th", () => {
     [undefined, null, "", 0, 19, -3, NaN, "nope"].forEach(v =>
-      expect(potHole(v)).toBe(DEFAULT_POT_HOLE));
+      expect(moneyHole(v)).toBe(DEFAULT_MONEY_HOLE));
   });
   it("keeps a hole that is on the card", () => {
-    expect(potHole(1)).toBe(1);
-    expect(potHole(9)).toBe(9);
-    expect(potHole("12")).toBe(12);
+    expect(moneyHole(1)).toBe(1);
+    expect(moneyHole(9)).toBe(9);
+    expect(moneyHole("12")).toBe(12);
   });
 });
 
-describe("holePotRows", () => {
+describe("moneyHoleRows", () => {
   const one = (scores) => Object.fromEntries(
     Object.entries(scores).map(([pid, v]) => [`${pid}_1`, { 17: v }]));
 
   it("gives the hole to the outright lowest net", () => {
-    const rows = holePotRows({ round: 1, hole: 18, field: players, holeData: one({ p1: 3, p2: 4, p3: 5, p4: 4 }) });
+    const rows = moneyHoleRows({ round: 1, hole: 18, field: players, holeData: one({ p1: 3, p2: 4, p3: 5, p4: 4 }) });
     expect(rows[0].pid).toBe("p1");
     expect(rows.filter(r => r.won).map(r => r.pid)).toEqual(["p1"]);
   });
 
   // The whole point of the game: a tie does not push, it splits.
   it("makes equal-lowest cards co-winners rather than pushing", () => {
-    const rows = holePotRows({ round: 1, hole: 18, field: players, holeData: one({ p1: 3, p2: 4, p3: 3, p4: 4 }) });
+    const rows = moneyHoleRows({ round: 1, hole: 18, field: players, holeData: one({ p1: 3, p2: 4, p3: 3, p4: 4 }) });
     expect(rows.filter(r => r.won).map(r => r.pid).sort()).toEqual(["p1", "p3"]);
   });
 
   // A shot on the hole is a shot in this game — same stroke maps as net skins.
   it("takes the hole's stroke off before comparing", () => {
     const maps = { p3: { 17: 1 } };
-    const rows = holePotRows({ round: 1, hole: 18, field: players, holeData: one({ p1: 3, p2: 4, p3: 4, p4: 4 }), maps });
+    const rows = moneyHoleRows({ round: 1, hole: 18, field: players, holeData: one({ p1: 3, p2: 4, p3: 4, p4: 4 }), maps });
     expect(rows.filter(r => r.won).map(r => r.pid).sort()).toEqual(["p1", "p3"]);
     expect(rows.find(r => r.pid === "p3").gross).toBe(4);
     expect(rows.find(r => r.pid === "p3").net).toBe(3);
@@ -209,7 +209,7 @@ describe("holePotRows", () => {
   // Somebody still out on the course is not losing the hole, he has not played
   // it — so he ranks below the cards that are in and prints no number.
   it("ranks a player with no score below everybody who has one, and never wins", () => {
-    const rows = holePotRows({ round: 1, hole: 18, field: players, holeData: one({ p1: 5, p2: 4 }) });
+    const rows = moneyHoleRows({ round: 1, hole: 18, field: players, holeData: one({ p1: 5, p2: 4 }) });
     // Cards in first, best net on top; the two who have not played it fall in
     // behind them by name ("Four" before "Three").
     expect(rows.map(r => r.pid)).toEqual(["p2", "p1", "p4", "p3"]);
@@ -219,23 +219,23 @@ describe("holePotRows", () => {
   });
 
   it("has no winner on a hole nobody has posted", () => {
-    const rows = holePotRows({ round: 1, hole: 18, field: players, holeData: {} });
+    const rows = moneyHoleRows({ round: 1, hole: 18, field: players, holeData: {} });
     expect(rows.filter(r => r.won)).toHaveLength(0);
   });
 
   // Which hole is a stored choice, so the rows have to read the one named.
   it("scores the hole it is given, not the eighteenth", () => {
-    const rows = holePotRows({ round: 1, hole: 9, field: players, holeData: { p1_1: { 8: 3 }, p2_1: { 8: 4, 17: 2 } } });
+    const rows = moneyHoleRows({ round: 1, hole: 9, field: players, holeData: { p1_1: { 8: 3 }, p2_1: { 8: 4, 17: 2 } } });
     expect(rows.filter(r => r.won).map(r => r.pid)).toEqual(["p1"]);
   });
 });
 
-describe("holePotWins", () => {
+describe("moneyHoleWins", () => {
   const hd = {
     p1_1: { 17: 3 }, p2_1: { 17: 4 }, p3_1: { 17: 3 }, p4_1: { 17: 5 },
     p1_2: { 17: 5 }, p2_2: { 17: 4 }, p3_2: { 17: 5 }, p4_2: { 17: 5 },
   };
-  const wins = holePotWins({ rounds: [1, 2], hole: 18, field: players, holeData: hd, pot: 160 });
+  const wins = moneyHoleWins({ rounds: [1, 2], hole: 18, field: players, holeData: hd, pot: 160 });
 
   // $160 over two rounds is $80 a hole; a tied hole splits ITS share rather
   // than paying twice, so no round can be worth more than a clean one.
@@ -247,16 +247,61 @@ describe("holePotWins", () => {
 
   // The user's own worked example: an $80 pot on one hole, two men on net 3.
   it("pays two tied men $40 each out of an $80 pot on a single round", () => {
-    const w = holePotWins({ rounds: [1], hole: 18, field: players, holeData: hd, pot: 80 });
+    const w = moneyHoleWins({ rounds: [1], hole: 18, field: players, holeData: hd, pot: 80 });
     expect(w.map(x => x.share)).toEqual([40, 40]);
   });
 
   it("yields nothing from a round nobody has posted", () => {
-    expect(holePotWins({ rounds: [1], hole: 18, field: players, holeData: {}, pot: 80 })).toHaveLength(0);
+    expect(moneyHoleWins({ rounds: [1], hole: 18, field: players, holeData: {}, pot: 80 })).toHaveLength(0);
   });
 
   it("is empty with no rounds on the schedule", () => {
-    expect(holePotWins({ rounds: [], hole: 18, field: players, holeData: hd, pot: 80 })).toHaveLength(0);
-    expect(holePotWins({ rounds: null, hole: 18, field: players, holeData: hd, pot: 80 })).toHaveLength(0);
+    expect(moneyHoleWins({ rounds: [], hole: 18, field: players, holeData: hd, pot: 80 })).toHaveLength(0);
+    expect(moneyHoleWins({ rounds: null, hole: 18, field: players, holeData: hd, pot: 80 })).toHaveLength(0);
+  });
+});
+
+// A par 3 already carries the CTP pot, so the money hole must not land on one
+// — and the check is per ROUND, because four rounds are four courses.
+describe("moneyHolePars", () => {
+  // hole_pars above: the 1st, 7th and 14th are par 3s; c1's 18th is a par 4.
+  it("flags the rounds whose designated hole is a par 3", () => {
+    const r = moneyHolePars({ rounds: [1], hole: 7, tRounds, courses: [course], roundLocks: {} });
+    expect(r.par3.map(x => x.round)).toEqual([1]);
+    expect(r.par3[0].par).toBe(3);
+  });
+
+  it("says nothing about a hole that is not a par 3", () => {
+    const r = moneyHolePars({ rounds: [1], hole: 18, tRounds, courses: [course], roundLocks: {} });
+    expect(r.par3).toHaveLength(0);
+    expect(r.unknown).toHaveLength(0);
+    expect(r.hole).toBe(18);
+  });
+
+  // resolveHolePars hands back eighteen par 4s with no course, which would
+  // read as a settled "not a par 3" on a question the draw has not answered.
+  it("holds a round with no course apart rather than passing it", () => {
+    const rs = [{ round_number: 1, course_id: "c1" }, { round_number: 2 }];
+    const r = moneyHolePars({ rounds: [1, 2], hole: 7, tRounds: rs, courses: [course], roundLocks: {} });
+    expect(r.par3.map(x => x.round)).toEqual([1]);
+    expect(r.unknown.map(x => x.round)).toEqual([2]);
+  });
+
+  // A locked round froze its course; the warning has to read the same table
+  // the scoring does, or it would clear a hole the round is not playing.
+  it("reads a locked round through its lock", () => {
+    const rs = [{ round_number: 1, course_id: "c2" }];
+    // c2's first hole is a par 4; the lock says the round was played on c1,
+    // whose first is a par 3.
+    const other = { ...course, id: "c2", hole_pars: course.hole_pars.map((p, i) => (i === 0 ? 4 : p)) };
+    const locks = { 1: { locked: true, course_id: "c1", hole_pars: course.hole_pars } };
+    const r = moneyHolePars({ rounds: [1], hole: 1, tRounds: rs, courses: [course, other], roundLocks: locks });
+    expect(r.par3.map(x => x.round)).toEqual([1]);
+  });
+
+  it("is empty on an empty schedule", () => {
+    const r = moneyHolePars({ rounds: [], hole: 18, tRounds, courses: [course], roundLocks: {} });
+    expect(r.perRound).toEqual([]);
+    expect(r.par3).toEqual([]);
   });
 });

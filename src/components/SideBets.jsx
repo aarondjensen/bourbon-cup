@@ -180,7 +180,7 @@ export function SideBets({ players, bets, user, authUid, teams, onAddBet, onDele
             {mineOnly
               ? "You are not in any of the bets on the board. Switch to All to see everybody else's."
               : canAdd
-                ? "Anything you have going with somebody else — a press, closest on 17, first to break 90."
+                ? "Anything you have going with somebody else — a press, long drive, first to break 85, cornhole."
                 : "Bets players have going with each other show up here."}
           </div>
         </div>

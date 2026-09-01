@@ -83,7 +83,9 @@ import { FullScorecard } from "./components/FullScorecard";
 import { FieldCard } from "./components/FieldCard";
 import { BuyInEditor } from "./components/BuyIns";
 import { LowNetCard } from "./components/LowNetCard";
-import { HolePotCard } from "./components/HolePotCard";
+import { MoneyHoleCard } from "./components/MoneyHoleCard";
+import { MoneyHoleSetup } from "./components/MoneyHoleSetup";
+import { MoneyHolePrompt } from "./components/MoneyHolePrompt";
 import { MatchSetup } from "./components/MatchSetup";
 import {
   GROUPS_COL, groupsDocId, encodeGroups, decodeGroups,
@@ -99,7 +101,7 @@ import {
 import { summarizeEdition, sameSummary } from "./lib/editionSummary";
 import {
   inField, roundSetup, strokeMapsFor, computeSkins, lowNetRows, ctpTags, ctpPinTotal,
-  potHole, holePotRows, holePotWins,
+  moneyHole, moneyHoleRows, moneyHoleWins, moneyHolePars,
 } from "./lib/betting";
 import { SIDE_BETS_COL, sideBetId, buildSideBet, toggleSettled } from "./lib/sideBets";
 import {
@@ -907,7 +909,7 @@ function LoginSplash({ tournamentName, tournamentLocation }) {
 const HOLE_RING = { width: 2, offset: 1 };
 const HOLE_RING_REACH = HOLE_RING.width + HOLE_RING.offset;
 
-function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teams, hcpOverrides, teeAssignments, roundLocks, rounds, currentRound, groups, ctpData, onSetCtp, onConfirmCtp, cardSigs, onSignCard, onAttestCard, onUnsignCard }) {
+function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teams, hcpOverrides, teeAssignments, roundLocks, rounds, currentRound, groups, ctpData, onSetCtp, onConfirmCtp, buyIns, cardSigs, onSignCard, onAttestCard, onUnsignCard }) {
   const userPid = user.player_id;
   // This screen is worked from, not read down — four players' scores have to
   // be reachable without scrolling to the one at the bottom. It measures the
@@ -939,6 +941,12 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // par-3 CTP chip re-opens it deliberately and ignores the guard.
   const [ctpPrompt, setCtpPrompt] = useState(null);
   const promptedCtp = useRef({});
+  // The money-hole heads-up. True while the popup is up; `promptedMoneyHole`
+  // is the session guard that keeps it to ONE appearance per round, the same
+  // shape the CTP guard has and for the same reason — a cleared and re-entered
+  // score on the hole before it must not announce the money hole twice.
+  const [moneyHolePrompt, setMoneyHolePrompt] = useState(false);
+  const promptedMoneyHole = useRef({});
   // The sign sheet. Only reachable from the promoted Full Scorecard button,
   // which only promotes on a complete card — see components/CardSignature.
   const [showSign, setShowSign] = useState(false);
@@ -1229,6 +1237,47 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     setCtpPrompt(h);
   };
 
+  // ── The money hole heads-up ──────────────────────────────────────────
+  // One designated hole a round carries a pot of its own (see lib/betting),
+  // and unlike the other three games it is over in fifteen minutes. A man who
+  // learns on the Betting tab that evening that he three-putted the 18th for a
+  // share of $80 was never told in time to care, so the app tells him on the
+  // tee: score the hole BEFORE it, and this comes up while the group is still
+  // walking.
+  //
+  // It asks nothing and writes nothing — everything about the money hole is
+  // already going to be on the card, which is the whole difference between
+  // this and the CTP prompt. It is an announcement, so its guards are about
+  // announcing it ONCE, at the right moment, to a group it applies to:
+  //
+  //   • a real score, on the hole immediately before the money hole. A money
+  //     hole on the 1st has no hole before it and never announces.
+  //   • the incomplete→complete TRANSITION, so a later correction on the
+  //     hole before does not re-announce
+  //   • once per round per session
+  //   • there has to be a pot — a game nobody has priced is not news
+  //   • somebody in THIS group has to be in it
+  //   • and nobody in the group can have scored the money hole already, which
+  //     is what stops a back-filled card announcing a hole that is played
+  const moneyHoleNum = moneyHole(buyIns?.moneyHoleNumber);
+  const moneyHoleIdx = moneyHoleNum - 1;
+  const moneyHoleField = inField(realPlayers(tPlayers), buyIns?.moneyHoleIn);
+  const moneyHoleFieldIds = new Set(moneyHoleField.map(p => p.player_id));
+  const moneyHolePot = (buyIns?.moneyHoleAmount || 0) > 0
+    ? moneyHoleField.length * buyIns.moneyHoleAmount : 0;
+
+  const maybePromptMoneyHole = (pids, h, score, priorScore) => {
+    if (score <= 0 || priorScore > 0) return;
+    if (moneyHolePot <= 0) return;
+    if (h !== moneyHoleIdx - 1) return;
+    if (promptedMoneyHole.current[match.round]) return;
+    if (!matchPids.some(p => moneyHoleFieldIds.has(p))) return;
+    if (matchPids.some(p => getScore(p, moneyHoleIdx) > 0)) return;
+    if (!matchPids.every(p => pids.includes(p) || getScore(p, h) > 0)) return;
+    promptedMoneyHole.current[match.round] = true;
+    setMoneyHolePrompt(true);
+  };
+
   // Provisional by definition — `approved: false`. The director settles the
   // hole from Betting → CTP, and only that write freezes it.
   const saveCtp = async (winnerPid, feet) => {
@@ -1298,6 +1347,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     tapFeedback();
     await Promise.all(pids.map(pid => onSaveHole(pid, match.round, h, score || null, tr?.course_id)));
     maybePromptCtp(pids, h, score || 0, prior);
+    maybePromptMoneyHole(pids, h, score || 0, prior);
   };
 
   // What a tap asks. Lifted out of onTapScore only to keep the write path
@@ -1989,6 +2039,36 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           />
         );
       })()}
+
+      {/* The money-hole heads-up, raised by maybePromptMoneyHole when this
+          group finishes the hole before it. The stroke each man gets there is
+          off lib/betting's OWN maps rather than the match's `strokeMaps`:
+          those are the match's allocation, which on most formats is relative
+          to the low ball, and the money hole is played on full course
+          handicap like the net skins are. A number from the wrong allocation
+          on a tee is worse than no number. */}
+      {moneyHolePrompt && (() => {
+        const maps = strokeMapsFor({
+          round: match.round, field: moneyHoleField,
+          tPlayers, tRounds, courses, roundLocks, hcpOverrides, teeAssignments,
+        });
+        return (
+          <MoneyHolePrompt
+            hole={moneyHoleNum}
+            par={holePars[moneyHoleIdx]}
+            share={rounds.length ? moneyHolePot / rounds.length : 0}
+            rows={matchPids.map(pid => {
+              const p = tPlayers.find(x => x.player_id === pid);
+              return {
+                pid, name: p?.name || pid, team: p?.team,
+                in: moneyHoleFieldIds.has(pid),
+                strokes: maps[pid]?.[moneyHoleIdx] || 0,
+              };
+            })}
+            onClose={() => setMoneyHolePrompt(false)}
+          />
+        );
+      })()}
     </>
   );
   // The auto-advance toast ("✓ Hole 4 saved — advancing…"), which also
@@ -2178,8 +2258,8 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // the skins card would mean opening one tab silently rearranged the other.
   const [ctpRound, setCtpRound] = useState(null);
   const [lowNetRound, setLowNetRound] = useState(null);
-  const [holePotRound, setHolePotRound] = useState(null);
-  const [editBuyIns, setEditBuyIns] = useState(null); // "skins" | "ctp" | "lownet" | "holepot" | null
+  const [moneyHoleRound, setMoneyHoleRound] = useState(null);
+  const [editBuyIns, setEditBuyIns] = useState(null); // "skins" | "ctp" | "lownet" | "moneyhole" | null
 
   // ── Who is playing for what ──
   // A null list means the director has never tagged anybody, and that means
@@ -2197,13 +2277,13 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   const ctpPotValue = (buyIns?.ctpAmount || 0) > 0 ? ctpField.length * buyIns.ctpAmount : 0;
   const lowNetField = inField(roster, buyIns?.lowNetIn);
   const lowNetPotValue = (buyIns?.lowNetAmount || 0) > 0 ? lowNetField.length * buyIns.lowNetAmount : 0;
-  // ── The hole pot ──
-  // One designated hole a round, lowest net, ties SPLIT. `potHole` normalises
-  // the stored number, so an absent or nonsense value scores the eighteenth
-  // rather than the first — see lib/betting.
-  const holePotField = inField(roster, buyIns?.holePotIn);
-  const holePotPotValue = (buyIns?.holePotAmount || 0) > 0 ? holePotField.length * buyIns.holePotAmount : 0;
-  const holeNum = potHole(buyIns?.holePotHole);
+  // ── The money hole ──
+  // One designated hole a round, lowest net, ties SPLIT. `moneyHole`
+  // normalises the stored number, so an absent or nonsense value scores the
+  // eighteenth rather than the first — see lib/betting.
+  const moneyHoleField = inField(roster, buyIns?.moneyHoleIn);
+  const moneyHolePot = (buyIns?.moneyHoleAmount || 0) > 0 ? moneyHoleField.length * buyIns.moneyHoleAmount : 0;
+  const holeNum = moneyHole(buyIns?.moneyHoleNumber);
 
   // The rounds that actually exist, not a hardcoded 1-4: a two-round
   // tournament used to get two empty tabs, and a fifth round never appeared
@@ -2317,24 +2397,28 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
     return acc;
   }, {})).sort((a, b) => b.count - a.count || (a.best ?? Infinity) - (b.best ?? Infinity));
 
-  // ── The hole pot ──
+  // ── The money hole ──
   // Its own stroke maps, because its field is its own: a man in on skins and
   // out of this one must not be handed a stroke allocation here, and the maps
   // are what decide the net score the hole is won on.
-  const holePotMapsFor = (round) => strokeMapsFor({ round, field: holePotField, ...ctx });
-  const holePotFor = (round) =>
-    holePotRows({ round, hole: holeNum, field: holePotField, holeData, maps: holePotMapsFor(round) });
+  const moneyHoleMapsFor = (round) => strokeMapsFor({ round, field: moneyHoleField, ...ctx });
+  const moneyHoleFor = (round) =>
+    moneyHoleRows({ round, hole: holeNum, field: moneyHoleField, holeData, maps: moneyHoleMapsFor(round) });
 
   // The pot divides by the ROUNDS and a tied hole splits ITS share — the same
   // shape as low net, and for the same reason: a tie must not make one hole
   // pay out more in total than a clean one. See lib/betting.
-  const holePotRoundShare = roundList.length ? holePotPotValue / roundList.length : 0;
-  const holePotWinners = holePotWins({
-    rounds: roundList, hole: holeNum, field: holePotField, holeData,
-    mapsFor: holePotMapsFor, pot: holePotPotValue,
+  const moneyHoleShare = roundList.length ? moneyHolePot / roundList.length : 0;
+  const moneyHoleWinners = moneyHoleWins({
+    rounds: roundList, hole: holeNum, field: moneyHoleField, holeData,
+    mapsFor: moneyHoleMapsFor, pot: moneyHolePot,
   });
-  const holePotDecided = new Set(holePotWinners.map(w => w.round)).size;
-  const holePotLeaders = Object.values(holePotWinners.reduce((acc, w) => {
+  const moneyHoleDecided = new Set(moneyHoleWinners.map(w => w.round)).size;
+  // The par the money hole plays to on every round of the draw — the par 3
+  // clash the setup console warns about. See lib/betting for why a par 3 is
+  // the wrong hole for this game.
+  const moneyHoleParInfo = moneyHolePars({ rounds: roundList, hole: holeNum, tRounds, courses, roundLocks });
+  const moneyHoleLeaders = Object.values(moneyHoleWinners.reduce((acc, w) => {
     const e = acc[w.pid] || (acc[w.pid] = { pid: w.pid, count: 0, best: null, money: 0 });
     e.count += 1;
     e.money += w.share;
@@ -2345,7 +2429,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // ── The CTP tab ──
   const ctpShownRound = roundList.includes(ctpRound) ? ctpRound : defaultRound;
   const lowNetShownRound = roundList.includes(lowNetRound) ? lowNetRound : defaultRound;
-  const holePotShownRound = roundList.includes(holePotRound) ? holePotRound : defaultRound;
+  const moneyHoleShownRound = roundList.includes(moneyHoleRound) ? moneyHoleRound : defaultRound;
 
   // How many pins the WEEK holds, off the rounds' own scorecards — see
   // lib/betting. It is what the pot divides by, and it is also the answer to
@@ -2414,12 +2498,12 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
             reads as one label. A hairline between them is the delineation —
             see SegmentedToggle, which hides the two beside the thumb.
 
-            The hole pot's tab is named after ITS HOLE rather than after the
-            game, because the game has no name anybody uses: the field calls
-            it eighteen. A director who moves it to the ninth gets a tab
-            called 9, which is still what the field will call it. */}
+            The money hole's tab is named after ITS HOLE rather than after
+            the game, because the hole is what the field calls it by. A
+            director who moves it to the ninth gets a tab called 9, which is
+            still what the field will call it. */}
         <SegmentedToggle
-          options={[["skins", "Skins"], ["ctp", "CTP"], ["lownet", "Low Net"], ["holepot", String(holeNum)], ["sidebet", "Side Bet"]]}
+          options={[["skins", "Skins"], ["ctp", "CTP"], ["lownet", "Low Net"], ["moneyhole", String(holeNum)], ["sidebet", "Side Bet"]]}
           value={activeTab} onChange={setActiveTab} letterSpacing={0.5} dividers snug
         />
       </StickyTop>
@@ -2831,82 +2915,76 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
         </div>
       )}
 
-      {roundList.length > 0 && activeTab === "holepot" && (
+      {roundList.length > 0 && activeTab === "moneyhole" && (
         <div>
-          {/* THE HOLE POT — counted from buy-ins, like CTP and low net.
+          {/* THE POT — counted from the buy-ins, like CTP and low net.
               Hidden from players until there is one; the director keeps it
-              either way, because this card is where the hole and the buy-in
-              are set. */}
-          {(holePotPotValue > 0 || user?.isDirector) && (
-            <div style={{ background: BC.card, borderRadius: 12, marginBottom: editBuyIns === "holepot" ? 0 : 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
+              either way, because the console below is where one gets set. */}
+          {(moneyHolePot > 0 || user?.isDirector) && (
+            <div style={{ background: BC.card, borderRadius: 12, marginBottom: editBuyIns === "moneyhole" ? 0 : 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
               <div style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>HOLE {holeNum} POT</div>
-                  <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold }}>${holePotPotValue.toFixed(2)}</div>
+                  <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>MONEY HOLE · {holeNum}</div>
+                  <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold }}>${moneyHolePot.toFixed(2)}</div>
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: FS.label, color: BC.t3 }}>{holePotDecided} of {roundList.length} decided</div>
-                  <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>${holePotRoundShare.toFixed(2)} / round</div>
+                  <div style={{ fontSize: FS.label, color: BC.t3 }}>{moneyHoleDecided} of {roundList.length} decided</div>
+                  <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>${moneyHoleShare.toFixed(2)} / round</div>
                 </div>
               </div>
 
-              {/* WHICH HOLE, on the pot card rather than inside the buy-in
-                  panel: it is the one thing about this game a player might
-                  want to check without opening anything, and it is what the
-                  tab above is named after. A select rather than a number
-                  field — there are eighteen answers and a typo would move the
-                  game rather than be refused. */}
-              {user?.isDirector && (
-                <label style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderTop: `1px solid ${BC.bdr}` }}>
-                  <span style={{ flex: 1, fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.6 }}>THE HOLE</span>
-                  <select
-                    value={holeNum}
-                    onChange={e => onUpdateBuyIns({ hole_pot_hole: Number(e.target.value) })}
-                    style={{ background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, color: BC.t1, fontSize: FS.small, fontWeight: 700, padding: "4px 6px", fontFamily: FONT }}
-                  >
-                    {Array.from({ length: HOLE_COUNT }, (_, i) => i + 1).map(h => (
-                      <option key={h} value={h}>Hole {h}</option>
-                    ))}
-                  </select>
-                </label>
+              {/* The par 3 clash, said on the card a PLAYER sees too and not
+                  only in the director's console — the group walking onto a
+                  hole carrying both pots is the party that finds out. */}
+              {moneyHoleParInfo.par3.length > 0 && (
+                <div style={{ padding: "8px 14px", borderTop: `1px solid ${BC.warn}${ALPHA.line}`, background: `${BC.warn}${ALPHA.wash}`, fontSize: FS.label, fontWeight: 700, color: BC.warn, letterSpacing: 0.4 }}>
+                  ⚠️ HOLE {holeNum} IS A PAR 3 ON {moneyHoleParInfo.par3.length === 1 ? `ROUND ${moneyHoleParInfo.par3[0].round}` : `ROUNDS ${moneyHoleParInfo.par3.map(x => x.round).join(", ")}`} — IT IS ALSO A CTP
+                </div>
               )}
 
               {user?.isDirector && (
                 <button
                   type="button"
-                  aria-expanded={editBuyIns === "holepot"}
-                  onClick={() => setEditBuyIns(v => (v === "holepot" ? null : "holepot"))}
+                  aria-expanded={editBuyIns === "moneyhole"}
+                  onClick={() => setEditBuyIns(v => (v === "moneyhole" ? null : "moneyhole"))}
                   style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "8px 14px", borderTop: `1px solid ${BC.bdr}`, width: "100%", background: "transparent", borderLeft: "none", borderRight: "none", borderBottom: "none", fontFamily: FONT }}
                 >
                   <span style={{ flex: 1, fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.6, textAlign: "left" }}>
-                    {holePotField.length} IN{(buyIns?.holePotAmount || 0) > 0 ? ` \u00b7 $${buyIns.holePotAmount} EACH` : ""}
+                    {moneyHoleField.length} IN{(buyIns?.moneyHoleAmount || 0) > 0 ? ` · $${buyIns.moneyHoleAmount} EACH` : ""}
                   </span>
                   <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.amberInk, letterSpacing: 0.6 }}>
-                    BUY-INS {editBuyIns === "holepot" ? "\u25be" : "\u25b8"}
+                    SET UP {editBuyIns === "moneyhole" ? "▾" : "▸"}
                   </span>
                 </button>
               )}
             </div>
           )}
 
-          {user?.isDirector && editBuyIns === "holepot" && (
-            <BuyInEditor
+          {/* The console. This game has a SETTING the other three do not —
+              which hole it is on — and that number names the tab, decides
+              which green the on-course prompt fires before, and is what every
+              payout here is computed from. See components/MoneyHoleSetup. */}
+          {user?.isDirector && editBuyIns === "moneyhole" && (
+            <MoneyHoleSetup
+              hole={holeNum}
+              pars={moneyHoleParInfo}
               players={realPlayers(tPlayers)}
-              amount={buyIns?.holePotAmount || 0}
-              ids={buyIns?.holePotIn ?? null}
-              onChange={patch => onUpdateBuyIns(
-                "amount" in patch ? { hole_pot_buyin: patch.amount } : { hole_pot_in: patch.ids }
+              amount={buyIns?.moneyHoleAmount || 0}
+              ids={buyIns?.moneyHoleIn ?? null}
+              onSetHole={h => onUpdateBuyIns({ money_hole_number: h })}
+              onChangeBuyIn={patch => onUpdateBuyIns(
+                "amount" in patch ? { money_hole_buyin: patch.amount } : { money_hole_in: patch.ids }
               )}
             />
           )}
 
-          {/* HOLE POT LEADERS — holes won, then the best net among equals.
+          {/* MONEY HOLE LEADERS — holes won, then the best net among equals.
               A man who has halved two of them shows two, because a split is a
               win here rather than a push. */}
-          {holePotLeaders.length > 0 && (
+          {moneyHoleLeaders.length > 0 && (
             <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 12, overflow: "hidden" }}>
-              <div style={{ padding: "8px 14px", borderBottom: `1px solid ${BC.bdr}`, fontSize: FS.label, fontWeight: 700, color: BC.gold, letterSpacing: 1 }}>HOLE {holeNum} LEADERS</div>
-              {holePotLeaders.map(({ pid, count, money }) => {
+              <div style={{ padding: "8px 14px", borderBottom: `1px solid ${BC.bdr}`, fontSize: FS.label, fontWeight: 700, color: BC.gold, letterSpacing: 1 }}>MONEY HOLE LEADERS</div>
+              {moneyHoleLeaders.map(({ pid, count, money }) => {
                 const p = tPlayers.find(t => t.player_id === pid);
                 const team = p ? teams[p.team] : null;
                 return (
@@ -2925,14 +3003,14 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
             variant="pills"
             style={{ marginBottom: 8 }}
             options={roundList.map(r => [r, `Rd ${r}`])}
-            value={holePotShownRound}
-            onChange={setHolePotRound}
+            value={moneyHoleShownRound}
+            onChange={setMoneyHoleRound}
           />
 
-          <HolePotCard
-            rows={holePotFor(holePotShownRound)}
+          <MoneyHoleCard
+            rows={moneyHoleFor(moneyHoleShownRound)}
             hole={holeNum}
-            share={holePotRoundShare}
+            share={moneyHoleShare}
           />
         </div>
       )}
@@ -3228,7 +3306,7 @@ export default function App() {
   // everybody, which is what every tournament played before this existed was.
   // An empty array is a different answer (nobody), so the two must not be
   // collapsed. See components/BuyIns.
-  const [buyIns, setBuyIns] = useState({ skinsAmount: 0, skinsIn: null, ctpAmount: 0, ctpIn: null, lowNetAmount: 0, lowNetIn: null, holePotAmount: 0, holePotIn: null, holePotHole: null });
+  const [buyIns, setBuyIns] = useState({ skinsAmount: 0, skinsIn: null, ctpAmount: 0, ctpIn: null, lowNetAmount: 0, lowNetIn: null, moneyHoleAmount: 0, moneyHoleIn: null, moneyHoleNumber: null });
   // Player-to-player wagers the app records but does not run. One document
   // per bet; see lib/sideBets for why nothing here scores or settles them.
   const [sideBets, setSideBets] = useState([]);
@@ -3883,12 +3961,12 @@ export default function App() {
         ctpIn: Array.isArray(s?.ctp_in) ? s.ctp_in : null,
         lowNetAmount: s?.lownet_buyin || 0,
         lowNetIn: Array.isArray(s?.lownet_in) ? s.lownet_in : null,
-        holePotAmount: s?.hole_pot_buyin || 0,
-        holePotIn: Array.isArray(s?.hole_pot_in) ? s.hole_pot_in : null,
-        // WHICH hole the pot is on. Left raw and normalised where it is read
-        // (lib/betting's potHole), so a tournament that has never opened the
-        // panel reads as the default 18 rather than being written one.
-        holePotHole: s?.hole_pot_hole ?? null,
+        moneyHoleAmount: s?.money_hole_buyin || 0,
+        moneyHoleIn: Array.isArray(s?.money_hole_in) ? s.money_hole_in : null,
+        // WHICH hole the money is on. Left raw and normalised where it is read
+        // (lib/betting's moneyHole), so a tournament that has never opened the
+        // console reads as the default 18 rather than being written one.
+        moneyHoleNumber: s?.money_hole_number ?? null,
       });
     }));
     // The edition index. Subscribed rather than fetched once because it now
@@ -4702,9 +4780,9 @@ export default function App() {
       ...("ctp_in" in patch ? { ctpIn: patch.ctp_in } : {}),
       ...("lownet_buyin" in patch ? { lowNetAmount: patch.lownet_buyin } : {}),
       ...("lownet_in" in patch ? { lowNetIn: patch.lownet_in } : {}),
-      ...("hole_pot_buyin" in patch ? { holePotAmount: patch.hole_pot_buyin } : {}),
-      ...("hole_pot_in" in patch ? { holePotIn: patch.hole_pot_in } : {}),
-      ...("hole_pot_hole" in patch ? { holePotHole: patch.hole_pot_hole } : {}),
+      ...("money_hole_buyin" in patch ? { moneyHoleAmount: patch.money_hole_buyin } : {}),
+      ...("money_hole_in" in patch ? { moneyHoleIn: patch.money_hole_in } : {}),
+      ...("money_hole_number" in patch ? { moneyHoleNumber: patch.money_hole_number } : {}),
     }));
     await db.upsert("bc_tournament_settings", { id: editionDocId("bc_settings_main"), tournament_id: TOURNAMENT_ID, ...patch });
   }, []);
@@ -5396,6 +5474,7 @@ export default function App() {
             ctpData={ctpData}
             onSetCtp={onSetCtp}
             onConfirmCtp={onConfirmCtp}
+            buyIns={buyIns}
             cardSigs={cardSigs}
             onSignCard={onSignCard}
             onAttestCard={onAttestCard}
