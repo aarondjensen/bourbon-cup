@@ -157,6 +157,11 @@ const SHOTS = [
   {
     name: "04-career",
     why: "ten years of record — the fastest way to say this is not a weekend project",
+    // The career table's column head. Without a marker this shot was the one
+    // the guards could not check, and it is also the one most likely to fail:
+    // the Data tab is a lazy chunk, so it is the only screen here that needs a
+    // network fetch AFTER the app has loaded.
+    expect: /\bPTS\b/,
     find: async (p) => {
       if (!(await tap(p, "More"))) return false;
       if (!(await tap(p, "Data"))) return false;
@@ -304,6 +309,22 @@ for (const t of WANTED) {
     // Two guards, because they catch different things. `expect` is what a
     // screen must contain to BE that screen; the duplicate check covers the
     // ones with no such marker.
+    // ── Is this the ErrorBoundary rather than the screen? ──
+    // A lazily-loaded chunk that 404s renders `src/components/ErrorBoundary`,
+    // which is a perfectly composed screenshot of the words "Something went
+    // wrong". It happened on a real run: the site redeployed between this
+    // script's two passes, the old hashed chunk name stopped existing, and the
+    // Data tab came out as the error card — written, ticked, and 404s scrolling
+    // past above it as warnings.
+    //
+    // Checked for EVERY shot rather than only the ones with a marker, because
+    // any screen can land here and none of them should be uploaded.
+    if (/Something went wrong/i.test(text) && /unexpected error/i.test(text)) {
+      console.log(`  ✖ ${s.name} — the app's error screen, not the app. Re-run; if it persists,`);
+      console.log("      a deploy is probably mid-flight and the chunk hashes have moved.");
+      wrong++;
+      continue;
+    }
     if (s.expect && !s.expect.test(text)) {
       console.log(`  ✖ ${s.name} — reached it, but nothing matching ${s.expect} is on it, skipped`);
       continue;
