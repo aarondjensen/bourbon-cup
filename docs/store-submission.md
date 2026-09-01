@@ -690,10 +690,25 @@ locked past year stays reportable — the lock exists to stop scores changing
 after a cup is over, and freezing the one action meant for flagging something
 that should not be there would be a strange reading of it.
 
-**This needs `firebase deploy --only firestore:rules`.** Until it lands the
-button is there and every report is refused by the default-deny — the write is
-`loud`, so it reports the failure rather than swallowing it, but it does not
-work. App first, rules second, as always.
+**Rules deployed 31 Aug 2026**, so the button works. Watch the output for
+`uploading rules firestore.rules` rather than `skipping upload` — see §1.2 for
+the morning this distinction cost, when a deploy from a stale checkout released
+the wrong file and said `Deploy complete!` about it.
+
+**The declaration is ahead of the builds, and that is the thing to keep
+straight.** A report button in `main` is not a report button in somebody's
+hand:
+
+| Where | Carries it? |
+| --- | --- |
+| the website | yes, on the next Vercel deploy |
+| Play internal testing, `versionCode 100` | **no** — built before it existed |
+| App Store Connect `1.0 (1)` | **no** — same |
+| anything built from `main` after 31 Aug | yes |
+
+So the Android bundle wants rebuilding (`versionCode 101`) and the iOS
+submission wants to be the `1.0 (2)` archive rather than the one already
+uploaded. Until then the IARC answer describes a build nobody is running.
 
 Play's IARC questionnaire asks this directly ("Does the app include the ability
 to report users or user-generated content?"). It is **yes** from the release
