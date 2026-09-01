@@ -30,7 +30,7 @@ import {
   LOCK_OPEN, LOCK_FINAL, LOCK_STATE_LABEL,
 } from "./lib/roundLocks";
 import {
-  concealHoleData, revealState, revealSummary, HOLE_COUNT,
+  concealHoleData, countdownHoleData, revealState, revealSummary, HOLE_COUNT,
   COUNTDOWN_HASH,
 } from "./lib/reveal";
 import { usePullToRefresh } from "./lib/usePullToRefresh";
@@ -4114,18 +4114,28 @@ export default function App() {
   })), [tRounds, roundLocksData]);
 
   // ── The blackout, applied once, at the source ────────────────────
-  // Every hole past a sealed round's reveal, removed (see lib/reveal.js).
-  // The read-only surfaces — the scoreboard and the Data tab — are
-  // handed THIS map rather than the real one, so a round nobody has turned
-  // over yet is not a round they are trusted to draw carefully: it is a
-  // round with no scores in it, and every point, strip, status and total
-  // they compute follows from that on its own.
+  // A sealed round that is still holding anything back, removed WHOLE (see
+  // lib/reveal.js). The read-only surfaces — the scoreboard, the Betting tab
+  // and the Data tab — are handed THIS map rather than the real one, so a
+  // round the countdown has not finished turning over is not a round they
+  // are trusted to draw carefully: it is a round with no scores in it, and
+  // every point, strip, status and total they compute follows from that on
+  // its own.
   //
   // The identity is returned untouched when nothing is sealed, which is
   // every round of every other day, so the memo chains downstream of this
   // are unaffected outside the one round it exists for.
   const revealedHoleData = useMemo(
     () => concealHoleData(holeData, enrichedRounds),
+    [holeData, enrichedRounds]
+  );
+
+  // The same subtraction cut at the reveal instead of at zero, for the one
+  // screen that walks the round in front of the room. It goes to the
+  // Leaderboard, which is where the countdown is mounted from, and is used
+  // for nothing else there — see TeamLeaderboard's note on the three maps.
+  const countdownData = useMemo(
+    () => countdownHoleData(holeData, enrichedRounds),
     [holeData, enrichedRounds]
   );
 
@@ -5441,6 +5451,7 @@ export default function App() {
             matches={enrichedMatches}
             holeData={revealedHoleData}
             ownHoleData={holeData}
+            countdownHoleData={countdownData}
             courses={courses}
             tRounds={enrichedRounds}
             tPlayers={tPlayers}

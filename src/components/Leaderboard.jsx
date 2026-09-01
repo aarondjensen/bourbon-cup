@@ -484,12 +484,14 @@ function MatchCard({
 //  See lib/reveal.js for what a sealed round is and why. What lands on
 //  this screen is three things, in this order:
 //
-//    • the BANNER, saying the round is sealed and how much of it is out.
+//    • the BANNER, saying the round is sealed and how far the countdown
+//      has walked. It stands in for the match rows, which are not drawn at
+//      all until the reveal is finished.
 //    • YOUR SIDE, hole by hole, for every hole your team has posted. This
 //      is the half of the feature that is not a subtraction: the board is
-//      scored off the revealed holes only (App hands this component hole
-//      data that genuinely stops at the reveal), so a team watching its
-//      own round needs its own numbers handed to it separately.
+//      handed a round with no holes in it at all (see lib/reveal), so a
+//      team watching its own round needs its own numbers handed to it
+//      separately.
 //    • the REVEAL, for a director — one tap a hole, and every phone in
 //      the room follows.
 //
@@ -663,8 +665,9 @@ function SealedPanel({ through, ownCards, remaining, canReveal, onSetReveal, onO
           </span>
         </div>
         <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5 }}>
-          {revealSummary(through)}. Nobody sees the other side, and this board does
-          not move, until the cards are turned over
+          {revealSummary(through)}. This round lands on the board when the
+          countdown reaches 18 — not a hole at a time — so nothing here moves
+          until the last card is turned over
           {remaining > 0 ? ` — ${fmtPts(remaining)} still to come` : ""}.
         </div>
         {/* The way onto the television. Offered to EVERYBODY, not just the
@@ -733,9 +736,22 @@ function RoundSection({
             }}>🔒 {seal.through}/{HOLE_COUNT}</span>
           )}
           <span style={{ flex: 1, minWidth: 6 }} />
-          <span style={{ fontSize: FS.lead, fontWeight: 800, flexShrink: 0, color: pts.A >= pts.B ? BC.teamA : `${BC.teamA}${ALPHA.held}` }}>{fmtPts(pts.A)}</span>
-          <span style={{ fontSize: FS.small, color: BC.t3, flexShrink: 0 }}>–</span>
-          <span style={{ fontSize: FS.lead, fontWeight: 800, flexShrink: 0, color: pts.B >= pts.A ? BC.teamB : `${BC.teamB}${ALPHA.held}` }}>{fmtPts(pts.B)}</span>
+          {/* A concealing round has no score on this bar, not even the 0–0 it
+              is honestly worth. The board banks nothing until the countdown
+              finishes (see lib/reveal), so a real-looking pair of zeroes would
+              sit there for the whole of an 18-hole ceremony reading as a round
+              that had been played to a standstill. A dash is what is true: not
+              yet. The 🔒 chip beside it says how far the reveal has walked,
+              which is progress without being a score. */}
+          {seal?.concealing ? (
+            <span style={{ fontSize: FS.lead, fontWeight: 800, flexShrink: 0, color: BC.t3 }}>—</span>
+          ) : (
+            <>
+              <span style={{ fontSize: FS.lead, fontWeight: 800, flexShrink: 0, color: pts.A >= pts.B ? BC.teamA : `${BC.teamA}${ALPHA.held}` }}>{fmtPts(pts.A)}</span>
+              <span style={{ fontSize: FS.small, color: BC.t3, flexShrink: 0 }}>–</span>
+              <span style={{ fontSize: FS.lead, fontWeight: 800, flexShrink: 0, color: pts.B >= pts.A ? BC.teamB : `${BC.teamB}${ALPHA.held}` }}>{fmtPts(pts.B)}</span>
+            </>
+          )}
         </div>
         {/* Nothing under the header. The tee, the handicap terms, the scoring
             type and the counting rule all used to sit here; all of it is setup
@@ -751,11 +767,14 @@ function RoundSection({
         ) : (
           <>
           {sealPanel}
-          {/* A sealed round with nothing turned over yet has no match rows to
-              draw — every one of them would say "THRU 0" against a tee time,
-              which reads as a round that hasn't started rather than one being
-              held back. The panel above says what is actually true. */}
-          {seal?.concealing && seal.through === 0 ? null : (
+          {/* No match rows at all while the round is concealing. There is
+              nothing in them to draw — the board is handed a round with no
+              holes in it until the countdown is finished (see lib/reveal) —
+              and a row of "THRU 0" against a tee time reads as a round nobody
+              has teed off on rather than one being held back. The panel above
+              says what is actually true, and the rows arrive with the result
+              the moment the eighteenth hole is turned over. */}
+          {seal?.concealing ? null : (
           /* One container per round, matches separated by hairlines — so the
              round reads as a single scoreboard rather than a stack of cards. */
           <div style={{
@@ -798,12 +817,18 @@ function RoundSection({
 // MATCH row read ▲ / ▼ from the reader's own side rather than an arbitrary
 // one. See components/FullScorecard.jsx on the two currencies of color.
 //
-// ── The two hole maps ────────────────────────────────────────────
-// `holeData` is the CONCEALED map — App has already removed every hole past
-// a sealed round's reveal (see lib/reveal.concealHoleData), so everything
-// this board computes from it is scored off the revealed holes and nothing
-// else. There is no branch anywhere below that has the sealed numbers and
-// chooses not to draw them; it does not have them.
+// ── The three hole maps ──────────────────────────────────────────
+// `holeData` is the CONCEALED map — App has already removed a still-sealed
+// round WHOLE (see lib/reveal.concealHoleData), so the board is scored off
+// a round that has not been played until the countdown finishes turning it
+// over, at which point the entire round lands at once. There is no branch
+// anywhere below that has the sealed numbers and chooses not to draw them;
+// it does not have them.
+//
+// `countdownHoleData` is the same subtraction cut at the reveal instead of
+// at zero, and it feeds exactly one thing: the Final Countdown, which is
+// mounted from here (as a portal onto the body) and is the one screen in
+// the app that is SUPPOSED to walk the round hole by hole.
 //
 // `ownHoleData` is the unsealed one, and it feeds exactly one thing: the
 // reader's own side of a sealed round (OwnSideCard). A team is allowed to
@@ -811,7 +836,7 @@ function RoundSection({
 // numbers gets them, indexes them by `viewer`, and never looks at the other
 // column. Everything else on this screen is handed `holeData`.
 export function TeamLeaderboard({
-  matches, holeData, ownHoleData, courses, tRounds, tPlayers, teams,
+  matches, holeData, ownHoleData, countdownHoleData, courses, tRounds, tPlayers, teams,
   hcpOverrides, teeAssignments, roundLocks, viewer,
   canReveal = false, onSetReveal, autoCountdown = false,
 }) {
@@ -985,6 +1010,45 @@ export function TeamLeaderboard({
   const barScale = Math.max(totalAvail, CUP_POINTS_TO_WIN ? toWin * 2 - 1 : 0);
   const pct = (v) => (barScale ? Math.min(100, (v / barScale) * 100) : 0);
 
+  // ── The countdown's own scoring ──────────────────────────────────
+  // The board is scored off a sealed round that has no holes in it at all
+  // (see the three maps above), which is exactly what this change is for —
+  // but the television has to walk. So the countdown is scored a second
+  // time, off `countdownHoleData`, and reads its match, its cup totals and
+  // its clinch off THAT pass rather than off the board's.
+  //
+  // The identity is the whole test for whether that second pass is needed:
+  // lib/reveal hands back the same object when nothing is concealing, so on
+  // every other day of the tournament this is the board's own numbers and
+  // costs nothing. It is also why the countdown's cup bar is the one on
+  // screen that moves during the reveal — the board's, deliberately, does
+  // not.
+  const cdSeparate = countdownHoleData !== holeData;
+  const cdResults = useMemo(() => {
+    if (!cdSeparate) return matchResults;
+    return matches.map((m) => {
+      const fmt = tRounds.find((t) => t.round_number === m.round)?.format || DEFAULT_FORMAT;
+      return {
+        match: m,
+        result: computeMatchResult(m, countdownHoleData || {}, courses, tRounds, tPlayers, fmt, hcpOverrides, undefined, teeAssignments, roundLocks),
+        format: fmt,
+      };
+    });
+  }, [cdSeparate, matchResults, matches, countdownHoleData, courses, tRounds, tPlayers, hcpOverrides, teeAssignments, roundLocks]);
+
+  const cdTotals = useMemo(() => {
+    if (!cdSeparate) return totals;
+    const t = { A: 0, B: 0 };
+    cdResults.forEach(({ result }) => { t.A += result.totalPts.A; t.B += result.totalPts.B; });
+    return t;
+  }, [cdSeparate, totals, cdResults]);
+
+  // The clinch, as the room sees it arrive. Read off the countdown's totals
+  // for the same reason the bar is: the board's clincher cannot fire until
+  // the last hole is turned over, and the trophy line belongs on the hole
+  // that wins the cup.
+  const cdClincher = cdTotals.A >= toWin ? "A" : cdTotals.B >= toWin ? "B" : null;
+
   // ── The Final Countdown ──────────────────────────────────────────
   // Which round's countdown is on screen, or null. It renders as a portal
   // onto document.body rather than inside this tab, because it is a
@@ -1017,8 +1081,12 @@ export function TeamLeaderboard({
   const countdown = countdownRound != null && (() => {
     const rnd = countdownRound;
     const meta = roundMeta[rnd];
-    const entry = meta?.results?.[0];
-    if (!entry) return null;
+    // The match itself off the countdown's pass — the board's copy of it is
+    // scored off a round with no holes in it while the reveal is running.
+    const entry = cdResults
+      .filter((mr) => mr.match.round === rnd)
+      .sort((a, b) => (a.match.matchNumber ?? 0) - (b.match.matchNumber ?? 0))[0];
+    if (!meta || !entry) return null;
     const { course, holePars, holeHcps } = getRoundCourseCtx({ roundLocks, round: rnd, tRounds, courses });
     return createPortal(
       // The fallback is a black screen, because that is what the countdown
@@ -1028,7 +1096,7 @@ export function TeamLeaderboard({
       <FinalCountdown
         match={entry.match}
         result={entry.result}
-        getScore={(pid, h) => (holeData?.[`${pid}_${rnd}`] || {})[h] || 0}
+        getScore={(pid, h) => (countdownHoleData?.[`${pid}_${rnd}`] || {})[h] || 0}
         holePars={holePars}
         holeHcps={holeHcps}
         tPlayers={tPlayers}
@@ -1036,9 +1104,9 @@ export function TeamLeaderboard({
         courseName={course?.name || null}
         formatLabel={meta.fmt?.label || null}
         through={meta.seal?.through ?? HOLE_COUNT}
-        totals={totals}
+        totals={cdTotals}
         toWin={toWin}
-        clincher={clincher}
+        clincher={cdClincher}
         canAdvance={canReveal && !!onSetReveal}
         onAdvance={(n) => onSetReveal(rnd, n)}
         onClose={closeCountdown}
@@ -1207,7 +1275,7 @@ export function TeamLeaderboard({
             letterSpacing: 0.5, color: BC.amberInk, lineHeight: 1.4,
           }}>
             🔒 Round{sealedOut.rounds.length > 1 ? "s" : ""} {sealedOut.rounds.join(", ")} sealed
-            {sealedOut.remaining > 0 ? ` — ${fmtPts(sealedOut.remaining)} not yet revealed` : ""}
+            {sealedOut.remaining > 0 ? ` — ${fmtPts(sealedOut.remaining)} lands when the countdown ends` : ""}
           </div>
         )}
 

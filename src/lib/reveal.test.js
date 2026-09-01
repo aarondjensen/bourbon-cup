@@ -3,7 +3,7 @@ import {
   resolveSealed,
   HOLE_COUNT, sealDefaultFor, isSealedRound, revealedThrough, isFullyRevealed,
   isConcealing, revealState, concealedRoundNumbers, concealHoleData,
-  stepReveal, revealSummary,
+  countdownHoleData, stepReveal, revealSummary,
 } from "./reveal";
 
 // The blackout is the one feature of this app whose failure mode is silent
@@ -149,17 +149,29 @@ describe("concealHoleData", () => {
     expect(out.p1_3).toEqual(card(18));
   });
 
-  it("keeps exactly the revealed holes and no more", () => {
-    const out = concealHoleData(data, [sealedRound(4, 6)]);
-    expect(Object.keys(out.p1_4).map(Number).sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5]);
-    expect(out.p1_4[5]).toBe(4);
-    expect(out.p1_4[6]).toBeUndefined();
+  // The board is all-or-nothing: a reveal in progress is still nothing.
+  // This is the whole change — the scoreboard no longer keeps step with the
+  // countdown, it waits for it. A hole leaking through here would put the
+  // ending on sixteen phones before it reaches the television.
+  it("drops the round mid-reveal too, however far the countdown has walked", () => {
+    [1, 6, 13, 17].forEach((through) => {
+      const out = concealHoleData(data, [round(3), sealedRound(4, through)]);
+      expect(out.p1_4).toBeUndefined();
+      expect(out.p_two_4).toBeUndefined();
+      expect(out.p1_3).toEqual(card(18));
+    });
+  });
+
+  it("lands the whole round the moment the eighteenth is turned over", () => {
+    expect(concealHoleData(data, [sealedRound(4, 17)]).p1_4).toBeUndefined();
+    expect(concealHoleData(data, [sealedRound(4, 18)]).p1_4).toEqual(card(18));
   });
 
   // A player id with underscores in it must not be read as a round number.
   it("reads the round off the last separator", () => {
     const out = concealHoleData(data, [sealedRound(4, 3)]);
-    expect(Object.keys(out.p_two_4)).toHaveLength(3);
+    expect(out.p_two_4).toBeUndefined();
+    expect(out.p1_3).toEqual(card(18));
   });
 
   it("leaves the original untouched", () => {
@@ -169,6 +181,59 @@ describe("concealHoleData", () => {
 
   it("survives an empty map", () => {
     expect(concealHoleData(undefined, [sealedRound(4, 3)])).toEqual({});
+  });
+});
+
+// The other half of the split. Same subtraction, cut at the reveal instead
+// of at zero, and handed to exactly one screen.
+describe("countdownHoleData", () => {
+  const data = { p1_3: card(18), p1_4: card(18), "p_two_4": card(12) };
+
+  it("hands back the same object when nothing is sealed", () => {
+    expect(countdownHoleData(data, [round(3), round(4)])).toBe(data);
+    expect(countdownHoleData(data, [round(3), sealedRound(4, 18)])).toBe(data);
+  });
+
+  it("keeps exactly the revealed holes and no more", () => {
+    const out = countdownHoleData(data, [sealedRound(4, 6)]);
+    expect(Object.keys(out.p1_4).map(Number).sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(out.p1_4[5]).toBe(4);
+    expect(out.p1_4[6]).toBeUndefined();
+  });
+
+  it("drops the round when nothing has been turned over", () => {
+    const out = countdownHoleData(data, [round(3), sealedRound(4, 0)]);
+    expect(out.p1_4).toBeUndefined();
+    expect(out.p1_3).toEqual(card(18));
+  });
+
+  it("reads the round off the last separator", () => {
+    const out = countdownHoleData(data, [sealedRound(4, 3)]);
+    expect(Object.keys(out.p_two_4)).toHaveLength(3);
+  });
+
+  it("leaves the original untouched", () => {
+    countdownHoleData(data, [sealedRound(4, 3)]);
+    expect(Object.keys(data.p1_4)).toHaveLength(18);
+  });
+
+  it("survives an empty map", () => {
+    expect(countdownHoleData(undefined, [sealedRound(4, 3)])).toEqual({});
+  });
+
+  // The two are only ever allowed to agree in one direction: whatever the
+  // countdown is showing, the board is showing that much or less.
+  it("never shows less than the board", () => {
+    for (let through = 0; through <= HOLE_COUNT; through += 1) {
+      const tRounds = [sealedRound(4, through)];
+      const board = concealHoleData(data, tRounds);
+      const tv = countdownHoleData(data, tRounds);
+      const boardHoles = Object.keys(board.p1_4 || {}).length;
+      const tvHoles = Object.keys(tv.p1_4 || {}).length;
+      expect(tvHoles).toBeGreaterThanOrEqual(boardHoles);
+      // And the board is at one of the two ends, never in between.
+      expect([0, HOLE_COUNT]).toContain(boardHoles);
+    }
   });
 });
 
@@ -191,9 +256,9 @@ describe("revealSummary", () => {
 
 // ── The whole point, end to end ────────────────────────────────────
 // isSealedRound is a predicate; what the field actually experiences is
-// concealHoleData, which is what the scoreboard and the Data tab are scored
-// off. These pin the subtraction on the shape that failed: a live cup whose
-// round 4 nobody opened the Rounds form for.
+// concealHoleData, which is what the scoreboard, the Betting tab and the
+// Data tab are scored off. These pin the subtraction on the shape that
+// failed: a live cup whose round 4 nobody opened the Rounds form for.
 describe("a live Team Best Ball round nobody flagged", () => {
   const liveCup = [
     { round_number: 1, format: "best_ball" },
@@ -214,11 +279,15 @@ describe("a live Team Best Ball round nobody flagged", () => {
     expect(out["b1_4"]).toBeUndefined();
   });
 
-  it("hands the holes back as the director turns them over", () => {
+  it("still says nothing while the countdown is walking", () => {
     const through2 = [{ round_number: 4, format: "team_best_ball", reveal_through: 2 }];
     const out = concealHoleData(holes, through2);
-    expect(out["a1_4"]).toEqual({ 0: 4, 1: 5 });
-    expect(out["b1_4"]).toEqual({ 0: 5, 1: 4 });
+    expect(out["a1_4"]).toBeUndefined();
+    expect(out["b1_4"]).toBeUndefined();
+    // The television is the one screen that has them.
+    const tv = countdownHoleData(holes, through2);
+    expect(tv["a1_4"]).toEqual({ 0: 4, 1: 5 });
+    expect(tv["b1_4"]).toEqual({ 0: 5, 1: 4 });
   });
 
   it("is fully open again once all eighteen are revealed", () => {
