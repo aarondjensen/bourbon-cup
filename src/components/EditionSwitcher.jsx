@@ -428,6 +428,18 @@ export function EditionSwitcher({ open, onClose, canManage = false, spectate = t
         {mode !== "list" && (() => {
           const editReady = mode === "edit" && !!editing?.name.trim() && !busy;
           const on = mode === "edit" ? editReady : ready;
+          // Gold means there is something to save, here as everywhere else in
+          // the app (saveBtn in theme.js). Renaming is the rare visit to this
+          // form — a director usually opens it to read a status — so an edit
+          // sheet that matches its row is unlit. The label still reads Save:
+          // `on` decides what the button DOES, this only decides whether it
+          // looks like it has work. A new tournament is all change, so the
+          // create side is lit as soon as it is legal.
+          const editedRow = mode === "edit" ? editions.find((x) => x.id === editing?.id) : null;
+          const lit = mode === "edit"
+            ? (editReady && (editing.name.trim() !== (editedRow?.name || "").trim()
+              || editing.status !== (editedRow?.status || "draft")))
+            : ready;
           return (
             <div style={{
               flexShrink: 0, display: "flex", gap: 8, background: BC.bg,
@@ -445,7 +457,7 @@ export function EditionSwitcher({ open, onClose, canManage = false, spectate = t
               <button onClick={mode === "edit" ? doSave : doCreate} disabled={!on} style={{
                 flex: 1, padding: 11, borderRadius: 10, border: "none", fontFamily: FONT,
                 cursor: on ? "pointer" : "not-allowed",
-                background: on ? BC.amber : BC.inp, color: on ? ON_AMBER : BC.t3,
+                background: lit ? BC.amber : BC.inp, color: lit ? ON_AMBER : BC.t3,
                 fontSize: FS.body, fontWeight: 800, letterSpacing: 0.5,
               }}>
                 {busy ? "Working…"

@@ -12,7 +12,7 @@
 // last. A director opening this in March wants "is $850 enough"; the lines are
 // how they change the answer, not the answer.
 import { useState, useMemo } from "react";
-import { BC, FONT, ALPHA, FS, ON_AMBER } from "../theme";
+import { BC, FONT, ALPHA, FS, saveBtn } from "../theme";
 import { Popup, ConfirmModal } from "./Popup";
 import { useConfirm } from "../lib/useConfirm";
 import { money } from "../lib/ledger";
@@ -31,6 +31,8 @@ const inputStyle = () => ({
   border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1,
   fontSize: FS.lead, boxSizing: "border-box", outline: "none", fontFamily: FONT,
 });
+
+const str = (v) => String(v ?? "").trim();
 
 const fieldLabel = () => ({
   fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1,
@@ -52,6 +54,16 @@ function BudgetLineSheet({ line, playerCount, onSave, onDelete, onClose, notify 
   // amount. A per-man figure is the one number a director cannot check in
   // their head against the total at the top, so the form does it for them.
   const perMan = basis === BASIS_PER_MAN;
+  // Whether the sheet holds anything worth committing. Editing, that is a
+  // comparison against the line it opened on; adding, it is whether an amount
+  // has been typed at all — the category and the basis both open on a default,
+  // so neither one alone makes a line.
+  const sheetDirty = editing
+    ? (category !== (line.category || DEFAULT_CATEGORY)
+      || str(label) !== str(line.label)
+      || str(amount) !== (line.amount != null ? String(line.amount) : "")
+      || basis !== normalizeBasis(line.basis))
+    : str(amount) !== "";
   const typed = Number(amount);
   const expanded = Number.isFinite(typed) && perMan && playerCount ? typed * playerCount : null;
 
@@ -138,11 +150,14 @@ function BudgetLineSheet({ line, playerCount, onSave, onDelete, onClose, notify 
             value={label} onChange={e => setLabel(e.target.value)} />
         </div>
 
+        {/* Gold only with something to save — the same rule the whole app
+            follows (saveBtn in theme.js). A line opened to read its amount
+            and closed again was never an edit. Not `disabled`: the amount
+            check inside `save` is what an empty tap has to hear about. */}
         <button onClick={save} disabled={busy} style={{
-          width: "100%", padding: "11px 0", borderRadius: 10, border: "none",
-          background: BC.amber, color: ON_AMBER, fontSize: FS.body, fontWeight: 800,
-          letterSpacing: 0.5, cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1,
-          fontFamily: FONT,
+          ...saveBtn(sheetDirty && !busy), width: "100%", padding: "11px 0", borderRadius: 10,
+          fontSize: FS.body, letterSpacing: 0.5,
+          cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1,
         }}>
           {busy ? "Working…" : editing ? "Save Line" : "Add Line"}
         </button>

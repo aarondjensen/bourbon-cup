@@ -23,7 +23,7 @@
 // player, because a player saying they paid is a claim and the director
 // receiving it is the record — see the authorization note in lib/ledger.
 import { useState, useMemo } from "react";
-import { BC, FONT, ALPHA, FS, ON_AMBER } from "../theme";
+import { BC, FONT, ALPHA, FS, saveBtn } from "../theme";
 import { Popup, ConfirmModal } from "./Popup";
 import { useConfirm } from "../lib/useConfirm";
 import {
@@ -226,6 +226,9 @@ function PlayerLedgerSheet({
       done?.ok ? "success" : "error");
   };
 
+  // The amount is the whole payment — the date and the method are seeded and
+  // the note is optional, so nothing else can make this form worth saving.
+  const payDirty = amount.trim() !== "";
   // Blank means "no override, use the tournament figure", which is why an
   // emptied box is a real edit rather than a no-op.
   const dueDirty = dueEdit.trim() !== (hasDuesOverride(row.player) ? String(round2(row.player.dues_amount)) : "");
@@ -301,11 +304,16 @@ function PlayerLedgerSheet({
           <input id="bc-pay-note" style={inputStyle()} maxLength={MAX_NOTE} placeholder="second installment"
             value={note} onChange={e => setNote(e.target.value)} />
         </div>
+        {/* Same rule as every other Save in the app: an untouched form has
+            nothing to commit, and this one sits open after each payment is
+            logged — the director works down a stack of Venmos, and a button
+            still gold over a cleared amount box is the one that gets tapped
+            twice. `payDirty`, not `disabled`: the amount check inside `save`
+            is what an empty tap has to hear about. */}
         <button onClick={save} disabled={busy} style={{
-          width: "100%", padding: "12px 0", borderRadius: 10, border: "none",
-          background: BC.amber, color: ON_AMBER, fontSize: FS.body, fontWeight: 800,
-          letterSpacing: 0.5, cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1,
-          fontFamily: FONT, marginBottom: 16,
+          ...saveBtn(payDirty && !busy), width: "100%", padding: "12px 0", borderRadius: 10,
+          fontSize: FS.body, letterSpacing: 0.5, marginBottom: 16,
+          cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1,
         }}>
           {busy ? "Working…" : "Log Payment"}
         </button>
@@ -329,14 +337,12 @@ function PlayerLedgerSheet({
             <input id="bc-pay-due" style={{ ...inputStyle(), flex: 1 }} inputMode="decimal"
               placeholder={`${money(duesAmount)} (tournament)`}
               value={dueEdit} onChange={e => setDueEdit(e.target.value)} />
-            <button onClick={saveDue} disabled={busy || !dueDirty} style={{
-              padding: "0 16px", borderRadius: 8, flexShrink: 0,
-              background: dueDirty ? `${BC.amber}${ALPHA.wash}` : "transparent",
-              border: `1px solid ${dueDirty ? BC.amber + ALPHA.line : BC.bdr}`,
-              color: dueDirty ? BC.amberInk : BC.t3,
-              fontSize: FS.small, fontWeight: 800, fontFamily: FONT,
-              cursor: busy || !dueDirty ? "default" : "pointer",
-            }}>Save</button>
+            {/* The shared Save look — gold only with something to save. It
+                used to be an amber wash here and a solid fill on the tab
+                behind it, which read as two different controls doing the
+                same thing. See saveBtn in theme.js. */}
+            <button onClick={saveDue} disabled={busy || !dueDirty}
+              style={{ ...saveBtn(dueDirty), padding: "0 16px" }}>Save</button>
           </div>
           {/* The placeholder already reads "$800 (tournament)", so blank
               explains itself. The 0 does not — a written zero is an override,
@@ -410,14 +416,8 @@ export function LedgerAdmin({
         <div style={{ display: "flex", gap: 8 }}>
           <input id="bc-dues" style={{ ...inputStyle(), flex: 1 }} inputMode="decimal" placeholder="0.00"
             value={duesEdit} onChange={e => setDuesEdit(e.target.value)} />
-          <button onClick={saveDues} disabled={savingDues || !duesDirty} style={{
-            padding: "0 18px", borderRadius: 8, flexShrink: 0,
-            background: duesDirty ? BC.amber : "transparent",
-            border: duesDirty ? "none" : `1px solid ${BC.bdr}`,
-            color: duesDirty ? ON_AMBER : BC.t3,
-            fontSize: FS.small, fontWeight: 800, fontFamily: FONT,
-            cursor: savingDues || !duesDirty ? "default" : "pointer",
-          }}>Save</button>
+          <button onClick={saveDues} disabled={savingDues || !duesDirty}
+            style={saveBtn(duesDirty)}>Save</button>
         </div>
         {/* The field's own label says what it is, and the roster under it
             demonstrates the per-player override. This is the only part the

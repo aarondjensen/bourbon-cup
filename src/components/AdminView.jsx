@@ -148,9 +148,14 @@ import {
   FS,
   ON_AMBER,
   playerNameColor,
+  saveBtn,
   segThumb,
   segTrack,
 } from "../theme";
+import {
+  courseFormSig,
+  playerFormSig,
+} from "../lib/formDirty";
 import {
   EditionSwitcher,
 } from "./EditionSwitcher";
@@ -522,6 +527,31 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
   useEffect(() => {
     setEditRoundCount(String(resolveRoundCount({ roundCount, tRounds, matches, roundLocks })));
   }, [roundCount, tRounds, matches, roundLocks]);
+  // The player sheet opens with a signature of what it was seeded from, and
+  // carries it until it closes: eleven fields, four of them written by the
+  // GHIN link rather than typed, are not a comparison worth writing inline at
+  // the button. `orig` is form state, never saved — doSave writes named
+  // fields. See lib/formDirty.
+  const seedPlayerForm = (form) => ({ ...form, orig: playerFormSig(form) });
+  // What the tournament card would write, against what is stored — compared
+  // AS THE SAVE WOULD WRITE IT, which is not the same as what is typed. An
+  // emptied name falls back to its constant, so a cleared box is not a
+  // change; an emptied round count falls back to the DEFAULT, so on an
+  // edition running five rounds it is one, and the button says so.
+  const savedRoundCount = resolveRoundCount({ roundCount, tRounds, matches, roundLocks });
+  const tournamentDirty = (
+    (editTournamentName.trim() || TOURNAMENT_TITLE) !== (tournamentName || TOURNAMENT_TITLE)
+    || (editTournamentLocation.trim() || TOURNAMENT_LOCATION) !== (tournamentLocation || TOURNAMENT_LOCATION)
+    || clampRoundCount(editRoundCount) !== savedRoundCount
+    || editStartDate !== tripDateFields({ start_date: startDate }).start
+    || editEndDate !== tripDateFields({ end_date: endDate }).end
+  );
+  // The house. Its link is trimmed on the way to the database and its name is
+  // not, so each is compared the way it is written.
+  const houseDirty = (
+    editHouseName !== (trip?.house_name || "")
+    || editHouseUrl.trim() !== (trip?.house_url || "").trim()
+  );
   // Rounds the schedule would hold on to at the number CURRENTLY TYPED, so
   // the hint answers while the director is still typing rather than after
   // they save and wonder why the pills did not change.
@@ -1101,11 +1131,9 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
   const TournLabelStyle = { fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.5, width: 52, flexShrink: 0, textTransform: "uppercase" };
   const TournCardStyle = { background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: "10px 12px", marginBottom: 10 };
   const TournHeadStyle = { fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase" };
-  const TournSaveStyle = { flexShrink: 0, fontSize: FS.label, fontWeight: 800, color: ON_AMBER, background: BC.amber, border: "none", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontFamily: FONT };
-  // The same button with the light off — a card whose fields say exactly what
-  // the documents already say has nothing gold about it. Same footprint, so
-  // the row does not move when it lights.
-  const TournSaveIdleStyle = { ...TournSaveStyle, color: BC.t3, background: BC.inp, border: `1px solid ${BC.bdr}`, padding: "5px 11px" };
+  // Every Save on this tab is the shared one from theme.js — gold only while
+  // its card holds something the documents do not already say. See saveBtn.
+  const TournSaveStyle = (dirty) => saveBtn(dirty, { compact: true });
 
   const InputStyle = { width: "100%", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.body, boxSizing: "border-box", outline: "none", fontFamily: FONT };
   const LabelStyle = { fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1, marginBottom: 4, display: "block" };
@@ -1191,7 +1219,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                 <span style={{ flex: 1, minWidth: 8 }} />
                 {/* + Add button, over the rows' Edit */}
                 <button
-                  onClick={() => setEditingPlayer({ isNew: true, team: team.id, first: "", last: "", nick: "", hi: "", ov: "", dir: false })}
+                  onClick={() => setEditingPlayer(seedPlayerForm({ isNew: true, team: team.id, first: "", last: "", nick: "", hi: "", ov: "", dir: false }))}
                   title="Add player"
                   style={{
                     padding: "3px 10px", borderRadius: 8, border: `1px solid ${team.accent}${ALPHA.line}`,
@@ -1233,7 +1261,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                       {synced && <span style={{ fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.2, color: BC.hcpBlue, border: `1px solid ${BC.hcpBlue}${ALPHA.line}`, background: BC.hcpBlue + ALPHA.tint, borderRadius: 3, padding: "1px 3px", lineHeight: 1 }}>G</span>}
                     </span>
                     <span style={{ flex: 1, minWidth: 8 }} />
-                    <button onClick={() => setEditingPlayer({ pid: p.player_id, team: p.team, first: p.first_name || (p.last_name ? "" : (p.name || "")), last: p.last_name || "", nick: p.name || "", hi: String(p.handicap_index), ov: (p.hi_override != null && String(p.hi_override).trim() !== "") ? String(p.hi_override) : "", dir: playerIsDirector(memberships, p) })} style={{
+                    <button onClick={() => setEditingPlayer(seedPlayerForm({ pid: p.player_id, team: p.team, first: p.first_name || (p.last_name ? "" : (p.name || "")), last: p.last_name || "", nick: p.name || "", hi: String(p.handicap_index), ov: (p.hi_override != null && String(p.hi_override).trim() !== "") ? String(p.hi_override) : "", dir: playerIsDirector(memberships, p) }))} style={{
                       fontSize: FS.label, padding: "2px 8px", borderRadius: 4, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer", flexShrink: 0,
                     }}>Edit</button>
                   </div>
@@ -1256,6 +1284,10 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
             // the editor recolours the sheet as you tap rather than after Save.
             const acc = (teams[editingPlayer.team] || teams[p?.team] || teams.A).accent;
             const defaultNick = toDisplayName(editingPlayer.first, editingPlayer.last);
+            // Against the signature the sheet opened with, so a GHIN sync
+            // counts as an edit (it writes into the form, not the database)
+            // and re-typing the same handicap does not.
+            const playerDirty = playerFormSig(editingPlayer) !== editingPlayer.orig;
             const linked = !!editingPlayer.ghin_number;
             // Who this row's crown can be changed by, and why not.
             // Mirrors the rules exactly (firestore.rules, bc_accounts
@@ -1540,7 +1572,12 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                   )}
                   <span style={{ flex: 1 }} />
                   <button onClick={close} style={{ padding: "10px 16px", borderRadius: 10, background: BC.inp, border: `1px solid ${BC.bdr}`, color: BC.t2, fontSize: FS.body, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
-                  <button onClick={doSave} style={{ padding: "10px 20px", borderRadius: 10, background: acc, border: "none", color: ON_AMBER, fontSize: FS.body, fontWeight: 800, cursor: "pointer" }}>{isNew ? "Add" : "Save"}</button>
+                  {/* Lit only once the sheet holds something its record does
+                      not — a director who opened a player to read a handicap
+                      and closed it again never had anything to commit. It
+                      stays clickable either way: the validation inside doSave
+                      is what a first-name-less Add has to hear about. */}
+                  <button onClick={doSave} style={{ padding: "10px 20px", borderRadius: 10, border: `1px solid ${playerDirty ? "transparent" : BC.bdr}`, background: playerDirty ? acc : BC.inp, color: playerDirty ? ON_AMBER : BC.t3, fontSize: FS.body, fontWeight: 800, cursor: "pointer", fontFamily: FONT }}>{isNew ? "Add" : "Save"}</button>
                 </div>
               </Popup>
             );
@@ -2893,6 +2930,14 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
             const tbs = draft.tee_boxes || [];
             // Existing (saved) course vs a fresh API search result.
             const isExisting = String(draft.id || "").startsWith("bc_course_");
+            // A result off the API has nothing in the library to compare
+            // against, so Add Course is always lit — there is a whole course
+            // to save. A course opened from the library is lit only once the
+            // sheet says something its document does not: the scorecard and
+            // the tee list come out of <input>s as strings, so both sides go
+            // through the same normalizer. See lib/formDirty.
+            const courseDirty = !isExisting
+              || courseFormSig(draft) !== courseFormSig(courses.find(c => c.id === draft.id));
             // Re-fetch tee data from the golf API by course name (+ state). Use
             // for recovery when tees were deleted/edited by mistake. Replaces the
             // whole tee list with the API's; the director reviews and Saves.
@@ -3065,7 +3110,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                         setCoursePreview(null);
                         doCourseSearch("");
                         notify(`${finalCourse.name} ${isExisting ? "updated" : "added"}!`, "success");
-                      }} style={{ flex: 2, padding: "10px 0", borderRadius: 8, background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`, border: "none", color: ON_AMBER, fontSize: FS.body, fontWeight: 700, cursor: "pointer" }}>{isExisting ? "✓ Save Changes" : "✓ Add Course"}</button>
+                      }} style={{ flex: 2, padding: "10px 0", borderRadius: 8, background: courseDirty ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.inp, border: `1px solid ${courseDirty ? "transparent" : BC.bdr}`, color: courseDirty ? ON_AMBER : BC.t3, fontSize: FS.body, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>{isExisting ? "✓ Save Changes" : "✓ Add Course"}</button>
                     </div>
                   </div>
               </Popup>
@@ -3193,7 +3238,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                   });
                   notify?.(ok ? "The tournament is saved" : "Could not save that — try again", ok ? "success" : "error");
                 }}
-                style={TournSaveStyle}
+                style={TournSaveStyle(tournamentDirty)}
               >Save</button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -3283,7 +3328,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                   const ok = await onSaveTrip({ houseName: editHouseName, houseUrl: url });
                   notify?.(ok ? "The house is saved" : "Could not save that — try again", ok ? "success" : "error");
                 }}
-                style={TournSaveStyle}
+                style={TournSaveStyle(houseDirty)}
               >Save</button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -3349,7 +3394,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                   setAccessCodeError("");
                   notify(next ? "Password changed" : "Password removed", "success");
                 }}
-                style={accessCodeDirty ? TournSaveStyle : TournSaveIdleStyle}
+                style={TournSaveStyle(accessCodeDirty)}
               >Save</button>
             </div>
 
@@ -3413,7 +3458,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                     setSavedDemoCode(next || null);
                     notify(next ? "Reviewer code changed" : "Reviewer code removed", "success");
                   }}
-                  style={demoCodeDirty ? TournSaveStyle : TournSaveIdleStyle}
+                  style={TournSaveStyle(demoCodeDirty)}
                 >Save</button>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 28 }}>
@@ -3458,13 +3503,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                   <button
                     onClick={() => saveTeam(team.id)}
                     disabled={!dirty}
-                    style={{
-                      flexShrink: 0, fontSize: FS.label, fontWeight: 800, borderRadius: 6, padding: "6px 12px", whiteSpace: "nowrap", fontFamily: FONT,
-                      color: dirty ? ON_AMBER : BC.t3,
-                      background: dirty ? BC.amber : BC.inp,
-                      border: dirty ? "none" : `1px solid ${BC.bdr}`,
-                      cursor: dirty ? "pointer" : "default",
-                    }}
+                    style={TournSaveStyle(dirty)}
                   >Save</button>
                 </div>
 
