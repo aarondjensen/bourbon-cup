@@ -367,9 +367,10 @@ never serve. So it holds against someone reading the bundle or skipping the
 app and talking to Firestore directly, which a client-side password check
 would not.
 
-- Set or change it in Admin → Event → Access, where **Show** reveals the
-  current one. Saving it blank turns the requirement off. Directors only, read
-  and write.
+- Set or change it in Admin → Event → Access, which shows both current codes
+  outright — there was a Show button and it withheld them from the only person
+  entitled to read them. Saving a code blank turns that door off. Directors
+  only, read and write.
 
 **There is a second code, and it is not a second password.** Same card, same
 document, `demo_code` rather than `code`. It mints a membership stamped

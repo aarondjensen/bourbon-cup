@@ -475,14 +475,17 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
   // The input always starts empty and always means "the NEW one" — unlike
   // its neighbours it is never seeded from the saved value, because typing
   // over a pre-filled password is how you change it by accident. The
-  // current code is shown separately, and only when asked for.
+  // current code is shown beside it, plainly.
   const [editAccessCode, setEditAccessCode] = useState("");
   const [savedAccessCode, setSavedAccessCode] = useState(null);
   const [accessCodeError, setAccessCodeError] = useState("");
-  const [showAccessCode, setShowAccessCode] = useState(false);
-  // The reviewer's code. Same document, same Show, and deliberately the same
-  // card — two codes on two panels is how one of them gets forgotten when
-  // somebody rotates the other.
+  // Until the read comes back, both codes are unknown — which is not the
+  // same as absent. Without this the card would spend its first frames
+  // saying "None", i.e. telling a director the tournament has no password.
+  const [accessCodeLoaded, setAccessCodeLoaded] = useState(false);
+  // The reviewer's code. Same document and deliberately the same card — two
+  // codes on two panels is how one of them gets forgotten when somebody
+  // rotates the other.
   const [editDemoCode, setEditDemoCode] = useState("");
   const [savedDemoCode, setSavedDemoCode] = useState(null);
   const loadAccessCode = useCallback(async () => {
@@ -490,8 +493,16 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
     setSavedAccessCode(res.ok ? res.code : null);
     setSavedDemoCode(res.ok ? res.demoCode : null);
     setAccessCodeError(res.ok ? "" : res.error);
-    setShowAccessCode(true);
+    setAccessCodeLoaded(true);
   }, []);
+  // Read once when the panel mounts rather than behind a Show button. The
+  // codes are the two things on this card a director opens it to look up,
+  // and a control that hides them from the one person allowed to read them
+  // is protecting nothing: the rules already refuse everybody else, and a
+  // shoulder-surfer is inside an Admin tab that can rewrite the draw.
+  // Skipped for a demo administrator, whose read `bc_secrets` refuses — the
+  // card is not drawn for them either.
+  useEffect(() => { if (!isDemoAdmin) loadAccessCode(); }, [isDemoAdmin, loadAccessCode]);
   useEffect(() => { setEditStartDate(tripDateFields({ start_date: startDate }).start); }, [startDate]);
   useEffect(() => { setEditEndDate(tripDateFields({ end_date: endDate }).end); }, [endDate]);
   useEffect(() => { setEditHouseName(trip?.house_name || ""); }, [trip?.house_name]);
@@ -3321,27 +3332,15 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
               >Save</button>
             </div>
 
-            {/* The current one. Fetched on demand — the read is a members-
-                only round trip to Firestore, so there is no reason to make
-                it on every visit to this tab. */}
+            {/* The current one, read on mount and simply shown. Only a
+                director gets this far and only a director may read the
+                document, so there is nobody left for a Show button to
+                withhold it from. */}
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, minHeight: 28 }}>
               <span style={TournLabelStyle}>Current</span>
-              {showAccessCode ? (
-                <span style={{ flex: 1, minWidth: 0, fontSize: accessCodeError ? FS.label : FS.body, fontWeight: accessCodeError ? 600 : 800, lineHeight: 1.35, color: accessCodeError ? BC.danger : (savedAccessCode ? BC.amberInk : BC.t3), wordBreak: "break-all" }}>
-                  {accessCodeError || savedAccessCode || "None"}
-                </span>
-              ) : (
-                <button type="button" onClick={loadAccessCode} style={{
-                  fontSize: FS.label, fontWeight: 700, padding: "5px 10px", borderRadius: 6, fontFamily: FONT,
-                  border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t2, cursor: "pointer",
-                }}>Show</button>
-              )}
-              {showAccessCode && (
-                <button type="button" onClick={() => setShowAccessCode(false)} style={{
-                  flexShrink: 0, fontSize: FS.label, fontWeight: 700, padding: "5px 10px", borderRadius: 6, fontFamily: FONT,
-                  border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer",
-                }}>Hide</button>
-              )}
+              <span style={{ flex: 1, minWidth: 0, fontSize: accessCodeError ? FS.label : FS.body, fontWeight: accessCodeError ? 600 : 800, lineHeight: 1.35, color: accessCodeError ? BC.danger : (savedAccessCode ? BC.amberInk : BC.t3), wordBreak: "break-all" }}>
+                {accessCodeError || (accessCodeLoaded ? (savedAccessCode || "None") : "\u2026")}
+              </span>
             </div>
 
             <input
@@ -3398,14 +3397,12 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                   style={TournSaveStyle}
                 >Save</button>
               </div>
-              {showAccessCode && (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, minHeight: 24 }}>
-                  <span style={TournLabelStyle}>Current</span>
-                  <span style={{ flex: 1, minWidth: 0, fontSize: FS.body, fontWeight: 800, color: savedDemoCode ? BC.amberInk : BC.t3, wordBreak: "break-all" }}>
-                    {savedDemoCode || "None"}
-                  </span>
-                </div>
-              )}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, minHeight: 24 }}>
+                <span style={TournLabelStyle}>Current</span>
+                <span style={{ flex: 1, minWidth: 0, fontSize: FS.body, fontWeight: 800, color: savedDemoCode ? BC.amberInk : BC.t3, wordBreak: "break-all" }}>
+                  {accessCodeLoaded ? (savedDemoCode || "None") : "\u2026"}
+                </span>
+              </div>
               <input
                 value={editDemoCode}
                 onChange={e => setEditDemoCode(e.target.value)}
