@@ -34,6 +34,12 @@
 //     number in the first place. This is the "link" half; the POST batch
 //     above is the "sync" half that runs once a number is stored.
 //
+//   GET  /api/ghin?diagnose=1[&ghin=<n>]   (why did a sync fail?)
+//     Reproduces both hops and reports what each one actually answered —
+//     statuses, response key names, and an upstream body only when that hop
+//     ERRORED. Returns no credential and no golfer data. This is the answer
+//     to "16 failed" with no reason attached; see diagnose() below.
+//
 // ── Response shapes ──
 //   POST → 200 OK
 //     { results: [
@@ -51,7 +57,11 @@
 
 const GHIN_BASE = "https://api2.ghin.com/api/v1";
 
-async function loginToGhin() {
+// The login request itself, returned raw so both the normal path and the
+// `?diagnose=` probe can read the SAME response. They used to be one function
+// that threw a string, which is why a login that answered 200 with a shape we
+// no longer recognise was indistinguishable from one that answered 401.
+async function loginRequest() {
   const email = process.env.GHIN_EMAIL;
   const password = process.env.GHIN_PASSWORD;
   if (!email || !password) {
@@ -76,60 +86,79 @@ async function loginToGhin() {
     }),
   });
 
-  if (!r.ok) {
-    const body = await r.text();
-    throw new Error(`GHIN login failed: HTTP ${r.status} — ${body.slice(0, 200)}`);
-  }
+  const text = await r.text();
+  let json = null;
+  try { json = JSON.parse(text); } catch { /* an HTML error page, not JSON */ }
 
-  const data = await r.json();
-  // The token field is sometimes nested under golfer_user, sometimes returned
-  // as a top-level golfer_user_token. Handle both shapes.
+  // WHICH field the token came out of is worth knowing, because the last
+  // fallback (`data.token`) is the one that can hand back a non-session
+  // value: we send a top-level `token` on the way in, so a response that
+  // echoes it would look like a successful login and then 401 on every
+  // single golfer read — which is exactly the "N failed, no reason given"
+  // shape this file keeps producing.
+  const field =
+    json?.golfer_user?.golfer_user_token ? "golfer_user.golfer_user_token"
+    : json?.golfer_user_token ? "golfer_user_token"
+    : json?.token ? "token"
+    : null;
   const token =
-    data?.golfer_user?.golfer_user_token ||
-    data?.golfer_user_token ||
-    data?.token;
+    json?.golfer_user?.golfer_user_token ||
+    json?.golfer_user_token ||
+    json?.token ||
+    null;
 
+  return { res: r, text, json, token, field };
+}
+
+async function loginToGhin() {
+  const { res, text, token, field } = await loginRequest();
+
+  if (!res.ok) {
+    throw new Error(`GHIN login failed: HTTP ${res.status} — ${snippet(text)}`);
+  }
   if (!token) {
     throw new Error("GHIN login succeeded but no token in response");
+  }
+  if (field === "token" && token === "bourbon-cup") {
+    // The response echoed our own app-identifier back. Treat that as no
+    // token at all rather than authenticating 16 reads with it.
+    throw new Error("GHIN login echoed the request token — no session token in response");
   }
   return token;
 }
 
-async function fetchGolfer(ghinNumber, token) {
-  const r = await fetch(
-    `${GHIN_BASE}/golfers/${encodeURIComponent(ghinNumber)}.json`,
-    {
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Accept": "application/json",
-      },
-    }
-  );
+// Trim an upstream error body down to something a toast can carry. GHIN
+// answers a bad token with JSON and a proxy in front of it with HTML, and
+// both are worth a glance — the first word of either says which.
+function snippet(text) {
+  return String(text || "").replace(/\s+/g, " ").trim().slice(0, 160);
+}
 
-  if (!r.ok) {
-    return { ghin_number: String(ghinNumber), error: `HTTP ${r.status}` };
-  }
+// One authenticated read, with the body kept as text so a non-JSON error page
+// doesn't throw inside `r.json()` and surface as a generic 500.
+async function ghinGet(url, token) {
+  const r = await fetch(url, {
+    headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" },
+  });
+  const text = await r.text();
+  let json = null;
+  try { json = JSON.parse(text); } catch { /* HTML error page, not JSON */ }
+  return { ok: r.ok, status: r.status, text, json };
+}
 
-  const data = await r.json();
-  // The response can be either { golfer: {...} } or just {...}, depending on
-  // which version of the endpoint we hit. Normalize.
-  const g = data?.golfer || data?.golfers?.[0] || data;
+// The index arrives under one of SEVERAL field names depending on endpoint
+// version (handicap_index / hi_value / hi_display / display). Only reading
+// `handicap_index` once made batch sync report every golfer as "failed" even
+// though the data was present, so this is shared by both lookup paths and by
+// the search path's normalizeGolfer().
+function readHI(g) {
+  return g?.handicap_index ?? g?.hi_value ?? g?.hi_display ?? g?.display ?? g?.handicap ?? null;
+}
 
-  // The single-golfer endpoint returns the index under one of SEVERAL field
-  // names depending on endpoint version (handicap_index / hi_value /
-  // hi_display / display). Only reading `handicap_index` made batch sync
-  // report every golfer as "failed" even though the data was present. Read
-  // the alternates too, exactly like the search path's normalizeGolfer().
-  const hiRaw =
-    g?.handicap_index ?? g?.hi_value ?? g?.hi_display ?? g?.display ?? g?.handicap ?? null;
-
-  if (!g || hiRaw == null) {
-    return { ghin_number: String(ghinNumber), error: "No handicap data in response" };
-  }
-
+function shapeGolfer(ghinNumber, g, via) {
   return {
     ghin_number: String(ghinNumber),
-    handicap_index: hiRaw,
+    handicap_index: readHI(g),
     first_name: g.first_name || g.player_first_name || null,
     last_name: g.last_name || g.player_last_name || null,
     club_name: g.club_name || g.primary_club_name || g.club || null,
@@ -137,7 +166,66 @@ async function fetchGolfer(ghinNumber, token) {
     last_revision_date:
       g.revision_date || g.last_revision_date || g.handicap_revision_date || g.hi_date || null,
     low_hi: g.low_hi || g.low_handicap_index || null,
+    // Which of the two endpoints answered. Costs nothing and is the first
+    // thing worth knowing when one of them moves.
+    via,
   };
+}
+
+// Look one golfer up by number.
+//
+// TWO endpoints are tried, in order, because a whole-batch failure has always
+// meant one endpoint moved and there was nothing to fall back to:
+//
+//   1. /golfers/{n}.json   — the direct read. Cheapest, and what has always
+//      been used here.
+//   2. /golfers/search.json?golfer_id={n} — the SAME endpoint the name search
+//      uses, filtered to one golfer. If (1) has moved or started refusing the
+//      token, this is the path already proven to work elsewhere in the file.
+//
+// The second only runs when the first produced nothing, so a healthy sync is
+// still one read per golfer. When both fail the returned `error` carries BOTH
+// statuses and the upstream body — "16 failed" with no reason is what made
+// this untroubleshootable from a phone.
+async function fetchGolfer(ghinNumber, token) {
+  const n = String(ghinNumber).trim();
+  const reasons = [];
+
+  // ── 1. direct read ──
+  const direct = await ghinGet(`${GHIN_BASE}/golfers/${encodeURIComponent(n)}.json`, token);
+  if (direct.ok) {
+    // Either { golfer: {...} }, { golfers: [...] } or just {...}.
+    const g = direct.json?.golfer || direct.json?.golfers?.[0] || direct.json;
+    if (g && readHI(g) != null) return shapeGolfer(n, g, "golfers/{n}.json");
+    reasons.push(
+      `golfers/{n}.json: 200 but no handicap field (keys: ${
+        direct.json ? Object.keys(direct.json).slice(0, 12).join(",") : "non-JSON body"
+      })`
+    );
+  } else {
+    reasons.push(`golfers/{n}.json: HTTP ${direct.status} — ${snippet(direct.text)}`);
+  }
+
+  // ── 2. the search endpoint, filtered to this one number ──
+  const params = new URLSearchParams({
+    golfer_id: n,
+    status: "Active",
+    from_ghin: "true",
+    per_page: "1",
+    page: "1",
+  });
+  const viaSearch = await ghinGet(`${GHIN_BASE}/golfers/search.json?${params.toString()}`, token);
+  if (viaSearch.ok) {
+    const list = viaSearch.json?.golfers || viaSearch.json?.golfer ||
+      (Array.isArray(viaSearch.json) ? viaSearch.json : []);
+    const g = Array.isArray(list) ? list[0] : list;
+    if (g && readHI(g) != null) return shapeGolfer(n, g, "search.json?golfer_id");
+    reasons.push("search.json?golfer_id: 200 but no matching golfer");
+  } else {
+    reasons.push(`search.json?golfer_id: HTTP ${viaSearch.status} — ${snippet(viaSearch.text)}`);
+  }
+
+  return { ghin_number: n, error: reasons.join(" | ") };
 }
 
 // Golfer search — the "link" half. Given a name (or a raw GHIN number),
@@ -163,7 +251,7 @@ function normalizeGolfer(g) {
     club_name: g.club_name || g.primary_club_name || g.club || null,
     state: g.state || g.club_state || null,
     // Passed through raw (may be "12.3" or "+2.1"); the client parses it.
-    handicap_index: g.handicap_index ?? g.hi_value ?? g.hi_display ?? g.display ?? null,
+    handicap_index: readHI(g),
     last_revision_date:
       g.revision_date || g.last_revision_date || g.rev_date || g.hi_date || null,
   };
@@ -235,6 +323,102 @@ async function searchGolfers(queryStr, token, state) {
   return list.map(normalizeGolfer).filter(Boolean);
 }
 
+// ── ?diagnose=1 ─────────────────────────────────────────────────────
+// A batch sync that answers "16 failed" leaves nobody anything to act on:
+// the reason was computed upstream and thrown away, and the credentials that
+// would let you reproduce it by hand only exist inside this function. So this
+// probe reproduces the two hops and reports what each one actually said.
+//
+// Open it in any browser — it needs a Vercel deploy but no app build, which
+// matters because the phone that hit the failure is running a bundle inside
+// a binary and cannot be patched today.
+//
+//   /api/ghin?diagnose=1              login only
+//   /api/ghin?diagnose=1&ghin=1234567 login + one golfer read, both endpoints
+//
+// NOTHING here returns a credential. The env vars are reported as booleans,
+// the token as its length and the field it came out of, and an upstream body
+// is echoed only when that response was an ERROR — which is a page saying
+// "unauthorized", never golfer data. A successful response is reported by its
+// KEY NAMES, which is what identifies a shape change without printing PII.
+async function diagnose(ghinNumber) {
+  const out = {
+    checked_at: new Date().toISOString(),
+    env: {
+      GHIN_EMAIL: process.env.GHIN_EMAIL ? "set" : "MISSING",
+      GHIN_PASSWORD: process.env.GHIN_PASSWORD ? "set" : "MISSING",
+      GHIN_COUNTRY: process.env.GHIN_COUNTRY || "(unset — defaults to USA)",
+    },
+  };
+
+  let token = null;
+  try {
+    const { res, text, json, token: t, field } = await loginRequest();
+    token = t;
+    out.login = {
+      status: res.status,
+      ok: res.ok,
+      token_found: !!t,
+      token_field: field,
+      token_length: t ? String(t).length : 0,
+      // A token that is our own "bourbon-cup" string echoed back authenticates
+      // nothing, and looks exactly like a healthy login from the outside.
+      token_is_echo: t === "bourbon-cup",
+      response_keys: json ? Object.keys(json) : null,
+      golfer_user_keys: json?.golfer_user ? Object.keys(json.golfer_user) : null,
+      body: res.ok ? undefined : snippet(text),
+    };
+  } catch (e) {
+    out.login = { error: e.message || String(e) };
+  }
+
+  if (!token) {
+    out.verdict = "Login produced no usable token — every golfer read would fail. " +
+      "Check GHIN_EMAIL / GHIN_PASSWORD in Vercel, then the login response keys above.";
+    return out;
+  }
+
+  const n = String(ghinNumber || "").trim();
+  if (!n) {
+    out.verdict = "Login is healthy. Re-run with &ghin=<a linked number> to test a golfer read.";
+    return out;
+  }
+
+  const direct = await ghinGet(`${GHIN_BASE}/golfers/${encodeURIComponent(n)}.json`, token);
+  out.golfer_direct = {
+    endpoint: "golfers/{n}.json",
+    status: direct.status,
+    ok: direct.ok,
+    response_keys: direct.json ? Object.keys(direct.json).slice(0, 20) : null,
+    handicap_field_found:
+      readHI(direct.json?.golfer || direct.json?.golfers?.[0] || direct.json) != null,
+    body: direct.ok ? undefined : snippet(direct.text),
+  };
+
+  const params = new URLSearchParams({
+    golfer_id: n, status: "Active", from_ghin: "true", per_page: "1", page: "1",
+  });
+  const viaSearch = await ghinGet(`${GHIN_BASE}/golfers/search.json?${params.toString()}`, token);
+  const list = viaSearch.json?.golfers || viaSearch.json?.golfer ||
+    (Array.isArray(viaSearch.json) ? viaSearch.json : []);
+  out.golfer_search = {
+    endpoint: "search.json?golfer_id",
+    status: viaSearch.status,
+    ok: viaSearch.ok,
+    count: Array.isArray(list) ? list.length : (list ? 1 : 0),
+    response_keys: viaSearch.json ? Object.keys(viaSearch.json).slice(0, 20) : null,
+    handicap_field_found: readHI(Array.isArray(list) ? list[0] : list) != null,
+    body: viaSearch.ok ? undefined : snippet(viaSearch.text),
+  };
+
+  const ok = out.golfer_direct.handicap_field_found || out.golfer_search.handicap_field_found;
+  out.verdict = ok
+    ? "At least one golfer endpoint returns a handicap — batch sync should work for this number."
+    : "Login works but NEITHER golfer endpoint returned a handicap. Compare response_keys above " +
+      "against what readHI() looks for; if the keys are unfamiliar, the endpoint shape moved.";
+  return out;
+}
+
 export default async function handler(req, res) {
   // Allow same-origin from claude's app — Vercel auto-handles this for the
   // app's own deployment, but explicit is safer.
@@ -246,6 +430,16 @@ export default async function handler(req, res) {
 
   // ── GET: golfer search (link step) ──
   if (req.method === "GET") {
+    // ?diagnose=1 — why did a sync fail? See diagnose() above.
+    if (req.query?.diagnose != null) {
+      try {
+        return res.status(200).json(await diagnose(req.query?.ghin));
+      } catch (err) {
+        console.error("[/api/ghin] diagnose error:", err);
+        return res.status(500).json({ error: err.message || "Unknown error" });
+      }
+    }
+
     const search = req.query?.search;
     if (!search || !String(search).trim()) {
       return res.status(400).json({ error: "Provide a ?search= name or GHIN number" });

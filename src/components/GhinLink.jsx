@@ -144,7 +144,11 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
     setBusy(true);
     try {
       const map = await syncGhinNumbers([player.ghin_number]);
-      const res = map[String(player.ghin_number)];
+      // Trimmed on BOTH sides: syncGhinNumbers trims what it sends and the
+      // proxy echoes back what it was sent, so a stored number with a stray
+      // space would miss its own result and report "no data" for a golfer
+      // the API answered for perfectly.
+      const res = map[String(player.ghin_number).trim()];
       if (!res || res.error || res.handicap_index == null) {
         notify?.(`Sync failed: ${res?.error || "no data"}`, "error"); return;
       }
@@ -360,6 +364,18 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
   );
 }
 
+// The commonest failure reason, trimmed to something a phone-sized toast can
+// hold. `fetchGolfer` joins its two attempts with " | "; the first half is the
+// one worth reading, and the full string is logged alongside it.
+function shortReason(reasons) {
+  if (!reasons?.length) return "unknown";
+  const counts = new Map();
+  for (const r of reasons) counts.set(r, (counts.get(r) || 0) + 1);
+  const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  const head = String(top).split(" | ")[0];
+  return head.length > 90 ? `${head.slice(0, 90)}…` : head;
+}
+
 // ── Director batch sync ─────────────────────────────────────────────
 // `confirm` (optional): a promise-based confirmation (useConfirm's) shown
 // before syncing, so the director sees exactly what will happen. `compact`
@@ -386,9 +402,15 @@ export function GhinSyncButton({ players, onUpdatePlayer, notify, confirm, compa
     try {
       const map = await syncGhinNumbers(linked.map(p => p.ghin_number));
       let changed = 0, same = 0, failed = 0;
+      const reasons = [];
       for (const p of linked) {
-        const res = map[String(p.ghin_number)];
-        if (!res || res.error || res.handicap_index == null) { failed++; continue; }
+        // Trimmed — see the note in the single-player resync above.
+        const res = map[String(p.ghin_number).trim()];
+        if (!res || res.error || res.handicap_index == null) {
+          failed++;
+          reasons.push(res?.error || (res ? "no handicap in response" : "no result returned"));
+          continue;
+        }
         const hi = parseGhinHI(res.handicap_index);
         const patch = {
           ...p,
@@ -398,8 +420,17 @@ export function GhinSyncButton({ players, onUpdatePlayer, notify, confirm, compa
         if (parseFloat(p.handicap_index) === hi) { await onUpdatePlayer(patch); same++; }
         else { await onUpdatePlayer({ ...patch, handicap_index: hi }); changed++; }
       }
+      // A count with no reason is a dead end: the proxy computed the actual
+      // upstream error for every one of these and the toast used to throw it
+      // away, leaving "16 failed" and nothing to act on. The reasons are all
+      // the same when the endpoint moved or the login went stale — which is
+      // every whole-batch failure — so lead with the commonest one and put
+      // the full set in the console for whoever has a laptop.
+      if (failed) console.warn("[GHIN sync] failures:", reasons, map);
       notify?.(
-        `GHIN sync: ${changed} updated, ${same} unchanged${failed ? `, ${failed} failed` : ""}`,
+        `GHIN sync: ${changed} updated, ${same} unchanged${
+          failed ? `, ${failed} failed — ${shortReason(reasons)}` : ""
+        }`,
         failed ? "error" : "success"
       );
     } catch (e) {
