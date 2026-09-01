@@ -47,9 +47,15 @@
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
+	<!-- arm64, not Capacitor's template default of armv7. This key lists
+	     capabilities a device MUST have to install the app, and armv7 is
+	     32-bit hardware that ended at iOS 11 — so on a build whose
+	     IPHONEOS_DEPLOYMENT_TARGET is 15.0 it declares a requirement no
+	     device that can run the app actually meets. WBC shipped the same
+	     template value and fixed it in its own store audit. -->
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
-		<string>armv7</string>
+		<string>arm64</string>
 	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
