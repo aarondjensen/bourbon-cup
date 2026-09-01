@@ -439,6 +439,15 @@ field tests a broken build and stops trusting the next one.
 No credentials are handed over — see `store-submission.md` §1.4 for why, and
 for how the Admin tabs are reachable without one.
 
+**The demo edition is load-bearing for exactly this**, which is worth knowing
+before anybody retires it. The guest door covers the read-only half of a
+review and needs nothing from us, but a reviewer who wants to SIGN IN has to
+claim a name, and that needs an unlocked edition with unclaimed roster rows.
+Only `bc_demo` is one: the current cup's roster belongs to the men playing it
+and every past year is locked. Since store builds stopped opening on the demo
+(`lib/defaultEdition`), switching to it is the reviewer's first step rather
+than a fallback, and the note below says so in that order.
+
 > The Bourbon Cup is the scoring app for one private annual golf tournament.
 > It is submitted for unlisted distribution.
 >
@@ -453,11 +462,11 @@ for how the Admin tabs are reachable without one.
 > screen. There is no separate demo account to request — this app has no
 > email-and-password sign-in, and Sign in with Apple needs nothing from us.
 >
-> **Please use the tournament named "DEMO — Testers".** If the app opens on a
-> different year, tap "Switch tournament" on the roster screen (or ☰ →
-> Tournaments) and choose it. The other years are completed tournaments and
-> are closed to new entries, so a name cannot be claimed in them — the app
-> says so on screen.
+> **First, switch to the tournament named "DEMO — Testers".** The app opens on
+> the current cup, whose roster is already claimed by the men playing it. Tap
+> "Switch tournament" on the roster screen, or ☰ → Tournaments, and choose the
+> one labelled DEMO. Every other year is a completed tournament, closed to new
+> entries, so a name cannot be claimed in one — the app says so on screen.
 >
 > Tournament password: `<from Admin → Event → Access>`
 >
