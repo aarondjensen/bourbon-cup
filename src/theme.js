@@ -503,6 +503,37 @@ export const segTrack = ({ compact = false } = {}) => ({
   border: "1px solid transparent",
 });
 
+// ── The Save button ────────────────────────────────────────────────
+// One rule, everywhere the app has a Save: **gold means there is something
+// to save.** A form that already says exactly what the database says has
+// nothing to commit, so its button is unlit — and a director scanning the
+// Event tab can tell at a glance which of five cards they have actually
+// touched, instead of reading five gold buttons that all mean nothing.
+//
+// It is a style, not a control, because the sites differ in every other
+// respect: some sit in a card header, some beside an input, some across the
+// foot of a sheet. Callers pass their own geometry and keep their own
+// decision about `disabled` — the Access card, for one, stays clickable
+// while unlit, because saving an empty box is how a password is removed.
+//
+// `compact` is the small pill used in an Admin card header; the default is
+// the larger button that sits beside a field or under a form. The border is
+// always drawn — transparent while lit, since the fill is its own edge — so
+// the button does not change size the moment it lights and nudge the row.
+export const saveBtn = (dirty, { compact = false } = {}) => ({
+  flexShrink: 0,
+  whiteSpace: "nowrap",
+  fontFamily: FONT,
+  fontWeight: 800,
+  fontSize: compact ? FS.label : FS.small,
+  borderRadius: compact ? 6 : 8,
+  padding: compact ? "6px 12px" : "0 18px",
+  color: dirty ? ON_AMBER : BC.t3,
+  background: dirty ? BC.amber : BC.inp,
+  border: `1px solid ${dirty ? "transparent" : BC.bdr}`,
+  cursor: dirty ? "pointer" : "default",
+});
+
 // ── Player-name text color ──
 // Single source of truth for how player names read in rosters and lists.
 // Brightening them updates every instance that routes through here. Uses the
