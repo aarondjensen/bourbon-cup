@@ -649,7 +649,7 @@ remembered:
   `canWriteEdition()`, which needs `isMember()`, which needs the tournament
   password — and `request.resource.data.uploadedBy == request.auth.uid`, so a
   photo cannot be posted under somebody else's name. The uploaders are sixteen
-  men who have played the same tournament since 2016 and see each other every
+  men who have played the same tournament since 2015 and see each other every
   July.
 - **A guest can look and cannot post.** Reads are `isOpen()`; a guest holds no
   auth token at all, so every write rule refuses them before the UI is
@@ -665,7 +665,7 @@ who has to guess:
 
 > The photo gallery is not public user-generated content. Uploading requires
 > the private tournament password AND a claimed spot on a fixed sixteen-person
-> roster of people who have known each other personally since 2016. Guests can
+> roster of people who have known each other personally since 2015. Guests can
 > view but cannot upload — an unauthenticated visitor holds no account and the
 > database refuses every write. Any photo can be removed by the person who
 > posted it or by the tournament director from inside the app, and the director

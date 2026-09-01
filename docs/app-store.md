@@ -570,8 +570,8 @@ Golf trip scoring and history
 **Promotional text** (170) — editable any time, no review.
 
 ```
-Live scoring, the draw, side games and every cup since 2016 — for one annual
-golf trip and the sixteen men who play it.
+Live scoring, the draw, side games and a decade of cup history — for one
+annual golf trip and the sixteen men who play it.
 ```
 
 **Keywords** (100, comma-separated, no spaces after commas). Do NOT repeat
@@ -588,7 +588,7 @@ a beta.
 
 ```
 The Bourbon Cup is the scoring app for one annual match-play golf tournament —
-two teams, four rounds, and a trophy that has changed hands since 2016.
+two teams, four rounds, and a trophy that has changed hands since 2015.
 
 Post scores hole by hole from the tee box. One phone in the group can enter for
 all four players, and the leaderboard updates on everybody else's while they
@@ -610,8 +610,8 @@ agreed; it moves no money and has no purchases of any kind.
 TRIP INFO — when it is, where everybody is staying, and the scorecard for every
 course on the schedule.
 
-DATA — every cup since 2016: career records, head-to-heads, partnerships, and
-where each year turned.
+DATA — ten cups of career records, head-to-heads, partnerships, and where each
+year turned.
 
 PHOTOS — the week, posted from the phone that took it.
 
@@ -632,6 +632,15 @@ and to be about the app; a bare marketing site sometimes draws a query.
 
 **Category** — Primary: Sports. Secondary: none. Not Games; a scorekeeper for a
 real tournament is not a game, and Games drags in the gambling questionnaire.
+
+**Two different years live in this copy and only one of them is 2015.** The
+tournament began in 2015 — that is what "changed hands since 2015" and the
+feature graphic's SINCE 2015 assert, and it is about the cup. The archive the
+app SHIPS starts at 2016, because that is where the spreadsheets everything is
+imported from begin, so the Data tab's earliest year is 2016. The lines about
+what the app contains therefore count cups rather than naming a year: "a decade
+of cup history", "ten cups". Anchor those to 2015 and the listing promises a
+year the app cannot show.
 
 The BETTING paragraph's second sentence is load-bearing and should not be
 trimmed for length: it is the same claim the age-rating questionnaire and the
