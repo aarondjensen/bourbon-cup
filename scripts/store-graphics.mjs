@@ -89,7 +89,7 @@ const background = `
     <text x="410" y="212" font-size="62" font-weight="800" letter-spacing="1">THE BOURBON</text>
     <text x="410" y="286" font-size="62" font-weight="800" letter-spacing="1">CUP</text>
     <rect x="412" y="318" width="86" height="5" rx="2.5" fill="#ffffff" opacity="0.85"/>
-    <text x="410" y="374" font-size="25" font-weight="600" letter-spacing="3.2" opacity="0.92">MATCH PLAY · SINCE 2016</text>
+    <text x="410" y="374" font-size="25" font-weight="600" letter-spacing="3.2" opacity="0.92">SINCE 2015</text>
   </g>
 </svg>`;
 
