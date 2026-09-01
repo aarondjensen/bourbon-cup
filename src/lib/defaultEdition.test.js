@@ -3,38 +3,30 @@ import { defaultEdition, liveEdition, WEB_DEFAULT_EDITION_ID } from "./defaultEd
 import { DEMO_EDITION_ID } from "./editionLock";
 
 describe("defaultEdition", () => {
-  it("opens a store build on the demo", () => {
-    // The whole point. A tester or a store reviewer is handed the app to try;
-    // landing them on a finished cup means a locked roster they cannot claim,
-    // so their first act in the app is a refusal.
-    expect(defaultEdition({ native: true })).toBe(DEMO_EDITION_ID);
-  });
-
-  it("leaves the web app on the cup", () => {
-    // thebourboncup.com is the sixteen men. They must never open the app on an
-    // invented tournament.
-    expect(defaultEdition({ native: false })).toBe(WEB_DEFAULT_EDITION_ID);
+  it("opens every install on the cup, store build or browser", () => {
+    // It used to fork on `native` and open a store build on the demo, for
+    // Play's twelve closed-test strangers who had no roster row. Internal
+    // testing retired that audience: a store build is now installed by the
+    // same sixteen men as the website, and landing THEM on "DEMO — Testers"
+    // is the same failure pointed the other way.
     expect(defaultEdition()).toBe(WEB_DEFAULT_EDITION_ID);
+    expect(defaultEdition({})).toBe(WEB_DEFAULT_EDITION_ID);
   });
 
-  it("lets VITE_DEFAULT_EDITION win on either platform", () => {
-    // The way this stops being a special case: when the field installs the
-    // store builds, point it at that year and the fork is gone.
-    expect(defaultEdition({ override: "bc_2026", native: true })).toBe("bc_2026");
-    expect(defaultEdition({ override: "bc_2026", native: false })).toBe("bc_2026");
+  it("never opens on the demo of its own accord", () => {
+    expect(defaultEdition()).not.toBe(DEMO_EDITION_ID);
   });
 
-  it("ignores an override that is blank or whitespace", () => {
-    // An env var set to "" is what an unset var looks like in a .env file, and
-    // it must not resolve the app to an edition id of "" — which would filter
-    // every query to nothing and render an empty tournament.
-    expect(defaultEdition({ override: "", native: true })).toBe(DEMO_EDITION_ID);
-    expect(defaultEdition({ override: "   ", native: false })).toBe(WEB_DEFAULT_EDITION_ID);
-    expect(defaultEdition({ override: undefined, native: true })).toBe(DEMO_EDITION_ID);
+  it("lets VITE_DEFAULT_EDITION win, which is how next year ships", () => {
+    expect(defaultEdition({ override: "bc_2026" })).toBe("bc_2026");
   });
 
-  it("trims a pasted override", () => {
-    expect(defaultEdition({ override: " bc_2026 " })).toBe("bc_2026");
+  it("treats a blank or absent override as absent", () => {
+    // Vite hands over "" for an unset variable, not undefined, and a value
+    // typed with a stray space is the same mistake.
+    expect(defaultEdition({ override: "" })).toBe(WEB_DEFAULT_EDITION_ID);
+    expect(defaultEdition({ override: "   " })).toBe(WEB_DEFAULT_EDITION_ID);
+    expect(defaultEdition({ override: undefined })).toBe(WEB_DEFAULT_EDITION_ID);
   });
 });
 

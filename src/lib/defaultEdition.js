@@ -7,24 +7,29 @@
 // exactly one thing — what somebody sees the first time they open the app,
 // before they know it has years in it at all.
 //
-// The two audiences are genuinely different, and it is the INSTALL that tells
-// them apart rather than anything about the person:
+// EVERY install now opens on the cup, web and store build alike.
 //
-//   web    — the sixteen men, on thebourboncup.com. Unchanged: the cup.
-//   native — a store build. Today that is Play's internal testers and the two
-//            review queues. They are handed the app to try, not to navigate.
+// It used to fork: a native build opened on `bc_demo`, because a store build
+// meant Play's twelve closed-test strangers, who had no name on any roster and
+// would have landed on a locked edition that refuses every write. That reason
+// is gone. Play distribution is INTERNAL TESTING (`play-store.md` §7), so a
+// store build is now installed by the same sixteen men who use the website —
+// and opening THEM on "DEMO — Testers" is the same failure the fork existed to
+// prevent, pointed the other way: the field would install the app off
+// thebourboncup.com/app and find a tournament nobody has played.
 //
-// A tester landing on a finished cup gets a roster they cannot claim: those
-// editions are locked, and `canWriteEdition()` refuses every write, so their
-// first act in the app is a refusal. Telling them to go and find the right
-// tournament is not a fix — a tester who must be instructed where to start is
-// a tester who reports the app as broken, and the store forms promise them a
-// roster they can claim from.
+// The demo edition is untouched and still reachable in ☰ → Tournaments; it is
+// simply no longer where anybody starts. A reviewer's path is the guest door
+// (`store-submission.md` §1.4), which needs no roster row at all and is what
+// the Review Notes point at.
+//
+// `VITE_DEFAULT_EDITION` still overrides, which is how next year's tournament
+// becomes a build setting rather than a code change.
 //
 // Pure, and its own module, because firebase.js initialises Firebase on
 // import and so cannot be unit-tested — the same split as editionLock.js and
-// editions.js. What a reviewer sees first is worth pinning.
-import { DEMO_EDITION_ID, isDemoEdition } from "./editionLock.js";
+// editions.js. What somebody sees first is worth pinning.
+import { isDemoEdition } from "./editionLock.js";
 
 // The web app's own year. Not "the latest edition": there is no server-side
 // flag saying which year is current — the active pointer is per-device — and
@@ -34,17 +39,13 @@ export const WEB_DEFAULT_EDITION_ID = "bc_2025";
 
 /**
  * @param {object} opts
- * @param {string} [opts.override]  VITE_DEFAULT_EDITION. Wins over everything,
- *   which is how this stops being a special case: when the field installs the
- *   store builds rather than twelve testers, set it to that year and the fork
- *   is gone without a code change.
- * @param {boolean} [opts.native]   Running inside a Capacitor build.
+ * @param {string} [opts.override]  VITE_DEFAULT_EDITION. Wins, which is how
+ *   next year's tournament becomes a build setting rather than a code change.
  * @returns {string} the edition id to open on.
  */
-export const defaultEdition = ({ override, native = false } = {}) => {
+export const defaultEdition = ({ override } = {}) => {
   const cleaned = typeof override === "string" ? override.trim() : "";
-  if (cleaned) return cleaned;
-  return native ? DEMO_EDITION_ID : WEB_DEFAULT_EDITION_ID;
+  return cleaned || WEB_DEFAULT_EDITION_ID;
 };
 
 // ══════════════════════════════════════════════════════════════════

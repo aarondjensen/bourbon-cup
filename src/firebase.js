@@ -10,7 +10,6 @@
 import { initializeApp } from "firebase/app";
 import { resolveFirebaseConfig } from "./lib/firebaseConfig";
 import { defaultEdition } from "./lib/defaultEdition";
-import { isNative } from "./lib/platform";
 import {
   getFirestore, initializeFirestore,
   persistentLocalCache, persistentMultipleTabManager,
@@ -120,7 +119,7 @@ const FIREBASE_CONFIG = (() => {
 // And a Firestore round trip cannot answer this — TOURNAMENT_ID is needed
 // synchronously, before the first query is built.
 const _defaultEdition = () =>
-  defaultEdition({ override: import.meta.env?.VITE_DEFAULT_EDITION, native: isNative() });
+  defaultEdition({ override: import.meta.env?.VITE_DEFAULT_EDITION });
 
 // Where a fresh install lands, for anybody who needs it AFTER startup. The
 // "back to the cup" row is the one caller: `liveEdition` reads it to know that
