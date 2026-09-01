@@ -297,7 +297,14 @@ into place is the whole of it.
    ```sh
    plutil -p ios/App/App/GoogleService-Info.plist \
      | grep -E 'PROJECT_ID|BUNDLE_ID|GOOGLE_APP_ID|REVERSED_CLIENT_ID'
+   grep googleusercontent ios/App/App/Info.plist
    ```
+
+   The second line is the committed half, and it is `grep googleusercontent`
+   rather than `grep REVERSED_CLIENT_ID` because `Info.plist` has no key by
+   that name — the id lives inside `CFBundleURLTypes` as a URL SCHEME, which
+   is what the OAuth callback comes back to. Grepping for the key name
+   returns nothing and reads exactly like a missing value.
 
    `PROJECT_ID` = `the-bourbon-cup`, `BUNDLE_ID` = `com.thebourboncup.app`,
    `GOOGLE_APP_ID` beginning `1:957218531964:ios:` — an id beginning `:web:`
