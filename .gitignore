@@ -100,3 +100,21 @@ android.keystore
 # native sign-in and push silently do nothing. See docs/play-store.md.
 android/app/google-services.json
 
+# ── Store screenshots ──
+# `npm run shots:store -- --write` renders these from the LIVE tournament, so
+# they are a photograph of a moment rather than a build artifact: a set taken
+# today and a set taken next week differ by whatever the field did in between,
+# and neither is more correct. Regenerate them when a listing needs them.
+#
+# Untracked-but-not-ignored was the worst of the three options — every
+# `git status` on every machine showed `?? store/ios/`, and the first person to
+# `git add -A` commits eight megabytes of PNG. It also hid the real hazard:
+# both machines had a `store/ios` full of screenshots of a two-week-old UI,
+# with nothing to say which was older.
+#
+# `store/play-feature-graphic.png` stays TRACKED, and the difference is that it
+# is rendered from committed source — the mark and the two gradient stops in
+# `public/BC ICON-01.svg` — and needs Montserrat installed on the machine to
+# come out right. That one is reproducible; these are not.
+store/ios/
+store/play/
