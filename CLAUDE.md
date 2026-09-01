@@ -822,6 +822,21 @@ them. Two consequences:
 - These are live third-party calls against the real GHIN account. Fine for
   lookups, but don't loop them.
 
+**When a GHIN sync fails, open `/api/ghin?diagnose=1&ghin=<a linked number>`.**
+A batch sync reporting "N failed" means the login hop worked and every golfer
+read did not — the two hops fail in completely different ways and the count
+alone cannot tell you which. The probe reproduces both and reports what each
+one actually answered: statuses, the field the session token came out of, the
+response key names, and the upstream body when a hop errored. It returns no
+credential and no golfer data, so it is safe on the public endpoint. It needs a
+Vercel deploy but no app build, which is the point — the phone that hit the
+failure is running a bundle inside a binary and cannot be patched today.
+
+`fetchGolfer` tries `/golfers/{n}.json` and falls back to
+`/golfers/search.json?golfer_id=` — the same endpoint the name search uses — so
+one of the two moving is no longer a whole-batch outage. The fallback only runs
+when the first returns nothing, and a golfer's `via` field says which answered.
+
 ## Verifying UI changes
 
 Screenshots beat assertions for anything visual. The pattern that works here:
