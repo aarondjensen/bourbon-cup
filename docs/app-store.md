@@ -260,9 +260,16 @@ as `store-submission.md` §1, and for the same reason: a list that still says
 | 1. `GoogleService-Info.plist` | **In place** | On the build Mac at `ios/App/App/`, dated 16 Aug. `plutil` says `PROJECT_ID` = `the-bourbon-cup`, `BUNDLE_ID` = `com.thebourboncup.app`, `GOOGLE_APP_ID` = `1:957218531964:ios:07e2…` — an `:ios:` app, not the web one. Per-machine and gitignored, so this is a fact about that Mac, not about the repo. |
 | 2. Reversed client ID | **Agrees** | The file's `REVERSED_CLIENT_ID` and the scheme committed in `Info.plist` are the same string, `…957218531964-c6ru1h658nj6udpbbbfd756db6jf9hb3`. So the iOS app has not been re-registered since it was committed. |
 | 3. APNs key | **Uploaded** | Firebase → Cloud Messaging shows key `7UA9A9SR3K` under both Development and Production with Team ID `7RRL56R755`, which matches `DEVELOPMENT_TEAM` in `project.pbxproj`. Both slots with one Key ID is correct, not a double upload. |
-| 4. Sign in with Apple on the App ID | **Unverified** | Developer portal, and nothing in the repo can see it. Missing it fails SIGNING with an entitlement mismatch. |
-| 5. Push Notifications on the App ID | **Unverified** | Same. |
-| 6. Build on a Mac | **Not yet** | `~/dev/bourbon-cup` on the MacBook is current with `main` and `npm ci` has run. |
+| 4. Sign in with Apple on the App ID | **Enabled** | Checked in the developer portal, Identifiers → `com.thebourboncup.app`, 31 Aug 2026. Nothing in the repo can see this, so it is a fact with a date on it and no way to re-derive. Missing it fails SIGNING with an entitlement mismatch that never mentions Apple. |
+| 5. Push Notifications on the App ID | **Enabled** | Same page, same date. |
+| 6. Build on a Mac | **Not yet** | `~/dev/bourbon-cup` on the MacBook is current with `main` and `npm ci` has run. **This is the only item left in §5.** |
+
+While the Keys page was open, the two `.p8`s were seen side by side and the
+column that tells them apart is exactly as described below: `7UA9A9SR3K`
+("App APNs") reads **Team Scoped (All topics) · Sandbox & Production**, and
+`9K7J7J2VGT` ("Bourbon Cup Apple Sign In") reads a dash. Three more sign-in
+keys sit beside them for WBC, MNQ and SFGL, which is why the filename is not a
+safe way to pick one.
 
 The repo side of iOS is finished: the `ios/` audit on 31 Aug found only
 `UIRequiredDeviceCapabilities` still set to Capacitor's `armv7`, now `arm64`.
