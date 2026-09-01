@@ -171,9 +171,12 @@ export const HANDICAP_MODE_FULL = "full";
 //
 // `holeOptions` is the exception: the formats where that is genuinely still
 // open, listed as the concrete methods on offer, FIRST ONE BEING THE DEFAULT.
-// Two formats have it, and they offer the same pair in opposite orders — a
-// Shamble is normally the better ball and a 2-Man Agg is normally the sum,
-// but either can be played the other way.
+// Only the Shamble has it, and it is the only format here whose NAME does not
+// answer the question: everyone drives, the side picks a drive, and then each
+// man plays his own ball in — which leaves "and then whose ball counts?"
+// genuinely open. Every other format states its own per-hole rule, and asking
+// there is not a setting, it is an invitation to score the round as some
+// other format.
 //
 // `forms` is which of Match / Total / Points the format offers and
 // `formDefault` is where it opens. Points-per-hole is Team Best Ball's alone —
@@ -220,9 +223,15 @@ export const FORMATS = [
     // The id stays `team_total`, because it is written on round documents
     // back to 2016 and branched on by the engine; the legacy `"aggregate"`
     // alias the engine also accepts is where this name came from.
+    //
+    // NO `holeOptions`. It used to carry the pair, and offering it was the
+    // same bug the Double Dot fix was about, one format further along: an
+    // aggregate IS the sum of the side's two nets, exactly as a Best Ball IS
+    // the better of them, so "2-Man Agg or Best Ball?" asks the director to
+    // re-answer a question the format he just picked has already answered —
+    // and the wrong answer silently scores the round as the OTHER format.
     desc: "Combined team net per hole vs combined team net. Lower combined wins the hole.",
     hole: "Both partners' nets added together.",
-    holeOptions: [HOLE_SCORING_TEAM_TOTAL, HOLE_SCORING_BEST_BALL],
     unit: UNIT_STROKES, perSide: 2,
     forms: [SCORING_TYPE_MATCH, SCORING_TYPE_TOTAL], formDefault: SCORING_TYPE_MATCH,
     nassau: { front: 1, back: 1, overall: 2 },
@@ -552,11 +561,11 @@ export const resolveFormOfPlay = (formatId, stored) =>
 //   COUNTING — Team Best Ball. Best ball is a given; the open question is how
 //              many balls count, which the F9/B9 grid asks.
 //   CHOICE   — the format genuinely leaves it open, and `holeOptions` names the
-//              methods on offer. Two formats do: a Shamble is normally the
-//              better ball and a 2-Man Agg normally the sum, but either side
-//              can agree to play it the other way.
-//   FIXED    — the format's name already answers it. The form STATES the rule
-//              instead of asking.
+//              methods on offer. Only the Shamble does: it is the one format
+//              whose name stops at the drive, so whose ball counts coming in
+//              is still a question the group has to settle.
+//   FIXED    — the format's name already answers it, which is every other
+//              format. The form asks nothing and renders nothing.
 export const HOLE_RULE_COUNTING = "counting";
 export const HOLE_RULE_CHOICE = "choice";
 export const HOLE_RULE_FIXED = "fixed";

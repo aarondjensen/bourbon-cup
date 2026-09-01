@@ -1791,26 +1791,30 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
 
             {/* ══ HOLE SCORING ══════════════════════════════════════════
                 The first of the two scoring axes: how a side's single number
-                for a hole is arrived at. The FORMAT usually answers it outright
-                — a Four-Ball takes the better ball, a 2-Man Agg adds both —
-                so the section asks only where something is genuinely open, and
-                otherwise STATES the rule rather than leaving the director to
-                infer it. Three shapes, chosen by constants.holeRuleFor:
+                for a hole is arrived at. Almost every FORMAT answers it
+                outright — a 2-Man Best Ball takes the better ball, a 2-Man Agg
+                adds both — so the section asks only where something is
+                genuinely open, and is absent everywhere else. Three shapes,
+                chosen by constants.holeRuleFor:
 
                   • COUNTING (Team Best Ball) → the count grid below. Best ball
                     is a given; the open question is how many balls count.
-                  • CHOICE → the best-ball override, which throws the format's
-                    own per-hole method away and takes each side's best net
-                    ball instead.
-                  • FIXED → one line of prose, no control.
+                  • CHOICE (the Shamble, and only it) → the two methods as
+                    pills. Its name stops at the drive, so whose ball counts
+                    coming in is still open.
+                  • FIXED → nothing at all; the format's name is the answer.
 
                 The override used to be offered on every format but Team Best
                 Ball, which is how a Double Dot round came to be asked whether
                 it was a Best Ball round — a question its own name answers, and
                 whose "yes" silently discards the Hi/Lo dots and re-scores the
-                round in net strokes. Same class of bug as offering it on a
-                format that already sums the best N (which discarded the
-                counts); the fix is the same one, applied to all of them. */}
+                round in net strokes. 2-Man Agg was the last format still
+                asking it: an aggregate is the sum of the side's two nets the
+                way a Best Ball is the better of them, so the menu let a
+                director score a 2-Man Agg round as a Best Ball by answering a
+                question he had already answered by picking the format. Same
+                class of bug as offering it on a format that already sums the
+                best N (which discarded the counts). */}
             <RoundSectionHeading>
               HOLE SCORING
             </RoundSectionHeading>
