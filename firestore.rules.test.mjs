@@ -672,6 +672,90 @@ await check("a guest — no auth at all — gets none of it", () =>
 await check("a director still administers the demo like anywhere else", () =>
   assertSucceeds(setDoc(doc(aliceDb(), "bc_rounds/demo_r1"), { tournament_id: "bc_demo", par: 71 }, { merge: true })));
 
+// ══════════════════════════════════════════════════════════════════
+//  THE REVIEWER'S CODE
+// ══════════════════════════════════════════════════════════════════
+//
+// A second code that mints a membership stamped `demo_only`, confined by
+// canWriteEdition() to demo editions. It exists so the credential written
+// into a store form — quoted back on every future update review, and
+// therefore unrotatable — is not the one the sixteen say out loud.
+//
+// The point of every case below is the same: learning this code must not
+// be learning a way into the cup.
+await env.clearFirestore();
+await seed("bc_secrets/access", { code: "BC2026", demo_code: "DEMO" });
+await seed("bc_editions/bc_demo", { is_demo: true });
+await seed("bc_editions/bc_2026", { name: "The Bourbon Cup 2026" });
+
+await check("the tournament code still mints an ordinary membership", () =>
+  assertSucceeds(setDoc(doc(peteDb(), "bc_accounts/pete"), { uid: "pete", code: "BC2026" })));
+
+await check("...and that member writes the cup", () =>
+  assertSucceeds(setDoc(doc(peteDb(), "bc_hole_scores/s1"), { tournament_id: "bc_2026", v: 4 })));
+
+await check("the tournament code may NOT claim the demo stamp", async () => {
+  // Otherwise a player could confine themselves by accident, or a curious
+  // one could mint a stamped membership and probe what it reaches.
+  const carl = env.authenticatedContext("carl").firestore();
+  await assertFails(setDoc(doc(carl, "bc_accounts/carl"), { uid: "carl", code: "BC2026", demo_only: true }));
+});
+
+await check("the reviewer code is refused an ordinary membership", async () => {
+  // This is the failure lib/accounts retries past, and it has to fail:
+  // if it succeeded, the second code would be a second password.
+  const rev = env.authenticatedContext("reviewer").firestore();
+  await assertFails(setDoc(doc(rev, "bc_accounts/reviewer"), { uid: "reviewer", code: "DEMO" }));
+});
+
+await check("the reviewer code mints a stamped one", () =>
+  assertSucceeds(setDoc(doc(env.authenticatedContext("reviewer").firestore(), "bc_accounts/reviewer"),
+    { uid: "reviewer", code: "DEMO", demo_only: true })));
+
+await check("a stamped member writes the demo", () =>
+  assertSucceeds(setDoc(doc(env.authenticatedContext("reviewer").firestore(), "bc_hole_scores/d1"),
+    { tournament_id: "bc_demo", v: 4 })));
+
+await check("a stamped member CANNOT write the cup", () =>
+  assertFails(setDoc(doc(env.authenticatedContext("reviewer").firestore(), "bc_hole_scores/s2"),
+    { tournament_id: "bc_2026", v: 4 })));
+
+await check("a stamped member cannot carry a row out of the demo", async () => {
+  await seed("bc_hole_scores/d2", { tournament_id: "bc_demo", v: 4 });
+  await assertFails(setDoc(doc(env.authenticatedContext("reviewer").firestore(), "bc_hole_scores/d2"),
+    { tournament_id: "bc_2026", v: 5 }));
+});
+
+await check("a stamped member cannot claim a name in the cup", async () => {
+  await seed("bc_players/p_cup", { tournament_id: "bc_2026", name: "Ben T" });
+  await assertFails(setDoc(doc(env.authenticatedContext("reviewer").firestore(), "bc_players/p_cup"),
+    { auth_uid: "reviewer" }, { merge: true }));
+});
+
+await check("...but can claim one in the demo", async () => {
+  await seed("bc_players/p_demo", { tournament_id: "bc_demo", name: "Dave R" });
+  await assertSucceeds(setDoc(doc(env.authenticatedContext("reviewer").firestore(), "bc_players/p_demo"),
+    { auth_uid: "reviewer" }, { merge: true }));
+});
+
+await check("the reviewer code is still not a way to a crown", () =>
+  assertFails(setDoc(doc(env.authenticatedContext("rev2").firestore(), "bc_accounts/rev2"),
+    { uid: "rev2", code: "DEMO", demo_only: true, is_director: true })));
+
+await check("a wrong code is refused both ways round", async () => {
+  const nope = env.authenticatedContext("nope").firestore();
+  await assertFails(setDoc(doc(nope, "bc_accounts/nope"), { uid: "nope", code: "OPENSESAME" }));
+  await assertFails(setDoc(doc(nope, "bc_accounts/nope"), { uid: "nope", code: "OPENSESAME", demo_only: true }));
+});
+
+await check("no reviewer code configured means no second door", async () => {
+  // Fails CLOSED, unlike the tournament code, whose blank is the bootstrap.
+  await seed("bc_secrets/access", { code: "BC2026", demo_code: "" });
+  const late = env.authenticatedContext("late").firestore();
+  await assertFails(setDoc(doc(late, "bc_accounts/late"), { uid: "late", code: "", demo_only: true }));
+  await assertFails(setDoc(doc(late, "bc_accounts/late"), { uid: "late", code: "DEMO", demo_only: true }));
+});
+
 await env.cleanup();
 
 let failed = 0;

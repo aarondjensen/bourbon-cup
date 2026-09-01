@@ -220,8 +220,15 @@ service cloud.firestore {
     //
     // Order matters for that cost: editionOpen() is checked first so the
     // common case — an unlocked year — never pays for the isDirector() read.
+    // A demo-only membership (see demoAccessCode) is confined to demo
+    // editions by the same both-ends check a demo administrator gets, so a
+    // reviewer cannot take a document out of the demo or drag one into it.
+    // Asked LAST, so an ordinary member never pays for it: the common case
+    // short-circuits on the two clauses in front.
     function canWriteEdition() {
-      return isMember() && (editionOpen() || isDirector());
+      return isMember()
+        && (editionOpen() || isDirector())
+        && (!demoOnlyMember() || bothEndsDemo());
     }
 
     // ── ADMIN INSIDE A DEMO ────────────────────────────────────────
@@ -297,6 +304,46 @@ service cloud.firestore {
         : null;
     }
 
+    // ── The second code, and why it is not a second password ──────
+    // App Review and Play's reviewers need to get INSIDE the app, and the
+    // form on both stores wants a credential written down in a box that is
+    // then quoted back on every future update review. A tournament password
+    // in that box is a password that can never be rotated without breaking
+    // the next review, and one that sixteen men say out loud across a table.
+    //
+    // So there are two codes and they are NOT equals. The tournament's own
+    // code mints an ordinary membership. This one mints a membership stamped
+    // `demo_only`, and canWriteEdition() refuses that membership everywhere
+    // except a demo edition. Somebody who learns the reviewer code — from a
+    // store form, from a screenshot, from a leak — gets a sandbox.
+    //
+    // Absent means there is no second door, not an open one: demoCodeOK()
+    // fails closed on a missing or blank value, unlike accessCode(), whose
+    // blank IS the bootstrap.
+    function demoAccessCode() {
+      return exists(/databases/$(database)/documents/bc_secrets/access)
+        ? get(/databases/$(database)/documents/bc_secrets/access).data.get('demo_code', null)
+        : null;
+    }
+
+    function demoCodeOK() {
+      return demoAccessCode() != null
+        && demoAccessCode() is string
+        && demoAccessCode() != ''
+        && request.resource.data.get('code', null) is string
+        && request.resource.data.code.lower() == demoAccessCode().lower();
+    }
+
+    // Is the CALLER's membership one of the stamped ones? Read off the same
+    // bc_accounts document isMember() and isDirector() already touch, so
+    // within one evaluation it is billed once rather than three times.
+    function demoOnlyMember() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/bc_accounts/$(request.auth.uid))
+        && get(/databases/$(database)/documents/bc_accounts/$(request.auth.uid))
+             .data.get('demo_only', false) == true;
+    }
+
     // Compared without case, because this password's life is being said
     // out loud across a table and typed into a phone by somebody who did
     // not see it written down. A capital letter at the front — from the
@@ -354,8 +401,19 @@ service cloud.firestore {
     // from, since this rule requires one to already exist.
     match /bc_accounts/{uid} {
       allow read: if isDirector() || (isSignedIn() && request.auth.uid == uid);
-      allow create: if isSignedIn() && request.auth.uid == uid && codeOK()
-                    && !('is_director' in request.resource.data);
+      // Two doors. The tournament code mints an ordinary membership and may
+      // NOT claim the stamp; the reviewer code mints one that MUST carry it,
+      // which is what confines it to the demo. Neither may carry is_director.
+      //
+      // The client cannot tell which code it typed — bc_secrets is unreadable
+      // to it — so lib/accounts asks for an ordinary membership first and
+      // retries stamped if that is refused. Two writes for a reviewer, one
+      // for everybody else, and no secret leaves the rules.
+      allow create: if isSignedIn() && request.auth.uid == uid
+                    && !('is_director' in request.resource.data)
+                    && ((codeOK() && !('demo_only' in request.resource.data))
+                        || (demoCodeOK()
+                            && request.resource.data.get('demo_only', false) == true));
       allow update: if isDirector()
                     && request.auth.uid != uid
                     && request.resource.data.diff(resource.data).affectedKeys()

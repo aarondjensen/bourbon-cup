@@ -370,6 +370,36 @@ would not.
 - Set or change it in Admin → Event → Access, where **Show** reveals the
   current one. Saving it blank turns the requirement off. Directors only, read
   and write.
+
+**There is a second code, and it is not a second password.** Same card, same
+document, `demo_code` rather than `code`. It mints a membership stamped
+`demo_only`, and `canWriteEdition()` confines that membership to demo editions
+by the same both-ends check a demo administrator gets — so it can claim a name,
+score, post and administer inside `bc_demo`, and can do nothing at all to the
+cup.
+
+It exists because both stores want a credential typed into a form that is
+quoted back on **every future update review**. A tournament password in that
+box can never be rotated without breaking the next review, and it is a password
+sixteen men say out loud across a table. Learning the reviewer code from a
+store form, a screenshot or a leak buys a sandbox.
+
+Two things follow that are easy to get wrong:
+
+- **The client cannot tell which code was typed** — `bc_secrets` is unreadable
+  to every client, which is the whole point of it. So `joinWithCode` asks for an
+  ordinary membership first and retries stamped only if that is refused. A
+  player pays one write, a reviewer two, and neither learns anything about the
+  other's code. Asking stamped-first would confine every player the day the two
+  codes happened to match.
+- **A blank reviewer code fails CLOSED**, unlike the tournament code, whose
+  blank is the bootstrap that lets the first membership exist. No second code
+  means no second door.
+
+`setAccessCode` and `setDemoAccessCode` both MERGE. `db.create` replaces a
+document, and a director changing the tournament password has no reason to be
+thinking about the other field — replacing would delete it silently and the
+symptom would arrive weeks later as a review that cannot get in.
 - **Compared without case** — it gets read aloud and typed into a phone by
   somebody who never saw it written down. The stored value keeps whatever
   casing was typed, so Show still displays it as written; only the comparison

@@ -115,14 +115,38 @@ export async function joinWithCode(authUser, code) {
       if (e?.code === "permission-denied") return { ok: false, error: STALE_RULES };
       throw e;
     }
-    await db.create(ACCOUNTS_COL, {
+    // ── Two codes, and the client cannot tell them apart ──────────
+    // There is a second code for store reviewers (see demoAccessCode in
+    // firestore.rules). It mints a membership stamped `demo_only`, which
+    // the rules confine to demo editions — so somebody who reads it off a
+    // store form gets a sandbox rather than the cup.
+    //
+    // This file cannot know which one was typed: bc_secrets is unreadable
+    // to every client, which is the whole point of it. So it asks for an
+    // ordinary membership first and retries stamped only if that is
+    // refused. A player pays one write; a reviewer pays two, and neither
+    // learns anything about the other's code.
+    //
+    // The order matters. Asking stamped-first would hand every player a
+    // demo_only membership whenever both codes were somehow equal, and
+    // they would find out on the first tee.
+    const base = {
       id: authUser.uid,
       uid: authUser.uid,
       code: (code || "").trim(),
       email: authUser.email || null,
       joined_at: new Date().toISOString(),
-    });
-    return { ok: true };
+    };
+    try {
+      await db.create(ACCOUNTS_COL, base);
+      return { ok: true };
+    } catch (e) {
+      if (e?.code !== "permission-denied") throw e;
+      // Wrong tournament code — or the reviewer's, which is refused by the
+      // same rule for the same reason: it may not mint an ordinary one.
+      await db.create(ACCOUNTS_COL, { ...base, demo_only: true });
+      return { ok: true, demoOnly: true };
+    }
   } catch (e) {
     if (e?.code === "permission-denied") {
       return { ok: false, error: "That password isn't right." };
@@ -192,7 +216,7 @@ export const playerIsDirector = (memberships, player) =>
 export async function readAccessCode() {
   try {
     const doc = await db.getById(SECRETS_COL, ACCESS_DOC);
-    return { ok: true, code: doc?.code || null };
+    return { ok: true, code: doc?.code || null, demoCode: doc?.demo_code || null };
   } catch (e) {
     if (e?.code === "permission-denied") {
       return { ok: false, error: "Can't read it — the rules deployed to Firebase are older than this app. Re-publish firestore.rules." };
@@ -207,10 +231,29 @@ export async function readAccessCode() {
 // setup possible before any code exists.
 export async function setAccessCode(code) {
   try {
-    await db.create(SECRETS_COL, { id: ACCESS_DOC, code: (code || "").trim() || null });
+    // MERGED, not replaced. `db.create` overwrites the whole document, and
+    // this one now carries a second field — the reviewer code — that a
+    // director changing the tournament password has no reason to be
+    // thinking about. Replacing here would delete it silently, and the
+    // symptom would arrive weeks later as a store review that cannot get in.
+    await db.upsert(SECRETS_COL, { id: ACCESS_DOC, code: (code || "").trim() || null }, { loud: true });
     return { ok: true };
   } catch {
     return { ok: false, error: "Could not save the password." };
+  }
+}
+
+// ── The reviewer's code ─────────────────────────────────────────────
+// Same document, different field, and the same merge discipline in reverse.
+// Blank removes it, which closes that door entirely rather than opening it:
+// demoCodeOK() in the rules fails on a missing or empty value, unlike the
+// tournament code whose blank is the bootstrap.
+export async function setDemoAccessCode(code) {
+  try {
+    await db.upsert(SECRETS_COL, { id: ACCESS_DOC, demo_code: (code || "").trim() || null }, { loud: true });
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Could not save the reviewer code." };
   }
 }
 
