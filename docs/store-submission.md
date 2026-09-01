@@ -671,7 +671,30 @@ who has to guess:
 > posted it or by the tournament director from inside the app, and the director
 > can disable uploads entirely. Contact: aarondjensen@gmail.com
 
-**If it is ever refused anyway**, the fix that removes the argument rather than
-making it is a "Report photo" affordance in the lightbox that flags the
-document and notifies the director. It is a small change. WBC's submission doc
-reached the same fork and made the same call.
+**There is a Report button now, so two of those four are answered outright**
+rather than argued (31 Aug 2026). `src/lib/mediaReports.js` and the
+`bc_media_reports` rules block:
+
+- **Report** — in the photo's lightbox, for any signed-in member, on anybody's
+  photo but their own (they can already delete that one). One document per
+  person per photo, id derived so a second tap overwrites rather than
+  accumulating, and the director sees a count beside the uploader's name.
+- **Block** — still no, and the honest answer stays the one above: the sixteen
+  are invited, and a director removing a photo or a membership is the block.
+
+Reports are **director-only to read**, which is the one line in `firestore.rules`
+that is not `isOpen()`. In a group this size "who reported whose photo" is not
+a fact to serve to anybody who asks, so the reporter's own UI remembers locally
+instead. Creating one needs `isMember()` rather than `canWriteEdition()`, so a
+locked past year stays reportable — the lock exists to stop scores changing
+after a cup is over, and freezing the one action meant for flagging something
+that should not be there would be a strange reading of it.
+
+**This needs `firebase deploy --only firestore:rules`.** Until it lands the
+button is there and every report is refused by the default-deny — the write is
+`loud`, so it reports the failure rather than swallowing it, but it does not
+work. App first, rules second, as always.
+
+Play's IARC questionnaire asks this directly ("Does the app include the ability
+to report users or user-generated content?"). It is **yes** from the release
+that carries this, and **no** for any build already in a store.
