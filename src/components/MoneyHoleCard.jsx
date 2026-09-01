@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════════
-//  HolePotCard — one round's table for the designated hole
+//  MoneyHoleCard — one round's table for the money hole
 // ══════════════════════════════════════════════════════════════════
 //
 //  The fourth side game, and the smallest: one hole a round — Hole 18 here —
@@ -11,9 +11,10 @@
 //  A TIE SPLITS. That is the whole difference between this and a skin on the
 //  same hole: a skin pushes and carries, and this has nowhere to carry to, so
 //  two men on net 3 take half the round's share each. Which means the winning
-//  row here is often more than one row, and the card has to say so out loud
-//  rather than leaving somebody to count the highlights — hence the strip
-//  under the header.
+//  row here is often more than one row, and the card says so out loud in the
+//  strip under the header rather than leaving somebody to count highlights —
+//  but only once there is a card in. A strip that announced there were no
+//  scores yet was restating the rows below it.
 //
 //  A PLAYER WITH NO SCORE has not lost the hole, he has not played it. He
 //  ranks below every card that is in and prints a dash, because a blank in a
@@ -24,11 +25,11 @@
 
 import { BC, FONT, ALPHA, FS, ON_AMBER, teamColor } from "../theme";
 
-export function HolePotCard({ rows, hole, share }) {
+export function MoneyHoleCard({ rows, hole, share }) {
   if (rows.length === 0) {
     return (
       <div style={{ background: BC.card, borderRadius: 8, border: `1px solid ${BC.bdr}`, padding: "14px 12px", fontSize: FS.small, color: BC.t3, textAlign: "center", fontFamily: FONT }}>
-        Nobody is in the hole {hole} game yet.
+        Nobody is in the money hole yet.
       </div>
     );
   }
@@ -51,19 +52,24 @@ export function HolePotCard({ rows, hole, share }) {
       </div>
 
       {/* Who is taking it and for how much. A tie is the ordinary case here,
-          not an edge one, so the split is stated rather than implied by two
-          highlighted rows — and while anybody is still out on the course it
-          says that instead, because the answer can still change. */}
-      <div style={{ padding: "6px 12px", borderBottom: `1px solid ${BC.bdr}${ALPHA.hair}`, fontSize: FS.label, fontWeight: 700, color: winners.length ? BC.amberInk : BC.t3, letterSpacing: 0.4 }}>
-        {winners.length === 0
-          ? "Nobody has posted this hole yet."
-          : `${winners.map(w => w.name).join(" · ")} — net ${winners[0].net}`
+          not an edge one, so the split is stated rather than left to be
+          inferred from two highlighted rows.
+
+          NOTHING is drawn before the first card is in. The strip used to say
+          "nobody has posted this hole yet", which every row underneath it
+          already says in the one place somebody is looking — a header
+          restating the table it sits on is a line to read past, not a line
+          that says anything. */}
+      {winners.length > 0 && (
+        <div style={{ padding: "6px 12px", borderBottom: `1px solid ${BC.bdr}${ALPHA.hair}`, fontSize: FS.label, fontWeight: 700, color: BC.amberInk, letterSpacing: 0.4 }}>
+          {`${winners.map(w => w.name).join(" · ")} — net ${winners[0].net}`
             + (winners.length > 1 ? ` · ${winners.length}-way split` : "")
             + (share > 0 ? ` · $${(share / winners.length).toFixed(2)} each` : "")}
-        {out > 0 && winners.length > 0 && (
-          <span style={{ color: BC.t3, fontWeight: 600 }}>{` · ${out} still to play it`}</span>
-        )}
-      </div>
+          {out > 0 && (
+            <span style={{ color: BC.t3, fontWeight: 600 }}>{` · ${out} still to play it`}</span>
+          )}
+        </div>
+      )}
 
       {rows.map(r => (
         <div

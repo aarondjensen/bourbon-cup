@@ -308,11 +308,11 @@ export const buildDemo = () => {
     skins_buyin: 20,
     ctp_buyin: 10,
     lownet_buyin: 10,
-    // The hole pot, on the hole the cup actually plays it. Written rather
+    // The money hole, on the hole the cup actually plays it. Written rather
     // than left to default so a reviewer opening the tab finds a pot on it
     // and not an empty game.
-    hole_pot_buyin: 10,
-    hole_pot_hole: 18,
+    money_hole_buyin: 10,
+    money_hole_number: 18,
   }));
 
   FIELD.forEach((p) => {

@@ -5,7 +5,7 @@
 // Skins, closest-to-the-pin and low net were each worked out inline inside
 // BettingView. They live here so the derivation has one author, and so a
 // screen that lists the winners and a screen that counts them cannot come to
-// different totals. The hole pot — one designated hole a round, ties split —
+// different totals. The money hole — one designated hole a round, ties split —
 // was written here from the start for the same reason.
 //
 // Nothing here is stored. A skin is whoever is lowest on the hole, worked out
@@ -181,7 +181,7 @@ export const ctpPinTotal = ({ rounds, tRounds, courses, roundLocks }) => {
 };
 
 
-// ── The hole pot ──────────────────────────────────────────────────────
+// ── The money hole ────────────────────────────────────────────────────
 // One designated hole a round — Hole 18 here — with a pot of its own. Lowest
 // NET on that hole takes it, and unlike a skin a TIE DOES NOT PUSH: it splits.
 // Two men on net 3 with the field on 4 take half the round's share each.
@@ -189,10 +189,10 @@ export const ctpPinTotal = ({ rounds, tRounds, courses, roundLocks }) => {
 // So it is a one-hole skins game with ties allowed, which makes it the fourth
 // distinct answer this file holds to "what does equal-lowest mean":
 //
-//   skins     a tie pushes; the hole carries and the pot divides by skins WON.
-//   low net   a tie splits the ROUND's share; there is nowhere to carry to.
-//   CTP       there are no ties; one ball is nearer.
-//   hole pot  a tie splits, same as low net — one hole, one round, no carry.
+//   skins        a tie pushes; the hole carries and the pot divides by skins WON.
+//   low net      a tie splits the ROUND's share; there is nowhere to carry to.
+//   CTP          there are no ties; one ball is nearer.
+//   money hole   a tie splits, same as low net — one hole, one round, no carry.
 //
 // It is net off the same stroke maps the net skins use, so a man only gets a
 // shot here if the hole's stroke index says he does. That is the game the
@@ -203,17 +203,49 @@ export const ctpPinTotal = ({ rounds, tRounds, courses, roundLocks }) => {
 // hole is the tournament's choice and the tab is named after it, so a director
 // who moves the game to the ninth gets a tab called 9 rather than a tab called
 // 18 scoring the ninth.
-export const DEFAULT_POT_HOLE = 18;
+export const DEFAULT_MONEY_HOLE = 18;
 
 // A stored hole, made safe to index with. Anything absent, unparseable or off
 // the card falls back to the default rather than to hole zero — a bad number
 // here would silently score a hole nobody designated.
-export const potHole = (n) => {
+export const moneyHole = (n) => {
   const h = Math.round(Number(n));
-  return Number.isFinite(h) && h >= 1 && h <= HOLES ? h : DEFAULT_POT_HOLE;
+  return Number.isFinite(h) && h >= 1 && h <= HOLES ? h : DEFAULT_MONEY_HOLE;
 };
 
-// One round's table for the designated hole.
+// ── Why a par 3 is the wrong hole for it ──────────────────────────────
+// Every par 3 in the tournament already carries the CTP pot, and the two games
+// are decided by different things on the same green: CTP by the tee shot, this
+// by the score. Put them on one hole and the group walks off it into two
+// prompts, one asking how close and one that has just paid out — and a man who
+// stiffs it to three feet, misses the putt and loses the money hole to a par is
+// the argument that follows.
+//
+// It is a WARNING, not a refusal. The director sets the draw and might have a
+// reason; what they must not do is set it by accident, which is what happens
+// when the hole is chosen in February and the courses land in June. Which is
+// also why this is asked per ROUND: four rounds are four courses, and the
+// eighth is a par 3 on exactly one of them.
+//
+// A round with no course yet is `unknown` rather than fine. It cannot be
+// checked, and reading "no par 3s here" off a course that does not exist is
+// how a screen says something settled about a question still open — the same
+// distinction ctpPinTotal draws with `partial`.
+export const moneyHolePars = ({ rounds, hole, tRounds, courses, roundLocks }) => {
+  const h = moneyHole(hole) - 1;
+  const perRound = (rounds || []).map(r => {
+    const { course, pars } = roundSetup({ round: r, tRounds, courses, roundLocks });
+    return { round: r, course, par: course ? pars[h] : null };
+  });
+  return {
+    hole: moneyHole(hole),
+    perRound,
+    par3: perRound.filter(x => x.par === 3),
+    unknown: perRound.filter(x => x.par == null),
+  };
+};
+
+// One round's table for the money hole.
 //
 // A player with no score on the hole is not losing it, he has not played it —
 // so he ranks below everybody who has and prints a dash rather than a number
@@ -221,8 +253,8 @@ export const potHole = (n) => {
 // lets a screen say a hole is still provisional: unlike low net, where a
 // finished card is finished, a single hole can be taken by anyone still out
 // on the course.
-export const holePotRows = ({ round, hole, field, holeData, maps }) => {
-  const h = potHole(hole) - 1;
+export const moneyHoleRows = ({ round, hole, field, holeData, maps }) => {
+  const h = moneyHole(hole) - 1;
   const rows = field.map(p => {
     const raw = (holeData[`${p.player_id}_${round}`] || {})[h];
     const posted = raw != null && raw > 0;
@@ -250,11 +282,11 @@ export const holePotRows = ({ round, hole, field, holeData, maps }) => {
 // splits ITS share rather than paying out twice — so a tie cannot make one
 // hole worth more than a clean one. A round nobody has posted yields nothing
 // and is not counted as decided.
-export const holePotWins = ({ rounds, hole, field, holeData, mapsFor, pot }) => {
+export const moneyHoleWins = ({ rounds, hole, field, holeData, mapsFor, pot }) => {
   const list = rounds || [];
   const share = list.length ? (pot || 0) / list.length : 0;
   return list.flatMap(r => {
-    const winners = holePotRows({ round: r, hole, field, holeData, maps: mapsFor?.(r) }).filter(x => x.won);
-    return winners.map(w => ({ ...w, round: r, share: share / winners.length }));
+    const winners = moneyHoleRows({ round: r, hole, field, holeData, maps: mapsFor?.(r) }).filter(x => x.won);
+    return winners.map(w => ({ ...w, share: share / winners.length, round: r }));
   });
 };
