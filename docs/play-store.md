@@ -337,12 +337,13 @@ Choose **All or some functionality is restricted** and add two entries:
 > roster screen. This unlocks score entry, the photo library upload, side bets
 > and the Admin tabs.
 >
-> Please use the tournament named "DEMO — Testers". If the app opens on a
-> different year, tap "Switch tournament" on the roster screen (or ☰ →
-> Tournaments) and choose it. The other years are completed tournaments,
-> closed to new entries, so a name cannot be claimed in them — the app says
-> so on screen. Inside the demo tournament every signed-in account gets the
-> Admin tabs, so nothing needs granting; changes there affect only the demo.
+> First, switch to the tournament named "DEMO — Testers". The app opens on
+> the current cup, whose roster is already claimed by the men playing it. Tap
+> "Switch tournament" on the roster screen, or ☰ → Tournaments, and choose the
+> one labelled DEMO. Every other year is a completed tournament, closed to new
+> entries, so a name cannot be claimed in one — the app says so on screen.
+> Inside the demo tournament every signed-in account gets the Admin tabs, so
+> nothing needs granting; changes there affect only the demo.
 >
 > Username: `<none — no credentials are handed over>`
 > Password: `<none>`
