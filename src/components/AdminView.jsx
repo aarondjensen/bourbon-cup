@@ -488,6 +488,16 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
   // rotates the other.
   const [editDemoCode, setEditDemoCode] = useState("");
   const [savedDemoCode, setSavedDemoCode] = useState(null);
+  // Whether either Save has anything to save, which is what lights it gold.
+  // Neither field is ever seeded from the saved value, so BLANK IS THE
+  // RESTING STATE, not an edit — a card sitting untouched on a tournament
+  // that has a password must not look like it is holding one. Typing the
+  // code that is already stored is not a change either.
+  //
+  // The button stays live while it is unlit, because saving blank is still
+  // how a code is taken off, and that is now the only route to it.
+  const accessCodeDirty = editAccessCode.trim() !== "" && editAccessCode.trim() !== (savedAccessCode || "");
+  const demoCodeDirty = editDemoCode.trim() !== "" && editDemoCode.trim() !== (savedDemoCode || "");
   const loadAccessCode = useCallback(async () => {
     const res = await readAccessCode();
     setSavedAccessCode(res.ok ? res.code : null);
@@ -1092,6 +1102,10 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
   const TournCardStyle = { background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: "10px 12px", marginBottom: 10 };
   const TournHeadStyle = { fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1.5, textTransform: "uppercase" };
   const TournSaveStyle = { flexShrink: 0, fontSize: FS.label, fontWeight: 800, color: ON_AMBER, background: BC.amber, border: "none", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontFamily: FONT };
+  // The same button with the light off — a card whose fields say exactly what
+  // the documents already say has nothing gold about it. Same footprint, so
+  // the row does not move when it lights.
+  const TournSaveIdleStyle = { ...TournSaveStyle, color: BC.t3, background: BC.inp, border: `1px solid ${BC.bdr}`, padding: "5px 11px" };
 
   const InputStyle = { width: "100%", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.body, boxSizing: "border-box", outline: "none", fontFamily: FONT };
   const LabelStyle = { fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1, marginBottom: 4, display: "block" };
@@ -3291,11 +3305,14 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
           </div>
 
           {/* Access — the password that stands between "signed in with
-              Google" and "can change the tournament". The current code is
-              behind a tap rather than on screen: this panel gets shown to
-              other people often enough (handicaps, tee times) that leaving
-              a password sitting on it would undo the point of having one.
-              Saving an empty field takes the password off.
+              Google" and "can change the tournament". Both codes are shown
+              outright: only a director reaches this tab and only a director
+              may read the document, so a Show button withheld them from the
+              one person entitled to them.
+
+              Saving an empty field takes a code off, and that is the one
+              thing the card no longer says in words — the confirm dialog
+              does, before anything is written.
 
               HIDDEN for a demo administrator, and this is the one that would
               matter most: the password is project-wide, so reading it here
@@ -3328,39 +3345,37 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                   setAccessCodeError("");
                   notify(next ? "Password changed" : "Password removed", "success");
                 }}
-                style={TournSaveStyle}
+                style={accessCodeDirty ? TournSaveStyle : TournSaveIdleStyle}
               >Save</button>
             </div>
 
-            {/* The current one, read on mount and simply shown. Only a
-                director gets this far and only a director may read the
-                document, so there is nobody left for a Show button to
-                withhold it from. */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, minHeight: 28 }}>
+            {/* The current one, read on mount and simply shown, with the box
+                that replaces it beside it. Only a director gets this far and
+                only a director may read the document, so there is nobody left
+                for a Show button to withhold it from.
+
+                One row rather than two: the old and the new are one question
+                asked twice, and stacking them put a full-width box under a
+                value it is meant to be compared against. The box keeps the
+                narrower placeholder because the row already says Current —
+                "New" beside it is unambiguous and fits a phone. */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 28 }}>
               <span style={TournLabelStyle}>Current</span>
-              <span style={{ flex: 1, minWidth: 0, fontSize: accessCodeError ? FS.label : FS.body, fontWeight: accessCodeError ? 600 : 800, lineHeight: 1.35, color: accessCodeError ? BC.danger : (savedAccessCode ? BC.amberInk : BC.t3), wordBreak: "break-all" }}>
+              <span style={{ flex: "1 1 0", minWidth: 0, fontSize: accessCodeError ? FS.label : FS.body, fontWeight: accessCodeError ? 600 : 800, lineHeight: 1.35, color: accessCodeError ? BC.danger : (savedAccessCode ? BC.amberInk : BC.t3), wordBreak: "break-all" }}>
                 {accessCodeError || (accessCodeLoaded ? (savedAccessCode || "None") : "\u2026")}
               </span>
-            </div>
-
-            <input
-              value={editAccessCode}
-              onChange={e => setEditAccessCode(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
-              placeholder="New password"
-              autoCapitalize="none" autoCorrect="off" spellCheck={false}
-              // FS.lead, not FS.body: iOS Safari zooms the page when a
-              // focused input is under 16px and does not zoom back out on
-              // blur, leaving the director stranded at 2x on a form they
-              // have to finish. See the note on the scale in theme.js.
-              style={{ ...TournFieldStyle, width: "100%", flex: "none" }}
-            />
-            {/* All that survives of a four-sentence explanation. The other
-                three described what a password is; this one is the only thing
-                the field cannot show — that emptying it is how you remove it,
-                which nobody would try on a control called "New password". */}
-            <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 5, lineHeight: 1.4 }}>
-              Save blank to remove.
+              <input
+                value={editAccessCode}
+                onChange={e => setEditAccessCode(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                placeholder="New"
+                autoCapitalize="none" autoCorrect="off" spellCheck={false}
+                // FS.lead, not FS.body: iOS Safari zooms the page when a
+                // focused input is under 16px and does not zoom back out on
+                // blur, leaving the director stranded at 2x on a form they
+                // have to finish. See the note on the scale in theme.js.
+                style={{ ...TournFieldStyle, flex: "1 1 0" }}
+              />
             </div>
 
             {/* ── The store reviewers' code ──
@@ -3394,25 +3409,22 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                     setSavedDemoCode(next || null);
                     notify(next ? "Reviewer code changed" : "Reviewer code removed", "success");
                   }}
-                  style={TournSaveStyle}
+                  style={demoCodeDirty ? TournSaveStyle : TournSaveIdleStyle}
                 >Save</button>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, minHeight: 24 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 28 }}>
                 <span style={TournLabelStyle}>Current</span>
-                <span style={{ flex: 1, minWidth: 0, fontSize: FS.body, fontWeight: 800, color: savedDemoCode ? BC.amberInk : BC.t3, wordBreak: "break-all" }}>
+                <span style={{ flex: "1 1 0", minWidth: 0, fontSize: FS.body, fontWeight: 800, color: savedDemoCode ? BC.amberInk : BC.t3, wordBreak: "break-all" }}>
                   {accessCodeLoaded ? (savedDemoCode || "None") : "\u2026"}
                 </span>
-              </div>
-              <input
-                value={editDemoCode}
-                onChange={e => setEditDemoCode(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
-                placeholder="New reviewer code"
-                autoCapitalize="none" autoCorrect="off" spellCheck={false}
-                style={{ ...TournFieldStyle, width: "100%", flex: "none" }}
-              />
-              <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 5, lineHeight: 1.4 }}>
-                Opens demo tournaments only. Save blank to remove.
+                <input
+                  value={editDemoCode}
+                  onChange={e => setEditDemoCode(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                  placeholder="New"
+                  autoCapitalize="none" autoCorrect="off" spellCheck={false}
+                  style={{ ...TournFieldStyle, flex: "1 1 0" }}
+                />
               </div>
             </div>
           </div>
