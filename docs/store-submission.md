@@ -631,3 +631,47 @@ needs twelve people using the app for fourteen days, and the iOS build was not
 something they could use — so the clock had to start before the Mac work.
 Internal testing has no clock, so the two are independent now. `play-store.md`
 §7 is the reasoning, and §8 is the closed test kept as reference.
+
+---
+
+## 6. The photo gallery is user-generated content
+
+`src/components/PhotosView.jsx` lets players upload photos, and **Apple
+Guideline 1.2 asks four things of any app with user-generated content**: a
+filter for objectionable material, a way to report it, a way to block abusive
+users, and published contact information. Play's UGC policy is the same shape.
+
+Nothing in the app answers those four directly, and the honest position is that
+the threat model does not apply. Read off `firestore.rules` rather than
+remembered:
+
+- **Uploading requires a membership.** `allow create` on `bc_media` needs
+  `canWriteEdition()`, which needs `isMember()`, which needs the tournament
+  password — and `request.resource.data.uploadedBy == request.auth.uid`, so a
+  photo cannot be posted under somebody else's name. The uploaders are sixteen
+  men who have played the same tournament since 2016 and see each other every
+  July.
+- **A guest can look and cannot post.** Reads are `isOpen()`; a guest holds no
+  auth token at all, so every write rule refuses them before the UI is
+  consulted.
+- **Anything can be taken down, by two people.** `allow delete` is the
+  director, or the uploader of that photo. There is no orphaned content.
+- **The director can turn uploading off entirely** — `photoUploadsOn()`.
+
+**Say it in the Review Notes.** The argument usually works; "usually" is the
+problem when you want the submission to pass first time, and a reviewer who
+finds a photo gallery with no report button and no explanation is a reviewer
+who has to guess:
+
+> The photo gallery is not public user-generated content. Uploading requires
+> the private tournament password AND a claimed spot on a fixed sixteen-person
+> roster of people who have known each other personally since 2016. Guests can
+> view but cannot upload — an unauthenticated visitor holds no account and the
+> database refuses every write. Any photo can be removed by the person who
+> posted it or by the tournament director from inside the app, and the director
+> can disable uploads entirely. Contact: aarondjensen@gmail.com
+
+**If it is ever refused anyway**, the fix that removes the argument rather than
+making it is a "Report photo" affordance in the lightbox that flags the
+document and notifies the director. It is a small change. WBC's submission doc
+reached the same fork and made the same call.
