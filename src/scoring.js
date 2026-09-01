@@ -689,7 +689,7 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
       // best N net scores — not its single best ball. N is the round's
       // counting score for THAT hole (see constants: the front has counted
       // 5-6 of 8 and the back 6-7), which is why this can't be expressed as
-      // either a Four-Ball or a Team Total.
+      // either a Four-Ball or a 2-Man Agg.
       //
       // A hole scores as soon as N of a side's players are in. That is
       // deliberate on a format where the side is spread over four tee times:
@@ -723,7 +723,8 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
     } else if (holeFormat === "aggregate" || holeFormat === "team_total") {
       // Combined team net per hole — both teammates' net scores are summed
       // and compared as a single team score. The Bourbon Cup name for this is
-      // "Team Total"; "aggregate" is a legacy alias retained for any matches
+      // "2-Man Agg" (it read "Team Total" until the rename, and the format id
+      // still does); "aggregate" is a legacy alias retained for any matches
       // saved before the format was officially exposed in the FORMATS list.
       const aNets = teamA.map(pid => { const m = getAdjustedStrokeMap(pid); return netScore(getPlayerScores(pid)[h], h, m); });
       const bNets = teamB.map(pid => { const m = getAdjustedStrokeMap(pid); return netScore(getPlayerScores(pid)[h], h, m); });

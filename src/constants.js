@@ -172,7 +172,7 @@ export const HANDICAP_MODE_FULL = "full";
 // `holeOptions` is the exception: the formats where that is genuinely still
 // open, listed as the concrete methods on offer, FIRST ONE BEING THE DEFAULT.
 // Two formats have it, and they offer the same pair in opposite orders — a
-// Shamble is normally the better ball and a Team Total is normally the sum,
+// Shamble is normally the better ball and a 2-Man Agg is normally the sum,
 // but either can be played the other way.
 //
 // `forms` is which of Match / Total / Points the format offers and
@@ -215,10 +215,12 @@ export const FORMATS = [
     allowance: { pct: 90 }, handicapMode: HANDICAP_MODE_LOW_MAN,
   },
   {
-    id: "team_total", label: "Team Total",
-    // Also known as 2-Man Aggregate, which is the name the engine's legacy
-    // `"aggregate"` format id came from.
-    desc: "Also called 2-Man Aggregate. Combined team net per hole vs combined team net. Lower combined wins the hole.",
+    id: "team_total", label: "2-Man Agg",
+    // The label is the only thing that moved — it used to read "Team Total".
+    // The id stays `team_total`, because it is written on round documents
+    // back to 2016 and branched on by the engine; the legacy `"aggregate"`
+    // alias the engine also accepts is where this name came from.
+    desc: "Combined team net per hole vs combined team net. Lower combined wins the hole.",
     hole: "Both partners' nets added together.",
     holeOptions: [HOLE_SCORING_TEAM_TOTAL, HOLE_SCORING_BEST_BALL],
     unit: UNIT_STROKES, perSide: 2,
@@ -381,7 +383,7 @@ export const describeAllowance = (spec) => {
 
 // ── Counting scores (Team Best Ball) ──
 // Every other format in this app has a shape fixed by its name: a Four-Ball
-// takes the better of two, a Team Total adds both. Team Best Ball doesn't —
+// takes the better of two, a 2-Man Agg adds both. Team Best Ball doesn't —
 // it is this event's own format, and the thing that defines it is a NUMBER
 // the director sets: how many of the side's net scores count on a hole.
 //
@@ -551,7 +553,7 @@ export const resolveFormOfPlay = (formatId, stored) =>
 //              many balls count, which the F9/B9 grid asks.
 //   CHOICE   — the format genuinely leaves it open, and `holeOptions` names the
 //              methods on offer. Two formats do: a Shamble is normally the
-//              better ball and a Team Total normally the sum, but either side
+//              better ball and a 2-Man Agg normally the sum, but either side
 //              can agree to play it the other way.
 //   FIXED    — the format's name already answers it. The form STATES the rule
 //              instead of asking.
@@ -580,7 +582,7 @@ export const resolveHoleMethod = (formatId, stored) => {
 // What each named method is called on a pill, and what it does in a sentence.
 export const HOLE_METHOD_LABELS = {
   [HOLE_SCORING_BEST_BALL]: "Best Ball",
-  [HOLE_SCORING_TEAM_TOTAL]: "Team Total",
+  [HOLE_SCORING_TEAM_TOTAL]: "2-Man Agg",
 };
 export const HOLE_METHOD_DESCRIPTIONS = {
   [HOLE_SCORING_BEST_BALL]: "The better of the side's two net balls.",
