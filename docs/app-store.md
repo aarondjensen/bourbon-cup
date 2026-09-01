@@ -4,10 +4,17 @@ Read [`store-submission.md`](./store-submission.md) first — the reviewer
 account, the data disclosures, the age rating and the deploy prerequisites are
 there and are not repeated here.
 
-**The code is written. Nothing has been compiled.** Everything in §2 and §3
-below exists in this repo; none of it has been through a Swift compiler,
-because that needs a Mac and there isn't one in CI. Treat §5 as the real
-starting line.
+**It compiles, and it has been uploaded.** On 31 Aug 2026 the first archive of
+this app went to App Store Connect from the MacBook: `npm run ios:sync`, Xcode,
+Archive, Distribute → Upload, accepted. Everything in §2 and §3 had until then
+never been through a Swift compiler, and that sentence stood at the top of this
+file for months — it is worth keeping the shape of it as a reminder of what
+"the code is written" is worth on its own.
+
+What that upload does NOT establish is §2: every one of those four subsystems
+fails on a phone rather than at build time, so **§6 is now the real starting
+line.** An accepted binary means the project is configured, not that Google
+sign-in works inside a WKWebView.
 
 ---
 
@@ -262,7 +269,7 @@ as `store-submission.md` §1, and for the same reason: a list that still says
 | 3. APNs key | **Uploaded** | Firebase → Cloud Messaging shows key `7UA9A9SR3K` under both Development and Production with Team ID `7RRL56R755`, which matches `DEVELOPMENT_TEAM` in `project.pbxproj`. Both slots with one Key ID is correct, not a double upload. |
 | 4. Sign in with Apple on the App ID | **Enabled** | Checked in the developer portal, Identifiers → `com.thebourboncup.app`, 31 Aug 2026. Nothing in the repo can see this, so it is a fact with a date on it and no way to re-derive. Missing it fails SIGNING with an entitlement mismatch that never mentions Apple. |
 | 5. Push Notifications on the App ID | **Enabled** | Same page, same date. |
-| 6. Build on a Mac | **Not yet** | `~/dev/bourbon-cup` on the MacBook is current with `main` and `npm ci` has run. **This is the only item left in §5.** |
+| 6. Build on a Mac | **Done** — 31 Aug 2026 | Archived from `~/dev/bourbon-cup` and accepted by App Store Connect. **§5 is complete.** Export compliance needed no questionnaire, which is `ITSAppUsesNonExemptEncryption` in `Info.plist` doing its job. |
 
 While the Keys page was open, the two `.p8`s were seen side by side and the
 column that tells them apart is exactly as described below: `7UA9A9SR3K`
