@@ -539,7 +539,7 @@ Live scoring, the draw and a decade of history for one annual golf trip.
 
 ```
 The Bourbon Cup is the scoring app for one annual match-play golf tournament —
-two teams, four rounds, and a trophy that has changed hands since 2016.
+two teams, four rounds, and a trophy that has changed hands since 2015.
 
 Post scores hole by hole from the tee box. One phone in the group can enter for
 all four players, and the leaderboard updates on everybody else's while they
@@ -555,8 +555,8 @@ they always were on paper.
   both sides agreeing rather than by the app deciding.
 • TRIP INFO — when it is, where everybody is staying, and the scorecard for
   every course on the schedule.
-• DATA — every cup since 2016: career records, head-to-heads, partnerships,
-  and where each year turned.
+• DATA — ten cups of career records, head-to-heads, partnerships, and where
+  each year turned.
 • PHOTOS — the week, posted from the phone that took it.
 
 Want a look before you commit? Tap "Look around as a guest" on the sign-in
