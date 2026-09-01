@@ -541,3 +541,99 @@ Unlisted does **not** mean unreviewed — §3 applies in full.
 
 Steps 1–2 are the whole remaining cost. Nothing before step 3 is verifiable
 without a Mac.
+
+---
+
+## 10. The listing copy
+
+Apple's fields are not Play's, so `play-store.md` §6 does not transfer: Apple
+has a **subtitle** and **keywords** that Play has no equivalent of, a shorter
+name limit in practice, and a **promotional text** field that can be changed
+WITHOUT shipping a new build — which is the one to use for anything that might
+date, like "2026 draw is up".
+
+Character limits are hard limits; App Store Connect truncates silently in some
+fields and refuses in others.
+
+**App Name** (30)
+
+```
+The Bourbon Cup
+```
+
+**Subtitle** (30) — shown under the name, indexed for search.
+
+```
+Golf trip scoring and history
+```
+
+**Promotional text** (170) — editable any time, no review.
+
+```
+Live scoring, the draw, side games and every cup since 2016 — for one annual
+golf trip and the sixteen men who play it.
+```
+
+**Keywords** (100, comma-separated, no spaces after commas). Do NOT repeat
+words already in the name or subtitle; Apple indexes those anyway and the
+space is better spent.
+
+```
+matchplay,scorecard,handicap,skins,fourball,scramble,pinehurst,tee,foursome
+```
+
+**Description** (4000). Adapted from Play's, with the two changes Apple
+requires: no mention of another platform, and nothing that reads as a price or
+a beta.
+
+```
+The Bourbon Cup is the scoring app for one annual match-play golf tournament —
+two teams, four rounds, and a trophy that has changed hands since 2016.
+
+Post scores hole by hole from the tee box. One phone in the group can enter for
+all four players, and the leaderboard updates on everybody else's while they
+walk. Cards are signed and attested by the people who played the round, the way
+they always were on paper.
+
+LEADERBOARD — the cup total, live, from the first tee shot to the handshake on
+18.
+
+SCORING — your group's card, with strokes worked out for the format you are
+playing: fourball, scramble, Pinehurst, singles.
+
+MATCHES — the whole draw, every round, with tee times and playing groups.
+
+BETTING — skins, closest-to-the-pin and side bets between players, settled by
+both sides agreeing rather than by the app deciding. The app records what was
+agreed; it moves no money and has no purchases of any kind.
+
+TRIP INFO — when it is, where everybody is staying, and the scorecard for every
+course on the schedule.
+
+DATA — every cup since 2016: career records, head-to-heads, partnerships, and
+where each year turned.
+
+PHOTOS — the week, posted from the phone that took it.
+
+Want a look first? Tap "Look around as a guest" on the sign-in screen and the
+whole app opens read-only, with no account needed.
+
+Scoring requires an account and the tournament password, which the tournament
+director hands to the field.
+```
+
+**Support URL** — `https://thebourboncup.com/app`, which is a real page that
+answers the question a support URL is for. Apple requires the URL to resolve
+and to be about the app; a bare marketing site sometimes draws a query.
+
+**Marketing URL** — `https://thebourboncup.com`
+
+**Copyright** — `2026 Aaron Jensen`
+
+**Category** — Primary: Sports. Secondary: none. Not Games; a scorekeeper for a
+real tournament is not a game, and Games drags in the gambling questionnaire.
+
+The BETTING paragraph's second sentence is load-bearing and should not be
+trimmed for length: it is the same claim the age-rating questionnaire and the
+review notes make (§3.2 in `store-submission.md`), and having it in the public
+description too is what makes the three agree if anybody checks.
