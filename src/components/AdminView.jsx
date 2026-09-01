@@ -81,6 +81,7 @@ import {
   playerIsDirector,
   readAccessCode,
   setAccessCode,
+  setDemoAccessCode,
   unlinkPatch,
 } from "../lib/accounts";
 import {
@@ -479,9 +480,15 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
   const [savedAccessCode, setSavedAccessCode] = useState(null);
   const [accessCodeError, setAccessCodeError] = useState("");
   const [showAccessCode, setShowAccessCode] = useState(false);
+  // The reviewer's code. Same document, same Show, and deliberately the same
+  // card — two codes on two panels is how one of them gets forgotten when
+  // somebody rotates the other.
+  const [editDemoCode, setEditDemoCode] = useState("");
+  const [savedDemoCode, setSavedDemoCode] = useState(null);
   const loadAccessCode = useCallback(async () => {
     const res = await readAccessCode();
     setSavedAccessCode(res.ok ? res.code : null);
+    setSavedDemoCode(res.ok ? res.demoCode : null);
     setAccessCodeError(res.ok ? "" : res.error);
     setShowAccessCode(true);
   }, []);
@@ -3355,6 +3362,61 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                 which nobody would try on a control called "New password". */}
             <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 5, lineHeight: 1.4 }}>
               Save blank to remove.
+            </div>
+
+            {/* ── The store reviewers' code ──
+                A second code that is NOT a second password. It mints a
+                membership the rules confine to demo tournaments, so the one
+                written into App Store Connect and Play Console — quoted back
+                on every future update review, and therefore unrotatable —
+                cannot reach the cup. See demoAccessCode in firestore.rules.
+
+                In the same card as the password on purpose: two codes on two
+                panels is how one gets forgotten when somebody rotates the
+                other, and forgetting THIS one surfaces weeks later as a
+                review that cannot get in. */}
+            <div style={{ borderTop: `1px solid ${BC.bdr}`, marginTop: 14, paddingTop: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
+                <div style={{ ...TournLabelStyle, fontWeight: 800 }}>Reviewer code</div>
+                <button
+                  onClick={async () => {
+                    const next = editDemoCode.trim();
+                    const ok = await confirm({
+                      title: next ? "Change the reviewer code?" : "Remove the reviewer code?",
+                      message: next
+                        ? `App Store and Play reviewers will use "${next}".\n\nIt only opens demo tournaments — never the cup — so it is safe to write into a store form. Update both forms after saving, or the next review is refused at the password screen.`
+                        : "Store reviewers will have no way past the password screen, and a review will be refused.",
+                      destructive: !next,
+                    });
+                    if (!ok) return;
+                    const res = await setDemoAccessCode(next);
+                    if (!res.ok) { notify(res.error, "error"); return; }
+                    setEditDemoCode("");
+                    setSavedDemoCode(next || null);
+                    notify(next ? "Reviewer code changed" : "Reviewer code removed", "success");
+                  }}
+                  style={TournSaveStyle}
+                >Save</button>
+              </div>
+              {showAccessCode && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, minHeight: 24 }}>
+                  <span style={TournLabelStyle}>Current</span>
+                  <span style={{ flex: 1, minWidth: 0, fontSize: FS.body, fontWeight: 800, color: savedDemoCode ? BC.amberInk : BC.t3, wordBreak: "break-all" }}>
+                    {savedDemoCode || "None"}
+                  </span>
+                </div>
+              )}
+              <input
+                value={editDemoCode}
+                onChange={e => setEditDemoCode(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                placeholder="New reviewer code"
+                autoCapitalize="none" autoCorrect="off" spellCheck={false}
+                style={{ ...TournFieldStyle, width: "100%", flex: "none" }}
+              />
+              <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 5, lineHeight: 1.4 }}>
+                Opens demo tournaments only. Save blank to remove.
+              </div>
             </div>
           </div>
           )}
