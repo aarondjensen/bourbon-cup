@@ -83,6 +83,7 @@ import { FullScorecard } from "./components/FullScorecard";
 import { FieldCard } from "./components/FieldCard";
 import { BuyInEditor } from "./components/BuyIns";
 import { LowNetCard } from "./components/LowNetCard";
+import { HolePotCard } from "./components/HolePotCard";
 import { MatchSetup } from "./components/MatchSetup";
 import {
   GROUPS_COL, groupsDocId, encodeGroups, decodeGroups,
@@ -98,6 +99,7 @@ import {
 import { summarizeEdition, sameSummary } from "./lib/editionSummary";
 import {
   inField, roundSetup, strokeMapsFor, computeSkins, lowNetRows, ctpTags, ctpPinTotal,
+  potHole, holePotRows, holePotWins,
 } from "./lib/betting";
 import { SIDE_BETS_COL, sideBetId, buildSideBet, toggleSettled } from "./lib/sideBets";
 import {
@@ -2176,7 +2178,8 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // the skins card would mean opening one tab silently rearranged the other.
   const [ctpRound, setCtpRound] = useState(null);
   const [lowNetRound, setLowNetRound] = useState(null);
-  const [editBuyIns, setEditBuyIns] = useState(null); // "skins" | "ctp" | null
+  const [holePotRound, setHolePotRound] = useState(null);
+  const [editBuyIns, setEditBuyIns] = useState(null); // "skins" | "ctp" | "lownet" | "holepot" | null
 
   // ── Who is playing for what ──
   // A null list means the director has never tagged anybody, and that means
@@ -2194,6 +2197,13 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   const ctpPotValue = (buyIns?.ctpAmount || 0) > 0 ? ctpField.length * buyIns.ctpAmount : 0;
   const lowNetField = inField(roster, buyIns?.lowNetIn);
   const lowNetPotValue = (buyIns?.lowNetAmount || 0) > 0 ? lowNetField.length * buyIns.lowNetAmount : 0;
+  // ── The hole pot ──
+  // One designated hole a round, lowest net, ties SPLIT. `potHole` normalises
+  // the stored number, so an absent or nonsense value scores the eighteenth
+  // rather than the first — see lib/betting.
+  const holePotField = inField(roster, buyIns?.holePotIn);
+  const holePotPotValue = (buyIns?.holePotAmount || 0) > 0 ? holePotField.length * buyIns.holePotAmount : 0;
+  const holeNum = potHole(buyIns?.holePotHole);
 
   // The rounds that actually exist, not a hardcoded 1-4: a two-round
   // tournament used to get two empty tabs, and a fifth round never appeared
@@ -2307,9 +2317,35 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
     return acc;
   }, {})).sort((a, b) => b.count - a.count || (a.best ?? Infinity) - (b.best ?? Infinity));
 
+  // ── The hole pot ──
+  // Its own stroke maps, because its field is its own: a man in on skins and
+  // out of this one must not be handed a stroke allocation here, and the maps
+  // are what decide the net score the hole is won on.
+  const holePotMapsFor = (round) => strokeMapsFor({ round, field: holePotField, ...ctx });
+  const holePotFor = (round) =>
+    holePotRows({ round, hole: holeNum, field: holePotField, holeData, maps: holePotMapsFor(round) });
+
+  // The pot divides by the ROUNDS and a tied hole splits ITS share — the same
+  // shape as low net, and for the same reason: a tie must not make one hole
+  // pay out more in total than a clean one. See lib/betting.
+  const holePotRoundShare = roundList.length ? holePotPotValue / roundList.length : 0;
+  const holePotWinners = holePotWins({
+    rounds: roundList, hole: holeNum, field: holePotField, holeData,
+    mapsFor: holePotMapsFor, pot: holePotPotValue,
+  });
+  const holePotDecided = new Set(holePotWinners.map(w => w.round)).size;
+  const holePotLeaders = Object.values(holePotWinners.reduce((acc, w) => {
+    const e = acc[w.pid] || (acc[w.pid] = { pid: w.pid, count: 0, best: null, money: 0 });
+    e.count += 1;
+    e.money += w.share;
+    if (e.best == null || w.net < e.best) e.best = w.net;
+    return acc;
+  }, {})).sort((a, b) => b.count - a.count || (a.best ?? Infinity) - (b.best ?? Infinity));
+
   // ── The CTP tab ──
   const ctpShownRound = roundList.includes(ctpRound) ? ctpRound : defaultRound;
   const lowNetShownRound = roundList.includes(lowNetRound) ? lowNetRound : defaultRound;
+  const holePotShownRound = roundList.includes(holePotRound) ? holePotRound : defaultRound;
 
   // How many pins the WEEK holds, off the rounds' own scorecards — see
   // lib/betting. It is what the pot divides by, and it is also the answer to
@@ -2372,9 +2408,19 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
           every other tab's does, and so the skins list scrolls under it
           rather than taking it away. */}
       <StickyTop>
+        {/* `dividers` because five games do not fit the shape four did: the
+            unselected segments ran together into one grey strip with nothing
+            between them but the space between two words, and "Low Net 18"
+            reads as one label. A hairline between them is the delineation —
+            see SegmentedToggle, which hides the two beside the thumb.
+
+            The hole pot's tab is named after ITS HOLE rather than after the
+            game, because the game has no name anybody uses: the field calls
+            it eighteen. A director who moves it to the ninth gets a tab
+            called 9, which is still what the field will call it. */}
         <SegmentedToggle
-          options={[["skins", "Skins"], ["ctp", "CTP"], ["lownet", "Low Net"], ["sidebet", "Side Bet"]]}
-          value={activeTab} onChange={setActiveTab} letterSpacing={0.5}
+          options={[["skins", "Skins"], ["ctp", "CTP"], ["lownet", "Low Net"], ["holepot", String(holeNum)], ["sidebet", "Side Bet"]]}
+          value={activeTab} onChange={setActiveTab} letterSpacing={0.5} dividers snug
         />
       </StickyTop>
 
@@ -2382,7 +2428,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
           but a wager gets made on the first tee — often before anybody has
           put a round on the schedule — and telling somebody to come back
           later is how it ends up on a napkin instead. */}
-      {roundList.length === 0 && activeTab !== "sidebet" && empty("🥃", "No bets yet", "Skins and closest-to-the-pin open once the tournament has a round on the schedule.")}
+      {roundList.length === 0 && activeTab !== "sidebet" && empty("🥃", "No bets yet", "The scored games open once the tournament has a round on the schedule.")}
 
       {roundList.length > 0 && activeTab === "skins" && (
         <div>
@@ -2785,6 +2831,112 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
         </div>
       )}
 
+      {roundList.length > 0 && activeTab === "holepot" && (
+        <div>
+          {/* THE HOLE POT — counted from buy-ins, like CTP and low net.
+              Hidden from players until there is one; the director keeps it
+              either way, because this card is where the hole and the buy-in
+              are set. */}
+          {(holePotPotValue > 0 || user?.isDirector) && (
+            <div style={{ background: BC.card, borderRadius: 12, marginBottom: editBuyIns === "holepot" ? 0 : 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
+              <div style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>HOLE {holeNum} POT</div>
+                  <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold }}>${holePotPotValue.toFixed(2)}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: FS.label, color: BC.t3 }}>{holePotDecided} of {roundList.length} decided</div>
+                  <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>${holePotRoundShare.toFixed(2)} / round</div>
+                </div>
+              </div>
+
+              {/* WHICH HOLE, on the pot card rather than inside the buy-in
+                  panel: it is the one thing about this game a player might
+                  want to check without opening anything, and it is what the
+                  tab above is named after. A select rather than a number
+                  field — there are eighteen answers and a typo would move the
+                  game rather than be refused. */}
+              {user?.isDirector && (
+                <label style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderTop: `1px solid ${BC.bdr}` }}>
+                  <span style={{ flex: 1, fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.6 }}>THE HOLE</span>
+                  <select
+                    value={holeNum}
+                    onChange={e => onUpdateBuyIns({ hole_pot_hole: Number(e.target.value) })}
+                    style={{ background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, color: BC.t1, fontSize: FS.small, fontWeight: 700, padding: "4px 6px", fontFamily: FONT }}
+                  >
+                    {Array.from({ length: HOLE_COUNT }, (_, i) => i + 1).map(h => (
+                      <option key={h} value={h}>Hole {h}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {user?.isDirector && (
+                <button
+                  type="button"
+                  aria-expanded={editBuyIns === "holepot"}
+                  onClick={() => setEditBuyIns(v => (v === "holepot" ? null : "holepot"))}
+                  style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "8px 14px", borderTop: `1px solid ${BC.bdr}`, width: "100%", background: "transparent", borderLeft: "none", borderRight: "none", borderBottom: "none", fontFamily: FONT }}
+                >
+                  <span style={{ flex: 1, fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.6, textAlign: "left" }}>
+                    {holePotField.length} IN{(buyIns?.holePotAmount || 0) > 0 ? ` \u00b7 $${buyIns.holePotAmount} EACH` : ""}
+                  </span>
+                  <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.amberInk, letterSpacing: 0.6 }}>
+                    BUY-INS {editBuyIns === "holepot" ? "\u25be" : "\u25b8"}
+                  </span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {user?.isDirector && editBuyIns === "holepot" && (
+            <BuyInEditor
+              players={realPlayers(tPlayers)}
+              amount={buyIns?.holePotAmount || 0}
+              ids={buyIns?.holePotIn ?? null}
+              onChange={patch => onUpdateBuyIns(
+                "amount" in patch ? { hole_pot_buyin: patch.amount } : { hole_pot_in: patch.ids }
+              )}
+            />
+          )}
+
+          {/* HOLE POT LEADERS — holes won, then the best net among equals.
+              A man who has halved two of them shows two, because a split is a
+              win here rather than a push. */}
+          {holePotLeaders.length > 0 && (
+            <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 12, overflow: "hidden" }}>
+              <div style={{ padding: "8px 14px", borderBottom: `1px solid ${BC.bdr}`, fontSize: FS.label, fontWeight: 700, color: BC.gold, letterSpacing: 1 }}>HOLE {holeNum} LEADERS</div>
+              {holePotLeaders.map(({ pid, count, money }) => {
+                const p = tPlayers.find(t => t.player_id === pid);
+                const team = p ? teams[p.team] : null;
+                return (
+                  <div key={pid} style={{ display: "flex", alignItems: "center", padding: "8px 14px", borderBottom: `1px solid ${BC.bdr}${ALPHA.hair}`, gap: 8 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
+                    <span style={{ flex: 1, minWidth: 0, fontSize: FS.body, fontWeight: 600, color: BC.t1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p?.name || pid}</span>
+                    <span style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>{count} hole{count !== 1 ? "s" : ""}</span>
+                    <span style={{ fontSize: FS.small, color: BC.t3 }}>${money.toFixed(2)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <SegmentedToggle
+            variant="pills"
+            style={{ marginBottom: 8 }}
+            options={roundList.map(r => [r, `Rd ${r}`])}
+            value={holePotShownRound}
+            onChange={setHolePotRound}
+          />
+
+          <HolePotCard
+            rows={holePotFor(holePotShownRound)}
+            hole={holeNum}
+            share={holePotRoundShare}
+          />
+        </div>
+      )}
+
       {activeTab === "sidebet" && (
         <SideBets
           players={roster}
@@ -3076,7 +3228,7 @@ export default function App() {
   // everybody, which is what every tournament played before this existed was.
   // An empty array is a different answer (nobody), so the two must not be
   // collapsed. See components/BuyIns.
-  const [buyIns, setBuyIns] = useState({ skinsAmount: 0, skinsIn: null, ctpAmount: 0, ctpIn: null, lowNetAmount: 0, lowNetIn: null });
+  const [buyIns, setBuyIns] = useState({ skinsAmount: 0, skinsIn: null, ctpAmount: 0, ctpIn: null, lowNetAmount: 0, lowNetIn: null, holePotAmount: 0, holePotIn: null, holePotHole: null });
   // Player-to-player wagers the app records but does not run. One document
   // per bet; see lib/sideBets for why nothing here scores or settles them.
   const [sideBets, setSideBets] = useState([]);
@@ -3731,6 +3883,12 @@ export default function App() {
         ctpIn: Array.isArray(s?.ctp_in) ? s.ctp_in : null,
         lowNetAmount: s?.lownet_buyin || 0,
         lowNetIn: Array.isArray(s?.lownet_in) ? s.lownet_in : null,
+        holePotAmount: s?.hole_pot_buyin || 0,
+        holePotIn: Array.isArray(s?.hole_pot_in) ? s.hole_pot_in : null,
+        // WHICH hole the pot is on. Left raw and normalised where it is read
+        // (lib/betting's potHole), so a tournament that has never opened the
+        // panel reads as the default 18 rather than being written one.
+        holePotHole: s?.hole_pot_hole ?? null,
       });
     }));
     // The edition index. Subscribed rather than fetched once because it now
@@ -4544,6 +4702,9 @@ export default function App() {
       ...("ctp_in" in patch ? { ctpIn: patch.ctp_in } : {}),
       ...("lownet_buyin" in patch ? { lowNetAmount: patch.lownet_buyin } : {}),
       ...("lownet_in" in patch ? { lowNetIn: patch.lownet_in } : {}),
+      ...("hole_pot_buyin" in patch ? { holePotAmount: patch.hole_pot_buyin } : {}),
+      ...("hole_pot_in" in patch ? { holePotIn: patch.hole_pot_in } : {}),
+      ...("hole_pot_hole" in patch ? { holePotHole: patch.hole_pot_hole } : {}),
     }));
     await db.upsert("bc_tournament_settings", { id: editionDocId("bc_settings_main"), tournament_id: TOURNAMENT_ID, ...patch });
   }, []);
