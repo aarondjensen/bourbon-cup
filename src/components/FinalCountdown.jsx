@@ -41,11 +41,19 @@
 //
 //  WHAT IT IS HANDED
 //  -----------------
-//  The CONCEALED hole data — the same map the scoreboard gets, cut off
-//  at the reveal. That is deliberate and it is what makes this screen
-//  safe to write casually: hole `through - 1` is the last one that
-//  exists, so there is no hole after it to leak, and no discipline
-//  required of the layout below to avoid drawing one.
+//  `countdownHoleData` — the round cut off at the reveal (see lib/reveal).
+//  That is deliberate and it is what makes this screen safe to write
+//  casually: hole `through - 1` is the last one that exists, so there is
+//  no hole after it to leak, and no discipline required of the layout
+//  below to avoid drawing one.
+//
+//  It is NOT what the scoreboard gets. The board is handed the same round
+//  with nothing in it at all and holds there until the eighteenth hole is
+//  turned over — the reveal happens here, on one screen, rather than on
+//  this one and on sixteen phones a half-second sooner. So the cup bar
+//  across the top, the trophy line and the match state below are all
+//  scored off this map, and they are the only place in the app any of it
+//  is visible while the countdown is running.
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { BC, FONT, ALPHA, teamColor } from "../theme";
@@ -178,10 +186,12 @@ function SideColumn({ tid, teamName, score, balls, revealed, won }) {
 // ══════════════════════════════════════════════════════════════════
 //  FinalCountdown
 // ══════════════════════════════════════════════════════════════════
-//  `result` is scored off the CONCEALED hole data, so `holes[through - 1]`
-//  is the last one with anything in it. `totals` / `toWin` / `clincher`
-//  are the cup as the scoreboard has it — revealed points only — which is
-//  what makes the bar across the top move as the holes come out.
+//  `result` is scored off `countdownHoleData`, so `holes[through - 1]` is
+//  the last one with anything in it. `totals` / `toWin` / `clincher` are
+//  the cup counted off that same pass — every point revealed so far,
+//  including this round's — which is what makes the bar across the top
+//  move as the holes come out. The scoreboard's own cup bar does not; see
+//  the note above.
 export function FinalCountdown({
   match, result, getScore, holePars, holeHcps, tPlayers, teams, courseName, formatLabel,
   through, totals, toWin, clincher, canAdvance, onAdvance, onClose,
