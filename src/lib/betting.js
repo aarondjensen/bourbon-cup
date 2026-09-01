@@ -1,17 +1,18 @@
 // ══════════════════════════════════════════════════════════════════
-//  betting — the three side games the app actually scores.
+//  betting — the four side games the app actually scores.
 // ══════════════════════════════════════════════════════════════════
 //
 // Skins, closest-to-the-pin and low net were each worked out inline inside
 // BettingView. They live here so the derivation has one author, and so a
 // screen that lists the winners and a screen that counts them cannot come to
-// different totals.
+// different totals. The hole pot — one designated hole a round, ties split —
+// was written here from the start for the same reason.
 //
 // Nothing here is stored. A skin is whoever is lowest on the hole, worked out
 // from the cards every time it is asked for — see the note over onSetCtp in
 // App about why there is no onSetSkin.
 //
-// The fourth Betting tab is not in this file and never will be: a side bet is
+// The one Betting tab that is not in this file and never will be is Side Bet:
 // a wager between two players on terms the app cannot read, so it is recorded
 // rather than derived. See lib/sideBets.
 //
@@ -179,3 +180,81 @@ export const ctpPinTotal = ({ rounds, tRounds, courses, roundLocks }) => {
   };
 };
 
+
+// ── The hole pot ──────────────────────────────────────────────────────
+// One designated hole a round — Hole 18 here — with a pot of its own. Lowest
+// NET on that hole takes it, and unlike a skin a TIE DOES NOT PUSH: it splits.
+// Two men on net 3 with the field on 4 take half the round's share each.
+//
+// So it is a one-hole skins game with ties allowed, which makes it the fourth
+// distinct answer this file holds to "what does equal-lowest mean":
+//
+//   skins     a tie pushes; the hole carries and the pot divides by skins WON.
+//   low net   a tie splits the ROUND's share; there is nowhere to carry to.
+//   CTP       there are no ties; one ball is nearer.
+//   hole pot  a tie splits, same as low net — one hole, one round, no carry.
+//
+// It is net off the same stroke maps the net skins use, so a man only gets a
+// shot here if the hole's stroke index says he does. That is the game the
+// field is playing; deriving it any other way would put a different winner on
+// this tab than the card in somebody's pocket.
+//
+// WHICH hole is a stored number, one to eighteen, not the constant 18. The
+// hole is the tournament's choice and the tab is named after it, so a director
+// who moves the game to the ninth gets a tab called 9 rather than a tab called
+// 18 scoring the ninth.
+export const DEFAULT_POT_HOLE = 18;
+
+// A stored hole, made safe to index with. Anything absent, unparseable or off
+// the card falls back to the default rather than to hole zero — a bad number
+// here would silently score a hole nobody designated.
+export const potHole = (n) => {
+  const h = Math.round(Number(n));
+  return Number.isFinite(h) && h >= 1 && h <= HOLES ? h : DEFAULT_POT_HOLE;
+};
+
+// One round's table for the designated hole.
+//
+// A player with no score on the hole is not losing it, he has not played it —
+// so he ranks below everybody who has and prints a dash rather than a number
+// somebody could be beaten by. `posted` counts the cards in, which is what
+// lets a screen say a hole is still provisional: unlike low net, where a
+// finished card is finished, a single hole can be taken by anyone still out
+// on the course.
+export const holePotRows = ({ round, hole, field, holeData, maps }) => {
+  const h = potHole(hole) - 1;
+  const rows = field.map(p => {
+    const raw = (holeData[`${p.player_id}_${round}`] || {})[h];
+    const posted = raw != null && raw > 0;
+    const strokes = maps?.[p.player_id]?.[h] || 0;
+    return {
+      pid: p.player_id, name: p.name, team: p.team,
+      posted, strokes,
+      gross: posted ? raw : null,
+      net: posted ? raw - strokes : null,
+    };
+  });
+  const inPlay = rows.filter(r => r.posted);
+  const best = inPlay.length ? Math.min(...inPlay.map(r => r.net)) : null;
+  rows.forEach(r => { r.won = r.posted && r.net === best; });
+  rows.sort((a, b) =>
+    (b.posted ? 1 : 0) - (a.posted ? 1 : 0)
+    || (a.posted ? a.net - b.net || a.gross - b.gross : 0)
+    || String(a.name).localeCompare(String(b.name)));
+  return rows;
+};
+
+// Every round's winners, with what each one is owed.
+//
+// The pot divides by the ROUNDS, exactly as low net's does, and a tied round
+// splits ITS share rather than paying out twice — so a tie cannot make one
+// hole worth more than a clean one. A round nobody has posted yields nothing
+// and is not counted as decided.
+export const holePotWins = ({ rounds, hole, field, holeData, mapsFor, pot }) => {
+  const list = rounds || [];
+  const share = list.length ? (pot || 0) / list.length : 0;
+  return list.flatMap(r => {
+    const winners = holePotRows({ round: r, hole, field, holeData, maps: mapsFor?.(r) }).filter(x => x.won);
+    return winners.map(w => ({ ...w, round: r, share: share / winners.length }));
+  });
+};

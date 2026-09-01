@@ -11,6 +11,7 @@
 //    • Toast           — the transient "slides down from the top" toast.
 //    • ScoreButtonRow  — the tappable par-relative score entry row.
 
+import { Fragment } from "react";
 import { createPortal } from "react-dom";
 import { BC, FONT, ON_ACCENT, BROWN, HOLE_BANNER, SHADOW, ALPHA, dimHex, teamColor, FS, segThumb, segTrack, R } from "../theme";
 
@@ -62,13 +63,34 @@ export function SegRule({ compact = false }) {
 // width: "Players" and "Matches" are the longest labels on that bar and were
 // there the whole time. The ceiling to watch is a SIXTH tab, or a label
 // longer than seven characters — not this one.
+// `snug` sizes each segment to its OWN label instead of making all of them
+// equal. `flex: 1` is `1 1 0%`, so every button is the same width whatever it
+// says, and a label wider than its share WRAPS — which is what a five-tab
+// Betting bar does to "Low Net" and "Side Bet" on a 320pt phone. Growing from
+// a content basis instead lays the same five out on one line with room to
+// spare, at the cost of a thumb whose width follows its word. That is the
+// trade to make on a bar of NAMES; a two-way mode switch stays equal, because
+// there the two halves are one control and a lopsided one reads as broken.
+//
+// This is not the `fit` prop the Admin bar used to carry. That one dropped a
+// type rung and ellipsised, which is why the note above says to shorten the
+// label instead. Nothing here shrinks or truncates any text.
+//
+// `dividers` puts a hairline between adjacent segments, and is for a bar with
+// enough tabs on it that the unselected ones run together into one grey strip.
+// It is off by default: on a two- or three-way toggle the thumb is delineation
+// enough, and a rule between two options reads as a fence rather than a seam.
+// The rules beside the thumb are drawn but hidden — a hairline touching a
+// raised segment reads as an edge ON it, and holding the space keeps the
+// labels from shifting sideways when the selection moves.
+//
 // `dense` is the 30px build, sized to stand level with the 30px switches in
 // NotificationSettings — My Account puts a theme pill and three of those on
 // one screen, and a control eight pixels taller than its neighbours reads as
 // more important than they are rather than as the same kind of thing. It is
 // the padding that shrinks, never the type: FS.small stays, so the labels are
 // as legible as anywhere else in the app.
-export function SegmentedToggle({ options, value, onChange, variant = "segmented", letterSpacing, dense = false, style }) {
+export function SegmentedToggle({ options, value, onChange, variant = "segmented", letterSpacing, dense = false, dividers = false, snug = false, style }) {
   const tracked = variant === "segmented";
   // The track is the sunken one so its thumb has something to be raised out
   // of. Free-standing pills get the same recess per button instead.
@@ -76,24 +98,34 @@ export function SegmentedToggle({ options, value, onChange, variant = "segmented
   const btn = (on) => (tracked
     ? segThumb(on)
     : { ...segThumb(on, { sunken: true }), borderRadius: R.md, border: `1px solid ${on ? "transparent" : BC.bdr}` });
+  const selected = options.findIndex(([k]) => value === k);
   return (
     <div style={{ display: "flex", ...track, ...style }}>
-      {options.map(([k, label]) => {
+      {options.map(([k, label], i) => {
         const on = value === k;
         return (
-          <button
-            key={k}
-            onClick={onChange ? () => onChange(k) : undefined}
-            style={{
-              flex: 1, padding: dense ? "5px 0" : tracked ? "8px 0" : "8px 4px",
-              fontSize: FS.small, fontWeight: 700, cursor: "pointer",
-              fontFamily: FONT, ...btn(on),
-              ...(letterSpacing != null ? { letterSpacing } : {}),
-            }}
-          >
-            {label}
-            {on && <SegRule />}
-          </button>
+          <Fragment key={k}>
+            {dividers && i > 0 && (
+              <span aria-hidden="true" style={{
+                alignSelf: "center", flexShrink: 0, width: 1,
+                height: dense ? 12 : 16, borderRadius: 1, background: BC.bdr,
+                opacity: selected === i || selected === i - 1 ? 0 : 1,
+              }} />
+            )}
+            <button
+              onClick={onChange ? () => onChange(k) : undefined}
+              style={{
+                flex: snug ? "1 1 auto" : 1,
+                padding: dense ? "5px 0" : tracked ? (snug ? "8px 6px" : "8px 0") : "8px 4px",
+                fontSize: FS.small, fontWeight: 700, cursor: "pointer",
+                fontFamily: FONT, ...btn(on),
+                ...(letterSpacing != null ? { letterSpacing } : {}),
+              }}
+            >
+              {label}
+              {on && <SegRule />}
+            </button>
+          </Fragment>
         );
       })}
     </div>
