@@ -54,7 +54,6 @@ import {
   formsFor,
   handicapModeFor,
   holeOptionsFor,
-  holePointsTotal,
   holeRuleFor,
   isPointsPerHole,
   parPointsDefaultFor,
@@ -273,7 +272,7 @@ const sameRoundMap = (a, b) => JSON.stringify(liveEntries(a)) === JSON.stringify
 const roundSettingsSignature = (r) => JSON.stringify([
   r.format, r.handicap_mode, r.date, r.tee_time, r.scoring_type, r.hole_scoring,
   r.nassau_front, r.nassau_back, r.nassau_overall, r.allowance, r.counting_scores,
-  r.hole_points, r.par_points, r.sealed,
+  r.hole_points, r.par_points, r.sealed, r.uniform_tee,
 ]);
 
 // The handicap allowance, normalized to the shape the round's FORMAT calls
@@ -403,7 +402,12 @@ const echoedSlice = (written, round, key, incomingSlice) =>
 // once because the header row, and every player row under it, have to agree —
 // they were built from the same template string in three places, which is how
 // the header and the rows drifted apart the last time a column moved.
-const ROUND_PLAYER_COLS = "1fr 30px 58px 30px 22px";
+// The name column is CAPPED rather than greedy. As `1fr` it swallowed every
+// spare pixel in the card, so "Dave R" sat alone at the left with the width of
+// a thumb between it and his index — the columns were a table only on the two
+// longest names in the field. minmax(0, …) still lets it give way first on a
+// narrow phone, so the cap costs nothing where there is no room to spare.
+const ROUND_PLAYER_COLS = "minmax(0, 140px) 34px 58px 32px 22px";
 
 // A rule and a name, nothing else. Each of these used to carry a sentence
 // underneath it — "How each side's number for a hole is arrived at." under a
@@ -690,6 +694,17 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
   // or a no, and the seeding that picks the opening answer happens once in
   // roundSealed rather than on every read.
   const [sealed, setSealed] = useState(false);
+  // Whether the whole field plays one tee. A property of the ROUND, stored on
+  // its document beside the format and the seal, because it is a decision
+  // about the day rather than a preference of whoever is holding the phone —
+  // a director who sets it on Saturday's round and hands the phone over has
+  // set it for everybody, and it survives a reload.
+  //
+  // It is a CONSTRAINT, not a shortcut: the field-wide row already assigned
+  // everyone in one tap. What this adds is the guarantee — with it on, the
+  // per-player tee cannot be reached at all, so a stray thumb on a name row
+  // cannot quietly put one man on the golds an hour before the draw.
+  const [uniformTee, setUniformTee] = useState(false);
   // ── Handicap-lock state ──
   // Read-only here: locking is automatic on the first score of a round (see
   // ensureRoundLock in App). These flags only gate the round form's editing.
@@ -791,6 +806,11 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
       // is never part of the signature — see roundSealedSeed.
       sealed: !!tr.sealed,
       sealed_seed: roundSealedSeed(fmt, tr.sealed, roundIsFinal),
+      // Off on a round that has never carried it, which is what every round
+      // written before the switch existed is: the per-player tee has always
+      // been reachable, and turning it off is not a change to make on a
+      // director's behalf.
+      uniform_tee: !!tr.uniform_tee,
       ch_overrides: hcpOverridesFromDb?.[editRound] || {},
       tee_assignments: teeAssignmentsFromDb?.[editRound] || {},
     };
@@ -826,10 +846,11 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
       hole_points: roundHolePoints(form, holePoints),
       par_points: roundParPoints(fmt, parPoints),
       sealed,
+      uniform_tee: uniformTee,
       ch_overrides: hcpOverrides[editRound] || {},
       tee_assignments: teeAssignments[editRound] || {},
     };
-  }, [storedRound, roundFormat, handicapMode, editRound, roundDate, roundTeeTime, nassau, scoringType, holeScoring, allowance, counting, holePoints, parPoints, sealed, hcpOverrides, teeAssignments]);
+  }, [storedRound, roundFormat, handicapMode, editRound, roundDate, roundTeeTime, nassau, scoringType, holeScoring, allowance, counting, holePoints, parPoints, sealed, uniformTee, hcpOverrides, teeAssignments]);
 
   const storedSettingsSig = roundSettingsSignature(storedRound);
   const hcpDocSig = JSON.stringify(hcpOverridesFromDb ?? null);
@@ -869,6 +890,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
     setHolePoints(storedRound.hole_points);
     setParPoints(storedRound.par_points);
     setSealed(storedRound.sealed_seed);
+    setUniformTee(storedRound.uniform_tee);
     setHandicapMode(prev => ({ ...prev, [editRound]: storedRound.handicap_mode }));
   }, [seed, seededRound, editRound, storedSettingsSig, storedRound]);
 
@@ -938,6 +960,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
         // the scoreboard and must never move because somebody edited a tee
         // time. See onSetReveal in App and lib/reveal.js.
         sealed: payload.sealed,
+        uniform_tee: payload.uniform_tee,
       });
       setAutoSave({ phase: "saved", round });
     } catch (err) {
@@ -2194,25 +2217,13 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                             holeField("front", "F9", "What one front-nine hole is worth"),
                             holeField("back", "B9", "What one back-nine hole is worth"),
                             <span key="tot" style={{ fontSize: FS.label, color: BC.t3, fontWeight: 600 }}>
-                              a hole · {holePointsTotal(hp)} on the round
+                              a hole
                             </span>,
                           ]
                         : isSingle
                           ? numField("overall", "Value")
                           : [["front", "F9"], ["back", "B9"], ["overall", "OVR"]].map(([k, lbl]) => numField(k, lbl))}
                     </div>
-                    {/* What the boxes above add up to. A Points round already
-                        prints its round total beside the fields; the pots did
-                        not, so the one number a director actually checks — what
-                        this round is worth to the cup — had to be added up by
-                        hand from two or three boxes. */}
-                    {!perHole && (
-                      <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5, marginTop: 5 }}>
-                        {isSingle
-                          ? `${nassau.overall || 0} on the round`
-                          : `${(nassau.front || 0) + (nassau.back || 0) + (nassau.overall || 0)} on the round`}
-                      </div>
-                    )}
                   </div>
                 </>
               );
@@ -2483,6 +2494,28 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                 // Each player gets the same CH-delta badge a single tee tap
                 // raises — a field-wide change moves everyone's strokes, which
                 // is exactly when seeing the movement matters most.
+                // The section's own segmented pill — the same thumb every
+                // toggle in the round form is drawn with (segThumb), a rung
+                // smaller because it rides on a column-header line.
+                const teePill = (active) => ({
+                  padding: "3px 10px 5px", fontSize: FS.micro, fontWeight: 700,
+                  cursor: roundIsFinal ? "not-allowed" : "pointer",
+                  ...segThumb(active, { compact: true }),
+                });
+                // What the field is mostly playing, and therefore what One tee
+                // adopts. The first tee on the card is the fallback: it is
+                // what an unassigned player is already treated as everywhere
+                // else on this screen (`teeOf` above).
+                const fieldTee = (() => {
+                  const counts = {};
+                  tPlayers.forEach(p => {
+                    const t = teeOf(p.player_id);
+                    if (t) counts[t] = (counts[t] || 0) + 1;
+                  });
+                  const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+                  return best ? best[0] : tees2h[0]?.name;
+                })();
+
                 const assignAllTees = (teeName) => {
                   if (roundIsFinal) return;
                   const newTee = tees2h.find(t => t.name === teeName);
@@ -2515,7 +2548,37 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                         which colour meant which tee before they could choose. */}
                     {tees2h.length > 0 && (
                       <div style={{ marginBottom: 10 }}>
-                        <div style={{ fontSize: FS.micro, color: BC.t3, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 5 }}>Everyone plays</div>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 5 }}>
+                          <div style={{ fontSize: FS.micro, color: BC.t3, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>Everyone plays</div>
+                          {/* ── One tee ──
+                              On, the tee below is the ONLY tee: every row's
+                              swatch stops being a control, so the field cannot
+                              drift a player at a time. Turning it on collapses
+                              the field onto whatever most of it is already
+                              playing — a switch called "one tee" that leaves
+                              three men on the golds would be a label, not a
+                              setting — and the CH deltas that lands are the
+                              same ones a field-wide tap raises, because it is
+                              the same move.
+                              Off is the default and nothing about a round
+                              changes as it goes off: the exceptions that were
+                              already there are still there. */}
+                          <div style={{ ...segTrack({ compact: true }), width: "fit-content" }}>
+                            <button
+                              onClick={() => { if (roundIsFinal) { warnRoundLocked(); return; } setUniformTee(false); }}
+                              title="Each player's tee can be set on their own row"
+                              style={teePill(!uniformTee)}>Any tee{!uniformTee && <SegRule compact />}</button>
+                            <button
+                              onClick={() => {
+                                if (roundIsFinal) { warnRoundLocked(); return; }
+                                setTeeRowOpen(null);
+                                assignAllTees(fieldTee);
+                                setUniformTee(true);
+                              }}
+                              title="The whole field plays one tee — individual rows are locked"
+                              style={teePill(uniformTee)}>One tee{uniformTee && <SegRule compact />}</button>
+                          </div>
+                        </div>
                         <div style={{ display: "flex", gap: 4 }}>
                           {tees2h.map((tee, ti) => {
                             // Lit only when the whole field is genuinely on this
@@ -2615,7 +2678,11 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                       <div key={p.player_id}>
                       <div style={{ display: "grid", gridTemplateColumns: ROUND_PLAYER_COLS, gap: 4, alignItems: "center", marginBottom: 3 }}>
                         <div style={{ fontSize: FS.small, color: playerNameColor(), fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
-                        <div title={hiOverridden ? `Index override (base ${p.handicap_index})` : undefined} style={{ fontSize: FS.label, color: hiOverridden ? BC.amberInk : BC.t3, fontWeight: hiOverridden ? 700 : 400, textAlign: "center" }}>{effHI}{hiOverridden ? "*" : ""}</div>
+                        {/* FS.small, the same as the name and the CH box
+                            beside it: the three read as one row of a table,
+                            and a 10px index next to a 12px name read as a
+                            footnote on it. */}
+                        <div title={hiOverridden ? `Index override (base ${p.handicap_index})` : undefined} style={{ fontSize: FS.small, color: hiOverridden ? BC.amberInk : BC.t3, fontWeight: hiOverridden ? 700 : 400, textAlign: "center" }}>{effHI}{hiOverridden ? "*" : ""}</div>
                         <input
                           type="number" step="1"
                           // readOnly (not disabled) when final so the tap still
@@ -2637,10 +2704,22 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                             almost always "whatever the field is playing". */}
                         {tees2.length > 0 ? (
                           <button
-                            onClick={() => setTeeRowOpen(teeOpen ? null : p.player_id)}
-                            title={`${currentTee2 || "No tee"} — tap to change`}
+                            // Under One tee this still takes the tap and still
+                            // says why nothing happened, rather than being
+                            // `disabled` — a dead swatch reads as a rendering
+                            // fault, and the answer ("the field is on one
+                            // tee") is one the director set and can undo two
+                            // rows up. Same reasoning as the locked-round
+                            // controls above.
+                            onClick={() => {
+                              if (uniformTee) { notify(`The whole field is on one tee — switch to Any tee to move ${p.name}`, "error"); return; }
+                              setTeeRowOpen(teeOpen ? null : p.player_id);
+                            }}
+                            title={uniformTee
+                              ? `${currentTee2 || "No tee"} — the whole field is on one tee`
+                              : `${currentTee2 || "No tee"} — tap to change`}
                             style={{
-                              background: "transparent", border: "none", padding: 0, cursor: "pointer",
+                              background: "transparent", border: "none", padding: 0, cursor: uniformTee ? "not-allowed" : "pointer",
                               display: "flex", alignItems: "center", justifyContent: "center", gap: 1,
                               opacity: roundIsFinal ? 0.55 : 1,
                             }}>
@@ -2648,14 +2727,20 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                               tee={tees2.find(t => t.name === currentTee2) || tees2[0]}
                               index={Math.max(0, tees2.findIndex(t => t.name === currentTee2))}
                               size={14} round active />
-                            <span style={{
-                              fontSize: FS.micro, lineHeight: 1,
-                              // Amber only when this player is genuinely off
-                              // whatever everyone else is on.
-                              color: offField ? BC.amberInk : BC.t3,
-                              transform: teeOpen ? "rotate(180deg)" : "none",
-                              transition: "transform 0.15s ease",
-                            }}>▾</span>
+                            {/* The chevron is the affordance, so it goes when
+                                the row is not a control — the swatch stays,
+                                because which tee this man is on is still the
+                                answer the column is there to give. */}
+                            {!uniformTee && (
+                              <span style={{
+                                fontSize: FS.micro, lineHeight: 1,
+                                // Amber only when this player is genuinely off
+                                // whatever everyone else is on.
+                                color: offField ? BC.amberInk : BC.t3,
+                                transform: teeOpen ? "rotate(180deg)" : "none",
+                                transition: "transform 0.15s ease",
+                              }}>▾</span>
+                            )}
                           </button>
                         ) : <div />}
                         {/* Standing override delta wins over the passing one a
@@ -2677,7 +2762,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                           whether it is for everyone or for one person — and it
                           carries the slope/rating, which is the whole reason
                           somebody is being moved off the field's tee. */}
-                      {teeOpen && tees2.length > 0 && (
+                      {teeOpen && !uniformTee && tees2.length > 0 && (
                         // Right-aligned and sized to its contents, so the
                         // options land under the tee column they came out of
                         // rather than stretching the full width of the card.
