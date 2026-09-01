@@ -37,6 +37,7 @@ import { Popup, ConfirmModal } from "./Popup";
 import { useConfirm } from "../lib/useConfirm";
 import { PHOTO_LIBRARY_URL } from "../constants";
 import { sortByTaken, canDelete, validateSource, uploadFailureMessage, UPLOAD_PHASE } from "../lib/media";
+import { canReport, readReported, rememberReported } from "../lib/mediaReports";
 import { savePhoto, saveMessage } from "../lib/mediaSave";
 
 // The same Card AccountView defines, for the same reason: this screen is a
@@ -152,7 +153,10 @@ function Tile({ item, onOpen }) {
 // The fetch needs BUCKET CORS to be configured for this origin. Without it the
 // fetch fails, `blob` stays null, and mediaSave falls back to opening the photo
 // in a tab — degraded, not broken, and it says so rather than claiming a save.
-function Lightbox({ item, items, onClose, onStep, onDelete, canRemove, busy, notify }) {
+function Lightbox({
+  item, items, onClose, onStep, onDelete, canRemove, busy, notify,
+  onReport, canFlag, reported, reportCount = 0,
+}) {
   const idx = items.findIndex(i => i.id === item.id);
   // The fetched bytes AND the url they came from, held together. Paging is
   // what makes that necessary: the previous photo's blob is still in state
@@ -201,7 +205,18 @@ function Lightbox({ item, items, onClose, onStep, onDelete, canRemove, busy, not
           <div style={{ fontSize: FS.body, color: BC.t1, marginBottom: 6 }}>{item.caption}</div>
         )}
         <div style={{ fontSize: FS.small, color: BC.t3, display: "flex", justifyContent: "space-between", gap: 10 }}>
-          <span>{item.uploadedByName || "—"}</span>
+          <span>
+            {item.uploadedByName || "—"}
+            {/* Only a director is subscribed to the reports, so this only ever
+                renders for one. It sits beside the uploader's name rather than
+                on the grid tile: a flag on a thumbnail is a public accusation
+                in a gallery sixteen people scroll. */}
+            {reportCount > 0 && (
+              <span style={{ marginLeft: 8, color: BC.danger, fontWeight: 800 }}>
+                ⚑ reported{reportCount > 1 ? ` ×${reportCount}` : ""}
+              </span>
+            )}
+          </span>
           <span>{items.length ? `${idx + 1} of ${items.length}` : ""}</span>
         </div>
         {/* Save leads and is the full-width one: everybody can do it, on
@@ -224,6 +239,27 @@ function Lightbox({ item, items, onClose, onStep, onDelete, canRemove, busy, not
             cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1,
           }}>
             {busy ? "Removing…" : "Remove photo"}
+          </button>
+        )}
+        {/* Quiet on purpose, and last. It is the rarest action in the app and
+            it should not compete with Save; a report button styled like the
+            other two invites a curious tap on a gallery of golf photos. Once
+            you have reported this one it says so instead of offering again —
+            reporting twice writes the same document, but a button that keeps
+            offering reads as one that did nothing. */}
+        {canFlag && (
+          <button
+            onClick={() => onReport(item)}
+            disabled={busy || reported}
+            style={{
+              width: "100%", marginTop: 8, padding: "8px 0", borderRadius: 10,
+              background: "none", border: "none", color: BC.t3,
+              fontSize: FS.small, fontWeight: 600, fontFamily: FONT,
+              textDecoration: reported ? "none" : "underline",
+              cursor: busy || reported ? "default" : "pointer",
+            }}
+          >
+            {reported ? "Reported — a director has been told" : "Report this photo"}
           </button>
         )}
       </div>
@@ -252,7 +288,7 @@ function ChevronButton({ side, onClick }) {
 // ── PhotosView ─────────────────────────────────────────────────────
 export function PhotosView({
   items, year, uid, isDirector, canPost, uploadsBlockedReason = "",
-  onUpload, onDelete, notify,
+  onUpload, onDelete, onReport, reportCounts, notify,
 }) {
   const [open, setOpen] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -262,6 +298,10 @@ export function PhotosView({
   // matters more than a spinner does.
   const [pending, setPending] = useState([]);
   const fileRef = useRef(null);
+  // Read once at mount rather than on every render: the reports collection is
+  // director-only, so this is the reporter's only way to know they already
+  // did. See lib/mediaReports for why the collection is not readable.
+  const [reported, setReported] = useState(() => readReported());
 
   // Object URLs are a manual allocation. Each is revoked as its upload
   // finishes, and this covers the other exit: navigating away mid-batch, which
@@ -413,6 +453,35 @@ export function PhotosView({
     }
   };
 
+  // ── Reporting somebody else's photo ──
+  // Confirmed, because it is a message about a person rather than about a
+  // file, and the dialog is where that gets said plainly. Not destructive
+  // styling: nothing is deleted, and a red button would suggest otherwise.
+  const report = async (item) => {
+    const ok = await confirm({
+      eyebrow: "Photos",
+      title: "Report this photo?",
+      message: [
+        "A director will be told, and can take it down.",
+        "",
+        "Nothing happens to the photo now, and whoever posted it is not told who reported it.",
+      ].join("\n"),
+      confirmLabel: "Report",
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await onReport(item);
+      setReported(rememberReported(item.id));
+      notify?.("Reported. A director will take a look.");
+    } catch (err) {
+      console.error("photo report failed:", err);
+      notify?.("Couldn't send that report.", "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div style={{ fontFamily: FONT }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12 }}>
@@ -528,6 +597,10 @@ export function PhotosView({
           canRemove={canDelete(open, { uid, isDirector })}
           onStep={step}
           onDelete={remove}
+          onReport={report}
+          canFlag={canReport(open, { uid })}
+          reported={reported.has(open.id)}
+          reportCount={reportCounts?.get(open.id) || 0}
           onClose={() => setOpen(null)}
           notify={notify}
         />

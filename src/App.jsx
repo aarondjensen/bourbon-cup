@@ -68,6 +68,7 @@ const AdminView = lazy(() =>
 // history is a static asset rather than ten Firestore subscriptions.
 const DataView = lazy(() => import("./components/DataView"));
 import { photoUploadsAllowed, uploadsDisabledReason, CONFIG_COL, PHOTOS_CONFIG_ID } from "./lib/media";
+import { REPORTS_COL, buildReport, reportsByMedia } from "./lib/mediaReports";
 import { initForegroundNotifications, syncAppBadge } from "./lib/notifications";
 import { tapFeedback, commitFeedback, applyNativeChrome } from "./lib/platform";
 import { SegmentedToggle, SegRule, StickyTop, Banner, PlayerName, Toast, HoleNavigator, ScoreButtonRow } from "./components/ui";
@@ -3830,6 +3831,15 @@ export default function App() {
   // else's photo still shows up live on every phone that has it open.
   const [photosOpened, setPhotosOpened] = useState(false);
   useEffect(() => { if (view === "photos") setPhotosOpened(true); }, [view]);
+  // Reports are DIRECTOR-ONLY to read, in the rules and here: in a group of
+  // sixteen, "who reported whose photo" is not a fact to hand around. Nobody
+  // else subscribes, so nobody else can be shown it by a UI mistake either.
+  const [photoReports, setPhotoReports] = useState([]);
+  useEffect(() => {
+    if (!photosOpened || !isDirectorUser) return;
+    return db.subscribe(REPORTS_COL, [{ field: "tournament_id", op: "==", value: TOURNAMENT_ID }], setPhotoReports);
+  }, [photosOpened, isDirectorUser]);
+  const reportCounts = useMemo(() => reportsByMedia(photoReports), [photoReports]);
   useEffect(() => {
     if (!photosOpened) return;
     return db.subscribe("bc_media", [{ field: "tournament_id", op: "==", value: TOURNAMENT_ID }], setMedia);
@@ -4419,6 +4429,19 @@ export default function App() {
     const { deletePhotoBytes } = await import("./lib/mediaUpload");
     await deletePhotoBytes(item);
   }, []);
+  // Flagging somebody else's photo for the director. `loud` because this one
+  // has to throw rather than swallow: PhotosView tells the reporter it was
+  // sent and then remembers it locally, and both of those would be lies if the
+  // write was refused. See lib/mediaReports for the shape and the collection.
+  const onReportPhoto = useCallback(async (item) => {
+    if (!item?.id || !authUser?.uid) throw new Error("Sign in to report a photo.");
+    await db.upsert(REPORTS_COL, buildReport({
+      mediaId: item.id,
+      tid: TOURNAMENT_ID,
+      uid: authUser.uid,
+      name: user?.name || "",
+    }), { loud: true });
+  }, [authUser?.uid, user?.name]);
   // ── Card signature / attestation ─────────────────────────────────────
   // Three writes against bc_card_sigs, and the whole workflow is these
   // three plus the director's force-attest below. See lib/cardSigs for the
@@ -5353,6 +5376,8 @@ export default function App() {
             uploadsBlockedReason={photoUploadsAllowed(photoConfig) ? "" : uploadsDisabledReason(photoConfig)}
             onUpload={onUploadPhoto}
             onDelete={onDeletePhoto}
+            onReport={onReportPhoto}
+            reportCounts={reportCounts}
             notify={notify}
           />
           </Suspense>

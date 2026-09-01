@@ -525,6 +525,38 @@ service cloud.firestore {
                         && resource.data.host == 'storage');
     }
 
+    // ── Reporting a photo ─────────────────────────────────────────
+    // Both stores ask whether user-generated content can be REPORTED, and
+    // until this collection existed the answer was an argument in the review
+    // notes. See src/lib/mediaReports.js.
+    //
+    // READ IS DIRECTOR-ONLY, and that is the unusual line in this file —
+    // everything else here is `isOpen()`. In a group of sixteen who have known
+    // each other since 2015, "who reported whose photo" is not a fact the
+    // database should serve to anyone who asks it. The reporter's own UI
+    // remembers locally instead, which is worth a stale answer after a
+    // reinstall.
+    //
+    // `create` is isMember() rather than canWriteEdition(): a LOCKED past year
+    // must still be reportable. The lock exists to stop scores changing after
+    // a cup is over, and it would be a strange rule that froze the one action
+    // whose whole purpose is flagging something that should not be there.
+    //
+    // `reported_by` is pinned to the caller, same as bc_media's own create —
+    // it is the field the director reads to know who raised it, so it has to
+    // be unforgeable at the moment it is written.
+    //
+    // No update at all: a report is a fact about a moment, not a document to
+    // revise. Reporting twice writes the same id (see reportDocId) and lands
+    // as an identical create rather than an edit.
+    match /bc_media_reports/{doc} {
+      allow read: if isDirector();
+      allow create: if isMember()
+                    && request.resource.data.reported_by == request.auth.uid;
+      allow update: if false;
+      allow delete: if isDirector();
+    }
+
     // ── Side bets ─────────────────────────────────────────────────
     // One document per player-to-player wager. The app records these and
     // scores nothing — see src/lib/sideBets.js.
