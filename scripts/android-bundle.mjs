@@ -130,6 +130,13 @@ if (!existsSync(aab)) {
 }
 const mb = (readFileSync(aab).length / 1024 / 1024).toFixed(1);
 console.log(`\n  ✓ ${aab}`);
-console.log(`    ${mb} MB, signed. Upload it to Play → Testing → Internal testing.\n`);
+console.log(`    ${mb} MB, signed.\n`);
+// Named rather than left as "Internal testing", which this line used to say
+// and which is the track that does NOT work on this app: internal was never
+// part of a submission, so it sits Active but unreviewed while the closed
+// track is the published one. See docs/play-store.md §7. Whoever fixes that
+// should fix this line too.
+console.log("    Upload it to Play → Testing → CLOSED testing, which is the");
+console.log("    published track. Internal is set up but unreviewed.\n");
 console.log("    Remember: versionCode in android/app/build.gradle must go up");
 console.log("    before the NEXT upload. Play refuses a re-used one.\n");
