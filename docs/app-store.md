@@ -598,9 +598,12 @@ Unlisted does **not** mean unreviewed — §3 applies in full.
 
 ## 9. The order from here
 
-**1.0 (2) was submitted to App Review on 2 Sep 2026.** Steps 1–8 below are
-done; step 9 is the only one left, and it is independent of the review's
-outcome — file it now rather than waiting for an approval.
+**1.0 (2) was submitted to App Review on 2 Sep 2026, and the
+unlisted-distribution request was filed the same evening.** Every step below is
+done. What is left is waiting, and then whatever either queue answers.
+
+The two run independently — the unlisted request is not part of App Review and
+does not wait on it — so a rejection from one says nothing about the other.
 
 1. ~~Everything in `store-submission.md` §1.~~
 2. ~~All six items in §5.~~
@@ -618,8 +621,14 @@ outcome — file it now rather than waiting for an approval.
    rather than the section, which is a slow way to find out.
 7. ~~Age rating.~~
 8. ~~Submit to App Review with the notes in §7.~~
-9. **File the unlisted-distribution request, as the Account Holder — §8.
-   BY HAND. STILL OPEN.**
+9. ~~File the unlisted-distribution request, as the Account Holder — §8.~~
+   Filed 2 Sep 2026. The form is written for enterprises distributing internal
+   tools, and none of its categories fit: organization type and app category
+   both go to **Other**, described as a private recurring event for a fixed
+   group. "General public" is the trap on the first one — it is the answer that
+   contradicts the request — and "Productivity" on the second, which means
+   workplace software and puts the request in front of a reviewer expecting a
+   business tool.
 
 ### What the submission run found, which nothing else would have
 
