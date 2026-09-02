@@ -55,7 +55,7 @@ import {
   getRedirectResult, onAuthStateChanged, signOut, signInWithCredential,
 } from "firebase/auth";
 import { firebaseApp } from "../firebase";
-import { isNative } from "./platform";
+import { isNative, isNativeAndroid } from "./platform";
 
 // ── The two providers ───────────────────────────────────────────────
 // Exported as data rather than as two functions so the login screen can
@@ -332,6 +332,37 @@ const friendly = (err) => {
 // nonce, sends its SHA-256 to Apple, and returns the RAW one; Firebase hashes
 // it again and compares. Pass the hashed one, or none, and the credential is
 // rejected with an error that says nothing about nonces.
+// ── Android's Credential Manager, and the door it refuses to open ───
+// `signInWithGoogle` on Android goes through Credential Manager, which
+// throws NoCredentialException — surfaced to a golfer as the bare string
+// "No credentials available" — on a phone with a Google account signed in,
+// the right signing certificate registered, and nothing whatever wrong with
+// the app. It is a system component with its own opinions about Play
+// services versions, work profiles and OEM builds, and none of them are
+// visible from here.
+//
+// The plugin keeps the older GoogleSignInClient intent flow behind
+// `useCredentialManager: false` — a full account picker that reads the same
+// default_web_client_id and asks Credential Manager nothing. So a refusal
+// retries there once rather than ending the sign-in.
+//
+// Android only. The option is ignored on iOS, so a retry there would just
+// fail the same way twice and double the wait before the error appears.
+// A CANCEL is never retried: the man tapped Back, and reopening the sheet
+// under his thumb is the rudest possible reading of that.
+//
+// Exported for the test. It takes the plugin as an argument rather than
+// importing it, which is what lets the three branches be pinned without a
+// Capacitor runtime.
+export const googleNative = async (FirebaseAuthentication) => {
+  try {
+    return await FirebaseAuthentication.signInWithGoogle();
+  } catch (e) {
+    if (!isNativeAndroid() || isCancelled(e)) throw e;
+    return await FirebaseAuthentication.signInWithGoogle({ useCredentialManager: false });
+  }
+};
+
 const nativeSignIn = async (providerId) => {
   const { FirebaseAuthentication } = await import("@capacitor-firebase/authentication");
   const auth = authInstance();
@@ -344,7 +375,7 @@ const nativeSignIn = async (providerId) => {
     return (await signInWithCredential(auth, cred)).user || null;
   }
 
-  const res = await FirebaseAuthentication.signInWithGoogle();
+  const res = await googleNative(FirebaseAuthentication);
   const { idToken, accessToken } = res?.credential || {};
   if (!idToken) throw new Error("Google sign-in came back without a token. Try again.");
   const cred = GoogleAuthProvider.credential(idToken, accessToken);

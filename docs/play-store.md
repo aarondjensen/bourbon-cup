@@ -243,6 +243,43 @@ A day or two, and nothing else in the submission is blocked by it — the
 functions, the rules, the demo seed, the edition locks and every App content
 section are all independent. Do them while it sits.
 
+### "No credentials available" on the Google button
+
+The first Android phone the app was ever installed on hit this, on 2 Sep 2026:
+the sign-in screen drew both buttons, Google was tapped, and a red line said
+**No credentials available** — the bare text of Android's
+`NoCredentialException`, falling through `friendly()`'s default case in
+`lib/auth`.
+
+**It was not the signing certificate**, which is the usual suspect and was
+checked first:
+
+```powershell
+Select-String -Path android\app\google-services.json -Pattern certificate_hash
+```
+
+returned both hashes, `4d82fa…4023` — Play's app-signing key — included. The
+tester's Google account was signed in on the device and was the same address
+on the tester list. `default_web_client_id` was present too, which the build
+proves: both code paths in the plugin read it through `R.string`, so a missing
+web client would not compile.
+
+It is **Credential Manager**, the Android system component
+`signInWithGoogle` goes through, refusing for reasons nothing in the app can
+see — Play services versions, work profiles, OEM builds. The plugin's own
+`setFilterByAuthorizedAccounts(false)` already rules out the common
+first-sign-in case.
+
+The fix is in `lib/auth`: a refusal retries once through the older
+`GoogleSignInClient` intent flow, which the plugin keeps behind
+`useCredentialManager: false` and which reads the same `default_web_client_id`.
+Android only, and never after a cancel. `auth.google.test.js` pins all four
+branches.
+
+**Worth knowing before reaching for the certificate again:** this failure and
+a genuinely unregistered fingerprint look identical from the phone. The grep
+above is what separates them, and it takes ten seconds.
+
 ### There is no Android device on this project
 
 Worth planning around rather than discovering: neither developer here carries
