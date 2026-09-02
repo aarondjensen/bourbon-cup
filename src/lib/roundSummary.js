@@ -24,7 +24,7 @@
 //
 // PURE — no firebase, no React. Tested in roundSummary.test.js.
 import { computeMatchResult, statusText } from "../scoring";
-import { DEFAULT_FORMAT } from "../constants";
+import { DEFAULT_FORMAT, parResultFor, parResultLabel } from "../constants";
 import { isRoundFinal } from "./roundLocks";
 import { realPlayers, playerLookup, sideNames } from "./players";
 import {
@@ -119,10 +119,43 @@ export const roundSummary = ({
   // Skins NET, which is the Betting tab's default (see the note at the top).
   // A hole with a carry has no winner and is not listed — the pot divides by
   // skins won, so a carried hole is money nobody took.
+  //
+  // ── Why both numbers, and why the name is off the GROSS one ─────
+  // The skin was won on NET, so that is the number that decided it. But "a
+  // birdie" is a thing a man says about a shot he hit, and in this app it is
+  // GROSS everywhere — the archive computes birdies gross from the holes for
+  // exactly this reason, and two definitions of a birdie on one screen is
+  // worse than either. So the row names the gross result and prints both
+  // scores, and a net birdie off a gross bogey reads as what it was.
+  //
+  // The gross is reconstructed from the net and the stroke map rather than
+  // read back out of holeData. It is the same number either way — computeSkins
+  // subtracted that exact stroke from that exact cell — but adding the stroke
+  // back cannot end up pointing at a different hole, and a second read of the
+  // card could.
+  //
+  // `parResultFor` is named for a NET difference because Stableford and Tilt
+  // are what it was written for. It is arithmetic on a delta; handing it a
+  // gross one classifies a gross result, which is what is wanted here.
   const maps = strokeMapsFor({ round, field: skinsField, ...ctx });
   const skins = computeSkins({ round, gross: false, field: skinsField, holeData, pars, maps })
     .filter((s) => s.winner)
-    .map((s) => ({ hole: s.hole, pid: s.winner.pid, name: s.winner.name, score: s.score, par: s.par }));
+    .map((s) => {
+      const strokes = maps?.[s.winner.pid]?.[s.hole] || 0;
+      const gross = s.score + strokes;
+      return {
+        hole: s.hole,
+        pid: s.winner.pid,
+        name: s.winner.name,
+        par: s.par,
+        gross,
+        net: s.score,
+        strokes,
+        // "Birdie", "Eagle", "Par", "Bogey" — the app's own ladder, off
+        // constants, so the sheet cannot invent a word for a score.
+        result: parResultLabel(null, parResultFor(gross - s.par, null)),
+      };
+    });
 
   // One round's pins, read through THIS round's par table — a hole the
   // director re-pointed after the fact must not keep a tag on a screen that

@@ -72,6 +72,32 @@ const WinRow = ({ lead, name, detail }) => (
   </div>
 );
 
+// A skin gets a line of its own rather than WinRow's single one. It carries
+// four facts — who, what he made, where, and off what — and the shot itself is
+// the one a man wants first, so the golf word leads the second line and the
+// two scores sit out to the right where they can be compared down the column.
+//
+// Both scores, always, even where they are the same: "5 gross · 5 net" is how
+// the card says he got no stroke on that hole, which is a real thing to know
+// about a skin somebody is about to be paid for.
+const SkinRow = ({ skin }) => (
+  <div style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "5px 0" }}>
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{
+        fontSize: FS.small, fontWeight: 700, color: BC.t1,
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      }}>{skin.name}</div>
+      <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 1 }}>
+        <span style={{ color: BC.amberInk, fontWeight: 800 }}>{skin.result}</span>
+        {` on Hole ${skin.hole + 1}, Par ${skin.par}`}
+      </div>
+    </div>
+    <span style={{ flexShrink: 0, fontSize: FS.label, fontWeight: 700, color: BC.t3 }}>
+      {skin.gross} gross · <span style={{ color: BC.t2 }}>{skin.net} net</span>
+    </span>
+  </div>
+);
+
 export function RoundSummarySheet({
   round, onClose,
   matches, holeData, tPlayers, tRounds, courses, roundLocks, ctpData, buyIns,
@@ -187,7 +213,7 @@ export function RoundSummarySheet({
 
             Each is scored against its OWN buy-in field, which is why a man
             can be missing from one card and on the next. */}
-        <Card label="PINS" note="closest to the pin" empty="No pin was tagged on this one." rows={s.ctp.length}>
+        <Card label="CTP" empty="No pin was tagged on this one." rows={s.ctp.length}>
           {s.ctp.map((c) => (
             <WinRow key={c.hole} lead={`#${c.hole + 1}`} name={c.name} detail={ft(c.distanceFt)} />
           ))}
@@ -197,12 +223,12 @@ export function RoundSummarySheet({
             round nobody has teed off on carried nothing. */}
         <Card
           label="SKINS"
-          note="net"
+          note="won on net"
           empty={s.played ? "Every hole carried." : "Nothing scored yet."}
           rows={s.skins.length}
         >
           {s.skins.map((k) => (
-            <WinRow key={k.hole} lead={`#${k.hole + 1}`} name={k.name} detail={`${k.score} on a par ${k.par}`} />
+            <SkinRow key={k.hole} skin={k} />
           ))}
         </Card>
 

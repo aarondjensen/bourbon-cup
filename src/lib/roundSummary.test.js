@@ -69,7 +69,41 @@ describe("roundSummary", () => {
       p2_1: card(4), p3_1: card(4), p4_1: card(4),
     };
     const s = roundSummary({ ...base, holeData });
-    expect(s.skins).toEqual([{ hole: 0, pid: "p1", name: "Paul W", score: 2, par: 3 }]);
+    expect(s.skins).toHaveLength(1);
+    expect(s.skins[0]).toMatchObject({ hole: 0, pid: "p1", name: "Paul W", par: 3 });
+  });
+
+  // The skin is won on NET; the golf word is off the GROSS, because that is
+  // what a birdie is everywhere else in this app.
+  it("carries both scores and names the gross result", () => {
+    const holeData = {
+      p1_1: { ...card(4), 0: 2 },   // a 2 on the par 3 — off scratch, a birdie
+      p2_1: card(4), p3_1: card(4), p4_1: card(4),
+    };
+    const [k] = roundSummary({ ...base, holeData }).skins;
+    expect(k).toMatchObject({ gross: 2, net: 2, strokes: 0, par: 3, result: "Birdie" });
+  });
+
+  it("names the gross result even when a stroke is what won the hole", () => {
+    // p1 off a 20 index gets two shots on the stroke-index-1 hole, which is
+    // hole 1 here; a gross 4 on that par 3 is a net 2 and takes the skin. The
+    // shot he actually hit was a bogey, and that is what the row says.
+    const tPlayersHcp = [{ ...tPlayers[0], handicap_index: 20 }, ...tPlayers.slice(1)];
+    const holeData = { p1_1: card(9), p2_1: card(5), p3_1: card(5), p4_1: card(5) };
+    holeData.p1_1[0] = 4;
+    const [k] = roundSummary({ ...base, tPlayers: tPlayersHcp, holeData }).skins;
+    expect(k).toMatchObject({ gross: 4, net: 2, strokes: 2, par: 3, result: "Bogey" });
+    expect(k.gross).toBe(k.net + k.strokes);
+  });
+
+  it("uses the app's own ladder for the word", () => {
+    // A 2 on the par 5 at hole 5 is an albatross.
+    const holeData = {
+      p1_1: { ...card(4), 4: 2 },
+      p2_1: card(4), p3_1: card(4), p4_1: card(4),
+    };
+    const k = roundSummary({ ...base, holeData }).skins.find(x => x.hole === 4);
+    expect(k.result).toBe("Albatross");
   });
 
   it("counts no skin on a carried hole", () => {
