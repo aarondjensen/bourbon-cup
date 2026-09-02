@@ -883,6 +883,36 @@ send the link, done. Steps 8 and 9 are the production road, kept for reference.
    registered — WBC is one, this is not.
 7. Collect the sixteen Google accounts, add them all at once, send the opt-in
    link — §7. **BY HAND**
+
+**A DRAFT app is not installable, and the opt-in link does not say so.** This
+cost an evening on 2 Sep 2026. The first tester followed the link, got
+*"You're a tester for com.thebourboncup.app"* — a Play Console page, which
+proves only that his address is on the list — then tapped **Download test app**
+and landed on **Item not found**. His account was right; the app's status on
+the Play Console home page was **Draft**, `Installed audience 0`.
+
+An app that has never had a release actually go live stays in Draft, and the
+Play Store has no listing to serve for it. The two halves are served by
+different systems and only one of them knows the app is unfinished.
+
+So before sending the link to anybody, check two things that are NOT the
+tester's account:
+
+- **The app's status on the Play Console home page.** `Draft` means no. A
+  published app reads `Internal testing`, `Closed testing` or `Production`,
+  and shows a non-zero installed audience once somebody has it. Compare
+  against another app on the same account that works.
+- **Testing → Internal testing → Releases.** A saved release is not a rolled
+  out one; it needs **Review release → Start rollout**.
+
+Draft persists until the Dashboard's setup tasks are all complete — the main
+store listing (§6) and every App content declaration (§3, §4). Step 5 above
+lists them, and it is the step that silently is not finished when this
+happens.
+
+The account-mismatch cause in §3 is real and worth checking SECOND. It is not
+where to start: it needs a phone and another person, and the Draft check is one
+glance at a page already open.
 8. *(Production only)* Promote to closed testing and run the fourteen days as
    §8 describes — with things to do, more than one build, and feedback written
    down. **BY HAND**
