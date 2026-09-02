@@ -4,9 +4,7 @@
 // noticing, because who rode with whom changes no score.
 import { describe, it, expect } from "vitest";
 import {
-  splitEvenly, autoBuildGroups, formatGroupsByTeam, isFoursomeFormat,
-  groupIssues, hasGroupIssues, sidesInRound, GROUP_TARGET,
-  assignPlayersToGroup, groupSizeAfter, groupFitsAfter,
+  splitEvenly, autoBuildGroups, formatGroupsByTeam, isFoursomeFormat, groupIssues, hasGroupIssues, sidesInRound, GROUP_TARGET, assignPlayersToGroup, groupSizeAfter, groupFitsAfter, scoringUnits, unitForPlayer,
 } from "./groups";
 
 const A8 = ["a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8"];
@@ -295,5 +293,92 @@ describe("groupIssues — oversized", () => {
   it("says nothing about a foursome", () => {
     const groups = [["a1", "a2", "a3", "a4"]];
     expect(groupIssues({ groups, matches: wholeSide() }).oversized).toEqual([]);
+  });
+});
+
+// ── scoringUnits ──────────────────────────────────────────────────
+// What one phone shows. The bug this exists for: the closing round is one
+// match holding the whole roster, and the Scoring tab drew all sixteen score
+// cards on it.
+describe("scoringUnits", () => {
+  const A8 = ["a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8"];
+  const B8 = ["b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8"];
+  // The real round-4 tee sheet: a side splits into waves, nobody rides with
+  // an opponent.
+  const R4_GROUPS = [
+    ["a1", "a2", "a3", "a4"],
+    ["b1", "b2", "b3", "b4"],
+    ["a5", "a6", "a7", "a8"],
+    ["b5", "b6", "b7", "b8"],
+  ];
+  const teamMatch = { id: "m4", round: 4, teamA: A8, teamB: B8 };
+
+  it("splits a team match into its tee groups, in tee order", () => {
+    const units = scoringUnits({ match: teamMatch, groups: R4_GROUPS, formatId: "team_best_ball" });
+    expect(units).toHaveLength(4);
+    expect(units.map(u => u.groupIdx)).toEqual([0, 1, 2, 3]);
+    expect(units[0].pids).toEqual(["a1", "a2", "a3", "a4"]);
+    expect(units[3].pids).toEqual(["b5", "b6", "b7", "b8"]);
+    // Nobody appears twice, and nobody is dropped.
+    expect(units.flatMap(u => u.pids).sort()).toEqual([...A8, ...B8].sort());
+  });
+
+  it("keeps every unit inside a foursome", () => {
+    scoringUnits({ match: teamMatch, groups: R4_GROUPS, formatId: "team_best_ball" })
+      .forEach(u => expect(u.pids.length).toBeLessThanOrEqual(4));
+  });
+
+  // The whole point of the shape: rounds 1-3 must not move.
+  it("leaves a 2-man match as one unit", () => {
+    const m = { id: "m1", round: 1, teamA: ["a1", "a2"], teamB: ["b1", "b2"] };
+    const units = scoringUnits({ match: m, groups: [["a1", "a2", "b1", "b2"]], formatId: "best_ball" });
+    expect(units).toEqual([{ key: "m1", pids: ["a1", "a2", "b1", "b2"], groupIdx: 0 }]);
+  });
+
+  // A 2-man match spread over two tee times is a draw error the admin screen
+  // already flags. Halving the card on the course is not the fix for it.
+  it("does not split a 2-man match that the draw broke", () => {
+    const m = { id: "m1", round: 1, teamA: ["a1", "a2"], teamB: ["b1", "b2"] };
+    const units = scoringUnits({ match: m, groups: [["a1", "a2"], ["b1", "b2"]], formatId: "best_ball" });
+    expect(units).toHaveLength(1);
+    expect(units[0].pids).toEqual(["a1", "a2", "b1", "b2"]);
+    expect(units[0].groupIdx).toBeNull();
+  });
+
+  it("is one unit before anybody has been drawn", () => {
+    const units = scoringUnits({ match: teamMatch, groups: [], formatId: "team_best_ball" });
+    expect(units).toHaveLength(1);
+    expect(units[0].pids).toHaveLength(16);
+    expect(units[0].groupIdx).toBeNull();
+  });
+
+  it("gives a player the draw missed somewhere to be scored", () => {
+    const partial = [["a1", "a2", "a3", "a4"], ["b1", "b2", "b3", "b4"]];
+    const units = scoringUnits({ match: teamMatch, groups: partial, formatId: "team_best_ball" });
+    const loose = units.find(u => u.groupIdx == null);
+    expect(loose.pids).toEqual(["a5", "a6", "a7", "a8", "b5", "b6", "b7", "b8"]);
+    expect(units.flatMap(u => u.pids)).toHaveLength(16);
+  });
+
+  it("is empty for no match", () => {
+    expect(scoringUnits({ match: null, groups: R4_GROUPS, formatId: "team_best_ball" })).toEqual([]);
+  });
+});
+
+describe("unitForPlayer", () => {
+  const units = [
+    { key: "m#0", pids: ["a1", "a2"], groupIdx: 0 },
+    { key: "m#1", pids: ["b1", "b2"], groupIdx: 1 },
+  ];
+
+  it("finds the group the reader is walking with", () => {
+    expect(unitForPlayer(units, "b2").key).toBe("m#1");
+  });
+
+  // A director who is not in this round's draw. The caller falls back to the
+  // first unit and offers the picker.
+  it("is null for somebody not in the match", () => {
+    expect(unitForPlayer(units, "z9")).toBeNull();
+    expect(unitForPlayer([], "a1")).toBeNull();
   });
 });

@@ -92,6 +92,7 @@ import {
   GROUPS_COL, groupsDocId, encodeGroups, decodeGroups,
   teeTimeForMatch, parseTeeTime, formatTeeTime, DEFAULT_TEE_INTERVAL, TEE_SLOTS,
   roundPlaySetup, orderMatchesForRound, numberMatches, groupIndexForMatch,
+  scoringUnits, unitForPlayer, teeTimeList, expandTeeTimes, stripAMPM,
 } from "./lib/groups";
 import { firstTeeAt } from "./lib/countdown";
 import { groupKey, tagAheadOfPlay } from "./lib/ctp";
@@ -922,6 +923,10 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
 
   // ── Hooks (always fire, in stable order) ──
   const [activeMatchId, setActiveMatchId] = useState(null);
+  // A director's explicit choice of TEE GROUP, within the match on screen, or
+  // null for "the one I am in". Only ever offered on a format whose match
+  // spans several — see `units` below and the picker further down.
+  const [pickedUnit, setPickedUnit] = useState(null);
   // A director's explicit choice of round. null means "follow the tournament",
   // which is what everybody starts on and what everybody who is not a director
   // is pinned to. Held here rather than lifted, for the same reason the match
@@ -1051,10 +1056,39 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   const matchPids = pidsOf(match);
   const getScore = scoresAt(match?.round ?? null);
 
+  // ── The scoring unit: this screen is a TEE GROUP, not a match ────
+  // On every 1- and 2-man format the match IS the foursome, so the unit is
+  // the match and none of this moves. A team format's match is the whole
+  // side — the closing round is one match holding sixteen players across four
+  // tee times — and drawing that as one card put sixteen score rows on a
+  // phone, which is not a scoring screen, it is a roster.
+  //
+  // Whoever is keeping the card is keeping it for the people they are walking
+  // with. See lib/groups.scoringUnits; the match is still what the group is
+  // scored INTO, so the engine sums the side's best N across all four waves
+  // exactly as before. Nothing about a result moves; only who is on screen.
+  const units = useMemo(
+    () => (match ? scoringUnits({ match, groups: groups?.[match.round], formatId: format }) : []),
+    [match, groups, format]
+  );
+  // The reader's own group unless a director has deliberately picked another.
+  // Resolved, never stored — a pick that stops matching (the round moved, the
+  // draw changed under them) falls back to their own group rather than
+  // pointing at players who are no longer grouped that way.
+  const unit = units.find(u => u.key === pickedUnit)
+    || unitForPlayer(units, userPid)
+    || units[0]
+    || null;
+  // What the cards, the hole strip and the auto-advance are about. `matchPids`
+  // stays the MATCH's roster and is still what decides a signature: a card is
+  // signed by somebody in the match, and on a team round the card is the
+  // side's, not the foursome's.
+  const cardPids = unit?.pids || [];
+
   // Which hole is showing, when it moves on by itself, and the toast during
   // the wait — see lib/useHoleAdvance.
   const { activeHole, goToHole, toast, positionOn } =
-    useHoleAdvance({ matchId: match?.id ?? null, pids: matchPids, getScore, hold: ctpPrompt != null });
+    useHoleAdvance({ matchId: unit?.key ?? null, pids: cardPids, getScore, hold: ctpPrompt != null });
 
   const par = holePars[activeHole];
   const hcp = holeHcps[activeHole];
@@ -1101,7 +1135,24 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     if (!m) return;
     setPickedRound(m.round === currentRound ? null : m.round);
     setActiveMatchId(id);
-    positionOn(id, pidsOf(m), scoresAt(m.round));
+    setPickedUnit(null);
+    // The unit the incoming match will resolve to, worked out here rather than
+    // waited for: useHoleAdvance is keyed on the unit now, so handing it the
+    // match id would position the wrong thing and then reposition a frame
+    // later — the flash this call exists to avoid.
+    const nextFmt = tRounds.find(t => t.round_number === m.round)?.format || DEFAULT_FORMAT;
+    const nextUnits = scoringUnits({ match: m, groups: groups?.[m.round], formatId: nextFmt });
+    const nextUnit = unitForPlayer(nextUnits, userPid) || nextUnits[0] || null;
+    positionOn(nextUnit?.key ?? m.id, nextUnit?.pids ?? pidsOf(m), scoresAt(m.round));
+  };
+
+  // Moving between the waves of one match. Same round, same match, same
+  // scores — only which four people are on screen.
+  const switchToUnit = (key) => {
+    const u = units.find(x => x.key === key);
+    if (!u) return;
+    setPickedUnit(key);
+    positionOn(u.key, u.pids, getScore);
   };
 
   // A director gets one control covering every group in every round, which
@@ -1234,7 +1285,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     const key = `${match.round}_${h}`;
     if (promptedCtp.current[key]) return;
     if (ctpFor(h)?.approved) return;
-    if (!matchPids.every(p => pids.includes(p) || getScore(p, h) > 0)) return;
+    if (!cardPids.every(p => pids.includes(p) || getScore(p, h) > 0)) return;
     promptedCtp.current[key] = true;
     setCtpPrompt(h);
   };
@@ -1273,9 +1324,9 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     if (moneyHolePot <= 0) return;
     if (h !== moneyHoleIdx - 1) return;
     if (promptedMoneyHole.current[match.round]) return;
-    if (!matchPids.some(p => moneyHoleFieldIds.has(p))) return;
-    if (matchPids.some(p => getScore(p, moneyHoleIdx) > 0)) return;
-    if (!matchPids.every(p => pids.includes(p) || getScore(p, h) > 0)) return;
+    if (!cardPids.some(p => moneyHoleFieldIds.has(p))) return;
+    if (cardPids.some(p => getScore(p, moneyHoleIdx) > 0)) return;
+    if (!cardPids.every(p => pids.includes(p) || getScore(p, h) > 0)) return;
     promptedMoneyHole.current[match.round] = true;
     setMoneyHolePrompt(true);
   };
@@ -1445,9 +1496,9 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // the frontier that way would advance it while the group is still entering
   // the hole they are on, which is the very thing this is here to stop.
   let lastFullHole = -1;
-  if (matchPids.length) {
+  if (cardPids.length) {
     for (let h = 0; h < 18; h++) {
-      if (matchPids.every(pid => getScore(pid, h) > 0)) lastFullHole = h;
+      if (cardPids.every(pid => getScore(pid, h) > 0)) lastFullHole = h;
     }
   }
   const renderStatusCell = (i) => {
@@ -1489,7 +1540,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     // back INTO a gap to fix it — the cell being worked on does not need to
     // warn about itself.
     if (!hr.played) {
-      const someScored = matchPids.some(pid => getScore(pid, i) > 0);
+      const someScored = cardPids.some(pid => getScore(pid, i) > 0);
       if (someScored && i !== activeHole && i < lastFullHole) {
         return shell(<div title="Missing score" style={{ textAlign: "center", fontSize: FS.small, opacity: 0.55, lineHeight: 1 }}>⚠️</div>);
       }
@@ -1534,8 +1585,8 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // so they cannot drift apart again.
   const renderHoleCell = (h) => {
     const cur = h === activeHole;
-    const allScored = matchPids.every(pid => getScore(pid, h) > 0);
-    const partial = !allScored && matchPids.some(pid => getScore(pid, h) > 0);
+    const allScored = cardPids.every(pid => getScore(pid, h) > 0);
+    const partial = !allScored && cardPids.some(pid => getScore(pid, h) > 0);
     // The current hole wears the hole banner's colours — same fill, same
     // ink, ring included. They are the same claim made twice on one screen,
     // "this is the hole you are on", and saying it in a bright amber chip up
@@ -1589,6 +1640,37 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
       onChange={switchToMatch}
     />
   ) : null;
+
+  // ── The group picker ─────────────────────────────────────────────────
+  // Only on a round whose match spans several tee times — which today is the
+  // closing round and nothing else — and only for a director. A player is in
+  // exactly one group and needs no control to find it; putting one on every
+  // phone would spend a row of score-button height on a question fifteen of
+  // the sixteen have already answered by standing where they are standing.
+  //
+  // A director gets it because the crown's whole purpose is entering scores
+  // for a group you are not in (see components/GroupSwitcher), and on a team
+  // round that switcher lists ONE match — so without this it can reach round
+  // 4 and then not reach anybody in it but the director's own foursome.
+  //
+  // Labelled by TEE TIME, because that is what a director hunting for a group
+  // is holding in their head. A wave with no time set falls back to its
+  // position, which is at least in the order they go off.
+  const groupPicker = isDirector && units.length > 1 ? (() => {
+    const times = expandTeeTimes(teeTimeList(tr), units.length);
+    return (
+      <SegmentedToggle
+        variant="pills"
+        style={{ marginBottom: 10 }}
+        options={units.map((u, i) => [
+          u.key,
+          u.groupIdx == null ? "Ungrouped" : (stripAMPM(times[u.groupIdx]) || `Wave ${i + 1}`),
+        ])}
+        value={unit?.key ?? units[0].key}
+        onChange={switchToUnit}
+      />
+    );
+  })() : null;
 
   // ── The off-round banner ─────────────────────────────────────────────
   // The loudest of the three tells, and the only one that costs this screen
@@ -1722,6 +1804,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
       {offRoundBanner}
       {sealedBanner}
       {matchSelector}
+      {groupPicker}
       <SignedCardPanel
         match={match} sig={sig} result={result} format={format}
         holePars={holePars} holeHcps={holeHcps} course={course}
@@ -1738,6 +1821,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
       {offRoundBanner}
       {sealedBanner}
       {matchSelector}
+      {groupPicker}
 
       {/* Front 9 — hole strip + status row. */}
       <div style={{ display: "flex", gap: 3, marginBottom: HOLE_RING_REACH + 1, flexShrink: 0 }}>
@@ -1842,10 +1926,20 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           handicap. See onTapScore for the write side of this. */}
       <div style={{ flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: fit.cardGap }}>
         {(() => {
+          // The group on screen, not the whole side — see `units` above. On
+          // every 2-man round these two lines are the match, unchanged.
           const shared = formatIsSharedBall(format);
-          const teamACards = shared ? [match.teamA] : match.teamA.map(pid => [pid]);
-          const teamBCards = shared ? [match.teamB] : match.teamB.map(pid => [pid]);
-          return [...teamACards, "DIVIDER", ...teamBCards];
+          const inUnit = (pid) => cardPids.includes(pid);
+          const aPids = match.teamA.filter(inUnit);
+          const bPids = match.teamB.filter(inUnit);
+          const teamACards = shared ? (aPids.length ? [aPids] : []) : aPids.map(pid => [pid]);
+          const teamBCards = shared ? (bPids.length ? [bPids] : []) : bPids.map(pid => [pid]);
+          // The divider separates two sides. A Team Best Ball wave is all one
+          // side, so there is nothing to separate and a rule across the middle
+          // of four teammates would be saying something untrue about them.
+          return teamACards.length && teamBCards.length
+            ? [...teamACards, "DIVIDER", ...teamBCards]
+            : [...teamACards, ...teamBCards];
         })().map((pids) => {
           if (pids === "DIVIDER") return <div key="div" style={{ borderTop: `1px dashed ${BC.bdr}`, flexShrink: 0, margin: `${fit.cardGap}px 0` }} />;
           const team = match.teamA.includes(pids[0]) ? "A" : "B";
@@ -2025,7 +2119,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
         return (
           <CtpPrompt
             holeNumber={ctpPrompt + 1}
-            players={matchPids.map(pid => tPlayers.find(p => p.player_id === pid) || { player_id: pid, name: pid })}
+            players={cardPids.map(pid => tPlayers.find(p => p.player_id === pid) || { player_id: pid, name: pid })}
             teams={teams}
             leader={rec}
             leaderName={rec?.player_id ? (tPlayers.find(p => p.player_id === rec.player_id)?.name || "") : ""}
@@ -2059,7 +2153,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
             hole={moneyHoleNum}
             par={holePars[moneyHoleIdx]}
             share={rounds.length ? moneyHolePot / rounds.length : 0}
-            rows={matchPids.map(pid => {
+            rows={cardPids.map(pid => {
               const p = tPlayers.find(x => x.player_id === pid);
               return {
                 pid, name: p?.name || pid, team: p?.team,
