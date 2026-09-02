@@ -17,10 +17,10 @@
 // disagree with the Betting tab about the same pot, in front of the men
 // settling it, and there would be no way to tell which was right.
 //
-// Which also fixes what this can and cannot show. The Betting tab has a
-// GROSS/net toggle for skins that is view state and is never stored, so this
-// reads NET, which is the tab's own default and what a man sees when he opens
-// it. The popup says so rather than leaving it to be inferred.
+// The Betting tab's GROSS/net toggle for skins is view state and is never
+// stored, so there is no stored answer to "which one counts". This draws BOTH
+// — see the note on skinsAt below — rather than picking one and calling it
+// skins.
 //
 // PURE — no firebase, no React. Tested in roundSummary.test.js.
 import { computeMatchResult, statusText } from "../scoring";
@@ -59,7 +59,7 @@ export const roundSummary = ({
   const empty = {
     round, courseName: null, format: null, final: false,
     points: { A: 0, B: 0, teamA: teamNames.A || "Team A", teamB: teamNames.B || "Team B", leader: null },
-    matches: [], ctp: [], skins: [], lowNet: [], moneyHole: null,
+    matches: [], ctp: [], skins: { gross: [], net: [] }, lowNet: [], moneyHole: null,
     played: false,
   };
   if (round == null) return empty;
@@ -116,17 +116,27 @@ export const roundSummary = ({
   const B = matchRows.reduce((n, r) => n + r.pts.B, 0);
 
   // ── The side games ──────────────────────────────────────────────
-  // Skins NET, which is the Betting tab's default (see the note at the top).
-  // A hole with a carry has no winner and is not listed — the pot divides by
-  // skins won, so a carried hole is money nobody took.
+  // Skins twice, GROSS and NET, which is the Betting tab's toggle unfolded
+  // into two lists. They are two games played on the same eighteen holes and
+  // they do not agree: a hole can go net to the man with the shot and carry
+  // gross, or go gross to the low ball and be halved once everybody's strokes
+  // are on. Showing one and calling it "skins" answers half the question and
+  // gives no clue which half.
+  //
+  // Both read the same buy-in field — a man is in skins or he is not; there
+  // is no separate gross buy-in.
+  //
+  // A hole with a carry has no winner and is not listed, in either. The pot
+  // divides by skins WON, so a carried hole is money nobody took.
   //
   // ── Why both numbers, and why the name is off the GROSS one ─────
-  // The skin was won on NET, so that is the number that decided it. But "a
-  // birdie" is a thing a man says about a shot he hit, and in this app it is
-  // GROSS everywhere — the archive computes birdies gross from the holes for
-  // exactly this reason, and two definitions of a birdie on one screen is
-  // worse than either. So the row names the gross result and prints both
-  // scores, and a net birdie off a gross bogey reads as what it was.
+  // A net skin was won on the net score, so that is the number that decided
+  // it and both are printed. But "a birdie" is a thing a man says about a
+  // shot he hit, and in this app it is GROSS everywhere — the archive
+  // computes birdies gross from the holes for exactly this reason, and two
+  // definitions of a birdie on one screen is worse than either. So the row
+  // names the gross result in both lists, and a net birdie off a gross bogey
+  // reads as what it was.
   //
   // The gross is reconstructed from the net and the stroke map rather than
   // read back out of holeData. It is the same number either way — computeSkins
@@ -138,24 +148,29 @@ export const roundSummary = ({
   // are what it was written for. It is arithmetic on a delta; handing it a
   // gross one classifies a gross result, which is what is wanted here.
   const maps = strokeMapsFor({ round, field: skinsField, ...ctx });
-  const skins = computeSkins({ round, gross: false, field: skinsField, holeData, pars, maps })
-    .filter((s) => s.winner)
-    .map((s) => {
-      const strokes = maps?.[s.winner.pid]?.[s.hole] || 0;
-      const gross = s.score + strokes;
-      return {
-        hole: s.hole,
-        pid: s.winner.pid,
-        name: s.winner.name,
-        par: s.par,
-        gross,
-        net: s.score,
-        strokes,
-        // "Birdie", "Eagle", "Par", "Bogey" — the app's own ladder, off
-        // constants, so the sheet cannot invent a word for a score.
-        result: parResultLabel(null, parResultFor(gross - s.par, null)),
-      };
-    });
+  const skinsAt = (gross) =>
+    computeSkins({ round, gross, field: skinsField, holeData, pars, maps: gross ? null : maps })
+      .filter((k) => k.winner)
+      .map((k) => {
+        // Scored gross, `k.score` already IS the gross and no stroke was
+        // applied. Scored net, the stroke comes back off the same map that
+        // took it off.
+        const strokes = gross ? 0 : (maps?.[k.winner.pid]?.[k.hole] || 0);
+        const grossScore = k.score + strokes;
+        return {
+          hole: k.hole,
+          pid: k.winner.pid,
+          name: k.winner.name,
+          par: k.par,
+          gross: grossScore,
+          net: k.score,
+          strokes,
+          // "Birdie", "Eagle", "Par", "Bogey" — the app's own ladder, off
+          // constants, so the sheet cannot invent a word for a score.
+          result: parResultLabel(null, parResultFor(grossScore - k.par, null)),
+        };
+      });
+  const skins = { gross: skinsAt(true), net: skinsAt(false) };
 
   // One round's pins, read through THIS round's par table — a hole the
   // director re-pointed after the fact must not keep a tag on a screen that

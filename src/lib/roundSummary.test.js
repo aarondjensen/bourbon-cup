@@ -69,18 +69,18 @@ describe("roundSummary", () => {
       p2_1: card(4), p3_1: card(4), p4_1: card(4),
     };
     const s = roundSummary({ ...base, holeData });
-    expect(s.skins).toHaveLength(1);
-    expect(s.skins[0]).toMatchObject({ hole: 0, pid: "p1", name: "Paul W", par: 3 });
+    expect(s.skins.gross).toHaveLength(1);
+    expect(s.skins.gross[0]).toMatchObject({ hole: 0, pid: "p1", name: "Paul W", par: 3 });
   });
 
-  // The skin is won on NET; the golf word is off the GROSS, because that is
-  // what a birdie is everywhere else in this app.
+  // The golf word is off the GROSS, because that is what a birdie is
+  // everywhere else in this app.
   it("carries both scores and names the gross result", () => {
     const holeData = {
       p1_1: { ...card(4), 0: 2 },   // a 2 on the par 3 — off scratch, a birdie
       p2_1: card(4), p3_1: card(4), p4_1: card(4),
     };
-    const [k] = roundSummary({ ...base, holeData }).skins;
+    const [k] = roundSummary({ ...base, holeData }).skins.net;
     expect(k).toMatchObject({ gross: 2, net: 2, strokes: 0, par: 3, result: "Birdie" });
   });
 
@@ -91,7 +91,7 @@ describe("roundSummary", () => {
     const tPlayersHcp = [{ ...tPlayers[0], handicap_index: 20 }, ...tPlayers.slice(1)];
     const holeData = { p1_1: card(9), p2_1: card(5), p3_1: card(5), p4_1: card(5) };
     holeData.p1_1[0] = 4;
-    const [k] = roundSummary({ ...base, tPlayers: tPlayersHcp, holeData }).skins;
+    const [k] = roundSummary({ ...base, tPlayers: tPlayersHcp, holeData }).skins.net;
     expect(k).toMatchObject({ gross: 4, net: 2, strokes: 2, par: 3, result: "Bogey" });
     expect(k.gross).toBe(k.net + k.strokes);
   });
@@ -102,13 +102,45 @@ describe("roundSummary", () => {
       p1_1: { ...card(4), 4: 2 },
       p2_1: card(4), p3_1: card(4), p4_1: card(4),
     };
-    const k = roundSummary({ ...base, holeData }).skins.find(x => x.hole === 4);
+    const k = roundSummary({ ...base, holeData }).skins.net.find(x => x.hole === 4);
     expect(k.result).toBe("Albatross");
+  });
+
+  // ── Gross and net are two games on the same holes ─────────────────
+  // The whole reason both are drawn: they disagree, and showing one and
+  // calling it "skins" answers half the question.
+  it("scores gross and net as separate games", () => {
+    // p1 off a 20 index gets two shots on hole 1 (stroke index 1). Everyone
+    // makes 4 there: gross is a four-way halve and carries, net is p1's by
+    // two. On hole 2 (stroke index 15, no shot for anybody) p1's 3 wins both.
+    const tPlayersHcp = [{ ...tPlayers[0], handicap_index: 20 }, ...tPlayers.slice(1)];
+    const holeData = {
+      p1_1: { ...card(9), 0: 4, 1: 3 },
+      p2_1: { ...card(9), 0: 4, 1: 4 },
+      p3_1: { ...card(9), 0: 4, 1: 4 },
+      p4_1: { ...card(9), 0: 4, 1: 4 },
+    };
+    const s = roundSummary({ ...base, tPlayers: tPlayersHcp, holeData });
+    expect(s.skins.gross.map(k => k.hole)).not.toContain(0);   // halved gross
+    expect(s.skins.net.map(k => k.hole)).toContain(0);         // won on strokes
+    expect(s.skins.gross.map(k => k.hole)).toContain(1);       // won on both
+    expect(s.skins.net.map(k => k.hole)).toContain(1);
+  });
+
+  it("takes no stroke off a gross skin", () => {
+    const tPlayersHcp = [{ ...tPlayers[0], handicap_index: 20 }, ...tPlayers.slice(1)];
+    const holeData = {
+      p1_1: { ...card(9), 1: 3 },
+      p2_1: { ...card(9), 1: 4 }, p3_1: { ...card(9), 1: 4 }, p4_1: { ...card(9), 1: 4 },
+    };
+    const k = roundSummary({ ...base, tPlayers: tPlayersHcp, holeData }).skins.gross.find(x => x.hole === 1);
+    expect(k).toMatchObject({ gross: 3, net: 3, strokes: 0 });
   });
 
   it("counts no skin on a carried hole", () => {
     const s = roundSummary(base);   // A pair tie every hole
-    expect(s.skins).toEqual([]);
+    expect(s.skins.gross).toEqual([]);
+    expect(s.skins.net).toEqual([]);
   });
 
   it("names the pins the round played, in hole order", () => {
@@ -163,19 +195,21 @@ describe("roundSummary", () => {
   it("treats a null buy-in field as everybody", () => {
     const holeData = { ...base.holeData, p1_1: { ...card(4), 0: 2 } };
     const s = roundSummary({ ...base, holeData, buyIns: { skinsIn: null } });
-    expect(s.skins).toHaveLength(1);
+    expect(s.skins.net).toHaveLength(1);
   });
 
   it("leaves a man outside the buy-in out of the game he did not enter", () => {
     const holeData = { ...base.holeData, p1_1: { ...card(4), 0: 2 } };
     const s = roundSummary({ ...base, holeData, buyIns: { skinsIn: ["p2", "p3", "p4"] } });
-    expect(s.skins.some(k => k.pid === "p1")).toBe(false);
+    expect(s.skins.net.some(k => k.pid === "p1")).toBe(false);
+    expect(s.skins.gross.some(k => k.pid === "p1")).toBe(false);
   });
 
   it("scores each game against its OWN field", () => {
     const ctpData = { "1_0": { player_id: "p1", distance_ft: 4 } };
     const s = roundSummary({ ...base, ctpData, buyIns: { skinsIn: [], ctpIn: null } });
-    expect(s.skins).toEqual([]);
+    expect(s.skins.gross).toEqual([]);
+    expect(s.skins.net).toEqual([]);
     expect(s.ctp).toHaveLength(1);
   });
 
@@ -231,7 +265,7 @@ describe("roundSummary", () => {
 
   it("every section is present and empty rather than missing", () => {
     const s = roundSummary({ ...base, holeData: {}, matches: [] });
-    expect(s.skins).toEqual([]);
+    expect(s.skins).toEqual({ gross: [], net: [] });
     expect(s.ctp).toEqual([]);
     expect(s.lowNet).toEqual([]);
     expect(s.moneyHole.winners).toEqual([]);

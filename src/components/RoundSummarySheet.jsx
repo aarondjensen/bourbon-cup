@@ -77,10 +77,15 @@ const WinRow = ({ lead, name, detail }) => (
 // the one a man wants first, so the golf word leads the second line and the
 // two scores sit out to the right where they can be compared down the column.
 //
-// Both scores, always, even where they are the same: "5 gross · 5 net" is how
-// the card says he got no stroke on that hole, which is a real thing to know
-// about a skin somebody is about to be paid for.
-const SkinRow = ({ skin }) => (
+// The GROSS list prints one score, because on it the gross IS the score and
+// "4 gross · 4 net" would be the same number twice on every row.
+//
+// The NET list prints both, always, even where they are equal: "5 gross · 5
+// net" is how the card says he got no stroke on that hole, which is a real
+// thing to know about a skin somebody is about to be paid for, and dropping
+// it on the rows where it happens to be true would make its absence mean two
+// different things.
+const SkinRow = ({ skin, showNet = false }) => (
   <div style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "5px 0" }}>
     <div style={{ flex: 1, minWidth: 0 }}>
       <div style={{
@@ -93,7 +98,9 @@ const SkinRow = ({ skin }) => (
       </div>
     </div>
     <span style={{ flexShrink: 0, fontSize: FS.label, fontWeight: 700, color: BC.t3 }}>
-      {skin.gross} gross · <span style={{ color: BC.t2 }}>{skin.net} net</span>
+      {showNet
+        ? <>{skin.gross} gross · <span style={{ color: BC.t2 }}>{skin.net} net</span></>
+        : <span style={{ color: BC.t2 }}>{skin.gross} gross</span>}
     </span>
   </div>
 );
@@ -219,17 +226,27 @@ export function RoundSummarySheet({
           ))}
         </Card>
 
-        {/* "Every hole carried" is a claim about a round somebody played. A
+        {/* Two games on the same eighteen holes, and they do not agree — a
+            hole can go net to the man with the shot and carry gross. Gross
+            first, because that is the order a golfer says a score in and the
+            order the net row's own two numbers are printed in.
+
+            "Every hole carried" is a claim about a round somebody played. A
             round nobody has teed off on carried nothing. */}
         <Card
-          label="SKINS"
-          note="won on net"
+          label="GROSS SKINS"
           empty={s.played ? "Every hole carried." : "Nothing scored yet."}
-          rows={s.skins.length}
+          rows={s.skins.gross.length}
         >
-          {s.skins.map((k) => (
-            <SkinRow key={k.hole} skin={k} />
-          ))}
+          {s.skins.gross.map((k) => <SkinRow key={k.hole} skin={k} />)}
+        </Card>
+
+        <Card
+          label="NET SKINS"
+          empty={s.played ? "Every hole carried." : "Nothing scored yet."}
+          rows={s.skins.net.length}
+        >
+          {s.skins.net.map((k) => <SkinRow key={k.hole} skin={k} showNet />)}
         </Card>
 
         {/* Only a finished card is ranked, and equal lowest cards are
