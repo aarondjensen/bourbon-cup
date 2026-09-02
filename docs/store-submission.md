@@ -497,8 +497,32 @@ So on both questionnaires, the real-money gambling question is **No**:
 - Play's real-money gambling policy is the same shape and would require
   licensing per country.
 
-"Contests" or "simulated gambling", where the questionnaire offers it, is the
-honest box.
+**And SIMULATED gambling is also No, and CONTESTS is None.** This paragraph
+used to say the opposite — that simulated gambling was "the honest box" — and
+that advice cost a rejection on 2 Sep 2026, before a human had looked at the
+app at all:
+
+> The current submission cannot be reviewed because the app's rating in App
+> Store Connect indicates it includes simulated gambling and the app has been
+> submitted by an individual developer.
+
+**Simulated gambling plus an individual developer account is an automatic
+stop.** Apple's only two remedies are correcting the rating or enrolling as an
+organization, and there is no third. So the box is not a cautious middle
+ground between "no gambling" and "real gambling" — it is a category with an
+account-type gate on it.
+
+It is also simply the wrong description. Apple's simulated gambling means
+gambling-THEMED GAMES: slots, poker, casino play, wagering virtual currency
+inside the app. This app contains no game of chance, no odds, no virtual
+currency and no wager placed in the app. The Betting tab records agreements
+made in person on a golf course and settled in person afterwards; nothing is
+gambled inside the app, simulated or otherwise. "Contests" means sweepstakes
+and prize contests the app runs, not a golf tournament between friends.
+
+The rating lives on the app record rather than in the binary, so correcting it
+needs no new build — App Information → Age Rating → Edit, then resubmit the
+build already attached.
 
 > **Say it in the review notes on both stores**, in one sentence: *the app
 > records wagers agreed between players in person and settles them in person;
@@ -506,10 +530,12 @@ honest box.
 > single most likely thing to draw a reviewer's question, and answering it
 > before it is asked costs one line and saves a rejection round trip.
 
-Worth knowing and not worth acting on yet: renaming the tab from **Betting** to
-something like **Games** would lower this risk further. It is not obviously
-worth changing a name the field already uses, and no reviewer has objected yet.
-If either store queries it, that is the cheap fix to reach for.
+Worth knowing and still not acted on: renaming the tab from **Betting** to
+something like **Games** would lower this risk further. Apple has now bounced
+the app once over gambling — but over the RATING we typed, not over anything
+on the screen, and a reviewer has still never objected to the tab itself. So
+the fix that matched the actual fault was the questionnaire. Keep the rename
+in reserve for a rejection that quotes the app rather than the form.
 
 ---
 
