@@ -4,87 +4,93 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Get the App — The Bourbon Cup</title>
-  <meta name="description" content="How to put The Bourbon Cup on your phone: the Android invite, the iPhone home-screen install, and what you need to sign in." />
+  <meta name="description" content="Install The Bourbon Cup on Android or iPhone." />
   <meta name="theme-color" content="#0a0a0b" media="(prefers-color-scheme: dark)" />
   <meta name="theme-color" content="#fafaf9" media="(prefers-color-scheme: light)" />
   <link rel="icon" href="/favicon/favicon.ico" sizes="any" />
   <link rel="stylesheet" href="/legal.css" />
+  <!-- Scoped to this page. legal.css is written for long-form documents —
+       privacy policy, account deletion — and this page is two buttons. -->
+  <style>
+    body { display: flex; align-items: center; min-height: 100vh; padding: 24px 20px; }
+    main { max-width: 420px; width: 100%; text-align: center; }
+    .mark { font-size: 12px; letter-spacing: .16em; text-transform: uppercase;
+            color: var(--amber); font-weight: 700; margin: 0 0 6px; }
+    .title { font-size: 26px; line-height: 1.2; color: var(--t1); font-weight: 800; margin: 0 0 28px; }
+    .stores { display: flex; flex-direction: column; gap: 12px; }
+    /* The badges carry their own artwork and their own padding, so the
+       container adds none — a box drawn around a store badge is exactly what
+       both sets of brand guidelines tell you not to do. */
+    .badge { display: inline-flex; align-items: center; gap: 10px; justify-content: center; }
+    .badge img { display: block; width: auto; }
+    /* Not the same height, because they are not the same kind of file.
+       Google's badge is a 646x250 canvas holding 564x168 of artwork — 41px of
+       clear space on every side, baked in — and Apple's SVG is 119.66x40 with
+       none. Setting both to one height renders the Play badge a third smaller
+       than the one beside it. 168/250 = 0.672, so Play is scaled by 1/0.672
+       to put the two pieces of ARTWORK at the same height, which is what an
+       eye compares and what both sets of guidelines mean by equal prominence.
+       Re-measure if either asset is replaced. */
+    .badge-apple img { height: 48px; }
+    .badge-play  img { height: 71px; }
+    /* The clear space is inside the Play image, so the row it sits in already
+       has 21px of air above and below that the Apple row does not. Pulling it
+       back keeps the gap between the two badges even. */
+    .badge-play { margin: -14px 0; }
+    /* Unavailable rather than disabled: the badge stays legible, and the word
+       beside it says why nothing happens when you tap it. */
+    .badge.soon { opacity: .45; cursor: default; }
+    /* Under the badge, not beside it. Beside it, the tag is part of the row
+       flex centres, so the badge itself lands off-centre and the column of
+       two stops reading as a column. */
+    .apple-wrap { display: flex; flex-direction: column; align-items: center; gap: 7px; }
+    .soon-tag {
+      font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+      color: var(--t3);
+    }
+    .note { font-size: 13px; color: var(--t3); line-height: 1.5; margin: 22px 0 0; }
+    .note a { color: var(--t2); }
+    .web { display: inline-block; margin-top: 26px; font-size: 14px; color: var(--t2); }
+  </style>
 </head>
 <body>
 <main>
-  <header>
-    <p class="eyebrow">The Bourbon Cup</p>
-    <h1>Get the App</h1>
-    <p class="updated">Last updated 31 August 2026</p>
-  </header>
+  <p class="mark">The Bourbon Cup</p>
+  <h1 class="title">Get the app</h1>
 
-  <p>
-    The app and this website are the same thing — the same leaderboard, the same
-    scorecards, the same ten years of history. Installing it puts it on your home
-    screen, keeps you signed in, and is what makes notifications work.
-  </p>
+  <div class="stores">
+    <!-- The OFFICIAL badges, served from our own origin rather than hotlinked
+         off Google's and Apple's CDNs. Google's brand guidelines ask for the
+         asset to be hosted; Apple's tolerate either. Self-hosting also means
+         this page cannot quietly lose its only two controls the day one of
+         those URLs moves. See docs/play-store.md for where they came from.
 
-  <div class="card">
-    <p>
-      <strong>You will need the tournament password.</strong> It is the same one
-      the website asks for, and the director has it. You enter it once, claim
-      your name off the roster once, and never see either screen again.
-    </p>
+         Sized by height and never by width — the two have different aspect
+         ratios by design — and by DIFFERENT heights, for the reason in the
+         stylesheet above. -->
+    <a class="badge badge-play" href="https://play.google.com/apps/internaltest/4701112230999898955">
+      <img src="/app/google-play-badge.png" alt="Get it on Google Play" />
+    </a>
+
+    <!-- No href: there is nowhere to send anybody until the App Store review
+         and the unlisted request both come back. A badge that navigates to a
+         404 is worse than one that says "soon". Swap the <span> for an <a>
+         when the link exists. -->
+    <span class="apple-wrap">
+      <span class="badge badge-apple soon">
+        <img src="/app/app-store-badge.svg" alt="Download on the App Store" />
+      </span>
+      <span class="soon-tag">Coming soon</span>
+    </span>
   </div>
 
-  <h2>Android</h2>
-  <p>
-    The Android app is distributed by invitation rather than through a public
-    listing — it is not in the Play Store to be searched for, and there is
-    nothing about a private golf tournament that a stranger could use.
-  </p>
-  <p>
-    <a href="https://play.google.com/apps/internaltest/4701112230999898955">Tap here if you got the invite</a>
-  </p>
-  <div class="card">
-    <p>
-      <strong>It has to be the right Google account.</strong> The invite works
-      only for the address we added, and that address must be the one signed
-      into the Play Store on the phone you are holding — check
-      <strong>Settings → Google</strong> if you are not sure. A work account on
-      the list and a personal account on the phone produces
-      <em>“item not found”</em>, which reads like the app is broken and is not.
-      Tell the director which address you actually use and it takes ten seconds
-      to fix.
-    </p>
-  </div>
-  <p>
-    Once it is installed it updates itself, the same as any other app on your
-    phone.
+  <p class="note">
+    Android: the invite only works for the Google address we added, and it has
+    to be the one signed into the Play Store on your phone. If you get
+    <em>item not found</em>, tell Aaron which address you actually use.
   </p>
 
-  <h2>iPhone</h2>
-  <p>
-    Not on the App Store yet. Until it is, the website installs to your home
-    screen and behaves the same way:
-  </p>
-  <ol class="steps">
-    <li>Open <a href="https://www.thebourboncup.com">thebourboncup.com</a> in
-      <strong>Safari</strong> — not Chrome, which has no way to do this.</li>
-    <li>Tap the <strong>Share</strong> button, the square with the arrow out of
-      the top.</li>
-    <li>Scroll down and tap <strong>Add to Home Screen</strong>.</li>
-    <li>Open it from the home screen icon from then on, not from a Safari tab.
-      Notifications only work that way.</li>
-  </ol>
-
-  <h2>Anything else</h2>
-  <p>
-    Just use <a href="https://www.thebourboncup.com">the website</a>. It is the
-    whole app in a browser, on a laptop or any phone, with nothing to install.
-  </p>
-
-  <footer>
-    <p>
-      Questions, or the invite did not work —
-      <a href="mailto:aarondjensen@gmail.com?subject=Bourbon%20Cup%20app">aarondjensen@gmail.com</a>.
-    </p>
-  </footer>
+  <a class="web" href="https://www.thebourboncup.com">Or just use the website →</a>
 </main>
 </body>
 </html>
