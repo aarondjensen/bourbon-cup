@@ -580,3 +580,71 @@ export function groupIssues({ groups, matches, formatId }) {
 export const hasGroupIssues = (issues) =>
   !!(issues.unassigned.length || issues.duplicated.length || issues.unmatched.length
      || issues.split.length || issues.oversized.length || issues.mixed?.length);
+
+// ── The scoring unit ───────────────────────────────────────────────
+// The players ONE PHONE enters scores for.
+//
+// For every format whose match fits inside a foursome — Singles at one a
+// side, everything 2-man at two — the match IS the group, and the unit is
+// the match. Nothing about those rounds changes here, and that is the point:
+// this is a generalisation, not a new mode.
+//
+// A TEAM format's match is the whole SIDE. On the Bourbon Cup's closing round
+// that is one match holding sixteen players, played across four tee times —
+// and scoring it as a single unit put sixteen score cards on one phone and
+// asked the group standing on the 3rd to scroll past twelve people they
+// cannot see to reach their own. Whoever is keeping that card is keeping it
+// for the four men they are walking with, which is a TEE GROUP.
+//
+// So on a team format the unit is the group, and the match is what the group
+// is scored INTO — the engine still sums the side's best N across all four
+// waves, exactly as before. Nothing about the result moves; only who is on
+// the screen.
+//
+// A 2-man match SPLIT across two tee times is deliberately NOT split here.
+// That is a draw error — MatchSetup flags it in as many words — and cutting
+// the card in half is not the fix for it; it would take a visible warning on
+// the admin screen and turn it into a silently halved scoring screen on the
+// course.
+//
+// Returns `[{ key, pids, groupIdx }]` in tee order. `groupIdx` is null when
+// nothing has been drawn yet, which is honest rather than "off first".
+export function scoringUnits({ match, groups, formatId }) {
+  const all = matchPlayers(match);
+  if (!all.length) return [];
+  const gs = groups || [];
+  const whole = (groupIdx) => [{ key: match.id, pids: all, groupIdx }];
+
+  // The match fits a foursome, so it is the unit however the draw looks.
+  if (formatPerSide(formatId) != null) {
+    const gi = groupIndexForMatch({ groups: gs, match });
+    return whole(gi < 0 ? null : gi);
+  }
+
+  const byIdx = new Map();
+  const ungrouped = [];
+  all.forEach((pid) => {
+    const gi = groupIndexForPlayer(gs, pid);
+    if (gi < 0) { ungrouped.push(pid); return; }
+    if (!byIdx.has(gi)) byIdx.set(gi, []);
+    byIdx.get(gi).push(pid);
+  });
+
+  // Undrawn, or drawn entirely into one group: one unit, and it is the match.
+  if (!byIdx.size) return whole(null);
+  if (byIdx.size === 1 && !ungrouped.length) return whole([...byIdx.keys()][0]);
+
+  const units = [...byIdx.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([groupIdx, pids]) => ({ key: `${match.id}#${groupIdx}`, pids, groupIdx }));
+  // Anybody the draw missed still needs somewhere to be scored, and a unit of
+  // their own says so. Dropping them would take a player off the course.
+  if (ungrouped.length) units.push({ key: `${match.id}#none`, pids: ungrouped, groupIdx: null });
+  return units;
+}
+
+// The unit a player is in, or null. `null` for a director who is not in this
+// round's draw at all — the caller falls back to the first unit and offers
+// the picker, which is what the crown has always been for.
+export const unitForPlayer = (units, pid) =>
+  (units || []).find((u) => u.pids.includes(pid)) || null;
