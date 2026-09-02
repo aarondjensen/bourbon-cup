@@ -269,7 +269,7 @@ as `store-submission.md` §1, and for the same reason: a list that still says
 | 3. APNs key | **Uploaded** | Firebase → Cloud Messaging shows key `7UA9A9SR3K` under both Development and Production with Team ID `7RRL56R755`, which matches `DEVELOPMENT_TEAM` in `project.pbxproj`. Both slots with one Key ID is correct, not a double upload. |
 | 4. Sign in with Apple on the App ID | **Enabled** | Checked in the developer portal, Identifiers → `com.thebourboncup.app`, 31 Aug 2026. Nothing in the repo can see this, so it is a fact with a date on it and no way to re-derive. Missing it fails SIGNING with an entitlement mismatch that never mentions Apple. |
 | 5. Push Notifications on the App ID | **Enabled** | Same page, same date. |
-| 6. Build on a Mac | **Done** — 31 Aug 2026 | Archived from `~/dev/bourbon-cup` and accepted by App Store Connect. **§5 is complete.** Export compliance needed no questionnaire, which is `ITSAppUsesNonExemptEncryption` in `Info.plist` doing its job. |
+| 6. Build on a Mac | **Done** — 1.0 (1) 31 Aug, 1.0 (2) 2 Sep 2026 | Archived from `~/dev/bourbon-cup` and accepted by App Store Connect. **§5 is complete.** Export compliance needed no questionnaire, which is `ITSAppUsesNonExemptEncryption` in `Info.plist` doing its job. |
 
 While the Keys page was open, the two `.p8`s were seen side by side and the
 column that tells them apart is exactly as described below: `7UA9A9SR3K`
@@ -598,23 +598,46 @@ Unlisted does **not** mean unreviewed — §3 applies in full.
 
 ## 9. The order from here
 
-1. Everything in `store-submission.md` §1. **BY HAND**
-2. All six items in §5. **BY HAND, on a Mac**
-3. Build, run on a device, work through the §6 list. **BY HAND**
-4. TestFlight to the field. **BY HAND**
-5. Screenshots at Apple's sizes — `store-submission.md` §4 for which screens.
-   Apple wants 6.9″ iPhone (1290×2796 or 1320×2868) and rejects on dimensions
-   alone. Read the current required set off App Store Connect rather than
-   trusting this line.
-6. App Privacy labels, from `store-submission.md` §2. They must agree with
-   `PrivacyInfo.xcprivacy`.
-7. Age rating — `store-submission.md` §3. Alcohol yes, gambling no.
-8. Submit to App Review with the notes in §7. **BY HAND**
-9. **Then** file the unlisted-distribution request, as the Account Holder — §8.
-   **BY HAND**
+**1.0 (2) was submitted to App Review on 2 Sep 2026.** Steps 1–8 below are
+done; step 9 is the only one left, and it is independent of the review's
+outcome — file it now rather than waiting for an approval.
 
-Steps 1–2 are the whole remaining cost. Nothing before step 3 is verifiable
-without a Mac.
+1. ~~Everything in `store-submission.md` §1.~~
+2. ~~All six items in §5.~~
+3. ~~Build, run on a device, work through the §6 list.~~
+4. ~~TestFlight to the field.~~ Internal testing only, via the **Dev Test**
+   group. No external group exists, so Beta App Review gates nothing — the
+   field will install from the unlisted App Store link. A beta submission of
+   1.0 (1) was rejected under 2.1(a) on 2 Sep with the Beta App Review
+   Information section empty; see §6. It was left unresolved deliberately.
+5. ~~Screenshots at Apple's sizes.~~ One 6.9″ set (1290×2796) uploaded; Apple
+   scales it into the 6.5″ slot, so one set covers both.
+6. ~~App Privacy labels.~~ The seven types from `store-submission.md` §2, all
+   App Functionality, all linked to identity, none used for tracking. **This
+   is the gate that blocks Add for Review**, and the error names an Admin
+   rather than the section, which is a slow way to find out.
+7. ~~Age rating.~~
+8. ~~Submit to App Review with the notes in §7.~~
+9. **File the unlisted-distribution request, as the Account Holder — §8.
+   BY HAND. STILL OPEN.**
+
+### What the submission run found, which nothing else would have
+
+Two live faults, both invisible from a director's account, both caught only
+because the reviewer path was walked on a plain Google account:
+
+- **Neither access code was set.** A blank `code` is an OPEN DOOR, not a
+  closed one — `codeOK()` treats blank as a pass, because that blank is the
+  bootstrap that lets the first membership exist. Anyone signing in with any
+  Google or Apple account was being minted an ordinary member of the live cup.
+- **`bc_2026` was locked**, so none of the fourteen unclaimed men could have
+  claimed a name. See §6; a director writes straight through the lock and sees
+  a normal roster.
+
+Neither is visible to a director and neither would have surfaced until the
+wrong person hit it — a reviewer in the first case, the field on a first tee
+in the second. Walk §6 on a non-director account before every release, not
+just this one.
 
 ---
 
