@@ -619,7 +619,11 @@ does not wait on it — so a rejection from one says nothing about the other.
    App Functionality, all linked to identity, none used for tracking. **This
    is the gate that blocks Add for Review**, and the error names an Admin
    rather than the section, which is a slow way to find out.
-7. ~~Age rating.~~
+7. ~~Age rating.~~ **Simulated Gambling: None. Contests: None.** Both were
+   set wrong and cost a rejection on 2 Sep — simulated gambling plus an
+   individual developer account is an automatic stop, refused before a human
+   sees the app. `store-submission.md` §3.2 has the reasoning; the fix is the
+   questionnaire and needs no new build.
 8. ~~Submit to App Review with the notes in §7.~~
 9. ~~File the unlisted-distribution request, as the Account Holder — §8.~~
    Filed 2 Sep 2026. The form is written for enterprises distributing internal
