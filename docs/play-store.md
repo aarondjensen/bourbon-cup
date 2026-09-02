@@ -707,7 +707,41 @@ ladder:
 
 **Internal testing installs through the Play Store, updates automatically, and
 needs no minimum tester count, no 14-day wait and no production-access
-application.** You can start one before the store listing is finished.
+application.**
+
+**But a FIRST release still has to clear review, and on a personal account
+that gate wants a closed track to exist.** This paragraph used to end "you can
+start one before the store listing is finished", and on 2 Sep 2026 that turned
+out to be false in the way that costs a day.
+
+What actually happened: the internal track read `Active`, the release was
+rolled out, the tester's Google account was right and Play Console told him
+`You're a tester` — and the Play Store still said **Item not found**, because
+the app had never been reviewed. Publishing overview held thirteen staged
+changes under *"Changes not yet submitted for review"* with **Send app for
+review** greyed out, and the Dashboard's remaining task was a closed test
+track. Nothing in the internal-testing UI says any of this; `Draft app` and
+`Internal testing · Active · Not reviewed` sit on the same line of the same
+page.
+
+So for a brand-new app on a personal account, the real sequence is:
+
+1. Store listing (§6) and every App content declaration — **all of it, before
+   anything installs.** Not "until you actually want a listing".
+2. A **closed testing track** that exists, with a tester list, a country, and
+   a rolled-out release. The same AAB as internal is fine; both tracks can
+   carry it.
+3. **Publishing overview → Send app for review**, then days, not minutes.
+
+The table's "minutes, no review queue" is true of the SECOND release and every
+one after it. It is not true of the first, and the first is the one somebody
+reads this file for.
+
+**None of that is the 12-testers-for-14-days requirement**, which is still
+only the gate on *production access* (§8) and still does not apply here. The
+closed track has to exist; nobody has to use it. That distinction is the whole
+reason this section is still worth reading — the cost is ten minutes of forms,
+not three weeks.
 
 For this app that is not a shortcut, it is the correct destination. The
 Bourbon Cup is sixteen men behind a tournament password. A public production
@@ -719,8 +753,9 @@ distribution by link, to people you name.
 So:
 
 - **If the field just needs the app on their phones** — internal testing.
-  Upload, add sixteen email addresses, send the link. Same day. Skip §8
-  entirely, and skip §6's listing copy until you actually want a listing.
+  Skip §8 entirely. Do NOT skip §6's listing copy: the first release does not
+  install until the app is reviewed, and it is not reviewable without it. Same
+  day only from the second release onwards.
 - **Only if you want The Bourbon Cup publicly listed on Play** does §8 apply.
 
 **And the requirement is per app.** Production access earned by one app does
@@ -740,10 +775,12 @@ the fourteen days when you decide you want production.
 **Testing → Internal testing → Create new release**, upload the AAB, roll out.
 Then **Testers**, paste the email addresses, and copy the opt-in URL.
 
-You still owe some of App content even on this track — a privacy policy URL,
-the content rating questionnaire (§4), App access (§3), ads and target
-audience. What you skip is the **Data safety form**, which is the long one:
-apps active only on internal testing are exempt from it.
+You owe the whole of App content before a first release will install — a
+privacy policy URL, the content rating questionnaire (§4), App access (§3),
+ads, target audience, health apps and the **Data safety form**. The exemption
+that used to make Data safety skippable for internal-only apps did not apply
+here: it was one of the thirteen changes Play required before it would take
+the app for review at all.
 
 ### The message to send, and the one line that has to be in it
 
