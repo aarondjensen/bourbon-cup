@@ -144,15 +144,24 @@ messaging.onBackgroundMessage(async (payload) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const data = event.notification.data || {};
-  // The app reads window.location.hash for its tab (see getTabFromHash in
-  // App.jsx), so these are hash routes. A ?tab= query would be silently
-  // ignored and always land on the default tab.
+  // The app reads window.location.hash (see src/lib/deepLink, consumed in
+  // App), so these are hash routes. A ?tab= query would be silently ignored
+  // and always land on the default tab.
+  //
+  // The map is only a FALLBACK for a message with no `url` — every message
+  // the functions send carries one, and `data.url` below wins. round_final is
+  // not IN the map because its target names a round (`/#round/3`) and a map
+  // keyed by type has no round to name; `data.round` is where that comes
+  // from, and it has ridden in the payload since the trigger was written.
   const urlMap = {
     attest_ready: "/#scoring",
     card_final:   "/#scoring",
-    round_final:  "/#leaderboard",
   };
-  const target = data.url || urlMap[data.type] || "/";
+  const target =
+    data.url
+    || (data.type === "round_final" && data.round ? `/#round/${data.round}` : null)
+    || urlMap[data.type]
+    || "/";
 
   event.waitUntil((async () => {
     const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });

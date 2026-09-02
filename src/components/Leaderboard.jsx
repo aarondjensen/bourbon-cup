@@ -34,7 +34,7 @@
 
 import { useState, useMemo, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
-import { BC, FONT, ALPHA, FS, ink, teamColor } from "../theme";
+import { BC, FONT, ALPHA, FS, R, ink, teamColor } from "../theme";
 import { playerLookup, realPlayers, sideNames } from "../lib/players";
 import {
   FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT,
@@ -694,7 +694,7 @@ function SealedPanel({ through, ownCards, remaining, canReveal, onSetReveal, onO
 //  Round section
 // ══════════════════════════════════════════════════════════════════
 function RoundSection({
-  meta, results, open, onToggle, tPlayers,
+  round, meta, results, open, onToggle, onOpenSummary, tPlayers,
   courses, tRounds, roundLocks, holeData, viewer, expandedMatch, setExpandedMatch,
   sealPanel,
 }) {
@@ -801,6 +801,30 @@ function RoundSection({
             ))}
           </div>
           )}
+          {/* ── The round's whole result ──────────────────────────────
+              Matches, pins, skins, low net and the money hole in one sheet
+              (components/RoundSummarySheet) — the same sheet a tapped
+              round-final notification opens, so the app has the door the push
+              has and a man can go back to Round 2 on Sunday.
+
+              Under the matches rather than up on the header bar, which was
+              where it started. That bar is one line on a phone and the course
+              name already ellipses on it; a chip beside the score took about
+              seventy pixels off "Arthur Hills — Orange · Team Best Ball" on
+              every round, expanded or not, to offer something only somebody
+              already reading a round wants. Down here it costs the collapsed
+              board nothing and sits where that reading ends. */}
+          {onOpenSummary && !seal?.concealing && (
+            <button
+              onClick={() => onOpenSummary(round)}
+              style={{
+                width: "100%", marginTop: 6, padding: "7px 0", borderRadius: R.sm,
+                background: "transparent", border: `1px solid ${BC.bdr}`, color: BC.t3,
+                fontSize: FS.micro, fontWeight: 800, letterSpacing: 1.2, cursor: "pointer",
+                fontFamily: FONT,
+              }}
+            >ROUND {round} SUMMARY</button>
+          )}
           </>
         )
       )}
@@ -838,7 +862,7 @@ function RoundSection({
 export function TeamLeaderboard({
   matches, holeData, ownHoleData, countdownHoleData, courses, tRounds, tPlayers, teams,
   hcpOverrides, teeAssignments, roundLocks, viewer,
-  canReveal = false, onSetReveal, autoCountdown = false,
+  canReveal = false, onSetReveal, autoCountdown = false, onOpenSummary,
 }) {
   const [expandedMatch, setExpandedMatch] = useState(null);
   // Round open/closed. Absent key = follow the automatic rule below;
@@ -1299,6 +1323,7 @@ export function TeamLeaderboard({
           sealPanel={sealPanelFor(rnd)}
           open={openOverrides[rnd] ?? defaultOpen.has(rnd)}
           onToggle={() => setOpenOverrides((p) => ({ ...p, [rnd]: !(p[rnd] ?? defaultOpen.has(rnd)) }))}
+          onOpenSummary={onOpenSummary}
           tPlayers={tPlayers}
           courses={courses}
           tRounds={tRounds}

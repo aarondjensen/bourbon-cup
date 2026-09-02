@@ -69,7 +69,7 @@ const AdminView = lazy(() =>
 const DataView = lazy(() => import("./components/DataView"));
 import { photoUploadsAllowed, uploadsDisabledReason, CONFIG_COL, PHOTOS_CONFIG_ID } from "./lib/media";
 import { REPORTS_COL, buildReport, reportsByMedia } from "./lib/mediaReports";
-import { initForegroundNotifications, syncAppBadge } from "./lib/notifications";
+import { initForegroundNotifications, initNotificationTaps, syncAppBadge } from "./lib/notifications";
 import { tapFeedback, commitFeedback, applyNativeChrome } from "./lib/platform";
 import { SegmentedToggle, SegRule, StickyTop, Banner, PlayerName, Toast, HoleNavigator, ScoreButtonRow } from "./components/ui";
 import { GroupSwitcher } from "./components/GroupSwitcher";
@@ -79,6 +79,7 @@ import { EditionSwitcher } from "./components/EditionSwitcher";
 import { EditionBanner } from "./components/EditionBanner";
 import { GhinLinkButton, GhinSyncButton } from "./components/GhinLink";
 import { TeamLeaderboard } from "./components/Leaderboard";
+import { RoundSummarySheet } from "./components/RoundSummarySheet";
 import { FullScorecard } from "./components/FullScorecard";
 import { FieldCard } from "./components/FieldCard";
 import { BuyInEditor } from "./components/BuyIns";
@@ -99,6 +100,7 @@ import {
   allRounds, MAX_ROUND_COUNT,
 } from "./lib/rounds";
 import { summarizeEdition, sameSummary } from "./lib/editionSummary";
+import { parseDeepLink } from "./lib/deepLink";
 import {
   inField, roundSetup, strokeMapsFor, computeSkins, lowNetRows, ctpTags, ctpPinTotal,
   moneyHole, moneyHoleRows, moneyHoleWins, moneyHolePars,
@@ -3297,6 +3299,13 @@ export default function App() {
   // most-glanced screen during a round, and the natural place for a
   // user reopening the app to check current state.
   const [view, setView] = useState("leaderboard");
+  // ── The round summary ──
+  // A round number, or null. Opened by the chip on a round's header on the
+  // Leaderboard and by a tapped round-final notification, which is why it
+  // lives up here rather than inside TeamLeaderboard: a deep link arrives at
+  // the app, not at a tab, and the sheet reads ctpData, buyIns and teamNames,
+  // none of which the board is given.
+  const [summaryRound, setSummaryRound] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [editionsOpen, setEditionsOpen] = useState(false);
   const [ctpData, setCtpData] = useState({});     // { "round_hole": record }
@@ -5017,6 +5026,40 @@ export default function App() {
   // never enabled push.
   useEffect(() => { initForegroundNotifications(); }, []);
 
+  // ── Where a tapped notification lands ────────────────────────────────
+  // The app is a single page with no router, so a hash is the whole of its
+  // addressing (the same decision COUNTDOWN_HASH documents in lib/reveal).
+  // Both platforms arrive here: the service worker navigates a web tap to
+  // `data.url`, and lib/notifications' native listener writes the same url's
+  // hash. lib/deepLink decides what one means; this is what acts on it.
+  //
+  // Read at mount AND on hashchange, because the two cases are different
+  // arrivals of the same tap: a cold launch has the hash before React runs,
+  // and a tap on an app already open changes it under a mounted tree.
+  //
+  // The hash is CLEARED once consumed. It is a one-shot instruction rather
+  // than an address — leaving it standing would reopen the summary on every
+  // reload of a phone somebody left on the screen, and would stop a second
+  // tap on the same notification doing anything at all. `replaceState` so
+  // the back button does not walk into the hash we just removed.
+  //
+  // `#countdown` is deliberately not ours (parseDeepLink returns null for
+  // it), so it is not cleared: it is the television's URL and the Leaderboard
+  // owns it.
+  useEffect(() => {
+    const consume = () => {
+      const link = parseDeepLink(window.location.hash);
+      if (!link) return;
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      setView(link.view);
+      if (link.round != null) setSummaryRound(link.round);
+    };
+    consume();
+    initNotificationTaps();
+    window.addEventListener("hashchange", consume);
+    return () => window.removeEventListener("hashchange", consume);
+  }, []);
+
   // ── The native status bar ────────────────────────────────────────────
   // index.html's `apple-mobile-web-app-status-bar-style` block is a Safari
   // home-screen mechanism and does nothing inside the iOS app's WKWebView —
@@ -5463,6 +5506,7 @@ export default function App() {
             canReveal={isDirector}
             onSetReveal={onSetReveal}
             autoCountdown={AUTO_COUNTDOWN}
+            onOpenSummary={setSummaryRound}
           />
         )}
         {view === "scoring" && (
@@ -5769,6 +5813,29 @@ export default function App() {
           `canManage` is what adds the create/delete half for a director, who
           also reaches the same modal from Admin → Event. */}
       <EditionSwitcher open={editionsOpen} onClose={() => setEditionsOpen(false)} canManage={isDirectorUser} />
+
+      {/* What one round decided, in one place. Opened by the chip on a round's
+          header on the Leaderboard and by a tapped round-final notification
+          (see the deep-link effect above). Rendered here rather than inside
+          TeamLeaderboard because it needs ctpData, buyIns and teamNames, and
+          because a deep link arrives at the app rather than at a tab. */}
+      {summaryRound != null && (
+        <RoundSummarySheet
+          round={summaryRound}
+          onClose={() => setSummaryRound(null)}
+          matches={matches}
+          holeData={holeData}
+          tPlayers={tPlayers}
+          tRounds={tRounds}
+          courses={courses}
+          roundLocks={roundLocksData}
+          ctpData={ctpData}
+          buyIns={buyIns}
+          hcpOverrides={hcpOverridesData}
+          teeAssignments={teeAssignmentsData}
+          teamNames={teamNames}
+        />
+      )}
 
       {/* The Finalize sheet — everything the removed Scoring card held, at
           zero cost until it is opened. */}

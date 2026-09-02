@@ -568,6 +568,47 @@ export const initForegroundNotifications = async () => {
   });
 };
 
+// ── Tapping one, on native ──────────────────────────────────────────
+// The web has had this since push landed: the service worker's
+// `notificationclick` handler navigates the app to `data.url`. Native never
+// did. iOS and Android draw the banner from the APNs / Android notification
+// block and hand the tap back to the app through the Capacitor plugin, and
+// nothing here was listening — so every tap on a phone simply foregrounded
+// the app on whatever tab it opened on, and the `url` the functions have
+// always been sending was read by nobody.
+//
+// It routes through the HASH rather than through a callback of its own,
+// which is the point: the web tap already arrives that way, so both
+// platforms land in the one reader (lib/deepLink, consumed in App). A second
+// path would be a second place for a link to be understood differently.
+//
+// The hash is CONSUMED and cleared by that reader, so tapping the same
+// notification twice sets it twice and fires `hashchange` twice — which it
+// would not if the app left the old hash standing.
+//
+// Best-effort by construction. A tap that arrives before this listener is
+// attached (a cold launch is a race the plugin does not promise to win) is a
+// tap that opens the app on its default tab, which is exactly what every tap
+// did before this existed.
+let _tapUnsub = null;
+export const initNotificationTaps = async () => {
+  if (_tapUnsub || !isNative()) return;
+  try {
+    const { FirebaseMessaging } = await import("@capacitor-firebase/messaging");
+    _tapUnsub = await FirebaseMessaging.addListener("notificationActionPerformed", (event) => {
+      // The plugin nests the payload one level down, and the shape has moved
+      // between versions — read both rather than pinning one.
+      const data = event?.notification?.data || event?.data || {};
+      const url = typeof data.url === "string" ? data.url : "";
+      const hash = url.slice(url.indexOf("#"));
+      if (url.includes("#") && hash.length > 1) window.location.hash = hash;
+    });
+  } catch (err) {
+    // A plugin that will not load is not worth failing a mount over.
+    console.warn("[push] tap listener unavailable", err);
+  }
+};
+
 // ── App badge ───────────────────────────────────────────────────────
 // The badge means PENDING ACTIONS, not unread messages: it is the count of
 // cards this player still owes an attestation on. So it is not cleared by

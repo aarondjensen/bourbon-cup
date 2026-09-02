@@ -75,7 +75,7 @@ export default defineConfig(({ mode }) => {
       // it belongs in the default run: the failure it exists to catch is a
       // regenerate or a merge quietly dropping a key, and that is only useful
       // caught on the commit that does it.
-      include: ['{src,pipeline,scripts}/**/*.{test,spec}.{js,jsx,mjs}'],
+      include: ['{src,pipeline,scripts,functions}/**/*.{test,spec}.{js,jsx,mjs}'],
     },
 
     server: {

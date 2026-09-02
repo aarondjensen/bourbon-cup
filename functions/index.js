@@ -48,6 +48,7 @@ const { setGlobalOptions } = require("firebase-functions/v2");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
+const { ctpBody } = require("./ctpNotice");
 
 // ── A ceiling on how much this can ever cost ────────────────────────
 // Cloud Functions bill per instance-second and scale out on demand. The
@@ -233,14 +234,60 @@ async function matchPlayerIds(matchId) {
 
 // Everyone in one edition. Used only by the round-final broadcast, which is
 // genuinely tournament-wide.
-async function allPlayerIds(tournamentId) {
+//
+// Returns the ROWS rather than the ids: the same query answers both halves of
+// that broadcast — who to send to, and what to call the men who took the pins
+// — and asking twice would be a second read of the same documents plus a
+// `nameOf` query per winner on top.
+async function rosterFor(tournamentId) {
   try {
     const snap = await db.collection("bc_players")
       .where("tournament_id", "==", tournamentId).get();
-    return snap.docs.map(d => d.data().player_id).filter(Boolean);
+    return snap.docs.map(d => d.data()).filter(p => p?.player_id);
   } catch (e) {
-    logger.warn("allPlayerIds failed", { tournamentId, err: e?.message });
+    logger.warn("rosterFor failed", { tournamentId, err: e?.message });
     return [];
+  }
+}
+
+// Every standing pin for one round.
+//
+// Two equality filters and no ordering, so this needs no composite index —
+// Firestore serves it off the single-field indexes it maintains by default.
+async function ctpTagsFor(tournamentId, round) {
+  try {
+    const snap = await db.collection("bc_ctp")
+      .where("tournament_id", "==", tournamentId)
+      .where("round", "==", round).get();
+    return snap.docs.map(d => d.data());
+  } catch (e) {
+    logger.warn("ctpTagsFor failed", { tournamentId, round, err: e?.message });
+    return [];
+  }
+}
+
+// Who bought into CTP. An array of player ids, or NULL when no director has
+// ever opened the buy-in panel — and null means everybody, which is what
+// every tournament played before buy-ins existed was (see lib/betting inField).
+//
+// Found by QUERY rather than by doc id, because the id depends on whether the
+// edition is namespaced (`bc_2026__bc_settings_main`) or is the original
+// bc_2025 (a bare `bc_settings_main`), and only the client knows which. Every
+// document in the collection carries its tournament_id, so the query does not
+// have to.
+//
+// A failure reads as null — everybody — rather than as nobody. The worse of
+// the two wrong answers is silently dropping the man who won the pin.
+async function ctpFieldFor(tournamentId) {
+  try {
+    const snap = await db.collection("bc_tournament_settings")
+      .where("tournament_id", "==", tournamentId).get();
+    const doc = snap.docs.find(d => d.id.endsWith("bc_settings_main"));
+    const ids = doc?.data()?.ctp_in;
+    return Array.isArray(ids) ? ids : null;
+  } catch (e) {
+    logger.warn("ctpFieldFor failed", { tournamentId, err: e?.message });
+    return null;
   }
 }
 
@@ -348,13 +395,41 @@ exports.onRoundFinal = onDocumentWritten("bc_round_locks/{docId}", async (event)
       return;
     }
 
-    const pids = await allPlayerIds(tournament_id);
+    const roster = await rosterFor(tournament_id);
+    const pids = roster.map(p => p.player_id);
     if (!pids.length) return;
+
+    // ── What the body says ──────────────────────────────────────────
+    // The pins, when the round played any and anybody took one. See
+    // ctpNotice.js for the character budget this is written to and for why
+    // the names come out as initials.
+    //
+    // `after.hole_pars` is the round lock's own frozen par table, which is
+    // what makes this cost two reads rather than four: the lock already
+    // carries the course's holes as they were when the round was sealed, so
+    // there is no course document to fetch and no chance of reading a hole
+    // the director has re-pointed since.
+    //
+    // The old sentence is the fallback, and it is still the right one for a
+    // round with no par 3s on it.
+    const [tags, ctpIn] = await Promise.all([
+      ctpTagsFor(tournament_id, round_number),
+      ctpFieldFor(tournament_id),
+    ]);
+    const pins = ctpBody({ pars: after.hole_pars, tags, ctpIn, roster });
 
     await broadcast(pids, {
       title: `Round ${round_number} is final`,
-      body: "Handicaps and results are frozen — the leaderboard is up to date.",
-      data: { type: "round_final", round: round_number, tournament_id, url: "/#leaderboard" },
+      body: pins || "Handicaps and results are frozen — the leaderboard is up to date.",
+      // `/#round/N` opens the round summary over the leaderboard — the
+      // matches, the pins, the skins, low net and the money hole, which is
+      // the rest of the answer the body has no room for. The hash is spelled
+      // by roundSummaryHash in src/lib/deepLink, which is what reads it; this
+      // is the one copy of it that module cannot own.
+      //
+      // A phone on a bundle older than that reader ignores the hash and opens
+      // on its default tab, which is what every tap did before it existed.
+      data: { type: "round_final", round: round_number, tournament_id, url: `/#round/${round_number}` },
     }, "round_final");
   } catch (err) {
     logger.error("onRoundFinal error", { err: err?.message, stack: err?.stack?.slice(0, 500) });
