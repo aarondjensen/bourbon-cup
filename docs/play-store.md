@@ -332,22 +332,21 @@ Choose **All or some functionality is restricted** and add two entries:
 
 > Name: Full access
 >
-> Instructions: Sign in with any Google account of your own, enter the
-> tournament password below when prompted, then tap any unclaimed name on the
-> roster screen. This unlocks score entry, the photo library upload, side bets
-> and the Admin tabs.
+> Instructions: Sign in with Google, enter the access code below when
+> prompted, then switch to the tournament named "DEMO — Testers" before
+> tapping a name. The app opens on the current cup, whose roster is already
+> claimed by the men playing it — tap "Switch tournament" on the roster
+> screen, or ☰ → Tournaments, and choose the one labelled DEMO. Then tap any
+> unclaimed name there. This unlocks score entry, the photo library upload,
+> side bets and the Admin tabs; inside the demo tournament every signed-in
+> account gets Admin, so nothing needs granting and changes affect only the
+> demo. The code below opens the demo tournament only and cannot write to the
+> tournament being played; if you tap a name outside it the app says so and
+> points you back to the switcher.
 >
-> First, switch to the tournament named "DEMO — Testers". The app opens on
-> the current cup, whose roster is already claimed by the men playing it. Tap
-> "Switch tournament" on the roster screen, or ☰ → Tournaments, and choose the
-> one labelled DEMO. Every other year is a completed tournament, closed to new
-> entries, so a name cannot be claimed in one — the app says so on screen.
-> Inside the demo tournament every signed-in account gets the Admin tabs, so
-> nothing needs granting; changes there affect only the demo.
->
-> Username: `<none — no credentials are handed over>`
-> Password: `<none>`
-> Any other instructions: Tournament password: `<from Admin → Event → Access>`
+> Username: `<the review account's address>`
+> Password: `<its Google password>`
+> Any other instructions: Access code: `<the REVIEWER code from Admin → Event → Access>`
 
 **This section used to say no account is handed over, on purpose.** Play has
 since closed that door: the Sign in details form ends with a mandatory
@@ -371,13 +370,27 @@ unchallenged rather than to be quick:
 2. **Do not enable 2-step verification on it.** Play asks for "reusable sign in
    details that don't expire", and a 2FA prompt on a reviewer's device is an
    access failure they cannot work around and cannot contact you about.
-3. Sign into the app with it once yourself: present the tournament password,
+3. Sign into the app with it once yourself: present the **reviewer** code,
    switch to **DEMO — Testers**, and claim a name. **Claim it in advance** —
    a reviewer who has to claim one is a reviewer who can fail at that step, and
    the account is a member either way.
+
+   Present the reviewer code and not the tournament password, and it matters
+   which: the code is what stamps the membership `demo_only`, and the stamp is
+   what the rules read. A membership minted with the tournament password is an
+   ordinary one for the rest of its life — there is no re-check and no way to
+   downgrade it from the app — so a review account let in the wrong door is a
+   full member of the live cup, permanently, with a password written into a
+   Google form.
 4. Put its address and password in the form's Username and Password fields,
-   the tournament password and the demo instructions in the free-text box, and
+   the **reviewer code** and the demo instructions in the free-text box, and
    tick the checkbox honestly.
+
+   The tournament password never goes in this form. Play quotes what is in it
+   back on every future update review, so a code here can never be rotated
+   without breaking the next one — and the tournament password is the one
+   sixteen men say out loud across a table. The reviewer code exists to be the
+   thing that is safe to type here; see `store-submission.md` §1.4.
 
 The account is then a permanent member of the demo edition and of nothing else.
 It never needs the crown: a demo grants Admin to any member (`canAdminEdition`),

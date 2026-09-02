@@ -45,7 +45,7 @@
 // means exactly one thing here: wrong password.
 import { db, TOURNAMENT_ID, writeFailure } from "../firebase";
 import { bestEffort } from "./bestEffort";
-import { isEditionLocked } from "./editionLock";
+import { isEditionLocked, isDemoEdition } from "./editionLock";
 
 // The fields this module owns on a player document. Grouped so the admin
 // unlink and the claim write cannot drift apart.
@@ -430,6 +430,26 @@ export async function claimPlayer(player, authUser) {
           ok: false,
           error: `${edition?.name || "This tournament"} is locked, so it can't take a new claim. Ask the tournament director to unlock it.`,
         };
+      }
+      // The other refusal this rule now has, and the one with an audience:
+      // a membership minted by the REVIEWER code is stamped demo_only, and
+      // canWriteEdition() confines it to demo editions. So a store reviewer
+      // who taps a name on the cup's roster instead of switching first is
+      // refused — and without this, by writeFailure's "the security rules
+      // may not be deployed yet", which is both wrong and reads like a
+      // broken app to the one person it must not read that way to.
+      //
+      // The stamp is on the caller's own bc_accounts document, which they
+      // are allowed to read. Fetched only on a denial, so the ordinary
+      // claim still costs one write and no reads.
+      if (!isDemoEdition(edition)) {
+        const membership = await db.getById("bc_accounts", authUser.uid).catch(() => null);
+        if (membership?.demo_only === true) {
+          return {
+            ok: false,
+            error: 'That access code only opens demo tournaments. Tap "Switch tournament" and choose the one labelled DEMO.',
+          };
+        }
       }
     }
     return { ok: false, error: writeFailure(e, "Could not save that — check signal and try again.") };

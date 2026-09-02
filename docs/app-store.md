@@ -436,8 +436,12 @@ field tests a broken build and stops trusting the next one.
 
 ## 7. Review notes to submit with the build
 
-No credentials are handed over — see `store-submission.md` §1.4 for why, and
-for how the Admin tabs are reachable without one.
+No account is handed over — see `store-submission.md` §1.4 for why, and for how
+the Admin tabs are reachable without one. What IS handed over is the **reviewer
+code**, which is not the tournament password: it mints a membership the rules
+confine to demo editions, so the string written into this form cannot reach the
+cup and never has to be rotated. Set it in Admin → Event → Access and paste the
+same value into Play's App access form.
 
 **The demo edition is load-bearing for exactly this**, which is worth knowing
 before anybody retires it. The guest door covers the read-only half of a
@@ -457,18 +461,23 @@ than a fallback, and the note below says so in that order.
 > account. It is not a limited demo; it is the whole app without write access.
 >
 > **To reach scoring, photos and everything a player does:** tap **Sign in with
-> Apple** and use the Apple ID already on your device, enter the tournament
-> password below when prompted, then tap any unclaimed name on the roster
-> screen. There is no separate demo account to request — this app has no
-> email-and-password sign-in, and Sign in with Apple needs nothing from us.
+> Apple** and use the Apple ID already on your device, then enter the access
+> code below when prompted. There is no separate demo account to request — this
+> app has no email-and-password sign-in, and Sign in with Apple needs nothing
+> from us.
 >
-> **First, switch to the tournament named "DEMO — Testers".** The app opens on
-> the current cup, whose roster is already claimed by the men playing it. Tap
-> "Switch tournament" on the roster screen, or ☰ → Tournaments, and choose the
-> one labelled DEMO. Every other year is a completed tournament, closed to new
-> entries, so a name cannot be claimed in one — the app says so on screen.
+> Access code: `<the REVIEWER code from Admin → Event → Access>`
 >
-> Tournament password: `<from Admin → Event → Access>`
+> **Then switch to the tournament named "DEMO — Testers", before tapping a
+> name.** The app opens on the current cup, whose roster is already claimed by
+> the men playing it. Tap "Switch tournament" on the roster screen, or
+> ☰ → Tournaments, and choose the one labelled DEMO. Then tap any unclaimed
+> name there.
+>
+> The code above opens the demo tournament only — it is issued for review and
+> deliberately cannot write to the tournament being played. If you tap a name
+> outside the demo, the app will say so and point you back to the switcher.
+> Every other year listed is a completed tournament, closed to new entries.
 >
 > **The Admin tab is open to you inside "DEMO — Testers".** One person in a real
 > tournament is its director, and the Admin tabs are that role's tools — the
@@ -489,8 +498,8 @@ than a fallback, and the note below says so in that order.
 > other players attested to.
 >
 > If you test deletion, please do it **last**. It is a real deletion: signing
-> in again creates a new account and needs the tournament password above, and
-> the roster name you claimed becomes free for somebody else.
+> in again creates a new account and needs the access code above, and the
+> roster name you claimed becomes free for somebody else.
 >
 > The app is iPhone-only by design and is used one-handed on a golf course.
 

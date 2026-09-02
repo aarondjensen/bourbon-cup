@@ -49,7 +49,7 @@ how an evening gets spent redoing it:
 | 1.1 Cloud Functions | **Deployed** | Reported in the commit that documented the discovery timeout — all six endpoints went up. Re-check by tapping My Account → Delete Account on a throwaway account; the button says so itself when the callable is missing. |
 | 1.2 `firestore.rules` | **Deployed** — 31 Aug 2026, on the second attempt | `firebase deploy --only firestore:rules` against `the-bourbon-cup` printed `uploading rules firestore.rules` and then `released rules … to cloud.firestore`. **The upload line is the one that matters**, and the first attempt did not have it — see below. |
 | 1.3 `VITE_FCM_VAPID_KEY` | **Set** | Confirmed in Vercel against the Web Push key pair in Firebase → Cloud Messaging. Nothing in the repo or the database can see this one, so it is the one item here that can only ever be checked by looking. Web push only — neither store build uses it. |
-| 1.4 Reviewer account | **Not needed** | No credentials are handed to either store. `bc_demo` holds its 371 documents and all twelve roster rows, unclaimed; a reviewer signs in with their own Apple ID or Google account, presents the tournament password, claims a name, and gets the Admin tabs because the edition is a demo. |
+| 1.4 Reviewer account | **Not needed** | No credentials are handed to either store. `bc_demo` holds its 371 documents and all twelve roster rows, unclaimed; a reviewer signs in with their own Apple ID or Google account, presents the REVIEWER code (not the tournament password — see below), claims a name, and gets the Admin tabs because the edition is a demo. |
 
 **Nothing in §1 is outstanding.** What is left of either submission is in
 `play-store.md` and `app-store.md`, plus the screenshots in §4.
@@ -219,13 +219,31 @@ Two things that look like ways round it and are not:
 - **Handing over a personal account.** It is a director on the live cup, and
   the reviewer's first documented instruction is to delete an account.
 
-#### What is actually submitted: no account at all
+#### What is actually submitted: no account, and not the tournament password
 
-**Hand over nothing.** Sign in with Apple works with the Apple ID already on the
-reviewer's device, and the tournament password is the only secret involved — see
-the review notes in `app-store.md` §7. Apple's App Review Information sign-in
-toggle is answered by naming the password; there is no username and password to
-type because this app has no email-and-password sign-in.
+**Hand over no account.** Sign in with Apple works with the Apple ID already on
+the reviewer's device, so there is no username and password to type — this app
+has no email-and-password sign-in. Apple's App Review Information sign-in toggle
+is answered by naming a code instead.
+
+**And it is not the tournament's code.** There are two, set in the same card in
+Admin → Event → Access. The reviewer code mints a membership stamped
+`demo_only`, which `canWriteEdition()` confines to demo editions — so the string
+typed into App Store Connect and into Play's App access form can claim a name,
+score, post photos and administer inside `bc_demo`, and can do nothing whatever
+to the cup.
+
+That distinction is what makes the form safe to fill in at all. Both stores
+quote the credential back on **every future update review**, so a code in that
+box can never be rotated without breaking the next review — and the tournament
+password is one sixteen men say out loud across a table. See the two-codes
+section in `CLAUDE.md`, and `demoAccessCode` in `firestore.rules`.
+
+**The order in the review notes is load-bearing.** A reviewer who taps a name
+on the cup's roster before switching to the demo is refused by the rules, so
+`claimPlayer` names that case specifically — "that access code only opens demo
+tournaments" — rather than falling through to `writeFailure`, which would tell
+an App Store reviewer that the app's security rules may not be deployed.
 
 That used to reach everything EXCEPT the Admin tabs, and the gap was structural:
 the crown is a flag on a membership document that does not exist until they sign
@@ -234,8 +252,9 @@ in, so nobody could set it in advance for an account nobody had created yet.
 **The gap is closed, from the other end.** Inside a DEMO edition every member is
 an administrator — `canAdminEdition()` in `firestore.rules`, mirrored by
 `canAdminEdition` in `src/lib/editionLock.js`. So a reviewer who signs in with
-their own Apple ID, presents the password and claims a name in "DEMO — Testers"
-gets the Admin tabs on the way in, with nothing granted by hand. Three cards are
+their own Apple ID, presents the reviewer code and claims a name in
+"DEMO — Testers" gets the Admin tabs on the way in, with nothing granted by
+hand. Three cards are
 not there, because they are project-wide rather than scoped to a tournament and
 the rules keep them director-only: **Editions** (creating, deleting or unlocking
 a tournament), **Access** (the password) and the **crown** itself. They are
