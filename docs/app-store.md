@@ -441,6 +441,26 @@ hardware:
   banner, not two.
 - Open the house link from Trip Info and get back.
 - Upload a photo from the library and watch it land.
+- **On a NON-DIRECTOR account, open the claim screen on the CUP and check the
+  roster is tappable.** This caught a locked `bc_2026` on 2 Sep 2026, with the
+  app days from the field. A locked edition refuses the claim write for
+  everybody except a director — `canWriteEdition()` is `isMember() &&
+  (editionOpen() || isDirector())` — and the screen greys the roster only for
+  non-directors (`editionLocked={isEditionLocked(activeEdition) &&
+  !isDirectorUser}`). So both directors saw a normal roster and wrote straight
+  through, and the fourteen men who would have hit it did not have the app yet.
+  It would have arrived as fourteen texts from a first tee.
+
+  Likely cause when it happens: **"Lock all but 2026"** run while a different
+  edition was active. `bulkLockVerdict` locks every edition OTHER than the
+  active one, so firing it from inside 2025 or the demo sweeps the cup up with
+  the rest — and can take `bc_demo` with it, which kills the reviewer's path
+  as well. Check both. The tell on screen is a card headed "This tournament is
+  closed"; the fix is Admin → Event → Editions.
+
+  A director cannot run this check from their own account. That is the whole
+  point of it.
+
 - **Sign in on a SECOND account, switch to "DEMO — Testers", and open Admin.**
   That is the path the reviewer takes (`store-submission.md` §1.4): every member
   administers a demo, so the tab should be there without anybody granting a
