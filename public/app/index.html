@@ -14,9 +14,11 @@
   <style>
     body { display: flex; align-items: center; min-height: 100vh; padding: 24px 20px; }
     main { max-width: 420px; width: 100%; text-align: center; }
-    .mark { font-size: 12px; letter-spacing: .16em; text-transform: uppercase;
-            color: var(--amber); font-weight: 700; margin: 0 0 6px; }
-    .title { font-size: 26px; line-height: 1.2; color: var(--t1); font-weight: 800; margin: 0 0 28px; }
+    /* 22.4% is iOS's own corner radius as a fraction of icon width, so the
+       tile here is the shape it will be on the home screen rather than a
+       rounded rectangle that happens to look close. */
+    .icon { width: 96px; height: 96px; border-radius: 22.4%; display: block; margin: 0 auto 16px; }
+    .title { font-size: 24px; line-height: 1.2; color: var(--t1); font-weight: 800; margin: 0 0 30px; }
     .stores { display: flex; flex-direction: column; gap: 12px; }
     /* The badges carry their own artwork and their own padding, so the
        container adds none — a box drawn around a store badge is exactly what
@@ -48,15 +50,17 @@
       font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
       color: var(--t3);
     }
-    .note { font-size: 13px; color: var(--t3); line-height: 1.5; margin: 22px 0 0; }
-    .note a { color: var(--t2); }
     .web { display: inline-block; margin-top: 26px; font-size: 14px; color: var(--t2); }
   </style>
 </head>
 <body>
 <main>
-  <p class="mark">The Bourbon Cup</p>
-  <h1 class="title">Get the app</h1>
+  <!-- The real launcher icon, the same file the installed app shows on a home
+       screen — so the page and the thing it installs are visibly one item.
+       512px served into a 96px box: it is also the maskable icon, and a
+       smaller source would be soft on a phone at 3x. -->
+  <img class="icon" src="/favicon/web-app-manifest-512x512.png" alt="" width="96" height="96" />
+  <h1 class="title">The Bourbon Cup</h1>
 
   <div class="stores">
     <!-- The OFFICIAL badges, served from our own origin rather than hotlinked
@@ -84,11 +88,6 @@
     </span>
   </div>
 
-  <p class="note">
-    Android: the invite only works for the Google address we added, and it has
-    to be the one signed into the Play Store on your phone. If you get
-    <em>item not found</em>, tell Aaron which address you actually use.
-  </p>
 
   <a class="web" href="https://www.thebourboncup.com">Or just use the website →</a>
 </main>
