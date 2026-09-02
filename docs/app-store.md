@@ -391,6 +391,47 @@ actually works. Up to 100 internal testers, each needing an App Store Connect
 user role — fine for a field of sixteen, and faster than external testing,
 which needs Beta App Review.
 
+### There are TWO review-notes fields and they are not the same one
+
+This cost a rejection on 2 Sep 2026 — **Guideline 2.1(a), "unable to
+successfully access all or part of the app"**, on the BETA review, with §7's
+notes sitting complete and unread the whole time.
+
+| Queue | Where its notes live | Who reads them |
+| --- | --- | --- |
+| App Store review | the version page → **App Review** (left sidebar) | the reviewer of a submitted version |
+| **Beta App Review** | **TestFlight → Test Information → Beta App Review Information** | the reviewer of an external TestFlight group |
+
+Filling one does nothing for the other. The beta reviewer met the sign-in
+screen with no instructions at all, no way to know an access code existed, and
+correctly reported that they could not get in.
+
+**Both fields get the §7 block.** Copy it into each; they are edited
+independently and neither warns that the other is empty.
+
+The credential fields are the awkward part, because this app has no
+email-and-password sign-in to give. Ticking **Sign-in required** makes User
+Name and Password mandatory, so they carry the instruction rather than a
+credential:
+
+- **User Name:** `No account needed — tap "Sign in with Apple"`
+- **Password:** the reviewer code
+
+That is honest rather than a dodge — the code IS the credential, and the notes
+say so in the sentence above it. Apple's own message offers "a demonstration
+mode that exhibits the app's full features" as an alternative to an account,
+which is what the guest door plus `bc_demo` are; say so in the reply.
+
+**Do not add an email-and-password login to satisfy this.** It would be a third
+permanent sign-in path, with its own account-deletion obligations under
+5.1.1(v) and its own console provider to enable, bought to appease one
+reviewer who has not yet seen the instructions.
+
+**And check whether external testing is wanted at all.** The field installs
+from the unlisted App Store link once that is approved, and internal testers
+need no review — so an external group created only to try a build is a review
+queue entered for nothing.
+
 Test these specifically. They are the ones that pass in a simulator and fail on
 hardware:
 
@@ -435,6 +476,10 @@ field tests a broken build and stops trusting the next one.
 ---
 
 ## 7. Review notes to submit with the build
+
+**Paste this into BOTH notes fields** — the version page's App Review
+Information and TestFlight's Beta App Review Information. They are separate
+queues with separate reviewers, and filling one leaves the other blank; see §6.
 
 No account is handed over — see `store-submission.md` §1.4 for why, and for how
 the Admin tabs are reachable without one. What IS handed over is the **reviewer
