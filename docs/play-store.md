@@ -281,6 +281,51 @@ Play — the bubblewrap TWA was uploaded to this same listing, and every
 the new app would have been refused for a reason that has nothing to do with
 the build. The number only ever goes up, so overshooting costs nothing.
 
+### The store badges on /app
+
+`public/app/index.html` is two official badges and nothing else. They are
+**served from our own origin**, not hotlinked: Google's brand guidelines ask
+for the asset to be hosted, and self-hosting also means the page cannot
+silently lose both of its controls the day one of those CDN URLs moves.
+
+The files are `public/app/google-play-badge.png` and
+`public/app/app-store-badge.svg`. If either needs replacing:
+
+```sh
+curl -L -o public/app/google-play-badge.png "https://play.google.com/intl/en-us/badges/images/generic/en_badge_web_generic.png"
+curl -L -o public/app/app-store-badge.svg "https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-app-store/black/en-us"
+```
+
+Both are set by HEIGHT in CSS and never by width — the two badges have
+different aspect ratios on purpose, and matching their widths is what makes
+one of them look stretched. Neither gets a border or a background box drawn
+around it; both sets of guidelines say not to.
+
+**They are set to DIFFERENT heights, and that is not a mistake.** Google's
+badge is a 646x250 canvas holding 564x168 of artwork — 41px of clear space on
+every side, baked into the asset — and Apple's SVG is 119.66x40 with none. One
+height for both renders the Play badge a third smaller than the badge beside
+it. 168/250 = 0.672, so Play is scaled by 1/0.672 and the two pieces of
+ARTWORK end up the same height, which is what an eye compares and what both
+guidelines mean by equal prominence. Re-measure if either asset is replaced:
+
+```sh
+node -e "require('sharp')('public/app/google-play-badge.png').trim({threshold:1}).toBuffer({resolveWithObject:true}).then(r=>console.log(r.info.width+'x'+r.info.height))"
+```
+
+**And check what came down before committing it.** The badge URLs move, and a
+404 from Google arrives as a 1.6 KB HTML page written to the filename you
+asked for — right name, right directory, exit code 0. `file` is the check:
+
+```sh
+file public/app/google-play-badge.png   # must say "PNG image data"
+```
+
+The App Store badge is a `<span>` rather than an `<a>` until the review and
+the unlisted request both come back, because a badge that navigates to a 404
+is worse than one that says "soon". Swapping the tag and adding the href is
+the whole of turning it on.
+
 ### Icons
 
 `npm run build:app-icons` renders every launcher icon on both platforms from
