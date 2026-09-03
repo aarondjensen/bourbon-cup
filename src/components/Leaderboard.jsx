@@ -43,7 +43,7 @@ import {
 } from "../constants";
 import {
   computeMatchResult, getRoundCourseCtx, holeFormatFor,
-  segmentState, statusText, segmentLeader,
+  segmentState, statusText, segmentLeader, nassauSegmentVisibility,
   segmentOptsFor, fmtPts,
 } from "../scoring";
 import { HoleStrip } from "./HoleStrip";
@@ -363,8 +363,10 @@ function MatchCard({
   // with no point on it isn't being played as a match and stays hidden, and
   // a Traditional round has only the single pot — so neither flank appears.
   // A points round flanks too — its nines are where the points live.
-  const showFront = perHole ? (hp?.front ?? 0) > 0 : !traditional && n.front > 0;
-  const showBack = perHole ? (hp?.back ?? 0) > 0 : !traditional && n.back > 0;
+  //
+  // Shared with the Scoring tab's status card, so a nine reads as a match
+  // (or doesn't) the same way on both screens.
+  const { showFront, showBack } = nassauSegmentVisibility(match, hp);
 
   // A completed match that finished level is a HALVE, worth a half point to
   // each side. statusText would call that "AS", which reads as a live state —

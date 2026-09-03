@@ -21,6 +21,7 @@ import {
   computeMatchResult,
   getRoundCH, lockForRound,
   totalUnit, segmentState, segmentOptsFor, holeFormatFor,
+  statusText, segmentLeader, nassauSegmentVisibility,
 } from "./scoring";
 import { holeFill } from "./lib/holeFill";
 import {
@@ -1795,6 +1796,83 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     </div>
   ) : null;
 
+  // ── The Nassau status row — front nine, overall, back nine ────────
+  // The two strips above keep their existing job unchanged: a per-hole
+  // result and, under it, the RUNNING 18-HOLE match. Neither says anything
+  // about the front or back nine on their own — a Nassau round settles
+  // three matches, and this row is the only place all three are named.
+  //
+  // OVERALL is never hidden — even on a points round with no 18-hole pot,
+  // the 18-hole margin behind it is real, and both this row and the
+  // Leaderboard's collapsed match card show it unconditionally. FRONT and
+  // BACK come and go with nassauSegmentVisibility, the same call the
+  // Leaderboard's own collapsed row makes, so a nine can never read as a
+  // match on one screen and not the other.
+  //
+  // The pill styling — dashed edge while live, solid and tinted the moment
+  // a segment settles — is lifted from the Leaderboard's SegmentPill. The
+  // WORDS are this screen's own: "WON 3 UP" / "LOST 2&1" / "HALVED" rather
+  // than a banked point total, because a SegmentPill answers "what did this
+  // segment pay out" and this row answers "did I win it" — the question
+  // that matters mid-round, from the reader's own side.
+  //
+  // Hidden while sealed, same as the running match under each hole: this
+  // IS the match state, said louder, and the sealedBanner already explains
+  // why nobody is seeing it.
+  const segVerdict = (st) => {
+    if (!st.played) return "—";
+    if (st.complete) {
+      if (st.winner == null) return st.unit === "up" ? "HALVED" : statusText(st);
+      return (st.winner === userTeam ? "WON " : "LOST ") + statusText(st);
+    }
+    return statusText(st);
+  };
+  const nassauBadges = (result && !conceal) ? (() => {
+    const { showFront, showBack } = nassauSegmentVisibility(match, result.holePoints);
+    const segs = [
+      showFront ? { key: "f", label: "FRONT", st: result.front } : null,
+      { key: "o", label: "OVERALL", st: result.overall },
+      showBack ? { key: "b", label: "BACK", st: result.back } : null,
+    ].filter(Boolean);
+    return (
+      // Sized to content, not forced into equal thirds — "OVERALL" carries
+      // both the longest label and, once settled, the longest word ("WON " /
+      // "LOST " ahead of the match's own "3&2" / "9 UP"), and splitting the
+      // row three ways evenly clipped it: `flex: 1` on this component's
+      // first landing squeezed "LOST 2 UP" down to "LOST …" behind a shared
+      // "OVERALL" label. `justify-content` keeps front/overall/back in
+      // their established left/middle/right order without asking any of
+      // them to be a width they don't need.
+      <div style={{ display: "flex", gap: 5, marginBottom: fit.stack, flexShrink: 0, justifyContent: segs.length > 1 ? "space-between" : "center" }}>
+        {segs.map((seg) => {
+          const settled = seg.st.complete;
+          const win = seg.st.winner;
+          const leader = segmentLeader(seg.st);
+          const color = leader ? teamColor(leader) : (seg.st.played ? BC.t2 : BC.t3);
+          return (
+            <div key={seg.key} style={{
+              flex: "0 0 auto", minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+              height: 26, borderRadius: 13, padding: "0 8px", overflow: "hidden", fontFamily: FONT,
+              background: settled && win ? `${color}${ALPHA.tint}` : BC.card,
+              border: `1px ${settled ? "solid" : "dashed"} ${settled ? (win ? `${color}${ALPHA.line}` : `${BC.bdr}${ALPHA.line}`) : `${BC.bdr}${ALPHA.line}`}`,
+            }}>
+              <span style={{ fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.6, color: BC.t3, flexShrink: 0, whiteSpace: "nowrap" }}>
+                {seg.label}
+              </span>
+              <span style={{
+                fontSize: FS.small, fontWeight: 800, lineHeight: 1, whiteSpace: "nowrap",
+                overflow: "hidden", textOverflow: "ellipsis",
+                color: settled ? (win == null ? BC.t2 : color) : (seg.st.played ? color : BC.t3),
+              }}>
+                {segVerdict(seg.st)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  })() : null;
+
   // ── Signed: the card replaces the scoring screen ──
   // Not a banner over the score buttons — the buttons are gone, because a
   // signed card has no scores left to enter and the screen's whole budget
@@ -1841,6 +1919,8 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
       <div style={{ display: "flex", marginBottom: fit.stack, flexShrink: 0, background: BC.card, border: `1px solid ${BC.bdr}${ALPHA.line}`, borderRadius: 8, padding: `${fit.statusPad}px 0`, alignItems: "center" }}>
         {Array.from({ length: 9 }, (_, i) => renderStatusCell(i + 9))}
       </div>
+
+      {nassauBadges}
 
       {/* Full Scorecard — sits ABOVE the hole banner (MNQ's placement) so
           it's reachable without scrolling past four player cards. Slim
