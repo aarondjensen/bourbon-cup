@@ -63,7 +63,7 @@ android {
         // go up, so overshooting costs nothing and a rejected upload costs a
         // rebuild. The exact high-water mark is on Play Console's release
         // page if it is ever worth knowing.
-        versionCode 101
+        versionCode 102
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
