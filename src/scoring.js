@@ -6,7 +6,7 @@
 // scoring screen always reflect the strokes used in the leaderboard math.
 import {
   NASSAU_DEFAULT, POINT_METHOD_NASSAU, POINT_METHOD_TRADITIONAL, resolveAllowance,
-  resolveCounting, resolveHolePoints, resolveScoring,
+  resolveCounting, resolveHolePoints, resolveScoring, isPointsPerHole,
   HOLE_SCORING_BEST_BALL, SCORING_TYPE_POINTS, SCORING_TYPE_TOTAL,
   formatUnit, UNIT_STROKES, handicapModeFor, resolveHoleMethod,
   resolveParPoints, parResultFor, tiltBirdieValue, tiltMultiplier,
@@ -241,6 +241,27 @@ export const statusText = (st) => {
 
 // Which side a segment's margin favours right now, or null when level.
 export const segmentLeader = (st) => (st.margin > 0 ? "A" : st.margin < 0 ? "B" : null);
+
+// Whether the front and back nines are being played as matches in their own
+// right — the Leaderboard's collapsed row and the Scoring tab's status card
+// both ask this, and it has to come out the same way on both: a Nassau round
+// set to "Single" zeroes both pots, Traditional pays one pot regardless of
+// what `nassau` holds, and a points round asks the round's own hole-point
+// split rather than `nassau` at all. One function, so neither screen can
+// show a segment as a match the other one wouldn't.
+//
+// The OVERALL segment is never gated here — it isn't a pot on a points
+// round (the two nines already account for every point), but the 18-hole
+// margin behind it is still real and both screens show it unconditionally.
+export const nassauSegmentVisibility = (match, holePoints) => {
+  if (isPointsPerHole(match.scoring_type)) {
+    const hp = holePoints || {};
+    return { showFront: (hp.front ?? 0) > 0, showBack: (hp.back ?? 0) > 0 };
+  }
+  const traditional = (match.point_method || "") === POINT_METHOD_TRADITIONAL;
+  const n = match.nassau || NASSAU_DEFAULT;
+  return { showFront: !traditional && n.front > 0, showBack: !traditional && n.back > 0 };
+};
 
 // ── How a match reads its holes ──
 // THE answer to "what flags does segmentState need for this match?", asked
