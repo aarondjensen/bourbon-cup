@@ -700,7 +700,7 @@ function RoundSection({
   courses, tRounds, roundLocks, holeData, viewer, expandedMatch, setExpandedMatch,
   sealPanel,
 }) {
-  const { course, fmt, pts, state, seal } = meta;
+  const { course, fmt, pts, state, seal, drawn } = meta;
 
   // The round header is a plain row, not a card. Four match rows plus a
   // boxed header per round was two levels of container for one level of
@@ -729,7 +729,13 @@ function RoundSection({
               live/final chip lost: a collapsed round showing 0–0 is otherwise
               indistinguishable from one nobody has teed off on, and those are
               very different things on the last day. */}
-          {seal?.concealing && (
+          {/* `drawn` as well as `concealing`, because a round with no draw
+              conceals nothing — Team Best Ball seals by default (see
+              lib/reveal.resolveSealed), so the closing round is sealed from
+              the day the director picks its format, months before anybody is
+              paired for it. A 🔒 0/18 on a round with no matches in it is a
+              blackout over an empty room. */}
+          {seal?.concealing && drawn && (
             <span style={{
               flexShrink: 0, fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.8,
               padding: "2px 5px", borderRadius: 4, whiteSpace: "nowrap",
@@ -744,8 +750,30 @@ function RoundSection({
               sit there for the whole of an 18-hole ceremony reading as a round
               that had been played to a standstill. A dash is what is true: not
               yet. The 🔒 chip beside it says how far the reveal has walked,
-              which is progress without being a score. */}
-          {seal?.concealing ? (
+              which is progress without being a score.
+
+              An undrawn round takes TBD in the same slot, for the same reason
+              and one more: 0–0 under a course name is what a round halved
+              four matches to nil looks like, and a round nobody has been
+              paired for has not been played at all. It says TBD rather than a
+              dash because collapsed is how most of these will be read, and
+              because it has to be distinguishable from a sealed round — one
+              is holding a result back, the other has none yet. Undrawn is
+              tested FIRST for that reason: Team Best Ball seals by default,
+              so the closing round is a sealed round from the day its format
+              was picked, and the dash would win on every undrawn one.
+
+              In the SCORE slot rather than as a chip beside the course name,
+              which is where it started: the chip cost about ninety pixels of
+              a row that already ellipses, and what it truncated was the
+              format — "Arthur Hills — Orange · T…". The format is most of the
+              reason an undrawn round is on this board at all. */}
+          {!drawn ? (
+            <span style={{
+              fontSize: FS.label, fontWeight: 800, letterSpacing: 0.8,
+              flexShrink: 0, color: BC.t3,
+            }}>TBD</span>
+          ) : seal?.concealing ? (
             <span style={{ fontSize: FS.lead, fontWeight: 800, flexShrink: 0, color: BC.t3 }}>—</span>
           ) : (
             <>
@@ -762,9 +790,13 @@ function RoundSection({
       </button>
 
       {open && (
+        /* Expanded, an undrawn round is the course and the format and the
+           promise that the rest is coming. That is genuinely all there is to
+           say about it, and it is more than the board used to say, which was
+           nothing — the round had no section at all until somebody drew it. */
         results.length === 0 ? (
           <div style={{ padding: "16px 0", textAlign: "center", color: BC.t3, fontSize: FS.small }}>
-            No matches set up for this round.
+            Pairings for this round haven&rsquo;t been set yet.
           </div>
         ) : (
           <>
@@ -881,7 +913,8 @@ export function TeamLeaderboard({
     return { match: m, result: res, format: fmt };
   }), [matches, holeData, courses, tRounds, tPlayers, hcpOverrides, teeAssignments, roundLocks]);
 
-  // Every round with a draw, in order — derived, not a fixed list of four.
+  // Every round this tournament HAS, in order — derived, not a fixed list of
+  // four.
   //
   // The literal it replaces was the one place on this screen that could
   // disagree with the rest of it: `totals`, `pending` and `cupPointsOnOffer`
@@ -889,10 +922,26 @@ export function TeamLeaderboard({
   // the cup and toward the clinch line from a round that had no section on
   // the board to explain them.
   //
-  // Rounds with no matches are still left out, as they always have been —
-  // see the note in RoundSection about a draw-less round being a row of
-  // "THRU 0" against a tee time.
-  const roundNumbers = useMemo(() => scheduledRounds({ matches }), [matches]);
+  // ── Why the draw is not what decides this ────────────────────────
+  // It used to read `scheduledRounds({ matches })` — a round appeared on the
+  // board when it had a draw and not before. That is the wrong question. The
+  // pairings are the LAST thing a director settles, usually the night before,
+  // and the course and the format are the first; so a Thursday board showed
+  // Round 1 (drawn) and Round 4 (drawn last year's way round) and simply had
+  // no row for the two rounds in the middle. Not "Round 2, pairings to come" —
+  // nothing at all, on the one screen everybody opens, for the two rounds
+  // everybody was asking about.
+  //
+  // So the same union every other screen reads (lib/rounds): the director set
+  // it up, or it has a draw, or somebody has posted a score in it. Any one of
+  // the three is a round that exists, and a round that exists gets a row that
+  // says where it is and what it is, whether or not anybody has been paired
+  // off yet. What it must NOT do is invent a score for one — see `drawn`
+  // below and the bar in RoundSection.
+  const roundNumbers = useMemo(
+    () => scheduledRounds({ tRounds, matches, roundLocks }),
+    [tRounds, matches, roundLocks],
+  );
 
   // Per-round rollup: points, points on offer, and play state.
   const roundMeta = useMemo(() => {
@@ -926,6 +975,11 @@ export function TeamLeaderboard({
         && (isRoundFinal(roundLocks, rnd) || results.every(({ match: m, result: r }) => matchSettled(m, r)));
       out[rnd] = {
         results, pts, avail, holesPlayed, course, seal,
+        // Whether anybody has been paired off yet. The board draws a round
+        // the moment the director picks a course for it, which is weeks
+        // before the draw exists, so this is what stops an undrawn round
+        // reading as a round played to a nil-nil standstill.
+        drawn: results.length > 0,
         fmt: FORMATS.find((f) => f.id === tr?.format) || null,
         state: settled ? "final" : holesPlayed > 0 ? "live" : "upcoming",
       };
@@ -959,7 +1013,8 @@ export function TeamLeaderboard({
   // revealed-holes-only view reads as "upcoming" until the first hole is
   // turned over, which would have folded it away at exactly the wrong moment.
   const defaultOpen = useMemo(() => {
-    const live = roundNumbers.filter((r) => roundMeta[r].state === "live" || roundMeta[r].seal?.concealing);
+    const live = roundNumbers.filter((r) => roundMeta[r].state === "live"
+      || (roundMeta[r].seal?.concealing && roundMeta[r].drawn));
     if (live.length) return new Set(live);
     const played = roundNumbers.filter((r) => roundMeta[r].holesPlayed > 0);
     if (played.length) return new Set([played[played.length - 1]]);
@@ -1012,7 +1067,12 @@ export function TeamLeaderboard({
   // withhold, so the board says so, and says how much. The figure is the
   // sealed rounds' pot less whatever the reveal has already paid out.
   const sealedOut = useMemo(() => {
-    const conceal = roundNumbers.filter((r) => roundMeta[r]?.seal?.concealing);
+    // Drawn rounds only. An undrawn round is on the board now (see
+    // roundNumbers) and Team Best Ball seals by default, so without this the
+    // cup bar announced "🔒 Round 4 sealed" from the moment the format was
+    // picked — a withholding notice over a round with nothing in it to
+    // withhold, on the line everybody reads first.
+    const conceal = roundNumbers.filter((r) => roundMeta[r]?.seal?.concealing && roundMeta[r]?.drawn);
     if (!conceal.length) return null;
     let pot = 0, banked = 0;
     conceal.forEach((rnd) => {
@@ -1090,7 +1150,10 @@ export function TeamLeaderboard({
   const [countdownRound, setCountdownRound] = useState(null);
   const [autoOpened, setAutoOpened] = useState(!autoCountdown);
   if (!autoOpened) {
-    const rnd = roundNumbers.find((r) => roundMeta[r]?.seal?.sealed);
+    // Drawn, or the television opens on a round with no match to walk and
+    // FinalCountdown's own guard hands back null — a black screen in front of
+    // the room, with the round it should have opened on further down the list.
+    const rnd = roundNumbers.find((r) => roundMeta[r]?.seal?.sealed && roundMeta[r]?.drawn);
     if (rnd != null) { setAutoOpened(true); setCountdownRound(rnd); }
   }
   // The hash follows the screen, so a refresh in front of sixteen people
