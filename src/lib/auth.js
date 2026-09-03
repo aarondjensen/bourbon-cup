@@ -285,8 +285,36 @@ export const isCancelled = (err) =>
 // written for a golfer standing on a tee box, and name the console setting
 // to change where there is one, because the person reading it on their
 // phone is usually also the person who can fix it.
+// Google Play services' own status codes, which arrive from the Android
+// plugin as a bare `message` — "10:", "12500:", "7:" — and nothing else. No
+// `code`, no sentence, and the number is the whole of what a golfer is shown
+// unless it is named here. The three that actually happen:
+//
+//   10  DEVELOPER_ERROR — the OAuth client does not match this
+//       (package name + signing certificate). On a Play-signed build the
+//       certificate is PLAY'S, not the upload key, and it has to be
+//       registered in Firebase as a SHA-1 specifically: a project holding
+//       only the SHA-256 fails exactly here while google-services.json
+//       still looks correct. See docs/play-store.md §1.
+//   12500 SIGN_IN_FAILED — the generic one, usually the same cause.
+//   7   NETWORK_ERROR.
+//
+// Matched on the message rather than a code because there is no code. The
+// anchor matters: `^10\b` and not `/10/`, or 12500 and 7100 match it too.
+const PLAY_SERVICES = [
+  [/^10\b/, "Google sign-in isn't configured for this build of the app — its signing certificate needs registering. Firebase console → Project settings → the Android app → add the SHA-1 from Play Console → App integrity → App signing. Sign in with Apple works meanwhile."],
+  [/^12500\b/, "Google sign-in was refused by Play services on this phone. Try Sign in with Apple, or the website."],
+  [/^7\b/, "No connection — check signal and try again."],
+];
+
+// Exported under a name that says what it is, for the test. `friendly` stays
+// the internal caller's word for it.
+export const signInErrorText = (err) => friendly(err);
+
 const friendly = (err) => {
   const code = err?.code || "";
+  const msg = String(err?.message || "");
+  for (const [pattern, text] of PLAY_SERVICES) if (pattern.test(msg)) return text;
   switch (code) {
     case "auth/operation-not-allowed":
       return "That sign-in method isn't switched on for this app yet — Firebase console → Authentication → Sign-in method.";

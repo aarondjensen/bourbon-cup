@@ -71,3 +71,26 @@ describe("googleNative", () => {
     expect(plugin.signInWithGoogle).toHaveBeenCalledTimes(2);
   });
 });
+
+// Play services hands the plugin a bare number as the whole message — "10:"
+// and nothing else. Unnamed, that is what the golfer reads.
+describe("friendly, on Play services status codes", () => {
+  it("names DEVELOPER_ERROR and where to fix it", async () => {
+    const { signInErrorText } = await import("./auth");
+    const text = signInErrorText({ message: "10:" });
+    expect(text).toMatch(/signing certificate/i);
+    expect(text).toMatch(/App signing/);
+    expect(text).not.toMatch(/^10/);
+  });
+
+  it("does not let 12500 or 7100 match the rule for 10", async () => {
+    const { signInErrorText } = await import("./auth");
+    expect(signInErrorText({ message: "12500:" })).toMatch(/refused by Play services/i);
+    expect(signInErrorText({ message: "7100: something else" })).not.toMatch(/check signal/i);
+  });
+
+  it("leaves a Firebase error alone", async () => {
+    const { signInErrorText } = await import("./auth");
+    expect(signInErrorText({ code: "auth/network-request-failed" })).toMatch(/No connection/);
+  });
+});
