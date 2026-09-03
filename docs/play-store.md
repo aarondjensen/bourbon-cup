@@ -280,6 +280,29 @@ branches.
 a genuinely unregistered fingerprint look identical from the phone. The grep
 above is what separates them, and it takes ten seconds.
 
+**And the fallback firing does not mean sign-in works.** On the same phone,
+`101` then produced a bare red **`10:`** — `DEVELOPER_ERROR` from the legacy
+path, which is the useful outcome: Credential Manager refused, the retry ran,
+and the older flow got far enough to report a real configuration fault.
+
+`DEVELOPER_ERROR` means the OAuth client does not match this **(package name +
+signing certificate)** pair. Two things to read, both console:
+
+- **Play Console → App integrity → App signing**, the **SHA-1** under *App
+  signing key certificate*. It must equal the `4d82fa…4023` in
+  `google-services.json`. If Play shows a different hash, Play is signing with
+  a key Firebase has never been told about, and that is the whole bug.
+- **Firebase → Project settings → the Android app**, and confirm that hash is
+  registered **as a SHA-1**, not only as a SHA-256. Google Sign-In wants the
+  SHA-1 specifically; a project holding only the SHA-256 fails exactly here
+  while `google-services.json` still looks correct, because the file carries
+  whatever hashes exist.
+
+Play services hands these up as a bare number and nothing else — `"10:"`, with
+no code and no sentence — so `lib/auth` names the three that happen (10, 12500,
+7) before falling through to `err.message`. Anchored (`/^10\b/`), because
+`/10/` also matches 12500.
+
 ### There is no Android device on this project
 
 Worth planning around rather than discovering: neither developer here carries
