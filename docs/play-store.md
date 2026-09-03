@@ -565,31 +565,57 @@ settings → the Android app → Add fingerprint — before the download.
   **Release → Setup → App integrity** as well — Play re-signs, so the
   fingerprint a shipped build presents is Google's, not yours.
 
-  **This is DONE here, checked on 31 Aug 2026.** All four numbers line up, so
-  no part of the cycle below is outstanding for this app:
+  **Checked on 31 Aug 2026 and INCOMPLETE, which was not discovered until a
+  phone proved it on 2 Sep.** Two of the three fingerprints were registered:
 
   | | SHA-1 | Where |
   | --- | --- | --- |
   | Upload key | `44:A0:58:…:8C:73` | `C:/dev/keys/bourbon-cup-upload.keystore`, alias `bourbon-cup` — and Play accepted a bundle signed with it |
-  | App signing key | `4D:82:FA:…:40:23` | Play's own, SHA-256 `00:91:40:…:E8:D2` |
+  | App signing key, in use | `4D:82:FA:…:40:23` | Play's own, SHA-256 `00:91:40:…:E8:D2` |
+  | App signing key, **previous** | `27:C1:9E:…:12:82` | **Was missing.** SHA-256 `83:DF:2D:…:A3:CB` |
 
-  Both are registered against the Android app in Firebase, and
-  `android/app/google-services.json` carries both as `certificate_hash`
-  values, so a local release build and a Play install can each present a
-  certificate Google recognises. `Select-String -Path
+  The third one is the trap and it has its own heading below. Registering the
+  first two put both a local release build and *some* Play installs on a
+  certificate Google recognises — which is worse than none of them, because
+  it looks like success from the machine that built it. `Select-String -Path
   android\app\google-services.json -Pattern certificate_hash` is how to see
   what any given download actually contains — two hashes, `44a058…` and
   `4d82fa…`.
 
-  > **Do not read the signing certificate off the Digital Asset Links JSON**
-  > at the bottom of that page. It quotes a `sha256_cert_fingerprints` that is
-  > NOT the classical app signing certificate — here it says `83:DF:20:…`,
-  > which appears nowhere in Firebase — and reading it as the signing key
-  > produces a confident, wrong conclusion that this app was about to ship
-  > with sign-in broken. The fingerprints to trust are the four behind the
-  > **copy buttons** under *Classical key* and *Upload key certificate*, and
-  > the classical pair is what Firebase wants, not the post-quantum one beside
-  > it.
+  > **This block used to warn against the Digital Asset Links JSON**, saying
+  > the `83:DF:2D:…` it quotes is not an app signing certificate and "appears
+  > nowhere in Firebase". That was wrong, and the warning then cost an evening
+  > on 2 Sep 2026 by steering the reader away from the one number on the page
+  > that mattered. `83:DF:2D:…` is a real app signing certificate — the
+  > PREVIOUS one — and Digital Asset Links quoted it because it was current
+  > when that was written.
+  >
+  > What is true: read the fingerprints from the **copy buttons**, take the
+  > **Classical key** pair rather than the **Post-quantum cryptography key**
+  > beside it, and read the **Previous app signing keys** table at the bottom
+  > as well. See "Two app signing keys" below.
+
+  **THIS APP HAS TWO APP SIGNING KEYS, AND BOTH HAVE TO BE REGISTERED.**
+  Play Console → Protected with Play → App signing shows one key *In use* and
+  a **Previous app signing keys** table under it. Here:
+
+  | | SHA-1 | Where it came from |
+  | --- | --- | --- |
+  | In use | `4D:82:FA:…:40:23` | Classical key, SHA-256 `00:91:40:…:E8:D2` |
+  | Previous | `27:C1:9E:…:12:82` | First used 15 Aug 2026, SHA-256 `83:DF:2D:…:A3:CB` |
+
+  **A key change does not retire the old key.** Play goes on signing installs
+  with the legacy certificate for devices that do not support key rotation,
+  and with the new one where they do — so both certificates land on real
+  phones, from one release. Register only the current one and Google sign-in
+  works on some men's phones and fails on others, with nothing in the app
+  or the bundle to distinguish them.
+
+  That is what `DEVELOPER_ERROR` (a bare red `10:`) means when the
+  certificate you checked is genuinely registered: it is the OTHER one.
+
+  The upload key is a third fingerprint and is not either of these
+  (`44:A0:58:…:8C:73` here). All three belong in Firebase.
 
   **On an app where it is NOT done, the first upload is a throwaway, and it
   has to be.** Google's
