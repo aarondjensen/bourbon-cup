@@ -517,21 +517,21 @@ function GateScreen({ tournamentName, tournamentLocation, authUser, onPassed, on
   return (
     <LoginChrome tournamentName={tournamentName} tournamentLocation={tournamentLocation}>
       <form onSubmit={submit} style={{ width: "100%", maxWidth: 340, display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
-        {/* Which account, because the way out of a wrong one is the Sign out
-            below — and, first, the sentence that says the sign-in already
-            worked. A reviewer who arrives here having just tapped Sign in
-            with Apple needs to be told that this is not a second attempt at
-            the same thing. */}
+        {/* Three lines, in this order, and the order is the argument: the
+            account is already signed in, the tournament is a separate thing
+            and it is private, and what the box wants is an invite to it.
+            Nothing here asks anybody to create anything.
+
+            Which account also matters on its own, because the way out of a
+            wrong one is the Sign out below. */}
         <div style={{ textAlign: "center", fontSize: FS.small, color: BC.t3, lineHeight: 1.4 }}>
-          Signed in as {authUser?.email || "your account"}. Your account is all set.
+          Signed in as: {authUser?.email || "your account"}
         </div>
         <div style={{ textAlign: "center", fontSize: FS.body, fontWeight: 800, color: BC.t1, lineHeight: 1.3 }}>
           This tournament is private
         </div>
         <div style={{ textAlign: "center", fontSize: FS.small, color: BC.t3, lineHeight: 1.5 }}>
-          Enter the invite code the tournament director gives the group. It is
-          the same code for everybody and it is <strong>not</strong> a password
-          for your account — you never create one here.
+          Enter the invite code below
         </div>
         <input
           value={code}
