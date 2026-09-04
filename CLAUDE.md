@@ -352,13 +352,21 @@ who has never claimed a name meeting the claim screen on the year being played.
 ## Sign-in
 
 Three steps, each seen once: sign in with Google or Apple (`src/lib/auth.js`),
-enter the tournament password, then claim a name off the roster
+enter the tournament's **invite code**, then claim a name off the roster
 (`src/lib/accounts.js`, which stores the uid on the `bc_players` document).
 Firebase persists the session in IndexedDB, so it survives closing the app —
 the old tap-a-player screen kept identity in sessionStorage, which is why
 reopening the app always asked again.
 
-The password is the actual access control, and it is enforced by the security
+**On screen it is an INVITE CODE, never a password**, and that wording is a
+store requirement rather than a preference. App Review rejected 1.0 (2) under
+guideline 4 on 4 Sep 2026 — "users are required to provide or create a password
+after using Sign in with Apple" — because the box said Password one tap after
+the Apple sheet. Nothing about the mechanism changed; it is one shared string
+for sixteen men and it authenticates nobody. See `app-store.md` §8 and
+`gateScreenWording.test.js`, which pins it.
+
+The code is the actual access control, and it is enforced by the security
 rules, not by the UI. Presenting it mints a `bc_accounts/{uid}` document, and
 every write in the project requires that document to exist. The code lives in
 `bc_secrets/access`, which **no client may read** — rules `get()` is not

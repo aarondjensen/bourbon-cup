@@ -1337,7 +1337,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                 ? "Can't read the accounts list, so no crown can be changed. The rules deployed to Firebase are probably older than this app — re-publish firestore.rules, then reopen this."
                 : !theirMembership
                   ? (isClaimed(p)
-                      ? "They've claimed this name but haven't been through the password screen on this build yet — ask them to open the app once."
+                      ? "They've claimed this name but haven't entered the invite code on this build yet — ask them to open the app once."
                       : "They need to sign in and claim this name first.")
                   : isSelf
                     ? "You can't change your own — that's what stops the last director locking everyone out. Ask the other director, or edit it in the Firebase console."
@@ -3462,8 +3462,8 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                 onClick={async () => {
                   const next = editAccessCode.trim();
                   const ok = await confirm({
-                    title: next ? "Change the password?" : "Remove the password?",
-                    // The half a director gets wrong. Setting a password is
+                    title: next ? "Change the invite code?" : "Remove the invite code?",
+                    // The half a director gets wrong. Setting a code is
                     // what the button says; that rotating it evicts nobody
                     // is the part no control on the panel shows.
                     message: next
@@ -3477,7 +3477,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                   setEditAccessCode("");
                   setSavedAccessCode(next || null);
                   setAccessCodeError("");
-                  notify(next ? "Password changed" : "Password removed", "success");
+                  notify(next ? "Invite code changed" : "Invite code removed", "success");
                 }}
                 style={TournSaveStyle(accessCodeDirty)}
               >Save</button>

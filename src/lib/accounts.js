@@ -239,7 +239,7 @@ export async function setAccessCode(code) {
     await db.upsert(SECRETS_COL, { id: ACCESS_DOC, code: (code || "").trim() || null }, { loud: true });
     return { ok: true };
   } catch {
-    return { ok: false, error: "Could not save the password." };
+    return { ok: false, error: "Could not save the invite code." };
   }
 }
 

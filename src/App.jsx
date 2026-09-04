@@ -464,13 +464,34 @@ function SignInScreen({ tournamentName, tournamentLocation, initialError, onGues
   );
 }
 
-// ── Screen 2: the password ──────────────────────────────────────────
+// ── Screen 2: the invite code ───────────────────────────────────────
 // Signing in proves who you are; it does not prove you were invited. This
 // is where the second half happens, and it is checked by the security
 // rules rather than here — the submit below writes a membership document
 // carrying the typed code, and the database rejects it if the code is
 // wrong (see lib/accounts.js and firestore.rules). Nothing on this screen
-// knows the password, so nothing on this screen can leak it.
+// knows the code, so nothing on this screen can leak it.
+//
+// ── Why it says INVITE CODE and not "password" ──────────────────────
+// App Review rejected 1.0 (2) under guideline 4 on 4 Sep 2026:
+//
+//   "users are required to provide or create a password after using Sign
+//    in with Apple even though account authentication is already handled
+//    by the Authentication Services framework so passwords are
+//    unnecessary."
+//
+// Which is what this screen said. A box placeheld "Password", one tap
+// after Sign in with Apple, reads as an account password being demanded
+// on top of the sign-in that just happened — and demanding one is exactly
+// what guideline 4 forbids.
+//
+// Nothing about the mechanism changed, because the mechanism was never the
+// problem: this is one shared code for a private group, the same string
+// for all sixteen men, and it authenticates nobody. It is the tournament's
+// front door, not a credential. So the screen now says that, in those
+// words, above the box — and the box is labelled for what it holds.
+//
+// Keep it that way. The word "password" on this screen is a rejection.
 //
 // It also carries the guest door a second time, and that is the point of
 // putting it here: the two provider buttons are the biggest thing on the
@@ -497,10 +518,20 @@ function GateScreen({ tournamentName, tournamentLocation, authUser, onPassed, on
     <LoginChrome tournamentName={tournamentName} tournamentLocation={tournamentLocation}>
       <form onSubmit={submit} style={{ width: "100%", maxWidth: 340, display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
         {/* Which account, because the way out of a wrong one is the Sign out
-            below. "Enter the tournament password" used to follow it, over a
-            box placeheld Password. */}
+            below — and, first, the sentence that says the sign-in already
+            worked. A reviewer who arrives here having just tapped Sign in
+            with Apple needs to be told that this is not a second attempt at
+            the same thing. */}
         <div style={{ textAlign: "center", fontSize: FS.small, color: BC.t3, lineHeight: 1.4 }}>
-          Signed in as {authUser?.email || "your account"}.
+          Signed in as {authUser?.email || "your account"}. Your account is all set.
+        </div>
+        <div style={{ textAlign: "center", fontSize: FS.body, fontWeight: 800, color: BC.t1, lineHeight: 1.3 }}>
+          This tournament is private
+        </div>
+        <div style={{ textAlign: "center", fontSize: FS.small, color: BC.t3, lineHeight: 1.5 }}>
+          Enter the invite code the tournament director gives the group. It is
+          the same code for everybody and it is <strong>not</strong> a password
+          for your account — you never create one here.
         </div>
         <input
           value={code}
@@ -510,7 +541,7 @@ function GateScreen({ tournamentName, tournamentLocation, authUser, onPassed, on
           // phone keyboard is how you get three failed attempts.
           type="text" autoCapitalize="none" autoCorrect="off" spellCheck={false}
           autoComplete="one-time-code" autoFocus
-          placeholder="Password"
+          placeholder="Invite code"
           style={{
             width: "100%", boxSizing: "border-box", background: BC.inp,
             border: `1px solid ${err ? BC.danger : BC.bdr}`, borderRadius: 10,
@@ -522,7 +553,7 @@ function GateScreen({ tournamentName, tournamentLocation, authUser, onPassed, on
           width: "100%", padding: "12px 16px", borderRadius: 12,
           background: BC.gold, border: "none", color: ON_AMBER,
           fontFamily: FONT, fontSize: FS.body, fontWeight: 800, cursor: busy ? "default" : "pointer",
-        }}>{busy ? "Checking…" : "Continue"}</button>
+        }}>{busy ? "Checking…" : "Join tournament"}</button>
       </form>
 
       <LoginNote text={err} />
