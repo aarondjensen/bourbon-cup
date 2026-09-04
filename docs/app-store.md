@@ -597,11 +597,20 @@ and a reviewer reads what is on the screen. Guideline 4 forbids demanding a
 password on top of the sign-in that just happened, and that is exactly what it
 looked like.
 
-The screen now leads with *"Your account is all set"*, then *"This tournament
-is private"*, then a sentence saying the code is the director's and is **not**
-a password for your account. The box says **Invite code** and the button says
-**Join tournament**. `gateScreenWording.test.js` pins it, because this is a
-store requirement carried entirely by four strings.
+The screen is now three lines, and the ORDER is the argument:
+
+> Signed in as: `name@example.com`
+> **This tournament is private**
+> Enter the invite code below
+
+The account is already signed in; the tournament is a separate thing and it is
+private; the box wants an invite to it. The box says **Invite code**, the
+button says **Join tournament**, and no verb anywhere asks anybody to create,
+choose or set anything — guideline 4 is about being made to *provide or create*
+a password, so "create" would be the same rejection in a new word.
+
+`gateScreenWording.test.js` pins the order and the vocabulary, because this is
+a store requirement carried entirely by a handful of strings.
 
 **The word "password" on that screen is a rejection.** The review notes above
 say the same thing in their own paragraph, so the next reviewer is told before

@@ -35,12 +35,24 @@ describe("the invite-code screen", () => {
     expect(gate).not.toMatch(/placeholder="[^"]*[Pp]assword/);
   });
 
-  it("says plainly that it is not an account password", () => {
-    expect(gate).toMatch(/not<\/strong> a password|not a password/);
+  // The three lines, in order. The order is the argument a reviewer reads:
+  // the account is already signed in, the tournament is a separate and
+  // private thing, and the box wants an invite to it. Nothing asks anybody
+  // to create anything.
+  it("says the account is already signed in, before asking for anything", () => {
+    const signedIn = gate.indexOf("Signed in as:");
+    const isPrivate = gate.indexOf("This tournament is private");
+    const enter = gate.indexOf("Enter the invite code below");
+    expect(signedIn).toBeGreaterThan(-1);
+    expect(isPrivate).toBeGreaterThan(signedIn);
+    expect(enter).toBeGreaterThan(isPrivate);
   });
 
-  it("tells the reviewer the sign-in already worked", () => {
-    expect(gate).toMatch(/Your account is all set/);
+  // "Enter" and never "create", "choose" or "set" — the guideline is about
+  // being made to PROVIDE OR CREATE a password after Sign in with Apple, and
+  // a verb that implies making one up is the same rejection in a new word.
+  it("asks the code to be entered, never created", () => {
+    expect(gate).not.toMatch(/\b(create|choose|set up|make) (a|your) (code|password)/i);
   });
 
   // type="password" would make a browser and a reviewer both read it as a
