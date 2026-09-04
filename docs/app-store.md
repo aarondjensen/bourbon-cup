@@ -572,6 +572,18 @@ than a fallback, and the note below says so in that order.
 
 ## 8. Unlisted distribution
 
+**APPROVED, 3 Sep 2026** — filed 2 Sep, answered the next day, case
+`102951265981`, app id `6802036093`. The four sequencing traps below were all
+avoided; the form itself is written for enterprises and none of its categories
+fit, so **organization type** and **app category** both went to **Other**,
+described as a private recurring event for a fixed group. "General public" is
+the trap on the first — it is the answer that contradicts the request — and
+"Productivity" on the second, which means workplace software.
+
+Approval is permission, not publication. The version still has to clear App
+Review; when it does and the release goes out, App Store Connect hands over the
+unlisted URL, and that is the link for the iPhone half of the field.
+
 Same route as Maize N Que, and for the same reason: this app is for sixteen
 men, it is gated behind a tournament password, and it has no business being
 searchable. Unlisted apps get a direct link and do not appear in search, charts
@@ -626,7 +638,7 @@ does not wait on it — so a rejection from one says nothing about the other.
    questionnaire and needs no new build.
 8. ~~Submit to App Review with the notes in §7.~~
 9. ~~File the unlisted-distribution request, as the Account Holder — §8.~~
-   Filed 2 Sep 2026. The form is written for enterprises distributing internal
+   Filed 2 Sep 2026, **approved 3 Sep**. The form is written for enterprises distributing internal
    tools, and none of its categories fit: organization type and app category
    both go to **Other**, described as a private recurring event for a fixed
    group. "General public" is the trap on the first one — it is the answer that
