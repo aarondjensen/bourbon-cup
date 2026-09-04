@@ -526,12 +526,18 @@ than a fallback, and the note below says so in that order.
 > account. It is not a limited demo; it is the whole app without write access.
 >
 > **To reach scoring, photos and everything a player does:** tap **Sign in with
-> Apple** and use the Apple ID already on your device, then enter the access
+> Apple** and use the Apple ID already on your device, then enter the invite
 > code below when prompted. There is no separate demo account to request — this
 > app has no email-and-password sign-in, and Sign in with Apple needs nothing
 > from us.
 >
-> Access code: `<the REVIEWER code from Admin → Event → Access>`
+> **The invite code is not an account password and you are never asked to
+> create one.** Sign in with Apple completes the authentication on its own;
+> the code is a single shared string the tournament director gives to the
+> whole group, the same for every member, and it authenticates nobody. It is
+> the private tournament's front door, not a credential.
+>
+> Invite code: `<the REVIEWER code from Admin → Event → Access>`
 >
 > **Then switch to the tournament named "DEMO — Testers", before tapping a
 > name.** The app opens on the current cup, whose roster is already claimed by
@@ -539,7 +545,7 @@ than a fallback, and the note below says so in that order.
 > ☰ → Tournaments, and choose the one labelled DEMO. Then tap any unclaimed
 > name there.
 >
-> The code above opens the demo tournament only — it is issued for review and
+> The invite code above opens the demo tournament only — it is issued for review and
 > deliberately cannot write to the tournament being played. If you tap a name
 > outside the demo, the app will say so and point you back to the switcher.
 > Every other year listed is a completed tournament, closed to new entries.
@@ -563,10 +569,43 @@ than a fallback, and the note below says so in that order.
 > other players attested to.
 >
 > If you test deletion, please do it **last**. It is a real deletion: signing
-> in again creates a new account and needs the access code above, and the
+> in again creates a new account and needs the invite code above, and the
 > roster name you claimed becomes free for somebody else.
 >
 > The app is iPhone-only by design and is used one-handed on a golf course.
+
+---
+
+### Guideline 4: the code screen may not look like a password
+
+**1.0 (2) was rejected on 4 Sep 2026** for this, reviewed on an iPhone 17 Pro
+Max:
+
+> The app offers Sign in with Apple as a login option but does not follow the
+> design and user experience requirements for Sign in with Apple.
+> Specifically, users are required to provide or create a password after using
+> Sign in with Apple even though account authentication is already handled by
+> the Authentication Services framework so passwords are unnecessary.
+
+Nothing was wrong with the mechanism, and nothing about it changed. The gate
+screen asks for ONE SHARED CODE for a private group — the same string for all
+sixteen men, checked by `firestore.rules`, authenticating nobody. It is the
+tournament's front door, not a credential.
+
+But it was a box placeheld **"Password"**, one tap after Sign in with Apple,
+and a reviewer reads what is on the screen. Guideline 4 forbids demanding a
+password on top of the sign-in that just happened, and that is exactly what it
+looked like.
+
+The screen now leads with *"Your account is all set"*, then *"This tournament
+is private"*, then a sentence saying the code is the director's and is **not**
+a password for your account. The box says **Invite code** and the button says
+**Join tournament**. `gateScreenWording.test.js` pins it, because this is a
+store requirement carried entirely by four strings.
+
+**The word "password" on that screen is a rejection.** The review notes above
+say the same thing in their own paragraph, so the next reviewer is told before
+they arrive rather than after.
 
 ---
 
