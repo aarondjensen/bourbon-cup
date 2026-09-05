@@ -539,16 +539,15 @@ than a fallback, and the note below says so in that order.
 >
 > Invite code: `<the REVIEWER code from Admin → Event → Access>`
 >
-> **Then switch to the tournament named "DEMO — Testers", before tapping a
-> name.** The app opens on the current cup, whose roster is already claimed by
-> the men playing it. Tap "Switch tournament" on the roster screen, or
-> ☰ → Tournaments, and choose the one labelled DEMO. Then tap any unclaimed
-> name there.
+> The code takes you straight into the tournament named **"DEMO — Testers"**.
+> On the roster screen that follows, tap the name **DEMO ACCOUNT** — it is at
+> the top of the Mash Brothers list and is there for you — then tap the button
+> below it to link the account. Any other unclaimed name works too.
 >
-> The invite code above opens the demo tournament only — it is issued for review and
-> deliberately cannot write to the tournament being played. If you tap a name
-> outside the demo, the app will say so and point you back to the switcher.
-> Every other year listed is a completed tournament, closed to new entries.
+> The invite code above opens that demo tournament only. It is issued for
+> review and deliberately cannot write to the tournament being played, so if
+> you switch to another year and tap a name there, the app will refuse it and
+> say why. Every year other than the demo is either in progress or completed.
 >
 > **The Admin tab is open to you inside "DEMO — Testers".** One person in a real
 > tournament is its director, and the Admin tabs are that role's tools — the
