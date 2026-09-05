@@ -61,3 +61,35 @@ describe("the invite-code screen", () => {
     expect(gate).not.toMatch(/type="password"/);
   });
 });
+
+// ── The claim screen ────────────────────────────────────────────────
+// App Review rejected 1.0 (3) under 2.1(a): "redirects to the Select your
+// Name screen after tapping on the Link this Account button". Nothing
+// redirected. The claim was refused, and doClaim then cleared the picked
+// player — which emptied the confirm bar and un-highlighted the name, so
+// the screen looked exactly as it had before the tap.
+const claimStart = src.indexOf("function ClaimScreen(");
+const claim = src
+  .slice(claimStart, src.indexOf("\n// ", claimStart + 10))
+  .split("\n")
+  .filter((line) => !line.trim().startsWith("//"))
+  .join("\n");
+
+describe("a refused claim", () => {
+  it("finds the screen, so the rest of this block means something", () => {
+    expect(claimStart).toBeGreaterThan(-1);
+    expect(claim).toMatch(/doClaim/);
+  });
+
+  // The pick surviving is what tells the eye the tap was received: the name
+  // stays lit and the button stays on screen, with the reason beside them.
+  it("keeps the picked player", () => {
+    const body = claim.slice(claim.indexOf("const doClaim"), claim.indexOf("onClaimed(res.player)"));
+    expect(body).not.toMatch(/setPicked\(null\)/);
+  });
+
+  it("says so somewhere a reviewer cannot miss", () => {
+    expect(claim).toMatch(/role="alert"/);
+    expect(claim).toMatch(/wasn&rsquo;t linked|wasn't linked/);
+  });
+});

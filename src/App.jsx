@@ -648,7 +648,15 @@ function ClaimScreen({ players, teams, darkMode, tournamentName, tournamentLocat
     setBusy(true); setErr("");
     const res = await claimPlayer(picked, authUser);
     setBusy(false);
-    if (!res.ok) { setErr(res.error); setPicked(null); return; }
+    // The pick SURVIVES a refusal, and that is the whole of this line.
+    // Clearing it emptied the confirm bar and un-highlighted the name, so a
+    // refused claim left the screen looking exactly like the one before the
+    // tap — App Review read that as the app sending them back and rejected
+    // 1.0 (3) under 2.1(a): "redirects to the Select your Name screen after
+    // tapping on the Link this Account button." Nothing redirected. A write
+    // was refused and the screen threw away the only evidence it had been
+    // attempted.
+    if (!res.ok) { setErr(res.error); return; }
     onClaimed(res.player);
   };
 
@@ -781,7 +789,27 @@ function ClaimScreen({ players, teams, darkMode, tournamentName, tournamentLocat
         </div>
       )}
 
-      <LoginNote text={err} />
+      {/* Loud, because the quiet version cost a rejection. This used to be a
+          LoginNote: one line of 13px danger text in a 34px slot under a
+          button that had just vanished. A refusal has to be unmistakably a
+          refusal — the tap did something, it did not work, and here is why —
+          or it reads as the screen resetting itself.
+
+          Below the confirm bar rather than above it, on purpose: the bar
+          holds its height so the name grid cannot walk up under the thumb
+          that just tapped it, and an error card above would put that shift
+          straight back. */}
+      {err ? (
+        <div role="alert" style={{
+          width: "100%", maxWidth: 480, marginTop: 10, padding: "12px 14px", borderRadius: 10,
+          background: BC.card + ALPHA.panel, border: `1px solid ${BC.danger}`, textAlign: "center",
+        }}>
+          <div style={{ fontSize: FS.body, fontWeight: 800, color: BC.danger, marginBottom: 4 }}>
+            That name wasn&rsquo;t linked
+          </div>
+          <div style={{ fontSize: FS.small, color: BC.t2, lineHeight: 1.45 }}>{err}</div>
+        </div>
+      ) : <LoginNote text="" />}
 
       {players.length === 0 && (
         <div style={{ textAlign: "center", color: BC.t3, fontSize: FS.small, marginTop: -22, marginBottom: 8, maxWidth: 360 }}>
