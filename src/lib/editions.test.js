@@ -32,7 +32,7 @@ vi.mock("../firebase", () => ({
   spectatorSession: (id) => ({ id }),
 }));
 
-const { editionSlug, editionIdFor, editionExists, createEdition, cloneEdition, updateEdition, switchEdition } =
+const { editionSlug, editionIdFor, editionExists, createEdition, cloneEdition, updateEdition, switchEdition, findDemoEdition } =
   await import("./editions");
 const firebase = await import("../firebase");
 
@@ -183,5 +183,39 @@ describe("switching editions", () => {
     switchEdition("bc_demo", { reload: false, namespaced: true, spectate: false });
     expect(firebase.setActiveTournamentId).toHaveBeenCalledWith("bc_demo", true);
     expect(firebase.writeUserSession).toHaveBeenCalledWith(null);
+  });
+});
+
+// ── Where a reviewer's code lands ───────────────────────────────────
+// A demo_only membership can write nothing outside a demo edition, and it
+// used to land on the cup — whose roster had fourteen unclaimed names, so
+// the obvious tap on the obvious screen was refused. App Review read that
+// as the app sending them back and rejected 1.0 (3) under 2.1(a).
+describe("findDemoEdition", () => {
+  it("finds the demo", async () => {
+    rows.bc_editions = [
+      { id: "bc_2026", name: "2026" },
+      { id: "bc_demo", name: "DEMO — Testers", is_demo: true },
+    ];
+    expect((await findDemoEdition())?.id).toBe("bc_demo");
+  });
+
+  // A locked demo refuses the claim for the same reason the cup does, so
+  // sending a reviewer there trades one dead end for another.
+  it("skips a locked demo", async () => {
+    rows.bc_editions = [{ id: "bc_demo", is_demo: true, locked: true }];
+    expect(await findDemoEdition()).toBeNull();
+  });
+
+  it("is null when there is no demo, leaving the caller where it was", async () => {
+    rows.bc_editions = [{ id: "bc_2026", name: "2026" }];
+    expect(await findDemoEdition()).toBeNull();
+  });
+
+  // The flag decides, never the id — the next scratch edition will not be
+  // called bc_demo.
+  it("does not go by the id", async () => {
+    rows.bc_editions = [{ id: "bc_demo", name: "DEMO" }];
+    expect(await findDemoEdition()).toBeNull();
   });
 });

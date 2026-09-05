@@ -595,11 +595,25 @@ beneath them. Below the confirm bar rather than above it, because the bar holds
 its height so the grid cannot walk up under the thumb that just tapped it.
 `gateScreenWording.test.js` pins both halves.
 
-**But the message is only half of it: something refused that claim, and the
-screen said which.** Before resubmitting, confirm on a NON-DIRECTOR account
-that the demo is actually claimable — `bc_demo` unlocked, and unclaimed rows
-on its roster. A director writes straight through the lock and sees a normal
-roster (§6), so this cannot be checked from the account that would fix it.
+**And the message was only half of it. What refused the claim was the
+edition.** `bc_demo` was unlocked and claimable the whole time; the reviewer
+never got there. A reviewer's code mints a `demo_only` membership, that
+membership landed on the CUP, and the cup's roster had fourteen unclaimed
+names on it — so the obvious tap on the obvious screen was refused by
+`canWriteEdition()`, correctly, and looked like a reset.
+
+**Telling them to switch first was the fix that had already failed.** It was
+in the review notes, in order, in its own paragraph. A roster full of tappable
+names beats a paragraph every time.
+
+So the code now lands them in the demo: `findDemoEdition` in `lib/editions`,
+called from the gate screen's `onPassed` when the join came back `demoOnly`.
+Unlocked demos only — a locked one refuses the claim for the same reason and
+would trade one dead end for another — and null leaves them on the cup with
+the (now loud) refusal rather than somewhere worse.
+
+The review notes still describe switching, because a reviewer who wanders back
+to the cup should know why it refuses them. They should no longer need it.
 
 ---
 
