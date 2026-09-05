@@ -129,8 +129,26 @@ export const EDITION_STATUSES = ["draft", "published", "archived"];
 //
 // Imported AND re-exported, not `export … from`: that form re-exports without
 // binding the name locally, and `cloneEdition` below calls it.
-import { isDemoEdition } from "./editionLock";
+import { isDemoEdition, isEditionLocked } from "./editionLock";
 export { isDemoEdition };
+
+// ── Where a reviewer's code puts them ───────────────────────────────
+// A membership minted by the reviewer code is stamped demo_only and can
+// write NOTHING outside a demo edition. Until this existed, such an account
+// still landed on the cup, whose roster had fourteen unclaimed names on it —
+// so the obvious action on the obvious screen was refused, and App Store
+// review rejected 1.0 (3) over it (2.1(a); see app-store.md). Telling them
+// to switch first was the fix that failed: it was in the review notes, in
+// order, and the roster in front of them said otherwise.
+//
+// So the code lands them where it works. UNLOCKED only — a locked demo
+// refuses the claim for exactly the same reason and would trade one dead end
+// for another. Null when there is no usable demo, which leaves the caller on
+// the cup with the refusal message rather than sending it somewhere worse.
+export const findDemoEdition = async () => {
+  const rows = await db.get(EDITIONS_COL, [{ field: "is_demo", op: "==", value: true }]).catch(() => []);
+  return (rows || []).find((e) => e?.id && isDemoEdition(e) && !isEditionLocked(e)) || null;
+};
 
 export const updateEdition = async (id, { name, status }) => {
   if (!id) return { ok: false, error: "No edition to rename." };

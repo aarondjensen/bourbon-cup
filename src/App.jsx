@@ -115,7 +115,7 @@ import {
 import {
   BUDGET_COL, budgetLineId, buildBudgetLine, budgetLineError,
 } from "./lib/budget";
-import { EDITIONS_COL, isDemoEdition } from "./lib/editions";
+import { EDITIONS_COL, isDemoEdition, findDemoEdition, switchEdition } from "./lib/editions";
 import { lockNotice, isEditionLocked, demoOnlyAdmin } from "./lib/editionLock";
 import { liveEdition } from "./lib/defaultEdition";
 import { prefetchArchive } from "./lib/useArchive";
@@ -509,9 +509,12 @@ function GateScreen({ tournamentName, tournamentLocation, authUser, onPassed, on
     if (busy) return;
     setBusy(true); setErr("");
     const res = await joinWithCode(authUser, code);
+    if (!res.ok) { setBusy(false); setErr(res.error); return; }
+    // Still busy: onPassed can reload the tab (a demo-only membership is
+    // sent to the demo edition), and dropping the spinner first would flash
+    // an idle Join button under the thumb on the way out.
+    await onPassed(res);
     setBusy(false);
-    if (!res.ok) { setErr(res.error); return; }
-    onPassed();
   };
 
   return (
@@ -5411,13 +5414,24 @@ export default function App() {
     if (authUser === undefined || (authUser && member === undefined) || (authUser && member && !user && !playersLoaded)) return <LoginSplash {...chrome} />;
     if (!authUser) return <SignInScreen {...chrome} initialError={authError} onGuest={enterGuest} />;
     if (!member) return (
-      // Re-read rather than assume: the membership document that was just
-      // created is also where Admin access is read from, and a director flag
-      // set in the console before the first sign-in would be missed by a
-      // locally-invented one.
       <GateScreen {...chrome} authUser={authUser} onSignOut={doSignOut}
         onGuest={() => doSignOut({ toGuest: true })}
-        onPassed={async () => { const { doc } = await loadMembership(authUser.uid); setMembership(doc || { uid: authUser.uid }); }} />
+        onPassed={async (res) => {
+          // A reviewer's code can only write a demo, so put them in one.
+          // Landing them on the cup was the 2.1(a) rejection: fourteen
+          // unclaimed names in front of them and every tap refused. This
+          // reloads, so nothing below it runs.
+          if (res?.demoOnly) {
+            const demo = await findDemoEdition();
+            if (demo) { switchEdition(demo.id); return; }
+          }
+          // Re-read rather than assume: the membership document that was just
+          // created is also where Admin access is read from, and a director flag
+          // set in the console before the first sign-in would be missed by a
+          // locally-invented one.
+          const { doc } = await loadMembership(authUser.uid);
+          setMembership(doc || { uid: authUser.uid });
+        }} />
     );
     if (!user) return (
       <ClaimScreen

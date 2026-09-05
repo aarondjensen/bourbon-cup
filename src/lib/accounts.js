@@ -149,7 +149,7 @@ export async function joinWithCode(authUser, code) {
     }
   } catch (e) {
     if (e?.code === "permission-denied") {
-      return { ok: false, error: "That password isn't right." };
+      return { ok: false, error: "That invite code isn't right." };
     }
     return { ok: false, error: "Could not check that — check signal and try again." };
   }
