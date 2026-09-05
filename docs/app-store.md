@@ -576,6 +576,33 @@ than a fallback, and the note below says so in that order.
 
 ---
 
+### Guideline 2.1(a): a refused claim looked like a redirect
+
+**1.0 (3) was rejected on 5 Sep 2026**, reviewed on an iPad Air 11-inch:
+
+> We were unable to access the app because it redirects to the "Select your
+> Name" screen after tapping on the "Link this Account" button.
+
+**Nothing redirected.** The claim was refused, and `doClaim` then called
+`setPicked(null)` — which emptied the confirm bar and un-highlighted the name,
+leaving the screen looking exactly as it had before the tap. The reason went
+into a `LoginNote`: one line of 13px danger text, in a 34px slot, underneath a
+button that had just disappeared. A refusal and a reset were indistinguishable.
+
+Fixed by keeping the pick and making the refusal loud — the name stays lit, the
+button stays on screen, and the reason sits in a bordered `role="alert"` card
+beneath them. Below the confirm bar rather than above it, because the bar holds
+its height so the grid cannot walk up under the thumb that just tapped it.
+`gateScreenWording.test.js` pins both halves.
+
+**But the message is only half of it: something refused that claim, and the
+screen said which.** Before resubmitting, confirm on a NON-DIRECTOR account
+that the demo is actually claimable — `bc_demo` unlocked, and unclaimed rows
+on its roster. A director writes straight through the lock and sees a normal
+roster (§6), so this cannot be checked from the account that would fix it.
+
+---
+
 ### Guideline 4: the code screen may not look like a password
 
 **1.0 (2) was rejected on 4 Sep 2026** for this, reviewed on an iPhone 17 Pro
