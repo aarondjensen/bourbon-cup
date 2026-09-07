@@ -492,3 +492,117 @@ describe("the documents the writer commits", () => {
     for (const { col } of writes) expect(DEMO_COLLECTIONS).toContain(col);
   });
 });
+
+// ══════════════════════════════════════════════════════════════════
+//  The dry run — `--countdown`
+// ══════════════════════════════════════════════════════════════════
+//  The Final Countdown runs once a year, on a television, in front of
+//  sixteen people, and it is the one screen in the app that cannot be
+//  rehearsed on the night. So the demo can be built with round 4 replaced
+//  by the round the real cup actually closes with: a sealed Team Best Ball
+//  with eighteen holes in the books and none of them turned over.
+//
+//  It goes in bc_demo and nowhere else. The two things worth pinning are
+//  that it still cannot escape, and that the default build — the one a
+//  store reviewer meets — is untouched by its existence.
+describe("the countdown dry run", () => {
+  const cd = buildDemo({ countdown: true });
+  const r4 = cd.bc_rounds.find(r => r.round_number === 4);
+  const m4 = cd.bc_matches.filter(m => m.round === 4);
+
+  it("does not change the tournament a reviewer opens", () => {
+    const plain = buildDemo();
+    const plainR4 = plain.bc_rounds.find(r => r.round_number === 4);
+    expect(plainR4.format).toBe("singles");
+    expect(plainR4.sealed).toBeUndefined();
+    expect(plain.bc_hole_scores.filter(h => h.round_number === 4)).toHaveLength(0);
+    // And rounds 1-3 are identical either way — the flag replaces one round,
+    // it does not regenerate the week.
+    expect(JSON.stringify(cd.bc_hole_scores.filter(h => h.round_number !== 4)))
+      .toBe(JSON.stringify(plain.bc_hole_scores.filter(h => h.round_number !== 4)));
+  });
+
+  it("closes with a sealed Team Best Ball, nothing revealed", () => {
+    expect(r4.format).toBe("team_best_ball");
+    expect(r4.sealed).toBe(true);
+    expect(r4.reveal_through).toBe(0);
+  });
+
+  // One match holding both whole sides. That IS the format, and it is what
+  // makes "the side's best N" mean anything.
+  it("is one match, whole side against whole side", () => {
+    expect(m4).toHaveLength(1);
+    const a = cd.bc_players.filter(p => p.team === "A").map(p => p.player_id).sort();
+    const b = cd.bc_players.filter(p => p.team === "B").map(p => p.player_id).sort();
+    expect([...m4[0].teamA].sort()).toEqual(a);
+    expect([...m4[0].teamB].sort()).toEqual(b);
+  });
+
+  // Nobody rides with an opponent, and no wave is bigger than a foursome —
+  // which is what the Scoring tab's tee groups read.
+  it("splits each side into waves of its own players", () => {
+    const g4 = cd.bc_groups.find(g => g.round_number === 4).groups;
+    const teamOf = (pid) => cd.bc_players.find(p => p.player_id === pid).team;
+    expect(g4.length).toBeGreaterThan(1);
+    g4.forEach(g => {
+      expect(g.players.length).toBeLessThanOrEqual(4);
+      expect(new Set(g.players.map(teamOf)).size).toBe(1);
+    });
+    expect(g4.flatMap(g => g.players).sort()).toEqual(cd.bc_players.map(p => p.player_id).sort());
+  });
+
+  // The point of the countdown is WHOSE ball counted. The demo field is six a
+  // side and the engine clamps the count to the smaller roster, so a count of
+  // six would make every ball count and the dimmed chips — half of what is
+  // being rehearsed — would never appear.
+  it("counts fewer balls than the side has", () => {
+    const side = m4[0].teamA.length;
+    expect(r4.counting_scores.holes[0]).toBeLessThan(side);
+    expect(r4.counting_scores.holes[9]).toBeLessThan(side);
+  });
+
+  it("has all eighteen holes in the books", () => {
+    const scored = cd.bc_hole_scores.filter(h => h.round_number === 4);
+    expect(scored).toHaveLength(cd.bc_players.length * 18);
+  });
+
+  // The whole thing is pointless if the round does not produce a result to
+  // turn over. Scored through the app's own engine, with the round's terms
+  // folded onto the match exactly as App does (see enrichedMatches).
+  it("scores to a real result, hole by hole", () => {
+    const holeData = {};
+    cd.bc_hole_scores.forEach(h => {
+      const k = `${h.player_id}_${h.round_number}`;
+      (holeData[k] ||= {})[h.hole_number - 1] = h.score;
+    });
+    const m = { ...m4[0], scoring_type: r4.scoring_type, hole_points: r4.hole_points };
+    const res = computeMatchResult(
+      m, holeData, cd.bc_courses, cd.bc_rounds, cd.bc_players, "team_best_ball", {}, undefined, {}, []
+    );
+    expect(res.holesPlayed).toBe(18);
+    // Every hole has a number for both sides and a list of the balls that
+    // made it — the two things the countdown reads out.
+    res.holes.forEach((h, i) => {
+      expect(typeof h.aScore, `hole ${i + 1} side A`).toBe("number");
+      expect(typeof h.bScore, `hole ${i + 1} side B`).toBe("number");
+      expect(h.counted.A.length).toBe(r4.counting_scores.holes[i]);
+      expect(h.counted.B.length).toBe(r4.counting_scores.holes[i]);
+    });
+    // A points round pays every hole, so the two totals add to the full pot.
+    const pot = r4.hole_points.front * 9 + r4.hole_points.back * 9;
+    expect(res.totalPts.A + res.totalPts.B).toBeCloseTo(pot, 5);
+    // And it is a contest, not a whitewash — a dry run where one side wins
+    // every hole rehearses nothing.
+    expect(res.holes.filter(h => h.winner === "A").length).toBeGreaterThan(0);
+    expect(res.holes.filter(h => h.winner === "B").length).toBeGreaterThan(0);
+  });
+
+  it("still cannot escape the demo edition", () => {
+    DEMO_COLLECTIONS.flatMap(c => cd[c]).forEach(doc => {
+      if (doc.tournament_id !== undefined) expect(doc.tournament_id).toBe(DEMO_EDITION_ID);
+      const own = doc.id === DEMO_EDITION_ID
+        || doc.id.startsWith(`${DEMO_EDITION_ID}__`) || doc.id.startsWith("demo_");
+      expect(own, `${doc.id} is not namespaced under ${DEMO_EDITION_ID}`).toBe(true);
+    });
+  });
+});
