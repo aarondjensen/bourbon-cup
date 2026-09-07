@@ -84,11 +84,22 @@ const phraseAfter = (f) => {
 const WRITE = has("--write");
 const UNDO = has("--undo");
 const ADD = phraseAfter("--add");
+// ── The dry run ───────────────────────────────────────────────────
+// Replaces the demo's round 4 with a sealed, fully-scored Team Best Ball so
+// the Final Countdown can be rehearsed on a television with the room empty.
+// Same edition, same mark, same rails — it changes WHAT is built, not where
+// it goes, so there is no argument anybody can type that reaches bc_2026.
+//
+// A plain `--write` puts the demo back to the state a store reviewer should
+// meet, which is the undo for this and is worth knowing before you run it two
+// days before a submission.
+const COUNTDOWN = has("--countdown");
 const allowProject = valueOf("--allow-project");
 
 const die = (msg) => { console.error(`\n✖ ${msg}\n`); process.exit(1); };
 
 if (ADD && UNDO) die("--add and --undo do opposite things. Pick one.");
+if (COUNTDOWN && (ADD || UNDO)) die("--countdown builds the whole tournament. It does not combine with --add or --undo.");
 
 // ── Build, then check what was built ────────────────────────────────
 // --add builds ONE roster row instead of the whole tournament, and goes
@@ -106,7 +117,7 @@ if (ADD) {
   total = 1;
   console.log(`\n  + ${res.player.name}  ·  Team ${res.player.team}  ·  ${res.player.handicap_index}  ·  ${res.player.id}`);
 } else {
-  built = buildDemo();
+  built = buildDemo({ countdown: COUNTDOWN });
   total = countDemoDocs(built);
 }
 
@@ -129,6 +140,10 @@ for (const col of DEMO_COLLECTIONS) {
 }
 
 console.log(`\n  ${DEMO_NAME}  (${DEMO_EDITION_ID})`);
+if (COUNTDOWN) {
+  console.log("  Round 4: Team Best Ball, SEALED, 18 holes scored — a Final Countdown dry run.");
+  console.log("  Re-run without --countdown to put the demo back for a store reviewer.");
+}
 console.log(`  ${"─".repeat(46)}`);
 for (const col of DEMO_COLLECTIONS) {
   const n = built[col].length;

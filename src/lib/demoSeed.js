@@ -174,6 +174,53 @@ const ROUNDS = [
   { round: 4, format: "singles",   course: "harbor",    date: DEMO_END,     tee: "9:00 AM", perSide: 1 },
 ];
 
+// ── The dry run ─────────────────────────────────────────────────────
+// `buildDemo({ countdown: true })` replaces round 4 with the closing round
+// the real cup actually plays: a Team Best Ball, sealed, eighteen holes in
+// the books and not one of them turned over. It exists so the Final Countdown
+// can be rehearsed on a television with the room empty — the one thing that
+// cannot be rehearsed on the night, and the one screen with an audience.
+//
+// It goes in the DEMO edition and nowhere else. Everything below writes
+// through the same constant id, the same `seeded_from` mark and the same
+// refusal to touch a document it did not write, so a dry run cannot reach
+// bc_2026 by any argument anybody types. A plain re-seed puts the demo back
+// to the state a store reviewer should meet.
+//
+// Best FOUR of six on the front and five of six on the back, not the cup's
+// six-of-eight. The demo field is six a side, and the engine clamps the count
+// to the smaller roster — so leaving it at six would make every ball count,
+// and the dimmed "did not count" chips that are half of what the countdown
+// is for would never appear at all.
+const COUNTDOWN_ROUND = {
+  round: 4, format: "team_best_ball", course: "harbor", date: DEMO_END,
+  tee: "9:00 AM|9:10 AM|9:20 AM|9:30 AM", perSide: null,
+  scoring_type: "points",
+  hole_points: { front: 1, back: 2 },
+  counting_scores: { holes: [...Array(9).fill(4), ...Array(9).fill(5)] },
+  sealed: true,
+};
+
+// A side split into even waves, never more than four in one. The same rule as
+// `splitEvenly` in lib/groups, spelled out again here rather than imported:
+// that module reaches Firebase, and this one is run from a Node script and
+// unit-tested, so it holds no Firebase at all. Four lines is the cheaper half
+// of that trade.
+const waves = (players, size = 4) => {
+  const count = Math.ceil(players.length / size);
+  const out = [];
+  let i = 0;
+  for (let g = 0; g < count; g++) {
+    const take = Math.ceil((players.length - i) / (count - g));
+    out.push(players.slice(i, i + take));
+    i += take;
+  }
+  return out;
+};
+
+const roundsFor = (countdown) =>
+  countdown ? ROUNDS.map(r => (r.round === 4 ? COUNTDOWN_ROUND : r)) : ROUNDS;
+
 // How much of the week is already played. R1 is complete so the leaderboard
 // has something on it the moment a tester opens the app; R2 stops at the turn
 // so there is something to DO — which is the entire reason this edition
@@ -194,7 +241,11 @@ const SCORED = { 1: 18, 2: 9 };
 const A_PAIRS = [[0, 1], [2, 3], [4, 5]];
 const B_PAIRS = [[0, 1], [2, 3], [4, 5]];
 
-const pairsFor = (round) => {
+const pairsFor = (round, countdown = false) => {
+  // A Team Best Ball is ONE match holding both whole sides — that is the
+  // format, and it is what makes the countdown's "best N of the side" mean
+  // anything.
+  if (round === 4 && countdown) return [{ teamA: A.map(a => a.key), teamB: B.map(b => b.key) }];
   if (round === 4) return A.map((a, i) => ({ teamA: [a.key], teamB: [B[i].key] }));
   return A_PAIRS.map((ap, g) => {
     const bp = B_PAIRS[(g + round - 1) % 3];
@@ -253,7 +304,11 @@ const roundFor = (pars, index, seedBase) => {
   return best.holes;
 };
 
-export const buildDemo = () => {
+export const buildDemo = ({ countdown = false } = {}) => {
+  const rounds = roundsFor(countdown);
+  // R1 complete, R2 stopped at the turn — plus a whole round 4 on a dry run,
+  // which is the only way there is anything to turn over.
+  const scored = countdown ? { ...SCORED, 4: 18 } : SCORED;
   const out = Object.fromEntries(DEMO_COLLECTIONS.map(c => [c, []]));
   const courseOf = (key) => COURSES.find(c => c.key === key);
   const nameOf = (key) => FIELD.find(p => p.key === key)?.name || key;
@@ -356,7 +411,7 @@ export const buildDemo = () => {
     }));
   });
 
-  ROUNDS.forEach((r) => {
+  rounds.forEach((r) => {
     out.bc_rounds.push(stamp({
       id: id(`bc_round_${r.round}`),
       round_number: r.round,
@@ -365,9 +420,16 @@ export const buildDemo = () => {
       tee_box: "Blue",
       tee_time: r.tee,
       date: r.date,
+      // Only the countdown round carries these, and only the keys it set —
+      // an undefined would be written as a missing field on every other
+      // round and read back as "the director never chose", which is true.
+      ...(r.scoring_type ? { scoring_type: r.scoring_type } : null),
+      ...(r.hole_points ? { hole_points: r.hole_points } : null),
+      ...(r.counting_scores ? { counting_scores: r.counting_scores } : null),
+      ...(r.sealed ? { sealed: true, reveal_through: 0 } : null),
     }));
 
-    const draw = pairsFor(r.round);
+    const draw = pairsFor(r.round, countdown);
     draw.forEach((m) => {
       const a = m.teamA.map(demoPlayerId);
       const b = m.teamB.map(demoPlayerId);
@@ -383,16 +445,22 @@ export const buildDemo = () => {
 
     // Tee sheet: one group per match in the team rounds, and the singles
     // paired up two matches to a group so nobody walks eighteen holes alone.
-    const groups = r.round === 4
-      ? [0, 2, 4].map(i => ({ players: [...draw[i].teamA, ...draw[i].teamB, ...draw[i + 1].teamA, ...draw[i + 1].teamB].map(demoPlayerId) }))
-      : draw.map(m => ({ players: [...m.teamA, ...m.teamB].map(demoPlayerId) }));
+    const groups = r.round === 4 && countdown
+      // Nobody rides with an opponent on a Team Best Ball: each side splits
+      // into waves, which is what the Scoring tab's tee groups read (see
+      // scoringUnits in lib/groups) and what the real round 4 looks like.
+      ? [...waves(A.map(a => a.key)), ...waves(B.map(b => b.key))]
+          .map(players => ({ players: players.map(demoPlayerId) }))
+      : r.round === 4
+        ? [0, 2, 4].map(i => ({ players: [...draw[i].teamA, ...draw[i].teamB, ...draw[i + 1].teamA, ...draw[i + 1].teamB].map(demoPlayerId) }))
+        : draw.map(m => ({ players: [...m.teamA, ...m.teamB].map(demoPlayerId) }));
     out.bc_groups.push(stamp({ id: id(`bc_groups_r${r.round}`), round_number: r.round, groups }));
   });
 
   // Hole scores. Seeded per (round, player) so adding a round later cannot
   // shift the numbers in the rounds before it.
-  ROUNDS.forEach((r) => {
-    const holes = SCORED[r.round] || 0;
+  rounds.forEach((r) => {
+    const holes = scored[r.round] || 0;
     if (!holes) return;
     const course = courseOf(r.course);
     FIELD.forEach((p, pi) => {
