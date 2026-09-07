@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  buildDemo, countDemoDocs, demoWrites, DEMO_COLLECTIONS, DEMO_EDITION_ID, DEMO_MARK,
-  demoPlayerId, DEMO_START, DEMO_END, DEMO_YEAR, buildDemoPlayer, SEEDED_PLAYER_IDS,
+  buildDemo, countDemoDocs, demoWrites, DEMO_COLLECTIONS, DEMO_EDITION_ID, DEMO_MARK, demoPlayerId, DEMO_START, DEMO_END, DEMO_YEAR, buildDemoPlayer, SEEDED_PLAYER_IDS, stalePaths,
 } from "./demoSeed";
 import { todayISO, addDays } from "./dates";
 import { isDemoEdition } from "./editions";
@@ -604,5 +603,57 @@ describe("the countdown dry run", () => {
         || doc.id.startsWith(`${DEMO_EDITION_ID}__`) || doc.id.startsWith("demo_");
       expect(own, `${doc.id} is not namespaced under ${DEMO_EDITION_ID}`).toBe(true);
     });
+  });
+});
+
+// ── Pruning ────────────────────────────────────────────────────────
+// `set(…, { merge: true })` corrects a document and cannot delete one, so a
+// seed that changes SHAPE leaves the old shape behind. Round 4's six singles
+// matches surviving a --countdown re-seed is the case that found this: seven
+// matches in the round, all scoring off the same holes, and nothing errors.
+describe("stalePaths", () => {
+  const plain = buildDemo();
+  const cd = buildDemo({ countdown: true });
+  const asExisting = (built) =>
+    DEMO_COLLECTIONS.flatMap(c => (built[c] || []).map(d => ({ col: c, id: d.id, mark: DEMO_MARK })));
+
+  it("removes the matches a countdown re-seed replaces", () => {
+    const stale = stalePaths(asExisting(plain), cd);
+    expect(stale.length).toBeGreaterThan(0);
+    // Every one of them is a match, and none survives into the new build.
+    const wanted = new Set(cd.bc_matches.map(m => m.id));
+    stale.forEach(({ col, id }) => {
+      expect(col).toBe("bc_matches");
+      expect(wanted.has(id)).toBe(false);
+    });
+    // The old round-4 singles, specifically — six of them.
+    const gone = new Set(stale.map(s => s.id));
+    const oldR4 = plain.bc_matches.filter(m => m.round === 4);
+    expect(oldR4).toHaveLength(6);
+    oldR4.forEach(m => expect(gone.has(m.id)).toBe(true));
+  });
+
+  it("takes nothing when the build has not changed", () => {
+    expect(stalePaths(asExisting(plain), plain)).toEqual([]);
+    expect(stalePaths(asExisting(cd), cd)).toEqual([]);
+  });
+
+  // The line --undo draws, drawn again here. A card a tester signed in the
+  // demo carries no mark of ours and is not the seed's to tidy away.
+  it("never touches a document this seed did not write", () => {
+    const existing = [
+      ...asExisting(plain),
+      { col: "bc_card_sigs", id: "a-tester-signed-this", mark: undefined },
+      { col: "bc_matches", id: "built-by-hand-in-admin", mark: "something-else" },
+    ];
+    const stale = stalePaths(existing, cd);
+    const ids = stale.map(s => s.id);
+    expect(ids).not.toContain("a-tester-signed-this");
+    expect(ids).not.toContain("built-by-hand-in-admin");
+  });
+
+  it("survives an empty read", () => {
+    expect(stalePaths([], cd)).toEqual([]);
+    expect(stalePaths(undefined, cd)).toEqual([]);
   });
 });

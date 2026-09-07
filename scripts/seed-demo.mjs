@@ -59,7 +59,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   buildDemo, buildDemoPlayer, countDemoDocs, demoWrites,
-  DEMO_COLLECTIONS, DEMO_EDITION_ID, DEMO_MARK, DEMO_NAME, SEEDED_PLAYER_IDS,
+  DEMO_COLLECTIONS, DEMO_EDITION_ID, DEMO_MARK, DEMO_NAME, SEEDED_PLAYER_IDS, stalePaths,
 } from "../src/lib/demoSeed.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -299,11 +299,16 @@ if (ADD) {
 // flatten anything, and a director who added a player by hand should not find
 // that adding a second one is now refused.
 const foreign = [];
+const existing = [];
 for (const col of ADD ? [] : DEMO_COLLECTIONS) {
   if (col === "bc_editions") continue;
   const snap = await db.collection(col).where("tournament_id", "==", DEMO_EDITION_ID).get()
     .catch((e) => firestoreDied(e, `Reading ${col}`));
-  for (const d of snap.docs) if (d.data().seeded_from !== DEMO_MARK) foreign.push(`${col}/${d.id}`);
+  for (const d of snap.docs) {
+    const mark = d.data().seeded_from;
+    if (mark !== DEMO_MARK) foreign.push(`${col}/${d.id}`);
+    existing.push({ col, id: d.id, mark });
+  }
 }
 if (foreign.length) {
   die(`${DEMO_EDITION_ID} holds ${foreign.length} document(s) this seed did not write:\n`
@@ -353,6 +358,21 @@ if (UNDO) {
 // field rather than erroring, and a tester's edited score is overwritten back
 // to the seed's value — which is what re-running a seed is FOR. It is also
 // what repairs a demo seeded by the version that dropped the id.
+// Rail 6 — what this build no longer writes. See stalePaths in lib/demoSeed
+// for the failure it exists for; the short version is that `merge: true`
+// corrects a document and cannot delete one, so a seed that changes SHAPE
+// leaves the old shape behind and scoring it is nobody's idea of a dry run.
+//
+// Named before it happens, because deleting is the half of a re-seed nobody
+// expects, and skipped entirely for --add, which writes one new row.
+const stale = ADD ? [] : stalePaths(existing, built);
+if (stale.length) {
+  console.log(`  Removing ${stale.length} document(s) this seed no longer writes…`);
+  stale.slice(0, 6).forEach(({ col, id }) => console.log(`      ${col}/${id}`));
+  if (stale.length > 6) console.log(`      … and ${stale.length - 6} more`);
+  await commitInChunks(stale.map(({ col, id }) => (b) => b.delete(db.collection(col).doc(id))));
+}
+
 const ops = demoWrites(built).map(({ col, id, doc }) =>
   (b) => b.set(db.collection(col).doc(id), doc, { merge: true }));
 console.log(`  Writing ${ops.length} document(s)…`);
