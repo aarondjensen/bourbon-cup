@@ -555,6 +555,30 @@ export const countDemoDocs = (built) =>
 export const demoWrites = (built) =>
   DEMO_COLLECTIONS.flatMap((col) => (built?.[col] || []).map((doc) => ({ col, id: doc.id, doc })));
 
+// ── What a re-seed has to take back out ─────────────────────────────
+// The writer uses `set(…, { merge: true })`, which corrects a changed field
+// and CANNOT remove a document that has stopped existing. That gap is
+// invisible and it scores.
+//
+// The case that found it: `--countdown` replaces round 4's six singles matches
+// with one Team Best Ball. Merge-writing over an older seed leaves the six in
+// place — same round, same players, summing the same hole scores — so round 4
+// holds seven matches and the Final Countdown opens whichever one sorts first.
+// Nothing errors. The dry run just quietly rehearses the wrong thing.
+//
+// So a full seed prunes, and the line it draws is the one `--undo` draws:
+// ONLY documents carrying this seed's mark. A card a tester signed in the demo
+// is theirs, not the seed's to tidy away.
+//
+// `existing` is `[{ col, id, mark }]` read back from Firestore. Returns the
+// subset to delete, as `{ col, id }`.
+export const stalePaths = (existing, built) => {
+  const wanted = new Set(demoWrites(built).map(({ col, id }) => `${col}/${id}`));
+  return (existing || [])
+    .filter(d => d.mark === DEMO_MARK && !wanted.has(`${d.col}/${d.id}`))
+    .map(({ col, id }) => ({ col, id }));
+};
+
 // ── Adding a tester ─────────────────────────────────────────────────
 // The twelve seeded golfers are enough for the Play closed test, but a real
 // tester often wants to see their OWN name on the leaderboard rather than
