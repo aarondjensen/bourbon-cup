@@ -1,9 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  resolveSealed,
-  HOLE_COUNT, sealDefaultFor, isSealedRound, revealedThrough, isFullyRevealed,
-  isConcealing, revealState, concealedRoundNumbers, concealHoleData,
-  countdownHoleData, stepReveal, revealSummary,
+  resolveSealed, HOLE_COUNT, sealDefaultFor, isSealedRound, revealedThrough, isFullyRevealed, isConcealing, revealState, concealedRoundNumbers, concealHoleData, countdownHoleData, stepReveal, revealSummary, wantsCountdown,
 } from "./reveal";
 
 // The blackout is the one feature of this app whose failure mode is silent
@@ -305,5 +302,37 @@ describe("a live Team Best Ball round nobody flagged", () => {
   it("respects an explicit unseal", () => {
     const open = [{ round_number: 4, format: "team_best_ball", sealed: false }];
     expect(concealHoleData(holes, open)).toBe(holes);
+  });
+});
+
+// ── The television's URL ─────────────────────────────────────────
+// One machine, wired to a TV, pointed at one address and refreshed by
+// somebody two minutes before the room sits down. Both spellings have to
+// land on the countdown; see the note over COUNTDOWN_PATH.
+describe("wantsCountdown", () => {
+  it("takes the path a person says out loud", () => {
+    expect(wantsCountdown({ pathname: "/finalcountdown", hash: "" })).toBe(true);
+    // A television browser adds the slash; nobody typing it does.
+    expect(wantsCountdown({ pathname: "/finalcountdown/", hash: "" })).toBe(true);
+    expect(wantsCountdown({ pathname: "/FinalCountdown", hash: "" })).toBe(true);
+  });
+
+  it("takes the hash the app writes for itself", () => {
+    expect(wantsCountdown({ pathname: "/", hash: "#countdown" })).toBe(true);
+  });
+
+  it("leaves every other address alone", () => {
+    expect(wantsCountdown({ pathname: "/", hash: "" })).toBe(false);
+    expect(wantsCountdown({ pathname: "/finalcountdownx", hash: "" })).toBe(false);
+    expect(wantsCountdown({ pathname: "/final", hash: "" })).toBe(false);
+    expect(wantsCountdown({ pathname: "/", hash: "#leaderboard" })).toBe(false);
+    expect(wantsCountdown(null)).toBe(false);
+  });
+
+  // A store build loads from a file inside the binary; its pathname is
+  // whatever the platform hands over and must never read as the countdown.
+  it("does not fire on a native file path", () => {
+    expect(wantsCountdown({ pathname: "/index.html", hash: "" })).toBe(false);
+    expect(wantsCountdown({ pathname: "/var/containers/app/index.html", hash: "" })).toBe(false);
   });
 });

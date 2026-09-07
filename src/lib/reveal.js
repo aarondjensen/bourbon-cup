@@ -245,8 +245,36 @@ export const revealSummary = (through) =>
     ? "Sealed — nothing revealed yet"
     : `${through} of ${HOLE_COUNT} holes revealed`;
 
-// The hash the Final Countdown lives behind. It exists so the television can
-// be pointed at one URL, bookmarked, and survive the refresh somebody will
-// inevitably perform two minutes before everyone sits down — the app is a
-// single page with no router, so a hash is the whole of its addressing.
+// ── Where the television is pointed ─────────────────────────────────
+// One URL, bookmarked on the machine wired to the TV, surviving the refresh
+// somebody will inevitably perform two minutes before everyone sits down.
+//
+// TWO spellings of it, and both are load-bearing.
+//
+// The PATH is what a person types, reads off a text message, or spells out
+// across a room — "the bourbon cup dot com slash final countdown". A hash is
+// none of those things: "#" is hard to say, easy to mishear as a hyphen, and
+// on a television remote's on-screen keyboard it is two menus deep. It needs
+// a server rewrite to reach the app at all (see vercel.json), which is why
+// the hash existed first.
+//
+// The HASH is what the app itself writes, because it is the only half that
+// works everywhere. The store builds load from a file inside the binary and
+// have no server to rewrite anything, so a path is not addressable there —
+// and rewriting the location to one would break a reload inside the app.
+//
+// So: either gets you in, the app keeps using the hash while it is running,
+// and closing the countdown clears the path as well so a refresh does not
+// silently reopen it.
 export const COUNTDOWN_HASH = "#countdown";
+export const COUNTDOWN_PATH = "/finalcountdown";
+
+// Did whoever opened this URL ask for the countdown? Takes a location-ish
+// object so it is testable without a browser. The trailing slash is accepted
+// because a television's browser will add one and nobody typing it will.
+export const wantsCountdown = (loc) => {
+  if (!loc) return false;
+  if (loc.hash === COUNTDOWN_HASH) return true;
+  const path = String(loc.pathname || "").replace(/\/+$/, "").toLowerCase();
+  return path === COUNTDOWN_PATH;
+};

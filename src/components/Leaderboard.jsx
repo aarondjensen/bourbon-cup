@@ -51,7 +51,7 @@ import { FullScorecard } from "./FullScorecard";
 import { StickyTop } from "./ui";
 import { isRoundFinal } from "../lib/roundLocks";
 import { scheduledRounds } from "../lib/rounds";
-import { HOLE_COUNT, revealState, revealSummary, stepReveal, COUNTDOWN_HASH } from "../lib/reveal";
+import { HOLE_COUNT, revealState, revealSummary, stepReveal, COUNTDOWN_HASH, COUNTDOWN_PATH } from "../lib/reveal";
 // The television screen, and nothing else opens it. Sixteen phones load the
 // scoreboard every few minutes all weekend; one of them, once, opens the
 // countdown — so it has no business riding in the bundle the other fifteen
@@ -1091,16 +1091,26 @@ export function TeamLeaderboard({
     const rnd = roundNumbers.find((r) => roundMeta[r]?.seal?.sealed);
     if (rnd != null) { setAutoOpened(true); setCountdownRound(rnd); }
   }
-  // The hash follows the screen, so a refresh in front of sixteen people
-  // comes back to where it was.
-  const setHash = (on) => {
+  // The URL follows the screen, so a refresh in front of sixteen people comes
+  // back to where it was.
+  //
+  // It writes the HASH and not the path, because a store build has no server
+  // to rewrite a path and moving the location to one would break a reload
+  // inside the app. But it CLEARS the path on the way out: somebody who
+  // arrived at /finalcountdown and then exited would otherwise be left on a
+  // URL that reopens the countdown the next time the machine is refreshed —
+  // which, on the one night this runs, is a screen nobody asked for in front
+  // of everybody. See lib/reveal for the two spellings.
+  const setCountdownUrl = (on) => {
     try {
       const { pathname, search } = window.location;
-      window.history.replaceState(null, "", on ? `${pathname}${search}${COUNTDOWN_HASH}` : `${pathname}${search}`);
+      const onCountdownPath = pathname.replace(/\/+$/, "").toLowerCase() === COUNTDOWN_PATH;
+      const base = on ? pathname : (onCountdownPath ? "/" : pathname);
+      window.history.replaceState(null, "", `${base}${search}${on ? COUNTDOWN_HASH : ""}`);
     } catch { /* a browser that refuses to rewrite its own URL still runs the countdown */ }
   };
-  const openCountdown = (rnd) => { setCountdownRound(rnd); setHash(true); };
-  const closeCountdown = () => { setCountdownRound(null); setHash(false); };
+  const openCountdown = (rnd) => { setCountdownRound(rnd); setCountdownUrl(true); };
+  const closeCountdown = () => { setCountdownRound(null); setCountdownUrl(false); };
 
   const countdown = countdownRound != null && (() => {
     const rnd = countdownRound;

@@ -31,7 +31,7 @@ import {
 } from "./lib/roundLocks";
 import {
   concealHoleData, countdownHoleData, revealState, revealSummary, HOLE_COUNT,
-  COUNTDOWN_HASH,
+  COUNTDOWN_HASH, wantsCountdown,
 } from "./lib/reveal";
 import { usePullToRefresh } from "./lib/usePullToRefresh";
 import { useFitDensity } from "./lib/useFitDensity";
@@ -128,14 +128,15 @@ import { useHoleAdvance } from "./lib/useHoleAdvance";
 
 // ── Landing straight on the Final Countdown ───────────────────────
 // Read ONCE, at module load, before React has rendered anything: the
-// television is pointed at `…/#countdown`, HDMI'd into the room, and it has
-// to come up on the countdown by itself — including after the refresh
-// somebody performs two minutes before everyone sits down. A constant
-// rather than a live hash listener because this is the app's STARTING
-// state; once it is running, opening and closing the countdown rewrites the
-// hash itself (see components/Leaderboard).
+// television is pointed at `…/finalcountdown`, HDMI'd into the room, and it
+// has to come up on the countdown by itself — including after the refresh
+// somebody performs two minutes before everyone sits down. Either spelling
+// of that URL counts; see wantsCountdown in lib/reveal for why there are
+// two. A constant rather than a live listener because this is the app's
+// STARTING state; once it is running, opening and closing the countdown
+// rewrites the location itself (see components/Leaderboard).
 const AUTO_COUNTDOWN =
-  typeof window !== "undefined" && window.location.hash === COUNTDOWN_HASH;
+  typeof window !== "undefined" && wantsCountdown(window.location);
 
 // ── Bottom-nav safe-area cushion ──────────────────────────────────
 // Padding under the nav labels, so they clear the home indicator.
