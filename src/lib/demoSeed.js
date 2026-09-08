@@ -4,9 +4,10 @@
 //
 // `docs/store-submission.md` §1.4 asks for a throwaway edition before either
 // store submission, and the Play closed test needs the same thing for a
-// different reason: twelve people have to USE the app for fourteen days, and
-// Google now refuses production access when they demonstrably did not. A
-// tester who can only look is a tester who generates nothing.
+// different reason: a tester has to be able to USE the app, and one who can
+// only look generates nothing. Internal testing takes up to a hundred with no
+// minimum (play-store.md §7), so the field is sized to the CUP rather than to
+// a tester count — see the note over FIELD.
 //
 // The alternative was a director building it by hand in Admin — a roster, two
 // courses, four rounds, a draw and a few hundred hole scores, clicked in one
@@ -83,12 +84,22 @@ const rng = (seed) => () => {
 
 // ── The field ───────────────────────────────────────────────────────
 // Invented golfers, and they have to stay invented. This edition is handed to
-// App Review, to Google, and to whoever fills the closed test out to twelve —
-// seeding the real roster would put sixteen named men's handicaps in front of
-// all of them for no benefit.
+// App Review, to Google, and to whoever is testing — seeding the real roster
+// would put sixteen named men's handicaps in front of all of them for no
+// benefit.
 //
-// Twelve, because that is the number Play wants opted in, so there is a row
-// for each tester to claim and nobody is left spectating.
+// SIXTEEN, eight a side — the size of the Bourbon Cup. It was twelve, which is
+// WBC's field and was chosen when the destination was Play's CLOSED test and
+// twelve was the number it wanted opted in. Internal testing retired that
+// audience (play-store.md §7: up to 100 testers, no minimum), so the count was
+// answering a question nobody asks any more.
+//
+// The size is not cosmetic on this app. The closing round is a Team Best Ball
+// counting the side's best N, and the engine clamps N to the smaller roster —
+// so a six-man side cannot demonstrate best-six-of-eight at all, and the tee
+// sheet drew waves of three where the cup plays foursomes. A demo of a
+// sixteen-man tournament has to be sixteen men or it is demonstrating a
+// different tournament.
 const FIELD = [
   { key: "dave",  name: "Dave R",  first: "Dave",  last: "Reyes",     team: "A", index: 8.4 },
   { key: "marty", name: "Marty K", first: "Marty", last: "Kowalski",  team: "A", index: 14.1 },
@@ -102,6 +113,10 @@ const FIELD = [
   { key: "wes",   name: "Wes L",   first: "Wes",   last: "Lindqvist", team: "B", index: 12.9 },
   { key: "alan",  name: "Alan P",  first: "Alan",  last: "Pryce",     team: "B", index: 20.4 },
   { key: "curt",  name: "Curt S",  first: "Curt",  last: "Solberg",   team: "B", index: 5.1 },
+  { key: "hank",  name: "Hank B",  first: "Hank",  last: "Brennan",   team: "A", index: 17.2 },
+  { key: "rudy",  name: "Rudy T",  first: "Rudy",  last: "Takahashi", team: "A", index: 7.8 },
+  { key: "vic",   name: "Vic C",   first: "Vic",   last: "Calderon",  team: "B", index: 13.6 },
+  { key: "owen",  name: "Owen H",  first: "Owen",  last: "Halloran",  team: "B", index: 21.1 },
 ];
 
 export const demoPlayerId = (key) => `demo_${key}`;
@@ -187,17 +202,18 @@ const ROUNDS = [
 // bc_2026 by any argument anybody types. A plain re-seed puts the demo back
 // to the state a store reviewer should meet.
 //
-// Best FOUR of six on the front and five of six on the back, not the cup's
-// six-of-eight. The demo field is six a side, and the engine clamps the count
-// to the smaller roster — so leaving it at six would make every ball count,
-// and the dimmed "did not count" chips that are half of what the countdown
-// is for would never appear at all.
+// The cup's own counts: best SIX of eight on the front, seven of eight on the
+// back. They were four and five, sized for a six-man side, because the engine
+// clamps the count to the smaller roster and six of six would have made every
+// ball count — with no dimmed "did not count" chips, which are half of what
+// the countdown is for. A sixteen-man field takes the real numbers, so a
+// rehearsal is a rehearsal of the round that gets played.
 const COUNTDOWN_ROUND = {
   round: 4, format: "team_best_ball", course: "harbor", date: DEMO_END,
   tee: "9:00 AM|9:10 AM|9:20 AM|9:30 AM", perSide: null,
   scoring_type: "points",
   hole_points: { front: 1, back: 2 },
-  counting_scores: { holes: [...Array(9).fill(4), ...Array(9).fill(5)] },
+  counting_scores: { holes: [...Array(9).fill(6), ...Array(9).fill(7)] },
   sealed: true,
 };
 
@@ -238,8 +254,13 @@ const SCORED = { 1: 18, 2: 9 };
 // The obvious alternative — shifting B by one PLAYER each round — looks like a
 // rotation and is not: A0 draws B1 in round 1 and again in round 2. That is
 // the bug the test in demoSeed.test.js exists to have caught, and did.
-const A_PAIRS = [[0, 1], [2, 3], [4, 5]];
-const B_PAIRS = [[0, 1], [2, 3], [4, 5]];
+// Four pairs a side now rather than three. The rotation still holds: pair g of
+// A faces pair (g + round - 1) mod 4 of B, so over rounds 1-3 no A pair meets
+// the same B pair twice. With four pairs and three rounds one pairing is left
+// unplayed each way, which is what a four-round cup does to a three-round
+// rotation and is not a bug.
+const A_PAIRS = [[0, 1], [2, 3], [4, 5], [6, 7]];
+const B_PAIRS = [[0, 1], [2, 3], [4, 5], [6, 7]];
 
 const pairsFor = (round, countdown = false) => {
   // A Team Best Ball is ONE match holding both whole sides — that is the
@@ -248,7 +269,7 @@ const pairsFor = (round, countdown = false) => {
   if (round === 4 && countdown) return [{ teamA: A.map(a => a.key), teamB: B.map(b => b.key) }];
   if (round === 4) return A.map((a, i) => ({ teamA: [a.key], teamB: [B[i].key] }));
   return A_PAIRS.map((ap, g) => {
-    const bp = B_PAIRS[(g + round - 1) % 3];
+    const bp = B_PAIRS[(g + round - 1) % B_PAIRS.length];
     return { teamA: ap.map(i => A[i].key), teamB: bp.map(i => B[i].key) };
   });
 };
@@ -331,7 +352,7 @@ export const buildDemo = ({ countdown = false } = {}) => {
     is_demo: true,
     // Said out loud, though false is already the default everywhere (see
     // isEditionLocked and firestore.rules). A locked demo is a demo nobody can
-    // test in — the twelve testers would find every score refused, and the one
+    // test in — every tester would find their scores refused, and the one
     // person who could not reproduce it is the director, who is exempt from
     // the lock. `bulkLockVerdict` now leaves demos alone for the same reason;
     // this is the belt to that brace.
@@ -452,7 +473,15 @@ export const buildDemo = ({ countdown = false } = {}) => {
       ? [...waves(A.map(a => a.key)), ...waves(B.map(b => b.key))]
           .map(players => ({ players: players.map(demoPlayerId) }))
       : r.round === 4
-        ? [0, 2, 4].map(i => ({ players: [...draw[i].teamA, ...draw[i].teamB, ...draw[i + 1].teamA, ...draw[i + 1].teamB].map(demoPlayerId) }))
+        // Singles, paired up two matches to a group so nobody walks alone.
+        // Counted off the draw rather than hardcoded: it was [0, 2, 4], which
+        // is three groups whatever the field is, and silently left the last
+        // four men off the tee sheet the moment there were sixteen.
+        ? draw.reduce((out, _m, i) => (i % 2 ? out : [...out, i]), [])
+            .map(i => ({
+              players: [draw[i], draw[i + 1]].filter(Boolean)
+                .flatMap(m => [...m.teamA, ...m.teamB]).map(demoPlayerId),
+            }))
         : draw.map(m => ({ players: [...m.teamA, ...m.teamB].map(demoPlayerId) }));
     out.bc_groups.push(stamp({ id: id(`bc_groups_r${r.round}`), round_number: r.round, groups }));
   });
@@ -580,9 +609,9 @@ export const stalePaths = (existing, built) => {
 };
 
 // ── Adding a tester ─────────────────────────────────────────────────
-// The twelve seeded golfers are enough for the Play closed test, but a real
-// tester often wants to see their OWN name on the leaderboard rather than
-// claim "Pete V" — and a thirteenth man is one row, not a re-seed.
+// The seeded field is enough for testing, but a real tester often wants to see
+// their OWN name on the leaderboard rather than claim "Pete V" — and one more
+// man is one row, not a re-seed.
 //
 // A director can do the same thing from Admin → Players while switched to the
 // demo, and that is the easier path for one person. This exists for a handful
@@ -590,7 +619,7 @@ export const stalePaths = (existing, built) => {
 // out with everything else, and the writer's "does this edition hold anything
 // I did not write" check keeps passing.
 //
-// The row lands unclaimed, like the seeded twelve: claiming is something the
+// The row lands unclaimed, like the rest of the field: claiming is something the
 // person does on the claim screen, and a row carrying somebody else's uid is
 // a row they cannot claim and the director cannot unclaim.
 export const demoPlayerSlug = (name) =>
@@ -625,5 +654,5 @@ export const buildDemoPlayer = ({ name, team, index }) => {
 };
 
 // The ids the seed itself owns, so the writer can tell a tester's added row
-// from one of the twelve and refuse to overwrite the wrong thing.
+// from one of the seeded field and refuse to overwrite the wrong thing.
 export const SEEDED_PLAYER_IDS = FIELD.map(p => demoPlayerId(p.key));
