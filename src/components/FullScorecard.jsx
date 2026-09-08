@@ -312,27 +312,19 @@ export function FullScorecard({
     });
   }
 
-  // Where the 18-hole match closed out, if it did. Only match play closes
-  // early: a Total round is live until the last putt, and points are banked
-  // hole by hole with nothing left pending. The lead has to be bigger than
-  // the holes still to play, which is the same test segmentState applies to
-  // the overall segment — this only locates the hole it happened on.
-  let clinchHole = null, clinchText = null;
-  if (!total && !perHole) {
-    for (let i = 0; i < 18; i++) {
-      if (running[i] == null) continue;
-      const lead = Math.abs(running[i]);
-      const rem = 17 - i;
-      if (lead > rem) {
-        clinchHole = i;
-        clinchText = rem > 0 ? `${lead}&${rem}` : `${lead} UP`;
-        break;
-      }
-    }
-  }
-
   const overall = segmentState(holes, segOpts);
   const overallLeader = segmentLeader(overall);
+
+  // Where the 18-hole match closed out, if it did — off segmentState's own
+  // `decided`, which is where that question is answered for every screen.
+  // This row used to walk `running` and find the hole itself, and the two
+  // readings were free to disagree: the header chip above prints
+  // `statusText(overall)`, so a match this row stamped 8&6 could be titled
+  // "10&4" three inches higher up. Only match play closes early — a Total
+  // round is live until the last putt, and points are banked hole by hole
+  // with nothing left pending — and `decided` is absent on both.
+  const clinchHole = overall.decided ? overall.decided.at : null;
+  const clinchText = overall.decided ? statusText(overall) : null;
 
   // ── One nine ─────────────────────────────────────────────────────
   const nine = (start, label) => {
@@ -518,7 +510,7 @@ export function FullScorecard({
           // Past the clinch there is nothing to say — the match was over.
           if (clinchHole != null && h > clinchHole) return <div key={h} style={holeCell(i, 26)} />;
           if (clinchHole === h) {
-            const col = teamColor(running[h] > 0 ? "A" : "B");
+            const col = teamColor(overall.decided.margin > 0 ? "A" : "B");
             return (
               <div key={h} style={holeCell(i, 26)}>
                 <div style={{ border: `1.5px solid ${col}`, borderRadius: 4, padding: "0 3px", lineHeight: "18px", maxWidth: "100%" }}>
