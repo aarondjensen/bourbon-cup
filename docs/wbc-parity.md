@@ -14,6 +14,19 @@ WBC", and `wbc/src/lib/scoreGuard.js` opens "Ported from Bourbon Cup."
 
 Ranked by whether a wrong answer is visible.
 
+## Status
+
+Everything in Tiers A and B is **fixed**, along with C1, C4 and C5. Each
+finding below carries its own status line. Two are deliberately NOT done and
+the reasoning is under "Left alone" at the bottom — both turned out to be
+weaker findings on a closer read than they looked from a directory listing.
+
+Nothing here needed a `firestore.rules` change, which was not luck: `bc_ctp`
+and `bc_card_sigs` already allow the whole document, `bc_notification_tokens`
+is already open to read, and the withdrawal flag rides on a roster row a
+director could already write. So there is no rules deploy waiting on any of
+it, and no ordering to get right.
+
 ---
 
 ## Tier A — it looks like it worked
@@ -23,6 +36,9 @@ thing, on the board. These are the ones CLAUDE.md's "one exception" covers:
 anything that can lie to the user.
 
 ### A1 — CTP took the warning from WBC and left the rule behind
+
+**Fixed.** A pin is one claim per group; ties break on tee order; a pass is
+recorded. `resolvePin` runs at the subscription so every screen is untouched.
 
 `src/lib/ctp.js` says it was ported from WBC "so the two apps read a pin the
 same way". It is 61 lines; WBC's is ~350. What came across is
@@ -50,6 +66,9 @@ Both groups saw their own tag confirmed on screen. Nothing disagrees.
 > — `wbc/src/lib/ctp.js`
 
 ### A2 — no phone here can tell you its scores never left it
+
+**Fixed.** `lib/connection` + `SyncBanner`. Every write goes through the
+tracker in `src/firebase.js`, so nothing has to remember to report.
 
 Firestore's `setDoc` does not fail without signal. It queues, the promise stays
 pending, and it lands when a bar comes back. That is what lets a card be scored
@@ -79,6 +98,8 @@ names this hazard three separate times; the remedy was written per-screen with
 
 ### A3 — two phones appending to the same array delete each other
 
+**Fixed.** An attestation is a key in a map. Both shapes read as one list.
+
 The same read-modify-write shape as A1, twice more, both on arrays several
 people in a group write within a minute of each other:
 
@@ -105,6 +126,9 @@ WBC's per-key map merge is the fix for this whole class, not just for pins.
 
 ### B1 — the service worker caches nothing, and most phones never register it
 
+**Fixed.** `public/sw-cache-rules.js`, importScripts'd into the one worker,
+and `lib/swRegister` registers it for everyone.
+
 - **WBC**: `lib/swRegister.js` registers for EVERYONE, with dev, native and
   insecure contexts excluded by a tested pure function.
   `public/sw-cache-rules.js` is `importScripts`'d into the same worker — one
@@ -123,6 +147,9 @@ the bundle and hangs.
 
 ### B2 — a man can withdraw in WBC; here there is no way to say so
 
+**Fixed, differently.** A flag on the roster row, scoring-neutral — not
+WBC's 99 sentinel, which would move a match result.
+
 - **WBC**: `WD_SENTINEL = 99`; `markPlayerWD` (`App.jsx:2400`) fills the
   unplayed holes so the card stays structurally complete, and `scoreGuard`,
   `handicap.js`, `individualBoard` and `historyImport` all exclude the
@@ -136,6 +163,9 @@ representation. A man who walks in after nine leaves a permanently incomplete
 card the finalize path has to be talked past every time.
 
 ### B3 — scoring is open on every round, all week
+
+**Fixed.** The Scoring tab lands on the round scheduled for today.
+`lib/scoringGate` engages only where a director has dated the rounds.
 
 - **WBC**: `lib/scoringGate.js` — a director always; a round a director has
   force-opened always; otherwise the round's date must be today AND the group's
@@ -156,6 +186,9 @@ to go find them.
 
 ### C1 — nothing answers "has he even opened it yet?"
 
+**Fixed.** Admin → Players. No rules change and no new write — the roster
+already carries `auth_uid` and the token collection is already readable.
+
 WBC's `lib/playerActivity.js` and `PlayerActivityPanel` join the roster against
 accounts (`lastLoginAt`) and push tokens, reporting last-seen-ago plus whether
 push is genuinely on. Token presence is the honest test — browser permission
@@ -167,6 +200,8 @@ Here: neither. No login stamp read anywhere, no per-player token view in
 tee time?" is the week-before question with no answer in the app.
 
 ### C2 — Apple token revocation is best-effort in the browser
+
+**Left alone — see the bottom.** This one got weaker on a closer read.
 
 Same App Store requirement, two answers.
 
@@ -184,6 +219,8 @@ server-side path removes the popup from the dependency chain entirely.
 
 ### C3 — no way to move an account between providers
 
+**Left alone — see the bottom.** A director unlink already covers it.
+
 WBC ships `offerAuthPairing` / `claimAuthPairing` callables behind
 `lib/authPairing.js`. Nothing equivalent here, so a player who signed in with
 Google one year and taps Apple the next arrives as a new uid with no route back
@@ -191,6 +228,8 @@ to his roster row — and the crown, the dues override and the claim all hang of
 that row.
 
 ### C4 — the rules suite has no command to run it
+
+**Fixed.** `npm run test:rules`.
 
 - **WBC**: `npm run test:rules` and `npm run test:ctp-claims`, with
   `@firebase/rules-unit-testing` as a devDependency; the scripts start and stop
@@ -207,6 +246,9 @@ nobody else. A script can still wrap the documented command.
 > written down for it. — `wbc/CLAUDE.md`, on the same trap
 
 ### C5 — screens have almost no mount tests
+
+**Fixed.** `src/components/screens.mount.test.jsx`, verified to fail on a
+screen that throws rather than passing vacuously.
 
 - **WBC**: a mount test beside ~20 components — `AdminView`, `BettingView`,
   `LeaderboardView`, `PlayersView`, `OnCourseScoring`, `ClaimScreen`,
@@ -258,3 +300,42 @@ and how little of it is format-specific.
 No code was changed by this audit. A1, A2 and A3 are the three that CLAUDE.md's
 working agreement classes as flag-before-landing, because each leaves the
 screen showing a result the database does not have.
+
+---
+
+## Left alone, and why
+
+Two findings did not survive being looked at properly. Both are recorded here
+rather than quietly dropped.
+
+### C2 — Apple token revocation
+
+The audit read this as "WBC does it server-side, this app does it in a popup".
+That is true and it is not the whole picture. This app calls Firebase's own
+`revokeAccessToken`, which is the supported path and does the revocation on
+Firebase's side; WBC predates it and holds an Apple `.p8` private key in a
+Functions secret to call Apple directly.
+
+Porting WBC's version would mean provisioning that key, capturing Apple's
+authorization code at sign-in (it is issued once) and storing it somewhere, and
+trusting a hand-rolled ES256 client-secret exchange over a first-party API —
+to close a gap that is one blocked popup on the web, on a path that already
+proceeds with the deletion rather than failing it.
+
+That is a worse trade, and none of it could be exercised from here. The
+recommendation is to leave it. If the popup ever does prove to be a real
+problem in the field, the smaller fix is to capture the authorization code on
+the NATIVE path, where the Apple sheet returns it without a popup at all.
+
+### C3 — moving an account between providers
+
+WBC has `offerAuthPairing` / `claimAuthPairing`. This app has the same
+capability by hand: **Admin → Players → Unlink**, after which the player
+re-claims his name with whichever provider he is on now. The roster row — the
+name, the handicap, the scores, the signed cards — is untouched by that, which
+is the whole reason unlink exists.
+
+So this is a convenience, not a gap: it turns a two-minute director job into a
+self-service one. It also needs new callables and a `firestore.rules` change,
+on the one code path where getting it wrong strands somebody out of their own
+account. Not worth shipping untested for that return.
