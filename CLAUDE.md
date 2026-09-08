@@ -177,8 +177,10 @@ why a push never arrived.
 ## The demo edition
 
 `bc_demo` — "DEMO — Testers" — is a whole tournament for the store reviewers
-and the twelve Play testers: an invented field, invented courses, and generated
-scores. `npm run seed:demo` builds it (dry run by default, `--write` to land it,
+and the Play testers: an invented field of sixteen, invented courses, and
+generated scores. **Sixteen, eight a side, because that is the Bourbon Cup** —
+it was twelve, which is WBC's field, and a six-man side cannot demonstrate the
+closing round at all (the engine clamps best-six-of-eight to the roster). `npm run seed:demo` builds it (dry run by default, `--write` to land it,
 `--undo --write` to remove it), and `--add "Name" --team A --index 12.4` adds a
 tester. `src/lib/demoSeed.js` decides every document and is unit-tested through
 the app's own scoring engine — the demo is not seeded unless it provably
@@ -186,7 +188,7 @@ renders. See `docs/store-submission.md` §1.4.
 
 **A demo is not a cup, and that has to be enforced in two places.** The
 `tournament_id` filter only covers the screens that read one edition; the app
-reaches ACROSS editions in exactly two, and both would otherwise surface twelve
+reaches ACROSS editions in exactly two, and both would otherwise surface sixteen
 golfers who do not exist:
 
 - **The Data tab** folds whichever edition is open into ten years of career
@@ -227,7 +229,7 @@ ledger — to any member whose write has `is_demo` on the edition at BOTH ends, 
 `canAdminEdition` in `lib/editionLock` is the app's mirror of it, which is what
 stops the app ever drawing an Admin tab whose writes would be refused.
 
-It exists for the store queues: App Review and the twelve Play testers get no
+It exists for the store queues: App Review and the Play testers get no
 account of ours and no crown, so the roster and the draw would otherwise be a
 tab reading "Directors Only". The alternative on the table was an Admin that
 renders and refuses, and it is worse — AdminView auto-saves on edit and

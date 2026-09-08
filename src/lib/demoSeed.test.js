@@ -64,10 +64,14 @@ describe("containment — nothing escapes the demo edition", () => {
 describe("the field", () => {
   const players = built.bc_players;
 
-  it("is twelve, six a side — one row per Play tester", () => {
-    expect(players).toHaveLength(12);
-    expect(players.filter(p => p.team === "A")).toHaveLength(6);
-    expect(players.filter(p => p.team === "B")).toHaveLength(6);
+  // Sixteen, because that is the Bourbon Cup. Twelve was WBC's field and was
+  // picked for Play's closed test, which internal testing retired — and the
+  // size is load-bearing here: the closing round counts the side's best six of
+  // eight, and an engine that clamps N to the roster cannot show that on six.
+  it("is sixteen, eight a side — the size of the cup it demonstrates", () => {
+    expect(players).toHaveLength(16);
+    expect(players.filter(p => p.team === "A")).toHaveLength(8);
+    expect(players.filter(p => p.team === "B")).toHaveLength(8);
   });
 
   it("leaves every row unclaimed and claimable", () => {
@@ -189,7 +193,7 @@ describe("the draw", () => {
     for (const round of [1, 2, 3, 4]) {
       const ms = built.bc_matches.filter(m => m.round === round);
       const pids = ms.flatMap(pidsOf);
-      expect(new Set(pids).size, `round ${round} has somebody twice`).toBe(12);
+      expect(new Set(pids).size, `round ${round} has somebody twice`).toBe(16);
     }
   });
 
@@ -216,7 +220,7 @@ describe("the draw", () => {
   it("sits everybody in a group in every round", () => {
     for (const g of built.bc_groups) {
       const pids = g.groups.flatMap(x => x.players);
-      expect(new Set(pids).size, `round ${g.round_number} tee sheet`).toBe(12);
+      expect(new Set(pids).size, `round ${g.round_number} tee sheet`).toBe(16);
     }
   });
 });
@@ -227,8 +231,8 @@ describe("the scores", () => {
   it("finishes round 1 and stops round 2 at the turn", () => {
     // R1 complete so the leaderboard is not empty on first open; R2 half done
     // so a tester has something to actually DO, which is the whole point.
-    expect(holes.filter(h => h.round_number === 1)).toHaveLength(12 * 18);
-    expect(holes.filter(h => h.round_number === 2)).toHaveLength(12 * 9);
+    expect(holes.filter(h => h.round_number === 1)).toHaveLength(16 * 18);
+    expect(holes.filter(h => h.round_number === 2)).toHaveLength(16 * 9);
     expect(holes.filter(h => h.round_number > 2)).toHaveLength(0);
   });
 
@@ -314,7 +318,7 @@ describe("it scores through the app's own engine", () => {
 
   it("produces a real result for every completed round-1 match", () => {
     const r1 = built.bc_matches.filter(m => m.round === 1);
-    expect(r1).toHaveLength(3);
+    expect(r1).toHaveLength(4);
     for (const m of r1) {
       const res = computeMatchResult(m, holeData, courses, rounds, players, "best_ball", {}, undefined, {}, []);
       // 18 holes scored means 18 holes played out, not a card that ran dry.
@@ -426,7 +430,7 @@ describe("adding a tester", () => {
   it("cannot silently replace one of the seeded twelve", () => {
     // The script refuses this, but the ids have to be knowable for it to.
     expect(SEEDED_PLAYER_IDS).toContain("demo_dave");
-    expect(SEEDED_PLAYER_IDS).toHaveLength(12);
+    expect(SEEDED_PLAYER_IDS).toHaveLength(16);
     expect(buildDemoPlayer({ name: "dave", index: 5 }).player.id).toBe("demo_dave");
   });
 });
@@ -629,7 +633,7 @@ describe("stalePaths", () => {
     // The old round-4 singles, specifically — six of them.
     const gone = new Set(stale.map(s => s.id));
     const oldR4 = plain.bc_matches.filter(m => m.round === 4);
-    expect(oldR4).toHaveLength(6);
+    expect(oldR4).toHaveLength(8);
     oldR4.forEach(m => expect(gone.has(m.id)).toBe(true));
   });
 
@@ -655,5 +659,71 @@ describe("stalePaths", () => {
   it("survives an empty read", () => {
     expect(stalePaths([], cd)).toEqual([]);
     expect(stalePaths(undefined, cd)).toEqual([]);
+  });
+});
+
+// ── The field size is the cup's, and it has to stay that way ───────
+// The demo was built at twelve, six a side. That is WBC's field, picked when
+// the destination was Play's closed test and twelve was the number it wanted
+// opted in — and it made a demo of a sixteen-man tournament that could not
+// demonstrate the tournament. These pin the ways that showed.
+describe("the demo is the shape of the cup", () => {
+  const cd = buildDemo({ countdown: true });
+  const r4 = cd.bc_rounds.find(r => r.round_number === 4);
+  const side = cd.bc_players.filter(p => p.team === "A").length;
+
+  // The whole point. Counting six of eight is what the Final Countdown reads
+  // out, and `countFor` clamps N to the smaller roster — so on a six-man side
+  // the round silently became "every ball counts" and the rehearsal showed a
+  // format nobody plays.
+  it("counts the cup's own best-six-of-eight, unclamped", () => {
+    expect(side).toBe(8);
+    expect(r4.counting_scores.holes[0]).toBe(6);
+    expect(r4.counting_scores.holes[9]).toBe(7);
+    // Below the roster, so some balls genuinely miss out — and reachable,
+    // so the count is not quietly reduced by the clamp.
+    expect(r4.counting_scores.holes[0]).toBeLessThan(side);
+    expect(r4.counting_scores.holes[9]).toBeLessThan(side);
+  });
+
+  // Waves of four, two a side — the real round-4 tee sheet. Six a side drew
+  // threes, which is not a foursome and not what anybody walks in.
+  it("draws the closing round in foursomes", () => {
+    const teamOf = (pid) => cd.bc_players.find(p => p.player_id === pid).team;
+    const g4 = cd.bc_groups.find(g => g.round_number === 4).groups;
+    expect(g4).toHaveLength(4);
+    g4.forEach(g => {
+      expect(g.players).toHaveLength(4);
+      expect(new Set(g.players.map(teamOf)).size).toBe(1);
+    });
+  });
+
+  // The bug the singles tee sheet had: `[0, 2, 4]` is three groups whatever
+  // the field is, so widening to sixteen left the last four men with no tee
+  // time at all — on a screen that says "every player has a group".
+  it("puts every man on every tee sheet, whatever the round", () => {
+    const plain = buildDemo();
+    [plain, cd].forEach((built) => {
+      const roster = built.bc_players.map(p => p.player_id).sort();
+      built.bc_groups.forEach((doc) => {
+        const drawn = doc.groups.flatMap(g => g.players).sort();
+        expect(drawn, `round ${doc.round_number} tee sheet`).toEqual(roster);
+      });
+    });
+  });
+
+  // Four pairs a side over three rounds: one B pair is not met, and no B pair
+  // is met twice. A modulo left at 3 would have sent pair 3 back to pair 0.
+  it("still rotates the draw without a repeat", () => {
+    const plain = buildDemo();
+    const seen = new Map();
+    [1, 2, 3].forEach((round) => {
+      plain.bc_matches.filter(m => m.round === round).forEach((m) => {
+        const key = `${[...m.teamA].sort().join("+")} vs ${[...m.teamB].sort().join("+")}`;
+        expect(seen.has(key), `${key} played twice`).toBe(false);
+        seen.set(key, round);
+      });
+    });
+    expect(seen.size).toBe(12);
   });
 });
