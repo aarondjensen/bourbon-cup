@@ -2,6 +2,8 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
+import { registerAppServiceWorker } from './lib/swRegister.js'
+import { isNative } from './lib/platform.js'
 
 // The outermost boundary, and the only one that can catch App itself.
 //
@@ -22,3 +24,15 @@ createRoot(document.getElementById('root')).render(
     </ErrorBoundary>
   </StrictMode>
 )
+
+// ── The service worker, for everyone ────────────────────────────────
+// It holds the app shell on disk, which is what lets a cold start out of
+// range open at all — see public/sw-cache-rules.js. It used to be registered
+// only inside the turn-on-notifications path, so the caching half reached the
+// few people who wanted push and nobody else.
+//
+// After render, deliberately: nothing on the first screen waits on this, and
+// a registration racing the first paint is a registration competing with the
+// bundle it exists to cache. Fire and forget — lib/swRegister decides whether
+// this device should have one at all, and says nothing when it should not.
+registerAppServiceWorker({ isProd: import.meta.env.PROD, isNative: isNative() })

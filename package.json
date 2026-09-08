@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:rules": "npx --yes -p firebase-tools -p @firebase/rules-unit-testing firebase emulators:exec --only firestore --project bc-rules-probe \"node firestore.rules.test.mjs\"",
     "build:editions": "node pipeline/editions.mjs",
     "build:archive": "node pipeline/archive.mjs",
     "build:app-icons": "node scripts/app-icons.mjs",

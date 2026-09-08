@@ -554,8 +554,11 @@ password — needs director.
 - The director escape hatch on the claim screen grants no Admin any more. It
   gets you into an edition with an empty roster; the flag decides what is there
   when you arrive.
-- `firestore.rules.test.mjs` covers all of this against the emulator. Run it
-  before deploying a rules change.
+- `firestore.rules.test.mjs` covers all of this against the emulator. Run
+  `npm run test:rules` before deploying a rules change — it fetches
+  `firebase-tools` and `@firebase/rules-unit-testing` on the fly (they are
+  deliberately not devDependencies) and starts and stops the emulator itself.
+  It needs a JRE on the PATH.
 
 Things that will bite you:
 

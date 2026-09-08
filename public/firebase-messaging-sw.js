@@ -33,6 +33,14 @@
 // (syncAppBadge in src/lib/notifications.js), so any overcount from here
 // self-corrects.
 
+// ── The worker's OTHER job: holding the app shell on disk ───────────
+// A scope has exactly one registration, so this file cannot be joined by a
+// second worker for caching — registering one at "/" would REPLACE this and
+// turn push off for everybody who had it on. The caching rules are therefore
+// pulled in here. Local, and first, so a gstatic outage cannot stop the app
+// from opening offline. See public/sw-cache-rules.js.
+importScripts("/sw-cache-rules.js");
+
 importScripts("https://www.gstatic.com/firebasejs/12.10.0/firebase-app-compat.js");
 importScripts("https://www.gstatic.com/firebasejs/12.10.0/firebase-messaging-compat.js");
 

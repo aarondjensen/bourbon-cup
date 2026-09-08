@@ -27,7 +27,7 @@ import { holeFill } from "./lib/holeFill";
 import {
   ROUND_LOCKS_COL, buildRoundLockDoc, refreshRoundLockDoc,
   markRoundFinal, unfinalizeRound, clearRoundLockDoc,
-  roundLockState, currentRoundNumber, nextRoundNumber, lastFinalRoundNumber,
+  roundLockState, currentRoundNumber, nextRoundNumber, lastFinalRoundNumber, isRoundFinal,
   LOCK_OPEN, LOCK_FINAL, LOCK_STATE_LABEL,
 } from "./lib/roundLocks";
 import {
@@ -127,6 +127,7 @@ import {
   roundCardProgress, pendingAttestations, attestedPids,
 } from "./lib/cardSigs";
 import { useHoleAdvance } from "./lib/useHoleAdvance";
+import { roundForToday } from "./lib/scoringGate";
 
 // ── Landing straight on the Final Countdown ───────────────────────
 // Read ONCE, at module load, before React has rendered anything: the
@@ -5264,10 +5265,31 @@ export default function App() {
   );
   // The one round open for score entry. null = nothing open (no schedule
   // yet, or the last round has been finalized).
-  const currentRound = useMemo(
-    () => currentRoundNumber(roundLocksData, tournamentRounds),
-    [roundLocksData, tournamentRounds]
+  //
+  // TODAY'S round wins over the lowest unfinalized one, and that ordering is
+  // the whole fix for a real hazard: `currentRoundNumber` is the lowest round
+  // NOBODY HAS FINALIZED, so on the Saturday of a four-round week — with
+  // Friday still unfinalized because one group has not attested — every phone
+  // in the field opened on Round 1 and said so only in small type. Scores
+  // typed there are real documents on a real leaderboard and somebody has to
+  // go and find them.
+  //
+  // It only applies where a director has actually dated the rounds. An
+  // edition with no dates — the ten imported years, the demo, a week that has
+  // been drawn but not scheduled — falls straight through to the old answer.
+  // See lib/scoringGate.
+  const roundToday = useMemo(
+    () => roundForToday({ tRounds, rounds: tournamentRounds }),
+    [tRounds, tournamentRounds]
   );
+  const currentRound = useMemo(() => {
+    const lowestOpen = currentRoundNumber(roundLocksData, tournamentRounds);
+    // Never onto a round that is already FINAL: a finalized round is closed
+    // to everybody, and landing the tab on one would trade a wrong-round
+    // score for a dead screen on the day it is being played.
+    if (roundToday != null && !isRoundFinal(roundLocksData, roundToday)) return roundToday;
+    return lowestOpen;
+  }, [roundLocksData, tournamentRounds, roundToday]);
 
   // ── This edition's row in the archive ────────────────────────────────
   // Computed from the cards by the same engine the leaderboard uses (see
