@@ -2688,6 +2688,16 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   const moneyHoleShownRound = moneyHoleRoundList.includes(moneyHoleRound)
     ? moneyHoleRound
     : (moneyHoleRoundList.includes(defaultRound) ? defaultRound : moneyHoleRoundList[0] ?? null);
+  // What the hole plays to on the round being SHOWN, and where it falls in
+  // that course's stroke index — the two facts that explain the card's own
+  // numbers, and both off the round's course rather than the tournament's.
+  // Null when the round has no course yet: the card drops each rather than
+  // printing a dash somebody would read as a par.
+  const moneyHoleShownSetup = moneyHoleShownRound == null
+    ? null
+    : roundSetup({ round: moneyHoleShownRound, tRounds, courses, roundLocks });
+  const moneyHoleShownPar = moneyHoleShownSetup?.course ? moneyHoleShownSetup.pars[holeNum - 1] ?? null : null;
+  const moneyHoleShownIndex = moneyHoleShownSetup?.course ? moneyHoleShownSetup.hcps[holeNum - 1] ?? null : null;
 
   // How many pins the WEEK holds, off the rounds' own scorecards — see
   // lib/betting. It is what the pot divides by, and it is also the answer to
@@ -3295,7 +3305,8 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
               <MoneyHoleCard
                 rows={moneyHoleFor(moneyHoleShownRound)}
                 hole={holeNum}
-                share={moneyHoleShare}
+                par={moneyHoleShownPar}
+                index={moneyHoleShownIndex}
               />
             </>
           ) : (
