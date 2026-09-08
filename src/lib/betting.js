@@ -213,6 +213,34 @@ export const moneyHole = (n) => {
   return Number.isFinite(h) && h >= 1 && h <= HOLES ? h : DEFAULT_MONEY_HOLE;
 };
 
+// ── Which rounds it is played in ──────────────────────────────────────
+// The money hole is a per-PLAYER game — lowest net on one hole — and there is
+// a format in the catalog where that sentence has no answer. On a shared-ball
+// round (2-Man Scramble, Pinehurst) a side plays ONE ball and both partners
+// carry it: identical gross, identical team stroke map, therefore identical
+// net. So a scramble pair does not win the money hole, it wins it TWICE, and
+// two men take two of the round's shares for one golf shot. Nobody at the
+// table agreed to that, and it is invisible until the payout is read out.
+//
+// The fix is a director's switch rather than a rule, because it is his call:
+// a group that wants the pair playing for it can have it. `only` is a list of
+// round numbers the game is played in, read exactly the way every buy-in
+// field in this file is read — ABSENT MEANS ALL, so a tournament that has
+// never opened the console behaves as it always has, and a stored [] means
+// the money hole is off for the week rather than meaning nobody chose.
+//
+// Everything downstream takes the FILTERED list, which is what makes the
+// arithmetic follow the switch: the pot divides by the rounds it is actually
+// played in, so turning the scramble off makes the other three rounds worth
+// more rather than orphaning a quarter of the pot.
+export const moneyHoleRoundsIn = (rounds, only) =>
+  (rounds || []).filter(r => !Array.isArray(only) || only.includes(r));
+
+// The same question asked of one round — what the on-course prompt and the
+// round summary need, neither of which holds the whole draw.
+export const moneyHolePlaysRound = (round, only) =>
+  !Array.isArray(only) || only.includes(round);
+
 // ── Why a par 3 is the wrong hole for it ──────────────────────────────
 // Every par 3 in the tournament already carries the CTP pot, and the two games
 // are decided by different things on the same green: CTP by the tee shot, this
@@ -234,8 +262,8 @@ export const moneyHole = (n) => {
 export const moneyHolePars = ({ rounds, hole, tRounds, courses, roundLocks }) => {
   const h = moneyHole(hole) - 1;
   const perRound = (rounds || []).map(r => {
-    const { course, pars } = roundSetup({ round: r, tRounds, courses, roundLocks });
-    return { round: r, course, par: course ? pars[h] : null };
+    const { tr, course, pars } = roundSetup({ round: r, tRounds, courses, roundLocks });
+    return { round: r, course, par: course ? pars[h] : null, format: tr?.format || null };
   });
   return {
     hole: moneyHole(hole),

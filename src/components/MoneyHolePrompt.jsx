@@ -40,8 +40,6 @@ import { Popup } from "./Popup";
 import { BC, ALPHA, ON_AMBER, FS, teamColor } from "../theme";
 
 export function MoneyHolePrompt({ hole, par, share, rows, onClose }) {
-  const inGame = rows.filter(r => r.in);
-
   return (
     <Popup
       onClose={onClose}
@@ -59,29 +57,30 @@ export function MoneyHolePrompt({ hole, par, share, rows, onClose }) {
         <div style={{ fontSize: FS.body, fontWeight: 800, color: BC.amberInk, letterSpacing: 0.3 }}>
           Next up — the Money Hole
         </div>
-        <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 2 }}>
-          Hole {hole}{par ? ` · Par ${par}` : ""}
-        </div>
       </div>
 
       <div style={{ padding: "14px 16px" }}>
-        {/* What it is worth on this tee. The round's share, not the pot —
-            see the note above. */}
-        {share > 0 && (
-          <div style={{
-            background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 12,
-            padding: "10px 12px", marginBottom: 12, textAlign: "center",
-          }}>
-            <div style={{ fontSize: FS.label, fontWeight: 800, color: BC.t3, letterSpacing: 1.2 }}>ON THIS HOLE</div>
+        {/* Which hole, what it plays to, and what it is worth on this tee.
+            The round's share, not the pot — see the note above. The hole and
+            par sit here rather than under the title because this is the card
+            somebody looks at, and the title had them a second time. */}
+        <div style={{
+          background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 12,
+          padding: "10px 12px", marginBottom: 12, textAlign: "center",
+        }}>
+          <div style={{ fontSize: FS.label, fontWeight: 800, color: BC.t3, letterSpacing: 1.2 }}>
+            HOLE {hole}{par ? ` · PAR ${par}` : ""}
+          </div>
+          {share > 0 && (
             <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold }}>${share.toFixed(2)}</div>
-          </div>
-        )}
+          )}
+        </div>
 
-        {/* Who is in, and what shot they get there. */}
+        {/* Who is in, and how many strokes they get there. No count above
+            it: "Everyone here is in" restated four rows that each already
+            say so, and STROKE is the card's word — "no shot" reads as a man
+            with nothing to hit. */}
         <div style={{ background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 12, padding: "10px 12px", marginBottom: 12 }}>
-          <div style={{ fontSize: FS.label, fontWeight: 800, color: BC.t3, letterSpacing: 1.2, marginBottom: 8 }}>
-            {inGame.length === rows.length ? "Everyone here is in" : `${inGame.length} of ${rows.length} here are in`}
-          </div>
           {rows.map(r => (
             <div key={r.pid} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0" }}>
               <span style={{ width: 6, height: 6, borderRadius: "50%", background: teamColor(r.team), flexShrink: 0, opacity: r.in ? 1 : 0.4 }} />
@@ -90,7 +89,7 @@ export function MoneyHolePrompt({ hole, par, share, rows, onClose }) {
               </span>
               {r.in ? (
                 <span style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 0.4, color: r.strokes ? BC.hcpBlue : BC.t3, flexShrink: 0 }}>
-                  {r.strokes ? `${r.strokes} shot${r.strokes !== 1 ? "s" : ""} here` : "no shot"}
+                  {r.strokes ? `${r.strokes} stroke${r.strokes !== 1 ? "s" : ""}` : "no stroke"}
                 </span>
               ) : (
                 <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, flexShrink: 0 }}>out</span>
@@ -102,8 +101,7 @@ export function MoneyHolePrompt({ hole, par, share, rows, onClose }) {
         {/* The rule people get wrong — everyone reads a one-hole pot as a
             skin, and a skin would carry. */}
         <div style={{ fontSize: FS.label, color: BC.t3, textAlign: "center", lineHeight: 1.5, marginBottom: 12 }}>
-          Lowest <strong style={{ color: BC.t2 }}>net</strong> score takes it. A tie <strong style={{ color: BC.t2 }}>splits</strong> the money —
-          it does not carry.
+          Lowest <strong style={{ color: BC.t2 }}>net</strong> score wins. <strong style={{ color: BC.t2 }}>Ties split.</strong>
         </div>
 
         <button

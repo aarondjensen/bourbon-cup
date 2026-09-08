@@ -106,6 +106,7 @@ import { parseDeepLink } from "./lib/deepLink";
 import {
   inField, roundSetup, strokeMapsFor, computeSkins, lowNetRows, ctpTags, ctpPinTotal,
   moneyHole, moneyHoleRows, moneyHoleWins, moneyHolePars,
+  moneyHoleRoundsIn, moneyHolePlaysRound,
 } from "./lib/betting";
 import { SIDE_BETS_COL, sideBetId, buildSideBet, toggleSettled } from "./lib/sideBets";
 import {
@@ -1373,6 +1374,9 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   //     hole before does not re-announce
   //   • once per round per session
   //   • there has to be a pot — a game nobody has priced is not news
+  //   • the money hole has to be PLAYED this round. A director who switched
+  //     it off on the scramble must not have the app announce it on the tee
+  //     of a round it will not pay out on.
   //   • somebody in THIS group has to be in it
   //   • and nobody in the group can have scored the money hole already, which
   //     is what stops a back-filled card announcing a hole that is played
@@ -1382,10 +1386,15 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   const moneyHoleFieldIds = new Set(moneyHoleField.map(p => p.player_id));
   const moneyHolePot = (buyIns?.moneyHoleAmount || 0) > 0
     ? moneyHoleField.length * buyIns.moneyHoleAmount : 0;
+  // The rounds it is actually played in — what the pot divides by, so the
+  // figure on the tee is the share of the rounds left ON rather than of the
+  // whole draw. See lib/betting's moneyHoleRoundsIn.
+  const moneyHoleRoundList = moneyHoleRoundsIn(rounds, buyIns?.moneyHoleRounds);
 
   const maybePromptMoneyHole = (pids, h, score, priorScore) => {
     if (score <= 0 || priorScore > 0) return;
     if (moneyHolePot <= 0) return;
+    if (!moneyHolePlaysRound(match.round, buyIns?.moneyHoleRounds)) return;
     if (h !== moneyHoleIdx - 1) return;
     if (promptedMoneyHole.current[match.round]) return;
     if (!cardPids.some(p => moneyHoleFieldIds.has(p))) return;
@@ -2295,7 +2304,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
           <MoneyHolePrompt
             hole={moneyHoleNum}
             par={holePars[moneyHoleIdx]}
-            share={rounds.length ? moneyHolePot / rounds.length : 0}
+            share={moneyHoleRoundList.length ? moneyHolePot / moneyHoleRoundList.length : 0}
             rows={cardPids.map(pid => {
               const p = tPlayers.find(x => x.player_id === pid);
               return {
@@ -2644,19 +2653,27 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   const moneyHoleFor = (round) =>
     moneyHoleRows({ round, hole: holeNum, field: moneyHoleField, holeData, maps: moneyHoleMapsFor(round) });
 
+  // The rounds it is PLAYED in. A director switches it off on a shared-ball
+  // round — both partners post the same net there, so a side would win it
+  // twice — and everything below divides by what is left rather than by the
+  // whole draw. See lib/betting's moneyHoleRoundsIn.
+  const moneyHoleRoundList = moneyHoleRoundsIn(roundList, buyIns?.moneyHoleRounds);
   // The pot divides by the ROUNDS and a tied hole splits ITS share — the same
   // shape as low net, and for the same reason: a tie must not make one hole
   // pay out more in total than a clean one. See lib/betting.
-  const moneyHoleShare = roundList.length ? moneyHolePot / roundList.length : 0;
+  const moneyHoleShare = moneyHoleRoundList.length ? moneyHolePot / moneyHoleRoundList.length : 0;
   const moneyHoleWinners = moneyHoleWins({
-    rounds: roundList, hole: holeNum, field: moneyHoleField, holeData,
+    rounds: moneyHoleRoundList, hole: holeNum, field: moneyHoleField, holeData,
     mapsFor: moneyHoleMapsFor, pot: moneyHolePot,
   });
   const moneyHoleDecided = new Set(moneyHoleWinners.map(w => w.round)).size;
   // The par the money hole plays to on every round of the draw — the par 3
   // clash the setup console warns about. See lib/betting for why a par 3 is
-  // the wrong hole for this game.
+  // the wrong hole for this game. The CONSOLE gets the whole draw, because a
+  // switched-off round still needs a row to switch back on; the warning strip
+  // on the pot card gets only the rounds being played.
   const moneyHoleParInfo = moneyHolePars({ rounds: roundList, hole: holeNum, tRounds, courses, roundLocks });
+  const moneyHolePlayingPar3 = moneyHoleParInfo.par3.filter(x => moneyHoleRoundList.includes(x.round));
   const moneyHoleLeaders = Object.values(moneyHoleWinners.reduce((acc, w) => {
     const e = acc[w.pid] || (acc[w.pid] = { pid: w.pid, count: 0, best: null, money: 0 });
     e.count += 1;
@@ -2668,7 +2685,9 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // ── The CTP tab ──
   const ctpShownRound = roundList.includes(ctpRound) ? ctpRound : defaultRound;
   const lowNetShownRound = roundList.includes(lowNetRound) ? lowNetRound : defaultRound;
-  const moneyHoleShownRound = roundList.includes(moneyHoleRound) ? moneyHoleRound : defaultRound;
+  const moneyHoleShownRound = moneyHoleRoundList.includes(moneyHoleRound)
+    ? moneyHoleRound
+    : (moneyHoleRoundList.includes(defaultRound) ? defaultRound : moneyHoleRoundList[0] ?? null);
 
   // How many pins the WEEK holds, off the rounds' own scorecards — see
   // lib/betting. It is what the pot divides by, and it is also the answer to
@@ -3167,7 +3186,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                   <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold }}>${moneyHolePot.toFixed(2)}</div>
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: FS.label, color: BC.t3 }}>{moneyHoleDecided} of {roundList.length} decided</div>
+                  <div style={{ fontSize: FS.label, color: BC.t3 }}>{moneyHoleDecided} of {moneyHoleRoundList.length} decided</div>
                   <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>${moneyHoleShare.toFixed(2)} / round</div>
                 </div>
               </div>
@@ -3175,9 +3194,21 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
               {/* The par 3 clash, said on the card a PLAYER sees too and not
                   only in the director's console — the group walking onto a
                   hole carrying both pots is the party that finds out. */}
-              {moneyHoleParInfo.par3.length > 0 && (
+              {moneyHolePlayingPar3.length > 0 && (
                 <div style={{ padding: "8px 14px", borderTop: `1px solid ${BC.warn}${ALPHA.line}`, background: `${BC.warn}${ALPHA.wash}`, fontSize: FS.label, fontWeight: 700, color: BC.warn, letterSpacing: 0.4 }}>
-                  ⚠️ HOLE {holeNum} IS A PAR 3 ON {moneyHoleParInfo.par3.length === 1 ? `ROUND ${moneyHoleParInfo.par3[0].round}` : `ROUNDS ${moneyHoleParInfo.par3.map(x => x.round).join(", ")}`} — IT IS ALSO A CTP
+                  ⚠️ HOLE {holeNum} IS A PAR 3 ON {moneyHolePlayingPar3.length === 1 ? `ROUND ${moneyHolePlayingPar3[0].round}` : `ROUNDS ${moneyHolePlayingPar3.map(x => x.round).join(", ")}`} — IT IS ALSO A CTP
+                </div>
+              )}
+
+              {/* Which rounds it is NOT played in, on the card a player sees:
+                  a man who never opens the console has no other way to learn
+                  that the scramble is off, and "3 of 4 decided" on a
+                  four-round week would otherwise read as a missing result. */}
+              {moneyHoleRoundList.length < roundList.length && (
+                <div style={{ padding: "8px 14px", borderTop: `1px solid ${BC.bdr}`, fontSize: FS.label, color: BC.t3, letterSpacing: 0.4 }}>
+                  {moneyHoleRoundList.length === 0
+                    ? "Not played in any round"
+                    : `Played in ${moneyHoleRoundList.length === 1 ? "round" : "rounds"} ${moneyHoleRoundList.join(", ")} only`}
                 </div>
               )}
 
@@ -3207,10 +3238,20 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
             <MoneyHoleSetup
               hole={holeNum}
               pars={moneyHoleParInfo}
+              only={buyIns?.moneyHoleRounds ?? null}
               players={realPlayers(tPlayers)}
               amount={buyIns?.moneyHoleAmount || 0}
               ids={buyIns?.moneyHoleIn ?? null}
               onSetHole={h => onUpdateBuyIns({ money_hole_number: h })}
+              /* A stored LIST rather than a stored set of exclusions: the
+                 draw can grow a round, and "rounds 1-3" would silently take
+                 in a fifth round nobody chose while "not round 2" would not.
+                 Written sorted so the strip on the pot card reads in order. */
+              onToggleRound={(r, on) => {
+                const now = moneyHoleRoundsIn(roundList, buyIns?.moneyHoleRounds);
+                const next = on ? [...now, r] : now.filter(x => x !== r);
+                onUpdateBuyIns({ money_hole_rounds: [...new Set(next)].sort((a, b) => a - b) });
+              }}
               onChangeBuyIn={patch => onUpdateBuyIns(
                 "amount" in patch ? { money_hole_buyin: patch.amount } : { money_hole_in: patch.ids }
               )}
@@ -3238,19 +3279,30 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
             </div>
           )}
 
-          <SegmentedToggle
-            variant="pills"
-            style={{ marginBottom: 8 }}
-            options={roundList.map(r => [r, `Rd ${r}`])}
-            value={moneyHoleShownRound}
-            onChange={setMoneyHoleRound}
-          />
+          {/* Only the rounds it is played in. A pill for a round the game is
+              off in would open a table of net scores nobody is being paid
+              for, which is the same lie the switch exists to stop. */}
+          {moneyHoleRoundList.length > 0 ? (
+            <>
+              <SegmentedToggle
+                variant="pills"
+                style={{ marginBottom: 8 }}
+                options={moneyHoleRoundList.map(r => [r, `Rd ${r}`])}
+                value={moneyHoleShownRound}
+                onChange={setMoneyHoleRound}
+              />
 
-          <MoneyHoleCard
-            rows={moneyHoleFor(moneyHoleShownRound)}
-            hole={holeNum}
-            share={moneyHoleShare}
-          />
+              <MoneyHoleCard
+                rows={moneyHoleFor(moneyHoleShownRound)}
+                hole={holeNum}
+                share={moneyHoleShare}
+              />
+            </>
+          ) : (
+            <div style={{ background: BC.card, borderRadius: 8, border: `1px solid ${BC.bdr}`, padding: "14px 12px", fontSize: FS.small, color: BC.t3, textAlign: "center" }}>
+              The money hole is switched off for every round.
+            </div>
+          )}
         </div>
       )}
 
@@ -3552,7 +3604,7 @@ export default function App() {
   // everybody, which is what every tournament played before this existed was.
   // An empty array is a different answer (nobody), so the two must not be
   // collapsed. See components/BuyIns.
-  const [buyIns, setBuyIns] = useState({ skinsAmount: 0, skinsIn: null, ctpAmount: 0, ctpIn: null, lowNetAmount: 0, lowNetIn: null, moneyHoleAmount: 0, moneyHoleIn: null, moneyHoleNumber: null });
+  const [buyIns, setBuyIns] = useState({ skinsAmount: 0, skinsIn: null, ctpAmount: 0, ctpIn: null, lowNetAmount: 0, lowNetIn: null, moneyHoleAmount: 0, moneyHoleIn: null, moneyHoleNumber: null, moneyHoleRounds: null });
   // Player-to-player wagers the app records but does not run. One document
   // per bet; see lib/sideBets for why nothing here scores or settles them.
   const [sideBets, setSideBets] = useState([]);
@@ -4213,6 +4265,12 @@ export default function App() {
         // (lib/betting's moneyHole), so a tournament that has never opened the
         // console reads as the default 18 rather than being written one.
         moneyHoleNumber: s?.money_hole_number ?? null,
+        // WHICH ROUNDS it is played in. Same `Array.isArray` test as the
+        // fields above and for the same reason: absent means every round,
+        // which is what a tournament that predates the switch played, and a
+        // stored [] means the director turned the game off rather than never
+        // having answered. See lib/betting's moneyHoleRoundsIn.
+        moneyHoleRounds: Array.isArray(s?.money_hole_rounds) ? s.money_hole_rounds : null,
       });
     }));
     // The edition index. Subscribed rather than fetched once because it now
@@ -5039,6 +5097,7 @@ export default function App() {
       ...("money_hole_buyin" in patch ? { moneyHoleAmount: patch.money_hole_buyin } : {}),
       ...("money_hole_in" in patch ? { moneyHoleIn: patch.money_hole_in } : {}),
       ...("money_hole_number" in patch ? { moneyHoleNumber: patch.money_hole_number } : {}),
+      ...("money_hole_rounds" in patch ? { moneyHoleRounds: patch.money_hole_rounds } : {}),
     }));
     await db.upsert("bc_tournament_settings", { id: editionDocId("bc_settings_main"), tournament_id: TOURNAMENT_ID, ...patch });
   }, []);

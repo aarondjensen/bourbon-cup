@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { inField, computeSkins, lowNetRows, ctpTags, ctpPinTotal, moneyHole, moneyHoleRows, moneyHoleWins, moneyHolePars, DEFAULT_MONEY_HOLE } from "./betting";
+import { inField, computeSkins, lowNetRows, ctpTags, ctpPinTotal, moneyHole, moneyHoleRows, moneyHoleWins, moneyHolePars, moneyHoleRoundsIn, moneyHolePlaysRound, DEFAULT_MONEY_HOLE } from "./betting";
 
 const course = {
   id: "c1",
@@ -303,5 +303,83 @@ describe("moneyHolePars", () => {
     const r = moneyHolePars({ rounds: [], hole: 18, tRounds, courses: [course], roundLocks: {} });
     expect(r.perRound).toEqual([]);
     expect(r.par3).toEqual([]);
+  });
+});
+
+// ── Which rounds the money hole is played in ──────────────────────────
+// The switch a director reaches for on a shared-ball round, where both
+// partners post the same net and a side would take two of the round's shares
+// for one ball. Absent means every round, so a tournament that predates the
+// switch plays exactly as it did.
+describe("moneyHoleRoundsIn", () => {
+  it("an absent list is every round", () => {
+    expect(moneyHoleRoundsIn([1, 2, 3, 4], null)).toEqual([1, 2, 3, 4]);
+    expect(moneyHoleRoundsIn([1, 2, 3, 4], undefined)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("a stored list keeps only those rounds, in the draw's order", () => {
+    expect(moneyHoleRoundsIn([1, 2, 3, 4], [3, 1])).toEqual([1, 3]);
+  });
+
+  it("a stored empty list is the game switched off, not everybody in", () => {
+    expect(moneyHoleRoundsIn([1, 2, 3, 4], [])).toEqual([]);
+  });
+
+  it("cannot invent a round the draw does not have", () => {
+    expect(moneyHoleRoundsIn([1, 2], [1, 2, 5])).toEqual([1, 2]);
+  });
+
+  it("holds no round list at all", () => {
+    expect(moneyHoleRoundsIn(null, [1])).toEqual([]);
+  });
+});
+
+describe("moneyHolePlaysRound", () => {
+  it("absent means played", () => {
+    expect(moneyHolePlaysRound(2, null)).toBe(true);
+  });
+
+  it("reads the list", () => {
+    expect(moneyHolePlaysRound(2, [1, 3])).toBe(false);
+    expect(moneyHolePlaysRound(3, [1, 3])).toBe(true);
+  });
+
+  it("an empty list plays nowhere", () => {
+    expect(moneyHolePlaysRound(1, [])).toBe(false);
+  });
+});
+
+// The pot divides by the rounds it is PLAYED in — switching the scramble off
+// makes the other rounds worth more rather than orphaning a share.
+describe("moneyHoleWins over a filtered draw", () => {
+  const players = [{ player_id: "p1", name: "AJ", team: "A" }, { player_id: "p2", name: "BK", team: "B" }];
+  const hd = { p1_1: { 17: 4 }, p2_1: { 17: 5 }, p1_2: { 17: 5 }, p2_2: { 17: 4 } };
+
+  it("pays the whole pot across two rounds", () => {
+    const w = moneyHoleWins({ rounds: [1, 2], hole: 18, field: players, holeData: hd, pot: 160 });
+    expect(w.map(x => x.share)).toEqual([80, 80]);
+  });
+
+  it("pays the whole pot across the one round left on", () => {
+    const rounds = moneyHoleRoundsIn([1, 2], [1]);
+    const w = moneyHoleWins({ rounds, hole: 18, field: players, holeData: hd, pot: 160 });
+    expect(w).toHaveLength(1);
+    expect(w[0].pid).toBe("p1");
+    expect(w[0].share).toBe(160);
+  });
+});
+
+// The console lists the format alongside the par, because the format is the
+// reason a director reaches for the switch.
+describe("moneyHolePars carries the format", () => {
+  const course = { id: "c1", holes: Array.from({ length: 18 }, () => ({ par: 4, hcp: 1 })) };
+
+  it("names each round's format", () => {
+    const tRounds = [
+      { round_number: 1, course_id: "c1", format: "scramble" },
+      { round_number: 2, course_id: "c1" },
+    ];
+    const r = moneyHolePars({ rounds: [1, 2], hole: 18, tRounds, courses: [course], roundLocks: {} });
+    expect(r.perRound.map(x => x.format)).toEqual(["scramble", null]);
   });
 });

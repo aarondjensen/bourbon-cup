@@ -257,16 +257,22 @@ export function RoundSummarySheet({
           ))}
         </Card>
 
-        <Card
-          label="MONEY HOLE"
-          note={`hole ${s.moneyHole.hole}${s.moneyHole.par ? ` · par ${s.moneyHole.par}` : ""}`}
-          empty="Nobody has posted it yet."
-          rows={s.moneyHole.winners.length}
-        >
-          {s.moneyHole.winners.map((r) => (
-            <WinRow key={r.pid} name={r.name} detail={`net ${r.net}`} />
-          ))}
-        </Card>
+        {/* Absent entirely on a round the money hole is switched off in —
+            not an empty card. "Nobody has posted it yet" on a round it is
+            not being played would be waiting for a result that is never
+            coming. See lib/betting. */}
+        {s.moneyHole && (
+          <Card
+            label="MONEY HOLE"
+            note={`hole ${s.moneyHole.hole}${s.moneyHole.par ? ` · par ${s.moneyHole.par}` : ""}`}
+            empty="Nobody has posted it yet."
+            rows={s.moneyHole.winners.length}
+          >
+            {s.moneyHole.winners.map((r) => (
+              <WinRow key={r.pid} name={r.name} detail={`net ${r.net}`} />
+            ))}
+          </Card>
+        )}
 
         {/* The pots themselves are not on this screen. What each of these is
             WORTH depends on the buy-in and on how the week's other rounds

@@ -189,6 +189,21 @@ describe("roundSummary", () => {
     expect(roundSummary(base).moneyHole.hole).toBe(18);
   });
 
+  // A round the director switched the money hole off in — the scramble,
+  // usually, where both partners post the same net. It reports NOTHING, so
+  // the sheet cannot name a winner of a hole nobody is paying out on.
+  it("reports no money hole on a round it is switched off in", () => {
+    const holeData = { ...base.holeData, p3_1: { ...card(5), 17: 2 } };
+    const s = roundSummary({ ...base, holeData, buyIns: { moneyHoleNumber: 18, moneyHoleRounds: [2] } });
+    expect(s.moneyHole).toBeNull();
+  });
+
+  it("reports it on a round it is switched on in", () => {
+    const holeData = { ...base.holeData, p3_1: { ...card(5), 17: 2 } };
+    const s = roundSummary({ ...base, holeData, buyIns: { moneyHoleNumber: 18, moneyHoleRounds: [1] } });
+    expect(s.moneyHole.winners.map(w => w.pid)).toEqual(["p3"]);
+  });
+
   // ── The buy-in fields ─────────────────────────────────────────────
   // Null is the state of a tournament that never opened the panel, and it
   // means everybody. An empty array is a different answer.
