@@ -46,6 +46,7 @@
 const admin = require("firebase-admin");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { defineSecret } = require("firebase-functions/params");
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const { ctpBody } = require("./ctpNotice");
@@ -494,6 +495,291 @@ exports.sendTestPush = onCall(async (request) => {
 // roster, so a player linked in bc_2025 is still linked in bc_2026. The
 // query is deliberately unscoped by tournament — deleting an account means
 // every edition, or next year's app signs them straight back in.
+// ─────────────────────────────────────────────────────────────────────────
+//  revokeAppleToken — telling Apple the account is gone
+// ─────────────────────────────────────────────────────────────────────────
+// Ported from WBC, and it fixes a hole rather than tidying one.
+//
+// App Store guideline 5.1.1(v) requires an app offering Sign in with Apple to
+// REVOKE the token when the account is deleted; without it the app stays
+// listed under Settings → Apple Account on a phone whose account it no longer
+// holds. Deleting the Firebase user does not do that.
+//
+// ── Why the client cannot finish the job on iOS ──
+// The web path works and is left alone: a popup reauth yields an OAuth ACCESS
+// token, and Firebase's own revokeAccessToken takes it from there.
+//
+// Native does not, and it failed SILENTLY. Apple's native sheet
+// (ASAuthorizationAppleIDCredential) has no OAuth access token at all — it
+// returns an authorization CODE, which is what the Capacitor plugin surfaces
+// (`authorizationCode`, documented "Only available for Apple Sign-in on iOS").
+// So lib/auth's native branch read `credential.accessToken`, got undefined,
+// and returned `no_token` — every iOS deletion opened a Face ID sheet, did
+// nothing with it, and reported nothing. Firebase's revokeAccessToken will not
+// take the code, so the exchange has to happen somewhere holding Apple's key.
+// Here.
+//
+// ── The client_id is the bundle id, not the Services ID ──
+// An authorization code is bound to the client that obtained it. A code from
+// the native sheet belongs to com.thebourboncup.app; a code from the web flow
+// belongs to the Services ID. Sending the wrong one gets `invalid_client` from
+// Apple, which is the failure that looks like a bad key and is not. The caller
+// says which it has, and APPLE_CLIENT_ID is the default for the web shape.
+//
+// ── Everything it needs, and none of it in the repo ──
+//   APPLE_PRIVATE_KEY  the .p8 contents, as a Functions SECRET
+//   APPLE_KEY_ID       the key's 10-character id
+//   APPLE_TEAM_ID      the Apple Developer team id
+//   APPLE_CLIENT_ID    the Services ID used by the WEB sign-in flow
+//   APPLE_BUNDLE_ID    the iOS bundle id (defaults to com.thebourboncup.app)
+//
+// Unset, it throws `failed-precondition` and the caller proceeds with the
+// deletion — see lib/auth. A revocation that cannot run must never be allowed
+// to strand somebody inside an account they asked to delete.
+const APPLE_PRIVATE_KEY = defineSecret("APPLE_PRIVATE_KEY");
+
+const appleParam = (name, fallback = "") => (process.env[name] || fallback).trim();
+
+exports.revokeAppleToken = onCall({ secrets: [APPLE_PRIVATE_KEY] }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
+
+  const authorizationCode = request.data?.authorizationCode;
+  if (!authorizationCode) throw new HttpsError("invalid-argument", "authorizationCode required");
+
+  const keyId = appleParam("APPLE_KEY_ID");
+  const teamId = appleParam("APPLE_TEAM_ID");
+  const webClientId = appleParam("APPLE_CLIENT_ID");
+  const bundleId = appleParam("APPLE_BUNDLE_ID", "com.thebourboncup.app");
+  // "native" is the iOS sheet; anything else is the web flow's Services ID.
+  const clientId = request.data?.platform === "native" ? bundleId : webClientId;
+
+  let privateKey = "";
+  try { privateKey = APPLE_PRIVATE_KEY.value(); } catch { privateKey = ""; }
+
+  if (!privateKey || !keyId || !teamId || !clientId) {
+    // Named precisely, because the person who sees this is the one who can
+    // fix it and the four causes have four different fixes.
+    const missing = [
+      !privateKey && "APPLE_PRIVATE_KEY",
+      !keyId && "APPLE_KEY_ID",
+      !teamId && "APPLE_TEAM_ID",
+      !clientId && (request.data?.platform === "native" ? "APPLE_BUNDLE_ID" : "APPLE_CLIENT_ID"),
+    ].filter(Boolean);
+    logger.warn("revokeAppleToken not configured", { missing });
+    throw new HttpsError("failed-precondition", `Apple revocation is not configured: ${missing.join(", ")}`);
+  }
+
+  // 1. The client secret — a short-lived ES256 JWT signed with the .p8.
+  const jwt = require("jsonwebtoken");
+  let clientSecret;
+  try {
+    clientSecret = jwt.sign({}, privateKey.replace(/\\n/g, "\n"), {
+      algorithm: "ES256",
+      keyid: keyId,
+      issuer: teamId,
+      audience: "https://appleid.apple.com",
+      subject: clientId,
+      expiresIn: "5m",
+    });
+  } catch (err) {
+    logger.error("Apple client secret sign failed", { reason: err?.message });
+    throw new HttpsError("internal", "Could not build the Apple client secret.");
+  }
+
+  // 2. Exchange the authorization code for a refresh token. The code is
+  //    SINGLE-USE and expires in about five minutes, which is why the client
+  //    obtains it fresh at deletion time rather than at sign-in.
+  const tokenResp = await fetch("https://appleid.apple.com/auth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      code: authorizationCode,
+      grant_type: "authorization_code",
+    }).toString(),
+  });
+  const tokenJson = await tokenResp.json().catch(() => ({}));
+  if (!tokenResp.ok) {
+    logger.warn("Apple token exchange refused", { status: tokenResp.status, error: tokenJson?.error });
+    throw new HttpsError("internal", `Apple refused the authorization code: ${tokenJson?.error || tokenResp.status}`);
+  }
+
+  // 3. Revoke it. A refresh token revokes the whole grant; an access token
+  //    revokes only itself, so the refresh token is the one to send.
+  const token = tokenJson.refresh_token || tokenJson.access_token;
+  const tokenTypeHint = tokenJson.refresh_token ? "refresh_token" : "access_token";
+  if (!token) throw new HttpsError("internal", "Apple returned no token to revoke.");
+
+  const revokeResp = await fetch("https://appleid.apple.com/auth/revoke", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      token,
+      token_type_hint: tokenTypeHint,
+    }).toString(),
+  });
+  if (!revokeResp.ok) {
+    const body = await revokeResp.text().catch(() => "");
+    logger.warn("Apple revoke refused", { status: revokeResp.status, body: body.slice(0, 200) });
+    throw new HttpsError("internal", `Apple refused the revocation: ${revokeResp.status}`);
+  }
+
+  logger.info("revokeAppleToken", { uid: request.auth.uid, tokenTypeHint });
+  return { revoked: true };
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+//  Auth pairing — moving a claimed name to a new sign-in
+// ─────────────────────────────────────────────────────────────────────────
+// Ported from WBC. The problem it solves is small and it recurs every year:
+// a man signs in with Google one summer and taps Apple the next — new phone,
+// muscle memory, whichever button is on top. That is a different uid, and his
+// name on the roster is already claimed by the old one, so the claim screen
+// has nothing to offer him.
+//
+// The manual fix already exists — a director unlinks the row in Admin →
+// Players and he re-claims it — and it stays the fallback. This makes it
+// self-service, which matters on a Thursday when the director is driving.
+//
+// ── What a pairing code is, and what it deliberately is not ──
+// It moves a ROSTER LINK. It does not grant access to the tournament: the
+// claiming account must ALREADY hold a membership, which means it has already
+// been through the invite code. So a leaked pairing code buys nothing that
+// the invite code does not already gate, and the two doors stay separate —
+// this is emphatically not a second way into the cup.
+//
+// bc_auth_pairings is written only by these functions, through the admin SDK.
+// No client may read or write it; the default-deny at the bottom of
+// firestore.rules covers it, and there is an explicit block there saying so
+// rather than leaving it to the reader to notice.
+const PAIRING_COL = "bc_auth_pairings";
+const PAIRING_TTL_MS = 15 * 60 * 1000;
+
+// No I, O, 0 or 1. This gets read off one phone and typed into another, often
+// by somebody standing up, and those four are the pairs that get mistyped.
+const PAIRING_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const PAIRING_LENGTH = 8;
+
+const makePairingCode = () => {
+  const bytes = require("node:crypto").randomBytes(PAIRING_LENGTH);
+  let out = "";
+  for (let i = 0; i < PAIRING_LENGTH; i++) out += PAIRING_ALPHABET[bytes[i] % PAIRING_ALPHABET.length];
+  return out;
+};
+
+// The roster rows this uid has claimed, across every edition. Editions clone
+// the roster, so a man who has played three years has three rows and all of
+// them have to move together — leaving one behind is how he ends up claimed
+// in 2026 and a spectator in 2025.
+const claimedRows = (uid) => db.collection("bc_players").where("auth_uid", "==", uid).get();
+
+exports.offerAuthPairing = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in first.");
+
+  const rows = await claimedRows(uid);
+  if (rows.empty) {
+    throw new HttpsError("failed-precondition", "This sign-in hasn't claimed a name yet, so there's nothing to move.");
+  }
+
+  const playerIds = [...new Set(rows.docs.map(d => d.data()?.player_id || d.id).filter(Boolean))];
+  const names = [...new Set(rows.docs.map(d => d.data()?.name).filter(Boolean))];
+
+  // One live code per account. Re-asking replaces the old one rather than
+  // leaving a second working code behind — a code somebody read out, then
+  // gave up on, should stop working the moment they ask for another.
+  const stale = await db.collection(PAIRING_COL).where("uid", "==", uid).get();
+  for (const doc of stale.docs) await doc.ref.delete();
+
+  const code = makePairingCode();
+  const expiresAt = Date.now() + PAIRING_TTL_MS;
+  await db.collection(PAIRING_COL).doc(code).set({
+    uid, player_ids: playerIds, name: names[0] || "",
+    created_at: Date.now(), expires_at: expiresAt,
+  });
+
+  logger.info("offerAuthPairing", { uid, playerIds });
+  return { code, expiresAt, name: names[0] || "", playerIds };
+});
+
+exports.claimAuthPairing = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in first.");
+
+  const code = String(request.data?.code || "").trim().toUpperCase();
+  if (!code) throw new HttpsError("invalid-argument", "Enter the move code.");
+
+  // A membership is required, and it is the whole security argument: this
+  // moves a link between two accounts that are BOTH already in the
+  // tournament. It is not a way in.
+  const acct = await db.collection("bc_accounts").doc(uid).get();
+  if (!acct.exists) {
+    throw new HttpsError("failed-precondition", "Enter the tournament's invite code first, then move your name across.");
+  }
+
+  // Already holding a name. Moving a second one onto this account would leave
+  // it claimed to two men, which no screen in the app expects.
+  const mine = await claimedRows(uid);
+  if (!mine.empty) {
+    throw new HttpsError("failed-precondition", "This sign-in has already claimed a name. Ask a director to unlink it first.");
+  }
+
+  const ref = db.collection(PAIRING_COL).doc(code);
+  const snap = await ref.get();
+  // `invalid-argument`, not `not-found`. A missing CALLABLE also surfaces to
+  // the client as `functions/not-found`, and the advice for the two is
+  // opposite — "ask for a new code" against "nobody has deployed this yet".
+  // See pairingError in lib/authPairing.
+  if (!snap.exists) throw new HttpsError("invalid-argument", "That code isn't valid. Ask for a new one.");
+
+  const pairing = snap.data() || {};
+  if (!pairing.expires_at || pairing.expires_at < Date.now()) {
+    await ref.delete();
+    throw new HttpsError("deadline-exceeded", "That code has expired. Ask for a new one.");
+  }
+  if (pairing.uid === uid) {
+    await ref.delete();
+    throw new HttpsError("failed-precondition", "That code belongs to this sign-in already.");
+  }
+
+  // The rows as they stand NOW, not the ids captured when the code was made:
+  // a director may have unlinked or re-drawn something in the fifteen minutes
+  // in between, and the document is the truth about who holds what.
+  const rows = await claimedRows(pairing.uid);
+  if (rows.empty) {
+    await ref.delete();
+    throw new HttpsError("failed-precondition", "That sign-in no longer holds a name — ask a director.");
+  }
+
+  const token = await admin.auth().getUser(uid).catch(() => null);
+  const patch = {
+    auth_uid: uid,
+    auth_email: token?.email || null,
+    auth_provider: token?.providerData?.[0]?.providerId?.replace(".com", "") || null,
+    auth_linked_at: new Date().toISOString(),
+  };
+
+  const moved = [];
+  for (const row of rows.docs) {
+    await row.ref.set(patch, { merge: true });
+    const pid = row.data()?.player_id || row.id;
+    if (pid && !moved.includes(pid)) moved.push(pid);
+  }
+
+  // Push tokens are keyed by PLAYER id, not uid, so they follow the name and
+  // need no rewrite. The old account keeps its membership and becomes an
+  // ordinary spectator — it is still a real Google or Apple account somebody
+  // owns, and deleting it here would be this function doing something nobody
+  // asked it to.
+  await ref.delete();
+
+  logger.info("claimAuthPairing", { from: pairing.uid, to: uid, moved });
+  return { moved, name: pairing.name || "" };
+});
+
 exports.deleteAccount = onCall(async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Sign in first.");

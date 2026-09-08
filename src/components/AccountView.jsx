@@ -35,6 +35,7 @@ import { useConfirm } from "../lib/useConfirm";
 import { providerLabel } from "../lib/auth";
 import { BOOTSTRAP_DIRECTOR } from "../firebase";
 import { NotificationSettings } from "./NotificationSettings";
+import { MoveSignIn } from "./MoveSignIn";
 import { BalanceCard } from "./Ledger";
 
 const Card = ({ children, style }) => (
@@ -323,6 +324,12 @@ export function AccountView({
         }}>
           {isGuest ? "Exit Guest Mode" : "Log Out"}
         </button>
+        {/* Moving to a different Google or Apple account. Above Delete and
+            below Log Out on purpose: it is the answer to the thing people
+            reach for Delete to solve — "I signed in with the wrong one" —
+            and it should be read before the button that cannot be undone.
+            Not offered to a guest, who has no name to move. */}
+        {!isGuest && <MoveSignIn notify={notify} />}
         {/* No Delete Account for a guest. There is no Firebase user, no
             membership document and no roster row to unlink — the callable
             would find nothing and the button would be a promise about an

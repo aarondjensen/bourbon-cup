@@ -128,6 +128,7 @@ import {
 } from "./lib/cardSigs";
 import { useHoleAdvance } from "./lib/useHoleAdvance";
 import { roundForToday } from "./lib/scoringGate";
+import { claimPairing, cleanCode, isCompleteCode } from "./lib/authPairing";
 
 // ── Landing straight on the Final Countdown ───────────────────────
 // Read ONCE, at module load, before React has rendered anything: the
@@ -582,6 +583,99 @@ function GateScreen({ tournamentName, tournamentLocation, authUser, onPassed, on
   );
 }
 
+// ── Taking a claimed name onto a new sign-in ────────────────────────
+// The CLAIM half of the move-code pair; the offer half is
+// components/MoveSignIn, on the account that still holds the name.
+//
+// It sits under the roster on the claim screen because that is where the
+// problem is discovered — a padlock beside your own name — and folded away
+// until asked for, because it is the answer to a question most people never
+// have. See lib/authPairing for why a code cannot let anybody in who is not
+// already through the invite code.
+function MoveCodeEntry({ onMoved, players }) {
+  const [open, setOpen] = useState(false);
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const submit = async () => {
+    if (busy || !isCompleteCode(code)) return;
+    setBusy(true); setErr("");
+    const res = await claimPairing(code);
+    setBusy(false);
+    if (!res.ok) { setErr(res.error); return; }
+    // The function moved the row; find it so the app can carry straight on
+    // into the tournament rather than bouncing back to a screen whose
+    // padlocks have not caught up yet.
+    const moved = (res.moved || [])[0];
+    onMoved(players.find(p => p.player_id === moved) || null);
+  };
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        style={{
+          marginTop: 2, marginBottom: 6, background: "transparent", border: "none",
+          color: BC.t3, fontSize: FS.small, fontFamily: FONT, cursor: "pointer",
+          textDecoration: "underline", textUnderlineOffset: 3,
+        }}
+      >
+        Your name locked? Move it from an old sign-in
+      </button>
+    );
+  }
+
+  return (
+    <div style={{
+      width: "100%", maxWidth: 480, marginTop: 8, marginBottom: 6, padding: "12px 14px",
+      borderRadius: 10, background: BC.card + ALPHA.panel, border: `1px solid ${BC.bdr}`,
+    }}>
+      <div style={{ fontSize: FS.small, color: BC.t2, lineHeight: 1.5, marginBottom: 8 }}>
+        On the phone still signed in as you, open{" "}
+        <strong style={{ color: BC.t1 }}>My Account → Move to a New Sign-In</strong>{" "}
+        and read the code off it.
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <input
+          value={code}
+          onChange={e => { setCode(cleanCode(e.target.value)); setErr(""); }}
+          onKeyDown={e => { if (e.key === "Enter") submit(); }}
+          placeholder="MOVE CODE"
+          autoCapitalize="characters"
+          autoCorrect="off"
+          spellCheck={false}
+          style={{
+            flex: 1, minWidth: 0, padding: "10px 12px", borderRadius: 8,
+            background: BC.inp, border: `1px solid ${err ? BC.danger : BC.bdr}`,
+            color: BC.t1, fontFamily: FONT, fontSize: FS.body, fontWeight: 700,
+            letterSpacing: 2, textAlign: "center",
+          }}
+        />
+        <button
+          onClick={submit}
+          disabled={busy || !isCompleteCode(code)}
+          style={{
+            flexShrink: 0, padding: "0 16px", borderRadius: 8, border: "none",
+            background: isCompleteCode(code) ? BC.gold : BC.inp,
+            color: isCompleteCode(code) ? ON_AMBER : BC.t3,
+            fontFamily: FONT, fontSize: FS.small, fontWeight: 800,
+            cursor: busy || !isCompleteCode(code) ? "default" : "pointer",
+            opacity: busy ? 0.6 : 1,
+          }}
+        >
+          {busy ? "Moving…" : "Move"}
+        </button>
+      </div>
+      {err && (
+        <div role="alert" style={{ marginTop: 8, fontSize: FS.small, color: BC.danger, lineHeight: 1.45 }}>
+          {err}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Screen 3: claim your name ───────────────────────────────────────
 // Shown to a signed-in account that no roster document points at. Tapping
 // a name selects it; a second tap on the confirm bar commits, because the
@@ -815,6 +909,25 @@ function ClaimScreen({ players, teams, darkMode, tournamentName, tournamentLocat
           <div style={{ fontSize: FS.small, color: BC.t2, lineHeight: 1.45 }}>{err}</div>
         </div>
       ) : <LoginNote text="" />}
+
+      {/* ── "That's my name, but it's locked" ──
+          Every claimed name on this screen is greyed with a padlock, and for
+          the man whose name it IS that is the end of the road: he signed in
+          with Google last summer and tapped Apple this time, so the row is
+          held by a uid that is his and is not this one. The fix was a text
+          to the director, who unlinks it in Admin → Players.
+
+          A move code does it himself. It is offered only when there is a
+          locked name to explain it — on a roster nobody has claimed it would
+          be a control with nothing to act on — and never on a locked edition,
+          where the padlocks mean something else entirely and the banner above
+          has already said so. See lib/authPairing. */}
+      {!editionLocked && players.some(isClaimed) && (
+        <MoveCodeEntry
+          onMoved={(player) => { if (player) onClaimed(player); }}
+          players={players}
+        />
+      )}
 
       {players.length === 0 && (
         <div style={{ textAlign: "center", color: BC.t3, fontSize: FS.small, marginTop: -22, marginBottom: 8, maxWidth: 360 }}>

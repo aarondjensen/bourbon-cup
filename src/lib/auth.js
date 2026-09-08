@@ -536,21 +536,56 @@ export async function revokeProviderAccess() {
   // revokeAccessToken supports Apple and nothing else today.
   if (u.providerData?.[0]?.providerId !== "apple.com") return { revoked: false, reason: "not_apple" };
 
-  // Native takes the same shape by a different door: there is no popup to
-  // reauthenticate through, so the fresh authorization comes from the system
-  // sheet instead. Everything after that is identical — a token, handed to
-  // Firebase's revoke endpoint — and the whole thing stays best-effort,
-  // because the App Store requires the revocation and the USER asked for a
-  // deletion, and the deletion is the promise that must not break.
+  // ── Native, and why it does not take the web's door ──
+  // The fresh authorization comes from the system sheet rather than a popup,
+  // which is the easy half. The hard half is what the sheet hands back.
+  //
+  // Apple's native credential (ASAuthorizationAppleIDCredential) has NO OAuth
+  // access token — it never did. It carries an authorization CODE, which is
+  // what the Capacitor plugin surfaces as `credential.authorizationCode`
+  // ("Only available for Apple Sign-in on iOS", per its own typings). This
+  // branch used to read `credential.accessToken`, which on iOS is undefined,
+  // so it bailed with `no_token` EVERY TIME: the deletion opened a Face ID
+  // sheet, did nothing with it, and reported nothing. Apple was never told,
+  // and 5.1.1(v) is the one part of this the App Store checks.
+  //
+  // Firebase's revokeAccessToken will not take a code, so the exchange goes
+  // to the revokeAppleToken Cloud Function, which holds Apple's key. The code
+  // is single-use and lives about five minutes; it is obtained HERE, seconds
+  // before it is spent, rather than being kept from sign-in and hoped over.
+  //
+  // Still best-effort, and that ordering is deliberate: the App Store requires
+  // the revocation, but the USER asked for a deletion, and the deletion is the
+  // promise that must not break. An undeployed function, an unset key and a
+  // cancelled sheet all return quietly.
   if (isNative()) {
     try {
       const { FirebaseAuthentication } = await import("@capacitor-firebase/authentication");
       const res = await FirebaseAuthentication.signInWithApple({ scopes: ["email", "name"] });
-      const token = res?.credential?.accessToken;
-      if (!token) return { revoked: false, reason: "no_token" };
-      const { revokeAccessToken } = await import("firebase/auth");
-      await revokeAccessToken(auth, token);
-      return { revoked: true };
+      const { authorizationCode, accessToken } = res?.credential || {};
+
+      // An access token, if this platform ever starts issuing one, still goes
+      // the short way. Nothing on iOS does today.
+      if (accessToken) {
+        const { revokeAccessToken } = await import("firebase/auth");
+        await revokeAccessToken(auth, accessToken);
+        return { revoked: true, via: "firebase" };
+      }
+      if (!authorizationCode) return { revoked: false, reason: "no_token" };
+
+      const [{ getFunctions, httpsCallable }, { getApp }] = await Promise.all([
+        import("firebase/functions"),
+        import("firebase/app"),
+      ]);
+      // Timeboxed. A deletion must not sit on Apple's token endpoint, and a
+      // function cold start plus two round trips to Apple is the slow case.
+      await Promise.race([
+        httpsCallable(getFunctions(getApp()), "revokeAppleToken")({
+          authorizationCode, platform: "native",
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("revoke timed out")), 8000)),
+      ]);
+      return { revoked: true, via: "function" };
     } catch (e) {
       console.warn("[auth] Apple token revocation skipped:", e?.code || e?.message || e);
       return { revoked: false, reason: e?.code || "failed" };

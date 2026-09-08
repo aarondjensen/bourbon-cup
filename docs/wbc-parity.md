@@ -16,16 +16,31 @@ Ranked by whether a wrong answer is visible.
 
 ## Status
 
-Everything in Tiers A and B is **fixed**, along with C1, C4 and C5. Each
-finding below carries its own status line. Two are deliberately NOT done and
-the reasoning is under "Left alone" at the bottom — both turned out to be
-weaker findings on a closer read than they looked from a directory listing.
+**All eleven are fixed.** Each finding below carries its own status line.
 
-Nothing here needed a `firestore.rules` change, which was not luck: `bc_ctp`
-and `bc_card_sigs` already allow the whole document, `bc_notification_tokens`
-is already open to read, and the withdrawal flag rides on a roster row a
-director could already write. So there is no rules deploy waiting on any of
-it, and no ordering to get right.
+C2 and C3 were held back on a first pass and then built; the note at the
+bottom records what changed on the closer read, because C2 in particular turned
+out to be the opposite of what this audit first said — it is not a web popup
+nicety, it is an iOS revocation that has never once run.
+
+Nothing in Tiers A and B needed a `firestore.rules` change, which was not luck:
+`bc_ctp` and `bc_card_sigs` already allow the whole document,
+`bc_notification_tokens` is already open to read, and the withdrawal flag rides
+on a roster row a director could already write.
+
+**Two things do not work until somebody deploys**, and both fail loudly rather
+than silently:
+
+- `firebase deploy --only functions` — `revokeAppleToken`, `offerAuthPairing`
+  and `claimAuthPairing` are new.
+- `firebase functions:secrets:set APPLE_PRIVATE_KEY`, plus `APPLE_KEY_ID`,
+  `APPLE_TEAM_ID`, `APPLE_CLIENT_ID` and `APPLE_BUNDLE_ID`. Until they are set
+  the Apple revocation reports `failed-precondition` and the deletion proceeds
+  — which is exactly where it already was.
+
+The `firestore.rules` change is a new **deny-everything** block for
+`bc_auth_pairings`. The default-deny at the bottom of that file already covered
+it, so it widens nothing and there is no ordering to get right.
 
 ---
 
@@ -201,7 +216,8 @@ tee time?" is the week-before question with no answer in the app.
 
 ### C2 — Apple token revocation is best-effort in the browser
 
-**Left alone — see the bottom.** This one got weaker on a closer read.
+**Fixed, and the audit had it backwards.** iOS has never revoked an Apple
+token at all. See the note at the bottom.
 
 Same App Store requirement, two answers.
 
@@ -219,7 +235,8 @@ server-side path removes the popup from the dependency chain entirely.
 
 ### C3 — no way to move an account between providers
 
-**Left alone — see the bottom.** A director unlink already covers it.
+**Fixed.** My Account → Move to a New Sign-In, claimed on the claim screen.
+The director unlink stays the fallback.
 
 WBC ships `offerAuthPairing` / `claimAuthPairing` callables behind
 `lib/authPairing.js`. Nothing equivalent here, so a player who signed in with
@@ -303,39 +320,48 @@ screen showing a result the database does not have.
 
 ---
 
-## Left alone, and why
+## The two that were held back, and what changed
 
-Two findings did not survive being looked at properly. Both are recorded here
-rather than quietly dropped.
+Both were parked on a first pass. Neither reasoning survived reading the code
+properly, and the C2 one was wrong in an interesting direction.
 
 ### C2 — Apple token revocation
 
-The audit read this as "WBC does it server-side, this app does it in a popup".
-That is true and it is not the whole picture. This app calls Firebase's own
-`revokeAccessToken`, which is the supported path and does the revocation on
-Firebase's side; WBC predates it and holds an Apple `.p8` private key in a
-Functions secret to call Apple directly.
+The audit read this as "WBC does it server-side, this app does it in a popup",
+and concluded the gap was one blocked popup on the web. That was wrong, and the
+mistake was reading a directory listing instead of the platform branch.
 
-Porting WBC's version would mean provisioning that key, capturing Apple's
-authorization code at sign-in (it is issued once) and storing it somewhere, and
-trusting a hand-rolled ES256 client-secret exchange over a first-party API —
-to close a gap that is one blocked popup on the web, on a path that already
-proceeds with the deletion rather than failing it.
+The web path is fine and is untouched: a popup reauth yields an OAuth access
+token and Firebase's own `revokeAccessToken` finishes the job.
 
-That is a worse trade, and none of it could be exercised from here. The
-recommendation is to leave it. If the popup ever does prove to be a real
-problem in the field, the smaller fix is to capture the authorization code on
-the NATIVE path, where the Apple sheet returns it without a popup at all.
+**Native never worked.** Apple's native credential
+(`ASAuthorizationAppleIDCredential`) has no OAuth access token — it never has.
+It carries an authorization CODE, which the Capacitor plugin surfaces as
+`credential.authorizationCode`, documented in its own typings as "Only
+available for Apple Sign-in on iOS". `revokeProviderAccess` read
+`credential.accessToken`, got `undefined`, and returned `no_token` on every
+single iOS deletion: the app opened a Face ID sheet, threw away what came back,
+told Apple nothing, and logged nothing a user would see.
+
+That is App Store guideline 5.1.1(v) — the one part of account deletion the
+store actually checks — failing silently on the platform that is in review. So
+the Cloud Function is not a nicety ported for symmetry; it is the only place
+the code can be exchanged, because Firebase will not accept one.
+
+One improvement on WBC while porting: WBC captures the code at SIGN-IN and
+spends it at deletion, hoping the two happen in the same session (the code
+lives about five minutes). This obtains it at deletion time, seconds before it
+is used, because the reauth was already happening there anyway.
 
 ### C3 — moving an account between providers
 
-WBC has `offerAuthPairing` / `claimAuthPairing`. This app has the same
-capability by hand: **Admin → Players → Unlink**, after which the player
-re-claims his name with whichever provider he is on now. The roster row — the
-name, the handicap, the scores, the signed cards — is untouched by that, which
-is the whole reason unlink exists.
+The reasoning for parking this one still stands as far as it went: **Admin →
+Players → Unlink** already does it by hand, so this is a convenience rather
+than a gap, and it stays the fallback for anything that goes wrong.
 
-So this is a convenience, not a gap: it turns a two-minute director job into a
-self-service one. It also needs new callables and a `firestore.rules` change,
-on the one code path where getting it wrong strands somebody out of their own
-account. Not worth shipping untested for that return.
+What it buys is a Thursday when the director is driving. The design keeps the
+two doors separate, which is the part worth checking on review: a pairing code
+moves a roster LINK between two accounts that BOTH already hold a membership.
+`claimAuthPairing` refuses an account without one, so the claiming side has
+already been through the invite code and a leaked pairing code buys nothing the
+invite code does not already gate. It is not a second way into the cup.

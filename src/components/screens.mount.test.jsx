@@ -19,7 +19,7 @@
 // somebody opens ☰ → Data, so a broken import there cannot fail anywhere else
 // first.
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, cleanup } from "@testing-library/react";
+import { render, cleanup, fireEvent } from "@testing-library/react";
 
 // The screens under test reach for Firestore at import time (the db handle)
 // and, in one case, subscribe on mount. Neither belongs in a mount test: this
@@ -42,6 +42,7 @@ import { CtpPrompt } from "./CtpPrompt";
 import { PlayerActivityPanel } from "./PlayerActivityPanel";
 import { SyncBanner } from "./SyncBanner";
 import DataView from "./DataView";
+import { MoveSignIn } from "./MoveSignIn";
 
 afterEach(cleanup);
 
@@ -203,5 +204,19 @@ describe("Data tab", () => {
   });
   it("renders an edition with no cards in it yet", () => {
     mounts(<DataView {...common} tPlayers={[]} tRounds={[]} courses={[]} editions={[]} />);
+  });
+});
+
+describe("Move to a new sign-in", () => {
+  it("renders folded away, which is how most people will never see it", () => {
+    const { container } = render(<MoveSignIn notify={noop} />);
+    expect(container.textContent).toContain("Move to a New Sign-In");
+  });
+  it("renders the explanation once opened", () => {
+    // The offer half of the move-code pair. The claim half lives on the
+    // claim screen; see lib/authPairing.
+    const { container, getByText } = render(<MoveSignIn notify={noop} />);
+    fireEvent.click(getByText("Move to a New Sign-In"));
+    expect(container.textContent).toContain("invite code");
   });
 });
