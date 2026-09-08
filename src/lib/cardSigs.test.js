@@ -145,7 +145,7 @@ describe("attestedPids", () => {
 // never be signed. Nothing here touches scoring — see lib/cardSigs.
 describe("withdrawals", () => {
   const match = { id: "m1", round: 1, teamA: ["a", "b"], teamB: ["c", "d"] };
-  const full = (pid) => Object.fromEntries(Array.from({ length: 18 }, (_, h) => [h, 4]));
+  const full = () => Object.fromEntries(Array.from({ length: 18 }, (_, h) => [h, 4]));
   const nine = () => Object.fromEntries(Array.from({ length: 9 }, (_, h) => [h, 4]));
   const holeData = { a_1: full(), b_1: full(), c_1: full(), d_1: nine() };
 
