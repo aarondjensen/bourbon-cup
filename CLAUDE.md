@@ -500,13 +500,78 @@ already agreed to. It is the same trade the director's own unlink makes. Both
 confirm dialogs say so before anybody taps.
 
 Two things stay on the client because only a browser can do them: revoking this
-device's FCM subscription, and revoking the Apple token. The second is its own
-App Store requirement for Sign in with Apple — skip it and the app stays listed
-under Settings → Apple Account on a phone whose account it no longer holds.
-Apple's token arrives once, in the credential from a sign-in, and is not
-stored, so `revokeProviderAccess` reauthenticates to get a fresh one. It is
-best-effort by construction: a blocked popup logs and the deletion proceeds,
-because refusing to delete an account over a popup is the worse failure.
+device's FCM subscription, and starting the Apple token revocation. The second
+is its own App Store requirement for Sign in with Apple — skip it and the app
+stays listed under Settings → Apple Account on a phone whose account it no
+longer holds. Apple's credential arrives once, at a sign-in, and is not stored,
+so `revokeProviderAccess` reauthenticates to get a fresh one.
+
+**The two platforms need different things back, and that is where this went
+wrong once.** The web reauth yields an OAuth ACCESS token and Firebase's own
+`revokeAccessToken` finishes the job. Apple's NATIVE credential
+(`ASAuthorizationAppleIDCredential`) has no access token at all — it carries an
+authorization CODE, surfaced by the Capacitor plugin as
+`credential.authorizationCode` and documented "Only available for Apple Sign-in
+on iOS". The native branch read `accessToken`, got `undefined`, and returned
+`no_token` every single time: iOS deletions opened a Face ID sheet, did nothing
+with it, and said nothing. Firebase will not take a code, so the exchange goes
+to the **`revokeAppleToken`** Cloud Function, which holds Apple's key. The code
+is single-use with a ~5-minute life and is obtained at deletion time, seconds
+before it is spent.
+
+That function needs five things set, and **none of them are in the repo**:
+
+```sh
+firebase functions:secrets:set APPLE_PRIVATE_KEY   # the .p8 file's contents
+firebase functions:config:set ...                  # or set as env params:
+#   APPLE_KEY_ID     the key's 10-character id
+#   APPLE_TEAM_ID    the Apple Developer team id
+#   APPLE_CLIENT_ID  the Services ID used by the WEB sign-in flow
+#   APPLE_BUNDLE_ID  the iOS bundle id (defaults to com.thebourboncup.app)
+```
+
+**The client_id is the bundle id for a native code and the Services ID for a
+web one** — an authorization code is bound to the client that obtained it, and
+sending the wrong one gets `invalid_client` back from Apple, which reads like a
+bad key and is not. The caller says which shape it holds.
+
+Unset, the function throws `failed-precondition`, the client logs it, and the
+deletion proceeds. That ordering is deliberate and holds for every failure
+here: the App Store requires the revocation, but the USER asked for a deletion,
+and the deletion is the promise that must not break.
+
+### Moving a name to a new sign-in
+
+A man signs in with Google one summer and taps Apple the next — new phone,
+muscle memory, whichever button is on top. Different uid, and his name on the
+roster is already claimed, so the claim screen shows him his own name behind a
+padlock. The manual fix still works and is still the fallback: a director
+unlinks the row in Admin → Players.
+
+**My Account → Move to a New Sign-In** issues an eight-character code (fifteen
+minutes, single use, one live code per account). On the new account — signed
+in, and through the invite code — the claim screen's "Your name locked?" row
+takes it. `offerAuthPairing` / `claimAuthPairing` in `functions/index.js`,
+`src/lib/authPairing.js` on the client.
+
+**A code moves a roster LINK, not access.** `claimAuthPairing` refuses an
+account with no `bc_accounts` membership, so the claiming side has already been
+through the invite code and a leaked pairing code buys nothing the invite code
+does not already gate. It also refuses an account that already holds a name,
+which would otherwise end with one uid claimed to two men. Rows move across
+**every edition**, because editions clone the roster and leaving one behind is
+how somebody ends up claimed in 2026 and a spectator in 2025.
+
+`bc_auth_pairings` is written only by those functions through the admin SDK.
+`firestore.rules` denies it to every client explicitly — the default-deny
+already covered it, so that block changes nothing and needs no urgent deploy;
+it is there because a collection the app writes to should not be absent from
+that file.
+
+- **Both of these need `firebase deploy --only functions`**, and the Apple one
+  needs its secret set as well. Until then, Move to a New Sign-In reports that
+  it is not deployed rather than failing silently, and an iOS deletion revokes
+  nothing — which is where it already was.
 
 - **It needs `firebase deploy --only functions`.** Until that runs the button
   reports that deletion isn't deployed yet rather than failing silently — but
@@ -556,8 +621,11 @@ password — needs director.
 - The director escape hatch on the claim screen grants no Admin any more. It
   gets you into an edition with an empty roster; the flag decides what is there
   when you arrive.
-- `firestore.rules.test.mjs` covers all of this against the emulator. Run it
-  before deploying a rules change.
+- `firestore.rules.test.mjs` covers all of this against the emulator. Run
+  `npm run test:rules` before deploying a rules change — it fetches
+  `firebase-tools` and `@firebase/rules-unit-testing` on the fly (they are
+  deliberately not devDependencies) and starts and stops the emulator itself.
+  It needs a JRE on the PATH.
 
 Things that will bite you:
 

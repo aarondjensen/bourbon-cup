@@ -742,6 +742,25 @@ service cloud.firestore {
     match /bc_notification_tokens/{doc} { allow read: if isOpen();
                                          allow write: if isMember(); }
 
+    // ── Auth pairings ─────────────────────────────────────────────
+    // Moving a claimed roster row to a new Google or Apple account. Written
+    // and read ONLY by the offerAuthPairing / claimAuthPairing Cloud
+    // Functions, which go through the admin SDK and bypass these rules
+    // entirely — see functions/index.js and src/lib/authPairing.
+    //
+    // Denied to every client, deliberately and explicitly. The default-deny
+    // below already covers it, so this block changes nothing and needs no
+    // urgent deploy; it is here because a collection the app writes to should
+    // never be absent from this file, and because "no client may read a
+    // pairing code" is the security property worth stating rather than
+    // leaving somebody to infer from a missing entry.
+    //
+    // A code is short-lived and single-use, and it moves a link between two
+    // accounts that BOTH already hold a membership — it is not a way into the
+    // tournament. Readable codes would still be worth having, though: the
+    // whole point is that only the person holding the old account sees one.
+    match /bc_auth_pairings/{code}     { allow read, write: if false; }
+
     // ── Everything else ───────────────────────────────────────────
     // Default deny. Adding a collection to the app means adding it here.
     match /{document=**} {

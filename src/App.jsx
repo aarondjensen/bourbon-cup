@@ -27,7 +27,7 @@ import { holeFill } from "./lib/holeFill";
 import {
   ROUND_LOCKS_COL, buildRoundLockDoc, refreshRoundLockDoc,
   markRoundFinal, unfinalizeRound, clearRoundLockDoc,
-  roundLockState, currentRoundNumber, nextRoundNumber, lastFinalRoundNumber,
+  roundLockState, currentRoundNumber, nextRoundNumber, lastFinalRoundNumber, isRoundFinal,
   LOCK_OPEN, LOCK_FINAL, LOCK_STATE_LABEL,
 } from "./lib/roundLocks";
 import {
@@ -37,6 +37,7 @@ import {
 import { usePullToRefresh } from "./lib/usePullToRefresh";
 import { useFitDensity } from "./lib/useFitDensity";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { SyncBanner } from "./components/SyncBanner";
 import { AppHeader, HEADER_SLOT_ID, HEADER_TOAST_TOP } from "./components/AppHeader";
 import { Popup, ConfirmModal } from "./components/Popup";
 import { CtpPrompt } from "./components/CtpPrompt";
@@ -96,7 +97,7 @@ import {
   scoringUnits, unitForPlayer, teeTimeList, expandTeeTimes, stripAMPM,
 } from "./lib/groups";
 import { firstTeeAt } from "./lib/countdown";
-import { groupKey, tagAheadOfPlay } from "./lib/ctp";
+import { groupKey, tagAheadOfPlay, resolvePin, OVERRIDE_KEY } from "./lib/ctp";
 import { roundScoreProgress, finalizeStage } from "./lib/scoreGuard";
 import {
   allRounds, MAX_ROUND_COUNT,
@@ -124,9 +125,11 @@ import { TRIP_SETTINGS_ID, houseFrom, tripSchedule, tripDates } from "./lib/trip
 import {
   cardSigBareId, sigForMatch, cardComplete, missingForCard,
   nonSignerPids, isFullyAttested, cardState,
-  roundCardProgress, pendingAttestations,
+  roundCardProgress, pendingAttestations, attestedPids, withdrawnIds,
 } from "./lib/cardSigs";
 import { useHoleAdvance } from "./lib/useHoleAdvance";
+import { roundForToday } from "./lib/scoringGate";
+import { claimPairing, cleanCode, isCompleteCode } from "./lib/authPairing";
 
 // ── Landing straight on the Final Countdown ───────────────────────
 // Read ONCE, at module load, before React has rendered anything: the
@@ -582,6 +585,99 @@ function GateScreen({ tournamentName, tournamentLocation, authUser, onPassed, on
   );
 }
 
+// ── Taking a claimed name onto a new sign-in ────────────────────────
+// The CLAIM half of the move-code pair; the offer half is
+// components/MoveSignIn, on the account that still holds the name.
+//
+// It sits under the roster on the claim screen because that is where the
+// problem is discovered — a padlock beside your own name — and folded away
+// until asked for, because it is the answer to a question most people never
+// have. See lib/authPairing for why a code cannot let anybody in who is not
+// already through the invite code.
+function MoveCodeEntry({ onMoved, players }) {
+  const [open, setOpen] = useState(false);
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const submit = async () => {
+    if (busy || !isCompleteCode(code)) return;
+    setBusy(true); setErr("");
+    const res = await claimPairing(code);
+    setBusy(false);
+    if (!res.ok) { setErr(res.error); return; }
+    // The function moved the row; find it so the app can carry straight on
+    // into the tournament rather than bouncing back to a screen whose
+    // padlocks have not caught up yet.
+    const moved = (res.moved || [])[0];
+    onMoved(players.find(p => p.player_id === moved) || null);
+  };
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        style={{
+          marginTop: 2, marginBottom: 6, background: "transparent", border: "none",
+          color: BC.t3, fontSize: FS.small, fontFamily: FONT, cursor: "pointer",
+          textDecoration: "underline", textUnderlineOffset: 3,
+        }}
+      >
+        Your name locked? Move it from an old sign-in
+      </button>
+    );
+  }
+
+  return (
+    <div style={{
+      width: "100%", maxWidth: 480, marginTop: 8, marginBottom: 6, padding: "12px 14px",
+      borderRadius: 10, background: BC.card + ALPHA.panel, border: `1px solid ${BC.bdr}`,
+    }}>
+      <div style={{ fontSize: FS.small, color: BC.t2, lineHeight: 1.5, marginBottom: 8 }}>
+        On the phone still signed in as you, open{" "}
+        <strong style={{ color: BC.t1 }}>My Account → Move to a New Sign-In</strong>{" "}
+        and read the code off it.
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <input
+          value={code}
+          onChange={e => { setCode(cleanCode(e.target.value)); setErr(""); }}
+          onKeyDown={e => { if (e.key === "Enter") submit(); }}
+          placeholder="MOVE CODE"
+          autoCapitalize="characters"
+          autoCorrect="off"
+          spellCheck={false}
+          style={{
+            flex: 1, minWidth: 0, padding: "10px 12px", borderRadius: 8,
+            background: BC.inp, border: `1px solid ${err ? BC.danger : BC.bdr}`,
+            color: BC.t1, fontFamily: FONT, fontSize: FS.body, fontWeight: 700,
+            letterSpacing: 2, textAlign: "center",
+          }}
+        />
+        <button
+          onClick={submit}
+          disabled={busy || !isCompleteCode(code)}
+          style={{
+            flexShrink: 0, padding: "0 16px", borderRadius: 8, border: "none",
+            background: isCompleteCode(code) ? BC.gold : BC.inp,
+            color: isCompleteCode(code) ? ON_AMBER : BC.t3,
+            fontFamily: FONT, fontSize: FS.small, fontWeight: 800,
+            cursor: busy || !isCompleteCode(code) ? "default" : "pointer",
+            opacity: busy ? 0.6 : 1,
+          }}
+        >
+          {busy ? "Moving…" : "Move"}
+        </button>
+      </div>
+      {err && (
+        <div role="alert" style={{ marginTop: 8, fontSize: FS.small, color: BC.danger, lineHeight: 1.45 }}>
+          {err}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Screen 3: claim your name ───────────────────────────────────────
 // Shown to a signed-in account that no roster document points at. Tapping
 // a name selects it; a second tap on the confirm bar commits, because the
@@ -815,6 +911,25 @@ function ClaimScreen({ players, teams, darkMode, tournamentName, tournamentLocat
           <div style={{ fontSize: FS.small, color: BC.t2, lineHeight: 1.45 }}>{err}</div>
         </div>
       ) : <LoginNote text="" />}
+
+      {/* ── "That's my name, but it's locked" ──
+          Every claimed name on this screen is greyed with a padlock, and for
+          the man whose name it IS that is the end of the road: he signed in
+          with Google last summer and tapped Apple this time, so the row is
+          held by a uid that is his and is not this one. The fix was a text
+          to the director, who unlinks it in Admin → Players.
+
+          A move code does it himself. It is offered only when there is a
+          locked name to explain it — on a roster nobody has claimed it would
+          be a control with nothing to act on — and never on a locked edition,
+          where the padlocks mean something else entirely and the banner above
+          has already said so. See lib/authPairing. */}
+      {!editionLocked && players.some(isClaimed) && (
+        <MoveCodeEntry
+          onMoved={(player) => { if (player) onClaimed(player); }}
+          players={players}
+        />
+      )}
 
       {players.length === 0 && (
         <div style={{ textAlign: "center", color: BC.t3, fontSize: FS.small, marginTop: -22, marginBottom: 8, maxWidth: 360 }}>
@@ -1169,9 +1284,13 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // every render, so a signature landing on another player's phone locks
   // this one's score buttons in the same beat it appears on theirs.
   const sig = match ? sigForMatch(cardSigs, match.id) : null;
-  const signState = match ? cardState(match, sig) : "open";
+  const signState = match ? cardState(match, sig, withdrawn) : "open";
   const signed = signState !== "open";
-  const complete = match ? cardComplete(match, holeData) : false;
+  // Who has walked in. A withdrawal is a flag on the roster row, and it is
+  // what stops three partners being left with a card that can never be
+  // signed — see lib/cardSigs. Scoring is untouched: his holes still count.
+  const withdrawn = useMemo(() => withdrawnIds(tPlayers), [tPlayers]);
+  const complete = match ? cardComplete(match, holeData, withdrawn) : false;
   // Whether the Full Scorecard button is allowed to promote to the sign CTA.
   // A signature is a claim by somebody IN the match — `signed_by` lands on the
   // card and every attestation is checked against the roster of that match —
@@ -1179,7 +1298,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // scorecard, however complete it is. Attesting is already gated the same way
   // inside SignedCardPanel.
   const canSign = complete && matchPids.includes(userPid);
-  const missingCard = match && !complete && !signed ? missingForCard(match, holeData) : [];
+  const missingCard = match && !complete && !signed ? missingForCard(match, holeData, withdrawn) : [];
 
   // No more hooks below this line.
 
@@ -1412,6 +1531,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     await onSetCtp(match.round, h, winnerPid, {
       distanceFt: feet, approved: false, taggedBy: userPid,
       groupKey: myGroupKey, groupOrder: myGroupIdx,
+      byName: tPlayers.find(p => p.player_id === userPid)?.name || "",
     });
     const nm = tPlayers.find(p => p.player_id === winnerPid)?.name || "";
     // Through notify(), not the hole-advance toast: tagging a CTP is ordinary
@@ -1428,7 +1548,10 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   const confirmCtp = async () => {
     const h = ctpPrompt;
     if (h == null || !userPid) return;
-    await onConfirmCtp?.(match.round, h, userPid);
+    await onConfirmCtp?.(match.round, h, userPid, {
+      groupKey: myGroupKey, groupOrder: myGroupIdx,
+      byName: tPlayers.find(p => p.player_id === userPid)?.name || "",
+    });
   };
 
   // ScoreButtonRow hands back the new gross directly (0 = cleared, which it
@@ -2312,6 +2435,12 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
               myOrder: myGroupIdx,
               myKey: myGroupKey,
             }) : null}
+            /* Both tee orders, so the prompt can offer a TIE to the group
+               that played the hole first — which is the rule lib/ctp settles
+               the pin by. Offering a tag the board would then refuse is how
+               the two used to disagree. */
+            leaderOrder={rec?.tagged_group_order ?? null}
+            myOrder={myGroupIdx}
             onSave={saveCtp}
             onPass={confirmCtp}
             onClose={() => setCtpPrompt(null)}
@@ -4005,6 +4134,11 @@ export default function App() {
   // it saw when it was created — silently dropping the attestation that
   // landed in between.
   const cardSigsRef = useRef([]);
+  // And the withdrawn ids, for the same reason: the sign and attest writes run
+  // outside the render cycle and must not close over a stale roster. A man
+  // marked WD between a card being signed and attested would otherwise still
+  // be counted among the attesters it is waiting on.
+  const withdrawnRef = useRef(new Set());
   // And for the cards themselves, so the save path can name the score a
   // failed write is reverting FROM without reading through React state.
   const holeDataRef = useRef({});
@@ -4229,7 +4363,11 @@ export default function App() {
   useEffect(() => {
     const unsubs = [];
     const f = [{ field: "tournament_id", op: "==", value: TOURNAMENT_ID }];
-    unsubs.push(db.subscribe("bc_players", f, rows => { setTPlayers(rows); setPlayersLoaded(true); }));
+    unsubs.push(db.subscribe("bc_players", f, rows => {
+      setTPlayers(rows);
+      withdrawnRef.current = withdrawnIds(rows);   // keep the ref hot for the sign/attest paths
+      setPlayersLoaded(true);
+    }));
     unsubs.push(db.subscribe("bc_settings", f, rows => {
       const tn = rows.find(r => r.id === editionDocId("team_names"));
       if (tn) setTeamNames({ A: tn.teamA || DEFAULT_TEAM_NAMES.A, B: tn.teamB || DEFAULT_TEAM_NAMES.B });
@@ -4274,26 +4412,38 @@ export default function App() {
       // the hole (`approved`), which stops the prompt from re-opening.
       // Legacy docs predate both fields and simply read as undefined.
       rows.forEach(r => {
-        cd[`${r.round}_${r.hole}`] = {
-          player_id: r.player_id || null,
-          distance_ft: r.distance_ft ?? null,
-          approved: r.approved === true,
-          tagged_by: r.tagged_by || null,
-          // WHICH GROUP tagged it, and where that group tees off. The player
-          // id above says who typed; this says where they were in the field,
-          // which is the only way a group entering late can be told that the
-          // number in front of them came from BEHIND them. Null on a
-          // director's pick and on any tag written before this was recorded —
-          // see lib/ctp, where an unknown order deliberately says nothing.
-          tagged_group_key: r.tagged_group_key || null,
-          tagged_group_order: Number.isInteger(r.tagged_group_order) ? r.tagged_group_order : null,
-          // Who has walked off the hole agreeing the tag stands. See
-          // onConfirmCtp — a pass in the on-course prompt is an answer,
-          // and this is where it lands.
-          confirmed_by: Array.isArray(r.confirmed_by) ? r.confirmed_by : [],
-        };
+        // resolvePin turns the document's CLAIMS MAP — one entry per group
+        // that answered the prompt — into the single standing tag, and falls
+        // back to the flat fields a pin tagged before claims existed still
+        // carries. Resolving here rather than at each screen is what keeps
+        // the prompt, the director's grid and lib/betting untouched: they go
+        // on reading exactly the record they always did, and simply start
+        // getting the right winner out of it. See lib/ctp.
+        cd[`${r.round}_${r.hole}`] = resolvePin({
+          claims: r.claims,
+          legacy: {
+            player_id: r.player_id || null,
+            distance_ft: r.distance_ft ?? null,
+            approved: r.approved === true,
+            tagged_by: r.tagged_by || null,
+            // WHICH GROUP tagged it, and where that group tees off. The
+            // player id above says who typed; this says where they were in
+            // the field, which is the only way a group entering late can be
+            // told that the number in front of them came from BEHIND them.
+            // Null on a director's pick and on any tag written before this
+            // was recorded — see lib/ctp, where an unknown order says nothing.
+            tagged_group_key: r.tagged_group_key || null,
+            tagged_group_order: Number.isInteger(r.tagged_group_order) ? r.tagged_group_order : null,
+            // Who has walked off the hole agreeing the tag stands. See
+            // onConfirmCtp — a pass in the on-course prompt is an answer,
+            // and this is where it lands. Confirmations now arrive as claims;
+            // this is the same list written under the old shape, and
+            // resolvePin folds the two into one.
+            confirmed_by: Array.isArray(r.confirmed_by) ? r.confirmed_by : [],
+          },
+        });
       });
-      ctpDataRef.current = cd;   // keep the ref hot for the confirm append
+      ctpDataRef.current = cd;   // keep the ref hot for the prompt's own reads
       setCtpData(cd);
     }));
     unsubs.push(db.subscribe("bc_tournament_settings", f, rows => {
@@ -4739,59 +4889,92 @@ export default function App() {
   // winner would create a second answer that can disagree with the scorecard
   // the field signed, and no screen ever offered a way to correct it.
   //
-  // One document per round+hole — the hole's STANDING closest-to-the-pin.
-  // A later group that gets inside the current tag overwrites it, which is
-  // the whole point: the doc is the current answer, not a log of attempts.
+  // One document per round+hole, holding ONE CLAIM PER GROUP rather than one
+  // winner. Every group that is asked writes only its own key inside `claims`,
+  // and `resolvePin` derives the standing tag by reading them all — see
+  // lib/ctp for why the document cannot be the answer itself.
   //
-  // `approved` is the director's settle flag. Players tagging from the
-  // Scoring tab write false (provisional); the Betting → CTP grid, which
-  // only the director can operate, writes true and freezes the hole.
-  // Every field is written on every call because db.upsert merges — a
-  // director reassignment that omitted distance_ft would otherwise leave
-  // the previous group's measurement attached to a different player. The
-  // tagging GROUP is written the same way and for the same reason: a
-  // director's pick off the Betting tab carries no group, and inheriting the
-  // last group's tee order would have the prompt telling the next group the
-  // field is out of order on the strength of a stale field.
+  // The short version: this used to write the whole answer, so two groups
+  // tagging the same pin at once was last-write-wins and a nine-footer could
+  // overwrite a five-footer. `db.upsert` is `setDoc(…, { merge: true })`,
+  // which merges a map key by key, so two groups now write two different keys
+  // and neither can erase the other.
   //
-  // `confirmed_by` is CLEARED rather than merged. A confirmation was
-  // agreement with a distance that has just been beaten; carrying it onto
-  // the new tag would show the field agreeing with a number it has never
-  // seen.
+  // `approved` is the director's settle flag and stays a flat field: it is a
+  // fact about the HOLE, not about one group's answer. Players tagging from
+  // the Scoring tab write false (provisional); the Betting → CTP grid, which
+  // only the director can operate, writes true and files its pick under the
+  // override key, which beats every group claim beneath it.
+  //
+  // The legacy flat winner fields are left exactly where they are. A pin
+  // tagged before this change, and every pin an old year's import wrote,
+  // still reads correctly because resolvePin falls back to them when no group
+  // has claimed anything.
   const onSetCtp = useCallback(async (round, hole, pid, opts = {}) => {
-    const { distanceFt = null, approved = true, taggedBy = null, groupKey: gKey = null, groupOrder = null } = opts;
+    const {
+      distanceFt = null, approved = true, taggedBy = null,
+      groupKey: gKey = null, groupOrder = null, byName = "",
+    } = opts;
     const id = editionDocId(`bc_ctp_r${round}_h${hole+1}`);
-    if (pid) {
-      await db.upsert("bc_ctp", {
-        id, tournament_id: TOURNAMENT_ID, round, hole, player_id: pid,
-        distance_ft: distanceFt, approved, tagged_by: taggedBy,
-        tagged_group_key: gKey,
-        tagged_group_order: Number.isInteger(groupOrder) ? groupOrder : null,
-        confirmed_by: [],
-      });
-    } else {
-      await db.delete("bc_ctp", id);
-    }
+    // A director's pick carries no group, so it goes under the override key.
+    // A player's tag goes under their group's — and a group we cannot name
+    // (a match nobody drew, or one spread across two groups) falls back to
+    // the tagging player's own id, which is stable for that device and still
+    // cannot collide with another group's key.
+    const key = approved ? OVERRIDE_KEY : (gKey || taggedBy || "unknown");
+    const claim = pid
+      ? {
+          kind: approved ? "override" : "tag",
+          player_id: pid,
+          distance_ft: Number.isFinite(distanceFt) ? distanceFt : null,
+          order: Number.isInteger(groupOrder) ? groupOrder : null,
+          by: taggedBy || null,
+          by_name: byName || "",
+          at: new Date().toISOString(),
+        }
+      // Clearing writes null rather than deleting the document. readClaims
+      // drops a null, so the override simply stops existing and the hole
+      // falls back to whatever the field tagged — where deleting the document
+      // would throw away every group's answer, which is the exact class of
+      // loss this whole change exists to stop.
+      : null;
+    return db.upsert("bc_ctp", {
+      id, tournament_id: TOURNAMENT_ID, round, hole,
+      approved: approved && !!pid,
+      claims: { [key]: claim },
+    });
   }, []);
   // ── Confirming a standing CTP ────────────────────────────────────────
-  // The pass answer from the on-course prompt. Additive and idempotent, so
-  // two phones in the same group confirming at once converge instead of
-  // racing, and a group re-answering its own hole doesn't stack duplicates.
+  // The pass answer from the on-course prompt. A group that walks off a par 3
+  // without getting inside the standing tag is saying the tag is right, and
+  // that is the only thing that turns "nobody has been asked" into "everybody
+  // has been asked and it stands".
   //
-  // A merge write of ONLY this field, deliberately: the winner, the distance
-  // and who tagged it belong to whoever tagged it, and a confirmation must
-  // never be able to overwrite them. It reads the record it is appending to
-  // out of the live map rather than the document, which is the same snapshot
-  // the prompt showed the group — confirming what they were actually looking
-  // at. Nothing to confirm on an untagged hole.
-  const onConfirmCtp = useCallback(async (round, hole, pid) => {
+  // It is a CLAIM like a tag is, under the same group key, so it can neither
+  // erase another group's answer nor be erased by one. It used to read
+  // `confirmed_by` out of the live map and write the whole array back, which
+  // converges on one device and drops an attestation across two.
+  //
+  // `pass` and `confirm` are the same gesture answered on different holes —
+  // there is nothing to confirm on a pin nobody has tagged — and lib/ctp
+  // counts both as the group having answered.
+  const onConfirmCtp = useCallback(async (round, hole, pid, opts = {}) => {
+    if (!pid) return null;
+    const { groupKey: gKey = null, groupOrder = null, byName = "" } = opts;
     const rec = ctpDataRef.current[`${round}_${hole}`];
-    if (!rec?.player_id || !pid) return;
-    if ((rec.confirmed_by || []).includes(pid)) return;
-    await db.upsert("bc_ctp", {
+    const key = gKey || pid;
+    return db.upsert("bc_ctp", {
       id: editionDocId(`bc_ctp_r${round}_h${hole+1}`),
-      tournament_id: TOURNAMENT_ID,
-      confirmed_by: [...new Set([...(rec.confirmed_by || []), pid])],
+      tournament_id: TOURNAMENT_ID, round, hole,
+      claims: {
+        [key]: {
+          kind: rec?.player_id ? "confirm" : "pass",
+          order: Number.isInteger(groupOrder) ? groupOrder : null,
+          by: pid,
+          by_name: byName || "",
+          at: new Date().toISOString(),
+        },
+      },
     });
   }, []);
 
@@ -5046,9 +5229,11 @@ export default function App() {
   // three plus the director's force-attest below. See lib/cardSigs for the
   // model and why signatures live in their own collection.
   //
-  // Every field is written on every call, for the same reason onSetCtp does
-  // it: db.upsert MERGES, so an update that omitted `attested_by` would
-  // leave the previous list attached to a card that no longer has it.
+  // Attestations are a MAP (`attests`), keyed by the attesting player, for
+  // the same reason CTP claims are: two phones appending to an array both
+  // computed `[...seen, me]` from the same snapshot, and the second write
+  // dropped the first. A map merges key by key and cannot lose one. See
+  // lib/cardSigs, which reads the map and the old array as one list.
   const onSignCard = useCallback(async (match, pid) => {
     if (!match || !pid) return null;
     // A match whose only member is the signer has nobody left to attest.
@@ -5056,7 +5241,7 @@ export default function App() {
     // attests itself at signing time — with `attested_by` populated, not
     // just the boolean, so the FINAL badge and the attester chips can never
     // disagree about the same card. (MnQ learned this one the hard way.)
-    const others = nonSignerPids(match, { signed_by: pid });
+    const others = nonSignerPids(match, { signed_by: pid }, withdrawnRef.current);
     const doc = {
       id: editionDocId(cardSigBareId(match.round, match.id)),
       tournament_id: TOURNAMENT_ID,
@@ -5068,25 +5253,46 @@ export default function App() {
       // list, so the auto-attested card's chip row and its FINAL badge agree
       // by construction rather than by a second field being kept in step.
       attested_by: [],
+      attests: {},
       attested: others.length === 0,
     };
     // A signature is the one act on this screen that the next tap cannot
     // undo, so it gets the heavier of the two haptics. Web: nothing.
     commitFeedback();
-    return db.upsert("bc_card_sigs", doc);
+    // REPLACES rather than merges, and that is the point of the flag: this
+    // payload is the whole document, and `attests: {}` under a merge is a
+    // no-op that would leave a previous signing's attestations attached to a
+    // freshly signed card. Unsign deletes the document, so the ordinary path
+    // never hits that — but "ordinary path" is not a guarantee, and a card
+    // carrying somebody else's attestation is the kind of wrong nobody looks
+    // for twice.
+    return db.upsert("bc_card_sigs", doc, { merge: false });
   }, []);
 
-  // Additive: an attester is appended, and the card flips to `attested`
-  // only on the one that completes the set. Recomputed from the document
-  // rather than from a count so two players attesting at once converge on
-  // the same answer instead of racing to a stale total.
+  // One key, merged in. The write touches nothing but this player's own
+  // entry, so two men attesting the same card at the same moment land two
+  // different keys and both survive — where appending to `attested_by` meant
+  // the second write carried a list that predated the first.
+  //
+  // `attested` is still written, because the Cloud Function that pushes
+  // "card is final" triggers on it (functions/index.js). It is derived from
+  // this phone's snapshot, so a genuine dead heat can leave it false on a
+  // card that is in fact complete — the next attest or the director's
+  // force-attest sets it, and every screen reads completeness off the map
+  // through isFullyAttested rather than off this flag. A missed push is the
+  // whole cost, where the old shape lost the attestation itself.
   const onAttestCard = useCallback(async (match, pid) => {
     if (!match || !pid) return null;
     const sig = sigForMatch(cardSigsRef.current, match.id);
     if (!sig) return null;
-    const attested_by = [...new Set([...(sig.attested_by || []), pid])];
-    const done = nonSignerPids(match, sig).every(p => attested_by.includes(p));
-    return db.upsert("bc_card_sigs", { ...sig, attested_by, attested: done });
+    const seen = new Set([...attestedPids(sig), pid]);
+    const done = nonSignerPids(match, sig, withdrawnRef.current).every(p => seen.has(p));
+    return db.upsert("bc_card_sigs", {
+      id: sig.id || editionDocId(cardSigBareId(match.round, match.id)),
+      tournament_id: TOURNAMENT_ID,
+      attests: { [pid]: { at: new Date().toISOString() } },
+      attested: done,
+    });
   }, []);
 
   // Unsign deletes the document outright rather than blanking its fields.
@@ -5109,15 +5315,19 @@ export default function App() {
   const onAttestAllInRound = useCallback(async (round, roundMatches) => {
     const pending = (roundMatches || []).filter(m => {
       const sig = sigForMatch(cardSigsRef.current, m.id);
-      return sig && !isFullyAttested(m, sig);
+      return sig && !isFullyAttested(m, sig, withdrawnRef.current);
     });
     for (const m of pending) {
       const sig = sigForMatch(cardSigsRef.current, m.id);
+      const at = new Date().toISOString();
       await db.upsert("bc_card_sigs", {
         ...sig,
-        attested_by: nonSignerPids(m, sig),
+        // Every outstanding attester at once, as map keys, so a player who
+        // taps Attest in the same moment merges with the force rather than
+        // fighting it.
+        attests: Object.fromEntries(nonSignerPids(m, sig, withdrawnRef.current).map(pid => [pid, { at, forced: true }])),
         attested: true,
-        attested_forced_at: new Date().toISOString(),
+        attested_forced_at: at,
       });
     }
     return pending.length;
@@ -5290,10 +5500,31 @@ export default function App() {
   );
   // The one round open for score entry. null = nothing open (no schedule
   // yet, or the last round has been finalized).
-  const currentRound = useMemo(
-    () => currentRoundNumber(roundLocksData, tournamentRounds),
-    [roundLocksData, tournamentRounds]
+  //
+  // TODAY'S round wins over the lowest unfinalized one, and that ordering is
+  // the whole fix for a real hazard: `currentRoundNumber` is the lowest round
+  // NOBODY HAS FINALIZED, so on the Saturday of a four-round week — with
+  // Friday still unfinalized because one group has not attested — every phone
+  // in the field opened on Round 1 and said so only in small type. Scores
+  // typed there are real documents on a real leaderboard and somebody has to
+  // go and find them.
+  //
+  // It only applies where a director has actually dated the rounds. An
+  // edition with no dates — the ten imported years, the demo, a week that has
+  // been drawn but not scheduled — falls straight through to the old answer.
+  // See lib/scoringGate.
+  const roundToday = useMemo(
+    () => roundForToday({ tRounds, rounds: tournamentRounds }),
+    [tRounds, tournamentRounds]
   );
+  const currentRound = useMemo(() => {
+    const lowestOpen = currentRoundNumber(roundLocksData, tournamentRounds);
+    // Never onto a round that is already FINAL: a finalized round is closed
+    // to everybody, and landing the tab on one would trade a wrong-round
+    // score for a dead screen on the day it is being played.
+    if (roundToday != null && !isRoundFinal(roundLocksData, roundToday)) return roundToday;
+    return lowestOpen;
+  }, [roundLocksData, tournamentRounds, roundToday]);
 
   // ── This edition's row in the archive ────────────────────────────────
   // Computed from the cards by the same engine the leaderboard uses (see
@@ -5361,8 +5592,8 @@ export default function App() {
   // signed, and how many of those every non-signer has attested. See
   // lib/cardSigs.
   const roundCards = useMemo(
-    () => roundCardProgress(enrichedMatches, cardSigs, currentRound),
-    [enrichedMatches, cardSigs, currentRound]
+    () => roundCardProgress(enrichedMatches, cardSigs, currentRound, withdrawnIds(tPlayers)),
+    [enrichedMatches, cardSigs, currentRound, tPlayers]
   );
   // ── Push: foreground rendering and the app badge ─────────────────────
   // FCM does not display anything while the tab is focused, so the
@@ -5427,9 +5658,9 @@ export default function App() {
   const myPendingAttest = useMemo(
     () => pendingAttestations(
       enrichedMatches.filter(m => m.round === currentRound),
-      cardSigs, user?.player_id,
+      cardSigs, user?.player_id, withdrawnIds(tPlayers),
     ),
-    [enrichedMatches, cardSigs, currentRound, user?.player_id]
+    [enrichedMatches, cardSigs, currentRound, user?.player_id, tPlayers]
   );
   useEffect(() => { syncAppBadge(myPendingAttest.length); }, [myPendingAttest.length]);
 
@@ -5687,6 +5918,13 @@ export default function App() {
           Toast spreads `top` straight into its style, so a calc() works here
           with no change to the component. */}
       <Toast message={notif?.msg} type={notif?.type} top="calc(env(safe-area-inset-top, 0px) + 16px)" />
+
+      {/* The connection strip. Draws nothing at all while writes are landing,
+          which is nearly always — it exists for the two states this app had
+          no voice for: a score queued on a phone with no signal, and a score
+          the rules REFUSED, which Firestore rolls back so it is gone from the
+          phone as well as the board. See lib/connection. */}
+      <SyncBanner />
 
       {/* Pull-to-refresh indicator — circular badge with the trophy
           silhouette inside, fixed-positioned and overlaid above the

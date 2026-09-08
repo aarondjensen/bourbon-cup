@@ -6,13 +6,18 @@
 // public config and the tournament data, so "it looked right" is not good
 // enough. Run this before deploying a change to them:
 //
-//   npm i --no-save firebase-tools @firebase/rules-unit-testing
-//   npx firebase emulators:exec --only firestore --project bc-rules-probe \
-//     "node firestore.rules.test.mjs"
+//   npm run test:rules
+//
+// That script fetches both packages on the fly and starts and stops the
+// emulator itself; it needs a JRE on the PATH and nothing else.
 //
 // The two packages are deliberately NOT devDependencies: they are ~600
 // packages and a JVM emulator between them, needed by whoever is editing
-// the rules and nobody else. `--no-save` leaves package.json alone.
+// the rules and nobody else. `npx -p` is what keeps them out of
+// package.json while still leaving ONE command to type — a command that
+// only exists inside a comment is a suite nobody runs, which is how WBC
+// lost months of rules coverage to an incantation written down in the
+// wrong place.
 //
 // Everything runs against a throwaway project id on a local emulator. No
 // call in here can reach the real project.

@@ -10,6 +10,7 @@
 import { initializeApp } from "firebase/app";
 import { resolveFirebaseConfig } from "./lib/firebaseConfig";
 import { defaultEdition } from "./lib/defaultEdition";
+import { createWriteTracker } from "./lib/connection";
 import {
   getFirestore, initializeFirestore,
   persistentLocalCache, persistentMultipleTabManager,
@@ -359,6 +360,20 @@ const SUBSCRIBE_RETRY_MS = [1000, 2000, 4000, 8000, 15000, 30000, 60000];
 // service-account key.
 const rowOf = (d) => ({ id: d.id, ...d.data() });
 
+// ── Writes that have not landed yet ─────────────────────────────────
+// Firestore queues a write with no signal rather than failing it, so every
+// `catch` below is guarding the case that almost never happens while the one
+// that happens all weekend passes as success. The tracker counts what has
+// been handed over and not acknowledged, and separately what was REFUSED —
+// which is worse, because Firestore rolls a refused write back and the score
+// is then gone from the phone too.
+//
+// It lives here, wrapped around the writes themselves, so nothing has to
+// remember to report: a call site gets covered by going through db. See
+// lib/connection for the counting and the wording, and SyncBanner for where
+// it surfaces.
+export const writeTracker = createWriteTracker();
+
 export const db = {
   _q: (col, filters = []) => {
     const ref = collection(_db, col);
@@ -373,12 +388,17 @@ export const db = {
   // but it makes "the rules refused this" and "something went wrong"
   // indistinguishable, and those have very different fixes. A form with a
   // Save button on it wants the difference; see writeFailure below.
-  upsert: async (col, data, { loud = false } = {}) => {
+  // `merge: false` REPLACES the document instead of merging into it, for the
+  // one case a merge cannot express: clearing a map. `{ attests: {} }` under
+  // a merge is a no-op — an empty map merges nothing and every existing key
+  // survives — so a write that means "this card has no attestations" has to
+  // replace. Only reach for it where the payload is the WHOLE document.
+  upsert: async (col, data, { loud = false, merge = true } = {}) => {
     if (!data.id) {
       if (loud) throw new Error("upsert needs an id");
       return null;
     }
-    try { await setDoc(doc(_db, col, String(data.id)), data, { merge: true }); return data; }
+    try { await writeTracker.track(setDoc(doc(_db, col, String(data.id)), data, { merge }), col); return data; }
     catch(e) {
       if (loud) throw e;
       console.error("db.upsert", col, e);
@@ -386,7 +406,7 @@ export const db = {
     }
   },
   delete: async (col, id) => {
-    try { await deleteDoc(doc(_db, col, String(id))); return true; }
+    try { await writeTracker.track(deleteDoc(doc(_db, col, String(id))), col); return true; }
     catch(e) { console.error("db.delete", col, e); return null; }
   },
   // `withId` makes the DOCUMENT ID win over a stored `id` field. Every row
@@ -489,7 +509,7 @@ export const db = {
   // rejection, because "permission-denied" IS the wrong-password answer.
   create: async (col, data) => {
     if (!data?.id) throw new Error("create needs an id");
-    await setDoc(doc(_db, col, String(data.id)), data);
+    await writeTracker.track(setDoc(doc(_db, col, String(data.id)), data), col);
     return data;
   },
   // `upsert` with the rejection left in — for the other write the rules
@@ -502,7 +522,7 @@ export const db = {
   // would put a second key in the diff and get the whole thing refused.
   upsertStrict: async (col, id, data) => {
     if (!id) throw new Error("upsertStrict needs an id");
-    await setDoc(doc(_db, col, String(id)), data, { merge: true });
+    await writeTracker.track(setDoc(doc(_db, col, String(id)), data, { merge: true }), col);
     return data;
   },
 };
