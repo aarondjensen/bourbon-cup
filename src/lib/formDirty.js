@@ -29,14 +29,14 @@ const str = (v) => String(v ?? "").trim();
 
 // The player sheet. `dir` is the crown, which writes to bc_accounts rather
 // than the roster row but is committed by the same Save, so it belongs here.
-const PLAYER_FIELDS = ["team", "first", "last", "nick", "hi", "ov", "dir",
+const PLAYER_FIELDS = ["team", "first", "last", "nick", "hi", "ov", "dir", "wd",
   "ghin_number", "ghin_name", "ghin_rev_date", "ghin_synced_at"];
 
 export function playerFormSig(form) {
   if (!form) return "";
   return JSON.stringify(PLAYER_FIELDS.map(k => {
     const v = form[k];
-    if (k === "dir") return !!v;
+    if (k === "dir" || k === "wd") return !!v;
     // hi and ov are typed numbers: "12.40" and "12.4" are the same handicap,
     // and a trailing zero is not an edit worth lighting a button for.
     if (k === "hi" || k === "ov") return str(v) === "" ? "" : num(v, str(v));

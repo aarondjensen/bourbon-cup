@@ -60,8 +60,42 @@ export const sigForMatch = (cardSigs, matchId) =>
 // purpose: that one asks "is the ROUND done", this one asks "is THIS card
 // signable", and a player should not be blocked from signing their own
 // finished card because another group is still on 14.
-export const cardComplete = (match, holeData) => {
-  const pids = matchPlayers(match);
+// ── Withdrawals ──────────────────────────────────────────────────────
+// A man who walks in after nine leaves holes that will never be filled. The
+// app already let a director finalize over that, behind a confirm naming who
+// is out — but nothing could RECORD it, so his three partners were left with
+// a card that could never be signed and a "can't sign yet" strip that was
+// permanently right and permanently useless.
+//
+// So a withdrawal is a flag on the roster row (`withdrawn`), and the two
+// completeness questions below skip him. Nothing else changes: his holes
+// still count exactly as they did, the leaderboard still reads them, and the
+// match still scores off whoever has scores. This does NOT fill his card with
+// a sentinel the way WBC does — WBC's rounds are individual boards where an
+// unplayed hole has to be worth something, and these are matches, where
+// inventing eighteen scores for a man who drove home would move a result the
+// field never played for.
+//
+// `withdrawnPids` is passed in rather than read off the match, because a match
+// document holds ids and the flag lives on the roster. Every caller that has
+// the roster can supply it; one that does not gets the old behaviour, which is
+// correct for a tournament where nobody has withdrawn.
+const notWithdrawn = (pids, withdrawnPids) => {
+  const out = withdrawnPids instanceof Set ? withdrawnPids : new Set(withdrawnPids || []);
+  return pids.filter(pid => !out.has(pid));
+};
+
+// Everybody in the match still expected to post a card.
+export const activePids = (match, withdrawnPids) =>
+  notWithdrawn(matchPlayers(match), withdrawnPids);
+
+// The roster's withdrawn ids, as a Set. One place, so a screen cannot ask the
+// question a slightly different way.
+export const withdrawnIds = (players) =>
+  new Set((players || []).filter(p => p?.withdrawn === true).map(p => p.player_id));
+
+export const cardComplete = (match, holeData, withdrawnPids) => {
+  const pids = activePids(match, withdrawnPids);
   if (!pids.length || match?.round == null) return false;
   return pids.every(pid => holesEntered(holeData, pid, match.round) >= 18);
 };
@@ -105,12 +139,16 @@ export const cardComplete = (match, holeData) => {
 // requires all 18. The note answers "what is stopping me signing RIGHT NOW
 // that I could go fix", and neither an unplayed hole nor the one being
 // played is that.
-export const missingForCard = (match, holeData) => {
+export const missingForCard = (match, holeData, withdrawnPids) => {
   if (match?.round == null) return [];
-  const pids = matchPlayers(match);
+  // The frontier is still read off EVERYBODY who has a score, a withdrawn man
+  // included: his holes are real and they say where the group got to. He is
+  // only dropped from who is expected to fill the gaps.
+  const all = matchPlayers(match);
+  const pids = notWithdrawn(all, withdrawnPids);
   const scoreAt = (pid, h) => holeData?.[`${pid}_${match.round}`]?.[h];
   const touched = [];
-  for (let h = 0; h < 18; h++) if (pids.some(pid => scoreAt(pid, h) > 0)) touched.push(h);
+  for (let h = 0; h < 18; h++) if (all.some(pid => scoreAt(pid, h) > 0)) touched.push(h);
   const frontier = touched.length ? touched[touched.length - 1] : -1;
   const played = touched.filter(h => h < frontier);
   return pids
@@ -146,24 +184,24 @@ export const attestedPids = (sig) => {
 // ── Signature state ─────────────────────────────────────────────────
 // Everyone in the match except whoever signed it. These are the players
 // the card is waiting on.
-export const nonSignerPids = (match, sig) =>
-  matchPlayers(match).filter(pid => pid !== sig?.signed_by);
+export const nonSignerPids = (match, sig, withdrawnPids) =>
+  activePids(match, withdrawnPids).filter(pid => pid !== sig?.signed_by);
 
 // A card is fully attested when every non-signer has attested. The
 // degenerate case — a match somehow containing only the signer — counts as
 // attested rather than hanging forever on an empty list, which mirrors
 // MnQ's autoAttest branch at signing time.
-export const isFullyAttested = (match, sig) => {
+export const isFullyAttested = (match, sig, withdrawnPids) => {
   if (!sig) return false;
-  const pending = nonSignerPids(match, sig);
+  const pending = nonSignerPids(match, sig, withdrawnPids);
   const attested = attestedPids(sig);
   return pending.length === 0 || pending.every(pid => attested.includes(pid));
 };
 
 // Three states, named once so the UI never re-derives them inconsistently:
 // "open" (no signature), "signed" (signed, waiting on attesters), "final".
-export const cardState = (match, sig) =>
-  !sig ? "open" : isFullyAttested(match, sig) ? "final" : "signed";
+export const cardState = (match, sig, withdrawnPids) =>
+  !sig ? "open" : isFullyAttested(match, sig, withdrawnPids) ? "final" : "signed";
 
 // ── Round-level progress ────────────────────────────────────────────
 // What the director's finalize gate reads. Counts EVERY match in the round,
@@ -173,7 +211,7 @@ export const cardState = (match, sig) =>
 // `complete` is the whole round attested, and is what promotes the
 // ready-to-finalize notification. A round with no matches drawn is not
 // complete, for the same reason an empty round is not a finished one there.
-export function roundCardProgress(matches, cardSigs, round) {
+export function roundCardProgress(matches, cardSigs, round, withdrawnPids) {
   const rnd = round == null ? [] : (matches || []).filter(m => m.round === round);
   let signed = 0, attested = 0;
   const unsigned = [], awaiting = [];
@@ -181,10 +219,10 @@ export function roundCardProgress(matches, cardSigs, round) {
     const sig = sigForMatch(cardSigs, m.id);
     if (!sig) { unsigned.push(m); return; }
     signed++;
-    if (isFullyAttested(m, sig)) attested++;
+    if (isFullyAttested(m, sig, withdrawnPids)) attested++;
     else awaiting.push({
       match: m,
-      pending: nonSignerPids(m, sig).filter(pid => !attestedPids(sig).includes(pid)),
+      pending: nonSignerPids(m, sig, withdrawnPids).filter(pid => !attestedPids(sig).includes(pid)),
     });
   });
   return {
@@ -204,12 +242,15 @@ export function roundCardProgress(matches, cardSigs, round) {
 // Callers pass the matches they consider ACTIONABLE (App scopes it to the
 // current round), because a badge counting something the app has no button
 // for is a badge that never clears.
-export function pendingAttestations(matches, cardSigs, pid) {
+export function pendingAttestations(matches, cardSigs, pid, withdrawnPids) {
   if (!pid) return [];
+  const out = withdrawnPids instanceof Set ? withdrawnPids : new Set(withdrawnPids || []);
+  // A man who withdrew is not asked to attest the card he walked off.
+  if (out.has(pid)) return [];
   return (matches || []).filter(m => {
     if (!matchPlayers(m).includes(pid)) return false;
     const sig = sigForMatch(cardSigs, m.id);
     if (!sig || sig.signed_by === pid) return false;
-    return !attestedPids(sig).includes(pid) && !isFullyAttested(m, sig);
+    return !attestedPids(sig).includes(pid) && !isFullyAttested(m, sig, withdrawnPids);
   });
 }

@@ -35,7 +35,7 @@ import { Popup, ConfirmModal } from "./Popup";
 import { useConfirm } from "../lib/useConfirm";
 import { playerLookup } from "../lib/players";
 import { FullScorecard } from "./FullScorecard";
-import { nonSignerPids, isFullyAttested, attestedPids } from "../lib/cardSigs";
+import { nonSignerPids, isFullyAttested, attestedPids, withdrawnIds } from "../lib/cardSigs";
 
 // Both panels below render the SAME card the Scoring tab's Full Scorecard
 // popup does, from the same already-resolved props — hole tables, course,
@@ -165,8 +165,11 @@ export function SignedCardPanel({
 
   // Both shapes, folded into one list — see lib/cardSigs.
   const attestedBy = attestedPids(sig);
-  const pending = nonSignerPids(match, sig);
-  const final = isFullyAttested(match, sig);
+  // A man who walked in owes nobody an attestation and is owed none, so the
+  // card does not sit waiting on him forever.
+  const withdrawn = withdrawnIds(tPlayers);
+  const pending = nonSignerPids(match, sig, withdrawn);
+  const final = isFullyAttested(match, sig, withdrawn);
   const inMatch = [...(match.teamA || []), ...(match.teamB || [])].includes(userPid);
   const iSigned = sig.signed_by === userPid;
   const iAttested = attestedBy.includes(userPid);

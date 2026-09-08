@@ -1248,7 +1248,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                 <span style={{ flex: 1, minWidth: 8 }} />
                 {/* + Add button, over the rows' Edit */}
                 <button
-                  onClick={() => setEditingPlayer(seedPlayerForm({ isNew: true, team: team.id, first: "", last: "", nick: "", hi: "", ov: "", dir: false }))}
+                  onClick={() => setEditingPlayer(seedPlayerForm({ isNew: true, team: team.id, first: "", last: "", nick: "", hi: "", ov: "", dir: false, wd: false }))}
                   title="Add player"
                   style={{
                     padding: "3px 10px", borderRadius: 8, border: `1px solid ${team.accent}${ALPHA.line}`,
@@ -1290,7 +1290,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                       {synced && <span style={{ fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.2, color: BC.hcpBlue, border: `1px solid ${BC.hcpBlue}${ALPHA.line}`, background: BC.hcpBlue + ALPHA.tint, borderRadius: 3, padding: "1px 3px", lineHeight: 1 }}>G</span>}
                     </span>
                     <span style={{ flex: 1, minWidth: 8 }} />
-                    <button onClick={() => setEditingPlayer(seedPlayerForm({ pid: p.player_id, team: p.team, first: p.first_name || (p.last_name ? "" : (p.name || "")), last: p.last_name || "", nick: p.name || "", hi: String(p.handicap_index), ov: (p.hi_override != null && String(p.hi_override).trim() !== "") ? String(p.hi_override) : "", dir: playerIsDirector(memberships, p) }))} style={{
+                    <button onClick={() => setEditingPlayer(seedPlayerForm({ pid: p.player_id, team: p.team, first: p.first_name || (p.last_name ? "" : (p.name || "")), last: p.last_name || "", nick: p.name || "", hi: String(p.handicap_index), ov: (p.hi_override != null && String(p.hi_override).trim() !== "") ? String(p.hi_override) : "", dir: playerIsDirector(memberships, p), wd: p.withdrawn === true }))} style={{
                       fontSize: FS.label, padding: "2px 8px", borderRadius: 4, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer", flexShrink: 0,
                     }}>Edit</button>
                   </div>
@@ -1444,7 +1444,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                 ? "\n\nThey get the Admin tab and everything in it."
                 : "\n\nThey lose the Admin tab. Everything a player does — scores, skins, signatures — is untouched.";
               if (await confirm({ title: "Confirm changes", message: changes.join("\n") + impact })) {
-                onUpdatePlayer({ ...p, team: newTeam, name: newName, first_name: first, last_name: last, handicap_index: parseFloat(editingPlayer.hi) || 0, hi_override: newOv, ...ghinFields, ...(cutSignIn ? unlinkPatch() : {}) });
+                onUpdatePlayer({ ...p, team: newTeam, name: newName, first_name: first, last_name: last, handicap_index: parseFloat(editingPlayer.hi) || 0, hi_override: newOv, withdrawn: editingPlayer.wd === true, ...ghinFields, ...(cutSignIn ? unlinkPatch() : {}) });
                 // A separate document, and one the rules police, so it is
                 // reported separately: the roster edit above can succeed
                 // while this is refused.
@@ -1530,6 +1530,34 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                   </div>
                   {!isNew && !canGrantDirector && (
                     <div style={{ fontSize: FS.label, color: BC.t3, marginTop: -6, lineHeight: 1.4 }}>{directorHint}</div>
+                  )}
+                  {/* ── Withdrawn ──
+                      A man who walks in after nine leaves holes that will
+                      never be filled, and until this existed his three
+                      partners were left with a card that could never be
+                      signed and a "can't sign yet" strip that was permanently
+                      right and permanently useless.
+
+                      It changes NOTHING about scoring. His holes still count,
+                      the leaderboard still reads them, and the match still
+                      scores off whoever has scores — this only stops the app
+                      waiting on the holes he is never going to post. See
+                      lib/cardSigs. */}
+                  {!isNew && (
+                    <div>
+                      <span style={lbl}>Withdrawn</span>
+                      <button type="button"
+                        onClick={() => set({ wd: !editingPlayer.wd })}
+                        style={{ fontSize: FS.body, fontWeight: 700, padding: "7px 10px", borderRadius: 8, cursor: "pointer", width: "100%", boxSizing: "border-box",
+                          border: `1px solid ${editingPlayer.wd ? BC.danger : BC.bdr}`, background: editingPlayer.wd ? BC.danger + ALPHA.wash : "transparent", color: editingPlayer.wd ? BC.danger : BC.t2 }}>
+                        {editingPlayer.wd ? "Withdrawn — not expected to finish" : "Playing"}
+                      </button>
+                      {editingPlayer.wd && (
+                        <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 5, lineHeight: 1.4 }}>
+                          His scores still count. Cards in his match can be signed without the rest of his holes.
+                        </div>
+                      )}
+                    </div>
                   )}
                   {/* The sign-in bound to this name. Read-only apart from
                       cutting it: there is nothing to type here, because the

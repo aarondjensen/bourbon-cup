@@ -124,7 +124,7 @@ import { TRIP_SETTINGS_ID, houseFrom, tripSchedule, tripDates } from "./lib/trip
 import {
   cardSigBareId, sigForMatch, cardComplete, missingForCard,
   nonSignerPids, isFullyAttested, cardState,
-  roundCardProgress, pendingAttestations, attestedPids,
+  roundCardProgress, pendingAttestations, attestedPids, withdrawnIds,
 } from "./lib/cardSigs";
 import { useHoleAdvance } from "./lib/useHoleAdvance";
 import { roundForToday } from "./lib/scoringGate";
@@ -1169,9 +1169,13 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // every render, so a signature landing on another player's phone locks
   // this one's score buttons in the same beat it appears on theirs.
   const sig = match ? sigForMatch(cardSigs, match.id) : null;
-  const signState = match ? cardState(match, sig) : "open";
+  const signState = match ? cardState(match, sig, withdrawn) : "open";
   const signed = signState !== "open";
-  const complete = match ? cardComplete(match, holeData) : false;
+  // Who has walked in. A withdrawal is a flag on the roster row, and it is
+  // what stops three partners being left with a card that can never be
+  // signed — see lib/cardSigs. Scoring is untouched: his holes still count.
+  const withdrawn = useMemo(() => withdrawnIds(tPlayers), [tPlayers]);
+  const complete = match ? cardComplete(match, holeData, withdrawn) : false;
   // Whether the Full Scorecard button is allowed to promote to the sign CTA.
   // A signature is a claim by somebody IN the match — `signed_by` lands on the
   // card and every attestation is checked against the roster of that match —
@@ -1179,7 +1183,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // scorecard, however complete it is. Attesting is already gated the same way
   // inside SignedCardPanel.
   const canSign = complete && matchPids.includes(userPid);
-  const missingCard = match && !complete && !signed ? missingForCard(match, holeData) : [];
+  const missingCard = match && !complete && !signed ? missingForCard(match, holeData, withdrawn) : [];
 
   // No more hooks below this line.
 
@@ -3915,6 +3919,11 @@ export default function App() {
   // it saw when it was created — silently dropping the attestation that
   // landed in between.
   const cardSigsRef = useRef([]);
+  // And the withdrawn ids, for the same reason: the sign and attest writes run
+  // outside the render cycle and must not close over a stale roster. A man
+  // marked WD between a card being signed and attested would otherwise still
+  // be counted among the attesters it is waiting on.
+  const withdrawnRef = useRef(new Set());
   // And for the cards themselves, so the save path can name the score a
   // failed write is reverting FROM without reading through React state.
   const holeDataRef = useRef({});
@@ -4139,7 +4148,11 @@ export default function App() {
   useEffect(() => {
     const unsubs = [];
     const f = [{ field: "tournament_id", op: "==", value: TOURNAMENT_ID }];
-    unsubs.push(db.subscribe("bc_players", f, rows => { setTPlayers(rows); setPlayersLoaded(true); }));
+    unsubs.push(db.subscribe("bc_players", f, rows => {
+      setTPlayers(rows);
+      withdrawnRef.current = withdrawnIds(rows);   // keep the ref hot for the sign/attest paths
+      setPlayersLoaded(true);
+    }));
     unsubs.push(db.subscribe("bc_settings", f, rows => {
       const tn = rows.find(r => r.id === editionDocId("team_names"));
       if (tn) setTeamNames({ A: tn.teamA || DEFAULT_TEAM_NAMES.A, B: tn.teamB || DEFAULT_TEAM_NAMES.B });
@@ -5007,7 +5020,7 @@ export default function App() {
     // attests itself at signing time — with `attested_by` populated, not
     // just the boolean, so the FINAL badge and the attester chips can never
     // disagree about the same card. (MnQ learned this one the hard way.)
-    const others = nonSignerPids(match, { signed_by: pid });
+    const others = nonSignerPids(match, { signed_by: pid }, withdrawnRef.current);
     const doc = {
       id: editionDocId(cardSigBareId(match.round, match.id)),
       tournament_id: TOURNAMENT_ID,
@@ -5052,7 +5065,7 @@ export default function App() {
     const sig = sigForMatch(cardSigsRef.current, match.id);
     if (!sig) return null;
     const seen = new Set([...attestedPids(sig), pid]);
-    const done = nonSignerPids(match, sig).every(p => seen.has(p));
+    const done = nonSignerPids(match, sig, withdrawnRef.current).every(p => seen.has(p));
     return db.upsert("bc_card_sigs", {
       id: sig.id || editionDocId(cardSigBareId(match.round, match.id)),
       tournament_id: TOURNAMENT_ID,
@@ -5081,7 +5094,7 @@ export default function App() {
   const onAttestAllInRound = useCallback(async (round, roundMatches) => {
     const pending = (roundMatches || []).filter(m => {
       const sig = sigForMatch(cardSigsRef.current, m.id);
-      return sig && !isFullyAttested(m, sig);
+      return sig && !isFullyAttested(m, sig, withdrawnRef.current);
     });
     for (const m of pending) {
       const sig = sigForMatch(cardSigsRef.current, m.id);
@@ -5091,7 +5104,7 @@ export default function App() {
         // Every outstanding attester at once, as map keys, so a player who
         // taps Attest in the same moment merges with the force rather than
         // fighting it.
-        attests: Object.fromEntries(nonSignerPids(m, sig).map(pid => [pid, { at, forced: true }])),
+        attests: Object.fromEntries(nonSignerPids(m, sig, withdrawnRef.current).map(pid => [pid, { at, forced: true }])),
         attested: true,
         attested_forced_at: at,
       });
@@ -5357,8 +5370,8 @@ export default function App() {
   // signed, and how many of those every non-signer has attested. See
   // lib/cardSigs.
   const roundCards = useMemo(
-    () => roundCardProgress(enrichedMatches, cardSigs, currentRound),
-    [enrichedMatches, cardSigs, currentRound]
+    () => roundCardProgress(enrichedMatches, cardSigs, currentRound, withdrawnIds(tPlayers)),
+    [enrichedMatches, cardSigs, currentRound, tPlayers]
   );
   // ── Push: foreground rendering and the app badge ─────────────────────
   // FCM does not display anything while the tab is focused, so the
@@ -5423,9 +5436,9 @@ export default function App() {
   const myPendingAttest = useMemo(
     () => pendingAttestations(
       enrichedMatches.filter(m => m.round === currentRound),
-      cardSigs, user?.player_id,
+      cardSigs, user?.player_id, withdrawnIds(tPlayers),
     ),
-    [enrichedMatches, cardSigs, currentRound, user?.player_id]
+    [enrichedMatches, cardSigs, currentRound, user?.player_id, tPlayers]
   );
   useEffect(() => { syncAppBadge(myPendingAttest.length); }, [myPendingAttest.length]);
 

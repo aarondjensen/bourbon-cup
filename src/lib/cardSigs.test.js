@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { missingForCard, cardComplete, attestedPids, isFullyAttested, pendingAttestations } from "./cardSigs";
+import { missingForCard, cardComplete, attestedPids, isFullyAttested, pendingAttestations, withdrawnIds } from "./cardSigs";
 
 // The can't-sign strip has now been wrong twice in the same direction: it
 // told a scorer his card was short while he was still tapping in the group
@@ -137,5 +137,49 @@ describe("attestedPids", () => {
       .toHaveLength(0);
     expect(pendingAttestations([{ id: "m1", ...match }], [{ match_id: "m1", ...sig }], "c"))
       .toHaveLength(1);
+  });
+});
+
+// ── A man who walked in ─────────────────────────────────────────────
+// Until this existed his three partners were left with a card that could
+// never be signed. Nothing here touches scoring — see lib/cardSigs.
+describe("withdrawals", () => {
+  const match = { id: "m1", round: 1, teamA: ["a", "b"], teamB: ["c", "d"] };
+  const full = (pid) => Object.fromEntries(Array.from({ length: 18 }, (_, h) => [h, 4]));
+  const nine = () => Object.fromEntries(Array.from({ length: 9 }, (_, h) => [h, 4]));
+  const holeData = { a_1: full(), b_1: full(), c_1: full(), d_1: nine() };
+
+  it("blocks the card while everybody is still expected to finish", () => {
+    expect(cardComplete(match, holeData)).toBe(false);
+  });
+
+  it("lets the card complete once the man who walked in is marked", () => {
+    expect(cardComplete(match, holeData, withdrawnIds([{ player_id: "d", withdrawn: true }]))).toBe(true);
+  });
+
+  it("stops naming his missing holes in the can't-sign strip", () => {
+    const before = missingForCard(match, holeData);
+    expect(before.map(m => m.pid)).toContain("d");
+    const after = missingForCard(match, holeData, new Set(["d"]));
+    expect(after.map(m => m.pid)).not.toContain("d");
+  });
+
+  it("still reads the frontier off HIS holes — they say where the group got to", () => {
+    // Only he has played the 10th. Dropping him from the frontier would make
+    // the other three's blanks on it read as gaps.
+    const hd = { a_1: nine(), b_1: nine(), c_1: nine(), d_1: { ...nine(), 9: 5 } };
+    expect(missingForCard(match, hd, new Set(["d"]))).toEqual([]);
+  });
+
+  it("does not wait on him for an attestation, or ask him for one", () => {
+    const sig = { match_id: "m1", signed_by: "a", attests: { b: { at: "t" }, c: { at: "t" } } };
+    expect(isFullyAttested(match, sig)).toBe(false);
+    expect(isFullyAttested(match, sig, new Set(["d"]))).toBe(true);
+    expect(pendingAttestations([match], [sig], "d", new Set(["d"]))).toHaveLength(0);
+  });
+
+  it("counts nobody as withdrawn on a roster with no flags", () => {
+    expect(withdrawnIds([{ player_id: "a" }, { player_id: "b", withdrawn: false }]).size).toBe(0);
+    expect(withdrawnIds(null).size).toBe(0);
   });
 });
