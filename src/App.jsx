@@ -104,7 +104,7 @@ import {
 import { summarizeEdition, sameSummary } from "./lib/editionSummary";
 import { parseDeepLink } from "./lib/deepLink";
 import {
-  inField, roundSetup, strokeMapsFor, computeSkins, lowNetRows, ctpTags, ctpPinTotal,
+  inField, roundSetup, strokeMapsFor, roundCHs, computeSkins, lowNetRows, ctpTags, ctpPinTotal,
   moneyHole, moneyHoleRows, moneyHoleWins, moneyHolePars,
   moneyHoleRoundsIn, moneyHolePlaysRound,
 } from "./lib/betting";
@@ -2681,8 +2681,15 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // out of this one must not be handed a stroke allocation here, and the maps
   // are what decide the net score the hole is won on.
   const moneyHoleMapsFor = (round) => strokeMapsFor({ round, field: moneyHoleField, ...ctx });
+  // The round's course handicaps as well as the maps: the card prints the
+  // handicap beside each name the way every other card in the app does, and
+  // it is the number that explains the gap between his gross and his net.
   const moneyHoleFor = (round) =>
-    moneyHoleRows({ round, hole: holeNum, field: moneyHoleField, holeData, maps: moneyHoleMapsFor(round) });
+    moneyHoleRows({
+      round, hole: holeNum, field: moneyHoleField, holeData,
+      maps: moneyHoleMapsFor(round),
+      chs: roundCHs({ round, field: moneyHoleField, ...ctx }),
+    });
 
   // The rounds it is PLAYED in. A director switches it off on a shared-ball
   // round — both partners post the same net there, so a side would win it
