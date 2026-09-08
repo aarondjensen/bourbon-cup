@@ -52,15 +52,33 @@ export const roundSetup = ({ round, tRounds, courses, roundLocks }) => {
 // settled skin must not change hands because somebody synced a GHIN index the
 // next morning. Uses the canonical buildStrokeMap so handicaps over 18 wrap
 // correctly; a hole can carry two strokes.
-export const strokeMapsFor = ({ round, field, tPlayers, tRounds, courses, roundLocks, hcpOverrides, teeAssignments }) => {
-  const { tr, course, hcps } = roundSetup({ round, tRounds, courses, roundLocks });
-  const maps = {};
-  field.forEach(p => {
-    const ch = getRoundCH({
+// Every player's COURSE HANDICAP for a round — the number the allocation
+// below is built from, and the number a card prints beside a name. Split out
+// so a screen can show one without deriving the other: a table of gross and
+// net answers "why is his net lower" with the handicap, not with a map of
+// which holes it falls on.
+//
+// Round-locked like everything else here, for the same reason: a settled
+// result must not move because somebody synced a GHIN index the next morning.
+export const roundCHs = ({ round, field, tPlayers, tRounds, courses, roundLocks, hcpOverrides, teeAssignments }) => {
+  const { tr, course } = roundSetup({ round, tRounds, courses, roundLocks });
+  const chs = {};
+  (field || []).forEach(p => {
+    chs[p.player_id] = getRoundCH({
       roundLocks, round, pid: p.player_id, players: tPlayers,
       course, chOverrides: hcpOverrides, teeAssignments, roundTee: tr?.tee_box,
     });
-    maps[p.player_id] = buildStrokeMap(ch, hcps);
+  });
+  return chs;
+};
+
+export const strokeMapsFor = (args) => {
+  const { round, field, tRounds, courses, roundLocks } = args;
+  const { hcps } = roundSetup({ round, tRounds, courses, roundLocks });
+  const chs = roundCHs(args);
+  const maps = {};
+  (field || []).forEach(p => {
+    maps[p.player_id] = buildStrokeMap(chs[p.player_id], hcps);
   });
   return maps;
 };
@@ -281,7 +299,7 @@ export const moneyHolePars = ({ rounds, hole, tRounds, courses, roundLocks }) =>
 // lets a screen say a hole is still provisional: unlike low net, where a
 // finished card is finished, a single hole can be taken by anyone still out
 // on the course.
-export const moneyHoleRows = ({ round, hole, field, holeData, maps }) => {
+export const moneyHoleRows = ({ round, hole, field, holeData, maps, chs }) => {
   const h = moneyHole(hole) - 1;
   const rows = field.map(p => {
     const raw = (holeData[`${p.player_id}_${round}`] || {})[h];
@@ -289,6 +307,11 @@ export const moneyHoleRows = ({ round, hole, field, holeData, maps }) => {
     const strokes = maps?.[p.player_id]?.[h] || 0;
     return {
       pid: p.player_id, name: p.name, team: p.team,
+      // The whole round's handicap, not the stroke this hole gives — what a
+      // card prints beside a name. Null when the caller did not ask for it;
+      // `chs` is optional because the round summary shows winners, not a
+      // handicap column. See roundCHs.
+      ch: chs?.[p.player_id] ?? null,
       posted, strokes,
       gross: posted ? raw : null,
       net: posted ? raw - strokes : null,

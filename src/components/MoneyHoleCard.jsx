@@ -5,15 +5,16 @@
 //  The fourth side game, and the smallest: one hole a round — Hole 18 here —
 //  played for a pot of its own. Lowest NET takes it.
 //
-//    AJ   • 4   3   ← the stroke he gets there, gross, net
-//    BK     3   3
+//    AJ (12)   4   3   ← the round's handicap, gross, net
+//    BK  (4)    3   3
 //
-//  THE STROKE IS A DOT BESIDE THE GROSS, which is the scorecard's own
-//  notation (see ScoreCell in FullScorecard) rather than a second one
-//  invented for this card. It used to be a −1 in a column of its own headed
-//  STK, and a man checking whether he gets a shot on the eighteenth was
-//  reading it two different ways on two screens. One way, and the column is
-//  gone with it.
+//  THE HANDICAP SITS WITH THE NAME, in parentheses and in the scorecard's
+//  blue, which is where every other card in the app puts it. It is the whole
+//  round's course handicap, not the stroke this one hole gives: the hole's
+//  stroke was a column of its own headed STK, then a dot beside the gross,
+//  and both were a second thing to read for a number that only ever explains
+//  ONE row's arithmetic. The handicap explains the man, and the gap between
+//  the two columns beside him is the hole.
 //
 //  A TIE SPLITS. That is the whole difference between this and a skin on the
 //  same hole: a skin pushes and carries, and this has nowhere to carry to, so
@@ -34,16 +35,10 @@
 
 import { BC, FONT, ALPHA, FS, ON_AMBER, teamColor } from "../theme";
 
-// The gross column carries the stroke dots as well as the number, so it is
-// wider than the net one beside it. Named because three places have to agree
-// on it — the header, the row, and the width the "not played" line spans.
-const GROSS_W = 52;
-// The number stays centred in that column and the dots are taken OUT of the
-// flow, pinned this far left of centre. Laying them out beside the number
-// instead would shift every gross a few pixels the moment a man had a stroke,
-// so the column would ripple down the card — and the GROSS header, centred on
-// the column, would no longer sit over the digits it names.
-const DOT_GAP = 9;
+// The two number columns, named because three places have to agree on them —
+// the header, the row, and the width the "not played" line spans.
+const GROSS_W = 42;
+const NET_W = 38;
 
 export function MoneyHoleCard({ rows, hole, par, index }) {
   if (rows.length === 0) {
@@ -71,7 +66,7 @@ export function MoneyHoleCard({ rows, hole, par, index }) {
           HOLE {hole}{par ? ` · PAR ${par}` : ""}{index ? ` · INDEX ${index}` : ""}
         </div>
         {head("GROSS", GROSS_W)}
-        {head("NET", 38)}
+        {head("NET", NET_W)}
       </div>
 
       {rows.map(r => (
@@ -84,35 +79,30 @@ export function MoneyHoleCard({ rows, hole, par, index }) {
           }}
         >
           <div style={{ width: 8, height: 8, borderRadius: "50%", background: teamColor(r.team), flexShrink: 0 }} />
-          <span style={{ flex: 1, minWidth: 0, fontSize: FS.small, fontWeight: 600, color: r.posted ? BC.t1 : BC.t3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {r.name}
-          </span>
+          {/* The handicap is its own span, outside the ellipsis, so a long
+              name is what gets truncated rather than the number explaining
+              the two columns to its right. */}
+          <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline", gap: 4 }}>
+            <span style={{ minWidth: 0, fontSize: FS.small, fontWeight: 600, color: r.posted ? BC.t1 : BC.t3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {r.name}
+            </span>
+            {r.ch != null && (
+              <span style={{ flexShrink: 0, fontSize: FS.micro, fontWeight: 700, color: BC.hcpBlue }}>({r.ch})</span>
+            )}
+          </div>
 
           {r.posted ? (
             <>
-              {/* One dot per stroke he gets on THIS hole, beside the gross —
-                  the scorecard's notation, in the scorecard's blue. The
-                  number sits in a box of its own so the gross column stays
-                  aligned whether or not a man has a dot beside it, and the
-                  dots grow leftwards into the lane. */}
-              <div style={{ width: GROSS_W, flexShrink: 0, position: "relative", textAlign: "center", fontSize: FS.small, fontWeight: 700, color: BC.t2 }}>
-                <span style={{
-                  position: "absolute", right: `calc(50% + ${DOT_GAP}px)`, top: "50%", transform: "translateY(-50%)",
-                  whiteSpace: "nowrap", color: BC.hcpBlue, fontSize: FS.micro, fontWeight: 800, letterSpacing: 1, lineHeight: 1,
-                }}>
-                  {"•".repeat(r.strokes || 0)}
-                </span>
-                {r.gross}
-              </div>
+              <div style={{ width: GROSS_W, flexShrink: 0, textAlign: "center", fontSize: FS.small, fontWeight: 700, color: BC.t2 }}>{r.gross}</div>
               <div style={{
-                width: 38, flexShrink: 0, textAlign: "center", fontSize: FS.small, fontWeight: 800,
+                width: NET_W, flexShrink: 0, textAlign: "center", fontSize: FS.small, fontWeight: 800,
                 color: r.won ? ON_AMBER : BC.t1,
                 background: r.won ? BC.amber : "transparent",
                 borderRadius: 4, padding: "1px 0",
               }}>{r.net}</div>
             </>
           ) : (
-            <div style={{ width: GROSS_W + 38 + 8, flexShrink: 0, textAlign: "right", fontSize: FS.label, fontWeight: 700, color: BC.t3 }}>
+            <div style={{ width: GROSS_W + NET_W + 8, flexShrink: 0, textAlign: "right", fontSize: FS.label, fontWeight: 700, color: BC.t3 }}>
               not played
             </div>
           )}

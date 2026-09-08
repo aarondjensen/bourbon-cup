@@ -206,6 +206,23 @@ describe("moneyHoleRows", () => {
     expect(rows.find(r => r.pid === "p3").net).toBe(3);
   });
 
+  // The card prints the round's handicap beside each name; the round summary
+  // does not, so `chs` is optional and its absence is a null rather than a
+  // zero somebody would read as a scratch handicap.
+  it("carries the round's course handicap when it is given one", () => {
+    const rows = moneyHoleRows({
+      round: 1, hole: 18, field: players, holeData: one({ p1: 4, p2: 5 }),
+      chs: { p1: 12, p2: 0 },
+    });
+    expect(rows.find(r => r.pid === "p1").ch).toBe(12);
+    expect(rows.find(r => r.pid === "p2").ch).toBe(0);
+  });
+
+  it("leaves the handicap null when none was asked for", () => {
+    const rows = moneyHoleRows({ round: 1, hole: 18, field: players, holeData: one({ p1: 4 }) });
+    expect(rows.every(r => r.ch === null)).toBe(true);
+  });
+
   // Somebody still out on the course is not losing the hole, he has not played
   // it — so he ranks below the cards that are in and prints no number.
   it("ranks a player with no score below everybody who has one, and never wins", () => {
