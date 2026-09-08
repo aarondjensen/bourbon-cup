@@ -575,6 +575,31 @@ than a fallback, and the note below says so in that order.
 
 ---
 
+### Guideline 2.3.6: the Gambling descriptor is Yes
+
+**1.0 (4) was rejected on 8 Sep 2026**, on an iPad Air 11-inch:
+
+> Since the app includes tips, tools, predictions or other information related
+> to real money gambling, real money betting, or real money skill-based gaming,
+> you must select "Yes" for "Gambling" in App Store Connect.
+
+**No build, no code change.** The rating lives on the app record: App
+Information → Age Rating → Edit → Gambling → **Yes**, then resubmit the build
+already attached. It pushes the app to 18+.
+
+Two questions were being answered as one, and `store-submission.md` §3.2 has
+the full version. Short form: "does the app OFFER real money gaming" is No and
+always was — that is 5.3, and it brings licensing with it — but the age
+rating's Gambling descriptor asks about tools and information RELATED TO
+real-money betting, and a tab that records wagers between players is one. The
+app processing no payments answers the first question and is not an answer to
+the second.
+
+Leave **Simulated Gambling** at None. It means gambling-themed games, it is
+still wrong here, and it is the box with the individual-developer gate on it.
+
+---
+
 ### Guideline 2.1(a): a refused claim looked like a redirect
 
 **1.0 (3) was rejected on 5 Sep 2026**, reviewed on an iPad Air 11-inch:
@@ -719,11 +744,15 @@ does not wait on it — so a rejection from one says nothing about the other.
    App Functionality, all linked to identity, none used for tracking. **This
    is the gate that blocks Add for Review**, and the error names an Admin
    rather than the section, which is a slow way to find out.
-7. ~~Age rating.~~ **Simulated Gambling: None. Contests: None.** Both were
-   set wrong and cost a rejection on 2 Sep — simulated gambling plus an
-   individual developer account is an automatic stop, refused before a human
-   sees the app. `store-submission.md` §3.2 has the reasoning; the fix is the
-   questionnaire and needs no new build.
+7. ~~Age rating.~~ **Gambling: YES. Simulated Gambling: None. Contests:
+   None.** All three cost a rejection. Simulated gambling was ticked on 2 Sep
+   and is an automatic stop on an individual developer account, refused before
+   a human sees the app; **Gambling was left at No and Apple overruled it on
+   8 Sep under 2.3.6** — the descriptor asks about tools and information
+   RELATED TO real-money betting, which the Betting tab is, and that is a
+   different question from whether the app offers real money gaming (it does
+   not). `store-submission.md` §3.2 has both. The fix is the questionnaire and
+   needs no new build.
 8. ~~Submit to App Review with the notes in §7.~~
 9. ~~File the unlisted-distribution request, as the Account Holder — §8.~~
    Filed 2 Sep 2026, **approved 3 Sep**. The form is written for enterprises distributing internal

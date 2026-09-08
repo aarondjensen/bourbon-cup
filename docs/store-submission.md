@@ -489,13 +489,30 @@ ledger's payment methods (`src/lib/ledger.js`) are labels a director types after
 a Venmo arrives outside the app; `SideBets` settles nothing and says so in its
 own header comment.
 
-So on both questionnaires, the real-money gambling question is **No**:
+**Two different questions get asked about gambling, and this file conflated
+them for a fortnight.** Apple bounced 1.0 (4) on 8 Sep 2026 under 2.3.6 for
+exactly that:
 
-- Apple 5.3.4 governs apps that *offer* real money gaming. Answering yes forces
-  18+ and invites a licensing and geo-restriction review the app cannot pass and
-  does not need.
-- Play's real-money gambling policy is the same shape and would require
-  licensing per country.
+> Since the app includes tips, tools, predictions or other information related
+> to real money gambling, real money betting, or real money skill-based gaming,
+> you must select "Yes" for "Gambling" in App Store Connect.
+
+- **"Does the app OFFER real money gaming?"** — No. That is guideline 5.3, it
+  governs apps that take and pay out money, and it brings licensing and
+  geo-restriction with it. This app moves no money and never has.
+- **The AGE RATING's Gambling descriptor** — **Yes.** It is a content
+  descriptor, not a licence question, and the bar Apple states is *tips, tools
+  or information RELATED TO* real-money betting. The Betting tab is a tool for
+  recording real-money wagers. It is.
+
+The paragraph below used to answer both with No, on the reasoning that the app
+processes no payments. That reasoning is sound and it answers the first
+question; it is not an answer to the second, and asserting it there is what
+cost the rejection. **A tool for money that changes hands outside the app is
+still a tool for money that changes hands.**
+
+Setting it pushes the rating to 18+, which for sixteen adult men costs nothing
+— the app was already near there on the alcohol reference.
 
 **And SIMULATED gambling is also No, and CONTESTS is None.** This paragraph
 used to say the opposite — that simulated gambling was "the honest box" — and
@@ -530,12 +547,24 @@ build already attached.
 > single most likely thing to draw a reviewer's question, and answering it
 > before it is asked costs one line and saves a rejection round trip.
 
-Worth knowing and still not acted on: renaming the tab from **Betting** to
-something like **Games** would lower this risk further. Apple has now bounced
-the app once over gambling — but over the RATING we typed, not over anything
-on the screen, and a reviewer has still never objected to the tab itself. So
-the fix that matched the actual fault was the questionnaire. Keep the rename
-in reserve for a rejection that quotes the app rather than the form.
+**The rename is still in reserve, and 8 Sep is not the day to reach for it.**
+Renaming **Betting** to something like **Games** was the fix held back for a
+rejection that quotes the app rather than the form. This one quotes the app —
+"the app includes tips, tools…" — but what Apple ASKED for is a metadata
+change, and they named the exact control. Doing more than they asked, on a
+submission that has already been through four rounds, adds a build and a
+review cycle to a fix that needs neither.
+
+It also would not obviously work. The tab would still hold dollar figures
+against names; a heading is not what makes it a tool. Reach for the rename if
+Apple objects to the CONTENT after the rating is honest — not as a way to
+avoid making it honest.
+
+**The one thing to watch**, because it has bitten here before: simulated
+gambling plus an individual developer account was an automatic stop on 2 Sep.
+If the real-money Gambling descriptor turns out to carry the same account-type
+gate, the answer is not to un-tick the box Apple instructed us to tick — it is
+to reply on the thread citing their own instruction and let them resolve it.
 
 ---
 
