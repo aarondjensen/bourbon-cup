@@ -29,7 +29,7 @@ import { isRoundFinal } from "./roundLocks";
 import { realPlayers, playerLookup, sideNames } from "./players";
 import {
   inField, roundSetup, strokeMapsFor, computeSkins, lowNetRows, ctpTags,
-  moneyHole, moneyHoleRows,
+  moneyHole, moneyHoleRows, moneyHolePlaysRound,
 } from "./betting";
 
 // ── One round, everything it decided ────────────────────────────────
@@ -185,12 +185,19 @@ export const roundSummary = ({
     .filter((r) => r.won)
     .map((r) => ({ pid: r.pid, name: r.name, gross: r.gross, ch: r.ch, net: r.net }));
 
-  // The money hole is one designated hole a round, lowest net, ties split.
+  // The money hole is one designated hole a round, lowest net, ties split —
+  // in the rounds the director has it switched on for. A round it is off in
+  // reports NULL rather than a winner: a shared-ball round would otherwise
+  // name a scramble pair as taking a hole nobody is paying out on, which is
+  // exactly the confusion the switch exists to end. See lib/betting.
   const mhNumber = moneyHole(buyIns?.moneyHoleNumber);
-  const mhWinners = moneyHoleRows({
-    round, hole: mhNumber, field: moneyField, holeData,
-    maps: strokeMapsFor({ round, field: moneyField, ...ctx }),
-  }).filter((r) => r.won);
+  const mhPlayed = moneyHolePlaysRound(round, buyIns?.moneyHoleRounds);
+  const mhWinners = mhPlayed
+    ? moneyHoleRows({
+      round, hole: mhNumber, field: moneyField, holeData,
+      maps: strokeMapsFor({ round, field: moneyField, ...ctx }),
+    }).filter((r) => r.won)
+    : [];
 
   return {
     round,
@@ -207,11 +214,11 @@ export const roundSummary = ({
     ctp,
     skins,
     lowNet,
-    moneyHole: {
+    moneyHole: mhPlayed ? {
       hole: mhNumber,
       par: pars?.[mhNumber - 1] ?? null,
       winners: mhWinners.map((r) => ({ pid: r.pid, name: r.name, gross: r.gross, net: r.net })),
-    },
+    } : null,
     // Whether anybody put a pencil to this round at all. A round with no
     // scores is not a round with nothing in it — it is a round that has not
     // happened, and the popup says a different thing about each.
