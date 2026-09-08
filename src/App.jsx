@@ -1092,7 +1092,14 @@ function LoginSplash({ tournamentName, tournamentLocation }) {
 const HOLE_RING = { width: 2, offset: 1 };
 const HOLE_RING_REACH = HOLE_RING.width + HOLE_RING.offset;
 
-function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teams, hcpOverrides, teeAssignments, roundLocks, rounds, currentRound, groups, ctpData, onSetCtp, onConfirmCtp, buyIns, cardSigs, onSignCard, onAttestCard, onUnsignCard }) {
+// Exported ONLY so screens.mount.test can render it. It has no other call
+// site and never will — this is the app's own scoring screen, not a component
+// anything else composes. It is exported because it is the one screen that
+// shipped dead on tap (a const read five lines above its declaration, which
+// is a ReferenceError on every render that has a match to score) while lint,
+// build and 1279 unit tests stayed green, and because it is the screen the
+// whole tournament is entered through. See the mount test's header.
+export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tRounds, notify, teams, hcpOverrides, teeAssignments, roundLocks, rounds, currentRound, groups, ctpData, onSetCtp, onConfirmCtp, buyIns, cardSigs, onSignCard, onAttestCard, onUnsignCard }) {
   const userPid = user.player_id;
   // This screen is worked from, not read down — four players' scores have to
   // be reachable without scrolling to the one at the bottom. It measures the
@@ -1283,13 +1290,23 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   // Derived, never stored: `sig` is looked up out of the live subscription
   // every render, so a signature landing on another player's phone locks
   // this one's score buttons in the same beat it appears on theirs.
-  const sig = match ? sigForMatch(cardSigs, match.id) : null;
-  const signState = match ? cardState(match, sig, withdrawn) : "open";
-  const signed = signState !== "open";
+  //
+  // `withdrawn` is read by both of the lines under it, so it is declared
+  // FIRST. It used to sit between them, which is a temporal dead zone and not
+  // a style question: `const` does not hoist a value, so `cardState(match,
+  // sig, withdrawn)` threw ReferenceError on every render that had a match to
+  // score, and the Scoring tab was the error boundary instead. It went
+  // unnoticed because the throw needs a match — a round with no draw yet
+  // short-circuits the ternary and renders fine, which is what the live cup
+  // looked like the day it landed.
+  //
   // Who has walked in. A withdrawal is a flag on the roster row, and it is
   // what stops three partners being left with a card that can never be
   // signed — see lib/cardSigs. Scoring is untouched: his holes still count.
   const withdrawn = useMemo(() => withdrawnIds(tPlayers), [tPlayers]);
+  const sig = match ? sigForMatch(cardSigs, match.id) : null;
+  const signState = match ? cardState(match, sig, withdrawn) : "open";
+  const signed = signState !== "open";
   const complete = match ? cardComplete(match, holeData, withdrawn) : false;
   // Whether the Full Scorecard button is allowed to promote to the sign CTA.
   // A signature is a claim by somebody IN the match — `signed_by` lands on the

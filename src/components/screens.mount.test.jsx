@@ -25,6 +25,23 @@ import { render, cleanup, fireEvent } from "@testing-library/react";
 // and, in one case, subscribe on mount. Neither belongs in a mount test: this
 // is about whether the tree renders, and a real listener would also be a real
 // listener pointed at the live tournament.
+// lib/auth calls warmAuth() at module scope — a real getRedirectResult against
+// a real auth instance, fired the moment the module is evaluated (which is the
+// point: it is a cold network fetch racing the user's thumb). Importing App.jsx
+// for the scoring screen below evaluates it, so it is stubbed here. Everything
+// any module in the tree imports from it is listed; a missing name fails loudly
+// rather than at the call.
+vi.mock("../lib/auth", () => ({
+  PROVIDERS: { GOOGLE: "google.com", APPLE: "apple.com" },
+  signIn: async () => ({ user: null, error: null }),
+  signOutUser: async () => {},
+  onAuthUser: () => () => {},
+  consumeRedirectResult: async () => ({ user: null, error: null }),
+  isCancelled: () => false,
+  whenAuthReady: async () => {},
+  providerLabel: () => "account",
+}));
+
 vi.mock("../firebase", () => ({
   db: { subscribe: () => () => {}, upsert: async () => null, delete: async () => null, get: async () => [] },
   TOURNAMENT_ID: "bc_test",
@@ -32,6 +49,20 @@ vi.mock("../firebase", () => ({
   getTournamentYear: () => 2026,
   writeFailure: () => "failed",
   writeTracker: { track: (p) => p, state: () => ({ pending: 0, kinds: {}, since: null, refused: 0, refusedKinds: {} }), subscribe: () => () => {} },
+  // The rest of the module's surface, needed once App.jsx is in the tree: it
+  // reaches the whole of it, and so do the screens it imports.
+  firebaseApp: {},
+  getMessagingInstance: async () => null,
+  getActiveTournamentId: () => "bc_test",
+  getDefaultEditionId: () => "bc_test",
+  setActiveTournamentId: () => {},
+  readUserSession: () => null,
+  writeUserSession: () => {},
+  readTournamentIdentity: () => null,
+  writeTournamentIdentity: () => {},
+  spectatorSession: () => null,
+  BOOTSTRAP_DIRECTOR: "bootstrap_director",
+  SPECTATOR_ID: "spectator",
 }));
 
 import { TripInfo } from "./TripInfo";
@@ -43,6 +74,7 @@ import { PlayerActivityPanel } from "./PlayerActivityPanel";
 import { SyncBanner } from "./SyncBanner";
 import DataView from "./DataView";
 import { MoveSignIn } from "./MoveSignIn";
+import { ScoreEntry } from "../App";
 
 afterEach(cleanup);
 
@@ -218,5 +250,74 @@ describe("Move to a new sign-in", () => {
     const { container, getByText } = render(<MoveSignIn notify={noop} />);
     fireEvent.click(getByText("Move to a New Sign-In"));
     expect(container.textContent).toContain("invite code");
+  });
+});
+
+// ── The scoring screen ──────────────────────────────────────────────
+// The one screen the whole tournament is entered through, and the one that
+// shipped DEAD ON TAP: `cardState(match, sig, withdrawn)` sat five lines
+// above `const withdrawn = useMemo(…)`, which is a temporal dead zone, not a
+// style question — `const` hoists the binding without the value, so every
+// render that had a match to score threw ReferenceError and the tab was the
+// error boundary. Lint was clean, the build was clean, and 1279 unit tests
+// were green, because none of them rendered it.
+//
+// It is exported out of App.jsx for this test and nothing else. The round
+// below is the shape it went wrong on: the closing Team Best Ball, sixteen
+// men in ONE match spanning four tee waves, sealed. That is the format whose
+// match is not a foursome, so it is also the only one that exercises
+// scoringUnits — and it needs a MATCH to be present at all, which is exactly
+// why an empty round hid the crash.
+describe("Scoring", () => {
+  const field = Array.from({ length: 16 }, (_, i) => ({
+    player_id: `p${i + 1}`,
+    name: `Player ${i + 1}`,
+    team: i < 8 ? "A" : "B",
+    handicap_index: 6 + i * 0.7,
+    ...(i === 0 ? { auth_uid: "u1" } : {}),
+  }));
+  const pids = field.map(p => p.player_id);
+  const teamA = pids.slice(0, 8);
+  const teamB = pids.slice(8);
+  // Four waves of four, teammates riding together — groupsByTeam, which Team
+  // Best Ball is the one format to set.
+  const waves = [
+    [...teamA.slice(0, 4)], [...teamB.slice(0, 4)],
+    [...teamA.slice(4)], [...teamB.slice(4)],
+  ];
+  const bestBallRound = {
+    round_number: 4, course_id: "c1", date: "2026-07-19",
+    tee_time: "8:00|8:10|8:20|8:30", format: "team_best_ball",
+    sealed: true, reveal_through: 0,
+    counting_scores: { holes: [...Array(9).fill(6), ...Array(9).fill(7)] },
+  };
+  const match = { id: "m4", round: 4, teamA, teamB, tournament_id: "bc_test" };
+  const scoring = (over = {}) => ({
+    user: { ...field[0], isDirector: false },
+    matches: [match], holeData: {}, onSaveHole: asyncNoop,
+    tPlayers: field, courses, tRounds: [bestBallRound], notify: noop,
+    teams, hcpOverrides: {}, teeAssignments: {}, roundLocks: {},
+    rounds: [1, 2, 3, 4], currentRound: 4, groups: { 4: waves },
+    ctpData: {}, onSetCtp: asyncNoop, onConfirmCtp: asyncNoop,
+    buyIns: {}, cardSigs: [], onSignCard: asyncNoop,
+    onAttestCard: asyncNoop, onUnsignCard: asyncNoop,
+    ...over,
+  });
+
+  it("renders the sealed closing round for a player in it", () => {
+    mounts(<ScoreEntry {...scoring()} />);
+  });
+  it("renders it for a director, who gets the group picker", () => {
+    // The picker only exists when a match spans more than one unit, so this
+    // is the branch scoringUnits was written for.
+    mounts(<ScoreEntry {...scoring({ user: { ...field[0], isDirector: true } })} />);
+  });
+  it("renders for somebody who is not in the round at all", () => {
+    // A spectator, or a man who withdrew. Resolves to no unit of his own and
+    // falls back to the first — the path that must not read off undefined.
+    mounts(<ScoreEntry {...scoring({ user: { player_id: "nobody", name: "Guest" } })} />);
+  });
+  it("renders a round with no draw yet, which is what hid the crash", () => {
+    mounts(<ScoreEntry {...scoring({ matches: [], groups: {} })} />);
   });
 });
