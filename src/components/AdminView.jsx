@@ -27,6 +27,7 @@
 // AdminView was.
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { PlayerActivityPanel } from "./PlayerActivityPanel";
 import {
   DEFAULT_FORMAT,
   FORMATS,
@@ -1188,6 +1189,11 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
 
       {tab === "players" && (
         <div>
+          {/* Is the field set up? Signed in, and will they get the tee time.
+              Collapsed by default — it is a pre-tournament check, not
+              something to read while running a round. See lib/playerActivity
+              for why push is read off a token and never off a permission. */}
+          <PlayerActivityPanel tPlayers={tPlayers} />
           {[teams.A, teams.B].map(team => (
             <div key={team.id} style={{ marginBottom: 10 }}>
               {/* Team header, laid out on the PLAYER ROW's columns rather than
