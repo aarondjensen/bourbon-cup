@@ -35,7 +35,7 @@ import { Popup, ConfirmModal } from "./Popup";
 import { useConfirm } from "../lib/useConfirm";
 import { playerLookup } from "../lib/players";
 import { FullScorecard } from "./FullScorecard";
-import { nonSignerPids, isFullyAttested } from "../lib/cardSigs";
+import { nonSignerPids, isFullyAttested, attestedPids } from "../lib/cardSigs";
 
 // Both panels below render the SAME card the Scoring tab's Full Scorecard
 // popup does, from the same already-resolved props — hole tables, course,
@@ -163,7 +163,8 @@ export function SignedCardPanel({
   const [busy, setBusy] = useState(false);
   const { nameOf, shortOf } = playerLookup(tPlayers);
 
-  const attestedBy = sig.attested_by || [];
+  // Both shapes, folded into one list — see lib/cardSigs.
+  const attestedBy = attestedPids(sig);
   const pending = nonSignerPids(match, sig);
   const final = isFullyAttested(match, sig);
   const inMatch = [...(match.teamA || []), ...(match.teamB || [])].includes(userPid);

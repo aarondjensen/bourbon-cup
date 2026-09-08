@@ -21,10 +21,13 @@
 //    from a cold 10 ft, and parking is not answering — only a real
 //    gesture (thumb, stylus, trackpad) counts as choosing.
 //
-//  • BEATING THE STANDING TAG MEANS STRICTLY SHORTER. Level isn't
-//    closer, so a tie keeps the earlier group's tag — first to hole it
-//    holds the pin. The Tag button stays dead until the number clears
-//    it, and says why rather than sitting mysteriously grey.
+//  • BEATING THE STANDING TAG MEANS STRICTLY SHORTER, except on a TIE,
+//    which goes to the group that played the hole FIRST — the lower tee
+//    order, not the earlier clock. lib/ctp's canTakePin decides it, and
+//    it is the same function the board settles the pin by: a prompt that
+//    offered a tag the board then refused would be worse than one that
+//    never offered it. The Tag button stays dead until the number clears
+//    the bar, and says why rather than sitting mysteriously grey.
 //
 //  • PASSING IS AN ANSWER, not a dismissal. A group that walks off
 //    without getting inside is saying the standing tag is right, and
@@ -54,6 +57,7 @@
 
 import { useRef, useState } from "react";
 import { Popup } from "./Popup";
+import { canTakePin, groupLabel } from "../lib/ctp";
 import { BC, ALPHA, ON_AMBER, FS } from "../theme";
 
 // Wheel geometry. WHEEL_H must leave a whole number of item slots above
@@ -67,7 +71,7 @@ const MAX_FT = 60;
 
 const clampFeet = (ft) => Math.max(1, Math.min(MAX_FT, Math.round(ft) || 0)) || 10;
 
-export function CtpPrompt({ holeNumber, players, teams, leader, leaderName, outOfOrder, onSave, onPass, onClose }) {
+export function CtpPrompt({ holeNumber, players, teams, leader, leaderName, outOfOrder, leaderOrder = null, myOrder = null, onSave, onPass, onClose }) {
   const [pid, setPid] = useState("");
   // null means UNANSWERED — see the wheel below. Not 10, which is an
   // answer, and not the standing distance, which is somebody else's.
@@ -88,7 +92,12 @@ export function CtpPrompt({ holeNumber, players, teams, leader, leaderName, outO
   const chosen = feet != null;
   // A standing tag with no distance on it (a director's hand-set winner)
   // is not a number, so there is nothing to be inside of.
-  const beatsLeader = !hasLeader || !leader.distance_ft || (chosen && feet < leader.distance_ft);
+  const beatsLeader = !hasLeader || !leader.distance_ft || canTakePin({
+    leaderFt: leader.distance_ft, leaderOrder, myFt: feet, myOrder,
+  });
+  // Whether a tie is ours to take, which is what decides which of the two
+  // "you did not clear it" lines below is true.
+  const tied = chosen && hasLeader && feet === leader.distance_ft;
   // BOTH halves, deliberately: a name without a measurement is not a tag.
   const canTag = !!pid && chosen && beatsLeader;
 
@@ -189,7 +198,7 @@ export function CtpPrompt({ holeNumber, players, teams, leader, leaderName, outO
                 <span style={{ fontSize: FS.label }}>⏱</span>
                 <span style={{ fontSize: FS.label, color: BC.t2, lineHeight: 1.45, minWidth: 0 }}>
                   <span style={{ fontWeight: 800, color: BC.warn }}>{outOfOrder.label} tagged this after you finished.</span>
-                  {" "}Tag it if you were closer — a tie stays theirs.
+                  {" "}Tag it if you were closer — and a tie is yours, you played it first.
                 </span>
               </div>
             )}
@@ -309,8 +318,8 @@ export function CtpPrompt({ holeNumber, players, teams, leader, leaderName, outO
             )}
             {chosen && !beatsLeader && (
               <div style={{ ...hint, color: BC.warn }}>
-                {feet === leader.distance_ft
-                  ? `Tied with ${leaderName || "the current CTP"} — the earlier tag holds.`
+                {tied
+                  ? `Tied with ${leaderName || "the current CTP"} — ${groupLabel(leaderOrder)} played it first, so it stays theirs.`
                   : `Not inside ${leaderDist} — ${leaderName || "the current CTP"} keeps it.`}
               </div>
             )}

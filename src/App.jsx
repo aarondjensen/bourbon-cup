@@ -37,6 +37,7 @@ import {
 import { usePullToRefresh } from "./lib/usePullToRefresh";
 import { useFitDensity } from "./lib/useFitDensity";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { SyncBanner } from "./components/SyncBanner";
 import { AppHeader, HEADER_SLOT_ID, HEADER_TOAST_TOP } from "./components/AppHeader";
 import { Popup, ConfirmModal } from "./components/Popup";
 import { CtpPrompt } from "./components/CtpPrompt";
@@ -96,7 +97,7 @@ import {
   scoringUnits, unitForPlayer, teeTimeList, expandTeeTimes, stripAMPM,
 } from "./lib/groups";
 import { firstTeeAt } from "./lib/countdown";
-import { groupKey, tagAheadOfPlay } from "./lib/ctp";
+import { groupKey, tagAheadOfPlay, resolvePin, OVERRIDE_KEY } from "./lib/ctp";
 import { roundScoreProgress, finalizeStage } from "./lib/scoreGuard";
 import {
   allRounds, MAX_ROUND_COUNT,
@@ -123,7 +124,7 @@ import { TRIP_SETTINGS_ID, houseFrom, tripSchedule, tripDates } from "./lib/trip
 import {
   cardSigBareId, sigForMatch, cardComplete, missingForCard,
   nonSignerPids, isFullyAttested, cardState,
-  roundCardProgress, pendingAttestations,
+  roundCardProgress, pendingAttestations, attestedPids,
 } from "./lib/cardSigs";
 import { useHoleAdvance } from "./lib/useHoleAdvance";
 
@@ -1402,6 +1403,7 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
     await onSetCtp(match.round, h, winnerPid, {
       distanceFt: feet, approved: false, taggedBy: userPid,
       groupKey: myGroupKey, groupOrder: myGroupIdx,
+      byName: tPlayers.find(p => p.player_id === userPid)?.name || "",
     });
     const nm = tPlayers.find(p => p.player_id === winnerPid)?.name || "";
     // Through notify(), not the hole-advance toast: tagging a CTP is ordinary
@@ -1418,7 +1420,10 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
   const confirmCtp = async () => {
     const h = ctpPrompt;
     if (h == null || !userPid) return;
-    await onConfirmCtp?.(match.round, h, userPid);
+    await onConfirmCtp?.(match.round, h, userPid, {
+      groupKey: myGroupKey, groupOrder: myGroupIdx,
+      byName: tPlayers.find(p => p.player_id === userPid)?.name || "",
+    });
   };
 
   // ScoreButtonRow hands back the new gross directly (0 = cleared, which it
@@ -2271,6 +2276,12 @@ function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, courses, tR
               myOrder: myGroupIdx,
               myKey: myGroupKey,
             }) : null}
+            /* Both tee orders, so the prompt can offer a TIE to the group
+               that played the hole first — which is the rule lib/ctp settles
+               the pin by. Offering a tag the board would then refuse is how
+               the two used to disagree. */
+            leaderOrder={rec?.tagged_group_order ?? null}
+            myOrder={myGroupIdx}
             onSave={saveCtp}
             onPass={confirmCtp}
             onClose={() => setCtpPrompt(null)}
@@ -4172,26 +4183,38 @@ export default function App() {
       // the hole (`approved`), which stops the prompt from re-opening.
       // Legacy docs predate both fields and simply read as undefined.
       rows.forEach(r => {
-        cd[`${r.round}_${r.hole}`] = {
-          player_id: r.player_id || null,
-          distance_ft: r.distance_ft ?? null,
-          approved: r.approved === true,
-          tagged_by: r.tagged_by || null,
-          // WHICH GROUP tagged it, and where that group tees off. The player
-          // id above says who typed; this says where they were in the field,
-          // which is the only way a group entering late can be told that the
-          // number in front of them came from BEHIND them. Null on a
-          // director's pick and on any tag written before this was recorded —
-          // see lib/ctp, where an unknown order deliberately says nothing.
-          tagged_group_key: r.tagged_group_key || null,
-          tagged_group_order: Number.isInteger(r.tagged_group_order) ? r.tagged_group_order : null,
-          // Who has walked off the hole agreeing the tag stands. See
-          // onConfirmCtp — a pass in the on-course prompt is an answer,
-          // and this is where it lands.
-          confirmed_by: Array.isArray(r.confirmed_by) ? r.confirmed_by : [],
-        };
+        // resolvePin turns the document's CLAIMS MAP — one entry per group
+        // that answered the prompt — into the single standing tag, and falls
+        // back to the flat fields a pin tagged before claims existed still
+        // carries. Resolving here rather than at each screen is what keeps
+        // the prompt, the director's grid and lib/betting untouched: they go
+        // on reading exactly the record they always did, and simply start
+        // getting the right winner out of it. See lib/ctp.
+        cd[`${r.round}_${r.hole}`] = resolvePin({
+          claims: r.claims,
+          legacy: {
+            player_id: r.player_id || null,
+            distance_ft: r.distance_ft ?? null,
+            approved: r.approved === true,
+            tagged_by: r.tagged_by || null,
+            // WHICH GROUP tagged it, and where that group tees off. The
+            // player id above says who typed; this says where they were in
+            // the field, which is the only way a group entering late can be
+            // told that the number in front of them came from BEHIND them.
+            // Null on a director's pick and on any tag written before this
+            // was recorded — see lib/ctp, where an unknown order says nothing.
+            tagged_group_key: r.tagged_group_key || null,
+            tagged_group_order: Number.isInteger(r.tagged_group_order) ? r.tagged_group_order : null,
+            // Who has walked off the hole agreeing the tag stands. See
+            // onConfirmCtp — a pass in the on-course prompt is an answer,
+            // and this is where it lands. Confirmations now arrive as claims;
+            // this is the same list written under the old shape, and
+            // resolvePin folds the two into one.
+            confirmed_by: Array.isArray(r.confirmed_by) ? r.confirmed_by : [],
+          },
+        });
       });
-      ctpDataRef.current = cd;   // keep the ref hot for the confirm append
+      ctpDataRef.current = cd;   // keep the ref hot for the prompt's own reads
       setCtpData(cd);
     }));
     unsubs.push(db.subscribe("bc_tournament_settings", f, rows => {
@@ -4631,59 +4654,92 @@ export default function App() {
   // winner would create a second answer that can disagree with the scorecard
   // the field signed, and no screen ever offered a way to correct it.
   //
-  // One document per round+hole — the hole's STANDING closest-to-the-pin.
-  // A later group that gets inside the current tag overwrites it, which is
-  // the whole point: the doc is the current answer, not a log of attempts.
+  // One document per round+hole, holding ONE CLAIM PER GROUP rather than one
+  // winner. Every group that is asked writes only its own key inside `claims`,
+  // and `resolvePin` derives the standing tag by reading them all — see
+  // lib/ctp for why the document cannot be the answer itself.
   //
-  // `approved` is the director's settle flag. Players tagging from the
-  // Scoring tab write false (provisional); the Betting → CTP grid, which
-  // only the director can operate, writes true and freezes the hole.
-  // Every field is written on every call because db.upsert merges — a
-  // director reassignment that omitted distance_ft would otherwise leave
-  // the previous group's measurement attached to a different player. The
-  // tagging GROUP is written the same way and for the same reason: a
-  // director's pick off the Betting tab carries no group, and inheriting the
-  // last group's tee order would have the prompt telling the next group the
-  // field is out of order on the strength of a stale field.
+  // The short version: this used to write the whole answer, so two groups
+  // tagging the same pin at once was last-write-wins and a nine-footer could
+  // overwrite a five-footer. `db.upsert` is `setDoc(…, { merge: true })`,
+  // which merges a map key by key, so two groups now write two different keys
+  // and neither can erase the other.
   //
-  // `confirmed_by` is CLEARED rather than merged. A confirmation was
-  // agreement with a distance that has just been beaten; carrying it onto
-  // the new tag would show the field agreeing with a number it has never
-  // seen.
+  // `approved` is the director's settle flag and stays a flat field: it is a
+  // fact about the HOLE, not about one group's answer. Players tagging from
+  // the Scoring tab write false (provisional); the Betting → CTP grid, which
+  // only the director can operate, writes true and files its pick under the
+  // override key, which beats every group claim beneath it.
+  //
+  // The legacy flat winner fields are left exactly where they are. A pin
+  // tagged before this change, and every pin an old year's import wrote,
+  // still reads correctly because resolvePin falls back to them when no group
+  // has claimed anything.
   const onSetCtp = useCallback(async (round, hole, pid, opts = {}) => {
-    const { distanceFt = null, approved = true, taggedBy = null, groupKey: gKey = null, groupOrder = null } = opts;
+    const {
+      distanceFt = null, approved = true, taggedBy = null,
+      groupKey: gKey = null, groupOrder = null, byName = "",
+    } = opts;
     const id = editionDocId(`bc_ctp_r${round}_h${hole+1}`);
-    if (pid) {
-      await db.upsert("bc_ctp", {
-        id, tournament_id: TOURNAMENT_ID, round, hole, player_id: pid,
-        distance_ft: distanceFt, approved, tagged_by: taggedBy,
-        tagged_group_key: gKey,
-        tagged_group_order: Number.isInteger(groupOrder) ? groupOrder : null,
-        confirmed_by: [],
-      });
-    } else {
-      await db.delete("bc_ctp", id);
-    }
+    // A director's pick carries no group, so it goes under the override key.
+    // A player's tag goes under their group's — and a group we cannot name
+    // (a match nobody drew, or one spread across two groups) falls back to
+    // the tagging player's own id, which is stable for that device and still
+    // cannot collide with another group's key.
+    const key = approved ? OVERRIDE_KEY : (gKey || taggedBy || "unknown");
+    const claim = pid
+      ? {
+          kind: approved ? "override" : "tag",
+          player_id: pid,
+          distance_ft: Number.isFinite(distanceFt) ? distanceFt : null,
+          order: Number.isInteger(groupOrder) ? groupOrder : null,
+          by: taggedBy || null,
+          by_name: byName || "",
+          at: new Date().toISOString(),
+        }
+      // Clearing writes null rather than deleting the document. readClaims
+      // drops a null, so the override simply stops existing and the hole
+      // falls back to whatever the field tagged — where deleting the document
+      // would throw away every group's answer, which is the exact class of
+      // loss this whole change exists to stop.
+      : null;
+    return db.upsert("bc_ctp", {
+      id, tournament_id: TOURNAMENT_ID, round, hole,
+      approved: approved && !!pid,
+      claims: { [key]: claim },
+    });
   }, []);
   // ── Confirming a standing CTP ────────────────────────────────────────
-  // The pass answer from the on-course prompt. Additive and idempotent, so
-  // two phones in the same group confirming at once converge instead of
-  // racing, and a group re-answering its own hole doesn't stack duplicates.
+  // The pass answer from the on-course prompt. A group that walks off a par 3
+  // without getting inside the standing tag is saying the tag is right, and
+  // that is the only thing that turns "nobody has been asked" into "everybody
+  // has been asked and it stands".
   //
-  // A merge write of ONLY this field, deliberately: the winner, the distance
-  // and who tagged it belong to whoever tagged it, and a confirmation must
-  // never be able to overwrite them. It reads the record it is appending to
-  // out of the live map rather than the document, which is the same snapshot
-  // the prompt showed the group — confirming what they were actually looking
-  // at. Nothing to confirm on an untagged hole.
-  const onConfirmCtp = useCallback(async (round, hole, pid) => {
+  // It is a CLAIM like a tag is, under the same group key, so it can neither
+  // erase another group's answer nor be erased by one. It used to read
+  // `confirmed_by` out of the live map and write the whole array back, which
+  // converges on one device and drops an attestation across two.
+  //
+  // `pass` and `confirm` are the same gesture answered on different holes —
+  // there is nothing to confirm on a pin nobody has tagged — and lib/ctp
+  // counts both as the group having answered.
+  const onConfirmCtp = useCallback(async (round, hole, pid, opts = {}) => {
+    if (!pid) return null;
+    const { groupKey: gKey = null, groupOrder = null, byName = "" } = opts;
     const rec = ctpDataRef.current[`${round}_${hole}`];
-    if (!rec?.player_id || !pid) return;
-    if ((rec.confirmed_by || []).includes(pid)) return;
-    await db.upsert("bc_ctp", {
+    const key = gKey || pid;
+    return db.upsert("bc_ctp", {
       id: editionDocId(`bc_ctp_r${round}_h${hole+1}`),
-      tournament_id: TOURNAMENT_ID,
-      confirmed_by: [...new Set([...(rec.confirmed_by || []), pid])],
+      tournament_id: TOURNAMENT_ID, round, hole,
+      claims: {
+        [key]: {
+          kind: rec?.player_id ? "confirm" : "pass",
+          order: Number.isInteger(groupOrder) ? groupOrder : null,
+          by: pid,
+          by_name: byName || "",
+          at: new Date().toISOString(),
+        },
+      },
     });
   }, []);
 
@@ -4938,9 +4994,11 @@ export default function App() {
   // three plus the director's force-attest below. See lib/cardSigs for the
   // model and why signatures live in their own collection.
   //
-  // Every field is written on every call, for the same reason onSetCtp does
-  // it: db.upsert MERGES, so an update that omitted `attested_by` would
-  // leave the previous list attached to a card that no longer has it.
+  // Attestations are a MAP (`attests`), keyed by the attesting player, for
+  // the same reason CTP claims are: two phones appending to an array both
+  // computed `[...seen, me]` from the same snapshot, and the second write
+  // dropped the first. A map merges key by key and cannot lose one. See
+  // lib/cardSigs, which reads the map and the old array as one list.
   const onSignCard = useCallback(async (match, pid) => {
     if (!match || !pid) return null;
     // A match whose only member is the signer has nobody left to attest.
@@ -4960,25 +5018,46 @@ export default function App() {
       // list, so the auto-attested card's chip row and its FINAL badge agree
       // by construction rather than by a second field being kept in step.
       attested_by: [],
+      attests: {},
       attested: others.length === 0,
     };
     // A signature is the one act on this screen that the next tap cannot
     // undo, so it gets the heavier of the two haptics. Web: nothing.
     commitFeedback();
-    return db.upsert("bc_card_sigs", doc);
+    // REPLACES rather than merges, and that is the point of the flag: this
+    // payload is the whole document, and `attests: {}` under a merge is a
+    // no-op that would leave a previous signing's attestations attached to a
+    // freshly signed card. Unsign deletes the document, so the ordinary path
+    // never hits that — but "ordinary path" is not a guarantee, and a card
+    // carrying somebody else's attestation is the kind of wrong nobody looks
+    // for twice.
+    return db.upsert("bc_card_sigs", doc, { merge: false });
   }, []);
 
-  // Additive: an attester is appended, and the card flips to `attested`
-  // only on the one that completes the set. Recomputed from the document
-  // rather than from a count so two players attesting at once converge on
-  // the same answer instead of racing to a stale total.
+  // One key, merged in. The write touches nothing but this player's own
+  // entry, so two men attesting the same card at the same moment land two
+  // different keys and both survive — where appending to `attested_by` meant
+  // the second write carried a list that predated the first.
+  //
+  // `attested` is still written, because the Cloud Function that pushes
+  // "card is final" triggers on it (functions/index.js). It is derived from
+  // this phone's snapshot, so a genuine dead heat can leave it false on a
+  // card that is in fact complete — the next attest or the director's
+  // force-attest sets it, and every screen reads completeness off the map
+  // through isFullyAttested rather than off this flag. A missed push is the
+  // whole cost, where the old shape lost the attestation itself.
   const onAttestCard = useCallback(async (match, pid) => {
     if (!match || !pid) return null;
     const sig = sigForMatch(cardSigsRef.current, match.id);
     if (!sig) return null;
-    const attested_by = [...new Set([...(sig.attested_by || []), pid])];
-    const done = nonSignerPids(match, sig).every(p => attested_by.includes(p));
-    return db.upsert("bc_card_sigs", { ...sig, attested_by, attested: done });
+    const seen = new Set([...attestedPids(sig), pid]);
+    const done = nonSignerPids(match, sig).every(p => seen.has(p));
+    return db.upsert("bc_card_sigs", {
+      id: sig.id || editionDocId(cardSigBareId(match.round, match.id)),
+      tournament_id: TOURNAMENT_ID,
+      attests: { [pid]: { at: new Date().toISOString() } },
+      attested: done,
+    });
   }, []);
 
   // Unsign deletes the document outright rather than blanking its fields.
@@ -5005,11 +5084,15 @@ export default function App() {
     });
     for (const m of pending) {
       const sig = sigForMatch(cardSigsRef.current, m.id);
+      const at = new Date().toISOString();
       await db.upsert("bc_card_sigs", {
         ...sig,
-        attested_by: nonSignerPids(m, sig),
+        // Every outstanding attester at once, as map keys, so a player who
+        // taps Attest in the same moment merges with the force rather than
+        // fighting it.
+        attests: Object.fromEntries(nonSignerPids(m, sig).map(pid => [pid, { at, forced: true }])),
         attested: true,
-        attested_forced_at: new Date().toISOString(),
+        attested_forced_at: at,
       });
     }
     return pending.length;
@@ -5578,6 +5661,13 @@ export default function App() {
           Toast spreads `top` straight into its style, so a calc() works here
           with no change to the component. */}
       <Toast message={notif?.msg} type={notif?.type} top="calc(env(safe-area-inset-top, 0px) + 16px)" />
+
+      {/* The connection strip. Draws nothing at all while writes are landing,
+          which is nearly always — it exists for the two states this app had
+          no voice for: a score queued on a phone with no signal, and a score
+          the rules REFUSED, which Firestore rolls back so it is gone from the
+          phone as well as the board. See lib/connection. */}
+      <SyncBanner />
 
       {/* Pull-to-refresh indicator — circular badge with the trophy
           silhouette inside, fixed-positioned and overlaid above the

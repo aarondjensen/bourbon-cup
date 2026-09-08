@@ -118,6 +118,31 @@ export const missingForCard = (match, holeData) => {
     .filter(m => m.holes.length > 0);
 };
 
+// ── Who has attested ────────────────────────────────────────────────
+// An attestation used to be an append to the `attested_by` ARRAY: read the
+// current list, add yourself, write the whole thing back. That converges on
+// one device and loses on two — both phones compute `[...seen, me]` from the
+// same snapshot and the second write lands on top, so one man's attestation
+// disappears and the card sits one short forever while he watched it register.
+//
+// So an attestation is now its own key in the `attests` MAP. `db.upsert` is
+// `setDoc(…, { merge: true })`, which merges a map key by key, and two phones
+// writing two different keys cannot erase each other. Same reasoning as the
+// CTP claims map in lib/ctp, and the same shape.
+//
+// Both are read here. The array is what every card signed before this change
+// carries, and a card can be part-written under each shape — one attestation
+// landing before the deploy and one after — so the two are folded into one
+// list rather than one winning.
+export const attestedPids = (sig) => {
+  const legacy = Array.isArray(sig?.attested_by) ? sig.attested_by : [];
+  const map = sig?.attests && typeof sig.attests === "object" ? sig.attests : {};
+  // A map key whose value is null is an attestation that was withdrawn; the
+  // key survives the merge, so absence has to be read off the value.
+  const fromMap = Object.keys(map).filter(pid => map[pid]);
+  return [...new Set([...legacy, ...fromMap])];
+};
+
 // ── Signature state ─────────────────────────────────────────────────
 // Everyone in the match except whoever signed it. These are the players
 // the card is waiting on.
@@ -131,7 +156,7 @@ export const nonSignerPids = (match, sig) =>
 export const isFullyAttested = (match, sig) => {
   if (!sig) return false;
   const pending = nonSignerPids(match, sig);
-  const attested = sig.attested_by || [];
+  const attested = attestedPids(sig);
   return pending.length === 0 || pending.every(pid => attested.includes(pid));
 };
 
@@ -159,7 +184,7 @@ export function roundCardProgress(matches, cardSigs, round) {
     if (isFullyAttested(m, sig)) attested++;
     else awaiting.push({
       match: m,
-      pending: nonSignerPids(m, sig).filter(pid => !(sig.attested_by || []).includes(pid)),
+      pending: nonSignerPids(m, sig).filter(pid => !attestedPids(sig).includes(pid)),
     });
   });
   return {
@@ -185,6 +210,6 @@ export function pendingAttestations(matches, cardSigs, pid) {
     if (!matchPlayers(m).includes(pid)) return false;
     const sig = sigForMatch(cardSigs, m.id);
     if (!sig || sig.signed_by === pid) return false;
-    return !(sig.attested_by || []).includes(pid) && !isFullyAttested(m, sig);
+    return !attestedPids(sig).includes(pid) && !isFullyAttested(m, sig);
   });
 }
