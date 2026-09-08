@@ -212,10 +212,44 @@ export function segmentState(holes, { total = false, higherWins = false, holeVal
   // Match play: a lead bigger than the holes left can't be caught, so the
   // segment is over before the holes run out ("3&2").
   const margin = aWins - bWins;
-  const clinched = played.length > 0 && Math.abs(margin) > remaining;
+  // ── Where it closed out, and what stood there ──
+  // A match ends ON the hole the lead outgrew the holes left, and the result
+  // is what stood on THAT hole. It is not what the card goes on to say
+  // afterwards, and here the card always does go on: the other two Nassau
+  // pots are still live after the 18-hole match is gone, the skins and the
+  // total are still live after all three, so every group scores all 18 holes
+  // whatever the match did on the 12th.
+  //
+  // Reading a result off the running margin therefore drifts one hole at a
+  // time — the lead keeps growing while the holes left keep shrinking — and
+  // it drifts into arithmetic golf cannot produce. A match 8 up with 6 to
+  // play is over at 8&6; scoring the next two holes made the same match read
+  // "10&4", which is not a score, because a 10-hole lead cannot survive to a
+  // hole with only 4 left. Played all the way out, `remaining` reaches zero
+  // and the same reading printed "6 UP" for a nine that ended 4&3.
+  //
+  // Walked in hole order rather than solved from the totals, because the
+  // question is WHEN, and because a hole nobody has scored yet is a hole
+  // still to play — a gap behind the group counts against the lead exactly
+  // as an unplayed hole ahead of it does.
+  const decided = (() => {
+    let m = 0, gaps = 0;
+    for (let i = 0; i < holes.length; i++) {
+      const h = holes[i];
+      if (!h.played) gaps++;
+      else if (h.winner === "A") m++;
+      else if (h.winner === "B") m--;
+      const left = gaps + (holes.length - 1 - i);
+      if (Math.abs(m) > left) return { margin: m, remaining: left, at: i };
+    }
+    return null;
+  })();
+  // The same test as `decided`, applied to the last hole — so the two can
+  // never disagree about whether this segment is over.
+  const clinched = decided != null;
   return {
-    ...base, unit: "up", margin, clinched, complete: clinched || allIn,
-    winner: clinched ? (margin > 0 ? "A" : "B")
+    ...base, unit: "up", margin, clinched, decided, complete: clinched || allIn,
+    winner: clinched ? (decided.margin > 0 ? "A" : "B")
       : allIn ? (margin > 0 ? "A" : margin < 0 ? "B" : null) : null,
   };
 }
@@ -234,7 +268,13 @@ export const statusText = (st) => {
   // story. Halves print as halves — a split hole is worth 0.5 on the front.
   if (st.unit === "points") return m === 0 ? "TIED" : `+${m % 1 ? m.toFixed(1) : m}`;
   if (st.unit === "total") return m === 0 ? "TIED" : `+${m}`;
-  if (st.clinched && st.remaining > 0) return `${m}&${st.remaining}`;
+  // A decided match reads as it stood on the hole it was decided — see
+  // `decided` in segmentState. Every later hole is scored for the pots that
+  // are still live, and none of them can change this number.
+  if (st.decided) {
+    const d = Math.abs(st.decided.margin);
+    return st.decided.remaining > 0 ? `${d}&${st.decided.remaining}` : `${d} UP`;
+  }
   if (m === 0) return "AS";
   return `${m} UP`;
 };
