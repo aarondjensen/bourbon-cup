@@ -1651,7 +1651,7 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   //     and half for one each, half against grey for a lone dot, grey when
   //     both were tied away.
   //   the GLYPH — where the match stands after that hole, from the reader's
-  //     own team's perspective: ▲N ahead, ▼N behind, TIED level.
+  //     own team's perspective: ▲N ahead, ▼N behind, AS level.
   //
   // The two are deliberately in different currencies. The bar is about one
   // hole and belongs to a team; the glyph is about the whole match so far and
@@ -1797,7 +1797,11 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
         <div style={{ textAlign: "center", fontSize: FS.body, fontWeight: 800, color, lineHeight: 1 }}>
           {fromUserView > 0 ? <>▲{fromUserView}</>
             : fromUserView < 0 ? <>▼{Math.abs(fromUserView)}</>
-            : <span style={{ fontSize: FS.micro, fontWeight: 700, letterSpacing: 0.5 }}>TIED</span>}
+            // ALL SQUARE on every format. This glyph is the match as it
+            // stands after a hole — live by construction, so never HALVED —
+            // and it said "TIED" on a Total or points round, which is a
+            // scoreboard word for some other sport. See scoring.statusText.
+            : <span style={{ fontSize: FS.micro, fontWeight: 700, letterSpacing: 0.5 }}>AS</span>}
         </div>
       </>
     );
@@ -2061,7 +2065,9 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   const segVerdict = (st) => {
     if (!st.played) return "—";
     if (st.complete) {
-      if (st.winner == null) return st.unit === "up" ? "HALVED" : statusText(st);
+      // statusText says HALVED for a settled level segment in every
+      // currency now, so this no longer has to fork on the unit.
+      if (st.winner == null) return statusText(st);
       return (st.winner === userTeam ? "WON " : "LOST ") + statusText(st);
     }
     if (st.unit === "up" && st.margin !== 0) {

@@ -262,12 +262,30 @@ export function segmentState(holes, { total = false, higherWins = false, holeVal
 export const statusText = (st) => {
   if (!st.played) return "—";
   const m = Math.abs(st.margin);
+  // ── Level, in golf's own two words ──
+  // Golf has never called this tied. A match that is level while it is still
+  // being played is ALL SQUARE; one that finished level was HALVED, and the
+  // past tense is the whole of the difference — a halved match paid out, half
+  // a point each, and there is nothing left to play for.
+  //
+  // Both words are older than the app and neither is optional: "TIED" read as
+  // a scoreboard for some other sport, and it was on screen in four places.
+  //
+  // It sits ABOVE the unit branches on purpose. A level segment is level
+  // whether the currency is holes, dots, points or strokes, and the three
+  // branches below have nothing to add to it — leaving each to answer for
+  // itself is exactly how one of them ended up saying "AS" for a settled nine
+  // while another said "TIED" for a settled round.
+  //
+  // `decided` cannot be set here: a segment closes out only when the lead is
+  // bigger than what is left, which needs a margin of at least one.
+  if (m === 0) return st.complete ? "HALVED" : "AS";
   // A points segment gets the same treatment as a total: there is no "up" in
   // a currency where one hole is worth two of another, and "5&4" would be a
   // flat lie about how much is left. The lead, and the color, is the whole
   // story. Halves print as halves — a split hole is worth 0.5 on the front.
-  if (st.unit === "points") return m === 0 ? "TIED" : `+${m % 1 ? m.toFixed(1) : m}`;
-  if (st.unit === "total") return m === 0 ? "TIED" : `+${m}`;
+  if (st.unit === "points") return `+${m % 1 ? m.toFixed(1) : m}`;
+  if (st.unit === "total") return `+${m}`;
   // A decided match reads as it stood on the hole it was decided — see
   // `decided` in segmentState. Every later hole is scored for the pots that
   // are still live, and none of them can change this number.
@@ -275,7 +293,6 @@ export const statusText = (st) => {
     const d = Math.abs(st.decided.margin);
     return st.decided.remaining > 0 ? `${d}&${st.decided.remaining}` : `${d} UP`;
   }
-  if (m === 0) return "AS";
   return `${m} UP`;
 };
 

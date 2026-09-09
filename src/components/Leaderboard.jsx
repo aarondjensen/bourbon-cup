@@ -305,7 +305,6 @@ function MatchCard({
   index, first, match, result, format, tPlayers,
   courses, tRounds, roundLocks, holeData, viewer, expanded, onToggle,
 }) {
-  const total = resolveScoring(match).formOfPlay === SCORING_TYPE_TOTAL;
   const opts = segOpts(match, format);
   // What the holes were actually scored as — see the note on holeFormatFor. The
   // strip below paints a hole from its two numbers, and on a best-ball override
@@ -369,11 +368,12 @@ function MatchCard({
   const { showFront, showBack } = nassauSegmentVisibility(match, hp);
 
   // A completed match that finished level is a HALVE, worth a half point to
-  // each side. statusText would call that "AS", which reads as a live state —
-  // "½" says it's over and how it was settled. Total matches keep their own
-  // "TIED" wording, so this only applies to match play.
-  const halved = done && !total && !perHole && overallSt.margin === 0;
-  const statusLabel = halved ? "½" : statusText(overallSt);
+  // each side, and statusText now says so in every currency — this row used
+  // to print "½" for match play and let statusText say "TIED" for the rest,
+  // which was one outcome under two names on one screen. The symbol survives
+  // in SegmentPill above, where it is a POT ("½ – ½", half a point each) and
+  // not the match's status.
+  const statusLabel = statusText(overallSt);
   const statusBase = leader ? teamColor(leader) : overallSt.played ? BC.t2 : BC.t3;
   const statusColor = ink(statusBase, done);
   // Sub-line under the status. An unplayed match has no progress to report,
