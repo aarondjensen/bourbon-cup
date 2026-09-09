@@ -19,7 +19,7 @@
 // somebody opens ☰ → Data, so a broken import there cannot fail anywhere else
 // first.
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/react";
+import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
 
 // The screens under test reach for Firestore at import time (the db handle)
 // and, in one case, subscribe on mount. Neither belongs in a mount test: this
@@ -306,6 +306,82 @@ describe("Scoring", () => {
 
   it("renders the sealed closing round for a player in it", () => {
     mounts(<ScoreEntry {...scoring()} />);
+  });
+
+  // ── Who a sealed round will let you walk to ───────────────────────
+  // The picker exists so a DIRECTOR can score a group they are not in, and on
+  // the closing round that is four tee times deep — which put every score in
+  // the sealed round four taps from a man who is also playing in it.
+  //
+  // The waves here are teammates, which is what a team round's draw is: 8:00
+  // and 8:20 are Team A, 8:10 and 8:30 are Team B, and the reader is p1.
+  describe("the seal, on the group picker", () => {
+    const text = (props) => render(<ScoreEntry {...props} />).container.textContent;
+    const director = { ...field[0], isDirector: true };
+
+    it("gives a player no picker at all", () => {
+      // Fifteen of the sixteen are in exactly one group and need no control to
+      // find it. This is the half that was already true, and the half that has
+      // to stay true — it is the whole answer to "can a player see the round".
+      const t = text(scoring());
+      expect(t).not.toContain("8:10");
+      expect(t).not.toContain("8:20");
+      expect(t).not.toContain("8:30");
+    });
+
+    it("keeps a player's screen to their own four", () => {
+      const t = text(scoring());
+      expect(t).toContain("Player 2");    // his own wave
+      expect(t).not.toContain("Player 5");  // his side's other wave
+      expect(t).not.toContain("Player 9");  // the other side
+    });
+
+    it("padlocks the other side's waves for a director", () => {
+      const t = text(scoring({ user: director }));
+      expect(t).toContain("🔒 8:10");
+      expect(t).toContain("🔒 8:30");
+    });
+
+    it("leaves a director's own side unlocked", () => {
+      // A team is never hidden from itself — the line every other surface in
+      // the app draws. Checking your own side's card is not the result.
+      const t = text(scoring({ user: director }));
+      expect(t).toContain("8:00");
+      expect(t).toContain("8:20");
+      expect(t).not.toContain("🔒 8:00");
+      expect(t).not.toContain("🔒 8:20");
+    });
+
+    it("lands a director on their own group, not on the first tee time", () => {
+      const t = text(scoring({ user: director }));
+      expect(t).toContain("Player 2");
+      expect(t).not.toContain("Player 9");
+    });
+
+    it("asks before it opens one, and shows nothing until answered", async () => {
+      const { container, getByText } = render(<ScoreEntry {...scoring({ user: director })} />);
+      fireEvent.click(getByText("🔒 8:10"));
+      // The confirm is up, naming what the tap costs.
+      await waitFor(() => expect(document.body.textContent).toContain("Show the other side"));
+      // And nothing has moved behind it.
+      expect(container.textContent).not.toContain("Player 9");
+    });
+
+    it("padlocks nothing once the round is not sealed at all", () => {
+      const open = { ...bestBallRound, sealed: false };
+      const t = text(scoring({ user: director, tRounds: [open] }));
+      expect(t).toContain("8:10");
+      expect(t).not.toContain("🔒");
+    });
+
+    it("padlocks nothing once the countdown has finished", () => {
+      // Sealed and fully revealed. The round is over and public; there is
+      // nothing left to protect and the picker goes back to being a picker.
+      const done = { ...bestBallRound, reveal_through: 18 };
+      const t = text(scoring({ user: director, tRounds: [done] }));
+      expect(t).toContain("8:10");
+      expect(t).not.toContain("🔒");
+    });
   });
   it("renders it for a director, who gets the group picker", () => {
     // The picker only exists when a match spans more than one unit, so this
