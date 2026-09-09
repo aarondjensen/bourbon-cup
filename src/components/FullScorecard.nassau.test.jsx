@@ -125,8 +125,13 @@ describe("the nines row", () => {
     const t = card({ point_method: "traditional" });
     expect(t).not.toContain("F9");
     expect(t).not.toContain("B9");
-    // The card is otherwise unchanged — the eighteen is still stated.
-    expect(t).toContain("Treetops");
+    // The card is otherwise unchanged — the eighteen is still stated, in the
+    // header chip between the two names. This used to check for the course
+    // name, which the card printed in a terms line under that header; the line
+    // is gone (it restated the Scoring tab's format badge and the Matches
+    // tab's round banner), and the eighteen's own result was always the
+    // better witness to "the card still states the match".
+    expect(t).toContain("1 UP");
   });
 
   it("shows only the nine that carries a point", () => {

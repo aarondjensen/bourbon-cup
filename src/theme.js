@@ -734,13 +734,24 @@ export const bcGlobalCSS = (bg, card) => `
   }
   body { margin: 0; padding: 0; -webkit-text-size-adjust: 100%; }
   /* ── All-caps, app-wide ──
-     One inherited rule on the mount point instead of a textTransform on every
-     style object — the app is styled inline, so per-component opt-in would be
-     hundreds of edits and every new component a chance to forget. Form
-     controls are named explicitly because a UA stylesheet is the one place
-     that can interrupt inheritance on them; this is display-only, so what
-     lands in Firestore is still exactly what the director typed. */
-  #root, #root input, #root textarea, #root select, #root button {
+     One inherited rule instead of a textTransform on every style object — the
+     app is styled inline, so per-component opt-in would be hundreds of edits
+     and every new component a chance to forget. Form controls are named
+     explicitly because a UA stylesheet is the one place that can interrupt
+     inheritance on them; this is display-only, so what lands in Firestore is
+     still exactly what the director typed.
+
+     On BODY, not on #root, and that is the whole point of it. A popup opened
+     with the portal prop is a direct child of <body> (components/Popup uses
+     createPortal, so a transformed ancestor cannot trap it), which put it
+     outside a rule anchored on #root: the app was all-caps everywhere except
+     the layer that floats above it. The Full Scorecard sheet was the visible
+     one — four names and a Sign Card button in sentence case over an app that
+     shouts — and every other portaled surface had it too: the confirm modal,
+     the Toast, the sync banner. Anything that genuinely wants its own case
+     sets textTransform itself and still wins on specificity, which is what
+     components/ErrorBoundary does to keep a stack trace readable. */
+  body, body input, body textarea, body select, body button {
     text-transform: uppercase;
   }
 `;
