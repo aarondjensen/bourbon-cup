@@ -127,9 +127,21 @@ export function RoundSummarySheet({
       onClose={onClose}
       maxWidth={440}
       padding={0}
-      outerPadding={12}
+      outerPadding={16}
       portal
-      innerStyle={{ background: BC.card, border: `1px solid ${BC.amber}${ALPHA.line}` }}
+      // ── A frame with a scrolling middle, not one long scroll ───────
+      // Popup carries display/flexDirection through to its scroller, which is
+      // what lets the three pieces below split it: the header and the team
+      // score are pinned, the sections travel underneath them, and Close sits
+      // on the bottom edge. One round is comfortably twice a phone's height —
+      // four matches, a pin, two skins lists, low net and the money hole — so
+      // as one scroll it opened with the round it was summarising already
+      // scrolled off the top and the only way out five sections below the
+      // fold.
+      innerStyle={{
+        background: BC.card, border: `1px solid ${BC.amber}${ALPHA.line}`,
+        display: "flex", flexDirection: "column",
+      }}
     >
       {/* ── The header ────────────────────────────────────────────
           Named by where and what, the way the Leaderboard's round bar is —
@@ -137,6 +149,7 @@ export function RoundSummarySheet({
           than its number does. The number is the eyebrow because the
           notification that opened this said it. */}
       <div style={{
+        flexShrink: 0,
         background: BC.amber + ALPHA.wash, borderBottom: `1px solid ${BC.amber}${ALPHA.hair}`,
         padding: "13px 18px", textAlign: "center",
       }}>
@@ -155,6 +168,7 @@ export function RoundSummarySheet({
           The two team totals, which is the one number the whole field cares
           about and the reason a round being final is worth a push at all. */}
       <div style={{
+        flexShrink: 0,
         display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
         padding: "12px 16px", borderBottom: `1px solid ${BC.bdr}`,
       }}>
@@ -177,7 +191,13 @@ export function RoundSummarySheet({
         </div>
       </div>
 
-      <div style={{ padding: "12px 14px" }}>
+      {/* Everything below the score is what scrolls. minHeight:0 is what
+          lets it: a flex item's automatic minimum is its content, so without
+          it this box refuses to shrink and pushes Close off the card again. */}
+      <div style={{
+        flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain",
+        padding: "12px 14px 2px",
+      }}>
         {/* ── The matches ─────────────────────────────────────────
             `status` off the scoring engine is already golf-native — "3&2
             (IRONS)", "TIED" — so nothing here re-words a result. The two sides
@@ -278,10 +298,18 @@ export function RoundSummarySheet({
             WORTH depends on the buy-in and on how the week's other rounds
             went, and the Betting tab is where that is settled — a share
             quoted here would be a second answer to it. */}
-        <div style={{ fontSize: FS.micro, color: BC.t3, textAlign: "center", lineHeight: 1.5, margin: "2px 0 12px" }}>
+        <div style={{ fontSize: FS.micro, color: BC.t3, textAlign: "center", lineHeight: 1.5, margin: "2px 0 10px" }}>
           What each of these pays is on the Betting tab.
         </div>
+      </div>
 
+      {/* On the frame rather than at the end of the scroll, so the way out of
+          a summary is where it is on every other sheet — the bottom edge —
+          rather than wherever the round happened to run to. */}
+      <div style={{
+        flexShrink: 0, padding: "10px 14px",
+        borderTop: `1px solid ${BC.bdr}`, background: BC.card,
+      }}>
         <button
           onClick={onClose}
           style={{

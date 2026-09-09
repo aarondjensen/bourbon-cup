@@ -95,6 +95,40 @@ describe("Popup structure", () => {
   it("declares the app font, since a portaled popup inherits nothing", () => {
     expect(render(<Popup onClose={() => {}}>hi</Popup>)).toContain("Montserrat");
   });
+
+  // The card is capped against the box it SITS IN, not against the page.
+  // `calc(100vh - 32px)` was wrong twice over: 32 hardcoded the default
+  // outerPadding, so a caller passing anything else got a card allowed to
+  // overflow the overlay's own content box, and 100vh in mobile Safari is the
+  // large viewport — the height with the toolbars retracted — which is taller
+  // than the position:fixed overlay itself. Both ways the bottom of the card
+  // hangs off the bottom of the screen, taking whatever sits on its bottom
+  // edge with it. A percentage cannot be wrong about either.
+  it("measures the card against the overlay, never against the viewport", () => {
+    const html = render(<Popup onClose={() => {}} outerPadding={12}>{tall}</Popup>);
+    expect(html).toContain("max-height:100%");
+    expect(html).not.toContain("100vh");
+  });
+
+  // env() insets have to be written AFTER the `padding` shorthand. They used
+  // to be spread in ahead of it, and a shorthand set later erases the
+  // longhand — so the safe-area clearance every keyboard-aware modal thought
+  // it had was being overwritten one property later and was never on screen.
+  it("keeps the safe-area insets from being erased by the padding shorthand", () => {
+    const html = render(<Popup onClose={() => {}}>hi</Popup>);
+    const padIdx = html.indexOf("padding:16px");
+    expect(padIdx).toBeGreaterThan(-1);
+    expect(html.indexOf("padding-top:calc(env(safe-area-inset-top")).toBeGreaterThan(padIdx);
+    expect(html.indexOf("padding-bottom:calc(env(safe-area-inset-bottom")).toBeGreaterThan(padIdx);
+  });
+
+  // A viewportFit overlay is already pinned to the visible rect, which ends at
+  // the top of the keyboard. A home-indicator inset added below that is
+  // clearance for glass that is not on screen any more.
+  it("leaves the bottom inset off a keyboard-aware overlay", () => {
+    const html = render(<Popup onClose={() => {}} viewportFit>hi</Popup>);
+    expect(html).not.toContain("safe-area-inset-bottom");
+  });
 });
 
 describe("ConfirmModal", () => {
