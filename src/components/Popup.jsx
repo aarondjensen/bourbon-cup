@@ -147,7 +147,7 @@ export function Popup({
         // viewportFit: pin to the live visible rect (above the keyboard).
         // Otherwise the classic full-viewport overlay.
         ...(viewportFit
-          ? { top: rect.top, left: rect.left, width: rect.width, height: rect.height, paddingTop: `calc(env(safe-area-inset-top, 0px) + ${outerPadding}px)` }
+          ? { top: rect.top, left: rect.left, width: rect.width, height: rect.height }
           // Plain inset:0. This used to reach below the layout viewport to dim
           // the strip an old iOS home-screen icon leaves under it, which never
           // worked: the webview clips at its bottom edge, so the backdrop was
@@ -163,6 +163,23 @@ export function Popup({
         alignItems,
         justifyContent: "center",
         padding: outerPadding,
+        // ── The insets go on AFTER the shorthand, not before ──────────
+        // These used to be written inside the viewportFit branch above, which
+        // is spread ahead of `padding` — and a `padding` shorthand set after a
+        // `paddingTop` erases it. The safe-area clearance every keyboard-aware
+        // modal thought it had was being overwritten one property later.
+        //
+        // The overlay covers the whole webview (viewport-fit=cover on the
+        // meta), so nothing else is going to tell a card about the notch or
+        // the home indicator. Both are 0px in a browser tab and 0px on a
+        // correctly installed icon, so this costs the web nothing; on a store
+        // build it is the ~34pt at the bottom the round summary was running
+        // its last row into.
+        paddingTop: `calc(env(safe-area-inset-top, 0px) + ${outerPadding}px)`,
+        // Not in viewportFit: there the rect already ends at the keyboard, and
+        // a home-indicator inset added under it is clearance for glass that is
+        // no longer on screen.
+        ...(viewportFit ? null : { paddingBottom: `calc(env(safe-area-inset-bottom, 0px) + ${outerPadding}px)` }),
         boxSizing: "border-box",
         overflowY: viewportFit ? "hidden" : "auto",
         overscrollBehavior: "contain",
@@ -181,8 +198,19 @@ export function Popup({
           fontFamily: FONT,
           width: "100%",
           maxWidth,
-          // viewportFit cards fill the rect and scroll internally.
-          maxHeight: viewportFit ? "100%" : "calc(100vh - 32px)",
+          // ── 100%, and deliberately NOT a vh unit ────────────────────
+          // A percentage max-height resolves against this flex container's
+          // CONTENT box — which is the fixed overlay minus the padding set
+          // above — so the card is measured against the box it actually sits
+          // in, safe-area insets and any outerPadding a caller passes
+          // included. `calc(100vh - 32px)` was two guesses: 32 hardcoded the
+          // DEFAULT outerPadding (the round summary passes 12), and 100vh on
+          // mobile Safari is the LARGE viewport — the height the page would
+          // have with the toolbars retracted, which is taller than the
+          // position:fixed box the overlay is. A card clamped to a height
+          // bigger than its own container hangs off the bottom of the screen,
+          // and the frame's Close button hangs off with it.
+          maxHeight: "100%",
           // ── The card is a FRAME. The scroller is inside it. ──
           // This used to be the scroller itself, with the ✕ absolutely
           // positioned in it — and an absolute box inside a scrolling
