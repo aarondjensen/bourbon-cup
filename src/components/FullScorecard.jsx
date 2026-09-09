@@ -62,13 +62,42 @@
 //      of view. A stated result — the overall status, a nine's status, a
 //      clinch — is team-colored again, because it names a winner.
 //
+//  ── One shape, one meaning ────────────────────────────────────────
+//  A rounded box around a number is GOLF NOTATION and nothing else: a
+//  square is a bogey, a double square a double, a circle a birdie. That
+//  is the oldest language on the card and the card does not get to
+//  redefine it three rows down.
+//
+//  So the two things that used to be drawn as outlined boxes — the
+//  side's number on a hole it WON, and the clinch stamp on the MATCH row
+//  — are FILLED in the team's deep shade instead. They sat in the column
+//  directly under a gross score wearing the real notation, at the same
+//  1.5px and the same radius, and the collision was worst exactly where
+//  the card was most worth reading: a birdie circled on the gross row
+//  with a square under it on the net row says "3, then a bogey" to
+//  anybody who reads a scorecard, when what happened is a birdie that
+//  won the hole.
+//
+//  The three treatments, and there are only three:
+//
+//    outline (circle / square) — a score against par. Gross rows only,
+//      in neutral ink, never in a team colour.
+//    solid team fill          — a team took this. The hole (NET row) or
+//      the match (the clinch stamp). Same thing holeFill already says
+//      with the Scoring tab's bars and the Leaderboard's cells.
+//    washed chip, hairline    — a STATED result: F9 / B9, OUT / IN.
+//
+//  The fill is teamColorDim, not the accent, because it carries white
+//  ink: ON_ACCENT on the accent green measures 2.9:1, and this is 13px
+//  in the densest grid in the app.
+//
 //  Everything here is presentational. Every number is either a gross
 //  score the group entered or something computeMatchResult already
 //  worked out.
 // ══════════════════════════════════════════════════════════════════
 
 import { playerLookup, sideNames } from "../lib/players";
-import { BC, FONT, ALPHA, FS, ON_AMBER, teamColor } from "../theme";
+import { BC, FONT, ALPHA, FS, ON_AMBER, ON_ACCENT, teamColor, teamColorDim } from "../theme";
 import {
   FORMATS, HOLE_METHOD_LABELS, UNIT_DOTS, UNIT_POINTS,
   describeHolePoints, formatIsSharedBall, isPointsPerHole, resolveScoring, SCORING_TYPE_TOTAL,
@@ -584,12 +613,19 @@ export function FullScorecard({
                 {hidden(h) ? (
                   <span style={{ fontSize: FS.micro, opacity: 0.5 }} title="Sealed until the reveal">🔒</span>
                 ) : won ? (
+                  // ── FILLED, never outlined ──
+                  // See "One shape, one meaning" at the top of this file. This
+                  // cell sits one row under a gross score wearing golf
+                  // notation, and an outlined box here was a bogey square in
+                  // the column directly below a bogey square — on a birdie it
+                  // was a circle above a square, which reads as the hole
+                  // getting worse rather than as the side winning it.
                   <div style={{
                     minWidth: 20, height: 20, padding: "0 3px",
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    borderRadius: 4, border: `1.5px solid ${col}`, background: `${col}${ALPHA.tint}`,
+                    borderRadius: 4, background: teamColorDim(tid),
                   }}>
-                    <span style={{ fontSize: FS.small, fontWeight: 800, color: BC.t1 }}>{v}</span>
+                    <span style={{ fontSize: FS.small, fontWeight: 800, color: ON_ACCENT }}>{v}</span>
                   </div>
                 ) : (
                   <span style={{ fontSize: FS.small, fontWeight: 800, color: v == null ? `${BC.t3}${ALPHA.hair}` : BC.t2 }}>
@@ -635,11 +671,14 @@ export function FullScorecard({
           // Past the clinch there is nothing to say — the match was over.
           if (clinchHole != null && h > clinchHole) return <div key={h} style={holeCell(i, 26)} />;
           if (clinchHole === h) {
-            const col = teamColor(overall.decided.margin > 0 ? "A" : "B");
+            // Filled, for the same reason the won-hole cell is — and because
+            // this IS a hole a team took, the last one they needed. An
+            // outline here put a box in the column under the notation too.
+            const won = overall.decided.margin > 0 ? "A" : "B";
             return (
               <div key={h} style={holeCell(i, 26)}>
-                <div style={{ border: `1.5px solid ${col}`, borderRadius: 4, padding: "0 3px", lineHeight: "18px", maxWidth: "100%" }}>
-                  <span style={{ fontSize: FS.label, fontWeight: 800, color: col, whiteSpace: "nowrap" }}>{clinchText}</span>
+                <div style={{ background: teamColorDim(won), borderRadius: 4, padding: "0 3px", lineHeight: "18px", maxWidth: "100%" }}>
+                  <span style={{ fontSize: FS.label, fontWeight: 800, color: ON_ACCENT, whiteSpace: "nowrap" }}>{clinchText}</span>
                 </div>
               </div>
             );
