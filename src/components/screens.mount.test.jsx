@@ -362,7 +362,7 @@ describe("Scoring", () => {
       const { container, getByText } = render(<ScoreEntry {...scoring({ user: director })} />);
       fireEvent.click(getByText("🔒 8:10"));
       // The confirm is up, naming what the tap costs.
-      await waitFor(() => expect(document.body.textContent).toContain("Show the other side"));
+      await waitFor(() => expect(document.body.textContent).toContain("intentionally hidden"));
       // And nothing has moved behind it.
       expect(container.textContent).not.toContain("Player 9");
     });

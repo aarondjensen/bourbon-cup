@@ -1909,15 +1909,15 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
     const times = expandTeeTimes(teeTimeList(tr), units.length);
     const locked = (u) => sealedToOwnSide && otherSideUnit(u);
     const unlockThen = async (key) => {
+      // Short on purpose. The man tapping this is a director standing on a
+      // golf course or sitting in the room, and he already knows what the seal
+      // is for — the sentence he needs is the one that says he is about to
+      // walk through it. An explanation of the countdown underneath it is
+      // three lines he has to read past to find the two buttons.
       const ok = await confirm({
-        eyebrow: `Round ${match.round}`,
-        title: "Show the other side's groups?",
-        message: [
-          "This round is sealed. The other side's tee groups are hidden so the result isn't spoiled for you before the countdown.",
-          "",
-          "Opening them shows their scores on this screen. If you are playing in this round, that is the ending.",
-        ].join("\n"),
-        confirmLabel: "Show them",
+        title: "Warning",
+        message: "You are trying to access the other team's scores, which are intentionally hidden.",
+        confirmLabel: "Proceed",
       });
       if (!ok) return;
       setUnlockedRound(match.round);
