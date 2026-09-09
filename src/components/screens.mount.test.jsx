@@ -326,6 +326,54 @@ describe("Scoring", () => {
   // margin from TEAM A's side whoever was holding the phone, so a front nine
   // played out two down came back as "LOST 2 UP". scoring.result.test pins
   // the words; this pins that the screen is asking for them.
+  // ── Why the sign CTA is not there ──
+  // A complete card promotes the Full Scorecard button into "Complete — Sign
+  // Card", but only for somebody IN the match: a signature is a claim, and
+  // signed_by is checked against that match's roster. A director scoring
+  // another group's card entered the eighteenth score and got nothing — no
+  // CTA and no reason, because the missing-holes note has nothing to say
+  // about a card that is complete.
+  describe("a complete card the reader cannot sign", () => {
+    const two = [
+      { player_id: "x1", name: "Hank B", team: "A", handicap_index: 0 },
+      { player_id: "x2", name: "Gil A", team: "B", handicap_index: 0 },
+    ];
+    const solo = { id: "mx", round: 1, teamA: ["x1"], teamB: ["x2"], tournament_id: "bc_test" };
+    const singles = { round_number: 1, course_id: "c1", date: "2026-07-16", tee_time: "8:30", format: "singles" };
+    const full = { x1_1: {}, x2_1: {} };
+    for (let h = 0; h < 18; h++) { full.x1_1[h] = 4; full.x2_1[h] = 5; }
+    const screen = (user) => render(<ScoreEntry {...scoring({
+      user, matches: [solo], holeData: full, tPlayers: two, tRounds: [singles],
+      rounds: [1], currentRound: 1, groups: { 1: [["x1", "x2"]] },
+    })} />).container.textContent;
+
+    it("offers the CTA to a player in the match", () => {
+      const t = screen({ ...two[0], isDirector: false });
+      expect(t).toContain("Complete — Sign Card");
+      expect(t).not.toContain("a player in this match signs it");
+    });
+
+    it("tells everybody else why they are not being offered it", () => {
+      // A director scoring somebody else's group — the shape this was found in.
+      const t = screen({ player_id: "someone-else", name: "Aaron J", isDirector: true });
+      expect(t).not.toContain("Complete — Sign Card");
+      expect(t).toContain("Card complete");
+      expect(t).toContain("a player in this match signs it");
+    });
+
+    it("says nothing of the kind while holes are still missing", () => {
+      // The other note owns that case; two of them at once would be noise.
+      const partial = { x1_1: { ...full.x1_1 }, x2_1: { ...full.x2_1 } };
+      delete partial.x2_1[6];
+      const t = render(<ScoreEntry {...scoring({
+        user: { player_id: "someone-else", name: "Aaron J", isDirector: true },
+        matches: [solo], holeData: partial, tPlayers: two, tRounds: [singles],
+        rounds: [1], currentRound: 1, groups: { 1: [["x1", "x2"]] },
+      })} />).container.textContent;
+      expect(t).not.toContain("Card complete");
+    });
+  });
+
   describe("the front / overall / back chips", () => {
     const two = [
       { player_id: "a", name: "Aaron J", team: "A", handicap_index: 0, auth_uid: "u1" },

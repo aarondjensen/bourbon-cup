@@ -42,7 +42,7 @@ import { AppHeader, HEADER_SLOT_ID, HEADER_TOAST_TOP } from "./components/AppHea
 import { Popup, ConfirmModal } from "./components/Popup";
 import { CtpPrompt } from "./components/CtpPrompt";
 import { DirectorFinalizeAlert, FinalizeRoundSheet } from "./components/FinalizeRound";
-import { MissingCardNote, SignCardSheet, SignedCardPanel } from "./components/CardSignature";
+import { MissingCardNote, CardSignerNote, SignCardSheet, SignedCardPanel } from "./components/CardSignature";
 import { SideBets } from "./components/SideBets";
 import { AccountView } from "./components/AccountView";
 import { TripInfo } from "./components/TripInfo";
@@ -2135,6 +2135,12 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
       {missingCard.length > 0 && (
         <MissingCardNote missing={missingCard} nameOf={(pid) => tPlayers.find(p => p.player_id === pid)?.name || pid} />
       )}
+
+      {/* And the other reason it hasn't promoted: the card IS complete, but
+          this reader is not in the match, so it is not theirs to sign. See
+          CardSignerNote — without it the eighteenth score lands and the
+          screen says nothing at all. */}
+      {complete && !canSign && <CardSignerNote />}
 
       <HoleNavigator hole={activeHole} par={par} hcp={hcp} onGo={goToHole} sizes={fit.nav} />
 
