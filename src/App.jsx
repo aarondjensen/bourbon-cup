@@ -6369,7 +6369,20 @@ export default function App() {
           round={summaryRound}
           onClose={() => setSummaryRound(null)}
           matches={matches}
-          holeData={holeData}
+          // ── The CONCEALED map, like every other consumer ──
+          // This sheet is the round's whole result — matches, skins, low net,
+          // the money hole — and it was the one screen handed the raw holes.
+          // The Leaderboard's own button to it is switched off while a round
+          // is sealed, but the deep link above is not: a round-final push, or
+          // a shared link, opened the sheet on a sealed round and printed
+          // everything the countdown exists to hold back.
+          //
+          // Structural rather than a branch, which is the whole design of the
+          // blackout: there is no screen that HAS the sealed numbers and
+          // declines to draw them. `concealHoleData` is the identity map when
+          // nothing is sealed, so this costs the other fifty-one weeks
+          // nothing.
+          holeData={revealedHoleData}
           tPlayers={tPlayers}
           tRounds={tRounds}
           courses={courses}

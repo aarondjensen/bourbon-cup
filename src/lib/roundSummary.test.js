@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { roundSummary } from "./roundSummary";
+import { concealHoleData } from "./reveal";
 
 // Hole 1, 7 and 14 are par 3s; hole 18 is the money hole and is a par 4.
 const course = {
@@ -285,5 +286,35 @@ describe("roundSummary", () => {
     expect(s.lowNet).toEqual([]);
     expect(s.moneyHole.winners).toEqual([]);
     expect(s.matches).toEqual([]);
+  });
+
+  // ── A finished halve is HALVED, not AS ──
+  // "AS" is where a match STANDS while it is live. This sheet is read after
+  // the round, and the point has already been split. The Leaderboard prints
+  // "½" and the Full Scorecard prints HALVED; this one went on saying AS,
+  // which is one fact in three tenses across three screens.
+  it("says a match that finished level was halved", () => {
+    const level = {
+      ...base,
+      holeData: { p1_1: card(4), p2_1: card(4), p3_1: card(4), p4_1: card(4) },
+    };
+    expect(roundSummary(level).matches[0].status).toBe("HALVED");
+  });
+
+  // ── The blackout has to reach this sheet too ──
+  // It is the round's WHOLE result — matches, skins, low net, the money hole
+  // — and it was the one screen App handed the raw holes. The Leaderboard's
+  // button to it is switched off while a round is sealed; the deep link a
+  // round-final push opens is not. Fed the concealed map, as every other
+  // consumer is, there is nothing here to leak.
+  it("has nothing to say about a round that is still sealed", () => {
+    const sealed = [{ ...tRounds[0], sealed: true, reveal_through: 0 }];
+    const s = roundSummary({
+      ...base,
+      tRounds: sealed,
+      holeData: concealHoleData(base.holeData, sealed),
+    });
+    expect(s.matches.map((m) => m.status)).toEqual(["—", "—"]);
+    expect(s.matches.every((m) => m.holesPlayed === 0)).toBe(true);
   });
 });
