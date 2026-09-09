@@ -88,13 +88,13 @@ const boardAt = (through, extra = {}) => {
 };
 
 // The two strings that are ALLOWED to move: the lock chip on the round bar
-// and the line inside the sealed panel. Both say how far the ceremony has
-// got, which is not a score.
+// and the counter inside the sealed panel. Both say how far the ceremony has
+// got, which is not a score. The panel used to carry a sentence of prose
+// alongside the counter and that moved too; it is gone, so this is now the
+// whole of what the reveal is permitted to change.
 const blindfold = (text) => text
   .replace(/🔒 \d+\/18/g, "🔒 n/18")
-  // The panel's own counter and the line under it, matched together so the
-  // counter's digits cannot be read as part of the summary that follows it.
-  .replace(/\d+ \/ 18(?:Sealed — nothing revealed yet|\d+ of 18 holes revealed)/g, "PROGRESS");
+  .replace(/\d+ \/ 18/g, "PROGRESS");
 
 describe("the scoreboard during the Final Countdown", () => {
   it("does not move a single character as the reveal walks", () => {
@@ -130,28 +130,36 @@ describe("the scoreboard during the Final Countdown", () => {
   });
 
   // The sealed round's points are on offer, not banked, right up to the last
-  // hole — and the round says so itself, in the SealedPanel, which is the only
-  // place that says it now. It used to be on the CUP BAR as well ("🔒 Round 4
-  // sealed — N lands when the countdown ends"); that line is gone, and this
-  // test is what stops the fact going with it.
+  // hole. The board used to SAY so — under the cup bar, and again in a
+  // paragraph inside the panel — and both are gone, so this asks the cup
+  // total itself instead of asking for a sentence about it. It is the better
+  // question anyway: the words were a description of this, and this is the
+  // thing that has to be true.
   it("banks none of the sealed round's points until the reveal is done", () => {
+    // Round 1 is a1 over b1, three Nassau points to Irons, and nothing else
+    // has landed. B took every hole of round 4, so any leak out of the sealed
+    // round shows up as points on Drivers.
     const held = boardAt(17);
-    expect(held).toMatch(/still to come/);
+    expect(held).toContain("Irons3");
+    expect(held).toContain("Drivers0");
     cleanup();
-    // At 18 the round is not concealing any more, so the panel is gone and
-    // there is nothing left to come — the points are on the board.
+    // At 18 the rout lands whole.
     const landed = boardAt(18);
-    expect(landed).not.toMatch(/still to come/);
+    expect(landed).toContain("Drivers27");
     cleanup();
   });
 
-  // The cup bar is the line everybody reads first, and on the one evening
-  // this runs it carries the score and nothing else.
-  it("says nothing about the seal on the cup bar itself", () => {
+  // The board withholds; it does not narrate the withholding. Neither the cup
+  // bar nor the panel may work out how much is being held back — a figure for
+  // that is one subtraction away from the ending, printed on the one screen
+  // whose job is not to have it.
+  it("never says how much the sealed round is worth", () => {
     const held = boardAt(9);
     expect(held).not.toMatch(/lands when the countdown ends/);
-    // The round's own panel still has all of it, a few inches down.
+    expect(held).not.toMatch(/still to come/);
+    // The panel is still there, still saying the two things it says.
     expect(held).toContain("THE FINAL COUNTDOWN");
+    expect(held).toContain("9 / 18");
     cleanup();
   });
 });
