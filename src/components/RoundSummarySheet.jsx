@@ -180,7 +180,7 @@ export function RoundSummarySheet({
       <div style={{ padding: "12px 14px" }}>
         {/* ── The matches ─────────────────────────────────────────
             `status` off the scoring engine is already golf-native — "3&2
-            (IRONS)", "AS" — so nothing here re-words a result. The two sides
+            (IRONS)", "TIED" — so nothing here re-words a result. The two sides
             are stacked rather than columned: a four-ball's two names per side
             do not fit across a phone beside a status. */}
         <Card label="MATCHES" empty="No matches set up for this round." rows={s.matches.length}>

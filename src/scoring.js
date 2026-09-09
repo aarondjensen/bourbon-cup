@@ -255,32 +255,29 @@ export function segmentState(holes, { total = false, higherWins = false, holeVal
 }
 
 // Golf-native result text for a segment. "3&2" when a match closes early,
-// "2 UP" when it goes the distance, "AS" for all square, "—" before a ball is
-// struck. A Total segment gets none of that language — there is no "up" and
-// nothing closes out early, only a lead on the running total, so 8 dots to 6
-// reads "+2" and the leading team is carried by color.
+// "2 UP" when it goes the distance, "TIED" when nobody is ahead, "—" before a
+// ball is struck. A Total segment gets none of that language — there is no
+// "up" and nothing closes out early, only a lead on the running total, so 8
+// dots to 6 reads "+2" and the leading team is carried by color.
 export const statusText = (st) => {
   if (!st.played) return "—";
   const m = Math.abs(st.margin);
-  // ── Level, in golf's own two words ──
-  // Golf has never called this tied. A match that is level while it is still
-  // being played is ALL SQUARE; one that finished level was HALVED, and the
-  // past tense is the whole of the difference — a halved match paid out, half
-  // a point each, and there is nothing left to play for.
+  // ── Level is TIED, in every tense and every currency ──
+  // Not AS, and not HALVED. Both are the older words for it — "all square"
+  // for a match still being played, "halved" for one that finished level —
+  // and this app says TIED, which is what the field says out loud.
   //
   // It sits ABOVE the unit branches on purpose. A level segment is level
   // whether the currency is holes, dots, points or strokes, and the branches
   // below have nothing to add to it. Leaving each to answer for itself is
-  // exactly how one outcome came to have four names: the card said HALVED on
-  // a nine and TIED on the round beneath it, the Leaderboard said "½" for
-  // match play and TIED for everything else, and both running lines said TIED
-  // on a Total round and AS on a match one. The distinction that matters was
-  // never the currency; it is the tense.
+  // exactly how one outcome came to have four names on four screens: HALVED
+  // on a card's nine, TIED on the round beneath it, "½" on the Leaderboard
+  // for match play and TIED for everything else.
   //
   // `decided` cannot be set here — a segment closes out only when the lead is
   // bigger than what is left, which needs a margin of at least one — so this
   // cannot swallow a closeout.
-  if (m === 0) return st.complete ? "HALVED" : "AS";
+  if (m === 0) return "TIED";
   // A points segment gets the same treatment as a total: there is no "up" in
   // a currency where one hole is worth two of another, and "5&4" would be a
   // flat lie about how much is left. The lead, and the color, is the whole
@@ -314,19 +311,18 @@ export const statusText = (st) => {
 export const verdictText = (st, userTeam) => {
   if (!st.played) return "—";
   if (st.unit !== "up") {
-    // A level one falls through to statusText, which says HALVED once it is
-    // settled and AS while it is not — the same two words this function
-    // returns for match play below, and for the same reason.
-
+    // A level one falls through to statusText, which says TIED — the same
+    // word this function returns for match play below, and it takes no WON or
+    // LOST in front of it because nobody did either.
     return st.complete && st.winner
       ? `${st.winner === userTeam ? "WON" : "LOST"} ${statusText(st)}`
       : statusText(st);
   }
   if (!st.complete) {
     const mine = userTeam === "A" ? st.margin : -st.margin;
-    return mine === 0 ? "AS" : `${Math.abs(mine)} ${mine > 0 ? "UP" : "DOWN"}`;
+    return mine === 0 ? "TIED" : `${Math.abs(mine)} ${mine > 0 ? "UP" : "DOWN"}`;
   }
-  if (st.winner == null) return "HALVED";
+  if (st.winner == null) return "TIED";
   const won = st.winner === userTeam;
   // `decided` is set on every settled match with a winner — see
   // segmentState — and its `remaining` is what separates the two cases.

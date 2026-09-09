@@ -335,11 +335,10 @@ export function FinalCountdown({
   // Painted by who took each hole. The one being revealed carries a ring,
   // and it is the only thing on the strip that moves.
   //
-  // A HALVED hole is split down the middle in both teams' colours rather
-  // than left grey. Grey is what an unturned hole looks like, and from the
-  // back of a room "we halved it" and "we haven't seen it yet" reading the
-  // same is the one mistake this strip can make — it is the thing everybody
-  // is counting.
+  // A TIED hole is split down the middle in both teams' colours rather than
+  // left grey. Grey is what an unturned hole looks like, and from the back of
+  // a room "we tied it" and "we haven't seen it yet" reading the same is the
+  // one mistake this strip can make — it is the thing everybody is counting.
   const strip = (
     <div style={{ flexShrink: 0, display: "flex", gap: "clamp(2px, 0.3vw, 6px)" }}>
       {Array.from({ length: HOLE_COUNT }, (_, i) => {
@@ -479,7 +478,7 @@ export function FinalCountdown({
             {!hr?.played ? "NO RESULT ON THIS HOLE"
               : verdictName
                 ? `${verdictName} TAKE IT${holeValue ? `  ·  +${fmtPts(holeValue)}` : ""}`
-                : `HALVED${holeValue ? `  ·  ${fmtPts(holeValue / 2)} EACH` : ""}`}
+                : `TIED${holeValue ? `  ·  ${fmtPts(holeValue / 2)} EACH` : ""}`}
           </div>
         )}
       </div>

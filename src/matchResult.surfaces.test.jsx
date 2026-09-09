@@ -16,12 +16,12 @@
 // every step. Each is allowed its own dialect and nothing else:
 //
 //   Scoring tab   says it from the reader's side  — "WON 9&7", "3 DOWN"
-//   everything else is neutral                    — "9&7", "HALVED"
+//   everything else is neutral                    — "9&7", "TIED"
 //
 // Strip the dialect and the four have to be the same sentence. ("½" is still
-// mapped below: the Leaderboard printed it for a halved overall until the
-// word moved into statusText, and a screen reaching back for the symbol
-// should fail on something other than a stale helper in a test.)
+// mapped below: the Leaderboard printed it for a level overall until the word
+// moved into statusText, and a screen reaching back for the symbol should
+// fail on something other than a stale helper in a test.)
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 
@@ -76,7 +76,7 @@ const scoringProps=(hd,rounds,over)=>({
 
 const chips=(txt)=>["FRONT","OVERALL","BACK"].map(l=>{
   const i=txt.indexOf(l); if(i<0) return `${l}:none`;
-  const m=txt.slice(i+l.length).match(/^(HALVED|—|AS|🔒|[0-9]+ (?:UP|DOWN)|(?:WON|LOST) [0-9]+(?:&[0-9]+| UP| DOWN))/);
+  const m=txt.slice(i+l.length).match(/^(TIED|—|🔒|[0-9]+ (?:UP|DOWN)|(?:WON|LOST) [0-9]+(?:&[0-9]+| UP| DOWN))/);
   return `${l}:${m?m[1]:"?"}`;}).join("  ");
 
 // A two-row three-column grid — F9 / overall / B9 on top, each value beneath.
@@ -97,11 +97,11 @@ const STATES=[
   ["all 18 in",            18, {}, "9&7"],
   ["signed",               18, {cardSigs:SIGNED}, "9&7"],
   ["attested / final",     18, {cardSigs:FINAL},  "9&7"],
-  ["halved",               18, {winners:"AAAAAAAAABBBBBBBBB"}, "HALVED"],
+  ["level",                18, {winners:"AAAAAAAAABBBBBBBBB"}, "TIED"],
 ];
 
 // The result, with each screen's dialect taken off it.
-const plain=(s)=>String(s??"").trim().replace(/^(WON|LOST)\s+/,"").replace(/^½$/,"HALVED").trim();
+const plain=(s)=>String(s??"").trim().replace(/^(WON|LOST)\s+/,"").replace(/^½$/,"TIED").trim();
 
 describe("one match, four screens, the same story", () => {
   for (const [label,n,over,expected] of STATES) {

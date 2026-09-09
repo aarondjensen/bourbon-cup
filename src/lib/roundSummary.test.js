@@ -288,17 +288,16 @@ describe("roundSummary", () => {
     expect(s.matches).toEqual([]);
   });
 
-  // ── A finished halve is HALVED, not AS ──
-  // "AS" is where a match STANDS while it is live. This sheet is read after
-  // the round, and the point has already been split. The Leaderboard prints
-  // "½" and the Full Scorecard prints HALVED; this one went on saying AS,
-  // which is one fact in three tenses across three screens.
-  it("says a match that finished level was halved", () => {
+  // ── A level match is TIED here too ──
+  // This sheet is read after the round, and it once said "AS" while the card
+  // said HALVED and the Leaderboard said "½" — one fact in three words on
+  // three screens. All three say TIED now.
+  it("says a match that finished level was tied", () => {
     const level = {
       ...base,
       holeData: { p1_1: card(4), p2_1: card(4), p3_1: card(4), p4_1: card(4) },
     };
-    expect(roundSummary(level).matches[0].status).toBe("HALVED");
+    expect(roundSummary(level).matches[0].status).toBe("TIED");
   });
 
   // ── The blackout has to reach this sheet too ──

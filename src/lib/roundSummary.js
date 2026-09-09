@@ -95,7 +95,7 @@ export const roundSummary = ({
     // carries no `overall` segment and no `totalPts` at all. Reading either
     // off it throws, and a round set up but not yet given a course is a
     // perfectly ordinary state for this sheet to be opened on. So both are
-    // read defensively, and the row says "—" rather than "AS": nothing was
+    // read defensively, and the row says "—" rather than "TIED": nothing was
     // played to a standstill, there is nothing to score against.
     const pts = res.totalPts || { A: 0, B: 0 };
     return {

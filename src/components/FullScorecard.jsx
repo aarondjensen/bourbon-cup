@@ -429,7 +429,7 @@ export function FullScorecard({
   //  what the blackout is holding back, and `nassauBadges` on the Scoring tab
   //  is switched off by the same test.
   //
-  //  A LEVEL nine reads HALVED, and that word comes from statusText along
+  //  A LEVEL nine reads TIED, and that word comes from statusText along
   //  with every other result on this card — see the note there. It is not a
   //  choice this file gets to make: the NINES row, the OUT / IN chips and the
   //  overall in the header are one fact stated three times, and the moment
@@ -711,14 +711,12 @@ export function FullScorecard({
           return (
             <div key={h} style={holeCell(i, 26)}>
               <span style={{ fontSize: FS.small, fontWeight: 800, color: col }}>
-                {/* ALL SQUARE, on every format. This cell is the match as it
-                    stood walking off a green, so it is live by construction
-                    and never HALVED. It used to say "TIED" on a Total or
-                    points round, on the reasoning that those have no "up" to
-                    be square about — but level is level, golf has a word for
-                    it, and that word was in the next cell along. */}
+                {/* TIED, on every format — the word this app uses for level
+                    wherever it says it, and the word in the next cell along.
+                    This one is the match as it stood walking off a green, so
+                    the currency changes and the fact does not. */}
                 {mine === 0
-                  ? <span style={{ fontSize: FS.micro, letterSpacing: 0.5 }}>AS</span>
+                  ? <span style={{ fontSize: FS.micro, letterSpacing: 0.5 }}>TIED</span>
                   : <>{mine > 0 ? "▲" : "▼"}{Math.abs(mine)}</>}
               </span>
             </div>
