@@ -293,8 +293,13 @@ const NINE_LABEL = {
   fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.6, color: BC.t3,
   lineHeight: 1, minWidth: 24, textAlign: "center",
 };
+// The nines are read at the same size as the match they are part of. They
+// were a rung smaller, which made three results of equal standing look like
+// one result and two footnotes — the front and back nines are their own
+// matches here, each paying its own pot, and the row is the only place all
+// three are stated together.
 const NINE_VALUE = {
-  fontSize: FS.small, fontWeight: 800, lineHeight: 1, whiteSpace: "nowrap",
+  fontSize: FS.lead, fontWeight: 800, lineHeight: 1, whiteSpace: "nowrap",
   minWidth: 24, textAlign: "center",
 };
 
