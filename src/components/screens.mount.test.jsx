@@ -443,9 +443,9 @@ describe("Scoring", () => {
       rounds: [1], currentRound: 1, groups: { 1: [["a", "b"]] },
     })} />).container.textContent;
 
-    it("tells the loser he lost two DOWN, not two up", () => {
+    it("tells the loser he lost two DN, not two up", () => {
       const text = chips("a");
-      expect(text).toContain("LOST 2 DOWN");
+      expect(text).toContain("LOST 2 DN");
       expect(text).not.toContain("LOST 2 UP");
     });
 
@@ -455,7 +455,7 @@ describe("Scoring", () => {
 
     it("says the live nine from each man's own side", () => {
       // One hole of the back is in and A lost it: A is 1 down on it, B 1 up.
-      expect(chips("a")).toContain("1 DOWN");
+      expect(chips("a")).toContain("1 DN");
       expect(chips("b")).toContain("1 UP");
     });
   });

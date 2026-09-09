@@ -135,9 +135,9 @@ describe("the formats that never close early", () => {
 describe("a settled match, from the reader's own side", () => {
   const A_WON_ON_18 = seg("AABBAABB-AABB-AAB-");   // 1 up, decided on the last
 
-  it("is won UP and lost DOWN, never lost up", () => {
+  it("is won UP and lost DN, never lost up", () => {
     expect(verdictText(A_WON_ON_18, "A")).toBe("WON 1 UP");
-    expect(verdictText(A_WON_ON_18, "B")).toBe("LOST 1 DOWN");
+    expect(verdictText(A_WON_ON_18, "B")).toBe("LOST 1 DN");
   });
 
   it("reports the margin it finished on, not the running one", () => {
@@ -145,7 +145,7 @@ describe("a settled match, from the reader's own side", () => {
     // when this was found.
     const st = seg("AAA-BBBBB");
     expect(st.decided).toEqual({ margin: -2, remaining: 0, at: 8 });
-    expect(verdictText(st, "A")).toBe("LOST 2 DOWN");
+    expect(verdictText(st, "A")).toBe("LOST 2 DN");
     expect(verdictText(st, "B")).toBe("WON 2 UP");
   });
 
@@ -168,7 +168,7 @@ describe("a live match, from the reader's own side", () => {
   it("flips the direction rather than leaving it to the colour", () => {
     const st = seg("AAB...............");   // A 1 up through 3
     expect(verdictText(st, "A")).toBe("1 UP");
-    expect(verdictText(st, "B")).toBe("1 DOWN");
+    expect(verdictText(st, "B")).toBe("1 DN");
   });
 
   it("is TIED to both of them", () => {
