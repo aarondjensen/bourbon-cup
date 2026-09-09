@@ -60,12 +60,13 @@ export const roundSummary = ({
     round, courseName: null, format: null, final: false,
     points: { A: 0, B: 0, teamA: teamNames.A || "Team A", teamB: teamNames.B || "Team B", leader: null },
     matches: [], ctp: [], skins: { gross: [], net: [] }, lowNet: [], moneyHole: null,
+    coursePar: null,
     played: false,
   };
   if (round == null) return empty;
 
   const ctx = { tPlayers, tRounds, courses, roundLocks, hcpOverrides, teeAssignments };
-  const { tr, course, pars } = roundSetup({ round, tRounds, courses, roundLocks });
+  const { tr, lock, course, pars } = roundSetup({ round, tRounds, courses, roundLocks });
   const format = tr?.format || DEFAULT_FORMAT;
   const { nameOf } = playerLookup(tPlayers);
 
@@ -181,6 +182,27 @@ export const roundSummary = ({
 
   // Only a FINISHED card is ranked, and equal lowest cards are co-winners —
   // low net has nowhere to carry to, so the round's share splits.
+  // ── What the round was played to ────────────────────────────────
+  // Summed off the SCORECARD — the same `pars` every other number here is
+  // scored against — rather than the course document's stored `par` field.
+  // The two can disagree, one having come from the import and the other from
+  // a director correcting holes since, and a screen that colours a score
+  // against one while scoring it against the other is worse than a screen
+  // that does not colour it at all.
+  //
+  // `resolveHolePars` never returns nothing: with neither a lock nor a course
+  // it hands back eighteen 4s, which is a placeholder for the engine and NOT
+  // a par anybody played to — it totals 72, and every net score on the sheet
+  // would come out under it. So the source is checked rather than the array,
+  // and a round with no card behind it gets no par at all. The lock is read
+  // first for the same reason `getRoundCH` does: a settled round keeps the
+  // card it was settled on, even if the course document has since been
+  // edited or deleted.
+  const holePars = lock?.hole_pars || course?.hole_pars || null;
+  const coursePar = holePars && pars.length > 0 && pars.every((p) => p > 0)
+    ? pars.reduce((n, p) => n + p, 0)
+    : null;
+
   const lowNet = lowNetRows({ round, field: lowNetField, holeData, ...ctx })
     .filter((r) => r.won)
     .map((r) => ({ pid: r.pid, name: r.name, gross: r.gross, ch: r.ch, net: r.net }));
@@ -214,6 +236,7 @@ export const roundSummary = ({
     ctp,
     skins,
     lowNet,
+    coursePar,
     moneyHole: mhPlayed ? {
       hole: mhNumber,
       par: pars?.[mhNumber - 1] ?? null,

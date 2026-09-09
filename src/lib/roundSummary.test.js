@@ -173,6 +173,31 @@ describe("roundSummary", () => {
     expect(s.lowNet[0].net).toBe(72);
   });
 
+  // The fixture's scorecard totals 71 and its tee box claims 72 — deliberately
+  // disagreeing, because that is the state the app is really in: one number
+  // came off the import and the other off a director correcting holes since.
+  // The sheet colours a score red for being under this, so it has to be the
+  // par the round was actually scored against.
+  it("totals the day's par off the scorecard, not off the stored par field", () => {
+    expect(roundSummary(base).coursePar).toBe(71);
+  });
+
+  it("has no par for a round whose scorecard is incomplete", () => {
+    const holed = { ...course, id: "c2", hole_pars: [3, 4, 4, 0, 5, 4, 3, 4, 4, 4, 4, 5, 4, 3, 4, 4, 4, 4] };
+    const s = roundSummary({
+      ...base, courses: [holed],
+      tRounds: [{ ...tRounds[0], course_id: "c2" }],
+    });
+    // A partial card totals to a number nobody played to, and every net score
+    // is under it. No par is the honest answer, not a smaller one.
+    expect(s.coursePar).toBeNull();
+  });
+
+  it("has no par for a round with no course yet", () => {
+    expect(roundSummary({ ...base, courses: [] }).coursePar).toBeNull();
+    expect(roundSummary({}).coursePar).toBeNull();
+  });
+
   it("does not rank an unfinished card", () => {
     const holeData = { ...base.holeData, p1_1: { 0: 2 } };
     const s = roundSummary({ ...base, holeData });
