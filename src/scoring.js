@@ -609,7 +609,36 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
   // A locked round can still be scored if the course doc has since been
   // deleted — the snapshot carries its own hole tables. Only bail when
   // there is neither a course nor a snapshot to score against.
-  if (!course && !lock) return { status: "AS", frontPts: 0, backPts: 0, overallPts: 0, holes: [] };
+  //
+  // ── And bail in the SHAPE of a result ──
+  // This is not a rare path. A director draws the round in February and books
+  // the courses in June, so between those two a match exists whose round has
+  // no course, and every screen scores it like any other. It used to hand
+  // back `{ status: "AS", frontPts: 0, backPts: 0, overallPts: 0, holes: [] }`
+  // — no `totalPts`, no `front`/`back`/`overall`, and the three pot fields as
+  // NUMBERS where a result carries `{ A, B }`. So `summarizeEdition`, which
+  // reads `res.totalPts.A` to write the cup's stored score, threw a TypeError
+  // on it, and so did the Data tab's live fold. One course-less round with a
+  // draw on it took both of them down.
+  //
+  // Nothing scored, said in the language every caller already speaks.
+  if (!course && !lock) {
+    const emptyHoles = Array.from({ length: 18 }, (_, h) => (
+      { h, aScore: null, bScore: null, winner: null, counted: null, played: false }));
+    const emptyOpts = segmentOptsFor(match, format);
+    const seg = (n) => segmentState(emptyHoles.slice(0, n), emptyOpts);
+    return {
+      holes: emptyHoles,
+      front: seg(9), back: seg(9), overall: segmentState(emptyHoles, emptyOpts),
+      frontPts: { A: 0, B: 0 }, backPts: { A: 0, B: 0 }, overallPts: { A: 0, B: 0 },
+      status: statusText(segmentState(emptyHoles, emptyOpts)),
+      holesPlayed: 0, strokeMaps: {},
+      allowance: getRoundAllowance({ roundLocks, round: rnd, tRounds, format }),
+      counting: null, holePoints: null,
+      playingCH: {}, exactCH: {}, teamCH: null,
+      totalPts: { A: 0, B: 0 },
+    };
+  }
 
   const getPlayerScores = (pid) => holeData[`${pid}_${rnd}`] || {};
   const roundTee = tr?.tee_box;
@@ -631,8 +660,34 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
   const higherWins = higherIsBetter(holeFormat);
   const netScore = (gross, holeIdx, strokeMap) => gross == null ? null : gross - (strokeMap[holeIdx] || 0);
 
-  const teamA = match.teamA; // array of pids
-  const teamB = match.teamB;
+  // ── Who is actually playing ──────────────────────────────────
+  // A withdrawal is a FLAG on the roster row, never a removal from the draw
+  // (lib/cardSigs) — the match keeps its pids so the men who finished the card
+  // can still sign and attest it. The engine has to know the difference,
+  // because "no score" means two opposite things on a card:
+  //
+  //   a partner still walking up the fairway   → the hole is unfinished, and
+  //                                              comparing a sum missing his
+  //                                              ball would hand the other
+  //                                              side a hole he might win
+  //   a partner who went home                  → the side is a man short for
+  //                                              the rest of the round, and
+  //                                              his ball is never coming
+  //
+  // Read as the second, the four formats that need every partner's number to
+  // make a hole — 2-Man Agg, Double Dot, Tilt and Stableford — went on waiting
+  // for a card nobody was going to post. The match scored NOTHING for the rest
+  // of the round: no holes, no winner, and its Nassau pot silently unawarded,
+  // on a leaderboard that just showed a dash. Double Dot has been played in
+  // four of the ten cups.
+  //
+  // Off `tPlayers`, which the engine already has, so nothing about the call
+  // signature moves. `withdrawn === true` is the same test lib/cardSigs makes.
+  const withdrawn = new Set(
+    (tPlayers || []).filter(p => p?.withdrawn === true).map(p => p.player_id));
+  const drawnPids = [...(match.teamA || []), ...(match.teamB || [])];
+  const teamA = (match.teamA || []).filter(pid => !withdrawn.has(pid)); // array of pids
+  const teamB = (match.teamB || []).filter(pid => !withdrawn.has(pid));
 
   // ── Handicap allocation ──
   // Three settings decide every stroke in the match, in this order:
@@ -656,6 +711,10 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
   // different numbers of scores are not comparable, and a side short a player
   // would otherwise never post a hole at all.
   const counting = getRoundCounting({ roundLocks, round: rnd, tRounds, format });
+  // Both sides count the same number, and it is the smaller of the director's
+  // figure and the smaller side ON THE COURSE — a side reduced to five by
+  // withdrawals cannot post a best-six, and clamping to the drawn roster
+  // instead would stop it posting at all.
   const countFor = (h) => Math.min(counting[h], teamA.length, teamB.length);
   const allPids = [...teamA, ...teamB];
   // Playing handicaps — the allowance-adjusted figures. A split allowance is
@@ -663,7 +722,12 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
   const exactCH = allowanceHandicaps([teamA, teamB], getCH, allowance);
   const playingCH = {};
   allPids.forEach(pid => { playingCH[pid] = Math.round(exactCH[pid] ?? 0); });
-  const minCH = Math.min(...allPids.map(pid => playingCH[pid] ?? 0));
+  // Off the men playing, not the men drawn: a scratch player who withdrew
+  // would otherwise go on taking a stroke off everybody else all round, in a
+  // match he is not in. `Infinity` when a side has emptied — nothing scores
+  // there anyway, and it must not reach a stroke map.
+  const active = allPids.filter(pid => playingCH[pid] != null);
+  const minCH = active.length ? Math.min(...active.map(pid => playingCH[pid])) : 0;
   // ── Built once per player, not once per player per hole ──────────────
   // A stroke map is a pure function of (playing handicap, hole handicaps),
   // and neither moves inside a match — so there is exactly one map per player
@@ -675,9 +739,13 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
   // Leaderboard re-scores every match in the tournament whenever any hole
   // changes — so a single tap on a score button was paying for thousands of
   // sorts of the same unchanging array.
+  // Built for everybody DRAWN, not just everybody playing: `strokeMaps` is
+  // handed back for the screens to draw dots from, and a man who withdrew on
+  // the twelfth still has eleven holes on his card wanting them.
   const adjustedStrokeMaps = {};
-  allPids.forEach(pid => {
-    const ch = playingCH[pid] ?? 0;
+  drawnPids.forEach(pid => {
+    const ch = playingCH[pid] ?? Math.round(
+      allowanceHandicaps([[pid]], getCH, allowance)[pid] ?? 0);
     // Play off the low man: low man gets 0, others get the difference.
     adjustedStrokeMaps[pid] = getStrokeMap(roundHandicapMode === "full" ? ch : ch - minCH);
   });
@@ -758,9 +826,40 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
   // partner has to have posted: a sum missing a card is not a smaller sum, it
   // is an unfinished hole, and comparing it would hand the other side a lead
   // that a single unentered score created.
+  // ── A side's number on a hole that ADDS its balls up ──────────
+  // 2-Man Agg adds the side's nets; Stableford and Tilt add its points. Both
+  // sides therefore have to be adding up the SAME NUMBER of balls, which is
+  // the rule `countFor` already applies to Team Best Ball, for the reason
+  // written there: two sums built from a different number of scores are not
+  // comparable.
+  //
+  // At full strength that number IS the whole side and this changes nothing —
+  // best two of two is the sum of two. Short a man it is what the smaller side
+  // can field, and it is the difference between a match and a walkover: two
+  // sides playing identical golf with one man withdrawn came out 18-0. To the
+  // SHORT side on 2-Man Agg, where one net beats two, and to the full side on
+  // Stableford and Tilt, where two men's points beat one man's.
+  //
+  // Ranked in whichever direction the format runs, so "best" means fewest
+  // strokes on an aggregate and most points against par.
+  //
+  // A side with nobody left on it posts nothing. `[].every()` is TRUE and
+  // `[].reduce(…, 0)` is 0, so an empty side used to post a perfect zero on
+  // all eighteen — the best aggregate there is — and take the match 18-0
+  // without a card on it. Silently, and it paid out.
+  const sideBalls = Math.min(teamA.length, teamB.length);
   const sumSide = (team, valueFor) => {
+    if (!sideBalls || !team.length) return null;
     const vals = team.map(valueFor);
-    return vals.every(v => v != null) ? vals.reduce((a, b) => a + b, 0) : null;
+    // Every man still ON the side has to be in: a sum missing a card is not a
+    // smaller sum, it is an unfinished hole, and comparing it would hand the
+    // other side a lead that one unentered score created. A man who WITHDREW
+    // is not a missing card — he is off the side entirely, above.
+    if (vals.some(v => v == null)) return null;
+    return [...vals]
+      .sort((x, y) => (higherWins ? y - x : x - y))
+      .slice(0, sideBalls)
+      .reduce((a, b) => a + b, 0);
   };
 
   // Compute per-hole results
@@ -842,10 +941,11 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
       // "2-Man Agg" (it read "Team Total" until the rename, and the format id
       // still does); "aggregate" is a legacy alias retained for any matches
       // saved before the format was officially exposed in the FORMATS list.
-      const aNets = teamA.map(pid => { const m = getAdjustedStrokeMap(pid); return netScore(getPlayerScores(pid)[h], h, m); });
-      const bNets = teamB.map(pid => { const m = getAdjustedStrokeMap(pid); return netScore(getPlayerScores(pid)[h], h, m); });
-      if (aNets.every(s => s != null)) aScore = aNets.reduce((a,b) => a+b, 0);
-      if (bNets.every(s => s != null)) bScore = bNets.reduce((a,b) => a+b, 0);
+      // Through sumSide for the empty-side guard — see the note on it. An
+      // aggregate of no balls is not zero, it is no score.
+      const net = (pid) => netScore(getPlayerScores(pid)[h], h, getAdjustedStrokeMap(pid));
+      aScore = sumSide(teamA, net);
+      bScore = sumSide(teamB, net);
     } else if (holeFormat === "double_dot") {
       // ── Double Dot (2-man Hi/Lo) ──
       // Every hole is TWO sub-matches played at once: the two sides' LOW
@@ -1010,11 +1110,14 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
   // that is the only allocation in play: the side has one ball and one set of
   // strokes. Handing back individual maps here would draw dots on the scoring
   // screen that nothing in the result was ever scored with.
+  //
+  // Everybody DRAWN gets one, withdrawals included — the holes he played
+  // before he went home are still on his card and still want their dots.
   const strokeMaps = {};
   const sharedBall = !!allowance.shared;
-  allPids.forEach(pid => {
+  drawnPids.forEach(pid => {
     strokeMaps[pid] = sharedBall
-      ? sharedStrokeMaps[teamA.includes(pid) ? "A" : "B"]
+      ? sharedStrokeMaps[(match.teamA || []).includes(pid) ? "A" : "B"]
       : getAdjustedStrokeMap(pid);
   });
 

@@ -99,16 +99,40 @@ describe("the running year, as rows", () => {
     });
     expect(partial.cards).toEqual([]);
   });
+
+  it("leaves out a match nobody has teed off in", () => {
+    // A drawn match scores 0-0 until a ball is struck, and archiveFold reads a
+    // level match as a HALVE. So on the Thursday of a cup every man's career
+    // record grew a match and a halve for golf that had not happened — and
+    // `ppm`, which the best-rate record ranks on, was being divided by the
+    // rest of the week. A match in PROGRESS still counts: those holes were
+    // played, which is this file's own rule for an unfinished cup.
+    const notYet = liveFacts({
+      year: 2099, tPlayers,
+      matches: [
+        { id: "m1", round: 1, teamA: ["p1", "p2"], teamB: ["p3", "p4"] },
+        { id: "m2", round: 2, teamA: ["p1", "p2"], teamB: ["p3", "p4"] },
+      ],
+      holeData: { p1_1: { 0: 4 }, p2_1: { 0: 4 }, p3_1: { 0: 5 }, p4_1: { 0: 5 } },
+      tRounds, courses, roundLocks: {}, players: archive.players,
+    });
+    expect(notYet.matches.map((m) => m.round)).toEqual([1]);
+  });
 });
 
 describe("the running year replaces the archive's copy of itself", () => {
   const yearInArchive = archive.years[archive.years.length - 1];
 
   it("drops the archived rows for the year that is open", () => {
+    // With a hole on it, because a year with a draw and no scores is not a
+    // year that is being played — it is the half-loaded edition the guard
+    // below exists to refuse, and liveFacts no longer reports an unteed
+    // match at all. One hole is enough to make this a cup in progress.
     const stand = liveFacts({
       year: yearInArchive, tPlayers,
       matches: [{ id: "m1", round: 1, teamA: ["p1", "p2"], teamB: ["p3", "p4"] }],
-      holeData: {}, tRounds, courses, roundLocks: {}, players: archive.players,
+      holeData: { p1_1: { 0: 4 }, p2_1: { 0: 4 }, p3_1: { 0: 5 }, p4_1: { 0: 5 } },
+      tRounds, courses, roundLocks: {}, players: archive.players,
     });
     const merged = mergeLive(archive, stand);
     expect(merged.editions.filter((e) => e.year === yearInArchive)).toHaveLength(1);
