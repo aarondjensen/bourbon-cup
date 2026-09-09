@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { missingForCard, cardComplete, attestedPids, isFullyAttested, pendingAttestations, withdrawnIds } from "./cardSigs";
+import { missingForCard, skippedHoles, cardComplete, attestedPids, isFullyAttested, pendingAttestations, withdrawnIds } from "./cardSigs";
 
 // The can't-sign strip has now been wrong twice in the same direction: it
 // told a scorer his card was short while he was still tapping in the group
@@ -78,6 +78,34 @@ describe("missingForCard — holes the group has not reached", () => {
   it("ignores the holes before a shotgun group's starting hole", () => {
     const shotgun = Object.fromEntries(PIDS.map(p => [p, upTo(9).slice(4)]));
     expect(missingForCard(match, hd(shotgun))).toEqual([]);
+  });
+
+  // ── The hole the WHOLE group skipped ──
+  // The one gap the strip could never see. `missingForCard` only ever looked
+  // at holes SOMEBODY had scored, so a hole nobody scored was missing for
+  // nobody — and the engine skips an unscored hole too, so the front, the
+  // back and the overall went on being computed around it in silence. Found
+  // on a demo card: holes 1-10 in, the 11th blank, 12 and 13 in, the group
+  // standing on the 14th and the status reading OVERALL TIED.
+  it("names a hole nobody in the group scored", () => {
+    // Holes 1-13 posted by everybody, except index 10 — hole 11.
+    const gap = Object.fromEntries(PIDS.map(p => [p, upTo(13).filter(h => h !== 10)]));
+    expect(missingForCard(match, hd(gap))).toEqual(
+      PIDS.map(pid => ({ pid, holes: [11] })));
+    expect(skippedHoles(match, hd(gap))).toEqual([11]);
+  });
+
+  it("says nothing of the kind about a shotgun group's blank front", () => {
+    // The window starts at the group's FIRST scored hole, not at hole 1 — a
+    // side that went off the 5th has four holes it has not reached, and they
+    // are not gaps because holes above them are filled.
+    const shotgun = Object.fromEntries(PIDS.map(p => [p, upTo(9).slice(4)]));
+    expect(skippedHoles(match, hd(shotgun))).toEqual([]);
+  });
+
+  it("says nothing of the kind about the holes ahead of a clean group", () => {
+    expect(skippedHoles(match, hd(all(9)))).toEqual([]);
+    expect(skippedHoles(match, hd({}))).toEqual([]);
   });
 
   it("is not what decides whether a card can be signed", () => {

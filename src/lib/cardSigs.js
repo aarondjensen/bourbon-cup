@@ -150,10 +150,55 @@ export const missingForCard = (match, holeData, withdrawnPids) => {
   const touched = [];
   for (let h = 0; h < 18; h++) if (all.some(pid => scoreAt(pid, h) > 0)) touched.push(h);
   const frontier = touched.length ? touched[touched.length - 1] : -1;
-  const played = touched.filter(h => h < frontier);
+  // ── Every hole the group has walked past, not just the scored ones ──
+  // This used to be `touched.filter(h => h < frontier)`, which can only ever
+  // report a hole SOMEBODY has a score on — so the one case it could not see
+  // was a hole the WHOLE group skipped. Nobody scored it, so it never entered
+  // `touched`, so it was missing for nobody, and the strip stayed silent while
+  // the group played on past it. The engine skips an unscored hole too, so the
+  // match status went on being computed around a hole nobody had played and
+  // nothing on the screen said so.
+  //
+  // The window is the group's FIRST scored hole to its frontier, and both ends
+  // matter. The frontier is what has always decided "behind": a hole ahead of
+  // the group is not missing, and the one they are standing on is excluded by
+  // `h < frontier`. The first end is what keeps a SHOTGUN start quiet — a
+  // group that went off the 5th has four blank holes at the front of its card
+  // that it has not reached yet, and they are not gaps just because holes
+  // above them are filled.
+  const played = touched.length
+    ? Array.from({ length: frontier - touched[0] }, (_, i) => touched[0] + i)
+    : [];
   return pids
     .map(pid => ({ pid, holes: played.filter(h => !(scoreAt(pid, h) > 0)).map(h => h + 1) }))
     .filter(m => m.holes.length > 0);
+};
+
+// ── The holes NOBODY played ─────────────────────────────────────────
+// A subset of what `missingForCard` reports, and a different sentence. One
+// player missing the 7th is a card to chase; the whole group missing the 11th
+// is a hole that was never played, and the match status on screen was computed
+// without it — the front nine, the back nine and the overall are all provisional
+// until it is filled. That is worth saying in those words rather than as four
+// men each missing the same hole.
+export const skippedHoles = (match, holeData, withdrawnPids) => {
+  if (match?.round == null) return [];
+  const all = matchPlayers(match);
+  const pids = notWithdrawn(all, withdrawnPids);
+  if (!pids.length) return [];
+  const scoreAt = (pid, h) => holeData?.[`${pid}_${match.round}`]?.[h];
+  const touched = [];
+  for (let h = 0; h < 18; h++) if (all.some(pid => scoreAt(pid, h) > 0)) touched.push(h);
+  const frontier = touched.length ? touched[touched.length - 1] : -1;
+  // Between the group's first scored hole and its frontier, for the reasons
+  // missingForCard gives: a shotgun group's blank front is holes it has not
+  // reached, and the hole it is standing on is not a gap either.
+  const out = [];
+  if (!touched.length) return out;
+  for (let h = touched[0]; h < frontier; h++) {
+    if (!all.some(pid => scoreAt(pid, h) > 0)) out.push(h + 1);
+  }
+  return out;
 };
 
 // ── Who has attested ────────────────────────────────────────────────

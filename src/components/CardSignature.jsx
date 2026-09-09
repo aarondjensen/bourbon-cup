@@ -62,8 +62,30 @@ import { nonSignerPids, isFullyAttested, attestedPids, withdrawnIds } from "../l
 // something is wrong and where to look. A card missing forty scores is a
 // card nobody is about to sign, and the count carries that better than
 // forty numbers would.
-export function MissingCardNote({ missing, nameOf }) {
+export function MissingCardNote({ missing, skipped = [], nameOf }) {
   if (!missing?.length) return null;
+  // ── A hole the whole group skipped gets its own sentence ──
+  // Four men each missing the 11th is not four problems, it is one: nobody
+  // played the 11th. And it is worth saying what that costs, because the
+  // engine skips an unscored hole — the front, the back and the overall on
+  // screen were all computed around it and none of them is settled until it
+  // is filled. "Dave R hole 11 · Marty K hole 11 · +2 more" says none of that.
+  if (skipped.length) {
+    const which = skipped.length > 3
+      ? `${skipped.length} holes`
+      : `Hole${skipped.length > 1 ? "s" : ""} ${skipped.join(", ")}`;
+    return (
+      <div style={{
+        width: "100%", padding: "5px 9px", borderRadius: 8, marginBottom: 6,
+        background: `${BC.warn}${ALPHA.wash}`, border: `1px solid ${BC.warn}${ALPHA.line}`,
+        color: BC.warn, fontFamily: FONT, boxSizing: "border-box", flexShrink: 0,
+        fontSize: FS.label, fontWeight: 700, lineHeight: 1.4,
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+      }}>
+        ⚠ {which} not scored — status is provisional
+      </div>
+    );
+  }
   // "Tim C hole 7" for a real gap, "Dave K 4 holes" once naming them stops
   // being useful — the point of the number is to go look, not to read it here.
   const part = ({ pid, holes }) => `${nameOf(pid)} ${holes.length > 3
