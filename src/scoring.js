@@ -298,8 +298,8 @@ export const statusText = (st) => {
 // `statusText` answers from TEAM A's, which is right for a scorecard sitting
 // between two named sides and wrong for a chip that has already said WON or
 // LOST. Pasting the two together produced "LOST 2 UP", which is not a
-// sentence: a match that goes the distance is won two UP and lost two DOWN,
-// and the front nine on screen had just been played out two DOWN.
+// sentence: a match that goes the distance is won two up and lost two down,
+// and the front nine on screen had just been played out two down.
 //
 // A CLOSEOUT is the exception, and it is not one word of this rule bending:
 // "3&2" is the whole result and reads the same from either side of it, so
@@ -308,6 +308,16 @@ export const statusText = (st) => {
 //
 // A Total or points segment has neither — it prints a signed lead and keeps
 // the colour for its side.
+//
+// ── DN, not DOWN ──
+// The three chips this feeds sit on one row of a phone, sized to their own
+// content, and the longest of them pushes the others off the edge: "FRONT
+// LOST 2 DOWN" was enough to run "BACK WON 4&3" past the right-hand side of
+// the screen. UP is already two characters and DOWN is four, so the row's
+// width was set by which side of the match the reader happened to be on.
+// Abbreviating levels that up and buys the row back thirty-odd pixels.
+const DIRECTION = (up) => (up ? "UP" : "DN");
+
 export const verdictText = (st, userTeam) => {
   if (!st.played) return "—";
   if (st.unit !== "up") {
@@ -320,14 +330,14 @@ export const verdictText = (st, userTeam) => {
   }
   if (!st.complete) {
     const mine = userTeam === "A" ? st.margin : -st.margin;
-    return mine === 0 ? "TIED" : `${Math.abs(mine)} ${mine > 0 ? "UP" : "DOWN"}`;
+    return mine === 0 ? "TIED" : `${Math.abs(mine)} ${DIRECTION(mine > 0)}`;
   }
   if (st.winner == null) return "TIED";
   const won = st.winner === userTeam;
   // `decided` is set on every settled match with a winner — see
   // segmentState — and its `remaining` is what separates the two cases.
   if (st.decided.remaining > 0) return `${won ? "WON" : "LOST"} ${statusText(st)}`;
-  return `${won ? "WON" : "LOST"} ${Math.abs(st.decided.margin)} ${won ? "UP" : "DOWN"}`;
+  return `${won ? "WON" : "LOST"} ${Math.abs(st.decided.margin)} ${DIRECTION(won)}`;
 };
 
 // Which side a segment's margin favours right now, or null when level.
