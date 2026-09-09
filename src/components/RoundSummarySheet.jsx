@@ -43,12 +43,23 @@ import { BC, ALPHA, ON_AMBER, FS, R, teamColor } from "../theme";
 // at a glance.
 const ROW = FS.small;
 
-// The all-caps eyebrow every section card is led by. Spelled once so five
+// The all-caps title every section card is led by. Spelled once so six
 // sections cannot drift apart by a letter of tracking.
+//
+// Centred and at the body's own rung + 1, which is the app's card-title size
+// (see the FS scale). Left-aligned at 10px it read as a tag stuck to the
+// corner of the card rather than as the card's name, and on a stack of six
+// cards the names are the only thing to navigate by. The note rides on the
+// title's baseline and centres with it as one unit, so "MONEY HOLE hole 18 ·
+// par 4" stays a single centred line rather than a title with something
+// trailing off it.
 const Label = ({ children, note }) => (
-  <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 6 }}>
-    <span style={{ fontSize: FS.label, fontWeight: 800, color: BC.t3, letterSpacing: 1.2 }}>{children}</span>
-    {note && <span style={{ fontSize: FS.label, color: BC.t3, opacity: 0.8, letterSpacing: 0.3 }}>{note}</span>}
+  <div style={{
+    display: "flex", alignItems: "baseline", justifyContent: "center",
+    gap: 6, marginBottom: 7,
+  }}>
+    <span style={{ fontSize: FS.body, fontWeight: 800, color: BC.t3, letterSpacing: 1.2 }}>{children}</span>
+    {note && <span style={{ fontSize: ROW, color: BC.t3, opacity: 0.8, letterSpacing: 0.3 }}>{note}</span>}
   </div>
 );
 
@@ -176,28 +187,44 @@ const SKINS_GRID = {
     "minmax(0, 1.35fr) minmax(max-content, 1fr) minmax(max-content, 0.55fr) minmax(max-content, 0.8fr)",
   columnGap: 8, rowGap: 5, alignItems: "baseline",
 };
-const SKIN_NAME = {
-  minWidth: 0, fontSize: ROW, fontWeight: 700, color: BC.t1,
-  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-};
-const SKIN_RESULT = { fontSize: ROW, fontWeight: 800, color: BC.amberInk, whiteSpace: "nowrap" };
-// Right-aligned so #7 lines up under #16 on its digits rather than on its
-// hash, which is the only thing a column of hole numbers is for.
-const SKIN_HOLE = { fontSize: ROW, color: BC.t3, whiteSpace: "nowrap", textAlign: "right" };
-const SKIN_PAR = { fontSize: ROW, color: BC.t3, whiteSpace: "nowrap", textAlign: "right" };
+// ── Read the theme at RENDER, not at import ─────────────────────────
+// These were four module-level constants and every one of them froze the
+// theme it was imported under. `BC` is mutated in place by applyBCTheme and
+// never reassigned — that is the whole contract, so that a top-level
+// re-render is all a theme toggle needs — but a constant that copies `BC.t1`
+// into itself has already taken a snapshot, and no re-render can reach it.
+// The symptom was the dark theme's off-white names on the light theme's white
+// card, which is invisible until somebody flips the pill in My Account.
+//
+// A function called on each render is the whole fix, and it is why every
+// other style in this file is written inline in the JSX.
+const skinCell = () => ({
+  name: {
+    minWidth: 0, fontSize: ROW, fontWeight: 700, color: BC.t1,
+    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  },
+  result: { fontSize: ROW, fontWeight: 800, color: BC.amberInk, whiteSpace: "nowrap" },
+  // Right-aligned so #7 lines up under #16 on its digits rather than on its
+  // hash, which is the only thing a column of hole numbers is for.
+  hole: { fontSize: ROW, color: BC.t3, whiteSpace: "nowrap", textAlign: "right" },
+  par: { fontSize: ROW, color: BC.t3, whiteSpace: "nowrap", textAlign: "right" },
+});
 
-const SkinsGrid = ({ skins }) => (
-  <div style={SKINS_GRID}>
-    {skins.map((k) => (
-      <Fragment key={k.hole}>
-        <span style={SKIN_NAME}>{k.name}</span>
-        <span style={SKIN_RESULT}>{k.result}</span>
-        <span style={SKIN_HOLE}>#{k.hole + 1}</span>
-        <span style={SKIN_PAR}>PAR {k.par}</span>
-      </Fragment>
-    ))}
-  </div>
-);
+const SkinsGrid = ({ skins }) => {
+  const c = skinCell();
+  return (
+    <div style={SKINS_GRID}>
+      {skins.map((k) => (
+        <Fragment key={k.hole}>
+          <span style={c.name}>{k.name}</span>
+          <span style={c.result}>{k.result}</span>
+          <span style={c.hole}>#{k.hole + 1}</span>
+          <span style={c.par}>PAR {k.par}</span>
+        </Fragment>
+      ))}
+    </div>
+  );
+};
 
 export function RoundSummarySheet({
   round, onClose,
@@ -213,6 +240,11 @@ export function RoundSummarySheet({
     ctpData, buyIns, hcpOverrides, teeAssignments, teamNames,
   }), [round, matches, holeData, tPlayers, tRounds, courses, roundLocks,
     ctpData, buyIns, hcpOverrides, teeAssignments, teamNames]);
+
+  // Under the day's par, which is what the red is for. A round whose
+  // scorecard is incomplete has no par to be under (see roundSummary), and
+  // the answer there is no colour rather than a guessed one.
+  const underPar = (n) => s.coursePar != null && n < s.coursePar;
 
   return (
     <Popup
@@ -375,10 +407,35 @@ export function RoundSummarySheet({
         </Card>
 
         {/* Only a finished card is ranked, and equal lowest cards are
-            co-winners — low net has nowhere to carry to. */}
+            co-winners — low net has nowhere to carry to.
+
+            The three numbers take the inks the app already uses for them
+            rather than one grey for the arithmetic: the course handicap in
+            `hcpBlue`, which is the handicap colour everywhere else in the
+            app and in MNQ (the stroke dots, the (CH) labels, the scorecard's
+            own low net card), and anything under the day's par in red.
+
+            `danger`, not `birdieRed` — birdieRed is the ring drawn on the
+            SELECTED SCORE CHIP, which is the page turned over, so it holds
+            the ink of the other mode: on the dark theme it is #c1272d, a
+            deep red meant for a near-white chip and all but invisible on the
+            near-black card this row is on. `danger` is the app's red on the
+            app's own surfaces and inverts the right way — 5.5:1 here in
+            dark, 6.1:1 in light.
+
+            A man scanning this for his own name should be able to find the
+            one number he is being ranked on without reading the sum. */}
         <Card label="LOW NET" empty="No card is in yet." rows={s.lowNet.length}>
           {s.lowNet.map((r) => (
-            <WinRow key={r.pid} name={r.name} detail={`${r.gross} − ${r.ch} = ${r.net}`} />
+            <WinRow key={r.pid} name={r.name} detail={
+              <>
+                <span style={{ color: underPar(r.gross) ? BC.danger : BC.t2 }}>{r.gross}</span>
+                {" − "}
+                <span style={{ color: BC.hcpBlue }}>{r.ch}</span>
+                {" = "}
+                <span style={{ color: underPar(r.net) ? BC.danger : BC.t1, fontWeight: 800 }}>{r.net}</span>
+              </>
+            } />
           ))}
         </Card>
 
