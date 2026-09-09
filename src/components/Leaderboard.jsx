@@ -51,7 +51,7 @@ import { FullScorecard } from "./FullScorecard";
 import { StickyTop } from "./ui";
 import { isRoundFinal } from "../lib/roundLocks";
 import { scheduledRounds } from "../lib/rounds";
-import { HOLE_COUNT, revealState, revealSummary, stepReveal, COUNTDOWN_HASH, COUNTDOWN_PATH } from "../lib/reveal";
+import { HOLE_COUNT, revealState, stepReveal, COUNTDOWN_HASH, COUNTDOWN_PATH } from "../lib/reveal";
 // The television screen, and nothing else opens it. Sixteen phones load the
 // scoreboard every few minutes all weekend; one of them, once, opens the
 // countdown — so it has no business riding in the bundle the other fifteen
@@ -655,14 +655,24 @@ function RevealControl({ through, onSet }) {
 
 // The banner, the own-side card and (for a director) the control, as one
 // panel that sits where the match rows would be.
-function SealedPanel({ through, ownCards, remaining, canReveal, onSetReveal, onOpenCountdown }) {
+//
+// It says three things and no longer explains any of them: SEALED, how many
+// holes are turned over, and the way onto the television. The paragraph that
+// used to sit under the header spelled out that the round lands in one piece
+// at 18 rather than a hole at a time, and how many points were still to come.
+// Both are true and neither needed saying: the counter above it already reads
+// n / 18, and the board holding still IS the explanation — a reader watching
+// nothing move while the count climbs has the mechanism in front of them.
+// Sixty words of it, on the screen sixteen men are looking at, on the one
+// evening the app is supposed to be getting out of the way.
+function SealedPanel({ through, ownCards, canReveal, onSetReveal, onOpenCountdown }) {
   return (
     <div style={{
       marginTop: 8, background: BC.card, borderRadius: 12, overflow: "hidden",
       border: `1px solid ${BC.amber}${ALPHA.line}`,
     }}>
       <div style={{ padding: "11px 12px 10px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span aria-hidden="true" style={{ fontSize: FS.small, lineHeight: 1 }}>🔒</span>
           <span style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 1, color: BC.amberInk }}>
             THE FINAL COUNTDOWN · SEALED
@@ -670,12 +680,6 @@ function SealedPanel({ through, ownCards, remaining, canReveal, onSetReveal, onO
           <span style={{ marginLeft: "auto", fontSize: FS.label, fontWeight: 800, color: BC.t3, letterSpacing: 0.5 }}>
             {through} / {HOLE_COUNT}
           </span>
-        </div>
-        <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.5 }}>
-          {revealSummary(through)}. This round lands on the board when the
-          countdown reaches 18 — not a hole at a time — so nothing here moves
-          until the last card is turned over
-          {remaining > 0 ? ` — ${fmtPts(remaining)} still to come` : ""}.
         </div>
         {/* The way onto the television. Offered to EVERYBODY, not just the
             director: the screen the room watches is signed in as whoever
@@ -1066,29 +1070,16 @@ export function TeamLeaderboard({
   );
 
   // ── What the cup total is NOT counting ───────────────────────────
-  // The totals above are banked points, and a sealed round banks nothing
-  // past its reveal. This is what is missing, in points: the sealed rounds'
-  // pot less whatever the reveal has already paid out.
+  // There is no longer a figure for this, and that is the point. A sealed
+  // round banks nothing past its reveal, so the cup total is short by that
+  // round's pot — and the board used to work the number out and print it,
+  // first under the cup bar and then inside the round's own SealedPanel.
   //
-  // It feeds ONE thing — the "— N still to come" on the round's own
-  // SealedPanel. It used to also print a notice on the cup bar; see the
-  // note where that used to be for why it no longer does.
-  const sealedOut = useMemo(() => {
-    // Drawn rounds only. An undrawn round is on the board now (see
-    // roundNumbers) and Team Best Ball seals by default, so without this the
-    // figure covered a round with nothing in it to withhold from the moment
-    // the format was picked.
-    const conceal = roundNumbers.filter((r) => roundMeta[r]?.seal?.concealing && roundMeta[r]?.drawn);
-    if (!conceal.length) return null;
-    let pot = 0, banked = 0;
-    conceal.forEach((rnd) => {
-      roundMeta[rnd].results.forEach(({ match: m, result: r }) => {
-        pot += matchPot(m);
-        banked += r.totalPts.A + r.totalPts.B;
-      });
-    });
-    return { rounds: conceal, remaining: Math.max(0, pot - banked) };
-  }, [roundNumbers, roundMeta]);
+  // Both are gone. The panel says SEALED and n / 18 and offers the
+  // television, and the board holding still is the rest of the explanation.
+  // Anything that computes how much is being withheld is one derivation
+  // away from a reader adding it back — which is the ending, arrived at
+  // early, off the one screen that is supposed to be withholding it.
   // The configured target wins over the derived one — see CUP_POINTS_TO_WIN.
   // The fallback still applies when it's unset, and it's also what decides
   // a clinch below, so the bar and the number can't tell different stories.
@@ -1240,7 +1231,6 @@ export function TeamLeaderboard({
     return (
       <SealedPanel
         through={seal.through}
-        remaining={sealedOut?.remaining ?? 0}
         canReveal={!!drive}
         onSetReveal={drive || (() => {})}
         onOpenCountdown={() => openCountdown(rnd)}
