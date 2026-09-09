@@ -31,7 +31,7 @@ import { BC, ALPHA, ON_AMBER, FS, R, teamColor } from "../theme";
 // ── One size for the body ───────────────────────────────────────────
 // Everything below the header is FS.small, and it is spelled once here so it
 // stays that way. This screen had four sizes in it — names at 12, results and
-// hole numbers at 10, the footnote at 8 — and a size rung is a claim about
+// hole numbers at 10, a closing note at 8 — and a size rung is a claim about
 // importance. It was not making one: a skin's hole number is not a footnote
 // to the man's name beside it, and the points a match moved are not smaller
 // news than the status they came from. Read down, the mixture just looked
@@ -191,8 +191,8 @@ const CtpTile = ({ ctp }) => (
 // and the row already says birdie and says par 4. The NET list is the real
 // trade: the net score is genuinely gone, and what is left says WHAT HE MADE
 // rather than what it netted to. Which shot won the skin is the thing being
-// read here; what it settles for is the Betting tab's, as the footnote below
-// these cards has always said.
+// read here; what it settles for is the Betting tab's, which is where every
+// question about what a pot pays is answered (see the side games below).
 // Fractions, not content widths. Sized to their contents the four columns
 // bunched against the left edge with a third of the card empty beside them,
 // which reads as a list that ran out rather than a table. Each track takes a
@@ -388,7 +388,14 @@ export function RoundSummarySheet({
             end of it, and the one hole with a pot of its own.
 
             Each is scored against its OWN buy-in field, which is why a man
-            can be missing from one card and on the next. */}
+            can be missing from one card and on the next.
+
+            None of them says what it PAYS, and that is the standing rule
+            here, not an omission to be filled in later: what a pot is worth
+            depends on the buy-in and on how the week's other rounds went, the
+            Betting tab is where that is settled, and a share quoted on this
+            screen would be a second answer to it. There used to be a line at
+            the bottom saying so; the rule outlives the line. */}
         {/* Four tiles across, because four is how many par 3s a course has —
             the pins are a fixed little set, not a list of unknown length, and
             laid out as one row they fit in the height a single stacked row
@@ -478,14 +485,6 @@ export function RoundSummarySheet({
             ))}
           </Card>
         )}
-
-        {/* The pots themselves are not on this screen. What each of these is
-            WORTH depends on the buy-in and on how the week's other rounds
-            went, and the Betting tab is where that is settled — a share
-            quoted here would be a second answer to it. */}
-        <div style={{ fontSize: ROW, color: BC.t3, textAlign: "center", lineHeight: 1.5, margin: "2px 0 10px" }}>
-          What each of these pays is on the Betting tab.
-        </div>
       </div>
 
       {/* On the frame rather than at the end of the scroll, so the way out of
