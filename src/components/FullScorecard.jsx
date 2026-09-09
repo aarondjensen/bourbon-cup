@@ -103,8 +103,8 @@
 import { playerLookup, sideNames } from "../lib/players";
 import { BC, FONT, ALPHA, FS, ON_AMBER, teamColor } from "../theme";
 import {
-  FORMATS, HOLE_METHOD_LABELS, UNIT_DOTS, UNIT_POINTS,
-  describeHolePoints, formatIsSharedBall, isPointsPerHole, resolveScoring, SCORING_TYPE_TOTAL,
+  UNIT_DOTS, UNIT_POINTS,
+  formatIsSharedBall, isPointsPerHole, resolveScoring, SCORING_TYPE_TOTAL,
 } from "../constants";
 import {
   higherIsBetter, totalUnit, holeFormatFor,
@@ -290,8 +290,20 @@ export function ScoreCell({ score, par, strokes = 0, size = CELL, color, skin = 
 //                             the blackout owes them is not their opponents'
 //                             scores back; it is what those scores ADD UP TO,
 //                             which is the round nobody is allowed to know.
+//    course                 — no longer read. The card used to print a terms
+//                             line under the header — course · format ·
+//                             scoring · match play — and it restated things
+//                             the screens around it already say: the Scoring
+//                             tab carries a format badge over the status strip
+//                             (App.jsx, the "Format / round badge" block,
+//                             which also names a best-ball override), the
+//                             Matches tab banners every round with its course
+//                             and format, and the row labels on this card
+//                             already say NET / DOTS / PTS and MATCH / LEAD.
+//                             Every caller still passes it, so putting the
+//                             line back is a render, not a rewiring job.
 export function FullScorecard({
-  match, result, format, holePars, holeHcps, course, tPlayers, getScore,
+  match, result, format, holePars, holeHcps, tPlayers, getScore,
   viewer = "A", showHeader = true, conceal = null,
 }) {
   if (!result) return null;
@@ -319,7 +331,6 @@ export function FullScorecard({
   // them net strokes whatever the round is called, and everything below
   // (direction, row label, notation) has to follow the method, not the name.
   const scoredFormat = holeFormatFor(match, format);
-  const methodNamed = scoredFormat !== format ? (HOLE_METHOD_LABELS[scoredFormat] || null) : null;
   const higherWins = higherIsBetter(scoredFormat);
   const unit = totalUnit(scoredFormat);
   const holes = result.holes;
@@ -775,18 +786,6 @@ export function FullScorecard({
       </div>}
 
       {NinesRow}
-
-      {/* The terms, in the order the round is scored: where, what the
-          format is, how a hole is made, how the holes settle. */}
-      <div style={{ fontSize: FS.micro, color: BC.t3, letterSpacing: 0.4, marginBottom: 10, lineHeight: 1.5 }}>
-        {[
-          course?.name,
-          FORMATS.find((f) => f.id === format)?.label,
-          methodNamed,
-          higherWins ? unit : "net scores",
-          perHole ? describeHolePoints(result.holePoints) : total ? `total ${unit}` : "match play",
-        ].filter(Boolean).join(" · ")}
-      </div>
 
       {nine(0, "OUT")}
       {nine(9, "IN")}
