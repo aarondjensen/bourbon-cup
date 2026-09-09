@@ -738,6 +738,26 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
     return false; // allow the change
   };
 
+  // The other half of the same rule, for the three controls that decide how a
+  // round is SCORED rather than what it is worth: format, form of play and
+  // hole scoring. A final round's scoring never moves, so they stand down —
+  // and they say so rather than taking the tap and discarding it, which is
+  // what the whole form used to do (see savedRound).
+  //
+  // Not warnRoundLocked: that one lets a merely-LOCKED round through with a
+  // note that the change is "saved for reference", which is true of a handicap
+  // field and false of these — a format change re-scores a locked round for
+  // real. Only FINAL is refused here; LOCKED passes silently, as it always has.
+  const finalScoringLocked = () => {
+    if (!roundIsFinal) return false;
+    confirm({
+      title: `Round ${editRound} is final`,
+      message: "Its format and scoring are read-only — nothing re-scores a final round. What the matches are worth can still be changed.",
+      alert: true,
+    });
+    return true;
+  };
+
   const showChDelta = (key, delta) => {
     if (!delta) return;
     setChDeltas(prev => ({ ...prev, [key]: delta }));
@@ -766,8 +786,8 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
   //     hydration on "is the form dirty" instead would deadlock on that
   //     first load and then write the empty form over real data.
   //
-  // A final round is closed: its handicaps are frozen in the snapshot, so
-  // nothing is written and the status line says so.
+  // A final round is not closed to every edit — only to the three that would
+  // re-score it. See savedRound below, and finalScoringLocked above.
 
   // What Firestore currently holds for `editRound`, with every default
   // resolved the same way the scoring path resolves it (see enrichedRounds).
@@ -856,7 +876,36 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
   const storedSettingsSig = roundSettingsSignature(storedRound);
   const hcpDocSig = JSON.stringify(hcpOverridesFromDb ?? null);
   const teeDocSig = JSON.stringify(teeAssignmentsFromDb ?? null);
-  const formSig = roundSignature(formRound);
+
+  // ── What a FINAL round still accepts ───────────────────────────────
+  // The round lock's guarantee is about STROKES, and it says so: handicaps,
+  // tees, mode, allowance, course and hole tables freeze, and "Nassau/point
+  // values (a director legitimately adjusts what a match is worth; that never
+  // changes strokes)" deliberately do not (lib/roundLocks). scoring.js scores
+  // the same way — getRoundHolePoints, getRoundCounting and getRoundParPoints
+  // all take the LIVE value over the snapshot so a correction lands.
+  //
+  // This form drew a second, wider line and drew it INVISIBLY: `roundIsFinal`
+  // discarded the whole write while leaving half the controls live. A director
+  // retyping a final round's Nassau pots watched the box take the number and
+  // the leaderboard never move — the edit was thrown away on its way out, and
+  // it came back on the next reload. That is the failure this file's own
+  // Tournament card was rewritten to stop making.
+  //
+  // So one line, in one place, and it is the lock's: a final round's SCORING is
+  // frozen — its format and its two scoring axes, the three fields that would
+  // re-score a finished round — and what a match is WORTH is not. The three
+  // controls are read-only below (see finalScoringLocked); pinning them here as
+  // well is what makes that a guarantee rather than a habit, so a control added
+  // later cannot quietly re-score 2019.
+  const savedRound = useMemo(() => (roundIsFinal ? {
+    ...formRound,
+    format: storedRound.format,
+    scoring_type: storedRound.scoring_type,
+    hole_scoring: storedRound.hole_scoring,
+  } : formRound), [roundIsFinal, formRound, storedRound]);
+
+  const formSig = roundSignature(savedRound);
   const roundDirty = formSig !== roundSignature(storedRound);
 
   const saveTimerRef = useRef(null);
@@ -984,16 +1033,16 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
   // re-arm the timer and duplicate the write.
   useEffect(() => {
     if (!formSeeded) return;
-    if (roundIsFinal || !roundDirty) { pendingSaveRef.current = null; return; }
+    if (!roundDirty) { pendingSaveRef.current = null; return; }
     // Re-sending a payload we already wrote can only mean the two sides
     // disagree about something the diff cannot reconcile. Stop, rather
     // than trade writes with Firestore forever.
     const written = lastWrittenRef.current;
     if (written && written.round === editRound && written.sig === formSig) return;
-    pendingSaveRef.current = { round: editRound, payload: formRound, sig: formSig };
+    pendingSaveRef.current = { round: editRound, payload: savedRound, sig: formSig };
     saveTimerRef.current = setTimeout(flushRoundSave, AUTOSAVE_MS);
     return () => { if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; } };
-  }, [formSeeded, roundDirty, roundIsFinal, formRound, formSig, editRound, flushRoundSave]);
+  }, [formSeeded, roundDirty, savedRound, formSig, editRound, flushRoundSave]);
 
   // Leaving the round (or the console) commits whatever is still queued.
   // Declared after the debounce effect so its cleanup runs second: the
@@ -1707,12 +1756,13 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
               <div>
                 <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.gold, marginBottom: 6 }}>FORMAT</div>
-                <select value={roundFormat} onChange={e => {
+                <select value={roundFormat} disabled={roundIsFinal} onChange={e => {
                   // Picking a format re-seeds every decision that follows from
                   // it. Nothing survives the change that the new format would
                   // not have chosen for itself — a Scramble's 35/15 means
                   // nothing on a Singles round, Points means nothing off Team
                   // Best Ball, and a 2-Man Agg's counts mean nothing anywhere.
+                  if (finalScoringLocked()) return;
                   const id = e.target.value;
                   const fmt = FORMATS.find(f => f.id === id);
                   setRoundFormat(id);
@@ -1729,7 +1779,10 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                   setCounting(null);
                   setHolePoints(null);
                   setParPoints(null);
-                }} style={{ ...InputStyle, marginBottom: 0, fontSize: FS.small, padding: "8px 8px", height: 38 }}>
+                }} style={{
+                  ...InputStyle, marginBottom: 0, fontSize: FS.small, padding: "8px 8px", height: 38,
+                  opacity: roundIsFinal ? 0.5 : 1, cursor: roundIsFinal ? "not-allowed" : "pointer",
+                }}>
                   <option value="">Select...</option>
                   {FORMATS.map(f => <option key={f.id} value={f.id} title={f.desc}>{f.label}</option>)}
                 </select>
@@ -1948,7 +2001,8 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
               // size — see theme.segThumb. These rows are the same control as the
               // tab bar above them and used to be drawn three separate ways.
               const bbPill = (active) => ({
-                padding: "4px 12px 6px", fontSize: FS.label, fontWeight: 700, cursor: "pointer",
+                padding: "4px 12px 6px", fontSize: FS.label, fontWeight: 700,
+                cursor: roundIsFinal ? "not-allowed" : "pointer",
                 ...segThumb(active, { compact: true }),
               });
               return (
@@ -1957,7 +2011,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                     {lbl}
                     <div style={segTrack({ compact: true })}>
                       {pills.map(p => (
-                        <button key={p.id} onClick={() => setHoleScoring(p.value)}
+                        <button key={p.id} onClick={() => { if (finalScoringLocked()) return; setHoleScoring(p.value); }}
                           title={HOLE_METHOD_DESCRIPTIONS[p.value] || describeHoleScore(fmtId, p.value)}
                           style={bbPill(current === p.value)}>{p.label}{current === p.value && <SegRule compact />}</button>
                       ))}
@@ -2227,8 +2281,8 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                   </RoundSectionHeading>
                   <div style={{ ...segTrack({ compact: true }), alignSelf: "flex-start", width: "fit-content", marginBottom: 5 }}>
                     {offered.map(f => (
-                      <button key={f} onClick={() => setScoringType(f)} title={describeFormOfPlay(f, formRound.format)}
-                        style={pill(current === f, false)}>{formOfPlayLabel(f, formRound.format)}{current === f && <SegRule compact />}</button>
+                      <button key={f} onClick={() => { if (finalScoringLocked()) return; setScoringType(f); }} title={describeFormOfPlay(f, formRound.format)}
+                        style={pill(current === f, roundIsFinal)}>{formOfPlayLabel(f, formRound.format)}{current === f && <SegRule compact />}</button>
                     ))}
                   </div>
 
@@ -2846,17 +2900,23 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
 
             {/* Auto-save status. Stands in for the old Save button: the
                 only thing a director still needs from it is confidence
-                that the edit landed. */}
+                that the edit landed.
+
+                A final round used to read "changes are not saved", which was
+                the truth about a form that took the change anyway. Now it says
+                what is actually frozen, and the save states underneath it are
+                the same ones every other round gets — because a final round
+                does save what it lets you edit. See savedRound. */}
             {(() => {
               const phase = autoSave?.round === editRound ? autoSave.phase : null;
-              const [text, color] = roundIsFinal
-                ? [`Round ${editRound} is final — changes are not saved`, BC.danger]
-                : phase === "error"
-                  ? [`Round ${editRound} could not be saved — retrying on your next edit`, BC.danger]
-                  : phase === "saving" || (roundDirty && formSeeded)
-                    ? ["Saving…", BC.amberInk]
-                    : phase === "saved"
-                      ? [`Round ${editRound} saved`, BC.t3]
+              const [text, color] = phase === "error"
+                ? [`Round ${editRound} could not be saved — retrying on your next edit`, BC.danger]
+                : phase === "saving" || (roundDirty && formSeeded)
+                  ? ["Saving…", BC.amberInk]
+                  : phase === "saved"
+                    ? [`Round ${editRound} saved`, BC.t3]
+                    : roundIsFinal
+                      ? [`Round ${editRound} is final — its scoring and handicaps are frozen`, BC.t3]
                       : ["Changes save automatically", BC.t3];
               return (
                 <div style={{
