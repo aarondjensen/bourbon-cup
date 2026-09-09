@@ -16,10 +16,12 @@
 // every step. Each is allowed its own dialect and nothing else:
 //
 //   Scoring tab   says it from the reader's side  — "WON 9&7", "3 DOWN"
-//   Leaderboard   is showing points, so a halve   — "½"
-//   the other two are neutral                     — "9&7", "HALVED"
+//   everything else is neutral                    — "9&7", "HALVED"
 //
-// Strip the dialect and the four have to be the same sentence.
+// Strip the dialect and the four have to be the same sentence. ("½" is still
+// mapped below: the Leaderboard printed it for a halved overall until the
+// word moved into statusText, and a screen reaching back for the symbol
+// should fail on something other than a stale helper in a test.)
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 
