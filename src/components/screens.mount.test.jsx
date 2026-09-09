@@ -320,4 +320,48 @@ describe("Scoring", () => {
   it("renders a round with no draw yet, which is what hid the crash", () => {
     mounts(<ScoreEntry {...scoring({ matches: [], groups: {} })} />);
   });
+
+  // ── The Nassau chips, from the reader's own side ──
+  // Not a mount check. These three chips say WON or LOST and then said the
+  // margin from TEAM A's side whoever was holding the phone, so a front nine
+  // played out two down came back as "LOST 2 UP". scoring.result.test pins
+  // the words; this pins that the screen is asking for them.
+  describe("the front / overall / back chips", () => {
+    const two = [
+      { player_id: "a", name: "Aaron J", team: "A", handicap_index: 0, auth_uid: "u1" },
+      { player_id: "b", name: "Paul W", team: "B", handicap_index: 0 },
+    ];
+    const singles = { round_number: 1, course_id: "c1", date: "2026-07-16", tee_time: "8:30", format: "singles" };
+    const solo = { id: "m1", round: 1, teamA: ["a"], teamB: ["b"], tournament_id: "bc_test" };
+    // A takes the first three, halves the fourth, loses the last five — two
+    // down at the turn, with the nine played out rather than closed. Then the
+    // tenth, so the back and the overall are live and the front is not.
+    const WINNERS = "AAA-BBBBBB";
+    const holeData = { a_1: {}, b_1: {} };
+    [...WINNERS].forEach((w, h) => {
+      holeData.a_1[h] = w === "A" ? 3 : w === "B" ? 5 : 4;
+      holeData.b_1[h] = w === "A" ? 5 : w === "B" ? 3 : 4;
+    });
+    const chips = (pid) => render(<ScoreEntry {...scoring({
+      user: { ...two.find(p => p.player_id === pid), isDirector: false },
+      matches: [solo], holeData, tPlayers: two, tRounds: [singles],
+      rounds: [1], currentRound: 1, groups: { 1: [["a", "b"]] },
+    })} />).container.textContent;
+
+    it("tells the loser he lost two DOWN, not two up", () => {
+      const text = chips("a");
+      expect(text).toContain("LOST 2 DOWN");
+      expect(text).not.toContain("LOST 2 UP");
+    });
+
+    it("tells the winner he won two UP", () => {
+      expect(chips("b")).toContain("WON 2 UP");
+    });
+
+    it("says the live nine from each man's own side", () => {
+      // One hole of the back is in and A lost it: A is 1 down on it, B 1 up.
+      expect(chips("a")).toContain("1 DOWN");
+      expect(chips("b")).toContain("1 UP");
+    });
+  });
 });

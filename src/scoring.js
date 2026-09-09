@@ -279,6 +279,39 @@ export const statusText = (st) => {
   return `${m} UP`;
 };
 
+// ── Every word of it from the reader's own side ──
+// `statusText` answers from TEAM A's, which is right for a scorecard sitting
+// between two named sides and wrong for a chip that has already said WON or
+// LOST. Pasting the two together produced "LOST 2 UP", which is not a
+// sentence: a match that goes the distance is won two UP and lost two DOWN,
+// and the front nine on screen had just been played out two DOWN.
+//
+// A CLOSEOUT is the exception, and it is not one word of this rule bending:
+// "3&2" is the whole result and reads the same from either side of it, so
+// WON / LOST is all the direction it needs. Only the margin of a match that
+// reached the last hole has an up and a down to get backwards.
+//
+// A Total or points segment has neither — it prints a signed lead and keeps
+// the colour for its side.
+export const verdictText = (st, userTeam) => {
+  if (!st.played) return "—";
+  if (st.unit !== "up") {
+    return st.complete && st.winner
+      ? `${st.winner === userTeam ? "WON" : "LOST"} ${statusText(st)}`
+      : statusText(st);
+  }
+  if (!st.complete) {
+    const mine = userTeam === "A" ? st.margin : -st.margin;
+    return mine === 0 ? "AS" : `${Math.abs(mine)} ${mine > 0 ? "UP" : "DOWN"}`;
+  }
+  if (st.winner == null) return "HALVED";
+  const won = st.winner === userTeam;
+  // `decided` is set on every settled match with a winner — see
+  // segmentState — and its `remaining` is what separates the two cases.
+  if (st.decided.remaining > 0) return `${won ? "WON" : "LOST"} ${statusText(st)}`;
+  return `${won ? "WON" : "LOST"} ${Math.abs(st.decided.margin)} ${won ? "UP" : "DOWN"}`;
+};
+
 // Which side a segment's margin favours right now, or null when level.
 export const segmentLeader = (st) => (st.margin > 0 ? "A" : st.margin < 0 ? "B" : null);
 
