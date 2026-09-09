@@ -23,10 +23,10 @@
 //
 //  What that buys, in order of how much it matters on a phone:
 //
-//    • GOLF NOTATION. A circled 3 and a squared 6 are read at a glance,
-//      by everyone who has ever held a scorecard. Nothing else in this
-//      app says "you birdied the 4th" without the reader doing
-//      arithmetic against the PAR row.
+//    • THE CARD ITSELF — the gross numbers the group wrote down, one row
+//      per player, which the four-row team grid this replaced had no room
+//      for at all. MNQ boxes and circles them in golf notation; this card
+//      does not, and "The box, and what it costs" below is why.
 //    • STROKE DOTS on the cell that gets them, not in a legend. The dots
 //      come from result.strokeMaps — the same allocation the match was
 //      scored with — so the card cannot show a stroke the engine didn't
@@ -62,34 +62,38 @@
 //      of view. A stated result — the overall status, a nine's status, a
 //      clinch — is team-colored again, because it names a winner.
 //
-//  ── One shape, one meaning ────────────────────────────────────────
-//  A rounded box around a number is GOLF NOTATION and nothing else: a
-//  square is a bogey, a double square a double, a circle a birdie. That
-//  is the oldest language on the card and the card does not get to
-//  redefine it three rows down.
+//  ── The box, and what it costs ─────────────────────────────────────
+//  There is exactly ONE boxed number on this card and it means the side
+//  TOOK THE HOLE. Not a bogey. The gross rows carry no golf notation at
+//  all — no circles, no squares — and that is a deliberate trade, made
+//  after the card was read on a phone.
 //
-//  So the two things that used to be drawn as outlined boxes — the
-//  side's number on a hole it WON, and the clinch stamp on the MATCH row
-//  — are FILLED in the team's deep shade instead. They sat in the column
-//  directly under a gross score wearing the real notation, at the same
-//  1.5px and the same radius, and the collision was worst exactly where
-//  the card was most worth reading: a birdie circled on the gross row
-//  with a square under it on the net row says "3, then a bogey" to
-//  anybody who reads a scorecard, when what happened is a birdie that
-//  won the hole.
+//  Notation is the better language in the abstract and this card is the
+//  wrong place for it, because the card has to say something notation
+//  cannot: who won the hole. Both were drawn as a rounded outline, at the
+//  same radius and the same 1.5px, in the SAME COLUMN two rows apart. On
+//  the 14th that came out as a circled 4 with a boxed 3 directly beneath
+//  it, which anybody who has ever held a scorecard reads as "birdie, then
+//  bogey" — when what happened is a birdie that won the hole.
 //
-//  The three treatments, and there are only three:
+//  Trying to keep both by splitting the treatments (fill for the hole,
+//  outline for the score) worked and was still two vocabularies to hold
+//  on one 26px row. Dropping one is simpler, and the one to drop is the
+//  one the card can afford: par is on screen, two rows up, in the PAR
+//  row directly above the score it belongs to. Which side won the hole
+//  is on screen nowhere else.
 //
-//    outline (circle / square) — a score against par. Gross rows only,
-//      in neutral ink, never in a team colour.
-//    solid team fill          — a team took this. The hole (NET row) or
-//      the match (the clinch stamp). Same thing holeFill already says
-//      with the Scoring tab's bars and the Leaderboard's cells.
-//    washed chip, hairline    — a STATED result: F9 / B9, OUT / IN.
+//  So:
 //
-//  The fill is teamColorDim, not the accent, because it carries white
-//  ink: ON_ACCENT on the accent green measures 2.9:1, and this is 13px
-//  in the densest grid in the app.
+//    a boxed number     the side took this hole (NET row), or took the
+//                       match here (the clinch stamp). Team-coloured.
+//    a washed chip      a STATED result: F9 / B9, OUT / IN.
+//    a bare number      everything else, gross scores included.
+//
+//  `ScoreCell` still knows how to draw notation and still does on the
+//  FIELD card (components/FieldCard), which has no won-hole row to
+//  collide with and no other way to say par. This card passes
+//  `notation={false}`.
 //
 //  Everything here is presentational. Every number is either a gross
 //  score the group entered or something computeMatchResult already
@@ -97,7 +101,7 @@
 // ══════════════════════════════════════════════════════════════════
 
 import { playerLookup, sideNames } from "../lib/players";
-import { BC, FONT, ALPHA, FS, ON_AMBER, ON_ACCENT, teamColor, teamColorDim } from "../theme";
+import { BC, FONT, ALPHA, FS, ON_AMBER, teamColor } from "../theme";
 import {
   FORMATS, HOLE_METHOD_LABELS, UNIT_DOTS, UNIT_POINTS,
   describeHolePoints, formatIsSharedBall, isPointsPerHole, resolveScoring, SCORING_TYPE_TOTAL,
@@ -151,6 +155,12 @@ const initials = (name) =>
 //  player gets on the hole, so a net score never has to be printed
 //  beside a gross one — the reader subtracts the dots.
 //
+//  `notation: false` keeps the digit and the dots and drops the rings. The
+//  MATCH card passes it, because a boxed number there already means the
+//  side won the hole and two meanings for one box is worse than one
+//  meaning missing — see "The box, and what it costs" above. The FIELD
+//  card leaves it on: nothing on it is boxed for any other reason.
+//
 //  An empty cell keeps the same height AND still draws its stroke dots:
 //  a blank card at the turn is how a player checks where their shots
 //  fall on the nine they are about to play.
@@ -164,7 +174,7 @@ const initials = (name) =>
 //  and the digit both switch to ON_AMBER: a skin is very often a birdie,
 //  and a treatment that ate the ring would trade the card's oldest piece of
 //  language for its newest.
-export function ScoreCell({ score, par, strokes = 0, size = CELL, color, skin = false }) {
+export function ScoreCell({ score, par, strokes = 0, size = CELL, color, skin = false, notation = true }) {
   const s = size;
   const sh = s + 8;      // the ring/box is a little larger than the digit
   const dotH = 9;        // the stroke-dot lane above it
@@ -203,18 +213,21 @@ export function ScoreCell({ score, par, strokes = 0, size = CELL, color, skin = 
     transform: `translate(-50%, calc(-50% - ${s * 0.07}px))`,
   };
 
+  // `notation: false` draws the digit and its stroke dots and nothing else.
+  // See the prop note above — the match card turns it off because it draws a
+  // box of its own two rows down.
   let border = null;
-  if (diff <= -2) {
+  if (notation && diff <= -2) {
     border = (
       <div style={{ ...ring, width: sh, height: sh, borderRadius: "50%", border: `1.5px solid ${bc}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ width: sh - 6, height: sh - 6, borderRadius: "50%", border: `1px solid ${bc}` }} />
       </div>
     );
-  } else if (diff === -1) {
+  } else if (notation && diff === -1) {
     border = <div style={{ ...ring, width: sh, height: sh, borderRadius: "50%", border: `1.5px solid ${bc}` }} />;
-  } else if (diff === 1) {
+  } else if (notation && diff === 1) {
     border = <div style={{ ...ring, width: sh, height: sh, borderRadius: 3, border: `1.5px solid ${bc}` }} />;
-  } else if (diff >= 2) {
+  } else if (notation && diff >= 2) {
     border = (
       <div style={{ ...ring, width: sh, height: sh, borderRadius: 3, border: `1.5px solid ${bc}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ width: sh - 6, height: sh - 6, borderRadius: 2, border: `1px solid ${bc}` }} />
@@ -573,7 +586,7 @@ export function FullScorecard({
           </div>
           {cells.map((c, i) => (
             <div key={c.h} style={holeCell(i, rowH)}>
-              <ScoreCell score={c.s} par={holePars[c.h]} strokes={c.st} />
+              <ScoreCell score={c.s} par={holePars[c.h]} strokes={c.st} notation={false} />
             </div>
           ))}
           <div style={totCell(rowH, { paddingTop: 8 })}>
@@ -613,19 +626,17 @@ export function FullScorecard({
                 {hidden(h) ? (
                   <span style={{ fontSize: FS.micro, opacity: 0.5 }} title="Sealed until the reveal">🔒</span>
                 ) : won ? (
-                  // ── FILLED, never outlined ──
-                  // See "One shape, one meaning" at the top of this file. This
-                  // cell sits one row under a gross score wearing golf
-                  // notation, and an outlined box here was a bogey square in
-                  // the column directly below a bogey square — on a birdie it
-                  // was a circle above a square, which reads as the hole
-                  // getting worse rather than as the side winning it.
+                  // ── The box on this card ──
+                  // A boxed number means the side TOOK the hole, and it is now
+                  // the only boxed number on the card — see "The box, and what
+                  // it costs" at the top of this file. Team-coloured, because a
+                  // hole belongs to a team.
                   <div style={{
                     minWidth: 20, height: 20, padding: "0 3px",
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    borderRadius: 4, background: teamColorDim(tid),
+                    borderRadius: 4, border: `1.5px solid ${col}`, background: `${col}${ALPHA.tint}`,
                   }}>
-                    <span style={{ fontSize: FS.small, fontWeight: 800, color: ON_ACCENT }}>{v}</span>
+                    <span style={{ fontSize: FS.small, fontWeight: 800, color: BC.t1 }}>{v}</span>
                   </div>
                 ) : (
                   <span style={{ fontSize: FS.small, fontWeight: 800, color: v == null ? `${BC.t3}${ALPHA.hair}` : BC.t2 }}>
@@ -671,14 +682,13 @@ export function FullScorecard({
           // Past the clinch there is nothing to say — the match was over.
           if (clinchHole != null && h > clinchHole) return <div key={h} style={holeCell(i, 26)} />;
           if (clinchHole === h) {
-            // Filled, for the same reason the won-hole cell is — and because
-            // this IS a hole a team took, the last one they needed. An
-            // outline here put a box in the column under the notation too.
-            const won = overall.decided.margin > 0 ? "A" : "B";
+            // Boxed for the same reason the won-hole cell is: this IS a hole a
+            // team took, the last one they needed.
+            const col = teamColor(overall.decided.margin > 0 ? "A" : "B");
             return (
               <div key={h} style={holeCell(i, 26)}>
-                <div style={{ background: teamColorDim(won), borderRadius: 4, padding: "0 3px", lineHeight: "18px", maxWidth: "100%" }}>
-                  <span style={{ fontSize: FS.label, fontWeight: 800, color: ON_ACCENT, whiteSpace: "nowrap" }}>{clinchText}</span>
+                <div style={{ border: `1.5px solid ${col}`, borderRadius: 4, padding: "0 3px", lineHeight: "18px", maxWidth: "100%" }}>
+                  <span style={{ fontSize: FS.label, fontWeight: 800, color: col, whiteSpace: "nowrap" }}>{clinchText}</span>
                 </div>
               </div>
             );
