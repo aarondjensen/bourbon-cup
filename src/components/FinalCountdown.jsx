@@ -109,6 +109,8 @@ const T = {
   promptSm: "clamp(10px, 1.2vw, 24px)",
 };
 
+const GRID_COLS = 4;
+
 const fmtPts = (n) => (n == null ? "—" : Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10));
 
 
@@ -128,11 +130,10 @@ function BallChip({ name, gross, strokes, net, par, tid, counted }) {
   const under = counted && net != null && Number.isFinite(par) && net < par;
   return (
     <div style={{
-      // Shares the column evenly with its siblings rather than claiming a
-      // fixed width. The counted row is six balls on the front and seven on
-      // the back — a fixed width sized for six wrapped the seventh onto a
-      // line of its own, which read as a ball that counted differently.
-      flex: "1 1 0", minWidth: 0,
+      // A cell of the side's grid, not a flex sibling — see SideColumn. Every
+      // man keeps the same square every hole, so the room learns where to look
+      // for him instead of re-reading eight names each time.
+      minWidth: 0,
       padding: "clamp(4px, 0.6vw, 12px) clamp(3px, 0.45vw, 10px)",
       borderRadius: "clamp(5px, 0.7vw, 14px)",
       background: counted ? `${col}${ALPHA.tint}` : "transparent",
@@ -145,6 +146,33 @@ function BallChip({ name, gross, strokes, net, par, tid, counted }) {
         color: counted ? col : BC.t3, whiteSpace: "nowrap",
         overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
       }}>{name}</div>
+
+      {/* ── The strokes he got, as DOTS ──
+          One dot per handicap stroke, in a lane of its own above the number,
+          which is where a scorecard puts them and where this app puts them
+          everywhere else (see ScoreCell in components/FullScorecard). They
+          used to be crammed inside the gross parenthetical as "(5•)", which
+          is not a stroke dot — it is a bullet in a bracket, at the size of
+          the smallest type on the screen, from twelve feet away.
+
+          They are the whole reason the big number is not the number he wrote
+          down. A room looking at a net 2 wants to know whether that was an
+          eagle or two shots, and the dots are the answer.
+
+          The lane keeps its height with no strokes in it, so the numbers
+          across the grid sit on one line whether or not the man got a shot. */}
+      <div style={{
+        height: "clamp(6px, 0.8vw, 16px)", display: "flex", alignItems: "center",
+        justifyContent: "center", gap: "clamp(1px, 0.15vw, 3px)",
+      }}>
+        {Array.from({ length: Math.min(strokes || 0, 4) }, (_, i) => (
+          <span key={i} style={{
+            width: "clamp(3px, 0.4vw, 8px)", height: "clamp(3px, 0.4vw, 8px)",
+            borderRadius: "50%", background: BC.hcpBlue, display: "block",
+          }} />
+        ))}
+      </div>
+
       <div style={{ display: "flex", alignItems: "baseline", gap: "0.35em" }}>
         <span style={{
           fontSize: T.chip, fontWeight: 800, lineHeight: 1,
@@ -152,9 +180,11 @@ function BallChip({ name, gross, strokes, net, par, tid, counted }) {
         }}>
           {net == null ? "·" : net}
         </span>
+        {/* The gross, small, beside it — what he actually wrote down. Only
+            when the two differ, which is exactly when the dots are lit. */}
         {gross != null && gross !== net && (
           <span style={{ fontSize: T.chipName, fontWeight: 700, color: BC.t3 }}>
-            ({gross}{strokes > 0 ? "•".repeat(Math.min(strokes, 3)) : ""})
+            ({gross})
           </span>
         )}
       </div>
@@ -163,12 +193,27 @@ function BallChip({ name, gross, strokes, net, par, tid, counted }) {
 }
 
 // ── One side of the hole ─────────────────────────────────────────
-// `revealed` is the stagger, not the blackout: the numbers are all here by
-// the time this renders. What it withholds it withholds for two seconds.
+// `revealed` is whether this side's captain has spoken. Until he has there
+// are no names and no numbers in the page at all — see the note at the top.
+//
+// THE GRID IS FIXED, AND SO IS THE ORDER. Eight men, four across and two
+// down, alphabetical, every hole for eighteen holes. It used to be two flex
+// rows — the balls that counted on top, the ones that missed underneath, each
+// sized to its own row — so a side's grid re-flowed on every hole: six across
+// then two, five then three, and a man moved three places between hole 4 and
+// hole 5 depending on how he putted.
+//
+// That is unreadable from the back of a room, and it is the wrong thing to
+// spend the animation on. What the room is watching for is WHOSE BALL
+// COUNTED, and that reads far better as a square lighting up in a place the
+// eye already knows than as a name migrating between two rows. Position is
+// now constant and the highlight carries all of the meaning.
+//
+// Alphabetical rather than roster order for the same reason: roster order is
+// whatever the director typed, it differs between the two sides, and it is
+// not a thing anybody can look a name up in. A is at the top left.
 function SideColumn({ tid, teamName, score, balls, par, revealed, won, waitingOn }) {
   const col = teamColor(tid);
-  const counted = balls.filter((b) => b.counted);
-  const missed = balls.filter((b) => !b.counted);
   return (
     <div style={{
       flex: 1, minWidth: 0, display: "flex", flexDirection: "column",
@@ -198,31 +243,13 @@ function SideColumn({ tid, teamName, score, balls, par, revealed, won, waitingOn
           color: BC.t3, textAlign: "center", lineHeight: 1.5,
         }}>{waitingOn || "WAITING"}</div>
       )}
-      {/* NOT RENDERED until the side has spoken, rather than rendered and
-          hidden. It used to be an opacity — which was fine when both sides
-          came out two seconds apart on a timer, and is not now: a side can sit
-          unrevealed for as long as the other captain wants to talk, and
-          "invisible on a television" is not the same as "not on the screen".
-          The names and the numbers stay out of the page until they are his to
-          give. Same rule as lib/reveal's, one layer up. */}
       {revealed && (
-      <div style={{
-        display: "flex", justifyContent: "center", alignItems: "stretch",
-        gap: "clamp(2px, 0.35vw, 8px)", width: "100%",
-        animation: "none",
-      }}>
-        {counted.map((b) => <BallChip key={b.pid} {...b} par={par} tid={tid} />)}
-      </div>
-      )}
-      {revealed && missed.length > 0 && (
-        // The ones that didn't count sit on their own line, and only as wide
-        // as they need to be — they are a footnote to the row above, not a
-        // second set of six.
         <div style={{
-          display: "flex", justifyContent: "center", alignItems: "stretch",
-          gap: "clamp(2px, 0.35vw, 8px)", width: `${Math.min(100, (missed.length / Math.max(counted.length, 1)) * 100)}%`,
+          display: "grid", width: "100%",
+          gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))`,
+          gap: "clamp(2px, 0.35vw, 8px)",
         }}>
-          {missed.map((b) => <BallChip key={b.pid} {...b} par={par} tid={tid} />)}
+          {balls.map((b) => <BallChip key={b.pid} {...b} par={par} tid={tid} />)}
         </div>
       )}
     </div>
@@ -362,7 +389,11 @@ export function FinalCountdown({
         // Singles) — dimming all of them would be a lie about the format.
         counted: made ? made.includes(pid) : true,
       };
-    });
+    })
+      // Alphabetical, so a man is in the same square on hole 18 as he was on
+      // hole 1. See the note on SideColumn's grid for why that matters more
+      // than sorting the counted ones to the front.
+      .sort((x, y) => x.name.localeCompare(y.name));
   };
 
   // ── What the captain reads out ───────────────────────────────────
@@ -434,24 +465,32 @@ export function FinalCountdown({
   );
 
   // ── The eighteen ───────────────────────────────────────────────
-  // Painted by who took each hole. The one being revealed carries a ring,
-  // and it is the only thing on the strip that moves.
+  // Coloured by WHO WON each hole, and by nothing else. Three states and
+  // three readings:
   //
-  // A TIED hole is split down the middle in both teams' colours rather than
-  // left grey. Grey is what an unturned hole looks like, and from the back of
-  // a room "we tied it" and "we haven't seen it yet" reading the same is the
-  // one mistake this strip can make — it is the thing everybody is counting.
+  //   a team's colour   they took the hole
+  //   grey, filled      it was tied
+  //   empty, outlined   not turned over yet
+  //
+  // The tie used to be a diagonal split in both teams' colours, on the
+  // reasoning that grey was already "we haven't seen it" and the two must not
+  // read alike. They still must not, and they still don't — one is filled and
+  // one is hollow — but the gradient was buying that at the price of the
+  // strip's actual job. From the back of a room eighteen cells in two colours
+  // read as a scoreboard; the same eighteen with four of them striped read as
+  // a loading bar, and the thing everybody is counting was the thing hardest
+  // to count.
+  //
+  // A hole is not coloured until BOTH captains have spoken — there is no
+  // winner before that — which is why this counts `settled` and not the hole
+  // on screen.
   const strip = (
     <div style={{ flexShrink: 0, display: "flex", gap: "clamp(2px, 0.3vw, 6px)" }}>
       {Array.from({ length: HOLE_COUNT }, (_, i) => {
-        // A hole is coloured by its WINNER, and there is no winner until both
-        // captains have spoken — so the strip counts what is wholly out, not
-        // what is on screen. The hole in play carries the ring and stays grey
-        // underneath it, which is exactly what it is: half a story.
         const out = i < settled;
         const h = result?.holes?.[i];
         const w = out ? h?.winner : null;
-        const halved = out && !w && h?.played;
+        const tied = out && !w && h?.played;
         const cur = i === holeIdx;
         return (
           <div key={i} style={{
@@ -459,12 +498,10 @@ export function FinalCountdown({
             padding: "clamp(2px, 0.35vw, 8px) 0",
             borderRadius: "clamp(3px, 0.4vw, 8px)",
             fontSize: T.strip, fontWeight: 800,
-            background: w ? teamColor(w)
-              : halved ? `linear-gradient(105deg, ${teamColor("A")} 0 50%, ${teamColor("B")} 50% 100%)`
-              : out ? BC.inp : "transparent",
+            background: w ? teamColor(w) : tied ? BC.t3 : out ? BC.inp : "transparent",
             border: `1px solid ${cur ? BC.amber : out ? "transparent" : `${BC.bdr}${ALPHA.line}`}`,
             outline: cur ? `2px solid ${BC.amber}` : "none",
-            color: w || halved ? BC.bg : out ? BC.t2 : BC.t3,
+            color: w || tied ? BC.bg : out ? BC.t2 : BC.t3,
             opacity: out ? 1 : 0.5,
             transition: "background 400ms ease",
           }}>{i + 1}</div>

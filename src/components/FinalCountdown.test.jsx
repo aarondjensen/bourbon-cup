@@ -97,6 +97,139 @@ describe("a hole half turned over", () => {
   });
 });
 
+// ── The grid ────────────────────────────────────────────────────────
+// Eight men, four across and two down, alphabetical, every hole for eighteen
+// holes. It used to be two flex rows sized to their contents — counted on top,
+// missed underneath — so a man moved between rows depending on how he putted,
+// and the room re-read eight names every hole. Position is constant now and
+// the highlight carries all of the meaning.
+describe("the side's grid", () => {
+  const namesIn = (container, side) => {
+    // The chips carry a name and a number; the names are the only all-caps-
+    // free text in them. Read them in DOM order, which is render order.
+    const col = container.querySelectorAll("div");
+    const roster = side === "A" ? ["Paul W", "Dave K", "Tim C"] : ["Andy H", "Nick R", "Rudy T"];
+    const seen = [];
+    col.forEach((d) => {
+      const t = d.textContent;
+      roster.forEach((n) => {
+        if (t === n && !seen.includes(n)) seen.push(n);
+      });
+    });
+    return seen;
+  };
+
+  it("draws every man on the side, counted or not", () => {
+    const t = screen({ A: 1, B: 1 }).textContent;
+    ["Paul W", "Dave K", "Tim C"].forEach((n) => expect(t).toContain(n));
+  });
+
+  it("puts them in alphabetical order, not roster order", () => {
+    // The roster is Paul, Dave, Tim. Alphabetically it is Dave, Paul, Tim —
+    // and it has to be the same order on hole 18 as on hole 1.
+    const c = screen({ A: 1, B: 1 });
+    expect(namesIn(c, "A")).toEqual(["Dave K", "Paul W", "Tim C"]);
+  });
+
+  it("keeps a man in the same place when his ball stops counting", () => {
+    // Hole 1 and hole 2 are scored identically here, but the order must not
+    // depend on the scoring at all — that is the whole point of the fixed grid.
+    const first = namesIn(screen({ A: 1, B: 1 }), "A");
+    cleanup();
+    const later = namesIn(screen({ A: 9, B: 9 }), "A");
+    expect(later).toEqual(first);
+  });
+});
+
+// ── Stroke dots ─────────────────────────────────────────────────────
+// The big number on a chip is a NET score, and the dots are the only thing
+// that says so. A room looking at a net 2 wants to know whether that was an
+// eagle or two shots. They used to be a bullet crammed inside the gross
+// parenthetical — "(5•)" — at the smallest type on the screen, read from
+// twelve feet away.
+describe("stroke dots", () => {
+  const dots = (container) =>
+    [...container.querySelectorAll("*")].filter(d => d.style?.borderRadius === "50%").length;
+
+  it("draws one per stroke on the man who got them", () => {
+    // Full handicaps off a neutral tee, so a Course Handicap of 18 is one
+    // stroke on every hole and 0 is none.
+    const shots = tPlayers.map(p => (p.player_id === "a1" ? { ...p, handicap_index: 18 } : p));
+    const r = computeMatchResult(match, holeData, courses, tRounds, shots, "team_best_ball", {}, undefined, {}, {});
+    const c = render(
+      <FinalCountdown
+        match={match} result={r} getScore={getScore} ownResult={r} ownGetScore={getScore}
+        holePars={PARS} holeHcps={SI} tPlayers={shots}
+        teams={{ A: { id: "A", name: "Mash Brothers" }, B: { id: "B", name: "Shot Callers" } }}
+        courseName="Treetops" formatLabel="Team Best Ball"
+        reveal={{ A: 1, B: 1 }} totals={{ A: 1, B: 1 }} toWin={12.5} clincher={null}
+        isDirector onAdvance={() => {}} onClose={() => {}}
+      />,
+    ).container;
+    expect(r.strokeMaps.a1[0]).toBe(1);
+    expect(dots(c)).toBe(1);
+  });
+
+  it("draws none at all when nobody is getting a shot", () => {
+    // Every index is 0 in the base fixture.
+    expect(dots(screen({ A: 1, B: 1 }))).toBe(0);
+  });
+});
+
+// ── The eighteen ────────────────────────────────────────────────────
+// Coloured by who WON, and by nothing else: a team's colour, grey for a tie,
+// hollow for a hole not turned over. The tie used to be a diagonal in both
+// teams' colours, which from the back of a room read as a loading bar rather
+// than a scoreboard.
+describe("the hole strip", () => {
+  const cell = (container, n) =>
+    [...container.querySelectorAll("div")].filter(d => d.textContent === String(n)).pop();
+
+  it("paints a won hole in the winning side's colour", () => {
+    // A takes every hole in this fixture.
+    const c = screen({ A: 3, B: 3 });
+    expect(cell(c, 1).style.background).toBeTruthy();
+    expect(cell(c, 1).style.background).not.toBe("transparent");
+  });
+
+  it("paints a tied hole grey, and not in two colours", () => {
+    // Same score both sides on hole 1 — played, no winner.
+    const level = {};
+    Object.keys(holeData).forEach((k) => { level[k] = { ...holeData[k] }; });
+    ["a1", "a2", "a3", "b1", "b2", "b3"].forEach((pid) => { level[`${pid}_4`][0] = 4; });
+    const levelResult = computeMatchResult(
+      { ...match }, level, courses, tRounds, tPlayers, "team_best_ball", {}, undefined, {}, {},
+    );
+    const c = render(
+      <FinalCountdown
+        match={match} result={levelResult} getScore={(pid, h) => level[`${pid}_4`]?.[h] || 0}
+        ownResult={levelResult} ownGetScore={(pid, h) => level[`${pid}_4`]?.[h] || 0}
+        holePars={PARS} holeHcps={SI} tPlayers={tPlayers}
+        teams={{ A: { id: "A", name: "Mash Brothers" }, B: { id: "B", name: "Shot Callers" } }}
+        courseName="Treetops" formatLabel="Team Best Ball"
+        reveal={{ A: 3, B: 3 }} totals={{ A: 1, B: 1 }} toWin={12.5} clincher={null}
+        isDirector onAdvance={() => {}} onClose={() => {}}
+      />,
+    ).container;
+    const bg = cell(c, 1).style.background;
+    expect(levelResult.holes[0].winner).toBe(null);
+    expect(bg).not.toContain("gradient");
+    expect(bg).toBeTruthy();
+  });
+
+  it("leaves a hole nobody has turned over hollow", () => {
+    const c = screen({ A: 3, B: 3 });
+    expect(cell(c, 12).style.background).toBe("transparent");
+  });
+
+  // A hole with one captain still to speak has no winner, so it cannot be
+  // coloured — the strip counts what is wholly out, not what is on screen.
+  it("does not colour the hole in play", () => {
+    const c = screen({ A: 4, B: 3 });
+    expect(cell(c, 4).style.background).toBe("transparent");
+  });
+});
+
 describe("whose tap it is", () => {
   it("offers both sides on a fresh hole", () => {
     const t = screen({ A: 1, B: 1 }).textContent;
