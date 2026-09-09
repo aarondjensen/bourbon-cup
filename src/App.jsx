@@ -1049,6 +1049,9 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // null for "the one I am in". Only ever offered on a format whose match
   // spans several — see `units` below and the picker further down.
   const [pickedUnit, setPickedUnit] = useState(null);
+  // The round the director has deliberately unlocked the other side's tee
+  // groups on, or null. See `sealedToOwnSide` below.
+  const [unlockedRound, setUnlockedRound] = useState(null);
   // A director's explicit choice of round. null means "follow the tournament",
   // which is what everybody starts on and what everybody who is not a director
   // is pinned to. Held here rather than lifted, for the same reason the match
@@ -1188,6 +1191,33 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
     ? (sharedBallScore(pids.map(p => getScore(p, h))) || 0)
     : getScore(pids[0], h));
 
+  // Whose side the ▲/▼ is read from. Normally that is settled by the match
+  // itself, but a director scoring somebody else's group is in neither side
+  // of it — and falling through to "B" would silently invert every glyph on
+  // screen. Their roster team answers it instead, so the strip reads from the
+  // same side it does on their own card.
+  //
+  // Declared up here rather than beside the strip it was written for, because
+  // the scoring unit below now needs it too: which tee groups a sealed round
+  // will show you is a question about whose side you are on.
+  //
+  // Null-safe on `match`, which the old position did not have to be: up here
+  // it runs before the no-match empty states below return.
+  const inMatch = matchPids.includes(userPid);
+  const userTeam = inMatch
+    ? (match?.teamA?.includes(userPid) ? "A" : "B")
+    : (tPlayers.find(p => p.player_id === userPid)?.team === "B" ? "B" : "A");
+  // ── The blackout, on the phone doing the scoring ─────────────────
+  // A sealed round (lib/reveal.js) is entered exactly as it always was —
+  // this screen keeps every score, including the two opponents in a mixed
+  // foursome, because somebody has to write them down. What it stops
+  // printing is what they COME TO: the running match state under each hole,
+  // and, on the card behind the Full Scorecard button, the other side's
+  // numbers and the running line. Those are the round, and the round is not
+  // known until the cards are turned over at the house.
+  const roundSeal = revealState(tRounds, match?.round);
+  const conceal = roundSeal.concealing ? { through: roundSeal.through, side: userTeam } : null;
+
   // ── The scoring unit: this screen is a TEE GROUP, not a match ────
   // On every 1- and 2-man format the match IS the foursome, so the unit is
   // the match and none of this moves. A team format's match is the whole
@@ -1203,12 +1233,51 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
     () => (match ? scoringUnits({ match, groups: groups?.[match.round], formatId: format }) : []),
     [match, groups, format]
   );
+  // ── What a sealed round will let you walk to ─────────────────────
+  // The group picker exists so a DIRECTOR can enter scores for a group they
+  // are not in, and on the closing round that is four tee times deep. Which
+  // means the crown, on the one round of the tournament nobody is allowed to
+  // know the state of, was four taps from every score in it — the opposing
+  // side's cards included, on the phone of a man who is also playing in it.
+  //
+  // Nothing was wrong with the seal. lib/reveal takes the round away from the
+  // scoreboard, the Betting tab and the Data tab, and the card behind the Full
+  // Scorecard button hides the other side past the reveal. This screen is the
+  // documented exception — somebody has to write the numbers down — and the
+  // exception was written for a MIXED FOURSOME, where the two opponents you
+  // are keeping are the two you can see anyway. A picker that walks the whole
+  // draw is a different thing, and it arrived after that reasoning.
+  //
+  // So: on a concealing round the picker will not take you to the OTHER SIDE
+  // without being asked twice. Your own side's other waves stay reachable,
+  // which is the same line every other surface in the app draws — a team is
+  // never hidden from itself (see the note at the top of lib/reveal), and a
+  // director checking their own side's card is not learning the result.
+  //
+  // Stored as the ROUND it was unlocked for rather than a boolean, so it
+  // resolves rather than needing to be cleared: walking to another round, or
+  // the round landing, re-locks it with no effect to fire. It is deliberately
+  // not persisted — the next time the app opens, the seal is back on.
+  const otherSideShown = unlockedRound != null && unlockedRound === match?.round;
+  const sealedToOwnSide = !!conceal && !otherSideShown;
+  // A unit belongs to the other side if it holds ANY player from it. The
+  // conservative direction on purpose: a wave a director grouped across both
+  // teams is hidden rather than half-shown.
+  const otherSideUnit = (u) =>
+    u.pids.some((pid) => (match?.teamA?.includes(pid) ? "A" : "B") !== userTeam);
+  const openUnits = sealedToOwnSide ? units.filter((u) => !otherSideUnit(u)) : units;
+
   // The reader's own group unless a director has deliberately picked another.
   // Resolved, never stored — a pick that stops matching (the round moved, the
-  // draw changed under them) falls back to their own group rather than
-  // pointing at players who are no longer grouped that way.
-  const unit = units.find(u => u.key === pickedUnit)
-    || unitForPlayer(units, userPid)
+  // draw changed under them, the seal took it back) falls back to their own
+  // group rather than pointing at players who are no longer grouped that way.
+  //
+  // The final `units[0]` is the floor: a screen has to be about somebody, and
+  // it is only reached when the reader's own side has no group at all, which
+  // is a draw nobody has finished making.
+  const unit = openUnits.find(u => u.key === pickedUnit)
+    || unitForPlayer(openUnits, userPid)
+    || openUnits[0]
     || units[0]
     || null;
   // What the cards, the hole strip and the auto-advance are about. `matchPids`
@@ -1611,25 +1680,6 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // Match round, the lead on the running total on a Total one. It used to
   // count holes won unconditionally, so a Total round showed a match-play
   // state it wasn't being scored on.
-  // Whose side the ▲/▼ is read from. Normally that is settled by the match
-  // itself, but a director scoring somebody else's group is in neither side
-  // of it — and falling through to "B" would silently invert every glyph on
-  // screen. Their roster team answers it instead, so the strip reads from the
-  // same side it does on their own card.
-  const inMatch = matchPids.includes(userPid);
-  const userTeam = inMatch
-    ? (match.teamA.includes(userPid) ? "A" : "B")
-    : (tPlayers.find(p => p.player_id === userPid)?.team === "B" ? "B" : "A");
-  // ── The blackout, on the phone doing the scoring ─────────────────
-  // A sealed round (lib/reveal.js) is entered exactly as it always was —
-  // this screen keeps every score, including the two opponents in a mixed
-  // foursome, because somebody has to write them down. What it stops
-  // printing is what they COME TO: the running match state under each hole,
-  // and, on the card behind the Full Scorecard button, the other side's
-  // numbers and the running line. Those are the round, and the round is not
-  // known until the cards are turned over at the house.
-  const roundSeal = revealState(tRounds, match.round);
-  const conceal = roundSeal.concealing ? { through: roundSeal.through, side: userTeam } : null;
   // The hole-scoring axis is read off `scoredFormat` below rather than from a
   // flag here: the badge names the METHOD a hole was scored by, and since a
   // format can now offer more than one, "was it best ball" is no longer the
@@ -1845,18 +1895,48 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // Labelled by TEE TIME, because that is what a director hunting for a group
   // is holding in their head. A wave with no time set falls back to its
   // position, which is at least in the order they go off.
+  //
+  // ── The locked half ──
+  // On a concealing round the other side's waves are still LISTED — the row
+  // keeps its size, so unlocking does not reflow the screen under a thumb —
+  // but they wear a padlock and tapping one asks first. The confirm names what
+  // it costs, because the man tapping it is usually also playing in the round.
+  //
+  // A pill rather than a button under the row: this screen is fit to the
+  // device (useFitDensity), so a control of its own would come out of the
+  // score buttons' height for a question asked once a year.
   const groupPicker = isDirector && units.length > 1 ? (() => {
     const times = expandTeeTimes(teeTimeList(tr), units.length);
+    const locked = (u) => sealedToOwnSide && otherSideUnit(u);
+    const unlockThen = async (key) => {
+      const ok = await confirm({
+        eyebrow: `Round ${match.round}`,
+        title: "Show the other side's groups?",
+        message: [
+          "This round is sealed. The other side's tee groups are hidden so the result isn't spoiled for you before the countdown.",
+          "",
+          "Opening them shows their scores on this screen. If you are playing in this round, that is the ending.",
+        ].join("\n"),
+        confirmLabel: "Show them",
+      });
+      if (!ok) return;
+      setUnlockedRound(match.round);
+      switchToUnit(key);
+    };
     return (
       <SegmentedToggle
         variant="pills"
         style={{ marginBottom: 10 }}
         options={units.map((u, i) => [
           u.key,
-          u.groupIdx == null ? "Ungrouped" : (stripAMPM(times[u.groupIdx]) || `Wave ${i + 1}`),
+          `${locked(u) ? "🔒 " : ""}${u.groupIdx == null ? "Ungrouped" : (stripAMPM(times[u.groupIdx]) || `Wave ${i + 1}`)}`,
         ])}
         value={unit?.key ?? units[0].key}
-        onChange={switchToUnit}
+        onChange={(key) => {
+          const u = units.find(x => x.key === key);
+          if (u && locked(u)) return unlockThen(key);
+          switchToUnit(key);
+        }}
       />
     );
   })() : null;
