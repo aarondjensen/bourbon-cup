@@ -131,6 +131,32 @@ export const nextRoundNumber = (locks, allRounds = [1, 2, 3, 4]) => {
   return cur == null ? null : (sorted.find((r) => r > cur) ?? null);
 };
 
+// Every round still waiting to be finalized, ascending. This is what the
+// Finalize sheet offers, and it is deliberately WIDER than currentRoundNumber
+// above: that one answers "which round is taking scores", and its answer moves
+// forward onto today's round the moment a director dates the week. A round the
+// field has finished and nobody froze then sits behind the live one with all
+// its scores in, no notification (the alert only ever speaks for the live
+// round) and — until this list existed — no control anywhere that could reach
+// it. It is not reachable again until the day rolls over, which on the
+// Saturday of a four-round week is the wrong side of the trip.
+export const unfinalizedRoundNumbers = (locks, allRounds = [1, 2, 3, 4]) =>
+  [...allRounds].sort((a, b) => a - b).filter((r) => !isRoundFinal(locks, r));
+
+// The round scoring sits on once `round` has been finalized — the lowest round
+// that is still open afterwards, or null when finalizing this one closes the
+// event out.
+//
+// Not the same question as nextRoundNumber, and the difference is the whole
+// reason it exists: finalizing the LIVE round opens the next one, while
+// finalizing a stranded earlier round opens nothing — the field is already
+// past it and stays exactly where it is. The sheet says which of the two is
+// about to happen rather than promising a round that is already open.
+export const openRoundAfter = (locks, allRounds = [1, 2, 3, 4], round) =>
+  [...allRounds]
+    .sort((a, b) => a - b)
+    .find((r) => r !== round && !isRoundFinal(locks, r)) ?? null;
+
 // The most recently finalized round — what a director reopens after
 // finalizing one hole too early. Highest final round, or null if none.
 export const lastFinalRoundNumber = (locks, allRounds = [1, 2, 3, 4]) => {

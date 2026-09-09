@@ -65,6 +65,22 @@
 // and finalizing is the one act on the tournament only a director can
 // perform, so it now lives with everything else in that category.
 //
+// ── AND IT IS NOT ALWAYS THE LIVE ROUND ────────────────────────────
+// Both routes open on the round the field is playing, and for years that
+// was the only round the sheet could name. It stopped being enough when
+// currentRound learned to prefer TODAY'S round: a Friday round that nobody
+// finalized — one group walked off without attesting — sits BEHIND the live
+// round for the whole of Saturday. Every score in it is posted, the alert
+// only ever speaks for the live round, and until the picker below existed
+// there was no control anywhere in the app pointed at it. The way out was
+// to wait for the day to roll over.
+//
+// So the sheet takes `rounds` (every unfinalized round, lib/roundLocks'
+// unfinalizedRoundNumbers) and draws a pill for each when there is more than
+// one. It opens on the live round every time — the picker is the exception
+// path, not a question asked of a director who came here to do the obvious
+// thing.
+//
 // FINALIZING WITH SCORES MISSING IS ALLOWED, behind a confirm that names
 // who is out. A hard block reads as safer than it is: a gate with no way
 // past it strands the whole field on a round nobody is playing. The
@@ -74,10 +90,25 @@ import { BC, FONT, ON_AMBER, ALPHA, FS } from "../theme";
 import { Popup, ConfirmModal } from "./Popup";
 import { useConfirm } from "../lib/useConfirm";
 import { playerLookup } from "../lib/players";
+import { SegmentedToggle } from "./ui";
 
 // `progress` throughout this file is one roundScoreProgress() result
 // (lib/scoreGuard) — entered / total / missing / missingBy / complete,
 // counted over every player in every match of the round.
+
+// What finalizing this round does to score entry, in a clause.
+//
+// Freezing the LIVE round moves the field somewhere, and `nextRound`
+// (lib/roundLocks' openRoundAfter) is where — the next round along, or back
+// onto an earlier one nobody finalized, or nowhere at all when this one closes
+// the cup out. Freezing a round the field has already walked off moves nothing:
+// scoring is on the live round and stays there. Saying "opens Round 2" about
+// a round that has been taking scores since breakfast is the kind of wrong
+// that makes a director doubt the button under it.
+const opensClause = (round, nextRound, liveRound) => {
+  if (liveRound != null && round !== liveRound) return `leaves scoring on Round ${liveRound}`;
+  return nextRound == null ? "closes out the tournament" : `opens Round ${nextRound} for scoring`;
+};
 
 // ── The notification ────────────────────────────────────────────────
 // A slim actionable bar in the app shell, under the header and above the
@@ -109,7 +140,7 @@ export function DirectorFinalizeAlert({ round, nextRound, progress, cards, stage
   const subhead = ready
     ? `${cards?.total
       ? `All ${cards.total} card${cards.total === 1 ? "" : "s"} signed and attested`
-      : `All ${progress.total} scores are in`} — ${nextRound ? `opens Round ${nextRound}` : "closes the tournament"}`
+      : `All ${progress.total} scores are in`} — ${opensClause(round, nextRound, round).replace(" for scoring", "")}`
     : `Waiting on ${outstanding} card${outstanding === 1 ? "" : "s"} — finalize or attest for them`;
 
   return (
@@ -181,7 +212,8 @@ export function DirectorFinalizeAlert({ round, nextRound, progress, cards, stage
 // keep theirs: finalizing over missing scores, and reopening a round the
 // field has already moved off.
 export function FinalizeRoundSheet({
-  round, nextRound, lastFinal, progress, cards, tPlayers,
+  round, rounds = [], liveRound, onPickRound,
+  nextRound, lastFinal, progress, cards, tPlayers,
   onFinalizeRound, onAttestAll, notify, onClose,
 }) {
   const { confirm, confirmModal } = useConfirm();
@@ -330,9 +362,36 @@ export function FinalizeRoundSheet({
 
       {round != null ? (
         <>
+          {/* Which round. Only when there is a choice — a tournament with one
+              round left to freeze has nothing to pick, and a picker with one
+              pill on it is a control that asks a question it already knows the
+              answer to. Every route in opens on the live round; this is how a
+              director reaches one the field has walked off. */}
+          {rounds.length > 1 && onPickRound && (
+            <div style={{ marginBottom: 12 }}>
+              <SegmentedToggle
+                variant="pills"
+                snug
+                options={rounds.map(r => [r, r === liveRound ? `Rd ${r} • live` : `Rd ${r}`])}
+                value={round}
+                onChange={onPickRound}
+              />
+            </div>
+          )}
+
           <div style={{ fontSize: FS.lead, fontWeight: 800, color: BC.t1, marginBottom: 12 }}>
             {cardsReady ? `Round ${round} is ready` : `Finalize Round ${round}`}
           </div>
+
+          {/* Said out loud, because everything below this line — the progress,
+              the missing names, the button — is about a round nobody is
+              standing on, and a director who tapped in from the live round's
+              notification has to be able to tell. */}
+          {liveRound != null && round !== liveRound && (
+            <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.45, marginBottom: 12 }}>
+              Not the live round — the field is scoring Round {liveRound}.
+            </div>
+          )}
 
           {/* Progress — the number that decides whether Finalize is the
               routine end of a round or an override. */}
@@ -446,7 +505,7 @@ export function FinalizeRoundSheet({
               used to say, and why the routine path no longer needs one. */}
           <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.45, marginBottom: 12 }}>
             Finalizing freezes Round {round}&apos;s handicaps and results, and{" "}
-            {nextRound ? `opens Round ${nextRound} for scoring.` : "closes out the tournament."}
+            {opensClause(round, nextRound, liveRound)}.
             {" "}You can reopen it afterwards if you need to.
           </div>
 

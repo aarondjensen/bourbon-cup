@@ -27,7 +27,8 @@ import { holeFill } from "./lib/holeFill";
 import {
   ROUND_LOCKS_COL, buildRoundLockDoc, refreshRoundLockDoc,
   markRoundFinal, unfinalizeRound, clearRoundLockDoc,
-  roundLockState, currentRoundNumber, nextRoundNumber, lastFinalRoundNumber, isRoundFinal,
+  roundLockState, currentRoundNumber, lastFinalRoundNumber, isRoundFinal,
+  unfinalizedRoundNumbers, openRoundAfter,
   LOCK_OPEN, LOCK_FINAL, LOCK_STATE_LABEL,
 } from "./lib/roundLocks";
 import {
@@ -4160,6 +4161,13 @@ export default function App() {
   // would otherwise put the bar straight back. The dot on More survives the
   // dismissal, so nothing is actually lost by remembering it.
   const [finalizeOpen, setFinalizeOpen] = useState(false);
+  // Which round the sheet is aimed at. Null means the live one, which is what
+  // every route into the sheet opens on — the picker inside it is how a
+  // director reaches a round the field has already walked off. See
+  // unfinalizedRoundNumbers in lib/roundLocks for why one is reachable and the
+  // other is not.
+  const [finalizePick, setFinalizePick] = useState(null);
+  const openFinalize = useCallback(() => { setFinalizePick(null); setFinalizeOpen(true); }, []);
   const [finalizeSnoozed, setFinalizeSnoozed] = useState(() => {
     try { return normalizeSnooze(localStorage.getItem(finalizeSnoozeKey())); }
     catch { return null; }
@@ -5761,9 +5769,48 @@ export default function App() {
   // header of components/FinalizeRound for why it fires twice.
   const roundStage = currentRound == null ? null : finalizeStage({ progress: roundProgress, cards: roundCards });
   const finalizeReady = isDirector && roundStage === "ready";
-  const finalizeNextRound = useMemo(
-    () => nextRoundNumber(roundLocksData, tournamentRounds),
+  // ── What the SHEET is looking at ─────────────────────────────────
+  // The alert above speaks for the live round and nothing else. The sheet
+  // does not have to: every round that has not been frozen is a round a
+  // director may legitimately want to freeze, and the one the field is
+  // standing on is only the usual case.
+  //
+  // That distinction started mattering the moment currentRound learned to
+  // prefer TODAY'S round (see roundToday). A Friday round left unfinalized
+  // because one group never attested is behind the live round all day
+  // Saturday — every score in, no alert, and no control anywhere pointed at
+  // it. It could only be finalized once the day rolled over, which is after
+  // the leaderboard and the handicap locks needed it.
+  const finalizeRounds = useMemo(
+    () => unfinalizedRoundNumbers(roundLocksData, tournamentRounds),
     [roundLocksData, tournamentRounds]
+  );
+  // The picked round only holds while it is still finalizable — finalizing it
+  // takes it off the list, and falling back to the live round is what keeps
+  // the sheet from sitting on a round it has just closed.
+  const finalizeTarget = finalizePick != null && finalizeRounds.includes(finalizePick)
+    ? finalizePick
+    : currentRound;
+  // The same two counts the alert reads, for whichever round the sheet is on.
+  // Separate memos rather than reusing the pair above: those are the live
+  // round's and the alert depends on them staying that way.
+  const finalizeProgress = useMemo(
+    () => (finalizeTarget === currentRound
+      ? roundProgress
+      : roundScoreProgress(enrichedMatches, holeData, finalizeTarget)),
+    [finalizeTarget, currentRound, roundProgress, enrichedMatches, holeData]
+  );
+  const finalizeCards = useMemo(
+    () => (finalizeTarget === currentRound
+      ? roundCards
+      : roundCardProgress(enrichedMatches, cardSigs, finalizeTarget, withdrawnIds(tPlayers))),
+    [finalizeTarget, currentRound, roundCards, enrichedMatches, cardSigs, tPlayers]
+  );
+  // Where scoring lands once this one is frozen — the next round for the live
+  // round, and nothing at all for a stranded one. See openRoundAfter.
+  const finalizeNextRound = useMemo(
+    () => openRoundAfter(roundLocksData, tournamentRounds, finalizeTarget),
+    [roundLocksData, tournamentRounds, finalizeTarget]
   );
   const finalizeLastFinal = useMemo(
     () => lastFinalRoundNumber(roundLocksData, tournamentRounds),
@@ -6073,11 +6120,11 @@ export default function App() {
       {showFinalizeAlert && (
         <DirectorFinalizeAlert
           round={currentRound}
-          nextRound={finalizeNextRound}
+          nextRound={openRoundAfter(roundLocksData, tournamentRounds, currentRound)}
           progress={roundProgress}
           cards={roundCards}
           stage={alertStage}
-          onOpen={() => setFinalizeOpen(true)}
+          onOpen={openFinalize}
           onDismiss={() => snoozeFinalizeAlert(currentRound, alertStage)}
         />
       )}
@@ -6407,7 +6454,7 @@ export default function App() {
             /* Admin → Rounds' route to the Finalize sheet — the early-finalize
                path that used to be a row in the More menu. Null when there is
                no round to finalize, which is what hides the control. */
-            onOpenFinalize={canFinalize ? () => setFinalizeOpen(true) : null}
+            onOpenFinalize={canFinalize ? openFinalize : null}
             finalizeRound={currentRound}
             finalizeReady={finalizeReady}
             /* The RAW trip document, not the normalized house: a link
@@ -6496,16 +6543,19 @@ export default function App() {
           zero cost until it is opened. */}
       {finalizeOpen && canFinalize && (
         <FinalizeRoundSheet
-          round={currentRound}
+          round={finalizeTarget}
+          rounds={finalizeRounds}
+          liveRound={currentRound}
+          onPickRound={setFinalizePick}
           nextRound={finalizeNextRound}
           lastFinal={finalizeLastFinal}
-          progress={roundProgress}
-          cards={roundCards}
+          progress={finalizeProgress}
+          cards={finalizeCards}
           tPlayers={tPlayers}
           onFinalizeRound={onFinalizeRound}
           onAttestAll={() => onAttestAllInRound(
-            currentRound,
-            enrichedMatches.filter(m => m.round === currentRound),
+            finalizeTarget,
+            enrichedMatches.filter(m => m.round === finalizeTarget),
           )}
           notify={notify}
           onClose={() => setFinalizeOpen(false)}
