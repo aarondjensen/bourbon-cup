@@ -21,7 +21,7 @@ import {
   computeMatchResult,
   getRoundCH, lockForRound,
   totalUnit, segmentState, segmentOptsFor, holeFormatFor,
-  statusText, segmentLeader, nassauSegmentVisibility,
+  statusText, segmentLeader, nassauSegmentVisibility, sharedBallScore,
 } from "./scoring";
 import { holeFill } from "./lib/holeFill";
 import {
@@ -1242,6 +1242,16 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   const scoresAt = (rnd) => (pid, h) => (rnd == null ? 0 : (holeData[`${pid}_${rnd}`] || {})[h] || 0);
   const matchPids = pidsOf(match);
   const getScore = scoresAt(match?.round ?? null);
+  // ── What a CARD holds on a hole ──
+  // One man's score, or the single ball a shared-ball side posted between
+  // them (scoring.sharedBallScore). onTapScore writes every pid on the card,
+  // so the two partners agree by construction — reading the SIDE's ball
+  // rather than partner one's is what keeps that a fact rather than a hope,
+  // and what stops this screen printing a different gross from the one the
+  // engine scored the hole on.
+  const cardScore = (pids, h) => (pids.length > 1
+    ? (sharedBallScore(pids.map(p => getScore(p, h))) || 0)
+    : getScore(pids[0], h));
 
   // ── The scoring unit: this screen is a TEE GROUP, not a match ────
   // On every 1- and 2-man format the match IS the foursome, so the unit is
@@ -1591,7 +1601,7 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
     // write — the CTP trigger below needs to know this was a first entry,
     // and auto-advance can move activeHole while the save is in flight.
     const h = activeHole;
-    const prior = getScore(pids[0], h);
+    const prior = cardScore(pids, h);
     // ── The catch on a closed round ──
     // The first tap does not enter a score, it asks. And it asks about THIS
     // tap by name — who, which hole, what it says now and what it would say —
@@ -2266,7 +2276,7 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
         })().map((pids) => {
           if (pids === "DIVIDER") return <div key="div" style={{ borderTop: `1px dashed ${BC.bdr}`, flexShrink: 0, margin: `${fit.cardGap}px 0` }} />;
           const team = match.teamA.includes(pids[0]) ? "A" : "B";
-          const cur = getScore(pids[0], activeHole);
+          const cur = cardScore(pids, activeHole);
           const strokes = strokeMaps[pids[0]]?.[activeHole] || 0;
           // CH for display — per-player tee assignment overrides round default,
           // matching the strokeMaps memo above and computeMatchResult. Fetched
@@ -2311,11 +2321,11 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
               : `Course Handicap ${ch}`;
           }
           // Running net to par thru holes scored — one shared line for a
-          // shared-ball side, since both partners' scores and strokes are
-          // identical by construction.
+          // shared-ball side, off the side's own ball and the team stroke map
+          // (see cardScore), which is what the engine scored the hole on.
           let netToPar = 0, thru = 0;
           for (let h = 0; h < 18; h++) {
-            const s = getScore(pids[0], h);
+            const s = cardScore(pids, h);
             if (s > 0) {
               const st = strokeMaps[pids[0]]?.[h] || 0;
               netToPar += (s - st) - holePars[h];

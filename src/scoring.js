@@ -322,6 +322,28 @@ export const segmentOptsFor = (match, format) => {
   return { total: formOfPlay === SCORING_TYPE_TOTAL, higherWins };
 };
 
+// ── The one ball a shared-ball side posted ───────────────────────
+// A scramble or a Pinehurst side plays a single ball, so both partners' cards
+// carry the same number and either one of them IS the side's score. The lower
+// of the two is what keeps the hole scoring when only one partner has been
+// entered — the scoring screen writes both (App.onTapScore), but a director
+// correcting one card, or data that arrived some other way, can leave them
+// disagreeing for a moment.
+//
+// Exported because the SCORECARD has to print the same ball the engine scored
+// off. It used to print partner one's card straight out of holeData while the
+// engine scored the pair's lower ball, and on a hole where the partner was
+// better the row read gross 7, net 5 with no stroke on it — a phantom stroke,
+// indistinguishable on screen from a handicap one, and not explained by the
+// dots above the number.
+//
+// A zero is an absent score, not a hole in none: `onSaveHole` stores a cleared
+// score as null, and every reader in the UI tests `> 0`.
+export const sharedBallScore = (scores) => {
+  const raws = (scores || []).filter(s => s != null && s > 0);
+  return raws.length ? Math.min(...raws) : null;
+};
+
 export const buildStrokeMap = (ch, holeHcps) => {
   const sorted = holeHcps.map((h, i) => ({ idx: i, hcp: h })).sort((a, b) => a.hcp - b.hcp);
   const map = {};
@@ -830,10 +852,10 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
       // score the first player's card off that player's own handicap, which
       // meant its 60/40 allowance computed a figure for the high man and then
       // discarded it.
-      const aRaws = teamA.map(pid => getPlayerScores(pid)[h]).filter(s => s != null);
-      const bRaws = teamB.map(pid => getPlayerScores(pid)[h]).filter(s => s != null);
-      aScore = aRaws.length ? netScore(Math.min(...aRaws), h, sharedStrokeMaps.A) : null;
-      bScore = bRaws.length ? netScore(Math.min(...bRaws), h, sharedStrokeMaps.B) : null;
+      const aRaw = sharedBallScore(teamA.map(pid => getPlayerScores(pid)[h]));
+      const bRaw = sharedBallScore(teamB.map(pid => getPlayerScores(pid)[h]));
+      aScore = aRaw == null ? null : netScore(aRaw, h, sharedStrokeMaps.A);
+      bScore = bRaw == null ? null : netScore(bRaw, h, sharedStrokeMaps.B);
     } else if (holeFormat === "stableford") {
       // Points against par, both partners added together. It scored only
       // teamA[0] and teamB[0] until the "2-Man" in the name was made true.

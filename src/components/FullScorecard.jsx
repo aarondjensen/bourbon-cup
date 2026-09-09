@@ -76,6 +76,7 @@ import {
 import {
   higherIsBetter, totalUnit, holeFormatFor,
   segmentState, statusText, segmentLeader, segmentOptsFor, nassauSegmentVisibility,
+  sharedBallScore,
 } from "../scoring";
 
 // ── Grid geometry ────────────────────────────────────────────────
@@ -497,10 +498,20 @@ export function FullScorecard({
     // while reading this; whose row it is, is.
     const PlayerRow = (pids, tid) => {
       const rowH = 30;
-      const pid = pids[0]; // shared-ball partners carry identical scores/strokes
+      const pid = pids[0];
+      const combined = pids.length > 1;
+      // ── One ball, one number ──
+      // A shared-ball side's row is the SIDE's card, so it prints the ball the
+      // engine scored (see scoring.sharedBallScore) rather than partner one's
+      // own. Those are the same number whenever the two cards agree, which is
+      // what the scoring screen writes — but when they don't, printing one
+      // partner's gross above a net taken off the other's put a stroke on the
+      // row that no dot above it accounted for.
       let gross = 0;
       const cells = idx.map((h) => {
-        const s = getScore(pid, h);
+        const s = combined
+          ? (sharedBallScore(pids.map(p => getScore(p, h))) || 0)
+          : getScore(pid, h);
         if (s > 0) gross += s;
         return { h, s, st: strokesFor(pid, h) };
       });
@@ -508,15 +519,27 @@ export function FullScorecard({
       // on this row were actually allocated from. On a shared-ball side that
       // is the team's summed-then-rounded figure (result.teamCH), never
       // either partner's own individually-rounded playingCH.
-      const combined = pids.length > 1;
       const ch = combined ? result.teamCH?.[tid] : result.playingCH?.[pid];
-      const label = pids.map(p => initials(nameOf(p))).join("/");
+      // ── The label, stacked ──
+      // A shared-ball side is two men in a 42px column. Side by side —
+      // "CB/ND" — they fit only at the grid's smallest type with the handicap
+      // pushed onto a second line under them, which is three things in a
+      // column and the busiest cell on a busy screen. Stacked, the initials
+      // get a whole type rung back and the handicap moves out beside them,
+      // where a singles row already carries it.
+      const label = (
+        <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+          {pids.map((p) => (
+            <span key={p} style={{ fontSize: combined ? FS.label : FS.small, fontWeight: 800, color: teamColor(tid), lineHeight: 1.15 }}>
+              {initials(nameOf(p))}
+            </span>
+          ))}
+        </div>
+      );
       return (
         <div key={pids.join("_")} style={{ display: "flex", alignItems: "center", borderBottom: gridLine() }}>
-          <div style={labelCell(rowH, combined
-            ? { gap: 1, color: BC.t1, flexDirection: "column", alignItems: "flex-start", justifyContent: "center" }
-            : { gap: 3, color: BC.t1, paddingTop: 8 })}>
-            <span style={{ fontSize: combined ? FS.micro : FS.small, fontWeight: 800, color: teamColor(tid), lineHeight: 1.15 }}>{label}</span>
+          <div style={labelCell(rowH, { gap: 3, color: BC.t1, paddingTop: combined ? 6 : 8 })}>
+            {label}
             {ch != null && <span style={{ fontSize: FS.micro, fontWeight: 700, color: BC.hcpBlue }}>{ch}</span>}
           </div>
           {cells.map((c, i) => (

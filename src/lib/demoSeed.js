@@ -40,6 +40,7 @@
 // can claim and nobody can unclaim.
 import { editionDocId } from "./historyImport.js";
 import { todayISO, addDays } from "./dates.js";
+import { allowanceDefaultFor, formatIsSharedBall, isSplitAllowance } from "../constants.js";
 
 // Defined in lib/editionLock and re-exported here, so the seed and its tests
 // go on reading one constant. It moved because firebase.js needs it — to
@@ -312,6 +313,23 @@ const grossFor = (par, index, r) => {
 const targetFor = (par, index) => par + index + 2;
 const TOLERANCE = 4;
 
+// ── What index a CARD plays to ──────────────────────────────────────
+// One man's own, or — on a shared ball — the side's, taken off the allowance
+// the format catalog already keeps for exactly this pair of numbers (35/15 on
+// a scramble, 60/40 on a Pinehurst). Read from there rather than restated
+// here, so a generated demo card and the handicap the app hands that same pair
+// cannot drift apart. Two men who play to 9 and 19 post a scramble ball around
+// a 6, which is what a scramble looks like.
+const cardIndex = (format, men) => {
+  const indexes = men.map(m => m.index);
+  if (indexes.length === 1) return indexes[0];
+  const spec = allowanceDefaultFor(format);
+  const [low, high] = [...indexes].sort((a, b) => a - b);
+  if (isSplitAllowance(spec)) return (low * spec.low + high * spec.high) / 100;
+  const mean = indexes.reduce((a, b) => a + b, 0) / indexes.length;
+  return mean * (spec.pct ?? 100) / 100;
+};
+
 const roundFor = (pars, index, seedBase) => {
   const target = targetFor(pars.reduce((a, b) => a + b, 0), index);
   let best = null;
@@ -486,28 +504,47 @@ export const buildDemo = ({ countdown = false } = {}) => {
     out.bc_groups.push(stamp({ id: id(`bc_groups_r${r.round}`), round_number: r.round, groups }));
   });
 
-  // Hole scores. Seeded per (round, player) so adding a round later cannot
+  // Hole scores. Seeded per (round, card) so adding a round later cannot
   // shift the numbers in the rounds before it.
   rounds.forEach((r) => {
     const holes = scored[r.round] || 0;
     if (!holes) return;
     const course = courseOf(r.course);
-    FIELD.forEach((p, pi) => {
+    // ── One ball, one card ──
+    // A scramble or Pinehurst side plays a SINGLE ball, so both partners'
+    // documents have to carry the same number. That is what the engine scores
+    // off (scoring.sharedBallScore) and what the scoring screen writes
+    // (App.onTapScore) — but this generated a card per MAN whatever the
+    // format, which put two different scores on one ball. The scorecard then
+    // printed one partner's gross over a net taken off the other's, and every
+    // hole the partner had beaten him on read as a handicap stroke that no dot
+    // on the row accounted for. A reviewer opening round 2 met a scramble
+    // whose arithmetic did not work.
+    //
+    // Non-shared rounds are one card per man, in FIELD order, which is what
+    // this always did — round 1 and the countdown round are untouched.
+    const cards = formatIsSharedBall(r.format)
+      ? pairsFor(r.round, countdown).flatMap(m => [m.teamA, m.teamB])
+      : FIELD.map(p => [p.key]);
+    cards.forEach((keys, ci) => {
+      const men = keys.map(k => FIELD.find(p => p.key === k));
       // The whole round is generated even when only the front nine is kept:
       // a nine sampled against an eighteen-hole target would come out twice as
       // far under it, and round 2's half-finished cards would show everybody
       // four under through the turn.
-      const full = roundFor(course.pars, p.index, r.round * 9973 + pi * 131);
-      for (let h = 1; h <= holes; h++) {
-        out.bc_hole_scores.push(stamp({
-          id: id(`bc_hs_r${r.round}_${demoPlayerId(p.key)}_h${h}`),
-          player_id: demoPlayerId(p.key),
-          round_number: r.round,
-          hole_number: h,
-          score: full[h - 1],
-          course_id: demoCourseId(r.course),
-        }));
-      }
+      const full = roundFor(course.pars, cardIndex(r.format, men), r.round * 9973 + ci * 131);
+      keys.forEach((key) => {
+        for (let h = 1; h <= holes; h++) {
+          out.bc_hole_scores.push(stamp({
+            id: id(`bc_hs_r${r.round}_${demoPlayerId(key)}_h${h}`),
+            player_id: demoPlayerId(key),
+            round_number: r.round,
+            hole_number: h,
+            score: full[h - 1],
+            course_id: demoCourseId(r.course),
+          }));
+        }
+      });
     });
   });
 
