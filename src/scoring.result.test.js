@@ -73,13 +73,15 @@ describe("a match that goes the distance", () => {
     expect(statusText(st)).toBe("1 UP");
   });
 
-  it("is all square when nobody is ahead at the end", () => {
+  it("was HALVED when nobody is ahead at the end", () => {
+    // The past tense is the whole of it: this match is over and paid out half
+    // a point each. All square is what it was standing on the 18th tee.
     const st = seg("AAAAAAAAABBBBBBBBB");
     expect(st.decided).toBe(null);
     expect(st.clinched).toBe(false);
     expect(st.complete).toBe(true);
     expect(st.winner).toBe(null);
-    expect(statusText(st)).toBe("AS");
+    expect(statusText(st)).toBe("HALVED");
   });
 
   it("reads the running margin while it is still live", () => {
@@ -181,10 +183,13 @@ describe("a live match, from the reader's own side", () => {
 });
 
 describe("the formats with no up and no down", () => {
-  it("keeps a Total segment's signed lead and adds only the verdict", () => {
+  it("halves a Total segment that finished level, same as any other", () => {
     const done = seg("AAAAAAAAAAAAAAAAAA", { total: true });
     // Every hole scored 4 apiece, so the totals are level however it is read.
-    expect(verdictText(done, "A")).toBe("TIED");
+    // It used to say TIED here on the reasoning that a Total round has no
+    // "up" to be square about — but a level round is a level round, and the
+    // chip beside it on the same screen already said HALVED.
+    expect(verdictText(done, "A")).toBe("HALVED");
   });
 
   it("leaves a live points segment as a bare lead", () => {
@@ -200,5 +205,46 @@ describe("the formats with no up and no down", () => {
     const st = seg("AAAAAAAAAAAA......", { holeValue: () => 1 });
     expect(verdictText(st, "A")).toBe("WON +12");
     expect(verdictText(st, "B")).toBe("LOST +12");
+  });
+});
+
+// ── One word for level, in every currency ───────────────────────────
+// Golf has never called this tied. A level match still being played is ALL
+// SQUARE; one that finished level was HALVED, and the past tense is the whole
+// of the difference — a halved match paid out, half a point each.
+//
+// TIED was the wording on a Total or points segment, on the reasoning that
+// neither has an "up" to be square about. That put one outcome under four
+// names: the card said HALVED on a nine and TIED on the round beneath it, the
+// Leaderboard said "½" for match play and TIED for the rest, and both running
+// lines said TIED on a Total round and AS on a match one. The distinction
+// that matters was never the currency; it is the tense.
+describe("a segment that is level", () => {
+  const units = [
+    ["match play", undefined],
+    ["a Total round", { total: true }],
+    ["a points round", { holeValue: () => 1 }],
+  ];
+
+  units.forEach(([name, opts]) => {
+    it(`is ALL SQUARE while ${name} is still live`, () => {
+      expect(statusText(seg("AB................", opts))).toBe("AS");
+      expect(verdictText(seg("AB................", opts), "B")).toBe("AS");
+    });
+
+    it(`was HALVED once ${name} is over`, () => {
+      expect(statusText(seg("ABABABABABABABABAB", opts))).toBe("HALVED");
+      expect(verdictText(seg("ABABABABABABABABAB", opts), "B")).toBe("HALVED");
+    });
+  });
+
+  it("says neither before a ball is struck", () => {
+    expect(statusText(seg("..................", { total: true }))).toBe("—");
+  });
+
+  it("still closes a match out rather than reading it as level", () => {
+    // The level branch sits above the closeout branch, so this is the test
+    // that it cannot swallow one. A decided match always carries a margin.
+    expect(statusText(seg("AAAAAAAAABBA......"))).toBe("8&6");
   });
 });
