@@ -31,7 +31,7 @@ import { BC, ALPHA, ON_AMBER, FS, R, teamColor } from "../theme";
 // The all-caps eyebrow every section card is led by. Spelled once so five
 // sections cannot drift apart by a letter of tracking.
 const Label = ({ children, note }) => (
-  <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 8 }}>
+  <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 6 }}>
     <span style={{ fontSize: FS.label, fontWeight: 800, color: BC.t3, letterSpacing: 1.2 }}>{children}</span>
     {note && <span style={{ fontSize: FS.micro, color: BC.t3, opacity: 0.8, letterSpacing: 0.3 }}>{note}</span>}
   </div>
@@ -43,7 +43,7 @@ const Label = ({ children, note }) => (
 const Card = ({ label, note, empty, children, rows }) => (
   <div style={{
     background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: R.xl,
-    padding: "10px 12px", marginBottom: 10,
+    padding: "9px 11px", marginBottom: 8,
   }}>
     <Label note={note}>{label}</Label>
     {rows === 0
@@ -52,16 +52,12 @@ const Card = ({ label, note, empty, children, rows }) => (
   </div>
 );
 
-// One line of a game's result: who, and what they did. The hole number leads
-// where there is one, because that is what a man scans for.
-const WinRow = ({ lead, name, detail }) => (
-  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}>
-    {lead != null && (
-      <span style={{
-        flexShrink: 0, minWidth: 26, fontSize: FS.label, fontWeight: 800,
-        color: BC.amberInk, letterSpacing: 0.3,
-      }}>{lead}</span>
-    )}
+// One line of a game's result: who, and what they did. Low net and the money
+// hole are lists of NAMES against one number each, which is the one shape on
+// this sheet a plain row still suits — the pins and the skins have three and
+// four facts a row and are laid out for that below.
+const WinRow = ({ name, detail }) => (
+  <div style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "3px 0" }}>
     <span style={{
       flex: 1, minWidth: 0, fontSize: FS.small, fontWeight: 700, color: BC.t1,
       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
@@ -72,35 +68,102 @@ const WinRow = ({ lead, name, detail }) => (
   </div>
 );
 
-// A skin gets a line of its own rather than WinRow's single one. It carries
-// four facts — who, what he made, where, and off what — and the shot itself is
-// the one a man wants first, so the golf word leads the second line and the
-// two scores sit out to the right where they can be compared down the column.
+// ── One side of a match, the Leaderboard's way ──────────────────────
+// Borrowed geometry rather than re-invented: the pair stacks on its own side
+// of the row with the team's colour as a rail on the OUTER edge, so the two
+// rails bracket the result sitting between them. Team A is the left column in
+// every match of every round on the board, and now here too — which is what
+// lets a man find himself without re-answering "which side am I reading?" on
+// each row. It also halves what the old layout spent: two names across a
+// column instead of two teams down a row, and the result beside them rather
+// than in a third column of its own.
+//
+// The losing side goes grey. That is the whole result signal in the names —
+// no tint, no pill — exactly as the board draws it.
+const MatchSide = ({ tid, names, winner }) => {
+  const left = tid === "A";
+  const lost = winner != null && winner !== tid;
+  return (
+    <div style={{
+      minWidth: 0, display: "flex", flexDirection: "column", gap: 1,
+      textAlign: left ? "left" : "right",
+      ...(left
+        ? { borderLeft: `3px solid ${teamColor(tid)}`, paddingLeft: 7 }
+        : { borderRight: `3px solid ${teamColor(tid)}`, paddingRight: 7 }),
+    }}>
+      {names.map((nm, i) => (
+        <div key={i} style={{
+          fontSize: FS.small, fontWeight: winner === tid ? 800 : 700,
+          color: lost ? BC.t3 : BC.t1, lineHeight: 1.25,
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        }}>{nm}</div>
+      ))}
+    </div>
+  );
+};
+
+// ── A tagged pin, as a tile ─────────────────────────────────────────
+// A course has four par 3s, so the pins are a fixed little set rather than a
+// list of unknown length — and four tiles across one row say that at a glance
+// in the height one stacked row used to take. Hole, name, distance, top to
+// bottom, because the hole is what a man looks for first and the name is what
+// he is looking for it about.
+const CtpTile = ({ ctp }) => (
+  <div style={{
+    minWidth: 0, textAlign: "center", borderRadius: R.md,
+    background: BC.amber + ALPHA.wash, border: `1px solid ${BC.amber}${ALPHA.hair}`,
+    padding: "5px 3px 6px",
+  }}>
+    <div style={{ fontSize: FS.label, fontWeight: 800, color: BC.amberInk, letterSpacing: 0.3, lineHeight: 1.2 }}>
+      #{ctp.hole + 1}
+    </div>
+    <div style={{
+      fontSize: FS.small, fontWeight: 800, color: BC.t1, lineHeight: 1.25, marginTop: 1,
+      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+    }}>{ctp.name}</div>
+    <div style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, lineHeight: 1.2, marginTop: 1 }}>
+      {ctp.distanceFt == null ? "—" : `${ctp.distanceFt} FT`}
+    </div>
+  </div>
+);
+
+// ── A skin, on one line ────────────────────────────────────────────
+// Four facts — who, what he made, where, and off what — and they used to take
+// two lines each. Five skins is a common enough round and that is ten lines
+// for what is really a five-row list. On one line the column of scores down
+// the right can still be compared, which is the only thing the second line
+// was buying.
 //
 // The GROSS list prints one score, because on it the gross IS the score and
-// "4 gross · 4 net" would be the same number twice on every row.
+// "4 GROSS · 4 NET" would be the same number twice on every row.
 //
-// The NET list prints both, always, even where they are equal: "5 gross · 5
-// net" is how the card says he got no stroke on that hole, which is a real
+// The NET list prints both, always, even where they are equal: "5 GROSS · 5
+// NET" is how the card says he got no stroke on that hole, which is a real
 // thing to know about a skin somebody is about to be paid for, and dropping
 // it on the rows where it happens to be true would make its absence mean two
 // different things.
 const SkinRow = ({ skin, showNet = false }) => (
-  <div style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "5px 0" }}>
-    <div style={{ flex: 1, minWidth: 0 }}>
-      <div style={{
-        fontSize: FS.small, fontWeight: 700, color: BC.t1,
-        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-      }}>{skin.name}</div>
-      <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 1 }}>
-        <span style={{ color: BC.amberInk, fontWeight: 800 }}>{skin.result}</span>
-        {` on Hole ${skin.hole + 1}, Par ${skin.par}`}
-      </div>
-    </div>
-    <span style={{ flexShrink: 0, fontSize: FS.label, fontWeight: 700, color: BC.t3 }}>
+  <div style={{ display: "flex", alignItems: "baseline", gap: 7, padding: "3px 0" }}>
+    {/* The only shrinking cell. Everything to its right is a fixed little
+        fact, so a long name gives up its own tail rather than pushing the
+        score off the end of the row. */}
+    <span style={{
+      flexShrink: 1, minWidth: 0, fontSize: FS.small, fontWeight: 700, color: BC.t1,
+      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+    }}>{skin.name}</span>
+    <span style={{ flexShrink: 0, fontSize: FS.label, fontWeight: 800, color: BC.amberInk }}>
+      {skin.result}
+    </span>
+    <span style={{ flexShrink: 0, fontSize: FS.label, color: BC.t3, whiteSpace: "nowrap" }}>
+      #{skin.hole + 1} · PAR {skin.par}
+    </span>
+    <span style={{
+      flexShrink: 0, marginLeft: "auto", paddingLeft: 4,
+      fontSize: FS.label, fontWeight: 700, color: BC.t3, whiteSpace: "nowrap",
+    }}>
       {showNet
-        ? <>{skin.gross} gross · <span style={{ color: BC.t2 }}>{skin.net} net</span></>
-        : <span style={{ color: BC.t2 }}>{skin.gross} gross</span>}
+        ? <>{skin.gross} GROSS · <span style={{ color: BC.t2 }}>{skin.net} NET</span></>
+        : <span style={{ color: BC.t2 }}>{skin.gross} GROSS</span>}
     </span>
   </div>
 );
@@ -119,8 +182,6 @@ export function RoundSummarySheet({
     ctpData, buyIns, hcpOverrides, teeAssignments, teamNames,
   }), [round, matches, holeData, tPlayers, tRounds, courses, roundLocks,
     ctpData, buyIns, hcpOverrides, teeAssignments, teamNames]);
-
-  const ft = (n) => (n == null ? null : `${n} ft`);
 
   return (
     <Popup
@@ -199,36 +260,38 @@ export function RoundSummarySheet({
         padding: "12px 14px 2px",
       }}>
         {/* ── The matches ─────────────────────────────────────────
-            `status` off the scoring engine is already golf-native — "3&2
-            (IRONS)", "TIED" — so nothing here re-words a result. The two sides
-            are stacked rather than columned: a four-ball's two names per side
-            do not fit across a phone beside a status. */}
+            The Leaderboard's own row: team A, the result, team B, with each
+            side's colour as a rail on its outer edge. It used to be the two
+            sides stacked on top of each other with the result pushed out to
+            the right — the same two lines spent, but with team A's names
+            ABOVE team B's on a screen whose score bar, six pixels up, has A
+            on the left and B on the right.
+
+            `1fr auto 1fr` keeps the centre exactly as wide as its content, so
+            the two name columns stay equal to each other however long the
+            status runs. `status` off the scoring engine is already
+            golf-native — "3&2", "TIED" — so nothing here re-words a result. */}
         <Card label="MATCHES" empty="No matches set up for this round." rows={s.matches.length}>
           {s.matches.map((m, i) => (
             <div key={m.id ?? i} style={{
-              padding: "7px 0",
+              display: "grid", gridTemplateColumns: "1fr auto 1fr",
+              alignItems: "center", gap: 8,
+              padding: "6px 0",
               borderTop: i ? `1px solid ${BC.bdr}${ALPHA.hair}` : "none",
             }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{
-                    fontSize: FS.small, fontWeight: 700, color: m.winner === "B" ? BC.t3 : BC.t1,
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                  }}>{m.a.join(" / ")}</div>
-                  <div style={{
-                    fontSize: FS.small, fontWeight: 700, color: m.winner === "A" ? BC.t3 : BC.t1,
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                  }}>{m.b.join(" / ")}</div>
-                </div>
-                <div style={{ flexShrink: 0, textAlign: "right" }}>
-                  <div style={{ fontSize: FS.label, fontWeight: 800, color: BC.t2, letterSpacing: 0.3 }}>{m.status}</div>
-                  <div style={{ fontSize: FS.label, fontWeight: 800, color: BC.t3 }}>
-                    <span style={{ color: m.winner === "A" ? BC.teamA : BC.t3 }}>{m.pts.A}</span>
-                    <span> – </span>
-                    <span style={{ color: m.winner === "B" ? BC.teamB : BC.t3 }}>{m.pts.B}</span>
-                  </div>
+              <MatchSide tid="A" names={m.a} winner={m.winner} />
+              <div style={{ minWidth: 50, textAlign: "center" }}>
+                <div style={{
+                  fontSize: FS.small, fontWeight: 800, lineHeight: 1.2, letterSpacing: 0.3,
+                  color: m.winner ? teamColor(m.winner) : BC.t2,
+                }}>{m.status}</div>
+                <div style={{ fontSize: FS.label, fontWeight: 800, lineHeight: 1.2 }}>
+                  <span style={{ color: m.winner === "A" ? BC.teamA : BC.t3 }}>{m.pts.A}</span>
+                  <span style={{ color: BC.t3 }}> – </span>
+                  <span style={{ color: m.winner === "B" ? BC.teamB : BC.t3 }}>{m.pts.B}</span>
                 </div>
               </div>
+              <MatchSide tid="B" names={m.b} winner={m.winner} />
             </div>
           ))}
         </Card>
@@ -240,10 +303,21 @@ export function RoundSummarySheet({
 
             Each is scored against its OWN buy-in field, which is why a man
             can be missing from one card and on the next. */}
+        {/* Four tiles across, because four is how many par 3s a course has —
+            the pins are a fixed little set, not a list of unknown length, and
+            laid out as one row they fit in the height a single stacked row
+            used to take. Fewer than four still divides the row rather than
+            stretching one tile the width of the card, which would read as the
+            only pin there was to tag; the floor of two keeps a lone tile from
+            becoming a banner. */}
         <Card label="CTP" empty="No pin was tagged on this one." rows={s.ctp.length}>
-          {s.ctp.map((c) => (
-            <WinRow key={c.hole} lead={`#${c.hole + 1}`} name={c.name} detail={ft(c.distanceFt)} />
-          ))}
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${Math.min(Math.max(s.ctp.length, 2), 4)}, 1fr)`,
+            gap: 5,
+          }}>
+            {s.ctp.map((c) => <CtpTile key={c.hole} ctp={c} />)}
+          </div>
         </Card>
 
         {/* Two games on the same eighteen holes, and they do not agree — a
