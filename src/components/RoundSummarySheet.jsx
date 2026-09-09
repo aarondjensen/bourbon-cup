@@ -22,7 +22,7 @@
 // on the Leaderboard. Nothing here needs the round to be final — a round in
 // play summarises fine and says THRU rather than a result — but the push is
 // what most opens it, so it reads as a round that is over.
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import { Popup } from "./Popup";
 import { roundSummary } from "../lib/roundSummary";
 import { formatLabel } from "../constants";
@@ -127,44 +127,55 @@ const CtpTile = ({ ctp }) => (
   </div>
 );
 
-// ── A skin, on one line ────────────────────────────────────────────
-// Four facts — who, what he made, where, and off what — and they used to take
-// two lines each. Five skins is a common enough round and that is ten lines
-// for what is really a five-row list. On one line the column of scores down
-// the right can still be compared, which is the only thing the second line
-// was buying.
+// ── The skins, as a real grid ───────────────────────────────────────
+// One grid per list rather than a row component per skin, because columns
+// only line up when the cells share ONE container: `auto` sizes a column to
+// the widest cell IN THE GRID, so BIRDIE and PAR start at the same x and #1
+// sits under #16 without anybody measuring anything. As a flex row per skin
+// each row sized itself, and every name of a different length nudged that
+// row's result and hole somewhere new — a list that was legible one line at
+// a time and a mess read down.
 //
-// The GROSS list prints one score, because on it the gross IS the score and
-// "4 GROSS · 4 NET" would be the same number twice on every row.
+// The name column is `minmax(0, max-content)` and the rest are `auto`, which
+// is what packs the four to the LEFT as a table instead of stranding the
+// result out at the right edge with a gulf of card between it and the man it
+// belongs to. It is also the only track with a min of 0, so when a name is
+// too long for the row it is the one that gives up its tail — the holes and
+// the pars hold their columns and the row still reads down.
 //
-// The NET list prints both, always, even where they are equal: "5 GROSS · 5
-// NET" is how the card says he got no stroke on that hole, which is a real
-// thing to know about a skin somebody is about to be paid for, and dropping
-// it on the rows where it happens to be true would make its absence mean two
-// different things.
-const SkinRow = ({ skin, showNet = false }) => (
-  <div style={{ display: "flex", alignItems: "baseline", gap: 7, padding: "3px 0" }}>
-    {/* The only shrinking cell. Everything to its right is a fixed little
-        fact, so a long name gives up its own tail rather than pushing the
-        score off the end of the row. */}
-    <span style={{
-      flexShrink: 1, minWidth: 0, fontSize: FS.small, fontWeight: 700, color: BC.t1,
-      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-    }}>{skin.name}</span>
-    <span style={{ flexShrink: 0, fontSize: FS.label, fontWeight: 800, color: BC.amberInk }}>
-      {skin.result}
-    </span>
-    <span style={{ flexShrink: 0, fontSize: FS.label, color: BC.t3, whiteSpace: "nowrap" }}>
-      #{skin.hole + 1} · PAR {skin.par}
-    </span>
-    <span style={{
-      flexShrink: 0, marginLeft: "auto", paddingLeft: 4,
-      fontSize: FS.label, fontWeight: 700, color: BC.t3, whiteSpace: "nowrap",
-    }}>
-      {showNet
-        ? <>{skin.gross} GROSS · <span style={{ color: BC.t2 }}>{skin.net} NET</span></>
-        : <span style={{ color: BC.t2 }}>{skin.gross} GROSS</span>}
-    </span>
+// ── There is no score column, and that is deliberate ────────────────
+// It read "3 GROSS" and "3 GROSS · 2 NET" out to the right. On the GROSS list
+// that was the same fact twice on every row — a birdie on a par 4 IS a three,
+// and the row already says birdie and says par 4. The NET list is the real
+// trade: the net score is genuinely gone, and what is left says WHAT HE MADE
+// rather than what it netted to. Which shot won the skin is the thing being
+// read here; what it settles for is the Betting tab's, as the footnote below
+// these cards has always said.
+const SKINS_GRID = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, max-content) auto auto 1fr",
+  columnGap: 8, rowGap: 5, alignItems: "baseline",
+};
+const SKIN_NAME = {
+  minWidth: 0, fontSize: FS.small, fontWeight: 700, color: BC.t1,
+  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+};
+const SKIN_RESULT = { fontSize: FS.label, fontWeight: 800, color: BC.amberInk, whiteSpace: "nowrap" };
+// Right-aligned so #7 lines up under #16 on its digits rather than on its
+// hash, which is the only thing a column of hole numbers is for.
+const SKIN_HOLE = { fontSize: FS.label, color: BC.t3, whiteSpace: "nowrap", textAlign: "right" };
+const SKIN_PAR = { fontSize: FS.label, color: BC.t3, whiteSpace: "nowrap" };
+
+const SkinsGrid = ({ skins }) => (
+  <div style={SKINS_GRID}>
+    {skins.map((k) => (
+      <Fragment key={k.hole}>
+        <span style={SKIN_NAME}>{k.name}</span>
+        <span style={SKIN_RESULT}>{k.result}</span>
+        <span style={SKIN_HOLE}>#{k.hole + 1}</span>
+        <span style={SKIN_PAR}>PAR {k.par}</span>
+      </Fragment>
+    ))}
   </div>
 );
 
@@ -332,7 +343,7 @@ export function RoundSummarySheet({
           empty={s.played ? "Every hole carried." : "Nothing scored yet."}
           rows={s.skins.gross.length}
         >
-          {s.skins.gross.map((k) => <SkinRow key={k.hole} skin={k} />)}
+          <SkinsGrid skins={s.skins.gross} />
         </Card>
 
         <Card
@@ -340,7 +351,7 @@ export function RoundSummarySheet({
           empty={s.played ? "Every hole carried." : "Nothing scored yet."}
           rows={s.skins.net.length}
         >
-          {s.skins.net.map((k) => <SkinRow key={k.hole} skin={k} showNet />)}
+          <SkinsGrid skins={s.skins.net} />
         </Card>
 
         {/* Only a finished card is ranked, and equal lowest cards are
