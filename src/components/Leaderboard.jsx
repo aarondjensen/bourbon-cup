@@ -286,7 +286,7 @@ const nineColor = (st) => {
 };
 
 // Cells of the centre cluster. minWidth on each keeps the columns from
-// jumping as the text inside changes width ("AS" → "3&2" → "—"); lineHeight
+// jumping as the text inside changes width ("TIED" → "3&2" → "—"); lineHeight
 // is pinned to 1 so the two rows sit a predictable distance apart once the
 // grid has aligned them on their baselines.
 const NINE_LABEL = {

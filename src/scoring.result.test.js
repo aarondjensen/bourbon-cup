@@ -73,7 +73,7 @@ describe("a match that goes the distance", () => {
     expect(statusText(st)).toBe("1 UP");
   });
 
-  it("was HALVED when nobody is ahead at the end", () => {
+  it("is TIED when nobody is ahead at the end", () => {
     // The past tense is the whole of it: this match is over and paid out half
     // a point each. All square is what it was standing on the 18th tee.
     const st = seg("AAAAAAAAABBBBBBBBB");
@@ -81,7 +81,7 @@ describe("a match that goes the distance", () => {
     expect(st.clinched).toBe(false);
     expect(st.complete).toBe(true);
     expect(st.winner).toBe(null);
-    expect(statusText(st)).toBe("HALVED");
+    expect(statusText(st)).toBe("TIED");
   });
 
   it("reads the running margin while it is still live", () => {
@@ -158,9 +158,9 @@ describe("a settled match, from the reader's own side", () => {
     expect(verdictText(st, "B")).toBe("LOST 8&6");
   });
 
-  it("halves without taking a side", () => {
-    expect(verdictText(seg("AAAAAAAAABBBBBBBBB"), "A")).toBe("HALVED");
-    expect(verdictText(seg("AAAAAAAAABBBBBBBBB"), "B")).toBe("HALVED");
+  it("is TIED to both of them, with no WON or LOST in front of it", () => {
+    expect(verdictText(seg("AAAAAAAAABBBBBBBBB"), "A")).toBe("TIED");
+    expect(verdictText(seg("AAAAAAAAABBBBBBBBB"), "B")).toBe("TIED");
   });
 });
 
@@ -171,10 +171,10 @@ describe("a live match, from the reader's own side", () => {
     expect(verdictText(st, "B")).toBe("1 DOWN");
   });
 
-  it("is all square to both of them", () => {
+  it("is TIED to both of them", () => {
     const st = seg("AB................");
-    expect(verdictText(st, "A")).toBe("AS");
-    expect(verdictText(st, "B")).toBe("AS");
+    expect(verdictText(st, "A")).toBe("TIED");
+    expect(verdictText(st, "B")).toBe("TIED");
   });
 
   it("says nothing before a ball is struck", () => {
@@ -183,13 +183,13 @@ describe("a live match, from the reader's own side", () => {
 });
 
 describe("the formats with no up and no down", () => {
-  it("halves a Total segment that finished level, same as any other", () => {
+  it("ties a Total segment that finished level, same as any other", () => {
     const done = seg("AAAAAAAAAAAAAAAAAA", { total: true });
     // Every hole scored 4 apiece, so the totals are level however it is read.
     // It used to say TIED here on the reasoning that a Total round has no
     // "up" to be square about — but a level round is a level round, and the
-    // chip beside it on the same screen already said HALVED.
-    expect(verdictText(done, "A")).toBe("HALVED");
+    // chip beside it on the same screen already said TIED.
+    expect(verdictText(done, "A")).toBe("TIED");
   });
 
   it("leaves a live points segment as a bare lead", () => {
@@ -208,17 +208,16 @@ describe("the formats with no up and no down", () => {
   });
 });
 
-// ── One word for level, in every currency ───────────────────────────
-// Golf has never called this tied. A level match still being played is ALL
-// SQUARE; one that finished level was HALVED, and the past tense is the whole
-// of the difference — a halved match paid out, half a point each.
+// ── One word for level: TIED ────────────────────────────────────────
+// Not AS, and not HALVED. Both are the older words for it — "all square" for
+// a match still being played, "halved" for one that finished level — and this
+// app says TIED, which is what the field says out loud.
 //
-// TIED was the wording on a Total or points segment, on the reasoning that
-// neither has an "up" to be square about. That put one outcome under four
-// names: the card said HALVED on a nine and TIED on the round beneath it, the
-// Leaderboard said "½" for match play and TIED for the rest, and both running
-// lines said TIED on a Total round and AS on a match one. The distinction
-// that matters was never the currency; it is the tense.
+// One word in every tense and every currency, because splitting it is how the
+// outcome came to have four names on four screens: HALVED on a card's nine,
+// TIED on the round beneath it, "½" on the Leaderboard for match play and
+// TIED for everything else. The currency never mattered and neither, here,
+// does the tense.
 describe("a segment that is level", () => {
   const units = [
     ["match play", undefined],
@@ -227,14 +226,14 @@ describe("a segment that is level", () => {
   ];
 
   units.forEach(([name, opts]) => {
-    it(`is ALL SQUARE while ${name} is still live`, () => {
-      expect(statusText(seg("AB................", opts))).toBe("AS");
-      expect(verdictText(seg("AB................", opts), "B")).toBe("AS");
+    it(`is TIED while ${name} is still live`, () => {
+      expect(statusText(seg("AB................", opts))).toBe("TIED");
+      expect(verdictText(seg("AB................", opts), "B")).toBe("TIED");
     });
 
-    it(`was HALVED once ${name} is over`, () => {
-      expect(statusText(seg("ABABABABABABABABAB", opts))).toBe("HALVED");
-      expect(verdictText(seg("ABABABABABABABABAB", opts), "B")).toBe("HALVED");
+    it(`is still TIED once ${name} is over`, () => {
+      expect(statusText(seg("ABABABABABABABABAB", opts))).toBe("TIED");
+      expect(verdictText(seg("ABABABABABABABABAB", opts), "B")).toBe("TIED");
     });
   });
 

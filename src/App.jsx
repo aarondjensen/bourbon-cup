@@ -1742,11 +1742,9 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
         <div style={{ textAlign: "center", fontSize: FS.body, fontWeight: 800, color, lineHeight: 1 }}>
           {fromUserView > 0 ? <>▲{fromUserView}</>
             : fromUserView < 0 ? <>▼{Math.abs(fromUserView)}</>
-            // ALL SQUARE on every format. This glyph is the match as it
-            // stands after a hole — live by construction, so never HALVED —
-            // and it said "TIED" on a Total or points round, which is a
-            // scoreboard word for some other sport. See scoring.statusText.
-            : <span style={{ fontSize: FS.micro, fontWeight: 700, letterSpacing: 0.5 }}>AS</span>}
+            // TIED on every format — one word for level wherever this app
+            // says it, whatever the currency. See scoring.statusText.
+            : <span style={{ fontSize: FS.micro, fontWeight: 700, letterSpacing: 0.5 }}>TIED</span>}
         </div>
       </>
     );
@@ -1992,7 +1990,7 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   //
   // The pill styling — dashed edge while live, solid and tinted the moment
   // a segment settles — is lifted from the Leaderboard's SegmentPill. The
-  // WORDS are this screen's own: "WON 3 UP" / "LOST 2&1" / "HALVED" rather
+  // WORDS are this screen's own: "WON 3 UP" / "LOST 2&1" / "TIED" rather
   // than a banked point total, because a SegmentPill answers "what did this
   // segment pay out" and this row answers "did I win it" — the question
   // that matters mid-round, from the reader's own side.

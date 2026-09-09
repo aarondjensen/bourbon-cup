@@ -76,25 +76,26 @@ describe("the nines row", () => {
     expect(t.match(/5&4/g)).toHaveLength(2);   // the row, and the OUT chip
   });
 
-  it("calls a nine that finished level HALVED, not AS", () => {
-    // statusText says "AS", which is how a LIVE match reads. On a settled
-    // nine that is the wrong tense — the point has already been split.
+  it("calls a nine that finished level TIED", () => {
+    // Not HALVED and not AS — both are the older words, and this app says
+    // TIED wherever a result is level.
     const t = card();
-    expect(t).toContain("HALVED");
-    expect(t).not.toContain("AS");
+    expect(t).toContain("TIED");
+    expect(t).not.toContain("HALVED");
+    expect(t).not.toMatch(/\bAS\b/);
   });
 
-  it("says HALVED in every place that states the result, not just the new one", () => {
+  it("says it in every place that states the result, not just the new one", () => {
     // The row, and the IN chip on that nine's own MATCH row. One fact in two
-    // tenses three inches apart is the same failure as an 8&6 sitting under a
+    // words three inches apart is the same failure as an 8&6 sitting under a
     // 10&4 — see the clinch test beside this one.
     const t = card();
-    expect(t.match(/HALVED/g)).toHaveLength(2);
+    expect(t.match(/TIED/g)).toHaveLength(2);
   });
 
-  it("leaves AS on a RUNNING match cell, which is the one place it is true", () => {
-    // Two holes in, one each: the match is level and LIVE, so the running
-    // cell says AS. Nothing is complete, so nothing says HALVED.
+  it("says TIED on a RUNNING match cell too", () => {
+    // Two holes in, one each: the match is level and LIVE. It reads the same
+    // as a finished level one, because this app has one word for level.
     const holeData = { a1_1: {}, b1_1: {} };
     [..."AB"].forEach((w, h) => {
       holeData.a1_1[h] = w === "A" ? 3 : w === "H" ? 4 : 5;
@@ -115,7 +116,7 @@ describe("the nines row", () => {
         getScore={(pid, h) => holeData[`${pid}_1`]?.[h] || 0}
       />,
     ).container.textContent;
-    expect(t).toContain("AS");
+    expect(t).toContain("TIED");
     expect(t).not.toContain("HALVED");
   });
 
