@@ -43,38 +43,61 @@ import { BC, ALPHA, ON_AMBER, FS, R, teamColor } from "../theme";
 // at a glance.
 const ROW = FS.small;
 
-// The all-caps title every section card is led by. Spelled once so six
-// sections cannot drift apart by a letter of tracking.
+// ── The section header ──────────────────────────────────────────────
+// A BAND across the top of the card, not a line of type floating above the
+// rows. Centred 14px bold caps was already the right type; what it was
+// missing is the thing that actually makes a header read as one — its own
+// ground, full-bleed to the card's edges, sealed off from the content by a
+// rule. Sitting on the same surface as the rows it was still a first row
+// that happened to be in capitals.
 //
-// Centred and at the body's own rung + 1, which is the app's card-title size
-// (see the FS scale). Left-aligned at 10px it read as a tag stuck to the
-// corner of the card rather than as the card's name, and on a stack of six
-// cards the names are the only thing to navigate by. The note rides on the
-// title's baseline and centres with it as one unit, so "MONEY HOLE hole 18 ·
-// par 4" stays a single centred line rather than a title with something
-// trailing off it.
+// `hover` for the ground because it is the palette's one step off `inp`,
+// which is what the card is: LIGHTER than the card in dark and DARKER in
+// light, so the band separates in both themes rather than being a tone that
+// happens to work in one. Neutral rather than the amber the sheet's own
+// banner uses — six amber strips down a screen that already spends amber on
+// the CTP tiles and every BIRDIE would stop amber meaning anything, and the
+// hierarchy is clearer with the accent kept for the round's own title: amber
+// names the round, neutral names its sections, and the rows are ink on the
+// card.
+//
+// `t2` rather than `t3`: a header is a thing to be read at a glance, and t3
+// is the mutest ink in the palette. The note stays at t3 and at the body's
+// size, and rides the title's baseline so it centres with it as one unit —
+// "MONEY HOLE hole 18 · par 4" is one centred line, not a title with
+// something trailing off it.
 const Label = ({ children, note }) => (
   <div style={{
-    display: "flex", alignItems: "baseline", justifyContent: "center",
-    gap: 6, marginBottom: 7,
+    display: "flex", alignItems: "baseline", justifyContent: "center", gap: 6,
+    padding: "5px 11px 6px",
+    background: BC.hover, borderBottom: `1px solid ${BC.bdr}`,
   }}>
-    <span style={{ fontSize: FS.body, fontWeight: 800, color: BC.t3, letterSpacing: 1.2 }}>{children}</span>
-    {note && <span style={{ fontSize: ROW, color: BC.t3, opacity: 0.8, letterSpacing: 0.3 }}>{note}</span>}
+    <span style={{ fontSize: FS.body, fontWeight: 800, color: BC.t2, letterSpacing: 1.4 }}>{children}</span>
+    {note && <span style={{ fontSize: ROW, color: BC.t3, letterSpacing: 0.3 }}>{note}</span>}
   </div>
 );
 
 // A section is always drawn, even with nothing in it. A card that disappears
 // when a game had no winner reads as a screen that failed to load, and "every
 // hole carried" is a real thing to know about a round.
+//
+// The padding moved off the card and onto the two halves, which is what lets
+// the header band reach the edges. `overflow: hidden` so the band's top
+// corners are cut by the card's own radius instead of squaring it off.
 const Card = ({ label, note, empty, children, rows }) => (
   <div style={{
     background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: R.xl,
-    padding: "9px 11px", marginBottom: 8,
+    marginBottom: 8, overflow: "hidden",
   }}>
     <Label note={note}>{label}</Label>
-    {rows === 0
-      ? <div style={{ fontSize: ROW, color: BC.t3 }}>{empty}</div>
-      : children}
+    <div style={{ padding: "7px 11px 8px" }}>
+      {/* Centred under a centred header. It is a note ABOUT the card rather
+          than a row in it, and left-aligned it read as the first entry of a
+          list that then stopped. */}
+      {rows === 0
+        ? <div style={{ fontSize: ROW, color: BC.t3, textAlign: "center", padding: "2px 0 3px" }}>{empty}</div>
+        : children}
+    </div>
   </div>
 );
 
