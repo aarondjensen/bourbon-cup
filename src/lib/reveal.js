@@ -88,6 +88,10 @@
 
 export const HOLE_COUNT = 18;
 
+// The two sides, in the order a hole is narrated when nobody has jumped in
+// first. Either captain may go first; this is only what the screen offers.
+export const SIDES = ["A", "B"];
+
 // The formats whose rounds open sealed in the Rounds tab. Team Best Ball is
 // the closing round and the reveal is what it is for; every other format is
 // off unless a director says otherwise.
@@ -130,13 +134,65 @@ export const resolveSealed = (format, raw, final) =>
 // a live round seals.
 export const isSealedRound = (tr) => resolveSealed(tr?.format, tr?.sealed, tr?.final);
 
-// How many holes are public. An unsealed round is all eighteen, which is
-// what makes every caller below safe to run against any round.
+const clampHole = (n) => {
+  const v = Math.floor(Number(n));
+  if (!Number.isFinite(v)) return 0;
+  return Math.max(0, Math.min(HOLE_COUNT, v));
+};
+
+// ── Two counters, one per side ──────────────────────────────────────
+// A hole is turned over ONE SIDE AT A TIME, because the room turns it over
+// one side at a time: the captain of the side going first tells the story of
+// their eight balls — whose net eagle, whose two birdies, what it came to —
+// and only then are the numbers on the television. Then the other captain
+// does theirs, and only then does anybody know who won the hole.
+//
+// So the reveal is not a cursor, it is a pair of them. `reveal_a` and
+// `reveal_b` count how many holes each side has had turned over, and either
+// captain may be the one ahead. A side's own captain moves its own counter;
+// a director may move either.
+//
+// `reveal_through` is what this was before the sides came apart, and it is
+// still what a director's ALL button writes and what every round sealed
+// before this shipped carries. It reads as both counters at once.
+export const revealedForSide = (tr, side) => {
+  if (!isSealedRound(tr)) return HOLE_COUNT;
+  const own = side === "B" ? tr?.reveal_b : tr?.reveal_a;
+  return clampHole(own == null ? tr?.reveal_through : own);
+};
+
+export const sideReveal = (tr) => ({ A: revealedForSide(tr, "A"), B: revealedForSide(tr, "B") });
+
+// How many holes are public — which is the LOWER of the two, because a hole
+// with one side still to come has no result yet. Everything that asks this
+// question (the scoreboard's subtraction, "is it over", the strip) means the
+// holes that are wholly out, so nothing downstream had to learn about sides.
 export const revealedThrough = (tr) => {
   if (!isSealedRound(tr)) return HOLE_COUNT;
-  const n = Math.floor(Number(tr.reveal_through));
-  if (!Number.isFinite(n)) return 0;
-  return Math.max(0, Math.min(HOLE_COUNT, n));
+  const { A, B } = sideReveal(tr);
+  return Math.min(A, B);
+};
+
+// The hole the room is ON: the one a side has been shown, or — when the two
+// are level — the last one finished. Zero before anybody has started.
+export const revealHole = (tr) => {
+  const { A, B } = sideReveal(tr);
+  return Math.max(A, B);
+};
+
+// Whose tap comes next on the hole in play. Both when the sides are level (a
+// new hole, and either captain may open it), one when the other is waiting.
+export const sidesPending = (tr) => {
+  const { A, B } = sideReveal(tr);
+  if (A === B) return A >= HOLE_COUNT ? [] : ["A", "B"];
+  return A < B ? ["A"] : ["B"];
+};
+
+// The hole a given side's next tap would turn over, 1-based, or null when
+// that side has nothing left to show.
+export const nextHoleForSide = (tr, side) => {
+  const n = revealedForSide(tr, side);
+  return n >= HOLE_COUNT ? null : n + 1;
 };
 
 export const isFullyRevealed = (tr) => revealedThrough(tr) >= HOLE_COUNT;
@@ -158,6 +214,11 @@ export const revealState = (tRounds, round) => {
     sealed: isSealedRound(tr),
     concealing: isConcealing(tr),
     through: revealedThrough(tr),
+    // Both counters, for the one screen that turns a hole over a side at a
+    // time. `through` above is still the pair's minimum — the holes that are
+    // wholly out — which is what every other reader means.
+    sides: sideReveal(tr),
+    hole: revealHole(tr),
   };
 };
 
@@ -225,12 +286,41 @@ export function concealHoleData(holeData, tRounds) {
 // the round, so its cut falls at the reveal rather than at zero. Hole
 // `through - 1` is the last one that exists in the map it hands back, which
 // is what makes that screen safe to lay out without a per-hole guard.
-export function countdownHoleData(holeData, tRounds) {
-  const limits = new Map();
-  (tRounds || []).forEach((tr) => {
-    if (isConcealing(tr)) limits.set(tr.round_number, revealedThrough(tr));
+// `sideOf(pid)` → "A" | "B" | null. Required in practice: a hole is turned
+// over one side at a time, so the cut is per PLAYER, not per hole — team A's
+// twelfth exists on this map while team B's twelfth does not. A player the
+// lookup does not know (null) is cut at the safer of the two, which is the
+// side that has been shown less.
+//
+// Called with no lookup it falls back to the old behaviour — both sides cut
+// at the hole that is wholly out. That is what a round written before the
+// sides came apart wants, and it is never LESS strict than the per-side cut.
+export function countdownHoleData(holeData, tRounds, sideOf) {
+  const rounds = (tRounds || []).filter(isConcealing);
+  if (!rounds.length) return holeData;
+
+  const bySide = new Map();
+  rounds.forEach((tr) => {
+    const { A, B } = sideReveal(tr);
+    bySide.set(tr.round_number, { A, B, none: Math.min(A, B) });
   });
-  return cutHoleData(holeData, limits);
+
+  const out = {};
+  Object.entries(holeData || {}).forEach(([key, scores]) => {
+    const cut = key.lastIndexOf("_");
+    const rnd = Number(key.slice(cut + 1));
+    const lim = bySide.get(rnd);
+    if (!lim) { out[key] = scores; return; }
+    const side = sideOf ? sideOf(key.slice(0, cut)) : null;
+    const through = side === "A" ? lim.A : side === "B" ? lim.B : lim.none;
+    if (through <= 0) return;
+    const kept = {};
+    Object.entries(scores || {}).forEach(([h, v]) => {
+      if (Number(h) < through) kept[h] = v;
+    });
+    out[key] = kept;
+  });
+  return out;
 }
 
 // ── Stepping the reveal ─────────────────────────────────────────────

@@ -761,6 +761,102 @@ await check("no reviewer code configured means no second door", async () => {
   await assertFails(setDoc(doc(late, "bc_accounts/late"), { uid: "late", code: "DEMO", demo_only: true }));
 });
 
+// ══════════════════════════════════════════════════════════════════
+//  The captains
+// ══════════════════════════════════════════════════════════════════
+//  One field, on one document, by one man. This is the only write in the
+//  project a plain member makes to an admin collection, so it gets pinned
+//  from every side it could be widened from — the other side's counter, a
+//  second field slipped into the same write, a round in another edition, a
+//  round that does not exist yet, and a member with no armband at all.
+await env.clearFirestore();
+await seed("bc_secrets/access", { code: "" });
+await seed("bc_editions/bc_2026", { id: "bc_2026", name: "The Bourbon Cup 2026" });
+await seed("bc_editions/bc_2025", { id: "bc_2025", name: "2025" });
+await seed("bc_rounds/r4", { tournament_id: "bc_2026", round_number: 4, tee_time: "8:00", reveal_a: 0, reveal_b: 0 });
+await seed("bc_rounds/old_r4", { tournament_id: "bc_2025", round_number: 4, reveal_a: 0, reveal_b: 0 });
+await seed("bc_accounts/pete", { uid: "pete", captain_of: { bc_2026: "A" } });
+await seed("bc_accounts/mallory", { uid: "mallory" });
+await grantDirector("alice");
+await seed("bc_accounts/alice", { uid: "alice", is_director: true });
+
+await check("a captain turns over his own side", () =>
+  assertSucceeds(setDoc(doc(peteDb(), "bc_rounds/r4"), { reveal_a: 1 }, { merge: true })));
+
+await check("a captain cannot turn over the other side", () =>
+  assertFails(setDoc(doc(peteDb(), "bc_rounds/r4"), { reveal_b: 1 }, { merge: true })));
+
+await check("a captain cannot carry a second field in with it", async () => {
+  // The affectedKeys check is the whole rule. Without it his one legitimate
+  // write is a door into every setting on the round.
+  await assertFails(setDoc(doc(peteDb(), "bc_rounds/r4"), { reveal_a: 2, tee_time: "9:00" }, { merge: true }));
+  await assertFails(setDoc(doc(peteDb(), "bc_rounds/r4"), { reveal_a: 2, reveal_through: 2 }, { merge: true }));
+  await assertFails(setDoc(doc(peteDb(), "bc_rounds/r4"), { tee_time: "9:00" }, { merge: true }));
+});
+
+await check("a captain cannot run more than one hole ahead", async () => {
+  // The ceremony, enforced: one hole, both stories, next hole. Without this a
+  // captain who kept tapping would reach 18 while the other side was on 1, and
+  // the countdown shows the LEADING side's hole — so the man behind would be
+  // tapping through holes nobody in the room could see.
+  await seed("bc_rounds/r4", { tournament_id: "bc_2026", round_number: 4, reveal_a: 1, reveal_b: 0 });
+  await assertFails(setDoc(doc(peteDb(), "bc_rounds/r4"), { reveal_a: 2 }, { merge: true }));
+  // Level again, and he may open the next one.
+  await seed("bc_rounds/r4", { tournament_id: "bc_2026", round_number: 4, reveal_a: 1, reveal_b: 1 });
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_rounds/r4"), { reveal_a: 2 }, { merge: true }));
+  // A director is not bound by it — resetting a countdown somebody walked to
+  // 18 by mistake is the repair this clamp would otherwise block.
+  await assertSucceeds(setDoc(doc(aliceDb(), "bc_rounds/r4"), { reveal_a: 18, reveal_b: 0 }, { merge: true }));
+  await seed("bc_rounds/r4", { tournament_id: "bc_2026", round_number: 4, reveal_a: 0, reveal_b: 0 });
+});
+
+await check("a captain cannot write nonsense into his own counter", async () => {
+  await assertFails(setDoc(doc(peteDb(), "bc_rounds/r4"), { reveal_a: -1 }, { merge: true }));
+  await assertFails(setDoc(doc(peteDb(), "bc_rounds/r4"), { reveal_a: "nine" }, { merge: true }));
+});
+
+await check("a captain cannot reach a round in another edition", () =>
+  assertFails(setDoc(doc(peteDb(), "bc_rounds/old_r4"), { reveal_a: 1 }, { merge: true })));
+
+await check("a captain cannot create a round", () =>
+  assertFails(setDoc(doc(peteDb(), "bc_rounds/r9"), { tournament_id: "bc_2026", reveal_a: 1 })));
+
+await check("a captain cannot delete one", () =>
+  assertFails(deleteDoc(doc(peteDb(), "bc_rounds/r4"))));
+
+await check("an ordinary member cannot turn over anything", () =>
+  assertFails(setDoc(doc(malloryDb(), "bc_rounds/r4"), { reveal_a: 2 }, { merge: true })));
+
+await check("a guest cannot either", () =>
+  assertFails(setDoc(doc(anonDb(), "bc_rounds/r4"), { reveal_a: 2 }, { merge: true })));
+
+await check("a director still moves either side, and everything else", async () => {
+  await assertSucceeds(setDoc(doc(aliceDb(), "bc_rounds/r4"), { reveal_a: 5, reveal_b: 5 }, { merge: true }));
+  await assertSucceeds(setDoc(doc(aliceDb(), "bc_rounds/r4"), { tee_time: "9:10" }, { merge: true }));
+});
+
+await check("only a director names a captain, and the armband is all they may write", async () => {
+  await assertFails(setDoc(doc(peteDb(), "bc_accounts/mallory"), { captain_of: { bc_2026: "B" } }, { merge: true }));
+  await assertFails(setDoc(doc(peteDb(), "bc_accounts/pete"), { captain_of: { bc_2026: "B" } }, { merge: true }));
+  await assertSucceeds(setDoc(doc(aliceDb(), "bc_accounts/mallory"), { captain_of: { bc_2026: "B" } }, { merge: true }));
+  // Not a way to smuggle the crown in beside it.
+  await assertFails(setDoc(doc(aliceDb(), "bc_accounts/mallory"), { captain_of: {}, is_director: true }, { merge: true }));
+});
+
+await check("a director may name HIMSELF captain, unlike the crown", async () => {
+  // The crown cannot be self-granted — that is what stops the last director
+  // stepping down. The armband moves one counter on one round, and both
+  // captains here will be directors.
+  await assertSucceeds(setDoc(doc(aliceDb(), "bc_accounts/alice"), { captain_of: { bc_2026: "A" } }, { merge: true }));
+  await assertFails(setDoc(doc(aliceDb(), "bc_accounts/alice"), { is_director: false }, { merge: true }));
+});
+
+await check("a captaincy in one edition is not one in another", async () => {
+  await seed("bc_accounts/pete", { uid: "pete", captain_of: { bc_2025: "A" } });
+  await assertFails(setDoc(doc(peteDb(), "bc_rounds/r4"), { reveal_a: 1 }, { merge: true }));
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_rounds/old_r4"), { reveal_a: 1 }, { merge: true }));
+});
+
 await env.cleanup();
 
 let failed = 0;

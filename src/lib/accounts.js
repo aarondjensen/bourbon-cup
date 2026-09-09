@@ -179,6 +179,30 @@ export async function setDirector(uid, on) {
   }
 }
 
+// ── The armband ─────────────────────────────────────────────────────
+// Same document as the crown and for the same reason (see lib/captains): the
+// rules can construct `bc_accounts/{uid}` and cannot query for a roster row.
+//
+// Unlike the crown, a director MAY set this on themselves. Both captains here
+// will be directors, and captaining your own side is not a promotion — it
+// moves one counter on one round and touches nothing else in the project.
+//
+// The whole `captain_of` map is written back rather than one field path,
+// because `db.upsertStrict` merges documents; a dotted key through a merging
+// set lands as a literal key with a dot in it. captainPatch builds it.
+export async function setCaptain(uid, patch) {
+  if (!uid) return { ok: false, error: "That player hasn't signed in yet." };
+  try {
+    await db.upsertStrict(ACCOUNTS_COL, uid, patch);
+    return { ok: true };
+  } catch (e) {
+    if (e?.code === "permission-denied") {
+      return { ok: false, error: writeFailure(e, "Only a director can name a captain.") };
+    }
+    return { ok: false, error: "Could not save that — check signal and try again." };
+  }
+}
+
 // Every membership, for a director's Admin screen — the roster's crown is
 // drawn from these rather than from a field on the roster, so what is on
 // screen is what the rules will honour. A non-director cannot read this;

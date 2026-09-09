@@ -905,7 +905,7 @@ function RoundSection({
 export function TeamLeaderboard({
   matches, holeData, ownHoleData, countdownHoleData, courses, tRounds, tPlayers, teams,
   hcpOverrides, teeAssignments, roundLocks, viewer,
-  canReveal = false, onSetReveal, autoCountdown = false, onOpenSummary,
+  canReveal = false, onSetReveal, captainSide = null, autoCountdown = false, onOpenSummary,
 }) {
   const [expandedMatch, setExpandedMatch] = useState(null);
   // Round open/closed. Absent key = follow the automatic rule below;
@@ -1199,12 +1199,15 @@ export function TeamLeaderboard({
         teams={teams}
         courseName={course?.name || null}
         formatLabel={meta.fmt?.label || null}
-        through={meta.seal?.through ?? HOLE_COUNT}
+        reveal={meta.seal?.sides ?? { A: HOLE_COUNT, B: HOLE_COUNT }}
+        ownResult={(ownResults[rnd] || [])[0]?.result || null}
+        ownGetScore={(pid, h) => (ownHoleData?.[`${pid}_${rnd}`] || {})[h] || 0}
         totals={cdTotals}
         toWin={toWin}
         clincher={cdClincher}
-        canAdvance={canReveal && !!onSetReveal}
-        onAdvance={(n) => onSetReveal(rnd, n)}
+        isDirector={canReveal && !!onSetReveal}
+        captainSide={onSetReveal ? captainSide : null}
+        onAdvance={(side, n) => onSetReveal(rnd, side, n)}
         onClose={closeCountdown}
       />
       </Suspense>,
@@ -1220,7 +1223,7 @@ export function TeamLeaderboard({
   const sealPanelFor = (rnd) => {
     const seal = roundMeta[rnd]?.seal;
     if (!seal?.sealed) return null;
-    const drive = canReveal && onSetReveal ? (n) => onSetReveal(rnd, n) : null;
+    const drive = canReveal && onSetReveal ? (n) => onSetReveal(rnd, null, n) : null;
     if (!seal.concealing) {
       return drive ? (
         <div style={{ marginTop: 8, background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}` }}>

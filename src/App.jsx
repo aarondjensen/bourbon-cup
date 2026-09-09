@@ -4,7 +4,8 @@ import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, HOLE_BANNER, FS, applyBCT
 import { playerLookup, realPlayers } from "./lib/players";
 import { db, writeFailure, TOURNAMENT_ID, getTournamentYear, getActiveTournamentId, getDefaultEditionId, editionDocId, setActiveTournamentId, readUserSession, writeUserSession, readTournamentIdentity, writeTournamentIdentity, BOOTSTRAP_DIRECTOR, SPECTATOR_ID } from "./firebase";
 import { PROVIDERS, signIn, signOutUser, onAuthUser, consumeRedirectResult, isCancelled, whenAuthReady } from "./lib/auth";
-import { claimPlayer, linkedPlayer, isClaimed, readMembership, isDirectorAccount, joinWithCode, setDirector, ACCOUNTS_COL, deleteAccount } from "./lib/accounts";
+import { claimPlayer, linkedPlayer, isClaimed, readMembership, isDirectorAccount, joinWithCode, setDirector, setCaptain, ACCOUNTS_COL, deleteAccount } from "./lib/accounts";
+import { captainSideFor, captainPatch } from "./lib/captains";
 import { GUEST_USER, isGuest, readGuestMode, writeGuestMode } from "./lib/guest";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
@@ -3988,6 +3989,31 @@ export default function App() {
     return res;
   }, []);
 
+  // Naming a captain stands the previous one down, which is two membership
+  // documents and therefore App's job rather than the player sheet's — that
+  // sheet is about one man. The stand-down goes FIRST: if it is refused, the
+  // grant never happens and the side keeps the captain it had, rather than
+  // ending with two of them and a toast about one.
+  // Which side, if any, the phone in my hand captains. Off my own membership,
+  // which every signed-in member can read — a captain does not need the
+  // accounts list a director gets.
+  const myCaptainSide = useMemo(
+    () => captainSideFor(membership, TOURNAMENT_ID),
+    [membership]
+  );
+
+  const onSetCaptain = useCallback(async (uid, side) => {
+    const held = side
+      ? (memberships || []).find(m => captainSideFor(m, TOURNAMENT_ID) === side && m.id !== uid)
+      : null;
+    if (held) {
+      const off = await setCaptain(held.id, captainPatch(held, TOURNAMENT_ID, null));
+      if (!off.ok) return off;
+    }
+    const mine = (memberships || []).find(m => m.id === uid) || null;
+    return setCaptain(uid, captainPatch(mine, TOURNAMENT_ID, side));
+  }, [memberships]);
+
   const user = useMemo(() => {
     // The guest, before anything else. It is the only identity here that
     // does NOT come from an account, so it is resolved without one — and
@@ -4693,9 +4719,17 @@ export default function App() {
   // screen that walks the round in front of the room. It goes to the
   // Leaderboard, which is where the countdown is mounted from, and is used
   // for nothing else there — see TeamLeaderboard's note on the three maps.
+  //
+  // The side lookup is what makes the cut PER PLAYER rather than per hole: a
+  // hole is turned over one side at a time now, so team A's twelfth can be on
+  // this map while team B's twelfth is not.
+  const sideOfPlayer = useCallback(
+    (pid) => (tPlayers.find(p => p.player_id === pid)?.team === "B" ? "B" : "A"),
+    [tPlayers]
+  );
   const countdownData = useMemo(
-    () => countdownHoleData(holeData, enrichedRounds),
-    [holeData, enrichedRounds]
+    () => countdownHoleData(holeData, enrichedRounds, sideOfPlayer),
+    [holeData, enrichedRounds, sideOfPlayer]
   );
 
   // Enhance matches with nassau + scoring type from their round.
@@ -5423,13 +5457,27 @@ export default function App() {
   // act performed in front of the room, and it must not be something a
   // director can trigger by editing a tee time. `bc_rounds` is director-only
   // in the rules, so who may do this is already settled there.
-  const onSetReveal = useCallback(async (round, through) => {
-    await db.upsert("bc_rounds", {
+  // ── Turning a hole over ──────────────────────────────────────────
+  // `side` is "A", "B", or null for both at once — which is what a director's
+  // ALL / reset control writes, and what every round sealed before the sides
+  // came apart already carries. See lib/reveal.
+  //
+  // A CAPTAIN's tap lands here too, and it is the one write in this project a
+  // member makes to an admin collection. The rules allow it narrowly — his own
+  // side's counter, on a round in his own edition, and nothing else in the
+  // document — so this sends the one field rather than a whole round, and
+  // `loud` so a refusal says so instead of vanishing.
+  const onSetReveal = useCallback(async (round, side, through) => {
+    const n = Math.max(0, Math.min(HOLE_COUNT, Math.round(through) || 0));
+    const fields = side === "A" ? { reveal_a: n }
+      : side === "B" ? { reveal_b: n }
+      : { reveal_a: n, reveal_b: n, reveal_through: n };
+    return db.upsert("bc_rounds", {
       id: editionDocId(`bc_round_${round}`),
       tournament_id: TOURNAMENT_ID,
       round_number: round,
-      reveal_through: Math.max(0, Math.min(HOLE_COUNT, Math.round(through) || 0)),
-    });
+      ...fields,
+    }, { loud: true });
   }, []);
   // Groups are written whole — the document is one round's list, and a
   // partial update of an array has no meaning here.
@@ -6194,6 +6242,7 @@ export default function App() {
             viewer={viewerTeam}
             canReveal={isDirector}
             onSetReveal={onSetReveal}
+            captainSide={myCaptainSide}
             autoCountdown={AUTO_COUNTDOWN}
             onOpenSummary={setSummaryRound}
           />
@@ -6382,6 +6431,8 @@ export default function App() {
             matches={enrichedMatches}
             memberships={memberships}
             onSetDirector={onSetDirector}
+            onSetCaptain={onSetCaptain}
+            editionId={TOURNAMENT_ID}
             onAddPlayer={onAddPlayer}
             onUpdatePlayer={onUpdatePlayer}
             onRemovePlayer={onRemovePlayer}

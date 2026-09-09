@@ -25,19 +25,40 @@
 //      the conversation in the room, and hiding it would be a kindness
 //      nobody asked for.
 //
-//  WHAT DRIVES IT
-//  --------------
-//  The director's phone. `reveal_through` is one live field on the round
-//  document, so the television is a dumb display pointed at a URL and
-//  nobody has to stand up or find a trackpad. Arrow keys and the space
-//  bar work too, for the year the laptop is close enough to reach.
+//  WHAT DRIVES IT — THE TWO CAPTAINS
+//  ---------------------------------
+//  A hole is turned over ONE SIDE AT A TIME, and the side's own captain is
+//  the one who turns it: he tells the room what is on it — "hole one, net
+//  eagle from Paul, couple of birdies off Dave and John, we're three under"
+//  — and THEN taps his own phone, and his eight balls go up on the
+//  television. Then the other captain does his. Only when both are out does
+//  anybody know who won the hole, and only then does the strip fill in.
 //
-//  Between taps everything is LOCAL: one press stages the hole open over
-//  about two and a half seconds — A's number, then B's, then the verdict
-//  and the cup bar moving — because eighteen holes at three taps each is
-//  fifty-four taps and puts the pacing in a thumb instead of on the
-//  screen. A second press during the stagger skips to the end, for the
-//  holes nobody is going to argue about.
+//  That is the evening, and it is why the reveal is a PAIR of counters
+//  (`reveal_a` / `reveal_b`, see lib/reveal) rather than one. A director can
+//  move either — somebody has to be able to fix a mistap, and a captain who
+//  put his phone down should not stop the room — but the pacing belongs to
+//  the two men doing the talking.
+//
+//  It replaced a three-second local stagger: one press used to open A, then
+//  B, then the verdict, on a timer. The timer was standing in for exactly
+//  this, badly. Nothing narrates as well as the man who played the hole, and
+//  a countdown paced by a setTimeout cannot wait for a story or hurry past a
+//  hole nobody wants to talk about.
+//
+//  Arrow keys and the space bar still work for whoever is driving, for the
+//  year the laptop is close enough to reach.
+//
+//  WHAT A CAPTAIN'S PHONE HAS THAT THE ROOM DOES NOT
+//  -------------------------------------------------
+//  His own side's next hole, before he reveals it — which is the whole point,
+//  since he is reading it out. It costs nothing and exposes nothing: a team is
+//  never hidden from itself (see lib/reveal), and it is the same allowance the
+//  scoreboard's own-side card has had all day. The OTHER side's next hole he
+//  does not get, on this screen or any other, until its captain says so.
+//
+//  lib/countdownPrompt turns those balls into the two lines he can read at a
+//  glance while holding a drink.
 //
 //  WHAT IT IS HANDED
 //  -----------------
@@ -55,10 +76,11 @@
 //  scored off this map, and they are the only place in the app any of it
 //  is visible while the countdown is running.
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { BC, FONT, ALPHA, teamColor } from "../theme";
 import { playerLookup } from "../lib/players";
-import { HOLE_COUNT } from "../lib/reveal";
+import { HOLE_COUNT, nextHoleForSide, sidesPending } from "../lib/reveal";
+import { holePrompt } from "../lib/countdownPrompt";
 
 // ── Type scale, for a television ─────────────────────────────────
 // Read as: never smaller than the first (a phone held sideways, or the
@@ -83,23 +105,27 @@ const T = {
   cup:      "clamp(20px, 3.4vw, 72px)",
   strip:    "clamp(7px,  0.95vw, 20px)",
   btn:      "clamp(11px, 1.5vw, 30px)",
+  prompt:   "clamp(13px, 1.6vw, 32px)",
+  promptSm: "clamp(10px, 1.2vw, 24px)",
 };
 
 const fmtPts = (n) => (n == null ? "—" : Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10));
 
-// The stagger, in ms from the tap. Tuned by reading it out loud: long
-// enough that the second number is a separate event from the first, short
-// enough that eighteen of them is not an hour.
-const STAGE_AT = [520, 1500, 2350];
-const STAGE_DONE = 3;
 
 // ── One player's ball ────────────────────────────────────────────
 // Gross above, net below, a dot per handicap stroke — the same three facts
 // the scorecard prints, at the size of a room. A ball that did not count is
 // the same card with the lights off; it is still named, because on this
 // format "you didn't count" is the joke of the evening.
-function BallChip({ name, gross, strokes, net, tid, counted }) {
+//
+//  UNDER PAR IS RED, which is the oldest convention on a scorecard and the
+//  one thing in this app where red does not mean trouble: a printed card puts
+//  the under-par numbers in red ink and everything else in black, and a room
+//  full of golfers reads it without being told. It is on the NET score,
+//  because net is what the format counts.
+function BallChip({ name, gross, strokes, net, par, tid, counted }) {
   const col = teamColor(tid);
+  const under = counted && net != null && Number.isFinite(par) && net < par;
   return (
     <div style={{
       // Shares the column evenly with its siblings rather than claiming a
@@ -120,7 +146,10 @@ function BallChip({ name, gross, strokes, net, tid, counted }) {
         overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
       }}>{name}</div>
       <div style={{ display: "flex", alignItems: "baseline", gap: "0.35em" }}>
-        <span style={{ fontSize: T.chip, fontWeight: 800, color: counted ? BC.t1 : BC.t3, lineHeight: 1 }}>
+        <span style={{
+          fontSize: T.chip, fontWeight: 800, lineHeight: 1,
+          color: under ? BC.danger : counted ? BC.t1 : BC.t3,
+        }}>
           {net == null ? "·" : net}
         </span>
         {gross != null && gross !== net && (
@@ -136,7 +165,7 @@ function BallChip({ name, gross, strokes, net, tid, counted }) {
 // ── One side of the hole ─────────────────────────────────────────
 // `revealed` is the stagger, not the blackout: the numbers are all here by
 // the time this renders. What it withholds it withholds for two seconds.
-function SideColumn({ tid, teamName, score, balls, revealed, won }) {
+function SideColumn({ tid, teamName, score, balls, par, revealed, won, waitingOn }) {
   const col = teamColor(tid);
   const counted = balls.filter((b) => b.counted);
   const missed = balls.filter((b) => !b.counted);
@@ -160,23 +189,40 @@ function SideColumn({ tid, teamName, score, balls, revealed, won }) {
         transform: revealed ? "none" : "translateY(0.12em) scale(0.94)",
         transition: "opacity 380ms ease, transform 380ms cubic-bezier(.2,.7,.3,1)",
       }}>{revealed ? (score == null ? "—" : score) : "—"}</div>
+      {/* A side still waiting on its captain says so, rather than sitting
+          under a dash that reads the same as a hole nobody posted. This is
+          the half of the screen the room is looking at while he talks. */}
+      {!revealed && (
+        <div style={{
+          fontSize: T.promptSm, fontWeight: 800, letterSpacing: "0.22em",
+          color: BC.t3, textAlign: "center", lineHeight: 1.5,
+        }}>{waitingOn || "WAITING"}</div>
+      )}
+      {/* NOT RENDERED until the side has spoken, rather than rendered and
+          hidden. It used to be an opacity — which was fine when both sides
+          came out two seconds apart on a timer, and is not now: a side can sit
+          unrevealed for as long as the other captain wants to talk, and
+          "invisible on a television" is not the same as "not on the screen".
+          The names and the numbers stay out of the page until they are his to
+          give. Same rule as lib/reveal's, one layer up. */}
+      {revealed && (
       <div style={{
         display: "flex", justifyContent: "center", alignItems: "stretch",
         gap: "clamp(2px, 0.35vw, 8px)", width: "100%",
-        opacity: revealed ? 1 : 0, transition: "opacity 420ms ease 120ms",
+        animation: "none",
       }}>
-        {counted.map((b) => <BallChip key={b.pid} {...b} tid={tid} />)}
+        {counted.map((b) => <BallChip key={b.pid} {...b} par={par} tid={tid} />)}
       </div>
-      {missed.length > 0 && (
+      )}
+      {revealed && missed.length > 0 && (
         // The ones that didn't count sit on their own line, and only as wide
         // as they need to be — they are a footnote to the row above, not a
         // second set of six.
         <div style={{
           display: "flex", justifyContent: "center", alignItems: "stretch",
           gap: "clamp(2px, 0.35vw, 8px)", width: `${Math.min(100, (missed.length / Math.max(counted.length, 1)) * 100)}%`,
-          opacity: revealed ? 1 : 0, transition: "opacity 420ms ease 260ms",
         }}>
-          {missed.map((b) => <BallChip key={b.pid} {...b} tid={tid} />)}
+          {missed.map((b) => <BallChip key={b.pid} {...b} par={par} tid={tid} />)}
         </div>
       )}
     </div>
@@ -194,43 +240,67 @@ function SideColumn({ tid, teamName, score, balls, revealed, won }) {
 //  the note above.
 export function FinalCountdown({
   match, result, getScore, holePars, holeHcps, tPlayers, teams, courseName, formatLabel,
-  through, totals, toWin, clincher, canAdvance, onAdvance, onClose,
+  reveal, ownResult, ownGetScore, totals, toWin, clincher,
+  isDirector = false, captainSide = null, onAdvance, onClose,
 }) {
-  const [stage, setStage] = useState(STAGE_DONE);
-  const holeIdx = through - 1;
   const { nameOf } = playerLookup(tPlayers);
+  const { A: outA, B: outB } = reveal || { A: 0, B: 0 };
+  // The hole the room is ON — the one a side has been shown, or the last one
+  // finished when the two are level. Not the minimum: the whole point is that
+  // a hole sits half-open while one captain talks.
+  const hole = Math.max(outA, outB);
+  const holeIdx = hole - 1;
+  const shown = { A: outA >= hole && hole > 0, B: outB >= hole && hole > 0 };
+  const bothOut = shown.A && shown.B;
+  // Wholly out, which is what the strip counts and what "is it over" means.
+  const settled = Math.min(outA, outB);
 
-  // ── The stagger ──────────────────────────────────────────────────
-  // Each new hole opens closed and walks itself open. Keyed on `through`,
-  // which is the live Firestore field — so a hole tapped on the director's
-  // phone opens the same way, at the same pace, on the television and on
-  // every phone in the room, rather than only on the screen that was
-  // touched.
-  //
-  // The reset happens DURING RENDER, not in the effect below. If it were in
-  // the effect, the new hole would paint fully open for one frame before
-  // closing again — the whole hole given away, then taken back, which is the
-  // one thing this screen must not do. Adjusting state on a changed prop
-  // during render is React's own answer to exactly this.
-  const [stagedFor, setStagedFor] = useState(through);
-  if (stagedFor !== through) {
-    setStagedFor(through);
-    setStage(through > 0 ? 0 : STAGE_DONE);
-  }
-  useEffect(() => {
-    if (through <= 0) return undefined;
-    const timers = STAGE_AT.map((ms, i) => setTimeout(() => setStage(i + 1), ms));
-    return () => timers.forEach(clearTimeout);
-  }, [through]);
+  // Who may move which counter. A director drives both; a captain drives his
+  // own and nothing else. Everybody else is watching a television.
+  const drives = (side) => !!onAdvance && (isDirector || captainSide === side);
+  const canDrive = drives("A") || drives("B");
 
-  const advance = useCallback(() => {
-    if (through > 0 && stage < STAGE_DONE) { setStage(STAGE_DONE); return; }
-    if (canAdvance && through < HOLE_COUNT) onAdvance(through + 1);
-  }, [through, stage, canAdvance, onAdvance]);
+  // A side may be AT MOST one hole ahead of the other, which is the ceremony
+  // written down: one hole, both stories, next hole. Without it a captain who
+  // kept tapping would run to 18 while the other side was still on 4 — and the
+  // screen shows `max(A, B)`, so the man behind would then tap his way through
+  // holes nobody could see. `sidesPending` is the same question asked in
+  // lib/reveal, and the security rules hold the same line so a second phone
+  // cannot get round it (see captainRevealing in firestore.rules).
+  const pending = sidesPending({ sealed: true, reveal_a: outA, reveal_b: outB });
+  const due = (side) => pending.includes(side);
 
+  const revealSide = useCallback((side) => {
+    if (!onAdvance) return;
+    const next = nextHoleForSide({ sealed: true, reveal_a: outA, reveal_b: outB }, side);
+    if (next == null) return;
+    if (!sidesPending({ sealed: true, reveal_a: outA, reveal_b: outB }).includes(side)) return;
+    onAdvance(side, next);
+  }, [outA, outB, onAdvance]);
+
+  // One step back, for the mistap. It takes the LEADING side back, which is
+  // the one that just moved — walking the trailing side backwards would open
+  // a gap nobody asked for.
   const back = useCallback(() => {
-    if (canAdvance && through > 0) onAdvance(through - 1);
-  }, [through, canAdvance, onAdvance]);
+    if (!onAdvance) return;
+    if (outA > outB && drives("A")) onAdvance("A", outA - 1);
+    else if (outB > outA && drives("B")) onAdvance("B", outB - 1);
+    else if (outA === outB && outA > 0) {
+      if (drives("A")) onAdvance("A", outA - 1);
+      else if (drives("B")) onAdvance("B", outB - 1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outA, outB, onAdvance, isDirector, captainSide]);
+
+  // Space / right arrow, for whoever is at the keyboard. It moves the side
+  // that is DUE: the one behind, or — when they are level — the first side
+  // this viewer is allowed to move. A television nobody is driving does
+  // nothing, which is what it should do.
+  const advance = useCallback(() => {
+    const next = sidesPending({ sealed: true, reveal_a: outA, reveal_b: outB }).filter(drives);
+    if (next.length) revealSide(next[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outA, outB, revealSide, isDirector, captainSide]);
 
   // Keyboard, for the year the laptop is within reach. The phone is still
   // the primary control — see the note at the top of the file.
@@ -272,12 +342,19 @@ export function FinalCountdown({
   // made the number flagged. `counted` comes off the engine (see
   // scoring.js) — this screen does not decide which balls counted, it only
   // says so loudly.
-  const ballsFor = (tid) => {
+  //
+  // Pointed at a DIFFERENT pass for the captain's own prompt: `ownResult` is
+  // his side scored off the uncut map, so it has the hole he is about to
+  // reveal. Same builder either way, so the eight chips the room sees and the
+  // two lines he reads out cannot describe different balls.
+  const ballsFor = (tid, idx = holeIdx, src = null) => {
+    const res = src?.result || result;
+    const read = src?.getScore || getScore;
     const pids = tid === "A" ? match.teamA : match.teamB;
-    const made = hr?.counted?.[tid] || null;
+    const made = res?.holes?.[idx]?.counted?.[tid] || null;
     return (pids || []).map((pid) => {
-      const gross = getScore(pid, holeIdx) || null;
-      const strokes = result?.strokeMaps?.[pid]?.[holeIdx] || 0;
+      const gross = read(pid, idx) || null;
+      const strokes = res?.strokeMaps?.[pid]?.[idx] || 0;
       return {
         pid, name: nameOf(pid), gross, strokes,
         net: gross == null || gross <= 0 ? null : gross - strokes,
@@ -287,6 +364,31 @@ export function FinalCountdown({
       };
     });
   };
+
+  // ── What the captain reads out ───────────────────────────────────
+  // His own side's NEXT hole — the one he is about to turn over — off the
+  // uncut own-side pass. Null for a director who captains nothing, and null
+  // once his side has no holes left. See lib/countdownPrompt.
+  const myNext = captainSide ? nextHoleForSide({ sealed: true, reveal_a: outA, reveal_b: outB }, captainSide) : null;
+  const myPrompt = (() => {
+    if (!captainSide || myNext == null || !ownResult) return null;
+    // Not his go. The other captain is talking and this band would be him
+    // reading ahead over the top of it.
+    if (!sidesPending({ sealed: true, reveal_a: outA, reveal_b: outB }).includes(captainSide)) return null;
+    const idx = myNext - 1;
+    const src = { result: ownResult, getScore: ownGetScore || getScore };
+    const own = ownResult.holes?.[idx];
+    return {
+      hole: myNext,
+      par: holePars?.[idx] ?? null,
+      ...holePrompt({
+        balls: ballsFor(captainSide, idx, src),
+        par: holePars?.[idx],
+        countN: ownResult.counting?.[idx] ?? null,
+        score: captainSide === "A" ? own?.aScore : own?.bScore,
+      }),
+    };
+  })();
 
   const pct = (v) => {
     const scale = Math.max(toWin * 2 - 1, totals.A + totals.B, 1);
@@ -300,7 +402,7 @@ export function FinalCountdown({
         position: "fixed", inset: 0, zIndex: 4000, background: BC.bg, color: BC.t1,
         fontFamily: FONT, display: "flex", flexDirection: "column",
         padding: "clamp(8px, 1.2vw, 26px)", gap: "clamp(6px, 0.9vw, 18px)",
-        cursor: canAdvance ? "pointer" : "default", userSelect: "none", overflow: "hidden",
+        cursor: canDrive ? "pointer" : "default", userSelect: "none", overflow: "hidden",
       }}>
       {children}
     </div>
@@ -342,7 +444,11 @@ export function FinalCountdown({
   const strip = (
     <div style={{ flexShrink: 0, display: "flex", gap: "clamp(2px, 0.3vw, 6px)" }}>
       {Array.from({ length: HOLE_COUNT }, (_, i) => {
-        const out = i < through;
+        // A hole is coloured by its WINNER, and there is no winner until both
+        // captains have spoken — so the strip counts what is wholly out, not
+        // what is on screen. The hole in play carries the ring and stays grey
+        // underneath it, which is exactly what it is: half a story.
+        const out = i < settled;
         const h = result?.holes?.[i];
         const w = out ? h?.winner : null;
         const halved = out && !w && h?.played;
@@ -367,27 +473,77 @@ export function FinalCountdown({
     </div>
   );
 
-  const controls = canAdvance ? (
+  // ── The controls ─────────────────────────────────────────────────
+  // One button per side this viewer may move, so a captain sees exactly one
+  // and a director sees the pair. A side already out on this hole shows what
+  // it did rather than a dead button — the room is looking at the numbers, and
+  // he needs to know his tap landed.
+  const sideBtn = (side) => {
+    const team = side === "A" ? tA : tB;
+    const col = teamColor(side);
+    const next = nextHoleForSide({ sealed: true, reveal_a: outA, reveal_b: outB }, side);
+    const done = next == null;
+    // Not his turn: his side is a hole up and the other captain is talking.
+    // The button says whose it is rather than greying out silently, because
+    // from where he is standing "nothing happened" and "it isn't your go" are
+    // the same tap.
+    const held = !done && !due(side);
+    const waiting = !shown[side] && hole > 0;
+    return (
+      <button key={side} onClick={() => revealSide(side)} disabled={done || held} style={{
+        flex: 1, minWidth: 0, padding: "clamp(6px, 0.9vw, 18px) clamp(6px, 0.8vw, 16px)",
+        borderRadius: "clamp(6px, 0.8vw, 16px)",
+        background: done || held ? BC.inp : `${col}${ALPHA.tint}`,
+        border: `2px solid ${done || held ? BC.bdr : col}`,
+        color: done || held ? BC.t3 : BC.t1, fontFamily: FONT,
+        fontSize: T.btn, fontWeight: 800, letterSpacing: 1,
+        cursor: done || held ? "not-allowed" : "pointer",
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+      }}>
+        {done ? `${team.name.toUpperCase()} · ALL OUT`
+          : held ? `WAITING ON ${(side === "A" ? tB : tA).name.toUpperCase()}`
+          : `${waiting ? "▸ " : ""}REVEAL ${team.name.toUpperCase()} · HOLE ${next}`}
+      </button>
+    );
+  };
+
+  // ── The captain's band ───────────────────────────────────────────
+  // What he says before he taps, and nothing else. Two lines: the number his
+  // side made, and the balls worth naming. See lib/countdownPrompt for where
+  // the line between "worth naming" and "leave it alone" is drawn, and why a
+  // net bogey is never on the right side of it.
+  const captainBand = myPrompt ? (
+    <div onClick={(e) => e.stopPropagation()} style={{
+      flexShrink: 0, padding: "clamp(6px, 0.9vw, 18px) clamp(9px, 1.2vw, 24px)",
+      borderRadius: "clamp(6px, 0.8vw, 16px)",
+      background: `${teamColor(captainSide)}${ALPHA.wash}`,
+      border: `2px solid ${teamColor(captainSide)}${ALPHA.line}`,
+    }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: "clamp(6px, 1vw, 20px)", flexWrap: "wrap" }}>
+        <span style={{ fontSize: T.promptSm, fontWeight: 800, letterSpacing: "0.2em", color: BC.t3 }}>
+          YOU&rsquo;RE UP · HOLE {myPrompt.hole}{myPrompt.par ? ` · PAR ${myPrompt.par}` : ""}
+        </span>
+        <span style={{ fontSize: T.prompt, fontWeight: 800, letterSpacing: 1, color: teamColor(captainSide) }}>
+          {myPrompt.headline}
+        </span>
+      </div>
+      <div style={{ marginTop: "0.35em", display: "flex", flexDirection: "column", gap: "0.15em" }}>
+        {myPrompt.notes.map((n) => (
+          <span key={n} style={{ fontSize: T.prompt, fontWeight: 700, color: BC.t1, lineHeight: 1.35 }}>{n}</span>
+        ))}
+      </div>
+    </div>
+  ) : null;
+
+  const controls = canDrive ? (
     <div style={{ flexShrink: 0, display: "flex", gap: "clamp(5px, 0.7vw, 14px)", alignItems: "stretch" }} onClick={(e) => e.stopPropagation()}>
-      <button onClick={back} disabled={through <= 0} style={{
+      <button onClick={back} disabled={hole <= 0} style={{
         padding: "clamp(6px, 0.9vw, 18px) clamp(10px, 1.4vw, 28px)", borderRadius: "clamp(6px, 0.8vw, 16px)",
         background: BC.inp, border: `1px solid ${BC.bdr}`, color: BC.t2, fontFamily: FONT,
         fontSize: T.btn, fontWeight: 800, letterSpacing: 1,
-        opacity: through <= 0 ? 0.35 : 1, cursor: through <= 0 ? "not-allowed" : "pointer",
+        opacity: hole <= 0 ? 0.35 : 1, cursor: hole <= 0 ? "not-allowed" : "pointer",
       }}>◀</button>
-      <button onClick={advance} disabled={through >= HOLE_COUNT && stage >= STAGE_DONE} style={{
-        flex: 1, padding: "clamp(6px, 0.9vw, 18px) 0", borderRadius: "clamp(6px, 0.8vw, 16px)",
-        background: through >= HOLE_COUNT ? BC.inp : BC.amberGlow,
-        border: `1px solid ${through >= HOLE_COUNT ? BC.bdr : BC.amber}`,
-        color: through >= HOLE_COUNT ? BC.t3 : BC.amberInk, fontFamily: FONT,
-        fontSize: T.btn, fontWeight: 800, letterSpacing: 1.4,
-        cursor: through >= HOLE_COUNT && stage >= STAGE_DONE ? "not-allowed" : "pointer",
-      }}>
-        {stage < STAGE_DONE ? "SKIP AHEAD"
-          : through >= HOLE_COUNT ? "THAT'S THE LOT"
-          : through === 0 ? "START THE COUNTDOWN ▸"
-          : `REVEAL HOLE ${through + 1} ▸`}
-      </button>
+      {["A", "B"].filter(drives).map(sideBtn)}
       <button onClick={onClose} style={{
         padding: "clamp(6px, 0.9vw, 18px) clamp(10px, 1.4vw, 28px)", borderRadius: "clamp(6px, 0.8vw, 16px)",
         background: BC.inp, border: `1px solid ${BC.bdr}`, color: BC.t2, fontFamily: FONT,
@@ -399,12 +555,12 @@ export function FinalCountdown({
       <button onClick={onClose} style={{
         background: "transparent", border: "none", color: BC.t3, fontFamily: FONT,
         fontSize: T.terms, fontWeight: 700, letterSpacing: 1.4, cursor: "pointer",
-      }}>THE DIRECTOR IS DRIVING · TAP TO EXIT</button>
+      }}>THE CAPTAINS ARE DRIVING · TAP TO EXIT</button>
     </div>
   );
 
   // ── Before the first hole ──────────────────────────────────────
-  if (through <= 0) {
+  if (hole <= 0) {
     return shell(
       <>
         {cupBar}
@@ -420,15 +576,19 @@ export function FinalCountdown({
           </div>
         </div>
         {strip}
+        {captainBand}
         {controls}
       </>
     );
   }
 
   // ── A hole ─────────────────────────────────────────────────────
-  const showA = stage >= 1;
-  const showB = stage >= 2;
-  const showVerdict = stage >= STAGE_DONE;
+  // The verdict waits for BOTH captains. Half a hole has no winner, and a
+  // screen that guessed at one from the side that spoke first would be doing
+  // the thing the whole evening exists to prevent.
+  const showA = shown.A;
+  const showB = shown.B;
+  const showVerdict = bothOut;
   const winner = hr?.winner || null;
   const verdictName = winner === "A" ? tA.name : winner === "B" ? tB.name : null;
 
@@ -448,9 +608,11 @@ export function FinalCountdown({
       </div>
 
       <div style={{ flex: "1 1 0", minHeight: 0, display: "flex", alignItems: "center", gap: "clamp(6px, 1vw, 22px)" }}>
-        <SideColumn tid="A" teamName={tA.name} score={hr?.aScore} balls={ballsFor("A")} revealed={showA} won={showVerdict && winner === "A"} />
+        <SideColumn tid="A" teamName={tA.name} score={hr?.aScore} balls={ballsFor("A")} par={holePars?.[holeIdx]}
+          revealed={showA} won={showVerdict && winner === "A"} waitingOn={`${tA.name.toUpperCase()} TO TELL IT`} />
         <div style={{ flexShrink: 0, fontSize: T.sideName, fontWeight: 800, color: BC.t3, opacity: 0.5 }}>vs</div>
-        <SideColumn tid="B" teamName={tB.name} score={hr?.bScore} balls={ballsFor("B")} revealed={showB} won={showVerdict && winner === "B"} />
+        <SideColumn tid="B" teamName={tB.name} score={hr?.bScore} balls={ballsFor("B")} par={holePars?.[holeIdx]}
+          revealed={showB} won={showVerdict && winner === "B"} waitingOn={`${tB.name.toUpperCase()} TO TELL IT`} />
       </div>
 
       {/* The verdict, and — on the hole it happens — the cup. A clinch gets
@@ -469,7 +631,12 @@ export function FinalCountdown({
         opacity: showVerdict ? 1 : 0,
         transition: "opacity 420ms ease, background 420ms ease, padding 420ms ease",
       }}>
-        {clincher && showVerdict ? (
+        {/* Half a hole has no winner, and the words for one are not written
+            into the page while a captain is still telling his half of it. The
+            band keeps its height so the layout does not jump when they land —
+            it is the TEXT that waits, not the space. */}
+        {!showVerdict ? <span>&nbsp;</span>
+          : clincher ? (
           <div style={{ fontSize: T.cup, fontWeight: 800, letterSpacing: "0.14em", color: teamColor(clincher), lineHeight: 1.15 }}>
             🏆 {clincher === "A" ? tA.name : tB.name} WIN THE BOURBON CUP
           </div>
@@ -484,6 +651,7 @@ export function FinalCountdown({
       </div>
 
       {strip}
+      {captainBand}
       {controls}
     </>
   );

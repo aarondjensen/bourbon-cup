@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   resolveSealed, HOLE_COUNT, sealDefaultFor, isSealedRound, revealedThrough, isFullyRevealed, isConcealing, revealState, concealedRoundNumbers, concealHoleData, countdownHoleData, stepReveal, revealSummary, wantsCountdown,
+  sideReveal, revealedForSide, revealHole, sidesPending, nextHoleForSide,
 } from "./reveal";
 
 // The blackout is the one feature of this app whose failure mode is silent
@@ -110,13 +111,13 @@ describe("revealState / concealedRoundNumbers", () => {
   const tRounds = [round(1), round(2), sealedRound(3, 18), sealedRound(4, 6)];
 
   it("answers per round", () => {
-    expect(revealState(tRounds, 1)).toEqual({ sealed: false, concealing: false, through: 18 });
-    expect(revealState(tRounds, 3)).toEqual({ sealed: true, concealing: false, through: 18 });
-    expect(revealState(tRounds, 4)).toEqual({ sealed: true, concealing: true, through: 6 });
+    expect(revealState(tRounds, 1)).toEqual({ sealed: false, concealing: false, through: 18, sides: { A: 18, B: 18 }, hole: 18 });
+    expect(revealState(tRounds, 3)).toEqual({ sealed: true, concealing: false, through: 18, sides: { A: 18, B: 18 }, hole: 18 });
+    expect(revealState(tRounds, 4)).toEqual({ sealed: true, concealing: true, through: 6, sides: { A: 6, B: 6 }, hole: 6 });
   });
 
   it("reads an unknown round as wide open", () => {
-    expect(revealState(tRounds, 9)).toEqual({ sealed: false, concealing: false, through: 18 });
+    expect(revealState(tRounds, 9)).toEqual({ sealed: false, concealing: false, through: 18, sides: { A: 18, B: 18 }, hole: 18 });
     expect(revealState(undefined, 1).concealing).toBe(false);
   });
 
@@ -334,5 +335,140 @@ describe("wantsCountdown", () => {
   it("does not fire on a native file path", () => {
     expect(wantsCountdown({ pathname: "/index.html", hash: "" })).toBe(false);
     expect(wantsCountdown({ pathname: "/var/containers/app/index.html", hash: "" })).toBe(false);
+  });
+});
+
+
+// ══════════════════════════════════════════════════════════════════
+//  Two counters, one per side
+// ══════════════════════════════════════════════════════════════════
+//  A hole is turned over one side at a time — its captain tells the room
+//  what is on it, then taps — so a hole can sit half-open while he talks.
+//  Everything that asks "what is PUBLIC" has to keep meaning the holes that
+//  are wholly out, or the board learns the result a captain has not given yet.
+
+const twoSided = (a, b) => round(4, { format: "team_best_ball", sealed: true, reveal_a: a, reveal_b: b });
+
+describe("the two sides", () => {
+  it("reads each side's own counter", () => {
+    expect(sideReveal(twoSided(7, 6))).toEqual({ A: 7, B: 6 });
+    expect(revealedForSide(twoSided(7, 6), "A")).toBe(7);
+    expect(revealedForSide(twoSided(7, 6), "B")).toBe(6);
+  });
+
+  // Every round sealed before the sides came apart carries one number, and it
+  // is what a director's ALL button still writes.
+  it("reads a legacy single counter as both", () => {
+    expect(sideReveal(sealedRound(4, 9))).toEqual({ A: 9, B: 9 });
+    expect(revealedForSide(sealedRound(4, 9), "B")).toBe(9);
+  });
+
+  it("takes a side's own counter over the legacy one", () => {
+    const tr = round(4, { format: "team_best_ball", sealed: true, reveal_through: 9, reveal_a: 3 });
+    expect(sideReveal(tr)).toEqual({ A: 3, B: 9 });
+  });
+
+  it("is every hole on a round that is not sealed", () => {
+    expect(sideReveal(round(1))).toEqual({ A: HOLE_COUNT, B: HOLE_COUNT });
+  });
+
+  it("clamps each side to the card", () => {
+    expect(sideReveal(twoSided(-4, 99))).toEqual({ A: 0, B: HOLE_COUNT });
+    expect(sideReveal(twoSided("nonsense", null))).toEqual({ A: 0, B: 0 });
+  });
+});
+
+// The load-bearing one. `revealedThrough` is what the scoreboard's own
+// subtraction, `isConcealing` and "is it over" all read, and it must never
+// count a hole only one captain has spoken to.
+describe("what is PUBLIC is the lower of the two", () => {
+  it("holds at the side that has said less", () => {
+    expect(revealedThrough(twoSided(7, 6))).toBe(6);
+    expect(revealedThrough(twoSided(6, 7))).toBe(6);
+    expect(revealedThrough(twoSided(0, 18))).toBe(0);
+  });
+
+  it("is not over until BOTH sides have finished", () => {
+    expect(isFullyRevealed(twoSided(18, 17))).toBe(false);
+    expect(isConcealing(twoSided(18, 17))).toBe(true);
+    expect(isFullyRevealed(twoSided(18, 18))).toBe(true);
+    expect(isConcealing(twoSided(18, 18))).toBe(false);
+  });
+
+  // The scoreboard is all-or-nothing whatever the sides are doing, which is
+  // the rule the whole evening rests on.
+  it("keeps the board at nothing while one side is ahead", () => {
+    const data = { p1_4: card(18) };
+    expect(concealHoleData(data, [twoSided(17, 16)]).p1_4).toBeUndefined();
+    expect(concealHoleData(data, [twoSided(18, 17)]).p1_4).toBeUndefined();
+    // And lands the lot when the last captain speaks.
+    expect(concealHoleData(data, [twoSided(18, 18)])).toBe(data);
+  });
+});
+
+describe("whose tap comes next", () => {
+  it("is the hole a side has been shown, or the last one finished", () => {
+    expect(revealHole(twoSided(0, 0))).toBe(0);
+    expect(revealHole(twoSided(1, 0))).toBe(1);
+    expect(revealHole(twoSided(1, 1))).toBe(1);
+  });
+
+  it("offers both when they are level and one when they are not", () => {
+    expect(sidesPending(twoSided(3, 3))).toEqual(["A", "B"]);
+    expect(sidesPending(twoSided(4, 3))).toEqual(["B"]);
+    expect(sidesPending(twoSided(3, 4))).toEqual(["A"]);
+    expect(sidesPending(twoSided(18, 18))).toEqual([]);
+  });
+
+  it("names the hole each side's next tap would turn over", () => {
+    expect(nextHoleForSide(twoSided(3, 4), "A")).toBe(4);
+    expect(nextHoleForSide(twoSided(3, 4), "B")).toBe(5);
+    expect(nextHoleForSide(twoSided(18, 4), "A")).toBe(null);
+  });
+});
+
+// The countdown's own map, and the reason it needed a side lookup: the one
+// screen that is supposed to walk the round has to walk it a side at a time.
+describe("countdownHoleData, per side", () => {
+  const sideOf = (pid) => (pid.startsWith("a") ? "A" : "B");
+  const data = { a1_4: card(18), b1_4: card(18), a1_3: card(18) };
+
+  it("gives each side its own cut", () => {
+    const out = countdownHoleData(data, [twoSided(7, 6)], sideOf);
+    expect(Object.keys(out.a1_4).length).toBe(7);
+    expect(Object.keys(out.b1_4).length).toBe(6);
+    // A round that is not concealing is untouched.
+    expect(out.a1_3).toEqual(card(18));
+  });
+
+  // The half that matters: team B's seventh must not be on this map while
+  // their captain still has it to tell.
+  it("holds the trailing side back a hole", () => {
+    const out = countdownHoleData(data, [twoSided(7, 6)], sideOf);
+    expect(out.a1_4[6]).toBe(4);
+    expect(out.b1_4[6]).toBeUndefined();
+  });
+
+  it("drops a side that has nothing out at all", () => {
+    const out = countdownHoleData(data, [twoSided(3, 0)], sideOf);
+    expect(Object.keys(out.a1_4).length).toBe(3);
+    expect(out.b1_4).toBeUndefined();
+  });
+
+  // A player the lookup has never heard of is cut at the SAFER of the two,
+  // which is the side that has been shown less.
+  it("cuts an unknown player at the lower counter", () => {
+    const out = countdownHoleData({ ghost_4: card(18) }, [twoSided(7, 2)], sideOf);
+    expect(Object.keys(out.ghost_4).length).toBe(2);
+  });
+
+  it("falls back to the wholly-out hole with no lookup at all", () => {
+    const out = countdownHoleData(data, [twoSided(7, 2)]);
+    expect(Object.keys(out.a1_4).length).toBe(2);
+    expect(Object.keys(out.b1_4).length).toBe(2);
+  });
+
+  it("hands back the same object when nothing is concealing", () => {
+    expect(countdownHoleData(data, [round(4)], sideOf)).toBe(data);
   });
 });
