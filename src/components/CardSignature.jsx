@@ -84,6 +84,37 @@ export function MissingCardNote({ missing, nameOf }) {
   );
 }
 
+// ── The other reason the CTA is not there ───────────────────────────
+// A card can be complete and still not offer YOU the sign button, because a
+// signature is a claim by somebody IN the match: `signed_by` lands on the
+// card and every attestation is checked against that match's roster. So a
+// director scoring another group's card — or anyone looking at a demo
+// tournament they are not in — enters the eighteenth score and gets nothing.
+//
+// Which is the same failure the note above exists to prevent, arriving by the
+// other road. That one says "you are missing holes"; this one says "you are
+// not missing anything, and it is not yours to sign". Silence in either case
+// leaves somebody on the eighteenth green tapping a button that will not
+// promote and no way to find out why.
+//
+// It does not name who can. The four of them are on screen directly beneath
+// it, on the cards this note is sitting above, and a second copy of the same
+// names would cost a row the score buttons need (see the note above on why
+// this strip is one line).
+export function CardSignerNote() {
+  return (
+    <div style={{
+      width: "100%", padding: "5px 9px", borderRadius: 8, marginBottom: 6,
+      background: `${BC.amber}${ALPHA.wash}`, border: `1px solid ${BC.amber}${ALPHA.line}`,
+      color: BC.amberInk, fontFamily: FONT, boxSizing: "border-box", flexShrink: 0,
+      fontSize: FS.label, fontWeight: 700, lineHeight: 1.4,
+      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+    }}>
+      ✓ Card complete — a player in this match signs it
+    </div>
+  );
+}
+
 // ── The sign sheet ──────────────────────────────────────────────────
 // A confirmation that shows what is being confirmed. The whole card is on
 // screen above the button, because "sign this card" is a claim about
