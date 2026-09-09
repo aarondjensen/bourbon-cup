@@ -137,12 +137,26 @@ export const checkDraw = (built, year, facts, roster) => {
 };
 
 // Every match-play match, against the running status the scorecard kept.
-// Compared on which side is ahead rather than by how much: the margin in a
-// dots or points game counts something different from holes, and the fact
-// worth defending is who won.
+//
+// Most formats are compared on which side is ahead rather than by how much,
+// because the margin does not count the same thing on both sides of the
+// comparison: a dots game's margin is dots and the card's is holes, and the
+// shared-ball rounds carry a blended handicap the app can only approximate
+// (see the 50/50 note in historyImport), which moves a scramble by a hole
+// either way. The fact worth defending there is who won.
+//
+// SINGLES is compared exactly, and that is not a nicety. It is the one format
+// where the app's margin and the card's are the same currency — one man's
+// holes against one man's — so there is no reason for them to differ, and all
+// EIGHTY singles matches across the ten cups reproduce their recorded margin
+// to the hole. A sign check would pass an engine change that turned every one
+// of them from 2 up into 5 up; this is the assertion that would not, and it
+// is the closest thing this project has to a regression test on the scoring
+// engine's arithmetic against a record it did not produce.
 export const checkMatches = (built, view, year, facts) => {
   const bad = [];
   let checked = 0;
+  let exact = 0;
   for (const m of built.bc_matches) {
     const tr = view.tRounds.find((r) => r.round_number === m.round);
     if (tr.scoring_type === "points") continue;   // Round 4 — checked below
@@ -153,11 +167,15 @@ export const checkMatches = (built, view, year, facts) => {
     // `overall.margin` is from A's perspective, and the fact's player is on A
     // by the line above, so the two point the same way.
     const margin = scoreMatch(built, view, m).overall?.margin ?? 0;
-    if (Math.sign(margin) !== Math.sign(f.final)) {
-      bad.push(`R${m.round} ${m.teamANames.join("+")} vs ${m.teamBNames.join("+")}: app ${margin}, card ${f.final}`);
+    const where = `R${m.round} ${m.teamANames.join("+")} vs ${m.teamBNames.join("+")}`;
+    if (tr.format === "singles") {
+      exact++;
+      if (margin !== f.final) bad.push(`${where}: app ${margin}, card ${f.final} (singles, exact)`);
+    } else if (Math.sign(margin) !== Math.sign(f.final)) {
+      bad.push(`${where}: app ${margin}, card ${f.final}`);
     }
   }
-  return { checked, bad };
+  return { checked, exact, bad };
 };
 
 // Round 4, against the point share the card totals. Exact, not a sign check:

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { inField, computeSkins, lowNetRows, ctpTags, ctpPinTotal, moneyHole, moneyHoleRows, moneyHoleWins, moneyHolePars, moneyHoleRoundsIn, moneyHolePlaysRound, DEFAULT_MONEY_HOLE } from "./betting";
+import { inField, computeSkins, strokeMapsFor, lowNetRows, ctpTags, ctpPinTotal, moneyHole, moneyHoleRows, moneyHoleWins, moneyHolePars, moneyHoleRoundsIn, moneyHolePlaysRound, DEFAULT_MONEY_HOLE } from "./betting";
 
 const course = {
   id: "c1",
@@ -398,5 +398,49 @@ describe("moneyHolePars carries the format", () => {
     ];
     const r = moneyHolePars({ rounds: [1, 2], hole: 18, tRounds, courses: [course], roundLocks: {} });
     expect(r.perRound.map(x => x.format)).toEqual(["scramble", null]);
+  });
+});
+
+// ── A shared ball in a per-player game ─────────────────────────────
+// Recorded rather than asserted-as-correct: this pins what the side games DO
+// on a scramble, because it is not what the file used to claim they did and
+// because changing it moves money.
+//
+// Both partners post the same gross — one ball — but every side game here
+// allocates off each man's OWN full Course Handicap, never the side's team
+// handicap. So the higher handicap of the pair takes more strokes off the
+// shared ball and beats his own partner on it. The money hole has a
+// director's switch to turn the round off (moneyHoleRoundsIn); net skins do
+// not, and on a shared-ball round they go to the weaker player of each side
+// on almost every hole.
+describe("a shared ball in a per-player game", () => {
+  const PARS = Array(18).fill(4);
+  const SI = Array.from({ length: 18 }, (_, i) => i + 1);
+  const course = { id: "sb1", par: 72, hole_pars: PARS, hole_handicaps: SI,
+    tee_boxes: [{ name: "W", slope: 113, rating: 72, par: 72 }] };
+  const pair = [
+    { player_id: "lo", name: "Low", team: "A", handicap_index: 2 },
+    { player_id: "hi", name: "High", team: "A", handicap_index: 24 },
+  ];
+  const holeData = {};
+  for (const p of pair) { const c = {}; for (let h = 0; h < 18; h++) c[h] = 4; holeData[`${p.player_id}_1`] = c; }
+  const tRounds = [{ round_number: 1, course_id: "sb1", tee_box: "W", format: "scramble" }];
+  const ctx = { tPlayers: pair, tRounds, courses: [course], roundLocks: {}, hcpOverrides: {}, teeAssignments: {} };
+
+  it("gives the two partners different nets off the one ball they hit", () => {
+    const maps = strokeMapsFor({ round: 1, field: pair, ...ctx });
+    const rows = moneyHoleRows({ round: 1, hole: 18, field: pair, holeData, maps });
+    const low = rows.find((r) => r.pid === "lo");
+    const high = rows.find((r) => r.pid === "hi");
+    expect(low.gross).toBe(high.gross);        // one ball
+    expect(high.net).toBeLessThan(low.net);    // and not one net
+    expect(high.won).toBe(true);
+    expect(low.won).toBe(false);
+  });
+
+  it("is what the money hole's round switch is for", () => {
+    // Absent means all; naming the other rounds takes the scramble out.
+    expect(moneyHoleRoundsIn([1, 2, 3, 4], undefined)).toEqual([1, 2, 3, 4]);
+    expect(moneyHoleRoundsIn([1, 2, 3, 4], [2, 3, 4])).toEqual([2, 3, 4]);
   });
 });

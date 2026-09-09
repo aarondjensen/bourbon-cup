@@ -127,9 +127,24 @@ export const liveFacts = ({
         B: (m.teamB || []).map(cid).filter(Boolean).sort(),
         ptsA: res.totalPts.A,
         ptsB: res.totalPts.B,
+        // Not part of a fact row — read by the filter below and dropped.
+        holesPlayed: res.holesPlayed,
       };
     })
-    .filter((m) => m.A.length && m.B.length);
+    // ── A match nobody has teed off in is not a match anybody has played ──
+    // A drawn match scores 0-0 until a ball is struck, and archiveFold reads
+    // a level match as a HALVE — so on the Thursday of a cup, every man's
+    // career record grew four matches and four halves for golf that had not
+    // happened. It is not only the halves column: `ppm` divides by matches
+    // played, and `bestRate` ranks on it and admits anybody with twelve, so a
+    // denominator counting the rest of the week moved a ten-year record on the
+    // strength of an empty draw.
+    //
+    // This file's rule is that an unfinished cup still counts towards careers
+    // "because those matches were played". A match with no holes was not.
+    // One in PROGRESS still counts, which is the same rule and the same line.
+    .filter((m) => m.A.length && m.B.length && m.holesPlayed > 0)
+    .map(({ holesPlayed, ...row }) => row);
 
   // Cards — COMPLETE rounds only. A man through fourteen is not having a good
   // week, he is unfinished, and folding his card into an average would put
@@ -205,6 +220,9 @@ export const mergeLive = (archive, live) => {
   if (!archive) return null;
   if (!live) return archive;
   const y = live.edition.year;
+  // No matches means one of two things and the same answer to both: the
+  // subscriptions have not all arrived yet, or the cup has a draw and not a
+  // ball struck. Neither is a year worth replacing a finished one with.
   const known = (archive.editions || []).some((e) => e.year === y);
   if (known && !live.matches.length) return archive;
   const drop = (rows) => (rows || []).filter((r) => r.year !== y);

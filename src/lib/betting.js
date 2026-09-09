@@ -235,10 +235,22 @@ export const moneyHole = (n) => {
 // The money hole is a per-PLAYER game — lowest net on one hole — and there is
 // a format in the catalog where that sentence has no answer. On a shared-ball
 // round (2-Man Scramble, Pinehurst) a side plays ONE ball and both partners
-// carry it: identical gross, identical team stroke map, therefore identical
-// net. So a scramble pair does not win the money hole, it wins it TWICE, and
-// two men take two of the round's shares for one golf shot. Nobody at the
-// table agreed to that, and it is invisible until the payout is read out.
+// carry it, so both post the same gross for one golf shot.
+//
+// The nets are NOT the same, and this comment used to say they were. Every
+// side game in this file allocates off `strokeMapsFor`, which is each man's
+// OWN full Course Handicap — never the side's team handicap, which exists
+// only inside a match result. So the higher handicap of the pair takes more
+// strokes off the shared ball than his partner does and beats him on it: on a
+// scramble the money hole, and the net skins, go to the weaker player of each
+// side, off a ball he only half hit. Two men, one shot, and the one who
+// contributed least to it collects. Nobody at the table agreed to that either,
+// and it is just as invisible until the payout is read out.
+//
+// The switch below is the answer for the money hole. NET SKINS have no such
+// switch and are still exposed to it — see the audit note in
+// betting.test.js ("a shared ball in a per-player game"); changing who
+// collects is the director's call, not a thing to fix quietly mid-season.
 //
 // The fix is a director's switch rather than a rule, because it is his call:
 // a group that wants the pair playing for it can have it. `only` is a list of
