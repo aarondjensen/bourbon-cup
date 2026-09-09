@@ -129,15 +129,29 @@ describe("the scoreboard during the Final Countdown", () => {
     cleanup();
   });
 
-  // The cup bar is the number everybody reads first, so it gets its own
-  // pin: the sealed round's points are on offer, not banked, right up to
-  // the last hole.
+  // The sealed round's points are on offer, not banked, right up to the last
+  // hole — and the round says so itself, in the SealedPanel, which is the only
+  // place that says it now. It used to be on the CUP BAR as well ("🔒 Round 4
+  // sealed — N lands when the countdown ends"); that line is gone, and this
+  // test is what stops the fact going with it.
   it("banks none of the sealed round's points until the reveal is done", () => {
     const held = boardAt(17);
-    expect(held).toMatch(/lands when the countdown ends/);
+    expect(held).toMatch(/still to come/);
     cleanup();
+    // At 18 the round is not concealing any more, so the panel is gone and
+    // there is nothing left to come — the points are on the board.
     const landed = boardAt(18);
-    expect(landed).not.toMatch(/lands when the countdown ends/);
+    expect(landed).not.toMatch(/still to come/);
+    cleanup();
+  });
+
+  // The cup bar is the line everybody reads first, and on the one evening
+  // this runs it carries the score and nothing else.
+  it("says nothing about the seal on the cup bar itself", () => {
+    const held = boardAt(9);
+    expect(held).not.toMatch(/lands when the countdown ends/);
+    // The round's own panel still has all of it, a few inches down.
+    expect(held).toContain("THE FINAL COUNTDOWN");
     cleanup();
   });
 });

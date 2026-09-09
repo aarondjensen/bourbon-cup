@@ -1062,16 +1062,17 @@ export function TeamLeaderboard({
 
   // ── What the cup total is NOT counting ───────────────────────────
   // The totals above are banked points, and a sealed round banks nothing
-  // past its reveal. That is correct — but a cup bar that silently leaves a
-  // whole round out is the one place this feature could mislead rather than
-  // withhold, so the board says so, and says how much. The figure is the
-  // sealed rounds' pot less whatever the reveal has already paid out.
+  // past its reveal. This is what is missing, in points: the sealed rounds'
+  // pot less whatever the reveal has already paid out.
+  //
+  // It feeds ONE thing — the "— N still to come" on the round's own
+  // SealedPanel. It used to also print a notice on the cup bar; see the
+  // note where that used to be for why it no longer does.
   const sealedOut = useMemo(() => {
     // Drawn rounds only. An undrawn round is on the board now (see
     // roundNumbers) and Team Best Ball seals by default, so without this the
-    // cup bar announced "🔒 Round 4 sealed" from the moment the format was
-    // picked — a withholding notice over a round with nothing in it to
-    // withhold, on the line everybody reads first.
+    // figure covered a round with nothing in it to withhold from the moment
+    // the format was picked.
     const conceal = roundNumbers.filter((r) => roundMeta[r]?.seal?.concealing && roundMeta[r]?.drawn);
     if (!conceal.length) return null;
     let pot = 0, banked = 0;
@@ -1365,19 +1366,19 @@ export function TeamLeaderboard({
           <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 2, marginLeft: -1, background: BC.bg, opacity: 0.9 }} />
         </div>
 
-        {/* Said before the clinch line, deliberately: a cup that reads as won
-            while a sealed round is still holding points is a cup that has not
-            been won yet, and the reader needs that in the same glance. */}
-        {sealedOut && (
-          <div style={{
-            marginTop: 7, textAlign: "center", fontSize: FS.label, fontWeight: 700,
-            letterSpacing: 0.5, color: BC.amberInk, lineHeight: 1.4,
-          }}>
-            🔒 Round{sealedOut.rounds.length > 1 ? "s" : ""} {sealedOut.rounds.join(", ")} sealed
-            {sealedOut.remaining > 0 ? ` — ${fmtPts(sealedOut.remaining)} lands when the countdown ends` : ""}
-          </div>
-        )}
+        {/* There is no sealed-round notice on the cup bar. It used to sit
+            here, above the clinch line — "🔒 Round 4 sealed — 4 lands when
+            the countdown ends" — and the reasoning was that a bar which
+            quietly leaves a whole round out could mislead rather than
+            withhold.
 
+            The round's own SealedPanel says all of it and says it better:
+            how far the countdown has walked, that the round lands in one
+            piece at 18, what is still to come, and the button onto the
+            television. That panel is a few inches down the same screen, so
+            the bar was a second, worse copy of it on the line everybody
+            reads first — on the one evening of the tournament when the line
+            everybody reads first should be the score. */}
         {clincher && (
           <div style={{ textAlign: "center", marginTop: 7, fontSize: FS.label, fontWeight: 700, letterSpacing: 1, color: teamColor(clincher) }}>
             {(clincher === "A" ? tA.name : tB.name).toUpperCase()} WIN THE CUP
