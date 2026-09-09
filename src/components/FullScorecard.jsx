@@ -418,20 +418,11 @@ export function FullScorecard({
   //  what the blackout is holding back, and `nassauBadges` on the Scoring tab
   //  is switched off by the same test.
   //
-  //  ── One word for a segment that finished level ──
-  //  statusText calls it "AS", which is how a LIVE match reads and is the
-  //  wrong tense on a settled one: the point has already been split. The
-  //  Leaderboard hits this on the overall and prints "½"; the Scoring tab's
-  //  pills say HALVED, and that is the word with room here.
-  //
-  //  It goes through EVERY stated result on this card — the NINES row, the
-  //  OUT / IN chips, and the overall in the header — rather than the new row
-  //  alone. A nine reading HALVED three inches above an IN chip reading "AS"
-  //  is one fact in two tenses, which is the same failure as the 8&6 that
-  //  used to sit under a 10&4 (see `clinchHole` below). A running MATCH cell
-  //  keeps "AS": that one IS live, and it is the only place the word is true.
-  const verdict = (st) =>
-    st.complete && st.unit === "up" && st.winner == null ? "HALVED" : statusText(st);
+  //  A LEVEL nine reads HALVED, and that word comes from statusText along
+  //  with every other result on this card — see the note there. It is not a
+  //  choice this file gets to make: the NINES row, the OUT / IN chips and the
+  //  overall in the header are one fact stated three times, and the moment
+  //  any of them owns its own wording they are free to disagree about tense.
 
   const nineCells = (showHeader && !conceal ? (() => {
     const { showFront, showBack } = nassauSegmentVisibility(match, result.holePoints);
@@ -463,7 +454,7 @@ export function FullScorecard({
             <span style={{
               fontSize: FS.small, fontWeight: 800, whiteSpace: "nowrap",
               overflow: "hidden", textOverflow: "ellipsis", color: col,
-            }}>{verdict(st)}</span>
+            }}>{statusText(st)}</span>
           </div>
         );
       })}
@@ -706,12 +697,17 @@ export function FullScorecard({
           // Flipped to the reader's own side, so ▲ always means "we are up".
           const mine = viewer === "A" ? v : -v;
           const col = mine > 0 ? BC.green : mine < 0 ? BC.danger : BC.t3;
-          const signed = total || perHole;
           return (
             <div key={h} style={holeCell(i, 26)}>
               <span style={{ fontSize: FS.small, fontWeight: 800, color: col }}>
+                {/* ALL SQUARE, on every format. This cell is the match as it
+                    stood walking off a green, so it is live by construction
+                    and never HALVED. It used to say "TIED" on a Total or
+                    points round, on the reasoning that those have no "up" to
+                    be square about — but level is level, golf has a word for
+                    it, and that word was in the next cell along. */}
                 {mine === 0
-                  ? <span style={{ fontSize: FS.micro, letterSpacing: 0.5 }}>{signed ? "TIED" : "AS"}</span>
+                  ? <span style={{ fontSize: FS.micro, letterSpacing: 0.5 }}>AS</span>
                   : <>{mine > 0 ? "▲" : "▼"}{Math.abs(mine)}</>}
               </span>
             </div>
@@ -729,7 +725,7 @@ export function FullScorecard({
               color: segLeader ? teamColor(segLeader) : BC.t3,
               background: segLeader ? `${teamColor(segLeader)}${ALPHA.wash}` : "transparent",
               border: `1px solid ${segLeader ? `${teamColor(segLeader)}${ALPHA.line}` : "transparent"}`,
-            }}>{verdict(seg)}</span>
+            }}>{statusText(seg)}</span>
           )}
         </div>
       </div>
@@ -768,7 +764,7 @@ export function FullScorecard({
         <span style={{
           flexShrink: 0, fontSize: FS.small, fontWeight: 800,
           color: conceal ? BC.amberInk : overallLeader ? teamColor(overallLeader) : BC.t3,
-        }}>{conceal ? "🔒 SEALED" : verdict(overall)}</span>
+        }}>{conceal ? "🔒 SEALED" : statusText(overall)}</span>
         <span style={{ flex: 1, minWidth: 0, fontSize: FS.label, fontWeight: 800, lineHeight: 1.3, color: BC.teamB, textAlign: "right" }}>
           {sideNames(match, "B", nameOf).join(" / ")}
         </span>
