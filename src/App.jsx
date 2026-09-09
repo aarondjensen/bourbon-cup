@@ -123,7 +123,7 @@ import { liveEdition } from "./lib/defaultEdition";
 import { prefetchArchive } from "./lib/useArchive";
 import { TRIP_SETTINGS_ID, houseFrom, tripSchedule, tripDates } from "./lib/tripInfo";
 import {
-  cardSigBareId, sigForMatch, cardComplete, missingForCard,
+  cardSigBareId, sigForMatch, cardComplete, missingForCard, skippedHoles,
   nonSignerPids, isFullyAttested, cardState,
   roundCardProgress, pendingAttestations, attestedPids, withdrawnIds,
 } from "./lib/cardSigs";
@@ -1261,6 +1261,10 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // inside SignedCardPanel.
   const canSign = complete && matchPids.includes(userPid);
   const missingCard = match && !complete && !signed ? missingForCard(match, holeData, withdrawn) : [];
+  // Holes the WHOLE group skipped, which is a different sentence from one man
+  // missing one hole — see lib/cardSigs.skippedHoles. The match status on
+  // screen is computed without them, so it is provisional until they are in.
+  const skipped = match && !complete && !signed ? skippedHoles(match, holeData, withdrawn) : [];
 
   // No more hooks below this line.
 
@@ -1698,8 +1702,13 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
     // back INTO a gap to fix it — the cell being worked on does not need to
     // warn about itself.
     if (!hr.played) {
-      const someScored = cardPids.some(pid => getScore(pid, i) > 0);
-      if (someScored && i !== activeHole && i < lastFullHole) {
+      // No `someScored` test any more. It meant the one hole this badge could
+      // never flag was a hole the WHOLE group skipped — nobody had a score on
+      // it, so it read as a hole nobody had reached, while the group played on
+      // three holes past it. `lastFullHole` is the frontier and is what decides
+      // "behind" (see lib/cardSigs.missingForCard, fixed the same way): an
+      // unscored hole below it is a gap whether one man missed it or four did.
+      if (i !== activeHole && i < lastFullHole) {
         return shell(<div title="Missing score" style={{ textAlign: "center", fontSize: FS.small, opacity: 0.55, lineHeight: 1 }}>⚠️</div>);
       }
       return shell(null);
@@ -2133,7 +2142,11 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
           carry is now implied: with no played holes there is nothing to
           report. */}
       {missingCard.length > 0 && (
-        <MissingCardNote missing={missingCard} nameOf={(pid) => tPlayers.find(p => p.player_id === pid)?.name || pid} />
+        <MissingCardNote
+          missing={missingCard}
+          skipped={skipped}
+          nameOf={(pid) => tPlayers.find(p => p.player_id === pid)?.name || pid}
+        />
       )}
 
       {/* And the other reason it hasn't promoted: the card IS complete, but

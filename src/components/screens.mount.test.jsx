@@ -326,6 +326,53 @@ describe("Scoring", () => {
   // margin from TEAM A's side whoever was holding the phone, so a front nine
   // played out two down came back as "LOST 2 UP". scoring.result.test pins
   // the words; this pins that the screen is asking for them.
+  // ── A hole the whole group skipped ──
+  // Found on a demo card: holes 1-10 in, the 11th blank, 12 and 13 in, the
+  // group on the 14th — and the screen said nothing. The strip's badge and
+  // the can't-sign note BOTH only looked at holes somebody had scored, so the
+  // one gap neither could see was the one nobody scored. Meanwhile the engine
+  // skips an unscored hole, so FRONT / OVERALL / BACK were being computed
+  // around a hole that was never played and presented as the state of a match.
+  describe("a hole nobody in the group scored", () => {
+    const four = [
+      { player_id: "d1", name: "Dave R", team: "A", handicap_index: 0 },
+      { player_id: "d2", name: "Marty K", team: "A", handicap_index: 0 },
+      { player_id: "d3", name: "Tom F", team: "B", handicap_index: 0 },
+      { player_id: "d4", name: "Wes L", team: "B", handicap_index: 0 },
+    ];
+    const bb = { id: "mg", round: 1, teamA: ["d1", "d2"], teamB: ["d3", "d4"], tournament_id: "bc_test" };
+    const round = { round_number: 1, course_id: "c1", date: "2026-07-16", tee_time: "8:30", format: "best_ball" };
+    const gapped = {};
+    for (const p of four) {
+      const card = {};
+      for (let h = 0; h < 13; h++) { if (h === 10) continue; card[h] = 4; }   // hole 11 skipped
+      gapped[`${p.player_id}_1`] = card;
+    }
+    const screen = (holeData) => render(<ScoreEntry {...scoring({
+      user: { ...four[0], isDirector: false },
+      matches: [bb], holeData, tPlayers: four, tRounds: [round],
+      rounds: [1], currentRound: 1, groups: { 1: [["d1", "d2", "d3", "d4"]] },
+    })} />).container.textContent;
+
+    it("says the hole was not scored and the status is provisional", () => {
+      const t = screen(gapped);
+      expect(t).toContain("Hole 11 not scored");
+      expect(t).toContain("status is provisional");
+    });
+
+    it("stays quiet on a clean round in progress", () => {
+      const clean = {};
+      for (const p of four) {
+        const card = {};
+        for (let h = 0; h < 13; h++) card[h] = 4;
+        clean[`${p.player_id}_1`] = card;
+      }
+      const t = screen(clean);
+      expect(t).not.toContain("not scored");
+      expect(t).not.toContain("provisional");
+    });
+  });
+
   // ── Why the sign CTA is not there ──
   // A complete card promotes the Full Scorecard button into "Complete — Sign
   // Card", but only for somebody IN the match: a signature is a claim, and
