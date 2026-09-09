@@ -21,7 +21,7 @@ import {
   computeMatchResult,
   getRoundCH, lockForRound,
   totalUnit, segmentState, segmentOptsFor, holeFormatFor,
-  statusText, segmentLeader, nassauSegmentVisibility, sharedBallScore,
+  verdictText, segmentLeader, nassauSegmentVisibility, sharedBallScore,
 } from "./scoring";
 import { holeFill } from "./lib/holeFill";
 import {
@@ -2062,24 +2062,9 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // IS the match state, said louder, and the sealedBanner already explains
   // why nobody is seeing it.
   //
-  // A LIVE segment is said from the reader's own side too, which the words
-  // off `statusText` are not: that function answers from Team A's, so a chip
-  // belonging to the side that is four DOWN read "4 UP" — the direction was
-  // carried by the chip's colour alone, next to a FRONT chip that spelled out
-  // "LOST". Only match play has an up and a down to get backwards; a Total or
-  // points segment prints a signed lead and keeps the colour for its side.
-  const segVerdict = (st) => {
-    if (!st.played) return "—";
-    if (st.complete) {
-      if (st.winner == null) return st.unit === "up" ? "HALVED" : statusText(st);
-      return (st.winner === userTeam ? "WON " : "LOST ") + statusText(st);
-    }
-    if (st.unit === "up" && st.margin !== 0) {
-      const mine = userTeam === "A" ? st.margin : -st.margin;
-      return `${Math.abs(mine)} ${mine > 0 ? "UP" : "DOWN"}`;
-    }
-    return statusText(st);
-  };
+  // The words are scoring.verdictText — said from the reader's own side, all
+  // of it, which is what "did I win it" needs and what `statusText` is not.
+  const segVerdict = (st) => verdictText(st, userTeam);
   const nassauBadges = (result && !conceal) ? (() => {
     const { showFront, showBack } = nassauSegmentVisibility(match, result.holePoints);
     const segs = [

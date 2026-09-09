@@ -14,7 +14,7 @@
 // closing hole itself, stamped 8&6 on the twelfth. Played all the way to 18
 // the same reading printed "6 UP" for a nine that ended 4&3.
 import { describe, it, expect } from "vitest";
-import { segmentState, statusText } from "./scoring";
+import { segmentState, statusText, verdictText } from "./scoring";
 
 // A segment from a string of hole winners: "A" / "B" / "-" halved / "." not
 // yet played. Scores are what segmentState counts holes with; the winner is
@@ -121,5 +121,84 @@ describe("the formats that never close early", () => {
     const st = seg("AAAAAAAAAAAA......", { holeValue: () => 1 });
     expect(st.decided).toBe(undefined);
     expect(statusText(st)).toBe("+12");
+  });
+});
+
+// ── The same result, said to the man reading it ─────────────────────
+// The Scoring tab's FRONT / OVERALL / BACK chips answer "did I win it", so
+// they say WON or LOST — and then pasted `statusText` on the end of that,
+// which answers from TEAM A's side whoever is holding the phone. A front nine
+// played out two down came back as "LOST 2 UP". You win two up and you lose
+// two down; "lost 2 up" is not a thing anybody has said on a golf course.
+describe("a settled match, from the reader's own side", () => {
+  const A_WON_ON_18 = seg("AABBAABB-AABB-AAB-");   // 1 up, decided on the last
+
+  it("is won UP and lost DOWN, never lost up", () => {
+    expect(verdictText(A_WON_ON_18, "A")).toBe("WON 1 UP");
+    expect(verdictText(A_WON_ON_18, "B")).toBe("LOST 1 DOWN");
+  });
+
+  it("reports the margin it finished on, not the running one", () => {
+    // Three up through three and two down at the turn — the shape on screen
+    // when this was found.
+    const st = seg("AAA-BBBBB");
+    expect(st.decided).toEqual({ margin: -2, remaining: 0, at: 8 });
+    expect(verdictText(st, "A")).toBe("LOST 2 DOWN");
+    expect(verdictText(st, "B")).toBe("WON 2 UP");
+  });
+
+  it("says a closeout the same way from either side", () => {
+    // "3&2" IS the result and reads the same whoever lost it, so WON / LOST
+    // carries all the direction it needs. Only a match that reached the last
+    // hole has an up and a down to get backwards.
+    const st = seg("AAAAAAAAABBA......");
+    expect(verdictText(st, "A")).toBe("WON 8&6");
+    expect(verdictText(st, "B")).toBe("LOST 8&6");
+  });
+
+  it("halves without taking a side", () => {
+    expect(verdictText(seg("AAAAAAAAABBBBBBBBB"), "A")).toBe("HALVED");
+    expect(verdictText(seg("AAAAAAAAABBBBBBBBB"), "B")).toBe("HALVED");
+  });
+});
+
+describe("a live match, from the reader's own side", () => {
+  it("flips the direction rather than leaving it to the colour", () => {
+    const st = seg("AAB...............");   // A 1 up through 3
+    expect(verdictText(st, "A")).toBe("1 UP");
+    expect(verdictText(st, "B")).toBe("1 DOWN");
+  });
+
+  it("is all square to both of them", () => {
+    const st = seg("AB................");
+    expect(verdictText(st, "A")).toBe("AS");
+    expect(verdictText(st, "B")).toBe("AS");
+  });
+
+  it("says nothing before a ball is struck", () => {
+    expect(verdictText(seg(".................."), "A")).toBe("—");
+  });
+});
+
+describe("the formats with no up and no down", () => {
+  it("keeps a Total segment's signed lead and adds only the verdict", () => {
+    const done = seg("AAAAAAAAAAAAAAAAAA", { total: true });
+    // Every hole scored 4 apiece, so the totals are level however it is read.
+    expect(verdictText(done, "A")).toBe("TIED");
+  });
+
+  it("leaves a live points segment as a bare lead", () => {
+    const st = seg("AAAAAA............", { holeValue: () => 1 });
+    expect(verdictText(st, "A")).toBe("+6");
+    expect(verdictText(st, "B")).toBe("+6");
+  });
+
+  it("puts the verdict in front of a settled one and nothing else", () => {
+    // "+12" is a magnitude, not a direction, so it takes WON / LOST without
+    // contradicting either. There is no "up" in a currency where one hole can
+    // be worth two of another — see statusText.
+    const st = seg("AAAAAAAAAAAA......", { holeValue: () => 1 });
+    expect(verdictText(st, "A")).toBe("WON +12");
+    expect(verdictText(st, "B")).toBe("LOST +12");
   });
 });
