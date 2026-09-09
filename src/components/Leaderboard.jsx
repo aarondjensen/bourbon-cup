@@ -752,7 +752,18 @@ function RoundSection({
               color: BC.amberInk,
             }}>🔒 {seal.through}/{HOLE_COUNT}</span>
           )}
-          <span style={{ flex: 1, minWidth: 6 }} />
+        </div>
+        {/* The score is a line of its own, centred under the course and the
+            format, rather than the right-hand end of that row. On a phone the
+            name is the part that ellipses, and it was ellipsing to buy room
+            for a figure that is at most seven characters — "8.5 – 3.5" was
+            eating "Arthur Hills — Orange · Two-Man Best Ball". Centred rather
+            than left-aligned so a collapsed stack of rounds reads as a column
+            of scores down the middle of the board. */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "center",
+          gap: 6, padding: "2px 0 1px",
+        }}>
           {/* A concealing round has no score on this bar, not even the 0–0 it
               is honestly worth. The board banks nothing until the countdown
               finishes (see lib/reveal), so a real-looking pair of zeroes would
@@ -792,10 +803,10 @@ function RoundSection({
             </>
           )}
         </div>
-        {/* Nothing under the header. The tee, the handicap terms, the scoring
-            type and the counting rule all used to sit here; all of it is setup
-            detail, and this is a board players read for the score. The Rounds
-            tab is where a round's terms belong. */}
+        {/* Nothing under the header but the score. The tee, the handicap
+            terms, the scoring type and the counting rule all used to sit
+            here; all of it is setup detail, and this is a board players read
+            for the score. The Rounds tab is where a round's terms belong. */}
       </button>
 
       {open && (
