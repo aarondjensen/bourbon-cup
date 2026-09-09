@@ -84,6 +84,7 @@ import {
   setDemoAccessCode,
   unlinkPatch,
 } from "../lib/accounts";
+import { playerCaptainSide, captainForSide } from "../lib/captains";
 import {
   DEFAULT_TEE_INTERVAL,
   TEE_SLOTS,
@@ -442,7 +443,7 @@ function ChDeltaBadge({ delta }) {
   );
 }
 
-export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAdmin = false, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, roundCount, tournamentRounds, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks, payments, duesAmount, onLogPayment, onDeletePayment, onSaveDues, onSetPlayerDues, onOpenFinalize, finalizeRound, finalizeReady, trip, onSaveTrip, startDate, endDate, budgetLines, onSaveBudgetLine, onDeleteBudgetLine }) {
+export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCaptain, editionId, isDemoAdmin = false, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, roundCount, tournamentRounds, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks, payments, duesAmount, onLogPayment, onDeletePayment, onSaveDues, onSetPlayerDues, onOpenFinalize, finalizeRound, finalizeReady, trip, onSaveTrip, startDate, endDate, budgetLines, onSaveBudgetLine, onDeleteBudgetLine }) {
   const [tab, setTab] = useState("players");
   // Which half of the $ tab. Budget leads because it is the half a director
   // fills in first — you cannot say what to charge until you know what the
@@ -537,6 +538,9 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
   // GHIN link rather than typed, are not a comparison worth writing inline at
   // the button. `orig` is form state, never saved — doSave writes named
   // fields. See lib/formDirty.
+  // Which side this roster row captains, or null. Off the MEMBERSHIP, like
+  // the crown and for the same reason — see lib/captains.
+  const captainOf = (p) => playerCaptainSide(memberships, p, editionId, membershipFor);
   const seedPlayerForm = (form) => ({ ...form, orig: playerFormSig(form) });
   // What the tournament card would write, against what is stored — compared
   // AS THE SAVE WOULD WRITE IT, which is not the same as what is typed. An
@@ -1297,7 +1301,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                 <span style={{ flex: 1, minWidth: 8 }} />
                 {/* + Add button, over the rows' Edit */}
                 <button
-                  onClick={() => setEditingPlayer(seedPlayerForm({ isNew: true, team: team.id, first: "", last: "", nick: "", hi: "", ov: "", dir: false, wd: false }))}
+                  onClick={() => setEditingPlayer(seedPlayerForm({ isNew: true, team: team.id, first: "", last: "", nick: "", hi: "", ov: "", dir: false, cap: false, wd: false }))}
                   title="Add player"
                   style={{
                     padding: "3px 10px", borderRadius: 8, border: `1px solid ${team.accent}${ALPHA.line}`,
@@ -1322,6 +1326,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                           roster, which cannot be checked by them and would
                           be free to disagree. */}
                       {playerIsDirector(memberships, p) && <span title="Tournament director" style={{ fontSize: FS.small, flexShrink: 0, lineHeight: 1 }}>👑</span>}
+                      {captainOf(p) === p.team && <span title="Side captain — narrates the Final Countdown" style={{ fontSize: FS.small, flexShrink: 0, lineHeight: 1 }}>🎙</span>}
                       {/* Whether this name has been claimed by a sign-in.
                           The director is the only person who can answer
                           "why can't I pick my own name" (somebody else
@@ -1339,7 +1344,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                       {synced && <span style={{ fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.2, color: BC.hcpBlue, border: `1px solid ${BC.hcpBlue}${ALPHA.line}`, background: BC.hcpBlue + ALPHA.tint, borderRadius: 3, padding: "1px 3px", lineHeight: 1 }}>G</span>}
                     </span>
                     <span style={{ flex: 1, minWidth: 8 }} />
-                    <button onClick={() => setEditingPlayer(seedPlayerForm({ pid: p.player_id, team: p.team, first: p.first_name || (p.last_name ? "" : (p.name || "")), last: p.last_name || "", nick: p.name || "", hi: String(p.handicap_index), ov: (p.hi_override != null && String(p.hi_override).trim() !== "") ? String(p.hi_override) : "", dir: playerIsDirector(memberships, p), wd: p.withdrawn === true }))} style={{
+                    <button onClick={() => setEditingPlayer(seedPlayerForm({ pid: p.player_id, team: p.team, first: p.first_name || (p.last_name ? "" : (p.name || "")), last: p.last_name || "", nick: p.name || "", hi: String(p.handicap_index), ov: (p.hi_override != null && String(p.hi_override).trim() !== "") ? String(p.hi_override) : "", dir: playerIsDirector(memberships, p), cap: captainOf(p) === p.team, wd: p.withdrawn === true }))} style={{
                       fontSize: FS.label, padding: "2px 8px", borderRadius: 4, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer", flexShrink: 0,
                     }}>Edit</button>
                   </div>
@@ -1374,6 +1379,21 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
             const theirMembership = isNew ? null : membershipFor(memberships, p);
             const isSelf = !!theirMembership && theirMembership.uid === user?.auth_uid;
             const canGrantDirector = !isNew && !isDemoAdmin && !!theirMembership && !isSelf;
+            // The armband. Unlike the crown a director MAY set their own — both
+            // captains here will be directors, and captaining your own side is
+            // not a promotion: it moves one counter on one round. It still needs
+            // a membership document, because that is where the flag lives and
+            // what the rules read (lib/captains).
+            const canGrantCaptain = !isNew && !!theirMembership;
+            const capSide = isNew ? null : (editingPlayer.team || p?.team);
+            const heldBy = capSide ? captainForSide(memberships, tPlayers, editionId, capSide, membershipFor) : null;
+            const captainHint = isNew
+              ? "Add them first, then they sign in and claim this name."
+              : accountsUnreadable(memberships)
+                ? "Can't read the accounts list, so no captain can be named. Re-publish firestore.rules, then reopen this."
+                : !theirMembership
+                  ? "They need to sign in and claim this name first."
+                  : null;
             // Four different reasons the toggle can be unavailable, and
             // they want four different actions from the director. Telling
             // them apart matters most for the last one: an empty accounts
@@ -1465,6 +1485,12 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
               const wasDir = playerIsDirector(memberships, p);
               const dirChanged = canGrantDirector && newDir !== wasDir;
               if (dirChanged) changes.push(`Director: ${wasDir ? "Yes" : "No"} → ${newDir ? "Yes" : "No"}`);
+              const wasCap = captainOf(p) === p.team;
+              const newCap = canGrantCaptain && editingPlayer.cap === true;
+              const capChanged = canGrantCaptain && newCap !== wasCap;
+              if (capChanged) changes.push(newCap
+                ? `Captain of ${teamNames[capSide] || capSide}`
+                : `No longer ${teamNames[capSide] || capSide} captain`);
               if ((editingPlayer.ghin_number || null) !== (p.ghin_number || null))
                 changes.push(editingPlayer.ghin_number ? `GHIN: linked #${editingPlayer.ghin_number}` : "GHIN: unlinked");
               const cutSignIn = !!editingPlayer.unlink && isClaimed(p);
@@ -1492,6 +1518,13 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
               if (dirChanged) impact += newDir
                 ? "\n\nThey get the Admin tab and everything in it."
                 : "\n\nThey lose the Admin tab. Everything a player does — scores, skins, signatures — is untouched.";
+              // Naming a captain stands the old one down, and it is not a
+              // detail to discover afterwards — the man losing it is in the
+              // room, and it is his half of the evening.
+              if (capChanged && newCap) impact += heldBy && heldBy.player_id !== p.player_id
+                ? `\n\nThey narrate their side of the Final Countdown from their own phone. ${heldBy.name} stops being captain.`
+                : "\n\nThey narrate their side of the Final Countdown from their own phone.";
+              if (capChanged && !newCap) impact += "\n\nTheir side will have no captain until you name one — only a director can turn its holes over.";
               if (await confirm({ title: "Confirm changes", message: changes.join("\n") + impact })) {
                 onUpdatePlayer({ ...p, team: newTeam, name: newName, first_name: first, last_name: last, handicap_index: parseFloat(editingPlayer.hi) || 0, hi_override: newOv, withdrawn: editingPlayer.wd === true, ...ghinFields, ...(cutSignIn ? unlinkPatch() : {}) });
                 // A separate document, and one the rules police, so it is
@@ -1501,6 +1534,15 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                   const res = await onSetDirector(theirMembership.uid, newDir);
                   if (!res.ok) notify(res.error, "error");
                   else notify(newDir ? `${newName} is a director` : `${newName} is no longer a director`, "success");
+                }
+                // Same shape, same reason: another document, policed by its own
+                // rule, so it reports separately from the roster edit above.
+                // Standing the old captain down is App's job — it is a second
+                // membership and this sheet is about one player.
+                if (capChanged) {
+                  const res = await onSetCaptain(theirMembership.uid, newCap ? capSide : null);
+                  if (!res.ok) notify(res.error, "error");
+                  else notify(newCap ? `${newName} captains ${teamNames[capSide] || capSide}` : `${newName} is no longer captain`, "success");
                 }
               }
               close();
@@ -1579,6 +1621,35 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, isDemoAd
                   </div>
                   {!isNew && !canGrantDirector && (
                     <div style={{ fontSize: FS.label, color: BC.t3, marginTop: -6, lineHeight: 1.4 }}>{directorHint}</div>
+                  )}
+                  {/* ── Captain ──
+                      One man per side. The only thing it grants is the Final
+                      Countdown: on the evening the closing round is turned
+                      over, his side's holes come out when HE taps, off his own
+                      phone, after he has told the room what is on them. His
+                      phone gets the prompt; see components/FinalCountdown.
+
+                      Naming a new one stands the old one down in the same
+                      Save — a side with two captains is a room with two people
+                      talking. The side is his TEAM, so there is nothing to
+                      pick: moving him across the sheet moves the armband with
+                      him, which is why this reads the form's team and not the
+                      saved one. */}
+                  {!isNew && (
+                    <div>
+                      <span style={lbl}>Captain</span>
+                      <button type="button"
+                        disabled={!canGrantCaptain}
+                        title={captainHint}
+                        onClick={() => set({ cap: !editingPlayer.cap })}
+                        style={{ fontSize: FS.body, fontWeight: 700, padding: "7px 10px", borderRadius: 8, cursor: canGrantCaptain ? "pointer" : "default", width: "100%", boxSizing: "border-box", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", opacity: canGrantCaptain ? 1 : 0.5,
+                          border: `1px solid ${editingPlayer.cap ? acc : BC.bdr}`, background: editingPlayer.cap ? acc + ALPHA.wash : "transparent", color: editingPlayer.cap ? BC.t1 : BC.t2 }}>
+                        {editingPlayer.cap ? `🎙 ${teamNames[capSide] || capSide} captain` : "Not a captain"}
+                      </button>
+                    </div>
+                  )}
+                  {!isNew && !canGrantCaptain && captainHint && (
+                    <div style={{ fontSize: FS.label, color: BC.t3, marginTop: -6, lineHeight: 1.4 }}>{captainHint}</div>
                   )}
                   {/* ── Withdrawn ──
                       A man who walks in after nine leaves holes that will

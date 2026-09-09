@@ -158,6 +158,64 @@ service cloud.firestore {
              .data.get('is_director', false) == true;
     }
 
+    // ── THE CAPTAINS ───────────────────────────────────────────────
+    // One man per side, per edition, and the only thing it grants is his own
+    // side's half of the Final Countdown: on the evening the closing round is
+    // turned over, HIS eight balls go up when HE taps, off his own phone,
+    // after he has told the room what is on them. See src/lib/captains.js.
+    //
+    // The flag is on the MEMBERSHIP document, not the roster row, for the
+    // same reason the crown is: rules can only `get()` a path they can
+    // construct, and finding the roster row whose `auth_uid` is yours needs
+    // a query. `captain_of` is a map of edition id → "A" | "B", so a man who
+    // captained one year is not captaining the next by default.
+    //
+    // Read off the same bc_accounts document isMember() and isDirector()
+    // already touch, so within one evaluation it is billed once.
+    function captainSideIn(edition) {
+      return isMember()
+        ? get(/databases/$(database)/documents/bc_accounts/$(request.auth.uid))
+            .data.get('captain_of', {}).get(edition, null)
+        : null;
+    }
+
+    // The one write in this project a plain member makes to an admin
+    // collection, and it is deliberately the narrowest one that could exist:
+    // an UPDATE to a round that already exists, changing HIS OWN side's
+    // counter and nothing else in the document, on a round in the edition he
+    // captains. He cannot create a round, delete one, move the other side's
+    // counter, or touch a tee time — the affectedKeys check is what makes
+    // that true rather than a promise the app makes.
+    //
+    // `resource != null` keeps it to an update: a create has no prior
+    // document to diff against, and a captain has no business making rounds.
+    // And ONE HOLE AT A TIME. A side may reach at most one hole ahead of the
+    // other, which is the ceremony written down: one hole, both stories, next
+    // hole. A captain who kept tapping would otherwise run his side to 18
+    // while the other was on 4 — the countdown shows the hole the LEADING side
+    // is on, so the man behind would then be tapping through holes nobody in
+    // the room could see. The screen holds the same line; this is what stops a
+    // second phone, or a stale one, getting round it.
+    //
+    // A director is not bound by it. He comes in through canAdminEdition, and
+    // resetting a countdown somebody walked to 18 by mistake is exactly the
+    // repair this clamp would otherwise block.
+    function captainStep(field, ceiling) {
+      return request.resource.data.get(field, 0) is int
+        && request.resource.data.get(field, 0) >= 0
+        && request.resource.data.get(field, 0) <= ceiling + 1;
+    }
+
+    function captainRevealing() {
+      return resource != null
+        && captainSideIn(resource.data.get('tournament_id', '')) != null
+        && (captainSideIn(resource.data.get('tournament_id', '')) == 'A'
+            ? (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reveal_a'])
+               && captainStep('reveal_a', resource.data.get('reveal_b', 0)))
+            : (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reveal_b'])
+               && captainStep('reveal_b', resource.data.get('reveal_a', 0))));
+    }
+
     // ── A LOCKED EDITION ───────────────────────────────────────────
     // `locked: true` on bc_editions/{id} freezes that tournament against
     // everybody but a director. See src/lib/editionLock.js for what it means
@@ -414,10 +472,22 @@ service cloud.firestore {
                     && ((codeOK() && !('demo_only' in request.resource.data))
                         || (demoCodeOK()
                             && request.resource.data.get('demo_only', false) == true));
+      // Two grants, two rules, and they are not the same shape.
+      //
+      // The CROWN cannot be given to yourself, which is what stops the last
+      // director removing themselves and leaving the cup unadministered.
+      //
+      // The ARMBAND can. Both captains here will be directors, and captaining
+      // your own side is not a promotion — it moves one counter on one round
+      // (see captainRevealing) and reaches nothing else in the project. A
+      // director who had to find the other director to be named captain of
+      // his own team would be a rule protecting nobody from anything.
       allow update: if isDirector()
-                    && request.auth.uid != uid
-                    && request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['is_director']);
+                    && ((request.auth.uid != uid
+                         && request.resource.data.diff(resource.data).affectedKeys()
+                              .hasOnly(['is_director']))
+                        || request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['captain_of']));
       allow delete: if false;
     }
 
@@ -461,8 +531,11 @@ service cloud.firestore {
     }
     match /bc_courses/{doc}            { allow read: if isOpen();
                                          allow write: if canAdminEdition(); }
+    // A director writes anything here. A CAPTAIN writes exactly one field —
+    // his own side's reveal counter — which is what lets the two of them pace
+    // the Final Countdown off their own phones. See captainRevealing above.
     match /bc_rounds/{doc}             { allow read: if isOpen();
-                                         allow write: if canAdminEdition(); }
+                                         allow write: if canAdminEdition() || captainRevealing(); }
     match /bc_matches/{doc}            { allow read: if isOpen();
                                          allow write: if canAdminEdition(); }
     // Playing groups — who tees off together, one document per round.
