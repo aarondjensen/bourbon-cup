@@ -42,7 +42,11 @@
 //
 //    • Two nines, not one. Each is its own block, and each block's OUT /
 //      IN cell carries that nine's segment state — which is a real
-//      result here, because the Nassau pays out on it.
+//      result here, because the Nassau pays out on it. A NINES row under
+//      the header states both again, together and in full: a Nassau card
+//      settles three matches and signing it swears to all three at once,
+//      which is not something to read off two chips sixteen rows apart.
+//      See the block above `nine()`.
 //    • The side's row is not always net strokes. It is whatever the
 //      hole was SCORED in (scoring.js holeFormatFor) — net strokes for
 //      most formats, dots on Double Dot, points on Stableford and Tilt —
@@ -71,7 +75,7 @@ import {
 } from "../constants";
 import {
   higherIsBetter, totalUnit, holeFormatFor,
-  segmentState, statusText, segmentLeader, segmentOptsFor,
+  segmentState, statusText, segmentLeader, segmentOptsFor, nassauSegmentVisibility,
 } from "../scoring";
 
 // ── Grid geometry ────────────────────────────────────────────────
@@ -217,14 +221,17 @@ export function ScoreCell({ score, par, strokes = 0, size = CELL, color, skin = 
 //    viewer                 — "A" | "B", the side the reader is on. Only
 //                             the running MATCH row uses it; omitting it
 //                             leaves that row on Team A's perspective.
-//    showHeader             — the names-and-status line. On by default: in
-//                             the Scoring popup it is the only place the
-//                             four players are spelled out, so the initials
-//                             in the rows below have nothing else to read
-//                             against. The Leaderboard turns it off — its
-//                             match row names the pair and states the match
-//                             directly above this, and its segment pills
-//                             say it a third time.
+//    showHeader             — the names-and-status line, and with it the
+//                             NINES row under it. Both are the card stating
+//                             its own results, and they travel together.
+//                             On by default: in the Scoring popup it is the
+//                             only place the four players are spelled out, so
+//                             the initials in the rows below have nothing else
+//                             to read against. The Leaderboard turns it off —
+//                             its match row names the pair and states the
+//                             match directly above this, F9 and B9 either
+//                             side of it, and its segment pills say all three
+//                             a second time.
 //    conceal                — { through, side } on a SEALED round, null on
 //                             every other one. See lib/reveal.js. Past hole
 //                             `through` this card stops printing anything
@@ -315,6 +322,14 @@ export function FullScorecard({
   const overall = segmentState(holes, segOpts);
   const overallLeader = segmentLeader(overall);
 
+  // ── The two nines, as matches in their own right ──────────────────
+  // Computed once here and handed to `nine()` below rather than worked out
+  // again inside it, so the NINES row and each block's own OUT / IN chip are
+  // reading one answer. Same argument as the Leaderboard's, which shares its
+  // per-nine state between the collapsed row's flanks and the expanded pills
+  // for exactly this reason.
+  const nineSt = [segmentState(holes.slice(0, 9), segOpts), segmentState(holes.slice(9, 18), segOpts)];
+
   // Where the 18-hole match closed out, if it did — off segmentState's own
   // `decided`, which is where that question is answered for every screen.
   // This row used to walk `running` and find the hole itself, and the two
@@ -326,13 +341,100 @@ export function FullScorecard({
   const clinchHole = overall.decided ? overall.decided.at : null;
   const clinchText = overall.decided ? statusText(overall) : null;
 
+  // ══════════════════════════════════════════════════════════════════
+  //  The NINES row — a Nassau is three matches, and this names two of them
+  // ══════════════════════════════════════════════════════════════════
+  //  A Nassau round settles the front, the back and the eighteen, each for
+  //  its own point. Until this row the card spelled out one of the three: the
+  //  header states the OVERALL, and each nine's result was a chip in the
+  //  corner of its MATCH row — FS.micro, labelled OUT and IN, sixteen rows
+  //  down the card from the other two.
+  //
+  //  That is enough to read a nine off mid-round. It is not enough to SIGN,
+  //  which is the one moment somebody is swearing to all three results at
+  //  once, and it is the sign sheet this row was asked for. It lands on every
+  //  standalone card rather than in the sheet alone, because the sheet, the
+  //  signed panel and the mid-round Scorecard popup are the same card opened
+  //  three ways, and a fact worth stating on one of them is worth stating on
+  //  all three. See `showHeader` on the props.
+  //
+  //  WHICH NINES are matches comes from nassauSegmentVisibility — the same
+  //  call the Leaderboard's collapsed row and the Scoring tab's status pills
+  //  make, so a nine can never be a match on one screen and a stretch of
+  //  holes on another. A Traditional round pays one pot for the eighteen and
+  //  gets no row at all; a Nassau with a nine zeroed out gets the other one.
+  //
+  //  THE WORDS are the card's, not the Scoring tab's. Its pills read "WON
+  //  3 UP" from the reader's own side; here a stated result names a winner
+  //  and is painted in that winner's colour, which is the rule the rest of
+  //  this file already follows (see the two-currencies note at the top) and
+  //  the rule the header directly above this row is printed under. One card,
+  //  one convention.
+  //
+  //  Nothing at all while the round is sealed. A segment result is precisely
+  //  what the blackout is holding back, and `nassauBadges` on the Scoring tab
+  //  is switched off by the same test.
+  //
+  //  ── One word for a segment that finished level ──
+  //  statusText calls it "AS", which is how a LIVE match reads and is the
+  //  wrong tense on a settled one: the point has already been split. The
+  //  Leaderboard hits this on the overall and prints "½"; the Scoring tab's
+  //  pills say HALVED, and that is the word with room here.
+  //
+  //  It goes through EVERY stated result on this card — the NINES row, the
+  //  OUT / IN chips, and the overall in the header — rather than the new row
+  //  alone. A nine reading HALVED three inches above an IN chip reading "AS"
+  //  is one fact in two tenses, which is the same failure as the 8&6 that
+  //  used to sit under a 10&4 (see `clinchHole` below). A running MATCH cell
+  //  keeps "AS": that one IS live, and it is the only place the word is true.
+  const verdict = (st) =>
+    st.complete && st.unit === "up" && st.winner == null ? "HALVED" : statusText(st);
+
+  const nineCells = (showHeader && !conceal ? (() => {
+    const { showFront, showBack } = nassauSegmentVisibility(match, result.holePoints);
+    return [
+      showFront ? { key: "f", label: "F9", st: nineSt[0] } : null,
+      showBack ? { key: "b", label: "B9", st: nineSt[1] } : null,
+    ].filter(Boolean);
+  })() : []);
+
+  // Two cells side by side, or one across the width when a round plays only
+  // one of its nines as a match. Dashed while a nine is still live and solid
+  // once it has settled — the live/settled language the Scoring tab's pills
+  // and the Leaderboard's use, so a settled nine looks settled wherever it
+  // is drawn.
+  const NinesRow = nineCells.length > 0 && (
+    <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+      {nineCells.map(({ key, label, st }) => {
+        const leader = segmentLeader(st);
+        const col = leader ? teamColor(leader) : st.played ? BC.t2 : BC.t3;
+        const settled = st.complete;
+        return (
+          <div key={key} style={{
+            flex: 1, minWidth: 0, display: "flex", alignItems: "baseline", justifyContent: "center", gap: 6,
+            padding: "4px 6px", borderRadius: 6,
+            background: settled && leader ? `${col}${ALPHA.wash}` : "transparent",
+            border: `1px ${settled ? "solid" : "dashed"} ${settled && leader ? `${col}${ALPHA.line}` : `${BC.bdr}${ALPHA.line}`}`,
+          }}>
+            <span style={{ fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.8, color: BC.t3 }}>{label}</span>
+            <span style={{
+              fontSize: FS.small, fontWeight: 800, whiteSpace: "nowrap",
+              overflow: "hidden", textOverflow: "ellipsis", color: col,
+            }}>{verdict(st)}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+
   // ── One nine ─────────────────────────────────────────────────────
   const nine = (start, label) => {
     const end = start + 9;
     const idx = Array.from({ length: 9 }, (_, i) => start + i);
     const parTotal = holePars.slice(start, end).reduce((a, b) => a + b, 0);
     // This nine's own result — a real one, since the Nassau pays out on it.
-    const seg = segmentState(holes.slice(start, end), segOpts);
+    // From `nineSt` above, which the NINES row reads too.
+    const seg = nineSt[start === 0 ? 0 : 1];
     const segLeader = segmentLeader(seg);
 
     // Every hole cell in every row shares this: equal width, hairline
@@ -555,7 +657,7 @@ export function FullScorecard({
               color: segLeader ? teamColor(segLeader) : BC.t3,
               background: segLeader ? `${teamColor(segLeader)}${ALPHA.wash}` : "transparent",
               border: `1px solid ${segLeader ? `${teamColor(segLeader)}${ALPHA.line}` : "transparent"}`,
-            }}>{statusText(seg)}</span>
+            }}>{verdict(seg)}</span>
           )}
         </div>
       </div>
@@ -594,11 +696,13 @@ export function FullScorecard({
         <span style={{
           flexShrink: 0, fontSize: FS.small, fontWeight: 800,
           color: conceal ? BC.amberInk : overallLeader ? teamColor(overallLeader) : BC.t3,
-        }}>{conceal ? "🔒 SEALED" : statusText(overall)}</span>
+        }}>{conceal ? "🔒 SEALED" : verdict(overall)}</span>
         <span style={{ flex: 1, minWidth: 0, fontSize: FS.label, fontWeight: 800, lineHeight: 1.3, color: BC.teamB, textAlign: "right" }}>
           {sideNames(match, "B", nameOf).join(" / ")}
         </span>
       </div>}
+
+      {NinesRow}
 
       {/* The terms, in the order the round is scored: where, what the
           format is, how a hole is made, how the holes settle. */}
