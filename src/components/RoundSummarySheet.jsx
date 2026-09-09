@@ -28,12 +28,27 @@ import { roundSummary } from "../lib/roundSummary";
 import { formatLabel } from "../constants";
 import { BC, ALPHA, ON_AMBER, FS, R, teamColor } from "../theme";
 
+// ── One size for the body ───────────────────────────────────────────
+// Everything below the header is FS.small, and it is spelled once here so it
+// stays that way. This screen had four sizes in it — names at 12, results and
+// hole numbers at 10, the footnote at 8 — and a size rung is a claim about
+// importance. It was not making one: a skin's hole number is not a footnote
+// to the man's name beside it, and the points a match moved are not smaller
+// news than the status they came from. Read down, the mixture just looked
+// like a screen assembled out of other screens.
+//
+// The header keeps its own scale — the round, the course, the two team
+// totals — and so do the all-caps eyebrows leading each card: those ARE
+// headers, one rung down, and they are what tells five stacked cards apart
+// at a glance.
+const ROW = FS.small;
+
 // The all-caps eyebrow every section card is led by. Spelled once so five
 // sections cannot drift apart by a letter of tracking.
 const Label = ({ children, note }) => (
   <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 6 }}>
     <span style={{ fontSize: FS.label, fontWeight: 800, color: BC.t3, letterSpacing: 1.2 }}>{children}</span>
-    {note && <span style={{ fontSize: FS.micro, color: BC.t3, opacity: 0.8, letterSpacing: 0.3 }}>{note}</span>}
+    {note && <span style={{ fontSize: FS.label, color: BC.t3, opacity: 0.8, letterSpacing: 0.3 }}>{note}</span>}
   </div>
 );
 
@@ -47,7 +62,7 @@ const Card = ({ label, note, empty, children, rows }) => (
   }}>
     <Label note={note}>{label}</Label>
     {rows === 0
-      ? <div style={{ fontSize: FS.small, color: BC.t3 }}>{empty}</div>
+      ? <div style={{ fontSize: ROW, color: BC.t3 }}>{empty}</div>
       : children}
   </div>
 );
@@ -59,11 +74,11 @@ const Card = ({ label, note, empty, children, rows }) => (
 const WinRow = ({ name, detail }) => (
   <div style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "3px 0" }}>
     <span style={{
-      flex: 1, minWidth: 0, fontSize: FS.small, fontWeight: 700, color: BC.t1,
+      flex: 1, minWidth: 0, fontSize: ROW, fontWeight: 700, color: BC.t1,
       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
     }}>{name}</span>
     {detail && (
-      <span style={{ flexShrink: 0, fontSize: FS.label, fontWeight: 700, color: BC.t3 }}>{detail}</span>
+      <span style={{ flexShrink: 0, fontSize: ROW, fontWeight: 700, color: BC.t3 }}>{detail}</span>
     )}
   </div>
 );
@@ -93,7 +108,7 @@ const MatchSide = ({ tid, names, winner }) => {
     }}>
       {names.map((nm, i) => (
         <div key={i} style={{
-          fontSize: FS.small, fontWeight: winner === tid ? 800 : 700,
+          fontSize: ROW, fontWeight: winner === tid ? 800 : 700,
           color: lost ? BC.t3 : BC.t1, lineHeight: 1.25,
           whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
         }}>{nm}</div>
@@ -114,14 +129,14 @@ const CtpTile = ({ ctp }) => (
     background: BC.amber + ALPHA.wash, border: `1px solid ${BC.amber}${ALPHA.hair}`,
     padding: "5px 3px 6px",
   }}>
-    <div style={{ fontSize: FS.label, fontWeight: 800, color: BC.amberInk, letterSpacing: 0.3, lineHeight: 1.2 }}>
+    <div style={{ fontSize: ROW, fontWeight: 800, color: BC.amberInk, letterSpacing: 0.3, lineHeight: 1.2 }}>
       #{ctp.hole + 1}
     </div>
     <div style={{
-      fontSize: FS.small, fontWeight: 800, color: BC.t1, lineHeight: 1.25, marginTop: 1,
+      fontSize: ROW, fontWeight: 800, color: BC.t1, lineHeight: 1.25, marginTop: 1,
       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
     }}>{ctp.name}</div>
-    <div style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3, lineHeight: 1.2, marginTop: 1 }}>
+    <div style={{ fontSize: ROW, fontWeight: 700, color: BC.t3, lineHeight: 1.2, marginTop: 1 }}>
       {ctp.distanceFt == null ? "—" : `${ctp.distanceFt} FT`}
     </div>
   </div>
@@ -136,13 +151,6 @@ const CtpTile = ({ ctp }) => (
 // row's result and hole somewhere new — a list that was legible one line at
 // a time and a mess read down.
 //
-// The name column is `minmax(0, max-content)` and the rest are `auto`, which
-// is what packs the four to the LEFT as a table instead of stranding the
-// result out at the right edge with a gulf of card between it and the man it
-// belongs to. It is also the only track with a min of 0, so when a name is
-// too long for the row it is the one that gives up its tail — the holes and
-// the pars hold their columns and the row still reads down.
-//
 // ── There is no score column, and that is deliberate ────────────────
 // It read "3 GROSS" and "3 GROSS · 2 NET" out to the right. On the GROSS list
 // that was the same fact twice on every row — a birdie on a par 4 IS a three,
@@ -151,20 +159,32 @@ const CtpTile = ({ ctp }) => (
 // rather than what it netted to. Which shot won the skin is the thing being
 // read here; what it settles for is the Betting tab's, as the footnote below
 // these cards has always said.
+// Fractions, not content widths. Sized to their contents the four columns
+// bunched against the left edge with a third of the card empty beside them,
+// which reads as a list that ran out rather than a table. Each track takes a
+// SHARE of the row instead, weighted to what it holds — the name needs the
+// most, a hole number the least — so the columns land where the eye expects
+// them and the row finishes on the card's edge the way it starts on it.
+//
+// The floor under each of the three fact tracks is `max-content`: a fraction
+// can shrink, and a track that shrinks below its own text clips it. Only the
+// name has a min of 0, so it stays the one that gives up its tail when a row
+// is too tight for everything on it.
 const SKINS_GRID = {
   display: "grid",
-  gridTemplateColumns: "minmax(0, max-content) auto auto 1fr",
+  gridTemplateColumns:
+    "minmax(0, 1.35fr) minmax(max-content, 1fr) minmax(max-content, 0.55fr) minmax(max-content, 0.8fr)",
   columnGap: 8, rowGap: 5, alignItems: "baseline",
 };
 const SKIN_NAME = {
-  minWidth: 0, fontSize: FS.small, fontWeight: 700, color: BC.t1,
+  minWidth: 0, fontSize: ROW, fontWeight: 700, color: BC.t1,
   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 };
-const SKIN_RESULT = { fontSize: FS.label, fontWeight: 800, color: BC.amberInk, whiteSpace: "nowrap" };
+const SKIN_RESULT = { fontSize: ROW, fontWeight: 800, color: BC.amberInk, whiteSpace: "nowrap" };
 // Right-aligned so #7 lines up under #16 on its digits rather than on its
 // hash, which is the only thing a column of hole numbers is for.
-const SKIN_HOLE = { fontSize: FS.label, color: BC.t3, whiteSpace: "nowrap", textAlign: "right" };
-const SKIN_PAR = { fontSize: FS.label, color: BC.t3, whiteSpace: "nowrap" };
+const SKIN_HOLE = { fontSize: ROW, color: BC.t3, whiteSpace: "nowrap", textAlign: "right" };
+const SKIN_PAR = { fontSize: ROW, color: BC.t3, whiteSpace: "nowrap", textAlign: "right" };
 
 const SkinsGrid = ({ skins }) => (
   <div style={SKINS_GRID}>
@@ -293,10 +313,10 @@ export function RoundSummarySheet({
               <MatchSide tid="A" names={m.a} winner={m.winner} />
               <div style={{ minWidth: 50, textAlign: "center" }}>
                 <div style={{
-                  fontSize: FS.small, fontWeight: 800, lineHeight: 1.2, letterSpacing: 0.3,
+                  fontSize: ROW, fontWeight: 800, lineHeight: 1.2, letterSpacing: 0.3,
                   color: m.winner ? teamColor(m.winner) : BC.t2,
                 }}>{m.status}</div>
-                <div style={{ fontSize: FS.label, fontWeight: 800, lineHeight: 1.2 }}>
+                <div style={{ fontSize: ROW, fontWeight: 800, lineHeight: 1.2 }}>
                   <span style={{ color: m.winner === "A" ? BC.teamA : BC.t3 }}>{m.pts.A}</span>
                   <span style={{ color: BC.t3 }}> – </span>
                   <span style={{ color: m.winner === "B" ? BC.teamB : BC.t3 }}>{m.pts.B}</span>
@@ -383,7 +403,7 @@ export function RoundSummarySheet({
             WORTH depends on the buy-in and on how the week's other rounds
             went, and the Betting tab is where that is settled — a share
             quoted here would be a second answer to it. */}
-        <div style={{ fontSize: FS.micro, color: BC.t3, textAlign: "center", lineHeight: 1.5, margin: "2px 0 10px" }}>
+        <div style={{ fontSize: ROW, color: BC.t3, textAlign: "center", lineHeight: 1.5, margin: "2px 0 10px" }}>
           What each of these pays is on the Betting tab.
         </div>
       </div>
