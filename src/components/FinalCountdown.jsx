@@ -83,7 +83,7 @@
 //  scored off this map, and they are the only place in the app any of it
 //  is visible while the countdown is running.
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
 import { BC, FONT, ALPHA, teamColor } from "../theme";
 import { TROPHY_SILHOUETTE } from "../constants";
 import { playerLookup } from "../lib/players";
@@ -201,7 +201,10 @@ function StrokeDots({ strokes, row }) {
       display: "flex", alignItems: "center", justifyContent: "center",
       gap: "clamp(1px, 0.15vw, 3px)",
       ...(row
-        ? { width: "clamp(18px, 2.2vw, 46px)", flexShrink: 0 }
+        // Four dots at their own size, plus the three gaps between them, is
+        // 28.8px at 1280 — and the lane was 28.2. A man on his fourth stroke
+        // pushed the last dot into the score beside him.
+        ? { width: "clamp(24px, 2.9vw, 60px)", flexShrink: 0 }
         : { height: "clamp(6px, 0.8vw, 16px)" }),
     }}>
       {Array.from({ length: Math.min(strokes || 0, 4) }, (_, i) => (
@@ -329,14 +332,49 @@ function BallChip({ strokes, name, net, par, tid, counted }) {
 // missed going dim (see the note in SideColumn).
 const RAIL = "clamp(3px, 0.4vw, 8px)";
 
-// How wide a name lane has to be, in ems of its own type, for `n` characters.
-// Montserrat Bold in the app's all-caps (see theme.js) measures about 0.67em a
-// character; this is that with a margin, because the cost of being a little
-// wide is a little slack and the cost of being narrow is "CHRISTOPHE…" on a
-// television. It ellipsizes anyway if a director ever types something enormous.
-const nameLaneEm = (n) => Math.max(3.4, (Number(n) || 0) * 0.75);
+// ── How wide the name lane has to be ────────────────────────────
+// MEASURED, not estimated — see `useNameLane` below. What follows is only the
+// fallback for the first paint and for a test environment that lays nothing
+// out, and it is deliberately generous: an AVERAGE character width is exactly
+// the wrong tool here, because a roster has whatever letters it has and "WOODY
+// W" is half again as wide per character as "TIM C". Being over costs a little
+// dead space for one frame; being under cuts a man's name off on a television.
+const nameLaneEm = (n) => Math.max(4, (Number(n) || 0) * 0.95);
 
-function BallRow({ strokes, name, net, par, tid, counted, nameEm }) {
+// The side's longest name, set invisibly in exactly the type the rows use, and
+// read back. Exact at any viewport, and it re-reads itself when the type
+// changes size — the whole scale on this screen is vw/vh, so a resized window
+// is a resized name.
+//
+// It replaced `characters x 0.75em`, which was Montserrat Bold's AVERAGE in
+// the app's all-caps and duly clipped every name built out of wider letters
+// than average. There is no factor that is both tight enough to keep the trio
+// centred and safe enough never to clip; measuring is the only thing that is
+// both.
+//
+// Falls back to the estimate above when there is nothing to measure: the first
+// paint, and jsdom, which has no layout and no ResizeObserver.
+function useNameLane(longest) {
+  const probe = useRef(null);
+  const [px, setPx] = useState(0);
+  useLayoutEffect(() => {
+    const el = probe.current;
+    if (!el) return undefined;
+    // +2 so sub-pixel rounding can never take the last letter.
+    const read = () => {
+      const w = Math.ceil(el.getBoundingClientRect().width);
+      if (w > 0) setPx((prev) => (prev === w + 2 ? prev : w + 2));
+    };
+    read();
+    if (typeof ResizeObserver !== "function") return undefined;
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [longest]);
+  return [px ? `${px}px` : `${nameLaneEm(longest.length)}em`, probe];
+}
+
+function BallRow({ strokes, name, net, par, tid, counted, nameLane }) {
   const col = teamColor(tid);
   const rel = ballRel(net, par);
   const under = rel != null && rel < 0;
@@ -352,14 +390,14 @@ function BallRow({ strokes, name, net, par, tid, counted, nameEm }) {
       minWidth: 0,
     }}>
       <div style={{
-        width: `${nameEm}em`, flexShrink: 1, minWidth: 0, textAlign: "left",
+        width: nameLane, flexShrink: 1, minWidth: 0, textAlign: "left",
         fontSize: T.rowName, fontWeight: 800, letterSpacing: 0.4,
         color: counted ? BC.t1 : BC.t2,
         whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
       }}>{name}</div>
       <StrokeDots strokes={strokes} row />
       <div style={{
-        width: "2.2em", flexShrink: 0, textAlign: "center", whiteSpace: "nowrap",
+        width: "2.7em", flexShrink: 0, textAlign: "center", whiteSpace: "nowrap",
         fontSize: T.rowScore, fontWeight: 800, lineHeight: 1,
         color: under ? BC.danger : counted ? BC.t1 : BC.t2,
       }}>{rel == null ? "·" : fmtRel(rel)}</div>
@@ -406,8 +444,12 @@ function SideColumn({ tid, teamName, score, balls, par, countN, compact, reveale
   const rel = revealed ? relToPar(score, par, need) : null;
   // The name lane, one width for all eight rows so the column has an edge to
   // be read down, and no wider than the longest name on the side so the trio
-  // has no slack to sit off-centre in. See BallRow.
-  const nameEm = nameLaneEm(Math.max(0, ...balls.map((b) => (b.name || "").length)));
+  // has no slack to sit off-centre in. See BallRow and useNameLane.
+  const longest = useMemo(
+    () => (balls || []).reduce((a, b) => ((b.name || "").length > a.length ? b.name : a), ""),
+    [balls],
+  );
+  const [nameLane, probeRef] = useNameLane(longest);
   return (
     <div style={{
       // On a television each side claims half the width and stretches to fill
@@ -480,14 +522,22 @@ function SideColumn({ tid, teamName, score, balls, par, countN, compact, reveale
       ) : (
         <div style={{
           display: "flex", flexDirection: "column", width: "100%",
-          gap: T.rowGap,
+          gap: T.rowGap, position: "relative",
         }}>
+          {/* The ruler. Out of flow and invisible, set in exactly the type the
+              names beside it are set in, so what comes back is the width the
+              lane has to be — see useNameLane. */}
+          <span ref={probeRef} aria-hidden="true" style={{
+            position: "absolute", left: 0, top: 0, visibility: "hidden",
+            pointerEvents: "none", whiteSpace: "nowrap",
+            fontSize: T.rowName, fontWeight: 800, letterSpacing: 0.4,
+          }}>{longest}</span>
           {/* One lane width for the whole side, off the longest name on it —
               which is what makes the trio hug its content and sit optically in
               the middle rather than floating in a share of the column. See the
               note on BallRow. */}
           {balls.map((b) => (
-            <BallRow key={b.pid} {...b} par={par} tid={tid} nameEm={nameEm} />
+            <BallRow key={b.pid} {...b} par={par} tid={tid} nameLane={nameLane} />
           ))}
         </div>
       ))}

@@ -284,16 +284,44 @@ describe("a man's ball", () => {
 
   // Sized to the longest name ON THAT SIDE, so the trio has no slack in it and
   // the middle of the box is the middle of the ink.
+  //
+  // In a browser that width is MEASURED off a hidden ruler set in the same
+  // type (see useNameLane). jsdom lays nothing out and has no ResizeObserver,
+  // so what this sees is the em fallback — which is the half worth pinning
+  // anyway: it is what the first paint uses, and it has to be generous enough
+  // never to clip.
   it("sizes the name lane to the longest name on the side", () => {
     setWidth(TV);
     const c = screen({ A: 1, B: 1 });
-    const lanes = [...c.querySelectorAll("div")]
-      .filter(d => d.style.borderLeft?.startsWith("clamp(3px"))
-      .map(row => row.children[0].style.width);
+    const rows = [...c.querySelectorAll("div")]
+      .filter(d => d.style.borderLeft?.startsWith("clamp(3px"));
+    const lanes = rows.map(row => row.children[0].style.width);
     // One width for the whole side, or the names have no left edge to line up
     // on. Both sides here are 6-character names, so both come out the same.
     expect(new Set(lanes).size).toBe(1);
-    expect(parseFloat(lanes[0])).toBeCloseTo(6 * 0.75, 5);
+    expect(parseFloat(lanes[0])).toBeCloseTo(6 * 0.95, 5);
+  });
+
+  // A ruler per side, out of flow and invisible, carrying that side's longest
+  // name in exactly the type the rows are set in. It is what makes the lane a
+  // measurement rather than a guess about how wide a letter is.
+  it("keeps a hidden ruler of the longest name", () => {
+    setWidth(TV);
+    const c = screen({ A: 1, B: 1 });
+    const rulers = [...c.querySelectorAll("span[aria-hidden='true']")]
+      .filter(el => el.style.visibility === "hidden");
+    // Every name on this fixture is six characters, so the ruler is whichever
+    // came first — the point is that there is one per side and it holds a name
+    // no shorter than any other on it.
+    expect(rulers).toHaveLength(2);
+    expect(rulers.map(r => r.textContent)).toEqual(["Dave K", "Andy H"]);
+    rulers.forEach((r) => {
+      expect(r.style.position).toBe("absolute");
+      expect(r.style.whiteSpace).toBe("nowrap");
+      // Same type as the names, or it is measuring something else.
+      expect(r.style.fontWeight).toBe("800");
+      expect(r.style.fontSize).toBe(rulers[0].style.fontSize);
+    });
   });
 
   // A border only on the left shifts the content box right by its own width,
