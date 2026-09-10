@@ -542,6 +542,29 @@ day after it was set. Destroying the Secret Manager version does not un-issue
 the key; only revoking it at Apple does. `describe` answers "is it set" without
 ever showing it, which is the question anybody actually has.
 
+**The key lives in TWO places, and rotating it means changing both.** This is
+the one that bit hardest. Besides the Functions secret above, Firebase Auth
+keeps its own copy: **Console → Authentication → Sign-in method → Apple →
+OAuth code flow configuration**, which holds the Apple team id, the Key Id and
+the private key, and is what Firebase's `revokeAccessToken` uses for the WEB
+path. Revoking a key at Apple without updating that panel leaves Firebase
+holding a dead credential — and it is a live sign-in path for the whole field,
+with nothing on any screen to say so.
+
+The Services ID sits on that same screen (`com.thebourboncup.web`), and reading
+it there beats Apple's Identifiers list: this account has one Services ID per
+project, and the console shows the one the web flow actually uses.
+
+So a key rotation is:
+
+1. Create the new key, tick **Sign in with Apple**, Configure → Primary App ID.
+2. `firebase functions:secrets:set APPLE_PRIVATE_KEY --data-file <new .p8>`
+3. Update `APPLE_KEY_ID` in `functions/.env.the-bourbon-cup`.
+4. **Firebase Console → Auth → Apple → OAuth code flow: new Key Id and new
+   private key.** The step nothing reminds you about.
+5. `firebase deploy --only functions`, then `scripts/apple-key-check.mjs`.
+6. Only then revoke the old key at Apple.
+
 **The other four are not secrets and are committed.** A team id, a key id, a
 Services ID and a bundle id are public identifiers — the bundle id is printed
 in the App Store — so they live in `functions/.env.the-bourbon-cup`, which the
