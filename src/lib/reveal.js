@@ -16,11 +16,15 @@
 // So a round can be SEALED. While it is:
 //
 //   • the scoreboard does not score it AT ALL. Not hole by hole as the
-//     reveal walks — at all, until the last of the eighteen is turned over.
-//     No points banked, no hole strip, no status, nothing in the cup total.
-//   • a player still sees THEIR OWN SIDE's numbers, for every hole their
-//     team has posted. "Only your own team" is the whole ask; a blackout
-//     that hid a team from itself would just be an off switch.
+//     reveal walks — at all, until the last of the eighteen is turned over
+//     and the director has put the round in the books. No points banked, no
+//     hole strip, no status, nothing in the cup total.
+//   • a player still sees THEIR OWN SIDE's numbers on the SCORING screen,
+//     for every hole their team has posted. "Only your own team" is the
+//     whole ask; a blackout that hid a team from itself would just be an
+//     off switch. It is not on the leaderboard — that screen is read for
+//     the RESULT, and a scorecard of a round whose result is being withheld
+//     is a reader doing the arithmetic himself.
 //   • the director turns the holes over from the countdown, one tap each,
 //     and the television in the room follows.
 //
@@ -38,8 +42,13 @@
 // build up in front of anybody who scrolled — which is the ending, arrived
 // at early, which is the whole thing the seal exists to prevent.
 //
-// So the board holds at nothing until the countdown is COMPLETE, and then
-// the whole round lands at once. Two audiences, two subtractions:
+// So the board holds at nothing until the countdown is COMPLETE AND THE
+// DIRECTOR HAS FINALIZED THE ROUND, and then the whole round lands at once.
+// The second condition is not a formality: eighteen holes turned over is the
+// ceremony finishing, and between that and the round going in the books sit
+// the things that decide what it is worth — an unsigned card, a hole typed
+// wrong and fixed in front of the room, an attest still outstanding. See
+// isConcealing. Two audiences, two subtractions:
 // `concealHoleData` for every read-only surface, `countdownHoleData` for
 // the one screen the room is watching.
 //
@@ -201,7 +210,27 @@ export const isFullyRevealed = (tr) => revealedThrough(tr) >= HOLE_COUNT;
 // actually has — a fully revealed round keeps its `sealed` flag forever (it
 // WAS a sealed round; that is how it is scored and how it reads in Admin),
 // but it conceals nothing.
-export const isConcealing = (tr) => isSealedRound(tr) && !isFullyRevealed(tr);
+//
+// TWO CONDITIONS, AND THE SECOND IS THE DIRECTOR'S. Eighteen holes turned over
+// is the CEREMONY finishing, which is not the same event as the round going in
+// the books. Between them sit the things that decide what the round is worth:
+// a card nobody signed, a hole somebody typed wrong and fixed in front of the
+// room, an attest still outstanding. Landing the result on the board at the
+// eighteenth hole meant the board published a number the director had not yet
+// stood behind — and on the one round where the whole cup is riding on it, a
+// figure that moves after everybody has read it is worse than one that arrives
+// a minute late.
+//
+// So the round holds until it is FINAL. `tr.final` is the round lock — not a
+// stored field on bc_rounds, folded on by App from bc_round_locks (see
+// enrichedRounds and the note on isSealedRound). A round object without it
+// reads as not-final, which is the safe end: it keeps concealing.
+//
+// This cannot deadlock a round that was never explicitly sealed: for those
+// `resolveSealed` already returns false the moment the lock lands, so the two
+// halves open the same door from opposite sides.
+export const isConcealing = (tr) =>
+  isSealedRound(tr) && !(isFullyRevealed(tr) && !!tr?.final);
 
 const roundOf = (tRounds, round) =>
   (tRounds || []).find((t) => t.round_number === round) || null;

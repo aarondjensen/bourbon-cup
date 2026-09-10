@@ -2460,7 +2460,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                         ACTIVE — this round is sealed
                       </div>
                       · Each side sees only its own numbers, on the board and on the scoring screen.<br />
-                      · The leaderboard does not move — no score, no match rows, nothing in the cup total — until all 18 are turned over, and then the whole round lands at once.<br />
+                      · The leaderboard does not move — no score, no match rows, nothing in the cup total — until all 18 are turned over <em>and you finalize the round</em>, and then the whole round lands at once.<br />
                       · The countdown is queued up: a director opens it from the Leaderboard and turns the holes over one at a time. It is the only screen that walks.
                     </div>
                   )}
