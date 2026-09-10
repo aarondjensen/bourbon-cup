@@ -12,7 +12,7 @@
 // sendToPlayer gates on exactly these strings. Rename one here without
 // renaming it there and the gate silently stops matching — which fails OPEN,
 // so the symptom is a push somebody switched off still arriving.
-export const NOTIFICATION_TYPES = ["attest_ready", "card_final", "round_final"];
+export const NOTIFICATION_TYPES = ["attest_ready", "card_final", "round_final", "card_amended"];
 
 // AN ABSENT KEY IS ON, and that is the whole reason this is a function
 // rather than a spread. Every token registered before the switches existed

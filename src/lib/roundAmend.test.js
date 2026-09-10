@@ -6,6 +6,7 @@ import {
   describeAmendImpact,
   amendImpactLines,
   describeRefreshImpact,
+  describeSettingValue,
   recordAmendment,
   describeAmendment,
 } from "./roundAmend";
@@ -249,5 +250,94 @@ describe("describeRefreshImpact", () => {
   it("is empty for an unlocked round or a missing snapshot", () => {
     expect(describeRefreshImpact({ locks: {}, round: 1, nextLock: lockWith({}) }).changed).toBe(0);
     expect(describeRefreshImpact({ locks: { 1: lockWith({}) }, round: 1, nextLock: null }).rows).toEqual([]);
+  });
+});
+
+// ── The half that was missing ──────────────────────────────────────
+// A Course Handicap is stored RAW in the snapshot; the allowance is applied
+// downstream of it in scoring.js. So a round corrected from 100% to 50% moves
+// every stroke in it and not one player's `ch` — and reporting only the
+// players answered "nothing to recalculate" for the one correction a
+// recalculate is the only way to land.
+describe("describeRefreshImpact — the round's own terms", () => {
+  const lockWith = (over = {}) => ({
+    locked: true, final: false, players: { a: { name: "Andy H", ch: 12 } },
+    allowance: { enabled: true, pct: 100 }, handicap_mode: "full",
+    format: "singles", course_id: "c1",
+    hole_handicaps: [1, 2, 3], hole_pars: [4, 4, 4], ...over,
+  });
+
+  it("reports an allowance change that moves no stored handicap", () => {
+    const before = { 1: lockWith() };
+    const next = lockWith({ allowance: { enabled: true, pct: 50 } });
+    const out = describeRefreshImpact({ locks: before, round: 1, nextLock: next });
+    expect(out.changed).toBe(0);
+    expect(out.settingsChanged).toBe(1);
+    expect(out.settings[0]).toMatchObject({ key: "allowance", label: "Handicap allowance" });
+  });
+
+  it("reports the mode, the format, the course and the hole tables too", () => {
+    const before = { 1: lockWith() };
+    const cases = [
+      ["handicap_mode", { handicap_mode: "low_man" }],
+      ["format", { format: "best_ball" }],
+      ["course_id", { course_id: "c2" }],
+      ["hole_handicaps", { hole_handicaps: [3, 2, 1] }],
+      ["hole_pars", { hole_pars: [4, 5, 4] }],
+    ];
+    cases.forEach(([key, over]) => {
+      const out = describeRefreshImpact({ locks: before, round: 1, nextLock: lockWith(over) });
+      expect(out.settings.map(d => d.key)).toEqual([key]);
+    });
+  });
+
+  // Three of the six are objects or arrays, and `!==` on those is true for
+  // two identical snapshots — which would flag every recalculate as a
+  // stroke-index change and train the director to ignore the list.
+  it("does not report an identical object or array as a change", () => {
+    const before = { 1: lockWith() };
+    const out = describeRefreshImpact({ locks: before, round: 1, nextLock: lockWith() });
+    expect(out.settingsChanged).toBe(0);
+    expect(out.changed).toBe(0);
+  });
+
+  it("reports both halves when both moved", () => {
+    const before = { 1: lockWith() };
+    const next = lockWith({
+      allowance: { enabled: true, pct: 90 },
+      players: { a: { name: "Andy H", ch: 14 } },
+    });
+    const out = describeRefreshImpact({ locks: before, round: 1, nextLock: next });
+    expect(out.changed).toBe(1);
+    expect(out.settingsChanged).toBe(1);
+  });
+
+  it("is empty on both counts for an unlocked round", () => {
+    const out = describeRefreshImpact({ locks: {}, round: 1, nextLock: lockWith() });
+    expect(out).toMatchObject({ changed: 0, settingsChanged: 0, rows: [], settings: [] });
+  });
+});
+
+describe("describeSettingValue", () => {
+  // The director's dialog and the field's push notification both print these,
+  // so they have to be the same strings.
+  it("renders an allowance the way a golfer states one", () => {
+    expect(describeSettingValue({ enabled: true, pct: 90 })).toBe("90%");
+    expect(describeSettingValue({ enabled: true, split: true, low: 35, high: 15 })).toBe("35% / 15%");
+    expect(describeSettingValue({ enabled: false, pct: 100 })).toBe("off");
+  });
+
+  it("counts a hole table rather than printing eighteen numbers", () => {
+    expect(describeSettingValue([1, 2, 3])).toBe("3 holes");
+  });
+
+  it("says none rather than nothing at all", () => {
+    expect(describeSettingValue(null)).toBe("none");
+    expect(describeSettingValue("")).toBe("none");
+  });
+
+  it("passes a plain value straight through", () => {
+    expect(describeSettingValue("low_man")).toBe("low_man");
+    expect(describeSettingValue(4)).toBe("4");
   });
 });

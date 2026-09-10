@@ -190,14 +190,32 @@ export function amendImpactLines(impact) {
 // one act in this whole flow that CHANGES A FINISHED RESULT, so it is the one
 // that has to say what it is about to do in numbers rather than in prose.
 //
-// Diffs the frozen snapshot against a freshly-built one and reports only the
-// players whose CH actually moves. An empty list is the useful answer too: it
-// means the correction was on the points side, or on nothing at all, and the
-// director can stand down instead of wondering whether the tap did anything.
+// Diffs the frozen snapshot against a freshly-built one. TWO kinds of change
+// come back, and reporting only the first was a bug worth naming, because it
+// told the director the opposite of the truth:
+//
+//   rows      players whose stored Course Handicap moves. This catches an
+//             index edit, a tee change, a re-rated course.
+//   settings  ROUND-LEVEL frozen fields that differ — the allowance, the
+//             handicap mode, the course, the hole tables.
+//
+// The allowance is the one that exposed it. A Course Handicap is stored raw:
+// `applyAllowance` is a later step in scoring.js reading `lock.allowance`, so
+// correcting a round from 100% to 50% moves every stroke in it and moves not
+// one player's `ch`. Diffing only the players therefore answered "nothing to
+// recalculate" for a correction that a recalculate is the ONLY way to land —
+// and the dialog said so in as many words, sending the director off to look
+// for their mistake somewhere else.
+//
+// An empty result on BOTH is still the useful answer it always was: the
+// correction was on the points side, which is live already, and the director
+// can stand down rather than wondering whether the tap did anything.
 export function describeRefreshImpact({ locks, round, nextLock }) {
   const before = locks?.[round] || null;
   const rows = [];
-  if (!before?.locked || !nextLock?.players) return { rows, changed: 0, unchanged: 0 };
+  if (!before?.locked || !nextLock?.players) {
+    return { rows, changed: 0, unchanged: 0, settings: [], settingsChanged: 0 };
+  }
 
   let unchanged = 0;
   Object.entries(nextLock.players).forEach(([pid, next]) => {
@@ -215,8 +233,63 @@ export function describeRefreshImpact({ locks, round, nextLock }) {
   });
 
   rows.sort((a, b) => Math.abs((b.to ?? 0) - (b.from ?? 0)) - Math.abs((a.to ?? 0) - (a.from ?? 0)));
-  return { rows, changed: rows.length, unchanged };
+
+  const settings = REFRESH_SETTINGS
+    .map(({ key, label }) => ({ key, label, from: before[key] ?? null, to: nextLock[key] ?? null }))
+    .filter(d => !sameSetting(d.from, d.to));
+
+  return { rows, changed: rows.length, unchanged, settings, settingsChanged: settings.length };
 }
+
+// A frozen setting, said out loud. Three of the six are objects or arrays —
+// the allowance and the two hole tables — and none of them has a useful
+// default rendering: "[object Object]", or eighteen numbers in a row.
+//
+// It lives here rather than in either caller because BOTH need it and they
+// must agree. The recalculate dialog prints these strings for the director,
+// and the amendment log stores the same strings for the notification the
+// field gets — a director told "Handicap allowance 100% → 50%" and a player
+// told something else about the same change is the drift this prevents.
+export const describeSettingValue = (v) => {
+  if (v == null || v === "") return "none";
+  if (Array.isArray(v)) return `${v.length} holes`;
+  if (typeof v === "object") {
+    if (v.enabled === false) return "off";
+    if (v.low != null) return `${v.low}% / ${v.high}%`;
+    if (v.pct != null) return `${v.pct}%`;
+    return "set";
+  }
+  return String(v);
+};
+
+// The frozen round-level fields a recalculate can move. Every one of them
+// allocates STROKES — which is the test for being on this list, and why the
+// Nassau pots and the hole values are not: those are live already and land
+// without any of this (see the module header).
+//
+// `format` is here because a reopened round's format can be edited again, and
+// it decides the allowance the round resolves against — so it moves strokes
+// even when the allowance field itself is untouched.
+const REFRESH_SETTINGS = [
+  { key: "allowance", label: "Handicap allowance" },
+  { key: "handicap_mode", label: "Handicap mode" },
+  { key: "format", label: "Format" },
+  { key: "course_id", label: "Course" },
+  { key: "hole_handicaps", label: "Stroke index" },
+  { key: "hole_pars", label: "Hole pars" },
+];
+
+// Structural comparison, because three of the six are objects or arrays and
+// `!==` on those is true for two identical snapshots — which would report
+// every recalculate as a stroke-index change and train the director to ignore
+// the list. Key order is stable here: both sides are built by the same
+// builder in the same pass.
+const sameSetting = (a, b) => {
+  if (a === b) return true;
+  if (a == null || b == null) return a == null && b == null;
+  if (typeof a !== "object" || typeof b !== "object") return false;
+  return JSON.stringify(a) === JSON.stringify(b);
+};
 
 // ── The audit trail ─────────────────────────────────────────────────
 // Stamped onto the lock when a final round is reopened for amendment. An
