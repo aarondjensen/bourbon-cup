@@ -931,12 +931,12 @@ function ClaimScreen({ players, teams, darkMode, tournamentName, tournamentLocat
 // Shown for the moment between "the app started" and "we know who you
 // are" — Firebase restoring its session, then the roster arriving. Without
 // it a cold start flashes the sign-in screen at somebody who is signed in.
+//
+// It draws the chrome and NOTHING ELSE. The ellipsis that used to sit under
+// the title said only what the blank panel already says, and on a warm start
+// it appeared for a frame — a flicker of punctuation on the trophy screen.
 function LoginSplash({ tournamentName, tournamentLocation }) {
-  return (
-    <LoginChrome tournamentName={tournamentName} tournamentLocation={tournamentLocation}>
-      <div style={{ color: BC.t3, fontSize: FS.small, letterSpacing: 1 }}>…</div>
-    </LoginChrome>
-  );
+  return <LoginChrome tournamentName={tournamentName} tournamentLocation={tournamentLocation} />;
 }
 
 // ══════════════════════════════════════════════════════════════════
