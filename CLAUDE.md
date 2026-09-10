@@ -553,6 +553,19 @@ web one** — an authorization code is bound to the client that obtained it, and
 sending the wrong one gets `invalid_client` back from Apple, which reads like a
 bad key and is not. The caller says which shape it holds.
 
+**`node scripts/apple-key-check.mjs <path-to-.p8>` settles which key is which.**
+A `.p8` is a bare EC private key with no metadata, so nothing in the file says
+whether it was issued for Sign in with Apple or for APNs — and both are called
+`AuthKey_<id>.p8` in the same folder. The probe asks Apple instead: it signs a
+client secret and sends it with a deliberately junk refresh token, because
+Apple validates the CREDENTIALS before the grant. `invalid_grant` back means
+the key, key id, team id and client id all work together and only the junk
+token was refused; `invalid_client` means one of the four is wrong. Same shape
+as `/api/ghin?diagnose=1` — a probe that reports what the hop actually
+answered. Zero dependencies, and it reads the ids out of
+`functions/.env.the-bourbon-cup`. Run it once per client id, since a key can
+be valid for the Services ID and not the bundle id.
+
 Unset, the function throws `failed-precondition`, the client logs it, and the
 deletion proceeds. That ordering is deliberate and holds for every failure
 here: the App Store requires the revocation, but the USER asked for a deletion,
