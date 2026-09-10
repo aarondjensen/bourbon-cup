@@ -58,10 +58,18 @@ const arg = (name) => {
 // blank lines and # comments dropped.
 const readEnv = () => {
   const out = {};
+  const seen = new Set();
   try {
     for (const line of readFileSync(ENV_FILE, "utf8").split(/\r?\n/)) {
       const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)$/.exec(line);
-      if (m) out[m[1]] = m[2].trim();
+      if (!m) continue;
+      // A key assigned twice is silent, and the LAST one wins — so a stray
+      // leftover blank below a filled-in line quietly empties it, and the
+      // function then throws failed-precondition for a value that is sitting
+      // right there in the file. Say so rather than inheriting the bug.
+      if (seen.has(m[1])) console.warn(`  ! ${m[1]} is assigned more than once in ${ENV_FILE}; the last one wins.`);
+      seen.add(m[1]);
+      out[m[1]] = m[2].trim();
     }
   } catch { /* no file is fine; everything can come from flags */ }
   return out;
