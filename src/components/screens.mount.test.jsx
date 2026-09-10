@@ -374,13 +374,21 @@ describe("Scoring", () => {
       expect(t).not.toContain("🔒");
     });
 
-    it("padlocks nothing once the countdown has finished", () => {
-      // Sealed and fully revealed. The round is over and public; there is
-      // nothing left to protect and the picker goes back to being a picker.
-      const done = { ...bestBallRound, reveal_through: 18 };
+    it("padlocks nothing once the countdown has finished and the round is final", () => {
+      // Sealed, fully revealed, and in the books. The round is over and
+      // public; there is nothing left to protect and the picker goes back to
+      // being a picker.
+      const done = { ...bestBallRound, reveal_through: 18, final: true };
       const t = text(scoring({ user: director, tRounds: [done] }));
       expect(t).toContain("8:10");
       expect(t).not.toContain("🔒");
+    });
+
+    it("keeps the padlocks on after the eighteenth until the round is final", () => {
+      // The ceremony finishing is not the round going in the books — see
+      // isConcealing in lib/reveal.
+      const walked = { ...bestBallRound, reveal_through: 18 };
+      expect(text(scoring({ user: director, tRounds: [walked] }))).toContain("🔒");
     });
   });
   it("renders it for a director, who gets the group picker", () => {

@@ -35,7 +35,10 @@ const tPlayers = [...A, ...B].map((pid) => ({
 
 const teams = { A: { name: "Irons" }, B: { name: "Drivers" } };
 
-const roundsFor = (through) => [
+// `final` is the director's lock, folded onto the round by App (see
+// enrichedRounds). A sealed round holds until BOTH are in: eighteen holes
+// turned over, and the round in the books — see isConcealing in lib/reveal.
+const roundsFor = (through, final = through >= 18) => [
   {
     round_number: 1, format: "singles", course_id: "c1", tee_box: "White",
     handicap_mode: "full", scoring_type: "match",
@@ -44,7 +47,7 @@ const roundsFor = (through) => [
     round_number: 4, format: "team_best_ball", course_id: "c1", tee_box: "White",
     handicap_mode: "full", scoring_type: "points",
     counting_scores: { holes: Array(18).fill(2) },
-    sealed: true, reveal_through: through,
+    sealed: true, reveal_through: through, final,
   },
 ];
 
@@ -65,8 +68,8 @@ Array.from({ length: 18 }, (_, h) => h).forEach((h) => {
 });
 
 // What App hands the board, computed the way App computes it.
-const boardAt = (through, extra = {}) => {
-  const tRounds = roundsFor(through);
+const boardAt = (through, extra = {}, final = through >= 18) => {
+  const tRounds = roundsFor(through, final);
   const { container } = render(
     <TeamLeaderboard
       matches={matches}
@@ -116,6 +119,21 @@ describe("the scoreboard during the Final Countdown", () => {
     cleanup();
   });
 
+  // ── The director's word is the second condition ──────────────────
+  // Eighteen holes turned over is the CEREMONY finishing, not the round going
+  // in the books. Between them sit the things that decide what it is worth: a
+  // card nobody signed, a hole somebody typed wrong and fixed in front of the
+  // room, an attest still outstanding. A cup total published before the
+  // director stands behind it can still move, and one that moves after
+  // sixteen men have read it is worse than one that lands a minute late.
+  it("still holds the round after the eighteenth until it is finalised", () => {
+    const walked = blindfold(boardAt(18, {}, false));
+    expect(walked).toContain("WAITING ON THE FINAL COUNTDOWN");
+    expect(walked).not.toContain("0–27");
+    expect(walked).not.toContain("Drivers27");
+    cleanup();
+  });
+
   it("lands the whole round the moment the eighteenth is turned over", () => {
     const held = blindfold(boardAt(17));
     cleanup();
@@ -157,9 +175,13 @@ describe("the scoreboard during the Final Countdown", () => {
     const held = boardAt(9);
     expect(held).not.toMatch(/lands when the countdown ends/);
     expect(held).not.toMatch(/still to come/);
-    // The panel is still there, still saying the two things it says.
-    expect(held).toContain("THE FINAL COUNTDOWN");
-    expect(held).toContain("9 / 18");
+    // The panel is still there, saying the one thing it says.
+    expect(held).toContain("WAITING ON THE FINAL COUNTDOWN");
+    // The count is on the round's own header chip and NOT restated inside the
+    // panel — the own-side scorecard that used to sit under it went with it.
+    expect(held).toContain("9/18");
+    expect(held).not.toContain("YOUR SIDE ONLY");
+    expect(held).not.toContain("YOUR TOTAL");
     cleanup();
   });
 });

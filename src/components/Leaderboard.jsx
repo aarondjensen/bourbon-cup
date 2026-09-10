@@ -489,118 +489,26 @@ function MatchCard({
 //  Sealed round — the blackout, and the reveal that lifts it
 // ══════════════════════════════════════════════════════════════════
 //  See lib/reveal.js for what a sealed round is and why. What lands on
-//  this screen is three things, in this order:
+//  this screen is two things:
 //
-//    • the BANNER, saying the round is sealed and how far the countdown
-//      has walked. It stands in for the match rows, which are not drawn at
-//      all until the reveal is finished.
-//    • YOUR SIDE, hole by hole, for every hole your team has posted. This
-//      is the half of the feature that is not a subtraction: the board is
-//      handed a round with no holes in it at all (see lib/reveal), so a
-//      team watching its own round needs its own numbers handed to it
-//      separately.
+//    • the BANNER, which says the round is waiting on the countdown and
+//      nothing else. It stands in for the match rows, which are not drawn
+//      at all until the reveal is finished AND the director has put the
+//      round in the books.
 //    • the REVEAL, for a director — one tap a hole, and every phone in
 //      the room follows.
 //
-//  Nothing here reads the other side. The one prop that could — the
-//  reader's own match result, computed off unsealed data — is indexed by
-//  `viewer` at the top of the component and never re-derived below it.
-
-// One nine of the reader's own side. `key` is aScore/bScore, resolved by
-// the caller; this block cannot address the other column.
-function OwnNine({ holes, start, label, sideKey, through, countLabel }) {
-  const idx = Array.from({ length: 9 }, (_, i) => start + i);
-  let sum = 0, any = false;
-  idx.forEach((h) => {
-    const v = holes?.[h]?.[sideKey];
-    if (v != null) { sum += v; any = true; }
-  });
-  const cell = (i) => ({
-    flex: 1, minWidth: 0, textAlign: "center",
-    borderRight: i < 8 ? `1px solid ${BC.bdr}${ALPHA.hair}` : "none",
-  });
-  return (
-    <div style={{ marginBottom: 6 }}>
-      <div style={{ display: "flex", alignItems: "center" }}>
-        {idx.map((h, i) => (
-          <div key={h} style={{ ...cell(i), fontSize: FS.micro, fontWeight: 800, color: BC.t3, paddingBottom: 2 }}>
-            {h + 1}
-          </div>
-        ))}
-        <div style={{ width: 46, flexShrink: 0, textAlign: "center", fontSize: FS.micro, fontWeight: 800, color: BC.t3, letterSpacing: 0.5 }}>
-          {label}
-        </div>
-      </div>
-      <div style={{ display: "flex", alignItems: "stretch" }}>
-        {idx.map((h, i) => {
-          const v = holes?.[h]?.[sideKey];
-          // A hole the room has already seen is tinted. Your own numbers
-          // are shown either way — the tint says what is PUBLIC, which is
-          // the one thing a player at the house cannot work out by looking.
-          const out = h < through;
-          return (
-            <div key={h} style={{
-              ...cell(i), padding: "3px 0", borderRadius: 4,
-              background: out ? `${BC.amber}${ALPHA.wash}` : "transparent",
-              fontSize: FS.small, fontWeight: 800,
-              color: v == null ? `${BC.t3}${ALPHA.hair}` : out ? BC.amberInk : BC.t1,
-            }}>
-              {v == null ? "·" : v}
-            </div>
-          );
-        })}
-        <div style={{ width: 46, flexShrink: 0, textAlign: "center", padding: "3px 0", fontSize: FS.small, fontWeight: 800, color: BC.t1 }}>
-          {any ? sum : ""}
-        </div>
-      </div>
-      {countLabel && (
-        <div style={{ textAlign: "right", fontSize: FS.micro, fontWeight: 700, letterSpacing: 0.5, color: BC.t3, marginTop: 1 }}>
-          {countLabel}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// The reader's own side of one sealed match — the card a team watches
-// itself on while the round is dark.
-function OwnSideCard({ result, viewer, teamName, through }) {
-  const sideKey = viewer === "A" ? "aScore" : "bScore";
-  const holes = result?.holes || [];
-  let thru = 0, total = 0, any = false;
-  holes.forEach((h, i) => {
-    const v = h?.[sideKey];
-    if (v == null) return;
-    total += v; any = true; thru = i + 1;
-  });
-  // Team Best Ball counts a different number of balls on each nine, and the
-  // sums in the rows above are meaningless without it.
-  const counting = result?.counting || null;
-  const col = teamColor(viewer);
-
-  return (
-    <div style={{ padding: "10px 12px 8px", borderTop: `1px solid ${BC.bdr}${ALPHA.line}` }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
-        <span style={{
-          minWidth: 0, fontSize: FS.label, fontWeight: 800, letterSpacing: 0.8, color: col,
-          textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-        }}>{teamName}</span>
-        <span style={{ fontSize: FS.micro, fontWeight: 800, letterSpacing: 1, color: BC.t3 }}>YOUR SIDE ONLY</span>
-        <span style={{ marginLeft: "auto", flexShrink: 0, fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.5 }}>
-          {thru ? `THRU ${thru}` : "NOT STARTED"}
-        </span>
-      </div>
-      <OwnNine holes={holes} start={0} label="OUT" sideKey={sideKey} through={through}
-        countLabel={counting ? `best ${counting[0]} of the side` : null} />
-      <OwnNine holes={holes} start={9} label="IN" sideKey={sideKey} through={through}
-        countLabel={counting ? `best ${counting[9]} of the side` : null} />
-      <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 4 }}>
-        <span style={{ fontSize: FS.micro, fontWeight: 800, letterSpacing: 1, color: BC.t3 }}>YOUR TOTAL</span>
-        <span style={{ marginLeft: "auto", fontSize: FS.lead, fontWeight: 800, color: col }}>{any ? total : "—"}</span>
-      </div>
-    </div>
-  );
-}
+//  It used to carry a third: the reader's own side, hole by hole, out and
+//  in and a total. That is a real allowance — a team is never hidden from
+//  itself, which is why the captain's card on the countdown exists — but
+//  this is the wrong screen for it. The leaderboard is what the room reads
+//  for the RESULT, and a full scorecard of a round whose result is being
+//  withheld is a reader doing arithmetic on half the evidence in front of
+//  the television about to hand him the other half.
+//
+//  Nothing here reads either side now. The own-side pass is still computed
+//  (`ownResults`) and goes to exactly one place: the captain's own phone,
+//  inside the countdown.
 
 // ── The reveal control ───────────────────────────────────────────
 // Directors only, and it is the whole ceremony: one tap turns over one
@@ -653,39 +561,46 @@ function RevealControl({ through, onSet }) {
   );
 }
 
-// The banner, the own-side card and (for a director) the control, as one
-// panel that sits where the match rows would be.
+// ── What a concealing round says on the board ────────────────────
+// One line, and a way onto the television. That is the whole panel.
 //
-// It says three things and no longer explains any of them: SEALED, how many
-// holes are turned over, and the way onto the television. The paragraph that
-// used to sit under the header spelled out that the round lands in one piece
-// at 18 rather than a hole at a time, and how many points were still to come.
-// Both are true and neither needed saying: the counter above it already reads
-// n / 18, and the board holding still IS the explanation — a reader watching
-// nothing move while the count climbs has the mechanism in front of them.
-// Sixty words of it, on the screen sixteen men are looking at, on the one
-// evening the app is supposed to be getting out of the way.
-function SealedPanel({ through, ownCards, canReveal, onSetReveal, onOpenCountdown }) {
+// IT USED TO PRINT THE READER'S OWN SIDE, hole by hole, out and in and a
+// total: a full scorecard of a round the board is otherwise refusing to
+// score. The argument for it was that a team is never hidden from itself, and
+// that is true — it is why the captain's card on the countdown exists. But it
+// is the wrong screen for it. This one is the LEADERBOARD, the thing the room
+// reads for the result, and the result of this round does not exist yet.
+// Eighteen numbers and a total sitting where the result goes is a reader doing
+// arithmetic on half the evidence in front of the television that is about to
+// hand him the other half.
+//
+// The n / 18 counter went with it, and it was a duplicate besides — the 🔒
+// chip on the round's own header bar has said exactly that all along, in the
+// row a collapsed board can still see.
+//
+// So: WAITING ON THE FINAL COUNTDOWN. It is what is true, it is what a player
+// looking for the score needs to know, and it is the whole of what the board
+// is entitled to say until the director puts the round in the books.
+function SealedPanel({ through, canReveal, onSetReveal, onOpenCountdown }) {
   return (
     <div style={{
       marginTop: 8, background: BC.card, borderRadius: 12, overflow: "hidden",
       border: `1px solid ${BC.amber}${ALPHA.line}`,
     }}>
       <div style={{ padding: "11px 12px 10px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
           <span aria-hidden="true" style={{ fontSize: FS.small, lineHeight: 1 }}>🔒</span>
-          <span style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 1, color: BC.amberInk }}>
-            THE FINAL COUNTDOWN · SEALED
-          </span>
-          <span style={{ marginLeft: "auto", fontSize: FS.label, fontWeight: 800, color: BC.t3, letterSpacing: 0.5 }}>
-            {through} / {HOLE_COUNT}
+          <span style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 1, color: BC.amberInk, textAlign: "center" }}>
+            WAITING ON THE FINAL COUNTDOWN
           </span>
         </div>
-        {/* The way onto the television. Offered to EVERYBODY, not just the
-            director: the screen the room watches is signed in as whoever
+        {/* The way onto the television, and the one thing here that is not
+            information about the round — take it away and nobody can put the
+            countdown on the screen. Offered to EVERYBODY, not just the
+            director: the machine the room watches is signed in as whoever
             happened to be holding the laptop, and a countdown only a director
-            could open would be a countdown nobody could put on the TV. The
-            controls inside it are still director-only. */}
+            could open would be a countdown nobody could open. The controls
+            inside it are still director-only. */}
         <button onClick={onOpenCountdown} style={{
           width: "100%", marginTop: 9, padding: "9px 0", borderRadius: 8,
           background: BC.amberGlow, border: `1px solid ${BC.amber}${ALPHA.line}`,
@@ -695,7 +610,6 @@ function SealedPanel({ through, ownCards, canReveal, onSetReveal, onOpenCountdow
           📺 OPEN THE FINAL COUNTDOWN
         </button>
       </div>
-      {ownCards}
       {canReveal && <RevealControl through={through} onSet={onSetReveal} />}
     </div>
   );
@@ -1248,15 +1162,6 @@ export function TeamLeaderboard({
         canReveal={!!drive}
         onSetReveal={drive || (() => {})}
         onOpenCountdown={() => openCountdown(rnd)}
-        ownCards={(ownResults[rnd] || []).map(({ match: m, result: r }) => (
-          <OwnSideCard
-            key={m.id}
-            result={r}
-            viewer={viewer}
-            teamName={viewer === "A" ? tA.name : tB.name}
-            through={seal.through}
-          />
-        ))}
       />
     );
   };

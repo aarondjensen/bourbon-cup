@@ -92,11 +92,33 @@ describe("revealedThrough", () => {
 });
 
 describe("isConcealing", () => {
-  it("stops the moment the last hole is turned over", () => {
+  it("stops when the last hole is turned over AND the round is final", () => {
     expect(isConcealing(sealedRound(4, 0))).toBe(true);
     expect(isConcealing(sealedRound(4, 17))).toBe(true);
-    expect(isConcealing(sealedRound(4, 18))).toBe(false);
+    expect(isConcealing(sealedRound(4, 18, { final: true }))).toBe(false);
     expect(isConcealing(round(4))).toBe(false);
+  });
+
+  // ── The second condition, and why it is not the eighteenth hole ──
+  // Turning over eighteen holes is the CEREMONY finishing. Between that and
+  // the round going in the books sit the things that decide what it is worth:
+  // a card nobody signed, a hole somebody typed wrong and fixed in front of
+  // the room, an attest still outstanding. A number published before the
+  // director stands behind it is a number that can still move, and one that
+  // moves after everybody has read it is worse than one that lands late.
+  it("keeps holding after the eighteenth until the director finalises it", () => {
+    expect(isFullyRevealed(sealedRound(4, 18))).toBe(true);
+    expect(isConcealing(sealedRound(4, 18))).toBe(true);
+  });
+
+  // The other end of the same door. A Team Best Ball round nobody ever
+  // flagged is sealed by the FORMAT, and resolveSealed drops that fallback
+  // the moment the lock lands — so the two halves cannot deadlock a round
+  // between them.
+  it("cannot strand a round that was never explicitly sealed", () => {
+    const unflagged = round(4, { format: "team_best_ball", reveal_through: 18, final: true });
+    expect(isSealedRound(unflagged)).toBe(false);
+    expect(isConcealing(unflagged)).toBe(false);
   });
 
   // The flag survives the reveal — a revealed round still reads as a sealed
@@ -108,7 +130,7 @@ describe("isConcealing", () => {
 });
 
 describe("revealState / concealedRoundNumbers", () => {
-  const tRounds = [round(1), round(2), sealedRound(3, 18), sealedRound(4, 6)];
+  const tRounds = [round(1), round(2), sealedRound(3, 18, { final: true }), sealedRound(4, 6)];
 
   it("answers per round", () => {
     expect(revealState(tRounds, 1)).toEqual({ sealed: false, concealing: false, through: 18, sides: { A: 18, B: 18 }, hole: 18 });
@@ -136,7 +158,7 @@ describe("concealHoleData", () => {
   });
 
   it("hands back the same object once everything is revealed", () => {
-    expect(concealHoleData(data, [round(3), sealedRound(4, 18)])).toBe(data);
+    expect(concealHoleData(data, [round(3), sealedRound(4, 18, { final: true })])).toBe(data);
   });
 
   it("drops the round entirely when nothing has been turned over", () => {
@@ -160,9 +182,11 @@ describe("concealHoleData", () => {
     });
   });
 
-  it("lands the whole round the moment the eighteenth is turned over", () => {
+  it("lands the whole round when the eighteenth is out and the round is final", () => {
     expect(concealHoleData(data, [sealedRound(4, 17)]).p1_4).toBeUndefined();
-    expect(concealHoleData(data, [sealedRound(4, 18)]).p1_4).toEqual(card(18));
+    // Eighteen out, not yet in the books: still nothing.
+    expect(concealHoleData(data, [sealedRound(4, 18)]).p1_4).toBeUndefined();
+    expect(concealHoleData(data, [sealedRound(4, 18, { final: true })]).p1_4).toEqual(card(18));
   });
 
   // A player id with underscores in it must not be read as a round number.
@@ -189,7 +213,7 @@ describe("countdownHoleData", () => {
 
   it("hands back the same object when nothing is sealed", () => {
     expect(countdownHoleData(data, [round(3), round(4)])).toBe(data);
-    expect(countdownHoleData(data, [round(3), sealedRound(4, 18)])).toBe(data);
+    expect(countdownHoleData(data, [round(3), sealedRound(4, 18, { final: true })])).toBe(data);
   });
 
   it("keeps exactly the revealed holes and no more", () => {
@@ -288,8 +312,10 @@ describe("a live Team Best Ball round nobody flagged", () => {
     expect(tv["b1_4"]).toEqual({ 0: 5, 1: 4 });
   });
 
-  it("is fully open again once all eighteen are revealed", () => {
-    const done = [{ round_number: 4, format: "team_best_ball", reveal_through: HOLE_COUNT }];
+  it("is fully open again once all eighteen are revealed and it is final", () => {
+    const walked = [{ round_number: 4, format: "team_best_ball", reveal_through: HOLE_COUNT }];
+    expect(concealHoleData(holes, walked)["a1_4"]).toBeUndefined();
+    const done = [{ round_number: 4, format: "team_best_ball", reveal_through: HOLE_COUNT, final: true }];
     expect(concealHoleData(holes, done)).toBe(holes);
   });
 
@@ -347,7 +373,7 @@ describe("wantsCountdown", () => {
 //  Everything that asks "what is PUBLIC" has to keep meaning the holes that
 //  are wholly out, or the board learns the result a captain has not given yet.
 
-const twoSided = (a, b) => round(4, { format: "team_best_ball", sealed: true, reveal_a: a, reveal_b: b });
+const twoSided = (a, b, extra = {}) => round(4, { format: "team_best_ball", sealed: true, reveal_a: a, reveal_b: b, ...extra });
 
 describe("the two sides", () => {
   it("reads each side's own counter", () => {
@@ -392,7 +418,7 @@ describe("what is PUBLIC is the lower of the two", () => {
     expect(isFullyRevealed(twoSided(18, 17))).toBe(false);
     expect(isConcealing(twoSided(18, 17))).toBe(true);
     expect(isFullyRevealed(twoSided(18, 18))).toBe(true);
-    expect(isConcealing(twoSided(18, 18))).toBe(false);
+    expect(isConcealing(twoSided(18, 18, { final: true }))).toBe(false);
   });
 
   // The scoreboard is all-or-nothing whatever the sides are doing, which is
@@ -402,7 +428,7 @@ describe("what is PUBLIC is the lower of the two", () => {
     expect(concealHoleData(data, [twoSided(17, 16)]).p1_4).toBeUndefined();
     expect(concealHoleData(data, [twoSided(18, 17)]).p1_4).toBeUndefined();
     // And lands the lot when the last captain speaks.
-    expect(concealHoleData(data, [twoSided(18, 18)])).toBe(data);
+    expect(concealHoleData(data, [twoSided(18, 18, { final: true })])).toBe(data);
   });
 });
 
