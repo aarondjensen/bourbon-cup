@@ -1327,7 +1327,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                           roster, which cannot be checked by them and would
                           be free to disagree. */}
                       {playerIsDirector(memberships, p) && <span title="Tournament director" style={{ fontSize: FS.small, flexShrink: 0, lineHeight: 1 }}>👑</span>}
-                      {captainOf(p) === p.team && <span title="Side captain — narrates the Final Countdown" style={{ fontSize: FS.small, flexShrink: 0, lineHeight: 1 }}>🎙</span>}
+                      {captainOf(p) === p.team && <span title="Side captain — narrates the Final Countdown" style={{ fontSize: FS.small, flexShrink: 0, lineHeight: 1 }}>📣</span>}
                       {/* Whether this name has been claimed by a sign-in.
                           The director is the only person who can answer
                           "why can't I pick my own name" (somebody else
@@ -1428,6 +1428,47 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
             // smaller makes iOS Safari zoom the page on focus. Height is
             // condensed via padding, not by dropping a rung.
             const inp = { fontSize: FS.lead, fontWeight: 600, color: BC.t1, width: "100%", boxSizing: "border-box", background: BC.inp, border: `1px solid ${acc}${ALPHA.line}`, borderRadius: 8, padding: "7px 10px", outline: "none", fontFamily: FONT };
+            // ── One role badge ────────────────────────────────────
+            // Three states, and the third is the one that has to be
+            // distinguishable at a glance: LIT (he has it), GREY (he does
+            // not, tap to give it), and FAINT + not tappable (it is not yours
+            // to give — the line under the row says why).
+            //
+            // Grey is `grayscale`, not just a lower opacity. A colour emoji
+            // dimmed to half is still gold and still reads as ON from arm's
+            // length; drained of colour it reads as an outline of the thing,
+            // which is what "not yet" should look like.
+            //
+            // WHICH IS ALSO WHY THE CAPTAIN IS A MEGAPHONE AND NOT A MICROPHONE.
+            // 🎙 is very nearly black — on this theme it was invisible dimmed,
+            // and no amount of brightness fixes a glyph that is already dark
+            // (multiplying twenty by two is still dark). 📣 is orange, so it
+            // greys to something you can see, and it is the better picture of
+            // the job anyway: the man is announcing his side to a room.
+            //
+            // The glyph carries no text, so the name of the role lives in
+            // `aria-label` and in the tooltip — and in the confirm on Save,
+            // which is where a tap actually costs anything.
+            const roleBadge = ({ glyph, label, on, can, hint, accent, onTap }) => (
+              <button type="button" key={label}
+                disabled={!can}
+                title={hint || label}
+                aria-label={label}
+                aria-pressed={on}
+                onClick={onTap}
+                style={{
+                  width: 36, height: 36, flexShrink: 0, padding: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: FS.body, lineHeight: 1, fontFamily: FONT,
+                  borderRadius: 8,
+                  border: `1px solid ${on ? accent : BC.bdr}`,
+                  background: on ? accent + ALPHA.wash : "transparent",
+                  opacity: !can ? 0.28 : on ? 1 : 0.5,
+                  filter: on ? "none" : "grayscale(1)",
+                  cursor: can ? "pointer" : "default",
+                  transition: "opacity 180ms ease, filter 180ms ease, border-color 180ms ease",
+                }}>{glyph}</button>
+            );
             // GHIN link/sync/unlink writes ONLY into the form here (never the db
             // directly) — the whole modal commits on Save, so add & edit behave
             // identically and Cancel truly discards. `formPlayer` gives
@@ -1596,62 +1637,71 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                       })}
                     </div>
                   </div>
-                  {/* Nickname + Director paired on one row, like First/Last. */}
-                  <div style={{ display: "flex", gap: 8 }}>
+                  {/* ── The two roles, as badges ──────────────────────
+                      They were two full-width buttons — "👑 Director" / "Player"
+                      on its own half-row, and "📣 Mash Brothers captain" /
+                      "Not a captain" on a whole row of its own beneath. Four
+                      lines of the sheet, counting their labels, to hold two
+                      booleans that are OFF for fourteen of the sixteen men.
+
+                      The badge is the same glyph the roster list already draws
+                      beside a name, so there is nothing new to learn: LIT means
+                      he has it, GREY means he does not, and a third state —
+                      barely there at all — means it is not yours to give,
+                      which is what the line underneath explains.
+
+                      TAPPING ONE COMMITS NOTHING. Like every other field here
+                      it only moves the form; Save is where the confirm names
+                      what is about to change and what it costs, and that is
+                      the guard that matters now the target is a 36px square
+                      rather than a labelled button. See the Save handler.
+
+                      What the crown IS: `is_director` on their membership
+                      document, the only flag the security rules honour. Two
+                      things it cannot do, both enforced by those rules rather
+                      than here — appoint somebody who has never signed in
+                      (there is no document to flag), and change your own (so
+                      the last director can never remove themselves).
+
+                      What the armband is: one man per side, and the only thing
+                      it grants is the Final Countdown — his side's holes come
+                      out when HE taps, off his own phone, after he has told
+                      the room what is on them. Naming a new one stands the old
+                      one down in the same Save. The side is his TEAM, so there
+                      is nothing to pick: moving him across the sheet moves the
+                      armband with him, which is why it reads the form's team
+                      and not the saved one. */}
+                  <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                     <label style={{ flex: 1, minWidth: 0 }}><span style={lbl}>Nickname</span>
                       <input value={editingPlayer.nick} placeholder={defaultNick} onChange={e => set({ nick: e.target.value })} style={inp} /></label>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      {/* This IS the grant — it writes is_director on their
-                          membership document, which is the only flag the
-                          security rules honour. Two things it cannot do,
-                          both enforced by those rules rather than here:
-                          appoint somebody who has never signed in (there is
-                          no membership document to flag), and change your
-                          own (so the last director can never remove
-                          themselves). */}
-                      <span style={lbl}>Director</span>
-                      <button type="button"
-                        disabled={!canGrantDirector}
-                        title={directorHint}
-                        onClick={() => set({ dir: !editingPlayer.dir })}
-                        style={{ fontSize: FS.body, fontWeight: 700, padding: "7px 10px", borderRadius: 8, cursor: canGrantDirector ? "pointer" : "default", width: "100%", boxSizing: "border-box", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", opacity: canGrantDirector ? 1 : 0.5,
-                          border: `1px solid ${editingPlayer.dir ? BC.amber : BC.bdr}`, background: editingPlayer.dir ? BC.amber + ALPHA.wash : "transparent", color: editingPlayer.dir ? BC.amberInk : BC.t2 }}>
-                        {editingPlayer.dir ? "👑 Director" : "Player"}
-                      </button>
-                    </div>
+                    {!isNew && (
+                      <div style={{ flexShrink: 0 }}>
+                        <span style={lbl}>Roles</span>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          {roleBadge({
+                            glyph: "👑", label: "Director", on: editingPlayer.dir,
+                            can: canGrantDirector, hint: directorHint, accent: BC.amber,
+                            onTap: () => set({ dir: !editingPlayer.dir }),
+                          })}
+                          {roleBadge({
+                            glyph: "📣", label: `${teamNames[capSide] || capSide} captain`,
+                            on: editingPlayer.cap,
+                            can: canGrantCaptain, hint: captainHint, accent: acc,
+                            onTap: () => set({ cap: !editingPlayer.cap }),
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  {!isNew && !canGrantDirector && (
-                    <div style={{ fontSize: FS.label, color: BC.t3, marginTop: -6, lineHeight: 1.4 }}>{directorHint}</div>
-                  )}
-                  {/* ── Captain ──
-                      One man per side. The only thing it grants is the Final
-                      Countdown: on the evening the closing round is turned
-                      over, his side's holes come out when HE taps, off his own
-                      phone, after he has told the room what is on them. His
-                      phone gets the prompt; see components/FinalCountdown.
-
-                      Naming a new one stands the old one down in the same
-                      Save — a side with two captains is a room with two people
-                      talking. The side is his TEAM, so there is nothing to
-                      pick: moving him across the sheet moves the armband with
-                      him, which is why this reads the form's team and not the
-                      saved one. */}
-                  {!isNew && (
-                    <div>
-                      <span style={lbl}>Captain</span>
-                      <button type="button"
-                        disabled={!canGrantCaptain}
-                        title={captainHint}
-                        onClick={() => set({ cap: !editingPlayer.cap })}
-                        style={{ fontSize: FS.body, fontWeight: 700, padding: "7px 10px", borderRadius: 8, cursor: canGrantCaptain ? "pointer" : "default", width: "100%", boxSizing: "border-box", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", opacity: canGrantCaptain ? 1 : 0.5,
-                          border: `1px solid ${editingPlayer.cap ? acc : BC.bdr}`, background: editingPlayer.cap ? acc + ALPHA.wash : "transparent", color: editingPlayer.cap ? BC.t1 : BC.t2 }}>
-                        {editingPlayer.cap ? `🎙 ${teamNames[capSide] || capSide} captain` : "Not a captain"}
-                      </button>
-                    </div>
-                  )}
-                  {!isNew && !canGrantCaptain && captainHint && (
-                    <div style={{ fontSize: FS.label, color: BC.t3, marginTop: -6, lineHeight: 1.4 }}>{captainHint}</div>
-                  )}
+                  {/* One line per REASON, not one per badge: when a man has
+                      never signed in both badges are out for the same reason,
+                      and printing it twice reads as two separate problems. */}
+                  {!isNew && [...new Set([
+                    canGrantDirector ? null : directorHint,
+                    canGrantCaptain ? null : captainHint,
+                  ].filter(Boolean))].map((h) => (
+                    <div key={h} style={{ fontSize: FS.label, color: BC.t3, marginTop: -6, lineHeight: 1.4 }}>{h}</div>
+                  ))}
                   {/* ── Withdrawn ──
                       A man who walks in after nine leaves holes that will
                       never be filled, and until this existed his three
