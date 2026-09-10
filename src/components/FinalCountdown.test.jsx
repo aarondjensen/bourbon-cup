@@ -84,7 +84,11 @@ describe("a hole half turned over", () => {
     expect(screen({ A: 1, B: 0 }).textContent).not.toContain("TAKE IT");
     // The app's all-caps is CSS, which jsdom does not apply — this is the
     // text as the component writes it.
-    expect(screen({ A: 1, B: 1 }).textContent).toContain("Mash Brothers TAKE IT");
+    const t = screen({ A: 1, B: 1 }).textContent;
+    expect(t).toContain("Mash Brothers TAKE IT");
+    // The point, said in words. A bare "+1" here would collide with the side
+    // numbers above, which are now figures against par.
+    expect(t).toContain("1 POINT");
   });
 
   it("names the balls that made the number and dims the ones that didn't", () => {
@@ -138,6 +142,48 @@ describe("the side's grid", () => {
     cleanup();
     const later = namesIn(screen({ A: 9, B: 9 }), "A");
     expect(later).toEqual(first);
+  });
+});
+
+// ── What a chip says, and what it stopped saying ────────────────────
+describe("the chip", () => {
+  it("shows the net score and not the gross", () => {
+    // a1 is a gross 3 with no strokes, a3 a gross 5. Both are on screen as
+    // net. What must NOT be there is the "(5)" that used to ride beside them:
+    // two numbers on a postage stamp, in a room.
+    const t = screen({ A: 1, B: 1 }).textContent;
+    expect(t).not.toMatch(/\(\d\)/);
+  });
+
+  it("leaves a ball that missed the cut legible", () => {
+    // It used to sit at opacity 0.42, which from twelve feet is a number you
+    // cannot read — and on this format "you didn't count" is half the
+    // conversation in the room. The ring and the tint say who made the number.
+    const c = screen({ A: 1, B: 1 });
+    const chips = [...c.querySelectorAll("div")].filter(d => d.style.borderRadius?.startsWith("clamp(5px"));
+    expect(chips.length).toBeGreaterThan(0);
+    chips.forEach(d => expect(d.style.opacity === "" || Number(d.style.opacity) >= 1).toBe(true));
+  });
+});
+
+// ── The side's number ───────────────────────────────────────────────
+// Against par, not a raw total. Nobody in the room knows that six pars on
+// this hole is 24; they all know what −3 is.
+describe("the side's number", () => {
+  it("is relative to par, measured against the balls that counted", () => {
+    // Best 2 of 3 on a par 4. A is net 3 + 4 against two pars — one under.
+    // B is 4 + 4 — level.
+    const t = screen({ A: 1, B: 1 }).textContent;
+    expect(t).toContain("−1");
+    expect(t).toContain("E");
+    // The raw totals are gone: 7 and 8 are not on the screen as side scores.
+    expect(result.holes[0].aScore).toBe(7);
+    expect(t).not.toContain("Mash Brothers7");
+  });
+
+  it("says nothing for a side whose captain has not spoken", () => {
+    const t = screen({ A: 1, B: 0 }).textContent;
+    expect(t).toContain("SHOT CALLERS TO TELL IT");
   });
 });
 

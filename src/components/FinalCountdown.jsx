@@ -80,7 +80,7 @@ import { useEffect, useRef, useCallback } from "react";
 import { BC, FONT, ALPHA, teamColor } from "../theme";
 import { playerLookup } from "../lib/players";
 import { HOLE_COUNT, nextHoleForSide, sidesPending } from "../lib/reveal";
-import { holePrompt } from "../lib/countdownPrompt";
+import { holePrompt, relToPar, fmtRel } from "../lib/countdownPrompt";
 
 // ── Type scale, for a television ─────────────────────────────────
 // Read as: never smaller than the first (a phone held sideways, or the
@@ -125,9 +125,9 @@ const fmtPts = (n) => (n == null ? "—" : Number.isInteger(n) ? String(n) : Str
 //  the under-par numbers in red ink and everything else in black, and a room
 //  full of golfers reads it without being told. It is on the NET score,
 //  because net is what the format counts.
-function BallChip({ name, gross, strokes, net, par, tid, counted }) {
+function BallChip({ strokes, name, net, par, tid, counted }) {
   const col = teamColor(tid);
-  const under = counted && net != null && Number.isFinite(par) && net < par;
+  const under = net != null && Number.isFinite(par) && net < par;
   return (
     <div style={{
       // A cell of the side's grid, not a flex sibling — see SideColumn. Every
@@ -138,7 +138,13 @@ function BallChip({ name, gross, strokes, net, par, tid, counted }) {
       borderRadius: "clamp(5px, 0.7vw, 14px)",
       background: counted ? `${col}${ALPHA.tint}` : "transparent",
       border: `1px solid ${counted ? col : `${BC.bdr}${ALPHA.line}`}`,
-      textAlign: "center", opacity: counted ? 1 : 0.42,
+      // A ball that missed is NOT dimmed. It used to sit at 0.42, which from
+      // twelve feet is a number you cannot read — and on this format "you
+      // didn't count" is half the conversation in the room, so the man being
+      // laughed at deserves to have his score legible while it happens. The
+      // ring and the tint already say who made the number; they say it
+      // loudly enough on their own, and they say it without hiding anything.
+      textAlign: "center",
       display: "flex", flexDirection: "column", alignItems: "center", gap: 1,
     }}>
       <div style={{
@@ -173,21 +179,24 @@ function BallChip({ name, gross, strokes, net, par, tid, counted }) {
         ))}
       </div>
 
-      <div style={{ display: "flex", alignItems: "baseline", gap: "0.35em" }}>
-        <span style={{
-          fontSize: T.chip, fontWeight: 800, lineHeight: 1,
-          color: under ? BC.danger : counted ? BC.t1 : BC.t3,
-        }}>
-          {net == null ? "·" : net}
-        </span>
-        {/* The gross, small, beside it — what he actually wrote down. Only
-            when the two differ, which is exactly when the dots are lit. */}
-        {gross != null && gross !== net && (
-          <span style={{ fontSize: T.chipName, fontWeight: 700, color: BC.t3 }}>
-            ({gross})
-          </span>
-        )}
-      </div>
+      {/* NET, and only net. The gross used to ride beside it in parentheses —
+          "3 (5)" — which is two numbers to read on a chip the size of a
+          postage stamp, in a room, on the one screen where a half-second of
+          squinting is a half-second of the ceremony. The dots above say the
+          number is a net one; the number he wrote down is on the card he
+          signed, and nobody in the room is auditing it.
+
+          Under par is red on ANY ball, not just one that counted. That is
+          what a scorecard's red ink means — the score, not its standing —
+          and a non-counting net birdie printed grey next to a counting one
+          printed red would be the brightening above undone in the one place
+          it matters most. */}
+      <span style={{
+        fontSize: T.chip, fontWeight: 800, lineHeight: 1,
+        color: under ? BC.danger : counted ? BC.t1 : BC.t2,
+      }}>
+        {net == null ? "·" : net}
+      </span>
     </div>
   );
 }
@@ -212,8 +221,23 @@ function BallChip({ name, gross, strokes, net, par, tid, counted }) {
 // Alphabetical rather than roster order for the same reason: roster order is
 // whatever the director typed, it differs between the two sides, and it is
 // not a thing anybody can look a name up in. A is at the top left.
-function SideColumn({ tid, teamName, score, balls, par, revealed, won, waitingOn }) {
+function SideColumn({ tid, teamName, score, balls, par, countN, revealed, won, waitingOn }) {
   const col = teamColor(tid);
+  // ── The number, AGAINST PAR ──
+  // It used to be the side's raw total — 25, 18 — which is the sum of six or
+  // seven net balls and means nothing to anybody without doing the same sum
+  // in their head first. Nobody in the room knows that six pars on this hole
+  // is 24. They all know what −3 is.
+  //
+  // Measured against N pars, where N is the number of balls that made the
+  // number, so a best-6 hole is compared with six pars and a best-7 hole with
+  // seven. The captain's prompt band is computed the same way (see
+  // lib/countdownPrompt) — one arithmetic, so the screen and the man reading
+  // it out cannot disagree by a shot.
+  const need = Number.isFinite(countN) && countN > 0
+    ? countN
+    : balls.filter((b) => b.counted && b.net != null).length;
+  const rel = revealed ? relToPar(score, par, need) : null;
   return (
     <div style={{
       flex: 1, minWidth: 0, display: "flex", flexDirection: "column",
@@ -233,7 +257,7 @@ function SideColumn({ tid, teamName, score, balls, par, revealed, won, waitingOn
         opacity: revealed ? 1 : 0,
         transform: revealed ? "none" : "translateY(0.12em) scale(0.94)",
         transition: "opacity 380ms ease, transform 380ms cubic-bezier(.2,.7,.3,1)",
-      }}>{revealed ? (score == null ? "—" : score) : "—"}</div>
+      }}>{revealed && score != null ? fmtRel(rel) : "—"}</div>
       {/* A side still waiting on its captain says so, rather than sitting
           under a dash that reads the same as a hole nobody posted. This is
           the half of the screen the room is looking at while he talks. */}
@@ -645,10 +669,12 @@ export function FinalCountdown({
       </div>
 
       <div style={{ flex: "1 1 0", minHeight: 0, display: "flex", alignItems: "center", gap: "clamp(6px, 1vw, 22px)" }}>
-        <SideColumn tid="A" teamName={tA.name} score={hr?.aScore} balls={ballsFor("A")} par={holePars?.[holeIdx]}
+        <SideColumn tid="A" teamName={tA.name} score={hr?.aScore} balls={ballsFor("A")}
+          par={holePars?.[holeIdx]} countN={countN}
           revealed={showA} won={showVerdict && winner === "A"} waitingOn={`${tA.name.toUpperCase()} TO TELL IT`} />
         <div style={{ flexShrink: 0, fontSize: T.sideName, fontWeight: 800, color: BC.t3, opacity: 0.5 }}>vs</div>
-        <SideColumn tid="B" teamName={tB.name} score={hr?.bScore} balls={ballsFor("B")} par={holePars?.[holeIdx]}
+        <SideColumn tid="B" teamName={tB.name} score={hr?.bScore} balls={ballsFor("B")}
+          par={holePars?.[holeIdx]} countN={countN}
           revealed={showB} won={showVerdict && winner === "B"} waitingOn={`${tB.name.toUpperCase()} TO TELL IT`} />
       </div>
 
@@ -679,9 +705,14 @@ export function FinalCountdown({
           </div>
         ) : (
           <div style={{ fontSize: T.verdict, fontWeight: 800, letterSpacing: "0.1em", color: winner ? teamColor(winner) : BC.t2 }}>
+            {/* "1 POINT", not "+1". The side's own number is now a figure
+                against par — "+1", "−6" — so a verdict reading "TAKE IT · +1"
+                put a plus sign on the screen meaning two different things
+                three inches apart. The terms line at the top already says
+                POINT; this says it the same way. */}
             {!hr?.played ? "NO RESULT ON THIS HOLE"
               : verdictName
-                ? `${verdictName} TAKE IT${holeValue ? `  ·  +${fmtPts(holeValue)}` : ""}`
+                ? `${verdictName} TAKE IT${holeValue ? `  ·  ${fmtPts(holeValue)} POINT${holeValue === 1 ? "" : "S"}` : ""}`
                 : `TIED${holeValue ? `  ·  ${fmtPts(holeValue / 2)} EACH` : ""}`}
           </div>
         )}
