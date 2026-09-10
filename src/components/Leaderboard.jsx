@@ -710,10 +710,16 @@ function RoundSection({
           ) : seal?.concealing ? (
             <span style={{ fontSize: FS.lead, fontWeight: 800, flexShrink: 0, color: BC.t3 }}>—</span>
           ) : (
+            /* Both figures at full team colour. The trailing side used to be
+               held back to 60%, which said "these two numbers are not equally
+               real" about a score that is exactly as real as the other one —
+               and on a round the trailing side is winning by half a point it
+               dimmed the wrong half of a scoreline nobody had to be told the
+               order of. The colours are the teams; the numbers are the score. */
             <>
-              <span style={{ fontSize: FS.lead, fontWeight: 800, flexShrink: 0, color: pts.A >= pts.B ? BC.teamA : `${BC.teamA}${ALPHA.held}` }}>{fmtPts(pts.A)}</span>
+              <span style={{ fontSize: FS.lead, fontWeight: 800, flexShrink: 0, color: BC.teamA }}>{fmtPts(pts.A)}</span>
               <span style={{ fontSize: FS.small, color: BC.t3, flexShrink: 0 }}>–</span>
-              <span style={{ fontSize: FS.lead, fontWeight: 800, flexShrink: 0, color: pts.B >= pts.A ? BC.teamB : `${BC.teamB}${ALPHA.held}` }}>{fmtPts(pts.B)}</span>
+              <span style={{ fontSize: FS.lead, fontWeight: 800, flexShrink: 0, color: BC.teamB }}>{fmtPts(pts.B)}</span>
             </>
           )}
         </div>
