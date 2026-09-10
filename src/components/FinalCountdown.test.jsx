@@ -121,6 +121,21 @@ describe("a hole half turned over", () => {
     expect(t).toContain("1 POINT");
   });
 
+  // Two lines under the number, not one string of four facts separated by
+  // dots. What the HOLE is (par, and the handicap that decides who gets a shot
+  // on it), then what it is WORTH (how many balls make the number, and what it
+  // pays). From the back of a room the single line was a rule nobody parses.
+  it("splits the hole from what it is worth", () => {
+    const t = screen({ A: 1, B: 1 }).textContent;
+    expect(t).toContain("PAR 4 · HANDICAP 1");
+    expect(t).toContain("BEST 2 OF 3 · 1 POINT");
+    // And they are separate elements, not one run of text.
+    expect(t).not.toContain("HANDICAP 1 · BEST");
+    // "SI" is the correct term and not the one anybody says out loud. The
+    // captain's card calls the same number the same thing.
+    expect(t).not.toContain("SI ");
+  });
+
   // Not the same fact. "Who took the hole" happens eighteen times; "the cup is
   // won" happens once, and it is the moment the evening is built around.
   it("still gives the clinch a band of its own", () => {
@@ -538,7 +553,7 @@ describe("a captain's phone", () => {
     // The hole is the heading and par/SI the detail under it — two lines, not
     // one grey caption with the number he is announcing buried in it.
     expect(t).toContain("HOLE 2");
-    expect(t).toContain("PAR 4 · SI 2");
+    expect(t).toContain("PAR 4 · HANDICAP 2");
     expect(t).toContain("Mash Brothers −1");   // birdie + par against two pars
     expect(t).toContain("Net birdie — Paul W");
   });
@@ -546,7 +561,7 @@ describe("a captain's phone", () => {
   // A net bogey is never read out — see lib/countdownPrompt for why.
   it("never names the man who made the bogey", () => {
     const t = screen({ A: 1, B: 1 }, captain).textContent;
-    const band = t.slice(t.indexOf("PAR 4 · SI 2"));
+    const band = t.slice(t.indexOf("PAR 4 · HANDICAP 2"));
     expect(band).not.toContain("Tim C");
   });
 
@@ -570,7 +585,7 @@ describe("a captain's phone", () => {
   // down, every hole, eighteen times, in front of everybody.
   it("puts the hole, then the men, then the number", () => {
     const t = screen({ A: 1, B: 1 }, captain).textContent;
-    const hole = t.indexOf("PAR 4 · SI 2");
+    const hole = t.indexOf("PAR 4 · HANDICAP 2");
     const names = t.indexOf("Net birdie — Paul W");
     const number = t.indexOf("Mash Brothers −1");
     expect(hole).toBeGreaterThan(-1);
@@ -651,7 +666,7 @@ describe("a captain's phone", () => {
     const t = screen({ A: 1, B: 1 }, captain).textContent;
     expect(t).not.toContain("Net birdie — Paul W");
     expect(t).not.toContain("in a row");
-    expect(t).not.toContain("PAR 4 · SI 2");
+    expect(t).not.toContain("PAR 4 · HANDICAP 2");
   });
 
   it("still gives him his reveal button on a big screen", () => {
