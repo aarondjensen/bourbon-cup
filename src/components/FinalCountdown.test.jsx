@@ -219,35 +219,45 @@ describe("a man's ball", () => {
     expect(scores(screen({ A: 1, B: 1 }))).toEqual(expect.arrayContaining(["−1", "E", "+1"]));
   });
 
-  // ── The row is built around its middle ──
-  // The dot lane is pinned to the centre of the column — the same centre the
-  // team's name and its big to-par number already sit on — and the name grows
-  // leftward out of it while the score sits immediately right. Equal `flex: 1`
-  // on the two outer lanes is the whole trick; it centres the middle one at
-  // any width with nothing measured.
-  //
-  // It used to be name-hard-left and number-hard-right, which on a 1250px
-  // column is two facts at opposite ends of a foot of black.
-  it("centres the stroke column under the team's own number", () => {
+  // ── A centred trio of left-to-right columns ──
+  // The side's header is centred, so the eight rows under it have to be. But
+  // "centred" means the three lanes TOGETHER, not each row's ink: the name
+  // stays left-aligned so eight names start on one pixel, the score is centred
+  // in its own lane, and the block of three sits in the middle.
+  it("centres the trio without centring what is inside it", () => {
     setWidth(TV);
     const c = screen({ A: 1, B: 1 });
     const rows = [...c.querySelectorAll("div")]
       .filter(d => d.style.borderLeft?.startsWith("clamp(3px"));
     expect(rows.length).toBe(6);
     rows.forEach((row) => {
+      expect(row.style.justifyContent).toBe("center");
       const [name, dots, score] = [...row.children];
-      // The two outer lanes take equal shares of the leftover, which is what
-      // puts the dot lane dead centre.
-      expect(name.style.flexGrow).toBe("1");
-      expect(score.style.flexGrow).toBe("1");
-      // The name runs INTO the dots and the score runs out of them.
-      expect(name.style.textAlign).toBe("right");
-      expect(score.style.textAlign).toBe("left");
-      // The dot lane itself is fixed, or it would stretch and stop being a
-      // centre at all.
-      expect(dots.style.flexGrow).toBe("");
+      expect(name.style.textAlign).toBe("left");
+      expect(score.style.textAlign).toBe("center");
+      // No lane may GROW. A lane that takes a share of the column carries the
+      // leftover space inside itself, which is what leaves a left-aligned name
+      // floating in a pool of it and the block reading left-heavy however
+      // carefully the box is centred.
+      [name, dots, score].forEach((lane) => expect(lane.style.flexGrow).toBe(""));
+      expect(name.style.width).toBeTruthy();
       expect(dots.style.width).toBeTruthy();
+      expect(score.style.width).toBeTruthy();
     });
+  });
+
+  // Sized to the longest name ON THAT SIDE, so the trio has no slack in it and
+  // the middle of the box is the middle of the ink.
+  it("sizes the name lane to the longest name on the side", () => {
+    setWidth(TV);
+    const c = screen({ A: 1, B: 1 });
+    const lanes = [...c.querySelectorAll("div")]
+      .filter(d => d.style.borderLeft?.startsWith("clamp(3px"))
+      .map(row => row.children[0].style.width);
+    // One width for the whole side, or the names have no left edge to line up
+    // on. Both sides here are 6-character names, so both come out the same.
+    expect(new Set(lanes).size).toBe(1);
+    expect(parseFloat(lanes[0])).toBeCloseTo(6 * 0.75, 5);
   });
 
   // A border only on the left shifts the content box right by its own width,

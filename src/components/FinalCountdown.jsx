@@ -264,19 +264,31 @@ function BallChip({ strokes, name, net, par, tid, counted }) {
 // of it. A row gives the name room and the number a lane of its own, so the
 // eight of them line up as a list somebody can read down.
 //
-// ── CENTRED ON THE STROKE COLUMN ──
-// The row is built around its MIDDLE, not its edges. The dot lane is pinned to
-// the centre of the column — which is the centre the team's name and its big
-// to-par number are already sitting on — and the name grows leftward out of it
-// while the score sits immediately right. The two outer lanes carry the same
-// `flex: 1`, which is the whole trick: equal shares of whatever is left over
-// put the middle one dead centre at any width, with no measuring.
+// ── A CENTRED TRIO OF LEFT-TO-RIGHT COLUMNS ──
+// The side's header is centred — the team's name over its big to-par number —
+// so the eight rows under it have to be, or the column reads as a centred
+// title over a table pushed against one edge. But "centred" here means the
+// THREE LANES TOGETHER, not each row's ink: name, strokes and score keep their
+// own alignment inside their own lane, and the block of three is what sits in
+// the middle.
 //
-// It used to be name-hard-left, number-hard-right, and on a 1250px column that
-// is two facts at opposite ends of a foot of black with the dots stranded
-// somewhere near the right. The header above it is centred; the eight rows
-// under it were not, so the side read as a centred title over a left-aligned
-// table. Now the whole column shares one spine.
+//   NAME     left-aligned, so eight names start on one pixel and the column
+//            can be read down rather than scanned.
+//   STROKES  a fixed lane, whether or not the man got a shot.
+//   SCORE    centred in its lane.
+//
+// It went through the wrong middle first: name hard left, number hard right,
+// and the dots stranded near the right on a 1250px column — two facts at
+// opposite ends of a foot of black. Then the dot lane was pinned dead centre
+// with equal flex either side, which centred one column and left the score
+// hanging past it with a hand's width of nothing beyond.
+//
+// WHAT MAKES IT OPTICAL RATHER THAN JUST CENTRED: the name lane is sized to
+// the LONGEST NAME ON THAT SIDE (see SideColumn) instead of to a share of the
+// column. A lane sized by its share carries the leftover space inside itself,
+// so left-aligned names sit in the middle of a pool of it and the block reads
+// left-heavy however carefully the box is centred. Sized to its content, the
+// trio has no slack in it and the middle of the box is the middle of the ink.
 //
 // The rail is mirrored by a TRANSPARENT border of the same width on the right.
 // A border only on the left shifts the content box right by its own width, and
@@ -289,13 +301,21 @@ function BallChip({ strokes, name, net, par, tid, counted }) {
 // missed going dim (see the note in SideColumn).
 const RAIL = "clamp(3px, 0.4vw, 8px)";
 
-function BallRow({ strokes, name, net, par, tid, counted }) {
+// How wide a name lane has to be, in ems of its own type, for `n` characters.
+// Montserrat Bold in the app's all-caps (see theme.js) measures about 0.67em a
+// character; this is that with a margin, because the cost of being a little
+// wide is a little slack and the cost of being narrow is "CHRISTOPHE…" on a
+// television. It ellipsizes anyway if a director ever types something enormous.
+const nameLaneEm = (n) => Math.max(3.4, (Number(n) || 0) * 0.75);
+
+function BallRow({ strokes, name, net, par, tid, counted, nameEm }) {
   const col = teamColor(tid);
   const rel = ballRel(net, par);
   const under = rel != null && rel < 0;
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: "clamp(4px, 0.6vw, 12px)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      gap: "clamp(4px, 0.6vw, 12px)",
       padding: `${T.rowPad} clamp(6px, 0.8vw, 16px)`,
       borderRadius: "clamp(4px, 0.5vw, 10px)",
       background: counted ? `${col}${ALPHA.tint}` : "transparent",
@@ -304,18 +324,14 @@ function BallRow({ strokes, name, net, par, tid, counted }) {
       minWidth: 0,
     }}>
       <div style={{
-        flex: 1, minWidth: 0, textAlign: "right",
+        width: `${nameEm}em`, flexShrink: 1, minWidth: 0, textAlign: "left",
         fontSize: T.rowName, fontWeight: 800, letterSpacing: 0.4,
         color: counted ? BC.t1 : BC.t2,
         whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
       }}>{name}</div>
       <StrokeDots strokes={strokes} row />
-      {/* Left-aligned in its own half, so every score in the column starts on
-          the same pixel and the minus signs stack — a right-aligned lane out
-          here would push the numbers to the far edge and undo the centring the
-          two flex halves just bought. */}
       <div style={{
-        flex: 1, minWidth: 0, textAlign: "left", whiteSpace: "nowrap",
+        width: "2.2em", flexShrink: 0, textAlign: "center", whiteSpace: "nowrap",
         fontSize: T.rowScore, fontWeight: 800, lineHeight: 1,
         color: under ? BC.danger : counted ? BC.t1 : BC.t2,
       }}>{rel == null ? "·" : fmtRel(rel)}</div>
@@ -360,6 +376,10 @@ function SideColumn({ tid, teamName, score, balls, par, countN, compact, reveale
     ? countN
     : balls.filter((b) => b.counted && b.net != null).length;
   const rel = revealed ? relToPar(score, par, need) : null;
+  // The name lane, one width for all eight rows so the column has an edge to
+  // be read down, and no wider than the longest name on the side so the trio
+  // has no slack to sit off-centre in. See BallRow.
+  const nameEm = nameLaneEm(Math.max(0, ...balls.map((b) => (b.name || "").length)));
   return (
     <div style={{
       // On a television each side claims half the width and stretches to fill
@@ -429,7 +449,13 @@ function SideColumn({ tid, teamName, score, balls, par, countN, compact, reveale
           display: "flex", flexDirection: "column", width: "100%",
           gap: T.rowGap,
         }}>
-          {balls.map((b) => <BallRow key={b.pid} {...b} par={par} tid={tid} />)}
+          {/* One lane width for the whole side, off the longest name on it —
+              which is what makes the trio hug its content and sit optically in
+              the middle rather than floating in a share of the column. See the
+              note on BallRow. */}
+          {balls.map((b) => (
+            <BallRow key={b.pid} {...b} par={par} tid={tid} nameEm={nameEm} />
+          ))}
         </div>
       ))}
     </div>
