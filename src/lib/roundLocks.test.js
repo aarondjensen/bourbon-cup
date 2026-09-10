@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   currentRoundNumber,
+  scoringRoundNumber,
   nextRoundNumber,
   unfinalizedRoundNumbers,
   openRoundAfter,
@@ -54,5 +55,48 @@ describe("openRoundAfter", () => {
     expect(openRoundAfter(l, [1, 2, 3], 1)).toBe(2);
     expect(openRoundAfter(l, [1, 2, 3], 2)).toBe(1);
     expect(nextRoundNumber(l, [1, 2, 3])).toBe(2);
+  });
+});
+
+// ── scoringRoundNumber ─────────────────────────────────────────────
+// The rule App draws the gate with, extracted so lib/roundAmend can answer
+// "does reopening this round move the field?" with the SAME rule. A dialog
+// that promises the gate will stay put and then moves it is worse than no
+// dialog, and that is exactly what two copies of this drifting would produce.
+describe("scoringRoundNumber", () => {
+  it("falls through to the lowest unfinalized round with no dates", () => {
+    const l = locks(1, 2);
+    expect(scoringRoundNumber({ locks: l, allRounds: [1, 2, 3, 4] })).toBe(3);
+    expect(scoringRoundNumber({ locks: l, allRounds: [1, 2, 3, 4] }))
+      .toBe(currentRoundNumber(l, [1, 2, 3, 4]));
+  });
+
+  // The hazard it exists for: Friday unfinalized because one group never
+  // attested, and every phone in the field opening on it on Saturday.
+  it("lets today's round win over a stranded earlier one", () => {
+    const l = locks(2);   // Saturday frozen, Friday never was
+    expect(currentRoundNumber(l, [1, 2, 3])).toBe(1);
+    expect(scoringRoundNumber({ locks: l, allRounds: [1, 2, 3], roundToday: 3 })).toBe(3);
+  });
+
+  // Landing the tab on a finalized round trades a wrong-round score for a
+  // dead screen on the day it is being played.
+  it("refuses to land on a round that is already final", () => {
+    const l = locks(1, 2);
+    expect(scoringRoundNumber({ locks: l, allRounds: [1, 2, 3, 4], roundToday: 2 })).toBe(3);
+  });
+
+  it("is null once every round is final", () => {
+    expect(scoringRoundNumber({ locks: locks(1, 2, 3, 4), allRounds: [1, 2, 3, 4] })).toBe(null);
+    expect(scoringRoundNumber({
+      locks: locks(1, 2, 3, 4), allRounds: [1, 2, 3, 4], roundToday: 4,
+    })).toBe(null);
+  });
+
+  // A round that is merely LOCKED — which is where an amendment leaves one —
+  // is open for scoring again, and that is the point of reopening it.
+  it("opens a round that has been un-finalized", () => {
+    const l = { ...locks(1, 2, 3), 2: { locked: true, final: false } };
+    expect(scoringRoundNumber({ locks: l, allRounds: [1, 2, 3, 4] })).toBe(2);
   });
 });

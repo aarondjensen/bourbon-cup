@@ -648,6 +648,74 @@ Things that will bite you:
   secret — leaving it reachable on a set-up tournament would hand Admin to
   anyone who reads the JavaScript.
 
+## Correcting a finished round
+
+A round freezes when it is finalized, and that guarantee is the right one —
+`src/lib/roundLocks.js` explains what it freezes and why. But "cannot be moved
+by accident" had been built as "cannot be moved", and those are different
+promises. A hole typed against the wrong player, signed, attested and
+finalized is a thing that happens once a decade, and when it did the app had
+no answer: the fix was a Firebase console edit on raw document ids, made from
+a golf course by the one person least able to verify it. A gate with no door
+is not safer than a heavy door — it moves the override somewhere nothing
+records it.
+
+**`src/lib/roundAmend.js`** is the door. Pure, unit-tested, and it introduces
+no new lock state: amending is FINAL → LOCKED, which is the state roundLocks
+already defines as "frozen snapshot, still movable by a deliberate act". What
+changed is reach and candour.
+
+- **Reach.** ☰ → the Finalize sheet, bottom section, reopens **any** final
+  round. It used to point at `lastFinalRoundNumber` and nothing else, so
+  Round 2 of a finished cup was unreachable while 3 and 4 stood.
+- **Candour.** Two dialogs. The first states the cost — which is *computed*
+  by `describeAmendImpact`, not written down, so it cannot promise the field
+  will not be moved and then move it. The second takes a typed `AMEND` and a
+  **reason in the director's own words**, kept on the lock forever alongside
+  `amend_count`. A re-finalized round must never again look identical to one
+  nobody touched.
+
+### The half that trips people up
+
+**Points are live; strokes are frozen.** This split is the whole model, and
+each half fails silently in its own direction:
+
+- **Nassau pots, hole values, par points and counting scores** are read off
+  the round document over the snapshot, *always*, a final round included
+  (`getRoundHolePoints` and its neighbours in `scoring.js`). So the Nassau
+  allotment that was wrong for a format is corrected in Admin → Rounds and it
+  lands on the leaderboard immediately — **no reopen, no recalculate**, on a
+  round the field finished yesterday. The round's value wins over any stale
+  copy on a match, which is why `MatchSetup` deliberately never writes one.
+- **Handicaps, allowance, mode, tees and the course** come off the snapshot.
+  Correcting one of those changes a stored field and *nothing else* until the
+  snapshot is re-taken. That is **Recalculate**, in Admin → Rounds, and it
+  appears only on a round that has been amended and not yet recalculated — it
+  is the one act in the app that moves a stroke in a round already played, so
+  it previews the exact handicaps about to change, in numbers, behind a typed
+  `RECALCULATE`. It says so when nothing moves, which is the useful answer:
+  the correction was on the points side and has already landed.
+
+`roundAmend.cascade.test.js` pins both halves against the real scoring engine.
+If the first ever broke, a director would correct a pot and watch a leaderboard
+refuse to move; if the second broke, a GHIN sync would re-score a tournament
+that was over. Neither announces itself on screen, which is why they are
+tested rather than trusted to the comments describing them.
+
+**The scoring gate rule lives in one place** — `scoringRoundNumber` in
+`lib/roundLocks` — because App draws the gate with it and the amend dialog
+uses it to say whether reopening moves the field. Two copies drifting is a
+dialog that promises the gate will hold and then moves it. On a dated week
+today's round wins, so reopening Friday's round on Saturday moves nobody;
+with no dates set it falls through to the lowest unfinalized round and does.
+
+**None of this needs a rules deploy.** The finalize lock was always a
+client-side guard — `firestore.rules` lets any member write `bc_round_locks`
+— so this ships with the app and nothing else. `requireText` and
+`reasonPrompt` on `ConfirmModal` are the reusable halves; use them for
+anything else rare enough that a one-tap confirm is the reflex rather than the
+check.
+
 ## The Data tab
 
 **☰ → Data**, one row where Player Analytics and Historical Data used to be two.

@@ -111,6 +111,7 @@ import {
   describeHiChangeImpact,
   roundLockState,
 } from "../lib/roundLocks";
+import { amendNeedsRefresh } from "../lib/roundAmend";
 import {
   MAX_ROUND_COUNT,
   clampRoundCount,
@@ -444,7 +445,7 @@ function ChDeltaBadge({ delta }) {
   );
 }
 
-export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCaptain, editionId, isDemoAdmin = false, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, roundCount, tournamentRounds, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks, payments, duesAmount, onLogPayment, onDeletePayment, onSaveDues, onSetPlayerDues, onOpenFinalize, finalizeRound, finalizeReady, trip, onSaveTrip, startDate, endDate, budgetLines, onSaveBudgetLine, onDeleteBudgetLine }) {
+export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCaptain, editionId, isDemoAdmin = false, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, roundCount, tournamentRounds, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks, payments, duesAmount, onLogPayment, onDeletePayment, onSaveDues, onSetPlayerDues, onOpenFinalize, onRecalculateRound, finalizeRound, finalizeReady, trip, onSaveTrip, startDate, endDate, budgetLines, onSaveBudgetLine, onDeleteBudgetLine }) {
   const [tab, setTab] = useState("players");
   // Which half of the $ tab. Budget leads because it is the half a director
   // fills in first — you cannot say what to charge until you know what the
@@ -717,6 +718,67 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
   const lockState = roundLockState(roundLocks, editRound);
   const roundIsLocked = lockState !== LOCK_OPEN;
   const roundIsFinal = lockState === LOCK_FINAL;
+  // Whether this round is carrying an amendment its snapshot has not caught
+  // up with — see lib/roundAmend. This is the ONLY condition under which the
+  // recalculate control appears at all.
+  const needsRecalc = amendNeedsRefresh(roundLocks?.[editRound]);
+  const [recalcBusy, setRecalcBusy] = useState(false);
+
+  // Recalculating re-derives every player's Course Handicap for the round
+  // from live values, which CHANGES A FINISHED RESULT. So it says what it is
+  // about to do in numbers before it does it, and again in numbers afterwards
+  // — the two most common outcomes are "nine handicaps moved" and "nothing
+  // moved", and a director who cannot tell those apart has no way to know
+  // whether their correction was on the right field.
+  //
+  // The preview is built by re-taking the snapshot WITHOUT writing it, so the
+  // list shown is the list that will land rather than an estimate of it.
+  const doRecalculate = async () => {
+    const preview = onRecalculateRound ? await onRecalculateRound(editRound, { preview: true }) : null;
+    if (!preview) { notify("Could not read this round's handicaps — try again", "error"); return; }
+    const { rows, changed, unchanged } = preview.impact;
+
+    if (!changed) {
+      confirm({
+        title: `Nothing to recalculate`,
+        message: `Every handicap in Round ${editRound} already matches the current players, tees, allowance and course. Whatever you corrected was not on the handicap side — scores and point values are live and have already landed.`,
+        alert: true,
+      });
+      return;
+    }
+
+    const list = rows.slice(0, 8)
+      .map(r => `• ${r.name}: ${r.from} → ${r.to}`)
+      .join("\n") + (rows.length > 8 ? `\n• …and ${rows.length - 8} more` : "");
+
+    const ok = await confirm({
+      eyebrow: `Round ${editRound}`,
+      title: `Move ${changed} handicap${changed === 1 ? "" : "s"} in a round that has been played?`,
+      message: [
+        `${changed} Course Handicap${changed === 1 ? "" : "s"} will change and ${unchanged} will not:`,
+        list,
+        "",
+        "This re-allocates strokes on holes that have already been played, so match results in this round can change. It is the point of the recalculate — just be sure it is what you meant.",
+      ].join("\n"),
+      confirmLabel: "Recalculate",
+      destructive: true,
+      requireText: "RECALCULATE",
+    });
+    if (!ok) return;
+
+    setRecalcBusy(true);
+    try {
+      const res = await onRecalculateRound(editRound);
+      notify(
+        res ? `Round ${editRound} recalculated — ${changed} handicap${changed === 1 ? "" : "s"} moved`
+            : "Could not recalculate — nothing was changed",
+        res ? "success" : "error"
+      );
+    } catch {
+      notify("Could not recalculate — nothing was changed", "error");
+    } finally { setRecalcBusy(false); }
+  };
+
   // Popup replacement for the old always-visible lock banner: raised when a
   // control in the handicap section is touched on a locked/final round.
   // FINAL blocks the change and warns on every attempt; merely LOCKED lets
@@ -725,9 +787,13 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
   const lockWarnedRef = useRef({});
   const warnRoundLocked = () => {
     if (roundIsFinal) {
+      // Names the way out rather than stopping at "no". A dead end here is
+      // what sent the one director who needed this into the Firebase console
+      // — the guard was right that the field should not move, and wrong to
+      // imply that nothing could ever move it. See lib/roundAmend.
       confirm({
         title: `Round ${editRound} is final`,
-        message: "These fields are read-only. Nothing recalculates a final round.",
+        message: "These fields are read-only while the round is final.\n\nTo correct it, reopen the round first — Finalize Round, at the top of this tab, then Correct a finished round.",
         alert: true,
       });
       return true; // block the change
@@ -757,7 +823,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
     if (!roundIsFinal) return false;
     confirm({
       title: `Round ${editRound} is final`,
-      message: "Its format and scoring are read-only — nothing re-scores a final round. What the matches are worth can still be changed.",
+      message: "Its format and scoring are read-only while the round is final. What the matches are worth — the Nassau pots and the point values — can still be changed, and those land straight away.\n\nTo change the format itself, reopen the round first: Finalize Round, at the top of this tab, then Correct a finished round.",
       alert: true,
     });
     return true;
@@ -2979,6 +3045,61 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                 </div>
               ))}
             </div>
+
+            {/* ── Recalculate ──────────────────────────────────────────
+                The act that makes a correction to a REOPENED round actually
+                reach the leaderboard, and the only thing in the app that
+                moves a stroke in a round that has already been played.
+
+                It is here rather than on the finalize sheet because it acts
+                on the round this FORM is editing — a director has just
+                changed an allowance, or a tee, or a handicap, and this is the
+                next thing they need. The sheet acts on the round the field is
+                playing; those are different questions (see the finalize
+                button's note above).
+
+                Only for a round that has been AMENDED and not yet
+                recalculated. That narrowness is deliberate:
+
+                  • a final round never shows it — the round must be reopened
+                    first, which is what makes the amendment a real gate
+                    rather than a speed bump.
+                  • an ordinary locked round never shows it either. A round
+                    locks automatically on its first score and then runs all
+                    afternoon; putting "recalculate every handicap in this
+                    round" next to the form for the whole of it is an invitation
+                    to re-derive a live round's strokes off whatever GHIN
+                    synced last night.
+                  • and once it has been tapped it goes away, because the
+                    snapshot is then newer than the amendment and there is
+                    nothing outstanding to land.
+
+                A round reopened purely to fix a typed score never sees this
+                at all, and should not: the strokes were right. */}
+            {needsRecalc && onRecalculateRound && (
+              <div style={{
+                marginTop: 12, padding: "10px 12px", borderRadius: 10,
+                background: BC.card, border: `1px solid ${BC.amber}${ALPHA.line}`,
+              }}>
+                <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.amberInk, marginBottom: 4 }}>
+                  Round {editRound} was reopened
+                </div>
+                <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.45, marginBottom: 9 }}>
+                  Its handicaps are still the ones frozen when it was first locked. Scores and
+                  point values are already live; recalculate only if you changed a handicap,
+                  an allowance, a tee or the course.
+                </div>
+                <button onClick={doRecalculate} disabled={recalcBusy} style={{
+                  width: "100%", padding: "9px 0", borderRadius: 8,
+                  background: "transparent", border: `1px solid ${BC.amber}${ALPHA.line}`,
+                  color: BC.amberInk, fontSize: FS.small, fontWeight: 800,
+                  cursor: recalcBusy ? "default" : "pointer", opacity: recalcBusy ? 0.6 : 1,
+                  fontFamily: FONT,
+                }}>
+                  {recalcBusy ? "Working…" : `Recalculate Round ${editRound} handicaps`}
+                </button>
+              </div>
+            )}
 
             {/* Auto-save status. Stands in for the old Save button: the
                 only thing a director still needs from it is confidence

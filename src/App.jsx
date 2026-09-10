@@ -28,10 +28,13 @@ import { holeFill } from "./lib/holeFill";
 import {
   ROUND_LOCKS_COL, buildRoundLockDoc, refreshRoundLockDoc,
   markRoundFinal, unfinalizeRound, clearRoundLockDoc,
-  roundLockState, currentRoundNumber, lastFinalRoundNumber, isRoundFinal,
+  roundLockState, scoringRoundNumber,
   unfinalizedRoundNumbers, openRoundAfter,
   LOCK_OPEN, LOCK_FINAL, LOCK_STATE_LABEL,
 } from "./lib/roundLocks";
+import {
+  amendableRoundNumbers, describeRefreshImpact, recordAmendment,
+} from "./lib/roundAmend";
 import {
   concealHoleData, countdownHoleData, revealState, revealSummary, HOLE_COUNT,
   COUNTDOWN_HASH, wantsCountdown,
@@ -5571,6 +5574,102 @@ export default function App() {
     return next;
   }, [onLockRound]);
 
+  // ── Amending a finalized round ───────────────────────────────────────
+  // The deliberate way back into a closed round. FINAL → LOCKED, which is
+  // the state roundLocks already defines as "frozen snapshot, still movable
+  // by a deliberate act" — so this introduces no new lifecycle, it just
+  // reaches a state the app could previously only leave.
+  //
+  // Two things separate it from onFinalizeRound(rnd, false), which it is
+  // otherwise a synonym for:
+  //
+  //   • it reaches ANY final round, not the most recent one, so the wrong
+  //     hole somebody found in Friday's round on Sunday morning is fixable
+  //     without unwinding the two rounds after it.
+  //   • it STAMPS the lock (lib/roundAmend's recordAmendment) with who, when
+  //     and why. A round that has been reopened is a round whose result the
+  //     field agreed to once and then saw changed, and that must not be
+  //     indistinguishable afterwards from one nobody touched. The reason is
+  //     the director's own words and is kept forever.
+  //
+  // It moves no stroke. See onRecalculateRound below, which is the act that
+  // does, and is deliberately separate from this one.
+  const onAmendRound = useCallback(async (rnd, { reason = "" } = {}) => {
+    const lock = roundLocksRef.current?.[rnd];
+    if (!lock?.locked || !lock.final) return null;
+    const by = userRef.current?.name || null;
+    const next = recordAmendment(unfinalizeRound(lock, by), { by, reason });
+    // Loud, so a refusal THROWS rather than resolving to null. db.upsert
+    // swallows a rejection by default, and an amendment that quietly did not
+    // land is precisely the failure this whole flow exists to stop being
+    // invisible: the sheet would close, the round would look reopened, and it
+    // would be final again on the next reload. Local state is only advanced
+    // once the write has actually gone.
+    try { await db.upsert(ROUND_LOCKS_COL, next, { loud: true }); }
+    catch { return null; }
+    roundLocksRef.current = { ...roundLocksRef.current, [rnd]: next };
+    setRoundLocksData(p => ({ ...p, [rnd]: next }));
+    return next;
+  }, []);
+
+  // ── Recalculating a round ────────────────────────────────────────────
+  // Re-takes the handicap snapshot against current live values. This is the
+  // ONLY act in the app that moves a stroke in a round that has already been
+  // played, and it exists because the alternative is worse: a director who
+  // corrects a round's allowance, or a player's index, or the tee they were
+  // put on, and re-finalizes has otherwise changed a stored field and nothing
+  // else — the leaderboard reads the frozen snapshot and never moves. That is
+  // the app taking an edit, showing it back, and discarding its effect.
+  //
+  // Kept separate from the amendment above rather than folded into it, in
+  // both directions:
+  //
+  //   • most amendments are score corrections, and a score needs no
+  //     recalculate at all — the strokes were right, a number was typed
+  //     wrong. Re-deriving every handicap for those would put a whole field's
+  //     Course Handicaps at the mercy of whatever GHIN synced last night.
+  //   • the point-side settings (Nassau pots, hole points, par points,
+  //     counting scores) need neither an amendment nor this: scoring.js reads
+  //     the LIVE value over the snapshot for all of them, so those corrections
+  //     land on the leaderboard the moment they save. See lib/roundAmend.
+  //
+  // Refused on a final round, which is what makes the amendment a real gate
+  // rather than a speed bump — the round must be reopened first.
+  //
+  // Returns { lock, impact } so the caller can report what actually moved.
+  // `preview: true` builds and diffs the snapshot WITHOUT writing it, which is
+  // what lets the confirm list the handicaps that are about to move rather
+  // than estimating them — the list shown is then the list that lands, built
+  // by the same call that will land it.
+  const onRecalculateRound = useCallback(async (rnd, { preview = false } = {}) => {
+    const prev = roundLocksRef.current?.[rnd];
+    if (!prev?.locked || prev.final) return null;
+    const { players, tRounds: rds, courses: crs, hcpOverrides, teeAssignments } = lockInputsRef.current;
+    const next = refreshRoundLockDoc({
+      tournamentId: TOURNAMENT_ID,
+      round: rnd,
+      players,
+      tRounds: rds,
+      courses: crs,
+      chOverrides: hcpOverrides,
+      teeAssignments,
+      lockedBy: userRef.current?.name || null,
+      previous: prev,
+    });
+    // Diffed BEFORE the write, against the snapshot still in hand, so the
+    // report is of what this recalculate did and not of what the next
+    // subscription frame happens to say.
+    const impact = describeRefreshImpact({ locks: roundLocksRef.current, round: rnd, nextLock: next });
+    if (preview) return { lock: next, impact };
+    // Loud for the same reason as the amendment: a recalculate that was
+    // refused must not report a list of moved handicaps that never moved.
+    try { await db.upsert(ROUND_LOCKS_COL, next, { loud: true }); }
+    catch { return null; }
+    roundLocksRef.current = { ...roundLocksRef.current, [rnd]: next };
+    setRoundLocksData(p => ({ ...p, [rnd]: next }));
+    return { lock: next, impact };
+  }, []);
+
   // Hand a round back to live handicaps. Only for a round locked by a stray
   // score before the event actually started — never reachable while final.
   // eslint-disable-next-line no-unused-vars
@@ -5621,14 +5720,18 @@ export default function App() {
     () => roundForToday({ tRounds, rounds: tournamentRounds }),
     [tRounds, tournamentRounds]
   );
-  const currentRound = useMemo(() => {
-    const lowestOpen = currentRoundNumber(roundLocksData, tournamentRounds);
-    // Never onto a round that is already FINAL: a finalized round is closed
-    // to everybody, and landing the tab on one would trade a wrong-round
-    // score for a dead screen on the day it is being played.
-    if (roundToday != null && !isRoundFinal(roundLocksData, roundToday)) return roundToday;
-    return lowestOpen;
-  }, [roundLocksData, tournamentRounds, roundToday]);
+  //
+  // The rule itself lives in lib/roundLocks (scoringRoundNumber) rather than
+  // here, because lib/roundAmend has to be able to answer "does reopening
+  // Round 2 move the field?" with the SAME rule this draws the gate with. A
+  // dialog that promises the gate will stay put and then moves it is worse
+  // than no dialog. Never onto a round that is already FINAL: a finalized
+  // round is closed to everybody, and landing the tab on one would trade a
+  // wrong-round score for a dead screen on the day it is being played.
+  const currentRound = useMemo(
+    () => scoringRoundNumber({ locks: roundLocksData, allRounds: tournamentRounds, roundToday }),
+    [roundLocksData, tournamentRounds, roundToday]
+  );
 
   // ── This edition's row in the archive ────────────────────────────────
   // Computed from the cards by the same engine the leaderboard uses (see
@@ -5860,8 +5963,14 @@ export default function App() {
     () => openRoundAfter(roundLocksData, tournamentRounds, finalizeTarget),
     [roundLocksData, tournamentRounds, finalizeTarget]
   );
-  const finalizeLastFinal = useMemo(
-    () => lastFinalRoundNumber(roundLocksData, tournamentRounds),
+  // ── What can be AMENDED ──────────────────────────────────────────
+  // Every final round, not merely the most recent one. The sheet's old
+  // reopen pointed at lastFinalRoundNumber and nothing else, which answered
+  // "I finalized one hole too early" and could not answer "we found a wrong
+  // hole in Friday's round on Sunday morning" — Round 2 of a finished cup was
+  // unreachable from inside the app while 3 and 4 stood. See lib/roundAmend.
+  const amendableRounds = useMemo(
+    () => amendableRoundNumbers(roundLocksData, tournamentRounds),
     [roundLocksData, tournamentRounds]
   );
 
@@ -6506,6 +6615,7 @@ export default function App() {
                path that used to be a row in the More menu. Null when there is
                no round to finalize, which is what hides the control. */
             onOpenFinalize={canFinalize ? openFinalize : null}
+            onRecalculateRound={canFinalize ? onRecalculateRound : null}
             finalizeRound={currentRound}
             finalizeReady={finalizeReady}
             /* The RAW trip document, not the normalized house: a link
@@ -6599,11 +6709,15 @@ export default function App() {
           liveRound={currentRound}
           onPickRound={setFinalizePick}
           nextRound={finalizeNextRound}
-          lastFinal={finalizeLastFinal}
+          amendable={amendableRounds}
+          roundLocks={roundLocksData}
+          allRounds={tournamentRounds}
+          roundToday={roundToday}
           progress={finalizeProgress}
           cards={finalizeCards}
           tPlayers={tPlayers}
           onFinalizeRound={onFinalizeRound}
+          onAmendRound={onAmendRound}
           onAttestAll={() => onAttestAllInRound(
             finalizeTarget,
             enrichedMatches.filter(m => m.round === finalizeTarget),
