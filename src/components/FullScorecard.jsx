@@ -418,12 +418,12 @@ export function FullScorecard({
   //  holes on another. A Traditional round pays one pot for the eighteen and
   //  gets no row at all; a Nassau with a nine zeroed out gets the other one.
   //
-  //  THE WORDS are the card's, not the Scoring tab's. Its pills read "WON
-  //  3 UP" from the reader's own side; here a stated result names a winner
-  //  and is painted in that winner's colour, which is the rule the rest of
-  //  this file already follows (see the two-currencies note at the top) and
-  //  the rule the header directly above this row is printed under. One card,
-  //  one convention.
+  //  THE WORDS are the card's, not the Scoring tab's. Its pills read "3 DN"
+  //  from the reader's own side; here a stated result names a winner and is
+  //  painted in that winner's colour, which is the rule the rest of this file
+  //  already follows (see the two-currencies note at the top) and the rule
+  //  the header directly above this row is printed under. One card, one
+  //  convention.
   //
   //  Nothing at all while the round is sealed. A segment result is precisely
   //  what the blackout is holding back, and `nassauBadges` on the Scoring tab

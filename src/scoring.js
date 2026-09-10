@@ -296,48 +296,58 @@ export const statusText = (st) => {
 
 // ── Every word of it from the reader's own side ──
 // `statusText` answers from TEAM A's, which is right for a scorecard sitting
-// between two named sides and wrong for a chip that has already said WON or
-// LOST. Pasting the two together produced "LOST 2 UP", which is not a
-// sentence: a match that goes the distance is won two up and lost two down,
-// and the front nine on screen had just been played out two down.
+// between two named sides and wrong for a chip on the phone of one of the
+// two sides. A match that goes the distance is won two up and lost two down,
+// and a front nine played out two down came back reading "2 UP".
 //
-// A CLOSEOUT is the exception, and it is not one word of this rule bending:
-// "3&2" is the whole result and reads the same from either side of it, so
-// WON / LOST is all the direction it needs. Only the margin of a match that
-// reached the last hole has an up and a down to get backwards.
+// ── And no WON or LOST in front of it ──
+// The chip is already tinted and lettered in the winning team's colour, and
+// a golfer holding the phone knows which of the two colours is his. "WON"
+// and "LOST" spent a fifth of a narrow row restating it, on the one row of
+// this screen where width is the binding constraint — three chips across a
+// phone, sized to their own content (see DN below, which exists for exactly
+// that reason). "3&1" and "1 UP" are how a result is said out loud.
 //
-// A Total or points segment has neither — it prints a signed lead and keeps
-// the colour for its side.
+// It also stops the chips asserting something they cannot know. `userTeam`
+// falls back to "A" for anybody not in the match — a spectator, a guest, a
+// director scoring another group — so the word was a coin flip for every
+// reader who is not one of the four men on the card, while the colour it
+// replaced is right for all of them.
+//
+// A closeout needs nothing else: "3&2" is the whole result and reads the
+// same from either side of it. Only the margin of a match that reached the
+// last hole has an up and a down to get backwards, and DIRECTION below is
+// what keeps that one pointing at the reader.
+//
+// A Total or points segment has neither an up nor a down — statusText
+// prints the lead unsigned and the colour carries whose it is.
 //
 // ── DN, not DOWN ──
 // The three chips this feeds sit on one row of a phone, sized to their own
-// content, and the longest of them pushes the others off the edge: "FRONT
-// LOST 2 DOWN" was enough to run "BACK WON 4&3" past the right-hand side of
-// the screen. UP is already two characters and DOWN is four, so the row's
-// width was set by which side of the match the reader happened to be on.
-// Abbreviating levels that up and buys the row back thirty-odd pixels.
+// content, and the longest of them pushes the others off the edge: back when
+// they carried a verdict too, "FRONT LOST 2 DOWN" was enough to run "BACK
+// WON 4&3" past the right-hand side of the screen. UP is two characters and
+// DOWN is four, so the row's width was set by which side of the match the
+// reader happened to be on — which is no way to lay out a row. Dropping the
+// verdict bought most of it back and this buys the rest, but the asymmetry
+// is the real reason: level it up and neither reader gets the wider row.
 const DIRECTION = (up) => (up ? "UP" : "DN");
 
 export const verdictText = (st, userTeam) => {
   if (!st.played) return "—";
-  if (st.unit !== "up") {
-    // A level one falls through to statusText, which says TIED — the same
-    // word this function returns for match play below, and it takes no WON or
-    // LOST in front of it because nobody did either.
-    return st.complete && st.winner
-      ? `${st.winner === userTeam ? "WON" : "LOST"} ${statusText(st)}`
-      : statusText(st);
-  }
+  // A points or total segment reads the same settled as it does live — an
+  // unsigned lead, coloured for the side holding it. There is no up or down
+  // in a currency where a hole can be worth two of another.
+  if (st.unit !== "up") return statusText(st);
   if (!st.complete) {
     const mine = userTeam === "A" ? st.margin : -st.margin;
     return mine === 0 ? "TIED" : `${Math.abs(mine)} ${DIRECTION(mine > 0)}`;
   }
   if (st.winner == null) return "TIED";
-  const won = st.winner === userTeam;
   // `decided` is set on every settled match with a winner — see
   // segmentState — and its `remaining` is what separates the two cases.
-  if (st.decided.remaining > 0) return `${won ? "WON" : "LOST"} ${statusText(st)}`;
-  return `${won ? "WON" : "LOST"} ${Math.abs(st.decided.margin)} ${DIRECTION(won)}`;
+  if (st.decided.remaining > 0) return statusText(st);
+  return `${Math.abs(st.decided.margin)} ${DIRECTION(st.winner === userTeam)}`;
 };
 
 // Which side a segment's margin favours right now, or null when level.

@@ -1770,7 +1770,7 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
     // The 18-hole match ended on the hole segmentState calls `decided.at`,
     // and every hole after it is being played for the two nines, the skins
     // and the total. The running number below would go on climbing anyway —
-    // it is what printed ▼10 under a match the chips call LOST 8&6 — so it
+    // it is what printed ▼10 under a match the chips call 8&6 — so it
     // stops where the match did, which is the rule the Full Scorecard's
     // MATCH row already follows.
     //
@@ -2112,17 +2112,23 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   //
   // The pill styling — dashed edge while live, solid and tinted the moment
   // a segment settles — is lifted from the Leaderboard's SegmentPill. The
-  // WORDS are this screen's own: "WON 3 UP" / "LOST 2&1" / "TIED" rather
-  // than a banked point total, because a SegmentPill answers "what did this
-  // segment pay out" and this row answers "did I win it" — the question
-  // that matters mid-round, from the reader's own side.
+  // WORDS are this screen's own: "3 UP" / "2&1" / "TIED" rather than a
+  // banked point total, because a SegmentPill answers "what did this segment
+  // pay out" and this row answers "did I win it" — the question that matters
+  // mid-round, from the reader's own side.
+  //
+  // And the tint is how it answers. A settled pill is filled and lettered in
+  // the winning team's colour, so "WON" and "LOST" in front of the margin
+  // were saying a second time what the pill was already saying — on the one
+  // row of this screen where width is the binding constraint. See
+  // scoring.verdictText, which dropped them.
   //
   // Hidden while sealed, same as the running match under each hole: this
   // IS the match state, said louder, and the sealedBanner already explains
   // why nobody is seeing it.
   //
-  // The words are scoring.verdictText — said from the reader's own side, all
-  // of it, which is what "did I win it" needs and what `statusText` is not.
+  // The words are scoring.verdictText — said from the reader's own side,
+  // which is what "did I win it" needs and what `statusText` is not.
   const segVerdict = (st) => verdictText(st, userTeam);
   const nassauBadges = (result && !conceal) ? (() => {
     const { showFront, showBack } = nassauSegmentVisibility(match, result.holePoints);
@@ -2133,13 +2139,13 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
     ].filter(Boolean);
     return (
       // Sized to content, not forced into equal thirds — "OVERALL" carries
-      // both the longest label and, once settled, the longest word ("WON " /
-      // "LOST " ahead of the match's own "3&2" / "9 UP"), and splitting the
-      // row three ways evenly clipped it: `flex: 1` on this component's
-      // first landing squeezed "LOST 2 UP" down to "LOST …" behind a shared
-      // "OVERALL" label. `justify-content` keeps front/overall/back in
-      // their established left/middle/right order without asking any of
-      // them to be a width they don't need.
+      // the longest label, and splitting the row three ways evenly clipped
+      // it: `flex: 1` on this component's first landing squeezed the value
+      // down to an ellipsis behind a shared "OVERALL". `justify-content`
+      // keeps front/overall/back in their established left/middle/right
+      // order without asking any of them to be a width they don't need.
+      // The row has slack in it now that the verdict words are gone; the
+      // sizing stays, because a points round's "+12.5" can still be wide.
       <div style={{ display: "flex", gap: 5, marginBottom: fit.stack, flexShrink: 0, justifyContent: segs.length > 1 ? "space-between" : "center" }}>
         {segs.map((seg) => {
           const settled = seg.st.complete;

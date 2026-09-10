@@ -527,14 +527,25 @@ describe("Scoring", () => {
       rounds: [1], currentRound: 1, groups: { 1: [["a", "b"]] },
     })} />).container.textContent;
 
-    it("tells the loser he lost two DN, not two up", () => {
+    it("tells the loser the nine went two DN, not two up", () => {
       const text = chips("a");
-      expect(text).toContain("LOST 2 DN");
-      expect(text).not.toContain("LOST 2 UP");
+      expect(text).toContain("FRONT2 DN");
+      expect(text).not.toContain("2 UP");
     });
 
-    it("tells the winner he won two UP", () => {
-      expect(chips("b")).toContain("WON 2 UP");
+    it("tells the winner it went two UP", () => {
+      const text = chips("b");
+      expect(text).toContain("FRONT2 UP");
+      expect(text).not.toContain("2 DN");
+    });
+
+    it("says neither WON nor LOST to either of them", () => {
+      // The chip is tinted and lettered in the winning team's colour, which
+      // is the whole verdict — a golfer knows which of the two he is. The
+      // words were a fifth of a three-chip row spent restating it.
+      for (const pid of ["a", "b"]) {
+        expect(chips(pid)).not.toMatch(/WON|LOST/);
+      }
     });
 
     it("says the live nine from each man's own side", () => {
