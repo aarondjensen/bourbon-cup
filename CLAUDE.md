@@ -526,14 +526,21 @@ That function needs five things, and **only one of them is a secret**. See
 pasted. It is multi-line PEM and the interactive prompt takes a single line:
 
 ```sh
-firebase functions:secrets:set APPLE_PRIVATE_KEY --data-file C:\dev\keys\AuthKey_9K7J7J2VGT.p8
+firebase functions:secrets:set APPLE_PRIVATE_KEY --data-file C:\dev\keys\AuthKey_<KEY_ID>.p8
 ```
 
 (`--data-file -` reads stdin instead, if piping suits better. The real path is
 written out above rather than a `~/Downloads/AuthKey_XXXXXXXXXX.p8` placeholder
 on purpose — that shape gets pasted verbatim, and the CLI takes a path that is
-not there without obviously complaining. `firebase functions:secrets:access
-APPLE_PRIVATE_KEY` prints what is actually stored, which is the way to tell.)
+not there without obviously complaining. `firebase functions:secrets:describe
+APPLE_PRIVATE_KEY` says whether a version exists and what state it is in.)
+
+**Never `functions:secrets:access` a private key.** It prints the key material
+to the terminal, which then lives in scrollback, a screenshot or a pasted chat
+log — and that is how key `9K7J7J2VGT` had to be revoked on 10 Sep 2026, one
+day after it was set. Destroying the Secret Manager version does not un-issue
+the key; only revoking it at Apple does. `describe` answers "is it set" without
+ever showing it, which is the question anybody actually has.
 
 **The other four are not secrets and are committed.** A team id, a key id, a
 Services ID and a bundle id are public identifiers — the bundle id is printed
@@ -569,6 +576,8 @@ as `/api/ghin?diagnose=1` — a probe that reports what the hop actually
 answered. Zero dependencies, and it reads the ids out of
 `functions/.env.the-bourbon-cup`. Run it once per client id, since a key can
 be valid for the Services ID and not the bundle id.
+
+It reads the key off disk and never prints it.
 
 Unset, the function throws `failed-precondition`, the client logs it, and the
 deletion proceeds. That ordering is deliberate and holds for every failure
