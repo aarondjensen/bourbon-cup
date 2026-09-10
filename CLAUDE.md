@@ -578,6 +578,14 @@ That name rather than a bare `functions/.env`, deliberately: `.env` is
 gitignored, so it would live on one laptop and a deploy from any other machine
 would silently lose all four. The project-suffixed file is not ignored.
 
+**Both files load, and the project-suffixed one wins.** A deploy prints
+`Loaded environment variables from functions\.env, functions\.env.the-bourbon-cup`
+— there IS a gitignored `functions/.env` on the machine that set this up, and
+Firebase reads it first and then lets `.env.<project-id>` override. So the
+committed values take precedence, which is the direction you want. Worth
+knowing before somebody puts an `APPLE_*` line in the gitignored file and
+cannot work out why it has no effect: it is being shadowed, not ignored.
+
 `firebase functions:config:set` is **not** the mechanism and does not exist
 here — that was the v1 API, and this project is on firebase-functions v7, which
 reads `.env` files out of the functions directory instead.
