@@ -76,7 +76,7 @@
 //  scored off this map, and they are the only place in the app any of it
 //  is visible while the countdown is running.
 
-import { useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { BC, FONT, ALPHA, teamColor } from "../theme";
 import { playerLookup } from "../lib/players";
 import { HOLE_COUNT, nextHoleForSide, sidesPending } from "../lib/reveal";
@@ -221,7 +221,7 @@ function BallChip({ strokes, name, net, par, tid, counted }) {
 // Alphabetical rather than roster order for the same reason: roster order is
 // whatever the director typed, it differs between the two sides, and it is
 // not a thing anybody can look a name up in. A is at the top left.
-function SideColumn({ tid, teamName, score, balls, par, countN, revealed, won, waitingOn }) {
+function SideColumn({ tid, teamName, score, balls, par, countN, compact, revealed, won, waitingOn }) {
   const col = teamColor(tid);
   // ── The number, AGAINST PAR ──
   // It used to be the side's raw total — 25, 18 — which is the sum of six or
@@ -240,31 +240,54 @@ function SideColumn({ tid, teamName, score, balls, par, countN, revealed, won, w
   const rel = revealed ? relToPar(score, par, need) : null;
   return (
     <div style={{
-      flex: 1, minWidth: 0, display: "flex", flexDirection: "column",
-      alignItems: "center", gap: "clamp(2px, 0.7vw, 14px)",
-      padding: "clamp(3px, 1vw, 20px) clamp(4px, 0.8vw, 16px)",
+      // On a television each side claims half the width and stretches to fill
+      // the height. On a PHONE they are stacked, and stretching makes each one
+      // half a screen tall with a column of black under an eight-man grid that
+      // is four rows deep. Content height, top of the screen down.
+      flex: compact ? "0 0 auto" : 1,
+      minWidth: 0, display: "flex", flexDirection: "column",
+      alignItems: "center", gap: compact ? 6 : "clamp(2px, 0.7vw, 14px)",
+      padding: compact ? "8px 10px" : "clamp(3px, 1vw, 20px) clamp(4px, 0.8vw, 16px)",
       borderRadius: "clamp(8px, 1vw, 20px)",
       background: won && revealed ? `${col}${ALPHA.wash}` : "transparent",
       border: `2px solid ${won && revealed ? `${col}${ALPHA.line}` : "transparent"}`,
       transition: "background 400ms ease, border-color 400ms ease",
     }}>
+      {/* On a television the name sits above the number, both enormous. On a
+          PHONE they share one row: the name at the left, the figure at the
+          right, which is a scoreboard line rather than two stacked blocks —
+          and it is the difference between the grids fitting on the screen and
+          not. */}
       <div style={{
-        fontSize: T.sideName, fontWeight: 800, letterSpacing: 1, color: col,
-        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
-      }}>{teamName}</div>
-      <div style={{
-        fontSize: T.side, fontWeight: 800, lineHeight: 0.95, color: col,
-        opacity: revealed ? 1 : 0,
-        transform: revealed ? "none" : "translateY(0.12em) scale(0.94)",
-        transition: "opacity 380ms ease, transform 380ms cubic-bezier(.2,.7,.3,1)",
-      }}>{revealed && score != null ? fmtRel(rel) : "—"}</div>
+        display: "flex", width: "100%",
+        // A COLUMN on a television, and its children have to be centred in it
+        // — `baseline` down a column is a left edge, which is how the name and
+        // the number came to sit against the left of a 16:9 screen with the
+        // grid centred underneath them.
+        alignItems: compact ? "baseline" : "center",
+        justifyContent: compact ? "space-between" : "center",
+        flexDirection: compact ? "row" : "column", gap: compact ? 8 : 0,
+      }}>
+        <div style={{
+          fontSize: compact ? 15 : T.sideName, fontWeight: 800, letterSpacing: 1, color: col,
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0,
+        }}>{teamName}</div>
+        <div style={{
+          fontSize: compact ? 30 : T.side, fontWeight: 800, lineHeight: 0.95, color: col,
+          flexShrink: 0,
+          opacity: revealed ? 1 : 0,
+          transform: revealed ? "none" : "translateY(0.12em) scale(0.94)",
+          transition: "opacity 380ms ease, transform 380ms cubic-bezier(.2,.7,.3,1)",
+        }}>{revealed && score != null ? fmtRel(rel) : "—"}</div>
+      </div>
       {/* A side still waiting on its captain says so, rather than sitting
           under a dash that reads the same as a hole nobody posted. This is
           the half of the screen the room is looking at while he talks. */}
       {!revealed && (
         <div style={{
-          fontSize: T.promptSm, fontWeight: 800, letterSpacing: "0.22em",
+          fontSize: compact ? 11 : T.promptSm, fontWeight: 800, letterSpacing: "0.22em",
           color: BC.t3, textAlign: "center", lineHeight: 1.5,
+          padding: compact ? "6px 0" : 0,
         }}>{waitingOn || "WAITING"}</div>
       )}
       {revealed && (
@@ -278,6 +301,40 @@ function SideColumn({ tid, teamName, score, balls, par, countN, revealed, won, w
       )}
     </div>
   );
+}
+
+// ── Which screen is this on? ─────────────────────────────────────
+// The countdown is TWO screens, not one page that stretches. A television
+// across a room and a captain's phone in his hand want opposite layouts, and
+// the clamps that made one page serve both served neither: eight names four
+// across in half of 393px is "CHRI…", eighteen tap targets across the same
+// 393px is 20px each, and a page laid out for 16:9 leaves a phone with a
+// column of dead black between the header and the grid.
+//
+// So this measures, and the render forks. Under 900px is a phone — including
+// a phone turned sideways, which is 852 wide and 393 tall and cannot hold the
+// television layout either.
+//
+// Measured rather than done in a media query because what changes is the
+// STRUCTURE — sides stacked instead of side by side, the strip in two rows
+// instead of one, the controls in a column — and that is JSX, not CSS.
+const PHONE_MAX = 900;
+
+function useCompact() {
+  const [compact, setCompact] = useState(
+    () => (typeof window === "undefined" ? false : window.innerWidth < PHONE_MAX),
+  );
+  useEffect(() => {
+    const read = () => setCompact(window.innerWidth < PHONE_MAX);
+    read();
+    window.addEventListener("resize", read);
+    window.addEventListener("orientationchange", read);
+    return () => {
+      window.removeEventListener("resize", read);
+      window.removeEventListener("orientationchange", read);
+    };
+  }, []);
+  return compact;
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -294,6 +351,7 @@ export function FinalCountdown({
   reveal, ownResult, ownGetScore, totals, toWin, clincher,
   isDirector = false, captainSide = null, onAdvance, onClose,
 }) {
+  const compact = useCompact();
   const { nameOf } = playerLookup(tPlayers);
   const { A: outA, B: outB } = reveal || { A: 0, B: 0 };
   // The hole the room is ON — the one a side has been shown, or the last one
@@ -508,29 +566,55 @@ export function FinalCountdown({
   // A hole is not coloured until BOTH captains have spoken — there is no
   // winner before that — which is why this counts `settled` and not the hole
   // on screen.
+  //
+  // On a PHONE it is two rows of nine. Eighteen across 393px is a 20px cell —
+  // unreadable, and untappable, which matters because a director navigating
+  // the reveal does it from here.
+  const stripCell = (i) => {
+    const out = i < settled;
+    const h = result?.holes?.[i];
+    const w = out ? h?.winner : null;
+    const tied = out && !w && h?.played;
+    const cur = i === holeIdx;
+    // Tapping a hole sets the reveal to it, BOTH sides at once. Offered to a
+    // director only: he is the one exempt from the one-hole-at-a-time clamp
+    // (see firestore.rules, captainRevealing), and jumping is the repair the
+    // clamp exists to make necessary — a stray tap took the room to hole 7 and
+    // somebody has to be able to take it back. A captain has his own button
+    // and no business moving the other side.
+    const jump = isDirector && onAdvance ? () => onAdvance(null, i + 1) : null;
+    const Cell = jump ? "button" : "div";
+    return (
+      <Cell key={i} onClick={jump || undefined} style={{
+        flex: 1, minWidth: 0, textAlign: "center", fontFamily: FONT,
+        padding: compact ? "9px 0" : "clamp(2px, 0.35vw, 8px) 0",
+        borderRadius: "clamp(3px, 0.4vw, 8px)",
+        fontSize: compact ? 14 : T.strip, fontWeight: 800,
+        background: w ? teamColor(w) : tied ? BC.t3 : out ? BC.inp : "transparent",
+        border: `1px solid ${cur ? BC.amber : out ? "transparent" : `${BC.bdr}${ALPHA.line}`}`,
+        outline: cur ? `2px solid ${BC.amber}` : "none",
+        color: w || tied ? BC.bg : out ? BC.t2 : BC.t3,
+        opacity: out ? 1 : 0.5,
+        cursor: jump ? "pointer" : "default",
+        transition: "background 400ms ease",
+      }}>{i + 1}</Cell>
+    );
+  };
+
+  const stripRow = (from, to) => (
+    <div style={{ display: "flex", gap: compact ? 4 : "clamp(2px, 0.3vw, 6px)" }}>
+      {Array.from({ length: to - from }, (_, k) => stripCell(from + k))}
+    </div>
+  );
+
   const strip = (
-    <div style={{ flexShrink: 0, display: "flex", gap: "clamp(2px, 0.3vw, 6px)" }}>
-      {Array.from({ length: HOLE_COUNT }, (_, i) => {
-        const out = i < settled;
-        const h = result?.holes?.[i];
-        const w = out ? h?.winner : null;
-        const tied = out && !w && h?.played;
-        const cur = i === holeIdx;
-        return (
-          <div key={i} style={{
-            flex: 1, minWidth: 0, textAlign: "center",
-            padding: "clamp(2px, 0.35vw, 8px) 0",
-            borderRadius: "clamp(3px, 0.4vw, 8px)",
-            fontSize: T.strip, fontWeight: 800,
-            background: w ? teamColor(w) : tied ? BC.t3 : out ? BC.inp : "transparent",
-            border: `1px solid ${cur ? BC.amber : out ? "transparent" : `${BC.bdr}${ALPHA.line}`}`,
-            outline: cur ? `2px solid ${BC.amber}` : "none",
-            color: w || tied ? BC.bg : out ? BC.t2 : BC.t3,
-            opacity: out ? 1 : 0.5,
-            transition: "background 400ms ease",
-          }}>{i + 1}</div>
-        );
-      })}
+    <div
+      onClick={(e) => e.stopPropagation()}
+      style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: compact ? 4 : 0 }}
+    >
+      {compact
+        ? <>{stripRow(0, 9)}{stripRow(9, HOLE_COUNT)}</>
+        : stripRow(0, HOLE_COUNT)}
     </div>
   );
 
@@ -552,14 +636,18 @@ export function FinalCountdown({
     const waiting = !shown[side] && hole > 0;
     return (
       <button key={side} onClick={() => revealSide(side)} disabled={done || held} style={{
-        flex: 1, minWidth: 0, padding: "clamp(6px, 0.9vw, 18px) clamp(6px, 0.8vw, 16px)",
+        flex: 1, minWidth: 0,
+        padding: compact ? "15px 10px" : "clamp(6px, 0.9vw, 18px) clamp(6px, 0.8vw, 16px)",
         borderRadius: "clamp(6px, 0.8vw, 16px)",
         background: done || held ? BC.inp : `${col}${ALPHA.tint}`,
         border: `2px solid ${done || held ? BC.bdr : col}`,
         color: done || held ? BC.t3 : BC.t1, fontFamily: FONT,
-        fontSize: T.btn, fontWeight: 800, letterSpacing: 1,
+        fontSize: compact ? 15 : T.btn, fontWeight: 800, letterSpacing: compact ? 0.4 : 1,
         cursor: done || held ? "not-allowed" : "pointer",
-        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        // The label wraps on a phone rather than truncating. "REVEAL SHOT …"
+        // is not a button — it is a button with the answer cut off it.
+        whiteSpace: compact ? "normal" : "nowrap",
+        overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.25,
       }}>
         {done ? `${team.name.toUpperCase()} · ALL OUT`
           : held ? `WAITING ON ${(side === "A" ? tB : tA).name.toUpperCase()}`
@@ -596,26 +684,53 @@ export function FinalCountdown({
     </div>
   ) : null;
 
+  //
+  // On a PHONE the reveal buttons get the full width and a row of their own,
+  // with ◀ and EXIT underneath. Four controls on one 393px row is how "REVEAL
+  // SHOT …" and "WAITING ON SH…" happened — every one of them truncated, and
+  // the two that matter most sharing their row with the two that matter least.
+  const smallBtn = (label, onPress, off) => (
+    <button onClick={onPress} disabled={off} style={{
+      padding: compact ? "12px 18px" : "clamp(6px, 0.9vw, 18px) clamp(10px, 1.4vw, 28px)",
+      borderRadius: "clamp(6px, 0.8vw, 16px)",
+      background: BC.inp, border: `1px solid ${BC.bdr}`, color: BC.t2, fontFamily: FONT,
+      fontSize: compact ? 15 : T.btn, fontWeight: 800, letterSpacing: 1,
+      opacity: off ? 0.35 : 1, cursor: off ? "not-allowed" : "pointer",
+      flex: compact ? 1 : "0 0 auto",
+    }}>{label}</button>
+  );
+
   const controls = canDrive ? (
-    <div style={{ flexShrink: 0, display: "flex", gap: "clamp(5px, 0.7vw, 14px)", alignItems: "stretch" }} onClick={(e) => e.stopPropagation()}>
-      <button onClick={back} disabled={hole <= 0} style={{
-        padding: "clamp(6px, 0.9vw, 18px) clamp(10px, 1.4vw, 28px)", borderRadius: "clamp(6px, 0.8vw, 16px)",
-        background: BC.inp, border: `1px solid ${BC.bdr}`, color: BC.t2, fontFamily: FONT,
-        fontSize: T.btn, fontWeight: 800, letterSpacing: 1,
-        opacity: hole <= 0 ? 0.35 : 1, cursor: hole <= 0 ? "not-allowed" : "pointer",
-      }}>◀</button>
-      {["A", "B"].filter(drives).map(sideBtn)}
-      <button onClick={onClose} style={{
-        padding: "clamp(6px, 0.9vw, 18px) clamp(10px, 1.4vw, 28px)", borderRadius: "clamp(6px, 0.8vw, 16px)",
-        background: BC.inp, border: `1px solid ${BC.bdr}`, color: BC.t2, fontFamily: FONT,
-        fontSize: T.btn, fontWeight: 800, letterSpacing: 1, cursor: "pointer",
-      }}>EXIT</button>
+    <div
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        flexShrink: 0, display: "flex", alignItems: "stretch",
+        flexDirection: compact ? "column" : "row",
+        gap: compact ? 7 : "clamp(5px, 0.7vw, 14px)",
+      }}
+    >
+      {compact ? (
+        <>
+          <div style={{ display: "flex", gap: 7 }}>{["A", "B"].filter(drives).map(sideBtn)}</div>
+          <div style={{ display: "flex", gap: 7 }}>
+            {smallBtn("◀ BACK", back, hole <= 0)}
+            {smallBtn("EXIT", onClose, false)}
+          </div>
+        </>
+      ) : (
+        <>
+          {smallBtn("◀", back, hole <= 0)}
+          {["A", "B"].filter(drives).map(sideBtn)}
+          {smallBtn("EXIT", onClose, false)}
+        </>
+      )}
     </div>
   ) : (
     <div style={{ flexShrink: 0, textAlign: "center", fontSize: T.terms, color: BC.t3, letterSpacing: 1.4, fontWeight: 700 }} onClick={(e) => e.stopPropagation()}>
       <button onClick={onClose} style={{
         background: "transparent", border: "none", color: BC.t3, fontFamily: FONT,
-        fontSize: T.terms, fontWeight: 700, letterSpacing: 1.4, cursor: "pointer",
+        fontSize: compact ? 13 : T.terms, fontWeight: 700, letterSpacing: 1.4,
+        cursor: "pointer", padding: compact ? 12 : 0,
       }}>THE CAPTAINS ARE DRIVING · TAP TO EXIT</button>
     </div>
   );
@@ -657,23 +772,42 @@ export function FinalCountdown({
       {cupBar}
 
       <div style={{ flexShrink: 0, textAlign: "center" }}>
-        <div style={{ fontSize: T.hole, fontWeight: 800, letterSpacing: "0.1em", color: BC.t1, lineHeight: 1.05 }}>
+        <div style={{ fontSize: compact ? 30 : T.hole, fontWeight: 800, letterSpacing: "0.1em", color: BC.t1, lineHeight: 1.05 }}>
           HOLE {holeIdx + 1}
         </div>
-        <div style={{ fontSize: T.terms, fontWeight: 700, letterSpacing: 2.4, color: BC.t3, marginTop: "0.3em" }}>
+        <div style={{ fontSize: compact ? 10 : T.terms, fontWeight: 700, letterSpacing: compact ? 1 : 2.4, color: BC.t3, marginTop: "0.3em" }}>
           PAR {holePars?.[holeIdx] ?? "—"} · SI {holeHcps?.[holeIdx] ?? "—"}
           {countN ? ` · BEST ${countN} OF ${match.teamA?.length ?? "—"}` : ""}
           {holeValue ? ` · ${fmtPts(holeValue)} POINT${holeValue === 1 ? "" : "S"}` : ""}
         </div>
       </div>
 
-      <div style={{ flex: "1 1 0", minHeight: 0, display: "flex", alignItems: "center", gap: "clamp(6px, 1vw, 22px)" }}>
+      {/* Side by side on a television, STACKED on a phone. Four names across
+          half of 393px is "CHRI…"; across the whole of it they fit, which is
+          the entire argument. The "vs" between them is a television flourish
+          and goes with the horizontal layout — stacked, it would be a row of
+          its own saying nothing.
+
+          The phone's column scrolls rather than compressing: two grids, a
+          prompt and a set of controls do not fit a 393×852 screen at any type
+          size that can be read, and a scroll is the honest answer. The strip
+          and the controls stay pinned below it. */}
+      <div style={{
+        flex: "1 1 0", minHeight: 0, display: "flex", gap: compact ? 10 : "clamp(6px, 1vw, 22px)",
+        flexDirection: compact ? "column" : "row",
+        alignItems: compact ? "stretch" : "center",
+        justifyContent: compact ? "flex-start" : "center",
+        overflowY: compact ? "auto" : "visible",
+        overscrollBehavior: "contain",
+      }}>
         <SideColumn tid="A" teamName={tA.name} score={hr?.aScore} balls={ballsFor("A")}
-          par={holePars?.[holeIdx]} countN={countN}
+          par={holePars?.[holeIdx]} countN={countN} compact={compact}
           revealed={showA} won={showVerdict && winner === "A"} waitingOn={`${tA.name.toUpperCase()} TO TELL IT`} />
-        <div style={{ flexShrink: 0, fontSize: T.sideName, fontWeight: 800, color: BC.t3, opacity: 0.5 }}>vs</div>
+        {!compact && (
+          <div style={{ flexShrink: 0, fontSize: T.sideName, fontWeight: 800, color: BC.t3, opacity: 0.5 }}>vs</div>
+        )}
         <SideColumn tid="B" teamName={tB.name} score={hr?.bScore} balls={ballsFor("B")}
-          par={holePars?.[holeIdx]} countN={countN}
+          par={holePars?.[holeIdx]} countN={countN} compact={compact}
           revealed={showB} won={showVerdict && winner === "B"} waitingOn={`${tB.name.toUpperCase()} TO TELL IT`} />
       </div>
 
