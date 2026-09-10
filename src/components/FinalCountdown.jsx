@@ -651,7 +651,6 @@ export function FinalCountdown({
   const showB = shown.B;
   const showVerdict = bothOut;
   const winner = hr?.winner || null;
-  const verdictName = winner === "A" ? tA.name : winner === "B" ? tB.name : null;
 
   return shell(
     <>
@@ -678,45 +677,32 @@ export function FinalCountdown({
           revealed={showB} won={showVerdict && winner === "B"} waitingOn={`${tB.name.toUpperCase()} TO TELL IT`} />
       </div>
 
-      {/* The verdict, and — on the hole it happens — the cup. A clinch gets
-          the band to itself at three times the height: it is the moment the
-          whole evening is built around and it should not have to share a row
-          with "won the hole". */}
-      <div style={{
-        flexShrink: 0, textAlign: "center", borderRadius: "clamp(6px, 0.8vw, 16px)",
-        padding: clincher && showVerdict ? "clamp(8px, 1.3vw, 26px) 0" : "clamp(5px, 0.8vw, 16px) 0",
-        background: clincher && showVerdict ? `${teamColor(clincher)}${ALPHA.tint}`
-          : winner && showVerdict ? `${teamColor(winner)}${ALPHA.wash}`
-          : showVerdict && hr?.played ? BC.inp : "transparent",
-        border: `2px solid ${clincher && showVerdict ? teamColor(clincher)
-          : winner && showVerdict ? `${teamColor(winner)}${ALPHA.line}`
-          : showVerdict && hr?.played ? `${BC.bdr}${ALPHA.line}` : "transparent"}`,
-        opacity: showVerdict ? 1 : 0,
-        transition: "opacity 420ms ease, background 420ms ease, padding 420ms ease",
-      }}>
-        {/* Half a hole has no winner, and the words for one are not written
-            into the page while a captain is still telling his half of it. The
-            band keeps its height so the layout does not jump when they land —
-            it is the TEXT that waits, not the space. */}
-        {!showVerdict ? <span>&nbsp;</span>
-          : clincher ? (
+      {/* ── The cup, on the hole it is won ──
+          There is no hole verdict here any more. It was a band across the
+          screen reading "SHOT CALLERS TAKE IT · 1 POINT", and it was the
+          third place on this screen saying the same thing: the winning side's
+          column already lights up in its own colour, and the strip along the
+          bottom already fills that hole in. Three tellings of one fact, on the
+          screen where every row is competing for the room's attention, and it
+          was the one of the three that cost a whole band of height.
+
+          The CLINCH stays, and it gets the band to itself. It is not the same
+          fact — "who took the hole" happens eighteen times and "the cup is
+          won" happens once — and it is the moment the whole evening is built
+          around. It renders only on the hole it happens, so the rest of the
+          countdown gets that height back for the grids. */}
+      {clincher && showVerdict && (
+        <div style={{
+          flexShrink: 0, textAlign: "center", borderRadius: "clamp(6px, 0.8vw, 16px)",
+          padding: "clamp(8px, 1.3vw, 26px) 0",
+          background: `${teamColor(clincher)}${ALPHA.tint}`,
+          border: `2px solid ${teamColor(clincher)}`,
+        }}>
           <div style={{ fontSize: T.cup, fontWeight: 800, letterSpacing: "0.14em", color: teamColor(clincher), lineHeight: 1.15 }}>
             🏆 {clincher === "A" ? tA.name : tB.name} WIN THE BOURBON CUP
           </div>
-        ) : (
-          <div style={{ fontSize: T.verdict, fontWeight: 800, letterSpacing: "0.1em", color: winner ? teamColor(winner) : BC.t2 }}>
-            {/* "1 POINT", not "+1". The side's own number is now a figure
-                against par — "+1", "−6" — so a verdict reading "TAKE IT · +1"
-                put a plus sign on the screen meaning two different things
-                three inches apart. The terms line at the top already says
-                POINT; this says it the same way. */}
-            {!hr?.played ? "NO RESULT ON THIS HOLE"
-              : verdictName
-                ? `${verdictName} TAKE IT${holeValue ? `  ·  ${fmtPts(holeValue)} POINT${holeValue === 1 ? "" : "S"}` : ""}`
-                : `TIED${holeValue ? `  ·  ${fmtPts(holeValue / 2)} EACH` : ""}`}
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {strip}
       {captainBand}
