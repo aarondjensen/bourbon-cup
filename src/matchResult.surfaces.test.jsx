@@ -15,13 +15,15 @@
 // and halved — and asserts the four screens are telling the same story at
 // every step. Each is allowed its own dialect and nothing else:
 //
-//   Scoring tab   says it from the reader's side  — "WON 9&7", "3 DOWN"
+//   Scoring tab   says it from the reader's side  — "9&7", "3 DN"
 //   everything else is neutral                    — "9&7", "TIED"
 //
-// Strip the dialect and the four have to be the same sentence. ("½" is still
-// mapped below: the Leaderboard printed it for a level overall until the word
-// moved into statusText, and a screen reaching back for the symbol should
-// fail on something other than a stale helper in a test.)
+// The Scoring tab used to prefix WON / LOST and no longer does — its chips
+// are tinted in the winning team's colour, which says the same thing without
+// spending a fifth of a three-chip row on it. Its dialect is now only the
+// UP / DN on a match that reached the eighteenth.
+//
+// Strip the dialect and the four have to be the same sentence.
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 
@@ -76,7 +78,7 @@ const scoringProps=(hd,rounds,over)=>({
 
 const chips=(txt)=>["FRONT","OVERALL","BACK"].map(l=>{
   const i=txt.indexOf(l); if(i<0) return `${l}:none`;
-  const m=txt.slice(i+l.length).match(/^(TIED|—|🔒|[0-9]+ (?:UP|DOWN)|(?:WON|LOST) [0-9]+(?:&[0-9]+| UP| DOWN))/);
+  const m=txt.slice(i+l.length).match(/^(TIED|—|🔒|[0-9]+(?:&[0-9]+| UP| DN))/);
   return `${l}:${m?m[1]:"?"}`;}).join("  ");
 
 // A two-row three-column grid — F9 / overall / B9 on top, each value beneath.
@@ -100,8 +102,16 @@ const STATES=[
   ["level",                18, {winners:"AAAAAAAAABBBBBBBBB"}, "TIED"],
 ];
 
-// The result, with each screen's dialect taken off it.
-const plain=(s)=>String(s??"").trim().replace(/^(WON|LOST)\s+/,"").replace(/^½$/,"TIED").trim();
+// The result, with each screen's dialect taken off it. Only the Leaderboard
+// has one left: it printed "½" for a level overall until the word moved into
+// statusText, and a screen reaching back for the symbol should fail on
+// something other than a stale helper in a test.
+//
+// The Scoring tab needs nothing here any more. Its dialect is the UP / DN on
+// a match that reached the eighteenth, and the reader below is on the side
+// that wins every state in the table — so it is now saying, letter for
+// letter, what the other three say.
+const plain=(s)=>String(s??"").trim().replace(/^½$/,"TIED").trim();
 
 describe("one match, four screens, the same story", () => {
   for (const [label,n,over,expected] of STATES) {
@@ -130,8 +140,8 @@ describe("one match, four screens, the same story", () => {
       };
       // The Scoring tab hands the whole screen over to the signed card, so its
       // chips are gone by then — the card above IS its statement of the result.
-      const chip=(chips(scoringTxt).match(/OVERALL:(\S+(?: (?:UP|DOWN|[0-9]+&[0-9]+))?)/)||[])[1];
-      if (chip && chip!=="none") said.scoringTab=plain(chip.replace(/^(WON|LOST)/,"").trim());
+      const chip=(chips(scoringTxt).match(/OVERALL:(\S+(?: (?:UP|DN))?)/)||[])[1];
+      if (chip && chip!=="none") said.scoringTab=plain(chip);
 
       for (const [where,text] of Object.entries(said)) {
         expect(text, `${where} said "${text}"`).toBe(expected);

@@ -127,17 +127,23 @@ describe("the formats that never close early", () => {
 });
 
 // ── The same result, said to the man reading it ─────────────────────
-// The Scoring tab's FRONT / OVERALL / BACK chips answer "did I win it", so
-// they say WON or LOST — and then pasted `statusText` on the end of that,
-// which answers from TEAM A's side whoever is holding the phone. A front nine
-// played out two down came back as "LOST 2 UP". You win two up and you lose
-// two down; "lost 2 up" is not a thing anybody has said on a golf course.
+// The Scoring tab's FRONT / OVERALL / BACK chips answer "did I win it", and
+// they answer it in golf's own words — "1 UP", "3&1" — from the reader's
+// side, on a chip already tinted and lettered in the winning team's colour.
+//
+// Two things they must not do. They must not paste `statusText` on the end
+// of a verdict: that one answers from TEAM A's side whoever is holding the
+// phone, and a front nine played out two down came back as "LOST 2 UP" — you
+// win two up and you lose two down, and "lost 2 up" is not a thing anybody
+// has said on a golf course. And they must not say WON or LOST at all: the
+// colour says it, `userTeam` is a guess for anybody not in the match, and
+// the row is three chips wide on a phone.
 describe("a settled match, from the reader's own side", () => {
   const A_WON_ON_18 = seg("AABBAABB-AABB-AAB-");   // 1 up, decided on the last
 
   it("is won UP and lost DN, never lost up", () => {
-    expect(verdictText(A_WON_ON_18, "A")).toBe("WON 1 UP");
-    expect(verdictText(A_WON_ON_18, "B")).toBe("LOST 1 DN");
+    expect(verdictText(A_WON_ON_18, "A")).toBe("1 UP");
+    expect(verdictText(A_WON_ON_18, "B")).toBe("1 DN");
   });
 
   it("reports the margin it finished on, not the running one", () => {
@@ -145,20 +151,30 @@ describe("a settled match, from the reader's own side", () => {
     // when this was found.
     const st = seg("AAA-BBBBB");
     expect(st.decided).toEqual({ margin: -2, remaining: 0, at: 8 });
-    expect(verdictText(st, "A")).toBe("LOST 2 DN");
-    expect(verdictText(st, "B")).toBe("WON 2 UP");
+    expect(verdictText(st, "A")).toBe("2 DN");
+    expect(verdictText(st, "B")).toBe("2 UP");
   });
 
   it("says a closeout the same way from either side", () => {
-    // "3&2" IS the result and reads the same whoever lost it, so WON / LOST
-    // carries all the direction it needs. Only a match that reached the last
-    // hole has an up and a down to get backwards.
+    // "8&6" IS the result and reads the same whoever lost it — the colour is
+    // what says which of them the reader is. Only a match that reached the
+    // last hole has an up and a down to get backwards.
     const st = seg("AAAAAAAAABBA......");
-    expect(verdictText(st, "A")).toBe("WON 8&6");
-    expect(verdictText(st, "B")).toBe("LOST 8&6");
+    expect(verdictText(st, "A")).toBe("8&6");
+    expect(verdictText(st, "B")).toBe("8&6");
   });
 
-  it("is TIED to both of them, with no WON or LOST in front of it", () => {
+  it("never says WON or LOST, on either kind of finish", () => {
+    // The words the chips used to carry. The tint under them is the whole
+    // statement now, so a stray verdict is a regression however it reads.
+    for (const st of [A_WON_ON_18, seg("AAAAAAAAABBA......")]) {
+      for (const side of ["A", "B"]) {
+        expect(verdictText(st, side)).not.toMatch(/WON|LOST/);
+      }
+    }
+  });
+
+  it("is TIED to both of them", () => {
     expect(verdictText(seg("AAAAAAAAABBBBBBBBB"), "A")).toBe("TIED");
     expect(verdictText(seg("AAAAAAAAABBBBBBBBB"), "B")).toBe("TIED");
   });
@@ -198,13 +214,14 @@ describe("the formats with no up and no down", () => {
     expect(verdictText(st, "B")).toBe("+6");
   });
 
-  it("puts the verdict in front of a settled one and nothing else", () => {
-    // "+12" is a magnitude, not a direction, so it takes WON / LOST without
-    // contradicting either. There is no "up" in a currency where one hole can
-    // be worth two of another — see statusText.
+  it("reads a settled one exactly as it read live", () => {
+    // "+12" is a magnitude and the colour carries whose it is — the same
+    // arrangement the live chip above already uses, and there is no "up" to
+    // add in a currency where one hole can be worth two of another (see
+    // statusText). Settling it changes the tint, not the words.
     const st = seg("AAAAAAAAAAAA......", { holeValue: () => 1 });
-    expect(verdictText(st, "A")).toBe("WON +12");
-    expect(verdictText(st, "B")).toBe("LOST +12");
+    expect(verdictText(st, "A")).toBe("+12");
+    expect(verdictText(st, "B")).toBe("+12");
   });
 });
 
