@@ -46,8 +46,15 @@
 //  a countdown paced by a setTimeout cannot wait for a story or hurry past a
 //  hole nobody wants to talk about.
 //
-//  Arrow keys and the space bar still work for whoever is driving, for the
-//  year the laptop is close enough to reach.
+//  A REVEAL HAS EXACTLY ONE DOOR: the button with the team's name on it.
+//  Nothing else on this screen turns a side over — not the background, not the
+//  hole number, not the space bar. It used to: the whole shell was a tap
+//  target, which on the one screen where a stray tap cannot be taken back is
+//  the wrong convenience. See the note above `revealSide`.
+//
+//  Arrow keys and the space bar move the room BETWEEN holes, for the year the
+//  laptop is close enough to reach. Neither of those shows anything that was
+//  not already on the screen.
 //
 //  WHAT A CAPTAIN'S PHONE HAS THAT THE ROOM DOES NOT
 //  -------------------------------------------------
@@ -573,8 +580,9 @@ export function FinalCountdown({
   // the one that just moved — walking the trailing side backwards would open
   // a gap nobody asked for.
   const back = useCallback(() => {
-    // Undo the clear first, for the same reason `advance` clears first: it is
-    // the step that just happened, and it is the one that un-does cleanly.
+    // Undo the clear first: it is the step that just happened, and it is the
+    // one that un-does cleanly. Only once there is no clear left to take back
+    // does this un-reveal anything.
     if (canBack) { goBack(); return; }
     if (!onAdvance) return;
     if (outA > outB && drives("A")) onAdvance("A", outA - 1);
@@ -586,34 +594,33 @@ export function FinalCountdown({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canBack, goBack, outA, outB, onAdvance, isDirector, captainSide]);
 
-  // Space / right arrow, and the background tap. One key for "the next thing
-  // that should happen", which is now three things in a cycle: clear the
-  // board, hear the first side, hear the second.
+  // ── NOTHING REVEALS A SIDE BUT ITS OWN BUTTON ────────────────────
+  // The whole screen used to be one tap target: a click anywhere on the
+  // background turned over the next side that was due. It was written as a
+  // convenience for whoever was driving, and it is the wrong convenience on
+  // this screen — the ONE screen in the app where a stray tap cannot be taken
+  // back. A phone in a pocket, a laptop trackpad brushed while somebody
+  // reaches past it, a hand steadying the machine on a table: any of those
+  // turned over eight balls in front of the room before the captain had said a
+  // word. Nobody would even know what they had touched.
   //
-  // CLEARING COMES FIRST when it is available, which it only is for a director
-  // and only on a hole both captains have finished. Without that, a director
-  // leaning on the space bar after the room finished hole 7 would open half of
-  // hole 8 over the top of the conversation about 7 — the exact beat the
-  // cursor exists to give him.
-  //
-  // A television nobody is driving does nothing, which is what it should do.
-  const advance = useCallback(() => {
-    if (canNext) { goNext(); return; }
-    const next = sidesPending({ sealed: true, reveal_a: outA, reveal_b: outB }).filter(drives);
-    if (next.length) revealSide(next[0]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canNext, goNext, outA, outB, revealSide, isDirector, captainSide]);
+  // So a reveal now has exactly one door, and it is the button with the team's
+  // name on it. The keyboard keeps the PACING — clear the board, take the
+  // clear back — because neither of those shows anything that was not already
+  // on screen, and a director driving from a laptop should not have to reach
+  // for a trackpad between every hole.
 
-  // Keyboard, for the year the laptop is within reach. The phone is still
-  // the primary control — see the note at the top of the file.
-  const keyRef = useRef({ advance, back, onClose });
-  useEffect(() => { keyRef.current = { advance, back, onClose }; }, [advance, back, onClose]);
+  // Keyboard, for the year the laptop is within reach. It moves the room
+  // between holes and nothing else — see the note above. The phone is still
+  // the primary control.
+  const keyRef = useRef({ goNext, goBack, onClose });
+  useEffect(() => { keyRef.current = { goNext, goBack, onClose }; }, [goNext, goBack, onClose]);
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === " " || e.key === "ArrowRight" || e.key === "Enter" || e.key === "PageDown") {
-        e.preventDefault(); keyRef.current.advance();
+        e.preventDefault(); keyRef.current.goNext();
       } else if (e.key === "ArrowLeft" || e.key === "PageUp") {
-        e.preventDefault(); keyRef.current.back();
+        e.preventDefault(); keyRef.current.goBack();
       } else if (e.key === "Escape") {
         keyRef.current.onClose();
       }
@@ -742,12 +749,11 @@ export function FinalCountdown({
 
   const shell = (children) => (
     <div
-      onClick={advance}
       style={{
         position: "fixed", inset: 0, zIndex: 4000, background: BC.bg, color: BC.t1,
         fontFamily: FONT, display: "flex", flexDirection: "column",
         padding: "clamp(8px, 1.2vw, 26px)", gap: "clamp(6px, 0.9vw, 18px)",
-        cursor: canDrive ? "pointer" : "default", userSelect: "none", overflow: "hidden",
+        userSelect: "none", overflow: "hidden",
       }}>
       {children}
     </div>
@@ -934,10 +940,7 @@ export function FinalCountdown({
   );
 
   const strip = (
-    <div
-      onClick={(e) => e.stopPropagation()}
-      style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: compact ? 4 : 0 }}
-    >
+    <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: compact ? 4 : 0 }}>
       {compact
         ? <>{stripRow(0, 9)}{stripRow(9, HOLE_COUNT)}</>
         : stripRow(0, HOLE_COUNT)}
@@ -1002,7 +1005,7 @@ export function FinalCountdown({
   // Dave and John, AND the first eagle of the round…") and the rule between
   // them was a pause he does not take.
   const captainBand = myPrompt ? (
-    <div onClick={(e) => e.stopPropagation()} style={{
+    <div style={{
       flexShrink: 0, padding: "clamp(6px, 0.9vw, 18px) clamp(9px, 1.2vw, 24px)",
       borderRadius: "clamp(6px, 0.8vw, 16px)",
       background: `${teamColor(captainSide)}${ALPHA.wash}`,
@@ -1067,14 +1070,12 @@ export function FinalCountdown({
   // SHOT …" and "WAITING ON SH…" happened — every one of them truncated, and
   // the two that matter most sharing their row with the two that matter least.
   // One of the two arrows beside the hole number, or nothing at all for
-  // anybody who is not driving. `stopPropagation` is not decoration: the whole
-  // shell is a tap target for `advance`, so without it a tap on ▶ would clear
-  // the board AND then be handled again by the background.
+  // anybody who is not driving.
   const holeArrow = (dir, onPress, off) => {
     if (!isDirector || !onSetHole) return null;
     return (
       <button
-        onClick={(e) => { e.stopPropagation(); onPress(); }}
+        onClick={onPress}
         disabled={off}
         aria-label={dir === "next" ? "Next hole" : "Previous hole"}
         style={{
@@ -1102,7 +1103,6 @@ export function FinalCountdown({
 
   const controls = canDrive ? (
     <div
-      onClick={(e) => e.stopPropagation()}
       style={{
         flexShrink: 0, display: "flex", alignItems: "stretch",
         flexDirection: compact ? "column" : "row",
@@ -1126,7 +1126,7 @@ export function FinalCountdown({
       )}
     </div>
   ) : (
-    <div style={{ flexShrink: 0, textAlign: "center", fontSize: T.terms, color: BC.t3, letterSpacing: 1.4, fontWeight: 700 }} onClick={(e) => e.stopPropagation()}>
+    <div style={{ flexShrink: 0, textAlign: "center", fontSize: T.terms, color: BC.t3, letterSpacing: 1.4, fontWeight: 700 }}>
       <button onClick={onClose} style={{
         background: "transparent", border: "none", color: BC.t3, fontFamily: FONT,
         fontSize: compact ? 13 : T.terms, fontWeight: 700, letterSpacing: 1.4,

@@ -879,27 +879,74 @@ describe("the hole arrows", () => {
     expect(arrow(screen({ A: 18, B: 18 }), "next").disabled).toBe(true);
   });
 
-  // One key for "the next thing that should happen", which is three things in
-  // a cycle: clear the board, hear the first side, hear the second. A director
-  // leaning on the space bar after the room finished hole 7 must not open half
-  // of hole 8 over the top of the conversation about 7.
-  it("takes the space bar first, ahead of a reveal", () => {
+  // The keyboard moves the room between holes and does not reveal — see the
+  // block below on the one door a reveal has.
+  it("moves the room on from the keyboard", () => {
     screen({ A: 7, B: 7 });
     fireEvent.keyDown(window, { key: " " });
     expect(cleared).toEqual([8]);
     expect(advanced).toEqual([]);
     cleanup();
-    // On a cleared board it goes back to revealing.
+    // On a cleared board there is nothing left for it to do — a captain's
+    // button is the only thing that turns a side over.
     screen({ A: 7, B: 7, cursor: 8 });
     fireEvent.keyDown(window, { key: " " });
+    fireEvent.keyDown(window, { key: "ArrowRight" });
     expect(cleared).toEqual([]);
-    expect(advanced).toEqual([["A", 8]]);
+    expect(advanced).toEqual([]);
   });
 
   it("undoes the clear on the way back, before it un-reveals anything", () => {
     screen({ A: 7, B: 7, cursor: 8 });
     fireEvent.keyDown(window, { key: "ArrowLeft" });
     expect(cleared).toEqual([7]);
+    expect(advanced).toEqual([]);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  A reveal has exactly one door
+// ══════════════════════════════════════════════════════════════════
+//  The whole screen used to be one tap target: a click anywhere on the
+//  background turned over the next side that was due. On the ONE screen in
+//  this app where a stray tap cannot be taken back, that is the wrong
+//  convenience — a phone in a pocket, a trackpad brushed while somebody
+//  reaches past the laptop, a hand steadying the machine on a table. Any of
+//  them put eight balls in front of the room before the captain had said a
+//  word, and nobody would know what they had touched.
+describe("what may turn a side over", () => {
+  const shell = (c) => c.firstChild;
+
+  it("is not the background", () => {
+    const c = screen({ A: 1, B: 1 });
+    fireEvent.click(shell(c));
+    expect(advanced).toEqual([]);
+    expect(cleared).toEqual([]);
+  });
+
+  it("is not the hole header, the strip, or the trophy behind them", () => {
+    const c = screen({ A: 1, B: 1 });
+    // Every element on the page that is not a button. If any of them reveals,
+    // the room finds out the hard way.
+    [...c.querySelectorAll("div,img,span")]
+      .filter(d => d.tagName !== "BUTTON")
+      .forEach(d => fireEvent.click(d));
+    expect(advanced).toEqual([]);
+  });
+
+  it("is the button with the team's name on it", () => {
+    const c = screen({ A: 1, B: 1 });
+    fireEvent.click([...c.querySelectorAll("button")]
+      .find(b => b.textContent.includes("REVEAL SHOT CALLERS")));
+    expect(advanced).toEqual([["B", 2]]);
+  });
+
+  // The keyboard keeps the PACING, because neither clearing the board nor
+  // taking a clear back shows anything that was not already on screen.
+  it("is not the space bar", () => {
+    screen({ A: 1, B: 1 });
+    ["  ", " ", "Enter", "ArrowRight", "PageDown"].forEach(key =>
+      fireEvent.keyDown(window, { key }));
     expect(advanced).toEqual([]);
   });
 });
