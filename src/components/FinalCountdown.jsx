@@ -95,25 +95,46 @@ import { holePrompt, relToPar, fmtRel } from "../lib/countdownPrompt";
 // browser window somebody is testing in), grows with the viewport, never
 // larger than the third (a 4K panel, where unbounded vw would put a single
 // digit through the ceiling).
+//
+// ── WHY ALMOST EVERY RUNG CARRIES A vh CEILING ──
+// This page has to FIT. It is one screenful — a band, a header, eight rows a
+// side, a strip and a row of controls — with no scroll on the television, so
+// anything that grows past the bottom does not scroll, it disappears under the
+// thing below it.
+//
+// Sized on vw alone, the chrome grows with WIDTH while the room it has to fit
+// in is HEIGHT, and those come apart the moment the window is not 16:9. A
+// laptop browser at 1366x640 is wider than a television in vw terms and two
+// inches shorter in the space that matters: the cup band and the hole header
+// came out bigger than they do on a 720p TV, and the last man's row went under
+// the hole ticker.
+//
+// `vwh(k)` is that fixed: the same vw size with a vh ceiling at 1.8x the
+// coefficient. 16:9 puts vh at exactly 0.5625vw, so a ceiling above 1.778x
+// never binds there — this is a NO-OP on a television, on a 4K panel and on
+// anything TALLER than 16:9 (a 16:10 laptop, a phone), and bites only on a
+// window WIDER than 16:9, where it scales the whole page down together rather
+// than letting the chrome eat the rows.
+const vwh = (k) => `min(${k}vw, ${(k * 1.8).toFixed(2)}vh)`;
+
 const T = {
-  cupName:  "clamp(11px, 1.5vw, 30px)",
+  cupName:  `clamp(11px, ${vwh(1.5)}, 30px)`,
   // The cup total is the biggest thing on the screen after the hole itself,
   // because the band across the top is what the room is actually tracking —
   // every hole is only interesting for what it does to these two numbers.
-  cupPts:   "clamp(26px, 4.2vw, 92px)",
+  cupPts:   `clamp(26px, ${vwh(4.2)}, 92px)`,
   // What it takes to win it, in gold, between them. Deliberately smaller than
   // the totals it sits between: it is the line they are running at, not a
   // third score.
-  cupGoal:  "clamp(17px, 2.3vw, 48px)",
-  hole:     "clamp(20px, 3.0vw, 62px)",
-  terms:    "clamp(9px,  1.2vw, 24px)",
-  // The one size that has to know about HEIGHT as well as width. A 16:9
-  // television and a phone turned sideways have similar widths in vw terms
-  // and nothing like the same room underneath — sized on vw alone, the
-  // number that fits a TV pushed the balls that made it off the bottom of a
-  // laptop window.
-  side:     "clamp(28px, min(5.5vw, 9.7vh), 120px)",
-  sideName: "clamp(12px, 1.7vw, 34px)",
+  cupGoal:  `clamp(17px, ${vwh(2.3)}, 48px)`,
+  hole:     `clamp(20px, ${vwh(3.0)}, 62px)`,
+  terms:    `clamp(9px,  ${vwh(1.2)}, 24px)`,
+  // The side's own number is capped HARDER than the rest — 9.7vh against the
+  // 10.2 `vwh` would give it — because it is the single tallest thing between
+  // the hole header and the strip, and the eight rows under it are what it
+  // takes room from.
+  side:     "clamp(28px, min(5.5vw, 9.1vh), 120px)",
+  sideName: `clamp(12px, ${vwh(1.7)}, 34px)`,
   chip:     "clamp(13px, 2.3vw, 48px)",
   chipName: "clamp(8px,  1.0vw, 21px)",
   // ── The television's roll-call ──
@@ -129,12 +150,12 @@ const T = {
   // box, so half of that overflow came out of the top: the last man's row sat
   // under the hole ticker and the terms line ran through the first man's.
   rowName:  "clamp(11px, min(1.45vw, 2.4vh), 30px)",
-  rowScore: "clamp(13px, min(1.75vw, 2.8vh), 36px)",
+  rowScore: "clamp(13px, min(1.75vw, 2.65vh), 36px)",
   rowPad:   "clamp(1px,  min(0.42vw, 0.7vh),  9px)",
   rowGap:   "clamp(2px,  min(0.3vw,  0.55vh), 7px)",
   cup:      "clamp(20px, 3.4vw, 72px)",
-  strip:    "clamp(7px,  0.95vw, 20px)",
-  btn:      "clamp(11px, 1.5vw, 30px)",
+  strip:    `clamp(7px,  ${vwh(0.95)}, 20px)`,
+  btn:      `clamp(11px, ${vwh(1.5)}, 30px)`,
   promptSm: "clamp(10px, 1.2vw, 24px)",
   // ── The captain's card ──
   // Its own three rungs, and they are the only sizes on this screen tuned for
@@ -752,7 +773,7 @@ export function FinalCountdown({
       style={{
         position: "fixed", inset: 0, zIndex: 4000, background: BC.bg, color: BC.t1,
         fontFamily: FONT, display: "flex", flexDirection: "column",
-        padding: "clamp(8px, 1.2vw, 26px)", gap: "clamp(6px, 0.9vw, 18px)",
+        padding: `clamp(8px, ${vwh(1.2)}, 26px)`, gap: `clamp(6px, ${vwh(0.9)}, 18px)`,
         userSelect: "none", overflow: "hidden",
       }}>
       {children}
@@ -819,7 +840,7 @@ export function FinalCountdown({
       background: BC.card,
       border: `1px solid ${BC.bdr}${ALPHA.line}`,
       borderRadius: "clamp(8px, 1vw, 20px)",
-      padding: compact ? "9px 12px" : "clamp(6px, 0.9vw, 18px) clamp(10px, 1.4vw, 28px)",
+      padding: compact ? "9px 12px" : `clamp(6px, ${vwh(0.9)}, 18px) clamp(10px, 1.4vw, 28px)`,
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: "clamp(8px, 1.5vw, 30px)" }}>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -851,7 +872,7 @@ export function FinalCountdown({
           the pair of them straddling the centre is what says so. The plain
           halfway line that used to be there said something weaker and looked
           the same. */}
-      <div style={{ position: "relative", height: "clamp(6px, 0.9vw, 18px)", borderRadius: 99, background: BC.inp, overflow: "hidden", marginTop: "clamp(4px, 0.6vw, 12px)" }}>
+      <div style={{ position: "relative", height: `clamp(6px, ${vwh(0.9)}, 18px)`, borderRadius: 99, background: BC.inp, overflow: "hidden", marginTop: `clamp(4px, ${vwh(0.6)}, 12px)` }}>
         <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct(totals.A)}%`, background: BC.teamA, transition: "width 700ms cubic-bezier(.2,.7,.3,1)" }} />
         <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: `${pct(totals.B)}%`, background: BC.teamB, transition: "width 700ms cubic-bezier(.2,.7,.3,1)" }} />
         <div style={{ position: "absolute", left: `${pct(toWin)}%`, top: 0, bottom: 0, width: 3, marginLeft: -1.5, background: BC.amber }} />
@@ -919,7 +940,7 @@ export function FinalCountdown({
     return (
       <Cell key={i} onClick={jump || undefined} style={{
         flex: 1, minWidth: 0, textAlign: "center", fontFamily: FONT,
-        padding: compact ? "9px 0" : "clamp(2px, 0.35vw, 8px) 0",
+        padding: compact ? "9px 0" : `clamp(2px, ${vwh(0.35)}, 8px) 0`,
         borderRadius: "clamp(3px, 0.4vw, 8px)",
         fontSize: compact ? 14 : T.strip, fontWeight: 800,
         background: w ? teamColor(w) : tied ? BC.t3 : out ? BC.inp : "transparent",
@@ -966,7 +987,7 @@ export function FinalCountdown({
     return (
       <button key={side} onClick={() => revealSide(side)} disabled={done || held} style={{
         flex: 1, minWidth: 0,
-        padding: compact ? "15px 10px" : "clamp(6px, 0.9vw, 18px) clamp(6px, 0.8vw, 16px)",
+        padding: compact ? "15px 10px" : `clamp(6px, ${vwh(0.9)}, 18px) clamp(6px, 0.8vw, 16px)`,
         borderRadius: "clamp(6px, 0.8vw, 16px)",
         background: done || held ? BC.inp : `${col}${ALPHA.tint}`,
         border: `2px solid ${done || held ? BC.bdr : col}`,
@@ -1032,7 +1053,7 @@ export function FinalCountdown({
           // hole and not the last one, which is the question the room asks the
           // moment a net eagle is announced — and the card is the only thing
           // in his hand that can answer it.
-          myPrompt.si ? `SI ${myPrompt.si}` : null,
+          myPrompt.si ? `HANDICAP ${myPrompt.si}` : null,
         ].filter(Boolean).join(" · ")}
       </div>
 
@@ -1092,7 +1113,7 @@ export function FinalCountdown({
 
   const smallBtn = (label, onPress, off) => (
     <button onClick={onPress} disabled={off} style={{
-      padding: compact ? "12px 18px" : "clamp(6px, 0.9vw, 18px) clamp(10px, 1.4vw, 28px)",
+      padding: compact ? "12px 18px" : `clamp(6px, ${vwh(0.9)}, 18px) clamp(10px, 1.4vw, 28px)`,
       borderRadius: "clamp(6px, 0.8vw, 16px)",
       background: BC.inp, border: `1px solid ${BC.bdr}`, color: BC.t2, fontFamily: FONT,
       fontSize: compact ? 15 : T.btn, fontWeight: 800, letterSpacing: 1,
@@ -1199,11 +1220,33 @@ export function FinalCountdown({
           </div>
           {holeArrow("next", goNext, !canNext)}
         </div>
+        {/* ── Two lines under the number, not one ──
+            They answer two different questions and they were running together
+            into one string of four facts separated by dots — "PAR 4 · SI 5 ·
+            BEST 6 OF 8 · 1 POINT" — which from the back of a room is a rule
+            nobody parses.
+
+            The HOLE is what it is: its par, and the handicap that decides who
+            gets a shot on it. The FORMAT is what it is worth: how many balls
+            make the number, and what the hole pays. One line each.
+
+            "HANDICAP" rather than "SI". Stroke index is the correct term and
+            it is not the one anybody in this room says out loud — a US card
+            prints Handicap, and the question being asked is always "who's
+            getting a shot here". The captain's card says the same word for
+            the same number; two names for one figure across two screens the
+            same man is holding is how an argument starts. */}
         <div style={{ fontSize: compact ? 10 : T.terms, fontWeight: 700, letterSpacing: compact ? 1 : 2.4, color: BC.t3, marginTop: "0.3em" }}>
-          PAR {holePars?.[holeIdx] ?? "—"} · SI {holeHcps?.[holeIdx] ?? "—"}
-          {countN ? ` · BEST ${countN} OF ${match.teamA?.length ?? "—"}` : ""}
-          {holeValue ? ` · ${fmtPts(holeValue)} POINT${holeValue === 1 ? "" : "S"}` : ""}
+          PAR {holePars?.[holeIdx] ?? "—"} · HANDICAP {holeHcps?.[holeIdx] ?? "—"}
         </div>
+        {(countN || holeValue) && (
+          <div style={{ fontSize: compact ? 10 : T.terms, fontWeight: 700, letterSpacing: compact ? 1 : 2.4, color: BC.t3, marginTop: "0.15em" }}>
+            {[
+              countN ? `BEST ${countN} OF ${match.teamA?.length ?? "—"}` : null,
+              holeValue ? `${fmtPts(holeValue)} POINT${holeValue === 1 ? "" : "S"}` : null,
+            ].filter(Boolean).join(" · ")}
+          </div>
+        )}
       </div>
 
       {/* Side by side on a television, STACKED on a phone. Four names across
