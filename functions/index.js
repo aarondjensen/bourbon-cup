@@ -50,6 +50,7 @@ const { defineSecret } = require("firebase-functions/params");
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const { ctpBody } = require("./ctpNotice");
+const { amendmentNotices } = require("./amendmentNotice");
 
 // ── A ceiling on how much this can ever cost ────────────────────────
 // Cloud Functions bill per instance-second and scale out on demand. The
@@ -292,6 +293,54 @@ async function ctpFieldFor(tournamentId) {
   }
 }
 
+// ── The edits a reopened round collected ────────────────────────────
+// Written by the client while the round was open for amendment (see
+// src/lib/scoreEdits), one document per hole or handicap that moved. Scoped
+// to the amendment as well as the round: a round reopened twice was corrected
+// twice, and replaying the first correction's holes on the second finalize
+// would tell a man his card moved when it did not.
+//
+// Three equality filters and no ordering, so this needs no composite index.
+async function amendmentEditsFor(tournamentId, round, amendSeq) {
+  try {
+    const snap = await db.collection("bc_score_edits")
+      .where("tournament_id", "==", tournamentId)
+      .where("round_number", "==", round)
+      .where("amend_seq", "==", amendSeq).get();
+    return snap.docs.map(d => d.data());
+  } catch (e) {
+    logger.warn("amendmentEditsFor failed", { tournamentId, round, amendSeq, err: e?.message });
+    return [];
+  }
+}
+
+// Who each player shares a card with, for one round: { pid: [everyone in his
+// match] }. One query for the round rather than one per affected player —
+// a correction can touch half a dozen men and the matches are the same eight
+// documents for all of them.
+//
+// A player in two matches of one round (Round 4 puts seven against seven and
+// nothing forbids it elsewhere) accumulates rather than overwrites, so
+// nobody who shared a card with him is dropped.
+async function matchmatesFor(tournamentId, round) {
+  const out = {};
+  try {
+    const snap = await db.collection("bc_matches")
+      .where("tournament_id", "==", tournamentId)
+      .where("round", "==", round).get();
+    for (const doc of snap.docs) {
+      const m = doc.data();
+      const pids = [...(m.teamA || []), ...(m.teamB || [])].filter(Boolean);
+      for (const pid of pids) {
+        out[pid] = [...new Set([...(out[pid] || []), ...pids.filter(x => x !== pid)])];
+      }
+    }
+  } catch (e) {
+    logger.warn("matchmatesFor failed", { tournamentId, round, err: e?.message });
+  }
+  return out;
+}
+
 const nameOf = async (playerId) => {
   if (!playerId) return "Someone";
   try {
@@ -374,6 +423,69 @@ exports.onCardAttested = onDocumentWritten("bc_card_sigs/{docId}", async (event)
   }
 });
 
+// ── The amendment half of TRIGGER 3 ─────────────────────────────────
+// A finished round was reopened, corrected and finalized again. Everybody
+// whose card moved hears exactly what moved on it, and everybody who shared
+// that card hears that it moved — see amendmentNotice.js for why the second
+// group is on the list at all.
+//
+// This is deliberately NOT a whole-roster broadcast. A correction to one
+// fourball is not news for the other twelve men, and the field-wide push that
+// already went out when the round first closed said everything they need. The
+// people with standing here are the ones who signed and attested the card.
+//
+// A silent return when there is nothing on file is the correct outcome and
+// the common one: most amendments are reopened to fix a SETTING — a Nassau
+// pot, a format — which moves nobody's card and records no edits (see
+// src/lib/scoreEdits for what does and does not count). Sending "your card
+// was corrected" to a field whose cards are untouched would be the app
+// inventing an alarm.
+async function sendAmendmentNotices({ after, round_number, tournament_id }) {
+  const amendSeq = after.amend_count || 0;
+  const edits = await amendmentEditsFor(tournament_id, round_number, amendSeq);
+  if (!edits.length) {
+    logger.info("amendment finalized with no card changes", { round_number, tournament_id, amendSeq });
+    return;
+  }
+
+  const matchmates = await matchmatesFor(tournament_id, round_number);
+  const notices = amendmentNotices({ round: round_number, edits, matchmates });
+  if (!notices.length) return;
+
+  let sent = 0, failed = 0;
+  const problems = {};
+  for (const n of notices) {
+    try {
+      // One send per recipient rather than a broadcast, because the BODY
+      // differs per player — that is the whole point of the notice. broadcast()
+      // takes one payload for everybody and cannot express it.
+      const r = await sendToPlayer(n.playerId, {
+        title: n.title,
+        body: n.body,
+        data: {
+          type: "card_amended",
+          round: round_number,
+          tournament_id,
+          amend_seq: amendSeq,
+          // Straight to the round summary, which is where the corrected
+          // matches and the moved result actually are. Same hash the
+          // round-final push uses; see src/lib/deepLink.
+          url: `/#round/${round_number}`,
+        },
+      });
+      sent += r.sent; failed += r.failed;
+      if (r.errors.length && !r.errors.every(e => e === "no_tokens_registered")) problems[n.playerId] = r.errors;
+    } catch (e) {
+      problems[n.playerId] = [e?.message || String(e)];
+    }
+  }
+  logger.info("card_amended broadcast complete", {
+    round_number, amendSeq, recipients: notices.length,
+    ownCard: notices.filter(n => n.ownCard).length,
+    sent, failed, problemPlayers: Object.keys(problems),
+  });
+}
+
 // ═══════════════════════════════════════════════════════════════════
 //  TRIGGER 3 — the director finalized a round
 // ═══════════════════════════════════════════════════════════════════
@@ -393,6 +505,25 @@ exports.onRoundFinal = onDocumentWritten("bc_round_locks/{docId}", async (event)
     const { round_number, tournament_id } = after;
     if (!tournament_id) {
       logger.warn("onRoundFinal: no tournament_id, cannot resolve a roster", { docId: event.params.docId });
+      return;
+    }
+
+    // ── A RE-finalize is a different event ──────────────────────────
+    // A round that was reopened and corrected (lib/roundAmend) ends on this
+    // same false→true edge, and the message below is wrong for it twice over:
+    // "Round 2 is final" already went to this field on Friday, and the pins
+    // it carries have not changed. Sending it again tells sixteen men
+    // something they know and nothing they don't — while the one fact that
+    // IS new, that a card they signed has moved, goes unsaid.
+    //
+    // So the amendment path takes over entirely rather than sending
+    // alongside: two pushes a minute apart, one of them stale, is how a
+    // player learns to dismiss both.
+    //
+    // Keyed on amend_count rather than on a flag the finalize writes, so it
+    // cannot disagree with the audit trail the reopen left behind.
+    if ((after.amend_count || 0) > 0) {
+      await sendAmendmentNotices({ after, round_number, tournament_id });
       return;
     }
 

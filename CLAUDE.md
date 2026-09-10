@@ -709,12 +709,68 @@ dialog that promises the gate will hold and then moves it. On a dated week
 today's round wins, so reopening Friday's round on Saturday moves nobody;
 with no dates set it falls through to the lowest unfinalized round and does.
 
-**None of this needs a rules deploy.** The finalize lock was always a
-client-side guard — `firestore.rules` lets any member write `bc_round_locks`
-— so this ships with the app and nothing else. `requireText` and
-`reasonPrompt` on `ConfirmModal` are the reusable halves; use them for
-anything else rare enough that a one-tap confirm is the reflex rather than the
-check.
+`requireText` and `reasonPrompt` on `ConfirmModal` are the reusable halves;
+use them for anything else rare enough that a one-tap confirm is the reflex
+rather than the check.
+
+### Telling the field
+
+A man signs his card, four people attest it, the round is finalized — and on
+Sunday a hole he signed for reads a different number. That correction made in
+the open is ordinary housekeeping. Made silently it is the exact thing an
+attestation exists to prevent, so every hole moved inside an amendment window
+is written to **`bc_score_edits`** (`src/lib/scoreEdits.js`) and the men whose
+card it is get a **`card_amended`** push.
+
+**It is sent on the RE-FINALIZE, never on the edit**, and that ordering is the
+design:
+
+- A correction in progress is not a correction — a director types 5, sees it
+  is wrong, types 4, and pushing on each keystroke tells a man about a number
+  that was never true of anything. The log keys one document per hole per
+  amendment and writes `from` ONLY on the first edit, so the notice reads
+  7 → 4 rather than 5 → 4. A hole put back where it started deletes its row.
+- One push, not one per hole.
+- Re-finalizing is when the correction becomes official — the same moment the
+  original result did. A round left reopened is still being worked on.
+
+`amend_seq` on every row is the lock's `amend_count`, which is how a round
+reopened twice does not replay the first correction's holes at the second
+finalize. That number has to survive every write between the reopen and the
+re-finalize — `buildRoundLockDoc` returns a fresh object, so it names the
+amendment fields explicitly, and `scoreEdits.lifecycle.test.js` walks the
+whole thing because the two halves live either side of the wire and cannot
+import each other.
+
+**Three kinds of change count, and the third is the one that hides.** A moved
+hole and a moved Course Handicap are obvious. A moved *allowance* is not: `ch`
+is stored raw and the allowance is applied downstream of the snapshot, so
+correcting a round from 100% to 50% re-scores every match in it and moves not
+one stored handicap. `describeRefreshImpact` reports round-level settings
+alongside the per-player rows for exactly that reason — reading only the
+players made the Recalculate dialog answer "nothing to recalculate" for the
+one correction a recalculate is the only way to land.
+
+**Who hears it**: the man whose hole moved, and everybody else in his match —
+a card is signed by one player and attested by the others, and when the number
+changes the people who swore to it have as much standing as its owner. A
+round-wide settings change reaches everybody who played. The rest of the field
+hears nothing; a corrected fourball is not news for the other twelve.
+`functions/amendmentNotice.js` decides all of it and is pure, like `ctpNotice`
+beside it, written to the same one-line Android budget.
+
+The field-wide "Round N is final" is **suppressed on a re-finalize** — it
+already went out the first time and says nothing about what changed.
+
+- **The notification half needs `firebase deploy --only functions`.** Until it
+  runs, corrections land and record themselves and nobody is told.
+- **`bc_score_edits` needs `firebase deploy --only firestore:rules`**, app
+  first as always. It is gated at `canWriteEdition()` rather than director,
+  because the writer is `onSaveHole` — the same call every player makes from a
+  tee box — and a rule that refused it would take the SCORE down with the log
+  entry.
+- The amendment itself needs neither: the finalize lock was always a
+  client-side guard.
 
 ## The Data tab
 

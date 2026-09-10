@@ -593,6 +593,19 @@ service cloud.firestore {
     // this half of the list rather than with the director-owned data.
     match /bc_card_sigs/{doc}          { allow read: if isOpen();
                                          allow write: if canWriteEdition(); }
+    // What moved on a card after a finalized round was reopened — one row per
+    // corrected hole or moved handicap. See src/lib/scoreEdits; the
+    // re-finalize notification (functions/amendmentNotice) is built from it.
+    //
+    // Written only by a director in practice, since only a director can
+    // reopen a round and the Scoring tab's off-round entry is director-only.
+    // Gated at canWriteEdition() rather than canAdminEdition() anyway, because
+    // the WRITER is onSaveHole — the same call every player makes from a tee
+    // box — and a rule that refuses it for a member would fail on the one path
+    // that must never fail: it would take the SCORE down with the log entry.
+    // Read-open like the rest of the tournament.
+    match /bc_score_edits/{doc}        { allow read: if isOpen();
+                                         allow write: if canWriteEdition(); }
 
     // ── The photo library ─────────────────────────────────────────
     // One document per photo. Not the photo — the INDEX of it: where the

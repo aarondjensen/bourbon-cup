@@ -283,6 +283,25 @@ export function buildRoundLockDoc({
     refreshed_by: previous ? lockedBy || null : null,
     finalized_at: previous?.finalized_at || null,
     finalized_by: previous?.finalized_by || null,
+    // ── The amendment trail rides through a refresh ─────────────────
+    // This builder returns a FRESH object rather than spreading `previous`,
+    // which is deliberate — a snapshot must not inherit a stray field from a
+    // shape it no longer has. But that means every field worth keeping has to
+    // be named here, and the amendment marks (lib/roundAmend) are worth
+    // keeping twice over: `amend_count` is the permanent record that a
+    // finished round was reopened, and it is also what the re-finalize
+    // notification keys on to find the edits belonging to THIS amendment.
+    //
+    // Losing them here would not have shown up in Firestore — db.upsert
+    // merges, so the stored document keeps what the write omits — but the
+    // in-memory lock the app scores and reports off would have dropped them
+    // the instant a director tapped Recalculate, which is precisely the
+    // moment they matter most.
+    amend_count: previous?.amend_count || 0,
+    amended_at: previous?.amended_at || null,
+    amended_by: previous?.amended_by || null,
+    amend_reason: previous?.amend_reason || null,
+    amend_history: previous?.amend_history || null,
     // Frozen round context
     course_id: tr.course_id || null,
     course_name: course?.name || null,

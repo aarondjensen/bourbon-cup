@@ -99,6 +99,11 @@ await check("an ordinary member CAN still do everything a player does", async ()
   // The auto-lock fires on the first score of a round, from a player's phone.
   await assertSucceeds(setDoc(doc(peteDb(), "bc_round_locks/r1"), { state: "open" }));
   await assertSucceeds(setDoc(doc(peteDb(), "bc_notification_tokens/pete_x"), { token: "t" }));
+  // The amendment log rides on the same write as the score that produced it
+  // (src/lib/scoreEdits, written from App.onSaveHole). A rule that refused it
+  // for a member would fail on the one path that must never fail — it would
+  // take the SCORE down with the log entry.
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_score_edits/e1"), { round_number: 1, kind: "score" }));
 });
 
 await grantDirector("alice");
@@ -222,6 +227,9 @@ await check("stranger with no code field at all is refused", () =>
 
 await check("stranger still cannot write a score", () =>
   assertFails(setDoc(doc(malloryDb(), "bc_hole_scores/y"), { v: 2 })));
+
+await check("stranger cannot forge an amendment log entry either", () =>
+  assertFails(setDoc(doc(malloryDb(), "bc_score_edits/forged"), { round_number: 1, kind: "score" })));
 
 await check("nobody can mint a membership for a DIFFERENT uid", () =>
   assertFails(setDoc(doc(malloryDb(), "bc_accounts/pete"), { uid: "pete", code: "bourbon2026" })));
@@ -458,6 +466,14 @@ await check("anon can read the budget but not write it", async () => {
 // ── Reads stay open, and the archive is director-owned ──────────────
 await check("anon can still read the leaderboard data", () =>
   assertSucceeds(getDoc(doc(anonDb(), "bc_hole_scores/x"))));
+
+// The amendment log is a record OF the tournament, so it reads like the rest
+// of it — a guest opening a shared leaderboard can see that a round was
+// corrected. Writing it needs a membership like every other write here.
+await check("anon can read the amendment log but not write it", async () => {
+  await assertSucceeds(getDoc(doc(anonDb(), "bc_score_edits/e1")));
+  await assertFails(setDoc(doc(anonDb(), "bc_score_edits/e_anon"), { kind: "score" }));
+});
 
 await check("anon can read the roster", () =>
   assertSucceeds(getDoc(doc(anonDb(), "bc_players/p1"))));

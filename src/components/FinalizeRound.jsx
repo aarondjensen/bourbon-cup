@@ -107,6 +107,7 @@ import { useConfirm } from "../lib/useConfirm";
 import { playerLookup } from "../lib/players";
 import { SegmentedToggle } from "./ui";
 import { describeAmendImpact, amendImpactLines } from "../lib/roundAmend";
+import { inAmendmentWindow, amendSeqOf, editsForAmendment, playersAffected } from "../lib/scoreEdits";
 
 // `progress` throughout this file is one roundScoreProgress() result
 // (lib/scoreGuard) — entered / total / missing / missingBy / complete,
@@ -229,7 +230,7 @@ export function DirectorFinalizeAlert({ round, nextRound, progress, cards, stage
 // field has already moved off.
 export function FinalizeRoundSheet({
   round, rounds = [], liveRound, onPickRound,
-  nextRound, amendable = [], roundLocks, allRounds, roundToday = null,
+  nextRound, amendable = [], scoreEdits, roundLocks, allRounds, roundToday = null,
   progress, cards, tPlayers,
   onFinalizeRound, onAmendRound, onAttestAll, notify, onClose,
 }) {
@@ -442,6 +443,24 @@ export function FinalizeRoundSheet({
 
   const pct = progress.total ? Math.round((progress.entered / progress.total) * 100) : 0;
 
+  // ── What finalizing is about to SEND ────────────────────────────────
+  // Only for a round that was reopened. Finalizing an amended round pushes
+  // "your card was corrected" to everybody whose card moved and everybody who
+  // signed it with them (functions/amendmentNotice), and that is a message a
+  // director cannot recall and cannot see the effect of. Naming the count
+  // here is the difference between a deliberate act and a surprise — and a
+  // zero is as informative as a number, because it says the correction was on
+  // the points side and nobody's card moved at all.
+  const amendLock = round != null ? roundLocks?.[round] : null;
+  const amending = inAmendmentWindow(amendLock);
+  const pendingEdits = amending
+    ? editsForAmendment(scoreEdits, round, amendSeqOf(amendLock))
+    : [];
+  const editedPlayers = amending
+    ? playersAffected(scoreEdits, round, amendSeqOf(amendLock)).length
+    : 0;
+  const roundWide = pendingEdits.some(e => e.kind === "setting");
+
   return (
     <Popup onClose={busy ? undefined : onClose} maxWidth={380} padding={18} portal showClose={!busy}>
       <div style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 1.5, color: BC.amberInk, marginBottom: 10 }}>
@@ -596,6 +615,25 @@ export function FinalizeRoundSheet({
             {opensClause(round, nextRound, liveRound)}.
             {" "}You can reopen it afterwards if you need to.
           </div>
+
+          {/* A reopened round is being finalized for the SECOND time, and this
+              one notifies people. Said before the button rather than after. */}
+          {amending && (
+            <div style={{
+              fontSize: FS.label, lineHeight: 1.45, marginBottom: 12,
+              padding: "8px 10px", borderRadius: 8,
+              background: `${BC.amber}${ALPHA.wash}`,
+              border: `1px solid ${BC.amber}${ALPHA.hair}`,
+              color: BC.t2,
+            }}>
+              <span style={{ fontWeight: 800, color: BC.amberInk }}>Reopened round. </span>
+              {roundWide
+                ? "Finalizing tells everyone who played this round that its terms changed and their strokes may have moved."
+                : editedPlayers
+                  ? `Finalizing tells ${editedPlayers} player${editedPlayers === 1 ? "" : "s"} their card was corrected, and the players who signed with them.`
+                  : "No card has changed, so nobody is notified. Finalizing simply closes the round again."}
+            </div>
+          )}
 
           {/* Attest All Signed — above Finalize, because when both are on
               screen this is nearly always the one that should be tapped

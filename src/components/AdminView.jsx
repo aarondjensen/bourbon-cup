@@ -111,7 +111,7 @@ import {
   describeHiChangeImpact,
   roundLockState,
 } from "../lib/roundLocks";
-import { amendNeedsRefresh } from "../lib/roundAmend";
+import { amendNeedsRefresh, describeSettingValue } from "../lib/roundAmend";
 import {
   MAX_ROUND_COUNT,
   clampRoundCount,
@@ -736,9 +736,15 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
   const doRecalculate = async () => {
     const preview = onRecalculateRound ? await onRecalculateRound(editRound, { preview: true }) : null;
     if (!preview) { notify("Could not read this round's handicaps — try again", "error"); return; }
-    const { rows, changed, unchanged } = preview.impact;
+    const { rows, changed, unchanged, settings, settingsChanged } = preview.impact;
 
-    if (!changed) {
+    // Nothing on the STROKE side at all — neither a player's handicap nor one
+    // of the round's frozen settings. Both halves have to be clear before
+    // this is the right thing to say: an allowance correction moves every
+    // stroke in the round and not one stored Course Handicap, so reading only
+    // the players here told a director their fix was somewhere else when it
+    // was sitting right in front of them. See describeRefreshImpact.
+    if (!changed && !settingsChanged) {
       confirm({
         title: `Nothing to recalculate`,
         message: `Every handicap in Round ${editRound} already matches the current players, tees, allowance and course. Whatever you corrected was not on the handicap side — scores and point values are live and have already landed.`,
@@ -747,17 +753,26 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
       return;
     }
 
-    const list = rows.slice(0, 8)
-      .map(r => `• ${r.name}: ${r.from} → ${r.to}`)
-      .join("\n") + (rows.length > 8 ? `\n• …and ${rows.length - 8} more` : "");
+    const settingList = settings.map(d => `• ${d.label}: ${describeSettingValue(d.from)} → ${describeSettingValue(d.to)}`);
+    const playerList = rows.slice(0, 8).map(r => `• ${r.name}: ${r.from} → ${r.to}`);
+    if (rows.length > 8) playerList.push(`• …and ${rows.length - 8} more`);
+
+    // The headline counts whichever is actually moving. A round whose
+    // allowance changed but whose stored handicaps did not is a real and
+    // common shape, and "Move 0 handicaps?" is not a question anybody can
+    // answer.
+    const title = changed
+      ? `Move ${changed} handicap${changed === 1 ? "" : "s"} in a round that has been played?`
+      : `Re-score a round that has been played?`;
 
     const ok = await confirm({
       eyebrow: `Round ${editRound}`,
-      title: `Move ${changed} handicap${changed === 1 ? "" : "s"} in a round that has been played?`,
+      title,
       message: [
-        `${changed} Course Handicap${changed === 1 ? "" : "s"} will change and ${unchanged} will not:`,
-        list,
-        "",
+        ...(settingsChanged ? ["The round's frozen settings will be re-taken:", ...settingList, ""] : []),
+        ...(changed
+          ? [`${changed} Course Handicap${changed === 1 ? "" : "s"} will change and ${unchanged} will not:`, ...playerList, ""]
+          : ["No stored Course Handicap moves — but the settings above allocate strokes, so the round still re-scores.", ""]),
         "This re-allocates strokes on holes that have already been played, so match results in this round can change. It is the point of the recalculate — just be sure it is what you meant.",
       ].join("\n"),
       confirmLabel: "Recalculate",
@@ -770,8 +785,11 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
     try {
       const res = await onRecalculateRound(editRound);
       notify(
-        res ? `Round ${editRound} recalculated — ${changed} handicap${changed === 1 ? "" : "s"} moved`
-            : "Could not recalculate — nothing was changed",
+        res
+          ? (changed
+            ? `Round ${editRound} recalculated — ${changed} handicap${changed === 1 ? "" : "s"} moved`
+            : `Round ${editRound} recalculated — ${settingsChanged} setting${settingsChanged === 1 ? "" : "s"} re-taken`)
+          : "Could not recalculate — nothing was changed",
         res ? "success" : "error"
       );
     } catch {
