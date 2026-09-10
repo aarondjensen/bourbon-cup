@@ -252,9 +252,8 @@ function BallChip({ strokes, name, net, par, tid, counted }) {
 }
 
 // ── One player's ball, on a television ───────────────────────────
-// The same three facts on ONE LINE — name at the left, strokes in the middle,
-// the number hard right — eight lines down a column instead of four chips
-// across and two down.
+// The same three facts on ONE LINE — name, strokes, the number — eight lines
+// down a column instead of four chips across and two down.
 //
 // A chip is the right shape for a phone, where the width is the scarce thing
 // and a name has to fit in a quarter of 393px. On a 16:9 television the scarce
@@ -262,13 +261,34 @@ function BallChip({ strokes, name, net, par, tid, counted }) {
 // grid spends all of it: the name is capped by the column, which is capped by
 // the chip, which is a quarter of half the screen — so "Christopher M" was set
 // in the smallest type on the display while an inch of black sat either side
-// of it. A row gives the name the whole column and the number a fixed lane at
-// the end, so the eight of them line up as a list somebody can read down.
+// of it. A row gives the name room and the number a lane of its own, so the
+// eight of them line up as a list somebody can read down.
 //
-// The counted balls carry a rail in the side's colour up their left edge. From
-// the back of a room that reads as one continuous mark down the six that made
-// the number, which is the question the format asks — and it does it without
-// the two that missed going dim (see the note in SideColumn).
+// ── CENTRED ON THE STROKE COLUMN ──
+// The row is built around its MIDDLE, not its edges. The dot lane is pinned to
+// the centre of the column — which is the centre the team's name and its big
+// to-par number are already sitting on — and the name grows leftward out of it
+// while the score sits immediately right. The two outer lanes carry the same
+// `flex: 1`, which is the whole trick: equal shares of whatever is left over
+// put the middle one dead centre at any width, with no measuring.
+//
+// It used to be name-hard-left, number-hard-right, and on a 1250px column that
+// is two facts at opposite ends of a foot of black with the dots stranded
+// somewhere near the right. The header above it is centred; the eight rows
+// under it were not, so the side read as a centred title over a left-aligned
+// table. Now the whole column shares one spine.
+//
+// The rail is mirrored by a TRANSPARENT border of the same width on the right.
+// A border only on the left shifts the content box right by its own width, and
+// "dead centre" that is eight pixels off is the kind of wrong that is visible
+// on a television and invisible in a diff.
+//
+// The counted balls carry that rail in the side's colour. From the back of a
+// room it reads as one continuous mark down the six that made the number,
+// which is the question the format asks — and it does it without the two that
+// missed going dim (see the note in SideColumn).
+const RAIL = "clamp(3px, 0.4vw, 8px)";
+
 function BallRow({ strokes, name, net, par, tid, counted }) {
   const col = teamColor(tid);
   const rel = ballRel(net, par);
@@ -279,18 +299,23 @@ function BallRow({ strokes, name, net, par, tid, counted }) {
       padding: `${T.rowPad} clamp(6px, 0.8vw, 16px)`,
       borderRadius: "clamp(4px, 0.5vw, 10px)",
       background: counted ? `${col}${ALPHA.tint}` : "transparent",
-      borderLeft: `clamp(3px, 0.4vw, 8px) solid ${counted ? col : `${BC.bdr}${ALPHA.line}`}`,
+      borderLeft: `${RAIL} solid ${counted ? col : `${BC.bdr}${ALPHA.line}`}`,
+      borderRight: `${RAIL} solid transparent`,
       minWidth: 0,
     }}>
       <div style={{
-        flex: 1, minWidth: 0, textAlign: "left",
+        flex: 1, minWidth: 0, textAlign: "right",
         fontSize: T.rowName, fontWeight: 800, letterSpacing: 0.4,
         color: counted ? BC.t1 : BC.t2,
         whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
       }}>{name}</div>
       <StrokeDots strokes={strokes} row />
+      {/* Left-aligned in its own half, so every score in the column starts on
+          the same pixel and the minus signs stack — a right-aligned lane out
+          here would push the numbers to the far edge and undo the centring the
+          two flex halves just bought. */}
       <div style={{
-        flexShrink: 0, minWidth: "1.8em", textAlign: "right",
+        flex: 1, minWidth: 0, textAlign: "left", whiteSpace: "nowrap",
         fontSize: T.rowScore, fontWeight: 800, lineHeight: 1,
         color: under ? BC.danger : counted ? BC.t1 : BC.t2,
       }}>{rel == null ? "·" : fmtRel(rel)}</div>
