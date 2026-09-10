@@ -497,6 +497,24 @@ export function FinalCountdown({
   // once his side has no holes left. See lib/countdownPrompt.
   const myNext = captainSide ? nextHoleForSide({ sealed: true, reveal_a: outA, reveal_b: outB }, captainSide) : null;
   const myPrompt = (() => {
+    // ── Never on the shared screen ──
+    // The commentary is a script for one man, and on the television it is not
+    // clutter — it is a LEAK. The card holds the hole NOBODY HAS SEEN YET, on
+    // purpose, because he is about to read it out; putting that on a forty-inch
+    // panel in front of the room is the one thing the whole evening is built to
+    // prevent, and it would happen without a single tap.
+    //
+    // Signing the television in as a guest already keeps `captainSide` null and
+    // the card away. That is a setup step somebody has to get right on the
+    // night, in a room, once a year — and if they get it wrong by signing in as
+    // a captain instead, the failure is silent and total. So the screen refuses
+    // on its own, off the same measurement the layout forks on.
+    //
+    // The cost is a captain driving from a laptop, who keeps his BUTTON and
+    // loses his card. That is the right way round: a captain narrating to a
+    // room is holding a phone, and the alternative is trusting a login on the
+    // one screen that cannot be untold.
+    if (!compact) return null;
     if (!captainSide || myNext == null || !ownResult) return null;
     // Not his go. The other captain is talking and this band would be him
     // reading ahead over the top of it.

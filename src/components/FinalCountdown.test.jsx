@@ -5,7 +5,7 @@
 // the arithmetic; this pins what the television actually SHOWS on the far side
 // of it — which can come apart from the arithmetic, because the component has
 // both sides' balls in hand the whole time and chooses which to draw.
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/react";
 import { FinalCountdown } from "./FinalCountdown";
 import { computeMatchResult } from "../scoring";
@@ -345,6 +345,8 @@ describe("whose tap it is", () => {
 
 describe("a captain's phone", () => {
   const captain = { isDirector: false, captainSide: "A" };
+  // The card is a PHONE thing — see the two tests at the bottom of this block.
+  beforeEach(() => setWidth(PHONE));
 
   it("gives him one button and it is his own side's", () => {
     const t = screen({ A: 1, B: 1 }, captain).textContent;
@@ -457,6 +459,29 @@ describe("a captain's phone", () => {
     // His side is a hole up: it is not his go, and a prompt here would be him
     // reading ahead over the top of the man who is speaking.
     expect(screen({ A: 2, B: 1 }, captain).textContent).not.toContain("Mash Brothers −");
+  });
+
+  // ── The card is HIS, and only his ─────────────────────────────
+  // The commentary is a script for one man. On the television it is not
+  // clutter, it is a LEAK: the card is the hole nobody has seen yet, printed
+  // in front of the room the countdown exists to keep it from.
+  //
+  // Signing the TV in as a guest keeps `captainSide` null and the card away —
+  // but that is a setup step somebody has to get right on the night, and the
+  // failure is silent and total. The screen refuses on its own instead.
+  it("never draws the card on a big screen, whoever is signed in", () => {
+    setWidth(TV);
+    const t = screen({ A: 1, B: 1 }, captain).textContent;
+    expect(t).not.toContain("Net birdie — Paul W");
+    expect(t).not.toContain("in a row");
+    expect(t).not.toContain("HOLE 2 · PAR 4 · SI 2");
+  });
+
+  it("still gives him his reveal button on a big screen", () => {
+    // The card is what is withheld, not the control. A captain driving off a
+    // laptop keeps his half of the countdown.
+    setWidth(TV);
+    expect(screen({ A: 1, B: 1 }, captain).textContent).toContain("REVEAL MASH BROTHERS · HOLE 2");
   });
 
   it("leaves a spectator with no controls at all", () => {
