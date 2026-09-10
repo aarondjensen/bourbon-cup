@@ -830,7 +830,7 @@ function RoundSection({
 export function TeamLeaderboard({
   matches, holeData, ownHoleData, countdownHoleData, courses, tRounds, tPlayers, teams,
   hcpOverrides, teeAssignments, roundLocks, viewer,
-  canReveal = false, onSetReveal, captainSide = null, autoCountdown = false, onOpenSummary,
+  canReveal = false, onSetReveal, onSetHole, captainSide = null, autoCountdown = false, onOpenSummary,
 }) {
   const [expandedMatch, setExpandedMatch] = useState(null);
   // Round open/closed. Absent key = follow the automatic rule below;
@@ -1124,7 +1124,12 @@ export function TeamLeaderboard({
         teams={teams}
         courseName={course?.name || null}
         formatLabel={meta.fmt?.label || null}
-        reveal={meta.seal?.sides ?? { A: HOLE_COUNT, B: HOLE_COUNT }}
+        reveal={{
+          ...(meta.seal?.sides ?? { A: HOLE_COUNT, B: HOLE_COUNT }),
+          // Where the ROOM is, which leads the two counters while the board
+          // sits cleared waiting for the first captain to speak.
+          cursor: meta.seal?.hole ?? 0,
+        }}
         ownResult={(ownResults[rnd] || [])[0]?.result || null}
         ownGetScore={(pid, h) => (ownHoleData?.[`${pid}_${rnd}`] || {})[h] || 0}
         totals={cdTotals}
@@ -1133,6 +1138,7 @@ export function TeamLeaderboard({
         isDirector={canReveal && !!onSetReveal}
         captainSide={onSetReveal ? captainSide : null}
         onAdvance={(side, n) => onSetReveal(rnd, side, n)}
+        onSetHole={onSetHole ? (n) => onSetHole(rnd, n) : null}
         onClose={closeCountdown}
       />
       </Suspense>,

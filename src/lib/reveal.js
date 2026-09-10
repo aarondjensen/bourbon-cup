@@ -93,7 +93,12 @@
 //   reveal_through — 0-18, how many holes have been turned over. Written
 //                    ONLY by the reveal control, never by the round form's
 //                    auto-save, so a director editing the tee times cannot
-//                    give the ending away.
+//                    give the ending away. Superseded per side by reveal_a /
+//                    reveal_b, which is what a captain's own tap writes.
+//   reveal_cursor  — 0-18, the hole the ROOM is on, which is not the same
+//                    question. See countdownHole. Director-only, and it
+//                    reveals nothing by itself: the countdown's scores are
+//                    cut by the two counters above, never by this.
 
 export const HOLE_COUNT = 18;
 
@@ -189,6 +194,51 @@ export const revealHole = (tr) => {
   return Math.max(A, B);
 };
 
+// ── Where the ROOM is, which is not where the reveal is ─────────────
+// A third number, and it earns its place on the one beat the two counters
+// cannot express: both captains have told their side, the hole is up on the
+// television with all sixteen balls on it, and everybody is looking at it.
+// The reveal is finished; the hole is not, because the hole is a conversation.
+//
+// Until this existed the only way off that hole was for a captain to reveal
+// the NEXT one — so the result of hole 7 was wiped by the arrival of half of
+// hole 8, on somebody else's cue, and there was no state in between. The
+// director had no way to say "right, that's 7" and clear the screen.
+//
+// `reveal_cursor` is that: the hole the room is ON. Nothing about it is
+// secret and nothing reads it but the layout — the countdown's own scores are
+// still cut by the two REVEAL counters (see countdownHoleData), so moving the
+// cursor can only ever show less, never more. It is why this needs no rules
+// change: a director already writes bc_rounds whole, and a captain still
+// cannot touch anything but his own counter.
+export const revealCursor = (tr) => clampHole(tr?.reveal_cursor);
+
+// The hole on screen. The cursor when the director has moved it, and the
+// furthest-revealed hole otherwise — MAX of the two, never the cursor alone.
+// A director who uses the arrows for six holes and then puts his phone down
+// must not freeze the television while the captains carry on revealing; the
+// max means the screen follows them again the moment they pass him.
+//
+// The same max is what bounds the back arrow: it can only walk the cursor
+// back to the last hole somebody actually turned over, which makes "back" the
+// undo of "next" and nothing more. Un-revealing a hole the room has already
+// watched is a different act, and it has its own control.
+export const countdownHole = (tr) => Math.max(revealCursor(tr), revealHole(tr));
+
+// May the director clear the screen and move on? Only once BOTH sides have
+// told this hole — advancing past a side that has not spoken would skip its
+// eight balls entirely, and they would never come back on their own.
+export const canAdvanceHole = (tr) => {
+  const at = countdownHole(tr);
+  if (at >= HOLE_COUNT) return false;
+  const { A, B } = sideReveal(tr);
+  return A >= at && B >= at;
+};
+
+// And may he take it back? Only while the clear is still a clear — nothing
+// revealed into it yet. See the note on countdownHole.
+export const canGoBackHole = (tr) => countdownHole(tr) > revealHole(tr);
+
 // Whose tap comes next on the hole in play. Both when the sides are level (a
 // new hole, and either captain may open it), one when the other is waiting.
 export const sidesPending = (tr) => {
@@ -247,7 +297,11 @@ export const revealState = (tRounds, round) => {
     // time. `through` above is still the pair's minimum — the holes that are
     // wholly out — which is what every other reader means.
     sides: sideReveal(tr),
-    hole: revealHole(tr),
+    // The hole ON SCREEN, which leads the reveal by one while the room is
+    // looking at a cleared board waiting for the first captain to speak.
+    hole: countdownHole(tr),
+    canNext: canAdvanceHole(tr),
+    canBack: canGoBackHole(tr),
   };
 };
 

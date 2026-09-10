@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   resolveSealed, HOLE_COUNT, sealDefaultFor, isSealedRound, revealedThrough, isFullyRevealed, isConcealing, revealState, concealedRoundNumbers, concealHoleData, countdownHoleData, stepReveal, revealSummary, wantsCountdown,
   sideReveal, revealedForSide, revealHole, sidesPending, nextHoleForSide,
+  revealCursor, countdownHole, canAdvanceHole, canGoBackHole,
 } from "./reveal";
 
 // The blackout is the one feature of this app whose failure mode is silent
@@ -132,14 +133,22 @@ describe("isConcealing", () => {
 describe("revealState / concealedRoundNumbers", () => {
   const tRounds = [round(1), round(2), sealedRound(3, 18, { final: true }), sealedRound(4, 6)];
 
+  // An unsealed round is every hole out and nothing left to drive.
+  const open18 = { through: 18, sides: { A: 18, B: 18 }, hole: 18, canNext: false, canBack: false };
+
   it("answers per round", () => {
-    expect(revealState(tRounds, 1)).toEqual({ sealed: false, concealing: false, through: 18, sides: { A: 18, B: 18 }, hole: 18 });
-    expect(revealState(tRounds, 3)).toEqual({ sealed: true, concealing: false, through: 18, sides: { A: 18, B: 18 }, hole: 18 });
-    expect(revealState(tRounds, 4)).toEqual({ sealed: true, concealing: true, through: 6, sides: { A: 6, B: 6 }, hole: 6 });
+    expect(revealState(tRounds, 1)).toEqual({ sealed: false, concealing: false, ...open18 });
+    expect(revealState(tRounds, 3)).toEqual({ sealed: true, concealing: false, ...open18 });
+    expect(revealState(tRounds, 4)).toEqual({
+      sealed: true, concealing: true, through: 6, sides: { A: 6, B: 6 }, hole: 6,
+      // Both sides have told hole 6, so the director may clear it; nothing has
+      // been cleared yet, so there is nothing to take back.
+      canNext: true, canBack: false,
+    });
   });
 
   it("reads an unknown round as wide open", () => {
-    expect(revealState(tRounds, 9)).toEqual({ sealed: false, concealing: false, through: 18, sides: { A: 18, B: 18 }, hole: 18 });
+    expect(revealState(tRounds, 9)).toEqual({ sealed: false, concealing: false, ...open18 });
     expect(revealState(undefined, 1).concealing).toBe(false);
   });
 
@@ -496,5 +505,96 @@ describe("countdownHoleData, per side", () => {
 
   it("hands back the same object when nothing is concealing", () => {
     expect(countdownHoleData(data, [round(4)], sideOf)).toBe(data);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  Where the ROOM is, which is not where the reveal is
+// ══════════════════════════════════════════════════════════════════
+//  Both captains have told their side, the hole is up on the television with
+//  all sixteen balls on it, and everybody is looking at it. The reveal is
+//  finished; the hole is not, because the hole is a conversation. Until the
+//  cursor existed the only way off it was for a captain to reveal HALF OF THE
+//  NEXT ONE — so the result of hole 7 was wiped by the arrival of hole 8, on
+//  somebody else's cue, and the director had no way to say "right, that's 7".
+describe("the director's cursor", () => {
+  const at = (a, b, cursor) => round(4, {
+    format: "team_best_ball", sealed: true, reveal_a: a, reveal_b: b,
+    ...(cursor == null ? {} : { reveal_cursor: cursor }),
+  });
+
+  it("is the furthest hole revealed when nobody has moved it", () => {
+    expect(revealCursor(at(7, 7))).toBe(0);
+    expect(countdownHole(at(7, 7))).toBe(7);
+    // A hole sits HALF open while one captain talks, so this is the max of the
+    // two counters and never the minimum.
+    expect(countdownHole(at(7, 6))).toBe(7);
+  });
+
+  it("leads the reveal once the director clears the board", () => {
+    expect(countdownHole(at(7, 7, 8))).toBe(8);
+  });
+
+  // The one that would have been a bug on the night. A director who uses the
+  // arrows for six holes and then puts his phone down must not freeze the
+  // television while the captains carry on revealing.
+  it("never holds the screen behind the captains", () => {
+    expect(countdownHole(at(11, 11, 8))).toBe(11);
+    expect(countdownHole(at(12, 11, 8))).toBe(12);
+  });
+
+  it("clamps like every other counter", () => {
+    expect(revealCursor(at(0, 0, -3))).toBe(0);
+    expect(revealCursor(at(0, 0, 99))).toBe(HOLE_COUNT);
+    expect(revealCursor(at(0, 0, "nonsense"))).toBe(0);
+  });
+
+  describe("next", () => {
+    it("waits for BOTH captains", () => {
+      // Advancing past a side that has not spoken would skip its eight balls
+      // and they would never come back on their own.
+      expect(canAdvanceHole(at(7, 6))).toBe(false);
+      expect(canAdvanceHole(at(7, 7))).toBe(true);
+    });
+
+    it("is done at the eighteenth", () => {
+      expect(canAdvanceHole(at(18, 18))).toBe(false);
+      expect(canAdvanceHole(at(17, 17))).toBe(true);
+    });
+
+    it("will not clear a board that is already clear", () => {
+      // Cleared to 8 and nobody has told it yet.
+      expect(canAdvanceHole(at(7, 7, 8))).toBe(false);
+    });
+  });
+
+  describe("back", () => {
+    it("undoes a clear", () => {
+      expect(canGoBackHole(at(7, 7, 8))).toBe(true);
+      expect(countdownHole(at(7, 7, 7))).toBe(7);
+    });
+
+    it("does nothing when there is no clear to undo", () => {
+      // Taking the room off a hole it has WATCHED is a different act, and the
+      // reveal control below is what does it.
+      expect(canGoBackHole(at(7, 7))).toBe(false);
+      expect(canGoBackHole(at(7, 6))).toBe(false);
+    });
+
+    it("stops the moment a captain reveals into the new hole", () => {
+      expect(canGoBackHole(at(8, 7, 8))).toBe(false);
+    });
+  });
+
+  // It moves the LAYOUT and nothing else. The countdown's scores are cut by
+  // the two reveal counters, so a cursor can only ever show less, never more —
+  // which is why a director may write it without a rules change.
+  it("cannot turn a single ball over", () => {
+    const holes = { a1_4: card(18), b1_4: card(18) };
+    const cleared = [at(7, 7, 8)];
+    const notCleared = [at(7, 7)];
+    expect(countdownHoleData(holes, cleared)).toEqual(countdownHoleData(holes, notCleared));
+    expect(revealedThrough(at(7, 7, 8))).toBe(7);
+    expect(concealHoleData(holes, cleared).a1_4).toBeUndefined();
   });
 });
