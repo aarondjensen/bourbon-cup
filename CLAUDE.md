@@ -519,16 +519,34 @@ to the **`revokeAppleToken`** Cloud Function, which holds Apple's key. The code
 is single-use with a ~5-minute life and is obtained at deletion time, seconds
 before it is spent.
 
-That function needs five things set, and **none of them are in the repo**:
+That function needs five things, and **only one of them is a secret**. See
+`functions/.env.example`, which is the setup written out in full.
+
+**The .p8 goes to the secret manager, from the file Apple gave you** — not
+pasted. It is multi-line PEM and the interactive prompt takes a single line:
 
 ```sh
-firebase functions:secrets:set APPLE_PRIVATE_KEY   # the .p8 file's contents
-firebase functions:config:set ...                  # or set as env params:
-#   APPLE_KEY_ID     the key's 10-character id
-#   APPLE_TEAM_ID    the Apple Developer team id
-#   APPLE_CLIENT_ID  the Services ID used by the WEB sign-in flow
-#   APPLE_BUNDLE_ID  the iOS bundle id (defaults to com.thebourboncup.app)
+firebase functions:secrets:set APPLE_PRIVATE_KEY --data-file ~/Downloads/AuthKey_XXXXXXXXXX.p8
 ```
+
+(`--data-file -` reads stdin instead, if piping suits better.)
+
+**The other four are not secrets and are committed.** A team id, a key id, a
+Services ID and a bundle id are public identifiers — the bundle id is printed
+in the App Store — so they live in `functions/.env.the-bourbon-cup`, which the
+CLI uploads at deploy time:
+
+```sh
+cp functions/.env.example functions/.env.the-bourbon-cup   # then fill it in
+```
+
+That name rather than a bare `functions/.env`, deliberately: `.env` is
+gitignored, so it would live on one laptop and a deploy from any other machine
+would silently lose all four. The project-suffixed file is not ignored.
+
+`firebase functions:config:set` is **not** the mechanism and does not exist
+here — that was the v1 API, and this project is on firebase-functions v7, which
+reads `.env` files out of the functions directory instead.
 
 **The client_id is the bundle id for a native code and the Services ID for a
 web one** — an authorization code is bound to the client that obtained it, and
