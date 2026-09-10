@@ -377,6 +377,36 @@ describe("a captain's phone", () => {
     expect(t).not.toContain("UP · HOLE");
   });
 
+  // ── The order he says it in ─────────────────────────────────────
+  // "…with contributions from Paul and Dave, and the first net eagle of the
+  // round — the Mash Brothers are three under."
+  //
+  // So the card reads top to bottom in that order, and the team's number is
+  // LAST. It used to sit at the top beside the hole, which is a scoreboard's
+  // order — answer first, detail under it — and reading this card out then
+  // meant starting at the bottom, going up for the names and coming back
+  // down, every hole, eighteen times, in front of everybody.
+  it("puts the hole, then the men, then the number", () => {
+    const t = screen({ A: 1, B: 1 }, captain).textContent;
+    const hole = t.indexOf("HOLE 2 · PAR 4");
+    const names = t.indexOf("Net birdie — Paul W");
+    const number = t.indexOf("Mash Brothers −1");
+    expect(hole).toBeGreaterThan(-1);
+    expect(names).toBeGreaterThan(hole);
+    expect(number).toBeGreaterThan(names);
+  });
+
+  it("puts a nugget with the men, ahead of the number", () => {
+    // "…from Paul, AND the first eagle of the round — the Mash Brothers are…"
+    // is one breath. The stats belong to the build-up, not to the payoff.
+    const t = screen({ A: 1, B: 1 }, captain).textContent;
+    const names = t.indexOf("Net birdie — Paul W");
+    const nugget = t.indexOf("in a row");
+    const number = t.indexOf("Mash Brothers −1");
+    expect(nugget).toBeGreaterThan(names);
+    expect(number).toBeGreaterThan(nugget);
+  });
+
   // ── The window the nuggets may look at ──────────────────────────
   // His phone holds his side's ENTIRE round, uncut, because a team is never
   // hidden from itself. The nuggets may only see the holes already turned
