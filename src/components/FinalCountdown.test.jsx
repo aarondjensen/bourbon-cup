@@ -63,8 +63,10 @@ const result = computeMatchResult(match, holeData, courses, tRounds, tPlayers, "
 const getScore = (pid, h) => holeData[`${pid}_4`]?.[h] || 0;
 
 const advanced = [];
+const cleared = [];
 const screen = (reveal, extra = {}) => {
   advanced.length = 0;
+  cleared.length = 0;
   return render(
     <FinalCountdown
       match={match} result={result} getScore={getScore}
@@ -73,7 +75,9 @@ const screen = (reveal, extra = {}) => {
       teams={{ A: { id: "A", name: "Mash Brothers" }, B: { id: "B", name: "Shot Callers" } }}
       courseName="Treetops" formatLabel="Team Best Ball"
       reveal={reveal} totals={{ A: 3, B: 1 }} toWin={12.5} clincher={null}
-      isDirector onAdvance={(s, n) => advanced.push([s, n])} onClose={() => {}}
+      isDirector onAdvance={(s, n) => advanced.push([s, n])}
+      onSetHole={(n) => cleared.push(n)}
+      onClose={() => {}}
       {...extra}
     />,
   ).container;
@@ -739,5 +743,112 @@ describe("the strip as a control", () => {
   it("is not a control for a spectator either", () => {
     const c = screen({ A: 6, B: 6 }, { isDirector: false, captainSide: null });
     expect(cell(c, 3).tagName).toBe("DIV");
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  Clearing the board between holes
+// ══════════════════════════════════════════════════════════════════
+//  Both captains have told their side, the hole is up with all sixteen balls
+//  on it, and everybody is looking at it. The reveal is finished; the hole is
+//  not, because the hole is a conversation. Before these two arrows the only
+//  way off it was for a captain to reveal HALF OF THE NEXT ONE — so the result
+//  of hole 7 was wiped by the arrival of hole 8, on somebody else's cue.
+describe("the hole arrows", () => {
+  // By aria-label, not by glyph: the controls row carries its own "◀" (the
+  // reveal step-back), and these two are a different control entirely.
+  const arrows = (c) => [...c.querySelectorAll(
+    'button[aria-label="Next hole"], button[aria-label="Previous hole"]')];
+  const arrow = (c, dir) => c.querySelector(
+    `button[aria-label="${dir === "next" ? "Next hole" : "Previous hole"}"]`);
+
+  it("moves the room on without turning anything over", () => {
+    const c = screen({ A: 7, B: 7 });
+    fireEvent.click(arrow(c, "next"));
+    expect(cleared).toEqual([8]);
+    // And nothing was revealed by it. That is the whole point: the board goes
+    // blank and waits for the first captain.
+    expect(advanced).toEqual([]);
+  });
+
+  it("clears the board rather than showing half of the next hole", () => {
+    // Cleared to 8 with both counters still on 7: hole 8 is on screen and
+    // neither side has been told.
+    const t = screen({ A: 7, B: 7, cursor: 8 }).textContent;
+    expect(t).toContain("HOLE 8");
+    expect(t).toContain("MASH BROTHERS TO TELL IT");
+    expect(t).toContain("SHOT CALLERS TO TELL IT");
+    expect(t).not.toContain("Paul W");
+    expect(t).not.toContain("Andy H");
+  });
+
+  it("waits for both captains before it will move", () => {
+    // A is a hole up; B has not told hole 7 yet. Advancing here would skip
+    // B's eight balls and they would never come back on their own.
+    const c = screen({ A: 7, B: 6 });
+    expect(arrow(c, "next").disabled).toBe(true);
+    fireEvent.click(arrow(c, "next"));
+    expect(cleared).toEqual([]);
+  });
+
+  it("takes a clear back, and only while it is still a clear", () => {
+    const c = screen({ A: 7, B: 7, cursor: 8 });
+    expect(arrow(c, "back").disabled).toBe(false);
+    fireEvent.click(arrow(c, "back"));
+    expect(cleared).toEqual([7]);
+    cleanup();
+    // Once a captain has revealed into the new hole, taking the room back
+    // would be un-showing something it has already watched.
+    const after = screen({ A: 8, B: 7, cursor: 8 });
+    expect(arrow(after, "back").disabled).toBe(true);
+    cleanup();
+    // And there is nothing to undo on a hole nobody cleared onto.
+    expect(arrow(screen({ A: 7, B: 7 }), "back").disabled).toBe(true);
+  });
+
+  // The shell is one big tap target for `advance`. Without stopPropagation a
+  // tap on ▶ would clear the board and then be handled again by the
+  // background — which on a hole both sides had told would clear it twice.
+  it("does not also fire the background tap", () => {
+    const c = screen({ A: 7, B: 7 });
+    fireEvent.click(arrow(c, "next"));
+    expect(cleared).toEqual([8]);
+  });
+
+  it("is a director's control and nobody else's", () => {
+    expect(arrows(screen({ A: 7, B: 7 }, { isDirector: false, captainSide: "A" })).length).toBe(0);
+    cleanup();
+    expect(arrows(screen({ A: 7, B: 7 }, { isDirector: false, captainSide: null })).length).toBe(0);
+    cleanup();
+    // Symmetric, so the hole number stays centred on the television.
+    expect(arrows(screen({ A: 7, B: 7 })).length).toBe(2);
+  });
+
+  it("has nothing left to clear on the eighteenth", () => {
+    expect(arrow(screen({ A: 18, B: 18 }), "next").disabled).toBe(true);
+  });
+
+  // One key for "the next thing that should happen", which is three things in
+  // a cycle: clear the board, hear the first side, hear the second. A director
+  // leaning on the space bar after the room finished hole 7 must not open half
+  // of hole 8 over the top of the conversation about 7.
+  it("takes the space bar first, ahead of a reveal", () => {
+    screen({ A: 7, B: 7 });
+    fireEvent.keyDown(window, { key: " " });
+    expect(cleared).toEqual([8]);
+    expect(advanced).toEqual([]);
+    cleanup();
+    // On a cleared board it goes back to revealing.
+    screen({ A: 7, B: 7, cursor: 8 });
+    fireEvent.keyDown(window, { key: " " });
+    expect(cleared).toEqual([]);
+    expect(advanced).toEqual([["A", 8]]);
+  });
+
+  it("undoes the clear on the way back, before it un-reveals anything", () => {
+    screen({ A: 7, B: 7, cursor: 8 });
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+    expect(cleared).toEqual([7]);
+    expect(advanced).toEqual([]);
   });
 });

@@ -457,15 +457,25 @@ function useCompact() {
 export function FinalCountdown({
   match, result, getScore, holePars, holeHcps, tPlayers, teams, courseName, formatLabel,
   reveal, ownResult, ownGetScore, totals, toWin, clincher,
-  isDirector = false, captainSide = null, onAdvance, onClose,
+  isDirector = false, captainSide = null, onAdvance, onSetHole, onClose,
 }) {
   const compact = useCompact();
   const { nameOf } = playerLookup(tPlayers);
   const { A: outA, B: outB } = reveal || { A: 0, B: 0 };
-  // The hole the room is ON — the one a side has been shown, or the last one
-  // finished when the two are level. Not the minimum: the whole point is that
-  // a hole sits half-open while one captain talks.
-  const hole = Math.max(outA, outB);
+  // ── The hole on screen ───────────────────────────────────────────
+  // The furthest a captain has turned over — a hole sits HALF open while one
+  // of them talks, which is why this is the max of the two counters and not
+  // the minimum — or the director's cursor, when he has moved the room on
+  // ahead of both of them.
+  //
+  // That last case is the cleared board: hole 7 is finished, everybody has
+  // looked at it, and the director taps ▸. The screen goes to hole 8 with
+  // nothing on it and both sides waiting to be told. Before the cursor
+  // existed the only way off hole 7 was for a captain to reveal half of hole
+  // 8, so the result was wiped on somebody else's cue and there was no beat
+  // in between. See countdownHole in lib/reveal.
+  const revealedHole = Math.max(outA, outB);
+  const hole = Math.max(reveal?.cursor || 0, revealedHole);
   const holeIdx = hole - 1;
   const shown = { A: outA >= hole && hole > 0, B: outB >= hole && hole > 0 };
   const bothOut = shown.A && shown.B;
@@ -487,6 +497,19 @@ export function FinalCountdown({
   const pending = sidesPending({ sealed: true, reveal_a: outA, reveal_b: outB });
   const due = (side) => pending.includes(side);
 
+  // ── Clearing the screen ──────────────────────────────────────────
+  // The director's alone. NEXT is offered only once both captains have told
+  // this hole — advancing past a side that has not spoken would skip its eight
+  // balls entirely and they would never come back on their own. BACK is the
+  // undo of it, and only while the clear is still a clear: once a captain has
+  // revealed into the new hole, taking the room back would be un-showing
+  // something it has already watched, which is what the reveal control in the
+  // row below is for.
+  const canNext = isDirector && !!onSetHole && hole > 0 && hole < HOLE_COUNT && bothOut;
+  const canBack = isDirector && !!onSetHole && hole > revealedHole;
+  const goNext = useCallback(() => { if (canNext) onSetHole(hole + 1); }, [canNext, onSetHole, hole]);
+  const goBack = useCallback(() => { if (canBack) onSetHole(hole - 1); }, [canBack, onSetHole, hole]);
+
   const revealSide = useCallback((side) => {
     if (!onAdvance) return;
     const next = nextHoleForSide({ sealed: true, reveal_a: outA, reveal_b: outB }, side);
@@ -499,6 +522,9 @@ export function FinalCountdown({
   // the one that just moved — walking the trailing side backwards would open
   // a gap nobody asked for.
   const back = useCallback(() => {
+    // Undo the clear first, for the same reason `advance` clears first: it is
+    // the step that just happened, and it is the one that un-does cleanly.
+    if (canBack) { goBack(); return; }
     if (!onAdvance) return;
     if (outA > outB && drives("A")) onAdvance("A", outA - 1);
     else if (outB > outA && drives("B")) onAdvance("B", outB - 1);
@@ -507,17 +533,25 @@ export function FinalCountdown({
       else if (drives("B")) onAdvance("B", outB - 1);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [outA, outB, onAdvance, isDirector, captainSide]);
+  }, [canBack, goBack, outA, outB, onAdvance, isDirector, captainSide]);
 
-  // Space / right arrow, for whoever is at the keyboard. It moves the side
-  // that is DUE: the one behind, or — when they are level — the first side
-  // this viewer is allowed to move. A television nobody is driving does
-  // nothing, which is what it should do.
+  // Space / right arrow, and the background tap. One key for "the next thing
+  // that should happen", which is now three things in a cycle: clear the
+  // board, hear the first side, hear the second.
+  //
+  // CLEARING COMES FIRST when it is available, which it only is for a director
+  // and only on a hole both captains have finished. Without that, a director
+  // leaning on the space bar after the room finished hole 7 would open half of
+  // hole 8 over the top of the conversation about 7 — the exact beat the
+  // cursor exists to give him.
+  //
+  // A television nobody is driving does nothing, which is what it should do.
   const advance = useCallback(() => {
+    if (canNext) { goNext(); return; }
     const next = sidesPending({ sealed: true, reveal_a: outA, reveal_b: outB }).filter(drives);
     if (next.length) revealSide(next[0]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [outA, outB, revealSide, isDirector, captainSide]);
+  }, [canNext, goNext, outA, outB, revealSide, isDirector, captainSide]);
 
   // Keyboard, for the year the laptop is within reach. The phone is still
   // the primary control — see the note at the top of the file.
@@ -981,6 +1015,29 @@ export function FinalCountdown({
   // with ◀ and EXIT underneath. Four controls on one 393px row is how "REVEAL
   // SHOT …" and "WAITING ON SH…" happened — every one of them truncated, and
   // the two that matter most sharing their row with the two that matter least.
+  // One of the two arrows beside the hole number, or nothing at all for
+  // anybody who is not driving. `stopPropagation` is not decoration: the whole
+  // shell is a tap target for `advance`, so without it a tap on ▶ would clear
+  // the board AND then be handled again by the background.
+  const holeArrow = (dir, onPress, off) => {
+    if (!isDirector || !onSetHole) return null;
+    return (
+      <button
+        onClick={(e) => { e.stopPropagation(); onPress(); }}
+        disabled={off}
+        aria-label={dir === "next" ? "Next hole" : "Previous hole"}
+        style={{
+          flexShrink: 0, background: "transparent", border: "none", fontFamily: FONT,
+          color: BC.t3, opacity: off ? 0.16 : 0.72,
+          fontSize: compact ? 20 : "clamp(13px, 1.6vw, 34px)", lineHeight: 1,
+          padding: compact ? "8px 12px" : "0 clamp(5px, 0.8vw, 16px)",
+          cursor: off ? "default" : "pointer",
+          transition: "opacity 250ms ease",
+        }}
+      >{dir === "next" ? "▶" : "◀"}</button>
+    );
+  };
+
   const smallBtn = (label, onPress, off) => (
     <button onClick={onPress} disabled={off} style={{
       padding: compact ? "12px 18px" : "clamp(6px, 0.9vw, 18px) clamp(10px, 1.4vw, 28px)",
@@ -1066,8 +1123,30 @@ export function FinalCountdown({
       {cupBar}
 
       <div style={{ flexShrink: 0, textAlign: "center" }}>
-        <div style={{ fontSize: compact ? 30 : T.hole, fontWeight: 800, letterSpacing: "0.1em", color: BC.t1, lineHeight: 1.05 }}>
-          HOLE {holeIdx + 1}
+        {/* ── The two arrows ──
+            They flank the hole number rather than joining the row of controls
+            at the bottom, because what they move IS the hole number — the
+            director reaches for them while looking at the thing they change,
+            and the row below is where the two teams' buttons live.
+
+            SUBTLE ON PURPOSE. This screen belongs to the room, and a pair of
+            chrome buttons either side of the biggest number on the television
+            would read as part of the ceremony rather than as the stagehand's
+            hand on the curtain. Grey, borderless, and dim to the point of
+            nearly gone when they cannot be used — which is most of the time,
+            since NEXT only lights when both captains have finished a hole.
+
+            Drawn for a director only, and symmetric, so the number stays
+            centred on the television whether or not anybody can drive it. */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "center",
+          gap: compact ? 2 : "clamp(2px, 0.4vw, 10px)",
+        }}>
+          {holeArrow("back", goBack, !canBack)}
+          <div style={{ fontSize: compact ? 30 : T.hole, fontWeight: 800, letterSpacing: "0.1em", color: BC.t1, lineHeight: 1.05 }}>
+            HOLE {holeIdx + 1}
+          </div>
+          {holeArrow("next", goNext, !canNext)}
         </div>
         <div style={{ fontSize: compact ? 10 : T.terms, fontWeight: 700, letterSpacing: compact ? 1 : 2.4, color: BC.t3, marginTop: "0.3em" }}>
           PAR {holePars?.[holeIdx] ?? "—"} · SI {holeHcps?.[holeIdx] ?? "—"}

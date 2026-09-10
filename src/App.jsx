@@ -5530,6 +5530,22 @@ export default function App() {
       ...fields,
     }, { loud: true });
   }, []);
+  // ── Where the room is ────────────────────────────────────────────
+  // The director's clear-the-screen, and the only writer of `reveal_cursor`
+  // (see lib/reveal.countdownHole). A separate call from onSetReveal because
+  // it is a separate act: that one turns a side's eight balls over and cannot
+  // be taken back, this one only says which hole the television is looking
+  // at. No rules change — a director already writes bc_rounds whole, and a
+  // captain's own narrow clause is untouched by a field he never sends.
+  const onSetHole = useCallback(async (round, at) => {
+    const n = Math.max(0, Math.min(HOLE_COUNT, Math.round(at) || 0));
+    return db.upsert("bc_rounds", {
+      id: editionDocId(`bc_round_${round}`),
+      tournament_id: TOURNAMENT_ID,
+      round_number: round,
+      reveal_cursor: n,
+    }, { loud: true });
+  }, []);
   // Groups are written whole — the document is one round's list, and a
   // partial update of an array has no meaning here.
   const onSaveGroups = useCallback(async (round, groups) => {
@@ -6293,6 +6309,7 @@ export default function App() {
             viewer={viewerTeam}
             canReveal={isDirector}
             onSetReveal={onSetReveal}
+            onSetHole={onSetHole}
             captainSide={myCaptainSide}
             autoCountdown={AUTO_COUNTDOWN}
             onOpenSummary={setSummaryRound}
