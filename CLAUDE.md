@@ -526,7 +526,7 @@ That function needs five things, and **only one of them is a secret**. See
 pasted. It is multi-line PEM and the interactive prompt takes a single line:
 
 ```sh
-firebase functions:secrets:set APPLE_PRIVATE_KEY --data-file C:\dev\keys\AuthKey_<KEY_ID>.p8
+firebase functions:secrets:set APPLE_PRIVATE_KEY --data-file C:\dev\keys\AuthKey_6RF36PB9N8.p8
 ```
 
 (`--data-file -` reads stdin instead, if piping suits better. The real path is
