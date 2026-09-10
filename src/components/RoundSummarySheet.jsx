@@ -325,10 +325,16 @@ export function RoundSummarySheet({
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           }}>{s.points.teamA}</div>
         </div>
+        {/* Both figures at full team colour, as on the leaderboard's round
+            headers. The trailing side used to be held back to 60%, which
+            said "this number is less real than the other one" about a score
+            that is exactly as real. The colours are the teams; the numbers
+            are the score, and the team names either side of them are already
+            in the same colour at full strength. */}
         <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexShrink: 0 }}>
-          <span style={{ fontSize: FS.title, fontWeight: 800, color: s.points.leader === "B" ? `${BC.teamA}${ALPHA.held}` : BC.teamA }}>{s.points.A}</span>
+          <span style={{ fontSize: FS.title, fontWeight: 800, color: BC.teamA }}>{s.points.A}</span>
           <span style={{ fontSize: FS.small, color: BC.t3 }}>–</span>
-          <span style={{ fontSize: FS.title, fontWeight: 800, color: s.points.leader === "A" ? `${BC.teamB}${ALPHA.held}` : BC.teamB }}>{s.points.B}</span>
+          <span style={{ fontSize: FS.title, fontWeight: 800, color: BC.teamB }}>{s.points.B}</span>
         </div>
         <div style={{ flex: 1, textAlign: "left", minWidth: 0 }}>
           <div style={{
