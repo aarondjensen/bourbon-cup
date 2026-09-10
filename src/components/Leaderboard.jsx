@@ -864,11 +864,20 @@ function RoundSection({
 // ══════════════════════════════════════════════════════════════════
 //  TeamLeaderboard
 // ══════════════════════════════════════════════════════════════════
-// `viewer` is the side of the cup the reader is on ("A" | "B"). Every player
-// belongs to one team for the whole tournament, so it is defined on every
-// match on this board — which is what lets an expanded scorecard's running
-// MATCH row read ▲ / ▼ from the reader's own side rather than an arbitrary
-// one. See components/FullScorecard.jsx on the two currencies of color.
+// `viewer` is the side of the cup the reader is on ("A" | "B") — his ROSTER
+// team, not whether he is in the match being read. Every player belongs to
+// one team for the whole tournament, and that is the allegiance: a director
+// opening another group's card is still an Iron, and the match still has a
+// side he wants to win. So `viewer` is defined on every match on this board,
+// which is what lets an expanded scorecard's running MATCH row read ▲ / ▼
+// from the reader's own side rather than an arbitrary one.
+//
+// The COLOR of that row is the leading team's rather than the reader's, and
+// the two are not in tension — see FullScorecard's header note. The arrow
+// answers "is this my side"; the color answers "whose lead is it", which is
+// the half a guest or a spectator can also read. Those two are the only
+// readers here with no team at all, and they fall back to "A" — harmless now
+// that the color carries the fact and the arrow is only a courtesy.
 //
 // ── The three hole maps ──────────────────────────────────────────
 // `holeData` is the CONCEALED map — App has already removed a still-sealed
