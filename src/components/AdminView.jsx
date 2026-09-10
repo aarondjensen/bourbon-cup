@@ -141,6 +141,7 @@ import {
   calcCH,
   calcCHForCourse,
   getEffectiveHI,
+  lockedPlayerRow,
 } from "../scoring";
 import {
   ALPHA,
@@ -2781,10 +2782,18 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                 <div key={team.id} style={{ marginBottom: 4 }}>
                   {teamIdx === 1 && <div style={{ height: 1, background: BC.bdr, margin: "6px 0 8px" }} />}
                   {realPlayers(tPlayers).filter(p => p.team === team.id).map(p => {
+                    // A locked round answers to its snapshot, same as scoring
+                    // does (getRoundCH) — otherwise this column drifts away
+                    // from what the round actually played on the moment
+                    // anyone edits the Players tab or a GHIN sync runs,
+                    // while the frozen scoring underneath never moves. null
+                    // on an open round, where live index/tee data still
+                    // decides everything below.
+                    const lockedRow = lockedPlayerRow(roundLocks, editRound, p.player_id);
                     // Effective INDEX (player-level override ?? GHIN/base). Shown
                     // for reference; the per-round control below overrides the CH.
                     const hiOverridden = p.hi_override != null && String(p.hi_override).trim() !== "";
-                    const effHI = hiOverridden ? p.hi_override : p.handicap_index;
+                    const effHI = lockedRow?.hi ?? (hiOverridden ? p.hi_override : p.handicap_index);
                     const override = hcpOverrides[editRound]?.[p.player_id]; // per-round CH override
                     const hasOverride = override !== undefined && override !== "";
                     const tr2 = tRounds.find(t => t.round_number === editRound);
@@ -2795,7 +2804,9 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                     // The CH the app WOULD calculate for this player/round from the
                     // effective index + assigned tee. Used as the input placeholder
                     // and as the baseline the override delta is measured against.
-                    const calcedCH = course2 ? calcCHForCourse(parseFloat(effHI) || 0, course2, currentTee2) : null;
+                    // Frozen to the lock's own final answer once one exists — see
+                    // lockedRow above.
+                    const calcedCH = lockedRow?.ch ?? (course2 ? calcCHForCourse(parseFloat(effHI) || 0, course2, currentTee2) : null);
                     // A manual CH is a standing condition, not an event: for as
                     // long as one is in force, the arrow states how far the round
                     // is being played from the calculated handicap. So it is
