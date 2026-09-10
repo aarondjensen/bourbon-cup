@@ -594,9 +594,12 @@ function RevealControl({ through, onSet }) {
 // arithmetic on half the evidence in front of the television that is about to
 // hand him the other half.
 //
-// The n / 18 counter went with it, and it was a duplicate besides — the 🔒
-// chip on the round's own header bar has said exactly that all along, in the
-// row a collapsed board can still see.
+// The n / 18 counter went with it, and so, later, did the 🔒 n/18 chip on the
+// round's own header bar that had been saying the same thing. How far the
+// ceremony has walked is the ceremony's business: a counter on the board is
+// an invitation to read the reveal off the leaderboard rather than off the
+// television it is being played on, and it is a number that answers a
+// question nobody in the room is asking yet.
 //
 // So: WAITING ON THE FINAL COUNTDOWN. It is what is true, it is what a player
 // looking for the score needs to know, and it is the whole of what the board
@@ -727,9 +730,16 @@ function RoundSection({
               is honestly worth. The board banks nothing until the countdown
               finishes (see lib/reveal), so a real-looking pair of zeroes would
               sit there for the whole of an 18-hole ceremony reading as a round
-              that had been played to a standstill. A dash is what is true: not
-              yet. The 🔒 chip beside it says how far the reveal has walked,
-              which is progress without being a score.
+              that had been played to a standstill. A dash is what is true:
+              not yet.
+
+              A 🔒 n/18 chip used to ride beside it, counting the holes the
+              reveal had turned over. It is gone: how far a ceremony has
+              walked is the ceremony's own business, and the board carrying a
+              live counter for it invited the room to read the reveal off the
+              leaderboard rather than off the television it is being played
+              on. The dash says the one thing this row is for — no score yet
+              — and the panel underneath an expanded round says why.
 
               An undrawn round takes TBD in the same slot, for the same reason
               and one more: 0–0 under a course name is what a round halved
@@ -753,22 +763,7 @@ function RoundSection({
               flexShrink: 0, color: BC.t3,
             }}>TBD</span>
           ) : seal?.concealing ? (
-            <>
-              <span style={{ fontSize: FS.lead, fontWeight: 800, flexShrink: 0, color: BC.t3 }}>—</span>
-              {/* The chip rides the dash rather than the course name, which is
-                  where it used to sit — it is a fact about the SCORE (how far
-                  the reveal has walked), and an inline chip up there would
-                  shove the dot off the centre it is now anchored to. It earns
-                  its room the way it always did: a collapsed round showing a
-                  dash is otherwise indistinguishable from one nobody has teed
-                  off on, and those are very different things on the last day. */}
-              <span style={{
-                flexShrink: 0, fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.8,
-                padding: "2px 5px", borderRadius: 4, whiteSpace: "nowrap",
-                background: `${BC.amber}${ALPHA.wash}`, border: `1px solid ${BC.amber}${ALPHA.line}`,
-                color: BC.amberInk,
-              }}>🔒 {seal.through}/{HOLE_COUNT}</span>
-            </>
+            <span style={{ fontSize: FS.lead, fontWeight: 800, flexShrink: 0, color: BC.t3 }}>—</span>
           ) : (
             /* Both figures at full team colour. The trailing side used to be
                held back to 60%, which said "these two numbers are not equally
@@ -1353,9 +1348,8 @@ export function TeamLeaderboard({
             withhold.
 
             The round's own SealedPanel says all of it and says it better:
-            how far the countdown has walked, that the round lands in one
-            piece at 18, what is still to come, and the button onto the
-            television. That panel is a few inches down the same screen, so
+            that the board is waiting on the countdown, and the button onto
+            the television. That panel is a few inches down the same screen, so
             the bar was a second, worse copy of it on the line everybody
             reads first — on the one evening of the tournament when the line
             everybody reads first should be the score. */}
