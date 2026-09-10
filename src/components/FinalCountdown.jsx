@@ -491,6 +491,24 @@ export function FinalCountdown({
     const idx = myNext - 1;
     const src = { result: ownResult, getScore: ownGetScore || getScore };
     const own = ownResult.holes?.[idx];
+    const scoreAt = (h) => (captainSide === "A" ? h?.aScore : h?.bScore);
+    const holeAt = (i) => ({
+      balls: ballsFor(captainSide, i, src),
+      par: holePars?.[i],
+      countN: ownResult.counting?.[i] ?? null,
+      score: scoreAt(ownResult.holes?.[i]),
+    });
+    // ── The window the nuggets may look at ──
+    // Holes 0 … idx-1, which is exactly the holes his side has already turned
+    // over — `myNext` is one past his own counter, so `idx` IS that counter.
+    //
+    // This cap is the whole safety of the feature. His phone holds his side's
+    // entire round, uncut, because a team is never hidden from itself; if the
+    // nuggets read all of it, "the first net eagle of the round" on the third
+    // hole would quietly be a promise that no eagle is coming, on an evening
+    // built on nobody knowing what is coming. lib/countdownPrompt has no way
+    // to reach past what it is handed, and this is where the handing happens.
+    const history = Array.from({ length: idx }, (_, i) => holeAt(i));
     return {
       hole: myNext,
       par: holePars?.[idx] ?? null,
@@ -498,7 +516,9 @@ export function FinalCountdown({
         balls: ballsFor(captainSide, idx, src),
         par: holePars?.[idx],
         countN: ownResult.counting?.[idx] ?? null,
-        score: captainSide === "A" ? own?.aScore : own?.bScore,
+        score: scoreAt(own),
+        teamName: (captainSide === "A" ? tA : tB).name,
+        history,
       }),
     };
   })();
@@ -669,8 +689,12 @@ export function FinalCountdown({
       border: `2px solid ${teamColor(captainSide)}${ALPHA.line}`,
     }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: "clamp(6px, 1vw, 20px)", flexWrap: "wrap" }}>
+        {/* No "YOU'RE UP". His phone put up a card, it is his side's colour,
+            and it carries a button with his team's name on it — he knows. It
+            was a line of the app talking to the man holding the phone on a
+            card whose whole job is to be read out to somebody else. */}
         <span style={{ fontSize: T.promptSm, fontWeight: 800, letterSpacing: "0.2em", color: BC.t3 }}>
-          YOU&rsquo;RE UP · HOLE {myPrompt.hole}{myPrompt.par ? ` · PAR ${myPrompt.par}` : ""}
+          HOLE {myPrompt.hole}{myPrompt.par ? ` · PAR ${myPrompt.par}` : ""}
         </span>
         <span style={{ fontSize: T.prompt, fontWeight: 800, letterSpacing: 1, color: teamColor(captainSide) }}>
           {myPrompt.headline}
@@ -681,6 +705,24 @@ export function FinalCountdown({
           <span key={n} style={{ fontSize: T.prompt, fontWeight: 700, color: BC.t1, lineHeight: 1.35 }}>{n}</span>
         ))}
       </div>
+      {/* The nuggets, under a rule and in the team's colour: they are a
+          different KIND of thing from the two lines above. Those are this
+          hole; these are the round it sits in, and they are the half he
+          cannot work out standing in front of everybody. */}
+      {myPrompt.nuggets?.length > 0 && (
+        <div style={{
+          marginTop: "0.5em", paddingTop: "0.45em",
+          borderTop: `1px solid ${teamColor(captainSide)}${ALPHA.line}`,
+          display: "flex", flexDirection: "column", gap: "0.2em",
+        }}>
+          {myPrompt.nuggets.map((n) => (
+            <span key={n} style={{
+              fontSize: T.prompt, fontWeight: 700, lineHeight: 1.35,
+              color: teamColor(captainSide),
+            }}>{n}</span>
+          ))}
+        </div>
+      )}
     </div>
   ) : null;
 
