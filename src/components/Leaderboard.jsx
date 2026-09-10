@@ -618,6 +618,17 @@ function SealedPanel({ through, canReveal, onSetReveal, onOpenCountdown }) {
 // ══════════════════════════════════════════════════════════════════
 //  Round section
 // ══════════════════════════════════════════════════════════════════
+
+// The type of the header line — the course, the dot and the format all take
+// it, so the three read as one string rather than as three spans that happen
+// to be adjacent. `minWidth: 0` is what lets the two halves ellipse at all: a
+// flex item's automatic minimum is its content, so without it a long name
+// pushes the dot off centre instead of truncating.
+const HEAD_TEXT = {
+  fontSize: FS.small, fontWeight: 800, letterSpacing: 1.2, color: BC.t1,
+  minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+};
+
 function RoundSection({
   round, meta, results, open, onToggle, onOpenSummary, tPlayers,
   courses, tRounds, roundLocks, holeData, viewer, expandedMatch, setExpandedMatch,
@@ -640,32 +651,46 @@ function RoundSection({
             far more directly than "ROUND 3" does. The live/final chip is
             gone with it: every match row already carries its own THRU or
             FINAL, so a round-level repeat was chrome. */}
+        {/* The separating dot is the line's anchor: it sits on the row's
+            centre and the course name and the format grow out of it in
+            opposite directions, so a stack of rounds lines up down the middle
+            with the score under it rather than ragging off the left margin.
+            Equal halves is what centres the dot — 1fr · 1fr — and the cost is
+            that a long name ellipses at half the row even when the format
+            beside it is short. On a phone that half is about twenty-two
+            characters, which "Arthur Hills — Orange" fits.
+
+            The caret is mirrored by an empty span of its own width on the
+            right, because the dot is centred in what the row has LEFT after
+            its flex items: without the mirror it centres in the space beside
+            the caret, which is the row's centre shifted eight pixels left of
+            the score's. */}
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
           <span style={{ fontSize: FS.label, color: BC.t3, width: 10, flexShrink: 0 }}>{open ? "▾" : "▸"}</span>
-          <span style={{
-            fontSize: FS.small, fontWeight: 800, letterSpacing: 1.2, color: BC.t1,
-            minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-          }}>
-            {[course?.name || "Course TBD", fmt?.label].filter(Boolean).join(" · ").toUpperCase()}
-          </span>
-          {/* The one round-level chip left on this bar. It earns the room the
-              live/final chip lost: a collapsed round showing 0–0 is otherwise
-              indistinguishable from one nobody has teed off on, and those are
-              very different things on the last day. */}
-          {/* `drawn` as well as `concealing`, because a round with no draw
-              conceals nothing — Team Best Ball seals by default (see
-              lib/reveal.resolveSealed), so the closing round is sealed from
-              the day the director picks its format, months before anybody is
-              paired for it. A 🔒 0/18 on a round with no matches in it is a
-              blackout over an empty room. */}
-          {seal?.concealing && drawn && (
-            <span style={{
-              flexShrink: 0, fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.8,
-              padding: "2px 5px", borderRadius: 4, whiteSpace: "nowrap",
-              background: `${BC.amber}${ALPHA.wash}`, border: `1px solid ${BC.amber}${ALPHA.line}`,
-              color: BC.amberInk,
-            }}>🔒 {seal.through}/{HOLE_COUNT}</span>
+          {fmt?.label ? (
+            <>
+              <span style={{ ...HEAD_TEXT, flex: 1, textAlign: "right" }}>
+                {(course?.name || "Course TBD").toUpperCase()}
+              </span>
+              {/* " · " rather than "·" so the header still reads as one
+                  string to a screen reader (and to the tests) now that the
+                  spacing is the flex gap. Each flex item is its own line box,
+                  so the leading and trailing spaces are trimmed on the way to
+                  the screen and only the gap is drawn. */}
+              <span style={{ ...HEAD_TEXT, flex: "0 0 auto", color: BC.t3 }}>{" · "}</span>
+              <span style={{ ...HEAD_TEXT, flex: 1, textAlign: "left" }}>
+                {fmt.label.toUpperCase()}
+              </span>
+            </>
+          ) : (
+            /* No format picked yet, so there is nothing for a dot to separate
+               and no second half to balance. The name takes the whole line
+               and centres on its own. */
+            <span style={{ ...HEAD_TEXT, flex: 1, textAlign: "center" }}>
+              {(course?.name || "Course TBD").toUpperCase()}
+            </span>
           )}
+          <span style={{ width: 10, flexShrink: 0 }} />
         </div>
         {/* The score is a line of its own, centred under the course and the
             format, rather than the right-hand end of that row. On a phone the
@@ -708,7 +733,22 @@ function RoundSection({
               flexShrink: 0, color: BC.t3,
             }}>TBD</span>
           ) : seal?.concealing ? (
-            <span style={{ fontSize: FS.lead, fontWeight: 800, flexShrink: 0, color: BC.t3 }}>—</span>
+            <>
+              <span style={{ fontSize: FS.lead, fontWeight: 800, flexShrink: 0, color: BC.t3 }}>—</span>
+              {/* The chip rides the dash rather than the course name, which is
+                  where it used to sit — it is a fact about the SCORE (how far
+                  the reveal has walked), and an inline chip up there would
+                  shove the dot off the centre it is now anchored to. It earns
+                  its room the way it always did: a collapsed round showing a
+                  dash is otherwise indistinguishable from one nobody has teed
+                  off on, and those are very different things on the last day. */}
+              <span style={{
+                flexShrink: 0, fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.8,
+                padding: "2px 5px", borderRadius: 4, whiteSpace: "nowrap",
+                background: `${BC.amber}${ALPHA.wash}`, border: `1px solid ${BC.amber}${ALPHA.line}`,
+                color: BC.amberInk,
+              }}>🔒 {seal.through}/{HOLE_COUNT}</span>
+            </>
           ) : (
             /* Both figures at full team colour. The trailing side used to be
                held back to 60%, which said "these two numbers are not equally
