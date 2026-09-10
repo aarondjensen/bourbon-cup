@@ -55,12 +55,23 @@
 //    • Team colors instead of MNQ's single accent, and no
 //      your-team-on-top swap: Team A stays on top, in the same order as
 //      the player cards on the screen behind this popup.
-//    • Two currencies of color, the split the Scoring tab's status strip
-//      already draws (see App.jsx, renderStatusCell): a HOLE belongs to a
-//      team and is painted in that team's color; the RUNNING MATCH belongs
-//      to the reader and is painted green/red from their own side's point
-//      of view. A stated result — the overall status, a nine's status, a
-//      clinch — is team-colored again, because it names a winner.
+//    • ONE currency of color, and it is the team's. A hole belongs to the
+//      team that took it; the running match belongs to the team that is
+//      ahead; a stated result — the overall status, a nine's status, a
+//      clinch — names a winner. All three are painted in that team's color,
+//      here and in the Scoring tab's status strip behind this popup (see
+//      App.jsx, renderStatusCell).
+//
+//      The running match used to be the exception, painted green/red from
+//      the reader's own side. Two reasons it is not: BC.teamA under BC.green
+//      is two greens saying nearly the same thing in different hues, two
+//      pixels apart; and "good news for me" is a question the card cannot
+//      always answer — `viewer` falls back to a reader's roster team, so a
+//      director reading somebody else's card was handed a side. WHOSE the
+//      lead is, it can always answer.
+//
+//      What stays from the reader's side is the ▲ / ▼, which needed no
+//      color to do it.
 //
 //  ── The box, and what it costs ─────────────────────────────────────
 //  There is exactly ONE boxed number on this card and it means the side
@@ -705,9 +716,23 @@ export function FullScorecard({
               </div>
             );
           }
+          // ── The arrow is the reader's, the colour is the leader's ──
           // Flipped to the reader's own side, so ▲ always means "we are up".
+          // That much a colour was never needed for, and a colour was the
+          // wrong thing to try it with: green/red here answered "is this good
+          // news for me", and `viewer` is `userTeam`, which falls back to a
+          // reader's ROSTER team when he is not in the match. A director
+          // opening somebody else's card got a red ▼ under a match he has no
+          // side in, naming a loser who was nobody.
+          //
+          // Team colour answers "who", which is a question this row can
+          // always answer, and it is the same currency the NET row's boxed
+          // hole and the clinch stamp beside it are already drawn in. It is
+          // also what the Scoring tab's own status strip behind this popup
+          // switched to (App.jsx renderStatusCell) — this row was the last
+          // green/red match state left in the app.
           const mine = viewer === "A" ? v : -v;
-          const col = mine > 0 ? BC.green : mine < 0 ? BC.danger : BC.t3;
+          const col = v > 0 ? teamColor("A") : v < 0 ? teamColor("B") : BC.t3;
           return (
             <div key={h} style={holeCell(i, 26)}>
               <span style={{ fontSize: FS.small, fontWeight: 800, color: col }}>

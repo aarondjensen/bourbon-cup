@@ -14,6 +14,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 import { FullScorecard } from "./FullScorecard";
 import { computeMatchResult } from "../scoring";
+import { BC, teamColor } from "../theme";
 
 afterEach(cleanup);
 
@@ -82,5 +83,54 @@ describe("a match scored past its own closeout", () => {
     const text = card("A").textContent;
     expect(text).toContain("5&4");
     expect(text).not.toContain("9 UP");
+  });
+});
+
+// ── Whose lead it is, not whether it is good news ──────────────────
+// The MATCH row's running number was the last green/red match state in the
+// app: green when the reader's side was up, red when it was down. Two things
+// wrong with it, and the second is the one that was reported.
+//
+// `viewer` is App.jsx's `userTeam`, which falls back to a reader's ROSTER
+// team when he is not in the match — so a director opening somebody else's
+// card was handed a side he does not have, and read a red ▼ naming a loser
+// who was nobody. And BC.teamA under BC.green is two greens two pixels
+// apart, saying nearly the same thing in different hues.
+//
+// The colour is the leading team's now, which is a question this row can
+// always answer and the currency every other mark on the card is already in.
+// The ▲ / ▼ still points from the reader's side; it never needed a colour.
+const rgb = (hex) => {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
+};
+// Every running-match glyph on the card, as [text, colour].
+const runningCells = (root) => [...root.querySelectorAll("span")]
+  .filter(el => /^[▲▼]\d+$/.test(el.textContent))
+  .map(el => [el.textContent, el.style.color]);
+
+describe("the running match is coloured for the team, not the reader", () => {
+  it("hands both readers the same colours", () => {
+    // Same card, opposite sides of it. The arrows flip and nothing else does
+    // — which is what lets somebody on neither side read it at all.
+    const a = runningCells(card("A")), b = runningCells(card("B"));
+    expect(a.length).toBeGreaterThan(8);
+    expect(a.map(([, c]) => c)).toEqual(b.map(([, c]) => c));
+    expect(a.map(([t]) => t)).not.toEqual(b.map(([t]) => t));
+  });
+
+  it("paints the lead in the leading team's colour", () => {
+    // B leads every hole of this card except none — every glyph is B's.
+    const cells = runningCells(card("A"));
+    expect(cells.every(([t]) => t.startsWith("▼"))).toBe(true);
+    expect(new Set(cells.map(([, c]) => c))).toEqual(new Set([rgb(teamColor("B"))]));
+  });
+
+  it("uses neither the good-news nor the bad-news colour", () => {
+    for (const viewer of ["A", "B"]) {
+      const colours = new Set(runningCells(card(viewer)).map(([, c]) => c));
+      expect(colours).not.toContain(rgb(BC.green));
+      expect(colours).not.toContain(rgb(BC.danger));
+    }
   });
 });
