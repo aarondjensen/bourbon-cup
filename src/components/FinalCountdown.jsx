@@ -101,12 +101,25 @@ const T = {
   sideName: "clamp(12px, 1.7vw, 34px)",
   chip:     "clamp(13px, 2.3vw, 48px)",
   chipName: "clamp(8px,  1.0vw, 21px)",
-  verdict:  "clamp(16px, 2.6vw, 54px)",
   cup:      "clamp(20px, 3.4vw, 72px)",
   strip:    "clamp(7px,  0.95vw, 20px)",
   btn:      "clamp(11px, 1.5vw, 30px)",
-  prompt:   "clamp(13px, 1.6vw, 32px)",
   promptSm: "clamp(10px, 1.2vw, 24px)",
+  // ── The captain's card ──
+  // Its own three rungs, and they are the only sizes on this screen tuned for
+  // a HAND rather than a room. Everything else here is read at twelve feet and
+  // takes its floor from whatever fits a browser window; this is read at arm's
+  // length, in a lit room, by a man holding a drink and talking at the same
+  // time — so the floors are what matter and they are set high.
+  //
+  // They were T.promptSm / T.prompt / T.verdict, which are television rungs:
+  // on a 393px phone every one of them bottomed out at its clamp minimum, and
+  // those minimums exist to keep a TELEVISION layout from collapsing in a
+  // narrow browser window. 10px, 13px and 16px is a caption, a body line and a
+  // subhead — for a card whose whole job is to be glanced at and read aloud.
+  cardLabel: "clamp(13px, 1.4vw, 28px)",
+  cardLine:  "clamp(17px, 1.8vw, 36px)",
+  cardTotal: "clamp(27px, 3.0vw, 62px)",
 };
 
 const GRID_COLS = 4;
@@ -512,6 +525,7 @@ export function FinalCountdown({
     return {
       hole: myNext,
       par: holePars?.[idx] ?? null,
+      si: holeHcps?.[idx] ?? null,
       ...holePrompt({
         balls: ballsFor(captainSide, idx, src),
         par: holePars?.[idx],
@@ -706,8 +720,14 @@ export function FinalCountdown({
           and it carries a button with his team's name on it — he knows. It
           was a line of the app talking to the man holding the phone on a
           card whose whole job is to be read out to somebody else. */}
-      <div style={{ fontSize: T.promptSm, fontWeight: 800, letterSpacing: "0.2em", color: BC.t3 }}>
-        HOLE {myPrompt.hole}{myPrompt.par ? ` · PAR ${myPrompt.par}` : ""}
+      <div style={{ fontSize: T.cardLabel, fontWeight: 800, letterSpacing: "0.16em", color: BC.t3 }}>
+        HOLE {myPrompt.hole}
+        {myPrompt.par ? ` · PAR ${myPrompt.par}` : ""}
+        {/* The stroke index too. It is why a man is getting a shot on this
+            hole and not the last one, which is the question the room asks the
+            moment a net eagle is announced — and the card is the only thing in
+            his hand that can answer it. */}
+        {myPrompt.si ? ` · SI ${myPrompt.si}` : ""}
       </div>
 
       {/* The contributions, then the fun of them. Still told apart by colour —
@@ -715,11 +735,11 @@ export function FinalCountdown({
           run of lines, because that is how they are spoken. */}
       <div style={{ marginTop: "0.35em", display: "flex", flexDirection: "column", gap: "0.2em" }}>
         {myPrompt.notes.map((n) => (
-          <span key={n} style={{ fontSize: T.prompt, fontWeight: 700, color: BC.t1, lineHeight: 1.35 }}>{n}</span>
+          <span key={n} style={{ fontSize: T.cardLine, fontWeight: 700, color: BC.t1, lineHeight: 1.3 }}>{n}</span>
         ))}
         {(myPrompt.nuggets || []).map((n) => (
           <span key={n} style={{
-            fontSize: T.prompt, fontWeight: 700, lineHeight: 1.35,
+            fontSize: T.cardLine, fontWeight: 700, lineHeight: 1.3,
             color: teamColor(captainSide),
           }}>{n}</span>
         ))}
@@ -730,7 +750,7 @@ export function FinalCountdown({
       <div style={{
         marginTop: "0.5em", paddingTop: "0.45em",
         borderTop: `1px solid ${teamColor(captainSide)}${ALPHA.line}`,
-        fontSize: T.verdict, fontWeight: 800, letterSpacing: 1,
+        fontSize: T.cardTotal, fontWeight: 800, letterSpacing: 1,
         color: teamColor(captainSide), lineHeight: 1.15,
       }}>
         {myPrompt.headline}

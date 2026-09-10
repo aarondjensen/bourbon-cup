@@ -356,7 +356,10 @@ describe("a captain's phone", () => {
   // reading it out. It is his OWN side, which is never hidden from him.
   it("tells him what to say before he taps", () => {
     const t = screen({ A: 1, B: 1 }, captain).textContent;
-    expect(t).toContain("HOLE 2 · PAR 4");
+    // The stroke index too — it is why a man is getting a shot on this hole
+    // and not the last one, which is what the room asks the moment a net eagle
+    // is announced.
+    expect(t).toContain("HOLE 2 · PAR 4 · SI 2");
     expect(t).toContain("Mash Brothers −1");   // birdie + par against two pars
     expect(t).toContain("Net birdie — Paul W");
   });
@@ -364,7 +367,7 @@ describe("a captain's phone", () => {
   // A net bogey is never read out — see lib/countdownPrompt for why.
   it("never names the man who made the bogey", () => {
     const t = screen({ A: 1, B: 1 }, captain).textContent;
-    const band = t.slice(t.indexOf("HOLE 2 · PAR 4"));
+    const band = t.slice(t.indexOf("HOLE 2 · PAR 4 · SI 2"));
     expect(band).not.toContain("Tim C");
   });
 
@@ -388,7 +391,7 @@ describe("a captain's phone", () => {
   // down, every hole, eighteen times, in front of everybody.
   it("puts the hole, then the men, then the number", () => {
     const t = screen({ A: 1, B: 1 }, captain).textContent;
-    const hole = t.indexOf("HOLE 2 · PAR 4");
+    const hole = t.indexOf("HOLE 2 · PAR 4 · SI 2");
     const names = t.indexOf("Net birdie — Paul W");
     const number = t.indexOf("Mash Brothers −1");
     expect(hole).toBeGreaterThan(-1);
