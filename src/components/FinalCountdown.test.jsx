@@ -12,6 +12,17 @@ import { computeMatchResult } from "../scoring";
 
 afterEach(cleanup);
 
+// jsdom reports 1024×768, so the component reads it as a television. These
+// two set the width the same way a real device does, and fire the resize the
+// hook listens for.
+const setWidth = (w) => {
+  window.innerWidth = w;
+  window.dispatchEvent(new Event("resize"));
+};
+const PHONE = 393;
+const TV = 1280;
+afterEach(() => setWidth(TV));
+
 const PARS = Array(18).fill(4);
 const SI = Array.from({ length: 18 }, (_, i) => i + 1);
 const courses = [{
@@ -85,7 +96,9 @@ describe("a hole half turned over", () => {
   // say who took the hole: the winning column lights up in its own colour, and
   // the strip fills that hole in. Neither may happen on half a hole.
   it("marks no winner until both captains have spoken", () => {
-    const cell = (c, n) => [...c.querySelectorAll("div")].filter(d => d.textContent === String(n)).pop();
+    // A strip cell is a <button> for a director (it jumps the reveal) and a
+    // <div> for everybody else, so this asks for either.
+    const cell = (c, n) => [...c.querySelectorAll("div,button")].filter(d => d.textContent === String(n)).pop();
     expect(cell(screen({ A: 1, B: 0 }), 1).style.background).toBe("transparent");
     cleanup();
     expect(cell(screen({ A: 1, B: 1 }), 1).style.background).not.toBe("transparent");
@@ -251,8 +264,9 @@ describe("stroke dots", () => {
 // teams' colours, which from the back of a room read as a loading bar rather
 // than a scoreboard.
 describe("the hole strip", () => {
+  // A strip cell is a <button> for a director and a <div> otherwise.
   const cell = (container, n) =>
-    [...container.querySelectorAll("div")].filter(d => d.textContent === String(n)).pop();
+    [...container.querySelectorAll("div,button")].filter(d => d.textContent === String(n)).pop();
 
   it("paints a won hole in the winning side's colour", () => {
     // A takes every hole in this fixture.
@@ -364,5 +378,91 @@ describe("a captain's phone", () => {
     const t = screen({ A: 1, B: 1 }, { isDirector: false, captainSide: null }).textContent;
     expect(t).not.toContain("REVEAL");
     expect(t).toContain("THE CAPTAINS ARE DRIVING");
+  });
+});
+
+
+// ══════════════════════════════════════════════════════════════════
+//  Two screens, not one page that stretches
+// ══════════════════════════════════════════════════════════════════
+//  A television across a room and a captain's phone in his hand want opposite
+//  layouts. Squeezing one page into both gave the phone eight names four
+//  across in half of 393px ("CHRI…"), eighteen tap targets at 20px each, and
+//  four controls on one row every one of which truncated.
+describe("the phone layout", () => {
+  const cells = (c) => [...c.querySelectorAll("div,button")]
+    .filter(d => /^([1-9]|1[0-8])$/.test(d.textContent) && d.style.borderRadius?.startsWith("clamp(3px"));
+
+  it("stacks the two sides instead of setting them side by side", () => {
+    setWidth(TV);
+    const wide = screen({ A: 1, B: 1 });
+    const row = [...wide.querySelectorAll("div")].find(d => d.style.flexDirection === "row" && d.style.overflowY === "visible");
+    expect(row).toBeTruthy();
+    cleanup();
+
+    setWidth(PHONE);
+    const tall = screen({ A: 1, B: 1 });
+    const col = [...tall.querySelectorAll("div")].find(d => d.style.flexDirection === "column" && d.style.overflowY === "auto");
+    expect(col).toBeTruthy();
+  });
+
+  it("drops the television's vs between them", () => {
+    setWidth(PHONE);
+    expect(screen({ A: 1, B: 1 }).textContent).not.toContain("vs");
+  });
+
+  it("keeps all eighteen holes, in either shape", () => {
+    setWidth(TV);
+    expect(cells(screen({ A: 1, B: 1 })).length).toBe(18);
+    cleanup();
+    setWidth(PHONE);
+    expect(cells(screen({ A: 1, B: 1 })).length).toBe(18);
+  });
+
+  it("gives the controls a column so nothing has to truncate", () => {
+    setWidth(PHONE);
+    const c = screen({ A: 2, B: 1 });
+    const held = [...c.querySelectorAll("button")].find(b => b.textContent.includes("WAITING ON"));
+    // `nowrap` is what turned "WAITING ON SHOT CALLERS" into "WAITING ON SH…".
+    expect(held.style.whiteSpace).toBe("normal");
+    expect(c.textContent).toContain("BACK");
+    expect(c.textContent).toContain("EXIT");
+  });
+});
+
+// ── Tapping between holes ───────────────────────────────────────────
+// The strip is how a director navigates. He is the one exempt from the
+// one-hole-at-a-time clamp, and jumping is the repair that clamp exists to
+// make necessary: a stray tap took the room to hole 7 and somebody has to be
+// able to take it back.
+describe("the strip as a control", () => {
+  const cell = (c, n) => [...c.querySelectorAll("div,button")]
+    .filter(d => d.textContent === String(n) && d.style.borderRadius?.startsWith("clamp(3px")).pop();
+
+  it("lets a director tap straight to a hole, both sides at once", () => {
+    const c = screen({ A: 6, B: 6 });
+    fireEvent.click(cell(c, 3));
+    expect(advanced).toEqual([[null, 3]]);
+  });
+
+  it("works the same on a phone, which is where it is needed", () => {
+    setWidth(PHONE);
+    const c = screen({ A: 6, B: 6 });
+    fireEvent.click(cell(c, 12));
+    expect(advanced).toEqual([[null, 12]]);
+  });
+
+  it("is not a control for a captain", () => {
+    // He has his own button and no business moving the other side. The rules
+    // would refuse it anyway — this is the screen not offering it.
+    const c = screen({ A: 6, B: 6 }, { isDirector: false, captainSide: "A" });
+    expect(cell(c, 3).tagName).toBe("DIV");
+    fireEvent.click(cell(c, 3));
+    expect(advanced).toEqual([]);
+  });
+
+  it("is not a control for a spectator either", () => {
+    const c = screen({ A: 6, B: 6 }, { isDirector: false, captainSide: null });
+    expect(cell(c, 3).tagName).toBe("DIV");
   });
 });
