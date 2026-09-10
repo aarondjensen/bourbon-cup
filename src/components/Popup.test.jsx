@@ -179,3 +179,64 @@ describe("ConfirmModal", () => {
     expect(viaFlag).not.toBe(plain);
   });
 });
+
+// ── The typed gate and the reason box ──────────────────────────────
+// Both are protections that only work by being IN THE WAY, and both fail
+// silently in the direction that matters: a Confirm button that is live when
+// it should be disabled looks exactly like one that is correctly live. These
+// pin the disabled state, which is the half a passing render never shows.
+describe("ConfirmModal — requireText", () => {
+  it("is absent by default, and Confirm is live", () => {
+    const html = render(<ConfirmModal modal={{ title: "x" }} />);
+    expect(html).not.toContain("to continue");
+    expect(html).not.toContain("disabled");
+  });
+
+  it("puts the word on screen and holds Confirm shut until it is typed", () => {
+    const html = render(<ConfirmModal modal={{ title: "x", requireText: "AMEND" }} />);
+    expect(html).toContain("Type AMEND to continue");
+    expect(html).toContain("disabled");
+  });
+
+  it("never disables Cancel — the way out is not the thing being gated", () => {
+    const html = render(<ConfirmModal modal={{ title: "x", requireText: "AMEND" }} />);
+    // One disabled attribute only, and it is not on the Cancel button.
+    expect(html.match(/disabled/g)).toHaveLength(1);
+    expect(html.split("Cancel")[0]).not.toContain("disabled");
+  });
+});
+
+describe("ConfirmModal — reasonPrompt", () => {
+  it("asks for a reason and holds Confirm shut while it is empty", () => {
+    const html = render(<ConfirmModal modal={{ title: "x", reasonPrompt: { label: "Reason" } }} />);
+    expect(html).toContain("Reason");
+    expect(html).toContain("<textarea");
+    expect(html).toContain("disabled");
+  });
+
+  it("shows the placeholder it was given", () => {
+    const html = render(<ConfirmModal modal={{
+      title: "x", reasonPrompt: { label: "Reason", placeholder: "e.g. hole 7 was wrong" },
+    }} />);
+    expect(html).toContain("e.g. hole 7 was wrong");
+  });
+
+  // The amendment flow asks for both at once. Neither may be droppable by
+  // satisfying the other.
+  it("stacks with requireText rather than replacing it", () => {
+    const html = render(<ConfirmModal modal={{
+      title: "x", requireText: "AMEND", reasonPrompt: { label: "Reason" },
+    }} />);
+    expect(html).toContain("<textarea");
+    expect(html).toContain("Type AMEND to continue");
+  });
+
+  // 16px is the floor mobile Safari zooms in under and does not zoom back out
+  // of. Both boxes sit inside a modal a director reaches one-handed.
+  it("keeps both inputs at the no-zoom type size", () => {
+    const html = render(<ConfirmModal modal={{
+      title: "x", requireText: "AMEND", reasonPrompt: { label: "Reason" },
+    }} />);
+    expect(html.match(/font-size:16px/g)?.length).toBe(2);
+  });
+});

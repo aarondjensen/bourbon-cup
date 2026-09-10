@@ -320,6 +320,28 @@ export function Popup({
 //  Renders nothing when neither title nor message is present (or when
 //  `modal` is explicitly null). destructive=true and variant="danger"
 //  both render a red (BC.danger) confirm button.
+//
+//  ── requireText ──────────────────────────────────────────────────
+//  `requireText: "AMEND"` puts a text box above the buttons and holds
+//  Confirm disabled until the box matches. It exists for the handful of
+//  actions that are legitimate, rare, and irreversible enough that the
+//  reflex a normal confirm trains is the whole problem — reopening a
+//  finalized round is the first of them.
+//
+//  Matched case-insensitively and trimmed, for the same reason the invite
+//  code is: the person typing it is on a phone, one-handed, and rejecting
+//  "amend " for its trailing space teaches nothing about consequences. The
+//  protection here is the DELIBERATION, not the keystrokes — a word that
+//  cannot be produced by a brushed thumb is the entire bar.
+//
+//  ── reasonPrompt ─────────────────────────────────────────────────
+//  `reasonPrompt: { label, placeholder }` adds a free-text box and makes the
+//  typed reason the RESULT: useConfirm resolves the trimmed string on
+//  confirm and `null` on cancel, rather than true/false. A reason is always
+//  required when the box is shown — an optional one is a box everybody
+//  leaves empty, which is worse than not asking, because it puts a field on
+//  the record that reads as "no reason given" when it means "not asked
+//  properly". Confirm stays disabled until it has something in it.
 // ──────────────────────────────────────────────────────────────────
 export function ConfirmModal(props) {
   // Prefer an explicit `modal` prop if present (even when null — that's
@@ -344,6 +366,19 @@ function ConfirmModalInner({ m }) {
     const el = document.activeElement;
     if (el && el !== document.body && typeof el.blur === "function") el.blur();
   }, []);
+
+  // Typed confirmation. `null` requireText means the ordinary two-button
+  // confirm and this state is never read.
+  const [typed, setTyped] = useState("");
+  const needed = (m.requireText || "").trim();
+  const typedOk = !needed || typed.trim().toLowerCase() === needed.toLowerCase();
+
+  // Free-text reason. When asked for, it is what the confirm RESOLVES —
+  // see the header note — and it gates the button alongside the typed word.
+  const [reason, setReason] = useState("");
+  const asks = m.reasonPrompt || null;
+  const reasonOk = !asks || reason.trim().length > 0;
+  const canConfirm = typedOk && reasonOk;
 
   const isDanger = m.destructive === true || m.variant === "danger";
   const confirmBg = isDanger ? BC.danger : BC.amber;
@@ -378,6 +413,60 @@ function ConfirmModalInner({ m }) {
           marginBottom: 16, whiteSpace: "pre-line",
         }}>{m.message}</div>
       )}
+      {asks && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{
+            fontSize: FS.label, fontWeight: 700, letterSpacing: 1,
+            color: BC.t3, marginBottom: 6, textTransform: "uppercase",
+          }}>
+            {asks.label || "Reason"}
+          </div>
+          <textarea
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            rows={3}
+            placeholder={asks.placeholder || ""}
+            aria-label={asks.label || "Reason"}
+            style={{
+              width: "100%", boxSizing: "border-box", padding: "10px 12px",
+              background: BC.inp, borderRadius: R.md, outline: "none",
+              border: `1px solid ${reasonOk ? BC.amber : BC.bdr}`,
+              color: BC.t1, lineHeight: 1.45, resize: "vertical",
+              fontFamily: FONT, fontSize: 16,
+            }}
+          />
+        </div>
+      )}
+
+      {needed && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{
+            fontSize: FS.label, fontWeight: 700, letterSpacing: 1,
+            color: BC.t3, marginBottom: 6, textTransform: "uppercase",
+          }}>
+            Type {needed} to continue
+          </div>
+          <input
+            value={typed}
+            onChange={e => setTyped(e.target.value)}
+            autoCapitalize="characters"
+            autoCorrect="off"
+            spellCheck={false}
+            aria-label={`Type ${needed} to continue`}
+            style={{
+              width: "100%", boxSizing: "border-box", padding: "10px 12px",
+              background: BC.inp, borderRadius: R.md, outline: "none",
+              border: `1px solid ${typedOk ? BC.amber : BC.bdr}`,
+              color: BC.t1, fontWeight: 700, letterSpacing: 1.5,
+              textAlign: "center", fontFamily: FONT,
+              // 16px floor: mobile Safari zooms a focused input under it in
+              // and does not zoom back out. See the Event tab's note.
+              fontSize: 16,
+            }}
+          />
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: 8 }}>
         {/* alert=true → informational notice: one OK button, no choice to
             make. Backdrop/ESC still settle it via onCancel. */}
@@ -395,12 +484,14 @@ function ConfirmModalInner({ m }) {
           </button>
         )}
         <button
-          onClick={m.onConfirm}
+          onClick={canConfirm ? () => m.onConfirm(asks ? reason.trim() : undefined) : undefined}
+          disabled={!canConfirm}
           style={{
             flex: 1, padding: 12, borderRadius: R.lg,
             background: confirmBg, border: "none",
             color: confirmFg, fontSize: FS.body, fontWeight: 700,
-            cursor: "pointer",
+            cursor: canConfirm ? "pointer" : "not-allowed",
+            opacity: canConfirm ? 1 : 0.45,
           }}
         >
           {m.confirmLabel || (m.alert ? "OK" : "Confirm")}
