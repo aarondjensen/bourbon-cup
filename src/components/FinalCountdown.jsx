@@ -133,7 +133,7 @@ const T = {
   // 10.2 `vwh` would give it — because it is the single tallest thing between
   // the hole header and the strip, and the eight rows under it are what it
   // takes room from.
-  side:     "clamp(28px, min(5.5vw, 9.1vh), 120px)",
+  side:     "clamp(28px, min(5.5vw, 8.6vh), 120px)",
   sideName: `clamp(12px, ${vwh(1.7)}, 34px)`,
   chip:     "clamp(13px, 2.3vw, 48px)",
   chipName: "clamp(8px,  1.0vw, 21px)",
@@ -151,8 +151,8 @@ const T = {
   // under the hole ticker and the terms line ran through the first man's.
   rowName:  "clamp(11px, min(1.45vw, 2.4vh), 30px)",
   rowScore: "clamp(13px, min(1.75vw, 2.65vh), 36px)",
-  rowPad:   "clamp(1px,  min(0.42vw, 0.7vh),  9px)",
-  rowGap:   "clamp(2px,  min(0.3vw,  0.55vh), 7px)",
+  rowPad:   "clamp(1px,  min(0.42vw, 0.62vh), 9px)",
+  rowGap:   "clamp(2px,  min(0.3vw,  0.47vh), 7px)",
   cup:      "clamp(20px, 3.4vw, 72px)",
   strip:    `clamp(7px,  ${vwh(0.95)}, 20px)`,
   btn:      `clamp(11px, ${vwh(1.5)}, 30px)`,
@@ -417,7 +417,12 @@ function SideColumn({ tid, teamName, score, balls, par, countN, compact, reveale
       flex: compact ? "0 0 auto" : 1,
       minWidth: 0, display: "flex", flexDirection: "column",
       alignItems: "center", gap: compact ? 6 : "clamp(2px, min(0.7vw, 1.1vh), 14px)",
-      padding: compact ? "8px 10px" : "clamp(3px, min(1vw, 1.6vh), 20px) clamp(4px, 0.8vw, 16px)",
+      // The bottom is deliberately deeper than the top: the eighth name sits
+      // against it, and the top edge has the team's own name above it doing
+      // the same job.
+      padding: compact
+        ? "8px 10px 12px"
+        : `clamp(3px, min(1vw, 1.6vh), 20px) clamp(4px, 0.8vw, 16px) clamp(8px, ${vwh(1.1)}, 26px)`,
       borderRadius: "clamp(8px, 1vw, 20px)",
       background: won && revealed ? `${col}${ALPHA.wash}` : "transparent",
       border: `2px solid ${won && revealed ? `${col}${ALPHA.line}` : "transparent"}`,
@@ -1194,7 +1199,14 @@ export function FinalCountdown({
     <>
       {cupBar}
 
-      <div style={{ flexShrink: 0, textAlign: "center" }}>
+      {/* A margin above the hole number and another under the last row of
+          each side — see the note on SideColumn's padding. The cup band ran
+          almost into HOLE 7 and the eighth man ran into the bottom of his own
+          card, so the middle of the screen read as one solid block from the
+          band to the ticker with no air anywhere in it. Capped on height like
+          everything else on this page, so a short window spends less of it
+          rather than pushing a row under the ticker. */}
+      <div style={{ flexShrink: 0, textAlign: "center", paddingTop: compact ? 6 : `clamp(4px, ${vwh(0.9)}, 20px)` }}>
         {/* ── The two arrows ──
             They flank the hole number rather than joining the row of controls
             at the bottom, because what they move IS the hole number — the

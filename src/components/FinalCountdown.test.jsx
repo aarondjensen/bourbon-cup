@@ -121,6 +121,27 @@ describe("a hole half turned over", () => {
     expect(t).toContain("1 POINT");
   });
 
+  // The cup band ran almost into HOLE 7 and the eighth man ran into the bottom
+  // of his own card, so the middle of the screen read as one solid block from
+  // the band to the ticker with no air anywhere in it.
+  it("gives the hole number room above it and the last man room below", () => {
+    setWidth(TV);
+    const c = screen({ A: 1, B: 1 });
+    // The whole header block — the arrows, the number and the two lines under
+    // it. (Its textContent starts with the back arrow, not with "HOLE".)
+    const header = [...c.querySelectorAll("div")].find(d =>
+      d.style.textAlign === "center" && d.textContent.includes("HOLE 1")
+      && d.textContent.includes("1 POINT"));
+    expect(header.style.paddingTop).toBeTruthy();
+    // And the side's card is deeper at the bottom than at the top: the eighth
+    // name sits against it, where the top edge has the team's own name above
+    // it doing the same job.
+    const col = [...c.querySelectorAll("div")]
+      .find(d => d.style.borderRadius?.startsWith("clamp(8px") && d.textContent.includes("Paul W"));
+    expect(col.style.paddingBottom).toBeTruthy();
+    expect(col.style.paddingBottom).not.toBe(col.style.paddingTop);
+  });
+
   // Two lines under the number, not one string of four facts separated by
   // dots. What the HOLE is (par, and the handicap that decides who gets a shot
   // on it), then what it is WORTH (how many balls make the number, and what it
