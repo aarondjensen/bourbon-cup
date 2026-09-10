@@ -827,6 +827,54 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
     return false; // allow the change
   };
 
+  // ── Re-pricing a round that is over ──────────────────────────────────
+  // What a match is WORTH stays editable on a final round, deliberately and
+  // correctly: point values are read live over the snapshot, so a wrong Nassau
+  // allotment can be fixed on a round the field finished yesterday and it
+  // lands on the leaderboard immediately (see lib/roundAmend).
+  //
+  // "Immediately" is the part nobody was told. The field freezes the format,
+  // greys the handicaps and refuses the taps — and then takes a Nassau edit
+  // silently and moves a finished result under sixteen men, with no confirm
+  // and the auto-save line four sections below the fold. A director had every
+  // reason to read the round as read-only and no way to learn otherwise.
+  //
+  // So: once per round per visit, on the first points edit — and THE EDIT IS
+  // CARRIED THROUGH THE DIALOG rather than discarded by it.
+  //
+  // That last part is not a detail. Refusing the keystroke that raises the
+  // question puts the director back where this file has already been once:
+  // they type a 2, something happens, and the box still reads what it read
+  // before. It reads as the app eating the input, they type it again, and the
+  // lesson learned is that this field is unreliable. So the attempted change
+  // is held as a thunk and applied on yes — one tap, nothing retyped.
+  //
+  // Not a per-keystroke confirm, and not a block: this edit is legitimate and
+  // is the entire reason the field stays live on a finished round. Only the
+  // first one per round per visit has to be deliberate.
+  const pointsWarnedRef = useRef({});
+  const warnFinalPoints = (apply) => {
+    if (!roundIsFinal || pointsWarnedRef.current[editRound]) return false;
+    pointsWarnedRef.current[editRound] = true;
+    confirm({
+      eyebrow: `Round ${editRound}`,
+      title: `Round ${editRound} is final — re-price it anyway?`,
+      message: [
+        "Changing what a match is worth re-scores this round straight away. The leaderboard moves as soon as the change saves, for everybody.",
+        "",
+        "Handicaps, format and hole scoring stay frozen — only the point values are live.",
+      ].join("\n"),
+      confirmLabel: "Re-price it",
+    }).then(ok => {
+      // Yes: the change the director already made lands now, unretyped.
+      // No: nothing was applied, so there is nothing to undo — and the flag
+      // is cleared so the next attempt asks again rather than sliding through.
+      if (ok) apply?.();
+      else pointsWarnedRef.current[editRound] = false;
+    });
+    return true;   // this call does not apply; the dialog will
+  };
+
   // The other half of the same rule, for the three controls that decide how a
   // round is SCORED rather than what it is worth: format, form of play and
   // hole scoring. A final round's scoring never moves, so they stand down —
@@ -1064,6 +1112,18 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
   const formSeeded = seededRound && seed.sig === storedSettingsSig
     && mapSeed.hcp === hcpDocSig && mapSeed.tee === teeDocSig;
 
+  // Which rounds are FINAL, kept in a ref because writeRound is a stable
+  // callback and cannot close over a value derived on each render. Keyed by
+  // round rather than a bare boolean: a write is debounced, so it can land
+  // after the director has switched to another round, and the toast has to
+  // speak for the round that was WRITTEN.
+  const roundIsFinalRef = useRef({});
+  useEffect(() => {
+    roundIsFinalRef.current = Object.fromEntries(
+      tournamentRounds.map(r => [r, roundLockState(roundLocks, r) === LOCK_FINAL])
+    );
+  }, [roundLocks, tournamentRounds]);
+
   const AUTOSAVE_MS = 700;
   // Carries the round it refers to: the status line is per-round, and a
   // director who switches tabs should not be told the round they just
@@ -1102,6 +1162,23 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
         uniform_tee: payload.uniform_tee,
       });
       setAutoSave({ phase: "saved", round });
+      // ── Say so, on the one round where it matters ──────────────────
+      // The auto-save status line is the answer to "did that save?" for every
+      // other round, and it is enough for them: it sits under the form and a
+      // director editing a live round is looking at the form.
+      //
+      // A FINAL round is different in two ways at once. The edit that reaches
+      // it is nearly always one of the point values — everything else is
+      // read-only — and that edit re-scores a result sixteen men have already
+      // been told. It also happens at the top of a long form, four sections
+      // above a status line nobody scrolls to.
+      //
+      // So it toasts. `notify` is portaled over everything (see the Toast
+      // note in CLAUDE.md), which is the whole reason it can be trusted to
+      // arrive where the status line cannot be seen.
+      if (roundIsFinalRef.current[round]) {
+        notify(`Round ${round} re-priced — the leaderboard has moved`, "success");
+      }
     } catch (err) {
       console.error("Round auto-save failed", err);
       lastWrittenRef.current = null;   // let the next edit retry
@@ -1298,6 +1375,26 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
   const TournSaveStyle = (dirty) => saveBtn(dirty, { compact: true });
 
   const InputStyle = { width: "100%", padding: "10px 12px", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 8, color: BC.t1, fontSize: FS.body, boxSizing: "border-box", outline: "none", fontFamily: FONT };
+  // ── The small numeric boxes on the round form ──────────────────────
+  // FS.lead is 16px and that is NOT a style choice. Mobile Safari zooms the
+  // page in when a focused input is under 16px and does not zoom back out —
+  // so tapping the Nassau box left a director on a viewport they had to pinch
+  // out of, with the form's left-hand labels off the side of the screen. The
+  // theme says exactly this next to the FS scale; the Rounds tab's numeric
+  // fields were the ones that never got it, because they are the smallest
+  // boxes in the app and 14px looked like the way to fit them.
+  //
+  // It is not: the rule is condense with PADDING, never by dropping a type
+  // rung. These carry one to three characters, so a tighter box at 16px fits
+  // what a looser box at 14px did.
+  //
+  // Defined once so the next numeric field added here inherits it rather than
+  // re-deriving 14px from the field beside it, which is how all seven of them
+  // came to be wrong together.
+  const NumInputStyle = {
+    ...InputStyle, marginBottom: 0, fontSize: FS.lead,
+    textAlign: "center", padding: "4px 2px",
+  };
   const LabelStyle = { fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1, marginBottom: 4, display: "block" };
   const BtnStyle = { padding: "10px 20px", borderRadius: 10, border: "none", fontSize: FS.body, fontWeight: 700, cursor: "pointer", background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`, color: ON_AMBER };
 
@@ -1936,7 +2033,11 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                   setHolePoints(null);
                   setParPoints(null);
                 }} style={{
-                  ...InputStyle, marginBottom: 0, fontSize: FS.small, padding: "8px 8px", height: 38,
+                  // FS.lead for the same reason as the numeric boxes above:
+                  // iOS zooms a focused <select> under 16px exactly as it does
+                  // an input, and does not zoom back out. Height is unchanged —
+                  // the padding gives it back.
+                  ...InputStyle, marginBottom: 0, fontSize: FS.lead, padding: "6px 8px", height: 38,
                   opacity: roundIsFinal ? 0.5 : 1, cursor: roundIsFinal ? "not-allowed" : "pointer",
                 }}>
                   <option value="">Select...</option>
@@ -1998,7 +2099,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                     <select
                       value={days.includes(roundDate) ? roundDate : ""}
                       onChange={e => setRoundDate(e.target.value)}
-                      style={{ ...InputStyle, marginBottom: 0, fontSize: FS.small, padding: "6px 8px", flex: 1, minWidth: 0 }}
+                      style={{ ...InputStyle, marginBottom: 0, fontSize: FS.lead, padding: "6px 8px", flex: 1, minWidth: 0 }}
                     >
                       <option value="">Not set</option>
                       {days.map(d => (
@@ -2017,7 +2118,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                       type="date"
                       value={roundDate || ""}
                       onChange={e => setRoundDate(e.target.value)}
-                      style={{ ...InputStyle, marginBottom: 0, fontSize: FS.small, padding: "6px 8px", flex: 1, minWidth: 0 }}
+                      style={{ ...InputStyle, marginBottom: 0, fontSize: FS.lead, padding: "6px 8px", flex: 1, minWidth: 0 }}
                     />
                   )}
                 </div>
@@ -2247,7 +2348,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                       placeholder="—"
                       onChange={e => setNine(back, e.target.value)}
                       onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
-                      style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: FS.body, textAlign: "center", width: 44 }} />
+                      style={{ ...NumInputStyle, width: 44 }} />
                   </div>
                 );
               };
@@ -2267,8 +2368,8 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                           onChange={e => setHole(h, e.target.value)}
                           onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
                           style={{
-                            ...InputStyle, marginBottom: 0, padding: "3px 0", fontSize: FS.body,
-                            textAlign: "center", width: "100%", minWidth: 0,
+                            ...NumInputStyle, padding: "3px 0",
+                            width: "100%", minWidth: 0,
                             color: capped ? BC.amberInk : undefined,
                             border: `1px solid ${capped ? BC.amber + ALPHA.line : BC.bdr}`,
                           }} />
@@ -2343,9 +2444,14 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                         <input
                           type="number" step="1"
                           value={val(k)}
-                          onChange={e => setRung(k, e.target.value)}
+                          onChange={e => {
+                            const v = e.target.value;
+                            const apply = () => setRung(k, v);
+                            if (warnFinalPoints(apply)) return;
+                            apply();
+                          }}
                           onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
-                          style={{ ...InputStyle, marginBottom: 0, padding: "4px 3px", fontSize: FS.body, textAlign: "center", width: 40 }} />
+                          style={{ ...NumInputStyle, width: 40 }} />
                       </div>
                     ))}
                   </div>
@@ -2401,10 +2507,25 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
               const numField = (k, lbl) => (
                 <div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}>
                   <span style={{ fontSize: FS.label, color: BC.t3, flexShrink: 0 }}>{lbl}</span>
-                  <input type="number" step="0.5" min="0" value={nassau[k]}
-                    onChange={e => setNassau(n => ({ ...n, [k]: parseFloat(e.target.value) || 0 }))}
+                  {/* String(), not the raw number, and it is load-bearing.
+                      React reconciles a number input with a LOOSE compare
+                      (`node.value != props.value`), so with a number here
+                      "02" != 2 is FALSE and the DOM is never corrected: a
+                      director tapping a field reading 0 and typing 2 was left
+                      looking at "02" for good. The stored value was 2 the
+                      whole time — only the box lied, which is the worse half.
+                      Against a string the compare is "02" != "2", which is
+                      true, and React writes the corrected value back. The
+                      hole-points field beside this one always did it. */}
+                  <input type="number" step="0.5" min="0" value={String(nassau[k])}
+                    onChange={e => {
+                      const v = parseFloat(e.target.value) || 0;
+                      const apply = () => setNassau(n => ({ ...n, [k]: v }));
+                      if (warnFinalPoints(apply)) return;
+                      apply();
+                    }}
                     onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
-                    style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: FS.body, textAlign: "center", width: 44 }} />
+                    style={{ ...NumInputStyle, width: 44 }} />
                 </div>
               );
               // Same box, pointed at the hole values instead of the pots.
@@ -2412,9 +2533,14 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                 <div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}>
                   <span title={hint} style={{ fontSize: FS.label, color: BC.t3, flexShrink: 0 }}>{lbl}</span>
                   <input type="number" step="0.5" min="0" value={String(hp[k])}
-                    onChange={e => setHolePoints({ ...hp, [k]: e.target.value })}
+                    onChange={e => {
+                      const v = e.target.value;
+                      const apply = () => setHolePoints({ ...hp, [k]: v });
+                      if (warnFinalPoints(apply)) return;
+                      apply();
+                    }}
                     onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
-                    style={{ ...InputStyle, marginBottom: 0, padding: "4px 4px", fontSize: FS.body, textAlign: "center", width: 44 }} />
+                    style={{ ...NumInputStyle, width: 44 }} />
                 </div>
               );
               // Which forms this format offers. Only the accrual axis changes
@@ -2451,8 +2577,16 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                         offering a choice that changes nothing. */}
                     {!perHole && (
                       <div style={{ ...segTrack({ compact: true }), width: "fit-content", marginBottom: 8 }}>
-                        <button onClick={() => setNassau(n => ({ front: 0, back: 0, overall: n.overall || 1 }))} title="One pot for the 18-hole result" style={pill(isSingle, false)}>Single</button>
-                        <button onClick={() => setNassau(n => ({ front: n.front || 1, back: n.back || 1, overall: n.overall || 1 }))} title="Three independent pots — front nine, back nine, and the overall match" style={pill(!isSingle, false)}>Nassau</button>
+                        <button onClick={() => {
+                          const apply = () => setNassau(n => ({ front: 0, back: 0, overall: n.overall || 1 }));
+                          if (warnFinalPoints(apply)) return;
+                          apply();
+                        }} title="One pot for the 18-hole result" style={pill(isSingle, false)}>Single</button>
+                        <button onClick={() => {
+                          const apply = () => setNassau(n => ({ front: n.front || 1, back: n.back || 1, overall: n.overall || 1 }));
+                          if (warnFinalPoints(apply)) return;
+                          apply();
+                        }} title="Three independent pots — front nine, back nine, and the overall match" style={pill(!isSingle, false)}>Nassau</button>
                       </div>
                     )}
                     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -2620,8 +2754,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                       onChange={e => setField(k, e.target.value)}
                       onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
                       style={{
-                        ...InputStyle, marginBottom: 0, padding: "4px 16px 4px 6px", fontSize: FS.body,
-                        textAlign: "center", width: 58,
+                        ...NumInputStyle, padding: "4px 16px 4px 6px", width: 58,
                         opacity: roundIsFinal ? 0.5 : 1, cursor: roundIsFinal ? "not-allowed" : "text",
                       }} />
                     <span style={{ position: "absolute", right: 6, fontSize: FS.label, color: BC.t3, pointerEvents: "none" }}>%</span>
@@ -2949,7 +3082,11 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                             setHcpOverrides(prev => ({ ...prev, [editRound]: { ...(prev[editRound]||{}), [p.player_id]: e.target.value } }));
                           }}
                           placeholder={calcedCH != null ? String(calcedCH) : "CH"}
-                          style={{ padding: "5px 8px", background: hasOverride ? BC.amber + ALPHA.wash : BC.inp, border: `1px solid ${hasOverride ? BC.amber : BC.bdr}`, borderRadius: 6, color: hasOverride ? BC.amberInk : BC.t2, fontSize: FS.small, fontWeight: hasOverride ? 700 : 400, outline: "none", textAlign: "center", opacity: roundIsFinal ? 0.5 : 1, cursor: roundIsFinal ? "not-allowed" : "text" }}
+                          // FS.lead, not FS.small: this is a typed field on a
+                          // roster row and iOS zooms the page on anything under
+                          // 16px. Condensed with padding, per the rule beside
+                          // the FS scale in theme.js.
+                          style={{ padding: "4px 6px", background: hasOverride ? BC.amber + ALPHA.wash : BC.inp, border: `1px solid ${hasOverride ? BC.amber : BC.bdr}`, borderRadius: 6, color: hasOverride ? BC.amberInk : BC.t2, fontSize: FS.lead, fontWeight: hasOverride ? 700 : 400, outline: "none", textAlign: "center", opacity: roundIsFinal ? 0.5 : 1, cursor: roundIsFinal ? "not-allowed" : "text" }}
                         />
                         {/* One swatch: the tee this player is actually on, and
                             the way in to change it. A row of every tee on the
@@ -3137,7 +3274,11 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                   : phase === "saved"
                     ? [`Round ${editRound} saved`, BC.t3]
                     : roundIsFinal
-                      ? [`Round ${editRound} is final — its scoring and handicaps are frozen`, BC.t3]
+                      // "its scoring and handicaps are frozen" was true of the
+                      // format and the handicaps and false of the thing a
+                      // director actually comes here to change on a finished
+                      // round. Naming what IS live is the useful half.
+                      ? [`Round ${editRound} is final — only point values are live`, BC.t3]
                       : ["Changes save automatically", BC.t3];
               return (
                 <div style={{
@@ -3914,7 +4055,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                     value={brandEdit[team.id]}
                     onChange={e => setBrandEdit(b => ({ ...b, [team.id]: e.target.value }))}
                     placeholder="#rrggbb"
-                    style={{ ...TournFieldStyle, flex: "0 0 96px", width: 96, fontSize: FS.small, padding: "5px 8px" }}
+                    style={{ ...TournFieldStyle, flex: "0 0 96px", width: 96, fontSize: FS.lead, padding: "5px 8px" }}
                   />
                   <label style={{ marginLeft: "auto", fontSize: FS.label, fontWeight: 700, color: BC.t2, background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 6, padding: "6px 10px", cursor: "pointer", whiteSpace: "nowrap", fontFamily: FONT }}>
                     {brandBusy === team.id ? "Reading…" : "Import logo"}
