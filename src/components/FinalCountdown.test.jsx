@@ -205,9 +205,11 @@ describe("a man's ball", () => {
     setWidth(TV);
     const tv = screen({ A: 1, B: 1 });
     expect(scores(tv)).toEqual(expect.arrayContaining(["−1", "E", "+1"]));
-    // And the raw nets are gone with it.
+    // And the raw nets are gone with it. (A strip cell is also a bare number,
+    // so this asks outside the strip — those are the eighteen hole labels.)
     expect([...tv.querySelectorAll("div,span")]
-      .filter(d => !d.children.length && d.textContent === "5").length).toBe(0);
+      .filter(d => !d.children.length && d.textContent === "5"
+        && !d.style.borderRadius?.startsWith("clamp(3px")).length).toBe(0);
     cleanup();
     setWidth(PHONE);
     expect(scores(screen({ A: 1, B: 1 }))).toEqual(expect.arrayContaining(["−1", "E", "+1"]));
@@ -641,15 +643,16 @@ describe("the phone layout", () => {
 });
 
 // ── Tapping between holes ───────────────────────────────────────────
-// The strip is how a director navigates. He is the one exempt from the
-// one-hole-at-a-time clamp, and jumping is the repair that clamp exists to
-// make necessary: a stray tap took the room to hole 7 and somebody has to be
-// able to take it back.
+// The strip REWINDS, and it does not fast-forward. Backward is the repair it
+// was added for — a stray tap took the room to hole 7 and somebody has to take
+// it back — and backward reveals nothing, because every hole it lands on has
+// already been seen. Forward is one hole at a time, through a captain's own
+// button, which is the ceremony.
 describe("the strip as a control", () => {
   const cell = (c, n) => [...c.querySelectorAll("div,button")]
     .filter(d => d.textContent === String(n) && d.style.borderRadius?.startsWith("clamp(3px")).pop();
 
-  it("lets a director tap straight to a hole, both sides at once", () => {
+  it("lets a director tap back to a hole, both sides at once", () => {
     const c = screen({ A: 6, B: 6 });
     fireEvent.click(cell(c, 3));
     expect(advanced).toEqual([[null, 3]]);
@@ -657,9 +660,51 @@ describe("the strip as a control", () => {
 
   it("works the same on a phone, which is where it is needed", () => {
     setWidth(PHONE);
-    const c = screen({ A: 6, B: 6 });
-    fireEvent.click(cell(c, 12));
-    expect(advanced).toEqual([[null, 12]]);
+    const c = screen({ A: 12, B: 12 });
+    fireEvent.click(cell(c, 4));
+    expect(advanced).toEqual([[null, 4]]);
+  });
+
+  // ── The one that cannot happen ────────────────────────────────────
+  // The strip used to accept any cell, which made it a way to turn over every
+  // hole between here and there in ONE TAP — the one thing this screen exists
+  // to prevent, and unrecoverable in the way that matters: a mistap on 18 does
+  // not show a wrong number somebody can correct, it shows the room the end of
+  // the tournament, and no amount of tapping back un-sees it.
+  it("will not jump a director FORWARD, on either screen", () => {
+    const forward = (w) => {
+      setWidth(w);
+      const c = screen({ A: 6, B: 6 });
+      // Hole 12 is six holes past what the room has seen.
+      expect(cell(c, 12).tagName).toBe("DIV");
+      fireEvent.click(cell(c, 12));
+      // And the very next one, which is the tempting mistap.
+      fireEvent.click(cell(c, 7));
+      expect(advanced).toEqual([]);
+      cleanup();
+    };
+    forward(TV);
+    forward(PHONE);
+  });
+
+  // With A on 7 and B on 6 the room is mid-hole-7. Tapping 7 would set BOTH
+  // sides to 7 — which is not going back, it is turning over the half of hole
+  // 7 the other captain has not told yet.
+  it("will not 'go back' to the half-open hole", () => {
+    const c = screen({ A: 7, B: 6 });
+    expect(cell(c, 7).tagName).toBe("DIV");
+    fireEvent.click(cell(c, 7));
+    expect(advanced).toEqual([]);
+    // Hole 6 is genuinely behind, and still works.
+    fireEvent.click(cell(c, 6));
+    expect(advanced).toEqual([[null, 6]]);
+  });
+
+  it("offers nothing at all before the first hole", () => {
+    const c = screen({ A: 0, B: 0 });
+    expect(cell(c, 1).tagName).toBe("DIV");
+    fireEvent.click(cell(c, 1));
+    expect(advanced).toEqual([]);
   });
 
   it("is not a control for a captain", () => {

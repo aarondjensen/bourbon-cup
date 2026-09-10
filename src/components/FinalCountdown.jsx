@@ -791,13 +791,31 @@ export function FinalCountdown({
     const w = out ? h?.winner : null;
     const tied = out && !w && h?.played;
     const cur = i === holeIdx;
-    // Tapping a hole sets the reveal to it, BOTH sides at once. Offered to a
-    // director only: he is the one exempt from the one-hole-at-a-time clamp
-    // (see firestore.rules, captainRevealing), and jumping is the repair the
-    // clamp exists to make necessary — a stray tap took the room to hole 7 and
-    // somebody has to be able to take it back. A captain has his own button
-    // and no business moving the other side.
-    const jump = isDirector && onAdvance ? () => onAdvance(null, i + 1) : null;
+    // ── The strip REWINDS. It does not fast-forward. ──
+    // Tapping a hole sets the reveal to it, both sides at once, and a director
+    // is the only one offered it — a captain has his own button and no
+    // business moving the other side (the rules refuse it too; see
+    // captainRevealing in firestore.rules).
+    //
+    // It used to accept ANY cell, which made the strip a way to turn over
+    // every hole between here and there in one tap. That is the one thing this
+    // whole screen exists to prevent, and it is unrecoverable in the way that
+    // matters: a mistap on 18 does not show a wrong number somebody can
+    // correct, it shows the ROOM the end of the tournament, and no amount of
+    // tapping back un-sees it. Eighteen live grenades along the bottom of the
+    // screen, on the one night everybody is reaching for the same laptop.
+    //
+    // So a cell is a control only if it is BEHIND the hole on screen. Backward
+    // is the repair the jump was added for — a stray tap took the room to hole
+    // 7 and somebody has to take it back — and backward reveals nothing,
+    // because every hole it lands on has already been seen. Forward is one
+    // hole at a time, through a captain's own button, which is the ceremony.
+    //
+    // `hole` and not `settled`: with A on 7 and B on 6, hole 7 itself must
+    // stay inert, or "going back" to it would turn over B's side of it.
+    const jump = isDirector && onAdvance && i + 1 < hole
+      ? () => onAdvance(null, i + 1)
+      : null;
     const Cell = jump ? "button" : "div";
     return (
       <Cell key={i} onClick={jump || undefined} style={{
@@ -1007,14 +1025,13 @@ export function FinalCountdown({
       <>
         {cupBar}
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "clamp(6px, 1vw, 20px)", textAlign: "center" }}>
-          <div style={{ fontSize: T.terms, fontWeight: 800, letterSpacing: "0.4em", color: BC.t3 }}>SEALED ALL DAY</div>
           <div style={{ fontSize: T.hole, fontWeight: 800, letterSpacing: "0.12em", color: BC.amberInk, lineHeight: 1.1 }}>
             THE FINAL COUNTDOWN
           </div>
           <div style={{ fontSize: T.terms, color: BC.t2, letterSpacing: 2, lineHeight: 1.8 }}>
             {[courseName, formatLabel].filter(Boolean).join(" · ")}
             <br />
-            {HOLE_COUNT} HOLES · {fmtPts(HOLE_COUNT && result?.holePoints ? result.holePoints.front * 9 + result.holePoints.back * 9 : 0)} POINTS ON THE TABLE
+            {HOLE_COUNT} HOLES · {fmtPts(HOLE_COUNT && result?.holePoints ? result.holePoints.front * 9 + result.holePoints.back * 9 : 0)} POINTS
           </div>
         </div>
         {strip}
