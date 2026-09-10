@@ -526,10 +526,14 @@ That function needs five things, and **only one of them is a secret**. See
 pasted. It is multi-line PEM and the interactive prompt takes a single line:
 
 ```sh
-firebase functions:secrets:set APPLE_PRIVATE_KEY --data-file ~/Downloads/AuthKey_XXXXXXXXXX.p8
+firebase functions:secrets:set APPLE_PRIVATE_KEY --data-file C:\dev\keys\AuthKey_9K7J7J2VGT.p8
 ```
 
-(`--data-file -` reads stdin instead, if piping suits better.)
+(`--data-file -` reads stdin instead, if piping suits better. The real path is
+written out above rather than a `~/Downloads/AuthKey_XXXXXXXXXX.p8` placeholder
+on purpose — that shape gets pasted verbatim, and the CLI takes a path that is
+not there without obviously complaining. `firebase functions:secrets:access
+APPLE_PRIVATE_KEY` prints what is actually stored, which is the way to tell.)
 
 **The other four are not secrets and are committed.** A team id, a key id, a
 Services ID and a bundle id are public identifiers — the bundle id is printed
