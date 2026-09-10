@@ -219,6 +219,47 @@ describe("a man's ball", () => {
     expect(scores(screen({ A: 1, B: 1 }))).toEqual(expect.arrayContaining(["−1", "E", "+1"]));
   });
 
+  // ── The row is built around its middle ──
+  // The dot lane is pinned to the centre of the column — the same centre the
+  // team's name and its big to-par number already sit on — and the name grows
+  // leftward out of it while the score sits immediately right. Equal `flex: 1`
+  // on the two outer lanes is the whole trick; it centres the middle one at
+  // any width with nothing measured.
+  //
+  // It used to be name-hard-left and number-hard-right, which on a 1250px
+  // column is two facts at opposite ends of a foot of black.
+  it("centres the stroke column under the team's own number", () => {
+    setWidth(TV);
+    const c = screen({ A: 1, B: 1 });
+    const rows = [...c.querySelectorAll("div")]
+      .filter(d => d.style.borderLeft?.startsWith("clamp(3px"));
+    expect(rows.length).toBe(6);
+    rows.forEach((row) => {
+      const [name, dots, score] = [...row.children];
+      // The two outer lanes take equal shares of the leftover, which is what
+      // puts the dot lane dead centre.
+      expect(name.style.flexGrow).toBe("1");
+      expect(score.style.flexGrow).toBe("1");
+      // The name runs INTO the dots and the score runs out of them.
+      expect(name.style.textAlign).toBe("right");
+      expect(score.style.textAlign).toBe("left");
+      // The dot lane itself is fixed, or it would stretch and stop being a
+      // centre at all.
+      expect(dots.style.flexGrow).toBe("");
+      expect(dots.style.width).toBeTruthy();
+    });
+  });
+
+  // A border only on the left shifts the content box right by its own width,
+  // and "dead centre" that is eight pixels off is the kind of wrong that is
+  // visible on a television and invisible in a diff.
+  it("mirrors the colour rail so the centre is a real centre", () => {
+    const row = [...screen({ A: 1, B: 1 }).querySelectorAll("div")]
+      .find(d => d.style.borderLeft?.startsWith("clamp(3px"));
+    expect(row.style.borderRightWidth).toBe(row.style.borderLeftWidth);
+    expect(row.style.borderRightColor).toBe("transparent");
+  });
+
   it("leaves a ball that missed the cut legible, on either screen", () => {
     // It used to sit at opacity 0.42, which from twelve feet is a number you
     // cannot read — and on this format "you didn't count" is half the
