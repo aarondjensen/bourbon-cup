@@ -676,11 +676,25 @@ export function FinalCountdown({
     );
   };
 
-  // ── The captain's band ───────────────────────────────────────────
-  // What he says before he taps, and nothing else. Two lines: the number his
-  // side made, and the balls worth naming. See lib/countdownPrompt for where
-  // the line between "worth naming" and "leave it alone" is drawn, and why a
-  // net bogey is never on the right side of it.
+  // ── The captain's card ───────────────────────────────────────────
+  // Laid out in the order he SAYS it, top to bottom:
+  //
+  //   "…with contributions from Paul, Dave and John, and the first net eagle
+  //    of the round — the Mash Brothers are three under."
+  //
+  // Which is why the team and its number are at the BOTTOM. They were at the
+  // top, beside the hole number, and that is the order a scoreboard uses: the
+  // answer first, the detail under it. This card is not a scoreboard. It is a
+  // script, and the number is the line he lands on — reading it out means
+  // starting at the bottom of the card, going up for the names, and coming
+  // back down, every hole, eighteen times, in front of everybody.
+  //
+  // So: the hole he is on, the men who made it, the fun of it, and then the
+  // number. The rule sits above the number rather than above the nuggets,
+  // because the split that matters on a card read aloud is BUILD-UP from
+  // PAYOFF — the contributions and the stats are one breath ("…from Paul,
+  // Dave and John, AND the first eagle of the round…") and the rule between
+  // them was a pause he does not take.
   const captainBand = myPrompt ? (
     <div onClick={(e) => e.stopPropagation()} style={{
       flexShrink: 0, padding: "clamp(6px, 0.9vw, 18px) clamp(9px, 1.2vw, 24px)",
@@ -688,41 +702,39 @@ export function FinalCountdown({
       background: `${teamColor(captainSide)}${ALPHA.wash}`,
       border: `2px solid ${teamColor(captainSide)}${ALPHA.line}`,
     }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: "clamp(6px, 1vw, 20px)", flexWrap: "wrap" }}>
-        {/* No "YOU'RE UP". His phone put up a card, it is his side's colour,
-            and it carries a button with his team's name on it — he knows. It
-            was a line of the app talking to the man holding the phone on a
-            card whose whole job is to be read out to somebody else. */}
-        <span style={{ fontSize: T.promptSm, fontWeight: 800, letterSpacing: "0.2em", color: BC.t3 }}>
-          HOLE {myPrompt.hole}{myPrompt.par ? ` · PAR ${myPrompt.par}` : ""}
-        </span>
-        <span style={{ fontSize: T.prompt, fontWeight: 800, letterSpacing: 1, color: teamColor(captainSide) }}>
-          {myPrompt.headline}
-        </span>
+      {/* No "YOU'RE UP". His phone put up a card, it is his side's colour,
+          and it carries a button with his team's name on it — he knows. It
+          was a line of the app talking to the man holding the phone on a
+          card whose whole job is to be read out to somebody else. */}
+      <div style={{ fontSize: T.promptSm, fontWeight: 800, letterSpacing: "0.2em", color: BC.t3 }}>
+        HOLE {myPrompt.hole}{myPrompt.par ? ` · PAR ${myPrompt.par}` : ""}
       </div>
-      <div style={{ marginTop: "0.35em", display: "flex", flexDirection: "column", gap: "0.15em" }}>
+
+      {/* The contributions, then the fun of them. Still told apart by colour —
+          one is this hole, the other is the round it sits in — but read as one
+          run of lines, because that is how they are spoken. */}
+      <div style={{ marginTop: "0.35em", display: "flex", flexDirection: "column", gap: "0.2em" }}>
         {myPrompt.notes.map((n) => (
           <span key={n} style={{ fontSize: T.prompt, fontWeight: 700, color: BC.t1, lineHeight: 1.35 }}>{n}</span>
         ))}
+        {(myPrompt.nuggets || []).map((n) => (
+          <span key={n} style={{
+            fontSize: T.prompt, fontWeight: 700, lineHeight: 1.35,
+            color: teamColor(captainSide),
+          }}>{n}</span>
+        ))}
       </div>
-      {/* The nuggets, under a rule and in the team's colour: they are a
-          different KIND of thing from the two lines above. Those are this
-          hole; these are the round it sits in, and they are the half he
-          cannot work out standing in front of everybody. */}
-      {myPrompt.nuggets?.length > 0 && (
-        <div style={{
-          marginTop: "0.5em", paddingTop: "0.45em",
-          borderTop: `1px solid ${teamColor(captainSide)}${ALPHA.line}`,
-          display: "flex", flexDirection: "column", gap: "0.2em",
-        }}>
-          {myPrompt.nuggets.map((n) => (
-            <span key={n} style={{
-              fontSize: T.prompt, fontWeight: 700, lineHeight: 1.35,
-              color: teamColor(captainSide),
-            }}>{n}</span>
-          ))}
-        </div>
-      )}
+
+      {/* The line he lands on. Bigger than everything above it, because it is
+          the only part of the card the room is waiting for. */}
+      <div style={{
+        marginTop: "0.5em", paddingTop: "0.45em",
+        borderTop: `1px solid ${teamColor(captainSide)}${ALPHA.line}`,
+        fontSize: T.verdict, fontWeight: 800, letterSpacing: 1,
+        color: teamColor(captainSide), lineHeight: 1.15,
+      }}>
+        {myPrompt.headline}
+      </div>
     </div>
   ) : null;
 
