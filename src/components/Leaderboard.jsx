@@ -194,11 +194,17 @@ function SegmentPill({ label, pot, st, pts }) {
   // A points nine is split between the sides rather than won outright — six
   // holes to three is 6 and 3, not "6". Printing only the leader's figure the
   // way a Nassau pot does would read as a shutout, so both are shown, live and
-  // finished alike, and the leading side carries the color.
+  // finished alike.
   const perHole = st.unit === "points";
   const lead = segmentLeader(st);
+  // A points nine prints BOTH figures, and each one is its own team's colour
+  // — "5 – 11" used to be drawn entirely in the leading side's hue, which
+  // put Drivers' eleven in Irons' green whenever Irons had the nine. A score
+  // is two teams' numbers side by side; one colour over both of them is the
+  // one thing a two-colour board must not do. The pill's tint and border
+  // still carry the leader, which is where that signal belongs.
   const shown = perHole
-    ? `${fmtPts(pts.A)} – ${fmtPts(pts.B)}`
+    ? null
     : settled ? (halved ? "½ – ½" : `${fmtPts(win === "A" ? pts.A : pts.B)}`) : statusText(st);
   const color = (perHole ? lead : win) ? teamColor(perHole ? lead : win) : BC.t2;
 
@@ -218,7 +224,13 @@ function SegmentPill({ label, pot, st, pts }) {
         color: settled ? (halved ? BC.t2 : color) : st.played ? color : BC.t3,
         whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
       }}>
-        {shown}
+        {perHole ? (
+          <>
+            <span style={{ color: BC.teamA }}>{fmtPts(pts.A)}</span>
+            <span style={{ color: BC.t3 }}>{" – "}</span>
+            <span style={{ color: BC.teamB }}>{fmtPts(pts.B)}</span>
+          </>
+        ) : shown}
       </div>
     </div>
   );
@@ -280,9 +292,16 @@ function MatchTeamColumn({ tid, names, isLeader, settled }) {
 // Each nine carries its OWN settled state, not the match's — a front nine
 // can be in the books while the back is still being played, and that's
 // precisely the distinction worth drawing here.
+//
+// The colour is full strength either way. It used to come through `ink`,
+// which pulls a live result back to 75% — a signal about TIME, landing on a
+// board where the other job colour has is naming a SIDE, so a match still
+// being played read as a lesser one. What a match is doing is said by
+// everything around the number: the dashed pill borders, THRU beneath the
+// status, the hole strip.
 const nineColor = (st) => {
   const lead = segmentLeader(st);
-  return ink(lead ? teamColor(lead) : st.played ? BC.t2 : BC.t3, st.complete);
+  return lead ? teamColor(lead) : st.played ? BC.t2 : BC.t3;
 };
 
 // Cells of the centre cluster. minWidth on each keeps the columns from
@@ -379,8 +398,9 @@ function MatchCard({
   // in SegmentPill above, where it is a POT ("½ – ½", half a point each) and
   // not the match's status.
   const statusLabel = statusText(overallSt);
-  const statusBase = leader ? teamColor(leader) : overallSt.played ? BC.t2 : BC.t3;
-  const statusColor = ink(statusBase, done);
+  // Undimmed in play, as above: FINAL underneath says the match is over, and
+  // no score on this board is drawn quieter than another.
+  const statusColor = leader ? teamColor(leader) : overallSt.played ? BC.t2 : BC.t3;
   // Sub-line under the status. An unplayed match has no progress to report,
   // so it shows its tee time instead — the only thing about it that's news.
   const subLabel = done ? "FINAL"
