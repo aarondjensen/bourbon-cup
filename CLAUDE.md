@@ -564,10 +564,16 @@ web one** — an authorization code is bound to the client that obtained it, and
 sending the wrong one gets `invalid_client` back from Apple, which reads like a
 bad key and is not. The caller says which shape it holds.
 
-**`node scripts/apple-key-check.mjs <path-to-.p8>` settles which key is which.**
-A `.p8` is a bare EC private key with no metadata, so nothing in the file says
-whether it was issued for Sign in with Apple or for APNs — and both are called
-`AuthKey_<id>.p8` in the same folder. The probe asks Apple instead: it signs a
+**Which key is which is a ten-second job in the portal.** The Keys list at
+developer.apple.com/account/resources/authkeys/list has a SERVICES column and a
+NAME: this account holds one Sign in with Apple key per project — Bourbon Cup,
+WBC, MNQ, SFGL — plus `7UA9A9SR3K` "App APNs", which is the push key and is not
+interchangeable with them. The `.p8` on disk cannot tell you that; it is a bare
+EC private key with no metadata, and both kinds are called `AuthKey_<id>.p8`.
+
+**`node scripts/apple-key-check.mjs <path-to-.p8>` settles the harder half** —
+whether the key, the key id, the team id and the client id work TOGETHER, which
+the portal does not answer and which fails identically to a bad key. It signs a
 client secret and sends it with a deliberately junk refresh token, because
 Apple validates the CREDENTIALS before the grant. `invalid_grant` back means
 the key, key id, team id and client id all work together and only the junk
