@@ -655,47 +655,55 @@ export function FinalCountdown({
     return Math.min(100, (v / scale) * 100);
   };
 
-  // ── The cup itself, behind all of it ─────────────────────────────
-  // The same trophy silhouette the sign-in screen puts behind the title, at
-  // the same full-bleed size, for the same reason: it is the thing in the room
-  // and this is the hour it gets handed over. Nothing on this screen names the
-  // Bourbon Cup otherwise — two team names, a hole number and eighteen cells —
-  // and a television somebody walks past should say what it is looking at.
-  //
-  // IT FADES WHEN THE HOLES START. The sign-in screen carries it at 0.28
-  // because there is nothing else on that screen; here there are eight names a
-  // side over it, and a watermark that competes with a name is a watermark
-  // that made a name harder to read from the back of a room. So it opens at
-  // the sign-in screen's own weight on the title card, where the screen is
-  // empty and the trophy IS the picture, and drops to a shadow once the first
-  // hole is up.
-  //
-  // Behind everything by construction: the image is the only positioned child
-  // of the backdrop, and the whole layout moved into a `relative` layer above
-  // it. Painting order alone would have put the image on top — a positioned
-  // element paints above static siblings whatever the source order.
   const shell = (children) => (
     <div
       onClick={advance}
       style={{
         position: "fixed", inset: 0, zIndex: 4000, background: BC.bg, color: BC.t1,
-        fontFamily: FONT, cursor: canDrive ? "pointer" : "default",
-        userSelect: "none", overflow: "hidden",
+        fontFamily: FONT, display: "flex", flexDirection: "column",
+        padding: "clamp(8px, 1.2vw, 26px)", gap: "clamp(6px, 0.9vw, 18px)",
+        cursor: canDrive ? "pointer" : "default", userSelect: "none", overflow: "hidden",
       }}>
+      {children}
+    </div>
+  );
+
+  // ── The cup itself, behind the hole ──────────────────────────────
+  // The same trophy silhouette the sign-in screen puts behind the title, for
+  // the same reason: it is the thing in the room and this is the hour it gets
+  // handed over. Nothing on this screen names the Bourbon Cup otherwise — two
+  // team names, a hole number and eighteen cells — and a television somebody
+  // walks past should say what it is looking at.
+  //
+  // IT IS SIZED TO THE STAGE, NOT THE SCREEN. It was inset:0 on the backdrop,
+  // full viewport — so the cup band across the top and the controls along the
+  // bottom, both opaque, sat ON it and cut the trophy off at the handles. A
+  // watermark with its top sliced away does not read as a trophy, it reads as
+  // a smudge. `contain` inside the stage — the band between the two headers,
+  // which is the only region of this screen the layout leaves empty — fits the
+  // whole cup with nothing over it. Nothing is measured: the stage is a flex
+  // child, so it already knows how much room the headers left it.
+  //
+  // IT FADES WHEN THE HOLES START. The sign-in screen carries it at full
+  // strength because there is nothing else on that screen; here there are
+  // eight names a side over it, and a watermark that competes with a name is
+  // one that made a name harder to read from the back of a room.
+  //
+  // Behind by construction: it is the only positioned child of the stage, and
+  // the stage's content sits in a `relative` layer above it. Painting order
+  // alone would have put the image on top — a positioned element paints above
+  // static siblings whatever the source order.
+  const stage = (inner, children) => (
+    <div style={{ position: "relative", flex: "1 1 0", minHeight: 0 }}>
       <img src={TROPHY_SILHOUETTE} alt="" style={{
-        position: "absolute", top: "50%", left: "50%",
-        transform: "translate(-50%, -50%)",
-        width: "100%", height: "100%", objectFit: "contain",
+        position: "absolute", inset: 0, width: "100%", height: "100%",
+        objectFit: "contain",
         opacity: hole <= 0 ? 0.34 : 0.1,
         filter: "brightness(1.4) contrast(1.2)",
         transition: "opacity 900ms ease",
         pointerEvents: "none", userSelect: "none", zIndex: 0,
       }} />
-      <div style={{
-        position: "relative", zIndex: 1, height: "100%", boxSizing: "border-box",
-        display: "flex", flexDirection: "column",
-        padding: "clamp(8px, 1.2vw, 26px)", gap: "clamp(6px, 0.9vw, 18px)",
-      }}>
+      <div style={{ position: "relative", zIndex: 1, height: "100%", ...inner }}>
         {children}
       </div>
     </div>
@@ -1024,16 +1032,19 @@ export function FinalCountdown({
     return shell(
       <>
         {cupBar}
-        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "clamp(6px, 1vw, 20px)", textAlign: "center" }}>
-          <div style={{ fontSize: T.hole, fontWeight: 800, letterSpacing: "0.12em", color: BC.amberInk, lineHeight: 1.1 }}>
-            THE FINAL COUNTDOWN
-          </div>
-          <div style={{ fontSize: T.terms, color: BC.t2, letterSpacing: 2, lineHeight: 1.8 }}>
-            {[courseName, formatLabel].filter(Boolean).join(" · ")}
-            <br />
-            {HOLE_COUNT} HOLES · {fmtPts(HOLE_COUNT && result?.holePoints ? result.holePoints.front * 9 + result.holePoints.back * 9 : 0)} POINTS
-          </div>
-        </div>
+        {stage(
+          { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "clamp(6px, 1vw, 20px)", textAlign: "center" },
+          <>
+            <div style={{ fontSize: T.hole, fontWeight: 800, letterSpacing: "0.12em", color: BC.amberInk, lineHeight: 1.1 }}>
+              THE FINAL COUNTDOWN
+            </div>
+            <div style={{ fontSize: T.terms, color: BC.t2, letterSpacing: 2, lineHeight: 1.8 }}>
+              {[courseName, formatLabel].filter(Boolean).join(" · ")}
+              <br />
+              {HOLE_COUNT} HOLES · {fmtPts(HOLE_COUNT && result?.holePoints ? result.holePoints.front * 9 + result.holePoints.back * 9 : 0)} POINTS
+            </div>
+          </>,
+        )}
         {strip}
         {captainBand}
         {controls}
@@ -1075,25 +1086,28 @@ export function FinalCountdown({
           prompt and a set of controls do not fit a 393×852 screen at any type
           size that can be read, and a scroll is the honest answer. The strip
           and the controls stay pinned below it. */}
-      <div style={{
-        flex: "1 1 0", minHeight: 0, display: "flex", gap: compact ? 10 : "clamp(6px, 1vw, 22px)",
-        flexDirection: compact ? "column" : "row",
-        alignItems: compact ? "stretch" : "center",
-        justifyContent: compact ? "flex-start" : "center",
-        overflowY: compact ? "auto" : "visible",
-        overscrollBehavior: "contain",
-      }}>
-        <SideColumn tid="A" teamName={tA.name} score={hr?.aScore} balls={ballsFor("A")}
-          par={holePars?.[holeIdx]} countN={countN} compact={compact}
-          revealed={showA} won={showVerdict && winner === "A"} waitingOn={`${tA.name.toUpperCase()} TO TELL IT`} />
-        {/* No "vs" between them. It was a television flourish from when each
-            side was a name over one enormous number and the gap between them
-            was empty; two eight-man lists do not need to be told they are
-            opposed, and the centred hole header above already parts them. */}
-        <SideColumn tid="B" teamName={tB.name} score={hr?.bScore} balls={ballsFor("B")}
-          par={holePars?.[holeIdx]} countN={countN} compact={compact}
-          revealed={showB} won={showVerdict && winner === "B"} waitingOn={`${tB.name.toUpperCase()} TO TELL IT`} />
-      </div>
+      {stage(
+        {
+          display: "flex", gap: compact ? 10 : "clamp(6px, 1vw, 22px)",
+          flexDirection: compact ? "column" : "row",
+          alignItems: compact ? "stretch" : "center",
+          justifyContent: compact ? "flex-start" : "center",
+          overflowY: compact ? "auto" : "visible",
+          overscrollBehavior: "contain",
+        },
+        <>
+          <SideColumn tid="A" teamName={tA.name} score={hr?.aScore} balls={ballsFor("A")}
+            par={holePars?.[holeIdx]} countN={countN} compact={compact}
+            revealed={showA} won={showVerdict && winner === "A"} waitingOn={`${tA.name.toUpperCase()} TO TELL IT`} />
+          {/* No "vs" between them. It was a television flourish from when each
+              side was a name over one enormous number and the gap between them
+              was empty; two eight-man lists do not need to be told they are
+              opposed, and the centred hole header above already parts them. */}
+          <SideColumn tid="B" teamName={tB.name} score={hr?.bScore} balls={ballsFor("B")}
+            par={holePars?.[holeIdx]} countN={countN} compact={compact}
+            revealed={showB} won={showVerdict && winner === "B"} waitingOn={`${tB.name.toUpperCase()} TO TELL IT`} />
+        </>,
+      )}
 
       {/* ── The cup, on the hole it is won ──
           There is no hole verdict here any more. It was a band across the
