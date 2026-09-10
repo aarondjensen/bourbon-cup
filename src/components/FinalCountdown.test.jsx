@@ -310,6 +310,26 @@ describe("the trophy", () => {
     expect(img.parentElement.querySelector("div").style.zIndex).toBe("1");
   });
 
+  // It was inset:0 on the fixed backdrop — the whole viewport — so the cup
+  // band across the top and the controls along the bottom, both opaque, sat ON
+  // it and sliced the trophy off at the handles. A watermark with its top cut
+  // away does not read as a trophy, it reads as a smudge.
+  it("is sized to the stage between the headers, not to the screen", () => {
+    const c = screen({ A: 1, B: 1 });
+    const img = trophy(c);
+    const box = img.parentElement;
+    // Its box is the flex child between the two headers, so it is bounded by
+    // whatever room they left — nothing is measured.
+    expect(box.style.position).toBe("relative");
+    expect(box.style.minHeight).toBe("0px");
+    expect(img.style.objectFit).toBe("contain");
+    // And NOT the fixed full-screen backdrop, which is what cropped it. The
+    // stage is a child of it, several elements down.
+    expect(c.firstChild.style.position).toBe("fixed");
+    expect(c.firstChild).not.toBe(box);
+    expect(c.firstChild.contains(box)).toBe(true);
+  });
+
   it("fades once there are names to read over it", () => {
     // The sign-in screen carries it at full strength because there is nothing
     // else on it. Here there are eight names a side, and a watermark that
