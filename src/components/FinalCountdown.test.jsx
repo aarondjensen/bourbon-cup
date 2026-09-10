@@ -80,15 +80,38 @@ describe("a hole half turned over", () => {
 
   // The one thing the screen must never do early. Both sides' numbers are in
   // the component's hands from the first render — the guard is what it DRAWS.
-  it("gives no verdict until both captains have spoken", () => {
-    expect(screen({ A: 1, B: 0 }).textContent).not.toContain("TAKE IT");
-    // The app's all-caps is CSS, which jsdom does not apply — this is the
-    // text as the component writes it.
+  //
+  // There is no verdict BAND any more, so this asks the two things that still
+  // say who took the hole: the winning column lights up in its own colour, and
+  // the strip fills that hole in. Neither may happen on half a hole.
+  it("marks no winner until both captains have spoken", () => {
+    const cell = (c, n) => [...c.querySelectorAll("div")].filter(d => d.textContent === String(n)).pop();
+    expect(cell(screen({ A: 1, B: 0 }), 1).style.background).toBe("transparent");
+    cleanup();
+    expect(cell(screen({ A: 1, B: 1 }), 1).style.background).not.toBe("transparent");
+  });
+
+  // It read "SHOT CALLERS TAKE IT · 1 POINT" across a band of its own — the
+  // third place on this screen saying one fact, and the only one of the three
+  // that cost a whole row of height.
+  it("has no hole-verdict band at all", () => {
     const t = screen({ A: 1, B: 1 }).textContent;
-    expect(t).toContain("Mash Brothers TAKE IT");
-    // The point, said in words. A bare "+1" here would collide with the side
-    // numbers above, which are now figures against par.
+    expect(t).not.toContain("TAKE IT");
+    expect(t).not.toContain("EACH");
+    expect(t).not.toContain("NO RESULT ON THIS HOLE");
+    // The hole's point value still rides in the terms line under HOLE 1,
+    // where it belongs — that is what the hole is worth, not who won it.
     expect(t).toContain("1 POINT");
+  });
+
+  // Not the same fact. "Who took the hole" happens eighteen times; "the cup is
+  // won" happens once, and it is the moment the evening is built around.
+  it("still gives the clinch a band of its own", () => {
+    const t = screen({ A: 1, B: 1 }, { clincher: "A" }).textContent;
+    expect(t).toContain("WIN THE BOURBON CUP");
+    // And not before both captains have spoken on the hole it lands.
+    cleanup();
+    expect(screen({ A: 1, B: 0 }, { clincher: "A" }).textContent).not.toContain("WIN THE BOURBON CUP");
   });
 
   it("names the balls that made the number and dims the ones that didn't", () => {
