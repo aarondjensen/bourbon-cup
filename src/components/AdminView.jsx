@@ -3504,8 +3504,34 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
               } catch { notify("Re-fetch failed", "error"); }
               finally { setRefetchingTees(false); }
             };
-            const ti = { background: BC.bg, border: `1px solid ${BC.amber}${ALPHA.hair}`, borderRadius: 4, color: BC.t1, fontSize: FS.label, textAlign: "center", width: "100%", padding: "3px 2px", boxSizing: "border-box" };
-            const tiL = { ...ti, textAlign: "left", padding: "3px 5px" };
+            // ── Every typed field in this editor is at the no-zoom size ──
+            // FS.lead is 16px, and mobile Safari zooms the page in on a focused
+            // field under it and does not zoom back out. This editor was the
+            // worst offender in the app: the tee rows were at 10px and the
+            // scorecard's par and stroke-index boxes at EIGHT, so tapping any
+            // of them left a director on a viewport they had to pinch out of —
+            // over a popup, which is the one place that is hardest to recover
+            // from. Condensed with padding, per the rule beside the FS scale in
+            // theme.js. The columns were measured after: nothing clips.
+            const ti = { background: BC.bg, border: `1px solid ${BC.amber}${ALPHA.hair}`, borderRadius: 4, color: BC.t1, fontSize: FS.lead, textAlign: "center", width: "100%", padding: "2px 1px", boxSizing: "border-box" };
+            const tiL = { ...ti, textAlign: "left", padding: "2px 4px" };
+            // The scorecard's own boxes: same floor, no chrome. They sit inside
+            // a tinted row that already reads as a field, so a border on each
+            // of nine would be nine borders in 320 pixels.
+            const holeInput = (over = {}) => ({
+              background: "transparent", border: "none", fontSize: FS.lead,
+              textAlign: "center", width: "100%", padding: "2px 0",
+              outline: "none", boxSizing: "border-box", fontFamily: FONT, ...over,
+            });
+            // The reference cells around them — the hole numbers, the yardages,
+            // the totals. Deliberately a rung DOWN from the inputs rather than
+            // level with them: nothing here is typed, so nothing here needs the
+            // 16px floor, and the size difference is what makes the two
+            // editable rows findable in a block of eight-point numbers.
+            const holeCell = { fontSize: FS.small };
+            // Wide enough for the row labels at the new size. The label column
+            // was 28px, which fit "Hole" at eight points and nothing at twelve.
+            const holeGrid = (count) => `38px repeat(${count}, 1fr) 34px`;
             // `portal` below is load-bearing, not decoration. This editor
             // opens from a row inside the course picker, and the picker IS
             // portaled to <body>. Rendered inline, the editor sits inside the
@@ -3525,9 +3551,9 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                           style={{ background: "transparent", border: "none", borderBottom: `1px solid ${BC.amber}${ALPHA.line}`, color: BC.t1, fontSize: FS.lead, fontWeight: 800, width: "100%", padding: "2px 0", outline: "none" }} />
                         <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
                           <input value={draft.city||""} onChange={e => setDraft(p => ({...p, city: e.target.value}))} placeholder="City"
-                            style={{ ...tiL, fontSize: FS.label, flex: 1 }} />
+                            style={{ ...tiL, flex: 1 }} />
                           <select value={draft.state||""} onChange={e => setDraft(p => ({...p, state: e.target.value}))}
-                            style={{ ...ti, fontSize: FS.label, width: 52 }}>
+                            style={{ ...ti, width: 58 }}>
                             <option value="">—</option>
                             {["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"].map(s => <option key={s} value={s}>{s}</option>)}
                           </select>
@@ -3559,20 +3585,50 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                         </div>
                       </div>
                       {tbs.length === 0 && <div style={{ fontSize: FS.label, color: BC.warn, marginBottom: 8, fontStyle: "italic" }}>⚠ No tees from API — add manually</div>}
-                      <div style={{ display: "grid", gridTemplateColumns: "18px 1fr 44px 38px 30px 46px 18px", gap: "3px 4px", fontSize: FS.micro, color: BC.t3, fontWeight: 600, marginBottom: 3 }}>
-                        <div/><div>Name</div><div style={{textAlign:"center"}}>Rating</div><div style={{textAlign:"center"}}>Slope</div><div style={{textAlign:"center"}}>Par</div><div style={{textAlign:"center"}}>Yards</div><div/>
-                      </div>
-                      {tbs.map((tb, i) => (
-                        <div key={i} style={{ display: "grid", gridTemplateColumns: "18px 1fr 44px 38px 30px 46px 18px", gap: "3px 4px", marginBottom: 4, alignItems: "center" }}>
-                          <TeeSwatch tee={tb} index={i} size={18} />
-                          <input value={tb.name} onChange={e => setDraft(p => { const t=[...p.tee_boxes]; t[i]={...t[i],name:e.target.value}; return {...p,tee_boxes:t}; })} style={{...tiL}} placeholder="Name" />
-                          <input value={tb.rating} onChange={e => setDraft(p => { const t=[...p.tee_boxes]; t[i]={...t[i],rating:e.target.value}; return {...p,tee_boxes:t}; })} style={ti} />
-                          <input value={tb.slope} onChange={e => setDraft(p => { const t=[...p.tee_boxes]; t[i]={...t[i],slope:e.target.value}; return {...p,tee_boxes:t}; })} style={ti} />
-                          <input value={tb.par} onChange={e => setDraft(p => { const t=[...p.tee_boxes]; t[i]={...t[i],par:e.target.value}; return {...p,tee_boxes:t}; })} style={ti} />
-                          <input value={tb.yardage} onChange={e => setDraft(p => { const t=[...p.tee_boxes]; t[i]={...t[i],yardage:e.target.value}; return {...p,tee_boxes:t}; })} style={ti} />
-                          <button onClick={() => setDraft(p => ({...p, tee_boxes: p.tee_boxes.filter((_,j) => j!==i)}))} style={{ background:"transparent", border:"none", color:BC.t3, fontSize:FS.small, cursor:"pointer", padding:0 }}>✕</button>
-                        </div>
-                      ))}
+                      {/* ── A tee is two rows, not one ───────────────────
+                          Five fields across a 390px phone worked at ten points
+                          and does not at sixteen: the four numbers each need
+                          every pixel they have (measured — rating, slope, par
+                          and yards all sit at exact capacity), which left the
+                          name 104px for a word like "Championship" that wants
+                          132. Something had to give and it was never going to
+                          be the numbers, because they are the ones that decide
+                          a course handicap.
+
+                          So the name takes its own line at full width, and the
+                          four numbers sit under it with their labels attached.
+                          Labels per field rather than a header row over the
+                          block, because a header only reads as a header while
+                          its columns line up, and these no longer do. */}
+                      {tbs.map((tb, i) => {
+                        const set = (k) => (e) => setDraft(p => { const t=[...p.tee_boxes]; t[i]={...t[i],[k]:e.target.value}; return {...p,tee_boxes:t}; });
+                        const numCell = (k, lbl) => (
+                          <div key={k} style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: FS.micro, color: BC.t3, fontWeight: 600, textAlign: "center", marginBottom: 1 }}>{lbl}</div>
+                            <input value={tb[k]} onChange={set(k)} inputMode="decimal" style={ti} />
+                          </div>
+                        );
+                        return (
+                          <div key={i} style={{
+                            marginBottom: 8, paddingBottom: 8,
+                            borderBottom: i < tbs.length - 1 ? `1px solid ${BC.bdr}` : "none",
+                          }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                              <TeeSwatch tee={tb} index={i} size={18} />
+                              <input value={tb.name} onChange={set("name")} style={{ ...tiL, flex: 1, minWidth: 0 }} placeholder="Name" />
+                              <button onClick={() => setDraft(p => ({...p, tee_boxes: p.tee_boxes.filter((_,j) => j!==i)}))}
+                                title="Remove this tee"
+                                style={{ background:"transparent", border:"none", color:BC.t3, fontSize:FS.small, cursor:"pointer", padding:"0 2px", flexShrink: 0 }}>✕</button>
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 4, paddingLeft: 24 }}>
+                              {numCell("rating", "Rating")}
+                              {numCell("slope", "Slope")}
+                              {numCell("par", "Par")}
+                              {numCell("yardage", "Yards")}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
 
                     {/* Scorecard */}
@@ -3586,29 +3642,29 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                         const hasYds = hy.some(y => y > 0);
                         return (
                           <div key={lbl} style={{ marginBottom: 6 }}>
-                            <div style={{ display: "grid", gridTemplateColumns: `28px repeat(${count}, 1fr) 30px`, gap: 1, fontSize: FS.micro }}>
+                            <div style={{ display: "grid", gridTemplateColumns: holeGrid(count), gap: 1, ...holeCell }}>
                               <div style={{ color: BC.t3, fontWeight: 600, padding: "2px 0" }}>Hole</div>
                               {Array.from({length:count},(_,i) => <div key={i} style={{ textAlign:"center", color:BC.t2, fontWeight:700, padding:"2px 0" }}>{start+i+1}</div>)}
-                              <div style={{ textAlign:"center", color:BC.t3, fontSize:FS.micro, padding:"2px 0" }}>Tot</div>
+                              <div style={{ textAlign:"center", color:BC.t3, padding:"2px 0" }}>Tot</div>
                             </div>
-                            <div style={{ display: "grid", gridTemplateColumns: `28px repeat(${count}, 1fr) 30px`, gap: 1, fontSize: FS.micro, background: BC.inp, borderRadius: 3, marginBottom: 1 }}>
+                            <div style={{ display: "grid", gridTemplateColumns: holeGrid(count), gap: 1, ...holeCell, background: BC.inp, borderRadius: 3, marginBottom: 1, alignItems: "center" }}>
                               <div style={{ color: BC.t3, fontWeight: 600, padding: "3px 2px" }}>Par</div>
                               {Array.from({length:count},(_,i) => (
-                                <input key={i} value={pars[i]??""} onChange={e => setDraft(p => { const hp=[...(p.hole_pars||Array(18).fill(4))]; hp[start+i]=e.target.value; return {...p,hole_pars:hp}; })}
-                                  style={{ background:"transparent", border:"none", color:BC.t1, fontSize:FS.micro, fontWeight:700, textAlign:"center", width:"100%", padding:"3px 0", outline:"none" }} />
+                                <input key={i} inputMode="numeric" value={pars[i]??""} onChange={e => setDraft(p => { const hp=[...(p.hole_pars||Array(18).fill(4))]; hp[start+i]=e.target.value; return {...p,hole_pars:hp}; })}
+                                  style={holeInput({ color: BC.t1, fontWeight: 700 })} />
                               ))}
-                              <div style={{ textAlign:"center", color:BC.amberInk, fontWeight:800, padding:"3px 0", fontSize:FS.micro }}>{pars.reduce((a,b)=>a+(parseInt(b)||0),0)}</div>
+                              <div style={{ textAlign:"center", color:BC.amberInk, fontWeight:800, padding:"3px 0" }}>{pars.reduce((a,b)=>a+(parseInt(b)||0),0)}</div>
                             </div>
-                            <div style={{ display: "grid", gridTemplateColumns: `28px repeat(${count}, 1fr) 30px`, gap: 1, fontSize: FS.micro, marginBottom: 1 }}>
+                            <div style={{ display: "grid", gridTemplateColumns: holeGrid(count), gap: 1, ...holeCell, marginBottom: 1, alignItems: "center" }}>
                               <div style={{ color: BC.t3, fontWeight: 600, padding: "2px 2px" }}>HCP</div>
                               {Array.from({length:count},(_,i) => (
-                                <input key={i} value={hcps[i]??""} onChange={e => setDraft(p => { const hh=[...(p.hole_handicaps||Array(18).fill(0))]; hh[start+i]=e.target.value; return {...p,hole_handicaps:hh}; })}
-                                  style={{ background:"transparent", border:"none", color:BC.t3, fontSize:FS.micro, textAlign:"center", width:"100%", padding:"2px 0", outline:"none" }} />
+                                <input key={i} inputMode="numeric" value={hcps[i]??""} onChange={e => setDraft(p => { const hh=[...(p.hole_handicaps||Array(18).fill(0))]; hh[start+i]=e.target.value; return {...p,hole_handicaps:hh}; })}
+                                  style={holeInput({ color: BC.t3 })} />
                               ))}
                               <div />
                             </div>
                             {hasYds && (
-                              <div style={{ display: "grid", gridTemplateColumns: `28px repeat(${count}, 1fr) 30px`, gap: 1, fontSize: FS.micro }}>
+                              <div style={{ display: "grid", gridTemplateColumns: holeGrid(count), gap: 1, ...holeCell }}>
                                 <div style={{ color: BC.t3, fontWeight: 600, padding: "2px 2px" }}>Yds</div>
                                 {hy.map((y, i) => <div key={i} style={{ textAlign:"center", color:BC.t3, padding:"2px 0" }}>{y||"–"}</div>)}
                                 <div style={{ textAlign:"center", color:BC.t3, padding:"2px 0" }}>{hy.reduce((a,b)=>a+(parseInt(b)||0),0)||""}</div>

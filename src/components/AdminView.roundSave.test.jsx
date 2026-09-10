@@ -43,9 +43,17 @@ afterEach(cleanup);
 
 const PARS = Array(18).fill(4);
 const courses = [{
-  id: "c1", name: "Treetops", par: 72, hole_pars: PARS,
+  // A stored course (bc_course_* is what marks one as existing) with a full
+  // card and the longest tee name anybody actually uses — the editor's widest
+  // case, which is the one the no-zoom sizes have to survive.
+  id: "bc_course_1", name: "Treetops", city: "Gaylord", state: "MI",
+  par: 72, hole_pars: PARS,
   hole_handicaps: Array.from({ length: 18 }, (_, i) => i + 1),
-  tee_boxes: [{ name: "White", slope: 113, rating: 72, par: 72 }],
+  tee_boxes: [
+    { name: "Championship", slope: 138, rating: 74.2, par: 72, yardage: 7104,
+      hole_yards: Array.from({ length: 18 }, () => 412) },
+    { name: "White", slope: 113, rating: 71.8, par: 72, yardage: 6412 },
+  ],
 }];
 const tPlayers = [
   { player_id: "p1", name: "Aaron J", team: "A", handicap_index: 8.1 },
@@ -56,7 +64,7 @@ const teams = { A: { id: "A", name: "Irons" }, B: { id: "B", name: "Drivers" } }
 // The round as App hands it over — enriched (see enrichedRounds), which is
 // what the form reads its stored values off.
 const round = {
-  id: "bc_demo__bc_round_1", round_number: 1, course_id: "c1", format: "fourball",
+  id: "bc_demo__bc_round_1", round_number: 1, course_id: "bc_course_1", format: "fourball",
   tee_time: "8:30", date: "2026-07-16", scoring_type: "match", hole_scoring: "format",
 };
 
@@ -226,20 +234,63 @@ describe("a pot box that reads 0", () => {
 // numeric boxes were the ones that never got it, so tapping the Nassau field
 // left the director on a viewport they had to pinch out of with the form's
 // labels off the side of the screen.
+const expectNoZoom = (root) => {
+  const fields = [...root.querySelectorAll("input, select")]
+    .filter(el => !["checkbox", "radio", "file"].includes(el.type));
+  expect(fields.length).toBeGreaterThan(0);
+  fields.forEach(el => {
+    const px = parseFloat(el.style.fontSize);
+    // Inline styles only — anything without one inherits the app's body size,
+    // which is already at or above the floor.
+    if (Number.isFinite(px)) {
+      expect(px, `${el.type} field near "${el.parentElement?.textContent?.slice(0, 30)}" at ${px}px would zoom iOS`).toBeGreaterThanOrEqual(16);
+    }
+  });
+  return fields.length;
+};
+
 describe("the round form's inputs", () => {
   it("keeps every typed field at the no-zoom size", () => {
     const { container } = roundsTab();
-    const fields = [...container.querySelectorAll("input, select")]
-      .filter(el => el.type !== "checkbox" && el.type !== "radio" && el.type !== "file");
-    expect(fields.length).toBeGreaterThan(0);
-    fields.forEach(el => {
-      const px = parseFloat(el.style.fontSize);
-      // Inline styles only — anything without one inherits the app's body
-      // size, which is already at or above the floor.
-      if (Number.isFinite(px)) {
-        expect(px, `${el.type} field near "${el.parentElement?.textContent?.slice(0, 30)}" at ${px}px would zoom iOS`).toBeGreaterThanOrEqual(16);
-      }
-    });
+    expectNoZoom(container);
+  });
+});
+
+// ── The course editor ───────────────────────────────────────────────
+// The worst offender in the app before this: the tee rows were at 10px and
+// the scorecard's par and stroke-index boxes at EIGHT. It opens as a POPUP,
+// which is the hardest place to recover a zoomed viewport from — there is no
+// page to scroll back to, just a card that no longer fits the screen.
+describe("the course editor", () => {
+  // Rounds tab → the COURSE field opens the picker → Edit opens the editor.
+  const openEditor = () => {
+    const { container } = roundsTab();
+    const course = [...container.querySelectorAll("button")]
+      .find(b => (b.textContent || "").includes("Treetops"));
+    expect(course, "course field not found on the round form").toBeTruthy();
+    fireEvent.click(course);
+    const edit = [...document.body.querySelectorAll("button")]
+      .find(b => (b.textContent || "").trim() === "Edit");
+    expect(edit, "Edit not found in the course picker").toBeTruthy();
+    fireEvent.click(edit);
+    expect(/Scorecard/i.test(document.body.textContent), "editor did not open").toBe(true);
+    return document.body;
+  };
+
+  it("keeps every typed field at the no-zoom size", () => {
+    // Both nines of the card, both tees, the name, the city and the state —
+    // if this count ever drops sharply, the editor stopped rendering rather
+    // than started passing.
+    expect(expectNoZoom(openEditor())).toBeGreaterThan(40);
+  });
+
+  it("still edits the scorecard it draws", () => {
+    const body = openEditor();
+    const parRow = [...body.querySelectorAll("div")]
+      .find(d => (d.textContent || "").startsWith("Par") && d.querySelector("input"));
+    const box = parRow.querySelectorAll("input")[0];
+    fireEvent.change(box, { target: { value: "5" } });
+    expect(box.value).toBe("5");
   });
 });
 
