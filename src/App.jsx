@@ -1071,14 +1071,15 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   const [showScorecard, setShowScorecard] = useState(false);
   // Closest-to-the-pin prompt — the 0-based index of the par 3 it is asking
   // about, or null. `promptedCtp` is the session guard that keeps it to ONE
-  // automatic appearance per round+hole (see maybePromptCtp); tapping the
-  // par-3 CTP chip re-opens it deliberately and ignores the guard.
+  // automatic appearance per round+hole per GROUP (see maybePromptCtp);
+  // tapping the par-3 CTP chip re-opens it deliberately and ignores the guard.
   const [ctpPrompt, setCtpPrompt] = useState(null);
   const promptedCtp = useRef({});
   // The money-hole heads-up. True while the popup is up; `promptedMoneyHole`
-  // is the session guard that keeps it to ONE appearance per round, the same
-  // shape the CTP guard has and for the same reason — a cleared and re-entered
-  // score on the hole before it must not announce the money hole twice.
+  // is the session guard that keeps it to ONE appearance per round per GROUP,
+  // the same shape the CTP guard has and for the same reason — a cleared and
+  // re-entered score on the hole before it must not announce the money hole
+  // twice, and the group after it must still be told.
   const [moneyHolePrompt, setMoneyHolePrompt] = useState(false);
   const promptedMoneyHole = useRef({});
   // The sign sheet. Only reachable from the promoted Full Scorecard button,
@@ -1495,15 +1496,22 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   //   • the write must be the incomplete→complete TRANSITION: the tapping
   //     player had nothing on the hole yet, and everyone else already did.
   //     Without this, every later correction on a finished par 3 re-prompts.
-  //   • once per round+hole per session, so a cleared-and-re-entered score
-  //     doesn't ask twice
+  //   • once per round+hole PER GROUP per session, so a cleared-and-re-entered
+  //     score doesn't ask twice. Per GROUP, because the session guard used to
+  //     be keyed on the round and hole alone and a device scores more than one
+  //     group: a director working down the draw was asked on the first match
+  //     they entered and never again, so every group after it walked off the
+  //     par 3 with the pin unasked. A pin holds one CLAIM PER GROUP (lib/ctp),
+  //     so the guard is keyed by the claim this card would write — the tee
+  //     group, or the card itself when the draw has not placed it, since an
+  //     unknown group must not collide with another match's.
   //   • never once the director has settled the hole (approved) — that tag
   //     is the result, not a running claim
   const maybePromptCtp = (pids, h, score, priorScore) => {
     if (score <= 0) return;
     if ((holePars[h] || 4) !== 3) return;
     if (priorScore > 0) return;
-    const key = `${match.round}_${h}`;
+    const key = `${myGroupKey || unit?.key || match.id}_${match.round}_${h}`;
     if (promptedCtp.current[key]) return;
     if (ctpFor(h)?.approved) return;
     if (!cardPids.every(p => pids.includes(p) || getScore(p, h) > 0)) return;
@@ -1547,16 +1555,22 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // whole draw. See lib/betting's moneyHoleRoundsIn.
   const moneyHoleRoundList = moneyHoleRoundsIn(rounds, buyIns?.moneyHoleRounds);
 
+  // The session guard is per GROUP, for the same reason the CTP one is: the
+  // announcement is made to the men walking to that tee, and a device that
+  // keeps two cards has two groups walking to it. Keyed on the round alone, a
+  // director entering the draw announced it to whichever group they typed
+  // first and to nobody after.
   const maybePromptMoneyHole = (pids, h, score, priorScore) => {
     if (score <= 0 || priorScore > 0) return;
     if (moneyHolePot <= 0) return;
     if (!moneyHolePlaysRound(match.round, buyIns?.moneyHoleRounds)) return;
     if (h !== moneyHoleIdx - 1) return;
-    if (promptedMoneyHole.current[match.round]) return;
+    const key = `${myGroupKey || unit?.key || match.id}_${match.round}`;
+    if (promptedMoneyHole.current[key]) return;
     if (!cardPids.some(p => moneyHoleFieldIds.has(p))) return;
     if (cardPids.some(p => getScore(p, moneyHoleIdx) > 0)) return;
     if (!cardPids.every(p => pids.includes(p) || getScore(p, h) > 0)) return;
-    promptedMoneyHole.current[match.round] = true;
+    promptedMoneyHole.current[key] = true;
     setMoneyHolePrompt(true);
   };
 
