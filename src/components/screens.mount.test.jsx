@@ -20,6 +20,7 @@
 // first.
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { useState } from "react";
 
 // The screens under test reach for Firestore at import time (the db handle)
 // and, in one case, subscribe on mount. Neither belongs in a mount test: this
@@ -75,6 +76,7 @@ import { SyncBanner } from "./SyncBanner";
 import DataView from "./DataView";
 import { MoveSignIn } from "./MoveSignIn";
 import { ScoreEntry } from "../App";
+import { HEADER_SLOT_ID } from "./AppHeader";
 
 afterEach(cleanup);
 
@@ -502,6 +504,94 @@ describe("Scoring", () => {
         rounds: [1], currentRound: 1, groups: { 1: [["x1", "x2"]] },
       })} />).container.textContent;
       expect(t).not.toContain("Card complete");
+    });
+  });
+
+  // ── The par-3 prompt, on the second group of the day ──────────────
+  // The closest-to-the-pin popup is raised by a SESSION guard, and that guard
+  // used to be keyed on the round and the hole alone. One device scores more
+  // than one group — a director works down the draw, and the tab keeps its
+  // state for as long as it is open — so the first card entered consumed the
+  // guard for that pin and every group after it walked off it unasked. The
+  // symptom is silence, which is the hardest kind to notice: nothing is drawn
+  // wrong, a question simply never gets asked.
+  //
+  // A pin holds one CLAIM PER GROUP (lib/ctp), so the guard is now keyed by
+  // the claim the card on screen would write.
+  describe("the closest-to-the-pin prompt, across groups", () => {
+    const four = [
+      { player_id: "a", name: "Aaron J", team: "A", handicap_index: 0, auth_uid: "u1" },
+      { player_id: "b", name: "Paul W", team: "B", handicap_index: 0 },
+      { player_id: "c", name: "Ben T", team: "A", handicap_index: 0 },
+      { player_id: "d", name: "Jim H", team: "B", handicap_index: 0 },
+    ];
+    // The first hole is the par 3, so it is also the hole the screen opens on.
+    const shortCourse = [{ ...courses[0], hole_pars: [3, ...Array(17).fill(4)] }];
+    const singles = { round_number: 1, course_id: "c1", date: "2026-07-16", tee_time: "8:30", format: "singles" };
+    const m1 = { id: "m1", round: 1, teamA: ["a"], teamB: ["b"], tournament_id: "bc_test" };
+    const m2 = { id: "m2", round: 1, teamA: ["c"], teamB: ["d"], tournament_id: "bc_test" };
+
+    // Each opponent's ball is already on the card, so ONE tap finishes the
+    // hole for that group — which is the incomplete→complete transition the
+    // prompt fires on.
+    const seeded = { b_1: { 0: 4 }, d_1: { 0: 4 } };
+
+    // In the app `holeData` is a prop fed by a Firestore subscription, so a
+    // tap is on screen before the next one is made. A fixed prop would leave
+    // the second group's card looking untouched and prove nothing.
+    function Harness(props) {
+      const [holeData, setHoleData] = useState(seeded);
+      return <ScoreEntry {...props} holeData={holeData}
+        onSaveHole={async (pid, round, h, score) => setHoleData(d => ({
+          ...d, [`${pid}_${round}`]: { ...(d[`${pid}_${round}`] || {}), [h]: score },
+        }))} />;
+    }
+
+    // The − nudge is the only control on the scoring screen carrying a minus
+    // sign, and one sits on every player card. Tapping it posts par-1, which
+    // is a real score. Picking a numbered button by its text would collide
+    // with the hole strip, where 1 through 18 are buttons too.
+    const nudges = (root) => [...root.querySelectorAll("button")].filter(b => b.textContent === "−");
+    // The popups portal to the body, so both the prompt and the crown's list
+    // are outside the render container.
+    const bodyButton = (text) => [...document.body.querySelectorAll("button")]
+      .find(b => b.textContent === text);
+    const prompting = () => document.body.textContent.includes("Closest to Pin");
+
+    afterEach(() => { document.getElementById(HEADER_SLOT_ID)?.remove(); });
+
+    it("asks the second group as well as the first", async () => {
+      // The crown portals into the app header's slot, and it is the only way
+      // to walk to another group — so the box has to be in the document.
+      const slot = document.createElement("div");
+      slot.id = HEADER_SLOT_ID;
+      document.body.appendChild(slot);
+
+      const { container } = render(<Harness {...scoring({
+        user: { ...four[0], isDirector: true },
+        matches: [m1, m2], tPlayers: four, courses: shortCourse, tRounds: [singles],
+        rounds: [1], currentRound: 1, groups: { 1: [["a", "b"], ["c", "d"]] },
+      })} />);
+
+      // Aaron's card is the first on screen (team A above the divider), and
+      // Paul's ball is already down: this tap finishes the group's par 3.
+      fireEvent.click(nudges(container)[0]);
+      await waitFor(() => expect(prompting()).toBe(true));
+
+      // Nobody was close, which is an answer — and it closes the popup.
+      fireEvent.click(bodyButton("No one in our group hit the green"));
+      await waitFor(() => expect(prompting()).toBe(false));
+
+      // Walk to the other group in the same round, the way a director does.
+      fireEvent.click([...document.body.querySelectorAll("button")]
+        .find(b => (b.getAttribute("aria-label") || "").includes("Score another group")));
+      fireEvent.click([...document.body.querySelectorAll("button")]
+        .find(b => b.textContent.includes("Ben T")));
+      await waitFor(() => expect(container.textContent).toContain("Ben T"));
+
+      // The same pin, a different group, and it has to be asked too.
+      fireEvent.click(nudges(container)[0]);
+      await waitFor(() => expect(prompting()).toBe(true));
     });
   });
 
