@@ -339,8 +339,7 @@ describe("a man's ball", () => {
     // cannot read — and on this format "you didn't count" is half the
     // conversation in the room. The tint and the rail say who made the number.
     const balls = (c) => [...c.querySelectorAll("div")]
-      .filter(d => d.style.borderRadius?.startsWith("clamp(5px")   // a phone chip
-        || d.style.borderLeft?.startsWith("clamp(3px"));           // a TV row
+      .filter(d => d.style.borderRightColor === "transparent" && d.style.justifyContent === "center");
     setWidth(TV);
     const tv = balls(screen({ A: 1, B: 1 }));
     expect(tv.length).toBe(6);
@@ -350,6 +349,55 @@ describe("a man's ball", () => {
     expect(phone.length).toBe(6);
     [...tv, ...phone].forEach(d =>
       expect(d.style.opacity === "" || Number(d.style.opacity) >= 1).toBe(true));
+  });
+
+  // ── One shape on both screens ────────────────────────────────────
+  // The phone used to get chips — four across and two down — on the reasoning
+  // that width is the scarce thing in a hand. The two sides are STACKED on a
+  // phone, so each one has the whole 393px and not half of it; what the grid
+  // actually did was cap every name at a quarter of the screen and set it in
+  // the smallest type in the app.
+  //
+  // A captain glancing down at his phone and then up at the wall should be
+  // looking at the same thing twice. He is describing that screen out loud.
+  it("gives the phone the television's list, not a grid of chips", () => {
+    setWidth(PHONE);
+    const c = screen({ A: 1, B: 1 });
+    // No grid anywhere: eight men, eight rows, on both screens.
+    expect([...c.querySelectorAll("div")].filter(d => d.style.display === "grid")).toEqual([]);
+    const rows = [...c.querySelectorAll("div")]
+      .filter(d => d.style.borderRightColor === "transparent" && d.style.justifyContent === "center");
+    expect(rows.length).toBe(6);
+    rows.forEach((row) => {
+      const [name, dots, score] = [...row.children];
+      expect(row.style.justifyContent).toBe("center");
+      expect(name.style.textAlign).toBe("left");
+      expect(score.style.textAlign).toBe("center");
+      expect(dots.style.width).toBeTruthy();
+      // Bigger than the 8px the chip's caption used, which is the point.
+      expect(parseFloat(name.style.fontSize)).toBeGreaterThanOrEqual(12);
+    });
+  });
+
+  // The team's name over its number, centred, on both screens. The phone ran
+  // them as one scoreboard line — name left, figure right — and that was
+  // bought to make room for the chip grid underneath.
+  it("stacks the side's name over its number on the phone too", () => {
+    // The side's own header: the team name and its number, and nothing else.
+    // (The shell and the stage are both columns whose text starts the same
+    // way, because the cup band names the team too.)
+    const header = (c) => [...c.querySelectorAll("div")]
+      .find(d => d.style.flexDirection === "column" && d.children.length === 2
+        && /^Mash Brothers(?:E|[−+]\d+)$/.test(d.textContent));
+    setWidth(PHONE);
+    const p = header(screen({ A: 1, B: 1 }));
+    expect(p).toBeTruthy();
+    expect(p.style.alignItems).toBe("center");
+    cleanup();
+    setWidth(TV);
+    const t = header(screen({ A: 1, B: 1 }));
+    expect(t.style.flexDirection).toBe(p.style.flexDirection);
+    expect(t.style.alignItems).toBe(p.style.alignItems);
   });
 });
 

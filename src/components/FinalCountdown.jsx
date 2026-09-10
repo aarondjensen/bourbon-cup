@@ -135,8 +135,6 @@ const T = {
   // takes room from.
   side:     "clamp(28px, min(5.5vw, 8.6vh), 120px)",
   sideName: `clamp(12px, ${vwh(1.7)}, 34px)`,
-  chip:     "clamp(13px, 2.3vw, 48px)",
-  chipName: "clamp(8px,  1.0vw, 21px)",
   // ── The television's roll-call ──
   // A name and a number on one line, eight lines a side. Bigger than the
   // chip's caption-sized name could ever be, which is the whole reason the
@@ -175,8 +173,6 @@ const T = {
   cardTotal: "clamp(27px, 3.0vw, 62px)",
 };
 
-const GRID_COLS = 4;
-
 const fmtPts = (n) => (n == null ? "—" : Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10));
 
 
@@ -194,18 +190,16 @@ const fmtPts = (n) => (n == null ? "—" : Number.isInteger(n) ? String(n) : Str
 //
 // The lane keeps its size with no strokes in it, so the numbers line up
 // whether or not the man got a shot.
-function StrokeDots({ strokes, row }) {
-  const d = row ? "clamp(4px, 0.45vw, 9px)" : "clamp(3px, 0.4vw, 8px)";
+function StrokeDots({ strokes, compact }) {
+  const d = compact ? 4 : "clamp(4px, 0.45vw, 9px)";
   return (
     <div style={{
       display: "flex", alignItems: "center", justifyContent: "center",
-      gap: "clamp(1px, 0.15vw, 3px)",
-      ...(row
-        // Four dots at their own size, plus the three gaps between them, is
-        // 28.8px at 1280 — and the lane was 28.2. A man on his fourth stroke
-        // pushed the last dot into the score beside him.
-        ? { width: "clamp(24px, 2.9vw, 60px)", flexShrink: 0 }
-        : { height: "clamp(6px, 0.8vw, 16px)" }),
+      gap: compact ? 2 : "clamp(1px, 0.15vw, 3px)",
+      // Four dots at their own size, plus the three gaps between them, is
+      // 28.8px at 1280 — and the lane was 28.2. A man on his fourth stroke
+      // pushed the last dot into the score beside him.
+      width: compact ? 22 : "clamp(24px, 2.9vw, 60px)", flexShrink: 0,
     }}>
       {Array.from({ length: Math.min(strokes || 0, 4) }, (_, i) => (
         <span key={i} style={{
@@ -231,69 +225,22 @@ function StrokeDots({ strokes, row }) {
 const ballRel = (net, par) =>
   net == null || !Number.isFinite(par) ? null : net - par;
 
-// ── One player's ball, on a phone ────────────────────────────────
-// A chip in the side's four-across grid. A ball that did not count is the same
-// card with the lights off; it is still named, because on this format "you
-// didn't count" is the joke of the evening.
-function BallChip({ strokes, name, net, par, tid, counted }) {
-  const col = teamColor(tid);
-  const rel = ballRel(net, par);
-  const under = rel != null && rel < 0;
-  return (
-    <div style={{
-      // A cell of the side's grid, not a flex sibling — see SideColumn. Every
-      // man keeps the same square every hole, so the room learns where to look
-      // for him instead of re-reading eight names each time.
-      minWidth: 0,
-      padding: "clamp(4px, 0.6vw, 12px) clamp(3px, 0.45vw, 10px)",
-      borderRadius: "clamp(5px, 0.7vw, 14px)",
-      background: counted ? `${col}${ALPHA.tint}` : "transparent",
-      border: `1px solid ${counted ? col : `${BC.bdr}${ALPHA.line}`}`,
-      // A ball that missed is NOT dimmed. It used to sit at 0.42, which from
-      // twelve feet is a number you cannot read — and on this format "you
-      // didn't count" is half the conversation in the room, so the man being
-      // laughed at deserves to have his score legible while it happens. The
-      // ring and the tint already say who made the number; they say it
-      // loudly enough on their own, and they say it without hiding anything.
-      textAlign: "center",
-      display: "flex", flexDirection: "column", alignItems: "center", gap: 1,
-    }}>
-      <div style={{
-        fontSize: T.chipName, fontWeight: 800, letterSpacing: 0.6,
-        color: counted ? col : BC.t3, whiteSpace: "nowrap",
-        overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
-      }}>{name}</div>
-
-      <StrokeDots strokes={strokes} />
-
-      {/* TO PAR, and net. The gross used to ride beside it in parentheses —
-          "3 (5)" — which is two numbers to read on a chip the size of a
-          postage stamp, in a room, on the one screen where a half-second of
-          squinting is a half-second of the ceremony. The dots above say the
-          number is a net one; the number he wrote down is on the card he
-          signed, and nobody in the room is auditing it. */}
-      <span style={{
-        fontSize: T.chip, fontWeight: 800, lineHeight: 1,
-        color: under ? BC.danger : counted ? BC.t1 : BC.t2,
-      }}>
-        {rel == null ? "·" : fmtRel(rel)}
-      </span>
-    </div>
-  );
-}
-
-// ── One player's ball, on a television ───────────────────────────
+// ── One player's ball ────────────────────────────────────────────
 // The same three facts on ONE LINE — name, strokes, the number — eight lines
-// down a column instead of four chips across and two down.
+// down a column, on the television and on a phone alike.
 //
-// A chip is the right shape for a phone, where the width is the scarce thing
-// and a name has to fit in a quarter of 393px. On a 16:9 television the scarce
-// thing is HEIGHT and width is what there is too much of, and a four-across
-// grid spends all of it: the name is capped by the column, which is capped by
-// the chip, which is a quarter of half the screen — so "Christopher M" was set
-// in the smallest type on the display while an inch of black sat either side
-// of it. A row gives the name room and the number a lane of its own, so the
-// eight of them line up as a list somebody can read down.
+// THE PHONE USED TO GET CHIPS: four across and two down, on the reasoning that
+// width is the scarce thing in a hand. It is not, and the argument had a hole
+// in it — the two sides are STACKED on a phone, so each one has the whole 393
+// px, not half of it. What that grid actually did was cap every name at a
+// quarter of the screen and set it in the smallest type in the app (8px), to
+// buy vertical space on the one layout that was already free to scroll.
+//
+// So both screens are the same list now, and the phone is the shape that
+// gained: a name at 13px instead of 8, no ellipsis, the same stroke dots, the
+// same to-par number, the same rail down the balls that counted. What a
+// captain sees in his hand is what the room sees on the wall, which is the
+// whole point of the thing — he is describing that screen out loud.
 //
 // ── A CENTRED TRIO OF LEFT-TO-RIGHT COLUMNS ──
 // The side's header is centred — the team's name over its big to-par number —
@@ -374,31 +321,32 @@ function useNameLane(longest) {
   return [px ? `${px}px` : `${nameLaneEm(longest.length)}em`, probe];
 }
 
-function BallRow({ strokes, name, net, par, tid, counted, nameLane }) {
+function BallRow({ strokes, name, net, par, tid, counted, nameLane, compact }) {
   const col = teamColor(tid);
   const rel = ballRel(net, par);
   const under = rel != null && rel < 0;
+  const rail = compact ? "3px" : RAIL;
   return (
     <div style={{
       display: "flex", alignItems: "center", justifyContent: "center",
-      gap: "clamp(4px, 0.6vw, 12px)",
-      padding: `${T.rowPad} clamp(6px, 0.8vw, 16px)`,
-      borderRadius: "clamp(4px, 0.5vw, 10px)",
+      gap: compact ? 6 : "clamp(4px, 0.6vw, 12px)",
+      padding: compact ? "2px 8px" : `${T.rowPad} clamp(6px, 0.8vw, 16px)`,
+      borderRadius: compact ? 5 : "clamp(4px, 0.5vw, 10px)",
       background: counted ? `${col}${ALPHA.tint}` : "transparent",
-      borderLeft: `${RAIL} solid ${counted ? col : `${BC.bdr}${ALPHA.line}`}`,
-      borderRight: `${RAIL} solid transparent`,
+      borderLeft: `${rail} solid ${counted ? col : `${BC.bdr}${ALPHA.line}`}`,
+      borderRight: `${rail} solid transparent`,
       minWidth: 0,
     }}>
       <div style={{
         width: nameLane, flexShrink: 1, minWidth: 0, textAlign: "left",
-        fontSize: T.rowName, fontWeight: 800, letterSpacing: 0.4,
+        fontSize: compact ? 13 : T.rowName, fontWeight: 800, letterSpacing: 0.4,
         color: counted ? BC.t1 : BC.t2,
         whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
       }}>{name}</div>
-      <StrokeDots strokes={strokes} row />
+      <StrokeDots strokes={strokes} compact={compact} />
       <div style={{
         width: "2.7em", flexShrink: 0, textAlign: "center", whiteSpace: "nowrap",
-        fontSize: T.rowScore, fontWeight: 800, lineHeight: 1,
+        fontSize: compact ? 15 : T.rowScore, fontWeight: 800, lineHeight: 1,
         color: under ? BC.danger : counted ? BC.t1 : BC.t2,
       }}>{rel == null ? "·" : fmtRel(rel)}</div>
     </div>
@@ -458,39 +406,39 @@ function SideColumn({ tid, teamName, score, balls, par, countN, compact, reveale
       // is four rows deep. Content height, top of the screen down.
       flex: compact ? "0 0 auto" : 1,
       minWidth: 0, display: "flex", flexDirection: "column",
-      alignItems: "center", gap: compact ? 6 : "clamp(2px, min(0.7vw, 1.1vh), 14px)",
+      alignItems: "center", gap: compact ? 4 : "clamp(2px, min(0.7vw, 1.1vh), 14px)",
       // The bottom is deliberately deeper than the top: the eighth name sits
       // against it, and the top edge has the team's own name above it doing
       // the same job.
       padding: compact
-        ? "8px 10px 12px"
+        ? "6px 10px 10px"
         : `clamp(3px, min(1vw, 1.6vh), 20px) clamp(4px, 0.8vw, 16px) clamp(8px, ${vwh(1.1)}, 26px)`,
       borderRadius: "clamp(8px, 1vw, 20px)",
       background: won && revealed ? `${col}${ALPHA.wash}` : "transparent",
       border: `2px solid ${won && revealed ? `${col}${ALPHA.line}` : "transparent"}`,
       transition: "background 400ms ease, border-color 400ms ease",
     }}>
-      {/* On a television the name sits above the number, both enormous. On a
-          PHONE they share one row: the name at the left, the figure at the
-          right, which is a scoreboard line rather than two stacked blocks —
-          and it is the difference between the grids fitting on the screen and
-          not. */}
+      {/* The name above the number, centred, on both screens. The phone used
+          to run them as one scoreboard line — name left, figure right — which
+          was bought to make room for the chip grid underneath. The grid is
+          gone and the line went with it: a captain glancing down at his phone
+          and then up at the wall should be looking at the same thing twice.
+
+          A COLUMN, and its children have to be CENTRED in it — `baseline` down
+          a column is a left edge, which is how the name and the number once
+          came to sit against the left of a 16:9 screen with the rows centred
+          underneath them. */}
       <div style={{
         display: "flex", width: "100%",
-        // A COLUMN on a television, and its children have to be centred in it
-        // — `baseline` down a column is a left edge, which is how the name and
-        // the number came to sit against the left of a 16:9 screen with the
-        // grid centred underneath them.
-        alignItems: compact ? "baseline" : "center",
-        justifyContent: compact ? "space-between" : "center",
-        flexDirection: compact ? "row" : "column", gap: compact ? 8 : 0,
+        alignItems: "center", justifyContent: "center", flexDirection: "column",
       }}>
         <div style={{
-          fontSize: compact ? 15 : T.sideName, fontWeight: 800, letterSpacing: 1, color: col,
-          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0,
+          maxWidth: "100%",
+          fontSize: compact ? 14 : T.sideName, fontWeight: 800, letterSpacing: 1, color: col,
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
         }}>{teamName}</div>
         <div style={{
-          fontSize: compact ? 30 : T.side, fontWeight: 800, lineHeight: 0.95, color: col,
+          fontSize: compact ? 27 : T.side, fontWeight: 800, lineHeight: 0.95, color: col,
           flexShrink: 0,
           opacity: revealed ? 1 : 0,
           transform: revealed ? "none" : "translateY(0.12em) scale(0.94)",
@@ -507,22 +455,13 @@ function SideColumn({ tid, teamName, score, balls, par, countN, compact, reveale
           padding: compact ? "6px 0" : 0,
         }}>{waitingOn || "WAITING"}</div>
       )}
-      {/* Chips across on a phone, a list down on a television — see the note
-          on BallRow for why the same eight men want two different shapes. The
-          ORDER is alphabetical either way, and it is the same order on hole 18
-          as on hole 1. */}
-      {revealed && (compact ? (
-        <div style={{
-          display: "grid", width: "100%",
-          gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))`,
-          gap: "clamp(2px, 0.35vw, 8px)",
-        }}>
-          {balls.map((b) => <BallChip key={b.pid} {...b} par={par} tid={tid} />)}
-        </div>
-      ) : (
+      {/* ONE list, on both screens. The ORDER is alphabetical, and it is the
+          same order on hole 18 as it was on hole 1 — a man keeps his line, and
+          the highlight moving is the only thing that changes. */}
+      {revealed && (
         <div style={{
           display: "flex", flexDirection: "column", width: "100%",
-          gap: T.rowGap, position: "relative",
+          gap: compact ? 2 : T.rowGap, position: "relative",
         }}>
           {/* The ruler. Out of flow and invisible, set in exactly the type the
               names beside it are set in, so what comes back is the width the
@@ -530,17 +469,17 @@ function SideColumn({ tid, teamName, score, balls, par, countN, compact, reveale
           <span ref={probeRef} aria-hidden="true" style={{
             position: "absolute", left: 0, top: 0, visibility: "hidden",
             pointerEvents: "none", whiteSpace: "nowrap",
-            fontSize: T.rowName, fontWeight: 800, letterSpacing: 0.4,
+            fontSize: compact ? 13 : T.rowName, fontWeight: 800, letterSpacing: 0.4,
           }}>{longest}</span>
           {/* One lane width for the whole side, off the longest name on it —
               which is what makes the trio hug its content and sit optically in
               the middle rather than floating in a share of the column. See the
               note on BallRow. */}
           {balls.map((b) => (
-            <BallRow key={b.pid} {...b} par={par} tid={tid} nameLane={nameLane} />
+            <BallRow key={b.pid} {...b} par={par} tid={tid} nameLane={nameLane} compact={compact} />
           ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }
