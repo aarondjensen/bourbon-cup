@@ -356,22 +356,74 @@ describe("a captain's phone", () => {
   // reading it out. It is his OWN side, which is never hidden from him.
   it("tells him what to say before he taps", () => {
     const t = screen({ A: 1, B: 1 }, captain).textContent;
-    expect(t).toContain("YOU’RE UP · HOLE 2");
-    expect(t).toContain("YOUR SIDE −1");     // birdie + par against two pars
+    expect(t).toContain("HOLE 2 · PAR 4");
+    expect(t).toContain("Mash Brothers −1");   // birdie + par against two pars
     expect(t).toContain("Net birdie — Paul W");
   });
 
   // A net bogey is never read out — see lib/countdownPrompt for why.
   it("never names the man who made the bogey", () => {
     const t = screen({ A: 1, B: 1 }, captain).textContent;
-    const band = t.slice(t.indexOf("YOU’RE UP"));
+    const band = t.slice(t.indexOf("HOLE 2 · PAR 4"));
     expect(band).not.toContain("Tim C");
+  });
+
+  it("names his side rather than calling it his", () => {
+    const t = screen({ A: 1, B: 1 }, captain).textContent;
+    expect(t).toContain("Mash Brothers −1");
+    expect(t).not.toContain("YOUR SIDE");
+    // And no "YOU'RE UP" — his phone put the card up, it is his side's
+    // colour, and the button under it has his team's name on it.
+    expect(t).not.toContain("UP · HOLE");
+  });
+
+  // ── The window the nuggets may look at ──────────────────────────
+  // His phone holds his side's ENTIRE round, uncut, because a team is never
+  // hidden from itself. The nuggets may only see the holes already turned
+  // over — otherwise "the first net eagle of the round" on hole 2 is quietly a
+  // promise that no eagle is coming, on an evening built on nobody knowing.
+  it("compiles a nugget only from holes the room has seen", () => {
+    // Every hole in this fixture is identical: a1 nets a birdie on all
+    // eighteen. On hole 2 that is his SECOND in a row and the card says so.
+    const t = screen({ A: 1, B: 1 }, captain).textContent;
+    expect(t).toContain("Paul W — two in a row");
+    cleanup();
+    // On hole 1 there is no history at all, so there is no run to call —
+    // even though holes 2 through 18 are sitting in the same object.
+    expect(screen({ A: 0, B: 0 }, captain).textContent).not.toContain("in a row");
+  });
+
+  it("calls the first net eagle off the revealed holes alone", () => {
+    // a1 is a gross 3 on every hole; give him a 2 on hole 3 and nothing else
+    // changes. Announcing hole 2, the room has seen one hole and there is no
+    // eagle in it — so hole 3's eagle must not be reachable, in either
+    // direction: it is neither called now nor able to cancel a later call.
+    const withEagle = {};
+    Object.keys(holeData).forEach((k) => { withEagle[k] = { ...holeData[k] }; });
+    withEagle.a1_4[2] = 2;
+    const r = computeMatchResult(match, withEagle, courses, tRounds, tPlayers, "team_best_ball", {}, undefined, {}, {});
+    const read = (pid, h) => withEagle[`${pid}_4`]?.[h] || 0;
+    const at = (reveal) => render(
+      <FinalCountdown
+        match={match} result={r} getScore={read} ownResult={r} ownGetScore={read}
+        holePars={PARS} holeHcps={SI} tPlayers={tPlayers}
+        teams={{ A: { id: "A", name: "Mash Brothers" }, B: { id: "B", name: "Shot Callers" } }}
+        courseName="Treetops" formatLabel="Team Best Ball"
+        reveal={reveal} totals={{ A: 3, B: 1 }} toWin={12.5} clincher={null}
+        isDirector={false} captainSide="A" onAdvance={() => {}} onClose={() => {}}
+      />,
+    ).container.textContent;
+
+    expect(at({ A: 1, B: 1 })).not.toContain("First net eagle");
+    cleanup();
+    // Announcing hole 3, which IS the eagle — now it is his to call.
+    expect(at({ A: 2, B: 2 })).toContain("First net eagle of the round — Paul W");
   });
 
   it("says nothing while the other captain is talking", () => {
     // His side is a hole up: it is not his go, and a prompt here would be him
     // reading ahead over the top of the man who is speaking.
-    expect(screen({ A: 2, B: 1 }, captain).textContent).not.toContain("YOU’RE UP");
+    expect(screen({ A: 2, B: 1 }, captain).textContent).not.toContain("Mash Brothers −");
   });
 
   it("leaves a spectator with no controls at all", () => {
