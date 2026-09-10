@@ -22,7 +22,7 @@ import {
   computeMatchResult,
   getRoundCH, lockForRound,
   totalUnit, segmentState, segmentOptsFor, holeFormatFor,
-  verdictText, segmentLeader, nassauSegmentVisibility, sharedBallScore,
+  verdictText, statusText, segmentLeader, nassauSegmentVisibility, sharedBallScore,
 } from "./scoring";
 import { holeFill } from "./lib/holeFill";
 import {
@@ -1785,6 +1785,37 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
         <div style={{ fontSize: FS.body, lineHeight: 1 }}>&nbsp;</div>
       </>
     );
+
+    // ── The hole it was won on says so ──
+    // The running number under every other hole is a state — where the match
+    // stood walking off that green. The closing hole's is a RESULT, and the
+    // two are not the same number: three up with one to play is a match that
+    // is over, and printing "▼3" under it left the strip's own account of the
+    // finish disagreeing with the OVERALL chip below it and with the card in
+    // the sign-off sheet, both of which read 3&1. The Full Scorecard's MATCH
+    // row has always marked this hole (see FullScorecard's clinchHole); this
+    // is the same mark on the screen a man is actually standing on.
+    //
+    // A tinted chip in the winning team's color rather than a bordered box,
+    // and at FS.small on the line FS.body already occupied: the cell is 20px
+    // tall at the tightest density, so anything that adds height would squeeze
+    // the hole bar above it. Team-colored, like every other stated result in
+    // this app — the ▲/▼ from the reader's own side is for the running number,
+    // and there is no running left here.
+    if (decided && i === decided.at) {
+      const col = teamColor(decided.margin > 0 ? "A" : "B");
+      return shell(
+        <>
+          <div style={{ height: barH, borderRadius: 3, boxSizing: "border-box", ...holeFill(hr, scoredFormat) }} />
+          <div style={{ display: "flex", justifyContent: "center", fontSize: FS.body, lineHeight: 1 }}>
+            <span style={{
+              fontSize: FS.small, fontWeight: 800, lineHeight: `${FS.body}px`, whiteSpace: "nowrap",
+              padding: "0 4px", borderRadius: 4, color: col, background: `${col}${ALPHA.tint}`,
+            }}>{statusText(result.overall)}</span>
+          </div>
+        </>
+      );
+    }
 
     const aLead = segmentState(result.holes.slice(0, i + 1), segOpts).margin;
     const fromUserView = userTeam === "A" ? aLead : -aLead;

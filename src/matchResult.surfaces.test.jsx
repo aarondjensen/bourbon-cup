@@ -139,3 +139,41 @@ describe("one match, four screens, the same story", () => {
     });
   }
 });
+
+// ── The fifth voice on the Scoring tab ──
+// The per-hole status strip under the hole numbers is a running account —
+// where the match stood walking off each green — and on the hole the match
+// ENDED it was still speaking that dialect: "▲9" under a match every other
+// surface on the same screen, the OVERALL chip included, calls 9&7. Three up
+// with one to play is not a state, it is a finish, and the strip was the one
+// place on the phone that would not say so. The Full Scorecard's MATCH row
+// has always marked the clinch hole; this pins that the strip does too.
+describe("the strip's closing hole states the result, not the margin", () => {
+  const scoringText=(n)=>{
+    const hd=cardTo(n);
+    const txt=render(<ScoreEntry {...scoringProps(hd,[baseRound],{})} />).container.textContent;
+    cleanup();
+    return txt;
+  };
+
+  it("marks the hole the match was won on", () => {
+    // A clinches on the 11th, 9 up with 7 to play, and the group scores on.
+    const txt=scoringText(14);
+    // Twice: once in the strip's eleventh cell, once in the OVERALL chip.
+    expect(txt.match(/9&7/g)||[]).toHaveLength(2);
+    // And never as the running margin it stood at — the number the strip
+    // used to print there, one hole before it stopped counting.
+    expect(txt).not.toContain("▲9");
+  });
+
+  it("leaves a live match's running numbers alone", () => {
+    // Eight holes in and nothing decided: every cell is still a state, and
+    // the strip must go on saying so.
+    const txt=scoringText(8);
+    // The strip alone — the FRONT chip below it has clinched its own nine
+    // 5&4 by the eighth, which is a segment result and not this strip's job.
+    const strip=txt.slice(0,txt.indexOf("FRONT"));
+    expect(strip).toContain("▲8");
+    expect(strip).not.toContain("&");
+  });
+});
