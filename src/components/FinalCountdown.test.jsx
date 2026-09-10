@@ -289,6 +289,37 @@ describe("the cup band", () => {
   });
 });
 
+// ── The cup, behind all of it ───────────────────────────────────────
+// The same trophy silhouette the sign-in screen carries. Nothing else on this
+// screen names the Bourbon Cup — two team names, a hole number and eighteen
+// cells — and a television somebody walks past should say what it is.
+describe("the trophy", () => {
+  const trophy = (c) => c.querySelector("img");
+
+  it("is behind the screen, not in front of it", () => {
+    const img = trophy(screen({ A: 1, B: 1 }));
+    expect(img).toBeTruthy();
+    expect(img.getAttribute("src")).toContain("trophy");
+    // A positioned element paints above its static siblings whatever the
+    // source order, so the layout lives in a `relative` layer of its own and
+    // the image sits under it. Without that the watermark covers the names.
+    expect(img.style.zIndex).toBe("0");
+    expect(img.style.pointerEvents).toBe("none");
+    expect(img.parentElement.querySelector("div").style.zIndex).toBe("1");
+  });
+
+  it("fades once there are names to read over it", () => {
+    // The sign-in screen carries it at full strength because there is nothing
+    // else on it. Here there are eight names a side, and a watermark that
+    // competes with a name is one that made a name harder to read.
+    const opening = Number(trophy(screen({ A: 0, B: 0 })).style.opacity);
+    cleanup();
+    const playing = Number(trophy(screen({ A: 1, B: 1 })).style.opacity);
+    expect(opening).toBeGreaterThan(playing);
+    expect(playing).toBeGreaterThan(0);
+  });
+});
+
 // ── Stroke dots ─────────────────────────────────────────────────────
 // The big number on a chip is a NET score, and the dots are the only thing
 // that says so. A room looking at a net 2 wants to know whether that was an
@@ -427,7 +458,10 @@ describe("a captain's phone", () => {
     // The stroke index too — it is why a man is getting a shot on this hole
     // and not the last one, which is what the room asks the moment a net eagle
     // is announced.
-    expect(t).toContain("HOLE 2 · PAR 4 · SI 2");
+    // The hole is the heading and par/SI the detail under it — two lines, not
+    // one grey caption with the number he is announcing buried in it.
+    expect(t).toContain("HOLE 2");
+    expect(t).toContain("PAR 4 · SI 2");
     expect(t).toContain("Mash Brothers −1");   // birdie + par against two pars
     expect(t).toContain("Net birdie — Paul W");
   });
@@ -435,7 +469,7 @@ describe("a captain's phone", () => {
   // A net bogey is never read out — see lib/countdownPrompt for why.
   it("never names the man who made the bogey", () => {
     const t = screen({ A: 1, B: 1 }, captain).textContent;
-    const band = t.slice(t.indexOf("HOLE 2 · PAR 4 · SI 2"));
+    const band = t.slice(t.indexOf("PAR 4 · SI 2"));
     expect(band).not.toContain("Tim C");
   });
 
@@ -459,7 +493,7 @@ describe("a captain's phone", () => {
   // down, every hole, eighteen times, in front of everybody.
   it("puts the hole, then the men, then the number", () => {
     const t = screen({ A: 1, B: 1 }, captain).textContent;
-    const hole = t.indexOf("HOLE 2 · PAR 4 · SI 2");
+    const hole = t.indexOf("PAR 4 · SI 2");
     const names = t.indexOf("Net birdie — Paul W");
     const number = t.indexOf("Mash Brothers −1");
     expect(hole).toBeGreaterThan(-1);
@@ -540,7 +574,7 @@ describe("a captain's phone", () => {
     const t = screen({ A: 1, B: 1 }, captain).textContent;
     expect(t).not.toContain("Net birdie — Paul W");
     expect(t).not.toContain("in a row");
-    expect(t).not.toContain("HOLE 2 · PAR 4 · SI 2");
+    expect(t).not.toContain("PAR 4 · SI 2");
   });
 
   it("still gives him his reveal button on a big screen", () => {

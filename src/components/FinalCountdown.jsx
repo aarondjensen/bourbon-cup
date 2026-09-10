@@ -78,6 +78,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { BC, FONT, ALPHA, teamColor } from "../theme";
+import { TROPHY_SILHOUETTE } from "../constants";
 import { playerLookup } from "../lib/players";
 import { HOLE_COUNT, nextHoleForSide, sidesPending } from "../lib/reveal";
 import { holePrompt, relToPar, fmtRel } from "../lib/countdownPrompt";
@@ -140,6 +141,7 @@ const T = {
   // those minimums exist to keep a TELEVISION layout from collapsing in a
   // narrow browser window. 10px, 13px and 16px is a caption, a body line and a
   // subhead — for a card whose whole job is to be glanced at and read aloud.
+  cardHole:  "clamp(22px, 2.3vw, 46px)",
   cardLabel: "clamp(13px, 1.4vw, 28px)",
   cardLine:  "clamp(17px, 1.8vw, 36px)",
   cardTotal: "clamp(27px, 3.0vw, 62px)",
@@ -653,16 +655,49 @@ export function FinalCountdown({
     return Math.min(100, (v / scale) * 100);
   };
 
+  // ── The cup itself, behind all of it ─────────────────────────────
+  // The same trophy silhouette the sign-in screen puts behind the title, at
+  // the same full-bleed size, for the same reason: it is the thing in the room
+  // and this is the hour it gets handed over. Nothing on this screen names the
+  // Bourbon Cup otherwise — two team names, a hole number and eighteen cells —
+  // and a television somebody walks past should say what it is looking at.
+  //
+  // IT FADES WHEN THE HOLES START. The sign-in screen carries it at 0.28
+  // because there is nothing else on that screen; here there are eight names a
+  // side over it, and a watermark that competes with a name is a watermark
+  // that made a name harder to read from the back of a room. So it opens at
+  // the sign-in screen's own weight on the title card, where the screen is
+  // empty and the trophy IS the picture, and drops to a shadow once the first
+  // hole is up.
+  //
+  // Behind everything by construction: the image is the only positioned child
+  // of the backdrop, and the whole layout moved into a `relative` layer above
+  // it. Painting order alone would have put the image on top — a positioned
+  // element paints above static siblings whatever the source order.
   const shell = (children) => (
     <div
       onClick={advance}
       style={{
         position: "fixed", inset: 0, zIndex: 4000, background: BC.bg, color: BC.t1,
-        fontFamily: FONT, display: "flex", flexDirection: "column",
-        padding: "clamp(8px, 1.2vw, 26px)", gap: "clamp(6px, 0.9vw, 18px)",
-        cursor: canDrive ? "pointer" : "default", userSelect: "none", overflow: "hidden",
+        fontFamily: FONT, cursor: canDrive ? "pointer" : "default",
+        userSelect: "none", overflow: "hidden",
       }}>
-      {children}
+      <img src={TROPHY_SILHOUETTE} alt="" style={{
+        position: "absolute", top: "50%", left: "50%",
+        transform: "translate(-50%, -50%)",
+        width: "100%", height: "100%", objectFit: "contain",
+        opacity: hole <= 0 ? 0.34 : 0.1,
+        filter: "brightness(1.4) contrast(1.2)",
+        transition: "opacity 900ms ease",
+        pointerEvents: "none", userSelect: "none", zIndex: 0,
+      }} />
+      <div style={{
+        position: "relative", zIndex: 1, height: "100%", boxSizing: "border-box",
+        display: "flex", flexDirection: "column",
+        padding: "clamp(8px, 1.2vw, 26px)", gap: "clamp(6px, 0.9vw, 18px)",
+      }}>
+        {children}
+      </div>
     </div>
   );
 
@@ -866,14 +901,25 @@ export function FinalCountdown({
           and it carries a button with his team's name on it — he knows. It
           was a line of the app talking to the man holding the phone on a
           card whose whole job is to be read out to somebody else. */}
-      <div style={{ fontSize: T.cardLabel, fontWeight: 800, letterSpacing: "0.16em", color: BC.t3 }}>
+      {/* ── The hole, then what is on it ──
+          Two lines, not one. It ran as "HOLE 8 · PAR 5 · SI 9" in one grey
+          caption, which puts the number he is announcing — the first thing out
+          of his mouth, and the one thing on the card he has to be sure of at a
+          glance — in the same weight and the same colour as the two facts
+          about it. WHICH HOLE is the heading; par and stroke index are the
+          detail under it. */}
+      <div style={{ fontSize: T.cardHole, fontWeight: 800, letterSpacing: "0.08em", color: BC.t1, lineHeight: 1.05 }}>
         HOLE {myPrompt.hole}
-        {myPrompt.par ? ` · PAR ${myPrompt.par}` : ""}
-        {/* The stroke index too. It is why a man is getting a shot on this
-            hole and not the last one, which is the question the room asks the
-            moment a net eagle is announced — and the card is the only thing in
-            his hand that can answer it. */}
-        {myPrompt.si ? ` · SI ${myPrompt.si}` : ""}
+      </div>
+      <div style={{ fontSize: T.cardLabel, fontWeight: 800, letterSpacing: "0.16em", color: BC.t3, marginTop: "0.15em" }}>
+        {[
+          myPrompt.par ? `PAR ${myPrompt.par}` : null,
+          // The stroke index too. It is why a man is getting a shot on this
+          // hole and not the last one, which is the question the room asks the
+          // moment a net eagle is announced — and the card is the only thing
+          // in his hand that can answer it.
+          myPrompt.si ? `SI ${myPrompt.si}` : null,
+        ].filter(Boolean).join(" · ")}
       </div>
 
       {/* The contributions, then the fun of them. Still told apart by colour —
