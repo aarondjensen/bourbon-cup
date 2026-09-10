@@ -181,24 +181,54 @@ describe("the side's grid", () => {
   });
 });
 
-// ── What a chip says, and what it stopped saying ────────────────────
-describe("the chip", () => {
+// ── What one man's ball says, and what it stopped saying ────────────
+// Chips across on a phone, a list down on a television — two shapes, one set
+// of facts. Every number on either of them is TO PAR, all the way down from
+// the side's total, so the six that made it visibly add up to it.
+describe("a man's ball", () => {
   it("shows the net score and not the gross", () => {
-    // a1 is a gross 3 with no strokes, a3 a gross 5. Both are on screen as
-    // net. What must NOT be there is the "(5)" that used to ride beside them:
-    // two numbers on a postage stamp, in a room.
+    // a1 is a gross 3 with no strokes, a3 a gross 5. What must NOT be there is
+    // the "(5)" that used to ride beside them: two numbers on a postage stamp,
+    // in a room.
     const t = screen({ A: 1, B: 1 }).textContent;
     expect(t).not.toMatch(/\(\d\)/);
   });
 
-  it("leaves a ball that missed the cut legible", () => {
+  // The side reads −1 and the balls under it used to read 3, 4, 5 — two
+  // scales in one column, and the room doing the conversion in its head to
+  // see where the number came from.
+  it("is against par, not a raw net, on either screen", () => {
+    const scores = (c) => [...c.querySelectorAll("div,span")]
+      .filter(d => !d.children.length && /^[−+]\d$|^E$/.test(d.textContent))
+      .map(d => d.textContent);
+    // Best 2 of 3 on a par 4: a birdie, a par and a bogey a side.
+    setWidth(TV);
+    const tv = screen({ A: 1, B: 1 });
+    expect(scores(tv)).toEqual(expect.arrayContaining(["−1", "E", "+1"]));
+    // And the raw nets are gone with it.
+    expect([...tv.querySelectorAll("div,span")]
+      .filter(d => !d.children.length && d.textContent === "5").length).toBe(0);
+    cleanup();
+    setWidth(PHONE);
+    expect(scores(screen({ A: 1, B: 1 }))).toEqual(expect.arrayContaining(["−1", "E", "+1"]));
+  });
+
+  it("leaves a ball that missed the cut legible, on either screen", () => {
     // It used to sit at opacity 0.42, which from twelve feet is a number you
     // cannot read — and on this format "you didn't count" is half the
-    // conversation in the room. The ring and the tint say who made the number.
-    const c = screen({ A: 1, B: 1 });
-    const chips = [...c.querySelectorAll("div")].filter(d => d.style.borderRadius?.startsWith("clamp(5px"));
-    expect(chips.length).toBeGreaterThan(0);
-    chips.forEach(d => expect(d.style.opacity === "" || Number(d.style.opacity) >= 1).toBe(true));
+    // conversation in the room. The tint and the rail say who made the number.
+    const balls = (c) => [...c.querySelectorAll("div")]
+      .filter(d => d.style.borderRadius?.startsWith("clamp(5px")   // a phone chip
+        || d.style.borderLeft?.startsWith("clamp(3px"));           // a TV row
+    setWidth(TV);
+    const tv = balls(screen({ A: 1, B: 1 }));
+    expect(tv.length).toBe(6);
+    cleanup();
+    setWidth(PHONE);
+    const phone = balls(screen({ A: 1, B: 1 }));
+    expect(phone.length).toBe(6);
+    [...tv, ...phone].forEach(d =>
+      expect(d.style.opacity === "" || Number(d.style.opacity) >= 1).toBe(true));
   });
 });
 
@@ -220,6 +250,42 @@ describe("the side's number", () => {
   it("says nothing for a side whose captain has not spoken", () => {
     const t = screen({ A: 1, B: 0 }).textContent;
     expect(t).toContain("SHOT CALLERS TO TELL IT");
+  });
+});
+
+// ── The cup, across the top ─────────────────────────────────────────
+// The central and most important thing on the screen: eighteen holes are
+// turned over underneath it and not one of them matters except for what it
+// does to these two numbers.
+describe("the cup band", () => {
+  const ticks = (c) => [...c.querySelectorAll("div")]
+    .filter(d => d.style.position === "absolute" && d.style.width === "3px");
+
+  it("names what the number in the middle is", () => {
+    // It read "TO WIN" in the same grey as everything else — a label on a
+    // number nobody could place, from across a room.
+    expect(screen({ A: 1, B: 1 }).textContent).toContain("TO WIN THE CUP");
+    expect(screen({ A: 1, B: 1 }).textContent).toContain("12.5");
+  });
+
+  it("shortens it on a phone rather than crushing the totals", () => {
+    setWidth(PHONE);
+    const t = screen({ A: 1, B: 1 }).textContent;
+    expect(t).toContain("TO WIN");
+    expect(t).not.toContain("TO WIN THE CUP");
+  });
+
+  // Each side fills from its own end, so the mark it has to REACH sits at
+  // `toWin` measured from that same end. On a full card those two land a
+  // shade either side of the middle, which is the truth of the format: both
+  // marks cannot be reached. The plain halfway line that used to be there
+  // said something weaker and looked the same.
+  it("marks the clinch from each end, not the halfway point", () => {
+    const [a, b] = ticks(screen({ A: 1, B: 1 }));
+    // toWin 12.5 against 24 points on the table.
+    expect(a.style.left).toBe(`${(12.5 / 24) * 100}%`);
+    expect(b.style.right).toBe(`${(12.5 / 24) * 100}%`);
+    expect(a.style.left).not.toBe("50%");
   });
 });
 

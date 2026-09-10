@@ -89,7 +89,14 @@ import { holePrompt, relToPar, fmtRel } from "../lib/countdownPrompt";
 // digit through the ceiling).
 const T = {
   cupName:  "clamp(11px, 1.5vw, 30px)",
-  cupPts:   "clamp(26px, 3.6vw, 76px)",
+  // The cup total is the biggest thing on the screen after the hole itself,
+  // because the band across the top is what the room is actually tracking —
+  // every hole is only interesting for what it does to these two numbers.
+  cupPts:   "clamp(26px, 4.2vw, 92px)",
+  // What it takes to win it, in gold, between them. Deliberately smaller than
+  // the totals it sits between: it is the line they are running at, not a
+  // third score.
+  cupGoal:  "clamp(17px, 2.3vw, 48px)",
   hole:     "clamp(20px, 3.0vw, 62px)",
   terms:    "clamp(9px,  1.2vw, 24px)",
   // The one size that has to know about HEIGHT as well as width. A 16:9
@@ -97,10 +104,26 @@ const T = {
   // and nothing like the same room underneath — sized on vw alone, the
   // number that fits a TV pushed the balls that made it off the bottom of a
   // laptop window.
-  side:     "clamp(30px, min(9vw, 17vh), 190px)",
+  side:     "clamp(28px, min(5.5vw, 9.7vh), 120px)",
   sideName: "clamp(12px, 1.7vw, 34px)",
   chip:     "clamp(13px, 2.3vw, 48px)",
   chipName: "clamp(8px,  1.0vw, 21px)",
+  // ── The television's roll-call ──
+  // A name and a number on one line, eight lines a side. Bigger than the
+  // chip's caption-sized name could ever be, which is the whole reason the
+  // television stopped using chips.
+  //
+  // Both rungs are capped on HEIGHT as well as width, and so is the row's
+  // padding and the side's number above it — because eight rows is a stack
+  // that has to FIT, and the thing it has to fit inside is the gap between
+  // the hole header and the strip. Sized on vw alone the eight of them ran
+  // 40px past the bottom of a 16:9 window, and the block is centred in its
+  // box, so half of that overflow came out of the top: the last man's row sat
+  // under the hole ticker and the terms line ran through the first man's.
+  rowName:  "clamp(11px, min(1.45vw, 2.4vh), 30px)",
+  rowScore: "clamp(13px, min(1.75vw, 2.8vh), 36px)",
+  rowPad:   "clamp(1px,  min(0.42vw, 0.7vh),  9px)",
+  rowGap:   "clamp(2px,  min(0.3vw,  0.55vh), 7px)",
   cup:      "clamp(20px, 3.4vw, 72px)",
   strip:    "clamp(7px,  0.95vw, 20px)",
   btn:      "clamp(11px, 1.5vw, 30px)",
@@ -127,20 +150,62 @@ const GRID_COLS = 4;
 const fmtPts = (n) => (n == null ? "—" : Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10));
 
 
-// ── One player's ball ────────────────────────────────────────────
-// Gross above, net below, a dot per handicap stroke — the same three facts
-// the scorecard prints, at the size of a room. A ball that did not count is
-// the same card with the lights off; it is still named, because on this
-// format "you didn't count" is the joke of the evening.
+// ── The strokes he got, as DOTS ──────────────────────────────────
+// One dot per handicap stroke, in a lane of its own, which is where a
+// scorecard puts them and where this app puts them everywhere else (see
+// ScoreCell in components/FullScorecard). They used to be crammed inside the
+// gross parenthetical as "(5•)", which is not a stroke dot — it is a bullet in
+// a bracket, at the size of the smallest type on the screen, from twelve feet
+// away.
 //
-//  UNDER PAR IS RED, which is the oldest convention on a scorecard and the
-//  one thing in this app where red does not mean trouble: a printed card puts
-//  the under-par numbers in red ink and everything else in black, and a room
-//  full of golfers reads it without being told. It is on the NET score,
-//  because net is what the format counts.
+// They are the whole reason the number beside them is not the number he wrote
+// down. A room looking at a man two under wants to know whether that was an
+// eagle or two shots, and the dots are the answer.
+//
+// The lane keeps its size with no strokes in it, so the numbers line up
+// whether or not the man got a shot.
+function StrokeDots({ strokes, row }) {
+  const d = row ? "clamp(4px, 0.45vw, 9px)" : "clamp(3px, 0.4vw, 8px)";
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "center",
+      gap: "clamp(1px, 0.15vw, 3px)",
+      ...(row
+        ? { width: "clamp(18px, 2.2vw, 46px)", flexShrink: 0 }
+        : { height: "clamp(6px, 0.8vw, 16px)" }),
+    }}>
+      {Array.from({ length: Math.min(strokes || 0, 4) }, (_, i) => (
+        <span key={i} style={{
+          width: d, height: d, borderRadius: "50%", background: BC.hcpBlue, display: "block",
+        }} />
+      ))}
+    </div>
+  );
+}
+
+// ── A score, against par ─────────────────────────────────────────
+// Every number on this screen is TO PAR, from the side's total down to one
+// man's ball. It used to be the man's raw net — 3, 4, 5 — beneath a side
+// total that was already relative, so the room was reading two different
+// scales in one column and doing the conversion in its head to see where the
+// −4 came from. Now the six numbers that made it visibly add up to it.
+//
+// UNDER PAR IS RED, the oldest convention on a scorecard and the one thing in
+// this app where red does not mean trouble: a printed card puts the under-par
+// numbers in red ink and everything else in black, and a room full of golfers
+// reads it without being told. On any ball, counted or not — that is what the
+// red ink means, the score and not its standing.
+const ballRel = (net, par) =>
+  net == null || !Number.isFinite(par) ? null : net - par;
+
+// ── One player's ball, on a phone ────────────────────────────────
+// A chip in the side's four-across grid. A ball that did not count is the same
+// card with the lights off; it is still named, because on this format "you
+// didn't count" is the joke of the evening.
 function BallChip({ strokes, name, net, par, tid, counted }) {
   const col = teamColor(tid);
-  const under = net != null && Number.isFinite(par) && net < par;
+  const rel = ballRel(net, par);
+  const under = rel != null && rel < 0;
   return (
     <div style={{
       // A cell of the side's grid, not a flex sibling — see SideColumn. Every
@@ -166,50 +231,67 @@ function BallChip({ strokes, name, net, par, tid, counted }) {
         overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
       }}>{name}</div>
 
-      {/* ── The strokes he got, as DOTS ──
-          One dot per handicap stroke, in a lane of its own above the number,
-          which is where a scorecard puts them and where this app puts them
-          everywhere else (see ScoreCell in components/FullScorecard). They
-          used to be crammed inside the gross parenthetical as "(5•)", which
-          is not a stroke dot — it is a bullet in a bracket, at the size of
-          the smallest type on the screen, from twelve feet away.
+      <StrokeDots strokes={strokes} />
 
-          They are the whole reason the big number is not the number he wrote
-          down. A room looking at a net 2 wants to know whether that was an
-          eagle or two shots, and the dots are the answer.
-
-          The lane keeps its height with no strokes in it, so the numbers
-          across the grid sit on one line whether or not the man got a shot. */}
-      <div style={{
-        height: "clamp(6px, 0.8vw, 16px)", display: "flex", alignItems: "center",
-        justifyContent: "center", gap: "clamp(1px, 0.15vw, 3px)",
-      }}>
-        {Array.from({ length: Math.min(strokes || 0, 4) }, (_, i) => (
-          <span key={i} style={{
-            width: "clamp(3px, 0.4vw, 8px)", height: "clamp(3px, 0.4vw, 8px)",
-            borderRadius: "50%", background: BC.hcpBlue, display: "block",
-          }} />
-        ))}
-      </div>
-
-      {/* NET, and only net. The gross used to ride beside it in parentheses —
+      {/* TO PAR, and net. The gross used to ride beside it in parentheses —
           "3 (5)" — which is two numbers to read on a chip the size of a
           postage stamp, in a room, on the one screen where a half-second of
           squinting is a half-second of the ceremony. The dots above say the
           number is a net one; the number he wrote down is on the card he
-          signed, and nobody in the room is auditing it.
-
-          Under par is red on ANY ball, not just one that counted. That is
-          what a scorecard's red ink means — the score, not its standing —
-          and a non-counting net birdie printed grey next to a counting one
-          printed red would be the brightening above undone in the one place
-          it matters most. */}
+          signed, and nobody in the room is auditing it. */}
       <span style={{
         fontSize: T.chip, fontWeight: 800, lineHeight: 1,
         color: under ? BC.danger : counted ? BC.t1 : BC.t2,
       }}>
-        {net == null ? "·" : net}
+        {rel == null ? "·" : fmtRel(rel)}
       </span>
+    </div>
+  );
+}
+
+// ── One player's ball, on a television ───────────────────────────
+// The same three facts on ONE LINE — name at the left, strokes in the middle,
+// the number hard right — eight lines down a column instead of four chips
+// across and two down.
+//
+// A chip is the right shape for a phone, where the width is the scarce thing
+// and a name has to fit in a quarter of 393px. On a 16:9 television the scarce
+// thing is HEIGHT and width is what there is too much of, and a four-across
+// grid spends all of it: the name is capped by the column, which is capped by
+// the chip, which is a quarter of half the screen — so "Christopher M" was set
+// in the smallest type on the display while an inch of black sat either side
+// of it. A row gives the name the whole column and the number a fixed lane at
+// the end, so the eight of them line up as a list somebody can read down.
+//
+// The counted balls carry a rail in the side's colour up their left edge. From
+// the back of a room that reads as one continuous mark down the six that made
+// the number, which is the question the format asks — and it does it without
+// the two that missed going dim (see the note in SideColumn).
+function BallRow({ strokes, name, net, par, tid, counted }) {
+  const col = teamColor(tid);
+  const rel = ballRel(net, par);
+  const under = rel != null && rel < 0;
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: "clamp(4px, 0.6vw, 12px)",
+      padding: `${T.rowPad} clamp(6px, 0.8vw, 16px)`,
+      borderRadius: "clamp(4px, 0.5vw, 10px)",
+      background: counted ? `${col}${ALPHA.tint}` : "transparent",
+      borderLeft: `clamp(3px, 0.4vw, 8px) solid ${counted ? col : `${BC.bdr}${ALPHA.line}`}`,
+      minWidth: 0,
+    }}>
+      <div style={{
+        flex: 1, minWidth: 0, textAlign: "left",
+        fontSize: T.rowName, fontWeight: 800, letterSpacing: 0.4,
+        color: counted ? BC.t1 : BC.t2,
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+      }}>{name}</div>
+      <StrokeDots strokes={strokes} row />
+      <div style={{
+        flexShrink: 0, minWidth: "1.8em", textAlign: "right",
+        fontSize: T.rowScore, fontWeight: 800, lineHeight: 1,
+        color: under ? BC.danger : counted ? BC.t1 : BC.t2,
+      }}>{rel == null ? "·" : fmtRel(rel)}</div>
     </div>
   );
 }
@@ -259,8 +341,8 @@ function SideColumn({ tid, teamName, score, balls, par, countN, compact, reveale
       // is four rows deep. Content height, top of the screen down.
       flex: compact ? "0 0 auto" : 1,
       minWidth: 0, display: "flex", flexDirection: "column",
-      alignItems: "center", gap: compact ? 6 : "clamp(2px, 0.7vw, 14px)",
-      padding: compact ? "8px 10px" : "clamp(3px, 1vw, 20px) clamp(4px, 0.8vw, 16px)",
+      alignItems: "center", gap: compact ? 6 : "clamp(2px, min(0.7vw, 1.1vh), 14px)",
+      padding: compact ? "8px 10px" : "clamp(3px, min(1vw, 1.6vh), 20px) clamp(4px, 0.8vw, 16px)",
       borderRadius: "clamp(8px, 1vw, 20px)",
       background: won && revealed ? `${col}${ALPHA.wash}` : "transparent",
       border: `2px solid ${won && revealed ? `${col}${ALPHA.line}` : "transparent"}`,
@@ -303,7 +385,11 @@ function SideColumn({ tid, teamName, score, balls, par, countN, compact, reveale
           padding: compact ? "6px 0" : 0,
         }}>{waitingOn || "WAITING"}</div>
       )}
-      {revealed && (
+      {/* Chips across on a phone, a list down on a television — see the note
+          on BallRow for why the same eight men want two different shapes. The
+          ORDER is alphabetical either way, and it is the same order on hole 18
+          as on hole 1. */}
+      {revealed && (compact ? (
         <div style={{
           display: "grid", width: "100%",
           gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))`,
@@ -311,7 +397,14 @@ function SideColumn({ tid, teamName, score, balls, par, countN, compact, reveale
         }}>
           {balls.map((b) => <BallChip key={b.pid} {...b} par={par} tid={tid} />)}
         </div>
-      )}
+      ) : (
+        <div style={{
+          display: "flex", flexDirection: "column", width: "100%",
+          gap: T.rowGap,
+        }}>
+          {balls.map((b) => <BallRow key={b.pid} {...b} par={par} tid={tid} />)}
+        </div>
+      ))}
     </div>
   );
 }
@@ -574,26 +667,61 @@ export function FinalCountdown({
   );
 
   // ── The cup, across the top ────────────────────────────────────
+  // The centre and the most important part of the whole thing. Eighteen holes
+  // are turned over underneath it and not one of them is interesting except
+  // for what it does to these two numbers — so it is a CARD of its own rather
+  // than three columns of loose text above a rule, and it holds the biggest
+  // type on the screen after the hole number itself.
+  //
+  // TO WIN THE CUP, in gold, dead centre. It used to read "TO WIN" in the same
+  // grey as everything else, which from across a room is a label on a number
+  // nobody could place — and it is the one number in the building that says
+  // what the evening is for. The gold is the app's own accent and it is used
+  // here and nowhere else on this screen, so the eye finds it without being
+  // sent.
   const cupBar = (
-    <div style={{ flexShrink: 0 }}>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: "clamp(8px, 1.5vw, 30px)" }}>
+    <div style={{
+      flexShrink: 0,
+      background: BC.card,
+      border: `1px solid ${BC.bdr}${ALPHA.line}`,
+      borderRadius: "clamp(8px, 1vw, 20px)",
+      padding: compact ? "9px 12px" : "clamp(6px, 0.9vw, 18px) clamp(10px, 1.4vw, 28px)",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "clamp(8px, 1.5vw, 30px)" }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: T.cupName, fontWeight: 800, letterSpacing: 1.4, color: BC.teamA, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tA.name}</div>
           <div style={{ fontSize: T.cupPts, fontWeight: 800, lineHeight: 1, color: BC.teamA }}>{fmtPts(totals.A)}</div>
         </div>
         <div style={{ textAlign: "center", flexShrink: 0 }}>
-          <div style={{ fontSize: T.cupName, fontWeight: 800, letterSpacing: 1.4, color: BC.t3 }}>TO WIN</div>
-          <div style={{ fontSize: T.hole, fontWeight: 800, lineHeight: 1, color: BC.t1 }}>{fmtPts(toWin)}</div>
+          {/* Shortened on a phone. "TO WIN THE CUP" at 11px with a third of an
+              em of tracking is most of a 393px row on its own, and the two
+              totals it is supposed to sit between would have nowhere to go. */}
+          <div style={{
+            fontSize: compact ? 9 : T.terms, fontWeight: 800,
+            letterSpacing: "0.28em", color: BC.t3, whiteSpace: "nowrap",
+          }}>{compact ? "TO WIN" : "TO WIN THE CUP"}</div>
+          <div style={{
+            fontSize: compact ? 22 : T.cupGoal, fontWeight: 800, lineHeight: 1.1,
+            color: BC.amberInk,
+          }}>{fmtPts(toWin)}</div>
         </div>
         <div style={{ flex: 1, minWidth: 0, textAlign: "right" }}>
           <div style={{ fontSize: T.cupName, fontWeight: 800, letterSpacing: 1.4, color: BC.teamB, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tB.name}</div>
           <div style={{ fontSize: T.cupPts, fontWeight: 800, lineHeight: 1, color: BC.teamB }}>{fmtPts(totals.B)}</div>
         </div>
       </div>
-      <div style={{ position: "relative", height: "clamp(6px, 0.8vw, 16px)", borderRadius: 99, background: BC.inp, overflow: "hidden", marginTop: "clamp(4px, 0.6vw, 12px)" }}>
+      {/* Each side fills from its own end, and the GOLD TICKS are where that
+          side's fill has to reach. They sit at `toWin` measured from each end,
+          which on a full card is a shade past the middle — which is the truth
+          of the format and worth showing: both marks cannot be reached, and
+          the pair of them straddling the centre is what says so. The plain
+          halfway line that used to be there said something weaker and looked
+          the same. */}
+      <div style={{ position: "relative", height: "clamp(6px, 0.9vw, 18px)", borderRadius: 99, background: BC.inp, overflow: "hidden", marginTop: "clamp(4px, 0.6vw, 12px)" }}>
         <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct(totals.A)}%`, background: BC.teamA, transition: "width 700ms cubic-bezier(.2,.7,.3,1)" }} />
         <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: `${pct(totals.B)}%`, background: BC.teamB, transition: "width 700ms cubic-bezier(.2,.7,.3,1)" }} />
-        <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 3, marginLeft: -1.5, background: BC.bg }} />
+        <div style={{ position: "absolute", left: `${pct(toWin)}%`, top: 0, bottom: 0, width: 3, marginLeft: -1.5, background: BC.amber }} />
+        <div style={{ position: "absolute", right: `${pct(toWin)}%`, top: 0, bottom: 0, width: 3, marginRight: -1.5, background: BC.amber }} />
       </div>
     </div>
   );
@@ -895,9 +1023,10 @@ export function FinalCountdown({
         <SideColumn tid="A" teamName={tA.name} score={hr?.aScore} balls={ballsFor("A")}
           par={holePars?.[holeIdx]} countN={countN} compact={compact}
           revealed={showA} won={showVerdict && winner === "A"} waitingOn={`${tA.name.toUpperCase()} TO TELL IT`} />
-        {!compact && (
-          <div style={{ flexShrink: 0, fontSize: T.sideName, fontWeight: 800, color: BC.t3, opacity: 0.5 }}>vs</div>
-        )}
+        {/* No "vs" between them. It was a television flourish from when each
+            side was a name over one enormous number and the gap between them
+            was empty; two eight-man lists do not need to be told they are
+            opposed, and the centred hole header above already parts them. */}
         <SideColumn tid="B" teamName={tB.name} score={hr?.bScore} balls={ballsFor("B")}
           par={holePars?.[holeIdx]} countN={countN} compact={compact}
           revealed={showB} won={showVerdict && winner === "B"} waitingOn={`${tB.name.toUpperCase()} TO TELL IT`} />
