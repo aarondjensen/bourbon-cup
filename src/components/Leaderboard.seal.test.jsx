@@ -90,21 +90,20 @@ const boardAt = (through, extra = {}, final = through >= 18) => {
   return container.textContent;
 };
 
-// The two strings that are ALLOWED to move: the lock chip on the round bar
-// and the counter inside the sealed panel. Both say how far the ceremony has
-// got, which is not a score. The panel used to carry a sentence of prose
-// alongside the counter and that moved too; it is gone, so this is now the
-// whole of what the reveal is permitted to change.
-const blindfold = (text) => text
-  .replace(/🔒 \d+\/18/g, "🔒 n/18")
-  .replace(/\d+ \/ 18/g, "PROGRESS");
+// Nothing on this board is allowed to move as the reveal walks — not one
+// character. There used to be two exceptions and both were the same fact
+// twice: a counter inside the sealed panel, and a 🔒 n/18 chip on the round
+// bar. The panel's went first, the chip's after it, and what is left is a
+// board that cannot be read for the ceremony's progress at all. So the
+// comparison below is exact, with nothing normalised away — which is the
+// only version of this test that could catch a counter creeping back in.
 
 describe("the scoreboard during the Final Countdown", () => {
   it("does not move a single character as the reveal walks", () => {
-    const sealed = blindfold(boardAt(0));
+    const sealed = boardAt(0);
     cleanup();
     for (let through = 1; through <= 17; through += 1) {
-      expect(blindfold(boardAt(through)), `reveal at ${through}`).toBe(sealed);
+      expect(boardAt(through), `reveal at ${through}`).toBe(sealed);
       cleanup();
     }
   });
@@ -127,7 +126,7 @@ describe("the scoreboard during the Final Countdown", () => {
   // director stands behind it can still move, and one that moves after
   // sixteen men have read it is worse than one that lands a minute late.
   it("still holds the round after the eighteenth until it is finalised", () => {
-    const walked = blindfold(boardAt(18, {}, false));
+    const walked = boardAt(18, {}, false);
     expect(walked).toContain("WAITING ON THE FINAL COUNTDOWN");
     expect(walked).not.toContain("0–27");
     expect(walked).not.toContain("Drivers27");
@@ -135,9 +134,9 @@ describe("the scoreboard during the Final Countdown", () => {
   });
 
   it("lands the whole round the moment the eighteenth is turned over", () => {
-    const held = blindfold(boardAt(17));
+    const held = boardAt(17);
     cleanup();
-    const landed = blindfold(boardAt(18));
+    const landed = boardAt(18);
     expect(landed).not.toBe(held);
     // The banner is gone with the seal, and the round has a score — the
     // rout the board sat on for eighteen holes, all of it at once.
@@ -177,9 +176,11 @@ describe("the scoreboard during the Final Countdown", () => {
     expect(held).not.toMatch(/still to come/);
     // The panel is still there, saying the one thing it says.
     expect(held).toContain("WAITING ON THE FINAL COUNTDOWN");
-    // The count is on the round's own header chip and NOT restated inside the
-    // panel — the own-side scorecard that used to sit under it went with it.
-    expect(held).toContain("9/18");
+    // And no count of the holes turned over, anywhere: not in the panel, and
+    // not on the round's header bar, where a 🔒 n/18 chip used to carry it.
+    // The reveal is read off the television, not off the leaderboard.
+    expect(held).not.toContain("9/18");
+    expect(held).not.toContain("🔒 ");
     expect(held).not.toContain("YOUR SIDE ONLY");
     expect(held).not.toContain("YOUR TOTAL");
     cleanup();
