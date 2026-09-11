@@ -642,11 +642,11 @@ function SealedPanel({ through, canReveal, onSetReveal, onOpenCountdown }) {
 //  Round section
 // ══════════════════════════════════════════════════════════════════
 
-// The type of the header line — the course, the dot and the format all take
-// it, so the three read as one string rather than as three spans that happen
-// to be adjacent. `minWidth: 0` is what lets the two halves ellipse at all: a
-// flex item's automatic minimum is its content, so without it a long name
-// pushes the dot off centre instead of truncating.
+// The type of the header line — the course and the format both take it, so
+// the two halves read as one string interrupted by the caret rather than as
+// two spans that happen to be adjacent. `minWidth: 0` is what lets them
+// ellipse at all: a flex item's automatic minimum is its content, so without
+// it a long name pushes the caret off centre instead of truncating.
 const HEAD_TEXT = {
   fontSize: FS.small, fontWeight: 800, letterSpacing: 1.2, color: BC.t1,
   minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
@@ -665,7 +665,7 @@ function RoundSection({
   // the hole strips below.
   return (
     <div style={{ marginBottom: 12 }}>
-      <button onClick={onToggle} style={{
+      <button onClick={onToggle} aria-expanded={open} style={{
         width: "100%", padding: "2px 2px 0", background: "transparent",
         border: "none", cursor: "pointer", textAlign: "left", display: "block", fontFamily: FONT,
       }}>
@@ -674,46 +674,40 @@ function RoundSection({
             far more directly than "ROUND 3" does. The live/final chip is
             gone with it: every match row already carries its own THRU or
             FINAL, so a round-level repeat was chrome. */}
-        {/* The separating dot is the line's anchor: it sits on the row's
-            centre and the course name and the format grow out of it in
-            opposite directions, so a stack of rounds lines up down the middle
-            with the score under it rather than ragging off the left margin.
-            Equal halves is what centres the dot — 1fr · 1fr — and the cost is
-            that a long name ellipses at half the row even when the format
-            beside it is short. On a phone that half is about twenty-two
-            characters, which "Arthur Hills — Orange" fits.
+        {/* The caret IS the divider. It sits on the row's centre where the
+            separating dot used to, with the course name and the format
+            growing out of it in opposite directions — so a stack of rounds
+            lines up down the middle, with the score under it rather than
+            ragging off the left margin, and the one mark that says "there is
+            more under here" sits in the middle of the thing it opens rather
+            than out in a margin of its own.
 
-            The caret is mirrored by an empty span of its own width on the
-            right, because the dot is centred in what the row has LEFT after
-            its flex items: without the mirror it centres in the space beside
-            the caret, which is the row's centre shifted eight pixels left of
-            the score's. */}
+            Equal halves is what centres it — 1fr ▾ 1fr — and the cost is that
+            a long name ellipses at half the row even when the format beside
+            it is short. Both halves are about seventeen pixels wider than
+            they were, though: the caret used to cost the row its own slot on
+            the left AND an empty span mirroring it on the right, which is
+            what it took to centre a dot in the space left between them.
+
+            Hidden from assistive tech, which gets `aria-expanded` on the
+            button instead — a triangle read out mid-title is noise, and the
+            state it stands for is a property of the button, not a character
+            in its name. */}
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-          <span style={{ fontSize: FS.label, color: BC.t3, width: 10, flexShrink: 0 }}>{open ? "▾" : "▸"}</span>
-          {fmt?.label ? (
-            <>
-              <span style={{ ...HEAD_TEXT, flex: 1, textAlign: "right" }}>
-                {(course?.name || "Course TBD").toUpperCase()}
-              </span>
-              {/* " · " rather than "·" so the header still reads as one
-                  string to a screen reader (and to the tests) now that the
-                  spacing is the flex gap. Each flex item is its own line box,
-                  so the leading and trailing spaces are trimmed on the way to
-                  the screen and only the gap is drawn. */}
-              <span style={{ ...HEAD_TEXT, flex: "0 0 auto", color: BC.t3 }}>{" · "}</span>
-              <span style={{ ...HEAD_TEXT, flex: 1, textAlign: "left" }}>
-                {fmt.label.toUpperCase()}
-              </span>
-            </>
-          ) : (
-            /* No format picked yet, so there is nothing for a dot to separate
-               and no second half to balance. The name takes the whole line
-               and centres on its own. */
-            <span style={{ ...HEAD_TEXT, flex: 1, textAlign: "center" }}>
-              {(course?.name || "Course TBD").toUpperCase()}
-            </span>
-          )}
-          <span style={{ width: 10, flexShrink: 0 }} />
+          <span style={{ ...HEAD_TEXT, flex: 1, textAlign: "right" }}>
+            {(course?.name || "Course TBD").toUpperCase()}
+          </span>
+          <span aria-hidden="true" style={{
+            fontSize: FS.label, color: BC.t3, flex: "0 0 auto",
+            width: 10, textAlign: "center", lineHeight: 1,
+          }}>{open ? "▾" : "▸"}</span>
+          {/* The format's half is drawn even when there is no format yet, so
+              the caret stays on the centre the score below it uses. A round
+              whose format the director has not picked is a name, a caret and
+              the room the format will take. */}
+          <span style={{ ...HEAD_TEXT, flex: 1, textAlign: "left" }}>
+            {fmt?.label ? fmt.label.toUpperCase() : ""}
+          </span>
         </div>
         {/* The score is a line of its own, centred under the course and the
             format, rather than the right-hand end of that row. On a phone the

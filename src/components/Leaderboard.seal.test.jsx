@@ -112,7 +112,10 @@ describe("the scoreboard during the Final Countdown", () => {
     const text = boardAt(12);
     expect(text).toContain("THE FINAL COUNTDOWN");
     // The round has a section, and it is showing a dash rather than a score.
-    expect(text).toContain("TREETOPS · TEAM BEST BALL");
+    // The caret sits between the name and the format, so they are checked as
+    // a pair rather than as one string.
+    expect(text).toContain("TREETOPS");
+    expect(text).toContain("TEAM BEST BALL");
     // B won every hole of it. Nothing on this board may say so.
     expect(text).not.toContain("Drivers win");
     cleanup();
