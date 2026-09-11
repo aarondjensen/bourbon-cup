@@ -67,7 +67,7 @@
 // ensureRoundLock in App.jsx). That automation is the actual guarantee —
 // it does not depend on the director remembering to press anything
 // before the group tees off.
-import { calcCHForCourse, getEffectiveHI } from "../scoring";
+import { calcCHForCourse, getEffectiveHI, resolveTeeSpec } from "../scoring";
 import { handicapModeFor } from "../constants";
 import { editionDocId } from "../firebase";
 
@@ -173,27 +173,10 @@ export const lockedPlayerEntry = (locks, round, pid) => {
 };
 
 // ── Tee resolution ──────────────────────────────────────────────────
-// Mirrors calcCHForCourse's fallback chain so the snapshot records the
-// exact slope/rating/par the live math would have used at this instant.
-const resolveTeeSpec = (course, teeName) => {
-  const teeBoxes = course?.tee_boxes || [];
-  const named = teeName ? teeBoxes.find((t) => t.name === teeName) : null;
-  if (named) {
-    return {
-      tee: named.name || null,
-      slope: parseFloat(named.slope) || 113,
-      rating: parseFloat(named.rating) || 72,
-      par: parseFloat(named.par) || 72,
-    };
-  }
-  const fallback = teeBoxes[0] || {};
-  return {
-    tee: teeName || fallback.name || null,
-    slope: parseFloat(course?.slope) || parseFloat(fallback.slope) || 113,
-    rating: parseFloat(course?.rating) || parseFloat(fallback.rating) || 72,
-    par: parseFloat(course?.par) || parseFloat(fallback.par) || 72,
-  };
-};
+// It lived here, as a copy of calcCHForCourse's fallback chain with a comment
+// saying so. Both are now the same function in scoring.js: what a lock FREEZES
+// and what the live math WOULD have used are supposed to be the same numbers,
+// and two authors is the one way to lose that.
 
 // ── Snapshot builder ────────────────────────────────────────────────
 // Captures EVERY tournament player, not just those in the round's

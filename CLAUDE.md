@@ -811,6 +811,69 @@ every screen showing exactly what the director had typed, with no toast and
 nothing to disagree with, and the change was gone on the next reload. It now
 writes first, applies nothing unless the write landed, and toasts either way.
 
+## The backup plan
+
+**Admin → Event → Export**, the last card on the tab and the only thing on it
+that writes nothing. One button a round plus a fifth for all of them, each a
+CSV of everybody's cards — gross and net, hole by hole.
+
+It exists for the Saturday Firestore is unreachable. The answer then is a
+laptop and the spreadsheet everybody already knows how to read, so the file is
+laid out like the **ALL SCORES** tab of the Google Sheets workbook the cup ran
+off before this app (`data/historical sheets/<year>/… - ALL SCORES.csv`):
+a 27-wide gross block, a spacer, and the same block again as net, 54 columns.
+
+**The layout is copied, not designed.** Nobody would choose it. That is the
+point — the columns land where a man looking for them expects them, and the
+sums can be re-added in place. `lib/scoresExport` holds the geometry as named
+constants (`COL`, `NET_OFFSET`) because every one of them is a fact about
+somebody else's spreadsheet, with nothing to derive it from.
+
+**It is checked against the real thing.** `scoresExport.fidelity.test.js`
+rebuilds 2024 and 2025 out of the imported documents, runs the exporter, and
+diffs it against the workbook's own CSV — course handicap, all eighteen gross,
+OUT/IN/TOTAL/NET/ESC, all eighteen net, rating, slope, par and stroke index.
+Same reason `historyImport.fidelity.test.js` exists: an export that is subtly
+wrong looks completely plausible and gets discovered on the one day it matters.
+
+**The one place it differs from the workbook, on purpose.** A scramble round's
+handicaps are fractional — the sheets blended each pair's Scramble and
+Pinehurst figures and wrote the result on both partners' rows, so 2025's round
+3 has men off 6.2 and 11.5. The sheet FLOORED that to allocate strokes; the
+app's `buildStrokeMap` hands out a stroke for the remainder too. One stroke, on
+one hole, per affected card. The export follows THE APP, because it is a backup
+of what the app holds and one that disagreed with the screen it came off would
+be worse than none. It cannot reach a live tournament either — `calcCH` ends in
+`Math.round`, so a fractional CH exists only inside an imported year. The test
+pins the divergence to exactly that, and fails if it ever grows.
+
+**Three things the workbook's tab carried are deliberately absent**: the skins,
+CTP and LP5 rows (side games, settled on the Betting tab, and nothing the Event
+tab is handed can answer them — an empty "CTP" row reads as "nobody won one"),
+the CHECK column (it cross-checked the tab against the four group-card tabs;
+there is one set of cards here and the file is printed off it), and the
+analytics block (derived, field-relative, and recomputable in the spreadsheet
+from what IS there). Their columns are left **empty rather than closed up**, so
+everything after them stays where the workbook put it.
+
+Everything else is the app's own: a locked round exports its frozen snapshot,
+an open one exports live data, and stroke allocation goes through the same
+`getRoundCH` every stroke dot on every screen does. OUT and IN add what has
+been posted so a round in progress shows a running nine, but **TOTAL, NET and
+ESC appear only on a complete card** — the workbook's own rule, and the honest
+one. The borrowed ball is included, unlike every screen that shows the roster:
+it is not a person, but it is a card, and 2020 cannot be re-scored without it.
+
+`lib/fileSave` gets it onto the machine — download first on the web, the OS
+share sheet first on a native build (`<a download>` opens a blank tab inside a
+WKWebView and saves nothing), clipboard as the last resort, which is a real
+outcome here because the destination is a spreadsheet. It reports which route
+happened for the same reason `lib/mediaSave` does: a director told his backup
+was saved when a popup blocker ate it finds out on the day he needs it.
+
+**No deploy, no rules change, no new collection.** It reads what the screen
+already holds.
+
 ## The money tab
 
 **Admin → Budget**, two sub-tabs, one question asked from both ends. The outer
