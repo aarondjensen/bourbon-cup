@@ -1289,6 +1289,65 @@ export function FinalCountdown({
   return shell(
     <>
       {cupBar}
+      {/* ── The cup, on the hole it is won ──
+          There is no hole verdict here any more. It was a band across the
+          screen reading "SHOT CALLERS TAKE IT · 1 POINT", and it was the
+          third place on this screen saying the same thing: the winning side's
+          column already lights up in its own colour, and the strip along the
+          bottom already fills that hole in.
+
+          The CLINCH stays, and it gets the band to itself. It is not the same
+          fact — "who took the hole" happens eighteen times and "the cup is
+          won" happens once — and it is the moment the whole evening is built
+          around.
+
+          ── WHERE IT SITS, AND WHY IT IS ALWAYS THERE ──
+          Under the cup, above the hole. That is the sentence it finishes: the
+          two totals are directly above it and the number that just moved them
+          is directly below, so the eye reads the score, the reason and the
+          verdict in one column without going anywhere.
+
+          It used to sit under the rows, and it used to render only on the hole
+          it happens — which together were the whole bug. This page is one
+          screenful with no scroll, the rows are sized to the space between the
+          header and the ticker, and a band arriving at hole 12 shrank that
+          space by its own height with nothing able to give it back. The rows
+          did not shrink — they OVERFLOWED, straight over the band, so the
+          biggest moment of the year read as "SHOT CALLERS WIN THE BOURBON CUP"
+          printed through two men's names.
+
+          Moving it up does not on its own fix that; RESERVING it does, and it
+          would have been needed wherever the band went. The header's own top
+          padding came off with the move, because the band's empty box is the
+          air under the cup band now.
+
+          So the band is always in the layout and only sometimes visible. The
+          placeholder carries the LONGER of the two team names, invisible, so
+          the height reserved is the height the real line will take — including
+          how it wraps on a phone, which a hardcoded number could not know.
+          Nothing moves when it lands; it fades up into a space that was always
+          its own. */}
+      {(() => {
+        const won = !!clincher && showVerdict;
+        const side = won ? clincher : (tA.name.length >= tB.name.length ? "A" : "B");
+        const line = `🏆 ${side === "A" ? tA.name : tB.name} WIN THE BOURBON CUP`;
+        return (
+          <div style={{
+            flexShrink: 0, textAlign: "center", borderRadius: "clamp(6px, 0.8vw, 16px)",
+            padding: `clamp(4px, ${vwh(0.55)}, 14px) 0`,
+            background: won ? `${teamColor(clincher)}${ALPHA.tint}` : "transparent",
+            border: `2px solid ${won ? teamColor(clincher) : "transparent"}`,
+            opacity: won ? 1 : 0,
+            transition: "opacity 700ms ease, background 700ms ease, border-color 700ms ease",
+          }}>
+            <div style={{
+              fontSize: T.cup, fontWeight: 800, letterSpacing: "0.14em",
+              color: won ? teamColor(clincher) : "transparent", lineHeight: 1.15,
+            }}>{line}</div>
+          </div>
+        );
+      })()}
+
 
       {/* A margin above the hole number and another under the last row of
           each side — see the note on SideColumn's padding. The cup band ran
@@ -1297,7 +1356,7 @@ export function FinalCountdown({
           band to the ticker with no air anywhere in it. Capped on height like
           everything else on this page, so a short window spends less of it
           rather than pushing a row under the ticker. */}
-      <div style={{ flexShrink: 0, textAlign: "center", paddingTop: compact ? 6 : `clamp(3px, ${vwh(0.6)}, 16px)` }}>
+      <div style={{ flexShrink: 0, textAlign: "center", paddingTop: 0 }}>
         {/* ── The two arrows ──
             They flank the hole number rather than joining the row of controls
             at the bottom, because what they move IS the hole number — the
@@ -1388,54 +1447,6 @@ export function FinalCountdown({
             waitingOn={`${tB.name.toUpperCase()} TO TELL IT`} />
         </>,
       )}
-
-      {/* ── The cup, on the hole it is won ──
-          There is no hole verdict here any more. It was a band across the
-          screen reading "SHOT CALLERS TAKE IT · 1 POINT", and it was the
-          third place on this screen saying the same thing: the winning side's
-          column already lights up in its own colour, and the strip along the
-          bottom already fills that hole in.
-
-          The CLINCH stays, and it gets the band to itself. It is not the same
-          fact — "who took the hole" happens eighteen times and "the cup is
-          won" happens once — and it is the moment the whole evening is built
-          around.
-
-          ── AND ITS ROOM IS RESERVED FROM THE FIRST HOLE ──
-          It used to render only on the hole it happens, which was the whole
-          bug: this page is one screenful with no scroll, the rows are sized to
-          the space between the header and the ticker, and a band arriving at
-          hole 12 shrank that space by its own height with nothing able to give
-          it back. The rows did not shrink — they OVERFLOWED, straight over the
-          band, so the biggest moment of the year read as "SHOT CALLERS WIN THE
-          BOURBON CUP" printed through two men's names.
-
-          So the band is always in the layout and only sometimes visible. The
-          placeholder carries the LONGER of the two team names, invisible, so
-          the height reserved is the height the real line will take — including
-          how it wraps on a phone, which a hardcoded number could not know.
-          Nothing moves when it lands; it fades up into a space that was always
-          its own. */}
-      {(() => {
-        const won = !!clincher && showVerdict;
-        const side = won ? clincher : (tA.name.length >= tB.name.length ? "A" : "B");
-        const line = `🏆 ${side === "A" ? tA.name : tB.name} WIN THE BOURBON CUP`;
-        return (
-          <div style={{
-            flexShrink: 0, textAlign: "center", borderRadius: "clamp(6px, 0.8vw, 16px)",
-            padding: `clamp(4px, ${vwh(0.55)}, 14px) 0`,
-            background: won ? `${teamColor(clincher)}${ALPHA.tint}` : "transparent",
-            border: `2px solid ${won ? teamColor(clincher) : "transparent"}`,
-            opacity: won ? 1 : 0,
-            transition: "opacity 700ms ease, background 700ms ease, border-color 700ms ease",
-          }}>
-            <div style={{
-              fontSize: T.cup, fontWeight: 800, letterSpacing: "0.14em",
-              color: won ? teamColor(clincher) : "transparent", lineHeight: 1.15,
-            }}>{line}</div>
-          </div>
-        );
-      })()}
 
       {strip}
       {captainBand}

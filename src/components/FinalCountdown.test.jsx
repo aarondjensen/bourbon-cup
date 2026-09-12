@@ -127,17 +127,13 @@ describe("a hole half turned over", () => {
 
   // The cup band ran almost into HOLE 7 and the eighth man ran into the bottom
   // of his own card, so the middle of the screen read as one solid block from
-  // the band to the ticker with no air anywhere in it.
-  it("gives the hole number room above it and the last man room below", () => {
+  // the band to the ticker with no air anywhere in it. The air above the hole
+  // is the clinch band's reserved box now — it sits between them — so the
+  // header no longer buys its own.
+  it("gives the last man room below him", () => {
     setWidth(TV);
     const c = screen({ A: 1, B: 1 });
-    // The whole header block — the arrows, the number and the two lines under
-    // it. (Its textContent starts with the back arrow, not with "HOLE".)
-    const header = [...c.querySelectorAll("div")].find(d =>
-      d.style.textAlign === "center" && d.textContent.includes("HOLE 1")
-      && d.textContent.includes("1 POINT"));
-    expect(header.style.paddingTop).toBeTruthy();
-    // And the side's card is deeper at the bottom than at the top: the eighth
+    // The side's card is deeper at the bottom than at the top: the eighth
     // name sits against it, where the top edge has the team's own name above
     // it doing the same job.
     const col = [...c.querySelectorAll("div")]
@@ -194,14 +190,25 @@ describe("a hole half turned over", () => {
     expect(b.firstChild.style.color).toBe("transparent");
   });
 
-  // Below the rows, not over them — which is where it always was in the DOM.
-  // What was missing was the room for it.
-  it("puts the band under the last man, not across him", () => {
+  // Under the cup, above the hole. That is the sentence it finishes: the two
+  // totals are directly above it and the number that just moved them is
+  // directly below, so the score, the reason and the verdict read as one
+  // column.
+  it("sits between the cup totals and the hole", () => {
     const c = screen({ A: 1, B: 1 }, { clincher: "A" });
+    const b = band(c);
+    const cup = [...c.querySelectorAll("div")]
+      .find(d => d.textContent.includes("TO WIN THE CUP"));
+    const hole = [...c.querySelectorAll("div")].find(d =>
+      d.style.textAlign === "center" && d.textContent.includes("HOLE 1")
+      && d.textContent.includes("1 POINT"));
+    const after = (x, y) => !!(x.compareDocumentPosition(y) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(after(cup, b)).toBe(true);
+    expect(after(b, hole)).toBe(true);
+    // And well clear of the rows it used to print through.
     const rows = [...c.querySelectorAll("div")]
       .filter(d => d.style.borderRightColor === "transparent" && d.style.justifyContent === "center");
-    const last = rows[rows.length - 1];
-    expect(last.compareDocumentPosition(band(c)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(after(b, rows[0])).toBe(true);
   });
 
   it("names the balls that made the number and dims the ones that didn't", () => {
