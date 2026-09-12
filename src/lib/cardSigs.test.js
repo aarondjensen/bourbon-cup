@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { missingForCard, skippedHoles, cardComplete, attestedPids, isFullyAttested, pendingAttestations, withdrawnIds } from "./cardSigs";
+import { missingForCard, skippedHoles, cardComplete, attestedPids, isFullyAttested, pendingAttestations, withdrawnIds, sigForMatch, cardState, roundCardProgress } from "./cardSigs";
 
 // The can't-sign strip has now been wrong twice in the same direction: it
 // told a scorer his card was short while he was still tapping in the group
@@ -209,5 +209,104 @@ describe("withdrawals", () => {
   it("counts nobody as withdrawn on a roster with no flags", () => {
     expect(withdrawnIds([{ player_id: "a" }, { player_id: "b", withdrawn: false }]).size).toBe(0);
     expect(withdrawnIds(null).size).toBe(0);
+  });
+});
+
+describe("sigForMatch", () => {
+  it("finds a card by match_id, not by its own document id", () => {
+    const sigs = [{ id: "bc_sig_r1_m1", match_id: "m1", signed_by: "a" }];
+    expect(sigForMatch(sigs, "m1")?.signed_by).toBe("a");
+  });
+
+  it("is null for a match with no card, an empty list, or nothing at all", () => {
+    expect(sigForMatch([{ match_id: "m1" }], "m2")).toBeNull();
+    expect(sigForMatch([], "m1")).toBeNull();
+    expect(sigForMatch(null, "m1")).toBeNull();
+  });
+});
+
+// ── The three named states, and who is asking for a re-sign ─────────
+describe("cardState", () => {
+  const match = { id: "m1", round: 1, teamA: ["a", "b"], teamB: ["c", "d"] };
+
+  it("is open with no signature at all", () => {
+    expect(cardState(match, null)).toBe("open");
+  });
+
+  it("is signed while at least one other player still owes an attestation", () => {
+    const sig = { signed_by: "a", attests: { b: { at: "t" } } };
+    expect(cardState(match, sig)).toBe("signed");
+  });
+
+  it("is final once every other player has attested", () => {
+    const sig = { signed_by: "a", attests: { b: { at: "t" }, c: { at: "t" }, d: { at: "t" } } };
+    expect(cardState(match, sig)).toBe("final");
+  });
+
+  // The degenerate case: a match containing only the signer is final the
+  // moment it is signed rather than waiting forever on an empty list.
+  it("is final immediately when the signer is the whole match", () => {
+    const solo = { id: "m2", round: 1, teamA: ["a"], teamB: [] };
+    expect(cardState(solo, { signed_by: "a" })).toBe("final");
+  });
+
+  it("re-signing (a second signature written on an already-signed card) is read the same way — the latest signed_by wins", () => {
+    // Nothing in this module makes the write idempotent by itself; it just
+    // reads whatever the document currently says. A second sign overwrites
+    // signed_by, and the card state is computed fresh off that.
+    const resigned = { signed_by: "b", attests: { a: { at: "t" } } };
+    expect(cardState(match, resigned)).toBe("signed");   // c and d still owe it
+  });
+});
+
+// ── Round-level progress, the finalize sheet's own view ──────────────
+describe("roundCardProgress", () => {
+  const matches = [
+    { id: "m1", round: 1, teamA: ["a", "b"], teamB: ["c", "d"] },
+    { id: "m2", round: 1, teamA: ["e", "f"], teamB: ["g", "h"] },
+  ];
+
+  it("counts an unsigned match as neither signed nor attested", () => {
+    const progress = roundCardProgress(matches, [], 1);
+    expect(progress.total).toBe(2);
+    expect(progress.signed).toBe(0);
+    expect(progress.attested).toBe(0);
+    expect(progress.unsigned.map(m => m.id)).toEqual(["m1", "m2"]);
+    expect(progress.complete).toBe(false);
+  });
+
+  it("names who a signed-but-not-final card is still waiting on", () => {
+    const cardSigs = [
+      { match_id: "m1", signed_by: "a", attests: { b: { at: "t" }, c: { at: "t" }, d: { at: "t" } } },
+      { match_id: "m2", signed_by: "e" },
+    ];
+    const progress = roundCardProgress(matches, cardSigs, 1);
+    expect(progress.signed).toBe(2);
+    expect(progress.attested).toBe(1);
+    expect(progress.awaiting).toHaveLength(1);
+    expect(progress.awaiting[0].match.id).toBe("m2");
+    expect(progress.awaiting[0].pending.sort()).toEqual(["f", "g", "h"]);
+    expect(progress.complete).toBe(false);
+  });
+
+  it("is complete only once every drawn match is fully attested", () => {
+    const cardSigs = matches.map(m => ({
+      match_id: m.id,
+      signed_by: m.teamA[0],
+      attests: Object.fromEntries([m.teamA[1], ...m.teamB].map(pid => [pid, { at: "t" }])),
+    }));
+    expect(roundCardProgress(matches, cardSigs, 1).complete).toBe(true);
+  });
+
+  // An empty round is not a finished one — there is nothing to be complete.
+  it("is not complete for a round with no matches drawn at all", () => {
+    const progress = roundCardProgress([], [], 1);
+    expect(progress.total).toBe(0);
+    expect(progress.complete).toBe(false);
+  });
+
+  it("ignores matches from another round", () => {
+    const other = [...matches, { id: "m3", round: 2, teamA: ["x"], teamB: ["y"] }];
+    expect(roundCardProgress(other, [], 1).total).toBe(2);
   });
 });

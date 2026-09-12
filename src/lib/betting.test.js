@@ -444,3 +444,41 @@ describe("a shared ball in a per-player game", () => {
     expect(moneyHoleRoundsIn([1, 2, 3, 4], [2, 3, 4])).toEqual([2, 3, 4]);
   });
 });
+
+// ── Edge cases: nobody finished, a three-way tie, and a comped pot ────────
+// Gaps not exercised above: lowNetRows with no complete card at all (does
+// "best" stay null rather than crowning an unfinished leader?), a money hole
+// tie among more than two players (the split is `share / winners.length`,
+// never checked past two), and a pot of zero — a comped weekend where the
+// director never priced the game but the rounds are still being played.
+describe("lowNetRows when nobody has finished", () => {
+  it("crowns no one when every card is still out on the course", () => {
+    const partial = Object.fromEntries(Array.from({ length: 9 }, (_, h) => [h, 4]));
+    const rows = lowNetRows({
+      round: 1, field: players, holeData: { p1_1: partial, p2_1: partial }, ...ctx,
+    });
+    expect(rows.every(r => !r.complete)).toBe(true);
+    expect(rows.every(r => r.won === false)).toBe(true);
+  });
+});
+
+describe("moneyHoleWins with more than two winners, and with no pot at all", () => {
+  const hd = { p1_1: { 17: 3 }, p2_1: { 17: 3 }, p3_1: { 17: 3 }, p4_1: { 17: 5 } };
+
+  // Three men on net 3, the field on 5 — the round's whole share splits three
+  // ways rather than the two every other test here happens to use.
+  it("splits a triple-tied round's share three ways", () => {
+    const w = moneyHoleWins({ rounds: [1], hole: 18, field: players, holeData: hd, pot: 90 });
+    expect(w).toHaveLength(3);
+    expect(w.map(x => x.share)).toEqual([30, 30, 30]);
+    expect(w.reduce((a, x) => a + x.share, 0)).toBe(90);
+  });
+
+  // A comped game still has winners; it just pays them nothing. Zero must not
+  // be read as "no pot was asked for" the way a null round list is.
+  it("still names the winners of a zero pot, each owed nothing", () => {
+    const w = moneyHoleWins({ rounds: [1], hole: 18, field: players, holeData: hd, pot: 0 });
+    expect(w).toHaveLength(3);
+    expect(w.every(x => x.share === 0)).toBe(true);
+  });
+});

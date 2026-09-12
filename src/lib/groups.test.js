@@ -280,6 +280,54 @@ describe("groupSizeAfter / groupFitsAfter", () => {
   });
 });
 
+// ── groupIssues — the checks besides mixed/oversized ───────────────
+// `mixed` and `oversized` are pinned above; the other four checks the same
+// function makes were otherwise untested.
+describe("groupIssues — the other checks", () => {
+  const matches = [
+    { id: "m1", teamA: ["a1", "a2"], teamB: ["b1", "b2"] },
+    { id: "m2", teamA: ["a3", "a4"], teamB: ["b3", "b4"] },
+  ];
+
+  it("flags a player sitting in two groups at once — he can only tee off once", () => {
+    const groups = [["a1", "b1"], ["a1", "a2", "b1", "b2"]];
+    const issues = groupIssues({ groups, matches });
+    expect(issues.duplicated).toEqual(["a1", "b1"]);
+    expect(hasGroupIssues(issues)).toBe(true);
+  });
+
+  it("flags a player who has a match but no tee time", () => {
+    const groups = [["a1", "b1"]];   // a2/b2 never assigned
+    const issues = groupIssues({ groups, matches: [matches[0]] });
+    expect(issues.unassigned).toEqual(["a2", "b2"]);
+  });
+
+  it("flags a player on a tee time who isn't playing a match this round", () => {
+    const groups = [["a1", "b1", "a2", "b2", "z9"]];
+    const issues = groupIssues({ groups, matches: [matches[0]] });
+    expect(issues.unmatched).toEqual(["z9"]);
+  });
+
+  it("flags a 2-man match small enough to ride together that has been split across tee times", () => {
+    const groups = [["a1"], ["b1"]];
+    const issues = groupIssues({ groups, matches: [matches[0]] });
+    expect(issues.split).toEqual([matches[0]]);
+  });
+
+  it("does not call an entirely ungrouped match split — there is nowhere for it to disagree with itself", () => {
+    const issues = groupIssues({ groups: [[], []], matches: [matches[0]] });
+    expect(issues.split).toEqual([]);
+  });
+
+  it("has nothing to say about an empty round with no groups drawn yet", () => {
+    const issues = groupIssues({ groups: [], matches: [] });
+    expect(hasGroupIssues(issues)).toBe(false);
+    expect(issues).toMatchObject({
+      mixed: [], unassigned: [], duplicated: [], unmatched: [], split: [], oversized: [],
+    });
+  });
+});
+
 describe("groupIssues — oversized", () => {
   // Nothing in the app can build one now, so this names a group that arrived
   // some other way: a document written before the cap, or a console edit.

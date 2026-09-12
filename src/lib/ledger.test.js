@@ -62,6 +62,13 @@ describe("duesFor", () => {
     expect(duesFor(player({ dues_amount: "lots" }), 850)).toBe(850);
     expect(duesFor(player({ dues_amount: -50 }), 850)).toBe(850);
   });
+  // A form field submits a string, and "0" typed into a box is the same
+  // override as the number 0 — it must not fall through the `raw === ""`
+  // check and read as blank.
+  it("honours an override of zero typed as a string", () => {
+    expect(hasDuesOverride(player({ dues_amount: "0" }))).toBe(true);
+    expect(duesFor(player({ dues_amount: "0" }), 850)).toBe(0);
+  });
 });
 
 describe("paymentsFor", () => {
@@ -85,6 +92,17 @@ describe("paymentsFor", () => {
     expect(paidBy(rows, "p1")).toBe(300);
     expect(paidBy(rows, "p2")).toBe(100);
     expect(paidBy(rows, "nobody")).toBe(0);
+  });
+  // Installments are the normal case, and more than one can land the same
+  // day — the director logging a stack of Venmos on a Sunday night. Nothing
+  // about sorting or filtering should collapse or drop either one.
+  it("sums multiple payments logged on the same date", () => {
+    const sameDay = [
+      pay({ id: "m1", date: "2026-06-01", amount: 100, created_at: 1 }),
+      pay({ id: "m2", date: "2026-06-01", amount: 150, created_at: 2 }),
+    ];
+    expect(paidBy(sameDay, "p1")).toBe(250);
+    expect(paymentsFor(sameDay, "p1")).toHaveLength(2);
   });
 });
 
@@ -156,6 +174,23 @@ describe("ledgerRows", () => {
   it("handles an empty roster", () => {
     expect(ledgerTotals(ledgerRows({ players: [], payments: [], defaultAmount: 850 })))
       .toMatchObject({ billed: 0, outstanding: 0, owing: 0, total: 0 });
+  });
+
+  // A comped player (a real override of zero) must count as $0 billed, not be
+  // averaged away or treated as "no override" and billed the full figure.
+  it("bills a comped player nothing rather than the tournament figure", () => {
+    const mixed = ledgerRows({
+      players: [
+        player({ player_id: "p1", name: "Aaron J" }),
+        player({ player_id: "p2", name: "Ben T", dues_amount: 0 }),
+        player({ player_id: "p3", name: "Cal W" }),
+      ],
+      payments: [],
+      defaultAmount: 850,
+    });
+    const t = ledgerTotals(mixed);
+    expect(t.billed).toBe(1700); // 850 + 0 + 850
+    expect(t.owing).toBe(2);     // the comped player owes nothing, not $0-of-$850
   });
 });
 

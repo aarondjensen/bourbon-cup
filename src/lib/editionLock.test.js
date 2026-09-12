@@ -58,6 +58,14 @@ describe("lockVerdict", () => {
   it("falls back to the id when a row has no year", () => {
     expect(lockVerdict({ id: "bc_dev" }).title).toMatch(/bc_dev/);
   });
+
+  it("never asks before unlocking, even for the active edition", () => {
+    // The locked branch ignores `isActive` entirely — unlocking widens what
+    // is possible regardless of which year the app happens to be showing.
+    const v = lockVerdict(ed("bc_2026", 2026, true), { isActive: true });
+    expect(v.next).toBe(false);
+    expect(v.confirm).toBeNull();
+  });
 });
 
 describe("bulkLockVerdict", () => {
@@ -168,6 +176,14 @@ describe("a demo tournament", () => {
     expect(canAdminEdition({ ...director, edition: null })).toBe(true);
   });
 
+  it("a director's exemption does not additionally require isMember", () => {
+    // The director branch is a bare `isDirector === true` with no membership
+    // check ANDed in — worth pinning, since the demo branch right next to it
+    // does require isMember, and it would be an easy fix to accidentally
+    // require it for both.
+    expect(canAdminEdition({ isDirector: true, isMember: false, edition: real })).toBe(true);
+  });
+
   it("a guest administers nothing — there is no account to be a member of", () => {
     expect(canAdminEdition({ ...guest, edition: demo })).toBe(false);
     expect(canAdminEdition({ ...guest, edition: real })).toBe(false);
@@ -202,6 +218,16 @@ describe("a demo tournament", () => {
     // is meaningless and naming it in the confirm is confusing.
     const v = bulkLockVerdict([{ ...real, locked: true }, live, demo], "bc_2026");
     expect(v.next).toBe(false);
+    expect(v.ids).not.toContain("bc_demo");
+  });
+
+  it("is excluded from the bulk lock even if it somehow carries locked: true itself", () => {
+    // isDemoEdition filters the demo out before isEditionLocked is ever
+    // consulted — a demo edition's own lock field (the seed always writes
+    // `locked: false`, but nothing stops a stray write) must not surface it
+    // in either the "to lock" or the "to unlock" set.
+    const stray = { ...demo, locked: true };
+    const v = bulkLockVerdict([real, live, stray], "bc_2026");
     expect(v.ids).not.toContain("bc_demo");
   });
 });
