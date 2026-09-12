@@ -48,6 +48,7 @@ import {
 } from "../scoring";
 import { HoleStrip } from "./HoleStrip";
 import { FullScorecard } from "./FullScorecard";
+import { TeamBestBallScoreboard } from "./TeamBestBallScoreboard";
 import { StickyTop } from "./ui";
 import { isRoundFinal } from "../lib/roundLocks";
 import { scheduledRounds } from "../lib/rounds";
@@ -327,8 +328,15 @@ const NINE_VALUE = {
 // ══════════════════════════════════════════════════════════════════
 function MatchCard({
   index, first, match, result, format, tPlayers,
-  courses, tRounds, roundLocks, holeData, viewer, expanded, onToggle,
+  courses, tRounds, roundLocks, holeData, viewer, expanded, expandLevel, onToggle,
 }) {
+  // Team Best Ball (Round 4) gets a middle level between collapsed and the
+  // full scorecard: every other format's card still opens straight to
+  // FullScorecard, same as always — see onToggle in RoundSection for the
+  // cycle this level participates in.
+  const scoreboardFormat = format === "team_best_ball";
+  const showScoreboard = expanded && scoreboardFormat && expandLevel === "points";
+  const showFullCard = expanded && (!scoreboardFormat || expandLevel === "full");
   const opts = segOpts(match, format);
   // What the holes were actually scored as — see the note on holeFormatFor. The
   // strip below paints a hole from its two numbers, and on a best-ball override
@@ -463,7 +471,15 @@ function MatchCard({
         </div>
       </button>
 
-      {expanded && (
+      {showScoreboard && (
+        <div style={{ borderTop: `1px solid ${BC.bdr}`, background: BC.bg }}>
+          <div style={{ padding: "12px 12px 14px" }}>
+            <TeamBestBallScoreboard result={result} holePars={cardCtx.holePars} />
+          </div>
+        </div>
+      )}
+
+      {showFullCard && (
         <div style={{ borderTop: `1px solid ${BC.bdr}`, background: BC.bg }}>
           {/* Points detail lives here rather than in the collapsed row: the
               banked total per side and the Front / Back / Overall split are
@@ -655,7 +671,7 @@ const HEAD_TEXT = {
 function RoundSection({
   round, meta, results, open, onToggle, onOpenSummary, tPlayers,
   courses, tRounds, roundLocks, holeData, viewer, expandedMatch, setExpandedMatch,
-  sealPanel,
+  expandedLevel, setExpandedLevel, sealPanel,
 }) {
   const { course, fmt, pts, state, seal, drawn } = meta;
 
@@ -819,7 +835,20 @@ function RoundSection({
                 holeData={holeData}
                 viewer={viewer}
                 expanded={expandedMatch === m.id}
-                onToggle={() => setExpandedMatch(expandedMatch === m.id ? null : m.id)}
+                expandLevel={expandedLevel}
+                onToggle={() => {
+                  // Team Best Ball cycles collapsed -> points -> full scorecard
+                  // -> collapsed; every other format keeps today's one-step
+                  // collapsed <-> full scorecard toggle.
+                  if (expandedMatch !== m.id) {
+                    setExpandedMatch(m.id);
+                    setExpandedLevel(format === "team_best_ball" ? "points" : "full");
+                  } else if (format === "team_best_ball" && expandedLevel === "points") {
+                    setExpandedLevel("full");
+                  } else {
+                    setExpandedMatch(null);
+                  }
+                }}
               />
             ))}
           </div>
@@ -897,6 +926,9 @@ export function TeamLeaderboard({
   canReveal = false, onSetReveal, onSetHole, captainSide = null, autoCountdown = false, onOpenSummary,
 }) {
   const [expandedMatch, setExpandedMatch] = useState(null);
+  // Which sub-level the expanded match is showing — only meaningful for a
+  // Team Best Ball match, which has a middle level (see MatchCard/RoundSection).
+  const [expandedLevel, setExpandedLevel] = useState("full");
   // Round open/closed. Absent key = follow the automatic rule below;
   // a tap writes an explicit override so the user always wins.
   const [openOverrides, setOpenOverrides] = useState({});
@@ -1391,6 +1423,8 @@ export function TeamLeaderboard({
           viewer={viewer}
           expandedMatch={expandedMatch}
           setExpandedMatch={setExpandedMatch}
+          expandedLevel={expandedLevel}
+          setExpandedLevel={setExpandedLevel}
         />
       ))}
     </div>
