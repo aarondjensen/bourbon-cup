@@ -83,7 +83,7 @@
 //  scored off this map, and they are the only place in the app any of it
 //  is visible while the countdown is running.
 
-import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { BC, FONT, ALPHA, teamColor } from "../theme";
 import { TROPHY_SILHOUETTE } from "../constants";
 import { playerLookup } from "../lib/players";
@@ -133,7 +133,7 @@ const T = {
   // 10.2 `vwh` would give it — because it is the single tallest thing between
   // the hole header and the strip, and the eight rows under it are what it
   // takes room from.
-  side:     "clamp(28px, min(5.5vw, 8.6vh), 120px)",
+  side:     "clamp(28px, min(5.5vw, 7.0vh), 120px)",
   sideName: `clamp(12px, ${vwh(1.7)}, 34px)`,
   // ── The television's roll-call ──
   // A name and a number on one line, eight lines a side. Bigger than the
@@ -148,10 +148,14 @@ const T = {
   // box, so half of that overflow came out of the top: the last man's row sat
   // under the hole ticker and the terms line ran through the first man's.
   rowName:  "clamp(11px, min(1.45vw, 2.4vh), 30px)",
-  rowScore: "clamp(13px, min(1.75vw, 2.65vh), 36px)",
-  rowPad:   "clamp(1px,  min(0.42vw, 0.62vh), 9px)",
-  rowGap:   "clamp(2px,  min(0.3vw,  0.47vh), 7px)",
-  cup:      "clamp(20px, 3.4vw, 72px)",
+  rowScore: "clamp(13px, min(1.75vw, 2.45vh), 36px)",
+  rowPad:   "clamp(1px,  min(0.42vw, 0.45vh), 9px)",
+  rowGap:   "clamp(2px,  min(0.3vw,  0.38vh), 7px)",
+  // The clinch line. Smaller than it was (3.4vw), because its band is now
+  // RESERVED for the whole round — see the note on `clinchBand` — so every
+  // pixel it takes is a pixel off eighteen holes of rows, not just the one it
+  // appears on.
+  cup:      `clamp(15px, ${vwh(1.95)}, 42px)`,
   strip:    `clamp(7px,  ${vwh(0.95)}, 20px)`,
   btn:      `clamp(11px, ${vwh(1.5)}, 30px)`,
   promptSm: "clamp(10px, 1.2vw, 24px)",
@@ -279,6 +283,89 @@ const ballRel = (net, par) =>
 // missed going dim (see the note in SideColumn).
 const RAIL = "clamp(3px, 0.4vw, 8px)";
 
+// ══════════════════════════════════════════════════════════════════
+//  Confetti, on the winners' side
+// ══════════════════════════════════════════════════════════════════
+//  Inside the winning side's own card and nowhere else, because WHOSE it is
+//  is the whole message. A shower across the middle of the screen would be the
+//  app celebrating; a shower over one of the two columns is the room being
+//  told which one.
+//
+//  It does not stop. The cup is won once in a year and the screen stays on it
+//  while sixteen men shout at each other — a three-second burst would be over
+//  before anybody looked up. Infinite, staggered, and costing nothing in
+//  layout: the whole thing is one absolutely-positioned layer with
+//  `pointer-events: none` over a card whose size it cannot change.
+//
+//  Seeded rather than random, so a re-render does not reshuffle every piece
+//  mid-fall — React has no idea this is an animation and would happily hand
+//  each strip a new duration on the next state change.
+//  It falls by animating `top`, not `transform`. A percentage inside
+//  `translate` resolves against the ELEMENT — so `translateY(118%)` on a strip
+//  eighteen pixels tall moves it twenty-one pixels and the whole shower sits
+//  in a band across the top of the card, which is exactly what it did. A
+//  percentage on `top` resolves against the containing block, which is the
+//  card, which is the distance meant. The transform is left to do the two
+//  things it is the right tool for: the sideways drift and the spin.
+const CONFETTI_CSS = `
+@keyframes bcConfettiFall {
+  0%   { top: -14%; transform: translateX(0) rotate(0deg); opacity: 0; }
+  6%   { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { top: 114%; transform: translateX(var(--bc-drift)) rotate(var(--bc-spin)); opacity: 0; }
+}`;
+
+const CONFETTI_N = 34;
+
+// A small deterministic generator — same pieces every render, different ones
+// per side.
+const seeded = (n) => {
+  let x = (n * 9301 + 49297) % 233280;
+  return () => { x = (x * 9301 + 49297) % 233280; return x / 233280; };
+};
+
+function Confetti({ tid }) {
+  const col = teamColor(tid);
+  const pieces = useMemo(() => {
+    const r = seeded(tid === "A" ? 17 : 41);
+    // The side's own colour, a light and a dark of it, and the cup's gold.
+    const palette = [col, `${col}${ALPHA.tint}`, BC.amber, BC.t1, col];
+    return Array.from({ length: CONFETTI_N }, (_, i) => ({
+      id: i,
+      left: r() * 100,
+      delay: -r() * 6,
+      dur: 3.6 + r() * 4.2,
+      drift: (r() * 2 - 1) * 40,
+      spin: 360 + Math.round(r() * 900),
+      w: 5 + Math.round(r() * 5),
+      h: 9 + Math.round(r() * 9),
+      color: palette[Math.floor(r() * palette.length)],
+      round: r() > 0.7,
+    }));
+  }, [col, tid]);
+  return (
+    <div aria-hidden="true" style={{
+      position: "absolute", inset: 0, overflow: "hidden",
+      pointerEvents: "none", zIndex: 2, borderRadius: "inherit",
+    }}>
+      <style>{CONFETTI_CSS}</style>
+      {pieces.map((p) => (
+        <span key={p.id} style={{
+          position: "absolute", top: 0, left: `${p.left}%`,
+          width: p.w, height: p.h,
+          background: p.color,
+          borderRadius: p.round ? "50%" : 1,
+          animation: `bcConfettiFall ${p.dur}s linear ${p.delay}s infinite`,
+          // Read by the keyframes, so each strip drifts and spins its own way
+          // instead of eighteen identical ones falling in a column.
+          "--bc-drift": `${p.drift}px`,
+          "--bc-spin": `${p.spin}deg`,
+        }} />
+      ))}
+    </div>
+  );
+}
+
 // ── How wide the name lane has to be ────────────────────────────
 // MEASURED, not estimated — see `useNameLane` below. What follows is only the
 // fallback for the first paint and for a test environment that lays nothing
@@ -288,36 +375,47 @@ const RAIL = "clamp(3px, 0.4vw, 8px)";
 // dead space for one frame; being under cuts a man's name off on a television.
 const nameLaneEm = (n) => Math.max(4, (Number(n) || 0) * 0.95);
 
-// The side's longest name, set invisibly in exactly the type the rows use, and
-// read back. Exact at any viewport, and it re-reads itself when the type
-// changes size — the whole scale on this screen is vw/vh, so a resized window
-// is a resized name.
+// EVERY name on the side, set invisibly in exactly the type the rows use, and
+// the widest of them read back. Exact at any viewport, and it re-reads itself
+// when the type changes size — the whole scale on this screen is vw/vh, so a
+// resized window is a resized name.
 //
-// It replaced `characters x 0.75em`, which was Montserrat Bold's AVERAGE in
-// the app's all-caps and duly clipped every name built out of wider letters
-// than average. There is no factor that is both tight enough to keep the trio
-// centred and safe enough never to clip; measuring is the only thing that is
-// both.
+// ALL OF THEM, AND THAT IS THE POINT. It used to measure the single longest
+// name and size the lane to that, where "longest" meant the most CHARACTERS —
+// which is the same mistake, one level up, as the 0.75em-a-character estimate
+// this replaced. "Curtis D" and "Wesley B" are both eight characters and
+// twelve pixels apart, so a side holding both sized its lane to Curtis and cut
+// Wesley off. On a television, in front of the room, on the one screen nobody
+// can correct in the moment.
+//
+// A shrink-to-fit box stacked with every name is as wide as the widest line in
+// it, so the browser does the comparison in the only unit that matters.
+//
+// The ruler is wired by a CALLBACK REF rather than an effect with a dependency
+// list. The rows it measures are behind `revealed`, so the node appears and
+// disappears during the round; a callback ref runs exactly when that happens,
+// where an effect keyed on the names would have been asked to re-run at a
+// moment its dependency had not changed.
 //
 // Falls back to the estimate above when there is nothing to measure: the first
 // paint, and jsdom, which has no layout and no ResizeObserver.
-function useNameLane(longest) {
-  const probe = useRef(null);
+function useNameLane(names) {
   const [px, setPx] = useState(0);
-  useLayoutEffect(() => {
-    const el = probe.current;
-    if (!el) return undefined;
+  const watching = useRef(null);
+  const probe = useCallback((el) => {
+    if (watching.current) { watching.current.disconnect(); watching.current = null; }
+    if (!el) return;
     // +2 so sub-pixel rounding can never take the last letter.
     const read = () => {
       const w = Math.ceil(el.getBoundingClientRect().width);
       if (w > 0) setPx((prev) => (prev === w + 2 ? prev : w + 2));
     };
     read();
-    if (typeof ResizeObserver !== "function") return undefined;
-    const ro = new ResizeObserver(read);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [longest]);
+    if (typeof ResizeObserver !== "function") return;
+    watching.current = new ResizeObserver(read);
+    watching.current.observe(el);
+  }, []);
+  const longest = (names || []).reduce((a, b) => (b.length > a.length ? b : a), "");
   return [px ? `${px}px` : `${nameLaneEm(longest.length)}em`, probe];
 }
 
@@ -373,7 +471,7 @@ function BallRow({ strokes, name, net, par, tid, counted, nameLane, compact }) {
 // Alphabetical rather than roster order for the same reason: roster order is
 // whatever the director typed, it differs between the two sides, and it is
 // not a thing anybody can look a name up in. A is at the top left.
-function SideColumn({ tid, teamName, score, balls, par, countN, compact, revealed, won, waitingOn }) {
+function SideColumn({ tid, teamName, score, balls, par, countN, compact, revealed, won, waitingOn, celebrate }) {
   const col = teamColor(tid);
   // ── The number, AGAINST PAR ──
   // It used to be the side's raw total — 25, 18 — which is the sum of six or
@@ -393,11 +491,8 @@ function SideColumn({ tid, teamName, score, balls, par, countN, compact, reveale
   // The name lane, one width for all eight rows so the column has an edge to
   // be read down, and no wider than the longest name on the side so the trio
   // has no slack to sit off-centre in. See BallRow and useNameLane.
-  const longest = useMemo(
-    () => (balls || []).reduce((a, b) => ((b.name || "").length > a.length ? b.name : a), ""),
-    [balls],
-  );
-  const [nameLane, probeRef] = useNameLane(longest);
+  const names = useMemo(() => (balls || []).map((b) => b.name || ""), [balls]);
+  const [nameLane, probeRef] = useNameLane(names);
   return (
     <div style={{
       // On a television each side claims half the width and stretches to fill
@@ -405,6 +500,10 @@ function SideColumn({ tid, teamName, score, balls, par, countN, compact, reveale
       // half a screen tall with a column of black under an eight-man grid that
       // is four rows deep. Content height, top of the screen down.
       flex: compact ? "0 0 auto" : 1,
+      // A containing block for the confetti, which is an absolute layer over
+      // this card and must be clipped by it — the celebration belongs to one
+      // side, so it may not spill across the screen.
+      position: "relative", overflow: "hidden",
       minWidth: 0, display: "flex", flexDirection: "column",
       alignItems: "center", gap: compact ? 4 : "clamp(2px, min(0.7vw, 1.1vh), 14px)",
       // The bottom is deliberately deeper than the top: the eighth name sits
@@ -412,12 +511,13 @@ function SideColumn({ tid, teamName, score, balls, par, countN, compact, reveale
       // the same job.
       padding: compact
         ? "6px 10px 10px"
-        : `clamp(3px, min(1vw, 1.6vh), 20px) clamp(4px, 0.8vw, 16px) clamp(8px, ${vwh(1.1)}, 26px)`,
+        : `clamp(3px, min(1vw, 1.6vh), 20px) clamp(4px, 0.8vw, 16px) clamp(6px, ${vwh(0.8)}, 20px)`,
       borderRadius: "clamp(8px, 1vw, 20px)",
       background: won && revealed ? `${col}${ALPHA.wash}` : "transparent",
       border: `2px solid ${won && revealed ? `${col}${ALPHA.line}` : "transparent"}`,
       transition: "background 400ms ease, border-color 400ms ease",
     }}>
+      {celebrate && <Confetti tid={tid} />}
       {/* The name above the number, centred, on both screens. The phone used
           to run them as one scoreboard line — name left, figure right — which
           was bought to make room for the chip grid underneath. The grid is
@@ -463,14 +563,16 @@ function SideColumn({ tid, teamName, score, balls, par, countN, compact, reveale
           display: "flex", flexDirection: "column", width: "100%",
           gap: compact ? 2 : T.rowGap, position: "relative",
         }}>
-          {/* The ruler. Out of flow and invisible, set in exactly the type the
-              names beside it are set in, so what comes back is the width the
-              lane has to be — see useNameLane. */}
-          <span ref={probeRef} aria-hidden="true" style={{
+          {/* The ruler. Out of flow and invisible, holding EVERY name on the
+              side, set in exactly the type the rows are set in. A shrink-to-fit
+              box is as wide as its widest line, so what comes back is the width
+              the lane has to be — measured, and in pixels, which is the only
+              unit that can tell "Curtis D" from "Wesley B". See useNameLane. */}
+          <div ref={probeRef} aria-hidden="true" style={{
             position: "absolute", left: 0, top: 0, visibility: "hidden",
             pointerEvents: "none", whiteSpace: "nowrap",
             fontSize: compact ? 13 : T.rowName, fontWeight: 800, letterSpacing: 0.4,
-          }}>{longest}</span>
+          }}>{names.map((n, i) => <div key={`${n}-${i}`}>{n}</div>)}</div>
           {/* One lane width for the whole side, off the longest name on it —
               which is what makes the trio hug its content and sit optically in
               the middle rather than floating in a share of the column. See the
@@ -1195,7 +1297,7 @@ export function FinalCountdown({
           band to the ticker with no air anywhere in it. Capped on height like
           everything else on this page, so a short window spends less of it
           rather than pushing a row under the ticker. */}
-      <div style={{ flexShrink: 0, textAlign: "center", paddingTop: compact ? 6 : `clamp(4px, ${vwh(0.9)}, 20px)` }}>
+      <div style={{ flexShrink: 0, textAlign: "center", paddingTop: compact ? 6 : `clamp(3px, ${vwh(0.6)}, 16px)` }}>
         {/* ── The two arrows ──
             They flank the hole number rather than joining the row of controls
             at the bottom, because what they move IS the hole number — the
@@ -1272,14 +1374,18 @@ export function FinalCountdown({
         <>
           <SideColumn tid="A" teamName={tA.name} score={hr?.aScore} balls={ballsFor("A")}
             par={holePars?.[holeIdx]} countN={countN} compact={compact}
-            revealed={showA} won={showVerdict && winner === "A"} waitingOn={`${tA.name.toUpperCase()} TO TELL IT`} />
+            revealed={showA} won={showVerdict && winner === "A"}
+            celebrate={showVerdict && clincher === "A"}
+            waitingOn={`${tA.name.toUpperCase()} TO TELL IT`} />
           {/* No "vs" between them. It was a television flourish from when each
               side was a name over one enormous number and the gap between them
               was empty; two eight-man lists do not need to be told they are
               opposed, and the centred hole header above already parts them. */}
           <SideColumn tid="B" teamName={tB.name} score={hr?.bScore} balls={ballsFor("B")}
             par={holePars?.[holeIdx]} countN={countN} compact={compact}
-            revealed={showB} won={showVerdict && winner === "B"} waitingOn={`${tB.name.toUpperCase()} TO TELL IT`} />
+            revealed={showB} won={showVerdict && winner === "B"}
+            celebrate={showVerdict && clincher === "B"}
+            waitingOn={`${tB.name.toUpperCase()} TO TELL IT`} />
         </>,
       )}
 
@@ -1288,27 +1394,48 @@ export function FinalCountdown({
           screen reading "SHOT CALLERS TAKE IT · 1 POINT", and it was the
           third place on this screen saying the same thing: the winning side's
           column already lights up in its own colour, and the strip along the
-          bottom already fills that hole in. Three tellings of one fact, on the
-          screen where every row is competing for the room's attention, and it
-          was the one of the three that cost a whole band of height.
+          bottom already fills that hole in.
 
           The CLINCH stays, and it gets the band to itself. It is not the same
           fact — "who took the hole" happens eighteen times and "the cup is
           won" happens once — and it is the moment the whole evening is built
-          around. It renders only on the hole it happens, so the rest of the
-          countdown gets that height back for the grids. */}
-      {clincher && showVerdict && (
-        <div style={{
-          flexShrink: 0, textAlign: "center", borderRadius: "clamp(6px, 0.8vw, 16px)",
-          padding: "clamp(8px, 1.3vw, 26px) 0",
-          background: `${teamColor(clincher)}${ALPHA.tint}`,
-          border: `2px solid ${teamColor(clincher)}`,
-        }}>
-          <div style={{ fontSize: T.cup, fontWeight: 800, letterSpacing: "0.14em", color: teamColor(clincher), lineHeight: 1.15 }}>
-            🏆 {clincher === "A" ? tA.name : tB.name} WIN THE BOURBON CUP
+          around.
+
+          ── AND ITS ROOM IS RESERVED FROM THE FIRST HOLE ──
+          It used to render only on the hole it happens, which was the whole
+          bug: this page is one screenful with no scroll, the rows are sized to
+          the space between the header and the ticker, and a band arriving at
+          hole 12 shrank that space by its own height with nothing able to give
+          it back. The rows did not shrink — they OVERFLOWED, straight over the
+          band, so the biggest moment of the year read as "SHOT CALLERS WIN THE
+          BOURBON CUP" printed through two men's names.
+
+          So the band is always in the layout and only sometimes visible. The
+          placeholder carries the LONGER of the two team names, invisible, so
+          the height reserved is the height the real line will take — including
+          how it wraps on a phone, which a hardcoded number could not know.
+          Nothing moves when it lands; it fades up into a space that was always
+          its own. */}
+      {(() => {
+        const won = !!clincher && showVerdict;
+        const side = won ? clincher : (tA.name.length >= tB.name.length ? "A" : "B");
+        const line = `🏆 ${side === "A" ? tA.name : tB.name} WIN THE BOURBON CUP`;
+        return (
+          <div style={{
+            flexShrink: 0, textAlign: "center", borderRadius: "clamp(6px, 0.8vw, 16px)",
+            padding: `clamp(4px, ${vwh(0.55)}, 14px) 0`,
+            background: won ? `${teamColor(clincher)}${ALPHA.tint}` : "transparent",
+            border: `2px solid ${won ? teamColor(clincher) : "transparent"}`,
+            opacity: won ? 1 : 0,
+            transition: "opacity 700ms ease, background 700ms ease, border-color 700ms ease",
+          }}>
+            <div style={{
+              fontSize: T.cup, fontWeight: 800, letterSpacing: "0.14em",
+              color: won ? teamColor(clincher) : "transparent", lineHeight: 1.15,
+            }}>{line}</div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {strip}
       {captainBand}
