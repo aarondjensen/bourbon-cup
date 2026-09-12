@@ -83,6 +83,10 @@ const screen = (reveal, extra = {}) => {
   ).container;
 };
 
+// The clinch band — always in the layout, only sometimes lit.
+const band = (c) => [...c.querySelectorAll("div")]
+  .find(d => d.children.length === 1 && /WIN THE BOURBON CUP$/.test(d.textContent));
+
 describe("a hole half turned over", () => {
   it("shows the side that has spoken and not the one that hasn't", () => {
     // A has hole 1; B does not. A's balls are on screen; B's are not.
@@ -160,11 +164,44 @@ describe("a hole half turned over", () => {
   // Not the same fact. "Who took the hole" happens eighteen times; "the cup is
   // won" happens once, and it is the moment the evening is built around.
   it("still gives the clinch a band of its own", () => {
-    const t = screen({ A: 1, B: 1 }, { clincher: "A" }).textContent;
-    expect(t).toContain("WIN THE BOURBON CUP");
+    const c = screen({ A: 1, B: 1 }, { clincher: "A" });
+    expect(c.textContent).toContain("WIN THE BOURBON CUP");
+    expect(band(c).style.opacity).toBe("1");
     // And not before both captains have spoken on the hole it lands.
     cleanup();
-    expect(screen({ A: 1, B: 0 }, { clincher: "A" }).textContent).not.toContain("WIN THE BOURBON CUP");
+    expect(band(screen({ A: 1, B: 0 }, { clincher: "A" })).style.opacity).toBe("0");
+  });
+
+  // ── The band's room is reserved from the first hole ──────────────
+  // It used to render only on the hole it happens, which was the whole bug.
+  // This page is one screenful with no scroll and the rows are sized to the
+  // space between the header and the ticker, so a band arriving at hole 12
+  // shrank that space with nothing able to give it back — and the rows did not
+  // shrink, they OVERFLOWED, straight over the band. The biggest moment of the
+  // year read as "SHOT CALLERS WIN THE BOURBON CUP" printed through two men's
+  // names.
+  it("keeps the clinch band's space from the first hole", () => {
+    const c = screen({ A: 1, B: 1 });
+    const b = band(c);
+    // In the layout, and invisible — not absent.
+    expect(b).toBeTruthy();
+    expect(b.style.opacity).toBe("0");
+    expect(b.style.borderColor).toBe("transparent");
+    // Carrying the line it will carry, so the height reserved is the height
+    // the real thing takes — including how it wraps on a phone, which a
+    // hardcoded number could not know.
+    expect(b.textContent).toMatch(/WIN THE BOURBON CUP$/);
+    expect(b.firstChild.style.color).toBe("transparent");
+  });
+
+  // Below the rows, not over them — which is where it always was in the DOM.
+  // What was missing was the room for it.
+  it("puts the band under the last man, not across him", () => {
+    const c = screen({ A: 1, B: 1 }, { clincher: "A" });
+    const rows = [...c.querySelectorAll("div")]
+      .filter(d => d.style.borderRightColor === "transparent" && d.style.justifyContent === "center");
+    const last = rows[rows.length - 1];
+    expect(last.compareDocumentPosition(band(c)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("names the balls that made the number and dims the ones that didn't", () => {
@@ -300,38 +337,6 @@ describe("a man's ball", () => {
     // on. Both sides here are 6-character names, so both come out the same.
     expect(new Set(lanes).size).toBe(1);
     expect(parseFloat(lanes[0])).toBeCloseTo(6 * 0.95, 5);
-  });
-
-  // A ruler per side, out of flow and invisible, carrying that side's longest
-  // name in exactly the type the rows are set in. It is what makes the lane a
-  // measurement rather than a guess about how wide a letter is.
-  it("keeps a hidden ruler of the longest name", () => {
-    setWidth(TV);
-    const c = screen({ A: 1, B: 1 });
-    const rulers = [...c.querySelectorAll("span[aria-hidden='true']")]
-      .filter(el => el.style.visibility === "hidden");
-    // Every name on this fixture is six characters, so the ruler is whichever
-    // came first — the point is that there is one per side and it holds a name
-    // no shorter than any other on it.
-    expect(rulers).toHaveLength(2);
-    expect(rulers.map(r => r.textContent)).toEqual(["Dave K", "Andy H"]);
-    rulers.forEach((r) => {
-      expect(r.style.position).toBe("absolute");
-      expect(r.style.whiteSpace).toBe("nowrap");
-      // Same type as the names, or it is measuring something else.
-      expect(r.style.fontWeight).toBe("800");
-      expect(r.style.fontSize).toBe(rulers[0].style.fontSize);
-    });
-  });
-
-  // A border only on the left shifts the content box right by its own width,
-  // and "dead centre" that is eight pixels off is the kind of wrong that is
-  // visible on a television and invisible in a diff.
-  it("mirrors the colour rail so the centre is a real centre", () => {
-    const row = [...screen({ A: 1, B: 1 }).querySelectorAll("div")]
-      .find(d => d.style.borderLeft?.startsWith("clamp(3px"));
-    expect(row.style.borderRightWidth).toBe(row.style.borderLeftWidth);
-    expect(row.style.borderRightColor).toBe("transparent");
   });
 
   it("leaves a ball that missed the cut legible, on either screen", () => {
@@ -1060,5 +1065,75 @@ describe("what may turn a side over", () => {
     ["  ", " ", "Enter", "ArrowRight", "PageDown"].forEach(key =>
       fireEvent.keyDown(window, { key }));
     expect(advanced).toEqual([]);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  Confetti, on the winners' side
+// ══════════════════════════════════════════════════════════════════
+//  Inside the winning side's own card and nowhere else, because WHOSE it is is
+//  the whole message. A shower across the middle of the screen would be the
+//  app celebrating; a shower over one of the two columns is the room being
+//  told which one.
+describe("the confetti", () => {
+  const pieces = (c) => [...c.querySelectorAll("span")]
+    .filter(el => (el.style.animation || "").includes("bcConfettiFall"));
+  const card = (c, name) => [...c.querySelectorAll("div")]
+    .find(d => d.style.borderRadius?.startsWith("clamp(8px") && d.textContent.includes(name));
+
+  it("does not fall until the cup is won", () => {
+    expect(pieces(screen({ A: 1, B: 1 }))).toEqual([]);
+  });
+
+  it("waits for both captains, like the band does", () => {
+    // Half a hole has no result, so it cannot have won anything.
+    expect(pieces(screen({ A: 1, B: 0 }, { clincher: "A" }))).toEqual([]);
+  });
+
+  it("falls on the winners and only on the winners", () => {
+    const c = screen({ A: 1, B: 1 }, { clincher: "B" });
+    const fall = pieces(c);
+    expect(fall.length).toBeGreaterThan(20);
+    const winners = card(c, "Andy H");   // B's side
+    const losers = card(c, "Paul W");    // A's side
+    expect(fall.every(el => winners.contains(el))).toBe(true);
+    expect(fall.some(el => losers.contains(el))).toBe(false);
+  });
+
+  // It does not stop. The cup is won once a year and the screen stays on it
+  // while sixteen men shout at each other; a three-second burst would be over
+  // before anybody looked up.
+  it("keeps going", () => {
+    pieces(screen({ A: 1, B: 1 }, { clincher: "A" }))
+      .forEach(el => expect(el.style.animation).toContain("infinite"));
+  });
+
+  it("costs the layout nothing", () => {
+    const c = screen({ A: 1, B: 1 }, { clincher: "A" });
+    const layer = pieces(c)[0].parentElement;
+    expect(layer.style.position).toBe("absolute");
+    expect(layer.style.pointerEvents).toBe("none");
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  The ruler measures EVERY name
+// ══════════════════════════════════════════════════════════════════
+//  It measured the single longest one, where "longest" meant the most
+//  CHARACTERS — the same mistake, one level up, as the em-a-character estimate
+//  it replaced. "Curtis D" and "Wesley B" are both eight characters and twelve
+//  pixels apart, so a side holding both sized its lane to Curtis and cut
+//  Wesley off, on a television, in front of the room.
+describe("the name ruler", () => {
+  it("holds every name on the side, not just the longest", () => {
+    setWidth(TV);
+    const c = screen({ A: 1, B: 1 });
+    const rulers = [...c.querySelectorAll("div[aria-hidden='true']")]
+      .filter(el => el.style.visibility === "hidden");
+    expect(rulers).toHaveLength(2);
+    // Every man on the side is in it — the browser compares them in pixels,
+    // which is the only unit that can tell those two names apart.
+    expect([...rulers[0].children].map(n => n.textContent)).toEqual(["Dave K", "Paul W", "Tim C"]);
+    expect([...rulers[1].children].map(n => n.textContent)).toEqual(["Andy H", "Nick R", "Rudy T"]);
   });
 });
