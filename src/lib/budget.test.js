@@ -5,6 +5,7 @@ import {
   BUDGET_BASES, normalizeBasis, isPerMan, lineTotal, lineTitle,
   budgetGroups, budgetTotal, budgetPerPlayer, budgetVsDues,
 } from "./budget";
+import { ledgerRows, ledgerTotals } from "./ledger";
 
 const line = (over = {}) => ({
   id: "b1", tournament_id: "bc_2026", category: "lodging",
@@ -209,5 +210,36 @@ describe("budgetVsDues", () => {
   it("survives an empty roster", () => {
     expect(budgetVsDues({ lines, charged: 6400, playerCount: 0 }))
       .toMatchObject({ total: 6400, perPlayer: null, gap: 0 });
+  });
+
+  // The `charged` figure this compares against is the ledger's own `billed`
+  // total, which is what makes a comped player contribute nothing rather than
+  // dragging the average down — this line spans both modules to prove the
+  // number that actually reaches budgetVsDues carries that through.
+  it("reflects a comped player's zero through the ledger's billed total", () => {
+    const players = [
+      { player_id: "p1", name: "Aaron J" },
+      { player_id: "p2", name: "Ben T", dues_amount: 0 }, // comped
+      { player_id: "p3", name: "Cal W" },
+    ];
+    const rows = ledgerRows({ players, payments: [], defaultAmount: 850 });
+    const { billed } = ledgerTotals(rows);
+    expect(billed).toBe(1700); // 850 + 0 + 850, not 3 x an averaged figure
+
+    const v = budgetVsDues({ lines: [line({ amount: 1700 })], charged: billed, playerCount: 3 });
+    expect(v).toMatchObject({ total: 1700, billed: 1700, gap: 0, comparable: true });
+  });
+});
+
+describe("budgetGroups tie-breaking", () => {
+  // Two lines that cost the trip the same amount have no natural order until
+  // the title breaks the tie — otherwise the sort is whatever order the array
+  // happened to arrive in, which reshuffles on every re-render.
+  it("sorts equal totals alphabetically by title", () => {
+    const g = budgetGroups([
+      line({ id: "z", category: "golf", label: "Zebra caddies", amount: 500 }),
+      line({ id: "a", category: "golf", label: "Apple carts", amount: 500 }),
+    ], 16);
+    expect(g[0].lines.map(l => l.id)).toEqual(["a", "z"]);
   });
 });
