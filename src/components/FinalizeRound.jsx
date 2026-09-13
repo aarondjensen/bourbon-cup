@@ -171,11 +171,15 @@ export function DirectorFinalizeAlert({ round, nextRound, progress, cards, stage
   // "Waiting on 3 cards" is a thing a director can go and do something about;
   // "the round is nearly done" is not.
   //
-  // On the countdown rung it is the NEXT MOVE, named as a place he can walk
-  // to: the way onto the television is a button on the Leaderboard, and this
-  // bar is the only thing in the app that knows the moment has arrived.
+  // The countdown rung is the exception, and deliberately so. Directions
+  // belong on a bar that has somewhere to send you and no other way of
+  // getting there — but this one IS the way there: the whole bar is a button
+  // and it opens the Leaderboard, where the television button is. So the
+  // wayfinding is in the tap, and the words are free to be what the moment
+  // actually is. The cards are in, the golf is over and the room is about to
+  // sit down.
   const subhead = toCountdown
-    ? `${allCards} — open it on the Leaderboard when the room is ready`
+    ? `${allCards} — LFG!!!!`
     : stage === "ready"
       ? `${allCards} — ${opensClause(round, nextRound, round).replace(" for scoring", "")}`
       : `Waiting on ${outstanding} card${outstanding === 1 ? "" : "s"} — finalize or attest for them`;

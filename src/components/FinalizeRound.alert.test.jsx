@@ -49,10 +49,9 @@ describe("DirectorFinalizeAlert", () => {
     expect(seen.textContent).toMatch(/Final Countdown/);
   });
 
-  it("names the cards and the place to go", () => {
+  it("names the cards, and then gets out of the way", () => {
     bar({ stage: "countdown" });
-    expect(screen.getByText(/All 16 cards signed and attested/)).toBeTruthy();
-    expect(screen.getByText(/open it on the Leaderboard/)).toBeTruthy();
+    expect(screen.getByText("All 16 cards signed and attested — LFG!!!!")).toBeTruthy();
   });
 
   it("still asks for the finalize once the reveal is done", () => {
