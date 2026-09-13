@@ -282,6 +282,28 @@ export const isFullyRevealed = (tr) => revealedThrough(tr) >= HOLE_COUNT;
 export const isConcealing = (tr) =>
   isSealedRound(tr) && !(isFullyRevealed(tr) && !!tr?.final);
 
+// ── The ceremony has not happened yet ───────────────────────────────
+// Sealed, and still short of eighteen. Narrower than `isConcealing`, and the
+// difference is the whole point: a round that has been fully turned over but
+// not yet finalized is still CONCEALING (it waits on the director), but its
+// ceremony is over and finalizing is exactly what should happen next.
+//
+// It exists for the finalize prompt, which had the order backwards. That
+// prompt fires when every card is ATTESTED — which for the closing round is
+// the moment the cards come back to the house, an hour before anybody sits
+// down. So the app put an amber dot in front of the director telling him to
+// finalize round 4, and finalizing it first does two things nobody wants:
+// `onRoundFinal` broadcasts "Round 4 is final" to all sixteen phones with the
+// pins in the body and a link to the round sheet, and the board then lands
+// the whole round the instant the eighteenth hole is turned over rather than
+// on the director's word — which is the second condition's entire job (see
+// isConcealing).
+//
+// The prompt is suppressed while this is true and comes back the moment the
+// last hole is out, which is when it is the right prompt. Nothing here blocks
+// finalizing: a director who means to can still do it from Admin → Rounds.
+export const revealPending = (tr) => isSealedRound(tr) && !isFullyRevealed(tr);
+
 const roundOf = (tRounds, round) =>
   (tRounds || []).find((t) => t.round_number === round) || null;
 

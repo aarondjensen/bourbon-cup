@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  resolveSealed, HOLE_COUNT, sealDefaultFor, isSealedRound, revealedThrough, isFullyRevealed, isConcealing, revealState, concealedRoundNumbers, concealHoleData, countdownHoleData, stepReveal, revealSummary, wantsCountdown,
+  resolveSealed, HOLE_COUNT, sealDefaultFor, isSealedRound, revealedThrough, isFullyRevealed, isConcealing, revealState, concealedRoundNumbers, concealHoleData, countdownHoleData, stepReveal, revealSummary, wantsCountdown, revealPending,
   sideReveal, revealedForSide, revealHole, sidesPending, nextHoleForSide,
   revealCursor, countdownHole, canAdvanceHole, canGoBackHole,
   COUNTDOWN_HASH, COUNTDOWN_PATH,
@@ -1143,5 +1143,52 @@ describe("the television's bookmark", () => {
     expect(wantsCountdown(null)).toBe(false);
     expect(wantsCountdown(undefined)).toBe(false);
     expect(wantsCountdown({ pathname: null, hash: null })).toBe(false);
+  });
+});
+
+// ── The ceremony has not happened yet ──────────────────────────────
+// `revealPending` gates the finalize prompt. It is deliberately narrower
+// than `isConcealing`: a fully-revealed round still conceals (it waits on
+// the director) but its ceremony IS over, and finalizing is the next thing
+// that should happen. Getting these two confused either nags the director an
+// hour early or never nags him at all.
+describe("revealPending", () => {
+  const sealed = (extra) => ({ round_number: 4, format: "team_best_ball", sealed: true, ...extra });
+
+  it("is true on a sealed round nobody has started turning over", () => {
+    expect(revealPending(sealed({ reveal_a: 0, reveal_b: 0 }))).toBe(true);
+  });
+
+  it("stays true all the way to the seventeenth", () => {
+    expect(revealPending(sealed({ reveal_a: 17, reveal_b: 17 }))).toBe(true);
+    // And on a hole only one side has told — which is not a hole that is out.
+    expect(revealPending(sealed({ reveal_a: 18, reveal_b: 17 }))).toBe(true);
+  });
+
+  it("goes false the moment the last hole is out, BEFORE the round is final", () => {
+    // The whole point. The ceremony is over, the round is not yet in the
+    // books, and this is exactly when the director should be prompted.
+    const done = sealed({ reveal_a: 18, reveal_b: 18 });
+    expect(revealPending(done)).toBe(false);
+    expect(isConcealing(done)).toBe(true);        // still concealing, still his call
+  });
+
+  it("is false on a round that was never sealed", () => {
+    expect(revealPending({ round_number: 1, format: "singles", sealed: false })).toBe(false);
+    // Including one with no scores and no counters at all.
+    expect(revealPending({ round_number: 1, format: "singles" })).toBe(false);
+  });
+
+  it("is false on a finished round, so an imported year never nags", () => {
+    // History is written locked and final, which is what keeps the ten old
+    // cups out of every fallback in this file.
+    expect(revealPending({ round_number: 4, format: "team_best_ball", final: true })).toBe(false);
+  });
+
+  it("is false for a round that does not exist", () => {
+    // What App hands it when `currentRound` is null or the round list has not
+    // arrived — the prompt must not be suppressed by a missing document.
+    expect(revealPending(undefined)).toBe(false);
+    expect(revealPending(null)).toBe(false);
   });
 });
