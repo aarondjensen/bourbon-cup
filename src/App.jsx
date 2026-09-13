@@ -6057,7 +6057,19 @@ export default function App() {
   // The notification itself: whichever stage the round has reached, and only
   // until the director puts THAT STAGE away. Dismissing "all scores are in"
   // leaves the "ready to finalize" bar still to come.
-  const alertStage = isDirector && roundStage ? roundStage : null;
+  //
+  // ── And the closing round gets a third stage ─────────────────────
+  // A sealed round the room has not seen yet is not "ready to finalize", even
+  // though every card is in and the arithmetic above says so. What is ready is
+  // the CEREMONY, and finalizing before it is the one order of events the
+  // reveal is built to prevent (see lib/reveal.revealPending). So the loud rung
+  // becomes "countdown" on that round, which re-words the bar, points its tap
+  // at the Leaderboard — where the way onto the television lives — and, because
+  // the snooze is remembered per stage, keeps its own dismissal separate from
+  // the "ready to finalize" bar that follows it after the eighteenth hole.
+  const alertStage = isDirector && roundStage
+    ? (roundStage === "ready" && ceremonyPending ? "countdown" : roundStage)
+    : null;
   const showFinalizeAlert = !!alertStage
     && finalizeSnoozed !== finalizeSnoozeTag(currentRound, alertStage);
 
@@ -6276,7 +6288,11 @@ export default function App() {
           progress={roundProgress}
           cards={roundCards}
           stage={alertStage}
-          onOpen={openFinalize}
+          /* The countdown rung walks him to the Leaderboard instead of
+             raising the finalize sheet: the way onto the television is the
+             button on that round's sealed panel, and the sheet is the thing
+             he must NOT reach for yet. */
+          onOpen={alertStage === "countdown" ? () => setView("leaderboard") : openFinalize}
           onDismiss={() => snoozeFinalizeAlert(currentRound, alertStage)}
         />
       )}
