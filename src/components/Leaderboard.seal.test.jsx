@@ -82,7 +82,7 @@ const boardAt = (through, extra = {}, final = through >= 18) => {
       teams={teams}
       hcpOverrides={{}}
       teeAssignments={{}}
-      roundLocks={{}}
+      roundLocks={final ? { 4: { locked: true, final: true } } : {}}
       viewer="A"
       {...extra}
     />
@@ -214,5 +214,43 @@ describe("the Final Countdown itself", () => {
     // And the hole itself is drawn from the balls, not from a blank map.
     expect(all).toContain("BEST 2 OF 4");
     cleanup();
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  Who gets the door onto the television
+// ══════════════════════════════════════════════════════════════════
+//  Everybody, while the round is still open — the machine the room watches is
+//  signed in as whoever happened to be holding the laptop, and a countdown
+//  only a director could open would be a countdown nobody could open.
+//
+//  Once the round is IN THE BOOKS it narrows to the two men who drive it. A
+//  finalized round's ceremony is over or was never needed, and for the other
+//  fourteen the button then offers a screen with nothing left to turn over.
+describe("the door onto the countdown", () => {
+  const DOOR = "OPEN THE FINAL COUNTDOWN";
+
+  it("is open to everybody while the round is not final", () => {
+    expect(boardAt(6, {}, false)).toContain(DOOR);
+    cleanup();
+    // Including a man who is neither.
+    expect(boardAt(6, { canReveal: false, captainSide: null }, false)).toContain(DOOR);
+  });
+
+  it("closes to a plain player once the round is finalized", () => {
+    const t = boardAt(6, { canReveal: false, captainSide: null }, true);
+    // The panel is still there saying what the board is waiting on — it is the
+    // DOOR that goes, not the explanation.
+    expect(t).toContain("WAITING ON THE FINAL COUNTDOWN");
+    expect(t).not.toContain(DOOR);
+  });
+
+  it("stays open to a director", () => {
+    expect(boardAt(6, { canReveal: true, onSetReveal: () => {}, captainSide: null }, true))
+      .toContain(DOOR);
+  });
+
+  it("stays open to a captain", () => {
+    expect(boardAt(6, { canReveal: false, captainSide: "A" }, true)).toContain(DOOR);
   });
 });
