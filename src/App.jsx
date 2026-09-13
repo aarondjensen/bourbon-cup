@@ -4774,10 +4774,32 @@ export default function App() {
   // The side lookup is what makes the cut PER PLAYER rather than per hole: a
   // hole is turned over one side at a time now, so team A's twelfth can be on
   // this map while team B's twelfth is not.
-  const sideOfPlayer = useCallback(
-    (pid) => (tPlayers.find(p => p.player_id === pid)?.team === "B" ? "B" : "A"),
-    [tPlayers]
-  );
+  //
+  // ── An unknown player is NOT team A ──────────────────────────────
+  // `countdownHoleData` cuts a player it cannot place at the safer of the two
+  // counters — the side that has been shown less — and it decides that off a
+  // NULL from this lookup. This was a seventh hand-rolled copy of `teamOf`
+  // (see lib/players, which exists because two earlier copies had already
+  // drifted on exactly this question), and it was the one that drifted the
+  // dangerous way: `?.team === "B" ? "B" : "A"` answers "A" for a player it
+  // has never heard of, so the safety net below it was unreachable.
+  //
+  // The case that reaches it is the television being refreshed, which is a
+  // thing somebody does two minutes before everyone sits down. Subscriptions
+  // land over several frames, and in the window where `holeData` has arrived
+  // and the roster has not, EVERY pid is unknown — so every one of them read
+  // as team A and team B's map was cut at team A's counter. With A a hole
+  // ahead, B's unrevealed hole was scored into the countdown's own result:
+  // the ball grid still said WAITING (`shown` is computed off the counters,
+  // not off the data), but the cup totals and the clinch band moved for a
+  // hole whose captain had not spoken. That is the outcome arriving early,
+  // which is the one thing the whole evening is built to prevent.
+  //
+  // `teamOf` answers null for an unknown id, and anything that is not "A" or
+  // "B" — a null, or a team a director spelled some other way — falls to the
+  // minimum of the two counters, which is the reveal's own definition of what
+  // is wholly public.
+  const sideOfPlayer = useMemo(() => playerLookup(tPlayers).teamOf, [tPlayers]);
   const countdownData = useMemo(
     () => countdownHoleData(holeData, enrichedRounds, sideOfPlayer),
     [holeData, enrichedRounds, sideOfPlayer]
