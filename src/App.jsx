@@ -34,7 +34,7 @@ import {
 } from "./lib/roundLocks";
 import {
   concealHoleData, countdownHoleData, revealState, revealSummary, HOLE_COUNT,
-  COUNTDOWN_HASH, wantsCountdown,
+  COUNTDOWN_HASH, wantsCountdown, revealPending,
 } from "./lib/reveal";
 import { usePullToRefresh } from "./lib/usePullToRefresh";
 import { useFitDensity } from "./lib/useFitDensity";
@@ -5910,7 +5910,17 @@ export default function App() {
   // something about. See lib/scoreGuard's finalizeStage for both, and the
   // header of components/FinalizeRound for why it fires twice.
   const roundStage = currentRound == null ? null : finalizeStage({ progress: roundProgress, cards: roundCards });
-  const finalizeReady = isDirector && roundStage === "ready";
+  // ── But not before the room has seen it ──────────────────────────
+  // "Ready" means every card is attested, which on the closing round is the
+  // moment the cards come back to the HOUSE — an hour before anybody sits
+  // down to watch it. Prompting there told the director to finalize the round
+  // whose whole point is that it is finalized last: the push goes out naming
+  // the pins, and the board then lands on the eighteenth hole rather than on
+  // his word. See lib/reveal.revealPending; the prompt returns the moment the
+  // last hole is turned over, which is when it is the right prompt.
+  const ceremonyPending = revealPending(
+    enrichedRounds.find(r => r.round_number === currentRound));
+  const finalizeReady = isDirector && roundStage === "ready" && !ceremonyPending;
   // ── What the SHEET is looking at ─────────────────────────────────
   // The alert above speaks for the live round and nothing else. The sheet
   // does not have to: every round that has not been frozen is a round a
