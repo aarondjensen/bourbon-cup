@@ -605,7 +605,7 @@ function RevealControl({ through, onSet }) {
 // So: WAITING ON THE FINAL COUNTDOWN. It is what is true, it is what a player
 // looking for the score needs to know, and it is the whole of what the board
 // is entitled to say until the director puts the round in the books.
-function SealedPanel({ through, canReveal, onSetReveal, onOpenCountdown }) {
+function SealedPanel({ through, canReveal, onSetReveal, onOpenCountdown, canOpen }) {
   return (
     <div style={{
       marginTop: 8, background: BC.card, borderRadius: 12, overflow: "hidden",
@@ -618,21 +618,33 @@ function SealedPanel({ through, canReveal, onSetReveal, onOpenCountdown }) {
             WAITING ON THE FINAL COUNTDOWN
           </span>
         </div>
-        {/* The way onto the television, and the one thing here that is not
-            information about the round — take it away and nobody can put the
-            countdown on the screen. Offered to EVERYBODY, not just the
-            director: the machine the room watches is signed in as whoever
+        {/* ── The way onto the television ──
+            The one thing in this panel that is not information about the
+            round. Offered to EVERYBODY while the round is still open, and that
+            is deliberate: the machine the room watches is signed in as whoever
             happened to be holding the laptop, and a countdown only a director
-            could open would be a countdown nobody could open. The controls
-            inside it are still director-only. */}
-        <button onClick={onOpenCountdown} style={{
-          width: "100%", marginTop: 9, padding: "9px 0", borderRadius: 8,
-          background: BC.amberGlow, border: `1px solid ${BC.amber}${ALPHA.line}`,
-          color: BC.amberInk, fontFamily: FONT, fontSize: FS.body, fontWeight: 800,
-          letterSpacing: 1, cursor: "pointer",
-        }}>
-          📺 OPEN THE FINAL COUNTDOWN
-        </button>
+            could open would be a countdown nobody could open.
+
+            ONCE THE ROUND IS IN THE BOOKS it narrows to the two men who drive
+            it — the captains and the directors. A finalized round is a round
+            whose ceremony is over or has never needed one, and for the other
+            fourteen the button then offers a screen with nothing left to turn
+            over: a television view of a result the board above it is already
+            showing, reachable by a tap that looks like it should do something.
+            The men who might still need it are the ones who might still be
+            driving it.
+
+            The controls inside are director-only either way. */}
+        {canOpen && (
+          <button onClick={onOpenCountdown} style={{
+            width: "100%", marginTop: 9, padding: "9px 0", borderRadius: 8,
+            background: BC.amberGlow, border: `1px solid ${BC.amber}${ALPHA.line}`,
+            color: BC.amberInk, fontFamily: FONT, fontSize: FS.body, fontWeight: 800,
+            letterSpacing: 1, cursor: "pointer",
+          }}>
+            📺 OPEN THE FINAL COUNTDOWN
+          </button>
+        )}
       </div>
       {canReveal && <RevealControl through={through} onSet={onSetReveal} />}
     </div>
@@ -1256,6 +1268,9 @@ export function TeamLeaderboard({
       <SealedPanel
         through={seal.through}
         canReveal={!!drive}
+        // Everybody until the round is in the books, then the two who drive
+        // it. See the note on the button itself.
+        canOpen={!isRoundFinal(roundLocks, rnd) || !!drive || !!captainSide}
         onSetReveal={drive || (() => {})}
         onOpenCountdown={() => openCountdown(rnd)}
       />
