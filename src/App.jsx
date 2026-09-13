@@ -96,7 +96,7 @@ import {
   GROUPS_COL, groupsDocId, encodeGroups, decodeGroups,
   teeTimeForMatch, parseTeeTime, formatTeeTime, DEFAULT_TEE_INTERVAL, TEE_SLOTS,
   roundPlaySetup, orderMatchesForRound, numberMatches, groupIndexForMatch,
-  scoringUnits, unitForPlayer, teeTimeList, expandTeeTimes, stripAMPM,
+  scoringUnits, unitForPlayer, readableUnits, teeTimeList, expandTeeTimes, stripAMPM,
 } from "./lib/groups";
 import { firstTeeAt } from "./lib/countdown";
 import { groupKey, tagAheadOfPlay, resolvePin, OVERRIDE_KEY } from "./lib/ctp";
@@ -1263,25 +1263,30 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // not persisted — the next time the app opens, the seal is back on.
   const otherSideShown = unlockedRound != null && unlockedRound === match?.round;
   const sealedToOwnSide = !!conceal && !otherSideShown;
-  // A unit belongs to the other side if it holds ANY player from it. The
-  // conservative direction on purpose: a wave a director grouped across both
-  // teams is hidden rather than half-shown.
-  const otherSideUnit = (u) =>
-    u.pids.some((pid) => (match?.teamA?.includes(pid) ? "A" : "B") !== userTeam);
-  const openUnits = sealedToOwnSide ? units.filter((u) => !otherSideUnit(u)) : units;
+  // Which side of the MATCH a player is on — the draw, not the roster, because
+  // that is what a card is scored into. See lib/groups.readableUnits for what
+  // a sealed round then does with it, and for the floor that used to step over
+  // this filter entirely on an undrawn closing round.
+  const otherSidePlayer = (pid) =>
+    (match?.teamA?.includes(pid) ? "A" : "B") !== userTeam;
+  const { open: openUnits, floor: floorUnit } = readableUnits({
+    units, sealed: sealedToOwnSide, otherSide: otherSidePlayer,
+  });
 
   // The reader's own group unless a director has deliberately picked another.
   // Resolved, never stored — a pick that stops matching (the round moved, the
   // draw changed under them, the seal took it back) falls back to their own
   // group rather than pointing at players who are no longer grouped that way.
   //
-  // The final `units[0]` is the floor: a screen has to be about somebody, and
+  // The final `floorUnit` is the floor: a screen has to be about somebody, and
   // it is only reached when the reader's own side has no group at all, which
-  // is a draw nobody has finished making.
+  // is a draw nobody has finished making. On a sealed round it is cut to the
+  // reader's own side — see lib/groups.readableUnits, where that cut and the
+  // reason for it live.
   const unit = openUnits.find(u => u.key === pickedUnit)
     || unitForPlayer(openUnits, userPid)
     || openUnits[0]
-    || units[0]
+    || floorUnit
     || null;
   // What the cards, the hole strip and the auto-advance are about. `matchPids`
   // stays the MATCH's roster and is still what decides a signature: a card is
@@ -1954,7 +1959,7 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // score buttons' height for a question asked once a year.
   const groupPicker = isDirector && units.length > 1 ? (() => {
     const times = expandTeeTimes(teeTimeList(tr), units.length);
-    const locked = (u) => sealedToOwnSide && otherSideUnit(u);
+    const locked = (u) => sealedToOwnSide && (u.pids || []).some(otherSidePlayer);
     const unlockThen = async (key) => {
       // Short on purpose. The man tapping this is a director standing on a
       // golf course or sitting in the room, and he already knows what the seal
