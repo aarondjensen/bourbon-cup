@@ -31,6 +31,18 @@ export default class ErrorBoundary extends Component {
     // Surface to devtools / Vercel logs. If external error reporting is
     // ever added (Sentry etc.), it would hook in here.
     console.error("[ErrorBoundary] Caught error in view:", error, errorInfo);
+    // ── An owner that wants to know ──────────────────────────────
+    // Optional, and only the Final Countdown uses it. A tab recovers by
+    // being navigated away from; the television has nobody to navigate it,
+    // so the countdown's boundary closes the countdown from here — which
+    // clears the #countdown hash and is the only thing that stops a reload
+    // landing straight back on the screen that just threw. See the portal
+    // in components/Leaderboard.
+    //
+    // Guarded, because a handler that throws inside componentDidCatch would
+    // replace a caught error with an uncaught one and take the tree it was
+    // called to save.
+    try { this.props.onError?.(error, errorInfo); } catch { /* keep the fallback */ }
   }
 
   render() {

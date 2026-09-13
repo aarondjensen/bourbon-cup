@@ -96,7 +96,7 @@ import {
   GROUPS_COL, groupsDocId, encodeGroups, decodeGroups,
   teeTimeForMatch, parseTeeTime, formatTeeTime, DEFAULT_TEE_INTERVAL, TEE_SLOTS,
   roundPlaySetup, orderMatchesForRound, numberMatches, groupIndexForMatch,
-  scoringUnits, unitForPlayer, teeTimeList, expandTeeTimes, stripAMPM,
+  scoringUnits, unitForPlayer, readableUnits, teeTimeList, expandTeeTimes, stripAMPM,
 } from "./lib/groups";
 import { firstTeeAt } from "./lib/countdown";
 import { groupKey, tagAheadOfPlay, resolvePin, OVERRIDE_KEY } from "./lib/ctp";
@@ -1263,25 +1263,30 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // not persisted — the next time the app opens, the seal is back on.
   const otherSideShown = unlockedRound != null && unlockedRound === match?.round;
   const sealedToOwnSide = !!conceal && !otherSideShown;
-  // A unit belongs to the other side if it holds ANY player from it. The
-  // conservative direction on purpose: a wave a director grouped across both
-  // teams is hidden rather than half-shown.
-  const otherSideUnit = (u) =>
-    u.pids.some((pid) => (match?.teamA?.includes(pid) ? "A" : "B") !== userTeam);
-  const openUnits = sealedToOwnSide ? units.filter((u) => !otherSideUnit(u)) : units;
+  // Which side of the MATCH a player is on — the draw, not the roster, because
+  // that is what a card is scored into. See lib/groups.readableUnits for what
+  // a sealed round then does with it, and for the floor that used to step over
+  // this filter entirely on an undrawn closing round.
+  const otherSidePlayer = (pid) =>
+    (match?.teamA?.includes(pid) ? "A" : "B") !== userTeam;
+  const { open: openUnits, floor: floorUnit } = readableUnits({
+    units, sealed: sealedToOwnSide, otherSide: otherSidePlayer,
+  });
 
   // The reader's own group unless a director has deliberately picked another.
   // Resolved, never stored — a pick that stops matching (the round moved, the
   // draw changed under them, the seal took it back) falls back to their own
   // group rather than pointing at players who are no longer grouped that way.
   //
-  // The final `units[0]` is the floor: a screen has to be about somebody, and
+  // The final `floorUnit` is the floor: a screen has to be about somebody, and
   // it is only reached when the reader's own side has no group at all, which
-  // is a draw nobody has finished making.
+  // is a draw nobody has finished making. On a sealed round it is cut to the
+  // reader's own side — see lib/groups.readableUnits, where that cut and the
+  // reason for it live.
   const unit = openUnits.find(u => u.key === pickedUnit)
     || unitForPlayer(openUnits, userPid)
     || openUnits[0]
-    || units[0]
+    || floorUnit
     || null;
   // What the cards, the hole strip and the auto-advance are about. `matchPids`
   // stays the MATCH's roster and is still what decides a signature: a card is
@@ -1954,7 +1959,7 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // score buttons' height for a question asked once a year.
   const groupPicker = isDirector && units.length > 1 ? (() => {
     const times = expandTeeTimes(teeTimeList(tr), units.length);
-    const locked = (u) => sealedToOwnSide && otherSideUnit(u);
+    const locked = (u) => sealedToOwnSide && (u.pids || []).some(otherSidePlayer);
     const unlockThen = async (key) => {
       // Short on purpose. The man tapping this is a director standing on a
       // golf course or sitting in the room, and he already knows what the seal
@@ -4774,10 +4779,32 @@ export default function App() {
   // The side lookup is what makes the cut PER PLAYER rather than per hole: a
   // hole is turned over one side at a time now, so team A's twelfth can be on
   // this map while team B's twelfth is not.
-  const sideOfPlayer = useCallback(
-    (pid) => (tPlayers.find(p => p.player_id === pid)?.team === "B" ? "B" : "A"),
-    [tPlayers]
-  );
+  //
+  // ── An unknown player is NOT team A ──────────────────────────────
+  // `countdownHoleData` cuts a player it cannot place at the safer of the two
+  // counters — the side that has been shown less — and it decides that off a
+  // NULL from this lookup. This was a seventh hand-rolled copy of `teamOf`
+  // (see lib/players, which exists because two earlier copies had already
+  // drifted on exactly this question), and it was the one that drifted the
+  // dangerous way: `?.team === "B" ? "B" : "A"` answers "A" for a player it
+  // has never heard of, so the safety net below it was unreachable.
+  //
+  // The case that reaches it is the television being refreshed, which is a
+  // thing somebody does two minutes before everyone sits down. Subscriptions
+  // land over several frames, and in the window where `holeData` has arrived
+  // and the roster has not, EVERY pid is unknown — so every one of them read
+  // as team A and team B's map was cut at team A's counter. With A a hole
+  // ahead, B's unrevealed hole was scored into the countdown's own result:
+  // the ball grid still said WAITING (`shown` is computed off the counters,
+  // not off the data), but the cup totals and the clinch band moved for a
+  // hole whose captain had not spoken. That is the outcome arriving early,
+  // which is the one thing the whole evening is built to prevent.
+  //
+  // `teamOf` answers null for an unknown id, and anything that is not "A" or
+  // "B" — a null, or a team a director spelled some other way — falls to the
+  // minimum of the two counters, which is the reveal's own definition of what
+  // is wholly public.
+  const sideOfPlayer = useMemo(() => playerLookup(tPlayers).teamOf, [tPlayers]);
   const countdownData = useMemo(
     () => countdownHoleData(holeData, enrichedRounds, sideOfPlayer),
     [holeData, enrichedRounds, sideOfPlayer]

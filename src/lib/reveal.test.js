@@ -3,6 +3,7 @@ import {
   resolveSealed, HOLE_COUNT, sealDefaultFor, isSealedRound, revealedThrough, isFullyRevealed, isConcealing, revealState, concealedRoundNumbers, concealHoleData, countdownHoleData, stepReveal, revealSummary, wantsCountdown,
   sideReveal, revealedForSide, revealHole, sidesPending, nextHoleForSide,
   revealCursor, countdownHole, canAdvanceHole, canGoBackHole,
+  COUNTDOWN_HASH, COUNTDOWN_PATH,
 } from "./reveal";
 
 // The blackout is the one feature of this app whose failure mode is silent
@@ -596,5 +597,551 @@ describe("the director's cursor", () => {
     expect(countdownHoleData(holes, cleared)).toEqual(countdownHoleData(holes, notCleared));
     expect(revealedThrough(at(7, 7, 8))).toBe(7);
     expect(concealHoleData(holes, cleared).a1_4).toBeUndefined();
+  });
+});
+
+
+// ══════════════════════════════════════════════════════════════════
+//  THE CONTROLS, EXHAUSTIVELY
+// ══════════════════════════════════════════════════════════════════
+//  Everything below is the same three numbers — `reveal_a`, `reveal_b` and
+//  `reveal_cursor` — asked every way the evening can ask them. The blocks
+//  above pin the cases somebody thought of; these walk the matrix, because
+//  the failure mode here is not a wrong number on a screen somebody can
+//  correct. It is eight balls in front of fifteen people, one beat early,
+//  and there is no revert for what a room has already read.
+
+// One round, three counters. `cursor` omitted means the field is absent,
+// which is what a round nobody has cleared carries.
+const rc = (a, b, cursor) => round(4, {
+  format: "team_best_ball", sealed: true, reveal_a: a, reveal_b: b,
+  ...(cursor == null ? {} : { reveal_cursor: cursor }),
+});
+
+// The states the ceremony can actually reach. A side may be at most one hole
+// ahead of the other (the screen holds that line and so do the security
+// rules), and the cursor is only ever where somebody walked it.
+const LADDER = [0, 1, 2, 6, 7, 8, 16, 17, 18];
+const CURSORS = Array.from({ length: HOLE_COUNT + 1 }, (_, i) => i);
+const everyState = (fn) => {
+  LADDER.forEach((a) => LADDER.forEach((b) => CURSORS.forEach((c) => {
+    fn(a, b, c, rc(a, b, c));
+  })));
+};
+
+describe("canAdvanceHole / canGoBackHole across the whole matrix", () => {
+  // The definition, written out once. `hole` is what the television is on;
+  // NEXT is offered only when both sides have reached it and there is a hole
+  // left to reach.
+  it("is exactly 'both sides have told the hole on screen, and it is not the last'", () => {
+    everyState((a, b, c, tr) => {
+      const at = Math.max(c, a, b);
+      expect(canAdvanceHole(tr)).toBe(at < HOLE_COUNT && a >= at && b >= at);
+    });
+  });
+
+  // The invariant that matters, stated as itself rather than as the formula:
+  // the room is never moved on past a captain who has not spoken.
+  it("never advances past a side that has not told the hole", () => {
+    everyState((a, b, c, tr) => {
+      if (!canAdvanceHole(tr)) return;
+      expect(Math.min(a, b)).toBeGreaterThanOrEqual(countdownHole(tr));
+    });
+  });
+
+  // BACK is the undo of NEXT and nothing else: it exists only while the clear
+  // is still a clear. Un-revealing a hole the room has WATCHED is a different
+  // act with its own control (the reveal buttons, and the director's strip).
+  it("goes back only when there is a clear to take back", () => {
+    everyState((a, b, c, tr) => {
+      expect(canGoBackHole(tr)).toBe(c > Math.max(a, b));
+    });
+  });
+
+  // They cannot both be live. If BACK is offered the cursor leads the reveal,
+  // so at least one side has not told the hole on screen — which is exactly
+  // what NEXT refuses. A screen offering both would mean the two controls
+  // disagreed about where the room is.
+  it("never offers both at once", () => {
+    everyState((a, b, c, tr) => {
+      expect(canAdvanceHole(tr) && canGoBackHole(tr)).toBe(false);
+    });
+  });
+
+  // Neither control can reach a hole outside the card, whatever is stored.
+  it("keeps the hole on the card", () => {
+    everyState((a, b, c, tr) => {
+      const at = countdownHole(tr);
+      expect(at).toBeGreaterThanOrEqual(0);
+      expect(at).toBeLessThanOrEqual(HOLE_COUNT);
+      if (canAdvanceHole(tr)) expect(at + 1).toBeLessThanOrEqual(HOLE_COUNT);
+      if (canGoBackHole(tr)) expect(at - 1).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  // ── The named corners ──────────────────────────────────────────
+  it("is level at nothing before anybody has tapped", () => {
+    // Both sides have reached hole 0 because there is no hole 0 to tell, so
+    // the state machine will clear the opening card onto hole 1 — which shows
+    // two empty columns and turns over nothing.
+    //
+    // The SCREEN is stricter: FinalCountdown's own `canNext` carries an extra
+    // `hole > 0`, so the ▶ arrow stays dark on the splash and the first move
+    // of the evening is a captain's. Both ends are safe (the cursor cannot
+    // reveal a ball either way); the screen is the one that decides.
+    expect(countdownHole(rc(0, 0))).toBe(0);
+    expect(canAdvanceHole(rc(0, 0))).toBe(true);
+    expect(canGoBackHole(rc(0, 0))).toBe(false);
+  });
+
+  it("holds while one side is ahead, either side", () => {
+    expect(canAdvanceHole(rc(1, 0))).toBe(false);
+    expect(canAdvanceHole(rc(0, 1))).toBe(false);
+    expect(canAdvanceHole(rc(18, 17))).toBe(false);
+    expect(canAdvanceHole(rc(17, 18))).toBe(false);
+    // And there is nothing to take back either — the leading side put the
+    // room on this hole, not the director.
+    expect(canGoBackHole(rc(1, 0))).toBe(false);
+    expect(canGoBackHole(rc(17, 18))).toBe(false);
+  });
+
+  it("offers only BACK once the cursor is ahead of both", () => {
+    expect(canAdvanceHole(rc(7, 7, 8))).toBe(false);
+    expect(canGoBackHole(rc(7, 7, 8))).toBe(true);
+    // Even miles ahead — a stored cursor that got away from the ceremony is
+    // still only ever walked back one hole at a time.
+    expect(canAdvanceHole(rc(2, 2, 17))).toBe(false);
+    expect(canGoBackHole(rc(2, 2, 17))).toBe(true);
+  });
+
+  it("has nothing to clear onto at the eighteenth", () => {
+    expect(canAdvanceHole(rc(18, 18))).toBe(false);
+    expect(canAdvanceHole(rc(18, 18, 18))).toBe(false);
+    expect(canGoBackHole(rc(18, 18, 18))).toBe(false);
+    // A cursor at 18 over an unfinished reveal is a cleared board on the last
+    // hole: nothing forward, and the clear still takes back.
+    expect(canAdvanceHole(rc(0, 0, 18))).toBe(false);
+    expect(canGoBackHole(rc(0, 0, 18))).toBe(true);
+    expect(canGoBackHole(rc(17, 17, 18))).toBe(true);
+  });
+
+  it("is inert when the cursor sits exactly on the revealed hole", () => {
+    // The common state: the director cleared onto 8 and both captains have
+    // since told it. Nothing to undo, and NEXT is live again.
+    expect(countdownHole(rc(8, 8, 8))).toBe(8);
+    expect(canGoBackHole(rc(8, 8, 8))).toBe(false);
+    expect(canAdvanceHole(rc(8, 8, 8))).toBe(true);
+  });
+
+  it("says nothing at all about a round that is not sealed", () => {
+    const open = round(4, { format: "singles", reveal_a: 3, reveal_b: 3, reveal_cursor: 4 });
+    expect(countdownHole(open)).toBe(HOLE_COUNT);
+    expect(canAdvanceHole(open)).toBe(false);
+    // The cursor is read off the raw field, so an unsealed round with a stale
+    // cursor still reports the whole card as revealed and drives nothing.
+    expect(canGoBackHole(open)).toBe(false);
+    expect(canAdvanceHole(null)).toBe(false);
+    expect(canGoBackHole(undefined)).toBe(false);
+  });
+});
+
+// The line the comment over countdownHole draws: a director who walks the
+// arrows and then puts his phone down must not freeze the television.
+describe("countdownHole is the MAX, never the cursor alone", () => {
+  it("is max(cursor, the furthest side)", () => {
+    everyState((a, b, c, tr) => {
+      expect(countdownHole(tr)).toBe(Math.max(c, a, b));
+    });
+  });
+
+  it("follows the captains again the moment they pass the director", () => {
+    // He cleared to 8 and stopped driving. The captains carry on.
+    expect(countdownHole(rc(7, 7, 8))).toBe(8);
+    expect(countdownHole(rc(8, 7, 8))).toBe(8);
+    expect(countdownHole(rc(8, 8, 8))).toBe(8);
+    expect(countdownHole(rc(9, 8, 8))).toBe(9);
+    expect(countdownHole(rc(12, 12, 8))).toBe(12);
+    // All the way to the end, with the cursor still sitting on 8.
+    expect(countdownHole(rc(18, 18, 8))).toBe(HOLE_COUNT);
+  });
+
+  it("never lets the cursor hide a hole a captain has turned over", () => {
+    // A cursor BEHIND the reveal is ignored outright — otherwise the screen
+    // would be showing a hole while a side's balls sat on a later one.
+    everyState((a, b, c, tr) => {
+      expect(countdownHole(tr)).toBeGreaterThanOrEqual(revealHole(tr));
+    });
+  });
+});
+
+describe("sidesPending / nextHoleForSide at every boundary", () => {
+  it("offers both captains a level hole and one captain a split one", () => {
+    expect(sidesPending(rc(0, 0))).toEqual(["A", "B"]);
+    expect(sidesPending(rc(9, 9))).toEqual(["A", "B"]);
+    expect(sidesPending(rc(17, 17))).toEqual(["A", "B"]);
+    expect(sidesPending(rc(1, 0))).toEqual(["B"]);
+    expect(sidesPending(rc(0, 1))).toEqual(["A"]);
+    expect(sidesPending(rc(18, 17))).toEqual(["B"]);
+    expect(sidesPending(rc(17, 18))).toEqual(["A"]);
+  });
+
+  it("has nobody left once both sides are out", () => {
+    expect(sidesPending(rc(18, 18))).toEqual([]);
+    expect(sidesPending(rc(18, 18, 18))).toEqual([]);
+  });
+
+  // The cursor is the layout and nothing else — it cannot put a captain back
+  // on the clock or take him off it.
+  it("ignores the cursor entirely", () => {
+    CURSORS.forEach((c) => {
+      expect(sidesPending(rc(7, 7, c))).toEqual(["A", "B"]);
+      expect(sidesPending(rc(8, 7, c))).toEqual(["B"]);
+      expect(sidesPending(rc(18, 18, c))).toEqual([]);
+    });
+  });
+
+  it("names each side's next hole, and null when it has none", () => {
+    expect(nextHoleForSide(rc(0, 0), "A")).toBe(1);
+    expect(nextHoleForSide(rc(0, 0), "B")).toBe(1);
+    expect(nextHoleForSide(rc(17, 17), "A")).toBe(18);
+    expect(nextHoleForSide(rc(18, 17), "A")).toBe(null);
+    expect(nextHoleForSide(rc(18, 17), "B")).toBe(18);
+    expect(nextHoleForSide(rc(17, 18), "A")).toBe(18);
+    expect(nextHoleForSide(rc(18, 18), "A")).toBe(null);
+    expect(nextHoleForSide(rc(18, 18), "B")).toBe(null);
+  });
+
+  // It answers "which hole would his tap turn over", not "is it his go" —
+  // those are two questions and sidesPending is the other one. FinalCountdown
+  // asks BOTH before it will call onAdvance; so do the security rules.
+  it("is not a permission — it names a hole for a side that is not due", () => {
+    expect(nextHoleForSide(rc(1, 0), "A")).toBe(2);
+    expect(sidesPending(rc(1, 0))).not.toContain("A");
+  });
+
+  // One hole at a time, all the way up, and never two.
+  it("only ever moves a side on by one", () => {
+    everyState((a, b, c, tr) => {
+      ["A", "B"].forEach((side) => {
+        const own = side === "A" ? a : b;
+        const next = nextHoleForSide(tr, side);
+        if (next == null) expect(own).toBe(HOLE_COUNT);
+        else expect(next).toBe(own + 1);
+      });
+    });
+  });
+});
+
+describe("stepReveal takes garbage and still lands on the card", () => {
+  it("walks one hole and stops at both ends", () => {
+    expect(stepReveal(0, 1)).toBe(1);
+    expect(stepReveal(0, -1)).toBe(0);
+    expect(stepReveal(17, 1)).toBe(HOLE_COUNT);
+    expect(stepReveal(18, 1)).toBe(HOLE_COUNT);
+    expect(stepReveal(18, -1)).toBe(17);
+    expect(stepReveal(1, -1)).toBe(0);
+  });
+
+  it("reads anything unreadable as nothing revealed", () => {
+    [undefined, null, "", "nonsense", NaN, {}, [], "abc"].forEach((v) => {
+      expect(stepReveal(v, 1)).toBe(1);
+      expect(stepReveal(v, -1)).toBe(0);
+    });
+  });
+
+  it("clamps a stored value from outside the card", () => {
+    expect(stepReveal(-5, 1)).toBe(0);
+    expect(stepReveal(-5, -1)).toBe(0);
+    expect(stepReveal(99, 1)).toBe(HOLE_COUNT);
+    expect(stepReveal(99, -1)).toBe(HOLE_COUNT);
+    expect(stepReveal(Infinity, 1)).toBe(HOLE_COUNT);
+    expect(stepReveal(-Infinity, 1)).toBe(0);
+  });
+
+  // Whatever goes in, what comes out is on the card. That is the only
+  // guarantee any caller needs from it.
+  it("is always between 0 and 18, from anything at all", () => {
+    [undefined, null, "", "7", "nonsense", NaN, Infinity, -Infinity, -1, 0, 3.7, 17, 18, 99, {}, []]
+      .forEach((v) => [1, -1, 18, -18].forEach((by) => {
+        const out = stepReveal(v, by);
+        expect(out).toBeGreaterThanOrEqual(0);
+        expect(out).toBeLessThanOrEqual(HOLE_COUNT);
+      }));
+  });
+
+  // A FRACTION SURVIVES, and that is fine: every caller floors before it gets
+  // here. `revealState.through` comes through clampHole (which floors) and
+  // App's onSetReveal rounds before it writes, so a stored 3.7 is a 3 by the
+  // time RevealControl sees it. Pinned so a change to either end is noticed.
+  it("does not itself round a fractional input", () => {
+    expect(stepReveal(3.7, 1)).toBeCloseTo(4.7, 5);
+    expect(revealedThrough(sealedRound(4, 3.7))).toBe(3);
+  });
+});
+
+// ── Half a hole is not a hole ───────────────────────────────────────
+// The one that the whole evening rests on. While one captain is talking his
+// side's number is on the television and the other side's is not, so the hole
+// has no result — and NOTHING outside the countdown may count it.
+describe("a half-revealed hole is public nowhere", () => {
+  const data = { a1_4: card(18), b1_4: card(18) };
+
+  it("is MIN for what is public and MAX for what is on screen", () => {
+    everyState((a, b, c, tr) => {
+      expect(revealedThrough(tr)).toBe(Math.min(a, b));
+      expect(revealHole(tr)).toBe(Math.max(a, b));
+    });
+  });
+
+  it("keeps the board at nothing on every split hole", () => {
+    for (let n = 1; n <= HOLE_COUNT; n += 1) {
+      [[n, n - 1], [n - 1, n]].forEach(([a, b]) => {
+        const tr = rc(a, b);
+        expect(revealedThrough(tr)).toBe(n - 1);
+        expect(isFullyRevealed(tr)).toBe(false);
+        expect(isConcealing(tr)).toBe(true);
+        expect(revealState([tr], 4).through).toBe(n - 1);
+        // The scoreboard is all-or-nothing whatever the sides are doing.
+        expect(concealHoleData(data, [tr]).a1_4).toBeUndefined();
+        expect(concealHoleData(data, [tr]).b1_4).toBeUndefined();
+      });
+    }
+  });
+
+  // Even on the last hole of the evening, and even with the round final: one
+  // captain still holding his eight balls means the cup is not decided.
+  it("is not over with one side still to speak on the eighteenth", () => {
+    expect(isFullyRevealed(rc(18, 17))).toBe(false);
+    expect(isConcealing(round(4, {
+      format: "team_best_ball", sealed: true, reveal_a: 18, reveal_b: 17, final: true,
+    }))).toBe(true);
+    expect(concealHoleData(data, [round(4, {
+      format: "team_best_ball", sealed: true, reveal_a: 18, reveal_b: 17, final: true,
+    })]).a1_4).toBeUndefined();
+  });
+
+  // The countdown is the ONE screen allowed to be mid-hole, and even there
+  // the cut is per side.
+  it("shows the trailing side less, on the one screen that may", () => {
+    const sideOf = (pid) => (pid.startsWith("a") ? "A" : "B");
+    const tv = countdownHoleData(data, [rc(7, 6)], sideOf);
+    expect(Object.keys(tv.a1_4).length).toBe(7);
+    expect(Object.keys(tv.b1_4).length).toBe(6);
+    expect(tv.b1_4[6]).toBeUndefined();
+  });
+
+  // And the cursor cannot buy a single ball. It is the layout; the scores are
+  // cut by the two counters, so a cleared board shows the same map as the
+  // hole before it.
+  it("is unmoved by the cursor, on either screen", () => {
+    CURSORS.forEach((c) => {
+      expect(countdownHoleData(data, [rc(7, 6, c)]))
+        .toEqual(countdownHoleData(data, [rc(7, 6)]));
+      expect(concealHoleData(data, [rc(7, 6, c)]).a1_4).toBeUndefined();
+      expect(revealedThrough(rc(7, 6, c))).toBe(6);
+    });
+  });
+});
+
+// A round sealed before the sides came apart carries ONE number. It has to
+// keep reading as both — and a side that has since been stepped has to win.
+describe("the legacy counter, and the mixed round", () => {
+  const legacy = (extra) => round(4, { format: "team_best_ball", sealed: true, ...extra });
+
+  it("reads one number as both sides", () => {
+    expect(sideReveal(legacy({ reveal_through: 9 }))).toEqual({ A: 9, B: 9 });
+    expect(revealedThrough(legacy({ reveal_through: 9 }))).toBe(9);
+    expect(revealHole(legacy({ reveal_through: 9 }))).toBe(9);
+    expect(sidesPending(legacy({ reveal_through: 9 }))).toEqual(["A", "B"]);
+  });
+
+  // The shape a round takes the first time a captain taps: his own counter is
+  // written, the other side is still on the legacy number.
+  it("takes a side's own counter and leaves the other on the legacy one", () => {
+    const mixed = legacy({ reveal_through: 9, reveal_a: 10 });
+    expect(sideReveal(mixed)).toEqual({ A: 10, B: 9 });
+    expect(revealedThrough(mixed)).toBe(9);
+    expect(revealHole(mixed)).toBe(10);
+    expect(sidesPending(mixed)).toEqual(["B"]);
+    expect(nextHoleForSide(mixed, "B")).toBe(10);
+    // Mirrored.
+    const other = legacy({ reveal_through: 9, reveal_b: 10 });
+    expect(sideReveal(other)).toEqual({ A: 9, B: 10 });
+    expect(sidesPending(other)).toEqual(["A"]);
+  });
+
+  // A written ZERO is a value, not an absence. A captain who stepped his side
+  // all the way back to 0 must not silently inherit the legacy number.
+  it("treats a written 0 as a counter and not as a missing one", () => {
+    expect(sideReveal(legacy({ reveal_through: 9, reveal_a: 0 }))).toEqual({ A: 0, B: 9 });
+    expect(revealedThrough(legacy({ reveal_through: 9, reveal_a: 0 }))).toBe(0);
+    expect(sidesPending(legacy({ reveal_through: 9, reveal_a: 0 }))).toEqual(["A"]);
+  });
+
+  it("is nothing revealed when neither the side nor the legacy field exists", () => {
+    expect(sideReveal(legacy({}))).toEqual({ A: 0, B: 0 });
+    expect(sideReveal(legacy({ reveal_a: 4 }))).toEqual({ A: 4, B: 0 });
+    expect(countdownHole(legacy({}))).toBe(0);
+  });
+});
+
+// A field somebody edited in the Firebase console, a value from an older
+// shape, a number that arrived as a string. None of them may produce a hole
+// off the card, and none of them may throw on the one evening it matters.
+describe("a corrupted counter reads as a hole on the card", () => {
+  const garbage = [
+    ["a string number", "7", 7],
+    ["a fractional string", "7.9", 7],
+    ["a fraction", 3.7, 3],
+    ["nonsense", "nonsense", 0],
+    ["an empty string", "", 0],
+    ["NaN", NaN, 0],
+    ["Infinity", Infinity, 0],
+    ["negative infinity", -Infinity, 0],
+    ["a negative", -1, 0],
+    ["far past the card", 99, HOLE_COUNT],
+    ["an object", {}, 0],
+    ["an array", [], 0],
+    ["false", false, 0],
+  ];
+
+  garbage.forEach(([what, value, expected]) => {
+    it(`reads ${what} as ${expected}`, () => {
+      const tr = round(4, {
+        format: "team_best_ball", sealed: true,
+        reveal_a: value, reveal_b: value, reveal_cursor: value,
+      });
+      expect(revealedForSide(tr, "A")).toBe(expected);
+      expect(revealedForSide(tr, "B")).toBe(expected);
+      expect(revealedThrough(tr)).toBe(expected);
+      expect(revealHole(tr)).toBe(expected);
+      expect(revealCursor(tr)).toBe(expected);
+      expect(countdownHole(tr)).toBe(expected);
+      // And nothing downstream falls over.
+      expect(typeof canAdvanceHole(tr)).toBe("boolean");
+      expect(typeof canGoBackHole(tr)).toBe("boolean");
+      expect(revealState([tr], 4).hole).toBe(expected);
+    });
+  });
+
+  // Infinity is the one worth naming: it reads as ZERO rather than as the
+  // whole card, because clampHole rejects a non-finite number before it
+  // clamps. Nothing revealed is the safe end of that mistake.
+  it("reads an infinite counter as nothing revealed, not as everything", () => {
+    const tr = round(4, { format: "team_best_ball", sealed: true, reveal_a: Infinity, reveal_b: Infinity });
+    expect(isFullyRevealed(tr)).toBe(false);
+    expect(isConcealing(tr)).toBe(true);
+  });
+
+  it("never returns a hole off the card, from anything", () => {
+    garbage.forEach(([, value]) => {
+      [["reveal_a", "A"], ["reveal_b", "B"]].forEach(([field, side]) => {
+        const tr = round(4, { format: "team_best_ball", sealed: true, [field]: value });
+        const n = revealedForSide(tr, side);
+        expect(Number.isInteger(n)).toBe(true);
+        expect(n).toBeGreaterThanOrEqual(0);
+        expect(n).toBeLessThanOrEqual(HOLE_COUNT);
+      });
+    });
+  });
+});
+
+describe("what the board says, at the four corners", () => {
+  const at = (through, extra = {}) => sealedRound(4, through, extra);
+
+  it("counts a concealing round in at 0, 1, 17 and 18", () => {
+    expect(isFullyRevealed(at(0))).toBe(false);
+    expect(isFullyRevealed(at(1))).toBe(false);
+    expect(isFullyRevealed(at(17))).toBe(false);
+    expect(isFullyRevealed(at(18))).toBe(true);
+
+    expect(concealedRoundNumbers([at(0)])).toEqual([4]);
+    expect(concealedRoundNumbers([at(1)])).toEqual([4]);
+    expect(concealedRoundNumbers([at(17)])).toEqual([4]);
+    // Eighteen out is the CEREMONY finishing, which is not the round going in
+    // the books — it holds until the director finalises it.
+    expect(concealedRoundNumbers([at(18)])).toEqual([4]);
+    expect(concealedRoundNumbers([at(18, { final: true })])).toEqual([]);
+  });
+
+  it("lists concealing rounds ascending and skips the ones without a number", () => {
+    expect(concealedRoundNumbers([at(6), { ...at(2), round_number: 2 }, round(1)])).toEqual([2, 4]);
+    expect(concealedRoundNumbers([{ ...at(6), round_number: undefined }])).toEqual([]);
+    expect(concealedRoundNumbers([{ ...at(6), round_number: "4" }])).toEqual([]);
+    expect(concealedRoundNumbers(null)).toEqual([]);
+  });
+
+  it("reports the whole control state per round", () => {
+    expect(revealState([at(0)], 4)).toEqual({
+      sealed: true, concealing: true, through: 0, sides: { A: 0, B: 0 }, hole: 0,
+      canNext: true, canBack: false,
+    });
+    expect(revealState([at(1)], 4)).toEqual({
+      sealed: true, concealing: true, through: 1, sides: { A: 1, B: 1 }, hole: 1,
+      canNext: true, canBack: false,
+    });
+    expect(revealState([at(17)], 4)).toEqual({
+      sealed: true, concealing: true, through: 17, sides: { A: 17, B: 17 }, hole: 17,
+      canNext: true, canBack: false,
+    });
+    expect(revealState([at(18)], 4)).toEqual({
+      sealed: true, concealing: true, through: 18, sides: { A: 18, B: 18 }, hole: 18,
+      canNext: false, canBack: false,
+    });
+    expect(revealState([at(18, { final: true })], 4)).toEqual({
+      sealed: true, concealing: false, through: 18, sides: { A: 18, B: 18 }, hole: 18,
+      canNext: false, canBack: false,
+    });
+  });
+
+  it("words the summary the same way at every count", () => {
+    expect(revealSummary(0)).toBe("Sealed — nothing revealed yet");
+    expect(revealSummary(1)).toBe("1 of 18 holes revealed");
+    expect(revealSummary(17)).toBe("17 of 18 holes revealed");
+    expect(revealSummary(18)).toBe("18 of 18 holes revealed");
+    // It never says "0 of 18", in either direction.
+    expect(revealSummary(-1)).toBe("Sealed — nothing revealed yet");
+    expect(revealSummary(0)).not.toContain("0 of");
+  });
+});
+
+// The machine wired to the television is bookmarked on one address and
+// refreshed by somebody two minutes before the room sits down.
+describe("the television's bookmark", () => {
+  it("takes the path in any case, with or without the trailing slash", () => {
+    [
+      "/finalcountdown", "/finalcountdown/", "/finalcountdown///",
+      "/FinalCountdown", "/FINALCOUNTDOWN", "/FINALCOUNTDOWN/",
+    ].forEach((pathname) => {
+      expect(wantsCountdown({ pathname, hash: "" })).toBe(true);
+    });
+  });
+
+  it("takes the hash the app writes for itself", () => {
+    expect(wantsCountdown({ pathname: "/", hash: COUNTDOWN_HASH })).toBe(true);
+    expect(wantsCountdown({ pathname: "/anything", hash: COUNTDOWN_HASH })).toBe(true);
+    expect(wantsCountdown({ pathname: COUNTDOWN_PATH, hash: "#leaderboard" })).toBe(true);
+  });
+
+  // The hash is compared EXACTLY, and it can be: it is the only spelling no
+  // human types. The app writes it, so it is always this string — the path is
+  // the half a person says out loud, and that is the half that is forgiving.
+  it("compares the hash exactly, because only the app writes it", () => {
+    expect(wantsCountdown({ pathname: "/", hash: "#Countdown" })).toBe(false);
+    expect(wantsCountdown({ pathname: "/", hash: "#countdown/" })).toBe(false);
+    expect(wantsCountdown({ pathname: "/", hash: "countdown" })).toBe(false);
+  });
+
+  it("leaves every near miss alone", () => {
+    [
+      "/", "/final", "/countdown", "/finalcountdownx", "/x/finalcountdown",
+      "//finalcountdown", "/finalcountdown/x", "/index.html",
+    ].forEach((pathname) => {
+      expect(wantsCountdown({ pathname, hash: "" })).toBe(false);
+    });
+    expect(wantsCountdown({})).toBe(false);
+    expect(wantsCountdown(null)).toBe(false);
+    expect(wantsCountdown(undefined)).toBe(false);
+    expect(wantsCountdown({ pathname: null, hash: null })).toBe(false);
   });
 });

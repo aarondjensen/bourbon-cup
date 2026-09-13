@@ -762,7 +762,17 @@ export function FinalCountdown({
     ? (holeIdx < 9 ? result.holePoints.front : result.holePoints.back)
     : null;
   const countN = result?.counting?.[holeIdx] ?? null;
-  const { A: tA, B: tB } = teams;
+  // ── Both sides always have a name ────────────────────────────────
+  // `resolveTeams` guarantees one today (see constants), and nothing on this
+  // screen should depend on that holding forever: four places read the name
+  // straight into `.toUpperCase()`, one of them the line the room stares at
+  // for the length of a captain's story. A teams map that arrives a frame
+  // behind its subscription, or an edition whose names were never written,
+  // would take the television dark rather than draw a default — on the one
+  // screen where dark is the whole failure. One fallback, at the one place
+  // both objects come from.
+  const tA = { ...teams?.A, name: teams?.A?.name || "TEAM A" };
+  const tB = { ...teams?.B, name: teams?.B?.name || "TEAM B" };
 
   // Every ball on the hole, both sides, in roster order with the ones that
   // made the number flagged. `counted` comes off the engine (see
@@ -792,7 +802,13 @@ export function FinalCountdown({
       // Alphabetical, so a man is in the same square on hole 18 as he was on
       // hole 1. See the note on SideColumn's grid for why that matters more
       // than sorting the counted ones to the front.
-      .sort((x, y) => x.name.localeCompare(y.name));
+      //
+      // Coerced, because `nameOf` answers a null pid with the null itself
+      // (see lib/players — the pid IS the fallback) and `null.localeCompare`
+      // is a TypeError that takes the whole screen with it. A draw cannot
+      // write an empty slot today; one empty slot should not be able to end
+      // the evening if one ever does.
+      .sort((x, y) => String(x.name ?? "").localeCompare(String(y.name ?? "")));
   };
 
   // ── What the captain reads out ───────────────────────────────────
@@ -1029,8 +1045,18 @@ export function FinalCountdown({
     //
     // `hole` and not `settled`: with A on 7 and B on 6, hole 7 itself must
     // stay inert, or "going back" to it would turn over B's side of it.
+    //
+    // IT HAS TO MOVE THE CURSOR TOO. The hole on screen is `max(cursor,
+    // revealed)`, so once the director has used ▶ even once, pulling the
+    // counters back to 3 leaves the television sitting on the cursor's hole
+    // with nothing on it — the rewind reads as "that did nothing", and the
+    // captains then tap through four holes the room cannot see before the
+    // screen catches up with them. Nothing leaks either way (the scores are
+    // cut by the two counters, never by this), but the repair the strip
+    // exists to make does not happen. Both writes are a director's, and he
+    // already writes bc_rounds whole, so this needs no rules change.
     const jump = isDirector && onAdvance && i + 1 < hole
-      ? () => onAdvance(null, i + 1)
+      ? () => { onAdvance(null, i + 1); onSetHole?.(i + 1); }
       : null;
     const Cell = jump ? "button" : "div";
     return (

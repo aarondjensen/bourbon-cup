@@ -4,7 +4,7 @@
 // noticing, because who rode with whom changes no score.
 import { describe, it, expect } from "vitest";
 import {
-  splitEvenly, autoBuildGroups, formatGroupsByTeam, isFoursomeFormat, groupIssues, hasGroupIssues, sidesInRound, GROUP_TARGET, assignPlayersToGroup, groupSizeAfter, groupFitsAfter, scoringUnits, unitForPlayer,
+  splitEvenly, autoBuildGroups, formatGroupsByTeam, isFoursomeFormat, groupIssues, hasGroupIssues, sidesInRound, GROUP_TARGET, assignPlayersToGroup, groupSizeAfter, groupFitsAfter, scoringUnits, unitForPlayer, readableUnits,
 } from "./groups";
 
 const A8 = ["a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8"];
@@ -428,5 +428,85 @@ describe("unitForPlayer", () => {
   it("is null for somebody not in the match", () => {
     expect(unitForPlayer(units, "z9")).toBeNull();
     expect(unitForPlayer([], "a1")).toBeNull();
+  });
+});
+
+// ── The sealed round's picker ──────────────────────────────────────
+// The closing round is played in the dark (see lib/reveal), and the Scoring
+// tab's exception — somebody has to write the numbers down — was written for
+// a mixed FOURSOME, not for a licence to walk the whole draw. These pin the
+// filter and, more importantly, the FLOOR: `scoringUnits` hands back one unit
+// holding the entire match when a round is undrawn, which is the state the
+// closing round is in until a director builds the tee waves.
+describe("readableUnits", () => {
+  const match = { id: "m1", teamA: A8, teamB: B8 };
+  // A reader on side A: everybody on B is the other side.
+  const otherSide = (pid) => B8.includes(pid);
+  const drawn = [
+    { key: "m1#0", pids: ["a1", "a2", "a3", "a4"], groupIdx: 0 },
+    { key: "m1#1", pids: ["a5", "a6", "a7", "a8"], groupIdx: 1 },
+    { key: "m1#2", pids: ["b1", "b2", "b3", "b4"], groupIdx: 2 },
+    { key: "m1#3", pids: ["b5", "b6", "b7", "b8"], groupIdx: 3 },
+  ];
+
+  it("is inert on a round nobody sealed", () => {
+    const { open, floor } = readableUnits({ units: drawn, sealed: false, otherSide });
+    expect(open).toBe(drawn);
+    expect(floor).toBe(drawn[0]);
+  });
+
+  it("offers a sealed round only the reader's own side's waves", () => {
+    const { open } = readableUnits({ units: drawn, sealed: true, otherSide });
+    expect(open.map(u => u.key)).toEqual(["m1#0", "m1#1"]);
+  });
+
+  it("withholds a wave drawn across both sides rather than half-showing it", () => {
+    const mixed = [{ key: "m1#0", pids: ["a1", "a2", "b1", "b2"], groupIdx: 0 }];
+    const { open } = readableUnits({ units: mixed, sealed: true, otherSide });
+    expect(open).toEqual([]);
+  });
+
+  // THE REGRESSION. An undrawn closing round is one unit holding all sixteen,
+  // so the filter above empties and the floor is the only thing left standing
+  // between a player and the other side's cards.
+  it("cuts the floor to the reader's own side on an undrawn sealed round", () => {
+    const undrawn = scoringUnits({ match, groups: [], formatId: "team_best_ball" });
+    expect(undrawn).toHaveLength(1);
+    expect(undrawn[0].pids).toHaveLength(16);   // the hazard, stated
+
+    const { open, floor } = readableUnits({ units: undrawn, sealed: true, otherSide });
+    expect(open).toEqual([]);                    // nothing wholly his own
+    expect(floor.pids).toEqual(A8);              // ...so the floor is his eight
+    expect(floor.pids.some(pid => B8.includes(pid))).toBe(false);
+    expect(floor.key).toBe("m1");                // and it is still that unit
+  });
+
+  it("cuts the floor for a side B reader the same way", () => {
+    const undrawn = scoringUnits({ match, groups: [], formatId: "team_best_ball" });
+    const { floor } = readableUnits({
+      units: undrawn, sealed: true, otherSide: (pid) => A8.includes(pid),
+    });
+    expect(floor.pids).toEqual(B8);
+  });
+
+  it("leaves the floor whole when it is already the reader's own side", () => {
+    const { floor } = readableUnits({ units: drawn, sealed: true, otherSide });
+    expect(floor).toBe(drawn[0]);
+  });
+
+  it("never hands back a pid from the other side, on any shape", () => {
+    // The invariant rather than a case list: whatever `open` and `floor` come
+    // back as, nothing in either may belong to the other side.
+    [drawn, scoringUnits({ match, groups: [], formatId: "team_best_ball" }),
+      [{ key: "m1#none", pids: ["a1", "b1"], groupIdx: null }]].forEach((units) => {
+      const { open, floor } = readableUnits({ units, sealed: true, otherSide });
+      open.forEach(u => u.pids.forEach(pid => expect(otherSide(pid)).toBe(false)));
+      (floor?.pids || []).forEach(pid => expect(otherSide(pid)).toBe(false));
+    });
+  });
+
+  it("survives an empty draw and a missing unit list", () => {
+    expect(readableUnits({ units: [], sealed: true, otherSide })).toEqual({ open: [], floor: null });
+    expect(readableUnits({ units: null, sealed: true, otherSide })).toEqual({ open: [], floor: null });
   });
 });
