@@ -220,37 +220,54 @@ describe("the Final Countdown itself", () => {
 // ══════════════════════════════════════════════════════════════════
 //  Who gets the door onto the television
 // ══════════════════════════════════════════════════════════════════
-//  Everybody, while the round is still open — the machine the room watches is
-//  signed in as whoever happened to be holding the laptop, and a countdown
-//  only a director could open would be a countdown nobody could open.
+//  The captains and the directors, and nobody else — the only people who can
+//  do anything with it.
 //
-//  Once the round is IN THE BOOKS it narrows to the two men who drive it. A
-//  finalized round's ceremony is over or was never needed, and for the other
-//  fourteen the button then offers a screen with nothing left to turn over.
+//  It used to be offered to everybody, on the reasoning that the machine the
+//  room watches is signed in as whoever happened to be holding the laptop. That
+//  was wrong about its own feature: the television is pointed at
+//  /finalcountdown and App opens the countdown off the URL with no role check
+//  (see `autoCountdown`). For the other fourteen the button opened a screen
+//  reading "THE CAPTAINS ARE DRIVING · TAP TO EXIT" — an offer the app cannot
+//  honour.
 describe("the door onto the countdown", () => {
   const DOOR = "OPEN THE FINAL COUNTDOWN";
+  const plain = { canReveal: false, captainSide: null };
 
-  it("is open to everybody while the round is not final", () => {
-    expect(boardAt(6, {}, false)).toContain(DOOR);
-    cleanup();
-    // Including a man who is neither.
-    expect(boardAt(6, { canReveal: false, captainSide: null }, false)).toContain(DOOR);
-  });
-
-  it("closes to a plain player once the round is finalized", () => {
-    const t = boardAt(6, { canReveal: false, captainSide: null }, true);
+  it("is not drawn for a plain player, open round or final", () => {
+    const live = boardAt(6, plain, false);
     // The panel is still there saying what the board is waiting on — it is the
     // DOOR that goes, not the explanation.
-    expect(t).toContain("WAITING ON THE FINAL COUNTDOWN");
-    expect(t).not.toContain(DOOR);
+    expect(live).toContain("WAITING ON THE FINAL COUNTDOWN");
+    expect(live).not.toContain(DOOR);
+    cleanup();
+    expect(boardAt(6, plain, true)).not.toContain(DOOR);
   });
 
-  it("stays open to a director", () => {
+  it("is drawn for a director", () => {
+    expect(boardAt(6, { canReveal: true, onSetReveal: () => {}, captainSide: null }, false))
+      .toContain(DOOR);
+    cleanup();
     expect(boardAt(6, { canReveal: true, onSetReveal: () => {}, captainSide: null }, true))
       .toContain(DOOR);
   });
 
-  it("stays open to a captain", () => {
-    expect(boardAt(6, { canReveal: false, captainSide: "A" }, true)).toContain(DOOR);
+  it("is drawn for a captain", () => {
+    expect(boardAt(6, { canReveal: false, captainSide: "A" }, false)).toContain(DOOR);
+    cleanup();
+    expect(boardAt(6, { canReveal: false, captainSide: "B" }, true)).toContain(DOOR);
+  });
+
+  // The television's own way in, which is the reason the button can be taken
+  // away from everybody else without stranding the room: it is pointed at
+  // /finalcountdown and App opens the countdown off the URL, with no role
+  // check anywhere in the path.
+  it("is not how the television gets there", async () => {
+    const board = boardAt(6, { ...plain, autoCountdown: true }, false);
+    expect(board).not.toContain(DOOR);
+    // The countdown opened anyway — lazily, and portaled onto the body — for
+    // a viewer who is neither a captain nor a director.
+    expect(await screen.findByText("HOLE 6")).toBeTruthy();
+    cleanup();
   });
 });

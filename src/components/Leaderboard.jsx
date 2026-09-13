@@ -620,21 +620,23 @@ function SealedPanel({ through, canReveal, onSetReveal, onOpenCountdown, canOpen
         </div>
         {/* ── The way onto the television ──
             The one thing in this panel that is not information about the
-            round. Offered to EVERYBODY while the round is still open, and that
-            is deliberate: the machine the room watches is signed in as whoever
-            happened to be holding the laptop, and a countdown only a director
-            could open would be a countdown nobody could open.
+            round, and the only people it is drawn for are the ones who can do
+            anything with it: the captains and the directors.
 
-            ONCE THE ROUND IS IN THE BOOKS it narrows to the two men who drive
-            it — the captains and the directors. A finalized round is a round
-            whose ceremony is over or has never needed one, and for the other
-            fourteen the button then offers a screen with nothing left to turn
-            over: a television view of a result the board above it is already
-            showing, reachable by a tap that looks like it should do something.
-            The men who might still need it are the ones who might still be
-            driving it.
+            It used to be offered to everybody, on the reasoning that the
+            machine the room watches is signed in as whoever happened to be
+            holding the laptop, so a door only a director could open would be a
+            door nobody could open. That reasoning was wrong about its own
+            feature. THE TELEVISION DOES NOT COME THROUGH THIS BUTTON — it is
+            pointed at /finalcountdown, and App opens the countdown off the URL
+            with no role check at all (see `autoCountdown`, and wantsCountdown
+            in lib/reveal). The button is a convenience for whoever is driving,
+            and for the other fourteen it opened a screen that says "THE
+            CAPTAINS ARE DRIVING · TAP TO EXIT" and hands them no control over
+            anything: an offer the app cannot honour, on the one screen where
+            everybody is already looking for something to do.
 
-            The controls inside are director-only either way. */}
+            The controls inside are director-only, as they always were. */}
         {canOpen && (
           <button onClick={onOpenCountdown} style={{
             width: "100%", marginTop: 9, padding: "9px 0", borderRadius: 8,
@@ -1268,9 +1270,8 @@ export function TeamLeaderboard({
       <SealedPanel
         through={seal.through}
         canReveal={!!drive}
-        // Everybody until the round is in the books, then the two who drive
-        // it. See the note on the button itself.
-        canOpen={!isRoundFinal(roundLocks, rnd) || !!drive || !!captainSide}
+        // The two who drive it, and nobody else. See the note on the button.
+        canOpen={!!drive || !!captainSide}
         onSetReveal={drive || (() => {})}
         onOpenCountdown={() => openCountdown(rnd)}
       />
