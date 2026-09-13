@@ -49,6 +49,7 @@ import {
 import { HoleStrip } from "./HoleStrip";
 import { FullScorecard } from "./FullScorecard";
 import { StickyTop } from "./ui";
+import ErrorBoundary from "./ErrorBoundary";
 import { isRoundFinal } from "../lib/roundLocks";
 import { scheduledRounds } from "../lib/rounds";
 import { HOLE_COUNT, revealState, stepReveal, COUNTDOWN_HASH, COUNTDOWN_PATH } from "../lib/reveal";
@@ -1174,9 +1175,33 @@ export function TeamLeaderboard({
     if (!meta || !entry) return null;
     const { course, holePars, holeHcps } = getRoundCourseCtx({ roundLocks, round: rnd, tRounds, courses });
     return createPortal(
-      // The fallback is a black screen, because that is what the countdown
-      // opens onto anyway — the television goes dark and then the round is
-      // there, rather than flashing a spinner in front of the room.
+      // ── A boundary of its own, and the reason is the television ──────
+      // A portal's children stay in the React tree of the component that
+      // made them, so without this the countdown's nearest boundary is the
+      // KEYED one around the whole tab (App.jsx) — and that is the wrong
+      // shape for this screen twice over.
+      //
+      // It takes the scoreboard with it: a crash in the countdown replaces
+      // the tab, so the room loses the board as well as the reveal.
+      //
+      // And the television cannot get out. A keyed boundary recovers by
+      // being navigated away from, which unmounts this component — and
+      // `autoOpened` above lives here, so the remount re-reads the hash and
+      // re-opens the countdown into the same crash. Reload App does the same
+      // thing for the same reason: the #countdown hash is still on the URL,
+      // because only closeCountdown clears it and a crash never called it.
+      // On the one machine in the room that nobody can navigate, that is a
+      // loop whose only exit is hand-editing the URL in front of everybody.
+      //
+      // So the boundary sits INSIDE the portal, where a crash costs the
+      // reveal and nothing else, and `onError` closes the countdown — which
+      // clears the hash first, so even the reload button lands on the
+      // scoreboard. The director can then re-open it deliberately; the two
+      // counters are in Firestore, so it comes back exactly where it was.
+      <ErrorBoundary onError={closeCountdown}>
+      {/* The fallback is a black screen, because that is what the countdown
+          opens onto anyway — the television goes dark and then the round is
+          there, rather than flashing a spinner in front of the room. */}
       <Suspense fallback={<div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 9999 }} />}>
       <FinalCountdown
         match={entry.match}
@@ -1205,7 +1230,8 @@ export function TeamLeaderboard({
         onSetHole={onSetHole ? (n) => onSetHole(rnd, n) : null}
         onClose={closeCountdown}
       />
-      </Suspense>,
+      </Suspense>
+      </ErrorBoundary>,
       document.body,
     );
   })();
