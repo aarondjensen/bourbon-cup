@@ -100,9 +100,6 @@ import {
   realPlayers,
 } from "../lib/players";
 import {
-  COUNTDOWN_HASH,
-  revealState,
-  revealSummary,
   resolveSealed,
 } from "../lib/reveal";
 import {
@@ -2528,7 +2525,6 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
               THE FINAL COUNTDOWN
             </RoundSectionHeading>
             {(() => {
-              const seal = revealState(tRounds, editRound);
               const pill = (active) => ({
                 padding: "4px 12px 6px", fontSize: FS.label, fontWeight: 700, cursor: "pointer",
                 ...segThumb(active, { compact: true }),
@@ -2563,35 +2559,29 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                       On{sealed && <SegRule compact />}
                     </button>
                   </div>
-                  {/* What ON actually does, stated as the three separate
-                      guarantees it makes rather than as "it hides things" —
-                      a director turning this on is promising the field a
-                      blackout, and needs to know exactly how wide it is.
-                      Only under ON. The OFF branch used to print "scored and
-                      shown live, like every other round", which is what every
-                      round on the schedule already does — a line describing
-                      the absence of a feature, on every round that doesn't
-                      use it. */}
-                  {sealed && (
-                    <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.6 }}>
-                      <div style={{ color: BC.amberInk, fontWeight: 800, letterSpacing: 0.5, marginBottom: 3 }}>
-                        ACTIVE — this round is sealed
-                      </div>
-                      · Each side sees only its own numbers, on the board and on the scoring screen.<br />
-                      · The leaderboard does not move — no score, no match rows, nothing in the cup total — until all 18 are turned over <em>and you finalize the round</em>, and then the whole round lands at once.<br />
-                      · The countdown is queued up: a director opens it from the Leaderboard and turns the holes over one at a time. It is the only screen that walks.
-                    </div>
-                  )}
-                  {/* Only once the round is actually sealed in Firestore — a
-                      toggle flipped a second ago has not been saved yet, and
-                      reporting a countdown state off the unsaved form would be
-                      reporting on a round that does not exist. */}
-                  {seal.sealed && (
-                    <div style={{ fontSize: FS.label, marginTop: 6, color: BC.amberInk, fontWeight: 700, lineHeight: 1.5 }}>
-                      🔒 {revealSummary(seal.through)} — driven from the Leaderboard, or from
-                      the television at {COUNTDOWN_HASH}.
-                    </div>
-                  )}
+                  {/* ── No essay under the switch ──────────────────
+                      It printed three bullets spelling out every guarantee ON
+                      makes — each side sees only its own numbers, the board
+                      holds until eighteen and a finalize, the countdown is the
+                      only screen that walks — and a fourth line under them
+                      reporting how far the reveal had got and where to drive
+                      it from.
+
+                      Four lines of prose under a two-position switch, on a tab
+                      whose whole job is to be got through quickly. A director
+                      setting this up has read it once; every time after that it
+                      is furniture between him and the tee times. The switch
+                      says On, which is what he came here to check, and the
+                      behaviour it describes is the same behaviour whether or
+                      not the paragraph is on screen.
+
+                      The reveal's own progress lives where the reveal does —
+                      on the Leaderboard, in front of the room — and it was
+                      deliberately taken off this tab once before, for the
+                      reason still written above the toggle: this form
+                      auto-saves, and a countdown state reported here invites
+                      somebody to act on it from a screen that should not be
+                      driving the ceremony at all. */}
                 </div>
               );
             })()}
