@@ -776,6 +776,48 @@ describe("Scoring — a singles foursome", () => {
     expect(text()).toContain("FRONT");
   });
 
+  // ── The Full Scorecard behind the button ──────────────────────────
+  // A card is a MATCH: the hole-won marks, the running line and the nine
+  // results all compare one pair. Handed the foursome as four rows it would
+  // draw Aaron against Shaun, who never played each other — so the popup
+  // stacks a card per match instead.
+  describe("the Full Scorecard", () => {
+    // Read INSIDE the popup. The scoring screen is still mounted behind it
+    // and already names all four men in its match boxes, so an assertion over
+    // the whole container would pass whether the card carried one match or
+    // two — which is the entire thing under test.
+    const open = (over) => {
+      const r = render(<ScoreEntry {...singles(over)} />);
+      fireEvent.click(r.getByText("Full Scorecard"));
+      const sheet = r.container.querySelector("[data-popup]");
+      expect(sheet).toBeTruthy();
+      return sheet.textContent;
+    };
+
+    it("carries both matches, not just the reader's", () => {
+      const t = open();
+      // Each card heads itself with its two sides and its own status.
+      expect(t).toContain("Aaron J");
+      expect(t).toContain("Dave S");
+      expect(t).toContain("Ben T");
+      expect(t).toContain("Shaun W");
+    });
+
+    // The popup's own title could only ever name one of the two.
+    it("drops the match number from the title", () => {
+      expect(open()).not.toContain("MATCH 3");
+    });
+
+    // A round with one match on screen is the card it always was.
+    it("is one card when the round is undrawn", () => {
+      const t = open({ groups: {} });
+      expect(t).toContain("Aaron J");
+      expect(t).toContain("Dave S");
+      expect(t).not.toContain("Ben T");
+      expect(t).not.toContain("Shaun W");
+    });
+  });
+
   // A singles round nobody has drawn has no second match to put on screen,
   // and pairing one out of the roster would be inventing a draw.
   it("falls back to the match when the round is undrawn", () => {
