@@ -264,3 +264,64 @@ describe("a segment that is level", () => {
     expect(statusText(seg("AAAAAAAAABBA......"))).toBe("8&6");
   });
 });
+
+// ── The 17th-vs-18th boundary ────────────────────────────────────────
+// `decided` fires on `Math.abs(m) > left`, strictly greater — a margin that
+// merely EQUALS the holes left is not enough, because those holes could
+// still draw level. The existing "closes out early" tests pin this down at
+// holes 11/12; this pins the same off-by-one exactly at the last hole, where
+// there is no room left to get it wrong by one.
+describe("a one-hole lead with one hole left is not decided until the 18th", () => {
+  it("is still live after 17, margin equal to what's left", () => {
+    const st = seg("AAAAAAAAABBBBBBBB.");
+    expect(st.decided).toBe(null);
+    expect(st.complete).toBe(false);
+    expect(statusText(st)).toBe("1 UP");
+  });
+
+  it("a halved 18th closes it at exactly 1 UP, decided ON the last hole", () => {
+    const st = seg("AAAAAAAAABBBBBBBB-");
+    expect(st.decided).toEqual({ margin: 1, remaining: 0, at: 17 });
+    expect(statusText(st)).toBe("1 UP");
+  });
+
+  it("an 18th won by the leader extends it, still closing exactly there", () => {
+    const st = seg("AAAAAAAAABBBBBBBBA");
+    expect(st.decided).toEqual({ margin: 2, remaining: 0, at: 17 });
+    expect(statusText(st)).toBe("2 UP");
+  });
+
+  it("an 18th won by the trailing side ties the match instead of closing it", () => {
+    const st = seg("AAAAAAAAABBBBBBBBB");
+    expect(st.decided).toBe(null);
+    expect(st.winner).toBe(null);
+    expect(statusText(st)).toBe("TIED");
+  });
+});
+
+// ── A Total segment reads the same unsigned lead as a points segment ──
+// Only the level case was pinned down before; an untied Total round has the
+// same "unsigned magnitude, colour carries the side" shape as points, both
+// live and settled, and nothing had checked that directly.
+describe("an untied Total segment, from either side", () => {
+  it("reads the running gap the same from both, while still live", () => {
+    const holes = Array.from({ length: 18 }, (_, h) => ({
+      h, played: h < 10, winner: null, aScore: h < 10 ? 3 : null, bScore: h < 10 ? 5 : null,
+    }));
+    const st = segmentState(holes, { total: true, higherWins: false });
+    expect(st.complete).toBe(false);
+    expect(statusText(st)).toBe("+20"); // bTot(50) - aTot(30), A ahead on strokes
+    expect(verdictText(st, "A")).toBe("+20");
+    expect(verdictText(st, "B")).toBe("+20");
+  });
+
+  it("settles the same way once it's over, unsigned for both", () => {
+    const holes = Array.from({ length: 18 }, (_, h) => ({ h, played: true, winner: null, aScore: 3, bScore: 5 }));
+    const st = segmentState(holes, { total: true, higherWins: false });
+    expect(st.complete).toBe(true);
+    expect(st.winner).toBe("A");
+    expect(statusText(st)).toBe("+36"); // bTot(90) - aTot(54)
+    expect(verdictText(st, "A")).toBe("+36");
+    expect(verdictText(st, "B")).toBe("+36");
+  });
+});

@@ -48,7 +48,9 @@ import {
 } from "../scoring";
 import { HoleStrip } from "./HoleStrip";
 import { FullScorecard } from "./FullScorecard";
+import { TeamBestBallScoreboard } from "./TeamBestBallScoreboard";
 import { StickyTop } from "./ui";
+import ErrorBoundary from "./ErrorBoundary";
 import { isRoundFinal } from "../lib/roundLocks";
 import { scheduledRounds } from "../lib/rounds";
 import { HOLE_COUNT, revealState, stepReveal, COUNTDOWN_HASH, COUNTDOWN_PATH } from "../lib/reveal";
@@ -327,8 +329,15 @@ const NINE_VALUE = {
 // ══════════════════════════════════════════════════════════════════
 function MatchCard({
   index, first, match, result, format, tPlayers,
-  courses, tRounds, roundLocks, holeData, viewer, expanded, onToggle,
+  courses, tRounds, roundLocks, holeData, viewer, expanded, expandLevel, onToggle,
 }) {
+  // Team Best Ball (Round 4) gets a middle level between collapsed and the
+  // full scorecard: every other format's card still opens straight to
+  // FullScorecard, same as always — see onToggle in RoundSection for the
+  // cycle this level participates in.
+  const scoreboardFormat = format === "team_best_ball";
+  const showScoreboard = expanded && scoreboardFormat && expandLevel === "points";
+  const showFullCard = expanded && (!scoreboardFormat || expandLevel === "full");
   const opts = segOpts(match, format);
   // What the holes were actually scored as — see the note on holeFormatFor. The
   // strip below paints a hole from its two numbers, and on a best-ball override
@@ -463,7 +472,15 @@ function MatchCard({
         </div>
       </button>
 
-      {expanded && (
+      {showScoreboard && (
+        <div style={{ borderTop: `1px solid ${BC.bdr}`, background: BC.bg }}>
+          <div style={{ padding: "12px 12px 14px" }}>
+            <TeamBestBallScoreboard result={result} holePars={cardCtx.holePars} />
+          </div>
+        </div>
+      )}
+
+      {showFullCard && (
         <div style={{ borderTop: `1px solid ${BC.bdr}`, background: BC.bg }}>
           {/* Points detail lives here rather than in the collapsed row: the
               banked total per side and the Front / Back / Overall split are
@@ -604,7 +621,7 @@ function RevealControl({ through, onSet }) {
 // So: WAITING ON THE FINAL COUNTDOWN. It is what is true, it is what a player
 // looking for the score needs to know, and it is the whole of what the board
 // is entitled to say until the director puts the round in the books.
-function SealedPanel({ through, canReveal, onSetReveal, onOpenCountdown }) {
+function SealedPanel({ through, canReveal, onSetReveal, onOpenCountdown, canOpen }) {
   return (
     <div style={{
       marginTop: 8, background: BC.card, borderRadius: 12, overflow: "hidden",
@@ -617,21 +634,35 @@ function SealedPanel({ through, canReveal, onSetReveal, onOpenCountdown }) {
             WAITING ON THE FINAL COUNTDOWN
           </span>
         </div>
-        {/* The way onto the television, and the one thing here that is not
-            information about the round — take it away and nobody can put the
-            countdown on the screen. Offered to EVERYBODY, not just the
-            director: the machine the room watches is signed in as whoever
-            happened to be holding the laptop, and a countdown only a director
-            could open would be a countdown nobody could open. The controls
-            inside it are still director-only. */}
-        <button onClick={onOpenCountdown} style={{
-          width: "100%", marginTop: 9, padding: "9px 0", borderRadius: 8,
-          background: BC.amberGlow, border: `1px solid ${BC.amber}${ALPHA.line}`,
-          color: BC.amberInk, fontFamily: FONT, fontSize: FS.body, fontWeight: 800,
-          letterSpacing: 1, cursor: "pointer",
-        }}>
-          📺 OPEN THE FINAL COUNTDOWN
-        </button>
+        {/* ── The way onto the television ──
+            The one thing in this panel that is not information about the
+            round, and the only people it is drawn for are the ones who can do
+            anything with it: the captains and the directors.
+
+            It used to be offered to everybody, on the reasoning that the
+            machine the room watches is signed in as whoever happened to be
+            holding the laptop, so a door only a director could open would be a
+            door nobody could open. That reasoning was wrong about its own
+            feature. THE TELEVISION DOES NOT COME THROUGH THIS BUTTON — it is
+            pointed at /finalcountdown, and App opens the countdown off the URL
+            with no role check at all (see `autoCountdown`, and wantsCountdown
+            in lib/reveal). The button is a convenience for whoever is driving,
+            and for the other fourteen it opened a screen that says "THE
+            CAPTAINS ARE DRIVING · TAP TO EXIT" and hands them no control over
+            anything: an offer the app cannot honour, on the one screen where
+            everybody is already looking for something to do.
+
+            The controls inside are director-only, as they always were. */}
+        {canOpen && (
+          <button onClick={onOpenCountdown} style={{
+            width: "100%", marginTop: 9, padding: "9px 0", borderRadius: 8,
+            background: BC.amberGlow, border: `1px solid ${BC.amber}${ALPHA.line}`,
+            color: BC.amberInk, fontFamily: FONT, fontSize: FS.body, fontWeight: 800,
+            letterSpacing: 1, cursor: "pointer",
+          }}>
+            📺 OPEN THE FINAL COUNTDOWN
+          </button>
+        )}
       </div>
       {canReveal && <RevealControl through={through} onSet={onSetReveal} />}
     </div>
@@ -642,11 +673,11 @@ function SealedPanel({ through, canReveal, onSetReveal, onOpenCountdown }) {
 //  Round section
 // ══════════════════════════════════════════════════════════════════
 
-// The type of the header line — the course, the dot and the format all take
-// it, so the three read as one string rather than as three spans that happen
-// to be adjacent. `minWidth: 0` is what lets the two halves ellipse at all: a
-// flex item's automatic minimum is its content, so without it a long name
-// pushes the dot off centre instead of truncating.
+// The type of the header line — the course and the format both take it, so
+// the two halves read as one string interrupted by the caret rather than as
+// two spans that happen to be adjacent. `minWidth: 0` is what lets them
+// ellipse at all: a flex item's automatic minimum is its content, so without
+// it a long name pushes the caret off centre instead of truncating.
 const HEAD_TEXT = {
   fontSize: FS.small, fontWeight: 800, letterSpacing: 1.2, color: BC.t1,
   minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
@@ -655,7 +686,7 @@ const HEAD_TEXT = {
 function RoundSection({
   round, meta, results, open, onToggle, onOpenSummary, tPlayers,
   courses, tRounds, roundLocks, holeData, viewer, expandedMatch, setExpandedMatch,
-  sealPanel,
+  expandedLevel, setExpandedLevel, sealPanel,
 }) {
   const { course, fmt, pts, state, seal, drawn } = meta;
 
@@ -665,7 +696,7 @@ function RoundSection({
   // the hole strips below.
   return (
     <div style={{ marginBottom: 12 }}>
-      <button onClick={onToggle} style={{
+      <button onClick={onToggle} aria-expanded={open} style={{
         width: "100%", padding: "2px 2px 0", background: "transparent",
         border: "none", cursor: "pointer", textAlign: "left", display: "block", fontFamily: FONT,
       }}>
@@ -674,46 +705,40 @@ function RoundSection({
             far more directly than "ROUND 3" does. The live/final chip is
             gone with it: every match row already carries its own THRU or
             FINAL, so a round-level repeat was chrome. */}
-        {/* The separating dot is the line's anchor: it sits on the row's
-            centre and the course name and the format grow out of it in
-            opposite directions, so a stack of rounds lines up down the middle
-            with the score under it rather than ragging off the left margin.
-            Equal halves is what centres the dot — 1fr · 1fr — and the cost is
-            that a long name ellipses at half the row even when the format
-            beside it is short. On a phone that half is about twenty-two
-            characters, which "Arthur Hills — Orange" fits.
+        {/* The caret IS the divider. It sits on the row's centre where the
+            separating dot used to, with the course name and the format
+            growing out of it in opposite directions — so a stack of rounds
+            lines up down the middle, with the score under it rather than
+            ragging off the left margin, and the one mark that says "there is
+            more under here" sits in the middle of the thing it opens rather
+            than out in a margin of its own.
 
-            The caret is mirrored by an empty span of its own width on the
-            right, because the dot is centred in what the row has LEFT after
-            its flex items: without the mirror it centres in the space beside
-            the caret, which is the row's centre shifted eight pixels left of
-            the score's. */}
+            Equal halves is what centres it — 1fr ▾ 1fr — and the cost is that
+            a long name ellipses at half the row even when the format beside
+            it is short. Both halves are about seventeen pixels wider than
+            they were, though: the caret used to cost the row its own slot on
+            the left AND an empty span mirroring it on the right, which is
+            what it took to centre a dot in the space left between them.
+
+            Hidden from assistive tech, which gets `aria-expanded` on the
+            button instead — a triangle read out mid-title is noise, and the
+            state it stands for is a property of the button, not a character
+            in its name. */}
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-          <span style={{ fontSize: FS.label, color: BC.t3, width: 10, flexShrink: 0 }}>{open ? "▾" : "▸"}</span>
-          {fmt?.label ? (
-            <>
-              <span style={{ ...HEAD_TEXT, flex: 1, textAlign: "right" }}>
-                {(course?.name || "Course TBD").toUpperCase()}
-              </span>
-              {/* " · " rather than "·" so the header still reads as one
-                  string to a screen reader (and to the tests) now that the
-                  spacing is the flex gap. Each flex item is its own line box,
-                  so the leading and trailing spaces are trimmed on the way to
-                  the screen and only the gap is drawn. */}
-              <span style={{ ...HEAD_TEXT, flex: "0 0 auto", color: BC.t3 }}>{" · "}</span>
-              <span style={{ ...HEAD_TEXT, flex: 1, textAlign: "left" }}>
-                {fmt.label.toUpperCase()}
-              </span>
-            </>
-          ) : (
-            /* No format picked yet, so there is nothing for a dot to separate
-               and no second half to balance. The name takes the whole line
-               and centres on its own. */
-            <span style={{ ...HEAD_TEXT, flex: 1, textAlign: "center" }}>
-              {(course?.name || "Course TBD").toUpperCase()}
-            </span>
-          )}
-          <span style={{ width: 10, flexShrink: 0 }} />
+          <span style={{ ...HEAD_TEXT, flex: 1, textAlign: "right" }}>
+            {(course?.name || "Course TBD").toUpperCase()}
+          </span>
+          <span aria-hidden="true" style={{
+            fontSize: FS.label, color: BC.t3, flex: "0 0 auto",
+            width: 10, textAlign: "center", lineHeight: 1,
+          }}>{open ? "▾" : "▸"}</span>
+          {/* The format's half is drawn even when there is no format yet, so
+              the caret stays on the centre the score below it uses. A round
+              whose format the director has not picked is a name, a caret and
+              the room the format will take. */}
+          <span style={{ ...HEAD_TEXT, flex: 1, textAlign: "left" }}>
+            {fmt?.label ? fmt.label.toUpperCase() : ""}
+          </span>
         </div>
         {/* The score is a line of its own, centred under the course and the
             format, rather than the right-hand end of that row. On a phone the
@@ -825,7 +850,20 @@ function RoundSection({
                 holeData={holeData}
                 viewer={viewer}
                 expanded={expandedMatch === m.id}
-                onToggle={() => setExpandedMatch(expandedMatch === m.id ? null : m.id)}
+                expandLevel={expandedLevel}
+                onToggle={() => {
+                  // Team Best Ball cycles collapsed -> points -> full scorecard
+                  // -> collapsed; every other format keeps today's one-step
+                  // collapsed <-> full scorecard toggle.
+                  if (expandedMatch !== m.id) {
+                    setExpandedMatch(m.id);
+                    setExpandedLevel(format === "team_best_ball" ? "points" : "full");
+                  } else if (format === "team_best_ball" && expandedLevel === "points") {
+                    setExpandedLevel("full");
+                  } else {
+                    setExpandedMatch(null);
+                  }
+                }}
               />
             ))}
           </div>
@@ -903,6 +941,9 @@ export function TeamLeaderboard({
   canReveal = false, onSetReveal, onSetHole, captainSide = null, autoCountdown = false, onOpenSummary,
 }) {
   const [expandedMatch, setExpandedMatch] = useState(null);
+  // Which sub-level the expanded match is showing — only meaningful for a
+  // Team Best Ball match, which has a middle level (see MatchCard/RoundSection).
+  const [expandedLevel, setExpandedLevel] = useState("full");
   // Round open/closed. Absent key = follow the automatic rule below;
   // a tap writes an explicit override so the user always wins.
   const [openOverrides, setOpenOverrides] = useState({});
@@ -1180,9 +1221,33 @@ export function TeamLeaderboard({
     if (!meta || !entry) return null;
     const { course, holePars, holeHcps } = getRoundCourseCtx({ roundLocks, round: rnd, tRounds, courses });
     return createPortal(
-      // The fallback is a black screen, because that is what the countdown
-      // opens onto anyway — the television goes dark and then the round is
-      // there, rather than flashing a spinner in front of the room.
+      // ── A boundary of its own, and the reason is the television ──────
+      // A portal's children stay in the React tree of the component that
+      // made them, so without this the countdown's nearest boundary is the
+      // KEYED one around the whole tab (App.jsx) — and that is the wrong
+      // shape for this screen twice over.
+      //
+      // It takes the scoreboard with it: a crash in the countdown replaces
+      // the tab, so the room loses the board as well as the reveal.
+      //
+      // And the television cannot get out. A keyed boundary recovers by
+      // being navigated away from, which unmounts this component — and
+      // `autoOpened` above lives here, so the remount re-reads the hash and
+      // re-opens the countdown into the same crash. Reload App does the same
+      // thing for the same reason: the #countdown hash is still on the URL,
+      // because only closeCountdown clears it and a crash never called it.
+      // On the one machine in the room that nobody can navigate, that is a
+      // loop whose only exit is hand-editing the URL in front of everybody.
+      //
+      // So the boundary sits INSIDE the portal, where a crash costs the
+      // reveal and nothing else, and `onError` closes the countdown — which
+      // clears the hash first, so even the reload button lands on the
+      // scoreboard. The director can then re-open it deliberately; the two
+      // counters are in Firestore, so it comes back exactly where it was.
+      <ErrorBoundary onError={closeCountdown}>
+      {/* The fallback is a black screen, because that is what the countdown
+          opens onto anyway — the television goes dark and then the round is
+          there, rather than flashing a spinner in front of the room. */}
       <Suspense fallback={<div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 9999 }} />}>
       <FinalCountdown
         match={entry.match}
@@ -1211,7 +1276,8 @@ export function TeamLeaderboard({
         onSetHole={onSetHole ? (n) => onSetHole(rnd, n) : null}
         onClose={closeCountdown}
       />
-      </Suspense>,
+      </Suspense>
+      </ErrorBoundary>,
       document.body,
     );
   })();
@@ -1236,6 +1302,8 @@ export function TeamLeaderboard({
       <SealedPanel
         through={seal.through}
         canReveal={!!drive}
+        // The two who drive it, and nobody else. See the note on the button.
+        canOpen={!!drive || !!captainSide}
         onSetReveal={drive || (() => {})}
         onOpenCountdown={() => openCountdown(rnd)}
       />
@@ -1397,6 +1465,8 @@ export function TeamLeaderboard({
           viewer={viewer}
           expandedMatch={expandedMatch}
           setExpandedMatch={setExpandedMatch}
+          expandedLevel={expandedLevel}
+          setExpandedLevel={setExpandedLevel}
         />
       ))}
     </div>

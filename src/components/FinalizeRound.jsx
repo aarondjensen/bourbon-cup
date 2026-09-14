@@ -125,23 +125,64 @@ const opensClause = (round, nextRound, liveRound) => {
 // with a pulsing dot, the scores bar is the same frame drawn quieter, with
 // a still dot. A director glancing at the top of the screen should be able
 // to tell "the round is done" from "the golf is done" without reading it.
+// ── AND THE CLOSING ROUND SAYS SOMETHING ELSE ENTIRELY ─────────────
+// `countdown` is lib/reveal's revealPending: the round is sealed and the room
+// has not seen it yet. Every word above is wrong for that round, and wrong in
+// the direction that costs the evening.
+//
+// "Ready to finalize" is a true sentence about a sealed round — every card IS
+// in — and it is an instruction to do the one thing that must happen LAST.
+// Finalizing first fires the round-final push at sixteen phones with the pins
+// in it, and takes the board's landing off the director's word and onto the
+// eighteenth hole. See lib/reveal.isConcealing for why that second condition
+// exists at all.
+//
+// What is actually ready at that moment is the ceremony. So the bar says so,
+// and points at the television rather than at the sheet. The ordinary wording
+// comes back on its own the moment the last hole is turned over, which is when
+// finalizing IS the next thing to do.
+// A THIRD STAGE RATHER THAN A FLAG ON THE SECOND, and the reason is the
+// dismissal. The snooze is remembered per stage (`${round}:${stage}`) for the
+// reason written above — putting away "all scores are in" must not swallow
+// "the round is ready" twenty minutes later. The same argument applies twice
+// over here: a director who puts away "ready for the Final Countdown" before
+// the room sits down must still be told, an hour later, that the round now
+// wants finalizing. Sharing the "ready" tag would have eaten it.
 export function DirectorFinalizeAlert({ round, nextRound, progress, cards, stage = "ready", onOpen, onDismiss }) {
-  const ready = stage === "ready";
+  // The loud bar covers both of the late stages — a filled amber frame with a
+  // pulsing dot. What changes between them is the sentence and where the tap
+  // goes, not the weight: both mean the round is waiting on the director.
+  const toCountdown = stage === "countdown";
+  const ready = stage === "ready" || toCountdown;
   const outstanding = cards?.total ? cards.total - cards.attested : 0;
 
-  const headline = ready
-    ? `Round ${round} is ready to finalize`
-    : `Round ${round} — all ${progress.total} scores are in`;
+  const headline = toCountdown
+    ? `Round ${round} is ready for the Final Countdown!`
+    : stage === "ready"
+      ? `Round ${round} is ready to finalize`
+      : `Round ${round} — all ${progress.total} scores are in`;
+
+  const allCards = cards?.total
+    ? `All ${cards.total} card${cards.total === 1 ? "" : "s"} signed and attested`
+    : `All ${progress.total} scores are in`;
 
   // The subhead carries the actionable half, and on the early rung that is
   // the COUNT OF WHAT IS MISSING rather than a restatement of the headline.
   // "Waiting on 3 cards" is a thing a director can go and do something about;
   // "the round is nearly done" is not.
-  const subhead = ready
-    ? `${cards?.total
-      ? `All ${cards.total} card${cards.total === 1 ? "" : "s"} signed and attested`
-      : `All ${progress.total} scores are in`} — ${opensClause(round, nextRound, round).replace(" for scoring", "")}`
-    : `Waiting on ${outstanding} card${outstanding === 1 ? "" : "s"} — finalize or attest for them`;
+  //
+  // The countdown rung is the exception, and deliberately so. Directions
+  // belong on a bar that has somewhere to send you and no other way of
+  // getting there — but this one IS the way there: the whole bar is a button
+  // and it opens the Leaderboard, where the television button is. So the
+  // wayfinding is in the tap, and the words are free to be what the moment
+  // actually is. The cards are in, the golf is over and the room is about to
+  // sit down.
+  const subhead = toCountdown
+    ? `${allCards} — LFG!!!!`
+    : stage === "ready"
+      ? `${allCards} — ${opensClause(round, nextRound, round).replace(" for scoring", "")}`
+      : `Waiting on ${outstanding} card${outstanding === 1 ? "" : "s"} — finalize or attest for them`;
 
   return (
     <div style={{ flexShrink: 0, padding: "0 10px 6px", fontFamily: FONT }}>

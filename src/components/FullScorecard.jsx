@@ -291,16 +291,50 @@ export function ScoreCell({ score, par, strokes = 0, size = CELL, color, skin = 
 //                             `through` this card stops printing anything
 //                             that COMPARES the two sides — the other side's
 //                             row, the hole-won marks, the running line, the
-//                             nine's result — and keeps everything that is
-//                             just a card: the gross scores the group is
-//                             writing down, and `side`'s own numbers.
+//                             nine's result — and keeps the gross scores,
+//                             because on a round whose match is one foursome
+//                             the four men on this card walked it together
+//                             and wrote all four of those rows between them.
+//                             Hiding numbers they typed an hour ago is not
+//                             what the blackout owes them; what it owes them
+//                             is what those numbers ADD UP TO.
+//    waves                  — [{ key, label, pids }] in tee order, when the
+//                             match is played across more than one of them.
+//                             A 2-man match is its own foursome and passes
+//                             nothing; Team Best Ball's side is eight men who
+//                             went off in twos, and a flat list of eight put
+//                             the men who actually walked together four rows
+//                             apart. The rows are grouped under each wave's
+//                             tee time instead, in the order the Scoring tab
+//                             draws that same wave — which is the order the
+//                             card was kept in, and the only one a man
+//                             reading it will recognise.
 //
-//                             It has to work that way rather than by hiding
-//                             the data, because the group holding this phone
-//                             is entering two of the four cards on it. What
-//                             the blackout owes them is not their opponents'
-//                             scores back; it is what those scores ADD UP TO,
-//                             which is the round nobody is allowed to know.
+//                             Grouping only. Nothing about the scoring moves:
+//                             the side's NET row is still the whole side's
+//                             best N, summed across every wave, because that
+//                             is the match.
+//    ownSideOnly            — the other side's card is not on this sheet at
+//                             all, sealed or not. The Scoring tab sets it for
+//                             a match bigger than a foursome, which today is
+//                             Team Best Ball: sixteen men across four tee
+//                             waves, so the eight opposite are a different
+//                             group on a different tee and nobody holding
+//                             this phone wrote a stroke of their card.
+//
+//                             NOT tied to the reveal, and that is the point.
+//                             This popup is a COURSE tool — the card the
+//                             group keeps while they are playing — and the
+//                             detailed result of a finished round is read off
+//                             the Leaderboard, which draws both sides in full
+//                             the moment the round stops concealing. So the
+//                             other side never needs to arrive here, and a
+//                             rule with no timing in it cannot be got wrong
+//                             by a lock state arriving in the wrong order.
+//
+//                             The reader's OWN side stays visible in full,
+//                             other waves included: a team is never hidden
+//                             from itself.
 //    course                 — no longer read. The card used to print a terms
 //                             line under the header — course · format ·
 //                             scoring · match play — and it restated things
@@ -315,7 +349,8 @@ export function ScoreCell({ score, par, strokes = 0, size = CELL, color, skin = 
 //                             line back is a render, not a rewiring job.
 export function FullScorecard({
   match, result, format, holePars, holeHcps, tPlayers, getScore,
-  viewer = "A", showHeader = true, conceal = null,
+  viewer = "A", showHeader = true, conceal = null, ownSideOnly = false,
+  waves = null,
 }) {
   if (!result) return null;
 
@@ -333,7 +368,26 @@ export function FullScorecard({
   const sealedHole = (h) => !!conceal && h >= conceal.through;
   // A nine only states a result once every hole in it is out.
   const sealedNine = (start) => sealedHole(start + 8);
-  const mySide = conceal?.side === "B" ? "B" : "A";
+  // The reader's own side. Off `viewer` rather than off `conceal`, because
+  // the question outlives the blackout now: `ownSideOnly` withholds the other
+  // side whether or not anything is sealed, and there is no conceal object to
+  // read a side out of then. Both callers pass the same value to both.
+  const mySide = viewer === "B" ? "B" : "A";
+  // ── Whether a side's CARD is on this sheet at all ────────────────
+  // Withheld as a BLOCK, not cell by cell. Locking each number left eighteen
+  // rows of padlocks on a Team Best Ball sheet — eight player rows and a NET
+  // row per nine, each one a control saying "no". A row of nothing is not
+  // information, it is furniture.
+  //
+  // No reveal state in it either. This sheet is the card the group keeps on
+  // the course; the detailed result of a finished round is read off the
+  // Leaderboard, which draws both sides in full once the round stops
+  // concealing. So on a match bigger than a foursome the other side is simply
+  // never here, and the rule has no timing to get wrong.
+  const hiddenSide = (tid) => ownSideOnly && tid !== mySide;
+  // The match cannot be stated with one side's card missing, so the running
+  // row goes with it rather than printing a line of padlocks under a gap.
+  const hiddenMatch = hiddenSide("A") || hiddenSide("B");
 
   const { formOfPlay } = resolveScoring(match);
   const total = formOfPlay === SCORING_TYPE_TOTAL;
@@ -609,6 +663,76 @@ export function FullScorecard({
       );
     };
 
+    // What stands in for a side whose card is not on this sheet. One row,
+    // where nine used to be: it says which side is missing and why, so the
+    // card reads as half-withheld rather than as a match with one team in
+    // it. Painted in the absent side's own colour, because that is the one
+    // thing about them this card can still state.
+    //
+    // Two sentences, because there are two reasons to be missing and they owe
+    // the reader different things. DURING the blackout it is the round nobody
+    // is allowed to know, and the lock says wait. AFTER it the card is simply
+    // not where that answer lives — this is the group's own card, on the
+    // course — so it points at the screen that does have it rather than
+    // leaving a reader wondering what is still being kept from them.
+    const SealedSide = (tid) => (
+      <div key={`sealed-${tid}`} style={{
+        display: "flex", alignItems: "center", gap: 6, padding: "9px 8px",
+        background: `${teamColor(tid)}${ALPHA.wash}`, borderRadius: 6,
+      }}>
+        {conceal && <span style={{ fontSize: FS.micro, opacity: 0.6 }} title="Sealed until the reveal">🔒</span>}
+        <span style={{ fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.4, color: teamColor(tid) }}>
+          {conceal ? "SEALED UNTIL THE REVEAL" : "FULL CARD ON THE LEADERBOARD"}
+        </span>
+      </div>
+    );
+
+    // The tee time a wave went off on, over the four men who went off on it.
+    // A label and a rule rather than a full row of its own: it is a heading
+    // for the rows under it, not a line of the card, and the grid below has
+    // to stay the only thing with columns in it.
+    const WaveLabel = (tid, w) => (
+      <div key={`wave-${tid}-${w.key}`} style={{
+        display: "flex", alignItems: "center", gap: 6, padding: "7px 6px 3px",
+      }}>
+        <span style={{
+          fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.8,
+          color: teamColor(tid), opacity: 0.8, whiteSpace: "nowrap",
+        }}>{w.label}</span>
+        <span style={{ flex: 1, height: 1, background: `${BC.bdr}${ALPHA.line}` }} />
+      </div>
+    );
+
+    // One side's player rows, grouped into the waves they went off in when
+    // there is more than one. Each wave's men come off the MATCH's own roster
+    // order filtered to that wave — the same expression the Scoring tab draws
+    // its cards from — so the two screens cannot put the same four men in two
+    // different orders.
+    //
+    // A shared-ball side is left alone: its "rows" are already one per side
+    // rather than one per man, and that format's match never spans a wave.
+    const PlayerRows = (tid, groups) => {
+      if (!waves?.length || shared) return groups.map((pids) => PlayerRow(pids, tid));
+      const roster = tid === "A" ? match.teamA : match.teamB;
+      const out = [];
+      const drawn = new Set();
+      waves.forEach((w) => {
+        const set = new Set(w.pids || []);
+        const mine = roster.filter((pid) => set.has(pid));
+        if (!mine.length) return;
+        out.push(WaveLabel(tid, w));
+        mine.forEach((pid) => { drawn.add(pid); out.push(PlayerRow([pid], tid)); });
+      });
+      // Anybody the draw missed still gets his row rather than falling off the
+      // card — the same call scoringUnits makes for an ungrouped player.
+      const left = roster.filter((pid) => !drawn.has(pid));
+      if (left.length) {
+        out.push(WaveLabel(tid, { key: "none", label: "NOT ON THE TEE SHEET" }));
+        left.forEach((pid) => out.push(PlayerRow([pid], tid)));
+      }
+      return out;
+    };
+
     // The side's number for each hole — net strokes, dots or points, per
     // the format. Read straight off result.holes: this row is the match,
     // and nothing about it is worked out here.
@@ -770,14 +894,22 @@ export function FullScorecard({
         {HoleRow}
         {ParRow}
         {HcpRow}
-        {teamAGroups.map((pids) => PlayerRow(pids, "A"))}
-        {SideRow("A")}
-        {MatchRow}
+        {/* Each side is its rows or, when its card is not this reader's to
+            see, the one line that says so. Written as a block per side
+            rather than "hide team B" because the reader is on either side of
+            this card, and it is always the OTHER one that goes. */}
+        {hiddenSide("A") ? SealedSide("A") : <>
+          {PlayerRows("A", teamAGroups)}
+          {SideRow("A")}
+        </>}
+        {!hiddenMatch && MatchRow}
         {/* The MATCH row is a floating chip; without a team label under it
             Team B's first row would butt straight into its border. */}
         <div style={{ marginTop: 5 }}>
-          {teamBGroups.map((pids) => PlayerRow(pids, "B"))}
-          {SideRow("B")}
+          {hiddenSide("B") ? SealedSide("B") : <>
+            {PlayerRows("B", teamBGroups)}
+            {SideRow("B")}
+          </>}
         </div>
       </div>
     );

@@ -33,8 +33,9 @@ import {
   LOCK_OPEN, LOCK_FINAL, LOCK_STATE_LABEL,
 } from "./lib/roundLocks";
 import {
-  concealHoleData, countdownHoleData, revealState, revealSummary, HOLE_COUNT,
-  COUNTDOWN_HASH, wantsCountdown,
+  concealHoleData, countdownHoleData, concealCtpData, isConcealing,
+  revealState, revealSummary, HOLE_COUNT,
+  COUNTDOWN_HASH, wantsCountdown, revealPending,
 } from "./lib/reveal";
 import { usePullToRefresh } from "./lib/usePullToRefresh";
 import { useFitDensity } from "./lib/useFitDensity";
@@ -96,7 +97,8 @@ import {
   GROUPS_COL, groupsDocId, encodeGroups, decodeGroups,
   teeTimeForMatch, parseTeeTime, formatTeeTime, DEFAULT_TEE_INTERVAL, TEE_SLOTS,
   roundPlaySetup, orderMatchesForRound, numberMatches, groupIndexForMatch,
-  scoringUnits, unitForPlayer, teeTimeList, expandTeeTimes, stripAMPM,
+  scoringUnits, unitForPlayer, readableUnits, teeTimeList, expandTeeTimes, stripAMPM,
+  formatGroupsByTeam, formatPerSide,
 } from "./lib/groups";
 import { firstTeeAt } from "./lib/countdown";
 import { groupKey, tagAheadOfPlay, resolvePin, OVERRIDE_KEY } from "./lib/ctp";
@@ -1220,6 +1222,24 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // known until the cards are turned over at the house.
   const roundSeal = revealState(tRounds, match?.round);
   const conceal = roundSeal.concealing ? { through: roundSeal.through, side: userTeam } : null;
+  // ── Whose card this screen is, at all ────────────────────────────
+  // Every card opened from the Scoring tab shows the reader's own side only
+  // when the match is bigger than a foursome. On every 1- and 2-man format
+  // the match IS the foursome — those four walked it together and wrote all
+  // four rows between them — so nothing there moves. Team Best Ball's match
+  // is the whole side across four tee waves, so the eight opposite are a
+  // different group on a different tee that this phone never saw, and their
+  // card is not this one.
+  //
+  // Deliberately NOT tied to the reveal. This tab is the COURSE tool; the
+  // detailed result of a finished round is read off the Leaderboard, which
+  // draws both sides in full the moment the round stops concealing. So the
+  // other side never has to arrive here at all — and a rule with no timing in
+  // it cannot be got wrong by a lock state landing in the wrong order.
+  //
+  // Structural rather than a check on the format's name: anything whose match
+  // outgrows a foursome lands on the safe side of it.
+  const ownSideOnly = formatPerSide(format) == null;
 
   // ── The scoring unit: this screen is a TEE GROUP, not a match ────
   // On every 1- and 2-man format the match IS the foursome, so the unit is
@@ -1263,31 +1283,56 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // not persisted — the next time the app opens, the seal is back on.
   const otherSideShown = unlockedRound != null && unlockedRound === match?.round;
   const sealedToOwnSide = !!conceal && !otherSideShown;
-  // A unit belongs to the other side if it holds ANY player from it. The
-  // conservative direction on purpose: a wave a director grouped across both
-  // teams is hidden rather than half-shown.
-  const otherSideUnit = (u) =>
-    u.pids.some((pid) => (match?.teamA?.includes(pid) ? "A" : "B") !== userTeam);
-  const openUnits = sealedToOwnSide ? units.filter((u) => !otherSideUnit(u)) : units;
+  // Which side of the MATCH a player is on — the draw, not the roster, because
+  // that is what a card is scored into. See lib/groups.readableUnits for what
+  // a sealed round then does with it, and for the floor that used to step over
+  // this filter entirely on an undrawn closing round.
+  const otherSidePlayer = (pid) =>
+    (match?.teamA?.includes(pid) ? "A" : "B") !== userTeam;
+  const { open: openUnits, floor: floorUnit } = readableUnits({
+    units, sealed: sealedToOwnSide, otherSide: otherSidePlayer,
+  });
 
   // The reader's own group unless a director has deliberately picked another.
   // Resolved, never stored — a pick that stops matching (the round moved, the
   // draw changed under them, the seal took it back) falls back to their own
   // group rather than pointing at players who are no longer grouped that way.
   //
-  // The final `units[0]` is the floor: a screen has to be about somebody, and
+  // The final `floorUnit` is the floor: a screen has to be about somebody, and
   // it is only reached when the reader's own side has no group at all, which
-  // is a draw nobody has finished making.
+  // is a draw nobody has finished making. On a sealed round it is cut to the
+  // reader's own side — see lib/groups.readableUnits, where that cut and the
+  // reason for it live.
   const unit = openUnits.find(u => u.key === pickedUnit)
     || unitForPlayer(openUnits, userPid)
     || openUnits[0]
-    || units[0]
+    || floorUnit
     || null;
   // What the cards, the hole strip and the auto-advance are about. `matchPids`
   // stays the MATCH's roster and is still what decides a signature: a card is
   // signed by somebody in the match, and on a team round the card is the
   // side's, not the foursome's.
   const cardPids = unit?.pids || [];
+
+  // ── The waves, for anything that draws more than one of them ─────
+  // A match played across several tee times is drawn on the Scoring tab one
+  // wave at a time — that is the whole of scoringUnits — but the Full
+  // Scorecard behind it is the MATCH, so it holds every wave at once. As a
+  // flat list of eight that put the four men who actually walked together
+  // four rows apart, in an order that matches nothing anybody saw.
+  //
+  // So the card is handed the waves themselves, in tee order and labelled by
+  // the time they went off, and groups its rows under them. `times` is lifted
+  // out of the group picker below, which is where it used to live, so the
+  // label on a wave here and the label on its pill down there cannot drift.
+  const teeTimes = expandTeeTimes(teeTimeList(tr), units.length);
+  const cardWaves = units.length > 1
+    ? units.map((u, i) => ({
+      key: u.key,
+      label: u.groupIdx == null ? "UNGROUPED" : (stripAMPM(teeTimes[u.groupIdx]) || `WAVE ${i + 1}`),
+      pids: u.pids,
+    }))
+    : null;
 
   // Which hole is showing, when it moves on by itself, and the toast during
   // the wait — see lib/useHoleAdvance.
@@ -1321,10 +1366,30 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // what stops three partners being left with a card that can never be
   // signed — see lib/cardSigs. Scoring is untouched: his holes still count.
   const withdrawn = useMemo(() => withdrawnIds(tPlayers), [tPlayers]);
-  const sig = match ? sigForMatch(cardSigs, match.id) : null;
-  const signState = match ? cardState(match, sig, withdrawn) : "open";
+  // ── A team round has no card to sign ──────────────────────────────
+  // Card signing was ported from MnQ, where a match IS a foursome — one
+  // card, four players, and "everybody in the match" is exactly who is
+  // standing over it. Team Best Ball breaks that: the match is the WHOLE
+  // side across every tee time (`matchPlayers` = teamA + teamB, up to
+  // sixteen men), so `cardComplete`/`missingForCard` were asking whether
+  // every wave of BOTH teams had finished, not whether the foursome on
+  // screen had. A group standing on the 3rd could never sign — and the
+  // "can't sign" note named men in a completely different wave, on the
+  // same team or the opposing one, who had nothing to do with the card
+  // this group was holding.
+  //
+  // There is no fix that scopes it to "this wave" either: the signature
+  // document is keyed by match id, and every wave of a team round shares
+  // ONE match id, so a per-wave sign would need a per-wave document this
+  // format has never written. Rather than invent that data shape, the
+  // round simply has no sign-off ritual — it is finalized by the director
+  // as a whole, and the result is revealed at the Final Countdown, not
+  // agreed to card by card on the course.
+  const teamRound = formatGroupsByTeam(format);
+  const sig = match && !teamRound ? sigForMatch(cardSigs, match.id) : null;
+  const signState = match && !teamRound ? cardState(match, sig, withdrawn) : "open";
   const signed = signState !== "open";
-  const complete = match ? cardComplete(match, holeData, withdrawn) : false;
+  const complete = match && !teamRound ? cardComplete(match, holeData, withdrawn) : false;
   // Whether the Full Scorecard button is allowed to promote to the sign CTA.
   // A signature is a claim by somebody IN the match — `signed_by` lands on the
   // card and every attestation is checked against the roster of that match —
@@ -1332,11 +1397,11 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // scorecard, however complete it is. Attesting is already gated the same way
   // inside SignedCardPanel.
   const canSign = complete && matchPids.includes(userPid);
-  const missingCard = match && !complete && !signed ? missingForCard(match, holeData, withdrawn) : [];
+  const missingCard = match && !teamRound && !complete && !signed ? missingForCard(match, holeData, withdrawn) : [];
   // Holes the WHOLE group skipped, which is a different sentence from one man
   // missing one hole — see lib/cardSigs.skippedHoles. The match status on
   // screen is computed without them, so it is provisional until they are in.
-  const skipped = match && !complete && !signed ? skippedHoles(match, holeData, withdrawn) : [];
+  const skipped = match && !teamRound && !complete && !signed ? skippedHoles(match, holeData, withdrawn) : [];
 
   // No more hooks below this line.
 
@@ -1953,8 +2018,8 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // device (useFitDensity), so a control of its own would come out of the
   // score buttons' height for a question asked once a year.
   const groupPicker = isDirector && units.length > 1 ? (() => {
-    const times = expandTeeTimes(teeTimeList(tr), units.length);
-    const locked = (u) => sealedToOwnSide && otherSideUnit(u);
+    const times = teeTimes;
+    const locked = (u) => sealedToOwnSide && (u.pids || []).some(otherSidePlayer);
     const unlockThen = async (key) => {
       // Short on purpose. The man tapping this is a director standing on a
       // golf course or sitting in the room, and he already knows what the seal
@@ -2204,7 +2269,8 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
         match={match} sig={sig} result={result} format={format}
         holePars={holePars} holeHcps={holeHcps} course={course}
         tPlayers={tPlayers} getScore={getScore} viewer={userTeam}
-        userPid={userPid} notify={notify} isDirector={isDirector} conceal={conceal}
+        userPid={userPid} notify={notify} isDirector={isDirector}
+        conceal={conceal} ownSideOnly={ownSideOnly} waves={cardWaves}
         onAttest={() => onAttestCard(match, userPid)}
         onUnsign={() => onUnsignCard(match)}
       />
@@ -2218,24 +2284,38 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
       {matchSelector}
       {groupPicker}
 
-      {/* Front 9 — hole strip + status row. */}
-      <div style={{ display: "flex", gap: 3, marginBottom: HOLE_RING_REACH + 1, flexShrink: 0 }}>
+      {/* Front 9 — hole strip + status row.
+          The status row is the running match state under each hole —
+          ▲/▼N off the reader's own side, computed over the WHOLE match. On
+          a team round that "match" is the entire side across every tee
+          time, so the number under hole 3 would be a running score for
+          holes this foursome never played, off men who aren't on this
+          screen — and it would be printing the very result the Final
+          Countdown exists to hold back until the room is together. So a
+          team round gets the hole strip (this group's own progress) and
+          nothing more; see `teamRound` above for the same reasoning that
+          drops the sign-card ritual. */}
+      <div style={{ display: "flex", gap: 3, marginBottom: teamRound ? Math.max(fit.stack, HOLE_RING_REACH + 1) : HOLE_RING_REACH + 1, flexShrink: 0 }}>
         {Array.from({ length: 9 }, (_, i) => renderHoleCell(i))}
       </div>
       {/* The one gap the ring reaches UP into: the back-nine strip follows
           this row, so on the densest phones — where fit.stack is 3 — the
           ring around 10 would rest on this card's border. */}
-      <div style={{ display: "flex", marginBottom: Math.max(fit.stack, HOLE_RING_REACH + 1), flexShrink: 0, background: BC.card, border: `1px solid ${BC.bdr}${ALPHA.line}`, borderRadius: 8, padding: `${fit.statusPad}px 0`, alignItems: "center" }}>
-        {Array.from({ length: 9 }, (_, i) => renderStatusCell(i))}
-      </div>
+      {!teamRound && (
+        <div style={{ display: "flex", marginBottom: Math.max(fit.stack, HOLE_RING_REACH + 1), flexShrink: 0, background: BC.card, border: `1px solid ${BC.bdr}${ALPHA.line}`, borderRadius: 8, padding: `${fit.statusPad}px 0`, alignItems: "center" }}>
+          {Array.from({ length: 9 }, (_, i) => renderStatusCell(i))}
+        </div>
+      )}
 
       {/* Back 9 — hole strip + status row. */}
-      <div style={{ display: "flex", gap: 3, marginBottom: HOLE_RING_REACH + 1, flexShrink: 0 }}>
+      <div style={{ display: "flex", gap: 3, marginBottom: teamRound ? fit.stack : HOLE_RING_REACH + 1, flexShrink: 0 }}>
         {Array.from({ length: 9 }, (_, i) => renderHoleCell(i + 9))}
       </div>
-      <div style={{ display: "flex", marginBottom: fit.stack, flexShrink: 0, background: BC.card, border: `1px solid ${BC.bdr}${ALPHA.line}`, borderRadius: 8, padding: `${fit.statusPad}px 0`, alignItems: "center" }}>
-        {Array.from({ length: 9 }, (_, i) => renderStatusCell(i + 9))}
-      </div>
+      {!teamRound && (
+        <div style={{ display: "flex", marginBottom: fit.stack, flexShrink: 0, background: BC.card, border: `1px solid ${BC.bdr}${ALPHA.line}`, borderRadius: 8, padding: `${fit.statusPad}px 0`, alignItems: "center" }}>
+          {Array.from({ length: 9 }, (_, i) => renderStatusCell(i + 9))}
+        </div>
+      )}
 
       {nassauBadges}
 
@@ -2412,6 +2492,18 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
               background: BC.card, borderRadius: 10, padding: fit.cardPad,
               flex: "1 1 0", minHeight: 0, maxHeight: fit.cardMax, display: "flex", flexDirection: "column",
               border: `1px solid ${BC.bdr}`,
+              // `maxHeight` is a cap, not a guarantee — the score row under it
+              // has a hard CSS `minHeight` floor (fit.btnMin), so on a device
+              // where the room above these cards (banners, the hole strips,
+              // the format badge) leaves less than four cards' worth of
+              // `cardMax` to divide, the button row refuses to shrink to fit
+              // and the card's own content grows past the box its rounded
+              // corners are drawn on. With no clip that excess doesn't stay
+              // inside — it paints straight through the border into whatever
+              // card comes next, which read as the score buttons spilling out
+              // of their row. Clipping here is what makes `maxHeight` actually
+              // a ceiling instead of a suggestion.
+              overflow: "hidden",
             }}>
               {/* Header row — name(s) + (CH) + stroke dots clustered tight on
                   the LEFT, so the handicap context reads as attached to the
@@ -2468,7 +2560,8 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
         <SignCardSheet
           match={match} result={result} format={format}
           holePars={holePars} holeHcps={holeHcps} course={course}
-          tPlayers={tPlayers} getScore={getScore} viewer={userTeam} conceal={conceal}
+          tPlayers={tPlayers} getScore={getScore} viewer={userTeam}
+          conceal={conceal} ownSideOnly={ownSideOnly} waves={cardWaves}
           onClose={() => setShowSign(false)}
           onSign={async () => {
             const res = await onSignCard(match, userPid);
@@ -2503,7 +2596,8 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
               match={match} result={result} format={format}
               holePars={holePars} holeHcps={holeHcps} course={course}
               tPlayers={tPlayers} getScore={getScore}
-              viewer={userTeam} conceal={conceal}
+              viewer={userTeam} conceal={conceal} ownSideOnly={ownSideOnly}
+              waves={cardWaves}
             />
           </div>
           <button onClick={() => setShowScorecard(false)} style={{
@@ -4766,6 +4860,16 @@ export default function App() {
     [holeData, enrichedRounds]
   );
 
+  // The pins, cut the same way and for the same reason. A CTP is not derived
+  // from a hole score, so the subtraction above could never reach it — which
+  // left the Betting tab drawing a sealed round's pin winners to anybody who
+  // tapped that round, and the round sheet behind the push notification doing
+  // the same. See concealCtpData in lib/reveal.
+  const revealedCtpData = useMemo(
+    () => concealCtpData(ctpData, enrichedRounds),
+    [ctpData, enrichedRounds]
+  );
+
   // The same subtraction cut at the reveal instead of at zero, for the one
   // screen that walks the round in front of the room. It goes to the
   // Leaderboard, which is where the countdown is mounted from, and is used
@@ -4774,10 +4878,32 @@ export default function App() {
   // The side lookup is what makes the cut PER PLAYER rather than per hole: a
   // hole is turned over one side at a time now, so team A's twelfth can be on
   // this map while team B's twelfth is not.
-  const sideOfPlayer = useCallback(
-    (pid) => (tPlayers.find(p => p.player_id === pid)?.team === "B" ? "B" : "A"),
-    [tPlayers]
-  );
+  //
+  // ── An unknown player is NOT team A ──────────────────────────────
+  // `countdownHoleData` cuts a player it cannot place at the safer of the two
+  // counters — the side that has been shown less — and it decides that off a
+  // NULL from this lookup. This was a seventh hand-rolled copy of `teamOf`
+  // (see lib/players, which exists because two earlier copies had already
+  // drifted on exactly this question), and it was the one that drifted the
+  // dangerous way: `?.team === "B" ? "B" : "A"` answers "A" for a player it
+  // has never heard of, so the safety net below it was unreachable.
+  //
+  // The case that reaches it is the television being refreshed, which is a
+  // thing somebody does two minutes before everyone sits down. Subscriptions
+  // land over several frames, and in the window where `holeData` has arrived
+  // and the roster has not, EVERY pid is unknown — so every one of them read
+  // as team A and team B's map was cut at team A's counter. With A a hole
+  // ahead, B's unrevealed hole was scored into the countdown's own result:
+  // the ball grid still said WAITING (`shown` is computed off the counters,
+  // not off the data), but the cup totals and the clinch band moved for a
+  // hole whose captain had not spoken. That is the outcome arriving early,
+  // which is the one thing the whole evening is built to prevent.
+  //
+  // `teamOf` answers null for an unknown id, and anything that is not "A" or
+  // "B" — a null, or a team a director spelled some other way — falls to the
+  // minimum of the two counters, which is the reveal's own definition of what
+  // is wholly public.
+  const sideOfPlayer = useMemo(() => playerLookup(tPlayers).teamOf, [tPlayers]);
   const countdownData = useMemo(
     () => countdownHoleData(holeData, enrichedRounds, sideOfPlayer),
     [holeData, enrichedRounds, sideOfPlayer]
@@ -5595,7 +5721,15 @@ export default function App() {
   // release are not surfaced anywhere (the Admin › Rounds lock card was
   // removed) and are retained as the data layer behind those actions.
   // Locking itself still happens automatically in ensureRoundLock.
-  const onLockRound = useCallback(async (rnd, { refresh = false } = {}) => {
+  //
+  // `inputs` lets a caller hand over the handicap maps it is holding rather
+  // than the ones App last heard about. The Admin form is the case: a
+  // director types a corrected Course Handicap and taps Recalculate, and
+  // between those two beats sit a 700ms debounce and a Firestore echo that
+  // has to come back through the subscription before `lockInputsRef` knows
+  // anything. Freezing off the ref there would snapshot the number he was
+  // correcting. The form flushes its write first AND passes what it wrote.
+  const onLockRound = useCallback(async (rnd, { refresh = false, inputs = null } = {}) => {
     const prev = roundLocksRef.current?.[rnd];
     if (prev?.final && refresh) return null; // final rounds are never refreshed
     const { players, tRounds: rds, courses: crs, hcpOverrides, teeAssignments } = lockInputsRef.current;
@@ -5605,8 +5739,8 @@ export default function App() {
       players,
       tRounds: rds,
       courses: crs,
-      chOverrides: hcpOverrides,
-      teeAssignments,
+      chOverrides: inputs?.chOverrides || hcpOverrides,
+      teeAssignments: inputs?.teeAssignments || teeAssignments,
       lockedBy: userRef.current?.name || null,
     };
     const lock = refresh && prev?.locked
@@ -5883,7 +6017,17 @@ export default function App() {
   // something about. See lib/scoreGuard's finalizeStage for both, and the
   // header of components/FinalizeRound for why it fires twice.
   const roundStage = currentRound == null ? null : finalizeStage({ progress: roundProgress, cards: roundCards });
-  const finalizeReady = isDirector && roundStage === "ready";
+  // ── But not before the room has seen it ──────────────────────────
+  // "Ready" means every card is attested, which on the closing round is the
+  // moment the cards come back to the HOUSE — an hour before anybody sits
+  // down to watch it. Prompting there told the director to finalize the round
+  // whose whole point is that it is finalized last: the push goes out naming
+  // the pins, and the board then lands on the eighteenth hole rather than on
+  // his word. See lib/reveal.revealPending; the prompt returns the moment the
+  // last hole is turned over, which is when it is the right prompt.
+  const ceremonyPending = revealPending(
+    enrichedRounds.find(r => r.round_number === currentRound));
+  const finalizeReady = isDirector && roundStage === "ready" && !ceremonyPending;
   // ── What the SHEET is looking at ─────────────────────────────────
   // The alert above speaks for the live round and nothing else. The sheet
   // does not have to: every round that has not been frozen is a round a
@@ -6017,10 +6161,40 @@ export default function App() {
   // More is where a PLAYER goes and finalizing is the one act on the
   // tournament that only a director can perform.
   const canFinalize = isDirector && tournamentRounds.length > 0;
+  // ── The way back into a finished round ───────────────────────────
+  // Both land on Admin → Rounds, in the one place a round's handicaps are
+  // edited, and they are deliberately TWO acts rather than one button:
+  //
+  //   reopen      FINAL → LOCKED (unfinalizeRound). Re-enables the form and
+  //               the recalculate below, and on its own moves no stroke —
+  //               scoring still answers to the frozen snapshot.
+  //   recalculate re-takes that snapshot (refreshRoundLockDoc), which is the
+  //               ONLY thing that makes a corrected Course Handicap land on a
+  //               round that has already been frozen.
+  //
+  // Two decisions, said out loud in that order: "this round is open again",
+  // then "score it off these numbers now". One button doing both would
+  // re-score a round every time a director reopened one to look at it.
+  const reopenRound = canFinalize ? ((rnd) => onFinalizeRound(rnd, false)) : null;
+  const recalcHandicaps = canFinalize
+    ? ((rnd, inputs) => onLockRound(rnd, { refresh: true, inputs }))
+    : null;
   // The notification itself: whichever stage the round has reached, and only
   // until the director puts THAT STAGE away. Dismissing "all scores are in"
   // leaves the "ready to finalize" bar still to come.
-  const alertStage = isDirector && roundStage ? roundStage : null;
+  //
+  // ── And the closing round gets a third stage ─────────────────────
+  // A sealed round the room has not seen yet is not "ready to finalize", even
+  // though every card is in and the arithmetic above says so. What is ready is
+  // the CEREMONY, and finalizing before it is the one order of events the
+  // reveal is built to prevent (see lib/reveal.revealPending). So the loud rung
+  // becomes "countdown" on that round, which re-words the bar, points its tap
+  // at the Leaderboard — where the way onto the television lives — and, because
+  // the snooze is remembered per stage, keeps its own dismissal separate from
+  // the "ready to finalize" bar that follows it after the eighteenth hole.
+  const alertStage = isDirector && roundStage
+    ? (roundStage === "ready" && ceremonyPending ? "countdown" : roundStage)
+    : null;
   const showFinalizeAlert = !!alertStage
     && finalizeSnoozed !== finalizeSnoozeTag(currentRound, alertStage);
 
@@ -6239,7 +6413,11 @@ export default function App() {
           progress={roundProgress}
           cards={roundCards}
           stage={alertStage}
-          onOpen={openFinalize}
+          /* The countdown rung walks him to the Leaderboard instead of
+             raising the finalize sheet: the way onto the television is the
+             button on that round's sealed panel, and the sheet is the thing
+             he must NOT reach for yet. */
+          onOpen={alertStage === "countdown" ? () => setView("leaderboard") : openFinalize}
           onDismiss={() => snoozeFinalizeAlert(currentRound, alertStage)}
         />
       )}
@@ -6364,7 +6542,9 @@ export default function App() {
                real map here would read out a sealed round's card one skin at
                a time from a tab nobody thought to check. */
             holeData={revealedHoleData}
-            ctpData={ctpData}
+            /* And the pins with them — `ctpTags` never took holeData, so the
+               subtraction above could not cut it. See concealCtpData. */
+            ctpData={revealedCtpData}
             skinsPot={skinsPot}
             buyIns={buyIns}
             onSetCtp={onSetCtp}
@@ -6574,6 +6754,8 @@ export default function App() {
                path that used to be a row in the More menu. Null when there is
                no round to finalize, which is what hides the control. */
             onOpenFinalize={canFinalize ? openFinalize : null}
+            onReopenRound={reopenRound}
+            onRecalcHandicaps={recalcHandicaps}
             finalizeRound={currentRound}
             finalizeReady={finalizeReady}
             /* The RAW trip document, not the normalized house: a link
@@ -6627,7 +6809,16 @@ export default function App() {
           (see the deep-link effect above). Rendered here rather than inside
           TeamLeaderboard because it needs ctpData, buyIns and teamNames, and
           because a deep link arrives at the app rather than at a tab. */}
-      {summaryRound != null && (
+      {/* ── And not at all while the round is concealing ──
+          The sheet's two data feeds are cut (holes above, pins below), so
+          what a concealing round would draw here is an empty summary rather
+          than a leak — but the Leaderboard already withholds the chip that
+          opens this thing on those rounds (`!seal?.concealing`, in its own
+          file), and the deep link behind the round-final push did not. One
+          door locked and the other standing open is how the push became the
+          way in. Locked at the render rather than in the effect so EVERY
+          route to the sheet goes through it, whatever sets the round. */}
+      {summaryRound != null && !isConcealing(enrichedRounds.find(t => t.round_number === summaryRound)) && (
         <RoundSummarySheet
           round={summaryRound}
           onClose={() => setSummaryRound(null)}
@@ -6650,7 +6841,10 @@ export default function App() {
           tRounds={tRounds}
           courses={courses}
           roundLocks={roundLocksData}
-          ctpData={ctpData}
+          /* Concealed, like the holes above it: this sheet is what the
+             round-final push deep-links to, and its CTP section was the one
+             part of it the blackout never reached. */
+          ctpData={revealedCtpData}
           buyIns={buyIns}
           hcpOverrides={hcpOverridesData}
           teeAssignments={teeAssignmentsData}

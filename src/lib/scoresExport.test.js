@@ -355,3 +355,62 @@ describe("the geometry constants", () => {
     expect(HOLES).toBe(18);
   });
 });
+
+// ── Review fixes ────────────────────────────────────────────────────
+describe("a cell that would be read as a formula", () => {
+  it("neutralises the four leading characters a spreadsheet acts on", () => {
+    expect(csvCell("=HYPERLINK(\"x\")")).toBe("\"'=HYPERLINK(\"\"x\"\")\"");
+    expect(csvCell("+SUM(A1)")).toBe("'+SUM(A1)");
+    expect(csvCell("@name")).toBe("'@name");
+    expect(csvCell("-- Tank --")).toBe("'-- Tank --");
+  });
+
+  it("leaves real numbers alone, negatives included", () => {
+    // The care that matters: a plus handicap is a negative number in this
+    // file, and quoting it as text would corrupt the one column the export
+    // exists to be trusted on.
+    expect(csvCell(-2)).toBe("-2");
+    expect(csvCell("-2")).toBe("-2");
+    expect(csvCell("-2.4")).toBe("-2.4");
+    expect(csvCell(0)).toBe("0");
+    expect(csvCell("Kaufman - White")).toBe("Kaufman - White");
+  });
+});
+
+describe("a locked round's header", () => {
+  const lockedRound = [{ round_number: 1, course_id: "c1", tee_box: "Gold" }];
+  // The course has been re-rated since, and the round re-pointed at another
+  // tee. The lock remembers what was actually played.
+  const reRated = [{
+    id: "c1", name: "Treetops", hole_pars: Array(18).fill(4),
+    hole_handicaps: Array.from({ length: 18 }, (_, i) => i + 1),
+    tee_boxes: [{ name: "Gold", slope: 155, rating: 78.9, par: 72 },
+                { name: "White", slope: 113, rating: 72.1, par: 72 }],
+  }];
+  const locks = { 1: { locked: true, course_name: "Treetops", players: {
+    p1: { tee: "White", slope: 113, rating: 72.1 },
+    p2: { tee: "White", slope: 113, rating: 72.1 },
+    p3: { tee: "Gold", slope: 155, rating: 78.9 },
+  } } };
+
+  it("prints the tee and rating the round was frozen against", () => {
+    const h = roundHeading({ round: 1, tRounds: lockedRound, courses: reRated, roundLocks: locks });
+    expect(h.course).toBe("Treetops - White");   // the field's tee, not the round doc's
+    expect(h.rating).toBe(72.1);
+    expect(h.slope).toBe(113);
+  });
+
+  it("still answers once the course document is gone", () => {
+    // A lock carries its own rating, so the row that used to print a frozen
+    // stroke index under a blank rating is answerable now.
+    const h = roundHeading({ round: 1, tRounds: lockedRound, courses: [], roundLocks: locks });
+    expect(h.rating).toBe(72.1);
+    expect(h.scored).toBe(true);
+  });
+
+  it("falls back to the live course on an open round", () => {
+    const h = roundHeading({ round: 1, tRounds: lockedRound, courses: reRated, roundLocks: {} });
+    expect(h.course).toBe("Treetops - Gold");
+    expect(h.slope).toBe(155);
+  });
+});

@@ -282,6 +282,28 @@ export const isFullyRevealed = (tr) => revealedThrough(tr) >= HOLE_COUNT;
 export const isConcealing = (tr) =>
   isSealedRound(tr) && !(isFullyRevealed(tr) && !!tr?.final);
 
+// ── The ceremony has not happened yet ───────────────────────────────
+// Sealed, and still short of eighteen. Narrower than `isConcealing`, and the
+// difference is the whole point: a round that has been fully turned over but
+// not yet finalized is still CONCEALING (it waits on the director), but its
+// ceremony is over and finalizing is exactly what should happen next.
+//
+// It exists for the finalize prompt, which had the order backwards. That
+// prompt fires when every card is ATTESTED — which for the closing round is
+// the moment the cards come back to the house, an hour before anybody sits
+// down. So the app put an amber dot in front of the director telling him to
+// finalize round 4, and finalizing it first does two things nobody wants:
+// `onRoundFinal` broadcasts "Round 4 is final" to all sixteen phones with the
+// pins in the body and a link to the round sheet, and the board then lands
+// the whole round the instant the eighteenth hole is turned over rather than
+// on the director's word — which is the second condition's entire job (see
+// isConcealing).
+//
+// The prompt is suppressed while this is true and comes back the moment the
+// last hole is out, which is when it is the right prompt. Nothing here blocks
+// finalizing: a director who means to can still do it from Admin → Rounds.
+export const revealPending = (tr) => isSealedRound(tr) && !isFullyRevealed(tr);
+
 const roundOf = (tRounds, round) =>
   (tRounds || []).find((t) => t.round_number === round) || null;
 
@@ -402,6 +424,44 @@ export function countdownHoleData(holeData, tRounds, sideOf) {
       if (Number(h) < through) kept[h] = v;
     });
     out[key] = kept;
+  });
+  return out;
+}
+
+// ── The other collection the round writes ───────────────────────────
+// `concealHoleData` above is the whole of the blackout's enforcement, and it
+// works by subtracting HOLE SCORES. That is the right shape and it had one
+// gap: a round records a second, independent result as it is played — the
+// closest-to-the-pin tags in `bc_ctp` — and nothing about them is derived
+// from a hole score, so no amount of subtracting scores ever reached them.
+//
+// The Betting tab drew them for any round in the schedule (`ctpTags` takes
+// `ctpData` and never `holeData`, so it could not have been cut by the
+// subtraction above), and the round sheet the push notification deep-links to
+// did the same. Both are read-only surfaces, open to anybody, during a round
+// nobody is allowed to know anything about. A pin is not a score, but it is a
+// money-bearing per-hole RESULT of the sealed round, and on a best-ball round
+// where the side's best N count, "three of their men stuffed the par 3s" is
+// exactly the inference the evening exists to withhold.
+//
+// So it gets its own subtraction, cut the same way and at the same place: the
+// read-only surfaces are handed a map with the concealing rounds taken out,
+// and the Scoring tab keeps the raw one because that is where the group
+// standing on the tee tags the pin. Same exception, same reason, as the
+// scores themselves.
+//
+// Keys are `${round}_${hole}`, so the round comes off the FIRST separator —
+// the opposite end from holeData's, whose player ids can contain one.
+export function concealCtpData(ctpData, tRounds) {
+  const sealed = new Set(
+    (tRounds || []).filter(isConcealing).map((tr) => tr.round_number),
+  );
+  if (!sealed.size) return ctpData;
+
+  const out = {};
+  Object.entries(ctpData || {}).forEach(([key, rec]) => {
+    const rnd = Number(key.slice(0, key.indexOf("_")));
+    if (!sealed.has(rnd)) out[key] = rec;
   });
   return out;
 }

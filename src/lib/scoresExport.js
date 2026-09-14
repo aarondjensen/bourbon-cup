@@ -94,7 +94,18 @@ const num = (n) => (n == null || !Number.isFinite(Number(n)) ? "" : String(Numbe
 // "The Nightmare - Blue/White" is fine, "Forest Dunes, ii/iii" is not.
 export const csvCell = (v) => {
   const s = v == null ? "" : String(v);
-  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  // ── Not a formula ──
+  // The stated destination is Google Sheets, and a cell opening with = + - or
+  // @ is read there as one. A course called "=Nightmare" is a contrived name;
+  // a roster somebody typed with a stray leading = is not, and neither is a
+  // tournament name pasted out of another document. The apostrophe is the
+  // spreadsheet's own "this is text" mark and does not survive into the value.
+  //
+  // NUMBERS ARE LEFT ALONE, which is the whole care needed here: a plus
+  // handicap is a real negative number in this file, and neutralising "-2"
+  // would corrupt the column the export exists to be trusted on.
+  const text = /^[=+@-]/.test(s) && !Number.isFinite(Number(s)) ? `'${s}` : s;
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 };
 
 // CRLF, because that is what RFC 4180 says and what Excel expects; Sheets
@@ -123,15 +134,40 @@ export const exportRoster = (players) => {
 // frozen snapshot and an open one exports live data — the same rule every
 // other screen follows. A director exporting 2019 gets what 2019 was played
 // off, not what its course document says today.
+// The tee the FIELD played, off the lock's own frozen rows. A lock stores
+// tee/slope/rating per player rather than once for the round, so there is no
+// single answer on a mixed-tee round — the most-played tee is the one the
+// header can honestly describe, and it is the whole field on every round that
+// is not deliberately split. Null when nothing is frozen.
+const lockedTeeSpec = (lock) => {
+  const rows = Object.values(lock?.players || {}).filter(r => r && r.tee);
+  if (!rows.length) return null;
+  const counts = new Map();
+  rows.forEach(r => counts.set(r.tee, (counts.get(r.tee) || 0) + 1));
+  const [tee] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+  const row = rows.find(r => r.tee === tee);
+  return { tee, slope: row.slope, rating: row.rating };
+};
+
 export const roundHeading = ({ round, tRounds, courses, roundLocks }) => {
   const { lock, tr, course } = getRoundCourseCtx({ roundLocks, round, tRounds, courses });
-  const tee = tr?.tee_box || null;
+  // ── A locked round's header is the lock's ──
+  // This used to read the tee off the live round doc and the rating off the
+  // live course doc even when a lock existed, so a course re-rated after the
+  // round — or a round whose tee_box was changed afterwards — printed today's
+  // numbers beside handicaps frozen against yesterday's. The two are the file's
+  // own self-check: a reader is meant to be able to recompute the H column
+  // from the rating and slope printed above it.
+  const frozen = lockedTeeSpec(lock);
+  const tee = frozen?.tee || tr?.tee_box || null;
   const name = lock?.course_name || course?.name || "";
   // Blank rather than the neutral 113/72 that resolveTeeSpec falls back to.
   // A round the director has not booked a course for yet has no rating, and
   // printing the fallback would put a plausible number in a column somebody
-  // would go on to recompute handicaps from.
-  const spec = course ? resolveTeeSpec(course, tee) : null;
+  // would go on to recompute handicaps from. A lock answers even when the
+  // course document has since been deleted, which is the case that used to
+  // print a frozen stroke index under a missing rating.
+  const spec = frozen || (course ? resolveTeeSpec(course, tee) : null);
   return {
     // "Kaufman - White" — the workbook's own form. The tee matters: it is
     // half of what the rating and slope beside it describe.

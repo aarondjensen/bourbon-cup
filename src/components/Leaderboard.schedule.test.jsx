@@ -64,8 +64,13 @@ const board = (props = {}) => render(
 describe("the board's round list", () => {
   it("draws a round that has a course and a format but no pairings", () => {
     const text = board();
-    expect(text).toContain("TREETOPS · SINGLES");
-    expect(text).toContain("ARTHUR HILLS · TEAM BEST BALL");
+    // Name and format with the round's own caret between them — it is the
+    // divider now, so the header reads "TREETOPS ▸ SINGLES" and the pair is
+    // checked rather than the string.
+    expect(text).toContain("TREETOPS");
+    expect(text).toContain("SINGLES");
+    expect(text).toContain("ARTHUR HILLS");
+    expect(text).toContain("TEAM BEST BALL");
     expect(text).toContain("SCRAMBLE");
   });
 

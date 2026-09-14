@@ -82,7 +82,7 @@ const boardAt = (through, extra = {}, final = through >= 18) => {
       teams={teams}
       hcpOverrides={{}}
       teeAssignments={{}}
-      roundLocks={{}}
+      roundLocks={final ? { 4: { locked: true, final: true } } : {}}
       viewer="A"
       {...extra}
     />
@@ -112,7 +112,10 @@ describe("the scoreboard during the Final Countdown", () => {
     const text = boardAt(12);
     expect(text).toContain("THE FINAL COUNTDOWN");
     // The round has a section, and it is showing a dash rather than a score.
-    expect(text).toContain("TREETOPS · TEAM BEST BALL");
+    // The caret sits between the name and the format, so they are checked as
+    // a pair rather than as one string.
+    expect(text).toContain("TREETOPS");
+    expect(text).toContain("TEAM BEST BALL");
     // B won every hole of it. Nothing on this board may say so.
     expect(text).not.toContain("Drivers win");
     cleanup();
@@ -192,6 +195,37 @@ describe("the scoreboard during the Final Countdown", () => {
 // If the countdown were handed the board's map too, the ceremony would be
 // eighteen taps of a blank television — a failure nobody would find until
 // the room was already sitting down.
+// ── The points scoreboard is inside the seal, not beside it ─────────
+// Round 4's hole-by-hole points board (components/TeamBestBallScoreboard) is
+// reached by expanding a match card, and the match list is what the seal takes
+// away — so while the round conceals there is no card to expand and no board
+// to read. That is the right structure, and it is one refactor away from not
+// being: hoist the scoreboard anywhere above the `seal?.concealing` check and
+// it publishes the round hole by hole, which is the one thing the whole
+// ceremony exists to prevent.
+//
+// The exact-text test above would catch it too, by failing everywhere at once.
+// This one names it, so the failure says what broke.
+describe("the hole-by-hole points scoreboard", () => {
+  const SCOREBOARD_HEADER = "PTS";
+
+  it("is nowhere on the board while the round conceals", () => {
+    for (const through of [0, 6, 12, 17]) {
+      const text = boardAt(through);
+      // Guard against passing because the board failed to render at all: the
+      // round's own section is there, it simply has no card to expand.
+      expect(text, `reveal at ${through}`).toContain("TEAM BEST BALL");
+      expect(text, `reveal at ${through}`).not.toContain(SCOREBOARD_HEADER);
+      cleanup();
+    }
+  });
+
+  it("is still nowhere once the eighteenth is out but the round is not final", () => {
+    // The gap the seal is most often wrongly assumed to close at eighteen.
+    expect(boardAt(18, {}, false)).not.toContain(SCOREBOARD_HEADER);
+  });
+});
+
 describe("the Final Countdown itself", () => {
   it("has the holes the board does not", async () => {
     // `autoCountdown` is how the television lands on it: App's reading of
@@ -210,6 +244,61 @@ describe("the Final Countdown itself", () => {
     expect(all).toContain("Drivers5");   // the television
     // And the hole itself is drawn from the balls, not from a blank map.
     expect(all).toContain("BEST 2 OF 4");
+    cleanup();
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  Who gets the door onto the television
+// ══════════════════════════════════════════════════════════════════
+//  The captains and the directors, and nobody else — the only people who can
+//  do anything with it.
+//
+//  It used to be offered to everybody, on the reasoning that the machine the
+//  room watches is signed in as whoever happened to be holding the laptop. That
+//  was wrong about its own feature: the television is pointed at
+//  /finalcountdown and App opens the countdown off the URL with no role check
+//  (see `autoCountdown`). For the other fourteen the button opened a screen
+//  reading "THE CAPTAINS ARE DRIVING · TAP TO EXIT" — an offer the app cannot
+//  honour.
+describe("the door onto the countdown", () => {
+  const DOOR = "OPEN THE FINAL COUNTDOWN";
+  const plain = { canReveal: false, captainSide: null };
+
+  it("is not drawn for a plain player, open round or final", () => {
+    const live = boardAt(6, plain, false);
+    // The panel is still there saying what the board is waiting on — it is the
+    // DOOR that goes, not the explanation.
+    expect(live).toContain("WAITING ON THE FINAL COUNTDOWN");
+    expect(live).not.toContain(DOOR);
+    cleanup();
+    expect(boardAt(6, plain, true)).not.toContain(DOOR);
+  });
+
+  it("is drawn for a director", () => {
+    expect(boardAt(6, { canReveal: true, onSetReveal: () => {}, captainSide: null }, false))
+      .toContain(DOOR);
+    cleanup();
+    expect(boardAt(6, { canReveal: true, onSetReveal: () => {}, captainSide: null }, true))
+      .toContain(DOOR);
+  });
+
+  it("is drawn for a captain", () => {
+    expect(boardAt(6, { canReveal: false, captainSide: "A" }, false)).toContain(DOOR);
+    cleanup();
+    expect(boardAt(6, { canReveal: false, captainSide: "B" }, true)).toContain(DOOR);
+  });
+
+  // The television's own way in, which is the reason the button can be taken
+  // away from everybody else without stranding the room: it is pointed at
+  // /finalcountdown and App opens the countdown off the URL, with no role
+  // check anywhere in the path.
+  it("is not how the television gets there", async () => {
+    const board = boardAt(6, { ...plain, autoCountdown: true }, false);
+    expect(board).not.toContain(DOOR);
+    // The countdown opened anyway — lazily, and portaled onto the body — for
+    // a viewer who is neither a captain nor a director.
+    expect(await screen.findByText("HOLE 6")).toBeTruthy();
     cleanup();
   });
 });

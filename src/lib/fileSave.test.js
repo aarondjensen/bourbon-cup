@@ -93,10 +93,28 @@ describe("on a native build", () => {
     expect(clicked).toEqual([]);
   });
 
-  it("downloads when the device cannot share a file", async () => {
-    setNavigator({ canShare: () => false, share: async () => {} });
-    expect(await saveTextFile({ name: NAME, text: TEXT, native: true })).toBe(SAVED.downloaded);
+  it("copies rather than claiming a download the webview never performed", async () => {
+    // The old spec expected SAVED.downloaded here, and that was the bug this
+    // module's own header warns about: inside a WKWebView `<a download>`
+    // neither saves nor throws, so the route reports success over a file that
+    // does not exist and the screen says "it's in your downloads". There is
+    // no download route on native any more — a device that cannot share a
+    // file gets the clipboard, which is at least true.
+    let copied = null;
+    setNavigator({
+      canShare: () => false, share: async () => {},
+      clipboard: { writeText: async (t) => { copied = t; } },
+    });
+    expect(await saveTextFile({ name: NAME, text: TEXT, native: true })).toBe(SAVED.copied);
+    expect(copied).toBe(TEXT);
     expect(shared).toEqual([]);
+  });
+
+  it("fails honestly on native when it cannot share OR copy", async () => {
+    // The one outcome that must never be dressed up as a success: a backup
+    // nobody knows did not happen is the worst of them.
+    setNavigator({ canShare: () => false, share: async () => {} });
+    expect(await saveTextFile({ name: NAME, text: TEXT, native: true })).toBe(SAVED.failed);
   });
 });
 

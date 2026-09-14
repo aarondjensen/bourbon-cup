@@ -90,8 +90,19 @@ const copyText = async (text) => {
 // stays testable without a Capacitor shim and the caller keeps the one
 // isNative() the rest of the screen is already branching on.
 export const saveTextFile = async ({ name, text, mime = "text/csv;charset=utf-8", native = false }) => {
+  // ── `<a download>` is not a fallback inside a webview ────────────
+  // It is the route this module's own header warns about: in a WKWebView the
+  // click neither saves nor throws, so `downloadFile` returns true and the
+  // screen says "it's in your downloads" over a file that does not exist.
+  // A backup that reports success and produced nothing is worse than one that
+  // failed, because nobody goes looking for it.
+  //
+  // So on native there is no download route at all. Share first, and when the
+  // device cannot share a file, the clipboard — which is honest, tells the
+  // director to paste it into a spreadsheet, and is what the wording for that
+  // case was already written for.
   const routes = native
-    ? [shareFile, downloadFile]
+    ? [shareFile]
     : [downloadFile, shareFile];
 
   for (const route of routes) {

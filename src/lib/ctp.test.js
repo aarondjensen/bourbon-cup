@@ -182,3 +182,34 @@ describe("groupLabel", () => {
     expect(groupLabel(null)).toBe("another group");
   });
 });
+
+// ── A hole-in-one — zero feet ────────────────────────────────────────
+// Zero is a legitimate distance (the ball is IN the hole) and it is falsy in
+// JS, which is exactly the shape of bug that slips past a quick `if (!ft)`
+// check. Nothing here is untested logic — `== null` guards throughout mean
+// it should already work — but it is the one distance never actually
+// exercised above, and it is the value most likely to break if any of these
+// checks are ever rewritten as a truthiness test instead.
+describe("a hole-in-one is zero feet, not no distance", () => {
+  it("winningClaim: a holed tee shot beats every measured tag", () => {
+    const cs = { g1: tag("ace", 0, 1), g2: tag("close", 3, 0) };
+    expect(winningClaim(cs).playerId).toBe("ace");
+  });
+
+  it("winningClaim: two aces still tie on tee order, not on distance", () => {
+    const cs = { g2: tag("late", 0, 2), g1: tag("early", 0, 1) };
+    expect(winningClaim(cs).playerId).toBe("early");
+  });
+
+  it("canTakePin: nothing beats a standing zero except another zero played first", () => {
+    const leader = { leaderFt: 0, leaderOrder: 2 };
+    expect(canTakePin({ ...leader, myFt: 1, myOrder: 0 })).toBe(false);
+    expect(canTakePin({ ...leader, myFt: 0, myOrder: 0 })).toBe(true);
+    expect(canTakePin({ ...leader, myFt: 0, myOrder: 5 })).toBe(false);
+  });
+
+  it("resolvePin: a legacy zero distance is kept, not read as missing", () => {
+    const r = resolvePin({ legacy: { player_id: "old", distance_ft: 0 } });
+    expect(r.distance_ft).toBe(0);
+  });
+});
