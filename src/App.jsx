@@ -92,6 +92,7 @@ import { LowNetCard } from "./components/LowNetCard";
 import { MoneyHoleCard } from "./components/MoneyHoleCard";
 import { MoneyHoleSetup } from "./components/MoneyHoleSetup";
 import { MoneyHolePrompt } from "./components/MoneyHolePrompt";
+import { TurnCard } from "./components/TurnCard";
 import { MatchSetup } from "./components/MatchSetup";
 import {
   GROUPS_COL, groupsDocId, encodeGroups, decodeGroups,
@@ -131,7 +132,7 @@ import {
   nonSignerPids, isFullyAttested, cardState,
   roundCardProgress, pendingAttestations, attestedPids, withdrawnIds,
 } from "./lib/cardSigs";
-import { useHoleAdvance } from "./lib/useHoleAdvance";
+import { useHoleAdvance, nineComplete } from "./lib/useHoleAdvance";
 import { roundForToday } from "./lib/scoringGate";
 import { claimPairing, cleanCode, isCompleteCode } from "./lib/authPairing";
 
@@ -1084,6 +1085,12 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // twice, and the group after it must still be told.
   const [moneyHolePrompt, setMoneyHolePrompt] = useState(false);
   const promptedMoneyHole = useRef({});
+  // The turn card — the group's gross front nine, put up once as they reach
+  // the 10th (components/TurnCard). Third of the three popups this screen
+  // raises by itself, and the same session-guard shape as the other two:
+  // keyed per CARD per round, because one phone keeps more than one of them.
+  const [turnCard, setTurnCard] = useState(false);
+  const promptedTurn = useRef({});
   // The sign sheet. Only reachable from the promoted Full Scorecard button,
   // which only promotes on a complete card — see components/CardSignature.
   const [showSign, setShowSign] = useState(false);
@@ -1314,6 +1321,24 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // side's, not the foursome's.
   const cardPids = unit?.pids || [];
 
+  // ── The CARDS on screen ──────────────────────────────────────────
+  // One per player, or one per SIDE on a shared-ball format (scramble,
+  // pinehurst): the side plays one ball and one tap posts it to both men, so
+  // it is one card with both names on it. See onTapScore for the write side.
+  //
+  // Derived up here rather than inside the render it was written for, because
+  // the turn card at the 10th has to draw the same rows the score buttons do.
+  // Built a second time down there, a scramble side would appear as two
+  // identical lines on one of the two screens and one line on the other, and
+  // the pair would be free to drift apart on the next format that joins them.
+  const sideCards = (sidePids) => {
+    const inUnit = (sidePids || []).filter(pid => cardPids.includes(pid));
+    if (!formatIsSharedBall(format)) return inUnit.map(pid => [pid]);
+    return inUnit.length ? [inUnit] : [];
+  };
+  const teamACards = sideCards(match?.teamA);
+  const teamBCards = sideCards(match?.teamB);
+
   // ── The waves, for anything that draws more than one of them ─────
   // A match played across several tee times is drawn on the Scoring tab one
   // wave at a time — that is the whole of scoringUnits — but the Full
@@ -1336,7 +1361,7 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
 
   // Which hole is showing, when it moves on by itself, and the toast during
   // the wait — see lib/useHoleAdvance.
-  const { activeHole, goToHole, toast, positionOn } =
+  const { activeHole, goToHole, editing, toast, positionOn } =
     useHoleAdvance({ matchId: unit?.key ?? null, pids: cardPids, getScore, hold: ctpPrompt != null });
 
   const par = holePars[activeHole];
@@ -1402,6 +1427,51 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // missing one hole — see lib/cardSigs.skippedHoles. The match status on
   // screen is computed without them, so it is provisional until they are in.
   const skipped = match && !teamRound && !complete && !signed ? skippedHoles(match, holeData, withdrawn) : [];
+
+  // ── The turn ─────────────────────────────────────────────────────
+  // The 10th tee is where a wrong number is still cheap to fix: the group is
+  // standing still, has just added up a nine, and somebody can still say "I
+  // had a 5 there". An hour later that is an argument, and after the card is
+  // signed it is a director's edit to a closed round. So once every man on
+  // the card has all nine front holes in and the screen lands on the 10th,
+  // the group's gross front nine goes up to eyeball. See components/TurnCard.
+  //
+  // An effect rather than a hook on the write path, which is where the CTP
+  // and money-hole prompts fire from: this is about ARRIVING on the 10th, and
+  // the group arrives 1.8 seconds after the tap, when auto-advance carries
+  // them there. Fired from the tap it would open over the 9th and fight the
+  // advance underneath it.
+  //
+  // The guards, in the order they matter:
+  //   • there is a card, it is not signed, and the round is the one being
+  //     played — a director opening a finished round to correct it is not a
+  //     group walking to a tee
+  //   • the screen is ON the 10th, and got there by ARRIVING rather than by
+  //     walking back to it. `editing` is the hook's own word for the second
+  //     one (lib/useHoleAdvance), and it is what keeps a finished card from
+  //     re-raising the turn when somebody taps back to the 10th to fix a hole.
+  //   • nothing else is up. A par-3 ninth raises the CTP prompt and a money
+  //     hole on the 10th raises its heads-up, both a beat before this; the
+  //     effect re-runs when they close, so this queues behind them rather
+  //     than stacking on top.
+  //   • every ACTIVE man on the card has the front nine in. Active, because a
+  //     man who has walked in will never post his nine and the group would
+  //     otherwise never reach the turn at all (lib/cardSigs.withdrawnIds).
+  //   • once per card per round. A group walking back to the 4th and forward
+  //     again is not asking to be shown it twice.
+  useEffect(() => {
+    if (!unit || signed || offRound) return;
+    if (activeHole !== 9 || editing) return;
+    if (ctpPrompt != null || moneyHolePrompt) return;
+    const active = cardPids.filter(pid => !withdrawn.has(pid));
+    if (!nineComplete(active, getScore)) return;
+    if (promptedTurn.current[unit.key]) return;
+    promptedTurn.current[unit.key] = true;
+    setTurnCard(true);
+    // getScore is rebuilt every render and cardPids is fixed for a unit; the
+    // hole and the two popups above are what this actually waits on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeHole, editing, unit?.key, holeData, signed, offRound, ctpPrompt, moneyHolePrompt]);
 
   // No more hooks below this line.
 
@@ -2415,22 +2485,16 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
           gets one input, joined names, and the team's summed-then-rounded
           handicap. See onTapScore for the write side of this. */}
       <div style={{ flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: fit.cardGap }}>
-        {(() => {
-          // The group on screen, not the whole side — see `units` above. On
-          // every 2-man round these two lines are the match, unchanged.
-          const shared = formatIsSharedBall(format);
-          const inUnit = (pid) => cardPids.includes(pid);
-          const aPids = match.teamA.filter(inUnit);
-          const bPids = match.teamB.filter(inUnit);
-          const teamACards = shared ? (aPids.length ? [aPids] : []) : aPids.map(pid => [pid]);
-          const teamBCards = shared ? (bPids.length ? [bPids] : []) : bPids.map(pid => [pid]);
+        {(
+          // `sideCards` above decides what a card IS — the group on screen,
+          // not the whole side, and one line a ball on a shared-ball format.
           // The divider separates two sides. A Team Best Ball wave is all one
           // side, so there is nothing to separate and a rule across the middle
           // of four teammates would be saying something untrue about them.
-          return teamACards.length && teamBCards.length
+          teamACards.length && teamBCards.length
             ? [...teamACards, "DIVIDER", ...teamBCards]
-            : [...teamACards, ...teamBCards];
-        })().map((pids) => {
+            : [...teamACards, ...teamBCards]
+        ).map((pids) => {
           if (pids === "DIVIDER") return <div key="div" style={{ borderTop: `1px dashed ${BC.bdr}`, flexShrink: 0, margin: `${fit.cardGap}px 0` }} />;
           const team = match.teamA.includes(pids[0]) ? "A" : "B";
           const cur = cardScore(pids, activeHole);
@@ -2672,6 +2736,25 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
           />
         );
       })()}
+
+      {/* The turn card, raised by the effect above when this group reaches
+          the 10th with the front nine in. One row per CARD off the same
+          `sideCards` the score buttons are drawn from, so a scramble side is
+          the one line it is on the screen behind this. Gross, straight off
+          `cardScore` — the ball the side actually posted, which is what the
+          engine scored the hole on. */}
+      {turnCard && (
+        <TurnCard
+          pars={holePars.slice(0, 9)}
+          rows={[...teamACards, ...teamBCards].map(pids => ({
+            key: pids.join("_"),
+            names: pids.map(pid => tPlayers.find(p => p.player_id === pid)?.name || pid),
+            scores: Array.from({ length: 9 }, (_, h) => cardScore(pids, h)),
+          }))}
+          onJump={goToHole}
+          onClose={() => setTurnCard(false)}
+        />
+      )}
     </>
   );
   // The auto-advance toast ("✓ Hole 4 saved — advancing…"), which also
