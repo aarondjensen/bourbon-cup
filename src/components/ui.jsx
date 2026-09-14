@@ -377,6 +377,25 @@ export function ScoreButtonRow({ par, score, onScore, fill = false, minHeight = 
     ? { flex: "1 1 auto", minHeight, height: "auto" }
     : { height: minHeight };
 
+  // ── The nudges reach PAST the window, never into it ─────────────
+  // Five numbers are on screen and every one of them is already one tap
+  // away, so a nudge that hands back a number sitting right there is a
+  // control that does nothing you could not already do — and it charges a
+  // tap to find that out. `+` used to be `score + 1`, which on an unscored
+  // par 4 meant bogey: the button two along from where the thumb started.
+  //
+  // So each nudge starts at the first score on its side that is NOT drawn.
+  // Read off `btns` rather than `defaultBtns` so it holds once the window
+  // has recentred: a 9 posted on a par 4 slides the window to [5…9], and
+  // `+` from there is 10 — one more, because the recentre has already put
+  // the score at the top. Which is what makes a blow-up hole two taps (8,
+  // then 9) instead of the five it used to be.
+  //
+  // `−` is floored at 1. There is nothing under a hole in one, and on a
+  // par 3 the window bottoms out at 2, so this is the tap that records one.
+  const nudgeUp = btns[btns.length - 1] + 1;
+  const nudgeDown = Math.max(1, btns[0] - 1);
+
   // t2, not t3: the glyph IS the control here, and on the sunken `inp` fill
   // t3 measured 4.23:1 in dark and 2.67:1 in light — the second of those is
   // under the 3:1 floor for a graphical control, never mind text. t2 keeps
@@ -403,7 +422,7 @@ export function ScoreButtonRow({ par, score, onScore, fill = false, minHeight = 
       {/* − sits at the FAR LEFT (not next to +) so the par button lands dead
           center of the seven-control row. Symmetric with the + on the right. */}
       <div style={{ ...column, flex: "0 0 auto" }}>
-        <button onClick={() => onScore(Math.max(1, (score || par) - 1))} style={nudge}>−</button>
+        <button onClick={() => onScore(nudgeDown)} style={nudge}>−</button>
         <div style={{ height: labelH }} />
       </div>
       {btns.map((btn, idx) => {
@@ -496,7 +515,7 @@ export function ScoreButtonRow({ par, score, onScore, fill = false, minHeight = 
         );
       })}
       <div style={{ ...column, flex: "0 0 auto" }}>
-        <button onClick={() => onScore((score || par) + 1)} style={nudge}>+</button>
+        <button onClick={() => onScore(nudgeUp)} style={nudge}>+</button>
         <div style={{ height: labelH }} />
       </div>
     </div>
