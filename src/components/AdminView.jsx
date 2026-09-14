@@ -100,7 +100,7 @@ import {
   realPlayers,
 } from "../lib/players";
 import {
-  resolveSealed,
+  resolveSealed, isConcealing,
 } from "../lib/reveal";
 import {
   LOCK_FINAL,
@@ -118,6 +118,15 @@ import {
   holesEntered,
 } from "../lib/scoreGuard";
 import {
+  SAVED,
+  savedMessage,
+  saveTextFile,
+} from "../lib/fileSave";
+import {
+  exportFilename,
+  scoresCsv,
+} from "../lib/scoresExport";
+import {
   safeHouseUrl, tripDateFields, tripDatesError, tripDayOptions,
 } from "../lib/tripInfo";
 import {
@@ -133,6 +142,7 @@ import {
 // describes: relative paths resolve inside the app bundle on the iOS build.
 import {
   apiUrl,
+  isNative,
 } from "../lib/platform";
 import {
   calcCH,
@@ -441,6 +451,11 @@ function ChDeltaBadge({ delta }) {
   );
 }
 
+// Which export is running, for the button that shows it. A round number is
+// itself; this is the all-rounds one. A string rather than null because null
+// is "nothing is running", and the two have to be tellable apart.
+const EXPORT_ALL = "all";
+
 export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCaptain, editionId, isDemoAdmin = false, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, roundCount, tournamentRounds, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks, payments, duesAmount, onLogPayment, onDeletePayment, onSaveDues, onSetPlayerDues, onOpenFinalize, onReopenRound, onRecalcHandicaps, finalizeRound, finalizeReady, trip, onSaveTrip, startDate, endDate, budgetLines, onSaveBudgetLine, onDeleteBudgetLine }) {
   const [tab, setTab] = useState("players");
   // Which half of the $ tab. Budget leads because it is the half a director
@@ -559,6 +574,89 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
     editHouseName !== (trip?.house_name || "")
     || editHouseUrl.trim() !== (trip?.house_url || "").trim()
   );
+  // ── The backup ────────────────────────────────────────────────
+  // Admin → Event → Export. Everybody's cards as a CSV shaped like the ALL
+  // SCORES tab of the workbook this app replaced, so that if Firestore is
+  // unreachable on the Saturday the tournament can be finished on a laptop in
+  // a spreadsheet everybody already knows how to read. See lib/scoresExport
+  // for the layout and why it is copied rather than designed.
+  //
+  // `round` is null for the button that exports the lot.
+  //
+  // Read-only, so there is nothing here to confirm and nothing to undo — the
+  // one button on this tab that cannot leave the tournament worse than it
+  // found it.
+  // `null` is idle and EXPORT_ALL is the every-round button, which is why the
+  // sentinel is a string rather than the null that reads more naturally: the
+  // all-scores export has to be distinguishable from nothing happening, or
+  // the button sits there showing its own progress before anybody taps it.
+  const [exporting, setExporting] = useState(null);
+  const exportScores = async (round) => {
+    // The export takes a moment on a decade-old edition, and a second tap
+    // would hand the director two copies of the same file.
+    if (exporting != null) return;
+    // ── A sealed round does not leave quietly ────────────────────────
+    // The blackout is enforced by subtracting scores at the source, and this
+    // tab is one of the two the subtraction deliberately does not reach — a
+    // director has to be able to type both sides' cards. That exemption was
+    // written for a SCREEN. A file is a different thing: it persists, it goes
+    // to a downloads folder or a share sheet, and it does it on the one
+    // evening the director is most likely to be mirroring their screen to a
+    // television in front of the whole field.
+    //
+    // So the round is not withheld — a backup missing Round 4 is a broken
+    // backup, and the director can already read those numbers on the Scoring
+    // tab — but it is never handed over silently. Named, confirmed, then
+    // exported, which is the same trade the group picker's padlock makes.
+    const sealedIn = (round == null ? tournamentRounds : [round])
+      .filter(r => isConcealing((tRounds || []).find(t => t.round_number === r)));
+    if (sealedIn.length) {
+      const which = sealedIn.length === 1 ? `Round ${sealedIn[0]}` : `Rounds ${sealedIn.join(", ")}`;
+      const ok = await confirm({
+        eyebrow: "Export",
+        title: `${which} ${sealedIn.length === 1 ? "is" : "are"} sealed`,
+        message: [
+          `This file will contain ${sealedIn.length === 1 ? "its" : "their"} scores — both sides, every hole — before the room has been shown them.`,
+          "",
+          "Fine as your own backup. Not something to open in front of anybody, or to leave on a screen that is being mirrored.",
+        ].join("\n"),
+        confirmLabel: "Export anyway",
+        destructive: true,
+      });
+      if (!ok) return;
+    }
+    setExporting(round == null ? EXPORT_ALL : round);
+    try {
+      const csv = scoresCsv({
+        rounds: round == null ? tournamentRounds : [round],
+        players: tPlayers,
+        holeData,
+        courses,
+        tRounds,
+        roundLocks,
+        // The documents rather than this screen's editing copies of them: an
+        // export is a backup of what is STORED, and the Rounds tab's in-flight
+        // state is not that yet.
+        chOverrides: hcpOverridesFromDb,
+        teeAssignments: teeAssignmentsFromDb,
+      });
+      const what = round == null ? "All scores" : `Round ${round}`;
+      const status = await saveTextFile({
+        name: exportFilename({ tournamentName: tournamentName || TOURNAMENT_TITLE, round }),
+        text: csv,
+        native: isNative(),
+      });
+      const msg = savedMessage(status, what);
+      // A share sheet dismissed and a share sheet completed both say nothing;
+      // anything else is worth a word, and a failure has to be one somebody
+      // notices, because a backup nobody knows didn't happen is the worst of
+      // the outcomes here.
+      if (msg) notify?.(msg, status === SAVED.failed ? "error" : "success");
+    } finally {
+      setExporting(null);
+    }
+  };
+
   // Rounds the schedule would hold on to at the number CURRENTLY TYPED, so
   // the hint answers while the director is still typing rather than after
   // they save and wonder why the pills did not change.
@@ -3940,6 +4038,62 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
               </div>
             );
           })}
+
+          {/* ── Export: the backup plan ──────────────────────────────
+              Last card on the tab, and last on purpose. Everything above it
+              sets the tournament up; this one takes a copy of it out, and it
+              is the only thing here that writes nothing.
+
+              A button a round plus one for all of them, each a CSV laid out
+              like the ALL SCORES tab of the Google Sheets workbook the cup ran
+              off before this app — so a file pastes into a spreadsheet and is
+              recognisable on arrival. See lib/scoresExport for why the layout
+              is copied rather than designed.
+
+              Shown to a demo administrator as well. It reads the edition they
+              are already in and writes nothing anywhere, so there is no rule
+              to refuse it and nothing it could reach. */}
+          <div style={{ ...TournHeadStyle, marginBottom: 6 }}>Export</div>
+          <div style={TournCardStyle}>
+            <div style={{ fontSize: FS.small, color: BC.t2, lineHeight: 1.45, marginBottom: 10 }}>
+              Everybody&rsquo;s scorecards as a CSV, gross and net, laid out like the
+              old scoring spreadsheet. Open it in Google Sheets if you ever need to
+              run a round without the app.
+            </div>
+            {/* One per round, then the lot. They wrap on a phone rather than
+                squeezing to five columns nobody can hit with a thumb. */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {tournamentRounds.map(r => (
+                <button
+                  key={r}
+                  onClick={() => exportScores(r)}
+                  disabled={exporting != null}
+                  style={{
+                    flex: "1 1 74px", padding: "9px 10px", borderRadius: 8,
+                    background: BC.inp, border: `1px solid ${BC.bdr}`, color: BC.t1,
+                    fontSize: FS.small, fontWeight: 700, letterSpacing: 0.3,
+                    fontFamily: FONT, cursor: exporting != null ? "default" : "pointer",
+                    opacity: exporting != null && exporting !== r ? 0.5 : 1,
+                    whiteSpace: "nowrap",
+                  }}
+                >{exporting === r ? "\u2026" : `Rd ${r}`}</button>
+              ))}
+              {/* The fifth button on a four-round cup. Amber, because it is
+                  the one somebody actually wants when the wheels come off. */}
+              <button
+                onClick={() => exportScores(null)}
+                disabled={exporting != null}
+                style={{
+                  flex: "1 1 110px", padding: "9px 10px", borderRadius: 8,
+                  background: BC.amber, border: `1px solid ${BC.amber}`, color: ON_AMBER,
+                  fontSize: FS.small, fontWeight: 800, letterSpacing: 0.3,
+                  fontFamily: FONT, cursor: exporting != null ? "default" : "pointer",
+                  opacity: exporting != null && exporting !== EXPORT_ALL ? 0.5 : 1,
+                  whiteSpace: "nowrap",
+                }}
+              >{exporting === EXPORT_ALL ? "\u2026" : "All scores"}</button>
+            </div>
+          </div>
         </div>
       )}
       <ConfirmModal modal={confirmModal} />

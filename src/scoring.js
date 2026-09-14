@@ -37,22 +37,39 @@ export const calcCH = (hi, slope, rating, par) => (!hi && hi !== 0) ? 0 : Math.r
 // through: top-level course.slope/rating/par → first tee box → USGA
 // neutral defaults (113/72/72). All values are coerced through
 // parseFloat so string-stored values from imported APIs still work.
-export const calcCHForCourse = (hi, course, teeName) => {
-  if (!course) return calcCH(hi, 113, 72, 72);
-  const teeBoxes = course.tee_boxes || [];
-  if (teeName) {
-    const tee = teeBoxes.find(t => t.name === teeName);
-    if (tee) {
-      const slope = parseFloat(tee.slope) || 113;
-      const rating = parseFloat(tee.rating) || 72;
-      const par = parseFloat(tee.par) || 72;
-      return calcCH(hi, slope, rating, par);
-    }
+// The playing conditions a course handicap is calculated against: the named
+// tee's own slope/rating/par, else the course's top-level figures, else the
+// first tee box, else USGA neutral. `tee` comes back too, which is what a
+// round lock records so a finished round can say which tee it was played off.
+//
+// Two callers had this chain written out separately — this function and
+// lib/roundLocks' snapshot builder, whose copy carried a comment saying it
+// "mirrors calcCHForCourse's fallback chain". A mirror is a second author, and
+// the one thing that must never drift is what a lock FREEZES versus what the
+// live math would have used: they are meant to be the same numbers, and the
+// only way to guarantee that is for them to come from the same place.
+export const resolveTeeSpec = (course, teeName) => {
+  const teeBoxes = course?.tee_boxes || [];
+  const named = teeName ? teeBoxes.find(t => t.name === teeName) : null;
+  if (named) {
+    return {
+      tee: named.name || null,
+      slope: parseFloat(named.slope) || 113,
+      rating: parseFloat(named.rating) || 72,
+      par: parseFloat(named.par) || 72,
+    };
   }
-  const fallbackTee = teeBoxes[0] || {};
-  const slope = parseFloat(course.slope) || parseFloat(fallbackTee.slope) || 113;
-  const rating = parseFloat(course.rating) || parseFloat(fallbackTee.rating) || 72;
-  const par = parseFloat(course.par) || parseFloat(fallbackTee.par) || 72;
+  const fallback = teeBoxes[0] || {};
+  return {
+    tee: teeName || fallback.name || null,
+    slope: parseFloat(course?.slope) || parseFloat(fallback.slope) || 113,
+    rating: parseFloat(course?.rating) || parseFloat(fallback.rating) || 72,
+    par: parseFloat(course?.par) || parseFloat(fallback.par) || 72,
+  };
+};
+
+export const calcCHForCourse = (hi, course, teeName) => {
+  const { slope, rating, par } = resolveTeeSpec(course, teeName);
   return calcCH(hi, slope, rating, par);
 };
 
