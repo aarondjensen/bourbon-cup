@@ -114,7 +114,7 @@
 import { playerLookup, sideNames } from "../lib/players";
 import { BC, FONT, ALPHA, FS, ON_AMBER, teamColor } from "../theme";
 import {
-  UNIT_DOTS, UNIT_POINTS,
+  UNIT_DOTS, UNIT_POINTS, HANDICAP_MODE_LOW_MAN,
   formatIsSharedBall, isPointsPerHole,
 } from "../constants";
 import {
@@ -408,6 +408,27 @@ export function FullScorecard({
   // What the side's row is counted in. Named for the currency rather than
   // the format, because that is what the numbers in it are.
   const sideLabel = unit === UNIT_DOTS ? "DOTS" : unit === UNIT_POINTS ? "PTS" : "NET";
+  // ── A low-man nine has no total to state ─────────────────────────
+  // Under low_man the strokes are the DIFFERENCE off the lowest playing
+  // handicap in the match (see scoring.js, "Three settings decide every
+  // stroke"), so a hole's net is a figure relative to one man rather than a
+  // score. Per hole that is exactly right and it is what the match is
+  // settled on — 4 against 4 is the hole, whoever the low man is. Added up,
+  // it stops being that and starts looking like a number: the low man's
+  // "net 39" is his gross, and the man off 15 posts a "net 33" that is not
+  // what he shot, not what he would post off his own handicap, and not
+  // comparable to anybody in another match.
+  //
+  // So the per-hole cells stay and the OUT / IN / TOTAL cells go blank. Not
+  // a dash — a dash is what this card prints for a number it does not have
+  // yet, and this is one that does not exist. The gross total is directly
+  // above it in the same column and is the number a man is looking for.
+  //
+  // Dots and points are untouched: they ACCRUE, and their total is the whole
+  // point of them. Full-handicap rounds are untouched too — Team Best Ball's
+  // nets are real net scores and they sum to one.
+  const netTotalStands = unit === UNIT_DOTS || unit === UNIT_POINTS
+    || result.handicapMode !== HANDICAP_MODE_LOW_MAN;
   // What the running row is counted in — a different question. Holes up on
   // a match round, the lead on the running total on a Total one, points
   // banked on a points-per-hole one.
@@ -790,10 +811,13 @@ export function FullScorecard({
           <div style={totCell(rowH)}>
             {/* A nine with a sealed hole in it has no total to state on the
                 other side — printing the revealed part would read as the
-                whole nine and hand over a comparison that isn't out yet. */}
+                whole nine and hand over a comparison that isn't out yet. And
+                a low-man nine has none at all; see netTotalStands. */}
             {hidden(end - 1) || hidden(start)
               ? <span style={{ fontSize: FS.micro, opacity: 0.5 }}>🔒</span>
-              : <span style={{ fontSize: FS.small, fontWeight: 800, color: col }}>{allIn || sum ? sum : ""}</span>}
+              : netTotalStands
+                ? <span style={{ fontSize: FS.small, fontWeight: 800, color: col }}>{allIn || sum ? sum : ""}</span>
+                : null}
           </div>
         </div>
       );

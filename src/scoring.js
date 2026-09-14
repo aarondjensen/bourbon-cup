@@ -768,6 +768,7 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
       status: statusText(segmentState(emptyHoles, emptyOpts)),
       holesPlayed: 0, strokeMaps: {},
       allowance: getRoundAllowance({ roundLocks, round: rnd, tRounds, format }),
+      handicapMode: getRoundHandicapMode({ roundLocks, round: rnd, tRounds, explicit: handicapMode }),
       counting: null, holePoints: null,
       playingCH: {}, exactCH: {}, teamCH: null,
       totalPts: { A: 0, B: 0 },
@@ -1274,6 +1275,15 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
     // allowance, pre-low-man; `teamCH` is the side's figure on a shared-ball
     // format and null on every other.
     allowance,
+    // low_man or full, resolved (see getRoundHandicapMode — the lock first,
+    // then the round doc, then the format, so a director who moved a round
+    // off its format's default is answered). Exposed because it decides what
+    // a net number MEANS: under low_man the strokes are the difference off
+    // the lowest playing handicap in the match, so a hole's net is a relative
+    // figure and a card totalling them is not stating a net score. The
+    // scorecard reads this rather than asking the format, for the same reason
+    // everything else here does — a round answers to how it was scored.
+    handicapMode: roundHandicapMode,
     // 18 per-hole counts on Team Best Ball, null on every other format — the
     // counts this result's hole scores were actually built from.
     counting,
