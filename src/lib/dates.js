@@ -78,6 +78,7 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 const MONTHS_LONG = ["January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December"];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAYS_LONG = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 export const WEEKDAY_INITIALS = ["S", "M", "T", "W", "T", "F", "S"];
 
 // The weekday, worked out arithmetically rather than by constructing a Date —
@@ -107,6 +108,20 @@ export const formatISODate = (iso, { withYear = false, weekday = false } = {}) =
   if (!p) return String(iso ?? "");
   const head = weekday ? `${DAYS[dowIndex(p.y, p.m, p.d)]}, ` : "";
   return `${head}${MONTHS[p.m - 1]} ${p.d}${withYear ? `, ${p.y}` : ""}`;
+};
+
+// The weekday on its own — "Friday", or "Fri" when the room is tight. The
+// day is how this trip is talked about ("we play Treetops Friday"), and a
+// date is not: nobody says the fourteenth.
+//
+// Unreadable comes back as an empty string rather than as itself, unlike
+// formatISODate. There is no weekday in a broken date to fall back to, and a
+// caller putting this beside other text wants nothing rather than a stray
+// fragment of a stored value.
+export const weekdayName = (iso, { long = true } = {}) => {
+  const p = parts(iso);
+  if (!p) return "";
+  return (long ? DAYS_LONG : DAYS)[dowIndex(p.y, p.m, p.d)];
 };
 
 // A span, collapsed as far as it honestly can be:

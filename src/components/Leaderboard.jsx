@@ -52,7 +52,7 @@ import { TeamBestBallScoreboard } from "./TeamBestBallScoreboard";
 import { StickyTop } from "./ui";
 import ErrorBoundary from "./ErrorBoundary";
 import { isRoundFinal } from "../lib/roundLocks";
-import { scheduledRounds } from "../lib/rounds";
+import { scheduledRounds, roundWhen } from "../lib/rounds";
 import { HOLE_COUNT, revealState, stepReveal, COUNTDOWN_HASH, COUNTDOWN_PATH } from "../lib/reveal";
 // The television screen, and nothing else opens it. Sixteen phones load the
 // scoreboard every few minutes all weekend; one of them, once, opens the
@@ -739,7 +739,7 @@ function RoundSection({
   courses, tRounds, roundLocks, holeData, viewer, expandedMatch, setExpandedMatch,
   expandedLevel, setExpandedLevel, sealPanel,
 }) {
-  const { course, fmt, pts, state, seal, drawn } = meta;
+  const { course, fmt, pts, state, seal, holesPlayed, when } = meta;
 
   // The round header is a plain row, not a card. Four match rows plus a
   // boxed header per round was two levels of container for one level of
@@ -817,27 +817,40 @@ function RoundSection({
               on. The dash says the one thing this row is for — no score yet
               — and the panel underneath an expanded round says why.
 
-              An undrawn round takes TBD in the same slot, for the same reason
-              and one more: 0–0 under a course name is what a round halved
-              four matches to nil looks like, and a round nobody has been
-              paired for has not been played at all. It says TBD rather than a
-              dash because collapsed is how most of these will be read, and
-              because it has to be distinguishable from a sealed round — one
-              is holding a result back, the other has none yet. Undrawn is
-              tested FIRST for that reason: Team Best Ball seals by default,
-              so the closing round is a sealed round from the day its format
-              was picked, and the dash would win on every undrawn one.
+              A round that has not started is tested FIRST, and it takes the
+              slot ahead of the dash: Team Best Ball seals by DEFAULT, so the
+              closing round is a sealed round from the day its format was
+              picked — months before anybody tees off in it — and a dash
+              would otherwise sit over it all summer where its tee time
+              belongs. The seal is about a result being held back; there is
+              no result to hold back until somebody has played a hole.
 
               In the SCORE slot rather than as a chip beside the course name,
-              which is where it started: the chip cost about ninety pixels of
-              a row that already ellipses, and what it truncated was the
-              format — "Arthur Hills — Orange · T…". The format is most of the
-              reason an undrawn round is on this board at all. */}
-          {!drawn ? (
+              which is where the undrawn round's own marker started: the chip
+              cost about ninety pixels of a row that already ellipses, and
+              what it truncated was the format — "Arthur Hills — Orange · T…".
+              The format is most of the reason an unplayed round is on this
+              board at all. */}
+          {holesPlayed === 0 ? (
+            /* A round nobody has teed off in has no score, so the slot says
+               when it goes off instead — the weekday and the first tee time,
+               which is what the group text is about on the night before.
+
+               The test is HOLES, not whether the draw exists. Both were TBD
+               under the old one only by luck: an undrawn round has no matches
+               to have played any, but a round drawn on Thursday for Sunday
+               morning has a full draw and no scores, and it was reading 0–0
+               — a round played to a nil-nil standstill, which is a real
+               result and not this one. The closing round is drawn earliest
+               and played last, so it wore that the longest.
+
+               Falls back to TBD only when the round has neither a date nor a
+               tee sheet, which is the one case where there is genuinely
+               nothing to say. */
             <span style={{
               fontSize: FS.label, fontWeight: 800, letterSpacing: 0.8,
-              flexShrink: 0, color: BC.t3,
-            }}>TBD</span>
+              flexShrink: 0, color: BC.t3, whiteSpace: "nowrap",
+            }}>{(when || "TBD").toUpperCase()}</span>
           ) : seal?.concealing ? (
             <span style={{ fontSize: FS.lead, fontWeight: 800, flexShrink: 0, color: BC.t3 }}>—</span>
           ) : (
@@ -1071,6 +1084,8 @@ export function TeamLeaderboard({
         && (isRoundFinal(roundLocks, rnd) || results.every(({ match: m, result: r }) => matchSettled(m, r, tr?.format || DEFAULT_FORMAT)));
       out[rnd] = {
         results, pts, avail, holesPlayed, course, seal,
+        // The day and the first tee time, for a round that has no score yet.
+        when: roundWhen(tr),
         // Whether anybody has been paired off yet. The board draws a round
         // the moment the director picks a course for it, which is weeks
         // before the draw exists, so this is what stops an undrawn round

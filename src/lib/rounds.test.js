@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   scheduledRounds, resolveRoundCount, allRounds, roundsBeyondCount, clampRoundCount,
-  DEFAULT_ROUND_COUNT, MAX_ROUND_COUNT,
+  roundWhen, DEFAULT_ROUND_COUNT, MAX_ROUND_COUNT,
 } from "./rounds";
 
 describe("scheduledRounds", () => {
@@ -156,5 +156,48 @@ describe("roundsBeyondCount", () => {
 
   it("is empty when the count covers everything", () => {
     expect(roundsBeyondCount({ roundCount: 4, matches: [{ round: 2 }] })).toEqual([]);
+  });
+});
+
+// ── When a round that has no score yet goes off ────────────────────
+// The two facts the group text carries the night before: which day, and what
+// time the first group is out.
+describe("roundWhen", () => {
+  // 2026-08-14 is a Friday. Worked out arithmetically — see lib/dates — so
+  // this is exact rather than dependent on the machine running the test.
+  const friday = "2026-08-14";
+
+  it("gives the weekday and the first tee time", () => {
+    expect(roundWhen({ date: friday, tee_time: "8:30|8:40|8:50" }))
+      .toBe("Friday · 8:30 AM");
+  });
+
+  it("takes the EARLIEST time, not the first box the director filled", () => {
+    // The list is positional — group i goes off at time i — so a reordered
+    // sheet leaves the morning's first time somewhere other than the front.
+    expect(roundWhen({ date: friday, tee_time: "9:10|8:30|9:20" }))
+      .toBe("Friday · 8:30 AM");
+  });
+
+  it("reads an empty slot as no tee time rather than as midnight", () => {
+    expect(roundWhen({ date: friday, tee_time: "||9:00|9:10" }))
+      .toBe("Friday · 9:00 AM");
+  });
+
+  it("says the half it has", () => {
+    expect(roundWhen({ date: friday })).toBe("Friday");
+    expect(roundWhen({ tee_time: "1:10" })).toBe("1:10 PM");
+  });
+
+  it("says nothing when the round has neither", () => {
+    expect(roundWhen({})).toBe("");
+    expect(roundWhen()).toBe("");
+    // A date the app cannot read is not a weekday to guess at.
+    expect(roundWhen({ date: "sometime in August" })).toBe("");
+  });
+
+  it("reads an afternoon tee time the way a golfer types it", () => {
+    // parseTeeTime's rule: a bare 1–4 is the afternoon.
+    expect(roundWhen({ date: friday, tee_time: "2:00" })).toBe("Friday · 2:00 PM");
   });
 });
