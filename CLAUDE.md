@@ -597,21 +597,102 @@ to the **`revokeAppleToken`** Cloud Function, which holds Apple's key. The code
 is single-use with a ~5-minute life and is obtained at deletion time, seconds
 before it is spent.
 
-That function needs five things set, and **none of them are in the repo**:
+That function needs five things, and **only one of them is a secret**. See
+`functions/.env.example`, which is the setup written out in full.
+
+**The .p8 goes to the secret manager, from the file Apple gave you** — not
+pasted. It is multi-line PEM and the interactive prompt takes a single line:
 
 ```sh
-firebase functions:secrets:set APPLE_PRIVATE_KEY   # the .p8 file's contents
-firebase functions:config:set ...                  # or set as env params:
-#   APPLE_KEY_ID     the key's 10-character id
-#   APPLE_TEAM_ID    the Apple Developer team id
-#   APPLE_CLIENT_ID  the Services ID used by the WEB sign-in flow
-#   APPLE_BUNDLE_ID  the iOS bundle id (defaults to com.thebourboncup.app)
+firebase functions:secrets:set APPLE_PRIVATE_KEY --data-file C:\dev\keys\AuthKey_6RF36PB9N8.p8
 ```
+
+(`--data-file -` reads stdin instead, if piping suits better. The real path is
+written out above rather than a `~/Downloads/AuthKey_XXXXXXXXXX.p8` placeholder
+on purpose — that shape gets pasted verbatim, and the CLI takes a path that is
+not there without obviously complaining. `firebase functions:secrets:describe
+APPLE_PRIVATE_KEY` says whether a version exists and what state it is in.)
+
+**Never `functions:secrets:access` a private key.** It prints the key material
+to the terminal, which then lives in scrollback, a screenshot or a pasted chat
+log — and that is how key `9K7J7J2VGT` had to be revoked on 10 Sep 2026, one
+day after it was set. Destroying the Secret Manager version does not un-issue
+the key; only revoking it at Apple does. `describe` answers "is it set" without
+ever showing it, which is the question anybody actually has.
+
+**The key lives in TWO places, and rotating it means changing both.** This is
+the one that bit hardest. Besides the Functions secret above, Firebase Auth
+keeps its own copy: **Console → Authentication → Sign-in method → Apple →
+OAuth code flow configuration**, which holds the Apple team id, the Key Id and
+the private key, and is what Firebase's `revokeAccessToken` uses for the WEB
+path. Revoking a key at Apple without updating that panel leaves Firebase
+holding a dead credential — and it is a live sign-in path for the whole field,
+with nothing on any screen to say so.
+
+The Services ID sits on that same screen (`com.thebourboncup.web`), and reading
+it there beats Apple's Identifiers list: this account has one Services ID per
+project, and the console shows the one the web flow actually uses.
+
+So a key rotation is:
+
+1. Create the new key, tick **Sign in with Apple**, Configure → Primary App ID.
+2. `firebase functions:secrets:set APPLE_PRIVATE_KEY --data-file <new .p8>`
+3. Update `APPLE_KEY_ID` in `functions/.env.the-bourbon-cup`.
+4. **Firebase Console → Auth → Apple → OAuth code flow: new Key Id and new
+   private key.** The step nothing reminds you about.
+5. `firebase deploy --only functions`, then `scripts/apple-key-check.mjs`.
+6. Only then revoke the old key at Apple.
+
+**The other four are not secrets and are committed.** A team id, a key id, a
+Services ID and a bundle id are public identifiers — the bundle id is printed
+in the App Store — so they live in `functions/.env.the-bourbon-cup`, which the
+CLI uploads at deploy time:
+
+```sh
+cp functions/.env.example functions/.env.the-bourbon-cup   # then fill it in
+```
+
+That name rather than a bare `functions/.env`, deliberately: `.env` is
+gitignored, so it would live on one laptop and a deploy from any other machine
+would silently lose all four. The project-suffixed file is not ignored.
+
+**Both files load, and the project-suffixed one wins.** A deploy prints
+`Loaded environment variables from functions\.env, functions\.env.the-bourbon-cup`
+— there IS a gitignored `functions/.env` on the machine that set this up, and
+Firebase reads it first and then lets `.env.<project-id>` override. So the
+committed values take precedence, which is the direction you want. Worth
+knowing before somebody puts an `APPLE_*` line in the gitignored file and
+cannot work out why it has no effect: it is being shadowed, not ignored.
+
+`firebase functions:config:set` is **not** the mechanism and does not exist
+here — that was the v1 API, and this project is on firebase-functions v7, which
+reads `.env` files out of the functions directory instead.
 
 **The client_id is the bundle id for a native code and the Services ID for a
 web one** — an authorization code is bound to the client that obtained it, and
 sending the wrong one gets `invalid_client` back from Apple, which reads like a
 bad key and is not. The caller says which shape it holds.
+
+**Which key is which is a ten-second job in the portal.** The Keys list at
+developer.apple.com/account/resources/authkeys/list has a SERVICES column and a
+NAME: this account holds one Sign in with Apple key per project — Bourbon Cup,
+WBC, MNQ, SFGL — plus `7UA9A9SR3K` "App APNs", which is the push key and is not
+interchangeable with them. The `.p8` on disk cannot tell you that; it is a bare
+EC private key with no metadata, and both kinds are called `AuthKey_<id>.p8`.
+
+**`node scripts/apple-key-check.mjs <path-to-.p8>` settles the harder half** —
+whether the key, the key id, the team id and the client id work TOGETHER, which
+the portal does not answer and which fails identically to a bad key. It signs a
+client secret and sends it with a deliberately junk refresh token, because
+Apple validates the CREDENTIALS before the grant. `invalid_grant` back means
+the key, key id, team id and client id all work together and only the junk
+token was refused; `invalid_client` means one of the four is wrong. Same shape
+as `/api/ghin?diagnose=1` — a probe that reports what the hop actually
+answered. Zero dependencies, and it reads the ids out of
+`functions/.env.the-bourbon-cup`. Run it once per client id, since a key can
+be valid for the Services ID and not the bundle id.
+
+It reads the key off disk and never prints it.
 
 Unset, the function throws `failed-precondition`, the client logs it, and the
 deletion proceeds. That ordering is deliberate and holds for every failure
