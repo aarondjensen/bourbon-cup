@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  resolveSealed, HOLE_COUNT, sealDefaultFor, isSealedRound, revealedThrough, isFullyRevealed, isConcealing, revealState, concealedRoundNumbers, concealHoleData, countdownHoleData, stepReveal, revealSummary, wantsCountdown, revealPending,
+  resolveSealed, HOLE_COUNT, sealDefaultFor, isSealedRound, revealedThrough, isFullyRevealed, isConcealing, revealState, concealedRoundNumbers, concealHoleData, countdownHoleData, concealCtpData, stepReveal, revealSummary, wantsCountdown, revealPending,
   sideReveal, revealedForSide, revealHole, sidesPending, nextHoleForSide,
   revealCursor, countdownHole, canAdvanceHole, canGoBackHole,
   COUNTDOWN_HASH, COUNTDOWN_PATH,
@@ -218,6 +218,50 @@ describe("concealHoleData", () => {
 
 // The other half of the split. Same subtraction, cut at the reveal instead
 // of at zero, and handed to exactly one screen.
+describe("concealCtpData", () => {
+  // The pins are the round's OTHER result, and they are recorded in their own
+  // collection — `ctpTags` takes ctpData and never holeData, so subtracting
+  // scores could not reach them however hard it cut. The Betting tab drew a
+  // sealed round's pin winners to anybody who tapped that round.
+  //
+  // Keys are `${round}_${hole}`, which is the opposite end from holeData's:
+  // there the player id can hold an underscore, so the round comes off the
+  // LAST one; here it is the first field and comes off the first.
+  const pins = {
+    "3_6": { player_id: "p1" },
+    "4_3": { player_id: "p2" },
+    "4_16": { player_id: "p_two" },
+  };
+
+  it("hands back the same object when nothing is sealed", () => {
+    expect(concealCtpData(pins, [round(3), round(4)])).toBe(pins);
+  });
+
+  it("hands back the same object once the round is revealed and final", () => {
+    expect(concealCtpData(pins, [round(3), sealedRound(4, 18, { final: true })])).toBe(pins);
+  });
+
+  it("drops every pin on a concealing round, and only those", () => {
+    const out = concealCtpData(pins, [round(3), sealedRound(4, 0)]);
+    expect(out["4_3"]).toBeUndefined();
+    expect(out["4_16"]).toBeUndefined();
+    expect(out["3_6"]).toEqual(pins["3_6"]);
+  });
+
+  it("keeps holding them while the reveal is only part way", () => {
+    // Same all-or-nothing rule the scores follow: a round mid-ceremony is a
+    // round the read-only surfaces have nothing to say about.
+    const out = concealCtpData(pins, [sealedRound(4, 12)]);
+    expect(out["4_3"]).toBeUndefined();
+    expect(out["4_16"]).toBeUndefined();
+  });
+
+  it("survives an empty or missing map", () => {
+    expect(concealCtpData({}, [sealedRound(4, 0)])).toEqual({});
+    expect(concealCtpData(undefined, [sealedRound(4, 0)])).toEqual({});
+  });
+});
+
 describe("countdownHoleData", () => {
   const data = { p1_3: card(18), p1_4: card(18), "p_two_4": card(12) };
 

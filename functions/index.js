@@ -382,6 +382,54 @@ exports.onCardAttested = onDocumentWritten("bc_card_sigs/{docId}", async (event)
 // next one is open on every device. The false→true edge on `final` is the
 // one moment the whole field needs to hear about, and it is the moment
 // scoring moves out from under them.
+// ── Is this round still behind the blackout? ────────────────────────
+// The closing round is played sealed and turned over a hole at a time in
+// front of the room (src/lib/reveal.js). Nothing on this side of the wire
+// knew that: the blackout is enforced in the client by subtracting scores,
+// and a Cloud Function is not on that path — so the one notification that
+// speaks for a whole round was free to speak for a round nobody had been
+// shown yet.
+//
+// Mirrors `isConcealing` in src/lib/reveal, cut down to the case this file
+// has: `final` is being set true by the very write that triggered us, so the
+// question reduces to "has the reveal finished walking". `reveal_a` / `reveal_b`
+// are the per-side counters, `reveal_through` the older single one that a
+// director's ALL button still writes; the round is out when BOTH sides are.
+//
+// An unset `sealed` flag falls back to the format, exactly as resolveSealed
+// does, because that fallback is the half that matters: a Team Best Ball
+// round nobody opened the form for is still played in the dark.
+//
+// FAILS CLOSED. A round document we cannot read is treated as concealing —
+// a push that never goes out is a notification nobody got, and a push that
+// goes out early is the ending, on sixteen phones, an hour before the room
+// sits down.
+const SEAL_DEFAULT_FORMATS = ["team_best_ball"];
+const HOLE_COUNT = 18;
+
+async function roundIsConcealing(tournamentId, round) {
+  try {
+    const snap = await db.collection("bc_rounds")
+      .where("tournament_id", "==", tournamentId)
+      .where("round_number", "==", round).get();
+    const tr = snap.docs[0]?.data();
+    if (!tr) {
+      logger.warn("roundIsConcealing: no round document", { tournamentId, round });
+      return true;
+    }
+    const sealed = tr.sealed == null ? SEAL_DEFAULT_FORMATS.includes(tr.format) : !!tr.sealed;
+    if (!sealed) return false;
+    const at = (own) => {
+      const n = Math.floor(Number(own == null ? tr.reveal_through : own));
+      return Number.isFinite(n) ? Math.max(0, Math.min(HOLE_COUNT, n)) : 0;
+    };
+    return Math.min(at(tr.reveal_a), at(tr.reveal_b)) < HOLE_COUNT;
+  } catch (e) {
+    logger.warn("roundIsConcealing failed — treating as sealed", { tournamentId, round, err: e?.message });
+    return true;
+  }
+}
+
 exports.onRoundFinal = onDocumentWritten("bc_round_locks/{docId}", async (event) => {
   try {
     const before = event.data.before?.exists ? event.data.before.data() : null;
@@ -393,6 +441,24 @@ exports.onRoundFinal = onDocumentWritten("bc_round_locks/{docId}", async (event)
     const { round_number, tournament_id } = after;
     if (!tournament_id) {
       logger.warn("onRoundFinal: no tournament_id, cannot resolve a roster", { docId: event.params.docId });
+      return;
+    }
+
+    // ── Not a word while the round is still sealed ──────────────────
+    // A director can finalize the closing round before the ceremony has
+    // walked all eighteen — the app only nudges against it (revealPending
+    // suppresses the prompt), Admin → Rounds still allows it — and this
+    // notification then told the entire roster that the round was over and
+    // "the leaderboard is up to date", with the pins the round had just
+    // played in the body. That is the ending, delivered to a lock screen,
+    // while the room is still on the seventh hole.
+    //
+    // It is not re-sent when the reveal finishes: this trigger fires on the
+    // false→true edge of `final` and that edge is already spent. A push
+    // nobody gets on the one evening everybody is in the same room watching
+    // the same television is the cheaper of the two failures by a distance.
+    if (await roundIsConcealing(tournament_id, round_number)) {
+      logger.info("onRoundFinal: round still concealing, no push", { tournament_id, round_number });
       return;
     }
 

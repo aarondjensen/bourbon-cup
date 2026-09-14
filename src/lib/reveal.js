@@ -428,6 +428,44 @@ export function countdownHoleData(holeData, tRounds, sideOf) {
   return out;
 }
 
+// ── The other collection the round writes ───────────────────────────
+// `concealHoleData` above is the whole of the blackout's enforcement, and it
+// works by subtracting HOLE SCORES. That is the right shape and it had one
+// gap: a round records a second, independent result as it is played — the
+// closest-to-the-pin tags in `bc_ctp` — and nothing about them is derived
+// from a hole score, so no amount of subtracting scores ever reached them.
+//
+// The Betting tab drew them for any round in the schedule (`ctpTags` takes
+// `ctpData` and never `holeData`, so it could not have been cut by the
+// subtraction above), and the round sheet the push notification deep-links to
+// did the same. Both are read-only surfaces, open to anybody, during a round
+// nobody is allowed to know anything about. A pin is not a score, but it is a
+// money-bearing per-hole RESULT of the sealed round, and on a best-ball round
+// where the side's best N count, "three of their men stuffed the par 3s" is
+// exactly the inference the evening exists to withhold.
+//
+// So it gets its own subtraction, cut the same way and at the same place: the
+// read-only surfaces are handed a map with the concealing rounds taken out,
+// and the Scoring tab keeps the raw one because that is where the group
+// standing on the tee tags the pin. Same exception, same reason, as the
+// scores themselves.
+//
+// Keys are `${round}_${hole}`, so the round comes off the FIRST separator —
+// the opposite end from holeData's, whose player ids can contain one.
+export function concealCtpData(ctpData, tRounds) {
+  const sealed = new Set(
+    (tRounds || []).filter(isConcealing).map((tr) => tr.round_number),
+  );
+  if (!sealed.size) return ctpData;
+
+  const out = {};
+  Object.entries(ctpData || {}).forEach(([key, rec]) => {
+    const rnd = Number(key.slice(0, key.indexOf("_")));
+    if (!sealed.has(rnd)) out[key] = rec;
+  });
+  return out;
+}
+
 // ── Stepping the reveal ─────────────────────────────────────────────
 // Clamped both ends. Going back to 0 re-seals the round completely, which is
 // the way out of a hole turned over by a stray tap.
