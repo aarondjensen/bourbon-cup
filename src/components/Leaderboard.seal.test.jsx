@@ -195,6 +195,37 @@ describe("the scoreboard during the Final Countdown", () => {
 // If the countdown were handed the board's map too, the ceremony would be
 // eighteen taps of a blank television — a failure nobody would find until
 // the room was already sitting down.
+// ── The points scoreboard is inside the seal, not beside it ─────────
+// Round 4's hole-by-hole points board (components/TeamBestBallScoreboard) is
+// reached by expanding a match card, and the match list is what the seal takes
+// away — so while the round conceals there is no card to expand and no board
+// to read. That is the right structure, and it is one refactor away from not
+// being: hoist the scoreboard anywhere above the `seal?.concealing` check and
+// it publishes the round hole by hole, which is the one thing the whole
+// ceremony exists to prevent.
+//
+// The exact-text test above would catch it too, by failing everywhere at once.
+// This one names it, so the failure says what broke.
+describe("the hole-by-hole points scoreboard", () => {
+  const SCOREBOARD_HEADER = "PTS";
+
+  it("is nowhere on the board while the round conceals", () => {
+    for (const through of [0, 6, 12, 17]) {
+      const text = boardAt(through);
+      // Guard against passing because the board failed to render at all: the
+      // round's own section is there, it simply has no card to expand.
+      expect(text, `reveal at ${through}`).toContain("TEAM BEST BALL");
+      expect(text, `reveal at ${through}`).not.toContain(SCOREBOARD_HEADER);
+      cleanup();
+    }
+  });
+
+  it("is still nowhere once the eighteenth is out but the round is not final", () => {
+    // The gap the seal is most often wrongly assumed to close at eighteen.
+    expect(boardAt(18, {}, false)).not.toContain(SCOREBOARD_HEADER);
+  });
+});
+
 describe("the Final Countdown itself", () => {
   it("has the holes the board does not", async () => {
     // `autoCountdown` is how the television lands on it: App's reading of

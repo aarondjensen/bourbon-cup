@@ -39,12 +39,18 @@ const holeData = {
   b1_4: { 0: 9, 1: 8 }, b2_4: { 0: 11, 1: 8 },
 };
 
-const scoreboard = () => {
-  const result = computeMatchResult(
-    match, holeData, courses, tRounds, tPlayers, "team_best_ball", {}, undefined, {}, {},
-  );
-  return render(<TeamBestBallScoreboard result={result} holePars={PARS} />).container;
-};
+const resultFor = (over = {}) => computeMatchResult(
+  { ...match, ...over.match }, over.holeData || holeData, courses,
+  [{ ...tRounds[0], ...over.round }], tPlayers, "team_best_ball", {}, undefined, {}, {},
+);
+const scoreboard = (over) => render(
+  <TeamBestBallScoreboard result={resultFor(over)} holePars={PARS} />,
+).container;
+// Every PTS cell on the card, in document order. The columns are the two
+// outermost of five, so reading them off the row is what tells a tie from a
+// win rather than searching the whole card for a string.
+const ptsCells = (el) => [...el.querySelectorAll("div")]
+  .filter(d => d.children.length === 0 && /^[0-9.]+$/.test((d.textContent || "").trim()));
 
 describe("TeamBestBallScoreboard", () => {
   it("shows the decisive hole's net-to-par and awards it the whole pot", () => {
@@ -63,14 +69,81 @@ describe("TeamBestBallScoreboard", () => {
   });
 
   it("totals the round to what computeMatchResult itself banked", () => {
-    const result = computeMatchResult(
-      match, holeData, courses, tRounds, tPlayers, "team_best_ball", {}, undefined, {}, {},
-    );
+    const result = resultFor();
     // Hole 1: A wins the front's 1-point pot outright. Hole 2: a tie splits it.
     // 1 + 0.5 = 1.5 for A; 0 + 0.5 = 0.5 for B.
     expect(result.totalPts.A).toBe(1.5);
     expect(result.totalPts.B).toBe(0.5);
     const text = render(<TeamBestBallScoreboard result={result} holePars={PARS} />).container.textContent;
     expect(text).toContain("1.5");
+  });
+});
+
+// ── The two nines are not priced the same ───────────────────────────
+// The sheet this is modeled on ran "1 Pt/Hole Front, 2 Pt/Hole Back", and
+// potFor's whole job is to know which nine a hole is in. Every hole above is
+// on the front, so the back branch was never once exercised.
+describe("a back nine priced differently from the front", () => {
+  const backHoles = {
+    a1_4: { 9: 4, 10: 4 }, a2_4: { 9: 4, 10: 4 },
+    b1_4: { 9: 9, 10: 4 }, b2_4: { 9: 9, 10: 4 },
+  };
+  const over = { holeData: backHoles, match: { hole_points: { front: 1, back: 2 } } };
+
+  it("pays the back nine's pot on a back nine hole", () => {
+    // Hole 10 is A's outright: the back pot is 2, not the front's 1.
+    const result = resultFor(over);
+    expect(result.holePoints.back).toBe(2);
+    expect(result.totalPts.A).toBe(3);     // 2 for the win, 1 for half of the tie
+    expect(result.totalPts.B).toBe(1);
+  });
+
+  it("prints that pot rather than the front's", () => {
+    expect(scoreboard(over).textContent).toContain("2");
+  });
+});
+
+// ── A round that does not pay by the hole ───────────────────────────
+// Team Best Ball offers Match and Total as well as Points (constants FORMATS),
+// and on those two `result.holePoints` is null — the round pays Nassau pots by
+// the NINE and has no per-hole pot at all. Reading that as zero printed
+// eighteen zeros down both PTS columns under a TOTAL row showing the round's
+// real points: columns that summed to nothing under a number that wasn't.
+describe("a Team Best Ball round run as a match rather than on points", () => {
+  const asMatch = { match: { scoring_type: "match" }, round: { scoring_type: "match" } };
+
+  it("has no per-hole pot to state", () => {
+    expect(resultFor(asMatch).holePoints).toBe(null);
+  });
+
+  it("draws no PTS columns at all", () => {
+    const el = scoreboard(asMatch);
+    expect(el.textContent).not.toContain("PTS");
+    // And no zeros standing in for the points it cannot state.
+    expect(ptsCells(el).filter(d => d.textContent.trim() === "0")).toHaveLength(0);
+  });
+
+  it("still draws the net-per-hole half, which is true on every form", () => {
+    const el = scoreboard(asMatch);
+    expect(el.textContent).toContain("NET");
+    expect(el.textContent).toContain("+4");
+    expect(el.textContent).toContain("+12");
+  });
+
+  it("still states what the round is worth, off the engine", () => {
+    // Whatever the Nassau pots have banked — nothing yet on a round two holes
+    // old, since a pot is not awarded until its nine settles. The point is
+    // that this number comes from computeMatchResult and is NOT the sum of a
+    // column of per-hole points, which is exactly why that column must not be
+    // drawn as zeros beside it.
+    const result = resultFor(asMatch);
+    const el = render(<TeamBestBallScoreboard result={result} holePars={PARS} />).container;
+    expect(el.textContent).toContain("TOTAL");
+    expect(result.holePoints).toBe(null);
+    expect(typeof result.totalPts.A).toBe("number");
+  });
+
+  it("keeps the PTS columns on a points round", () => {
+    expect(scoreboard().textContent).toContain("PTS");
   });
 });

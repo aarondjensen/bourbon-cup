@@ -39,7 +39,19 @@ import { fmtScore, fmtPts } from "../scoring";
 // A hole's point pot — front nine and back nine can be priced differently
 // (the old sheet's "1 Pt/Hole Front, 2 Pt/Hole Back"), so which nine a hole
 // falls in decides its pot, not a flat per-hole value.
-const potFor = (holePoints, h) => (h < 9 ? holePoints?.front : holePoints?.back) || 0;
+//
+// NULL when the round does not pay by the hole at all. `result.holePoints` is
+// only populated for a points-per-hole round (scoring.js sets it from the form
+// of play), and Team Best Ball offers two others — a round run as Match or
+// Total pays Nassau pots by the NINE and has no per-hole pot to state. Reading
+// `undefined || 0` there printed eighteen zeros down both PTS columns under a
+// TOTAL row showing the round's real points: a scoreboard whose own columns
+// summed to nothing under a number that wasn't nothing. So the absence is
+// carried as null and the columns come off, rather than being drawn as zero.
+const potFor = (holePoints, h) => {
+  if (!holePoints) return null;
+  return (h < 9 ? holePoints.front : holePoints.back) || 0;
+};
 
 // The cell for one side's number on one hole — plain in its team's color
 // when it didn't win, wrapped in that same color's tint+border when it did.
@@ -89,7 +101,7 @@ function HoleMark({ h, winner }) {
 // One nine's worth of rows — a pure rendering slice, so the 1-9/10-18 gap
 // the old sheet drew is just two calls of this rather than a branch inside
 // a single 18-row loop.
-function NineBlock({ start, result, holePars }) {
+function NineBlock({ start, result, holePars, showPts }) {
   const rows = Array.from({ length: 9 }, (_, i) => start + i);
   return (
     <div>
@@ -111,16 +123,17 @@ function NineBlock({ start, result, holePars }) {
         };
         const wonNet = (side) => played && hr.winner === side;
         const wonPts = (side) => wonNet(side) && pot > 0;
+        const pts = (side) => (pointsFor(side) == null ? null : fmtPts(pointsFor(side)));
         return (
           <div key={h} style={{
             display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
             padding: "5px 0", borderBottom: `1px solid ${BC.bdr}${ALPHA.hair}`,
           }}>
-            <Cell value={pointsFor("A") == null ? null : fmtPts(pointsFor("A"))} won={wonPts("A")} side="A" align="right" />
+            {showPts && <Cell value={pts("A")} won={wonPts("A")} side="A" align="right" />}
             <Cell value={netToPar("A")} won={wonNet("A")} side="A" align="right" />
             <HoleMark h={h} winner={played ? hr.winner : null} />
             <Cell value={netToPar("B")} won={wonNet("B")} side="B" align="left" />
-            <Cell value={pointsFor("B") == null ? null : fmtPts(pointsFor("B"))} won={wonPts("B")} side="B" align="left" />
+            {showPts && <Cell value={pts("B")} won={wonPts("B")} side="B" align="left" />}
           </div>
         );
       })}
@@ -133,28 +146,36 @@ function NineBlock({ start, result, holePars }) {
 // so this can never disagree with the card it sits inside.
 export function TeamBestBallScoreboard({ result, holePars }) {
   const ptsA = result.totalPts.A, ptsB = result.totalPts.B;
+  // Whether this round pays by the hole at all — see potFor. A Team Best Ball
+  // round run as Match or Total still gets this board, because the NET-per-hole
+  // half is the sheet's own view and is true on every form of play; it is only
+  // the two PTS columns that have nothing to say.
+  const showPts = result.holePoints != null;
   return (
     <div style={{ fontFamily: FONT }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 4 }}>
-        <span style={{ width: 30, textAlign: "right", fontSize: FS.micro, fontWeight: 700, color: BC.t3 }}>PTS</span>
+        {showPts && <span style={{ width: 30, textAlign: "right", fontSize: FS.micro, fontWeight: 700, color: BC.t3 }}>PTS</span>}
         <span style={{ width: 30, textAlign: "right", fontSize: FS.micro, fontWeight: 700, color: BC.t3 }}>NET</span>
         <span style={{ width: 34, textAlign: "center", fontSize: FS.micro, fontWeight: 700, color: BC.t3 }}>HOLE</span>
         <span style={{ width: 30, textAlign: "left", fontSize: FS.micro, fontWeight: 700, color: BC.t3 }}>NET</span>
-        <span style={{ width: 30, textAlign: "left", fontSize: FS.micro, fontWeight: 700, color: BC.t3 }}>PTS</span>
+        {showPts && <span style={{ width: 30, textAlign: "left", fontSize: FS.micro, fontWeight: 700, color: BC.t3 }}>PTS</span>}
       </div>
-      <NineBlock start={0} result={result} holePars={holePars} />
+      <NineBlock start={0} result={result} holePars={holePars} showPts={showPts} />
       {/* The one gap in the middle — nothing else marks the turn, same as
           the sheet this is modeled on. */}
       <div style={{ height: 10 }} />
-      <NineBlock start={9} result={result} holePars={holePars} />
+      <NineBlock start={9} result={result} holePars={holePars} showPts={showPts} />
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
         marginTop: 8, paddingTop: 8, borderTop: `1px solid ${BC.bdr}`,
       }}>
+        {/* The round's points either way — on a Nassau round these are the
+            nine pots rather than a sum of the columns above, which is exactly
+            why the columns above are not drawn as zeros when there are none. */}
         <span style={{ width: 30, textAlign: "right", fontSize: FS.body, fontWeight: 800, color: teamColor("A") }}>{fmtPts(ptsA)}</span>
-        <span style={{ width: 30 }} />
+        {showPts && <span style={{ width: 30 }} />}
         <span style={{ width: 34, textAlign: "center", fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.5, color: BC.t3 }}>TOTAL</span>
-        <span style={{ width: 30 }} />
+        {showPts && <span style={{ width: 30 }} />}
         <span style={{ width: 30, textAlign: "left", fontSize: FS.body, fontWeight: 800, color: teamColor("B") }}>{fmtPts(ptsB)}</span>
       </div>
     </div>
