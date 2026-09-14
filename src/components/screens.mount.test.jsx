@@ -407,6 +407,54 @@ describe("Scoring", () => {
     mounts(<ScoreEntry {...scoring({ matches: [], groups: {} })} />);
   });
 
+  // ── A team round has no card to sign ──────────────────────────────
+  // cardComplete/missingForCard read matchPids, which for every other
+  // format is one foursome and for Team Best Ball is teamA + teamB — the
+  // whole side across every tee time. Before `teamRound` gated it in
+  // App.jsx, a wave that had posted its own eighteen was told it couldn't
+  // sign because a man on a DIFFERENT tee time — same team or the other
+  // one — still had holes open, and the note named him. The running
+  // ▲/▼ status under each hole had the same problem in the other
+  // direction: it is a score for the whole side, not this foursome, and
+  // printing it is the result the Final Countdown exists to hold back.
+  describe("a team round has no card to sign", () => {
+    const openRound = { ...bestBallRound, sealed: false };
+    const fullCard = () => {
+      const card = {};
+      for (let h = 0; h < 18; h++) card[h] = 4;
+      return card;
+    };
+
+    it("never shows the can't-sign note, even when other waves are wide open", () => {
+      // p1's own wave finishes all eighteen; nobody else has posted anything.
+      const holeData = {};
+      for (const pid of waves[0]) holeData[`${pid}_4`] = fullCard();
+      const t = render(<ScoreEntry {...scoring({ holeData, tRounds: [openRound] })} />).container.textContent;
+      expect(t).not.toContain("Can't sign");
+    });
+
+    it("never promotes to the sign CTA, even once the whole match is complete", () => {
+      const holeData = {};
+      for (const pid of pids) holeData[`${pid}_4`] = fullCard();
+      const t = render(<ScoreEntry {...scoring({ holeData, tRounds: [openRound] })} />).container.textContent;
+      expect(t).toContain("Full Scorecard");
+      expect(t).not.toContain("Complete — Sign Card");
+      expect(t).not.toContain("a player in this match signs it");
+    });
+
+    it("shows no running match-status glyphs under the holes", () => {
+      const holeData = {};
+      for (const pid of waves[0]) {
+        const card = {};
+        for (let h = 0; h < 3; h++) card[h] = 4;
+        holeData[`${pid}_4`] = card;
+      }
+      const t = render(<ScoreEntry {...scoring({ holeData, tRounds: [openRound] })} />).container.textContent;
+      expect(t).not.toMatch(/[▲▼]/);
+      expect(t).not.toContain("TIED");
+    });
+  });
+
   // ── The Nassau chips, from the reader's own side ──
   // Not a mount check. These three chips say WON or LOST and then said the
   // margin from TEAM A's side whoever was holding the phone, so a front nine

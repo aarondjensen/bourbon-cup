@@ -97,6 +97,7 @@ import {
   teeTimeForMatch, parseTeeTime, formatTeeTime, DEFAULT_TEE_INTERVAL, TEE_SLOTS,
   roundPlaySetup, orderMatchesForRound, numberMatches, groupIndexForMatch,
   scoringUnits, unitForPlayer, readableUnits, teeTimeList, expandTeeTimes, stripAMPM,
+  formatGroupsByTeam,
 } from "./lib/groups";
 import { firstTeeAt } from "./lib/countdown";
 import { groupKey, tagAheadOfPlay, resolvePin, OVERRIDE_KEY } from "./lib/ctp";
@@ -1326,10 +1327,30 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // what stops three partners being left with a card that can never be
   // signed — see lib/cardSigs. Scoring is untouched: his holes still count.
   const withdrawn = useMemo(() => withdrawnIds(tPlayers), [tPlayers]);
-  const sig = match ? sigForMatch(cardSigs, match.id) : null;
-  const signState = match ? cardState(match, sig, withdrawn) : "open";
+  // ── A team round has no card to sign ──────────────────────────────
+  // Card signing was ported from MnQ, where a match IS a foursome — one
+  // card, four players, and "everybody in the match" is exactly who is
+  // standing over it. Team Best Ball breaks that: the match is the WHOLE
+  // side across every tee time (`matchPlayers` = teamA + teamB, up to
+  // sixteen men), so `cardComplete`/`missingForCard` were asking whether
+  // every wave of BOTH teams had finished, not whether the foursome on
+  // screen had. A group standing on the 3rd could never sign — and the
+  // "can't sign" note named men in a completely different wave, on the
+  // same team or the opposing one, who had nothing to do with the card
+  // this group was holding.
+  //
+  // There is no fix that scopes it to "this wave" either: the signature
+  // document is keyed by match id, and every wave of a team round shares
+  // ONE match id, so a per-wave sign would need a per-wave document this
+  // format has never written. Rather than invent that data shape, the
+  // round simply has no sign-off ritual — it is finalized by the director
+  // as a whole, and the result is revealed at the Final Countdown, not
+  // agreed to card by card on the course.
+  const teamRound = formatGroupsByTeam(format);
+  const sig = match && !teamRound ? sigForMatch(cardSigs, match.id) : null;
+  const signState = match && !teamRound ? cardState(match, sig, withdrawn) : "open";
   const signed = signState !== "open";
-  const complete = match ? cardComplete(match, holeData, withdrawn) : false;
+  const complete = match && !teamRound ? cardComplete(match, holeData, withdrawn) : false;
   // Whether the Full Scorecard button is allowed to promote to the sign CTA.
   // A signature is a claim by somebody IN the match — `signed_by` lands on the
   // card and every attestation is checked against the roster of that match —
@@ -1337,11 +1358,11 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // scorecard, however complete it is. Attesting is already gated the same way
   // inside SignedCardPanel.
   const canSign = complete && matchPids.includes(userPid);
-  const missingCard = match && !complete && !signed ? missingForCard(match, holeData, withdrawn) : [];
+  const missingCard = match && !teamRound && !complete && !signed ? missingForCard(match, holeData, withdrawn) : [];
   // Holes the WHOLE group skipped, which is a different sentence from one man
   // missing one hole — see lib/cardSigs.skippedHoles. The match status on
   // screen is computed without them, so it is provisional until they are in.
-  const skipped = match && !complete && !signed ? skippedHoles(match, holeData, withdrawn) : [];
+  const skipped = match && !teamRound && !complete && !signed ? skippedHoles(match, holeData, withdrawn) : [];
 
   // No more hooks below this line.
 
@@ -2223,24 +2244,38 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
       {matchSelector}
       {groupPicker}
 
-      {/* Front 9 — hole strip + status row. */}
-      <div style={{ display: "flex", gap: 3, marginBottom: HOLE_RING_REACH + 1, flexShrink: 0 }}>
+      {/* Front 9 — hole strip + status row.
+          The status row is the running match state under each hole —
+          ▲/▼N off the reader's own side, computed over the WHOLE match. On
+          a team round that "match" is the entire side across every tee
+          time, so the number under hole 3 would be a running score for
+          holes this foursome never played, off men who aren't on this
+          screen — and it would be printing the very result the Final
+          Countdown exists to hold back until the room is together. So a
+          team round gets the hole strip (this group's own progress) and
+          nothing more; see `teamRound` above for the same reasoning that
+          drops the sign-card ritual. */}
+      <div style={{ display: "flex", gap: 3, marginBottom: teamRound ? Math.max(fit.stack, HOLE_RING_REACH + 1) : HOLE_RING_REACH + 1, flexShrink: 0 }}>
         {Array.from({ length: 9 }, (_, i) => renderHoleCell(i))}
       </div>
       {/* The one gap the ring reaches UP into: the back-nine strip follows
           this row, so on the densest phones — where fit.stack is 3 — the
           ring around 10 would rest on this card's border. */}
-      <div style={{ display: "flex", marginBottom: Math.max(fit.stack, HOLE_RING_REACH + 1), flexShrink: 0, background: BC.card, border: `1px solid ${BC.bdr}${ALPHA.line}`, borderRadius: 8, padding: `${fit.statusPad}px 0`, alignItems: "center" }}>
-        {Array.from({ length: 9 }, (_, i) => renderStatusCell(i))}
-      </div>
+      {!teamRound && (
+        <div style={{ display: "flex", marginBottom: Math.max(fit.stack, HOLE_RING_REACH + 1), flexShrink: 0, background: BC.card, border: `1px solid ${BC.bdr}${ALPHA.line}`, borderRadius: 8, padding: `${fit.statusPad}px 0`, alignItems: "center" }}>
+          {Array.from({ length: 9 }, (_, i) => renderStatusCell(i))}
+        </div>
+      )}
 
       {/* Back 9 — hole strip + status row. */}
-      <div style={{ display: "flex", gap: 3, marginBottom: HOLE_RING_REACH + 1, flexShrink: 0 }}>
+      <div style={{ display: "flex", gap: 3, marginBottom: teamRound ? fit.stack : HOLE_RING_REACH + 1, flexShrink: 0 }}>
         {Array.from({ length: 9 }, (_, i) => renderHoleCell(i + 9))}
       </div>
-      <div style={{ display: "flex", marginBottom: fit.stack, flexShrink: 0, background: BC.card, border: `1px solid ${BC.bdr}${ALPHA.line}`, borderRadius: 8, padding: `${fit.statusPad}px 0`, alignItems: "center" }}>
-        {Array.from({ length: 9 }, (_, i) => renderStatusCell(i + 9))}
-      </div>
+      {!teamRound && (
+        <div style={{ display: "flex", marginBottom: fit.stack, flexShrink: 0, background: BC.card, border: `1px solid ${BC.bdr}${ALPHA.line}`, borderRadius: 8, padding: `${fit.statusPad}px 0`, alignItems: "center" }}>
+          {Array.from({ length: 9 }, (_, i) => renderStatusCell(i + 9))}
+        </div>
+      )}
 
       {nassauBadges}
 
@@ -2417,6 +2452,18 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
               background: BC.card, borderRadius: 10, padding: fit.cardPad,
               flex: "1 1 0", minHeight: 0, maxHeight: fit.cardMax, display: "flex", flexDirection: "column",
               border: `1px solid ${BC.bdr}`,
+              // `maxHeight` is a cap, not a guarantee — the score row under it
+              // has a hard CSS `minHeight` floor (fit.btnMin), so on a device
+              // where the room above these cards (banners, the hole strips,
+              // the format badge) leaves less than four cards' worth of
+              // `cardMax` to divide, the button row refuses to shrink to fit
+              // and the card's own content grows past the box its rounded
+              // corners are drawn on. With no clip that excess doesn't stay
+              // inside — it paints straight through the border into whatever
+              // card comes next, which read as the score buttons spilling out
+              // of their row. Clipping here is what makes `maxHeight` actually
+              // a ceiling instead of a suggestion.
+              overflow: "hidden",
             }}>
               {/* Header row — name(s) + (CH) + stroke dots clustered tight on
                   the LEFT, so the handicap context reads as attached to the

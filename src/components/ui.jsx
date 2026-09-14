@@ -440,6 +440,16 @@ export function ScoreButtonRow({ par, score, onScore, fill = false, minHeight = 
               background: isCur ? BC.sel : BC.inp,
               color: isCur ? BC.bg : BC.t2,
               position: "relative", display: "flex", alignItems: "center", justifyContent: "center",
+              // The selection rings below are a fixed 32px box, and a button
+              // squeezed under that by a dense card (tight/compact — see
+              // useFitDensity) is shorter than the ring it's asked to hold.
+              // Without a clip the ring doesn't shrink to fit, it OVERFLOWS —
+              // top and bottom, past this button's own rounded corners and
+              // into the row underneath, which on a stacked scoring screen is
+              // the next player's card. `overflow: hidden` on the button it's
+              // centered in crops the ring to the tap target instead, which
+              // is a smaller ring, not a bleeding one.
+              overflow: "hidden",
               // No CSS transition: when the hole auto-advances, all four
               // selections should swap instantly. A fade cross-dissolves them
               // through a half-amber state that reads as ghost selections.
