@@ -81,9 +81,12 @@ const chips=(txt)=>["FRONT","OVERALL","BACK"].map(l=>{
   const m=txt.slice(i+l.length).match(/^(TIED|—|🔒|[0-9]+(?:&[0-9]+| UP| DN))/);
   return `${l}:${m?m[1]:"?"}`;}).join("  ");
 
-// A two-row three-column grid — F9 / overall / B9 on top, each value beneath.
+// A three-row three-column grid — F9 / overall / B9 on top, each value
+// beneath, and the expand chevron alone on the third row under THRU / FINAL.
+// The chevron used to ride on that line, which is why it once sat between the
+// sub-label and the B9 value in this reading rather than after both.
 const lbRow=(txt)=>{
-  const m=txt.match(/Aaron J\s*F9([\s\S]*?)B9([\s\S]*?)(THRU [0-9]+|FINAL|—|8:30)\s*▾([\s\S]*?)Paul W/);
+  const m=txt.match(/Aaron J\s*F9([\s\S]*?)B9([\s\S]*?)(THRU [0-9]+|FINAL|—|8:30)([\s\S]*?)[▾▴]([\s\S]*?)Paul W/);
   return m ? `F9 ${m[2].trim()} · overall ${m[1].trim()} · B9 ${m[4].trim()} · ${m[3]}`
     : (txt.match(/Aaron J[\s\S]{0,70}?Paul W/)||["?"])[0].replace(/\s+/g," ").trim();
 };

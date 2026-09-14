@@ -430,7 +430,10 @@ function MatchCard({
       borderTop: first ? "none" : `1px solid ${BC.bdr}${ALPHA.line}`,
       background: expanded ? `${BC.amber}${ALPHA.wash}` : "transparent",
     }}>
-      <button onClick={onToggle} style={{
+      {/* `aria-expanded` because the chevron below is aria-hidden: it is a
+          mark for the eye, and the state it stands for belongs to the button
+          rather than to a triangle in the middle of the row's text. */}
+      <button onClick={onToggle} aria-expanded={expanded} style={{
         width: "100%", padding: "9px 12px 10px", background: "transparent",
         border: "none", cursor: "pointer", textAlign: "left", display: "block", fontFamily: FONT,
       }}>
@@ -463,14 +466,29 @@ function MatchCard({
             </div>
             {showBack && <div style={NINE_LABEL}>B9</div>}
 
-            {/* Bottom row — each one's detail, directly beneath it. The
-                chevron rides on THRU rather than taking a row of its own,
-                so the expand affordance costs no vertical space. */}
+            {/* Middle row — each one's detail, directly beneath it. */}
             {showFront && <div style={{ ...NINE_VALUE, color: nineColor(frontSt) }}>{statusText(frontSt)}</div>}
             <div style={{ fontSize: FS.label, fontWeight: 700, letterSpacing: 0.9, lineHeight: 1, minWidth: 52, textAlign: "center", color: BC.t3 }}>
-              {subLabel} {expanded ? "▴" : "▾"}
+              {subLabel}
             </div>
             {showBack && <div style={{ ...NINE_VALUE, color: nineColor(backSt) }}>{statusText(backSt)}</div>}
+
+            {/* The chevron, on a line of its own under THRU / FINAL. It used
+                to ride on that line to cost the row no height, and what that
+                bought was a sub-line reading "THRU 17 ▾" — the state of the
+                match and a control for the card, in one string, centred as
+                one object. Under it, it is a mark you tap rather than a word
+                you read.
+
+                The flanking cells are empty divs rather than nothing: this
+                grid flows in order, so without them the chevron lands in the
+                F9 column on any round that has nines. */}
+            {showFront && <div />}
+            <div aria-hidden="true" style={{
+              fontSize: FS.label, lineHeight: 1, minWidth: 52,
+              textAlign: "center", color: BC.t3,
+            }}>{expanded ? "▴" : "▾"}</div>
+            {showBack && <div />}
           </div>
           <MatchTeamColumn tid="B" names={bNames} isLeader={leader === "B"} settled={done} />
         </div>
