@@ -33,7 +33,8 @@ import {
   LOCK_OPEN, LOCK_FINAL, LOCK_STATE_LABEL,
 } from "./lib/roundLocks";
 import {
-  concealHoleData, countdownHoleData, revealState, revealSummary, HOLE_COUNT,
+  concealHoleData, countdownHoleData, concealCtpData, isConcealing,
+  revealState, revealSummary, HOLE_COUNT,
   COUNTDOWN_HASH, wantsCountdown, revealPending,
 } from "./lib/reveal";
 import { usePullToRefresh } from "./lib/usePullToRefresh";
@@ -97,7 +98,7 @@ import {
   teeTimeForMatch, parseTeeTime, formatTeeTime, DEFAULT_TEE_INTERVAL, TEE_SLOTS,
   roundPlaySetup, orderMatchesForRound, numberMatches, groupIndexForMatch,
   scoringUnits, unitForPlayer, readableUnits, teeTimeList, expandTeeTimes, stripAMPM,
-  formatGroupsByTeam,
+  formatGroupsByTeam, formatPerSide,
 } from "./lib/groups";
 import { firstTeeAt } from "./lib/countdown";
 import { groupKey, tagAheadOfPlay, resolvePin, OVERRIDE_KEY } from "./lib/ctp";
@@ -1220,7 +1221,20 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // numbers and the running line. Those are the round, and the round is not
   // known until the cards are turned over at the house.
   const roundSeal = revealState(tRounds, match?.round);
-  const conceal = roundSeal.concealing ? { through: roundSeal.through, side: userTeam } : null;
+  // `mixedFoursome` says whether the two sides on a card walked it together,
+  // which is what decides whether the OTHER side's gross rows are this
+  // reader's to see — see the prop note in components/FullScorecard. A format
+  // with a `perSide` count has a match that fits one foursome, so the group
+  // holding the phone wrote every card on it. Team Best Ball's match is the
+  // whole side across four tee waves, so it did not, and the opposition's
+  // cards go dark with everything else the seal takes.
+  //
+  // Structural rather than a check on the format's name: anything whose match
+  // outgrows a foursome has the same problem, and the fallback lands on the
+  // safe side of it.
+  const conceal = roundSeal.concealing
+    ? { through: roundSeal.through, side: userTeam, mixedFoursome: formatPerSide(format) != null }
+    : null;
 
   // ── The scoring unit: this screen is a TEE GROUP, not a match ────
   // On every 1- and 2-man format the match IS the foursome, so the unit is
@@ -4818,6 +4832,16 @@ export default function App() {
     [holeData, enrichedRounds]
   );
 
+  // The pins, cut the same way and for the same reason. A CTP is not derived
+  // from a hole score, so the subtraction above could never reach it — which
+  // left the Betting tab drawing a sealed round's pin winners to anybody who
+  // tapped that round, and the round sheet behind the push notification doing
+  // the same. See concealCtpData in lib/reveal.
+  const revealedCtpData = useMemo(
+    () => concealCtpData(ctpData, enrichedRounds),
+    [ctpData, enrichedRounds]
+  );
+
   // The same subtraction cut at the reveal instead of at zero, for the one
   // screen that walks the round in front of the room. It goes to the
   // Leaderboard, which is where the countdown is mounted from, and is used
@@ -6464,7 +6488,9 @@ export default function App() {
                real map here would read out a sealed round's card one skin at
                a time from a tab nobody thought to check. */
             holeData={revealedHoleData}
-            ctpData={ctpData}
+            /* And the pins with them — `ctpTags` never took holeData, so the
+               subtraction above could not cut it. See concealCtpData. */
+            ctpData={revealedCtpData}
             skinsPot={skinsPot}
             buyIns={buyIns}
             onSetCtp={onSetCtp}
@@ -6727,7 +6753,16 @@ export default function App() {
           (see the deep-link effect above). Rendered here rather than inside
           TeamLeaderboard because it needs ctpData, buyIns and teamNames, and
           because a deep link arrives at the app rather than at a tab. */}
-      {summaryRound != null && (
+      {/* ── And not at all while the round is concealing ──
+          The sheet's two data feeds are cut (holes above, pins below), so
+          what a concealing round would draw here is an empty summary rather
+          than a leak — but the Leaderboard already withholds the chip that
+          opens this thing on those rounds (`!seal?.concealing`, in its own
+          file), and the deep link behind the round-final push did not. One
+          door locked and the other standing open is how the push became the
+          way in. Locked at the render rather than in the effect so EVERY
+          route to the sheet goes through it, whatever sets the round. */}
+      {summaryRound != null && !isConcealing(enrichedRounds.find(t => t.round_number === summaryRound)) && (
         <RoundSummarySheet
           round={summaryRound}
           onClose={() => setSummaryRound(null)}
@@ -6750,7 +6785,10 @@ export default function App() {
           tRounds={tRounds}
           courses={courses}
           roundLocks={roundLocksData}
-          ctpData={ctpData}
+          /* Concealed, like the holes above it: this sheet is what the
+             round-final push deep-links to, and its CTP section was the one
+             part of it the blackout never reached. */
+          ctpData={revealedCtpData}
           buyIns={buyIns}
           hcpOverrides={hcpOverridesData}
           teeAssignments={teeAssignmentsData}

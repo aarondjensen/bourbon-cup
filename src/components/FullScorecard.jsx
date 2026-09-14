@@ -286,21 +286,39 @@ export function ScoreCell({ score, par, strokes = 0, size = CELL, color, skin = 
 //                             match directly above this, F9 and B9 either
 //                             side of it, and its segment pills say all three
 //                             a second time.
-//    conceal                — { through, side } on a SEALED round, null on
-//                             every other one. See lib/reveal.js. Past hole
-//                             `through` this card stops printing anything
-//                             that COMPARES the two sides — the other side's
-//                             row, the hole-won marks, the running line, the
-//                             nine's result — and keeps everything that is
-//                             just a card: the gross scores the group is
-//                             writing down, and `side`'s own numbers.
+//    conceal                — { through, side, mixedFoursome } on a SEALED
+//                             round, null on every other one. See
+//                             lib/reveal.js. Past hole `through` this card
+//                             stops printing anything that COMPARES the two
+//                             sides — the other side's row, the hole-won
+//                             marks, the running line, the nine's result.
 //
-//                             It has to work that way rather than by hiding
-//                             the data, because the group holding this phone
-//                             is entering two of the four cards on it. What
-//                             the blackout owes them is not their opponents'
-//                             scores back; it is what those scores ADD UP TO,
-//                             which is the round nobody is allowed to know.
+//                             `mixedFoursome` is what it keeps BESIDES that,
+//                             and it is the whole of the difference between
+//                             the two shapes of sealed round:
+//
+//                             TRUE — the match is one foursome and the two
+//                             sides on this card walked it together, so the
+//                             group holding the phone entered all four of
+//                             these cards themselves. Hiding the gross rows
+//                             would be taking back numbers they typed an
+//                             hour ago. What the blackout owes them is not
+//                             their opponents' scores; it is what those
+//                             scores ADD UP TO, which is the round nobody is
+//                             allowed to know.
+//
+//                             FALSE — the match is bigger than a foursome
+//                             (Team Best Ball: the whole side, across four
+//                             tee waves), so the other eight men are a
+//                             different group on a different tee and nobody
+//                             on this phone wrote a stroke of their card.
+//                             There is no "they typed it themselves" to
+//                             trade against, so the gross rows go dark too —
+//                             which is the only reading of "the teams cannot
+//                             see each other's scores" that is actually true.
+//                             The reader's OWN side stays visible in full,
+//                             other waves included: a team is never hidden
+//                             from itself.
 //    course                 — no longer read. The card used to print a terms
 //                             line under the header — course · format ·
 //                             scoring · match play — and it restated things
@@ -334,6 +352,17 @@ export function FullScorecard({
   // A nine only states a result once every hole in it is out.
   const sealedNine = (start) => sealedHole(start + 8);
   const mySide = conceal?.side === "B" ? "B" : "A";
+  // ── Whether a GROSS row is this reader's to see ──────────────────
+  // The aggregate rows below have always gone dark for the other side,
+  // because a side's net-per-hole IS the round. The individual gross rows
+  // did not, and the reason they did not was that the four men on the card
+  // walked together and wrote all four of them — which stops being true the
+  // moment a match is bigger than a foursome. On Team Best Ball the card
+  // carries sixteen men across four tee waves, so it was printing all eight
+  // of the opposition's cards to a group that never saw them play, on the
+  // one round of the year whose entire point is that nobody knows. See
+  // `mixedFoursome` on the props above.
+  const sealedGross = (tid, h) => sealedHole(h) && tid !== mySide && !conceal?.mixedFoursome;
 
   const { formOfPlay } = resolveScoring(match);
   const total = formOfPlay === SCORING_TYPE_TOTAL;
@@ -564,12 +593,21 @@ export function FullScorecard({
       // row that no dot above it accounted for.
       let gross = 0;
       const cells = idx.map((h) => {
+        // Sealed cells are not read at all, rather than read and then not
+        // drawn: the total below is built in this same pass, and a hidden
+        // hole that still counted towards it would hand the number back by
+        // subtraction.
+        if (sealedGross(tid, h)) return { h, s: 0, st: 0, sealed: true };
         const s = combined
           ? (sharedBallScore(pids.map(p => getScore(p, h))) || 0)
           : getScore(pid, h);
         if (s > 0) gross += s;
         return { h, s, st: strokesFor(pid, h) };
       });
+      // And a nine with any sealed hole in it states no total, for the same
+      // reason the side's own row does (see SideRow): a total over the part
+      // that is out reads as the whole nine.
+      const grossSealed = cells.some((c) => c.sealed);
       // The playing handicap — post-allowance, which is the number the dots
       // on this row were actually allocated from. On a shared-ball side that
       // is the team's summed-then-rounded figure (result.teamCH), never
@@ -599,11 +637,15 @@ export function FullScorecard({
           </div>
           {cells.map((c, i) => (
             <div key={c.h} style={holeCell(i, rowH)}>
-              <ScoreCell score={c.s} par={holePars[c.h]} strokes={c.st} notation={false} />
+              {c.sealed
+                ? <span title="Sealed until the reveal" style={{ fontSize: FS.micro, opacity: 0.5 }}>🔒</span>
+                : <ScoreCell score={c.s} par={holePars[c.h]} strokes={c.st} notation={false} />}
             </div>
           ))}
           <div style={totCell(rowH, { paddingTop: 8 })}>
-            <span style={{ fontSize: FS.small, fontWeight: 800, color: BC.t1 }}>{gross || ""}</span>
+            {grossSealed
+              ? <span style={{ fontSize: FS.micro, opacity: 0.5 }}>🔒</span>
+              : <span style={{ fontSize: FS.small, fontWeight: 800, color: BC.t1 }}>{gross || ""}</span>}
           </div>
         </div>
       );
