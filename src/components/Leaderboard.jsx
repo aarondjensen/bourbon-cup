@@ -410,11 +410,10 @@ function MatchCard({
   // which was one outcome under two names on one screen. The symbol survives
   // in SegmentPill above, where it is a POT ("½ – ½", half a point each) and
   // not the match's status.
-  // What this match has banked plus what it is on course to bank — the pair
-  // drawn under the strip. Read through the same helper the cup bar's +N
-  // markers use, so the row and the bar can never disagree about what a
-  // match in play is worth.
-  const cupPending = pendingPts(match, result, format);
+  // What the match has BANKED for the cup — settled segments only, which is
+  // what computeMatchResult puts in totalPts. Nothing projected: see the
+  // note on the line itself.
+  const totalPts = result.totalPts;
 
   const statusLabel = statusText(overallSt);
   // Undimmed in play, as above: FINAL underneath says the match is over, and
@@ -495,26 +494,30 @@ function MatchCard({
             already unlike anything above it. A "CUP" eyebrow was the first
             cut and it read as a footnote to a row that is busy enough.
 
-            An unplayed match has no line at all. Nothing is banked and
-            nothing is in flight, so "0 – 0" would be inventing a result for
-            a match whose tee time hasn't come round — the same reason
-            pendingPts refuses to project a segment nobody has teed off on.
+            ONLY WHAT IS BANKED. A segment pays when it settles, and until
+            it does there is nothing official to print — so a match with no
+            settled segment has no line at all, and one whose front nine is
+            in the books shows the front nine's point and nothing for the
+            two still being played. The figure only ever grows, and every
+            number on it is a number the cup has actually been given.
 
-            A match in play shows what it is ON COURSE to pay, banked plus
-            in flight — the identical arithmetic behind the cup bar's own
-            +N markers. THRU 12 sits directly above it and the hole strip
-            beside it is half empty, so the figure reads as what it is. */}
-        {(done || result.holesPlayed > 0) && (
+            It started out as banked PLUS in flight, the arithmetic behind
+            the cup bar's +N markers. On the bar that projection is drawn as
+            its own marker over its own faded segment; here it would have
+            been the same type, in the same place, as a match that was over
+            — a provisional score wearing a final one's clothes, on the row
+            a man checks to see what his match paid. */}
+        {(done || totalPts.A > 0 || totalPts.B > 0) && (
           <div style={{
             display: "flex", alignItems: "baseline", justifyContent: "center",
             gap: 6, marginTop: 6,
           }}>
             <span style={{ fontSize: FS.lead, fontWeight: 800, color: BC.teamA }}>
-              {fmtPts(result.totalPts.A + cupPending.A)}
+              {fmtPts(totalPts.A)}
             </span>
             <span style={{ fontSize: FS.small, color: BC.t3 }}>–</span>
             <span style={{ fontSize: FS.lead, fontWeight: 800, color: BC.teamB }}>
-              {fmtPts(result.totalPts.B + cupPending.B)}
+              {fmtPts(totalPts.B)}
             </span>
           </div>
         )}
