@@ -479,25 +479,35 @@ function GateScreen({ tournamentName, tournamentLocation, authUser, onPassed, on
         <div style={{ textAlign: "center", fontSize: FS.body, fontWeight: 800, color: BC.t1, lineHeight: 1.3 }}>
           This tournament is private
         </div>
-        <div style={{ textAlign: "center", fontSize: FS.small, color: BC.t3, lineHeight: 1.5 }}>
-          Enter the invite code below
+        {/* The one thing on this screen somebody actually has to go find —
+            everything else here is a tap. Amber pulls the eye the same way
+            it does on the submit button below; the label and the box read
+            as one unit rather than a caption floating over an input. */}
+        <div style={{
+          width: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column",
+          alignItems: "center", gap: 8, padding: "14px 14px 16px", borderRadius: 14,
+          background: BC.amberGlow, border: `1px solid ${BC.amber}${ALPHA.line}`,
+        }}>
+          <div style={{ textAlign: "center", fontSize: FS.small, fontWeight: 800, color: BC.amberInk, lineHeight: 1.5 }}>
+            Enter the invite code below
+          </div>
+          <input
+            value={code}
+            onChange={e => setCode(e.target.value)}
+            // Not type="password": there is no privacy to protect from
+            // somebody standing on the same tee box, and a masked field on a
+            // phone keyboard is how you get three failed attempts.
+            type="text" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+            autoComplete="one-time-code" autoFocus
+            placeholder="Invite code"
+            style={{
+              width: "100%", boxSizing: "border-box", background: BC.inp,
+              border: `2px solid ${err ? BC.danger : BC.amber}`, borderRadius: 10,
+              padding: "12px 14px", color: BC.t1, textAlign: "center",
+              // 16px, or iOS Safari zooms the page on focus.
+              fontSize: FS.lead, fontWeight: 700, fontFamily: FONT, outline: "none",
+            }} />
         </div>
-        <input
-          value={code}
-          onChange={e => setCode(e.target.value)}
-          // Not type="password": there is no privacy to protect from
-          // somebody standing on the same tee box, and a masked field on a
-          // phone keyboard is how you get three failed attempts.
-          type="text" autoCapitalize="none" autoCorrect="off" spellCheck={false}
-          autoComplete="one-time-code" autoFocus
-          placeholder="Invite code"
-          style={{
-            width: "100%", boxSizing: "border-box", background: BC.inp,
-            border: `1px solid ${err ? BC.danger : BC.bdr}`, borderRadius: 10,
-            padding: "12px 14px", color: BC.t1, textAlign: "center",
-            // 16px, or iOS Safari zooms the page on focus.
-            fontSize: FS.lead, fontWeight: 700, fontFamily: FONT, outline: "none",
-          }} />
         <button type="submit" disabled={busy} style={{
           width: "100%", padding: "12px 16px", borderRadius: 12,
           background: BC.gold, border: "none", color: ON_AMBER,
