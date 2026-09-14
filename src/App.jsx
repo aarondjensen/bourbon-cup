@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
+import { Fragment, useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { BC, FONT, ON_ACCENT, SHADOW, ALPHA, ON_AMBER, HOLE_BANNER, FS, applyBCTheme, initialBCMode, bcGlobalCSS, teamColor, VP_BAND } from "./theme";
 import { playerLookup, realPlayers } from "./lib/players";
@@ -93,6 +93,7 @@ import { MoneyHoleCard } from "./components/MoneyHoleCard";
 import { MoneyHoleSetup } from "./components/MoneyHoleSetup";
 import { MoneyHolePrompt } from "./components/MoneyHolePrompt";
 import { TurnCard } from "./components/TurnCard";
+import { MatchStatusBar } from "./components/MatchStatusBar";
 import { MatchSetup } from "./components/MatchSetup";
 import {
   GROUPS_COL, groupsDocId, encodeGroups, decodeGroups,
@@ -1030,6 +1031,11 @@ function LoginSplash({ tournamentName, tournamentLocation }) {
 // is invisible to layout, that reach is also what the strip has to leave
 // under itself. See renderHoleCell.
 const HOLE_RING = { width: 2, offset: 1 };
+// The match box's status bar, in pixels — the one dimension of it the SCREEN
+// needs as well as the component does, because the box's height ceiling is
+// the bar plus the two cards under it. Kept here rather than exported from
+// the component so it sits with the screen's other fixed measurements.
+const MATCH_BAR_H = 22;
 const HOLE_RING_REACH = HOLE_RING.width + HOLE_RING.offset;
 
 // Exported ONLY so screens.mount.test can render it. It has no other call
@@ -1175,15 +1181,6 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   const holePars = resolveHolePars(course, lock);
   const holeHcps = resolveHoleHcps(course, lock);
 
-  // The seam useHoleAdvance is built around. This screen keeps scores in
-  // holeData under `pid_round`, but the hole machinery never sees that shape —
-  // it gets a reader that reduces to "give me one player's gross on one hole",
-  // which is the only thing it ever needed to know.
-  const result = useMemo(
-    () => match ? computeMatchResult(match, holeData, courses, tRounds, tPlayers, format, hcpOverrides, undefined, teeAssignments, roundLocks) : null,
-    [match, holeData, courses, tRounds, tPlayers, format, hcpOverrides, teeAssignments, roundLocks]
-  );
-
   // scoresAt takes the ROUND, not the match: the reader it returns is handed
   // to useHoleAdvance and kept in a ref there, and a closure over the whole
   // match object is enough for React Compiler to give up memoizing this
@@ -1315,29 +1312,88 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
     || openUnits[0]
     || floorUnit
     || null;
+  const unitPids = unit?.pids || [];
+
+  // ── The MATCHES on screen ────────────────────────────────────────
+  // One, on every round but singles. A singles unit is the whole tee group
+  // (lib/groups.scoringUnits), which is two 1v1 matches, and both of them are
+  // drawn — each in its own bordered box under its own status bar. The four
+  // men walked it together and marked each other's cards; splitting them
+  // across two phones is what this undoes.
+  //
+  // Resolved out of the unit rather than handed down, because `scoringUnits`
+  // is given ONE match and cannot know what else the group holds. In tee
+  // order: a group is built match by match (lib/groups.matchSeq), so the
+  // match owning the earliest name in it leads.
+  const unitMatches = useMemo(() => {
+    if (!match) return [];
+    if (formatPerSide(format) !== 1) return [match];
+    const inUnit = matches.filter(m =>
+      m.round === match.round && [...m.teamA, ...m.teamB].some(p => unitPids.includes(p)));
+    if (inUnit.length < 2) return [match];
+    const at = (m) => Math.min(...[...m.teamA, ...m.teamB]
+      .map(p => (unitPids.indexOf(p) < 0 ? 99 : unitPids.indexOf(p))));
+    return [...inUnit].sort((a, b) => at(a) - at(b));
+    // unitPids is settled by the unit's key; listing it would re-run on every snapshot
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [match, format, matches, unit?.key]);
+
+  // More than one match on screen — the trigger for the boxes, and for the
+  // per-hole status rows and the Nassau row standing down. Not a check on the
+  // format's name: anything that ever puts two matches in front of one phone
+  // lands on the side of it that can say which is which.
+  const boxed = unitMatches.length > 1;
+
   // What the cards, the hole strip and the auto-advance are about. `matchPids`
   // stays the MATCH's roster and is still what decides a signature: a card is
   // signed by somebody in the match, and on a team round the card is the
   // side's, not the foursome's.
-  const cardPids = unit?.pids || [];
+  //
+  // Boxed, it is every man in the unit who is in one of the matches being
+  // drawn — never the unit's raw pids. A director can drop somebody into a
+  // tee group who is in no match of that round, and they would have no card
+  // here to be on; counting them anyway would leave the turn card, the CTP
+  // prompt and the money-hole heads-up waiting on a hole nobody can post.
+  const cardPids = boxed
+    ? unitMatches.flatMap(m => [...m.teamA, ...m.teamB].filter(p => unitPids.includes(p)))
+    : unitPids;
+
+  // Every match on screen, scored. On every round but singles this is the one
+  // entry it has always been; `result` is still the READER's match, so the
+  // Full Scorecard, the signature, the seal and the hole strip are all
+  // unmoved — only the card stack knows there is more than one.
+  const results = useMemo(
+    () => new Map(unitMatches.map(m => [m.id, computeMatchResult(
+      m, holeData, courses, tRounds, tPlayers, format, hcpOverrides, undefined, teeAssignments, roundLocks,
+    )])),
+    [unitMatches, holeData, courses, tRounds, tPlayers, format, hcpOverrides, teeAssignments, roundLocks]
+  );
+  const result = (match && results.get(match.id)) || null;
 
   // ── The CARDS on screen ──────────────────────────────────────────
   // One per player, or one per SIDE on a shared-ball format (scramble,
   // pinehurst): the side plays one ball and one tap posts it to both men, so
   // it is one card with both names on it. See onTapScore for the write side.
   //
-  // Derived up here rather than inside the render it was written for, because
-  // the turn card at the 10th has to draw the same rows the score buttons do.
-  // Built a second time down there, a scramble side would appear as two
-  // identical lines on one of the two screens and one line on the other, and
-  // the pair would be free to drift apart on the next format that joins them.
+  // Asked of a MATCH rather than of the unit, because a boxed screen draws
+  // each match's own two rows inside its own border. Derived up here rather
+  // than inside the render it was written for, because the turn card at the
+  // 10th has to draw the same rows the score buttons do — built a second time
+  // down there, a scramble side would be two identical lines on one of the
+  // two screens and one line on the other.
   const sideCards = (sidePids) => {
     const inUnit = (sidePids || []).filter(pid => cardPids.includes(pid));
     if (!formatIsSharedBall(format)) return inUnit.map(pid => [pid]);
     return inUnit.length ? [inUnit] : [];
   };
-  const teamACards = sideCards(match?.teamA);
-  const teamBCards = sideCards(match?.teamB);
+  const cardsForMatch = (m) => ({ a: sideCards(m?.teamA), b: sideCards(m?.teamB) });
+  // Every card on the screen, in the order they are drawn — for the things
+  // that are about the GROUP rather than about one match. The turn card is
+  // the only one so far, and it is right: the four of them turn together.
+  const allCards = unitMatches.flatMap(m => {
+    const { a, b } = cardsForMatch(m);
+    return [...a, ...b];
+  });
 
   // ── The waves, for anything that draws more than one of them ─────
   // A match played across several tee times is drawn on the Scoring tab one
@@ -1366,12 +1422,6 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
 
   const par = holePars[activeHole];
   const hcp = holeHcps[activeHole];
-
-  // Per-player stroke maps for this match come straight from the result the
-  // leaderboard is computed with (computeMatchResult now exposes them), so the
-  // dots on the scoring screen and the strokes in the leaderboard math can
-  // never diverge — one allocation, one source.
-  const strokeMaps = result?.strokeMaps || {};
 
   // ── Signature state for the card on screen ──
   // Derived, never stored: `sig` is looked up out of the live subscription
@@ -1410,7 +1460,55 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // round simply has no sign-off ritual — it is finalized by the director
   // as a whole, and the result is revealed at the Final Countdown, not
   // agreed to card by card on the course.
+  // ── What a match box's status bar says ───────────────────────────
+  // ABSOLUTE — it names the leader — where every other verdict on this screen
+  // is from the reader's own side. The reason is that a boxed screen holds a
+  // match the reader may be in neither side of: the man in the OTHER match of
+  // this foursome, or a director scoring the group, would read "2 UP" as his
+  // own. `statusText` already answers from Team A's side, so the name in
+  // front of it is what settles which side that is; level is TIED and gets no
+  // name, because there is nobody to name. See components/MatchStatusBar.
+  //
+  // OVERALL is the bar's own primary text, so it is not also a chip. What is
+  // left is FRONT and BACK, gated by the same nassauSegmentVisibility the
+  // badge row uses — on a round that is not played as a Nassau there are no
+  // chips at all and the bar is one line.
+  const sideName = (m, side) => (side === "A" ? m.teamA : m.teamB)
+    .map(pid => tPlayers.find(p => p.player_id === pid)?.name || pid)
+    .join(" / ");
+  const matchBar = (m, r) => {
+    const st = r?.overall;
+    if (!st) return { verdict: "—", leader: null, settled: false, segments: [] };
+    const leader = st.played ? segmentLeader(st) : null;
+    const { showFront, showBack } = nassauSegmentVisibility(m, r.holePoints);
+    // A nine nobody has teed off on gets no chip at all, where the badge row
+    // prints it as "—". That row is three fixed columns and has to fill them;
+    // this bar is sized to what it holds, and a chip carrying no state is ink
+    // spent saying the back nine has not happened yet.
+    const chip = (key, label, seg) => (seg?.played
+      ? { key, label, verdict: statusText(seg), leader: segmentLeader(seg) }
+      : null);
+    return {
+      verdict: leader ? `${sideName(m, leader)} ${statusText(st)}` : statusText(st),
+      leader,
+      settled: !!st.complete,
+      segments: [
+        showFront ? chip("f", "FRONT", r.front) : null,
+        showBack ? chip("b", "BACK", r.back) : null,
+      ].filter(Boolean),
+    };
+  };
+
   const teamRound = formatGroupsByTeam(format);
+  // ── Whether the per-hole status rows under the strips can be drawn ──
+  // They say where ONE match stands after each hole, from the reader's own
+  // side. A team round has no match small enough for that to mean anything
+  // (see the note on the strips below); a boxed screen has two matches and
+  // no way to say which of them a row is about — so each box carries its own
+  // status bar instead, where the two names it concerns are directly under
+  // it. The hole strips themselves stay in both cases: those are the group's
+  // own progress, and the group is the one thing the screen is always about.
+  const holeStatus = !teamRound && !boxed;
   const sig = match && !teamRound ? sigForMatch(cardSigs, match.id) : null;
   const signState = match && !teamRound ? cardState(match, sig, withdrawn) : "open";
   const signed = signState !== "open";
@@ -2282,7 +2380,13 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // The words are scoring.verdictText — said from the reader's own side,
   // which is what "did I win it" needs and what `statusText` is not.
   const segVerdict = (st) => verdictText(st, userTeam);
-  const nassauBadges = (result && !conceal) ? (() => {
+  // ── The badge row, and who it could honestly speak for ───────────
+  // One row, one match. On a boxed screen there are two, and a row that
+  // showed either one of them would be a front-nine verdict sitting under a
+  // hole strip with no way to say whose it is. Each box carries its own
+  // FRONT and BACK instead (components/MatchStatusBar), so the row is not
+  // withheld here — it has moved.
+  const nassauBadges = (result && !conceal && !boxed) ? (() => {
     const { showFront, showBack } = nassauSegmentVisibility(match, result.holePoints);
     const segs = [
       showFront ? { key: "f", label: "FRONT", st: result.front } : null,
@@ -2350,6 +2454,143 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
     </>
   );
 
+  // ── One score card ───────────────────────────────────────────────
+  // Taken out of the stack below and given the MATCH it belongs to, because
+  // a boxed screen draws two matches and every number on a card — the team
+  // handicap, the allowance, the stroke dots, the running net — comes from
+  // its own match's result. Read off the screen's single `result`, the second
+  // box would print the first match's strokes under the second match's names.
+  const renderScoreCard = (pids, m, mResult) => {
+    // Straight off the result the leaderboard is computed with
+    // (computeMatchResult exposes them), so the dots on this screen and the
+    // strokes in the leaderboard math can never diverge — one allocation, one
+    // source. Per match, because on a boxed screen there are two of them.
+    const mStrokes = mResult?.strokeMaps || {};
+          const team = m.teamA.includes(pids[0]) ? "A" : "B";
+          const cur = cardScore(pids, activeHole);
+          const strokes = mStrokes[pids[0]]?.[activeHole] || 0;
+          // CH for display — per-player tee assignment overrides round default,
+          // matching the strokeMaps memo above and computeMatchResult. Fetched
+          // per pid even on a shared card: the tooltip below names each
+          // partner's own Course Handicap alongside the team's summed figure.
+          const fullCHs = pids.map(pid => getRoundCH({
+            roundLocks, round: m.round, pid, players: tPlayers,
+            course, chOverrides: hcpOverrides, teeAssignments, roundTee,
+          }));
+
+          let ch, chTitle, reduced;
+          if (pids.length > 1) {
+            // A side that plays one ball has one handicap: computeMatchResult's
+            // own sum-then-round figure (scoring.js "Shared-ball team
+            // handicaps"), never either partner's individually-rounded
+            // playingCH. exactCH is the unrounded per-player share that sum
+            // was taken from — dividing it back by each partner's own raw CH
+            // reads off the allowance percentage that was actually applied,
+            // without re-deriving the low/high split here.
+            ch = mResult?.teamCH?.[team] ?? 0;
+            reduced = true;
+            const exactCH = mResult?.exactCH || {};
+            const terms = pids.map((pid, i) => {
+              const full = fullCHs[i];
+              const pct = full > 0 ? Math.round(((exactCH[pid] ?? 0) / full) * 100) : 0;
+              return `${pct}% of ${full}`;
+            }).join(" + ");
+            chTitle = `Team playing handicap ${ch} — ${terms}`;
+          } else {
+            // Show the number the dots were actually allocated from. On a
+            // round with a handicap allowance that is the reduced PLAYING
+            // handicap, not the full Course Handicap — printing the full
+            // figure beside three-quarters of the dots is how a player
+            // concludes the app has shorted them. The full CH stays
+            // available on the tooltip.
+            const fullCH = fullCHs[0];
+            const playingCH = mResult?.playingCH?.[pids[0]];
+            ch = playingCH ?? fullCH;
+            reduced = playingCH != null && playingCH !== fullCH;
+            chTitle = reduced
+              ? `Playing handicap ${ch} — ${describeAllowance(mResult?.allowance)} allowance off a Course Handicap of ${fullCH}`
+              : `Course Handicap ${ch}`;
+          }
+          // Running net to par thru holes scored — one shared line for a
+          // shared-ball side, off the side's own ball and the team stroke map
+          // (see cardScore), which is what the engine scored the hole on.
+          let netToPar = 0, thru = 0;
+          for (let h = 0; h < 18; h++) {
+            const s = cardScore(pids, h);
+            if (s > 0) {
+              const st = mStrokes[pids[0]]?.[h] || 0;
+              netToPar += (s - st) - holePars[h];
+              thru = h + 1;
+            }
+          }
+
+          return (
+            <div key={pids.join("_")} style={{
+              // Inside a match box the border and the fill belong to the BOX —
+              // a card drawn on a card is a second edge saying the same thing,
+              // and the inner one would be cutting between two men the outer
+              // one just joined.
+              background: boxed ? "transparent" : BC.card,
+              borderRadius: boxed ? 0 : 10, padding: fit.cardPad,
+              flex: "1 1 0", minHeight: 0, maxHeight: fit.cardMax, display: "flex", flexDirection: "column",
+              border: boxed ? "none" : `1px solid ${BC.bdr}`,
+              // `maxHeight` is a cap, not a guarantee — the score row under it
+              // has a hard CSS `minHeight` floor (fit.btnMin), so on a device
+              // where the room above these cards (banners, the hole strips,
+              // the format badge) leaves less than four cards' worth of
+              // `cardMax` to divide, the button row refuses to shrink to fit
+              // and the card's own content grows past the box its rounded
+              // corners are drawn on. With no clip that excess doesn't stay
+              // inside — it paints straight through the border into whatever
+              // card comes next, which read as the score buttons spilling out
+              // of their row. Clipping here is what makes `maxHeight` actually
+              // a ceiling instead of a suggestion.
+              overflow: "hidden",
+            }}>
+              {/* Header row — name(s) + (CH) + stroke dots clustered tight on
+                  the LEFT, so the handicap context reads as attached to the
+                  player(s) it describes, and the running Net pushed to the far
+                  RIGHT of the same row. The Net used to sit on a line of its
+                  own beneath; folding it up here buys back a row per card,
+                  which over four cards is most of the difference between the
+                  scoring screen fitting a phone and having to be scrolled. */}
+              <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 3, minWidth: 0, flexShrink: 0 }}>
+                <span style={{ fontSize: FS.body, fontWeight: 700, color: BC.t1, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>
+                  {pids.map((pid, i) => (
+                    <span key={pid}>
+                      {i > 0 && " / "}
+                      {tPlayers.find(t => t.player_id === pid)?.name || pid}
+                    </span>
+                  ))}
+                </span>
+                <span title={chTitle} style={{ fontSize: FS.small, fontWeight: 700, color: BC.hcpBlue, flexShrink: 0 }}>
+                  ({ch}{reduced ? "*" : ""})
+                </span>
+                {strokes > 0 && (
+                  <span style={{ color: BC.hcpBlue, fontSize: FS.small, letterSpacing: 1, flexShrink: 0, lineHeight: 1 }}>
+                    {"●".repeat(strokes)}
+                  </span>
+                )}
+                {thru > 0 && (
+                  <span style={{ marginLeft: "auto", paddingLeft: 8, fontSize: FS.label, color: BC.t3, lineHeight: 1.1, whiteSpace: "nowrap", flexShrink: 0 }}>
+                    Net <strong style={{ color: netToPar < 0 ? BC.danger : netToPar === 0 ? BC.t3 : BC.t1, fontWeight: 700 }}>
+                      {fmtScore(netToPar)}
+                    </strong> thru {thru}
+                  </span>
+                )}
+              </div>
+              {/* Takes the card's remaining height, so the tap targets are
+                  as big as the device allows rather than a fixed 44. */}
+              <div style={{ flex: "1 1 auto", minHeight: 0, display: "flex" }}>
+                <ScoreButtonRow
+                  par={par} score={cur} onScore={(v) => onTapScore(pids, v)}
+                  fill minHeight={fit.btnMin} fontSize={fit.btnFont} labels={fit.labels}
+                />
+              </div>
+            </div>
+          );
+  };
+
   return shell(
     <>
       {offRoundBanner}
@@ -2368,23 +2609,23 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
           team round gets the hole strip (this group's own progress) and
           nothing more; see `teamRound` above for the same reasoning that
           drops the sign-card ritual. */}
-      <div style={{ display: "flex", gap: 3, marginBottom: teamRound ? Math.max(fit.stack, HOLE_RING_REACH + 1) : HOLE_RING_REACH + 1, flexShrink: 0 }}>
+      <div style={{ display: "flex", gap: 3, marginBottom: holeStatus ? HOLE_RING_REACH + 1 : Math.max(fit.stack, HOLE_RING_REACH + 1), flexShrink: 0 }}>
         {Array.from({ length: 9 }, (_, i) => renderHoleCell(i))}
       </div>
       {/* The one gap the ring reaches UP into: the back-nine strip follows
           this row, so on the densest phones — where fit.stack is 3 — the
           ring around 10 would rest on this card's border. */}
-      {!teamRound && (
+      {holeStatus && (
         <div style={{ display: "flex", marginBottom: Math.max(fit.stack, HOLE_RING_REACH + 1), flexShrink: 0, background: BC.card, border: `1px solid ${BC.bdr}${ALPHA.line}`, borderRadius: 8, padding: `${fit.statusPad}px 0`, alignItems: "center" }}>
           {Array.from({ length: 9 }, (_, i) => renderStatusCell(i))}
         </div>
       )}
 
       {/* Back 9 — hole strip + status row. */}
-      <div style={{ display: "flex", gap: 3, marginBottom: teamRound ? fit.stack : HOLE_RING_REACH + 1, flexShrink: 0 }}>
+      <div style={{ display: "flex", gap: 3, marginBottom: holeStatus ? HOLE_RING_REACH + 1 : fit.stack, flexShrink: 0 }}>
         {Array.from({ length: 9 }, (_, i) => renderHoleCell(i + 9))}
       </div>
-      {!teamRound && (
+      {holeStatus && (
         <div style={{ display: "flex", marginBottom: fit.stack, flexShrink: 0, background: BC.card, border: `1px solid ${BC.bdr}${ALPHA.line}`, borderRadius: 8, padding: `${fit.statusPad}px 0`, alignItems: "center" }}>
           {Array.from({ length: 9 }, (_, i) => renderStatusCell(i + 9))}
         </div>
@@ -2485,132 +2726,36 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
           gets one input, joined names, and the team's summed-then-rounded
           handicap. See onTapScore for the write side of this. */}
       <div style={{ flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: fit.cardGap }}>
-        {(
-          // `sideCards` above decides what a card IS — the group on screen,
-          // not the whole side, and one line a ball on a shared-ball format.
-          // The divider separates two sides. A Team Best Ball wave is all one
-          // side, so there is nothing to separate and a rule across the middle
-          // of four teammates would be saying something untrue about them.
-          teamACards.length && teamBCards.length
-            ? [...teamACards, "DIVIDER", ...teamBCards]
-            : [...teamACards, ...teamBCards]
-        ).map((pids) => {
-          if (pids === "DIVIDER") return <div key="div" style={{ borderTop: `1px dashed ${BC.bdr}`, flexShrink: 0, margin: `${fit.cardGap}px 0` }} />;
-          const team = match.teamA.includes(pids[0]) ? "A" : "B";
-          const cur = cardScore(pids, activeHole);
-          const strokes = strokeMaps[pids[0]]?.[activeHole] || 0;
-          // CH for display — per-player tee assignment overrides round default,
-          // matching the strokeMaps memo above and computeMatchResult. Fetched
-          // per pid even on a shared card: the tooltip below names each
-          // partner's own Course Handicap alongside the team's summed figure.
-          const fullCHs = pids.map(pid => getRoundCH({
-            roundLocks, round: match.round, pid, players: tPlayers,
-            course, chOverrides: hcpOverrides, teeAssignments, roundTee,
-          }));
-
-          let ch, chTitle, reduced;
-          if (pids.length > 1) {
-            // A side that plays one ball has one handicap: computeMatchResult's
-            // own sum-then-round figure (scoring.js "Shared-ball team
-            // handicaps"), never either partner's individually-rounded
-            // playingCH. exactCH is the unrounded per-player share that sum
-            // was taken from — dividing it back by each partner's own raw CH
-            // reads off the allowance percentage that was actually applied,
-            // without re-deriving the low/high split here.
-            ch = result?.teamCH?.[team] ?? 0;
-            reduced = true;
-            const exactCH = result?.exactCH || {};
-            const terms = pids.map((pid, i) => {
-              const full = fullCHs[i];
-              const pct = full > 0 ? Math.round(((exactCH[pid] ?? 0) / full) * 100) : 0;
-              return `${pct}% of ${full}`;
-            }).join(" + ");
-            chTitle = `Team playing handicap ${ch} — ${terms}`;
-          } else {
-            // Show the number the dots were actually allocated from. On a
-            // round with a handicap allowance that is the reduced PLAYING
-            // handicap, not the full Course Handicap — printing the full
-            // figure beside three-quarters of the dots is how a player
-            // concludes the app has shorted them. The full CH stays
-            // available on the tooltip.
-            const fullCH = fullCHs[0];
-            const playingCH = result?.playingCH?.[pids[0]];
-            ch = playingCH ?? fullCH;
-            reduced = playingCH != null && playingCH !== fullCH;
-            chTitle = reduced
-              ? `Playing handicap ${ch} — ${describeAllowance(result?.allowance)} allowance off a Course Handicap of ${fullCH}`
-              : `Course Handicap ${ch}`;
-          }
-          // Running net to par thru holes scored — one shared line for a
-          // shared-ball side, off the side's own ball and the team stroke map
-          // (see cardScore), which is what the engine scored the hole on.
-          let netToPar = 0, thru = 0;
-          for (let h = 0; h < 18; h++) {
-            const s = cardScore(pids, h);
-            if (s > 0) {
-              const st = strokeMaps[pids[0]]?.[h] || 0;
-              netToPar += (s - st) - holePars[h];
-              thru = h + 1;
-            }
-          }
-
+        {unitMatches.map((m) => {
+          const mResult = results.get(m.id) || null;
+          const { a: aCards, b: bCards } = cardsForMatch(m);
+          // The dashed rule separates two SIDES, and it is what a screen uses
+          // when it has nothing better. Boxed, the border around the match
+          // says who is playing whom already, and a rule inside it would be
+          // cutting between the two men it just joined. A Team Best Ball wave
+          // is all one side, so there is nothing to separate there either.
+          const rows = (!boxed && aCards.length && bCards.length)
+            ? [...aCards, "DIVIDER", ...bCards]
+            : [...aCards, ...bCards];
+          const cards = rows.map((pids) => (pids === "DIVIDER"
+            ? <div key="div" style={{ borderTop: `1px dashed ${BC.bdr}`, flexShrink: 0, margin: `${fit.cardGap}px 0` }} />
+            : renderScoreCard(pids, m, mResult)));
+          if (!boxed) return <Fragment key={m.id}>{cards}</Fragment>;
+          const bar = matchBar(m, mResult);
+          const edge = bar.leader ? `${teamColor(bar.leader)}${bar.settled ? ALPHA.line : ALPHA.hair}` : BC.bdr;
           return (
-            <div key={pids.join("_")} style={{
-              background: BC.card, borderRadius: 10, padding: fit.cardPad,
-              flex: "1 1 0", minHeight: 0, maxHeight: fit.cardMax, display: "flex", flexDirection: "column",
-              border: `1px solid ${BC.bdr}`,
-              // `maxHeight` is a cap, not a guarantee — the score row under it
-              // has a hard CSS `minHeight` floor (fit.btnMin), so on a device
-              // where the room above these cards (banners, the hole strips,
-              // the format badge) leaves less than four cards' worth of
-              // `cardMax` to divide, the button row refuses to shrink to fit
-              // and the card's own content grows past the box its rounded
-              // corners are drawn on. With no clip that excess doesn't stay
-              // inside — it paints straight through the border into whatever
-              // card comes next, which read as the score buttons spilling out
-              // of their row. Clipping here is what makes `maxHeight` actually
-              // a ceiling instead of a suggestion.
-              overflow: "hidden",
+            <div key={m.id} style={{
+              flex: "1 1 0", minHeight: 0,
+              // The bar, two cards and the gaps around them — the same ceiling
+              // the bare cards have, so two boxes divide the room four cards
+              // used to and the tap targets do not change size.
+              maxHeight: MATCH_BAR_H + fit.cardMax * 2 + fit.cardGap * 3,
+              display: "flex", flexDirection: "column", overflow: "hidden",
+              background: BC.card, borderRadius: 10, border: `1px solid ${edge}`,
             }}>
-              {/* Header row — name(s) + (CH) + stroke dots clustered tight on
-                  the LEFT, so the handicap context reads as attached to the
-                  player(s) it describes, and the running Net pushed to the far
-                  RIGHT of the same row. The Net used to sit on a line of its
-                  own beneath; folding it up here buys back a row per card,
-                  which over four cards is most of the difference between the
-                  scoring screen fitting a phone and having to be scrolled. */}
-              <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 3, minWidth: 0, flexShrink: 0 }}>
-                <span style={{ fontSize: FS.body, fontWeight: 700, color: BC.t1, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>
-                  {pids.map((pid, i) => (
-                    <span key={pid}>
-                      {i > 0 && " / "}
-                      {tPlayers.find(t => t.player_id === pid)?.name || pid}
-                    </span>
-                  ))}
-                </span>
-                <span title={chTitle} style={{ fontSize: FS.small, fontWeight: 700, color: BC.hcpBlue, flexShrink: 0 }}>
-                  ({ch}{reduced ? "*" : ""})
-                </span>
-                {strokes > 0 && (
-                  <span style={{ color: BC.hcpBlue, fontSize: FS.small, letterSpacing: 1, flexShrink: 0, lineHeight: 1 }}>
-                    {"●".repeat(strokes)}
-                  </span>
-                )}
-                {thru > 0 && (
-                  <span style={{ marginLeft: "auto", paddingLeft: 8, fontSize: FS.label, color: BC.t3, lineHeight: 1.1, whiteSpace: "nowrap", flexShrink: 0 }}>
-                    Net <strong style={{ color: netToPar < 0 ? BC.danger : netToPar === 0 ? BC.t3 : BC.t1, fontWeight: 700 }}>
-                      {fmtScore(netToPar)}
-                    </strong> thru {thru}
-                  </span>
-                )}
-              </div>
-              {/* Takes the card's remaining height, so the tap targets are
-                  as big as the device allows rather than a fixed 44. */}
-              <div style={{ flex: "1 1 auto", minHeight: 0, display: "flex" }}>
-                <ScoreButtonRow
-                  par={par} score={cur} onScore={(v) => onTapScore(pids, v)}
-                  fill minHeight={fit.btnMin} fontSize={fit.btnFont} labels={fit.labels}
-                />
+              <MatchStatusBar {...bar} />
+              <div style={{ flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column", gap: fit.cardGap, padding: `${fit.cardGap}px 0` }}>
+                {cards}
               </div>
             </div>
           );
@@ -2746,7 +2891,7 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
       {turnCard && (
         <TurnCard
           pars={holePars.slice(0, 9)}
-          rows={[...teamACards, ...teamBCards].map(pids => ({
+          rows={allCards.map(pids => ({
             key: pids.join("_"),
             names: pids.map(pid => tPlayers.find(p => p.player_id === pid)?.name || pid),
             scores: Array.from({ length: 9 }, (_, h) => cardScore(pids, h)),
