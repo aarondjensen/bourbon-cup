@@ -21,9 +21,16 @@
 // handing over all eight of their cards, in full, on the one round of the
 // year whose entire point is that nobody knows.
 //
-// So the gross rows now follow the same rule as everything else on a sealed
-// card, EXCEPT when the two sides genuinely shared a foursome. Both halves
-// are pinned here, because either one alone is a card that is wrong.
+// So a match bigger than a foursome shows the reader's own side and nothing
+// else on this sheet — `ownSideOnly`, set by the Scoring tab. Not tied to the
+// reveal: this popup is the card the group keeps ON THE COURSE, and the
+// detailed result of a finished round is read off the Leaderboard, which
+// draws both sides in full once the round stops concealing. A rule with no
+// timing in it cannot be got wrong by a lock state landing out of order.
+//
+// Both halves are pinned here, because either one alone is a card that is
+// wrong: a 2v2 match IS its own foursome, and taking those rows away would be
+// hiding numbers the four of them typed an hour ago.
 import { describe, it, expect, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 import { FullScorecard } from "./FullScorecard";
@@ -68,7 +75,7 @@ const match = { id: "m4", round: 4, teamA, teamB, scoring_type: "match" };
 // and not one hole turned over yet.
 const SEALED = { through: 0, side: "A" };
 
-const card = (conceal) => {
+const card = (conceal, ownSideOnly = true) => {
   const result = computeMatchResult(
     match, holeData, courses, [round], tPlayers, "team_best_ball", {}, undefined, {}, {},
   );
@@ -76,7 +83,7 @@ const card = (conceal) => {
     <FullScorecard
       match={match} result={result} format="team_best_ball"
       holePars={PARS} holeHcps={SI} course={courses[0]}
-      tPlayers={tPlayers} viewer="A" conceal={conceal}
+      tPlayers={tPlayers} viewer="A" conceal={conceal} ownSideOnly={ownSideOnly}
       getScore={(pid, h) => holeData[`${pid}_4`]?.[h] || 0}
     />,
   ).container;
@@ -84,69 +91,61 @@ const card = (conceal) => {
 
 const locks = (el) => el.querySelectorAll('[title="Sealed until the reveal"]').length;
 
-describe("a sealed card whose match is bigger than a foursome", () => {
-  // mixedFoursome false: Team Best Ball. Nobody holding this phone wrote a
-  // stroke of the other side's card.
-  const teamRound = { ...SEALED, mixedFoursome: false };
-
+describe("a card whose match is bigger than a foursome", () => {
+  // The Scoring tab sets ownSideOnly for it. Nobody holding this phone wrote a
+  // stroke of the other side's card — they are a different wave on a different
+  // tee — so it is not on this sheet.
   it("does not print the other side's totals", () => {
-    expect(card(teamRound).textContent).not.toContain(String(B_NINE));
+    expect(card(SEALED).textContent).not.toContain(String(B_NINE));
   });
 
   it("still prints the reader's own side in full", () => {
     // A team is never hidden from itself — the line every surface in this app
     // draws. Four players, two nines, 36 apiece.
-    const text = card(teamRound).textContent;
-    expect(text).toContain("36");
+    expect(card(SEALED).textContent).toContain("36");
   });
 
   it("draws no rows for the other side at all, locked or otherwise", () => {
     // Not eighteen rows of padlocks. A row of nothing is furniture, not
     // information — so the side's four player rows and its NET row are simply
-    // absent, and the count of cells on the card falls by exactly that much.
-    const el = card(teamRound);
-    const shared = card({ ...SEALED, mixedFoursome: true });
-    // Five rows a nine (four players + NET), two nines, ten hole cells each
-    // (nine holes and the OUT/IN total).
+    // absent, and the card is shorter by exactly that much.
     const cells = (c) => c.querySelectorAll("div").length;
-    expect(cells(el)).toBeLessThan(cells(shared));
-    // And what is left in their place is one line a nine, not ninety.
-    expect(locks(el)).toBe(2);
+    expect(cells(card(SEALED))).toBeLessThan(cells(card(SEALED, false)));
+    // One line a nine stands where they were, not ninety locks.
+    expect(locks(card(SEALED))).toBe(2);
   });
 
   it("says which side is missing rather than leaving a gap", () => {
-    expect(card(teamRound).textContent).toContain("SEALED UNTIL THE REVEAL");
+    expect(card(SEALED).textContent).toContain("SEALED UNTIL THE REVEAL");
   });
 
   it("states no running match either", () => {
     // The match cannot be stated with one side's card off the sheet, so the
     // MATCH row goes with it rather than printing padlocks under a gap.
-    const text = card(teamRound).textContent;
+    const text = card(SEALED).textContent;
     expect(text).not.toContain("▲");
     expect(text).not.toContain("▼");
   });
 });
 
 // ══════════════════════════════════════════════════════════════════
-//  WHEN the other side's card comes back
+//  And it does not come back here when the round opens up
 // ══════════════════════════════════════════════════════════════════
 //
-// Two gates, and the scores are withheld until BOTH are open: every hole
-// turned over, AND the round final — which on the closing round is the
-// countdown finished and the cup decided. Eighteen holes revealed is the
-// CEREMONY ending; the round going in the books is the director standing
-// behind the result, and between them sit the things that decide what it is
-// worth (see isConcealing in lib/reveal).
+// The blackout lifts when every hole has been turned over AND the round is
+// final — the countdown finished and the cup decided (isConcealing, in
+// lib/reveal). That is when the LEADERBOARD draws both sides in full, which
+// is where a finished round is read.
 //
-// Driven through `revealState` from a real round document, exactly as App.jsx
-// builds this prop, so this pins the gate itself and not a restatement of it.
-describe("the moment the other side's card is readable", () => {
+// This sheet is not that screen. It is the card the group keeps while they
+// are playing, and the other side's eight men were never part of it, so it
+// stays own-side-only through every one of those states. The card says so in
+// as many words once there is nothing left to seal.
+describe("the Scoring tab's card, at every state of the reveal", () => {
   const at = (over) => {
     const tr = { ...round, final: false, ...over };
     const seal = revealState([tr], 4);
-    return card(seal.concealing
-      ? { through: seal.through, side: "A", mixedFoursome: false }
-      : null);
+    return card(seal.concealing ? { through: seal.through, side: "A" } : null);
   };
   const showsB = (over) => at(over).textContent.includes(String(B_NINE));
 
@@ -160,47 +159,56 @@ describe("the moment the other side's card is readable", () => {
 
   it("withholds it when the countdown is done but the cup is not", () => {
     // The hole everybody assumes is the finish line. The room has seen all
-    // eighteen on the television and the round is still not in the books, so
-    // the card stays shut.
+    // eighteen on the television and the round is still not in the books.
     expect(showsB({ reveal_through: 18, final: false })).toBe(false);
   });
 
-  it("withholds it if the round goes final with holes still unturned", () => {
-    // A director finalizing early does not open the card — it takes both.
-    expect(showsB({ reveal_through: 12, final: true })).toBe(false);
+  it("withholds it once the countdown is complete and the cup has a winner", () => {
+    // The blackout is over — and this is still not the screen that answers it.
+    expect(showsB({ reveal_through: 18, final: true })).toBe(false);
   });
 
-  it("opens it once the countdown is complete AND the cup has a winner", () => {
-    expect(showsB({ reveal_through: 18, final: true })).toBe(true);
+  it("stops saying SEALED and points at the Leaderboard instead", () => {
+    // Two reasons to be missing, two sentences. While the round is sealed the
+    // lock says wait; afterwards the card is simply not where that answer
+    // lives, and it says where it does.
+    const open = at({ reveal_through: 18, final: true });
+    expect(open.textContent).not.toContain("SEALED UNTIL THE REVEAL");
+    expect(open.textContent).toContain("FULL CARD ON THE LEADERBOARD");
+    expect(locks(open)).toBe(0);
   });
 
-  it("opens the whole card, not just the numbers", () => {
-    const text = at({ reveal_through: 18, final: true }).textContent;
-    expect(text).not.toContain("SEALED");
-    expect(locks(at({ reveal_through: 18, final: true }))).toBe(0);
+  it("never withholds the reader's own side at any of them", () => {
+    [{ reveal_through: 0 }, { reveal_through: 12 }, { reveal_through: 18 },
+     { reveal_through: 18, final: true }].forEach((over) => {
+      expect(at(over).textContent).toContain("36");
+    });
   });
 });
 
+// ══════════════════════════════════════════════════════════════════
+//  The other shape: a sealed round whose match IS one foursome
+// ══════════════════════════════════════════════════════════════════
 describe("a sealed card whose two sides shared a foursome", () => {
-  // mixedFoursome true: a 2v2 match is one foursome, so these four men wrote
+  // ownSideOnly false: a 2v2 match is one foursome, so these four men wrote
   // all four of these rows between them. What the blackout owes them is what
   // the scores ADD UP TO, not the scores back.
-  const foursome = { ...SEALED, mixedFoursome: true };
+  const foursome = (c) => card(c, false);
 
   it("keeps printing the opponents' gross rows", () => {
-    expect(card(foursome).textContent).toContain(String(B_NINE));
+    expect(foursome(SEALED).textContent).toContain(String(B_NINE));
   });
 
   it("still withholds what those scores come to", () => {
-    // The card's own header: a sealed round states no result either way.
-    expect(card(foursome).textContent).toContain("SEALED");
-    expect(locks(card(foursome))).toBeGreaterThan(0);
+    expect(foursome(SEALED).textContent).toContain("SEALED");
+    expect(locks(foursome(SEALED))).toBeGreaterThan(0);
   });
 });
 
-describe("an unsealed card", () => {
+describe("an unsealed card that is nobody's own side only", () => {
   it("prints both sides, and locks nothing", () => {
-    const el = card(null);
+    // What the LEADERBOARD opens: no conceal, no ownSideOnly, the whole card.
+    const el = card(null, false);
     expect(el.textContent).toContain(String(B_NINE));
     expect(locks(el)).toBe(0);
   });

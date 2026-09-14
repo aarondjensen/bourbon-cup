@@ -286,36 +286,36 @@ export function ScoreCell({ score, par, strokes = 0, size = CELL, color, skin = 
 //                             match directly above this, F9 and B9 either
 //                             side of it, and its segment pills say all three
 //                             a second time.
-//    conceal                — { through, side, mixedFoursome } on a SEALED
-//                             round, null on every other one. See
-//                             lib/reveal.js. Past hole `through` this card
-//                             stops printing anything that COMPARES the two
-//                             sides — the other side's row, the hole-won
-//                             marks, the running line, the nine's result.
+//    conceal                — { through, side } on a SEALED round, null on
+//                             every other one. See lib/reveal.js. Past hole
+//                             `through` this card stops printing anything
+//                             that COMPARES the two sides — the other side's
+//                             row, the hole-won marks, the running line, the
+//                             nine's result — and keeps the gross scores,
+//                             because on a round whose match is one foursome
+//                             the four men on this card walked it together
+//                             and wrote all four of those rows between them.
+//                             Hiding numbers they typed an hour ago is not
+//                             what the blackout owes them; what it owes them
+//                             is what those numbers ADD UP TO.
+//    ownSideOnly            — the other side's card is not on this sheet at
+//                             all, sealed or not. The Scoring tab sets it for
+//                             a match bigger than a foursome, which today is
+//                             Team Best Ball: sixteen men across four tee
+//                             waves, so the eight opposite are a different
+//                             group on a different tee and nobody holding
+//                             this phone wrote a stroke of their card.
 //
-//                             `mixedFoursome` is what it keeps BESIDES that,
-//                             and it is the whole of the difference between
-//                             the two shapes of sealed round:
+//                             NOT tied to the reveal, and that is the point.
+//                             This popup is a COURSE tool — the card the
+//                             group keeps while they are playing — and the
+//                             detailed result of a finished round is read off
+//                             the Leaderboard, which draws both sides in full
+//                             the moment the round stops concealing. So the
+//                             other side never needs to arrive here, and a
+//                             rule with no timing in it cannot be got wrong
+//                             by a lock state arriving in the wrong order.
 //
-//                             TRUE — the match is one foursome and the two
-//                             sides on this card walked it together, so the
-//                             group holding the phone entered all four of
-//                             these cards themselves. Hiding the gross rows
-//                             would be taking back numbers they typed an
-//                             hour ago. What the blackout owes them is not
-//                             their opponents' scores; it is what those
-//                             scores ADD UP TO, which is the round nobody is
-//                             allowed to know.
-//
-//                             FALSE — the match is bigger than a foursome
-//                             (Team Best Ball: the whole side, across four
-//                             tee waves), so the other eight men are a
-//                             different group on a different tee and nobody
-//                             on this phone wrote a stroke of their card.
-//                             There is no "they typed it themselves" to
-//                             trade against, so the gross rows go dark too —
-//                             which is the only reading of "the teams cannot
-//                             see each other's scores" that is actually true.
 //                             The reader's OWN side stays visible in full,
 //                             other waves included: a team is never hidden
 //                             from itself.
@@ -333,7 +333,7 @@ export function ScoreCell({ score, par, strokes = 0, size = CELL, color, skin = 
 //                             line back is a render, not a rewiring job.
 export function FullScorecard({
   match, result, format, holePars, holeHcps, tPlayers, getScore,
-  viewer = "A", showHeader = true, conceal = null,
+  viewer = "A", showHeader = true, conceal = null, ownSideOnly = false,
 }) {
   if (!result) return null;
 
@@ -351,29 +351,23 @@ export function FullScorecard({
   const sealedHole = (h) => !!conceal && h >= conceal.through;
   // A nine only states a result once every hole in it is out.
   const sealedNine = (start) => sealedHole(start + 8);
-  const mySide = conceal?.side === "B" ? "B" : "A";
+  // The reader's own side. Off `viewer` rather than off `conceal`, because
+  // the question outlives the blackout now: `ownSideOnly` withholds the other
+  // side whether or not anything is sealed, and there is no conceal object to
+  // read a side out of then. Both callers pass the same value to both.
+  const mySide = viewer === "B" ? "B" : "A";
   // ── Whether a side's CARD is on this sheet at all ────────────────
-  // The aggregate rows have always gone dark for the other side, because a
-  // side's net-per-hole IS the round. The individual gross rows did not, and
-  // the reason they did not was that the four men on the card walked
-  // together and wrote all four of them — which stops being true the moment
-  // a match is bigger than a foursome. On Team Best Ball the card carries
-  // sixteen men across four tee waves, so it was printing all eight of the
-  // opposition's cards to a group that never saw them play, on the one round
-  // of the year whose entire point is that nobody knows.
+  // Withheld as a BLOCK, not cell by cell. Locking each number left eighteen
+  // rows of padlocks on a Team Best Ball sheet — eight player rows and a NET
+  // row per nine, each one a control saying "no". A row of nothing is not
+  // information, it is furniture.
   //
-  // WITHHELD AS A BLOCK, not cell by cell. Locking each number left eight
-  // player rows and a NET row of padlocks per nine — eighteen rows of a
-  // control saying "no" on a card whose whole other half is the answer. A
-  // row of nothing is not information, it is furniture. The side is simply
-  // not drawn, and one line says why.
-  //
-  // No `through` in it either: this is all-or-nothing, and it opens when the
-  // round stops concealing — every hole turned over AND the round final,
-  // which is the countdown finished and the cup decided (see isConcealing in
-  // lib/reveal). Until both, the other side's card is not on this sheet; the
-  // moment the second lands, `conceal` is null and the whole thing is.
-  const hiddenSide = (tid) => !!conceal && tid !== mySide && !conceal.mixedFoursome;
+  // No reveal state in it either. This sheet is the card the group keeps on
+  // the course; the detailed result of a finished round is read off the
+  // Leaderboard, which draws both sides in full once the round stops
+  // concealing. So on a match bigger than a foursome the other side is simply
+  // never here, and the rule has no timing to get wrong.
+  const hiddenSide = (tid) => ownSideOnly && tid !== mySide;
   // The match cannot be stated with one side's card missing, so the running
   // row goes with it rather than printing a line of padlocks under a gap.
   const hiddenMatch = hiddenSide("A") || hiddenSide("B");
@@ -657,14 +651,21 @@ export function FullScorecard({
     // card reads as half-withheld rather than as a match with one team in
     // it. Painted in the absent side's own colour, because that is the one
     // thing about them this card can still state.
+    //
+    // Two sentences, because there are two reasons to be missing and they owe
+    // the reader different things. DURING the blackout it is the round nobody
+    // is allowed to know, and the lock says wait. AFTER it the card is simply
+    // not where that answer lives — this is the group's own card, on the
+    // course — so it points at the screen that does have it rather than
+    // leaving a reader wondering what is still being kept from them.
     const SealedSide = (tid) => (
       <div key={`sealed-${tid}`} style={{
         display: "flex", alignItems: "center", gap: 6, padding: "9px 8px",
         background: `${teamColor(tid)}${ALPHA.wash}`, borderRadius: 6,
       }}>
-        <span style={{ fontSize: FS.micro, opacity: 0.6 }} title="Sealed until the reveal">🔒</span>
+        {conceal && <span style={{ fontSize: FS.micro, opacity: 0.6 }} title="Sealed until the reveal">🔒</span>}
         <span style={{ fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.4, color: teamColor(tid) }}>
-          SEALED UNTIL THE REVEAL
+          {conceal ? "SEALED UNTIL THE REVEAL" : "FULL CARD ON THE LEADERBOARD"}
         </span>
       </div>
     );
