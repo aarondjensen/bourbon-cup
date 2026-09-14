@@ -20,6 +20,7 @@ import {
   LOCK_FINAL,
 } from "./roundLocks";
 import { handicapModeFor } from "../constants";
+import { getRoundCH } from "../scoring";
 
 // A lock map of the shape App maintains: { [round]: { locked, final } }.
 const locks = (...finalRounds) =>
@@ -305,5 +306,76 @@ describe("describeHiChangeImpact", () => {
   it("says the edit applies everywhere when nothing is locked yet", () => {
     expect(describeHiChangeImpact({}, [1, 2, 3]).text)
       .toBe("No rounds are locked yet, so this applies everywhere.");
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  Correcting a handicap on a round that is already frozen
+// ══════════════════════════════════════════════════════════════════
+//
+// The end-to-end guarantee behind Admin → Rounds' Reopen / Recalculate pair,
+// pinned across the two modules that actually decide it. Scoring reads the
+// snapshot before it reads anything else (getRoundCH), so a correction typed
+// into a frozen round is inert until the snapshot is re-taken — and a test
+// that only checked the override map would pass while the round went on
+// scoring off the old number.
+describe("a per-round CH override, on a round that has already locked", () => {
+  const refresh = (chOverrides, previous) => refreshRoundLockDoc({
+    tournamentId: "t1", round: 1, players, tRounds, courses: [course],
+    chOverrides, lockedBy: "aaron", previous,
+  });
+  const locked = buildRoundLockDoc({
+    tournamentId: "t1", round: 1, players, tRounds, courses: [course], lockedBy: "aaron",
+  });
+  const chFor = (lock, chOverrides) => getRoundCH({
+    roundLocks: { 1: lock }, round: 1, pid: "p1", players,
+    course, chOverrides, teeAssignments: {}, roundTee: "Blue",
+  });
+
+  it("does nothing at all until the snapshot is re-taken", () => {
+    // The typed correction is in hand and the round still scores off the
+    // frozen figure. This is the state the app used to leave a director in
+    // permanently, with the form telling him it would not count and nothing
+    // anywhere to make it count.
+    const frozen = locked.players.p1.ch;
+    expect(chFor(locked, { 1: { p1: 12 } })).toBe(frozen);
+    expect(frozen).not.toBe(12);
+  });
+
+  it("lands the moment it is", () => {
+    const after = refresh({ 1: { p1: 12 } }, locked);
+    expect(after.players.p1.ch).toBe(12);
+    expect(after.players.p1.overridden).toBe(true);
+    expect(chFor(after, { 1: { p1: 12 } })).toBe(12);
+  });
+
+  it("goes back to the calculated figure when the override is cleared", () => {
+    // Blank is an absence, not a value — the same rule the admin form's
+    // liveEntries follows — so clearing the box and recalculating hands the
+    // round back to the index and the tee.
+    const corrected = refresh({ 1: { p1: 12 } }, locked);
+    const cleared = refresh({ 1: { p1: "" } }, corrected);
+    expect(cleared.players.p1.ch).toBe(locked.players.p1.ch);
+    expect(cleared.players.p1.overridden).toBe(false);
+  });
+
+  it("keeps the audit trail across the correction", () => {
+    // Who locked it first and who re-took it are different questions, and a
+    // corrected round has to be able to answer both.
+    const after = refresh({ 1: { p1: 12 } }, locked);
+    expect(after.locked_at).toBe(locked.locked_at);
+    expect(after.refreshed_at).toBeTruthy();
+    expect(after.locked).toBe(true);
+  });
+
+  it("cannot be re-taken while the round is still final", () => {
+    // Not enforced here — enforced in App's onLockRound, which refuses a
+    // refresh on a final lock. This pins the shape that refusal reads:
+    // markRoundFinal leaves everything else alone, so reopening is the only
+    // thing between a final round and a corrected one.
+    const final = markRoundFinal(locked, "aaron");
+    expect(final.final).toBe(true);
+    expect(unfinalizeRound(final, "aaron").final).toBe(false);
+    expect(unfinalizeRound(final, "aaron").players.p1.ch).toBe(locked.players.p1.ch);
   });
 });
