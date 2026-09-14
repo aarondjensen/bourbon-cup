@@ -901,12 +901,14 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
       notify(res ? `Round ${editRound} recalculated off the current handicaps` : `Could not recalculate Round ${editRound}`, res ? "success" : "error");
     } catch { notify(`Could not recalculate Round ${editRound}`, "error"); }
     finally { setLockBusy(false); }
+  };
 
   // ── Re-pricing a round that is over ──────────────────────────────────
   // What a match is WORTH stays editable on a final round, deliberately and
   // correctly: point values are read live over the snapshot, so a wrong Nassau
   // allotment can be fixed on a round the field finished yesterday and it
-  // lands on the leaderboard immediately (see lib/roundAmend).
+  // lands on the leaderboard immediately (scoring.js reads getRoundHolePoints
+  // and its neighbours live, over the lock — see "WHAT IS FROZEN" there).
   //
   // "Immediately" is the part nobody was told. The field freezes the format,
   // greys the handicaps and refuses the taps — and then takes a Nassau edit
