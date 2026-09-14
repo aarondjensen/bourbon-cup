@@ -76,7 +76,7 @@ import { photoUploadsAllowed, uploadsDisabledReason, CONFIG_COL, PHOTOS_CONFIG_I
 import { REPORTS_COL, buildReport, reportsByMedia } from "./lib/mediaReports";
 import { initForegroundNotifications, initNotificationTaps, syncAppBadge } from "./lib/notifications";
 import { tapFeedback, commitFeedback, applyNativeChrome } from "./lib/platform";
-import { SegmentedToggle, SegRule, StickyTop, Banner, PlayerName, Toast, HoleNavigator, ScoreButtonRow } from "./components/ui";
+import { SegmentedToggle, SegRule, StickyTop, Banner, Toast, HoleNavigator, ScoreButtonRow } from "./components/ui";
 import { GroupSwitcher } from "./components/GroupSwitcher";
 import { useConfirm } from "./lib/useConfirm";
 import { useStableCallback } from "./lib/useStableCallback";
@@ -2516,14 +2516,11 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
                   which over four cards is most of the difference between the
                   scoring screen fitting a phone and having to be scrolled. */}
               <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 3, minWidth: 0, flexShrink: 0 }}>
-                {/* `team` here is the side of THIS match, not the roster row —
-                    they agree in every real draw, and the match is the thing
-                    on screen. */}
                 <span style={{ fontSize: FS.body, fontWeight: 700, color: BC.t1, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>
                   {pids.map((pid, i) => (
                     <span key={pid}>
                       {i > 0 && " / "}
-                      <PlayerName name={tPlayers.find(t => t.player_id === pid)?.name || pid} team={team} />
+                      {tPlayers.find(t => t.player_id === pid)?.name || pid}
                     </span>
                   ))}
                 </span>
