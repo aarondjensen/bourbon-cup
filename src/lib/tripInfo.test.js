@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
-  safeHouseUrl, linkHost, houseFrom, hasHouse, MAX_HOUSE_NAME,
+  safeHouseUrl, linkHost, houseFrom, hasHouse, houseMapUrl,
+  MAX_HOUSE_NAME, MAX_HOUSE_ADDRESS,
   tripSchedule, tripDates, tripDayOptions, tripDateFields, tripDatesError, scheduleDayLabel,
   courseTees, courseScorecard, coursePar, courseYardage, courseWhere, hasTripInfo,
 } from "./tripInfo";
@@ -69,6 +70,37 @@ describe("houseFrom", () => {
     expect(hasHouse(houseFrom(null))).toBe(false);
     expect(hasHouse(houseFrom({}))).toBe(false);
     expect(hasHouse(houseFrom({ house_name: "The Lodge" }))).toBe(true);
+  });
+  it("counts an address on its own as a house", () => {
+    const h = houseFrom({ house_address: "  1 Lakeview Dr, Gaylord, MI  " });
+    expect(h.address).toBe("1 Lakeview Dr, Gaylord, MI");
+    expect(hasHouse(h)).toBe(true);
+    // Nothing to put in front of it — the screen prints the address alone
+    // rather than an empty bold line above it.
+    expect(h.label).toBe("");
+  });
+  it("caps the address", () => {
+    expect(houseFrom({ house_address: "x".repeat(400) }).address.length).toBe(MAX_HOUSE_ADDRESS);
+  });
+  it("has no map link without an address", () => {
+    expect(houseFrom({ house_name: "The Lodge" }).mapUrl).toBeNull();
+  });
+});
+
+describe("houseMapUrl", () => {
+  it("searches for the address as typed", () => {
+    expect(houseMapUrl("1 Lakeview Dr, Gaylord, MI 49735"))
+      .toBe("https://www.google.com/maps/search/?api=1&query=1%20Lakeview%20Dr%2C%20Gaylord%2C%20MI%2049735");
+  });
+  it("escapes what it is handed, so nothing lands outside the query", () => {
+    const url = houseMapUrl("a&b=c#d");
+    expect(url).toBe("https://www.google.com/maps/search/?api=1&query=a%26b%3Dc%23d");
+    expect(new URL(url).searchParams.get("query")).toBe("a&b=c#d");
+  });
+  it("is null for nothing", () => {
+    expect(houseMapUrl("")).toBeNull();
+    expect(houseMapUrl("   ")).toBeNull();
+    expect(houseMapUrl(null)).toBeNull();
   });
 });
 
@@ -222,6 +254,7 @@ describe("hasTripInfo", () => {
   });
   it("is true on any one of the three", () => {
     expect(hasTripInfo({ ...empty, house: houseFrom({ house_name: "The Lodge" }) })).toBe(true);
+    expect(hasTripInfo({ ...empty, house: houseFrom({ house_address: "1 Lakeview Dr" }) })).toBe(true);
     expect(hasTripInfo({ ...empty, schedule: [{ round: 1, date: "2026-08-13" }] })).toBe(true);
     expect(hasTripInfo({ ...empty, schedule: [{ round: 1, course: course() }] })).toBe(true);
     expect(hasTripInfo({ ...empty, schedule: [{ round: 1, teeTime: "8:30" }] })).toBe(true);

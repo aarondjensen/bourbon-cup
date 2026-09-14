@@ -5348,11 +5348,12 @@ export default function App() {
   // copies that document when the director asks for the tournament name, and
   // last year's rental link on this year's Trip Info would send the field to
   // the wrong house.
-  const onSaveTrip = useCallback(async ({ houseName, houseUrl }) => {
+  const onSaveTrip = useCallback(async ({ houseName, houseUrl, houseAddress }) => {
     const res = await db.upsert("bc_settings", {
       id: editionDocId(TRIP_SETTINGS_ID), tournament_id: TOURNAMENT_ID,
       house_name: String(houseName || "").trim(),
       house_url: String(houseUrl || "").trim(),
+      house_address: String(houseAddress || "").trim(),
     });
     return !!res;
   }, []);

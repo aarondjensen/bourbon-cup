@@ -238,9 +238,14 @@ export function TripInfo({ tournamentName, tournamentLocation, house, schedule, 
         <>
           <SectionLabel>THE HOUSE</SectionLabel>
           <Card style={{ textAlign: "center" }}>
-            <div style={{ fontSize: FS.body, fontWeight: 800, color: BC.t1, overflowWrap: "anywhere" }}>
-              {house.label}
-            </div>
+            {/* Only when there is one. A house with an address and neither a
+                name nor a listing has no label at all, and an empty bold line
+                above the address reads as a name that failed to load. */}
+            {house.label && (
+              <div style={{ fontSize: FS.body, fontWeight: 800, color: BC.t1, overflowWrap: "anywhere" }}>
+                {house.label}
+              </div>
+            )}
             {house.url && (
               <>
                 {/* rel is load-bearing, not boilerplate: a target=_blank link
@@ -272,6 +277,30 @@ export function TripInfo({ tournamentName, tournamentLocation, house, schedule, 
                   <span style={{ color: BC.t3, fontWeight: 500, flexShrink: 0 }}>{linkHost(house.url)} ↗</span>
                 </a>
               </>
+            )}
+            {/* The address, and it is a link to it rather than a line of type.
+                A man reading it off a phone on a dark road wants his map app
+                open, not eleven words to retype into it — and a directions
+                button is the whole reason to store the street at all.
+
+                It wraps and stays centred, because it is the ADDRESS that is
+                being read here; the arrow says the row is tappable without
+                spending a line on saying so. lib/tripInfo builds the URL out
+                of a search query, so nothing typed here can reach the page as
+                anything but a query string. */}
+            {house.mapUrl && (
+              <a href={house.mapUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => {
+                if (!isNative()) return;
+                e.preventDefault();
+                openExternal(house.mapUrl);
+              }} style={{
+                display: "block", marginTop: 8, padding: "8px 10px", borderRadius: 8,
+                border: `1px solid ${BC.bdr}`,
+                color: BC.t2, fontSize: FS.small, fontWeight: 600,
+                textDecoration: "none", fontFamily: FONT, overflowWrap: "anywhere",
+              }}>
+                {house.address} <span style={{ color: BC.t3, fontWeight: 500 }}>↗</span>
+              </a>
             )}
           </Card>
         </>
