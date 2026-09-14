@@ -352,17 +352,31 @@ export function FullScorecard({
   // A nine only states a result once every hole in it is out.
   const sealedNine = (start) => sealedHole(start + 8);
   const mySide = conceal?.side === "B" ? "B" : "A";
-  // ── Whether a GROSS row is this reader's to see ──────────────────
-  // The aggregate rows below have always gone dark for the other side,
-  // because a side's net-per-hole IS the round. The individual gross rows
-  // did not, and the reason they did not was that the four men on the card
-  // walked together and wrote all four of them — which stops being true the
-  // moment a match is bigger than a foursome. On Team Best Ball the card
-  // carries sixteen men across four tee waves, so it was printing all eight
-  // of the opposition's cards to a group that never saw them play, on the
-  // one round of the year whose entire point is that nobody knows. See
-  // `mixedFoursome` on the props above.
-  const sealedGross = (tid, h) => sealedHole(h) && tid !== mySide && !conceal?.mixedFoursome;
+  // ── Whether a side's CARD is on this sheet at all ────────────────
+  // The aggregate rows have always gone dark for the other side, because a
+  // side's net-per-hole IS the round. The individual gross rows did not, and
+  // the reason they did not was that the four men on the card walked
+  // together and wrote all four of them — which stops being true the moment
+  // a match is bigger than a foursome. On Team Best Ball the card carries
+  // sixteen men across four tee waves, so it was printing all eight of the
+  // opposition's cards to a group that never saw them play, on the one round
+  // of the year whose entire point is that nobody knows.
+  //
+  // WITHHELD AS A BLOCK, not cell by cell. Locking each number left eight
+  // player rows and a NET row of padlocks per nine — eighteen rows of a
+  // control saying "no" on a card whose whole other half is the answer. A
+  // row of nothing is not information, it is furniture. The side is simply
+  // not drawn, and one line says why.
+  //
+  // No `through` in it either: this is all-or-nothing, and it opens when the
+  // round stops concealing — every hole turned over AND the round final,
+  // which is the countdown finished and the cup decided (see isConcealing in
+  // lib/reveal). Until both, the other side's card is not on this sheet; the
+  // moment the second lands, `conceal` is null and the whole thing is.
+  const hiddenSide = (tid) => !!conceal && tid !== mySide && !conceal.mixedFoursome;
+  // The match cannot be stated with one side's card missing, so the running
+  // row goes with it rather than printing a line of padlocks under a gap.
+  const hiddenMatch = hiddenSide("A") || hiddenSide("B");
 
   const { formOfPlay } = resolveScoring(match);
   const total = formOfPlay === SCORING_TYPE_TOTAL;
@@ -593,21 +607,12 @@ export function FullScorecard({
       // row that no dot above it accounted for.
       let gross = 0;
       const cells = idx.map((h) => {
-        // Sealed cells are not read at all, rather than read and then not
-        // drawn: the total below is built in this same pass, and a hidden
-        // hole that still counted towards it would hand the number back by
-        // subtraction.
-        if (sealedGross(tid, h)) return { h, s: 0, st: 0, sealed: true };
         const s = combined
           ? (sharedBallScore(pids.map(p => getScore(p, h))) || 0)
           : getScore(pid, h);
         if (s > 0) gross += s;
         return { h, s, st: strokesFor(pid, h) };
       });
-      // And a nine with any sealed hole in it states no total, for the same
-      // reason the side's own row does (see SideRow): a total over the part
-      // that is out reads as the whole nine.
-      const grossSealed = cells.some((c) => c.sealed);
       // The playing handicap — post-allowance, which is the number the dots
       // on this row were actually allocated from. On a shared-ball side that
       // is the team's summed-then-rounded figure (result.teamCH), never
@@ -637,19 +642,32 @@ export function FullScorecard({
           </div>
           {cells.map((c, i) => (
             <div key={c.h} style={holeCell(i, rowH)}>
-              {c.sealed
-                ? <span title="Sealed until the reveal" style={{ fontSize: FS.micro, opacity: 0.5 }}>🔒</span>
-                : <ScoreCell score={c.s} par={holePars[c.h]} strokes={c.st} notation={false} />}
+              <ScoreCell score={c.s} par={holePars[c.h]} strokes={c.st} notation={false} />
             </div>
           ))}
           <div style={totCell(rowH, { paddingTop: 8 })}>
-            {grossSealed
-              ? <span style={{ fontSize: FS.micro, opacity: 0.5 }}>🔒</span>
-              : <span style={{ fontSize: FS.small, fontWeight: 800, color: BC.t1 }}>{gross || ""}</span>}
+            <span style={{ fontSize: FS.small, fontWeight: 800, color: BC.t1 }}>{gross || ""}</span>
           </div>
         </div>
       );
     };
+
+    // What stands in for a side whose card is not on this sheet. One row,
+    // where nine used to be: it says which side is missing and why, so the
+    // card reads as half-withheld rather than as a match with one team in
+    // it. Painted in the absent side's own colour, because that is the one
+    // thing about them this card can still state.
+    const SealedSide = (tid) => (
+      <div key={`sealed-${tid}`} style={{
+        display: "flex", alignItems: "center", gap: 6, padding: "9px 8px",
+        background: `${teamColor(tid)}${ALPHA.wash}`, borderRadius: 6,
+      }}>
+        <span style={{ fontSize: FS.micro, opacity: 0.6 }} title="Sealed until the reveal">🔒</span>
+        <span style={{ fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.4, color: teamColor(tid) }}>
+          SEALED UNTIL THE REVEAL
+        </span>
+      </div>
+    );
 
     // The side's number for each hole — net strokes, dots or points, per
     // the format. Read straight off result.holes: this row is the match,
@@ -812,14 +830,22 @@ export function FullScorecard({
         {HoleRow}
         {ParRow}
         {HcpRow}
-        {teamAGroups.map((pids) => PlayerRow(pids, "A"))}
-        {SideRow("A")}
-        {MatchRow}
+        {/* Each side is its rows or, when its card is not this reader's to
+            see, the one line that says so. Written as a block per side
+            rather than "hide team B" because the reader is on either side of
+            this card, and it is always the OTHER one that goes. */}
+        {hiddenSide("A") ? SealedSide("A") : <>
+          {teamAGroups.map((pids) => PlayerRow(pids, "A"))}
+          {SideRow("A")}
+        </>}
+        {!hiddenMatch && MatchRow}
         {/* The MATCH row is a floating chip; without a team label under it
             Team B's first row would butt straight into its border. */}
         <div style={{ marginTop: 5 }}>
-          {teamBGroups.map((pids) => PlayerRow(pids, "B"))}
-          {SideRow("B")}
+          {hiddenSide("B") ? SealedSide("B") : <>
+            {teamBGroups.map((pids) => PlayerRow(pids, "B"))}
+            {SideRow("B")}
+          </>}
         </div>
       </div>
     );

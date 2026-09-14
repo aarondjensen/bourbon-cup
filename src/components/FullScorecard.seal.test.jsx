@@ -28,6 +28,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 import { FullScorecard } from "./FullScorecard";
 import { computeMatchResult } from "../scoring";
+import { revealState } from "../lib/reveal";
 
 afterEach(cleanup);
 
@@ -99,12 +100,84 @@ describe("a sealed card whose match is bigger than a foursome", () => {
     expect(text).toContain("36");
   });
 
-  it("locks every one of the other side's gross cells", () => {
-    // Four B players over eighteen holes. Counted against the SAME card drawn
-    // for a foursome that did share a tee, so the difference is exactly the
-    // gross rows and nothing else on the card has moved.
-    const shared = locks(card({ ...SEALED, mixedFoursome: true }));
-    expect(locks(card(teamRound)) - shared).toBe(teamB.length * 18);
+  it("draws no rows for the other side at all, locked or otherwise", () => {
+    // Not eighteen rows of padlocks. A row of nothing is furniture, not
+    // information — so the side's four player rows and its NET row are simply
+    // absent, and the count of cells on the card falls by exactly that much.
+    const el = card(teamRound);
+    const shared = card({ ...SEALED, mixedFoursome: true });
+    // Five rows a nine (four players + NET), two nines, ten hole cells each
+    // (nine holes and the OUT/IN total).
+    const cells = (c) => c.querySelectorAll("div").length;
+    expect(cells(el)).toBeLessThan(cells(shared));
+    // And what is left in their place is one line a nine, not ninety.
+    expect(locks(el)).toBe(2);
+  });
+
+  it("says which side is missing rather than leaving a gap", () => {
+    expect(card(teamRound).textContent).toContain("SEALED UNTIL THE REVEAL");
+  });
+
+  it("states no running match either", () => {
+    // The match cannot be stated with one side's card off the sheet, so the
+    // MATCH row goes with it rather than printing padlocks under a gap.
+    const text = card(teamRound).textContent;
+    expect(text).not.toContain("▲");
+    expect(text).not.toContain("▼");
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  WHEN the other side's card comes back
+// ══════════════════════════════════════════════════════════════════
+//
+// Two gates, and the scores are withheld until BOTH are open: every hole
+// turned over, AND the round final — which on the closing round is the
+// countdown finished and the cup decided. Eighteen holes revealed is the
+// CEREMONY ending; the round going in the books is the director standing
+// behind the result, and between them sit the things that decide what it is
+// worth (see isConcealing in lib/reveal).
+//
+// Driven through `revealState` from a real round document, exactly as App.jsx
+// builds this prop, so this pins the gate itself and not a restatement of it.
+describe("the moment the other side's card is readable", () => {
+  const at = (over) => {
+    const tr = { ...round, final: false, ...over };
+    const seal = revealState([tr], 4);
+    return card(seal.concealing
+      ? { through: seal.through, side: "A", mixedFoursome: false }
+      : null);
+  };
+  const showsB = (over) => at(over).textContent.includes(String(B_NINE));
+
+  it("withholds it while the countdown has not started", () => {
+    expect(showsB({ reveal_through: 0 })).toBe(false);
+  });
+
+  it("withholds it part way through the countdown", () => {
+    expect(showsB({ reveal_through: 12 })).toBe(false);
+  });
+
+  it("withholds it when the countdown is done but the cup is not", () => {
+    // The hole everybody assumes is the finish line. The room has seen all
+    // eighteen on the television and the round is still not in the books, so
+    // the card stays shut.
+    expect(showsB({ reveal_through: 18, final: false })).toBe(false);
+  });
+
+  it("withholds it if the round goes final with holes still unturned", () => {
+    // A director finalizing early does not open the card — it takes both.
+    expect(showsB({ reveal_through: 12, final: true })).toBe(false);
+  });
+
+  it("opens it once the countdown is complete AND the cup has a winner", () => {
+    expect(showsB({ reveal_through: 18, final: true })).toBe(true);
+  });
+
+  it("opens the whole card, not just the numbers", () => {
+    const text = at({ reveal_through: 18, final: true }).textContent;
+    expect(text).not.toContain("SEALED");
+    expect(locks(at({ reveal_through: 18, final: true }))).toBe(0);
   });
 });
 
