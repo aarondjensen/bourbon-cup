@@ -100,7 +100,8 @@ const FIREBASE_CONFIG = (() => {
 // what somebody sees the first time they open the app, before they know the
 // app has years in it at all.
 //
-// On the WEB that is the sixteen men, and it stays bc_2025.
+// On the WEB that is the sixteen men, and it is WEB_DEFAULT_EDITION_ID in
+// lib/defaultEdition.js — bc_2026 as of the 2026 tournament.
 //
 // On a STORE BUILD it is a tester or a store reviewer, and it must be the
 // demo. They are handed the app to try, not to navigate: landing them on a
