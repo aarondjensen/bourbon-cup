@@ -323,30 +323,46 @@ describe("resolveSealed's unset-flag fallback", () => {
   // document when a director opens it, so a Team Best Ball round nobody
   // edited was played in the open.
   it("seals a live Team Best Ball round nobody flagged", () => {
-    expect(resolveSealed("team_best_ball", undefined, false)).toBe(true);
-    expect(resolveSealed("team_best_ball", null, undefined)).toBe(true);
+    expect(resolveSealed("team_best_ball", undefined)).toBe(true);
+    expect(resolveSealed("team_best_ball", null)).toBe(true);
   });
 
-  // The guard on the other end, and it is what keeps 2016–2024 on screen:
-  // the history import writes every round locked and final, so none of it
-  // is reachable by the fallback above.
-  it("never retro-seals a finished round on the format alone", () => {
-    expect(resolveSealed("team_best_ball", undefined, true)).toBe(false);
-    expect(resolveSealed("team_best_ball", null, true)).toBe(false);
+  // Finality is not part of this answer any more. It used to be — the fallback
+  // refused to seal a round already in the books — and that read as "last
+  // year's Team Best Ball match, in full, on the leaderboard" the moment a
+  // director finalized one. What keeps 2016–2024 on screen is the other end:
+  // a sealed round that is final and was NEVER WALKED is fully revealed. See
+  // revealedForSide, and the end-to-end below.
+  it("seals a finished Team Best Ball round too", () => {
+    expect(resolveSealed("team_best_ball", undefined)).toBe(true);
+    expect(resolveSealed("team_best_ball", null)).toBe(true);
   });
 
-  it("still takes an explicit flag over both", () => {
-    expect(resolveSealed("team_best_ball", false, false)).toBe(false);
-    expect(resolveSealed("singles", true, true)).toBe(true);
+  it("still takes an explicit flag over the format", () => {
+    expect(resolveSealed("team_best_ball", false)).toBe(false);
+    expect(resolveSealed("singles", true)).toBe(true);
   });
 
-  // End to end, on the map: an imported year's closing round is scored.
+  // End to end, on the map: an imported year's closing round is scored. It is
+  // SEALED now — it was a Team Best Ball round, and Admin says so — and it
+  // conceals nothing, because it is in the books and nobody ever walked it.
   it("leaves an imported year's Team Best Ball round on the board", () => {
     const hd = { hist_2019_paulw_4: { 0: 4, 1: 4 } };
     const imported = [{
       round_number: 4, format: "team_best_ball", final: true, // sealed unset
     }];
     expect(concealHoleData(hd, imported)).toBe(hd);
+  });
+
+  // And the round the complaint was about: last year's edition, finalized,
+  // with somebody re-entering scores into it. A counter exists the moment the
+  // countdown is touched, and until it reaches eighteen the board has nothing.
+  it("takes a finished round back off the board once somebody walks it", () => {
+    const hd = { p1_4: { 0: 4, 1: 4 } };
+    const walked = [{
+      round_number: 4, format: "team_best_ball", final: true, reveal_through: 0,
+    }];
+    expect(concealHoleData(hd, walked).p1_4).toBeUndefined();
   });
 });
 
