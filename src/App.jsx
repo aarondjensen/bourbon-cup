@@ -21,7 +21,7 @@ import {
   resolveHolePars, resolveHoleHcps,
   computeMatchResult,
   getRoundCH, lockForRound,
-  totalUnit, segmentState, segmentOptsFor, holeFormatFor,
+  totalUnit, segmentState, segmentOptsFor, holeFormatFor, settlesOnTotal,
   verdictText, statusText, segmentLeader, nassauSegmentVisibility, sharedBallScore,
 } from "./scoring";
 import { holeFill } from "./lib/holeFill";
@@ -1766,7 +1766,10 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // format can now offer more than one, "was it best ball" is no longer the
   // question — "which of its methods" is.
   const { formOfPlay } = resolveScoring(match);
-  const totalScored = formOfPlay === SCORING_TYPE_TOTAL;
+  // Through settlesOnTotal rather than off formOfPlay: a Double Dot round
+  // accrues dots whatever it was saved as, and the glyph below has to count
+  // the same currency the engine settles in.
+  const totalScored = settlesOnTotal(match, format);
   const perHoleScored = formOfPlay === SCORING_TYPE_POINTS;
   // The format the holes in `result` were ACTUALLY scored under. Anything that
   // reads a hole's numbers has to ask for this rather than the round format: a

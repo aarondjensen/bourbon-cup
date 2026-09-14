@@ -115,10 +115,10 @@ import { playerLookup, sideNames } from "../lib/players";
 import { BC, FONT, ALPHA, FS, ON_AMBER, teamColor } from "../theme";
 import {
   UNIT_DOTS, UNIT_POINTS,
-  formatIsSharedBall, isPointsPerHole, resolveScoring, SCORING_TYPE_TOTAL,
+  formatIsSharedBall, isPointsPerHole,
 } from "../constants";
 import {
-  higherIsBetter, totalUnit, holeFormatFor,
+  higherIsBetter, totalUnit, holeFormatFor, settlesOnTotal,
   segmentState, statusText, segmentLeader, segmentOptsFor, nassauSegmentVisibility,
   sharedBallScore,
 } from "../scoring";
@@ -389,8 +389,12 @@ export function FullScorecard({
   // row goes with it rather than printing a line of padlocks under a gap.
   const hiddenMatch = hiddenSide("A") || hiddenSide("B");
 
-  const { formOfPlay } = resolveScoring(match);
-  const total = formOfPlay === SCORING_TYPE_TOTAL;
+  // Through settlesOnTotal, not off formOfPlay — Double Dot accrues its dots
+  // whatever the round was saved as, and this row has to be counting the same
+  // currency the engine is settling in. Deriving it here separately is how the
+  // running row came to print a match-play state on a card the engine was
+  // scoring on totals.
+  const total = settlesOnTotal(match, format);
   const perHole = isPointsPerHole(match.scoring_type);
   // What the holes were actually scored under — a best-ball override makes
   // them net strokes whatever the round is called, and everything below

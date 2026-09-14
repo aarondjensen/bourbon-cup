@@ -261,7 +261,14 @@ export const FORMATS = [
     desc: "2-man Hi/Lo. Each hole: a dot for the low ball, a dot for the high ball. Ties win nothing.",
     hole: "Two dots a hole — one for the low ball, one for the high. A tied ball wins nothing.",
     unit: UNIT_DOTS, perSide: 2,
-    forms: [SCORING_TYPE_MATCH, SCORING_TYPE_TOTAL], formDefault: SCORING_TYPE_MATCH,
+    // Dots accrue, so Total is the only form this format HAS — a side that
+    // sweeps a hole banks two dots, it does not go one up, and each Nassau
+    // segment falls to whoever holds the most dots at the end of it. It opened
+    // on Match until that was fixed, which is why scoring.js asks
+    // settlesOnTotal rather than the stored form: every Double Dot round
+    // already in Firestore still carries `scoring_type: "match"`, and the
+    // engine has to score those on dots too.
+    forms: [SCORING_TYPE_TOTAL], formDefault: SCORING_TYPE_TOTAL,
     nassau: { front: 1, back: 1, overall: 2 },
     allowance: { pct: 90 }, handicapMode: HANDICAP_MODE_LOW_MAN,
   },

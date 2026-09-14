@@ -8,7 +8,7 @@ import {
   NASSAU_DEFAULT, POINT_METHOD_NASSAU, POINT_METHOD_TRADITIONAL, resolveAllowance,
   resolveCounting, resolveHolePoints, resolveScoring, isPointsPerHole,
   HOLE_SCORING_BEST_BALL, SCORING_TYPE_POINTS, SCORING_TYPE_TOTAL,
-  formatUnit, UNIT_STROKES, handicapModeFor, resolveHoleMethod,
+  formatUnit, UNIT_STROKES, UNIT_DOTS, handicapModeFor, resolveHoleMethod,
   resolveParPoints, parResultFor, tiltBirdieValue, tiltMultiplier,
   // The `.js` is deliberate. Vite resolves both forms identically, but
   // scripts/import-history.mjs loads this engine under PLAIN NODE to verify a
@@ -181,6 +181,40 @@ export const holeFormatFor = (doc, format) => {
   // override a pre-split `scoring_type: "team"` document still carries.
   return (holeScoring === HOLE_SCORING_BEST_BALL && format !== "team_best_ball")
     ? "best_ball" : format;
+};
+
+// ── Settled on an accrued total, or on holes won? ────────────────────────────
+// Asked here once, because the engine and three separate screens all have to
+// answer it the same way: segmentOptsFor below, the FullScorecard's running
+// row, the Leaderboard's settled test and the Scoring tab's status strip each
+// derived it from `formOfPlay` on their own, which is precisely the divergence
+// segmentState's own note was written about.
+//
+// A form of play of Total says so outright. What that misses is DOUBLE DOT,
+// whose per-hole number is ALREADY a count of sub-matches won — two dots on
+// offer every hole, one for the low ball and one for the high, and a side takes
+// both, one, or none. Reducing that to "who won the hole" throws the second dot
+// away: a hole swept 2-0 and a hole split 1-0 both count as one hole won, and
+// the side that swept reads "1 UP" instead of banking 2. Dots ACCRUE. They do
+// not go up and down, no lead is ever bigger than the dots left to win, and
+// nothing closes out early at 3&2.
+//
+// So a dots format settles on its running total whatever form of play the round
+// was saved under. That last clause is the load-bearing one: Double Dot opened
+// on Match (constants.js FORMATS) until this was fixed, so every Double Dot
+// round already in Firestore carries `scoring_type: "match"` and would go on
+// being scored as holes won if this asked the stored value alone.
+//
+// Asked of the format's UNIT rather than a list of format ids, for the same
+// reason higherIsBetter is: a dot IS a won sub-match, so any dots format
+// accrues by construction. Points are deliberately NOT swept in — a Stableford
+// hole's number is points SCORED, and winning a hole on them is a real game.
+export const settlesOnTotal = (doc, format) => {
+  const { formOfPlay } = resolveScoring(doc);
+  // Points-per-hole banks each hole as its own pot and is neither of these.
+  if (formOfPlay === SCORING_TYPE_POINTS) return false;
+  return formOfPlay === SCORING_TYPE_TOTAL
+    || formatUnit(holeFormatFor(doc, format)) === UNIT_DOTS;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -425,7 +459,7 @@ export const segmentOptsFor = (match, format) => {
     const hp = resolveHolePoints(match?.hole_points);
     return { higherWins, holeValue: (h) => (h < 9 ? hp.front : hp.back) };
   }
-  return { total: formOfPlay === SCORING_TYPE_TOTAL, higherWins };
+  return { total: settlesOnTotal(match, format), higherWins };
 };
 
 // ── The one ball a shared-ball side posted ───────────────────────

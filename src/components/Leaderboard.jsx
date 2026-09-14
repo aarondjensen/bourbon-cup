@@ -39,10 +39,10 @@ import { playerLookup, realPlayers, sideNames } from "../lib/players";
 import {
   FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT,
   POINT_METHOD_TRADITIONAL, TROPHY_SILHOUETTE, CUP_POINTS_TO_WIN,
-  isPointsPerHole, holePointsTotal, resolveScoring, SCORING_TYPE_TOTAL,
+  isPointsPerHole, holePointsTotal,
 } from "../constants";
 import {
-  computeMatchResult, getRoundCourseCtx, holeFormatFor,
+  computeMatchResult, getRoundCourseCtx, holeFormatFor, settlesOnTotal,
   segmentState, statusText, segmentLeader, nassauSegmentVisibility,
   segmentOptsFor, fmtPts,
 } from "../scoring";
@@ -132,12 +132,16 @@ function cupPointsOnOffer(matches, tRounds, playersPerSide) {
 // Has every point in this match been decided? A match can be "closed out"
 // (3&2) while a Nassau segment is still live, so the result being final and
 // the POINTS being final are two different questions — this asks the second.
-const matchSettled = (m, r) => {
+const matchSettled = (m, r, format) => {
   // Points are banked hole by hole, so the only thing that leaves a point
   // undecided is a hole nobody has played. A clinched lead does NOT settle it:
   // the remaining holes still pay out even once the round can't change hands.
   if (isPointsPerHole(m.scoring_type)) return r.holesPlayed === 18;
-  if (resolveScoring(m).formOfPlay === SCORING_TYPE_TOTAL) return r.holesPlayed === 18;
+  // Anything settled on an accrued total is live until the last putt, because
+  // every remaining hole still moves the total — Double Dot included, whatever
+  // form of play it was saved under. Through settlesOnTotal so this can never
+  // answer differently from the engine awarding the points.
+  if (settlesOnTotal(m, format)) return r.holesPlayed === 18;
   if ((m.point_method || "") === POINT_METHOD_TRADITIONAL) return r.overall.complete;
   const n = m.nassau || NASSAU_DEFAULT;
   return (!n.front || r.front.complete) && (!n.back || r.back.complete) && (!n.overall || r.overall.complete);
@@ -362,7 +366,7 @@ function MatchCard({
 
   const ptsA = result.totalPts.A, ptsB = result.totalPts.B;
   const leader = segmentLeader(overallSt);
-  const done = matchSettled(match, result);
+  const done = matchSettled(match, result, format);
 
   // Per-nine state, computed once and shared by the collapsed row's F9/B9
   // flanks and the expanded segment pills — so the two can never disagree.
@@ -1017,7 +1021,7 @@ export function TeamLeaderboard({
       // whose result nobody has seen would be the board's own spoiler — it
       // would mean the numbers beside it are the whole story, and they aren't.
       const settled = results.length > 0 && !seal.concealing
-        && (isRoundFinal(roundLocks, rnd) || results.every(({ match: m, result: r }) => matchSettled(m, r)));
+        && (isRoundFinal(roundLocks, rnd) || results.every(({ match: m, result: r }) => matchSettled(m, r, tr?.format || DEFAULT_FORMAT)));
       out[rnd] = {
         results, pts, avail, holesPlayed, course, seal,
         // Whether anybody has been paired off yet. The board draws a round
