@@ -51,6 +51,32 @@ One flag, at the point of merging. Not a caveats section on every message, not
 a re-raise of something he already answered. If he says land it anyway, land
 it and don't mention it again.
 
+## Ship the control, not the explanation
+
+**A new feature arrives as the control and nothing else.** No helper line under
+the toggle, no sentence introducing what the tab is for, no parenthetical
+telling a golfer what a format does. Descriptive text gets asked for deletion
+far more often than it gets kept, so it is not the default and adding it is not
+neutral — every line of it is a line somebody has to ask to remove.
+
+Write it only where a reader genuinely cannot act without it:
+
+- a destructive confirm, which has to name what it destroys
+- a field whose expected format cannot be guessed from the field
+- a rule of THIS event that somebody would otherwise get wrong
+
+That is the list. "It might not be obvious" is not on it, and neither is
+symmetry with a screen that already carries a line.
+
+The screen has usually already said it. A row of numbers labelled DOTS is a
+dots row, a chip in a team's colour belongs to that team, and a button reading
+Delete deletes. A sentence restating any of that spends width on the one screen
+that has none — a phone held on a tee box — and pushes the thing it describes
+further down.
+
+Label, don't narrate. When it is genuinely needed, the shortest form that
+works: a label, then a tooltip, then a sentence, in that order.
+
 ## Git
 
 This is a two-developer project, so the old "always commit straight to `main`,
@@ -258,6 +284,58 @@ flag to typo, every document is re-checked before a connection opens, the
 service-account key is checked against `.firebaserc`, and a full seed aborts if
 `bc_demo` holds a document it did not write. `--undo` deletes by the
 `seeded_from` mark, so a card a tester signed survives it.
+
+## Double Dot settles on dots, never on holes won
+
+Every hole puts two dots up — one for the low ball, one for the high — and a
+side takes both, one, or none. They **accrue**. A side that sweeps a hole banks
+2; it does not go one up, nothing closes out at 3&2 (every remaining hole still
+moves the total), and each Nassau segment falls to whoever holds the most dots
+at the end of it.
+
+The engine counted **holes won** until #357, which throws the second dot away:
+a hole swept 2-0 and a hole split 1-0 both counted as one hole. The two
+readings are not a rounding apart — a side can win FEWER holes and hold MORE
+dots, and then they name different winners. On the card in
+`scoring.doubledot.test.js` the front nine went to the side that won three
+holes to two while the other side held four dots to three: the wrong team took
+the pot, and the side that was a dot AHEAD read "1 DN" on their phone.
+
+`settlesOnTotal(doc, format)` is the single answer to "accrued total, or holes
+won?". The engine asks it through `segmentOptsFor`, and so do the
+FullScorecard's running row, the Leaderboard's settled test and the Scoring
+tab's status strip. Each of those derived it from `formOfPlay` on its own
+before, which is how a card comes to print a match-play state over an engine
+scoring on totals.
+
+It is asked of the format's **unit**, the same way `higherIsBetter` is: a dot
+IS a won sub-match, so any dots format accrues by construction. Stableford is
+deliberately not swept in — its per-hole number is points SCORED, and winning a
+hole on them is a real game.
+
+**It reads the format, not the stored form of play.** Double Dot opened on
+Match (`formDefault` in FORMATS), so a round saved in the app carries
+`scoring_type: "match"` and would go on being scored as holes won if this
+trusted the stored value. The format offers Total alone now, since Match no
+longer changes anything.
+
+### The imported years were never affected, and that is tested
+
+`historyImport.js` has always mapped `double_dot` to `"stroke"`, so every
+imported round was already settling on its dot total. #357 moved nothing on
+2016 R2, 2020 R1, 2023 R1 or 2025 R1 — the only Double Dot rounds in the ten
+archived editions. Past editions also render the archive's stored `ptsA`/`ptsB`,
+and its `cards` carry round summaries rather than hole scores, so there is
+nothing there for the engine to re-derive; `archiveLive.js` recomputes only the
+edition currently open in Firestore.
+
+Do not re-reason about that insulation next time — **check the guard.**
+`historyImport.fidelity.test.js` runs the app's own engine over all ten years
+on every `npm test` and compares the answer with the record, so a scoring
+change that really did move a settled year fails there rather than on
+somebody's phone. A green run of it IS the evidence that history did not move,
+and a caveat about recalculated history written without looking at it is a
+guess.
 
 ## The old cups
 
