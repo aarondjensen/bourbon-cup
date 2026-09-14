@@ -79,6 +79,31 @@ export function openingHole(pids, score, holes = HOLES) {
   return { hole: holes - 1, allComplete: true, hasAnyScores: true, resolved: true };
 }
 
+// ── nineComplete ───────────────────────────────────────────────────
+// Has every player on the card posted every hole of one nine? `from` is the
+// first hole index of it — 0 for the front, 9 for the back.
+//
+// This is what gates the turn card the Scoring tab puts up on the 10th tee
+// (components/TurnCard). Same name, same shape and same answer as WBC's
+// lib/holeAdvance.nineComplete, so the two apps decide the turn identically —
+// the same seam `openingHole` above already sits on.
+//
+// A card with nobody on it has not finished anything, so an empty list is
+// false rather than a vacuously true "all done".
+//
+// Who is ON the card is the caller's question, not this one's: BC lets a man
+// withdraw mid-round, and a group waiting on nine holes he will never post
+// would never reach the turn at all. The Scoring tab hands this the active
+// players for that reason.
+export function nineComplete(pids, score, from = 0, len = 9) {
+  const clean = (pids || []).filter(Boolean);
+  if (clean.length === 0) return false;
+  for (let h = from; h < from + len; h++) {
+    if (!clean.every(pid => (score(pid, h) || 0) > 0)) return false;
+  }
+  return true;
+}
+
 export function useHoleAdvance({ matchId, pids, getScore, hold = false }) {
   // Open on the live edge, resolved synchronously from the scores we already
   // have. Leaving the screen unmounts it, so returning mid-round used to

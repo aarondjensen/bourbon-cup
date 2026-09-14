@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { openingHole, HOLES } from "./useHoleAdvance";
+import { openingHole, nineComplete, HOLES } from "./useHoleAdvance";
 
 // Only `openingHole` is covered here. The hook around it is timers, refs and
 // React state — it needs a renderer BC has no jsdom environment for — but the
@@ -90,5 +90,53 @@ describe("openingHole", () => {
   it("honours a shorter card for a nine-hole round", () => {
     expect(openingHole(["a"], reader({ a: card(9) }), 9))
       .toMatchObject({ hole: 8, allComplete: true });
+  });
+});
+
+// ── nineComplete ───────────────────────────────────────────────────
+// The gate on the turn card (components/TurnCard). A wrong answer here is
+// either a card that never goes up at all, or one that goes up over a nine
+// the group has not finished — and both of those are only found on a tee.
+describe("nineComplete", () => {
+  it("is true when every player has every hole of the front", () => {
+    expect(nineComplete(["a", "b"], reader({ a: card(9), b: card(9) }))).toBe(true);
+  });
+
+  // The group turns together. One man short is one man still to putt out.
+  it("waits for the slowest player", () => {
+    expect(nineComplete(["a", "b"], reader({ a: card(9), b: card(8) }))).toBe(false);
+  });
+
+  // A skipped hole, not a card in progress — the whole point of the card is
+  // to catch it, so the card must not go up saying the nine is complete.
+  it("does not count a gap in the middle of the nine", () => {
+    const holed = { ...card(9) };
+    delete holed[4];
+    expect(nineComplete(["a"], reader({ a: holed }))).toBe(false);
+  });
+
+  it("treats a cleared score (0) as unplayed", () => {
+    expect(nineComplete(["a"], reader({ a: { ...card(9), 6: 0 } }))).toBe(false);
+  });
+
+  it("reads the back nine from hole 10", () => {
+    const back = Object.fromEntries(Array.from({ length: 9 }, (_, i) => [i + 9, 5]));
+    expect(nineComplete(["a"], reader({ a: back }), 9)).toBe(true);
+    expect(nineComplete(["a"], reader({ a: back }), 0)).toBe(false);
+  });
+
+  // The front nine being in says nothing about the back, and a card that is
+  // 18 holes done is still a card whose front nine is done.
+  it("ignores the back nine when asked about the front", () => {
+    expect(nineComplete(["a"], reader({ a: card(18) }))).toBe(true);
+  });
+
+  it("is false with nobody on the card", () => {
+    expect(nineComplete([], reader({}))).toBe(false);
+    expect(nineComplete(undefined, reader({}))).toBe(false);
+  });
+
+  it("drops empty slots in the player list", () => {
+    expect(nineComplete(["a", null], reader({ a: card(9) }))).toBe(true);
   });
 });
