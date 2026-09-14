@@ -434,7 +434,7 @@ function MatchCard({
           mark for the eye, and the state it stands for belongs to the button
           rather than to a triangle in the middle of the row's text. */}
       <button onClick={onToggle} aria-expanded={expanded} style={{
-        width: "100%", padding: "9px 12px 10px", background: "transparent",
+        width: "100%", padding: "9px 12px 3px", background: "transparent",
         border: "none", cursor: "pointer", textAlign: "left", display: "block", fontFamily: FONT,
       }}>
         {/* Team A | status | team B — the cup card's geometry, one row down.
@@ -480,15 +480,22 @@ function MatchCard({
                 one object. Under it, it is a mark you tap rather than a word
                 you read.
 
-                The flanking cells are empty divs rather than nothing: this
-                grid flows in order, so without them the chevron lands in the
-                F9 column on any round that has nines. */}
-            {showFront && <div />}
+                It spans the cluster — `1 / -1` — rather than sitting in the
+                centre column with an empty cell either side of it. The whole
+                row has always been the button, so a tap anywhere opens the
+                card, but a 10px triangle is what a thumb actually aims at and
+                a near miss deserves to hit something. Spanning costs no
+                height and makes the band under THRU as wide as the three
+                columns above it; the padding gives it the depth, and the
+                row's own bottom padding hands most of that back. */}
             <div aria-hidden="true" style={{
-              fontSize: FS.label, lineHeight: 1, minWidth: 52,
-              textAlign: "center", color: BC.t3,
+              // `justifySelf` because the cluster sets `justifyItems: center`,
+              // which shrinks every cell to its glyph — spanning the columns
+              // without it gives a 6px-wide band across a 114px row.
+              gridColumn: "1 / -1", justifySelf: "stretch",
+              fontSize: FS.small, lineHeight: 1,
+              padding: "7px 0 9px", textAlign: "center", color: BC.t3,
             }}>{expanded ? "▴" : "▾"}</div>
-            {showBack && <div />}
           </div>
           <MatchTeamColumn tid="B" names={bNames} isLeader={leader === "B"} settled={done} />
         </div>
