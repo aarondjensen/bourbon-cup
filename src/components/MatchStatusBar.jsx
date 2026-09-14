@@ -56,11 +56,19 @@ const bandStyle = (leader, settled) => {
 // `segments` is [{ key, label, verdict, leader }] — already resolved by the
 // caller through the same segmentState the engine settles on, so this cannot
 // second-guess what a hole was worth.
-export function MatchStatusBar({ verdict, leader = null, settled = false, segments = [] }) {
+//
+// `style` is the one escape hatch, and it exists for exactly one difference:
+// the band heads a match BOX on the scoring screen, where the box's own
+// overflow rounds its top corners and the bottom border is what separates it
+// from the cards — and it floats free inside the turn card's popup, where it
+// wants edges of its own. Everything that makes it the same bar in both
+// places, the wording and the colour, stays here rather than being drawn a
+// second time by whoever needs the other shape.
+export function MatchStatusBar({ verdict, leader = null, settled = false, segments = [], style }) {
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: 8, height: 22, padding: "0 9px",
-      flexShrink: 0, ...bandStyle(leader, settled),
+      flexShrink: 0, ...bandStyle(leader, settled), ...style,
     }}>
       <span style={{
         fontSize: FS.small, fontWeight: 800, letterSpacing: 0.6, lineHeight: 1,

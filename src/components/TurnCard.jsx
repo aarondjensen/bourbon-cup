@@ -13,15 +13,32 @@
 //  card is signed it is a director's edit to a closed round.
 //
 //  What it is NOT is the scorecard. There is a Full Scorecard behind a button
-//  on the same screen and it prints net, strokes, the match state and both
-//  sides. This prints GROSS ONLY, nine columns, one row a card — the numbers
-//  a man can check against his own memory of the hole, and nothing else to
-//  read past. Anything else on it makes it a thing to study rather than a
-//  thing to confirm.
+//  on the same screen and it prints net, strokes, both sides and a running
+//  line under every hole. The numbers here are GROSS ONLY, nine columns, one
+//  row a card — what a man can check against his own memory of the hole, and
+//  nothing else to read past. No net, no stroke dots, no birdie rings.
 //
-//  Gross is also what makes it safe on a sealed round (lib/reveal). This
-//  screen already shows the group's gross on the score buttons — what the
-//  seal withholds is the running match state, which is not here.
+//  ── Except the match, and only where it is the news ────────────────
+//  A bar over each match, the same one the score cards behind this popup are
+//  headed with (components/MatchStatusBar), because the turn is when the
+//  front nine SETTLES. A Nassau's front pot is decided on the ninth green and
+//  the group walks off it not knowing — the one moment where the match state
+//  is not a distraction from the numbers but the reason anybody is reading
+//  them. It is one line a match, above the two men it is about, and the FRONT
+//  chip on it is what has just been won.
+//
+//  The caller decides whether there is a bar at all, and passes `bar: null`
+//  where there is not. Two cases, both its to know, not this one's:
+//
+//    • a SEALED round (lib/reveal). Gross is what makes this popup safe there
+//      — the screen behind it already shows the group's gross on the score
+//      buttons — and a running match state is the one thing the seal exists
+//      to withhold. It would be handed to the man keeping the card, an hour
+//      before the room is together.
+//    • a TEAM round, whose match is the whole side across four tee times. A
+//      verdict over these four would be a running score for holes they never
+//      played, off men who are not in this popup. Same reasoning that takes
+//      the per-hole status rows off that round's scoring screen.
 //
 //  A hole number is a button back to that hole. Catching a wrong number is
 //  only worth anything with a way to it, and the group is standing on the
@@ -32,6 +49,7 @@
 //  not be what closes it.
 
 import { Popup } from "./Popup";
+import { MatchStatusBar } from "./MatchStatusBar";
 import { BC, ALPHA, ON_AMBER, FS, R } from "../theme";
 
 // Every cell on the grid is the same box; only its ink changes. 30px is a
@@ -40,17 +58,21 @@ import { BC, ALPHA, ON_AMBER, FS, R } from "../theme";
 const CELL = { display: "flex", alignItems: "center", justifyContent: "center", minHeight: 30 };
 const LEAD = { ...CELL, justifyContent: "flex-start", overflow: "hidden" };
 
-// `rows` is one entry per CARD, not per player: a shared-ball side plays one
-// ball and posts one number, so both partners share a row.
-//   { key, names: ["Aaron J", "Dave S"], scores: [9 gross, 0 for unposted] }
+// `sections` is one entry per MATCH — because a singles tee group is two of
+// them (lib/groups.scoringUnits) and each has its own front nine to have won.
+// Every other round is one section holding every row.
 //
-// Their names are STACKED in the cell rather than joined with a slash. The
-// field's longest name is eight characters ("Julius P"), which is what the
-// name column is cut to — two of them and a separator is triple that, and it
-// came out as "CHRISTOP…", which identifies nobody. The row is the wide part
-// of this card and the tall part is free: a shared-ball round has two rows on
-// it, not four.
-export function TurnCard({ pars = [], rows = [], onJump, onClose }) {
+//   { key,
+//     bar:  MatchStatusBar props, or null where there is no verdict to give
+//     rows: [{ key, names: ["Aaron J", "Dave S"], scores: [9 gross, 0 unposted] }] }
+//
+// A row is one CARD, not one player: a shared-ball side plays one ball and
+// posts one number, so both partners share a row. Their names are STACKED in
+// the cell rather than joined with a slash — the field's longest name is
+// eight characters ("Julius P"), which is what the name column is cut to, and
+// two of them with a separator came out as "CHRISTOP…", which identifies
+// nobody. The row is the wide part of this card and the tall part is free.
+export function TurnCard({ pars = [], sections = [], onJump, onClose }) {
   const holes = Array.from({ length: 9 }, (_, i) => i);
   const parOut = holes.reduce((a, h) => a + (pars[h] || 0), 0);
   const cols = "70px repeat(9, minmax(0,1fr)) 34px";
@@ -95,7 +117,15 @@ export function TurnCard({ pars = [], rows = [], onJump, onClose }) {
           ))}
           <div style={{ ...CELL, fontSize: FS.label, fontWeight: 700, color: BC.t2 }}>{parOut || "–"}</div>
 
-          {rows.map(r => {
+          {sections.flatMap(sec => [
+            // Spans the whole grid rather than sitting in the name column:
+            // the bar is about the rows under it, not about one of them.
+            sec.bar ? (
+              <div key={`${sec.key}-bar`} style={{ gridColumn: "1 / -1", margin: "5px 0 3px" }}>
+                <MatchStatusBar {...sec.bar} style={{ borderRadius: R.sm, border: `1px solid ${BC.bdr}` }} />
+              </div>
+            ) : null,
+            ...(sec.rows || []).flatMap(r => {
             const out = holes.reduce((a, h) => a + (r.scores?.[h] || 0), 0);
             return [
               <div key={`${r.key}-n`} style={{ ...LEAD, flexDirection: "column", alignItems: "flex-start", justifyContent: "center", padding: "3px 0" }}>
@@ -116,7 +146,8 @@ export function TurnCard({ pars = [], rows = [], onJump, onClose }) {
                 {out || ""}
               </div>,
             ];
-          })}
+            }),
+          ].filter(Boolean))}
         </div>
 
         <div style={{ height: 12 }} />
