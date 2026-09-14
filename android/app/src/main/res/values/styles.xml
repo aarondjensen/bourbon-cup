@@ -16,7 +16,18 @@
     </style>
 
 
+    <!-- The launch screen, and it takes two answers because Android 12 changed
+         the question. Below 12 the window background IS the launch screen, so
+         @drawable/splash is what shows. From 12 up the system draws the
+         adaptive launcher icon over windowSplashScreenBackground and never
+         looks at the drawable — and that attribute's default is the parent
+         theme's colorBackground, which is WHITE. That is where the white flash
+         in front of a near-black app was coming from on every recent phone.
+         Both now point at the app's own background; scripts/app-icons.mjs
+         writes the colour and the drawables from one constant. -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>
 </resources>

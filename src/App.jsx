@@ -4404,9 +4404,11 @@ export default function App() {
   //   • On the first paint it is literally a guess — the state below seeded 64
   //     while the real bar is 56 plus the inset, so the very first frame of
   //     every cold start was wrong by up to 30px.
-  //   • Montserrat is fetched at runtime (theme.js injects the <link>), so the
-  //     10px labels re-metric when it lands. The bar changes height a beat
-  //     after the app is interactive, and the reservation jumps with it.
+  //   • Montserrat is a webfont, so the 10px labels re-metric when it lands.
+  //     The bar changed height a beat after the app was interactive, and the
+  //     reservation jumped with it. Self-hosting and preloading it (index.html)
+  //     shrank that window to almost nothing, but "almost" is the operative
+  //     word and a layout that has to predict a font is the wrong shape.
   //   • Raising the OS text size scales the labels, so the bar grows and the
   //     reservation is short until an observer callback catches up.
   //

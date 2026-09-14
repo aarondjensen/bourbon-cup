@@ -2,15 +2,15 @@
   "appId": "com.thebourboncup.app",
   "appName": "The Bourbon Cup",
   "webDir": "dist",
-  "backgroundColor": "#161618",
+  "backgroundColor": "#0a0a0b",
   "ios": {
     "contentInset": "never",
     "scrollEnabled": false,
     "limitsNavigationsToAppBoundDomains": false,
-    "backgroundColor": "#161618"
+    "backgroundColor": "#0a0a0b"
   },
   "android": {
-    "backgroundColor": "#161618",
+    "backgroundColor": "#0a0a0b",
     "allowMixedContent": false
   },
   "plugins": {

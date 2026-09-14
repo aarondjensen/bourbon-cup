@@ -301,10 +301,18 @@ export const applyBCTheme = (mode, brand = null) => {
 };
 
 // ── The typeface ──
-// theme.js loads Montserrat (see the <link> injection at the bottom), so it
-// owns the family string too. It was declared as a `const FONT` in four
+// The family string, and only that. It was declared as a `const FONT` in four
 // component files and typed out inline twenty-four more times, which is a lot
 // of places to edit the day the tournament changes its type.
+//
+// The @font-face rules that BACK it are in index.html, not here, and that is
+// deliberate rather than an oversight. This file used to append a <link> to
+// fonts.googleapis.com at import time, which meant the font could not even be
+// ASKED for until the bundle had downloaded and evaluated — so the app painted
+// in the system sans and re-lettered a beat later, most visibly on the splash,
+// whose title is the largest type in the app. A rule the browser can only find
+// by running JavaScript is a rule it finds too late by construction; the one
+// place it is early enough is the document itself. See the note there.
 export const FONT = "'Montserrat', sans-serif";
 
 // ── Ink on amber ──
@@ -767,12 +775,6 @@ if (typeof document !== "undefined") {
   _style.id = "bc-global-style";
   _style.textContent = bcGlobalCSS(BC.bg, BC.card);
   document.head.appendChild(_style);
-
-  // ── Inject Montserrat font ──
-  const _link = document.createElement("link");
-  _link.rel = "stylesheet";
-  _link.href = "https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap";
-  document.head.appendChild(_link);
 
   // ── Measure the band below the viewport (see VP_BAND above) ──
   // Measured before React mounts so the nav never paints in the wrong place,
