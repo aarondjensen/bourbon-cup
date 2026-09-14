@@ -132,13 +132,18 @@ describe("counted — other formats", () => {
 // ── Shared-ball team handicaps ──────────────────────────────────────
 // A 2-Man Scramble side plays one ball, so it gets one handicap: the sum of
 // each partner's allowance-adjusted Course Handicap (35% of the low man's,
-// 15% of the high man's), taken on the EXACT figures and rounded once — not
-// each player's own figure rounded first and then added. Nothing pinned this
-// down before; it was only reachable by reading scoring.js.
+// 15% of the high man's), taken on each player's UNROUNDED Course Handicap
+// and rounded exactly once, on the team total — not each player's Course
+// Handicap rounded to a whole number first and THEN split, and not each
+// player's own split figure rounded before it's added to their partner's.
+// USGA's Rules of Handicapping (Appendix C) apply an allowance's percentage
+// to the unrounded Course Handicap and round only the resulting Playing (or
+// Team) Handicap — rounding earlier is a different, occasionally wrong
+// number. Nothing pinned this down before; it was only reachable by reading
+// scoring.js.
 describe("Shared-ball team handicaps — 2-Man Scramble", () => {
-  // Slope 113 / rating-par 0 makes Course Handicap == the index, rounded —
-  // so a 9.4/11.2 pair gives clean, checkable-by-hand inputs: CH 9 and 11,
-  // 35% of 9 (3.15) + 15% of 11 (1.65) = 4.8, rounded once to 5.
+  // Slope 113 / rating-par 0 makes Course Handicap == the index exactly, so
+  // a 9.4/11.2 pair gives clean, checkable-by-hand inputs.
   const players = [
     { player_id: "p1", name: "P1", team: "A", handicap_index: 9.4 },
     { player_id: "p2", name: "P2", team: "A", handicap_index: 11.2 },
@@ -153,19 +158,34 @@ describe("Shared-ball team handicaps — 2-Man Scramble", () => {
   const result = () =>
     computeMatchResult(match, {}, courses, tRounds, players, "scramble", {}, undefined, {}, {});
 
-  it("sums the unrounded per-player figures and rounds once, not the other way round", () => {
+  it("splits the UNROUNDED Course Handicap and rounds once, on the team total", () => {
     const r = result();
-    // Rounding each player first would give round(3.15) + round(1.65) = 3 + 2 = 5
-    // here too by coincidence — the case that actually distinguishes the two
-    // orders is any pair whose per-player roundings both go the SAME way
-    // (e.g. two low-CH players at 34%/16% would sum-then-round to a different
-    // whole number than round-then-sum). This pins the sum-first order down
-    // directly against the exact figures rather than relying on a case where
-    // the two methods happen to agree.
-    expect(r.exactCH.p1).toBeCloseTo(9 * 0.35, 5);
-    expect(r.exactCH.p2).toBeCloseTo(11 * 0.15, 5);
-    expect(r.exactCH.p1 + r.exactCH.p2).toBeCloseTo(4.8, 5);
+    // 35% of 9.4 (3.29) + 15% of 11.2 (1.68) = 4.97, rounded once to 5.
+    // Rounding each player's Course Handicap to a whole number FIRST (9 and
+    // 11) would give 35% of 9 (3.15) + 15% of 11 (1.65) = 4.8 — still 5 here,
+    // which is why the case below is the one that actually distinguishes the
+    // two orders rather than relying on one where they happen to agree.
+    expect(r.exactCH.p1).toBeCloseTo(9.4 * 0.35, 5);
+    expect(r.exactCH.p2).toBeCloseTo(11.2 * 0.15, 5);
+    expect(r.exactCH.p1 + r.exactCH.p2).toBeCloseTo(4.97, 5);
     expect(r.teamCH.A).toBe(5);
+  });
+
+  it("disagrees with rounding the Course Handicap first — that would be the wrong number", () => {
+    // 8.6/9.6: unrounded gives 35% of 8.6 (3.01) + 15% of 9.6 (1.44) = 4.45,
+    // rounded once to 4. Rounding each Course Handicap to a whole number
+    // first (9 and 10) gives 35% of 9 (3.15) + 15% of 10 (1.5) = 4.65,
+    // rounded to 5 — a whole stroke off. This is the case the test above
+    // couldn't catch.
+    const ps = [
+      { player_id: "p1", name: "P1", team: "A", handicap_index: 8.6 },
+      { player_id: "p2", name: "P2", team: "A", handicap_index: 9.6 },
+      { player_id: "p3", name: "P3", team: "B", handicap_index: 0 },
+      { player_id: "p4", name: "P4", team: "B", handicap_index: 0 },
+    ];
+    const r = computeMatchResult(match, {}, courses, tRounds, ps, "scramble", {}, undefined, {}, {});
+    expect(r.exactCH.p1 + r.exactCH.p2).toBeCloseTo(4.45, 5);
+    expect(r.teamCH.A).toBe(4);
   });
 
   it("is null on a format that doesn't share a ball", () => {

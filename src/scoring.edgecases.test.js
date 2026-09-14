@@ -13,7 +13,7 @@
 import { describe, it, expect } from "vitest";
 import {
   computeMatchResult, fmtPts, sharedBallScore, buildStrokeMap, allowanceHandicaps,
-  getRoundCH, getRoundHandicapMode, getRoundAllowance, getRoundCounting, getRoundParPoints,
+  getRoundCH, getRoundCHExact, getRoundHandicapMode, getRoundAllowance, getRoundCounting, getRoundParPoints,
   segmentState,
 } from "./scoring";
 import { parResultFor, tiltBirdieValue, tiltMultiplier, POINT_METHOD_TRADITIONAL, SCORING_TYPE_TOTAL } from "./constants";
@@ -216,6 +216,41 @@ describe("getRoundCH: lock beats override beats computed", () => {
     const players = [{ player_id: "p1", handicap_index: 5 }];
     const ch = getRoundCH({ roundLocks: {}, round: 2, pid: "p1", players, course: null, chOverrides: {}, teeAssignments: {}, roundTee: undefined });
     expect(ch).toBe(5); // calcCH(5, 113, 72, 72) === 5
+  });
+});
+
+// getRoundCHExact mirrors getRoundCH's own resolution order, but answers
+// with the unrounded figure the allowance math actually needs (see
+// scoring.js). A locked round without a frozen `ch_exact` — every lock taken
+// before this existed — falls back to the frozen (rounded) `ch` rather than
+// recomputing anything, same as getRoundCH's own lock branch never
+// recomputes from frozen inputs.
+describe("getRoundCHExact: lock beats override beats computed, unrounded", () => {
+  it("a locked round with a frozen ch_exact answers with it, not the rounded ch", () => {
+    const roundLocks = { 1: { locked: true, players: { p1: { hi: 10, ch: 7, ch_exact: 6.6, tee: "White" } } } };
+    const players = [{ player_id: "p1", handicap_index: 5 }];
+    const ch = getRoundCHExact({ roundLocks, round: 1, pid: "p1", players, course: null, chOverrides: {}, teeAssignments: {}, roundTee: "White" });
+    expect(ch).toBe(6.6);
+  });
+
+  it("a locked round with no frozen ch_exact falls back to the frozen ch", () => {
+    const roundLocks = { 1: { locked: true, players: { p1: { hi: 10, ch: 7, tee: "White" } } } };
+    const players = [{ player_id: "p1", handicap_index: 5 }];
+    const ch = getRoundCHExact({ roundLocks, round: 1, pid: "p1", players, course: null, chOverrides: {}, teeAssignments: {}, roundTee: "White" });
+    expect(ch).toBe(7);
+  });
+
+  it("an open round's chOverride wins over the computed figure", () => {
+    const players = [{ player_id: "p1", handicap_index: 5.6 }];
+    const chOverrides = { 2: { p1: 42 } };
+    const ch = getRoundCHExact({ roundLocks: {}, round: 2, pid: "p1", players, course: null, chOverrides, teeAssignments: {}, roundTee: undefined });
+    expect(ch).toBe(42);
+  });
+
+  it("falls back to the computed, UNROUNDED CH when neither applies", () => {
+    const players = [{ player_id: "p1", handicap_index: 5.6 }];
+    const ch = getRoundCHExact({ roundLocks: {}, round: 2, pid: "p1", players, course: null, chOverrides: {}, teeAssignments: {}, roundTee: undefined });
+    expect(ch).toBe(5.6); // calcCHExact(5.6, 113, 72, 72) === 5.6, unrounded
   });
 });
 

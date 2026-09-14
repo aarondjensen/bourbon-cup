@@ -27,16 +27,26 @@ import {
 // Result is rounded to the nearest integer per USGA convention.
 export const calcCH = (hi, slope, rating, par) => (!hi && hi !== 0) ? 0 : Math.round((hi * (slope / 113)) + (rating - par));
 
-// Resolves slope/rating/par for a course doc and runs calcCH. The tee
-// the player is actually playing matters — different tees on the same
-// course can have wildly different slope ratings (e.g. Black 138 vs
-// White 122), and the USGA formula uses the playing tee's values, not
-// course-level averages. When a specific tee is named, its values are
-// definitive — they ARE the playing conditions. When no tee is named
-// (legacy events created before tee selection existed), we fall back
-// through: top-level course.slope/rating/par → first tee box → USGA
-// neutral defaults (113/72/72). All values are coerced through
+// The same formula, unrounded. `calcCH` is the POSTED Course Handicap and
+// stays a whole number always — that part of USGA convention doesn't move.
+// This exists for what comes AFTER it: a handicap allowance (Appendix C) is
+// supposed to apply its percentage to the unrounded figure and round only
+// once, at the end, on the Playing (or, for a shared ball, Team) Handicap.
+// Rounding here first and then applying a percentage to that whole number is
+// a different — and occasionally wrong-by-a-stroke — computation. See
+// getRoundCHExact for where this actually reaches the allowance math.
+export const calcCHExact = (hi, slope, rating, par) => (!hi && hi !== 0) ? 0 : (hi * (slope / 113)) + (rating - par);
+
+// Resolves slope/rating/par for a course doc. The tee the player is actually
+// playing matters — different tees on the same course can have wildly
+// different slope ratings (e.g. Black 138 vs White 122), and the USGA formula
+// uses the playing tee's values, not course-level averages. When a specific
+// tee is named, its values are definitive — they ARE the playing conditions.
+// When no tee is named (legacy events created before tee selection existed),
+// we fall back through: top-level course.slope/rating/par → first tee box →
+// USGA neutral defaults (113/72/72). All values are coerced through
 // parseFloat so string-stored values from imported APIs still work.
+//
 // The playing conditions a course handicap is calculated against: the named
 // tee's own slope/rating/par, else the course's top-level figures, else the
 // first tee box, else USGA neutral. `tee` comes back too, which is what a
@@ -47,7 +57,8 @@ export const calcCH = (hi, slope, rating, par) => (!hi && hi !== 0) ? 0 : Math.r
 // "mirrors calcCHForCourse's fallback chain". A mirror is a second author, and
 // the one thing that must never drift is what a lock FREEZES versus what the
 // live math would have used: they are meant to be the same numbers, and the
-// only way to guarantee that is for them to come from the same place.
+// only way to guarantee that is for them to come from the same place. Shared
+// by calcCHForCourse and calcCHForCourseExact too, for the same reason.
 export const resolveTeeSpec = (course, teeName) => {
   const teeBoxes = course?.tee_boxes || [];
   const named = teeName ? teeBoxes.find(t => t.name === teeName) : null;
@@ -71,6 +82,13 @@ export const resolveTeeSpec = (course, teeName) => {
 export const calcCHForCourse = (hi, course, teeName) => {
   const { slope, rating, par } = resolveTeeSpec(course, teeName);
   return calcCH(hi, slope, rating, par);
+};
+
+// The unrounded companion, resolving the SAME tee the same way — see
+// calcCHExact for why this needs to exist at all.
+export const calcCHForCourseExact = (hi, course, teeName) => {
+  const { slope, rating, par } = resolveTeeSpec(course, teeName);
+  return calcCHExact(hi, slope, rating, par);
 };
 
 // ── Score formatting ──
@@ -517,6 +535,33 @@ export const getRoundCH = ({
   return calcCHForCourse(hi, course, tee);
 };
 
+// The companion getRoundCH's allowance math actually needs: the UNROUNDED
+// Course Handicap. USGA's Appendix C order is percentage-then-round-once, not
+// round-then-percentage, and getRoundCH's `ch` is deliberately the rounded,
+// posted figure (frozen as the final answer — see roundLocks.js). A locked
+// round therefore answers from its own frozen `ch_exact`, captured at the
+// same instant as `ch` from the same inputs — never recomputed later, same
+// guarantee as everything else in the snapshot. A lock taken before
+// `ch_exact` existed carries none, and falls back to its frozen `ch` rather
+// than recomputing anything from frozen inputs — a completed round still
+// never moves, it just keeps the coarser number it was scored on. A director
+// CH override has nothing to unround, so it answers both getRoundCH and this
+// one identically.
+export const getRoundCHExact = ({
+  roundLocks, round, pid, players, course, chOverrides, teeAssignments, roundTee,
+}) => {
+  const row = lockedPlayerRow(roundLocks, round, pid);
+  if (row) {
+    if (row.ch_exact != null && Number.isFinite(Number(row.ch_exact))) return Number(row.ch_exact);
+    if (row.ch != null && Number.isFinite(Number(row.ch))) return Number(row.ch);
+  }
+  const cho = chOverrides?.[round]?.[pid];
+  if (cho != null && String(cho).trim() !== "" && Number.isFinite(Number(cho))) return Number(cho);
+  const hi = getRoundHI({ roundLocks, round, pid, players });
+  const tee = getRoundTee({ roundLocks, round, pid, teeAssignments, roundTee });
+  return calcCHForCourseExact(hi, course, tee);
+};
+
 // low_man vs full re-allocates every stroke in a match, so it is frozen too.
 // Lock wins over an explicit argument on purpose: a completed round answers
 // to its snapshot and nothing else.
@@ -697,7 +742,11 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
 
   const getPlayerScores = (pid) => holeData[`${pid}_${rnd}`] || {};
   const roundTee = tr?.tee_box;
-  const getCH = (pid) => getRoundCH({
+  // The UNROUNDED figure — see getRoundCHExact. Every player's CH reaches the
+  // allowance math through this, never through the rounded getRoundCH: the
+  // percentage split (flat or low/high) is supposed to apply to the exact
+  // number and round only once, on the resulting Playing or Team Handicap.
+  const getCHExact = (pid) => getRoundCHExact({
     roundLocks, round: rnd, pid, players: tPlayers, course, chOverrides, teeAssignments, roundTee,
   });
   const getStrokeMap = (ch) => buildStrokeMap(ch, holeHcps);
@@ -774,7 +823,7 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
   const allPids = [...teamA, ...teamB];
   // Playing handicaps — the allowance-adjusted figures. A split allowance is
   // resolved per SIDE, so teamA and teamB are passed as separate groups.
-  const exactCH = allowanceHandicaps([teamA, teamB], getCH, allowance);
+  const exactCH = allowanceHandicaps([teamA, teamB], getCHExact, allowance);
   const playingCH = {};
   allPids.forEach(pid => { playingCH[pid] = Math.round(exactCH[pid] ?? 0); });
   // Off the men playing, not the men drawn: a scratch player who withdrew
@@ -800,7 +849,7 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
   const adjustedStrokeMaps = {};
   drawnPids.forEach(pid => {
     const ch = playingCH[pid] ?? Math.round(
-      allowanceHandicaps([[pid]], getCH, allowance)[pid] ?? 0);
+      allowanceHandicaps([[pid]], getCHExact, allowance)[pid] ?? 0);
     // Play off the low man: low man gets 0, others get the difference.
     adjustedStrokeMaps[pid] = getStrokeMap(roundHandicapMode === "full" ? ch : ch - minCH);
   });
@@ -808,11 +857,14 @@ export function computeMatchResult(match, holeData, courses, tRounds, tPlayers, 
 
   // ── Shared-ball team handicaps ──
   // A side that plays ONE ball has one handicap: the sum of its players'
-  // allowance-adjusted figures (35% of the low man + 15% of the high man for
-  // a two-man scramble). Summed, not averaged — the allowance percentages are
+  // allowance-adjusted figures (35% of the low man's UNROUNDED Course
+  // Handicap + 15% of the high man's for a two-man scramble — see
+  // getRoundCHExact). Summed, not averaged — the allowance percentages are
   // already sized on the assumption that they add up. The sum is taken on the
   // exact figures and rounded once, so two halves make a stroke rather than
-  // rounding to nothing (or to two) on the way in.
+  // rounding to nothing (or to two) on the way in — and so the two players'
+  // own Course Handicaps are never separately rounded before their
+  // percentages are taken, which is a different, occasionally wrong number.
   const teamCH = (side) => Math.round(side.reduce((s, pid) => s + (exactCH[pid] ?? 0), 0));
   const aTeamCH = teamCH(teamA), bTeamCH = teamCH(teamB);
   // Low-man applies to the SIDES here rather than to individuals, for the same
