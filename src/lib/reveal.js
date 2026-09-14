@@ -86,10 +86,10 @@
 //
 //   sealed         — boolean. Set from the Rounds tab; on for Team Best Ball
 //                    and off for everything else. An UNSET flag falls back to
-//                    that same default, whatever state the round is in, so a
-//                    round nobody edited is never played in the open. See
-//                    resolveSealed — and revealedForSide for the reason that
-//                    does not black out a decade of finished cups.
+//                    that same default while the round is still live, so a
+//                    round nobody edited is not played in the open; a round
+//                    already final is never touched, which is what keeps every
+//                    imported year visible. See resolveSealed.
 //   reveal_through — 0-18, how many holes have been turned over. Written
 //                    ONLY by the reveal control, never by the round form's
 //                    auto-save, so a director editing the tee times cannot
@@ -115,31 +115,29 @@ export const sealDefaultFor = (format) => SEAL_DEFAULT_FORMATS.includes(format);
 
 // The rule, in ONE place — the Rounds tab seeds the form from it and the
 // board reads it. A stored flag always wins; an unset one falls back to the
-// format's default.
+// format's default, but only while the round is still live.
 //
 // It used to be explicit-only at read time: a document that had never carried
-// the flag was not sealed, whatever its format. The seed only reached the
-// document if a director happened to open that round's form, so a Team Best
-// Ball round nobody edited was played in the open — opponents' scores and the
-// match status on every phone on the course, which is the one thing the reveal
-// exists to prevent.
+// the flag was not sealed, whatever its format. The reasoning was that
+// nothing already in the books should go dark because this shipped, and that
+// half is still right — hence `final`.
 //
-// IT THEN CARRIED A `final` GUARD, and that was wrong in a quieter way. The
-// worry it answered was real — nothing already in the books should go dark
-// because this shipped — but it answered it in the wrong place. Finality is
-// about whether a round can still CHANGE; the seal is about whether its
-// result has been SHOWN. Tying them meant a Team Best Ball round read as
-// unsealed the moment it was finalized, and a director testing last year's
-// round 4 got the whole match on the leaderboard: names, running score, a
-// THRU counter, everything the countdown exists to hold back.
+// The other half was backwards, and round 4 of the live cup is what showed
+// it. The seed only reached the document if a director happened to open that
+// round's form, so a Team Best Ball round nobody edited was played in the
+// open: opponents' scores and the match status on every phone on the course,
+// which is the one thing the reveal exists to prevent. The two failures are
+// not comparable. Sealing a finished round by mistake hides a result until
+// somebody turns it over — visible, and a toggle away. NOT sealing a live one
+// spoils the ending for the whole field, and there is no undo for what
+// sixteen people have already read.
 //
-// The books are protected where the question actually belongs — in
-// `revealedForSide`, which reads a final round that never had a countdown as
-// fully revealed. Sealed, and concealing nothing. Every imported year stays
-// visible and the format's default stops depending on a flag about something
-// else.
-export const resolveSealed = (format, raw) =>
-  raw == null ? sealDefaultFor(format) : !!raw;
+// So an unset flag now defaults to the format. `final` is the guard on the
+// other end, and it is what keeps every imported year visible: history is
+// written locked and final (see historyImport), so none of it is reachable
+// by this fallback.
+export const resolveSealed = (format, raw, final) =>
+  raw == null ? (!final && sealDefaultFor(format)) : !!raw;
 
 // Is this round played behind the blackout at all?
 //
@@ -148,7 +146,7 @@ export const resolveSealed = (format, raw) =>
 // finality lives in bc_round_locks and every reader here already has the
 // round. A round object without it reads as not-final, which is the safe end:
 // a live round seals.
-export const isSealedRound = (tr) => resolveSealed(tr?.format, tr?.sealed);
+export const isSealedRound = (tr) => resolveSealed(tr?.format, tr?.sealed, tr?.final);
 
 const clampHole = (n) => {
   const v = Math.floor(Number(n));
@@ -171,22 +169,8 @@ const clampHole = (n) => {
 // `reveal_through` is what this was before the sides came apart, and it is
 // still what a director's ALL button writes and what every round sealed
 // before this shipped carries. It reads as both counters at once.
-// A sealed round that is IN THE BOOKS and never had a countdown at all has
-// nothing left to hide. That is every year imported from the sheets, and every
-// round finished before this feature existed: the result is history, nobody is
-// going to stand up and narrate it, and a blackout over it would be the app
-// refusing to show a decade of golf until somebody tapped eighteen times.
-//
-// It is NOT the same as "final", which on its own would open a round the
-// moment a director put it in the books mid-ceremony. Both halves are
-// required: in the books, AND no counter was ever written — the instant a
-// captain turns over his first hole, that counter is what answers.
-const neverWalked = (tr) =>
-  tr?.reveal_a == null && tr?.reveal_b == null && tr?.reveal_through == null;
-
 export const revealedForSide = (tr, side) => {
   if (!isSealedRound(tr)) return HOLE_COUNT;
-  if (tr?.final && neverWalked(tr)) return HOLE_COUNT;
   const own = side === "B" ? tr?.reveal_b : tr?.reveal_a;
   return clampHole(own == null ? tr?.reveal_through : own);
 };
@@ -292,10 +276,9 @@ export const isFullyRevealed = (tr) => revealedThrough(tr) >= HOLE_COUNT;
 // enrichedRounds and the note on isSealedRound). A round object without it
 // reads as not-final, which is the safe end: it keeps concealing.
 //
-// This cannot deadlock a round that never had a countdown: `revealedForSide`
-// reads a final round with no counter as fully revealed, so putting it in the
-// books is what opens it. A round somebody HAS started walking answers to its
-// counters, which is the point.
+// This cannot deadlock a round that was never explicitly sealed: for those
+// `resolveSealed` already returns false the moment the lock lands, so the two
+// halves open the same door from opposite sides.
 export const isConcealing = (tr) =>
   isSealedRound(tr) && !(isFullyRevealed(tr) && !!tr?.final);
 

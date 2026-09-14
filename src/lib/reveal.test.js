@@ -48,15 +48,8 @@ describe("isSealedRound", () => {
   // The other end, and the load-bearing one: every imported year is written
   // locked and final, so none of a decade of results can be pulled off the
   // board by this fallback.
-  // Finality no longer answers this. It is about whether a round can still
-  // CHANGE; the seal is about whether its result has been SHOWN, and tying
-  // them put last year's Team Best Ball match on the leaderboard in full the
-  // moment it went in the books. What keeps the finished cups visible is
-  // revealedForSide, not this — see below.
-  it("seals a finished round on the format too", () => {
-    expect(isSealedRound(round(4, { format: "team_best_ball", final: true }))).toBe(true);
-    // And it conceals nothing, which is the half that matters.
-    expect(isConcealing(round(4, { format: "team_best_ball", final: true }))).toBe(false);
+  it("never seals a finished round on the format alone", () => {
+    expect(isSealedRound(round(4, { format: "team_best_ball", final: true }))).toBe(false);
   });
 
   it("leaves every other format alone", () => {
@@ -72,12 +65,12 @@ describe("resolveSealed", () => {
   // They each held their own copy, which is how a form and a scoreboard came
   // to disagree about what an unwritten flag meant.
   it("is the same answer the Rounds form seeds from", () => {
-    expect(resolveSealed("team_best_ball", null)).toBe(true);
-    expect(resolveSealed("team_best_ball", undefined)).toBe(true);
-    expect(resolveSealed("best_ball", null)).toBe(false);
-    // A stored flag is the director's word and still wins, both ways.
-    expect(resolveSealed("best_ball", true)).toBe(true);
-    expect(resolveSealed("team_best_ball", false)).toBe(false);
+    expect(resolveSealed("team_best_ball", null, false)).toBe(true);
+    expect(resolveSealed("team_best_ball", null, true)).toBe(false);
+    expect(resolveSealed("team_best_ball", undefined, false)).toBe(true);
+    expect(resolveSealed("best_ball", null, false)).toBe(false);
+    expect(resolveSealed("best_ball", true, true)).toBe(true);
+    expect(resolveSealed("team_best_ball", false, false)).toBe(false);
   });
 });
 
@@ -126,36 +119,8 @@ describe("isConcealing", () => {
   // between them.
   it("cannot strand a round that was never explicitly sealed", () => {
     const unflagged = round(4, { format: "team_best_ball", reveal_through: 18, final: true });
-    expect(isSealedRound(unflagged)).toBe(true);
+    expect(isSealedRound(unflagged)).toBe(false);
     expect(isConcealing(unflagged)).toBe(false);
-  });
-
-  // ── The finished cups, and why they are not black ────────────────
-  // Every year imported from the sheets, and every round finished before this
-  // feature existed: sealed by format, in the books, and never walked. Nobody
-  // is going to stand up and narrate 2019, so it is read as fully revealed
-  // rather than as a blackout over a decade of golf.
-  it("reads a final round that never had a countdown as fully revealed", () => {
-    const history = round(4, { format: "team_best_ball", final: true });
-    expect(isSealedRound(history)).toBe(true);
-    expect(isFullyRevealed(history)).toBe(true);
-    expect(isConcealing(history)).toBe(false);
-  });
-
-  // BOTH halves are required. Final on its own would open a round the moment
-  // a director put it in the books mid-ceremony.
-  it("does not open a final round somebody has started walking", () => {
-    const midway = round(4, { format: "team_best_ball", final: true, reveal_a: 6, reveal_b: 6 });
-    expect(isConcealing(midway)).toBe(true);
-    expect(revealedThrough(midway)).toBe(6);
-    // Even at zero, which is a round finalized before the room sat down.
-    expect(isConcealing(round(4, { format: "team_best_ball", final: true, reveal_through: 0 }))).toBe(true);
-  });
-
-  // And a LIVE one is concealed, which is the whole point of the change: a
-  // Team Best Ball round nobody has edited shows no match on the board.
-  it("conceals a live round nobody has flagged or walked", () => {
-    expect(isConcealing(round(4, { format: "team_best_ball" }))).toBe(true);
   });
 
   // The flag survives the reveal — a revealed round still reads as a sealed

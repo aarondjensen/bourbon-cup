@@ -327,7 +327,7 @@ const roundCounting = (format, raw) => {
 // One rule, now shared with the board that reads it — see resolveSealed in
 // lib/reveal. It used to live here as well, which is how a form and a
 // scoreboard came to disagree about what an unwritten flag meant.
-const roundSealedSeed = (format, raw) => resolveSealed(format, raw);
+const roundSealedSeed = (format, raw, final) => resolveSealed(format, raw, final);
 
 // Hole values, normalized the same way, and only on a round that is actually
 // settled hole by hole — a Match or Total round has no hole values to store.
@@ -831,7 +831,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
       // actually holds. `sealed_seed` is what an unwritten round OPENS at and
       // is never part of the signature — see roundSealedSeed.
       sealed: !!tr.sealed,
-      sealed_seed: roundSealedSeed(fmt, tr.sealed),
+      sealed_seed: roundSealedSeed(fmt, tr.sealed, roundIsFinal),
       // Off on a round that has never carried it, which is what every round
       // written before the switch existed is: the per-player tee has always
       // been reachable, and turning it off is not a change to make on a
@@ -840,7 +840,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
       ch_overrides: hcpOverridesFromDb?.[editRound] || {},
       tee_assignments: teeAssignmentsFromDb?.[editRound] || {},
     };
-  }, [tRounds, editRound, hcpOverridesFromDb, teeAssignmentsFromDb]);
+  }, [tRounds, editRound, hcpOverridesFromDb, teeAssignmentsFromDb, roundIsFinal]);
 
   // The same shape, built from the form. `course_id` rides along unchanged
   // — it belongs to the Courses tab and is only here so a round write does
