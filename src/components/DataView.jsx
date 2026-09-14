@@ -25,7 +25,7 @@
 // folds 2016. So a match that finishes moves a career record on the next
 // render, without a rebuild and without a second definition of a win.
 import { useMemo, useState } from "react";
-import { BC, FONT, FS, ALPHA, playerNameColor } from "../theme";
+import { BC, FONT, FS, ALPHA, playerNameColor, themedStyle } from "../theme";
 import { SegmentedToggle, StickyTop } from "./ui";
 import { fmtPts, fmtScore } from "../scoring";
 import { formatLabel } from "../constants";
@@ -33,9 +33,9 @@ import { switchEdition } from "../lib/editions";
 import { useArchive } from "../lib/useArchive";
 
 // ── Small shared furniture ────────────────────────────────────────
-const card = { background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 12 };
-const eyebrow = { fontSize: FS.label, fontWeight: 800, color: BC.t3, letterSpacing: 1 };
-const hair = `1px solid ${BC.bdr}${ALPHA.hair}`;
+const card = themedStyle(() => ({ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 12 }));
+const eyebrow = themedStyle(() => ({ fontSize: FS.label, fontWeight: 800, color: BC.t3, letterSpacing: 1 }));
+const hair = () => `1px solid ${BC.bdr}${ALPHA.hair}`;
 
 const Section = ({ label, note, children, style }) => (
   <div style={{ ...card, padding: 14, ...style }}>
@@ -138,7 +138,7 @@ function YearRow({ e, live, teams, open, onToggle }) {
       </button>
 
       {open && (
-        <div style={{ borderTop: hair, padding: "10px 14px 14px" }}>
+        <div style={{ borderTop: hair(), padding: "10px 14px 14px" }}>
           {!e.rounds.length && (
             <div style={{ fontSize: FS.small, color: BC.t3 }}>Nothing played yet.</div>
           )}
@@ -150,7 +150,7 @@ function YearRow({ e, live, teams, open, onToggle }) {
           </div>
           )}
           {e.rounds.map((r) => (
-            <div key={r.round} style={{ display: "grid", gridTemplateColumns: "22px 1fr 62px 60px", gap: 6, alignItems: "center", padding: "5px 0", borderTop: hair }}>
+            <div key={r.round} style={{ display: "grid", gridTemplateColumns: "22px 1fr 62px 60px", gap: 6, alignItems: "center", padding: "5px 0", borderTop: hair() }}>
               <div style={{ fontSize: FS.small, fontWeight: 800, color: BC.t3 }}>{r.round}</div>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: FS.small, color: BC.t1, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.course || "—"}</div>
@@ -226,7 +226,7 @@ function RoundDrama({ data }) {
   return (
     <Section label="Where the cup turns" note="AVERAGE SWING PER ROUND">
       {rows.map((r) => (
-        <div key={r.round} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderTop: r.round === rows[0].round ? "none" : hair }}>
+        <div key={r.round} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderTop: r.round === rows[0].round ? "none" : hair() }}>
           <div style={{ fontSize: FS.small, fontWeight: 800, color: BC.t3, width: 24 }}>R{r.round}</div>
           <div style={{ flex: 1, height: 8, background: BC.inp, borderRadius: 4, overflow: "hidden" }}>
             <div style={{ width: `${(r.avgSwing / max) * 100}%`, height: "100%", background: BC.amber, borderRadius: 4 }} />
@@ -264,7 +264,7 @@ function Passport({ data }) {
     <Section label="The courses" note={`${distinct} COURSES · ${rows.length} ROUNDS`}>
       <Chips options={[["year", "By year"], ["hard", "Hardest first"]]} value={sort} onChange={setSort} />
       {rows.map((c) => (
-        <div key={`${c.year}_${c.round}`} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderTop: hair }}>
+        <div key={`${c.year}_${c.round}`} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderTop: hair() }}>
           <div style={{ fontSize: FS.micro, fontWeight: 800, color: BC.t3, width: 46, letterSpacing: 0.4 }}>{c.year} R{c.round}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: FS.small, color: BC.t1, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.course}</div>
@@ -352,10 +352,10 @@ function PlayerCard({ p, data, activeYear }) {
     .map(([f, v]) => ({ f, ...v }))
     .sort((a, b) => b.matches - a.matches), [p.byFormat]);
 
-  const line = { display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderTop: hair, fontSize: FS.small };
+  const line = { display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderTop: hair(), fontSize: FS.small };
 
   return (
-    <div style={{ padding: "10px 14px 14px", borderTop: hair }}>
+    <div style={{ padding: "10px 14px 14px", borderTop: hair() }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 14 }}>
         <Stat label="Cups" value={p.apps} sub={p.debut === p.last ? `${p.debut}` : `${p.debut}–${p.last}`} />
         <Stat label="Won" value={p.cupsWon} sub={p.cupsHalved ? `${p.cupsHalved} halved` : null} color={BC.green} />
@@ -463,7 +463,7 @@ function PlayerRecords({ data }) {
     <div style={{ marginBottom: 12 }}>
       <div style={eyebrow}>{label}</div>
       {rows.map((x, i) => (
-        <div key={i} style={{ display: "flex", gap: 8, padding: "4px 0", borderTop: i ? hair : "none", fontSize: FS.small }}>
+        <div key={i} style={{ display: "flex", gap: 8, padding: "4px 0", borderTop: i ? hair() : "none", fontSize: FS.small }}>
           <span style={{ width: 14, color: BC.t3, fontWeight: 800 }}>{i + 1}</span>
           {render(x)}
         </div>
@@ -547,7 +547,7 @@ function CareerTable({ rows, teamOf, myId, activeYear, data, open, setOpen }) {
         const isOpen = open === p.id;
         const mine = p.id === myId;
         return (
-          <div key={p.id} style={{ borderBottom: i < rows.length - 1 ? hair : "none", background: mine ? BC.amber + ALPHA.wash : "transparent" }}>
+          <div key={p.id} style={{ borderBottom: i < rows.length - 1 ? hair() : "none", background: mine ? BC.amber + ALPHA.wash : "transparent" }}>
             <button onClick={() => setOpen(isOpen ? null : p.id)} style={{
               display: "block", width: "100%", textAlign: "left", padding: "8px 12px",
               background: "transparent", border: "none", cursor: "pointer", fontFamily: FONT,

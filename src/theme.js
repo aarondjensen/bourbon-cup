@@ -295,9 +295,56 @@ export const initialBCMode = (() => {
 // and reads up-to-date values inline in JSX after a top-level re-render.
 export const BC = { ...getBCTheme(initialBCMode) };
 
+// ── A style that survives the toggle ────────────────────────────
+// "Reads up-to-date values INLINE in JSX" is the whole contract above, and a
+// style object built once at module scope breaks it: it copies the values
+// out of BC at import time and keeps them, so after a toggle it is painting
+// the mode the app started in. It looks right on every fresh load, which is
+// how it lived here for months — the failure needs somebody to change the
+// theme without reloading, and then the Leaderboard's round header is
+// near-white on cream.
+//
+// A component that reads BC when it renders is fine and needs none of this.
+// This is for the shared style object several components spread, which has
+// nowhere to be rebuilt.
+//
+// It hands back GETTERS rather than values, and that is not a flourish:
+// React freezes any object passed as a `style` prop in development, so a
+// style that refreshed itself by mutating in place threw
+// "Cannot assign to read only property" the first time the theme changed
+// after a render. Freezing an accessor leaves the accessor working, so a
+// getter is the one shape that can still answer with the current palette
+// after React has had it. Spreading calls them; so does React reading the
+// prop.
+//
+// The build is cached and re-run only when the generation moves, so a style
+// spread on every row of a list costs one object, not one per property.
+// Keys are taken from the first build — a builder whose KEYS depend on the
+// mode would need more than this, and none does.
+//
+// A theme-dependent string has no properties to define, so it stays a
+// function of its own — see `hair` in DataView. `themeMutation.test.js` is
+// what stops the next one being written as a constant.
+let themeGeneration = 0;
+export const themedStyle = (build) => {
+  let cached = build();
+  let builtAt = themeGeneration;
+  const current = () => {
+    if (builtAt !== themeGeneration) { cached = build(); builtAt = themeGeneration; }
+    return cached;
+  };
+  const style = {};
+  for (const key of Object.keys(cached)) {
+    Object.defineProperty(style, key, { enumerable: true, get: () => current()[key] });
+  }
+  return style;
+};
+
 export const applyBCTheme = (mode, brand = null) => {
   const next = getBCTheme(mode, brand);
   for (const key in next) BC[key] = next[key];
+  // After BC, never before: the builders read it on their next property read.
+  themeGeneration += 1;
 };
 
 // ── The typeface ──

@@ -25,7 +25,7 @@
 // it, not the main road.
 
 import { useLayoutEffect, useRef, useState } from "react";
-import { BC, FONT, SCRIM, ALPHA, ON_AMBER, FS } from "../theme";
+import { BC, FONT, SCRIM, ALPHA, ON_AMBER, FS, themedStyle } from "../theme";
 import { SegmentedToggle } from "./ui";
 import { playerLookup, sideNames } from "../lib/players";
 import { FORMATS } from "../constants";
@@ -46,15 +46,15 @@ import {
 } from "../lib/scoreGuard";
 
 
-const cardStyle = { background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}` };
-const miniBtn = {
+const cardStyle = themedStyle(() => ({ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}` }));
+const miniBtn = themedStyle(() => ({
   padding: "5px 10px", borderRadius: 8, fontSize: FS.label, fontWeight: 700, cursor: "pointer",
   background: "transparent", border: `1px solid ${BC.amber}${ALPHA.line}`, color: BC.amberInk, fontFamily: FONT,
-};
-const xBtn = {
+}));
+const xBtn = themedStyle(() => ({
   fontSize: FS.label, padding: "3px 7px", borderRadius: 6, border: `1px solid ${BC.danger}${ALPHA.hair}`,
   background: "transparent", color: BC.danger, cursor: "pointer", flexShrink: 0, fontFamily: FONT,
-};
+}));
 
 export function MatchSetup({
   round, setRound,
