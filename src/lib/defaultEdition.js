@@ -35,7 +35,7 @@ import { isDemoEdition } from "./editionLock.js";
 // flag saying which year is current — the active pointer is per-device — and
 // this has to be answered synchronously, before the first query is built, so
 // a Firestore round trip cannot be waited on.
-export const WEB_DEFAULT_EDITION_ID = "bc_2025";
+export const WEB_DEFAULT_EDITION_ID = "bc_2026";
 
 /**
  * @param {object} opts
