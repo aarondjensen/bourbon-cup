@@ -392,6 +392,7 @@ export const buildDemo = ({ countdown = false } = {}) => {
     id: id("trip"),
     house_name: "The Lodge on Otsego Lake",
     house_url: "https://www.vrbo.com/vacation-rentals/usa/michigan/gaylord",
+    house_address: "1 Lakeview Dr, Gaylord, MI 49735",
   }));
 
   // The Betting tab, with something in it. Small round numbers so nothing

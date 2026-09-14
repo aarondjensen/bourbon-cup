@@ -826,7 +826,17 @@ what are we playing.
   **scorecard** — par, stroke index and yardage per hole, with a tee picker.
   Read-only, same numbers the director edits in Admin → Courses.
 - **The house** is the one genuinely new fact typed for this screen:
-  `bc_settings/<edition>__trip` (`house_name`, `house_url`), set in Admin → Event.
+  `bc_settings/<edition>__trip` (`house_name`, `house_url`, `house_address`),
+  set in Admin → Event.
+
+  The address is a third box rather than something read off the listing: a VRBO
+  page withholds the street until it is booked, and a director who books direct
+  has an address and no listing at all. Trip Info renders it as a maps link —
+  `houseMapUrl` wraps it in a Google Maps SEARCH query, which is the one form
+  that opens on every phone without knowing which map app is on it, and
+  `encodeURIComponent` is what keeps a pasted `&` inside the query. The address
+  alone is a house: `hasHouse` counts it, and the name line is dropped rather
+  than printed empty above it.
 
 Schedule and Courses used to be two sections and the second was the first
 restated — every course on it was already named on a schedule row. One list

@@ -127,7 +127,7 @@ import {
   scoresCsv,
 } from "../lib/scoresExport";
 import {
-  safeHouseUrl, tripDateFields, tripDatesError, tripDayOptions,
+  MAX_HOUSE_ADDRESS, safeHouseUrl, tripDateFields, tripDatesError, tripDayOptions,
 } from "../lib/tripInfo";
 import {
   formatISODate,
@@ -490,6 +490,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
   const [editEndDate, setEditEndDate] = useState("");
   const [editHouseName, setEditHouseName] = useState("");
   const [editHouseUrl, setEditHouseUrl] = useState("");
+  const [editHouseAddress, setEditHouseAddress] = useState("");
   const [editTournamentName, setEditTournamentName] = useState(tournamentName || "");
   const [editTournamentLocation, setEditTournamentLocation] = useState(tournamentLocation || "");
   // Seeded from the RESOLVED count, not the raw setting, so an edition that
@@ -541,6 +542,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
   useEffect(() => { setEditEndDate(tripDateFields({ end_date: endDate }).end); }, [endDate]);
   useEffect(() => { setEditHouseName(trip?.house_name || ""); }, [trip?.house_name]);
   useEffect(() => { setEditHouseUrl(trip?.house_url || ""); }, [trip?.house_url]);
+  useEffect(() => { setEditHouseAddress(trip?.house_address || ""); }, [trip?.house_address]);
   useEffect(() => { setEditTournamentName(tournamentName || ""); }, [tournamentName]);
   useEffect(() => { setEditTournamentLocation(tournamentLocation || ""); }, [tournamentLocation]);
   useEffect(() => {
@@ -568,11 +570,12 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
     || editStartDate !== tripDateFields({ start_date: startDate }).start
     || editEndDate !== tripDateFields({ end_date: endDate }).end
   );
-  // The house. Its link is trimmed on the way to the database and its name is
-  // not, so each is compared the way it is written.
+  // The house. Its link and its address are trimmed on the way to the database
+  // and its name is not, so each is compared the way it is written.
   const houseDirty = (
     editHouseName !== (trip?.house_name || "")
     || editHouseUrl.trim() !== (trip?.house_url || "").trim()
+    || editHouseAddress.trim() !== (trip?.house_address || "").trim()
   );
   // ── The backup ────────────────────────────────────────────────
   // Admin → Event → Export. Everybody's cards as a CSV shaped like the ALL
@@ -4026,7 +4029,14 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
               The link is checked before it saves, not after: a director who
               pastes something that will not open should hear about it here,
               standing in front of the box, rather than from a player tapping a
-              dead button in June. */}
+              dead button in June.
+
+              The address is its own box rather than something read out of the
+              listing. A VRBO page does not show the street until it has been
+              booked, a director who books direct has no listing at all, and
+              the address is the half a man standing on a dark road at 9pm
+              needs. Trip Info turns it into a maps link; nothing here has to
+              be a URL. */}
           <div style={TournCardStyle}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
               <div style={TournHeadStyle}>The House</div>
@@ -4037,7 +4047,9 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                     notify?.("That link doesn't look like a web address", "error");
                     return;
                   }
-                  const ok = await onSaveTrip({ houseName: editHouseName, houseUrl: url });
+                  const ok = await onSaveTrip({
+                    houseName: editHouseName, houseUrl: url, houseAddress: editHouseAddress,
+                  });
                   notify?.(ok ? "The house is saved" : "Could not save that — try again", ok ? "success" : "error");
                 }}
                 style={TournSaveStyle(houseDirty)}
@@ -4047,6 +4059,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
               {[
                 { key: "name", val: editHouseName, set: setEditHouseName, ph: "The lake house", lbl: "Name" },
                 { key: "link", val: editHouseUrl, set: setEditHouseUrl, ph: "vrbo.com/1234567", lbl: "Link" },
+                { key: "address", val: editHouseAddress, set: setEditHouseAddress, ph: "1234 Otsego Lake Dr, Gaylord, MI", lbl: "Address" },
               ].map(f => (
                 <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={TournLabelStyle}>{f.lbl}</span>
@@ -4058,6 +4071,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                     inputMode={f.key === "link" ? "url" : "text"}
                     autoCapitalize={f.key === "link" ? "none" : undefined}
                     autoCorrect={f.key === "link" ? "off" : undefined}
+                    maxLength={f.key === "address" ? MAX_HOUSE_ADDRESS : undefined}
                     style={TournFieldStyle}
                   />
                 </div>

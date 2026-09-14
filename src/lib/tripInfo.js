@@ -22,7 +22,8 @@
 //            the days between them, so a round cannot be dated outside the
 //            trip, and this screen's banner is that pair.
 //   THE HOUSE is the one genuinely new fact, and the only thing a director
-//            types for this screen. It lives in bc_settings/<edition>__trip.
+//            types for this screen — its name, its listing and its address.
+//            It lives in bc_settings/<edition>__trip.
 //
 // Neither the house nor the dates survive into a new edition — cloneEdition
 // does not copy the trip document at all, and it strips `start_date` /
@@ -37,6 +38,7 @@ import { formatISODate, formatISORange, isISODate, rangeDays, daysBetween } from
 export const TRIP_SETTINGS_ID = "trip";
 
 export const MAX_HOUSE_NAME = 80;
+export const MAX_HOUSE_ADDRESS = 160;
 
 // ── The house link ────────────────────────────────────────────────
 // A link a director pastes becomes an anchor every player taps, so what
@@ -71,20 +73,40 @@ export const linkHost = (url) => {
   catch { return url || ""; }
 };
 
+// ── The address ───────────────────────────────────────────────────
+// A listing answers "which house"; it does not answer "how do I get there at
+// 9pm on the Thursday". The two are separate facts and neither derives from
+// the other — a VRBO page withholds the street until you have booked, and a
+// director who books directly has an address and no listing at all.
+//
+// It is a free-text line rather than parsed parts, because it gets pasted out
+// of a confirmation email in one piece and nothing here needs the pieces.
+//
+// The maps link is BUILT from it rather than typed: a search query is the one
+// form that works on every phone without knowing which map app is on it, and
+// encodeURIComponent means nothing a director pastes can escape the query.
+export const houseMapUrl = (raw) => {
+  const s = String(raw || "").trim();
+  return s ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s)}` : null;
+};
+
 // The stored document, normalized. `url` is null unless it is a link this
 // module would let a player tap.
 export const houseFrom = (doc) => {
   const url = safeHouseUrl(doc?.house_url);
+  const address = String(doc?.house_address || "").trim().slice(0, MAX_HOUSE_ADDRESS);
   return {
     name: String(doc?.house_name || "").trim().slice(0, MAX_HOUSE_NAME),
     url,
+    address,
+    mapUrl: houseMapUrl(address),
     // What the button should SAY. The name if there is one, the host if there
     // is only a link, and nothing if there is neither.
     label: String(doc?.house_name || "").trim().slice(0, MAX_HOUSE_NAME) || (url ? linkHost(url) : ""),
   };
 };
 
-export const hasHouse = (house) => !!(house?.name || house?.url);
+export const hasHouse = (house) => !!(house?.name || house?.url || house?.address);
 
 // ── The schedule ──────────────────────────────────────────────────
 // One row per round the tournament actually has, in round order, carrying
