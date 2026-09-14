@@ -331,6 +331,26 @@ describe("roundSummary", () => {
   // button to it is switched off while a round is sealed; the deep link a
   // round-final push opens is not. Fed the concealed map, as every other
   // consumer is, there is nothing here to leak.
+  // ── A locked round scores off its own frozen scorecard ────────────
+  // The lock is read FIRST for the same reason getRoundCH is: a settled round
+  // keeps the card it was settled on, even if the course document has since
+  // been edited or deleted out from under it.
+  it("uses the lock's frozen hole_pars even when the course document has changed since", () => {
+    // The course was re-imported after the round locked and now disagrees
+    // with what the round was actually played to.
+    const changedCourse = { ...course, hole_pars: Array(18).fill(5) };
+    const roundLocks = { 1: { locked: true, final: true, hole_pars: course.hole_pars } };
+    const s = roundSummary({ ...base, courses: [changedCourse], roundLocks });
+    expect(s.coursePar).toBe(71);   // the ORIGINAL scorecard's total, not the edited one
+  });
+
+  it("uses the lock's frozen hole_pars even when the course has been deleted entirely", () => {
+    const roundLocks = { 1: { locked: true, final: true, hole_pars: course.hole_pars } };
+    const s = roundSummary({ ...base, courses: [], roundLocks });
+    expect(s.coursePar).toBe(71);
+    expect(s.courseName).toBeNull();   // the course itself really is gone
+  });
+
   it("has nothing to say about a round that is still sealed", () => {
     const sealed = [{ ...tRounds[0], sealed: true, reveal_through: 0 }];
     const s = roundSummary({

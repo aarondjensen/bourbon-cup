@@ -100,9 +100,6 @@ import {
   realPlayers,
 } from "../lib/players";
 import {
-  COUNTDOWN_HASH,
-  revealState,
-  revealSummary,
   resolveSealed,
 } from "../lib/reveal";
 import {
@@ -444,7 +441,7 @@ function ChDeltaBadge({ delta }) {
   );
 }
 
-export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCaptain, editionId, isDemoAdmin = false, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, roundCount, tournamentRounds, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks, payments, duesAmount, onLogPayment, onDeletePayment, onSaveDues, onSetPlayerDues, onOpenFinalize, finalizeRound, finalizeReady, trip, onSaveTrip, startDate, endDate, budgetLines, onSaveBudgetLine, onDeleteBudgetLine }) {
+export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCaptain, editionId, isDemoAdmin = false, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, roundCount, tournamentRounds, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks, payments, duesAmount, onLogPayment, onDeletePayment, onSaveDues, onSetPlayerDues, onOpenFinalize, onReopenRound, onRecalcHandicaps, finalizeRound, finalizeReady, trip, onSaveTrip, startDate, endDate, budgetLines, onSaveBudgetLine, onDeleteBudgetLine }) {
   const [tab, setTab] = useState("players");
   // Which half of the $ tab. Budget leads because it is the half a director
   // fills in first — you cannot say what to charge until you know what the
@@ -727,7 +724,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
     if (roundIsFinal) {
       confirm({
         title: `Round ${editRound} is final`,
-        message: "These fields are read-only. Nothing recalculates a final round.",
+        message: "These fields are read-only while a round is final. Reopen it at the top of HANDICAPS to correct a handicap, then recalculate.",
         alert: true,
       });
       return true; // block the change
@@ -736,11 +733,76 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
       lockWarnedRef.current[editRound] = true;
       confirm({
         title: `Round ${editRound} is locked`,
-        message: "Its handicaps are frozen. Changes here are saved for reference but will not affect its scoring.",
+        message: "Its handicaps are frozen on the snapshot taken when it locked. Edit what you need, then tap Recalculate at the top of HANDICAPS to score the round off the new figures.",
         alert: true,
       });
     }
     return false; // allow the change
+  };
+
+  // ── What the warnings above now point at ─────────────────────────
+  // `lockBusy` guards both: each is one write, and a double tap on
+  // Recalculate would take two snapshots a beat apart for no reason.
+  const [lockBusy, setLockBusy] = useState(false);
+  const lockActionStyle = (primary, busy) => ({
+    flexShrink: 0, padding: "7px 12px", borderRadius: 8, cursor: busy ? "default" : "pointer",
+    background: primary ? BC.amber : "transparent",
+    border: primary ? "none" : `1px solid ${BC.amber}${ALPHA.line}`,
+    color: primary ? ON_AMBER : BC.amberInk,
+    fontSize: FS.small, fontWeight: 800, letterSpacing: 0.3, opacity: busy ? 0.6 : 1,
+    fontFamily: FONT,
+  });
+
+  // FINAL → LOCKED. Names the two things it actually moves — where scoring
+  // is, and what the leaderboard is allowed to say — because a director
+  // reopening Friday on Saturday morning is moving the field.
+  const doReopenRound = async () => {
+    const ok = await confirm({
+      eyebrow: `Round ${editRound}`,
+      title: `Reopen Round ${editRound} for editing?`,
+      message: [
+        "Scoring moves back to this round and its result stops being final.",
+        "",
+        "Handicaps stay frozen exactly as they are — reopening changes what can be TYPED, not a stroke already allocated. Recalculate is what makes a handicap correction land.",
+      ].join("\n"),
+      confirmLabel: "Reopen",
+    });
+    if (!ok) return;
+    setLockBusy(true);
+    try {
+      const res = await onReopenRound(editRound);
+      notify(res ? `Round ${editRound} reopened — handicaps can be edited` : `Could not reopen Round ${editRound}`, res ? "success" : "error");
+    } catch { notify(`Could not reopen Round ${editRound}`, "error"); }
+    finally { setLockBusy(false); }
+  };
+
+  // Re-take the snapshot. The flush is load-bearing: the CH boxes auto-save
+  // on a 700ms debounce, so a director who types and taps straight away would
+  // otherwise freeze the figure he was correcting. The maps go over with it
+  // rather than being read back out of App, which would wait on a Firestore
+  // echo for the same reason.
+  const doRecalcHandicaps = async () => {
+    const ok = await confirm({
+      eyebrow: `Round ${editRound}`,
+      title: `Recalculate Round ${editRound}'s handicaps?`,
+      message: [
+        "The frozen snapshot is re-taken from what is on this screen now — every override, tee and index below.",
+        "",
+        "Strokes are re-allocated and the leaderboard moves. Scores already posted are not touched, and cards that were signed stay signed.",
+      ].join("\n"),
+      confirmLabel: "Recalculate",
+      destructive: true,
+    });
+    if (!ok) return;
+    setLockBusy(true);
+    try {
+      await flushRoundSave();
+      const res = await onRecalcHandicaps(editRound, {
+        chOverrides: hcpOverrides, teeAssignments,
+      });
+      notify(res ? `Round ${editRound} recalculated off the current handicaps` : `Could not recalculate Round ${editRound}`, res ? "success" : "error");
+    } catch { notify(`Could not recalculate Round ${editRound}`, "error"); }
+    finally { setLockBusy(false); }
   };
 
   // The other half of the same rule, for the three controls that decide how a
@@ -1026,11 +1088,14 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
     }
   });
 
+  // Returns the write when there was one, so a caller that needs the edit to
+  // be IN Firestore before it does something else can await it. Recalculate
+  // is that caller: it freezes a snapshot off these very values.
   const flushRoundSave = useStableCallback(() => {
     if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
     const pending = pendingSaveRef.current;
     pendingSaveRef.current = null;
-    if (pending) writeRound(pending);
+    return pending ? writeRound(pending) : undefined;
   });
 
   // Arm the debounce. `formRound` only gets a new identity when something
@@ -2460,7 +2525,6 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
               THE FINAL COUNTDOWN
             </RoundSectionHeading>
             {(() => {
-              const seal = revealState(tRounds, editRound);
               const pill = (active) => ({
                 padding: "4px 12px 6px", fontSize: FS.label, fontWeight: 700, cursor: "pointer",
                 ...segThumb(active, { compact: true }),
@@ -2495,35 +2559,29 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                       On{sealed && <SegRule compact />}
                     </button>
                   </div>
-                  {/* What ON actually does, stated as the three separate
-                      guarantees it makes rather than as "it hides things" —
-                      a director turning this on is promising the field a
-                      blackout, and needs to know exactly how wide it is.
-                      Only under ON. The OFF branch used to print "scored and
-                      shown live, like every other round", which is what every
-                      round on the schedule already does — a line describing
-                      the absence of a feature, on every round that doesn't
-                      use it. */}
-                  {sealed && (
-                    <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.6 }}>
-                      <div style={{ color: BC.amberInk, fontWeight: 800, letterSpacing: 0.5, marginBottom: 3 }}>
-                        ACTIVE — this round is sealed
-                      </div>
-                      · Each side sees only its own numbers, on the board and on the scoring screen.<br />
-                      · The leaderboard does not move — no score, no match rows, nothing in the cup total — until all 18 are turned over <em>and you finalize the round</em>, and then the whole round lands at once.<br />
-                      · The countdown is queued up: a director opens it from the Leaderboard and turns the holes over one at a time. It is the only screen that walks.
-                    </div>
-                  )}
-                  {/* Only once the round is actually sealed in Firestore — a
-                      toggle flipped a second ago has not been saved yet, and
-                      reporting a countdown state off the unsaved form would be
-                      reporting on a round that does not exist. */}
-                  {seal.sealed && (
-                    <div style={{ fontSize: FS.label, marginTop: 6, color: BC.amberInk, fontWeight: 700, lineHeight: 1.5 }}>
-                      🔒 {revealSummary(seal.through)} — driven from the Leaderboard, or from
-                      the television at {COUNTDOWN_HASH}.
-                    </div>
-                  )}
+                  {/* ── No essay under the switch ──────────────────
+                      It printed three bullets spelling out every guarantee ON
+                      makes — each side sees only its own numbers, the board
+                      holds until eighteen and a finalize, the countdown is the
+                      only screen that walks — and a fourth line under them
+                      reporting how far the reveal had got and where to drive
+                      it from.
+
+                      Four lines of prose under a two-position switch, on a tab
+                      whose whole job is to be got through quickly. A director
+                      setting this up has read it once; every time after that it
+                      is furniture between him and the tee times. The switch
+                      says On, which is what he came here to check, and the
+                      behaviour it describes is the same behaviour whether or
+                      not the paragraph is on screen.
+
+                      The reveal's own progress lives where the reveal does —
+                      on the Leaderboard, in front of the room — and it was
+                      deliberately taken off this tab once before, for the
+                      reason still written above the toggle: this form
+                      auto-saves, and a countdown state reported here invites
+                      somebody to act on it from a screen that should not be
+                      driving the ceremony at all. */}
                 </div>
               );
             })()}
@@ -2553,6 +2611,44 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
             <RoundSectionHeading>
               HANDICAPS
             </RoundSectionHeading>
+            {/* ── The way back into a frozen round ──────────────────────
+                A round locks on its first score and freezes every handicap
+                into a snapshot, and scoring answers to that snapshot for as
+                long as it exists (scoring.getRoundCH). That is the right
+                guarantee — a GHIN sync on Saturday must not re-score Friday
+                — but it was a gate with no door: the fields below went
+                read-only on a final round, and on a merely locked one they
+                took the edit and told the director it would not count, with
+                nothing anywhere to make it count. The correction had to be
+                made in the Firebase console, on raw document ids, by the one
+                person least able to check it from a phone.
+                Two buttons, in the order the two decisions happen. Neither
+                is reachable by accident and both say what they cost. */}
+            {roundIsLocked && (onReopenRound || onRecalcHandicaps) && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+                padding: "8px 10px", marginBottom: 10, borderRadius: 8,
+                background: roundIsFinal ? BC.inp : `${BC.amber}${ALPHA.wash}`,
+                border: `1px solid ${roundIsFinal ? BC.bdr : BC.amber + ALPHA.line}`,
+              }}>
+                <span style={{ flex: 1, minWidth: 140, fontSize: FS.label, color: BC.t2, lineHeight: 1.4 }}>
+                  {roundIsFinal
+                    ? `Round ${editRound} is final — handicaps are read-only.`
+                    : `Handicaps are frozen on the snapshot taken when Round ${editRound} locked.`}
+                </span>
+                {roundIsFinal
+                  ? onReopenRound && (
+                    <button onClick={doReopenRound} disabled={lockBusy} style={lockActionStyle(false, lockBusy)}>
+                      {lockBusy ? "Working…" : "Reopen"}
+                    </button>
+                  )
+                  : onRecalcHandicaps && (
+                    <button onClick={doRecalcHandicaps} disabled={lockBusy} style={lockActionStyle(true, lockBusy)}>
+                      {lockBusy ? "Working…" : "Recalculate"}
+                    </button>
+                  )}
+              </div>
+            )}
             {(() => {
               const fmtId = formRound.format;
               const fmt = FORMATS.find(f => f.id === fmtId);
@@ -2665,9 +2761,18 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                       reports what the round will actually do (add both
                       partners' full handicaps together), which no control on
                       the page shows. */}
+                  {/* The allowance is frozen into the same snapshot the
+                      handicaps are (buildRoundLockDoc stores it raw), so it
+                      answers to the same two acts — which is why this line
+                      names them rather than ending at "will not move it". It
+                      used to, and that was true only because there was
+                      nothing anywhere that could move it. */}
                   {roundIsLocked && (
                     <div style={{ fontSize: FS.label, color: roundIsFinal ? BC.danger : BC.amberInk, marginTop: 4 }}>
-                      Round {editRound} is locked — its allowance is frozen, so a change here will not move it.
+                      Round {editRound} is {roundIsFinal ? "final" : "locked"} — its allowance is frozen.{" "}
+                      {roundIsFinal
+                        ? "Reopen the round above to change it, then recalculate."
+                        : "Change it here, then tap Recalculate above to score the round off it."}
                     </div>
                   )}
                 </div>

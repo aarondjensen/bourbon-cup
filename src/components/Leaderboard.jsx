@@ -50,6 +50,7 @@ import { HoleStrip } from "./HoleStrip";
 import { FullScorecard } from "./FullScorecard";
 import { TeamBestBallScoreboard } from "./TeamBestBallScoreboard";
 import { StickyTop } from "./ui";
+import ErrorBoundary from "./ErrorBoundary";
 import { isRoundFinal } from "../lib/roundLocks";
 import { scheduledRounds } from "../lib/rounds";
 import { HOLE_COUNT, revealState, stepReveal, COUNTDOWN_HASH, COUNTDOWN_PATH } from "../lib/reveal";
@@ -620,7 +621,7 @@ function RevealControl({ through, onSet }) {
 // So: WAITING ON THE FINAL COUNTDOWN. It is what is true, it is what a player
 // looking for the score needs to know, and it is the whole of what the board
 // is entitled to say until the director puts the round in the books.
-function SealedPanel({ through, canReveal, onSetReveal, onOpenCountdown }) {
+function SealedPanel({ through, canReveal, onSetReveal, onOpenCountdown, canOpen }) {
   return (
     <div style={{
       marginTop: 8, background: BC.card, borderRadius: 12, overflow: "hidden",
@@ -633,21 +634,35 @@ function SealedPanel({ through, canReveal, onSetReveal, onOpenCountdown }) {
             WAITING ON THE FINAL COUNTDOWN
           </span>
         </div>
-        {/* The way onto the television, and the one thing here that is not
-            information about the round — take it away and nobody can put the
-            countdown on the screen. Offered to EVERYBODY, not just the
-            director: the machine the room watches is signed in as whoever
-            happened to be holding the laptop, and a countdown only a director
-            could open would be a countdown nobody could open. The controls
-            inside it are still director-only. */}
-        <button onClick={onOpenCountdown} style={{
-          width: "100%", marginTop: 9, padding: "9px 0", borderRadius: 8,
-          background: BC.amberGlow, border: `1px solid ${BC.amber}${ALPHA.line}`,
-          color: BC.amberInk, fontFamily: FONT, fontSize: FS.body, fontWeight: 800,
-          letterSpacing: 1, cursor: "pointer",
-        }}>
-          📺 OPEN THE FINAL COUNTDOWN
-        </button>
+        {/* ── The way onto the television ──
+            The one thing in this panel that is not information about the
+            round, and the only people it is drawn for are the ones who can do
+            anything with it: the captains and the directors.
+
+            It used to be offered to everybody, on the reasoning that the
+            machine the room watches is signed in as whoever happened to be
+            holding the laptop, so a door only a director could open would be a
+            door nobody could open. That reasoning was wrong about its own
+            feature. THE TELEVISION DOES NOT COME THROUGH THIS BUTTON — it is
+            pointed at /finalcountdown, and App opens the countdown off the URL
+            with no role check at all (see `autoCountdown`, and wantsCountdown
+            in lib/reveal). The button is a convenience for whoever is driving,
+            and for the other fourteen it opened a screen that says "THE
+            CAPTAINS ARE DRIVING · TAP TO EXIT" and hands them no control over
+            anything: an offer the app cannot honour, on the one screen where
+            everybody is already looking for something to do.
+
+            The controls inside are director-only, as they always were. */}
+        {canOpen && (
+          <button onClick={onOpenCountdown} style={{
+            width: "100%", marginTop: 9, padding: "9px 0", borderRadius: 8,
+            background: BC.amberGlow, border: `1px solid ${BC.amber}${ALPHA.line}`,
+            color: BC.amberInk, fontFamily: FONT, fontSize: FS.body, fontWeight: 800,
+            letterSpacing: 1, cursor: "pointer",
+          }}>
+            📺 OPEN THE FINAL COUNTDOWN
+          </button>
+        )}
       </div>
       {canReveal && <RevealControl through={through} onSet={onSetReveal} />}
     </div>
@@ -1206,9 +1221,33 @@ export function TeamLeaderboard({
     if (!meta || !entry) return null;
     const { course, holePars, holeHcps } = getRoundCourseCtx({ roundLocks, round: rnd, tRounds, courses });
     return createPortal(
-      // The fallback is a black screen, because that is what the countdown
-      // opens onto anyway — the television goes dark and then the round is
-      // there, rather than flashing a spinner in front of the room.
+      // ── A boundary of its own, and the reason is the television ──────
+      // A portal's children stay in the React tree of the component that
+      // made them, so without this the countdown's nearest boundary is the
+      // KEYED one around the whole tab (App.jsx) — and that is the wrong
+      // shape for this screen twice over.
+      //
+      // It takes the scoreboard with it: a crash in the countdown replaces
+      // the tab, so the room loses the board as well as the reveal.
+      //
+      // And the television cannot get out. A keyed boundary recovers by
+      // being navigated away from, which unmounts this component — and
+      // `autoOpened` above lives here, so the remount re-reads the hash and
+      // re-opens the countdown into the same crash. Reload App does the same
+      // thing for the same reason: the #countdown hash is still on the URL,
+      // because only closeCountdown clears it and a crash never called it.
+      // On the one machine in the room that nobody can navigate, that is a
+      // loop whose only exit is hand-editing the URL in front of everybody.
+      //
+      // So the boundary sits INSIDE the portal, where a crash costs the
+      // reveal and nothing else, and `onError` closes the countdown — which
+      // clears the hash first, so even the reload button lands on the
+      // scoreboard. The director can then re-open it deliberately; the two
+      // counters are in Firestore, so it comes back exactly where it was.
+      <ErrorBoundary onError={closeCountdown}>
+      {/* The fallback is a black screen, because that is what the countdown
+          opens onto anyway — the television goes dark and then the round is
+          there, rather than flashing a spinner in front of the room. */}
       <Suspense fallback={<div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 9999 }} />}>
       <FinalCountdown
         match={entry.match}
@@ -1237,7 +1276,8 @@ export function TeamLeaderboard({
         onSetHole={onSetHole ? (n) => onSetHole(rnd, n) : null}
         onClose={closeCountdown}
       />
-      </Suspense>,
+      </Suspense>
+      </ErrorBoundary>,
       document.body,
     );
   })();
@@ -1262,6 +1302,8 @@ export function TeamLeaderboard({
       <SealedPanel
         through={seal.through}
         canReveal={!!drive}
+        // The two who drive it, and nobody else. See the note on the button.
+        canOpen={!!drive || !!captainSide}
         onSetReveal={drive || (() => {})}
         onOpenCountdown={() => openCountdown(rnd)}
       />

@@ -648,3 +648,43 @@ export function scoringUnits({ match, groups, formatId }) {
 // the picker, which is what the crown has always been for.
 export const unitForPlayer = (units, pid) =>
   (units || []).find((u) => u.pids.includes(pid)) || null;
+
+// ── What a SEALED round lets a reader walk to ───────────────────────
+// On the closing round nobody may learn the other side's card until it is
+// turned over at the house (see lib/reveal). The Scoring tab is the
+// documented exception — somebody has to write the numbers down — but that
+// exception was written for a MIXED FOURSOME, where the two opponents you
+// are keeping are the two you can see anyway. It is not a licence to walk
+// the whole draw.
+//
+// So a sealed round offers the reader only the units that are wholly his own
+// side's, and `otherSide` is asked of ANY player in the unit: a wave a
+// director grouped across both teams is withheld rather than half-shown.
+//
+// ── The floor is the part that bit ──
+// A screen still has to be about somebody, so the caller falls back to the
+// first unit when the reader's own side has no group at all. `scoringUnits`
+// returns ONE unit holding the entire match when a round is undrawn or drawn
+// into a single group (above) — which is the likeliest state for the closing
+// round to be in until a director builds the tee waves — so on that round the
+// floor was the whole field, and it stepped straight over the filter.
+//
+// `floor` is therefore the first unit CUT TO THE READER'S OWN SIDE rather
+// than the first unit whole. His own eight are the men he is walking with;
+// the other side is not his to see, and a director who needs that card has
+// the deliberate second ask for it.
+//
+// Returns `{ open, floor }` — `open` is what the picker may list, `floor` is
+// what to fall back to when nothing in `open` fits. Both are the units
+// themselves when the round is not sealed, so this is inert every other week.
+export function readableUnits({ units, sealed, otherSide }) {
+  const all = units || [];
+  if (!sealed) return { open: all, floor: all[0] || null };
+  const spans = (u) => (u.pids || []).some((pid) => otherSide(pid));
+  const open = all.filter((u) => !spans(u));
+  const first = all[0] || null;
+  const floor = !first ? null
+    : spans(first) ? { ...first, pids: (first.pids || []).filter((pid) => !otherSide(pid)) }
+      : first;
+  return { open, floor };
+}

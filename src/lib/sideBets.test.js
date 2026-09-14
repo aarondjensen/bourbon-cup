@@ -214,3 +214,51 @@ describe("canDeleteSideBet", () => {
     expect(canDeleteSideBet(bet(), { uid: null, isDirector: false })).toBe(false);
   });
 });
+
+// ── Edge cases: corrupt data on the way in, and the form/document split ──
+describe("settling against a corrupt document", () => {
+  // Firestore holds whatever was last written; a field is not guaranteed to
+  // still be an array just because it always has been. This is the same
+  // defensiveness ctp.js's readClaims applies to a claims map.
+  it("reads a non-array mark list as nobody, not as a crash", () => {
+    expect(settledBy(bet({ settled_by: "p1" }))).toEqual([]);
+    expect(settledBy(bet({ settled_by: { p1: true } }))).toEqual([]);
+    expect(isSettled(bet({ settled_by: "p1" }))).toBe(false);
+  });
+
+  // Nobody asking has no mark to toggle — a bystander tapping a settle
+  // button that should not exist must not silently invent a mark for "".
+  it("toggleSettled leaves the marks alone when nobody is asking", () => {
+    const b = bet({ settled_by: ["p1"] });
+    expect(toggleSettled(b, null)).toEqual(["p1"]);
+    expect(toggleSettled(b, undefined)).toEqual(["p1"]);
+  });
+});
+
+describe("sideBetTotals against a corrupted bet", () => {
+  // sideBetError refuses this at the form, but the field only checks the
+  // rules can enforce (created_by), not player_a/player_b — so a bet with
+  // the same id on both sides is reachable from a console edit or an import.
+  // inSideBet is one `||`, not two independent checks, so it must not count
+  // the stake twice for the one man on it.
+  it("does not double the exposure when both sides name the same player", () => {
+    const rows = [bet({ id: "self", amount: 20, player_a: "p1", player_b: "p1" })];
+    expect(sideBetTotals(rows, "p1")).toEqual({ atStake: 20, count: 1, mine: 20 });
+  });
+});
+
+describe("buildSideBet trusts the validated form", () => {
+  // sideBetError is what a self-bet or a non-positive amount is refused by;
+  // buildSideBet itself does not re-check either one, because it is
+  // documented as building FROM a validated form, not validating one. Pinned
+  // here so a future change to either function is a deliberate choice, not a
+  // discovery.
+  it("stores whatever it is handed rather than re-guarding the form's checks", () => {
+    const selfBet = buildSideBet({
+      id: "b1", tournamentId: "bc_2026", createdBy: "uid_a",
+      playerA: "p1", playerB: "p1", amount: "-5", detail: "", now: 1,
+    });
+    expect(selfBet.player_a).toBe(selfBet.player_b);
+    expect(selfBet.amount).toBe(-5);
+  });
+});
