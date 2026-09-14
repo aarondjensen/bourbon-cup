@@ -818,6 +818,64 @@ describe("Scoring — a singles foursome", () => {
     });
   });
 
+  // ── The turn card, at the 10th tee ────────────────────────────────
+  // It goes up by itself once every man has all nine front holes in and the
+  // screen lands on the 10th (components/TurnCard). The front nine has just
+  // SETTLED, which is the one moment the match state is the reason anybody is
+  // reading the numbers rather than a distraction from them.
+  describe("the turn card", () => {
+    // All nine in: Aaron beat Dave on every one, Ben and Shaun matched.
+    const nine = (v) => Object.fromEntries(Array.from({ length: 9 }, (_, i) => [i, v]));
+    const atTheTurn = {
+      s1_3: nine(4), s2_3: nine(5),
+      s3_3: nine(4), s4_3: nine(4),
+    };
+    // `baseElement`, not `container`: the turn card's Popup is portalled to
+    // <body> (a fixed overlay inside the app shell is trapped in the shell's
+    // stacking context — see the note on Toast in CLAUDE.md), so it is not
+    // inside the render's own container at all.
+    const turn = (over) => {
+      const { baseElement } = render(<ScoreEntry {...singles({ holeData: atTheTurn, ...over })} />);
+      return baseElement.textContent;
+    };
+
+    it("goes up on the 10th with the group's front nine", () => {
+      const t = turn();
+      expect(t).toContain("At the Turn");
+      expect(t).toContain("On to the Back 9");
+    });
+
+    it("heads each match with its own verdict", () => {
+      const t = turn();
+      expect(t).toContain("Aaron J 9 UP");
+      expect(t).toContain("FRONT");
+    });
+
+    // ── The seal ─────────────────────────────────────────────────────
+    // Gross is what makes this popup safe on a concealing round — the screen
+    // behind it already shows the group's gross on the score buttons. A
+    // running match state is the one thing the reveal exists to hold back,
+    // and putting it here would hand it to the man keeping the card an hour
+    // before the room is together.
+    it("withholds every verdict on a sealed round", () => {
+      const t = turn({ tRounds: [{ ...singlesRound, sealed: true, reveal_through: 0 }] });
+      expect(t).toContain("At the Turn");
+      expect(t).toContain("On to the Back 9");
+      expect(t).not.toContain("9 UP");
+      expect(t).not.toMatch(/FRONT \d|BACK \d/);
+    });
+
+    // The bar on the screen BEHIND it stands down the same way, and says so
+    // rather than going blank. This screen is handed raw holeData on purpose
+    // — somebody has to write the numbers down — so nothing about the seal is
+    // automatic here.
+    it("seals the match box's own header too", () => {
+      const t = turn({ tRounds: [{ ...singlesRound, sealed: true, reveal_through: 0 }] });
+      expect(t).toContain("SEALED");
+      expect(t).not.toContain("Aaron J 9 UP");
+    });
+  });
+
   // A singles round nobody has drawn has no second match to put on screen,
   // and pairing one out of the roster would be inventing a draw.
   it("falls back to the match when the round is undrawn", () => {

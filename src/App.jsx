@@ -1287,12 +1287,28 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // not persisted — the next time the app opens, the seal is back on.
   const otherSideShown = unlockedRound != null && unlockedRound === match?.round;
   const sealedToOwnSide = !!conceal && !otherSideShown;
-  // Which side of the MATCH a player is on — the draw, not the roster, because
-  // that is what a card is scored into. See lib/groups.readableUnits for what
-  // a sealed round then does with it, and for the floor that used to step over
-  // this filter entirely on an undrawn closing round.
-  const otherSidePlayer = (pid) =>
-    (match?.teamA?.includes(pid) ? "A" : "B") !== userTeam;
+  // Which side of the DRAW a player is on, because that is what a card is
+  // scored into. See lib/groups.readableUnits for what a sealed round then
+  // does with it, and for the floor that used to step over this filter
+  // entirely on an undrawn closing round.
+  //
+  // Asked of the ROUND rather than of `match`, because a unit can now hold
+  // more than one. Read off `match.teamA` alone, a man in the OTHER match of
+  // a singles foursome is in neither of its sides and falls through to "B" —
+  // so a Mash Brothers man opening a sealed singles round had his own
+  // teammate filtered off the screen as the opposition. A team is never
+  // hidden from itself; that is the rule readableUnits is built on.
+  //
+  // The roster is the fallback for a man the draw has not placed. Nothing on
+  // a card is scored off it, but he has to be on one side or the other to be
+  // asked about at all.
+  const sideInRound = (pid) => {
+    const m = matches.find(x => x.round === match?.round
+      && [...x.teamA, ...x.teamB].includes(pid));
+    if (m) return m.teamA.includes(pid) ? "A" : "B";
+    return tPlayers.find(p => p.player_id === pid)?.team === "B" ? "B" : "A";
+  };
+  const otherSidePlayer = (pid) => sideInRound(pid) !== userTeam;
   const { open: openUnits, floor: floorUnit } = readableUnits({
     units, sealed: sealedToOwnSide, otherSide: otherSidePlayer,
   });
@@ -1387,13 +1403,6 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
     return inUnit.length ? [inUnit] : [];
   };
   const cardsForMatch = (m) => ({ a: sideCards(m?.teamA), b: sideCards(m?.teamB) });
-  // Every card on the screen, in the order they are drawn — for the things
-  // that are about the GROUP rather than about one match. The turn card is
-  // the only one so far, and it is right: the four of them turn together.
-  const allCards = unitMatches.flatMap(m => {
-    const { a, b } = cardsForMatch(m);
-    return [...a, ...b];
-  });
 
   // ── The waves, for anything that draws more than one of them ─────
   // A match played across several tee times is drawn on the Scoring tab one
@@ -1477,6 +1486,20 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
     .map(pid => tPlayers.find(p => p.player_id === pid)?.name || pid)
     .join(" / ");
   const matchBar = (m, r) => {
+    // ── The seal, on the one header that could give it away ─────────
+    // This screen is handed RAW holeData on purpose — somebody has to write
+    // the numbers down — so `r` is fully scored on a concealing round and
+    // this bar would print the result an hour before the room is together.
+    // Everything else on the screen already stands down: the badge row is
+    // gated on `conceal`, renderStatusCell locks every hole past
+    // `conceal.through`, and the card behind the Full Scorecard button hides
+    // the other side. The bar is new, and the seal is not a rule it gets to
+    // be exempt from.
+    //
+    // It says so rather than going blank, in the words the Full Scorecard's
+    // own header uses: a box with no header reads as a box whose match has
+    // not started.
+    if (conceal) return { verdict: "🔒 SEALED", leader: null, settled: false, segments: [] };
     const st = r?.overall;
     if (!st) return { verdict: "—", leader: null, settled: false, segments: [] };
     const leader = st.played ? segmentLeader(st) : null;
@@ -1509,6 +1532,14 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // it. The hole strips themselves stay in both cases: those are the group's
   // own progress, and the group is the one thing the screen is always about.
   const holeStatus = !teamRound && !boxed;
+  // ── And whether the turn card may carry the match ────────────────
+  // Same two exclusions, for the same two reasons, plus the seal. A team
+  // round's match is the whole side across four tee times, so a verdict over
+  // the four men in this popup would be a running score for holes they never
+  // played; a sealed round's running state is the one thing the reveal exists
+  // to hold back, and gross is what makes the turn card safe there at all.
+  // See the note at the top of components/TurnCard.
+  const turnBars = !teamRound && !conceal;
   const sig = match && !teamRound ? sigForMatch(cardSigs, match.id) : null;
   const signState = match && !teamRound ? cardState(match, sig, withdrawn) : "open";
   const signed = signState !== "open";
@@ -2901,19 +2932,32 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
       })()}
 
       {/* The turn card, raised by the effect above when this group reaches
-          the 10th with the front nine in. One row per CARD off the same
-          `sideCards` the score buttons are drawn from, so a scramble side is
-          the one line it is on the screen behind this. Gross, straight off
-          `cardScore` — the ball the side actually posted, which is what the
-          engine scored the hole on. */}
+          the 10th with the front nine in. One section per MATCH — headed by
+          the same bar the score cards behind it are, because the turn is when
+          the front nine settles and that is the one moment the match state is
+          the reason anybody is reading the numbers rather than a distraction
+          from them. `turnBars` is what withholds it on a sealed or team
+          round; see components/TurnCard.
+
+          The rows inside a section come off the same `cardsForMatch` the
+          score buttons do, so a scramble side is the one line it is on the
+          screen behind this, and the gross is `cardScore` — the ball the side
+          actually posted, which is what the engine scored the hole on. */}
       {turnCard && (
         <TurnCard
           pars={holePars.slice(0, 9)}
-          rows={allCards.map(pids => ({
-            key: pids.join("_"),
-            names: pids.map(pid => tPlayers.find(p => p.player_id === pid)?.name || pid),
-            scores: Array.from({ length: 9 }, (_, h) => cardScore(pids, h)),
-          }))}
+          sections={unitMatches.map(m => {
+            const { a, b } = cardsForMatch(m);
+            return {
+              key: m.id,
+              bar: turnBars ? matchBar(m, results.get(m.id)) : null,
+              rows: [...a, ...b].map(pids => ({
+                key: pids.join("_"),
+                names: pids.map(pid => tPlayers.find(p => p.player_id === pid)?.name || pid),
+                scores: Array.from({ length: 9 }, (_, h) => cardScore(pids, h)),
+              })),
+            };
+          })}
           onJump={goToHole}
           onClose={() => setTurnCard(false)}
         />
