@@ -2792,7 +2792,7 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
         const teeTime = teeTimeForMatch({ groups, times, match: m });
         return (
         <div key={m.id} style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: "12px 14px", marginBottom: 8 }}>
-          <div style={{ fontSize: FS.label, color: BC.t3, marginBottom: 8, fontWeight: 800, letterSpacing: 1 }}>
+          <div style={{ fontSize: FS.label, color: BC.t3, marginBottom: 8, fontWeight: 800, letterSpacing: 1, textAlign: "center" }}>
             MATCH {m.matchNumber ?? i + 1}{teeTime ? `  ·  ${teeTime}` : ""}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10 }}>
