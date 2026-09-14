@@ -615,6 +615,31 @@ export function scoringUnits({ match, groups, formatId }) {
   const gs = groups || [];
   const whole = (groupIdx) => [{ key: match.id, pids: all, groupIdx }];
 
+  // ── Singles ride two matches to a tee ────────────────────────────
+  // A 1v1 match is two men, and nobody plays a singles round in a twoball:
+  // autoBuildGroups has always sent two matches off every tee, and those four
+  // walk the round marking each other's cards. Drawing the unit as the MATCH
+  // put two of that four on screen and left the other pair to a second phone
+  // — two men entering the same group's holes, twice, out of sight of each
+  // other. So on singles the unit is the TEE GROUP, and the screen holds two
+  // matches. Resolving them back out of it is the caller's job.
+  //
+  // Only where the DRAW says so. The group has to hold this whole match and
+  // more besides; an undrawn round, or a match that is a group by itself,
+  // falls back to the match. There is no second match to put on screen then,
+  // and pairing one out of the roster would be inventing a draw.
+  //
+  // Keyed on the GROUP rather than the match, because both matches in it draw
+  // the same screen: keyed on the match, walking from one to the other would
+  // restart the hole machinery that is keyed on this (lib/useHoleAdvance).
+  if (formatPerSide(formatId) === 1) {
+    const gi = groupIndexForMatch({ groups: gs, match });
+    if (gi < 0) return whole(null);
+    const inGroup = (gs[gi] || []).filter(Boolean);
+    if (inGroup.length <= all.length) return whole(gi);
+    return [{ key: `r${match.round}#g${gi}`, pids: inGroup, groupIdx: gi }];
+  }
+
   // The match fits a foursome, so it is the unit however the draw looks.
   if (formatPerSide(formatId) != null) {
     const gi = groupIndexForMatch({ groups: gs, match });

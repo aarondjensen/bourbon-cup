@@ -376,6 +376,68 @@ describe("scoringUnits", () => {
       .forEach(u => expect(u.pids.length).toBeLessThanOrEqual(4));
   });
 
+  // ── Singles ────────────────────────────────────────────────────
+  // Two 1v1 matches ride together — autoBuildGroups has always drawn it that
+  // way — and the four of them mark each other's cards. The unit is the tee
+  // group, so one phone holds the foursome instead of two phones holding two
+  // men each and neither seeing the other pair.
+  const S3 = { id: "m3", round: 3, teamA: ["a1"], teamB: ["b1"] };
+  const S4 = { id: "m4", round: 3, teamA: ["a2"], teamB: ["b2"] };
+  const S_GROUPS = [["a1", "b1", "a2", "b2"], ["a3", "b3", "a4", "b4"]];
+
+  it("draws a singles match as its whole tee group", () => {
+    const units = scoringUnits({ match: S3, groups: S_GROUPS, formatId: "singles" });
+    expect(units).toHaveLength(1);
+    expect(units[0].pids).toEqual(["a1", "b1", "a2", "b2"]);
+    expect(units[0].groupIdx).toBe(0);
+  });
+
+  // Keyed on the GROUP, so both matches in it resolve to the same screen and
+  // walking between them does not restart the hole machinery keyed on it.
+  it("gives both matches in a group the same unit key", () => {
+    const a = scoringUnits({ match: S3, groups: S_GROUPS, formatId: "singles" })[0];
+    const b = scoringUnits({ match: S4, groups: S_GROUPS, formatId: "singles" })[0];
+    expect(a.key).toBe(b.key);
+    expect(a.pids).toEqual(b.pids);
+  });
+
+  it("puts a match in the second group on that group, not the first", () => {
+    const m = { id: "m5", round: 3, teamA: ["a3"], teamB: ["b3"] };
+    const u = scoringUnits({ match: m, groups: S_GROUPS, formatId: "singles" })[0];
+    expect(u.pids).toEqual(["a3", "b3", "a4", "b4"]);
+    expect(u.groupIdx).toBe(1);
+  });
+
+  // Nothing to pair with is not a reason to invent a pairing out of the
+  // roster: the draw is the only thing that says who rides with whom.
+  it("is just the match before anybody has been drawn", () => {
+    const u = scoringUnits({ match: S3, groups: [], formatId: "singles" })[0];
+    expect(u).toEqual({ key: "m3", pids: ["a1", "b1"], groupIdx: null });
+  });
+
+  it("is just the match when it has a tee to itself", () => {
+    const u = scoringUnits({ match: S3, groups: [["a1", "b1"]], formatId: "singles" })[0];
+    expect(u).toEqual({ key: "m3", pids: ["a1", "b1"], groupIdx: 0 });
+  });
+
+  // A 1v1 whose two men were drawn into different groups is a draw error the
+  // admin screen already flags. Picking one of the two groups to show would
+  // be answering it.
+  it("does not pick a group for a match the draw split", () => {
+    const u = scoringUnits({ match: S3, groups: [["a1", "a2"], ["b1", "b2"]], formatId: "singles" })[0];
+    expect(u.pids).toEqual(["a1", "b1"]);
+    expect(u.groupIdx).toBeNull();
+  });
+
+  // A threeball — a director part-way through building the tee sheet. The
+  // group is still the unit; the Scoring tab draws whatever matches it can
+  // resolve out of it and leaves the stray man to the phone that has him.
+  it("takes an odd group at its word", () => {
+    const u = scoringUnits({ match: S3, groups: [["a1", "b1", "a2"]], formatId: "singles" })[0];
+    expect(u.pids).toEqual(["a1", "b1", "a2"]);
+    expect(u.groupIdx).toBe(0);
+  });
+
   // The whole point of the shape: rounds 1-3 must not move.
   it("leaves a 2-man match as one unit", () => {
     const m = { id: "m1", round: 1, teamA: ["a1", "a2"], teamB: ["b1", "b2"] };

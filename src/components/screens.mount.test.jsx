@@ -693,3 +693,96 @@ describe("Scoring", () => {
     });
   });
 });
+
+// ══════════════════════════════════════════════════════════════════
+//  Singles — one screen, two matches
+// ══════════════════════════════════════════════════════════════════
+//
+// A 1v1 match is two men and nobody plays a singles round in a twoball: the
+// draw has always sent two matches off every tee (lib/groups.autoBuildGroups)
+// and the four of them mark each other's cards. The Scoring tab drew the
+// MATCH, so it showed two of that four and left the other pair to a second
+// phone — two men entering the same group's holes, out of sight of each
+// other. The unit is the tee group now, and each match is drawn in its own
+// box under its own status bar.
+describe("Scoring — a singles foursome", () => {
+  const field = [
+    { player_id: "s1", name: "Aaron J", team: "A", handicap_index: 10 },
+    { player_id: "s2", name: "Dave S", team: "B", handicap_index: 10 },
+    { player_id: "s3", name: "Ben T", team: "A", handicap_index: 10 },
+    { player_id: "s4", name: "Shaun W", team: "B", handicap_index: 10 },
+  ];
+  const m3 = { id: "m3", round: 3, teamA: ["s1"], teamB: ["s2"] };
+  const m4 = { id: "m4", round: 3, teamA: ["s3"], teamB: ["s4"] };
+  const singlesRound = {
+    round_number: 3, course_id: "c1", date: "2026-07-18",
+    tee_time: "8:40", format: "singles",
+  };
+  // Seven holes in. Aaron has beaten Dave on every one of them; Ben and Shaun
+  // have matched each other stroke for stroke.
+  const card = (v) => Object.fromEntries(Array.from({ length: 7 }, (_, i) => [i, v]));
+  const holeData = {
+    s1_3: card(4), s2_3: card(5),
+    s3_3: card(4), s4_3: card(4),
+  };
+  const singles = (over = {}) => ({
+    user: { ...field[0], isDirector: false },
+    matches: [m3, m4], holeData, onSaveHole: asyncNoop,
+    tPlayers: field, courses, tRounds: [singlesRound], notify: noop,
+    teams, hcpOverrides: {}, teeAssignments: {}, roundLocks: {},
+    rounds: [1, 2, 3], currentRound: 3,
+    groups: { 3: [["s1", "s2", "s3", "s4"]] },
+    ctpData: {}, onSetCtp: asyncNoop, onConfirmCtp: asyncNoop,
+    buyIns: {}, cardSigs: [], onSignCard: asyncNoop,
+    onAttestCard: asyncNoop, onUnsignCard: asyncNoop,
+    ...over,
+  });
+  const text = (over) => render(<ScoreEntry {...singles(over)} />).container.textContent;
+
+  it("puts the whole foursome on one screen", () => {
+    const t = text();
+    for (const p of field) expect(t).toContain(p.name);
+  });
+
+  // The point of the boxes. Two matches on one screen means two verdicts, and
+  // each of them has to be findable as its own.
+  it("says where BOTH matches stand", () => {
+    const t = text();
+    expect(t).toContain("Aaron J 7 UP");
+    expect(t).toContain("TIED");
+  });
+
+  // ── The verdict names the leader, it is not from the reader's side ──
+  // Every other verdict on this screen answers "am I up or down". This one
+  // cannot: the man in the OTHER match of this foursome, and the director
+  // scoring a group he is in neither half of, would both read a relative
+  // verdict as their own. Dave loses by seven and the bar over his match
+  // still says Aaron is seven up.
+  it("reads the same on the loser's phone", () => {
+    expect(text({ user: { ...field[1], isDirector: false } })).toContain("Aaron J 7 UP");
+  });
+
+  it("reads the same to the man in the other match", () => {
+    expect(text({ user: { ...field[2], isDirector: false } })).toContain("Aaron J 7 UP");
+  });
+
+  // OVERALL is the bar's own primary text. The badge row that carried it as a
+  // third chip is gone — one row cannot say which of two matches it is about.
+  it("never prints an OVERALL chip", () => {
+    expect(text()).not.toContain("OVERALL");
+  });
+
+  it("still carries the nines it is played over", () => {
+    expect(text()).toContain("FRONT");
+  });
+
+  // A singles round nobody has drawn has no second match to put on screen,
+  // and pairing one out of the roster would be inventing a draw.
+  it("falls back to the match when the round is undrawn", () => {
+    const t = text({ groups: {} });
+    expect(t).toContain("Aaron J");
+    expect(t).toContain("Dave S");
+    expect(t).not.toContain("Ben T");
+    expect(t).not.toContain("Shaun W");
+  });
+});
