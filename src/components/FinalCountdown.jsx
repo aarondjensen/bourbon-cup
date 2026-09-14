@@ -955,9 +955,24 @@ export function FinalCountdown({
       padding: compact ? "9px 12px" : `clamp(6px, ${vwh(0.9)}, 18px) clamp(10px, 1.4vw, 28px)`,
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: "clamp(8px, 1.5vw, 30px)" }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: T.cupName, fontWeight: 800, letterSpacing: 1.4, color: BC.teamA, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tA.name}</div>
-          <div style={{ fontSize: T.cupPts, fontWeight: 800, lineHeight: 1, color: BC.teamA }}>{fmtPts(totals.A)}</div>
+        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: "clamp(6px, 1vw, 18px)" }}>
+          {/* Same badge the claim screen carries, same reason: the room reads
+              a crest faster than a name at twelve feet. Dropped in compact —
+              that mode is the laptop/phone fallback, where the width it would
+              take is the width "MASH BROTHERS" needs to not truncate, and a
+              name cut short on THIS screen is the bug this file already had
+              once (see the note on `sideBtn`). No fallback when a team has no
+              logo — the name beside it already says who this is. */}
+          {!compact && tA.logo && (
+            <img src={tA.logo} alt={tA.name} style={{
+              flexShrink: 0, objectFit: "contain",
+              width: `clamp(26px, ${vwh(4.2)}, 92px)`, height: `clamp(26px, ${vwh(4.2)}, 92px)`,
+            }} />
+          )}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: T.cupName, fontWeight: 800, letterSpacing: 1.4, color: BC.teamA, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tA.name}</div>
+            <div style={{ fontSize: T.cupPts, fontWeight: 800, lineHeight: 1, color: BC.teamA }}>{fmtPts(totals.A)}</div>
+          </div>
         </div>
         <div style={{ textAlign: "center", flexShrink: 0 }}>
           {/* Shortened on a phone. "TO WIN THE CUP" at 11px with a third of an
@@ -972,9 +987,17 @@ export function FinalCountdown({
             color: BC.amberInk,
           }}>{fmtPts(toWin)}</div>
         </div>
-        <div style={{ flex: 1, minWidth: 0, textAlign: "right" }}>
-          <div style={{ fontSize: T.cupName, fontWeight: 800, letterSpacing: 1.4, color: BC.teamB, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tB.name}</div>
-          <div style={{ fontSize: T.cupPts, fontWeight: 800, lineHeight: 1, color: BC.teamB }}>{fmtPts(totals.B)}</div>
+        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "clamp(6px, 1vw, 18px)" }}>
+          <div style={{ minWidth: 0, textAlign: "right" }}>
+            <div style={{ fontSize: T.cupName, fontWeight: 800, letterSpacing: 1.4, color: BC.teamB, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tB.name}</div>
+            <div style={{ fontSize: T.cupPts, fontWeight: 800, lineHeight: 1, color: BC.teamB }}>{fmtPts(totals.B)}</div>
+          </div>
+          {!compact && tB.logo && (
+            <img src={tB.logo} alt={tB.name} style={{
+              flexShrink: 0, objectFit: "contain",
+              width: `clamp(26px, ${vwh(4.2)}, 92px)`, height: `clamp(26px, ${vwh(4.2)}, 92px)`,
+            }} />
+          )}
         </div>
       </div>
       {/* Each side fills from its own end, and the GOLD TICKS are where that
