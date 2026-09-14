@@ -32,6 +32,10 @@
 //                          final answer, not just its inputs, so even a
 //                          change to calcCH's rounding could not move a
 //                          completed round.
+//   players[pid].ch_exact — the unrounded companion of `ch`, from the same
+//                          inputs at the same instant. The shared-ball
+//                          allowance split (Scramble, Pinehurst) needs this,
+//                          not `ch` — see getRoundCHExact in scoring.js.
 //   handicap_mode        — low_man vs full. Flipping this re-allocates
 //                          every stroke in the match, so it is frozen.
 //   allowance            — the round's handicap allowance ({pct} or
@@ -67,7 +71,7 @@
 // ensureRoundLock in App.jsx). That automation is the actual guarantee —
 // it does not depend on the director remembering to press anything
 // before the group tees off.
-import { calcCHForCourse, getEffectiveHI, resolveTeeSpec } from "../scoring";
+import { calcCHForCourse, calcCHForCourseExact, getEffectiveHI, resolveTeeSpec } from "../scoring";
 import { handicapModeFor } from "../constants";
 import { editionDocId } from "../firebase";
 
@@ -229,6 +233,14 @@ export function buildRoundLockDoc({
       par: spec.par,
       // The final answer, frozen. Everything above is audit detail.
       ch: hasChOv ? Number(chOv) : calcCHForCourse(hi, course, teeName),
+      // The unrounded companion, captured at this same instant from these
+      // same inputs — never recomputed later, same guarantee as `ch` itself.
+      // It's what the shared-ball allowance split (Scramble 35/15, Pinehurst
+      // 60/40) actually needs: USGA applies that percentage to the unrounded
+      // Course Handicap and rounds only the final Team Handicap (see
+      // getRoundCHExact in scoring.js). A lock taken before this field
+      // existed simply has none, and scoring falls back to `ch`.
+      ch_exact: hasChOv ? Number(chOv) : calcCHForCourseExact(hi, course, teeName),
     };
   });
 
