@@ -36,11 +36,10 @@
 //  ghin_rev_date, ghin_synced_at. db.upsert merges → unlink writes nulls.
 
 import { useState, useEffect, useRef } from "react";
-import { BC, FONT, SCRIM, ALPHA, ON_AMBER, FS } from "../theme";
+import { BC, FONT, SCRIM, ALPHA, ON_AMBER, FS, themedStyle } from "../theme";
 import { Popup } from "./Popup";
 import { searchGhinGolfers, syncGhinNumbers, parseGhinHI, fmtHI } from "../lib/ghin";
 
-const BLUE = BC.hcpBlue;
 const US_STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"];
 
 const primaryBtn = (color) => ({
@@ -48,12 +47,12 @@ const primaryBtn = (color) => ({
   border: "none", background: color, color: ON_AMBER, fontSize: FS.lead, fontWeight: 800,
   cursor: "pointer", fontFamily: FONT,
 });
-const ghostBtn = {
+const ghostBtn = themedStyle(() => ({
   width: "100%", boxSizing: "border-box", padding: "13px 14px", borderRadius: 12,
   border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t2,
   fontSize: FS.body, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
-};
-const muted = { fontSize: FS.body, color: BC.t3, padding: "16px 4px", lineHeight: 1.5, textAlign: "center" };
+}));
+const muted = themedStyle(() => ({ fontSize: FS.body, color: BC.t3, padding: "16px 4px", lineHeight: 1.5, textAlign: "center" }));
 
 // ── GHIN wordmark badge ─────────────────────────────────────────────
 // A small text badge in the GHIN/handicap blue. Deliberately NOT the USGA
@@ -70,7 +69,7 @@ export function GhinBadge({ size = "sm", title = "Handicap Index sourced from GH
       display: "inline-flex", alignItems: "center", boxSizing: "border-box",
       fontSize: s.fontSize, fontWeight: 800, letterSpacing: s.letter, lineHeight: 1,
       padding: s.padding, borderRadius: s.radius, whiteSpace: "nowrap",
-      border: `1px solid ${BLUE}${ALPHA.line}`, background: BLUE + "1f", color: BLUE, fontFamily: FONT,
+      border: `1px solid ${BC.hcpBlue}${ALPHA.line}`, background: BC.hcpBlue + "1f", color: BC.hcpBlue, fontFamily: FONT,
     }}>GHIN</span>
   );
 }
@@ -215,7 +214,7 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
         {mode === "view" && linked && (
           <div style={{ overflowY: "auto", overscrollBehavior: "contain", padding: 16 }}>
             <div style={{ background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 14, padding: 14, marginBottom: 16 }}>
-              <div style={{ fontSize: FS.small, fontWeight: 700, color: BLUE, letterSpacing: 0.5 }}>GHIN #{player.ghin_number}</div>
+              <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.hcpBlue, letterSpacing: 0.5 }}>GHIN #{player.ghin_number}</div>
               {player.ghin_name && <div style={{ fontSize: FS.lead, fontWeight: 700, color: BC.t1, marginTop: 4 }}>{player.ghin_name}</div>}
               <div style={{ fontSize: FS.body, color: BC.t2, marginTop: 8 }}>
                 Handicap Index <b style={{ color: BC.t1 }}>{fmtHI(player.handicap_index)}</b>
@@ -274,7 +273,7 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
                   <option value="">All states</option>
                   {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
-                <button disabled={busy} onClick={doSearch} style={{ ...primaryBtn(BLUE), flex: 1 }}>
+                <button disabled={busy} onClick={doSearch} style={{ ...primaryBtn(BC.hcpBlue), flex: 1 }}>
                   {busy ? "Searching…" : "Search GHIN"}
                 </button>
               </div>
@@ -302,8 +301,8 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
                       display: "flex", alignItems: "center", gap: 12, width: "100%",
                       boxSizing: "border-box", textAlign: "left", cursor: "pointer",
                       padding: "13px 14px", marginBottom: 8, borderRadius: 12,
-                      background: isSel ? BLUE + "22" : BC.inp,
-                      border: `1px solid ${isSel ? BLUE : BC.bdr}`, fontFamily: FONT,
+                      background: isSel ? BC.hcpBlue + "22" : BC.inp,
+                      border: `1px solid ${isSel ? BC.hcpBlue : BC.bdr}`, fontFamily: FONT,
                     }}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -315,7 +314,7 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
                       </div>
                     </div>
                     <div style={{ flexShrink: 0, textAlign: "right" }}>
-                      <div style={{ fontSize: FS.lead, fontWeight: 800, color: BLUE }}>{fmtHI(parseGhinHI(g.handicap_index))}</div>
+                      <div style={{ fontSize: FS.lead, fontWeight: 800, color: BC.hcpBlue }}>{fmtHI(parseGhinHI(g.handicap_index))}</div>
                       <div style={{ fontSize: FS.micro, fontWeight: 700, color: BC.t3, letterSpacing: 1 }}>INDEX</div>
                     </div>
                   </button>
@@ -351,9 +350,9 @@ export function GhinLinkButton({ player, user, onUpdatePlayer, notify }) {
           flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 3,
           boxSizing: "border-box", padding: "3px 7px", borderRadius: 5, cursor: "pointer",
           fontSize: FS.label, fontWeight: 800, letterSpacing: 0.2, fontFamily: FONT,
-          border: `1px solid ${(linked ? BC.green : BLUE)}${ALPHA.line}`,
-          background: (linked ? BC.green : BLUE) + "1f",
-          color: linked ? BC.green : BLUE, whiteSpace: "nowrap",
+          border: `1px solid ${(linked ? BC.green : BC.hcpBlue)}${ALPHA.line}`,
+          background: (linked ? BC.green : BC.hcpBlue) + "1f",
+          color: linked ? BC.green : BC.hcpBlue, whiteSpace: "nowrap",
         }}
       >
         {linked ? "GHIN ✓" : "+ GHIN"}

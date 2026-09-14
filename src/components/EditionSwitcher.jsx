@@ -19,7 +19,7 @@
 // allows bc_editions writes to a director only — it is there so a player is
 // not shown controls whose every tap comes back refused.
 import { useState, useEffect } from "react";
-import { BC, FS, FONT, ALPHA, ON_AMBER, R } from "../theme";
+import { BC, FS, FONT, ALPHA, ON_AMBER, R, themedStyle } from "../theme";
 import { Popup, ConfirmModal } from "./Popup";
 import { EditionSheet } from "./EditionSheet";
 import { IconLock, IconUnlock, IconChevron } from "./Icons";
@@ -41,10 +41,10 @@ const fieldStyle = (w) => ({
   fontSize: FS.lead, fontWeight: 600, outline: "none",
 });
 
-const lbl = {
+const lbl = themedStyle(() => ({
   display: "block", fontSize: FS.label, fontWeight: 800, letterSpacing: 1,
   textTransform: "uppercase", color: BC.t3, marginBottom: 4,
-};
+}));
 
 // What a clone can copy. Scores/matches/skins/locks are NEVER cloned.
 const CLONE_ITEMS = [

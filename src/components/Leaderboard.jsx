@@ -34,7 +34,7 @@
 
 import { useState, useMemo, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
-import { BC, FONT, ALPHA, FS, R, ink, teamColor } from "../theme";
+import { BC, FONT, ALPHA, FS, R, ink, teamColor, themedStyle } from "../theme";
 import { playerLookup, realPlayers, sideNames } from "../lib/players";
 import {
   FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT,
@@ -314,10 +314,10 @@ const nineColor = (st) => {
 // jumping as the text inside changes width ("TIED" → "3&2" → "—"); lineHeight
 // is pinned to 1 so the two rows sit a predictable distance apart once the
 // grid has aligned them on their baselines.
-const NINE_LABEL = {
+const NINE_LABEL = themedStyle(() => ({
   fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.6, color: BC.t3,
   lineHeight: 1, minWidth: 24, textAlign: "center",
-};
+}));
 // The nines are read at the same size as the match they are part of. They
 // were a rung smaller, which made three results of equal standing look like
 // one result and two footnotes — the front and back nines are their own
@@ -729,10 +729,10 @@ function SealedPanel({ through, canReveal, onSetReveal, onOpenCountdown, canOpen
 // two spans that happen to be adjacent. `minWidth: 0` is what lets them
 // ellipse at all: a flex item's automatic minimum is its content, so without
 // it a long name pushes the caret off centre instead of truncating.
-const HEAD_TEXT = {
+const HEAD_TEXT = themedStyle(() => ({
   fontSize: FS.small, fontWeight: 800, letterSpacing: 1.2, color: BC.t1,
   minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-};
+}));
 
 function RoundSection({
   round, meta, results, open, onToggle, onOpenSummary, tPlayers,
