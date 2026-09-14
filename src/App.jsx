@@ -2798,7 +2798,16 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
           player signs is exactly what they have been looking at. */}
       {showSign && (
         <SignCardSheet
-          match={match} result={result} format={format}
+          cards={unitMatches.map(m => ({ key: m.id, match: m, result: results.get(m.id) }))}
+          /* What he is putting his name to, once there is more than one card
+             in front of him. `match` is the reader's own — that has not moved
+             and is what onSign writes — but the button can no longer point at
+             it by saying "the card". See the note on it in CardSignature. */
+          /* "vs", not "v". The app letters its buttons in caps, and "AARON J
+             V DAVE S" puts a lone V hard against a last initial — it reads as
+             a second one. Two letters cost nothing on a 480px sheet. */
+          signLabel={boxed ? `Sign ${sideName(match, "A")} vs ${sideName(match, "B")}` : "Sign Card"}
+          format={format}
           holePars={holePars} holeHcps={holeHcps} course={course}
           tPlayers={tPlayers} getScore={getScore} viewer={userTeam}
           conceal={conceal} ownSideOnly={ownSideOnly} waves={cardWaves}

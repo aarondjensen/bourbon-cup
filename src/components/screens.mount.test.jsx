@@ -818,6 +818,46 @@ describe("Scoring — a singles foursome", () => {
     });
   });
 
+  // ── The sign sheet ────────────────────────────────────────────────
+  // A man signs for HIS match — the claim is a claim about one pair, and
+  // onSign is unmoved. What he reads before he does is the card the group
+  // kept, and half of it belonging to two other men does not make it
+  // somebody else's card.
+  describe("the sign sheet", () => {
+    // Every hole in for all four, so the button promotes.
+    const all18 = (v) => Object.fromEntries(Array.from({ length: 18 }, (_, i) => [i, v]));
+    const done = { s1_3: all18(4), s2_3: all18(5), s3_3: all18(4), s4_3: all18(4) };
+    // Portalled to <body>, like the turn card — `container` never sees it.
+    const sheet = (over) => {
+      const r = render(<ScoreEntry {...singles({ holeData: done, ...over })} />);
+      fireEvent.click(r.getByText("Complete — Sign Card"));
+      const el = r.baseElement.querySelector("[data-popup]");
+      expect(el).toBeTruthy();
+      return el.textContent;
+    };
+
+    it("shows the whole foursome's cards", () => {
+      const t = sheet();
+      expect(t).toContain("Aaron J");
+      expect(t).toContain("Dave S");
+      expect(t).toContain("Ben T");
+      expect(t).toContain("Shaun W");
+    });
+
+    // "Sign Card" worked because there was one card and no question which. A
+    // button saying it over a sheet holding somebody else's match asks a man
+    // to put his name to something without saying what.
+    it("names the match the button signs", () => {
+      expect(sheet()).toContain("Sign Aaron J vs Dave S");
+    });
+
+    it("is still just Sign Card with one match on screen", () => {
+      const t = sheet({ groups: {} });
+      expect(t).toContain("Sign Card");
+      expect(t).not.toContain("Ben T");
+    });
+  });
+
   // ── The turn card, at the 10th tee ────────────────────────────────
   // It goes up by itself once every man has all nine front holes in and the
   // screen lands on the 10th (components/TurnCard). The front nine has just

@@ -152,9 +152,18 @@ export function CardSignerNote() {
 // signing a sealed round's card is swearing to the GROSS SCORES on it, which
 // is all a card ever was; what the blackout holds back is what they add up to,
 // and that is not what a signature is for.
+// `cards` is [{ key, match, result }] in tee order — one, on every round but
+// singles, where a tee group is two matches (lib/groups.scoringUnits) and the
+// sheet shows both. What a man signs for is his own match; what he reads
+// before he does is the card the group kept, and half of it belonging to two
+// other men does not make it somebody else's card.
+//
+// `signLabel` is what the button says, and it stops being "Sign Card" the
+// moment there are two of them on screen — see the note on the button.
 export function SignCardSheet({
-  match, result, format, holePars, holeHcps, course, tPlayers, getScore,
-  viewer, onSign, onClose, conceal = null, ownSideOnly = false, waves = null,
+  cards = [], format, holePars, holeHcps, course, tPlayers, getScore,
+  viewer, onSign, onClose, signLabel = "Sign Card",
+  conceal = null, ownSideOnly = false, waves = null,
 }) {
   const [busy, setBusy] = useState(false);
 
@@ -168,18 +177,26 @@ export function SignCardSheet({
       showClose={false}
       innerStyle={{ background: BC.card, border: `1px solid ${BC.amber}${ALPHA.line}`, borderRadius: 12 }}>
       {/* No heading above the card, and no explanation below it. The card
-          names the four players, the course and the format; the button says
-          Sign Card; the sheet only opens on a deliberate tap. A title, a
+          names the players, the course and the format; the button says what
+          it signs; the sheet only opens on a deliberate tap. A title, a
           round/match line and a paragraph on what signing means were three
           bands of a phone spent restating what the card and the button
           already say to anybody who has signed one before — which, by the
-          time this opens, is everybody. */}
-      <div style={{ padding: 12 }}>
-        <FullScorecard
-          match={match} result={result} format={format}
-          holePars={holePars} holeHcps={holeHcps} course={course}
-          tPlayers={tPlayers} getScore={getScore} viewer={viewer}
-          conceal={conceal} ownSideOnly={ownSideOnly} waves={waves} />
+          time this opens, is everybody.
+
+          A card a MATCH, because that is what a card is: the hole-won marks
+          and the running line compare one pair, and FullScorecard heads each
+          one with its own two sides. */}
+      <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 14 }}>
+        {cards.map((c, i) => (
+          <div key={c.key} style={i > 0 ? { borderTop: `1px solid ${BC.bdr}`, paddingTop: 14 } : undefined}>
+            <FullScorecard
+              match={c.match} result={c.result} format={format}
+              holePars={holePars} holeHcps={holeHcps} course={course}
+              tPlayers={tPlayers} getScore={getScore} viewer={viewer}
+              conceal={conceal} ownSideOnly={ownSideOnly} waves={waves} />
+          </div>
+        ))}
       </div>
 
       <div style={{ padding: "0 14px 14px", fontFamily: FONT }}>
@@ -189,7 +206,15 @@ export function SignCardSheet({
           fontSize: FS.body, fontWeight: 800, letterSpacing: 0.5,
           cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1, fontFamily: FONT,
         }}>
-          {busy ? "Signing…" : "Sign Card"}
+          {/* ── The one place this sheet has to use words ──────────────
+              "Sign Card" worked because there was one card and no question
+              which. On a singles foursome there are two, and a button that
+              says "Sign Card" over a sheet holding somebody else's is asking
+              a man to put his name to something without saying what. So it
+              names the match — the two men, in the app's own short names —
+              the same way a destructive confirm has to name what it destroys.
+              One card on screen and it is "Sign Card" as it always was. */}
+          {busy ? "Signing…" : signLabel}
         </button>
         <button onClick={onClose} disabled={busy} style={{
           width: "100%", padding: "9px 0", marginTop: 4, background: "none", border: "none",
