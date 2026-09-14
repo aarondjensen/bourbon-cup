@@ -298,6 +298,22 @@ export function ScoreCell({ score, par, strokes = 0, size = CELL, color, skin = 
 //                             Hiding numbers they typed an hour ago is not
 //                             what the blackout owes them; what it owes them
 //                             is what those numbers ADD UP TO.
+//    waves                  — [{ key, label, pids }] in tee order, when the
+//                             match is played across more than one of them.
+//                             A 2-man match is its own foursome and passes
+//                             nothing; Team Best Ball's side is eight men who
+//                             went off in twos, and a flat list of eight put
+//                             the men who actually walked together four rows
+//                             apart. The rows are grouped under each wave's
+//                             tee time instead, in the order the Scoring tab
+//                             draws that same wave — which is the order the
+//                             card was kept in, and the only one a man
+//                             reading it will recognise.
+//
+//                             Grouping only. Nothing about the scoring moves:
+//                             the side's NET row is still the whole side's
+//                             best N, summed across every wave, because that
+//                             is the match.
 //    ownSideOnly            — the other side's card is not on this sheet at
 //                             all, sealed or not. The Scoring tab sets it for
 //                             a match bigger than a foursome, which today is
@@ -334,6 +350,7 @@ export function ScoreCell({ score, par, strokes = 0, size = CELL, color, skin = 
 export function FullScorecard({
   match, result, format, holePars, holeHcps, tPlayers, getScore,
   viewer = "A", showHeader = true, conceal = null, ownSideOnly = false,
+  waves = null,
 }) {
   if (!result) return null;
 
@@ -670,6 +687,52 @@ export function FullScorecard({
       </div>
     );
 
+    // The tee time a wave went off on, over the four men who went off on it.
+    // A label and a rule rather than a full row of its own: it is a heading
+    // for the rows under it, not a line of the card, and the grid below has
+    // to stay the only thing with columns in it.
+    const WaveLabel = (tid, w) => (
+      <div key={`wave-${tid}-${w.key}`} style={{
+        display: "flex", alignItems: "center", gap: 6, padding: "7px 6px 3px",
+      }}>
+        <span style={{
+          fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.8,
+          color: teamColor(tid), opacity: 0.8, whiteSpace: "nowrap",
+        }}>{w.label}</span>
+        <span style={{ flex: 1, height: 1, background: `${BC.bdr}${ALPHA.line}` }} />
+      </div>
+    );
+
+    // One side's player rows, grouped into the waves they went off in when
+    // there is more than one. Each wave's men come off the MATCH's own roster
+    // order filtered to that wave — the same expression the Scoring tab draws
+    // its cards from — so the two screens cannot put the same four men in two
+    // different orders.
+    //
+    // A shared-ball side is left alone: its "rows" are already one per side
+    // rather than one per man, and that format's match never spans a wave.
+    const PlayerRows = (tid, groups) => {
+      if (!waves?.length || shared) return groups.map((pids) => PlayerRow(pids, tid));
+      const roster = tid === "A" ? match.teamA : match.teamB;
+      const out = [];
+      const drawn = new Set();
+      waves.forEach((w) => {
+        const set = new Set(w.pids || []);
+        const mine = roster.filter((pid) => set.has(pid));
+        if (!mine.length) return;
+        out.push(WaveLabel(tid, w));
+        mine.forEach((pid) => { drawn.add(pid); out.push(PlayerRow([pid], tid)); });
+      });
+      // Anybody the draw missed still gets his row rather than falling off the
+      // card — the same call scoringUnits makes for an ungrouped player.
+      const left = roster.filter((pid) => !drawn.has(pid));
+      if (left.length) {
+        out.push(WaveLabel(tid, { key: "none", label: "NOT ON THE TEE SHEET" }));
+        left.forEach((pid) => out.push(PlayerRow([pid], tid)));
+      }
+      return out;
+    };
+
     // The side's number for each hole — net strokes, dots or points, per
     // the format. Read straight off result.holes: this row is the match,
     // and nothing about it is worked out here.
@@ -836,7 +899,7 @@ export function FullScorecard({
             rather than "hide team B" because the reader is on either side of
             this card, and it is always the OTHER one that goes. */}
         {hiddenSide("A") ? SealedSide("A") : <>
-          {teamAGroups.map((pids) => PlayerRow(pids, "A"))}
+          {PlayerRows("A", teamAGroups)}
           {SideRow("A")}
         </>}
         {!hiddenMatch && MatchRow}
@@ -844,7 +907,7 @@ export function FullScorecard({
             Team B's first row would butt straight into its border. */}
         <div style={{ marginTop: 5 }}>
           {hiddenSide("B") ? SealedSide("B") : <>
-            {teamBGroups.map((pids) => PlayerRow(pids, "B"))}
+            {PlayerRows("B", teamBGroups)}
             {SideRow("B")}
           </>}
         </div>

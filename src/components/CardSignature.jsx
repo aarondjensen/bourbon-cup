@@ -154,7 +154,7 @@ export function CardSignerNote() {
 // and that is not what a signature is for.
 export function SignCardSheet({
   match, result, format, holePars, holeHcps, course, tPlayers, getScore,
-  viewer, onSign, onClose, conceal = null, ownSideOnly = false,
+  viewer, onSign, onClose, conceal = null, ownSideOnly = false, waves = null,
 }) {
   const [busy, setBusy] = useState(false);
 
@@ -179,7 +179,7 @@ export function SignCardSheet({
           match={match} result={result} format={format}
           holePars={holePars} holeHcps={holeHcps} course={course}
           tPlayers={tPlayers} getScore={getScore} viewer={viewer}
-          conceal={conceal} ownSideOnly={ownSideOnly} />
+          conceal={conceal} ownSideOnly={ownSideOnly} waves={waves} />
       </div>
 
       <div style={{ padding: "0 14px 14px", fontFamily: FONT }}>
@@ -212,7 +212,7 @@ export function SignCardSheet({
 export function SignedCardPanel({
   match, sig, result, format, holePars, holeHcps, course, tPlayers, getScore,
   viewer, userPid, onAttest, onUnsign, notify, isDirector = false, conceal = null,
-  ownSideOnly = false,
+  ownSideOnly = false, waves = null,
 }) {
   const { confirm, confirmModal } = useConfirm();
   const [busy, setBusy] = useState(false);
@@ -302,7 +302,7 @@ export function SignedCardPanel({
           match={match} result={result} format={format}
           holePars={holePars} holeHcps={holeHcps} course={course}
           tPlayers={tPlayers} getScore={getScore} viewer={viewer}
-          conceal={conceal} ownSideOnly={ownSideOnly} />
+          conceal={conceal} ownSideOnly={ownSideOnly} waves={waves} />
       </div>
 
       {/* ── The status block ── */}

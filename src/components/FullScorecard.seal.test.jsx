@@ -48,7 +48,13 @@ const courses = [{
 
 // Scratch all round, so every net is its gross and nothing below turns on a
 // handicap allocation.
-const mk = (pid, team) => ({ player_id: pid, name: `${team}${pid} Man`, team, handicap_index: 0 });
+// Distinct initials on purpose: the grid draws a man as his initials, so
+// unique ones are what make the ROW ORDER readable off the rendered card.
+const NAMES = {
+  a1: "Aaron Jensen", a2: "Pete Carr", a3: "Andy Hill", a4: "Kevin Jones",
+  b1: "Wes Long", b2: "Gil Ash", b3: "Tom Frye", b4: "Marty King",
+};
+const mk = (pid, team) => ({ player_id: pid, name: NAMES[pid], team, handicap_index: 0 });
 const teamA = ["a1", "a2", "a3", "a4"];
 const teamB = ["b1", "b2", "b3", "b4"];
 const tPlayers = [...teamA.map(p => mk(p, "A")), ...teamB.map(p => mk(p, "B"))];
@@ -75,7 +81,7 @@ const match = { id: "m4", round: 4, teamA, teamB, scoring_type: "match" };
 // and not one hole turned over yet.
 const SEALED = { through: 0, side: "A" };
 
-const card = (conceal, ownSideOnly = true) => {
+const card = (conceal, ownSideOnly = true, waves = null) => {
   const result = computeMatchResult(
     match, holeData, courses, [round], tPlayers, "team_best_ball", {}, undefined, {}, {},
   );
@@ -83,7 +89,7 @@ const card = (conceal, ownSideOnly = true) => {
     <FullScorecard
       match={match} result={result} format="team_best_ball"
       holePars={PARS} holeHcps={SI} course={courses[0]}
-      tPlayers={tPlayers} viewer="A" conceal={conceal} ownSideOnly={ownSideOnly}
+      tPlayers={tPlayers} viewer="A" conceal={conceal} ownSideOnly={ownSideOnly} waves={waves}
       getScore={(pid, h) => holeData[`${pid}_4`]?.[h] || 0}
     />,
   ).container;
@@ -211,5 +217,69 @@ describe("an unsealed card that is nobody's own side only", () => {
     const el = card(null, false);
     expect(el.textContent).toContain(String(B_NINE));
     expect(locks(el)).toBe(0);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  Grouped by the foursome that actually played together
+// ══════════════════════════════════════════════════════════════════
+//
+// The Scoring tab draws one WAVE at a time — four men who walked together.
+// The card behind it is the MATCH, so it holds every wave at once, and as a
+// flat list of eight it put those four men four rows apart in an order that
+// matched nothing anybody had seen. So it takes the waves and groups under
+// them, labelled by the tee time they went off.
+describe("a side that went off in waves", () => {
+  // Deliberately NOT in roster order: a1 and a3 went off at 2:00 with two
+  // men from later in the list, which is exactly the interleaving that made a
+  // flat list unreadable.
+  const waves = [
+    { key: "w1", label: "2:00", pids: ["a3", "a1"] },
+    { key: "w2", label: "2:10", pids: ["a4", "a2"] },
+  ];
+  const el = () => card(SEALED, true, waves);
+
+  it("labels each wave with the time it went off", () => {
+    const text = el().textContent;
+    expect(text).toContain("2:00");
+    expect(text).toContain("2:10");
+  });
+
+  // Where each thing lands in the rendered card, read off the first nine.
+  const at = (needle) => el().textContent.indexOf(needle);
+
+  it("puts each man under the wave he went off in", () => {
+    // AJ and AH went off at 2:00; PC and KJ at 2:10. On a flat list they were
+    // interleaved — AJ, PC, AH, KJ — which is the reading this fixes.
+    expect(at("2:00")).toBeLessThan(at("AJ"));
+    expect(at("AH")).toBeLessThan(at("2:10"));
+    expect(at("2:10")).toBeLessThan(at("PC"));
+  });
+
+  it("orders a wave the way the Scoring tab orders it", () => {
+    // The Scoring tab draws `match.teamA.filter(inUnit)` — the MATCH's roster
+    // order, cut to the wave. The 2:00 wave is handed over here as [a3, a1]
+    // and must still be drawn a1 (AJ) then a3 (AH), so the two screens can
+    // never put the same four men in two different orders.
+    expect(at("AJ")).toBeLessThan(at("AH"));
+    expect(at("PC")).toBeLessThan(at("KJ"));
+  });
+
+  it("still counts the whole side, not the wave", () => {
+    // Grouping is a layout. The NET row is the side's best N across every
+    // wave, exactly as the engine scored it.
+    expect(el().textContent).toContain("36");
+  });
+
+  it("keeps a man the draw never placed on the card", () => {
+    const short = [{ key: "w1", label: "2:00", pids: ["a1", "a2"] }];
+    const text = card(SEALED, true, short).textContent;
+    expect(text).toContain("NOT ON THE TEE SHEET");
+  });
+
+  it("draws a flat list when there are no waves to group by", () => {
+    // Every 1- and 2-man round: the match IS the foursome, so there is
+    // nothing to group and no label row is spent on saying so.
+    expect(card(SEALED, true, null).textContent).not.toContain("2:00");
   });
 });

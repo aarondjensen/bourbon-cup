@@ -1314,6 +1314,26 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // side's, not the foursome's.
   const cardPids = unit?.pids || [];
 
+  // ── The waves, for anything that draws more than one of them ─────
+  // A match played across several tee times is drawn on the Scoring tab one
+  // wave at a time — that is the whole of scoringUnits — but the Full
+  // Scorecard behind it is the MATCH, so it holds every wave at once. As a
+  // flat list of eight that put the four men who actually walked together
+  // four rows apart, in an order that matches nothing anybody saw.
+  //
+  // So the card is handed the waves themselves, in tee order and labelled by
+  // the time they went off, and groups its rows under them. `times` is lifted
+  // out of the group picker below, which is where it used to live, so the
+  // label on a wave here and the label on its pill down there cannot drift.
+  const teeTimes = expandTeeTimes(teeTimeList(tr), units.length);
+  const cardWaves = units.length > 1
+    ? units.map((u, i) => ({
+      key: u.key,
+      label: u.groupIdx == null ? "UNGROUPED" : (stripAMPM(teeTimes[u.groupIdx]) || `WAVE ${i + 1}`),
+      pids: u.pids,
+    }))
+    : null;
+
   // Which hole is showing, when it moves on by itself, and the toast during
   // the wait — see lib/useHoleAdvance.
   const { activeHole, goToHole, toast, positionOn } =
@@ -1998,7 +2018,7 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // device (useFitDensity), so a control of its own would come out of the
   // score buttons' height for a question asked once a year.
   const groupPicker = isDirector && units.length > 1 ? (() => {
-    const times = expandTeeTimes(teeTimeList(tr), units.length);
+    const times = teeTimes;
     const locked = (u) => sealedToOwnSide && (u.pids || []).some(otherSidePlayer);
     const unlockThen = async (key) => {
       // Short on purpose. The man tapping this is a director standing on a
@@ -2250,7 +2270,7 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
         holePars={holePars} holeHcps={holeHcps} course={course}
         tPlayers={tPlayers} getScore={getScore} viewer={userTeam}
         userPid={userPid} notify={notify} isDirector={isDirector}
-        conceal={conceal} ownSideOnly={ownSideOnly}
+        conceal={conceal} ownSideOnly={ownSideOnly} waves={cardWaves}
         onAttest={() => onAttestCard(match, userPid)}
         onUnsign={() => onUnsignCard(match)}
       />
@@ -2541,7 +2561,7 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
           match={match} result={result} format={format}
           holePars={holePars} holeHcps={holeHcps} course={course}
           tPlayers={tPlayers} getScore={getScore} viewer={userTeam}
-          conceal={conceal} ownSideOnly={ownSideOnly}
+          conceal={conceal} ownSideOnly={ownSideOnly} waves={cardWaves}
           onClose={() => setShowSign(false)}
           onSign={async () => {
             const res = await onSignCard(match, userPid);
@@ -2577,6 +2597,7 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
               holePars={holePars} holeHcps={holeHcps} course={course}
               tPlayers={tPlayers} getScore={getScore}
               viewer={userTeam} conceal={conceal} ownSideOnly={ownSideOnly}
+              waves={cardWaves}
             />
           </div>
           <button onClick={() => setShowScorecard(false)} style={{
