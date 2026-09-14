@@ -2788,26 +2788,44 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
           not the Leaderboard's team-only grid: this one is opened by a
           player mid-round, so it shows the four GROSS lines in golf
           notation with their stroke dots, then how the side's number was
-          made from them. */}
+          made from them.
+
+          ── One card a MATCH, not one card a screen ────────────────
+          A singles foursome is two matches (see `unitMatches`), and a card
+          is a match: the hole-won marks, the running line and the nine
+          results all compare ONE pair. Handed four rows it would draw
+          Aaron against Shaun, who never played each other.
+
+          So the popup stacks a card per match, in the same tee order the
+          boxes behind it are in. FullScorecard already heads itself with
+          the two sides' names and the match's status, so each card says
+          whose it is without anything here labelling it — which is also why
+          the popup's own title drops the match number when there are two:
+          it could only ever name one of them. */}
       {showScorecard && (
         <Popup onClose={() => setShowScorecard(false)} maxWidth={480} padding={0} outerPadding={12}
           innerStyle={{ background: BC.card, border: `1px solid ${BC.amber}${ALPHA.line}`, borderRadius: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderBottom: `1px solid ${BC.bdr}` }}>
             <div style={{ fontSize: FS.small, fontWeight: 800, color: BC.amberInk, letterSpacing: 1 }}>
-              SCORECARD — RD {match.round}{match.matchNumber ? ` · MATCH ${match.matchNumber}` : ""}
+              SCORECARD — RD {match.round}
+              {!boxed && match.matchNumber ? ` · MATCH ${match.matchNumber}` : ""}
             </div>
             <button onClick={() => setShowScorecard(false)} style={{
               background: "transparent", border: "none", color: BC.t2, fontSize: FS.title, cursor: "pointer", padding: "0 4px",
             }}>×</button>
           </div>
-          <div style={{ padding: 12 }}>
-            <FullScorecard
-              match={match} result={result} format={format}
-              holePars={holePars} holeHcps={holeHcps} course={course}
-              tPlayers={tPlayers} getScore={getScore}
-              viewer={userTeam} conceal={conceal} ownSideOnly={ownSideOnly}
-              waves={cardWaves}
-            />
+          <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 14 }}>
+            {unitMatches.map((m, i) => (
+              <div key={m.id} style={i > 0 ? { borderTop: `1px solid ${BC.bdr}`, paddingTop: 14 } : undefined}>
+                <FullScorecard
+                  match={m} result={results.get(m.id)} format={format}
+                  holePars={holePars} holeHcps={holeHcps} course={course}
+                  tPlayers={tPlayers} getScore={getScore}
+                  viewer={userTeam} conceal={conceal} ownSideOnly={ownSideOnly}
+                  waves={cardWaves}
+                />
+              </div>
+            ))}
           </div>
           <button onClick={() => setShowScorecard(false)} style={{
             display: "block", width: "calc(100% - 24px)", margin: "0 auto 12px",
