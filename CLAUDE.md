@@ -1097,6 +1097,62 @@ failure is running a bundle inside a binary and cannot be patched today.
 one of the two moving is no longer a whole-batch outage. The fallback only runs
 when the first returns nothing, and a golfer's `via` field says which answered.
 
+## The first frame
+
+Two things decide what the app looks like before it is the app, and both had
+drifted into saying something the app does not.
+
+**The typeface is self-hosted, and its @font-face lives in `index.html`.**
+Montserrat used to be a `<link>` to fonts.googleapis.com that `theme.js`
+appended at import time, which puts the font four hops behind the first paint:
+fetch the bundle, evaluate it, fetch Google's CSS, fetch the woff2 off a third
+origin. With `display: swap` the app painted in the system sans for all of that
+and re-lettered when the font landed — most visibly on the splash, whose title
+is the largest type in the app, and which was reported as "The Bourbon Cup 20XX
+in two different font formats". A screen that re-letters reads as a second
+screen.
+
+A rule the browser can only find by running JavaScript is a rule it finds too
+late by construction, so the declaration has to be in the document. Two
+variable files, one per subset, weight 400–800 — every weight the app asks for
+in a single request. Only latin is preloaded; latin-ext is declared so an
+accented name renders in the same face as the one beside it, and is
+unicode-range'd so it is never fetched otherwise. `crossorigin` on the preload
+is not optional even though the file is same-origin: fonts are fetched in CORS
+mode, and a preload whose mode disagrees is discarded and fetched twice.
+
+Same-origin also means `public/sw-cache-rules.js` can hold it — cross-origin
+requests are `bypass` there, so the Google-hosted font was never on disk and an
+installed app cold-starting out of range did without its typeface entirely.
+`FONT` in `theme.js` is still the one place the family string lives.
+`src/typeface.test.js` is the guard.
+
+**One colour behind the launch, and four files name it.** `capacitor.config.json`
+(three times), `scripts/app-icons.mjs`, `values/splash_background.xml` and
+`BC.bg` in `theme.js`. Nothing makes them agree on their own and they drifted:
+the launch image was generated on `#161618` while the web view painted
+`#0a0a0b` under it, so the screen lightened a shade at the handoff. It is
+`#0a0a0b` everywhere now and `native-projects.test.js` pins all four together —
+it cannot tell you the colour is right, only that every file says the same one.
+
+**`npm run build:app-icons` does Android's launch screen too.** It always did
+iOS's, and that asymmetry is why Android shipped Capacitor's blue X on WHITE in
+front of a near-black app while iOS showed the real mark. Eleven drawables
+rather than one because a bitmap used as a window background is stretched with
+no aspect ratio kept — the port/land split and the density buckets are what
+keep the mark from being pulled.
+
+Android 12 and up mostly never reach those drawables: `Theme.SplashScreen`
+draws the adaptive launcher icon over `windowSplashScreenBackground`, and that
+attribute's default is the AppCompat parent's `colorBackground`, which is
+white. `values/styles.xml` now sets both, and the script writes the colour, so
+the pre-12 and post-12 answers cannot disagree.
+
+**All of the native half is inert until somebody builds.** A Vercel deploy does
+not reach an installed app on either platform (see "The two shells"), so the
+launch-screen work ships on the next store build and not before. The typeface
+half is a web change and lands with the deploy.
+
 ## Verifying UI changes
 
 Screenshots beat assertions for anything visual. The pattern that works here:

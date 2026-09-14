@@ -45,8 +45,11 @@ const SPLASHES = ["splash-2732x2732.png", "splash-2732x2732-1.png", "splash-2732
 
 // The app's own background, so the launch image and the first painted frame
 // are the same colour and the handoff is invisible. Kept in step with
-// `backgroundColor` in capacitor.config.json and BC.bg in src/theme.js.
-const APP_BG = "#161618";
+// `backgroundColor` in capacitor.config.json and BC.bg in src/theme.js — it
+// had drifted to #161618 while both of those said #0a0a0b, which is a seam
+// you see rather than measure: the launch image lightens a shade at the
+// moment the web view takes over.
+const APP_BG = "#0a0a0b";
 const ICON_BG = "#0a0a0b";
 
 // Written to a temp name and renamed, so an interrupted run cannot leave a
@@ -84,6 +87,53 @@ for (const name of SPLASHES) {
       .composite([{ input: mark, gravity: "centre" }])
       .removeAlpha(),
     SPLASH_DIR + name
+  );
+}
+
+// ── The Android launch screen ───────────────────────────────────────
+// Same mark, same ground, and it is here for the reason at the top of this
+// file: `cap add android` seeds THESE too, and it seeds them with the blue X
+// on WHITE. iOS was being regenerated and Android was not, so the repo shipped
+// one platform's launch screen as the app and the other's as Capacitor's —
+// and on Android the white is the loud part, because it flashes in front of a
+// near-black app.
+//
+// Eleven files rather than one because a bitmap used as a window background is
+// STRETCHED to the window, with no aspect ratio kept. That is what the
+// port/land split and the density buckets are for: each bucket is already
+// close to the shape of the screens that ask for it, so the mark arrives
+// roughly square instead of pulled. It is sized off the SHORTER edge for the
+// same reason — 30% of it, which is the proportion the iOS square uses.
+//
+// Android 12 and up mostly do not reach these: `Theme.SplashScreen` draws the
+// adaptive launcher icon over `windowSplashScreenBackground` instead, which is
+// why values/splash_background.xml is written below. These are what everything
+// older still uses, and they are what `android:background` on the launch theme
+// points at.
+const ANDROID_SPLASHES = {
+  "drawable": [480, 320],
+  "drawable-land-mdpi": [480, 320],
+  "drawable-land-hdpi": [800, 480],
+  "drawable-land-xhdpi": [1280, 720],
+  "drawable-land-xxhdpi": [1600, 960],
+  "drawable-land-xxxhdpi": [1920, 1280],
+  "drawable-port-mdpi": [320, 480],
+  "drawable-port-hdpi": [480, 800],
+  "drawable-port-xhdpi": [720, 1280],
+  "drawable-port-xxhdpi": [960, 1600],
+  "drawable-port-xxxhdpi": [1280, 1920],
+};
+
+for (const [bucket, [w, h]] of Object.entries(ANDROID_SPLASHES)) {
+  const dir = `${ANDROID_RES}/${bucket}`;
+  await mkdir(dir, { recursive: true });
+  const size = Math.round(Math.min(w, h) * 0.3);
+  const art = await render(size).png().toBuffer();
+  await writeAtomic(
+    sharp({ create: { width: w, height: h, channels: 3, background: APP_BG } })
+      .composite([{ input: art, gravity: "centre" }])
+      .removeAlpha(),
+    `${dir}/splash.png`
   );
 }
 
@@ -158,6 +208,17 @@ await writeFile(
   `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">${ANDROID_BG}</color>\n</resources>\n`
 );
 
+// The ground the Android 12+ system splash draws the launcher icon on, read by
+// `windowSplashScreenBackground` in values/styles.xml. Its own default is the
+// theme's colorBackground, which on the AppCompat parent Capacitor seeds is
+// WHITE — so the drawables above were being skipped and a white screen shown
+// instead, on every phone new enough to matter. Written here rather than typed
+// into styles.xml so it can only ever be APP_BG.
+await writeFile(
+  `${ANDROID_RES}/values/splash_background.xml`,
+  `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="splash_background">${APP_BG}</color>\n</resources>\n`
+);
+
 const { width, height, channels } = await sharp(ICON).metadata();
 // Loud rather than silent: this is the one assertion that would otherwise be
 // discovered by App Store Connect, hours later, on an upload.
@@ -166,3 +227,4 @@ if (width !== 1024 || height !== 1024 || channels !== 3) {
 }
 console.log(`iOS: ${width}x${height} icon (${channels} channels, no alpha) + ${SPLASHES.length} splash images`);
 console.log(`Android: ${Object.keys(DENSITIES).length} densities x 3 slots, adaptive background ${ANDROID_BG}`);
+console.log(`Launch screen: ${Object.keys(ANDROID_SPLASHES).length} Android drawables + splash_background ${APP_BG}`);

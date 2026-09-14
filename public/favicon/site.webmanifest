@@ -33,7 +33,7 @@
     }
   ],
   "theme_color": "#0a0a0b",
-  "background_color": "#161618",
+  "background_color": "#0a0a0b",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait",

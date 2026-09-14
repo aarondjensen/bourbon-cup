@@ -51,6 +51,11 @@ const PBXPROJ = read("ios/App/App.xcodeproj/project.pbxproj");
 const APPDELEGATE = read("ios/App/App/AppDelegate.swift");
 const CAP = json("capacitor.config.json");
 
+// BC.bg in the dark theme — the colour the app's first painted frame actually
+// is. Everything the launch touches has to agree with it; see "the launch
+// colour" below for the four places that name it.
+const APP_BG = "#0a0a0b";
+
 describe("capacitor.config.json", () => {
   it("does not point the webview at a remote URL", () => {
     // THE 4.2 TRAP, and the one most likely to be reintroduced — pointing
@@ -305,7 +310,61 @@ describe("capacitor.config.json, Android", () => {
     // background colour, which flashes white behind a near-black app on every
     // cold start.
     expect(CAP.android).toBeTruthy();
-    expect(CAP.android.backgroundColor).toBe("#161618");
+    expect(CAP.android.backgroundColor).toBe(APP_BG);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  One colour behind the launch
+// ══════════════════════════════════════════════════════════════════
+//
+// Four files name the colour the app starts on, and nothing makes them agree
+// on their own — so they drifted, and the drift is the kind you see rather
+// than measure. The launch image was generated on #161618 while the web view
+// painted #0a0a0b under it, so the screen lightened a shade at the handoff and
+// the whole thing read as two screens rather than one.
+//
+// This is the test that stops it happening again. It cannot tell you the
+// colour is right; it tells you every file is saying the same one.
+
+describe("the launch colour", () => {
+  it("is the same in the Capacitor config, the generator and the theme", () => {
+    expect(CAP.backgroundColor).toBe(APP_BG);
+    expect(CAP.ios.backgroundColor).toBe(APP_BG);
+    expect(CAP.android.backgroundColor).toBe(APP_BG);
+    // The status bar sits on the same ground, and always has.
+    expect(CAP.plugins?.StatusBar?.backgroundColor).toBe(APP_BG);
+
+    // scripts/app-icons.mjs paints the launch images and writes the Android
+    // 12+ splash colour resource. Read as text rather than imported: the
+    // script does its work at module scope, so importing it would regenerate
+    // every icon in the repo as a side effect of running the test suite.
+    const gen = readFileSync("scripts/app-icons.mjs", "utf8");
+    expect(gen).toMatch(new RegExp(`const APP_BG = "${APP_BG}";`));
+
+    // And what that script actually wrote, which is what Android 12 and up
+    // draw the system splash on. The pre-12 drawables are PNGs and are
+    // checked by eye; this one is a string and can be pinned.
+    const splashColor = readFileSync(
+      "android/app/src/main/res/values/splash_background.xml", "utf8");
+    expect(splashColor).toContain(`<color name="splash_background">${APP_BG}</color>`);
+
+    // The theme's own dark background — the colour the first painted frame
+    // actually is, and therefore the one all of the above exist to match.
+    const theme = readFileSync("src/theme.js", "utf8");
+    expect(theme).toMatch(new RegExp(`bg: "${APP_BG}",`));
+  });
+
+  it("is what the Android launch theme points at, on both sides of 12", () => {
+    const styles = readFileSync(
+      "android/app/src/main/res/values/styles.xml", "utf8");
+    // Below 12 the window background IS the launch screen.
+    expect(styles).toContain('<item name="android:background">@drawable/splash</item>');
+    // From 12 up the drawable is ignored and this is used instead. Without it
+    // the attribute falls back to the AppCompat parent's colorBackground,
+    // which is white — in front of a near-black app.
+    expect(styles).toContain(
+      '<item name="windowSplashScreenBackground">@color/splash_background</item>');
   });
 });
 
