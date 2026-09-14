@@ -34,6 +34,9 @@
 // field the director immediately owns — not a rule, and nothing downstream
 // reads it once a count is stored. The Bourbon Cup has been four rounds
 // every year since 2016, so that is the useful thing to put in the box.
+import { weekdayName } from "./dates";
+import { teeTimeList, parseTeeTime, formatTeeTime } from "./groups";
+
 export const DEFAULT_ROUND_COUNT = 4;
 
 // A ceiling, so a slipped keystroke in a number field cannot ask the app to
@@ -133,4 +136,37 @@ export const allRounds = ({ roundCount, tRounds, matches, roundLocks } = {}) => 
 export const roundsBeyondCount = (args) => {
   const n = resolveRoundCount(args);
   return scheduledRounds(args).filter(r => r > n);
+};
+
+
+// ══════════════════════════════════════════════════════════════════
+//  When is it?
+// ══════════════════════════════════════════════════════════════════
+//
+// A round that has not been played has no score, and the board used to say
+// TBD in the slot where one goes. That is true and it is useless: a man
+// looking at Sunday's round on Friday night wants the two facts the group
+// text is about — which day, and what time the first group goes off.
+//
+// The day is the WEEKDAY, not the date. Nobody says "we play Treetops on the
+// fourteenth"; they say Friday. `bc_rounds.date` is a YYYY-MM-DD string and
+// is never parsed into a Date — see lib/dates for why that matters in a
+// tournament played in Michigan off a database in UTC.
+//
+// The time is the EARLIEST of the round's tee times rather than the first
+// box the director filled. The list is positional — group i goes off at time
+// i — so a director who fills G1 last, or reorders the sheet, leaves the
+// earliest time somewhere other than the front. "First tee time" is a fact
+// about the morning, not about the list.
+//
+// Either half can be missing, and then it says what it has: a round with a
+// date and no tee sheet says the day, one with times and no day says the
+// time. With neither there is nothing to say — the caller shows TBD, which
+// is where this started.
+export const roundWhen = (tr) => {
+  const day = weekdayName(tr?.date);
+  const times = teeTimeList(tr).map(parseTeeTime).filter((v) => v != null);
+  const first = times.length ? Math.min(...times) : null;
+  const tee = first == null ? "" : formatTeeTime(first, { ampm: true });
+  return [day, tee].filter(Boolean).join(" · ");
 };
