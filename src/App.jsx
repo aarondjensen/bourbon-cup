@@ -1221,20 +1221,25 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // numbers and the running line. Those are the round, and the round is not
   // known until the cards are turned over at the house.
   const roundSeal = revealState(tRounds, match?.round);
-  // `mixedFoursome` says whether the two sides on a card walked it together,
-  // which is what decides whether the OTHER side's gross rows are this
-  // reader's to see — see the prop note in components/FullScorecard. A format
-  // with a `perSide` count has a match that fits one foursome, so the group
-  // holding the phone wrote every card on it. Team Best Ball's match is the
-  // whole side across four tee waves, so it did not, and the opposition's
-  // cards go dark with everything else the seal takes.
+  const conceal = roundSeal.concealing ? { through: roundSeal.through, side: userTeam } : null;
+  // ── Whose card this screen is, at all ────────────────────────────
+  // Every card opened from the Scoring tab shows the reader's own side only
+  // when the match is bigger than a foursome. On every 1- and 2-man format
+  // the match IS the foursome — those four walked it together and wrote all
+  // four rows between them — so nothing there moves. Team Best Ball's match
+  // is the whole side across four tee waves, so the eight opposite are a
+  // different group on a different tee that this phone never saw, and their
+  // card is not this one.
+  //
+  // Deliberately NOT tied to the reveal. This tab is the COURSE tool; the
+  // detailed result of a finished round is read off the Leaderboard, which
+  // draws both sides in full the moment the round stops concealing. So the
+  // other side never has to arrive here at all — and a rule with no timing in
+  // it cannot be got wrong by a lock state landing in the wrong order.
   //
   // Structural rather than a check on the format's name: anything whose match
-  // outgrows a foursome has the same problem, and the fallback lands on the
-  // safe side of it.
-  const conceal = roundSeal.concealing
-    ? { through: roundSeal.through, side: userTeam, mixedFoursome: formatPerSide(format) != null }
-    : null;
+  // outgrows a foursome lands on the safe side of it.
+  const ownSideOnly = formatPerSide(format) == null;
 
   // ── The scoring unit: this screen is a TEE GROUP, not a match ────
   // On every 1- and 2-man format the match IS the foursome, so the unit is
@@ -2244,7 +2249,8 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
         match={match} sig={sig} result={result} format={format}
         holePars={holePars} holeHcps={holeHcps} course={course}
         tPlayers={tPlayers} getScore={getScore} viewer={userTeam}
-        userPid={userPid} notify={notify} isDirector={isDirector} conceal={conceal}
+        userPid={userPid} notify={notify} isDirector={isDirector}
+        conceal={conceal} ownSideOnly={ownSideOnly}
         onAttest={() => onAttestCard(match, userPid)}
         onUnsign={() => onUnsignCard(match)}
       />
@@ -2534,7 +2540,8 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
         <SignCardSheet
           match={match} result={result} format={format}
           holePars={holePars} holeHcps={holeHcps} course={course}
-          tPlayers={tPlayers} getScore={getScore} viewer={userTeam} conceal={conceal}
+          tPlayers={tPlayers} getScore={getScore} viewer={userTeam}
+          conceal={conceal} ownSideOnly={ownSideOnly}
           onClose={() => setShowSign(false)}
           onSign={async () => {
             const res = await onSignCard(match, userPid);
@@ -2569,7 +2576,7 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
               match={match} result={result} format={format}
               holePars={holePars} holeHcps={holeHcps} course={course}
               tPlayers={tPlayers} getScore={getScore}
-              viewer={userTeam} conceal={conceal}
+              viewer={userTeam} conceal={conceal} ownSideOnly={ownSideOnly}
             />
           </div>
           <button onClick={() => setShowScorecard(false)} style={{
