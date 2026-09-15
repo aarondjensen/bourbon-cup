@@ -575,7 +575,14 @@ export function PhotosView({
       {/* The years that were photographed before this screen existed. They live
           on the tournament's own website and always have; this tab is what the
           app itself holds, which is nothing at all for most of them. The link
-          out is how you get to the rest rather than a second navigation. */}
+          out is how you get to the rest rather than a second navigation.
+
+          DRAWN ONLY WHEN THERE IS SOMEWHERE TO GO. The constant named a page
+          the site does not serve, so the row was a 404 with a chevron on it —
+          and a link that fails is worse here than no link, because the tab
+          reads as though the rest of the library is one tap away. See
+          PHOTO_LIBRARY_URL in constants.js for what to put back. */}
+      {PHOTO_LIBRARY_URL ? (
       <a
         href={PHOTO_LIBRARY_URL}
         target="_blank"
@@ -588,6 +595,7 @@ export function PhotosView({
       >
         The full photo library ↗
       </a>
+      ) : null}
 
       {open && (
         <Lightbox
