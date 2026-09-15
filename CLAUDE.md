@@ -786,6 +786,20 @@ password — needs director.
   deliberately not devDependencies) and starts and stops the emulator itself.
   It needs a JRE on the PATH.
 
+  **The two are fetched by different mechanisms, and that is not tidiable.**
+  `firebase-tools` is the command npx runs, so `npx -p` reaches it. The other
+  is imported by `firestore.rules.test.mjs`, which the emulator runs as a
+  CHILD process — and that `node` resolves imports from the repo, not from
+  npx's cache, so a second `-p` put the package somewhere it could never be
+  found. The symptom is `ERR_MODULE_NOT_FOUND` for
+  `@firebase/rules-unit-testing` AFTER the emulator has started and printed
+  its banner, which reads like a broken test run and is a broken invocation.
+  It went unnoticed because a machine that had ever installed the package for
+  any other reason resolved it anyway. `pretest:rules` installs it
+  `--no-save` — into `node_modules`, where the child can see it, and out of
+  `package.json` and `package-lock.json`, which is what "deliberately not a
+  devDependency" was protecting.
+
 Things that will bite you:
 
 - **Neither provider works until it is enabled in the Firebase console**
