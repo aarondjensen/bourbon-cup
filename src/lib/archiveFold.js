@@ -137,6 +137,7 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
         rounds: 0, toPar: 0, holesToPar: 0,
         e: 0, b: 0, pr: 0, bo: 0, d: 0,
         best: null, byFormat: {}, byYear: [],
+        sgGross: 0, sgNet: 0, sgRounds: 0, sgNets: 0, bestSg: null,
         cupsWon: 0, cupsLost: 0, cupsHalved: 0,
         comebacks: 0, collapses: 0,
       });
@@ -156,6 +157,7 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
         year: e.year, team: t,
         teamName: t === "A" ? e.teamA : e.teamB,
         w: 0, l: 0, h: 0, pts: 0, matches: 0, rounds: 0, toPar: 0, best: null,
+        sgGross: 0, sgNet: 0, sgRounds: 0, sgNets: 0,
       });
       if (e.complete) {
         if (e.halved) r.cupsHalved += 1;
@@ -223,6 +225,47 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
     }
   });
 
+  // ── Strokes gained ──────────────────────────────────────────────
+  // Against the FIELD, which is the only benchmark this data can support and
+  // is also the standard one: SG Total is defined as the field's average score
+  // less the player's, and that is exactly what this is. It is NOT shot-level
+  // SG — off the tee, approach, around the green, putting — and it never can
+  // be from a scorecard, because a scorecard does not know where the ball was.
+  //
+  // Every comparison is inside ONE round, so the course, the tees, the weather
+  // and the pin sheet are the same for everybody being compared and cancel.
+  // That is what makes it safe to average across thirty-six courses afterwards
+  // when nothing else on this tab is: +2.4 at Bay Harbor and +2.4 at Harbor
+  // Point are the same claim about the same field.
+  //
+  // Gross says who played the best golf. NET says who played best to his
+  // handicap, which is the argument the cup actually settles — and the two
+  // answer differently often enough that showing one alone picks a side in it.
+  //
+  // Own-ball rounds only (formatOwnBall), for the third time and the same
+  // reason: on a scramble the field average is a field of shared balls, and a
+  // man's "score" is his partner's as much as his.
+  const fieldAvg = new Map();
+  cards.forEach((c) => {
+    const k = roundKey(c);
+    if (!formatOwnBall(roundIx.get(k)?.format)) return;
+    const f = fieldAvg.get(k) || { g: 0, n: 0, cards: 0, nets: 0 };
+    f.g += c.g; f.cards += 1;
+    if (c.ch != null) { f.n += c.g - c.ch; f.nets += 1; }
+    fieldAvg.set(k, f);
+  });
+
+  // A field of one is not a field. It is a man compared with himself, which is
+  // zero strokes gained by construction and would put anybody who played a
+  // round nobody else did on top of the board.
+  const gainOn = (c) => {
+    const f = fieldAvg.get(roundKey(c));
+    if (!f || f.cards < 2) return null;
+    const gross = (f.g / f.cards) - c.g;
+    const net = c.ch != null && f.nets >= 2 ? (f.n / f.nets) - (c.g - c.ch) : null;
+    return { gross, net };
+  };
+
   // ── Cards ───────────────────────────────────────────────────────
   cards.forEach((c) => {
     const r = row(c.p);
@@ -245,6 +288,16 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
       y.rounds += 1; y.toPar += c.tp;
       if (own && (!y.best || c.tp < y.best.toPar)) y.best = shot;
     }
+    const sg = own ? gainOn(c) : null;
+    if (sg) {
+      r.sgRounds += 1; r.sgGross += sg.gross;
+      if (sg.net != null) { r.sgNets += 1; r.sgNet += sg.net; }
+      if (!r.bestSg || sg.gross > r.bestSg.sg) r.bestSg = { ...shot, sg: sg.gross };
+      if (y) {
+        y.sgRounds += 1; y.sgGross += sg.gross;
+        if (sg.net != null) { y.sgNets += 1; y.sgNet += sg.net; }
+      }
+    }
     // Clutch, off the status at the turn. Down three with nine to play and
     // won it is a fact nobody could recover from a final margin, which is why
     // `a9` is the one hole-level number the archive carries.
@@ -259,8 +312,17 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
     ...r,
     years: r.years.slice().sort((a, b) => a - b),
     byYear: r.byYear.slice().sort((a, b) => b.year - a.year)
-      .map((y) => ({ ...y, avgToPar: y.rounds ? y.toPar / y.rounds : null })),
+      .map((y) => ({
+        ...y,
+        avgToPar: y.rounds ? y.toPar / y.rounds : null,
+        sg: y.sgRounds ? y.sgGross / y.sgRounds : null,
+        sgNetPer: y.sgNets ? y.sgNet / y.sgNets : null,
+      })),
     avgToPar: r.rounds ? r.toPar / r.rounds : null,
+    // Per ROUND rather than totalled: a total is a record about turning up,
+    // and this board already sits next to MOST APPEARANCES.
+    sg: r.sgRounds ? r.sgGross / r.sgRounds : null,
+    sgNetPer: r.sgNets ? r.sgNet / r.sgNets : null,
     ppm: r.matches ? r.pts / r.matches : null,
     birdiesPerRound: r.rounds ? (r.e + r.b) / r.rounds : null,
     debut: r.years.length ? Math.min(...r.years) : null,
@@ -459,6 +521,24 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
     cupsPlayed: finished.length,
   };
 
+  // Eight own-ball rounds is three cups' worth — the same floor `bestRate`
+  // puts on a rate, for the same reason. Below it one calm morning in a gale
+  // tops the board forever, which is a record about the weather.
+  const SG_MIN_ROUNDS = 8;
+  const sgBoard = (key, rounds) => top(played
+    .filter((r) => r[key] != null && r[rounds] >= SG_MIN_ROUNDS)
+    .sort((a, b) => b[key] - a[key]));
+
+  const strokesGained = {
+    gross: sgBoard("sg", "sgRounds"),
+    net: sgBoard("sgNetPer", "sgNets"),
+    // One round, not an average: the most dominant day anybody has had.
+    best: top(played.filter((r) => r.bestSg)
+      .map((r) => ({ id: r.id, name: r.name, ...r.bestSg }))
+      .sort((a, b) => b.sg - a.sg)),
+    minRounds: SG_MIN_ROUNDS,
+  };
+
   const streaks = {
     cupsWon: board("cupsWon"),
     matchWins: board("matchWins"),
@@ -494,6 +574,7 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
     courses: courseRows,
     roundDrama,
     records,
+    strokesGained,
     streaks,
     streakOf: (id) => streakRows.find((s) => s.id === id) || null,
   };

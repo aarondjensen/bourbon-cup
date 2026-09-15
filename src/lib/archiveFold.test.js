@@ -166,6 +166,76 @@ describe("the cards", () => {
   });
 });
 
+// ── Strokes gained ────────────────────────────────────────────────
+// Against the field, inside one round. It is zero-sum by construction, which
+// is the check worth having: if it ever stops summing to zero, the field the
+// comparison is against is not the field that played.
+describe("strokes gained", () => {
+  const round1 = (gs) => ({
+    players: toy.players,
+    editions: [{
+      year: 2001, teamA: "REDS", teamB: "BLUES", complete: true,
+      roster: Object.keys(gs).map((p) => ({ p, t: "A" })),
+    }],
+    rounds: [{ year: 2001, round: 1, format: "best_ball", course: "Toy", par: 72 }],
+    matches: [],
+    cards: Object.entries(gs).map(([p, [g, ch]]) => ({
+      year: 2001, round: 1, p, g, ch, tp: g - 72, e: 0, b: 0, pr: 0, bo: 0, d: 0,
+    })),
+  });
+
+  it("is the field average less his own score", () => {
+    // 70, 80, 90 — the field averages 80.
+    const f = foldArchive(round1({ a: [70, 0], b: [80, 0], c: [90, 0] }));
+    expect(f.careerOf("a").sg).toBeCloseTo(10, 9);
+    expect(f.careerOf("b").sg).toBeCloseTo(0, 9);
+    expect(f.careerOf("c").sg).toBeCloseTo(-10, 9);
+  });
+
+  it("sums to zero across the field", () => {
+    const f = foldArchive(round1({ a: [71, 4], b: [83, 11], c: [96, 22], d: [88, 15] }));
+    expect(f.career.reduce((s, r) => s + (r.sg ?? 0) * r.sgRounds, 0)).toBeCloseTo(0, 9);
+    expect(f.career.reduce((s, r) => s + (r.sgNetPer ?? 0) * r.sgNets, 0)).toBeCloseTo(0, 9);
+  });
+
+  it("answers gross and net differently, which is the point of showing both", () => {
+    // b shoots five more than a and gets eleven more strokes.
+    const f = foldArchive(round1({ a: [75, 2], b: [80, 13] }));
+    expect(f.careerOf("a").sg).toBeGreaterThan(f.careerOf("b").sg);
+    expect(f.careerOf("a").sgNetPer).toBeLessThan(f.careerOf("b").sgNetPer);
+  });
+
+  // A man compared with himself is zero by construction, and a board of those
+  // would be topped by whoever played a round nobody else did.
+  it("refuses a field of one", () => {
+    const f = foldArchive(round1({ a: [70, 0] }));
+    expect(f.careerOf("a").sg).toBeNull();
+    expect(f.careerOf("a").sgRounds).toBe(0);
+  });
+
+  it("leaves a shared ball out of it", () => {
+    const base = round1({ a: [70, 0], b: [80, 0] });
+    const shared = { ...base, rounds: [{ ...base.rounds[0], format: "scramble" }] };
+    expect(foldArchive(base).careerOf("a").sg).toBeCloseTo(5, 9);
+    expect(foldArchive(shared).careerOf("a").sg).toBeNull();
+  });
+
+  it("has no net figure for a card with no handicap on it", () => {
+    const f = foldArchive(round1({ a: [70, null], b: [80, null] }));
+    expect(f.careerOf("a").sg).toBeCloseTo(5, 9);
+    expect(f.careerOf("a").sgNetPer).toBeNull();
+  });
+
+  it("keeps a short career off the board but not out of the record", () => {
+    const f = foldArchive(round1({ a: [70, 0], b: [80, 0] }));
+    expect(f.careerOf("a").sg).toBeCloseTo(5, 9);
+    // One round is a long way short of the eight-round floor.
+    expect(f.strokesGained.gross).toEqual([]);
+    // The best single round has no floor — it is one round by definition.
+    expect(f.strokesGained.best[0].name).toBe("Amy A");
+  });
+});
+
 // ── Streaks ───────────────────────────────────────────────────────
 // The marks themselves are pinned in streaks.test.js. What is pinned here is
 // what the fold refuses to carry a run through.
@@ -398,6 +468,18 @@ describe("the committed archive", () => {
         }
       });
     });
+  });
+
+  // On the real record, across ten years and forty rounds.
+  it("gains no strokes on the field overall", () => {
+    expect(f.career.reduce((s, r) => s + (r.sg ?? 0) * r.sgRounds, 0)).toBeCloseTo(0, 6);
+    expect(f.career.reduce((s, r) => s + (r.sgNetPer ?? 0) * r.sgNets, 0)).toBeCloseTo(0, 6);
+  });
+
+  it("admits nobody to a strokes gained board under the round floor", () => {
+    const min = f.strokesGained.minRounds;
+    f.strokesGained.gross.forEach((r) => expect(r.sgRounds).toBeGreaterThanOrEqual(min));
+    f.strokesGained.net.forEach((r) => expect(r.sgNets).toBeGreaterThanOrEqual(min));
   });
 
   it("counts every card's holes as eighteen", () => {
