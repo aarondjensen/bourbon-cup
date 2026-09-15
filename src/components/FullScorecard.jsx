@@ -115,9 +115,10 @@ import { playerLookup, sideNames } from "../lib/players";
 import { BC, FONT, ALPHA, FS, ON_AMBER, teamColor } from "../theme";
 import {
   UNIT_DOTS, UNIT_POINTS, HANDICAP_MODE_LOW_MAN,
-  formatIsSharedBall, isPointsPerHole,
+  formatIsSharedBall, isPointsPerHole, formatGroupsByTeam, getTeam,
 } from "../constants";
 import {
+  fmtScore,
   higherIsBetter, totalUnit, holeFormatFor, settlesOnTotal,
   segmentState, statusText, segmentLeader, segmentOptsFor, nassauSegmentVisibility,
   sharedBallScore,
@@ -147,6 +148,23 @@ const labelCell = (h, extra) => ({
 });
 
 const totCell = (h, extra) => ({
+  width: TOT_W, flexShrink: 0, height: h,
+  display: "flex", alignItems: "center", justifyContent: "center",
+  borderLeft: colBdr(),
+  ...extra,
+});
+
+// ── The TOTAL column ──────────────────────────────────────────────
+// The eighteen-hole figure, and it only exists on the back block — a total
+// under the front nine would be the nine's own number said twice, and there
+// is no eighteen to total halfway through one.
+//
+// The column is drawn on BOTH blocks all the same, empty on the front. Two
+// blocks of the same card with different column counts do not line up, and
+// the eye reading down a card that is nine columns wide at the top and ten
+// at the bottom stops trusting that the columns mean the same thing. It
+// costs 34px of a phone once; it buys a card that reads as one grid.
+const sumCell = (h, extra) => ({
   width: TOT_W, flexShrink: 0, height: h,
   display: "flex", alignItems: "center", justifyContent: "center",
   borderLeft: colBdr(),
@@ -429,6 +447,45 @@ export function FullScorecard({
   // nets are real net scores and they sum to one.
   const netTotalStands = unit === UNIT_DOTS || unit === UNIT_POINTS
     || result.handicapMode !== HANDICAP_MODE_LOW_MAN;
+
+  // ── A side's number, where the side is EIGHT MEN ──────────────────
+  // Team Best Ball counts the best six (front) or seven (back) NETS on a
+  // hole and adds them, so the side's number for a par 4 is somewhere around
+  // 24 — a figure with no meaning anybody carries in their head, and one
+  // that says nothing about whether the hole went well. Six nets adding to
+  // 22 is the whole story and it is invisible in "22".
+  //
+  // So on that format the row reads TO PAR: the same number, measured
+  // against what those six or seven balls were expected to make. `counting`
+  // is the per-hole count the engine actually scored with (computeMatchResult
+  // exposes it), never the director's setting — a hole where a side was a man
+  // short counted fewer balls and its par has to follow.
+  //
+  // Every other format's side number is one ball, or dots, or points, and is
+  // already the number people say out loud. Left alone.
+  const counting = result.counting;
+  const toPar = !!counting;
+  const parFor = (h) => (counting?.[h] || 0) * (holePars[h] || 0);
+
+  // ── Who the header names ──────────────────────────────────────────
+  // The four men on the card, normally, because it is the only place they
+  // are spelled out and it is the legend for the initials in the rows.
+  //
+  // A Team Best Ball match is EIGHT a side, and eight names against eight
+  // wraps to four lines of a phone before a single hole is drawn — a header
+  // that pushes the card it heads off the screen. It is technically the
+  // match, and it is unreadable. The teams are what those sixteen are
+  // playing as, the row colours already say which is which, and every man's
+  // own row still carries his initials. So the two sides are named as
+  // teams, and the legend job is given up on the one format where it could
+  // not be done anyway.
+  //
+  // `getTeam` reads the LIVE team names (constants mutates them in place
+  // when the director's overrides land), so this cannot print last year's.
+  const bigSides = formatGroupsByTeam(format);
+  const sideHeading = (tid) => (bigSides
+    ? getTeam(tid).name
+    : sideNames(match, tid, nameOf).join(" / "));
   // What the running row is counted in — a different question. Holes up on
   // a match round, the lead on the running total on a Total one, points
   // banked on a points-per-hole one.
@@ -587,6 +644,10 @@ export function FullScorecard({
     const end = start + 9;
     const idx = Array.from({ length: 9 }, (_, i) => start + i);
     const parTotal = holePars.slice(start, end).reduce((a, b) => a + b, 0);
+    // The back block is the one that totals eighteen holes; the front draws
+    // the column and leaves it empty. See sumCell.
+    const isBack = start === 9;
+    const par18 = holePars.slice(0, 18).reduce((a, b) => a + b, 0);
     // This nine's own result — a real one, since the Nassau pays out on it.
     // From `nineSt` above, which the NINES row reads too.
     const seg = nineSt[start === 0 ? 0 : 1];
@@ -613,6 +674,11 @@ export function FullScorecard({
         <div style={totCell(24, { borderLeft: "none" })}>
           <span style={{ fontSize: FS.micro, fontWeight: 800, color: ON_AMBER, letterSpacing: 0.5 }}>{label}</span>
         </div>
+        {/* Headed on both blocks, because the heading is what says the empty
+            column on the front is deliberate rather than a clipped one. */}
+        <div style={sumCell(24, { borderLeft: "none" })}>
+          <span style={{ fontSize: FS.micro, fontWeight: 800, color: ON_AMBER, letterSpacing: 0.5 }}>TOT</span>
+        </div>
       </div>
     );
 
@@ -625,6 +691,9 @@ export function FullScorecard({
           </div>
         ))}
         <div style={totCell(20)}><span style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3 }}>{parTotal}</span></div>
+        <div style={sumCell(20)}>
+          {isBack && <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.t3 }}>{par18}</span>}
+        </div>
       </div>
     );
 
@@ -640,6 +709,7 @@ export function FullScorecard({
           </div>
         ))}
         <div style={totCell(18)} />
+        <div style={sumCell(18)} />
       </div>
     );
 
@@ -669,6 +739,16 @@ export function FullScorecard({
         if (s > 0) gross += s;
         return { h, s, st: strokesFor(pid, h) };
       });
+      // The eighteen, for the TOTAL column on the back block. Off the same
+      // reader the nine's cells come from, so a shared-ball side's total is
+      // the ball it played rather than one partner's own.
+      let gross18 = 0;
+      for (let h = 0; h < 18; h++) {
+        const v = combined
+          ? (sharedBallScore(pids.map(p => getScore(p, h))) || 0)
+          : getScore(pid, h);
+        if (v > 0) gross18 += v;
+      }
       // The playing handicap — post-allowance, which is the number the dots
       // on this row were actually allocated from. On a shared-ball side that
       // is the team's summed-then-rounded figure (result.teamCH), never
@@ -703,6 +783,9 @@ export function FullScorecard({
           ))}
           <div style={totCell(rowH, { paddingTop: 8 })}>
             <span style={{ fontSize: FS.small, fontWeight: 800, color: BC.t1 }}>{gross || ""}</span>
+          </div>
+          <div style={sumCell(rowH, { paddingTop: 8 })}>
+            {isBack && <span style={{ fontSize: FS.small, fontWeight: 800, color: BC.t1 }}>{gross18 || ""}</span>}
           </div>
         </div>
       );
@@ -788,17 +871,35 @@ export function FullScorecard({
       // The other side's row is the round, so it stops at the reveal. Your
       // own keeps going: a team is never hidden from itself.
       const hidden = (h) => sealedHole(h) && tid !== mySide;
+      // What the row prints for a hole: the side's raw number, or how that
+      // number stands against the par of the balls it counted. See `toPar`.
+      const at = (h) => {
+        const v = holes[h]?.[key];
+        if (v == null) return null;
+        return toPar ? v - parFor(h) : v;
+      };
       let sum = 0, allIn = true;
       idx.forEach((h) => {
-        const v = hidden(h) ? null : holes[h]?.[key];
+        const v = hidden(h) ? null : at(h);
         if (v == null) allIn = false; else sum += v;
       });
+      // The eighteen. Its own `allIn`, because a card can have a complete
+      // nine and an incomplete card.
+      let sum18 = 0, allIn18 = true;
+      for (let h = 0; h < 18; h++) {
+        const v = (sealedHole(h) && tid !== mySide) ? null : at(h);
+        if (v == null) allIn18 = false; else sum18 += v;
+      }
+      // A to-par row reads in the app's own score vocabulary — E, +2, −3 —
+      // where a raw side number is just a number. `0` is E, and an empty
+      // cell is still empty.
+      const show = (v) => (v == null ? null : toPar ? fmtScore(v) : v);
       return (
         <div style={{ display: "flex", alignItems: "center", background: `${col}${ALPHA.wash}` }}>
           <div style={labelCell(rowH, { color: col })}>{sideLabel}</div>
           {idx.map((h, i) => {
             const hr = holes[h];
-            const v = hidden(h) ? null : hr?.[key];
+            const v = hidden(h) ? null : show(at(h));
             // Who took the hole is a comparison, so it goes dark for BOTH
             // sides — a mark left on your own row would say the other side
             // lost it, which is the same leak the other way round.
@@ -836,8 +937,13 @@ export function FullScorecard({
             {hidden(end - 1) || hidden(start)
               ? <span style={{ fontSize: FS.micro, opacity: 0.5 }}>🔒</span>
               : netTotalStands
-                ? <span style={{ fontSize: FS.small, fontWeight: 800, color: col }}>{allIn || sum ? sum : ""}</span>
+                ? <span style={{ fontSize: FS.small, fontWeight: 800, color: col }}>{allIn || sum ? show(sum) : ""}</span>
                 : null}
+          </div>
+          <div style={sumCell(rowH)}>
+            {isBack && netTotalStands && !hidden(17) && !hidden(0) && (allIn18 || sum18)
+              ? <span style={{ fontSize: FS.small, fontWeight: 800, color: col }}>{show(sum18)}</span>
+              : null}
           </div>
         </div>
       );
@@ -934,6 +1040,11 @@ export function FullScorecard({
             }}>{statusText(seg)}</span>
           )}
         </div>
+        {/* Deliberately empty, on both blocks. The eighteen-hole verdict is
+            the header's, three inches up and in words; a second copy of it
+            here would be the same fact twice on one card. The cell is drawn
+            so the row keeps the grid's column count. */}
+        <div style={sumCell(26, { borderLeft: "none" })} />
       </div>
     );
 
@@ -990,14 +1101,14 @@ export function FullScorecard({
       )}
       {showHeader && !solo && <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
         <span style={{ flex: 1, minWidth: 0, fontSize: FS.label, fontWeight: 800, lineHeight: 1.3, color: BC.teamA }}>
-          {sideNames(match, "A", nameOf).join(" / ")}
+          {sideHeading("A")}
         </span>
         <span style={{
           flexShrink: 0, fontSize: FS.small, fontWeight: 800,
           color: conceal ? BC.amberInk : overallLeader ? teamColor(overallLeader) : BC.t3,
         }}>{conceal ? "🔒 SEALED" : statusText(overall)}</span>
         <span style={{ flex: 1, minWidth: 0, fontSize: FS.label, fontWeight: 800, lineHeight: 1.3, color: BC.teamB, textAlign: "right" }}>
-          {sideNames(match, "B", nameOf).join(" / ")}
+          {sideHeading("B")}
         </span>
       </div>}
 
