@@ -87,8 +87,8 @@ const Empty = ({ icon = "📊", children }) => (
 // A row of chips that filters rather than navigates. Deliberately not a
 // SegmentedToggle: that control is the tab switcher's language, and there is
 // already one of those at the top of this screen.
-const Chips = ({ options, value, onChange }) => (
-  <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+const Chips = ({ options, value, onChange, style }) => (
+  <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap", ...style }}>
     {options.map(([v, label]) => {
       const on = v === value;
       return (
@@ -105,6 +105,10 @@ const Chips = ({ options, value, onChange }) => (
 );
 
 const toParText = (n) => (n == null ? "—" : fmtScore(Math.round(n * 10) / 10));
+
+// One shared empty set, so a fold without one does not hand a NEW set to a
+// memo on every render and re-filter every board for nothing.
+const NO_CORE = new Set();
 
 // ══════════════════════════════════════════════════════════════════
 //  TOURNAMENT
@@ -532,12 +536,12 @@ function PlayerCard({ p, data, activeYear }) {
 }
 
 // ── Personal records ──────────────────────────────────────────────
-function PlayerRecords({ data }) {
+function PlayerRecords({ data, note = "ALL YEARS" }) {
   const r = data.records;
   const list = (label, rows, render) => <RecordList label={label} rows={rows} render={render} />;
 
   return (
-    <Section label="Records" note="ALL YEARS">
+    <Section label="Records" note={note}>
       {/* OWN BALL is the whole qualification, and it belongs on the label:
           without it the list silently drops a scramble 62 that two men still
           talk about, and nothing on the screen says why. */}
@@ -595,7 +599,7 @@ function PlayerRecords({ data }) {
 // SG Total — the field's average less his own, inside one round so the course
 // and the day cancel — and deliberately not the shot-level split, which a
 // scorecard cannot support because it does not know where the ball was.
-function StrokesGained({ data }) {
+function StrokesGained({ data, note = "" }) {
   const sg = data.strokesGained;
   if (!sg || !(sg.gross.length || sg.net.length || sg.best.length)) return null;
   const rate = (key, rounds) => (p) => (
@@ -607,10 +611,13 @@ function StrokesGained({ data }) {
   );
 
   return (
-    <Section label="Strokes gained" note="VS THE FIELD · OWN BALL">
-      <RecordList label="PER ROUND · GROSS" rows={sg.gross} render={rate("sg", "sgRounds")} />
-      <RecordList label="PER ROUND · NET" rows={sg.net} render={rate("sgNetPer", "sgNets")} />
-      <RecordList label="BEST ROUND" rows={sg.best} render={(r) => (
+    <Section label="Strokes gained" note={`${note ? `${note} · ` : ""}VS THE FIELD`}>
+      {/* OWN BALL rides the board labels now that the note carries the field —
+          it is a fact about which rounds counted, and the boards are what it
+          is a fact about. */}
+      <RecordList label="PER ROUND · GROSS · OWN BALL" rows={sg.gross} render={rate("sg", "sgRounds")} />
+      <RecordList label="PER ROUND · NET · OWN BALL" rows={sg.net} render={rate("sgNetPer", "sgNets")} />
+      <RecordList label="BEST ROUND · OWN BALL" rows={sg.best} render={(r) => (
         <>
           <span style={{ flex: 1, minWidth: 0, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</span>
           <span style={{ width: 48, textAlign: "right", fontWeight: 800, color: sgColor(r.sg) }}>{fmtSg(r.sg)}</span>
@@ -626,7 +633,7 @@ function StrokesGained({ data }) {
 // and the split does the grouping that a sentence would otherwise have to.
 // The hole streaks are all inside one cup (see archiveFold), so the span on
 // the right is always a week somebody could go and check.
-function Streaks({ data }) {
+function Streaks({ data, note = "ALL YEARS" }) {
   const s = data.streaks;
   const row = (color) => (x) => (
     <>
@@ -645,7 +652,7 @@ function Streaks({ data }) {
   return (
     <>
       {any(s.cupsWon, s.matchWins, s.holesWon, s.netPar, s.noDouble) && (
-        <Section label="Streaks" note="ALL YEARS">
+        <Section label="Streaks" note={note}>
           <RecordList label="CUPS WON IN A ROW" rows={s.cupsWon} render={hot} />
           <RecordList label="MATCHES WON IN A ROW" rows={s.matchWins} render={hot} />
           <RecordList label="HOLES WON IN A ROW" rows={s.holesWon} render={hot} />
@@ -656,7 +663,7 @@ function Streaks({ data }) {
         </Section>
       )}
       {any(s.cupsLost, s.winless, s.holesLost, s.noPar) && (
-        <Section label="Cold streaks" note="ALL YEARS">
+        <Section label="Cold streaks" note={note}>
           <RecordList label="CUPS LOST IN A ROW" rows={s.cupsLost} render={cold} />
           <RecordList label="MATCHES WITHOUT A WIN" rows={s.winless} render={cold} />
           <RecordList label="HOLES LOST IN A ROW" rows={s.holesLost} render={cold} />
@@ -729,7 +736,36 @@ function CareerTable({ rows, teamOf, myId, activeYear, data, open, setOpen }) {
 
 function PlayerHalf({ data, activeYear, myId, teams }) {
   const [scope, setScope] = useState("career");
+  // ── Who is in the table ──────────────────────────────────────────
+  // The core sixteen by default, because the other eight are men who came
+  // once and the standing is a ten-year standing: a table sorted on points
+  // puts a one-cup guest among the regulars with a tenth of their golf behind
+  // him, and there is no column that says so.
+  //
+  // It filters the RECORD BOARDS as well as the table, which is the only
+  // reading that holds together — a Core 16 table above an all-time low round
+  // by a man the table has just hidden is two answers to one question. Every
+  // section says which set it is showing, because the chips are at the top of
+  // a long screen and a board halfway down it has to stand on its own.
+  //
+  // ALL is one tap away, and it is where the whole record lives: John S's 64
+  // is the lowest round anybody has played here and he played two cups.
+  const [field, setField] = useState("core");
   const [open, setOpen] = useState(null);
+
+  const core = data.core || NO_CORE;
+  const onlyCore = field === "core" && core.size > 0;
+  // Asked of the fold rather than filtered here, because a board has to be
+  // cut to the field BEFORE it is cut to five: filtering a finished top five
+  // down to the core leaves LOW ROUNDS with one line on it, the other four
+  // being John S, who played two cups and holds the four lowest rounds here.
+  const boards = useMemo(
+    () => (onlyCore && data.boards ? data.boards(core) : data),
+    [data, core, onlyCore],
+  );
+  const fieldNote = onlyCore
+    ? `CORE ${core.size}`
+    : `ALL ${data.career.filter((p) => p.apps || p.matches).length}`;
 
   const thisYear = data.edition(activeYear);
   const teamOf = useMemo(() => {
@@ -741,8 +777,10 @@ function PlayerHalf({ data, activeYear, myId, teams }) {
   // either way — a scope is which slice of a man's record you are reading,
   // not a different table.
   const rows = useMemo(() => {
-    if (scope === "career") return data.career.filter((p) => p.apps || p.matches);
-    return data.career
+    const played = data.career.filter((p) => (p.apps || p.matches)
+      && (!onlyCore || core.has(p.id)));
+    if (scope === "career") return played;
+    return played
       .map((p) => {
         const y = p.byYear.find((x) => x.year === activeYear);
         if (!y) return null;
@@ -751,24 +789,37 @@ function PlayerHalf({ data, activeYear, myId, teams }) {
       .filter(Boolean)
       .sort((a, b) => b.pts - a.pts || (a.avgToPar ?? Infinity) - (b.avgToPar ?? Infinity)
         || String(a.name).localeCompare(String(b.name)));
-  }, [data.career, scope, activeYear]);
+  }, [data.career, core, onlyCore, scope, activeYear]);
 
   // Yours first. Not a sort — the table's order is the standing and moving a
   // man up it would be a lie — so the row is highlighted where it belongs and
   // this scrolls nothing.
   return (
     <div>
-      <Chips
-        options={[["career", "Career"], ["year", String(activeYear)]]}
-        value={scope} onChange={(v) => { setScope(v); setOpen(null); }}
-      />
+      {/* Two axes, one line. Which slice of a man's record on the left, which
+          men on the right — they are different questions and a single row of
+          four chips would read as one. */}
+      <div style={{ display: "flex", gap: 8, justifyContent: "space-between", flexWrap: "wrap", marginBottom: 12 }}>
+        <Chips
+          options={[["career", "Career"], ["year", String(activeYear)]]}
+          value={scope} onChange={(v) => { setScope(v); setOpen(null); }}
+          style={{ marginBottom: 0 }}
+        />
+        {core.size > 0 && (
+          <Chips
+            options={[["core", `Core ${core.size}`], ["all", "All"]]}
+            value={field} onChange={(v) => { setField(v); setOpen(null); }}
+            style={{ marginBottom: 0 }}
+          />
+        )}
+      </div>
       <CareerTable
         rows={rows} teamOf={teamOf} myId={myId} activeYear={activeYear}
         data={data} open={open} setOpen={setOpen}
       />
-      {scope === "career" && <PlayerRecords data={data} />}
-      {scope === "career" && <StrokesGained data={data} />}
-      {scope === "career" && <Streaks data={data} />}
+      {scope === "career" && <PlayerRecords data={boards} note={fieldNote} />}
+      {scope === "career" && <StrokesGained data={boards} note={fieldNote} />}
+      {scope === "career" && <Streaks data={boards} note={fieldNote} />}
     </div>
   );
 }

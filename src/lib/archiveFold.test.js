@@ -3,7 +3,7 @@
 // what it refuses to count, is worth pinning.
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { foldArchive, aliasIndex, norm } from "./archiveFold.js";
+import { foldArchive, aliasIndex, norm, CORE_MIN_APPS } from "./archiveFold.js";
 
 const read = (f) => JSON.parse(readFileSync(new URL(`../../data/${f}`, import.meta.url), "utf8"));
 const archive = read("bourbon-cup-archive.json");
@@ -163,6 +163,86 @@ describe("the cards", () => {
     expect(f.careerOf("a").comebacks).toBe(1);
     expect(f.careerOf("c").collapses).toBe(1);
     expect(f.careerOf("b").comebacks).toBe(0);
+  });
+});
+
+// ── The core sixteen ──────────────────────────────────────────────
+describe("the core", () => {
+  // n cups, each with the same two men, so appearances are the only variable.
+  const cups = (appsOf) => {
+    const years = [...new Set(Object.values(appsOf).flat())].sort();
+    return {
+      players: toy.players,
+      editions: years.map((year) => ({
+        year, teamA: "REDS", teamB: "BLUES", complete: true,
+        roster: Object.entries(appsOf).filter(([, ys]) => ys.includes(year))
+          .map(([p], i) => ({ p, t: i % 2 ? "B" : "A" })),
+      })),
+      rounds: [], matches: [], cards: [],
+    };
+  };
+
+  it("takes everyone with four cups or more", () => {
+    const f = foldArchive(cups({
+      a: [2001, 2002, 2003, 2004],
+      b: [2001, 2002, 2003],
+      c: [2004],
+    }));
+    expect(CORE_MIN_APPS).toBe(4);
+    expect([...f.core].sort()).toEqual(["a"]);
+  });
+
+  // On the real record the rule lands on sixteen, and it is not a number
+  // chosen to: the sixteenth man has played seven cups and the seventeenth
+  // has played three, so any cut between four and seven names the same men.
+  it("names sixteen on the committed archive, with room either side", () => {
+    const f = foldArchive(archive);
+    expect(f.core.size).toBe(16);
+    const apps = f.career.filter((r) => r.apps).map((r) => r.apps).sort((x, y) => y - x);
+    expect(apps[15]).toBeGreaterThanOrEqual(7);
+    expect(apps[16]).toBeLessThanOrEqual(3);
+    [4, 5, 6, 7].forEach((cut) => {
+      expect(f.career.filter((r) => r.apps >= cut).length).toBe(16);
+    });
+  });
+});
+
+describe("boards over a chosen field", () => {
+  const f = foldArchive(archive);
+
+  it("hands back the whole record when asked for everybody", () => {
+    expect(f.boards(null).records.lowRounds).toEqual(f.records.lowRounds);
+    expect(f.boards(null).streaks).toEqual(f.streaks);
+    expect(f.boards(null).strokesGained).toEqual(f.strokesGained);
+  });
+
+  // The reason this is a function of the field and not a filter over a
+  // finished board: John S played two cups and holds the four lowest rounds
+  // in the record, so cutting the top five down to the core afterwards leaves
+  // one line on it.
+  it("cuts to the field before it cuts to five", () => {
+    const core = f.boards(f.core);
+    expect(f.records.lowRounds.filter((c) => f.core.has(c.id))).toHaveLength(1);
+    expect(core.records.lowRounds).toHaveLength(5);
+    core.records.lowRounds.forEach((c) => expect(f.core.has(c.id)).toBe(true));
+  });
+
+  it("keeps every board inside the field it was asked for", () => {
+    const core = f.boards(f.core);
+    const ids = (rows) => rows.forEach((r) => expect(f.core.has(r.id)).toBe(true));
+    ["lowRounds", "bestWeeks", "mostPoints", "mostApps", "bestRate", "mostBirdies", "comebacks"]
+      .forEach((k) => ids(core.records[k]));
+    ["gross", "net", "best"].forEach((k) => ids(core.strokesGained[k]));
+    Object.values(core.streaks).forEach(ids);
+  });
+
+  // The cup's own records are not a player board. Which year was closest is
+  // the same answer whoever is being listed.
+  it("leaves the cup's own records alone", () => {
+    const core = f.boards(f.core);
+    expect(core.records.closest).toEqual(f.records.closest);
+    expect(core.records.cupComebacks).toEqual(f.records.cupComebacks);
+    expect(core.records.cupsPlayed).toBe(f.records.cupsPlayed);
   });
 });
 

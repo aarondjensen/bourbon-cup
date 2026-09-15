@@ -61,6 +61,23 @@ export const aliasIndex = (players = []) => {
   return map;
 };
 
+// ── The core sixteen ──────────────────────────────────────────────
+// The men who keep coming. Four cups is the cut, and it is not a number
+// somebody picked to land on sixteen — the record has a hole in it exactly
+// there. Sixteen golfers have played seven cups or more; the next man down
+// has played three. Nobody has ever played four, five or six.
+//
+// So any cut between four and seven names the same sixteen, which is what
+// makes this worth having as a rule rather than a hand-kept list: it does not
+// sit on a knife edge, and it maintains itself. A man on his fourth cup joins
+// on the day he tees off, and the label counts whoever is in rather than
+// saying "16" and being wrong the first year somebody does.
+//
+// Four rather than a top-sixteen-by-appearances, because a rate is a rule and
+// a rank is an arbitration: two men tied on the boundary would leave one of
+// them in and one out with nothing to say why.
+export const CORE_MIN_APPS = 4;
+
 // ── The fold ──────────────────────────────────────────────────────
 export const foldArchive = ({ players = [], editions = [], rounds = [], matches = [], cards = [] } = {}) => {
   const nameOf = new Map(players.map((p) => [p.id, p.name]));
@@ -392,7 +409,10 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
   // a career, a week and the course passport, where the side is the subject.
   const rankedCards = cards
     .filter((c) => formatOwnBall(roundIx.get(roundKey(c))?.format))
-    .map((c) => ({ ...c, name: named(c.p), course: roundIx.get(roundKey(c))?.course || "" }))
+    // `id` as well as `p`: it is the card's golfer either way, and every other
+    // board on the tab names him `id`. A screen filtering boards by player
+    // should not have to know which kind of row it is holding.
+    .map((c) => ({ ...c, id: c.p, name: named(c.p), course: roundIx.get(roundKey(c))?.course || "" }))
     .sort(byNum((c) => c.tp));
 
   // ── Streaks ─────────────────────────────────────────────────────
@@ -490,29 +510,82 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
     };
   });
 
-  // Two is the floor. A run of one is not a streak, it is a thing that
-  // happened once, and a board of them would be every golfer who has ever
-  // won a hole. Ties go to the older run, then to the name, so the list is
-  // the same on every phone.
-  const board = (key, n = 3) => streakRows
-    .map((s) => (s[key] ? { id: s.id, name: s.name, ...s[key] } : null))
-    .filter((s) => s && s.len >= 2)
-    .sort((a, b) => b.len - a.len || a.from.year - b.from.year
-      || String(a.name).localeCompare(String(b.name)))
-    .slice(0, n);
+  // ── The player boards ───────────────────────────────────────────
+  // A FUNCTION of which golfers are in, not a list, because the Data tab can
+  // ask for the core sixteen (see CORE_MIN_APPS) and a board has to be cut to
+  // the field BEFORE it is cut to five. Filtering a finished top five down to
+  // the core leaves LOW ROUNDS with one line on it — the other four were John
+  // S, who played two cups and holds the four lowest rounds in the record.
+  //
+  // `ids` is a Set, or null for everybody.
+  // Eight own-ball rounds is three cups' worth — the same floor `bestRate`
+  // puts on a rate, for the same reason. Below it one calm morning in a gale
+  // tops the board forever, which is a record about the weather.
+  const SG_MIN_ROUNDS = 8;
 
+  const playerBoards = (ids) => {
+    const mine = (x) => !ids || ids.has(x.id ?? x.p);
+    const top = (xs, n = 5) => xs.filter(mine).slice(0, n);
+    const some = (xs) => (ids ? xs.filter(mine) : xs);
+
+    // Two is the floor. A run of one is not a streak, it is a thing that
+    // happened once, and a board of them would be every golfer who has ever
+    // won a hole. Ties go to the older run, then to the name, so the list is
+    // the same on every phone.
+    const board = (key, n = 3) => some(streakRows)
+      .map((s) => (s[key] ? { id: s.id, name: s.name, ...s[key] } : null))
+      .filter((s) => s && s.len >= 2)
+      .sort((a, b) => b.len - a.len || a.from.year - b.from.year
+        || String(a.name).localeCompare(String(b.name)))
+      .slice(0, n);
+
+    const sgBoard = (key, rounds) => top(played
+      .filter((r) => r[key] != null && r[rounds] >= SG_MIN_ROUNDS)
+      .sort((a, b) => b[key] - a[key]));
+
+    return {
+      records: {
+        lowRounds: top(rankedCards),
+        bestWeeks: top(weeks.slice().sort(byNum((w) => w.toPar))),
+        mostPoints: top(played.flatMap((r) => r.byYear.filter((y) => y.matches).map((y) => ({ id: r.id, name: r.name, ...y })))
+          .sort((a, b) => b.pts - a.pts)),
+        mostApps: top(played.slice().sort((a, b) => b.apps - a.apps || String(a.name).localeCompare(String(b.name)))),
+        // A rate needs a denominator worth trusting. Twelve matches is three
+        // cups' worth — below that one hot weekend tops the list forever.
+        bestRate: top(played.filter((r) => r.matches >= 12).sort((a, b) => b.ppm - a.ppm)),
+        mostBirdies: top(played.filter((r) => r.rounds).slice().sort((a, b) => (b.e + b.b) - (a.e + a.b))),
+        comebacks: top(played.filter((r) => r.comebacks).sort((a, b) => b.comebacks - a.comebacks)),
+      },
+      strokesGained: {
+        gross: sgBoard("sg", "sgRounds"),
+        net: sgBoard("sgNetPer", "sgNets"),
+        // One round, not an average: the most dominant day anybody has had.
+        best: top(played.filter((r) => r.bestSg)
+          .map((r) => ({ id: r.id, name: r.name, ...r.bestSg }))
+          .sort((a, b) => b.sg - a.sg)),
+        minRounds: SG_MIN_ROUNDS,
+      },
+      streaks: {
+        cupsWon: board("cupsWon"),
+        matchWins: board("matchWins"),
+        holesWon: board("holesWon"),
+        netPar: board("netPar"),
+        noDouble: board("noDouble"),
+        cupsLost: board("cupsLost"),
+        winless: board("winless"),
+        holesLost: board("holesLost"),
+        noPar: board("noPar"),
+      },
+    };
+  };
+
+  const allBoards = playerBoards(null);
+
+  // ── The cup's own records ───────────────────────────────────────
+  // Not a player board and not filtered by one: which year was closest is the
+  // same answer whoever is being listed.
   const top = (xs, n = 5) => xs.slice(0, n);
-  const records = {
-    lowRounds: top(rankedCards),
-    bestWeeks: top(weeks.slice().sort(byNum((w) => w.toPar))),
-    mostPoints: top(played.flatMap((r) => r.byYear.filter((y) => y.matches).map((y) => ({ id: r.id, name: r.name, ...y })))
-      .sort((a, b) => b.pts - a.pts)),
-    mostApps: top(played.slice().sort((a, b) => b.apps - a.apps || String(a.name).localeCompare(String(b.name)))),
-    // A rate needs a denominator worth trusting. Twelve matches is three
-    // cups' worth — below that one hot weekend tops the list forever.
-    bestRate: top(played.filter((r) => r.matches >= 12).sort((a, b) => b.ppm - a.ppm)),
-    mostBirdies: top(played.filter((r) => r.rounds).slice().sort((a, b) => (b.e + b.b) - (a.e + a.b))),
-    comebacks: top(played.filter((r) => r.comebacks).sort((a, b) => b.comebacks - a.comebacks)),
+  const cupRecords = {
     closest: finished.filter((e) => !e.halved).slice().sort(byNum((e) => e.margin))[0] || null,
     biggest: finished.slice().sort((a, b) => b.margin - a.margin)[0] || null,
     halved: finished.filter((e) => e.halved),
@@ -540,35 +613,10 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
       .sort((a, b) => b.deficit - a.deficit || b.margin - a.margin)),
   };
 
-  // Eight own-ball rounds is three cups' worth — the same floor `bestRate`
-  // puts on a rate, for the same reason. Below it one calm morning in a gale
-  // tops the board forever, which is a record about the weather.
-  const SG_MIN_ROUNDS = 8;
-  const sgBoard = (key, rounds) => top(played
-    .filter((r) => r[key] != null && r[rounds] >= SG_MIN_ROUNDS)
-    .sort((a, b) => b[key] - a[key]));
-
-  const strokesGained = {
-    gross: sgBoard("sg", "sgRounds"),
-    net: sgBoard("sgNetPer", "sgNets"),
-    // One round, not an average: the most dominant day anybody has had.
-    best: top(played.filter((r) => r.bestSg)
-      .map((r) => ({ id: r.id, name: r.name, ...r.bestSg }))
-      .sort((a, b) => b.sg - a.sg)),
-    minRounds: SG_MIN_ROUNDS,
-  };
-
-  const streaks = {
-    cupsWon: board("cupsWon"),
-    matchWins: board("matchWins"),
-    holesWon: board("holesWon"),
-    netPar: board("netPar"),
-    noDouble: board("noDouble"),
-    cupsLost: board("cupsLost"),
-    winless: board("winless"),
-    holesLost: board("holesLost"),
-    noPar: board("noPar"),
-  };
+  // The cup's records and the unfiltered player boards, as one object — the
+  // shape every caller before the Core/All toggle read, and still the default.
+  const records = { ...cupRecords, ...allBoards.records };
+  const { strokesGained, streaks } = allBoards;
 
   return {
     years: editionRows.map((e) => e.year),
@@ -591,10 +639,21 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
       };
     }).sort((a, b) => b.matches - a.matches),
     courses: courseRows,
+    // Who is in the core, as ids — the shape a screen filtering a board by
+    // player actually needs. Counted off appearances, which include the year
+    // being played: a man's fourth cup counts from the day he tees off in it.
+    core: new Set(careerRows.filter((r) => r.apps >= CORE_MIN_APPS).map((r) => r.id)),
     roundDrama,
     records,
     strokesGained,
     streaks,
+    // The same three, over whichever golfers are asked for — a Set of ids, or
+    // null for everybody. The cup's own records ride along unchanged so a
+    // caller can hand the result to the same screens.
+    boards: (ids) => {
+      const b = playerBoards(ids || null);
+      return { records: { ...cupRecords, ...b.records }, strokesGained: b.strokesGained, streaks: b.streaks };
+    },
     streakOf: (id) => streakRows.find((s) => s.id === id) || null,
   };
 };
