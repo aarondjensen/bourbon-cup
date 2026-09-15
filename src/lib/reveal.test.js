@@ -325,7 +325,7 @@ describe("stepReveal", () => {
 
 describe("revealSummary", () => {
   it("says nothing is out rather than '0 of 18'", () => {
-    expect(revealSummary(0)).toBe("Sealed — nothing revealed yet");
+    expect(revealSummary(0)).toBe("keep posting scores");
     expect(revealSummary(6)).toBe("6 of 18 holes revealed");
   });
 });
@@ -1139,12 +1139,12 @@ describe("what the board says, at the four corners", () => {
   });
 
   it("words the summary the same way at every count", () => {
-    expect(revealSummary(0)).toBe("Sealed — nothing revealed yet");
+    expect(revealSummary(0)).toBe("keep posting scores");
     expect(revealSummary(1)).toBe("1 of 18 holes revealed");
     expect(revealSummary(17)).toBe("17 of 18 holes revealed");
     expect(revealSummary(18)).toBe("18 of 18 holes revealed");
     // It never says "0 of 18", in either direction.
-    expect(revealSummary(-1)).toBe("Sealed — nothing revealed yet");
+    expect(revealSummary(-1)).toBe("keep posting scores");
     expect(revealSummary(0)).not.toContain("0 of");
   });
 });

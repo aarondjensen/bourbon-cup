@@ -773,6 +773,41 @@ export const readVpBand = () => {
 // otherwise be a bare strip.
 export const bcGlobalCSS = (bg, card) => `
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ── The score row's window, sliding ──
+     The − and + nudges reach PAST the five numbers on screen, so a tap on
+     either can move the whole window (components/ui ScoreButtonRow). It used
+     to swap all five in a single frame, which does not read as a row that
+     moved — it reads as a flicker, and the eye re-reads every number to work
+     out what happened.
+
+     So the controls enter from the side the window came from: nudge up, the
+     window walks right, and the new numbers arrive from the right.
+
+     Sixteen pixels over MOTION, on a gentle ease-out. The first pass was ten
+     over MOTION_FAST on an ease-out-QUINT, and measured mid-flight it was 92%
+     finished 60ms in — which is not an animation anybody sees, it is the same
+     snap with a wind-up. Far enough and long enough to read as a row that
+     moved; not so far that it is a thing you wait for between taps.
+
+     The fade starts at a quarter rather than nothing: a control that
+     materialises out of transparent reads as a NEW control, and these are the
+     same five the thumb was already on.
+
+     Defined here rather than in a <style> beside the row, because there are
+     four of those rows on a scoring screen and this is one rule.
+
+     ── And off, for anybody who asked for it ──
+     The app's first motion on a control people tap eighteen times a round,
+     so it is the first thing that has owed this. Scoped to the class rather
+     than added globally: the toast's entrance is a different question and
+     this is not the change that should answer it. */
+  @keyframes bcScoreInRight { from { transform: translateX(16px); opacity: 0.25; } to { transform: none; opacity: 1; } }
+  @keyframes bcScoreInLeft  { from { transform: translateX(-16px); opacity: 0.25; } to { transform: none; opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) {
+    .bc-score-slide { animation: none !important; }
+  }
+
   html, body {
     height: 100%;
     width: 100%;

@@ -10,9 +10,9 @@
 //    • Toast           — the transient "slides down from the top" toast.
 //    • ScoreButtonRow  — the tappable par-relative score entry row.
 
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { createPortal } from "react-dom";
-import { BC, FONT, ON_ACCENT, BROWN, HOLE_BANNER, SHADOW, ALPHA, dimHex, FS, segThumb, segTrack, R } from "../theme";
+import { BC, FONT, ON_ACCENT, BROWN, HOLE_BANNER, SHADOW, ALPHA, dimHex, FS, segThumb, segTrack, R, MOTION } from "../theme";
 
 
 // The rule that marks the thumb. A child rather than a border because it is
@@ -383,6 +383,50 @@ export function ScoreButtonRow({ par, score, onScore, fill = false, minHeight = 
   // level with the score buttons instead of hanging a label's worth lower.
   const column = { display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 0, height: "100%" };
 
+  // ── The window, sliding ───────────────────────────────────────────
+  // A nudge can move the whole five-number window (see the recentre above),
+  // and it used to move it in one frame. Five digits changing at once does
+  // not read as a row that slid — it reads as a flicker, and the eye re-reads
+  // all of them to work out what happened. The controls enter from the side
+  // the window came from instead; the keyframes are in theme's bcGlobalCSS.
+  //
+  // ── Only on a nudge ──
+  // Three things change what is in this row and only one of them is a move:
+  //
+  //   the hole advancing     resets the score to 0 and may change par, so
+  //                          the window returns to its default. Auto-advance
+  //                          is deliberately instant (see the note on the
+  //                          selection fill below) and a slide under every
+  //                          one of them is the opposite of that.
+  //   clearing a score       same: back to the default window, not a move.
+  //   a NUDGE past the edge  the only one that walks the window along.
+  //
+  // `score > 0` is what separates them, and the previous window's low number
+  // is what gives the direction.
+  //
+  // Derived DURING RENDER, which is React's own answer to "adjust state when
+  // a prop changes" — the setters below re-run this component before anything
+  // is committed, so the numbers and the animation that carries them land in
+  // the same frame. An effect cannot: it runs after the paint, so the row
+  // shows the finished state and then animates into it, which is a flash of
+  // exactly the harshness this is here to remove. (A layout effect gets the
+  // timing right and is a cascading render, which lint objects to on its own
+  // terms and is a heavier tool than this needs.)
+  const lo = btns[0];
+  const [seen, setSeen] = useState({ par, lo });
+  const [slide, setSlide] = useState(null);
+  if (seen.par !== par || seen.lo !== lo) {
+    const moved = seen.par === par && score > 0;
+    setSeen({ par, lo });
+    setSlide(moved ? { lo, dir: lo > seen.lo ? "Right" : "Left" } : null);
+  }
+  // Restarting a CSS animation means a remount, and the key is what does it.
+  // Stable while the window is still, so nothing re-mounts on an ordinary tap.
+  const slid = slide?.lo === lo ? slide : null;
+  const slideStyle = slid
+    ? { animation: `bcScoreIn${slid.dir} ${MOTION} cubic-bezier(0.33, 1, 0.68, 1) both` }
+    : undefined;
+
   return (
     <div style={{
       display: "flex", gap: 4, alignItems: "stretch",
@@ -409,7 +453,11 @@ export function ScoreButtonRow({ par, score, onScore, fill = false, minHeight = 
         // since par isn't in the window then.
         const showParAnchor = btn === par && !isCur;
         return (
-          <div key={btn} style={{ ...column, flex: 1 }}>
+          <div
+            key={slid ? `${btn}@${slid.lo}` : btn}
+            className="bc-score-slide"
+            style={{ ...column, flex: 1, ...slideStyle }}
+          >
             <button onClick={() => onScore(isCur ? 0 : btn)} style={{
               width: "100%", ...btnBox, borderRadius: R.md, cursor: "pointer", fontSize, fontWeight: 800,
               // INVERTED — the chip is the page turned inside out: a light
