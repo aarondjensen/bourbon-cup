@@ -41,7 +41,10 @@
 //  Notes
 //  ─────
 //  • Stop-propagation on the inner card is automatic — children click
-//    freely without closing the popup.
+//    freely without closing the popup. A backdrop dismiss additionally
+//    requires the gesture to have STARTED and ENDED on the backdrop, which
+//    is what stops a text selection dragged out of a field from closing the
+//    thing you were selecting in. See handleBackdrop.
 //  • The `data-popup` attribute on the backdrop is load-bearing, not
 //    decoration: usePullToRefresh walks up from the touch target and
 //    bails when it crosses one, which is how every popup — portaled or
@@ -54,7 +57,7 @@
 //    accent by default and switches to BC.danger for destructive actions.
 // ══════════════════════════════════════════════════════════════════
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BC, FONT, ON_ACCENT, ON_AMBER, SHADOW, SCRIM, FS, R } from "../theme";
 
@@ -134,13 +137,48 @@ export function Popup({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, escCloses]);
 
-  const handleBackdrop = () => {
-    if (!noBackdropClose && onClose) onClose();
+  // ── A backdrop dismiss is a TAP on the backdrop, start to finish ──
+  //
+  // The card stops click propagation, which is enough for a click that begins
+  // and ends inside it. It is not enough for a DRAG, and the drag people
+  // actually perform inside a popup is selecting text to retype it.
+  //
+  // A browser fires `click` on the nearest common ancestor of the element the
+  // pointer went down on and the one it came up on. Highlight a word in the
+  // course editor's name field and release past the edge of the card — which
+  // is most of a phone screen — and that ancestor IS the backdrop. The click
+  // is dispatched on it directly, so the card's stopPropagation never runs and
+  // never could: it is not on the path. What the director sees is the sheet
+  // vanishing at the exact moment the highlight completes, with the draft
+  // course gone with it.
+  //
+  // So the gesture has to land on the backdrop at BOTH ends. Down inside the
+  // card and up outside it is a text selection; down on the backdrop and up
+  // inside the card is a slip, and neither is somebody asking to close. The
+  // ref is written during the same gesture it is read in, so it never needs to
+  // survive a render.
+  const backdropGesture = useRef(false);
+  const markDown = (e) => { backdropGesture.current = e.target === e.currentTarget; };
+  const markUp = (e) => { if (e.target !== e.currentTarget) backdropGesture.current = false; };
+  const handleBackdrop = (e) => {
+    if (noBackdropClose || !onClose) return;
+    // Belt and braces with the card's stopPropagation: a click that bubbled
+    // out of anything inside is not a backdrop click either.
+    if (e.target !== e.currentTarget) return;
+    if (!backdropGesture.current) return;
+    onClose();
   };
 
   const node = (
     <div
       onClick={handleBackdrop}
+      /* Pointer events cover mouse and touch alike; mouse events are the
+         fallback for an engine without them, and agree with them where both
+         fire. */
+      onPointerDown={markDown}
+      onPointerUp={markUp}
+      onMouseDown={markDown}
+      onMouseUp={markUp}
       data-popup
       style={{
         position: "fixed",
