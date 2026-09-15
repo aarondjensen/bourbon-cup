@@ -959,7 +959,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
     return false; // allow the change
   };
 
-  // ── Re-pricing a round that is over ──────────────────────────────────
+  // ── Changing the points on a round that is over ──────────────────────
   // What a match is WORTH stays editable on a final round, deliberately and
   // correctly: point values are read live over the snapshot, so a wrong Nassau
   // allotment can be fixed on a round the field finished yesterday and it
@@ -991,13 +991,13 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
     pointsWarnedRef.current[editRound] = true;
     confirm({
       eyebrow: `Round ${editRound}`,
-      title: `Round ${editRound} is final — re-price it anyway?`,
+      title: `Round ${editRound} is final — change the points anyway?`,
       message: [
         "Changing what a match is worth re-scores this round straight away. The leaderboard moves as soon as the change saves, for everybody.",
         "",
         "Handicaps, format and hole scoring stay frozen — only the point values are live.",
       ].join("\n"),
-      confirmLabel: "Re-price it",
+      confirmLabel: "Change the points",
     }).then(ok => {
       // Yes: the change the director already made lands now, unretyped.
       // No: nothing was applied, so there is nothing to undo — and the flag
@@ -1310,18 +1310,19 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
       // note in CLAUDE.md), which is the whole reason it can be trusted to
       // arrive where the status line cannot be seen.
       //
-      // ── But only a price says it was re-priced ──────────────────────
+      // ── It says which half of the form moved, and nothing more ──────
       // A final round still takes a date and a tee time, and neither moves a
-      // point. Saying "re-priced — the leaderboard has moved" over a corrected
-      // date tells a director a finished result just shifted under the field,
-      // which is alarming and untrue — and the day it IS true the sentence
-      // has already been spent. `priced` is computed against what Firestore
-      // holds, at the moment the save is armed, so it covers everything the
-      // debounce coalesced.
+      // point, so the two answers are not the same answer. `priced` is
+      // computed against what Firestore holds at the moment the save is
+      // armed, so it covers everything the debounce coalesced.
+      //
+      // Neither line warns, and that is deliberate: the warning belongs
+      // BEFORE the edit, where warnFinalPoints already puts it, and a toast
+      // arrives after the change has landed. A toast that announced a moved
+      // leaderboard was a warning nobody could act on, in a sentence that
+      // then had to be spent on a corrected tee time as well.
       if (roundIsFinalRef.current[round]) {
-        notify(priced
-          ? `Round ${round} re-priced — the leaderboard has moved`
-          : `Round ${round} saved`, "success");
+        notify(`Rd ${round} ${priced ? "Format updated" : "saved"}`, "success");
       }
     } catch (err) {
       console.error("Round auto-save failed", err);
