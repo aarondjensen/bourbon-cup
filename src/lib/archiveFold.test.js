@@ -166,6 +166,72 @@ describe("the cards", () => {
   });
 });
 
+// ── The biggest comeback ──────────────────────────────────────────
+describe("trailing into the last round and winning anyway", () => {
+  // n rounds, each one match, with the points given per round for each side.
+  const cupOf = (year, perRound, complete = true) => ({
+    players: toy.players,
+    editions: [{
+      year, teamA: "REDS", teamB: "BLUES", complete,
+      roster: [{ p: "a", t: "A" }, { p: "c", t: "B" }],
+    }],
+    rounds: perRound.map((_, i) => ({ year, round: i + 1, format: "singles", course: "Toy", par: 72 })),
+    matches: perRound.map(([ptsA, ptsB], i) => ({ year, round: i + 1, A: ["a"], B: ["c"], ptsA, ptsB })),
+    cards: [],
+  });
+
+  it("counts the deficit going into the last round", () => {
+    // Down 8–2 after two, then 9–0: won by 3 from 6 down.
+    const f = foldArchive(cupOf(2001, [[1, 4], [1, 4], [9, 0]]));
+    const [cb] = f.records.cupComebacks;
+    expect(cb.year).toBe(2001);
+    expect(cb.deficit).toBe(6);
+    expect(cb.after).toBe(2);
+    expect(cb.margin).toBe(3);
+  });
+
+  // The PENULTIMATE round, not round three by number — so a cup played over
+  // three rounds or five is still asked what had to be overturned on the
+  // last day.
+  it("asks about the penultimate round, whatever its number", () => {
+    expect(foldArchive(cupOf(2001, [[0, 5], [9, 0]])).records.cupComebacks[0].after).toBe(1);
+    expect(foldArchive(cupOf(2002, [[1, 1], [1, 1], [1, 1], [0, 5], [9, 0]]))
+      .records.cupComebacks[0].after).toBe(4);
+  });
+
+  it("is not a comeback if the winner was already ahead", () => {
+    expect(foldArchive(cupOf(2001, [[5, 0], [5, 0], [1, 1]])).records.cupComebacks).toEqual([]);
+  });
+
+  it("is not a comeback if the cup was halved or is unfinished", () => {
+    expect(foldArchive(cupOf(2001, [[0, 5], [5, 0]])).records.cupComebacks).toEqual([]);
+    expect(foldArchive(cupOf(2001, [[0, 5], [9, 0]], false)).records.cupComebacks).toEqual([]);
+  });
+
+  it("ranks the biggest deficit first", () => {
+    const a = cupOf(2001, [[0, 3], [9, 0]]);
+    const b = cupOf(2002, [[0, 9], [20, 0]]);
+    const f = foldArchive({
+      players: toy.players,
+      editions: [...a.editions, ...b.editions],
+      rounds: [...a.rounds, ...b.rounds],
+      matches: [...a.matches, ...b.matches],
+      cards: [],
+    });
+    expect(f.records.cupComebacks.map((c) => [c.year, c.deficit])).toEqual([[2002, 9], [2001, 3]]);
+  });
+
+  // On the real record: three in ten years, and 2025 is the extreme of it.
+  it("finds 2025 on the committed archive", () => {
+    const f = foldArchive(archive);
+    const [cb] = f.records.cupComebacks;
+    expect(cb.year).toBe(2025);
+    expect(cb.deficit).toBe(11);
+    expect(cb.after).toBe(3);
+    expect(f.records.cupComebacks.map((c) => c.year)).toEqual([2025, 2016, 2018]);
+  });
+});
+
 // ── Strokes gained ────────────────────────────────────────────────
 // Against the field, inside one round. It is zero-sum by construction, which
 // is the check worth having: if it ever stops summing to zero, the field the

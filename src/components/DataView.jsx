@@ -63,6 +63,20 @@ const Stat = ({ label, value, sub, color }) => (
   </div>
 );
 
+// A ranked list under a label: 1, 2, 3 down the left and whatever the record
+// is across the row. Every board on this tab is one of these.
+const RecordList = ({ label, rows = [], render }) => !!rows.length && (
+  <div style={{ marginBottom: 12 }}>
+    <div style={eyebrow}>{label}</div>
+    {rows.map((x, i) => (
+      <div key={i} style={{ display: "flex", gap: 8, padding: "4px 0", borderTop: i ? hair() : "none", fontSize: FS.small }}>
+        <span style={{ width: 14, color: BC.t3, fontWeight: 800 }}>{i + 1}</span>
+        {render(x)}
+      </div>
+    ))}
+  </div>
+);
+
 const Empty = ({ icon = "📊", children }) => (
   <div style={{ textAlign: "center", padding: 40, color: BC.t3 }}>
     <div style={{ fontSize: FS.display, marginBottom: 12 }}>{icon}</div>
@@ -97,54 +111,60 @@ const toParText = (n) => (n == null ? "—" : fmtScore(Math.round(n * 10) / 10))
 // ══════════════════════════════════════════════════════════════════
 
 // ── One year ──────────────────────────────────────────────────────
-// The row used to be the whole answer: two teams and two numbers. A final
-// score says who won and nothing at all about whether it was over on Saturday
-// morning, so the row now opens onto the running total after each round —
-// which is where "2021 was done by lunchtime" and "2025 came down to the last
-// group" stop being things people remember differently.
+// A ROW in one table, not a card of its own. Eleven cards is eleven screens of
+// scrolling to answer "which year was closest", and the answer was never on
+// any one of them — a comparison needs the years next to each other, which is
+// what a card with its own border is built to prevent.
+//
+// What the row lost is the losing side's name and the two big numbers. Neither
+// was carrying its width: the score reads 42.5–40.5 in the same place, and
+// the loser is the other team, which the winner's own colour already says.
 //
 // Tapping OPENS rather than switches. Switching edition hard-reloads the whole
 // app onto another tournament, and that is too big a thing to be what a tap on
 // a summary row does; it is a button inside, named.
+const YEAR_COLS = "44px 1fr 74px 40px 14px";
+
 function YearRow({ e, live, teams, open, onToggle }) {
-  const side = (name, score, accent, align, won) => (
-    <div style={{ flex: 1, minWidth: 0, textAlign: align }}>
-      <div style={{
-        fontSize: FS.label, fontWeight: 800, color: accent, letterSpacing: 0.4,
-        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-      }}>{name || "—"}</div>
-      <div style={{ fontSize: FS.lead, fontWeight: 800, color: won ? BC.t1 : BC.t2 }}>{fmtPts(score)}</div>
-    </div>
-  );
+  const accent = e.winnerSide === "A" ? teams.A.accent : e.winnerSide === "B" ? teams.B.accent : BC.t3;
+  const result = e.halved ? "HALVED"
+    : !e.complete ? (e.rounds.length ? "IN PROGRESS" : "NOT STARTED")
+      : e.winner || "—";
 
   return (
-    <div style={{ ...card, border: `1px solid ${live ? BC.amber + ALPHA.line : BC.bdr}` }}>
+    <div style={{ borderTop: hair(), background: live ? BC.amber + ALPHA.wash : "transparent" }}>
       <button onClick={onToggle} style={{
-        display: "block", width: "100%", textAlign: "left", padding: 14,
+        display: "grid", gridTemplateColumns: YEAR_COLS, gap: 6, alignItems: "center",
+        width: "100%", textAlign: "left", padding: "9px 14px",
         background: "transparent", border: "none", cursor: "pointer", fontFamily: FONT,
       }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
-          <span style={{ fontSize: FS.body, fontWeight: 700, color: BC.gold }}>{e.year}</span>
-          <span style={{
-            flex: 1, minWidth: 0, fontSize: FS.label, color: BC.t3,
-            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-          }}>{(e.location || "").toUpperCase()}</span>
-          {live && <span style={{ fontSize: FS.micro, fontWeight: 800, color: BC.amberInk, letterSpacing: 0.6 }}>THIS YEAR</span>}
-          <span style={{ fontSize: FS.small, color: BC.t3, transform: open ? "rotate(90deg)" : "none", display: "inline-block" }}>›</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 10 }}>
-          {side(e.teamA, e.scoreA, teams.A.accent, "left", e.winnerSide === "A")}
-          {side(e.teamB, e.scoreB, teams.B.accent, "right", e.winnerSide === "B")}
-        </div>
-        <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.amberInk, marginTop: 8 }}>
-          {e.halved ? "🏆 The cup was halved"
-            : !e.complete ? `In progress · ${e.rounds.length} round${e.rounds.length === 1 ? "" : "s"}`
-              : e.winner ? `🏆 ${e.winner} won by ${fmtPts(e.margin)}` : "—"}
-        </div>
+        <span style={{ fontSize: FS.small, fontWeight: 800, color: BC.gold }}>{e.year}</span>
+        <span style={{
+          minWidth: 0, fontSize: FS.small, fontWeight: 700, color: accent, letterSpacing: 0.3,
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        }}>{result}</span>
+        <span style={{ fontSize: FS.small, fontWeight: 700, color: BC.t2, textAlign: "right" }}>
+          {e.complete || e.rounds.length ? `${fmtPts(e.scoreA)}–${fmtPts(e.scoreB)}` : "—"}
+        </span>
+        <span style={{ fontSize: FS.small, fontWeight: 800, color: e.halved ? BC.t3 : BC.amberInk, textAlign: "right" }}>
+          {e.halved ? "—" : e.complete ? fmtPts(e.margin) : ""}
+        </span>
+        <span style={{ fontSize: FS.small, color: BC.t3, transform: open ? "rotate(90deg)" : "none", display: "inline-block" }}>›</span>
       </button>
 
       {open && (
-        <div style={{ borderTop: hair(), padding: "10px 14px 14px" }}>
+        <div style={{ borderTop: hair(), padding: "10px 14px 14px", background: BC.inp + ALPHA.wash }}>
+          {/* The two sides in full, which the row above deliberately does not
+              carry — and the location, which used to sit on the card head. */}
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8, fontSize: FS.small }}>
+            <span style={{ fontWeight: 800, color: teams.A.accent }}>{e.teamA || "—"} {fmtPts(e.scoreA)}</span>
+            <span style={{ color: BC.t3 }}>vs</span>
+            <span style={{ fontWeight: 800, color: teams.B.accent }}>{e.teamB || "—"} {fmtPts(e.scoreB)}</span>
+            <span style={{
+              flex: 1, minWidth: 0, textAlign: "right", fontSize: FS.micro, color: BC.t3, letterSpacing: 0.4,
+              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+            }}>{(e.location || "").toUpperCase()}</span>
+          </div>
           {!e.rounds.length && (
             <div style={{ fontSize: FS.small, color: BC.t3 }}>Nothing played yet.</div>
           )}
@@ -202,10 +222,18 @@ function CupRecords({ data }) {
         {r.easiest && <Stat label="Kindest day" value={toParText(r.easiest.avgToPar)} sub={`${r.easiest.course} · ${r.easiest.year}`} color={BC.green} />}
       </div>
       {!!r.halved.length && (
-        <div style={{ fontSize: FS.small, color: BC.t2, marginBottom: 6 }}>
+        <div style={{ fontSize: FS.small, color: BC.t2, marginBottom: 12 }}>
           🏆 Halved: {r.halved.map((e) => e.year).join(", ")}
         </div>
       )}
+      <RecordList label="BIGGEST COMEBACK" rows={r.cupComebacks} render={(e) => (
+        <>
+          <span style={{ width: 34, color: BC.gold, fontWeight: 700 }}>{e.year}</span>
+          <span style={{ flex: 1, minWidth: 0, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.winner}</span>
+          <span style={{ fontWeight: 800, color: BC.green }}>{fmtPts(e.deficit)} DN</span>
+          <span style={{ width: 64, textAlign: "right", color: BC.t3 }}>AFTER R{e.after}</span>
+        </>
+      )} />
     </Section>
   );
 }
@@ -299,19 +327,55 @@ function TournamentHalf({ data, editions, activeYear, teams }) {
       .sort((a, b) => b.year - a.year);
   }, [data.editions, editions]);
 
+  // Year or margin. Two chips rather than tappable column heads: a head that
+  // sorts has to say so, and saying so costs more width than this table has.
+  //
+  // Margin runs BIGGEST first, which is the reading of "sort by margin" — and
+  // the closest year is already a Stat at the top of Cup records, so the one
+  // this order buries is the one that is hardest to miss.
+  const [sort, setSort] = useState("year");
+  const sorted = useMemo(() => rows.slice().sort((a, b) => {
+    if (sort === "year") return b.year - a.year;
+    // An unfinished cup has no margin of victory — nobody has won by
+    // anything yet — so it sits under the years that do rather than being
+    // ranked on a number that is still moving.
+    const am = a.complete && !a.halved ? a.margin : -1;
+    const bm = b.complete && !b.halved ? b.margin : -1;
+    return bm - am || b.year - a.year;
+  }), [rows, sort]);
+
   if (!rows.length) return <Empty>No years yet</Empty>;
 
   return (
     <div>
       <CupRecords data={data} />
-      {rows.map((e) => (
-        <YearRow
-          key={e.year} e={e} teams={teams}
-          live={e.year === activeYear}
-          open={open === e.year}
-          onToggle={() => setOpen(open === e.year ? null : e.year)}
-        />
-      ))}
+      <div style={{ ...card, overflow: "hidden" }}>
+        <div style={{ padding: "14px 14px 0" }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
+            <div style={eyebrow}>YEAR BY YEAR</div>
+            <div style={{ fontSize: FS.micro, color: BC.t3, letterSpacing: 0.4, marginLeft: "auto" }}>
+              {rows.length} CUPS
+            </div>
+          </div>
+          <Chips
+            options={[["year", "Year"], ["margin", "Margin"]]}
+            value={sort} onChange={setSort}
+          />
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: YEAR_COLS, gap: 6, padding: "0 14px 8px", ...eyebrow }}>
+          <div>YEAR</div><div>WINNER</div>
+          <div style={{ textAlign: "right" }}>SCORE</div>
+          <div style={{ textAlign: "right" }}>MGN</div><div />
+        </div>
+        {sorted.map((e) => (
+          <YearRow
+            key={e.year} e={e} teams={teams}
+            live={e.year === activeYear}
+            open={open === e.year}
+            onToggle={() => setOpen(open === e.year ? null : e.year)}
+          />
+        ))}
+      </div>
       <RoundDrama data={data} />
       <Passport data={data} />
     </div>
@@ -466,20 +530,6 @@ function PlayerCard({ p, data, activeYear }) {
     </div>
   );
 }
-
-// A ranked list under a label: 1, 2, 3 down the left and whatever the record
-// is across the row. Every board on this half of the tab is one of these.
-const RecordList = ({ label, rows = [], render }) => !!rows.length && (
-  <div style={{ marginBottom: 12 }}>
-    <div style={eyebrow}>{label}</div>
-    {rows.map((x, i) => (
-      <div key={i} style={{ display: "flex", gap: 8, padding: "4px 0", borderTop: i ? hair() : "none", fontSize: FS.small }}>
-        <span style={{ width: 14, color: BC.t3, fontWeight: 800 }}>{i + 1}</span>
-        {render(x)}
-      </div>
-    ))}
-  </div>
-);
 
 // ── Personal records ──────────────────────────────────────────────
 function PlayerRecords({ data }) {

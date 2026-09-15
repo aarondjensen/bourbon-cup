@@ -519,6 +519,25 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
     hardest: courseRows.filter((c) => c.cards).slice().sort((a, b) => b.avgToPar - a.avgToPar)[0] || null,
     easiest: courseRows.filter((c) => c.cards).slice().sort(byNum((c) => c.avgToPar))[0] || null,
     cupsPlayed: finished.length,
+    // ── Trailing going into the last round, and won anyway ────────
+    // Measured after the PENULTIMATE round rather than after round three by
+    // number, so a cup that is ever played over three rounds or five is still
+    // asked the right question: what did they have to overturn on the last
+    // day.
+    //
+    // Three in ten years, which is what makes it a record rather than a
+    // curiosity — and the reason is the format: Round 4 is worth more than the
+    // first three put together, so a lead going into Sunday has never been
+    // safe. 2025 is the extreme of it, eleven down and won by two.
+    cupComebacks: top(finished
+      .filter((e) => !e.halved && e.winnerSide && e.rounds.length > 1)
+      .map((e) => {
+        const before = e.rounds[e.rounds.length - 2];
+        const lead = e.winnerSide === "A" ? before.cumA - before.cumB : before.cumB - before.cumA;
+        return { ...e, deficit: -lead, after: before.round };
+      })
+      .filter((e) => e.deficit > 0)
+      .sort((a, b) => b.deficit - a.deficit || b.margin - a.margin)),
   };
 
   // Eight own-ball rounds is three cups' worth — the same floor `bestRate`
