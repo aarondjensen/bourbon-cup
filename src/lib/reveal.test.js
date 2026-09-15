@@ -1218,4 +1218,26 @@ describe("revealPending", () => {
     expect(revealPending(undefined)).toBe(false);
     expect(revealPending(null)).toBe(false);
   });
+
+  // ── The way out, now that this REFUSES the finalize ──────────────
+  // It stopped being only the gate on a prompt: App's onFinalizeRound will
+  // not freeze a round while this is true, and the sheet's button is disabled
+  // and says so. Which means a cup that never intends to hold a countdown
+  // must have a door, or round 4 can never go in the books — and "the app
+  // will not let me finish the tournament" is a worse failure than the one
+  // this prevents.
+  //
+  // The door is the Final Countdown toggle in Admin → Rounds, and it is the
+  // right one: turning the ceremony off is exactly what somebody not holding
+  // a ceremony does. An EXPLICIT false always wins over the format default
+  // (see resolveSealed), so it works on the live round with scores already in
+  // it, not just on a fresh one.
+  it("goes false the moment a director switches the seal off", () => {
+    const dark = sealed({ reveal_a: 3, reveal_b: 3 });
+    expect(revealPending(dark)).toBe(true);
+    expect(revealPending({ ...dark, sealed: false })).toBe(false);
+    // And the round is then an ordinary one everywhere else too, so nothing
+    // is left holding its scores back either.
+    expect(isConcealing({ ...dark, sealed: false })).toBe(false);
+  });
 });

@@ -100,7 +100,7 @@ import {
   realPlayers,
 } from "../lib/players";
 import {
-  resolveSealed, isConcealing,
+  resolveSealed, isConcealing, revealPending,
 } from "../lib/reveal";
 import {
   LOCK_FINAL,
@@ -2147,11 +2147,18 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
               <span style={{ minWidth: 0 }}>
                 {finalizeRound != null ? `Finalize Round ${finalizeRound}` : "Correct a finished round"}
                 <span style={{ display: "block", fontSize: FS.label, fontWeight: 500, color: BC.t3, marginTop: 2 }}>
+                  {/* "Freeze it early" is an invitation to do the one thing
+                      the closing round refuses (see lib/reveal.revealPending),
+                      so the sealed round gets its own line. The row still
+                      opens the sheet — correcting a finished round lives
+                      behind it too. */}
                   {finalizeRound == null
                     ? "Every round is final — scoring is closed"
-                    : finalizeReady
-                      ? "Every card is in and attested"
-                      : "Freeze it early, or reopen a finished one"}
+                    : revealPending(tRounds.find(t => t.round_number === finalizeRound))
+                      ? "Sealed — after the Final Countdown"
+                      : finalizeReady
+                        ? "Every card is in and attested"
+                        : "Freeze it early, or reopen a finished one"}
                 </span>
               </span>
               <span style={{ color: finalizeReady ? BC.amberInk : BC.t3, fontSize: FS.lead, flexShrink: 0 }}>›</span>

@@ -288,20 +288,32 @@ export const isConcealing = (tr) =>
 // not yet finalized is still CONCEALING (it waits on the director), but its
 // ceremony is over and finalizing is exactly what should happen next.
 //
-// It exists for the finalize prompt, which had the order backwards. That
-// prompt fires when every card is ATTESTED — which for the closing round is
-// the moment the cards come back to the house, an hour before anybody sits
+// It began as the gate on the finalize PROMPT, which had the order backwards.
+// That prompt fires when every card is ATTESTED — which for the closing round
+// is the moment the cards come back to the house, an hour before anybody sits
 // down. So the app put an amber dot in front of the director telling him to
-// finalize round 4, and finalizing it first does two things nobody wants:
+// finalize round 4, and finalizing it first does three things nobody wants:
 // `onRoundFinal` broadcasts "Round 4 is final" to all sixteen phones with the
-// pins in the body and a link to the round sheet, and the board then lands
-// the whole round the instant the eighteenth hole is turned over rather than
-// on the director's word — which is the second condition's entire job (see
-// isConcealing).
+// pins in the body and a link to the round sheet; the board then lands the
+// whole round the instant the eighteenth hole is turned over rather than on
+// the director's word (see isConcealing); and on a round whose `sealed` flag
+// was never explicitly written, `resolveSealed` stops returning true the
+// moment the lock lands — so the whole round goes straight onto the
+// leaderboard and the evening is over before it started.
 //
-// The prompt is suppressed while this is true and comes back the moment the
-// last hole is out, which is when it is the right prompt. Nothing here blocks
-// finalizing: a director who means to can still do it from Admin → Rounds.
+// IT IS NOW THE GATE ON THE ACT, NOT JUST THE PROMPT. Suppressing the nudge
+// left the button itself sitting there — Admin → Rounds → Finalize Round 4,
+// two taps, on the one round where there is nothing to look at afterwards
+// that would tell a director what he had just done. Every consequence above
+// is invisible on his own screen: the push goes to everybody else's phone,
+// and the board landing early looks exactly like the board landing correctly.
+// That is the one thing this project does not ship — a control that can lie
+// to the man holding it — so the act is refused while this is true.
+//
+// Refused, not removed. The moment the eighteenth hole is out this goes false
+// and finalizing is the next thing to do; the sheet says so while it waits,
+// and `reopenRound` is untouched, so a round frozen by mistake before any of
+// this existed can still be handed back.
 export const revealPending = (tr) => isSealedRound(tr) && !isFullyRevealed(tr);
 
 const roundOf = (tRounds, round) =>

@@ -272,7 +272,7 @@ export function DirectorFinalizeAlert({ round, nextRound, progress, cards, stage
 export function FinalizeRoundSheet({
   round, rounds = [], liveRound, onPickRound,
   nextRound, amendable = [], scoreEdits, roundLocks, allRounds, roundToday = null,
-  progress, cards, tPlayers,
+  progress, cards, held = false, tPlayers,
   onFinalizeRound, onAmendRound, onAttestAll, notify, onClose,
 }) {
   const { confirm, confirmModal } = useConfirm();
@@ -316,6 +316,11 @@ export function FinalizeRoundSheet({
   };
 
   const doFinalize = async () => {
+    // The button is disabled, so this is the keyboard and the stray
+    // programmatic click. Bail before the confirms rather than after them —
+    // asking "finalize anyway?" about an act that is refused is the shape of
+    // dialog that teaches a director his taps do not mean anything.
+    if (held) return;
     if (!progress.complete) {
       const ok = await confirm({
         eyebrow: `Round ${round}`,
@@ -530,8 +535,13 @@ export function FinalizeRoundSheet({
             </div>
           )}
 
+          {/* "Round 4 is ready" is true of the cards and false of the round
+              while the seal holds — every card in, and the one thing this
+              sheet does still refused. The heading says which. */}
           <div style={{ fontSize: FS.lead, fontWeight: 800, color: BC.t1, marginBottom: 12 }}>
-            {cardsReady ? `Round ${round} is ready` : `Finalize Round ${round}`}
+            {held
+              ? `Round ${round} is sealed`
+              : cardsReady ? `Round ${round} is ready` : `Finalize Round ${round}`}
           </div>
 
           {/* Said out loud, because everything below this line — the progress,
@@ -653,12 +663,16 @@ export function FinalizeRoundSheet({
           )}
 
           {/* The consequence, spelled out. This is what the removed confirm
-              used to say, and why the routine path no longer needs one. */}
-          <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.45, marginBottom: 12 }}>
-            Finalizing freezes Round {round}&apos;s handicaps and results, and{" "}
-            {opensClause(round, nextRound, liveRound)}.
-            {" "}You can reopen it afterwards if you need to.
-          </div>
+              used to say, and why the routine path no longer needs one.
+              Dropped while the round is HELD: it describes an act that is
+              refused, and the button below already names the rule. */}
+          {!held && (
+            <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.45, marginBottom: 12 }}>
+              Finalizing freezes Round {round}&apos;s handicaps and results, and{" "}
+              {opensClause(round, nextRound, liveRound)}.
+              {" "}You can reopen it afterwards if you need to.
+            </div>
+          )}
 
           {/* A reopened round is being finalized for the SECOND time, and this
               one notifies people. Said before the button rather than after. */}
@@ -695,15 +709,25 @@ export function FinalizeRoundSheet({
             </button>
           )}
 
-          <button onClick={doFinalize} disabled={busy} style={{
-            width: "100%", padding: "12px 0", borderRadius: 10, cursor: busy ? "default" : "pointer",
-            border: cardsReady ? "none" : `1px solid ${BC.amber}${ALPHA.line}`,
-            background: cardsReady ? BC.amber : "transparent",
-            color: cardsReady ? ON_AMBER : BC.amberInk,
-            fontSize: FS.body, fontWeight: 800, letterSpacing: 0.5, opacity: busy ? 0.6 : 1,
+          {/* HELD is not "not ready yet" — it is the one state on this sheet
+              where the act is refused rather than merely unwise, so it is the
+              button's LABEL and not a line above it. Every other unreadiness
+              here has an override, because a round the field has walked off
+              must be freezable whatever is outstanding; this one has none,
+              and App refuses it at the source (see onFinalizeRound). */}
+          <button onClick={doFinalize} disabled={busy || held} style={{
+            width: "100%", padding: "12px 0", borderRadius: 10,
+            cursor: busy || held ? "default" : "pointer",
+            border: cardsReady && !held ? "none" : `1px solid ${BC.amber}${ALPHA.line}`,
+            background: cardsReady && !held ? BC.amber : "transparent",
+            color: cardsReady && !held ? ON_AMBER : BC.amberInk,
+            fontSize: FS.body, fontWeight: 800, letterSpacing: 0.5,
+            opacity: busy ? 0.6 : held ? 0.55 : 1,
             fontFamily: FONT,
           }}>
-            {busy ? "Working…" : `Finalize Round ${round}`}
+            {held
+              ? "Finalize after the Final Countdown"
+              : busy ? "Working…" : `Finalize Round ${round}`}
           </button>
         </>
       ) : (
