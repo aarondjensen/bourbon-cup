@@ -65,16 +65,22 @@ export function holeFill(hole, format, settled = true) {
   if (a === max) return { background: A, border: "none" };
   if (b === max) return { background: B, border: "none" };
 
-  // Split hole. The seam runs bottom-left to top-right, putting team A in the
-  // upper-left wedge and team B in the lower-right — the same left/right
-  // geometry the match rows use, so the wedge a colour sits in already tells
-  // you whose side of the card it belongs to. A side that won only one of the
-  // two dots shares the cell with halved grey.
-  //
-  // 135deg is the axis, not the seam: CSS measures the gradient's direction
-  // (down-right here), and the colour boundary sits perpendicular to it.
-  return {
-    background: `linear-gradient(135deg, ${a ? A : HALVED} 0 50%, ${b ? B : HALVED} 50% 100%)`,
-    border: "none",
-  };
+  // Split hole. A side that won only one of the two dots shares the cell with
+  // halved grey.
+  return { background: splitFill(a ? A : HALVED, b ? B : HALVED), border: "none" };
 }
+
+// ── The seam ──────────────────────────────────────────────────────
+// One definition of "this was shared", so a split hole on the strip and a
+// halved Nassau pot in the match panel cannot be drawn at different angles.
+//
+// It runs bottom-left to top-right, putting team A in the upper-left wedge
+// and team B in the lower-right — the same left/right geometry the match rows
+// use, so the wedge a colour sits in already tells you whose side it belongs
+// to. 135deg is the AXIS, not the seam: CSS measures the gradient's direction
+// (down-right here) and the colour boundary sits perpendicular to it.
+//
+// The two colours are the caller's, at whatever strength that surface wants —
+// the strip paints solid team colour, the panel's badge a wash it can print
+// on top of.
+export const splitFill = (a, b) => `linear-gradient(135deg, ${a} 0 50%, ${b} 50% 100%)`;

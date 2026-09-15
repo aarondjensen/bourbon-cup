@@ -47,6 +47,7 @@ import {
   segmentOptsFor, fmtPts,
 } from "../scoring";
 import { HoleStrip } from "./HoleStrip";
+import { splitFill } from "../lib/holeFill";
 import { FullScorecard } from "./FullScorecard";
 import { TeamBestBallScoreboard } from "./TeamBestBallScoreboard";
 import { StickyTop } from "./ui";
@@ -222,10 +223,29 @@ function SegmentPill({ label, pot, st, pts }) {
       }}>
         {label}{pot ? ` · ${fmtPts(pot)}` : ""}
       </div>
+      {/* A badge, not a button: the label above it is the heading and this is
+          the one fact under it, so it is sized to the figure rather than to
+          the room. It was a rung larger and a third taller, which made three
+          of them across the panel read as the controls they are not.
+
+          A HALVED pot takes the seam the Scoring tab paints a shared hole
+          with — team A's wash in the upper-left wedge, team B's in the lower
+          right, off the same splitFill the strip uses. "½ – ½" said it in
+          words while every other badge said it in colour, and a pot that was
+          split is exactly what that diagonal means everywhere else in the
+          app. A wash rather than the strip's solid team colour, because this
+          one has to be printed on — but a third rather than the won badge's
+          fifteen percent: that badge's TEXT carries its team colour, and a
+          halved one has no single text colour to carry it, so the wedges have
+          to do the telling. At fifteen they are two barely different pale
+          tints and the seam disappears, which is the one thing this must
+          not do. */}
       <div style={{
-        textAlign: "center", padding: "5px 2px", borderRadius: 7,
-        fontSize: FS.small, fontWeight: 800, lineHeight: 1.1,
-        background: settled && win ? `${color}${ALPHA.tint}` : "transparent",
+        textAlign: "center", padding: "3px 2px", borderRadius: 6,
+        fontSize: FS.label, fontWeight: 800, lineHeight: 1.15,
+        background: settled && win ? `${color}${ALPHA.tint}`
+          : settled && halved ? splitFill(`${teamColor("A")}${ALPHA.line}`, `${teamColor("B")}${ALPHA.line}`)
+          : "transparent",
         border: `1px ${settled ? "solid" : "dashed"} ${settled ? (win ? `${color}${ALPHA.line}` : BC.bdr) : `${BC.bdr}`}`,
         color: settled ? (halved ? BC.t2 : color) : st.played ? color : BC.t3,
         whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
@@ -364,7 +384,6 @@ function MatchCard({
   const aNames = sideNames(match, "A", nameOf);
   const bNames = sideNames(match, "B", nameOf);
 
-  const ptsA = result.totalPts.A, ptsB = result.totalPts.B;
   const leader = segmentLeader(overallSt);
   const done = matchSettled(match, result, format);
 
@@ -562,17 +581,21 @@ function MatchCard({
               banked total per side and the Front / Back / Overall split are
               what you open a match to find, not what you scan a board for. */}
           <div style={{ padding: "10px 12px 0" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-              <span style={{ flex: 1, fontSize: FS.label, fontWeight: 800, letterSpacing: 1, color: BC.t3 }}>
-                {/* The match's number in the tournament, not its position in
-                    this round — Round 2's opener is Match 5 when Round 1 had
-                    four. Falls back to the row index only for a match the
-                    numbering never reached. */}
-                MATCH {match.matchNumber ?? index + 1}{match.teeTime ? ` · ${match.teeTime}` : ""}
-              </span>
-              <span style={{ fontSize: FS.lead, fontWeight: 800, color: BC.teamA }}>{fmtPts(ptsA)}</span>
-              <span style={{ fontSize: FS.small, color: BC.t3 }}>–</span>
-              <span style={{ fontSize: FS.lead, fontWeight: 800, color: BC.teamB }}>{fmtPts(ptsB)}</span>
+            {/* The match's number in the tournament, not its position in this
+                round — Round 2's opener is Match 5 when Round 1 had four.
+                Falls back to the row index only for a match the numbering
+                never reached.
+
+                Centred, and alone. It used to sit left with the match's cup
+                points against the right-hand edge, which printed that pair
+                twice within an inch: the collapsed row already carries it
+                under the hole strip, directly above this panel, and the row
+                is still on screen when the panel opens. */}
+            <div style={{
+              fontSize: FS.label, fontWeight: 800, letterSpacing: 1, color: BC.t3,
+              textAlign: "center", marginBottom: 8,
+            }}>
+              MATCH {match.matchNumber ?? index + 1}{match.teeTime ? ` · ${match.teeTime}` : ""}
             </div>
             <div style={{ display: "flex", gap: 6 }}>
               {segments.map((s) => (
