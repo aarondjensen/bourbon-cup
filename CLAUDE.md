@@ -821,6 +821,150 @@ Things that will bite you:
   secret — leaving it reachable on a set-up tournament would hand Admin to
   anyone who reads the JavaScript.
 
+## Correcting a finished round
+
+A round freezes when it is finalized, and that guarantee is the right one —
+`src/lib/roundLocks.js` explains what it freezes and why. But "cannot be moved
+by accident" had been built as "cannot be moved", and those are different
+promises. A hole typed against the wrong player, signed, attested and
+finalized is a thing that happens once a decade, and when it did the app had
+no answer: the fix was a Firebase console edit on raw document ids, made from
+a golf course by the one person least able to verify it. A gate with no door
+is not safer than a heavy door — it moves the override somewhere nothing
+records it.
+
+**`src/lib/roundAmend.js`** is the door. Pure, unit-tested, and it introduces
+no new lock state: amending is FINAL → LOCKED, which is the state roundLocks
+already defines as "frozen snapshot, still movable by a deliberate act". What
+changed is reach and candour.
+
+- **Reach.** ☰ → the Finalize sheet, bottom section, reopens **any** final
+  round. It used to point at `lastFinalRoundNumber` and nothing else, so
+  Round 2 of a finished cup was unreachable while 3 and 4 stood.
+- **Candour.** Two dialogs. The first states the cost — which is *computed*
+  by `describeAmendImpact`, not written down, so it cannot promise the field
+  will not be moved and then move it. The second takes a typed `AMEND` and a
+  **reason in the director's own words**, kept on the lock forever alongside
+  `amend_count`. A re-finalized round must never again look identical to one
+  nobody touched.
+
+### The half that trips people up
+
+**Points are live; strokes are frozen.** This split is the whole model, and
+each half fails silently in its own direction:
+
+- **Nassau pots, hole values, par points and counting scores** are read off
+  the round document over the snapshot, *always*, a final round included
+  (`getRoundHolePoints` and its neighbours in `scoring.js`). So the Nassau
+  allotment that was wrong for a format is corrected in Admin → Rounds and it
+  lands on the leaderboard immediately — **no reopen, no recalculate**, on a
+  round the field finished yesterday. The round's value wins over any stale
+  copy on a match, which is why `MatchSetup` deliberately never writes one.
+- **Handicaps, allowance, mode, tees and the course** come off the snapshot.
+  Correcting one of those changes a stored field and *nothing else* until the
+  snapshot is re-taken. That is **Recalculate**, at the foot of HANDICAPS in
+  Admin → Rounds, on every LOCKED round that is not final — it is the one act
+  in the app that moves a stroke in a round already played, so it previews the
+  exact handicaps about to change, in numbers, behind a typed `RECALCULATE`.
+  It says so when nothing moves, which is the useful answer: the correction
+  was on the points side and has already landed.
+
+  **A final round is not offered it**, and that is what makes the amendment a
+  real gate rather than a speed bump — the round has to be reopened first, and
+  `onRecalculateRound` refuses one outright rather than leaving it to the UI.
+  Every other locked round IS offered it, because a round locks on its first
+  score and from that moment the form is editing fields the scoring has
+  stopped reading: a wrong tee spotted on the third hole is the gate-with-no-
+  door again, a day earlier. The card's heading is the one thing the amendment
+  changes — a round somebody REOPENED is waiting on this and says so.
+
+  **It flushes the form's pending save first and hands over what it wrote.**
+  The Round CH boxes auto-save on a 700ms debounce and App only hears the new
+  value when Firestore echoes it back, so a director who types 12 and taps
+  straight away would otherwise preview, and freeze, the 8 he was correcting.
+  Same `inputs` escape hatch `onLockRound` carries, and for the same reason.
+
+  Reopen and Recalculate are deliberately **two acts in two places**: the
+  sheet acts on a round the tournament has finished with, the Admin card acts
+  on the round the form in front of you is editing. One button doing both
+  would re-score a round every time a director reopened one to look at it.
+
+`roundAmend.cascade.test.js` pins both halves against the real scoring engine.
+If the first ever broke, a director would correct a pot and watch a leaderboard
+refuse to move; if the second broke, a GHIN sync would re-score a tournament
+that was over. Neither announces itself on screen, which is why they are
+tested rather than trusted to the comments describing them.
+
+**The scoring gate rule lives in one place** — `scoringRoundNumber` in
+`lib/roundLocks` — because App draws the gate with it and the amend dialog
+uses it to say whether reopening moves the field. Two copies drifting is a
+dialog that promises the gate will hold and then moves it. On a dated week
+today's round wins, so reopening Friday's round on Saturday moves nobody;
+with no dates set it falls through to the lowest unfinalized round and does.
+
+`requireText` and `reasonPrompt` on `ConfirmModal` are the reusable halves;
+use them for anything else rare enough that a one-tap confirm is the reflex
+rather than the check.
+
+### Telling the field
+
+A man signs his card, four people attest it, the round is finalized — and on
+Sunday a hole he signed for reads a different number. That correction made in
+the open is ordinary housekeeping. Made silently it is the exact thing an
+attestation exists to prevent, so every hole moved inside an amendment window
+is written to **`bc_score_edits`** (`src/lib/scoreEdits.js`) and the men whose
+card it is get a **`card_amended`** push.
+
+**It is sent on the RE-FINALIZE, never on the edit**, and that ordering is the
+design:
+
+- A correction in progress is not a correction — a director types 5, sees it
+  is wrong, types 4, and pushing on each keystroke tells a man about a number
+  that was never true of anything. The log keys one document per hole per
+  amendment and writes `from` ONLY on the first edit, so the notice reads
+  7 → 4 rather than 5 → 4. A hole put back where it started deletes its row.
+- One push, not one per hole.
+- Re-finalizing is when the correction becomes official — the same moment the
+  original result did. A round left reopened is still being worked on.
+
+`amend_seq` on every row is the lock's `amend_count`, which is how a round
+reopened twice does not replay the first correction's holes at the second
+finalize. That number has to survive every write between the reopen and the
+re-finalize — `buildRoundLockDoc` returns a fresh object, so it names the
+amendment fields explicitly, and `scoreEdits.lifecycle.test.js` walks the
+whole thing because the two halves live either side of the wire and cannot
+import each other.
+
+**Three kinds of change count, and the third is the one that hides.** A moved
+hole and a moved Course Handicap are obvious. A moved *allowance* is not: `ch`
+is stored raw and the allowance is applied downstream of the snapshot, so
+correcting a round from 100% to 50% re-scores every match in it and moves not
+one stored handicap. `describeRefreshImpact` reports round-level settings
+alongside the per-player rows for exactly that reason — reading only the
+players made the Recalculate dialog answer "nothing to recalculate" for the
+one correction a recalculate is the only way to land.
+
+**Who hears it**: the man whose hole moved, and everybody else in his match —
+a card is signed by one player and attested by the others, and when the number
+changes the people who swore to it have as much standing as its owner. A
+round-wide settings change reaches everybody who played. The rest of the field
+hears nothing; a corrected fourball is not news for the other twelve.
+`functions/amendmentNotice.js` decides all of it and is pure, like `ctpNotice`
+beside it, written to the same one-line Android budget.
+
+The field-wide "Round N is final" is **suppressed on a re-finalize** — it
+already went out the first time and says nothing about what changed.
+
+- **The notification half needs `firebase deploy --only functions`.** Until it
+  runs, corrections land and record themselves and nobody is told.
+- **`bc_score_edits` needs `firebase deploy --only firestore:rules`**, app
+  first as always. It is gated at `canWriteEdition()` rather than director,
+  because the writer is `onSaveHole` — the same call every player makes from a
+  tee box — and a rule that refused it would take the SCORE down with the log
+  entry.
+- The amendment itself needs neither: the finalize lock was always a
+  client-side guard.
+
 ## The Data tab
 
 **☰ → Data**, one row where Player Analytics and Historical Data used to be two.

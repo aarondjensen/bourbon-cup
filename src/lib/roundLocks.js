@@ -127,6 +127,27 @@ export const openRoundNumbers = (locks, allRounds = [1, 2, 3, 4]) =>
 export const currentRoundNumber = (locks, allRounds = [1, 2, 3, 4]) =>
   [...allRounds].sort((a, b) => a - b).find((r) => !isRoundFinal(locks, r)) ?? null;
 
+// The round the SCORING TAB is actually pointed at, which is not always the
+// one above. `currentRoundNumber` answers "what has nobody finalized"; this
+// answers "where is the field standing", and on a dated week those differ:
+// today's round wins outright, so a Friday round left unfinalized because one
+// group never attested does not drag every phone in the field back to it on
+// Saturday morning (see roundForToday in lib/scoringGate).
+//
+// `roundToday` is that answer, or null when the edition has no dates — an
+// imported year, the demo, a week drawn but not scheduled — in which case this
+// falls straight through to the lowest unfinalized round.
+//
+// It lives here, beside the rule it overrides, because two callers need the
+// same answer and they need it to be the SAME answer: App draws the gate with
+// it, and lib/roundAmend uses it to tell a director whether reopening a
+// finalized round is about to move the whole field. Those two disagreeing is a
+// dialog that promises the gate will stay put and then moves it.
+export const scoringRoundNumber = ({ locks, allRounds = [1, 2, 3, 4], roundToday = null }) => {
+  if (roundToday != null && !isRoundFinal(locks, roundToday)) return roundToday;
+  return currentRoundNumber(locks, allRounds);
+};
+
 // The round that comes after the current one, or null if the current round
 // closes out the event. Used to tell the director what finalizing will open.
 export const nextRoundNumber = (locks, allRounds = [1, 2, 3, 4]) => {
@@ -257,6 +278,25 @@ export function buildRoundLockDoc({
     refreshed_by: previous ? lockedBy || null : null,
     finalized_at: previous?.finalized_at || null,
     finalized_by: previous?.finalized_by || null,
+    // ── The amendment trail rides through a refresh ─────────────────
+    // This builder returns a FRESH object rather than spreading `previous`,
+    // which is deliberate — a snapshot must not inherit a stray field from a
+    // shape it no longer has. But that means every field worth keeping has to
+    // be named here, and the amendment marks (lib/roundAmend) are worth
+    // keeping twice over: `amend_count` is the permanent record that a
+    // finished round was reopened, and it is also what the re-finalize
+    // notification keys on to find the edits belonging to THIS amendment.
+    //
+    // Losing them here would not have shown up in Firestore — db.upsert
+    // merges, so the stored document keeps what the write omits — but the
+    // in-memory lock the app scores and reports off would have dropped them
+    // the instant a director tapped Recalculate, which is precisely the
+    // moment they matter most.
+    amend_count: previous?.amend_count || 0,
+    amended_at: previous?.amended_at || null,
+    amended_by: previous?.amended_by || null,
+    amend_reason: previous?.amend_reason || null,
+    amend_history: previous?.amend_history || null,
     // Frozen round context
     course_id: tr.course_id || null,
     course_name: course?.name || null,

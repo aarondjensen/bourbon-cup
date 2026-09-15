@@ -49,6 +49,7 @@ const TYPES = [
   { key: "attest_ready", title: "Time to attest your card", sub: "Someone in your match signed it" },
   { key: "card_final", title: "Your card is final", sub: "Everyone has attested" },
   { key: "round_final", title: "A round is final", sub: "Handicaps frozen, next round open" },
+  { key: "card_amended", title: "Your card was corrected", sub: "A finished round was reopened and changed" },
 ];
 
 const Card = ({ children, style }) => (

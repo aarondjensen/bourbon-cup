@@ -14,15 +14,23 @@
 // count. `refreshRoundLockDoc` existed and was reachable from nothing; the
 // correction had to be made in the Firebase console, on raw document ids.
 //
-// Two controls now, in the order the two decisions happen:
+// Two doors now, and they are in two places because they answer two
+// different questions:
 //
-//   Reopen       FINAL → LOCKED. Moves no stroke by itself.
-//   Recalculate  re-takes the snapshot off what is on screen, which is the
-//                only thing that makes a corrected handicap land.
+//   Reopen       FINAL → LOCKED, on the Finalize sheet, stamped with who,
+//                when and why (lib/roundAmend). Moves no stroke by itself.
+//   Recalculate  HERE, at the foot of HANDICAPS, on the round this form is
+//                editing — re-takes the snapshot off what is on screen,
+//                which is the only thing that makes a corrected handicap
+//                land.
 //
-// What is pinned here is that the second one carries the CURRENT figures —
-// the debounce and the Firestore echo between the keystroke and the tap are
-// exactly where this would silently freeze the number being corrected.
+// Three things are pinned. That the second one carries the CURRENT figures
+// — the debounce and the Firestore echo between the keystroke and the tap
+// are exactly where this would silently freeze the number being corrected.
+// That it names the handicaps it is about to move, in numbers, behind a
+// typed word, because it re-scores holes that have been played. And that a
+// FINAL round is not offered it at all, which is what makes the amendment a
+// real gate rather than a speed bump.
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
 
@@ -71,6 +79,14 @@ const round = {
 const LOCKED = { 1: { locked: true, final: false, players: { p1: { ch: 8, hi: 8.1 } } } };
 const FINAL = { 1: { locked: true, final: true, players: { p1: { ch: 8, hi: 8.1 } } } };
 
+// What onRecalculateRound resolves to — { lock, impact }, where impact is
+// lib/roundAmend's describeRefreshImpact. Built here rather than inline so a
+// test that cares about one field does not have to spell out the other four.
+const RECALC = ({ rows = [{ pid: "p1", name: "Aaron J", from: 8, to: 12 }], unchanged = 1, settings = [] } = {}) => ({
+  lock: { locked: true, final: false },
+  impact: { rows, changed: rows.length, unchanged, settings, settingsChanged: settings.length },
+});
+
 const props = (over = {}) => ({
   user: { isDirector: true, player_id: "p1" },
   tPlayers, memberships: [], onSetDirector: async () => {},
@@ -86,8 +102,8 @@ const props = (over = {}) => ({
   onSaveGroups: async () => {}, notify: () => {}, roundLocks: {},
   payments: [], duesAmount: 0, onLogPayment: async () => {}, onDeletePayment: async () => {},
   onSaveDues: async () => {}, onSetPlayerDues: async () => {},
-  onOpenFinalize: () => {}, onReopenRound: async () => ({ final: false }),
-  onRecalcHandicaps: async () => ({ locked: true }),
+  onOpenFinalize: () => {},
+  onRecalculateRound: async () => RECALC({ changed: 1 }),
   finalizeRound: null, finalizeReady: false,
   trip: {}, onSaveTrip: async () => {}, startDate: "", endDate: "",
   budgetLines: [], onSaveBudgetLine: async () => {}, onDeleteBudgetLine: async () => {},
@@ -123,62 +139,55 @@ const chBox = (container, name = "Aaron J") => {
   return box;
 };
 
+// The recalculate button's own label, which names the round it acts on.
+const RECALC_BTN = "Recalculate Round 1 handicaps";
+// Typing the word the confirm holds itself back behind.
+const typeToConfirm = (word) => {
+  const box = document.body.querySelector(`input[aria-label="Type ${word} to continue"]`);
+  expect(box, `no ${word} box`).toBeTruthy();
+  fireEvent.change(box, { target: { value: word } });
+};
+
 describe("the controls a frozen round offers", () => {
-  it("offers neither on an open round", () => {
+  it("offers nothing on an open round", () => {
     const c = roundsTab();
-    expect(button(c, "Reopen")).toBeFalsy();
-    expect(button(c, "Recalculate")).toBeFalsy();
+    expect(button(c, RECALC_BTN)).toBeFalsy();
   });
 
   it("offers Recalculate once the round is locked", () => {
     const c = roundsTab({ roundLocks: LOCKED });
-    expect(button(c, "Recalculate")).toBeTruthy();
-    expect(button(c, "Reopen")).toBeFalsy();
+    expect(button(c, RECALC_BTN)).toBeTruthy();
   });
 
-  it("offers Reopen once it is final, and not Recalculate", () => {
-    // The two are a sequence, not a choice: a final round has to come back to
-    // LOCKED before its snapshot can be re-taken at all (onLockRound refuses).
+  // The gate. A final round has to come back to LOCKED before its snapshot
+  // can be re-taken at all — App's onRecalculateRound refuses one outright —
+  // and a control that appears only to say no is the failure these guards
+  // were rewritten to stop making.
+  it("offers nothing at all once the round is final", () => {
     const c = roundsTab({ roundLocks: FINAL });
-    expect(button(c, "Reopen")).toBeTruthy();
-    expect(button(c, "Recalculate")).toBeFalsy();
+    expect(button(c, RECALC_BTN)).toBeFalsy();
   });
 
-  it("says what state the round is in either way", () => {
-    expect(roundsTab({ roundLocks: FINAL }).textContent).toContain("Round 1 is final");
-    expect(roundsTab({ roundLocks: LOCKED }).textContent).toContain("frozen on the snapshot");
+  // The amendment does not gate the control, it words it: a round somebody
+  // REOPENED is waiting on this, and one that locked on its first score this
+  // morning is not waiting on anything.
+  it("says which of the two frozen rounds this is", () => {
+    expect(roundsTab({ roundLocks: LOCKED }).textContent).toContain("Round 1's handicaps are frozen");
+    const amended = {
+      1: {
+        ...LOCKED[1], amend_count: 1,
+        amended_at: "2026-07-18T12:00:00.000Z", locked_at: "2026-07-16T12:00:00.000Z",
+      },
+    };
+    expect(roundsTab({ roundLocks: amended }).textContent).toContain("Round 1 was reopened");
   });
 
-  it("draws nothing at all when the caller supplies no actions", () => {
-    // A non-director never reaches this tab, but the props are optional and a
-    // strip with no buttons in it is furniture.
-    const c = roundsTab({ roundLocks: FINAL, onReopenRound: null, onRecalcHandicaps: null });
-    expect(button(c, "Reopen")).toBeFalsy();
-    expect(button(c, "Recalculate")).toBeFalsy();
-    expect(c.textContent).not.toContain("handicaps are read-only");
-  });
-});
-
-describe("reopening a final round", () => {
-  it("asks first, and says that it moves no stroke on its own", async () => {
-    const calls = [];
-    const c = roundsTab({ roundLocks: FINAL, onReopenRound: async (r) => { calls.push(r); return { final: false }; } });
-    fireEvent.click(button(c, "Reopen"));
-    await waitFor(() => expect(document.body.textContent).toContain("Reopen Round 1 for editing?"));
-    // The sentence that stops a director thinking the job is done.
-    expect(document.body.textContent).toContain("Recalculate is what makes a handicap correction land");
-    expect(calls).toEqual([]);              // nothing yet
-    await confirmWith("Reopen");
-    await waitFor(() => expect(calls).toEqual([1]));
-  });
-
-  it("does nothing if the director backs out", async () => {
-    const calls = [];
-    const c = roundsTab({ roundLocks: FINAL, onReopenRound: async (r) => { calls.push(r); return {}; } });
-    fireEvent.click(button(c, "Reopen"));
-    await waitFor(() => expect(document.body.textContent).toContain("Reopen Round 1"));
-    await confirmWith("Cancel");
-    expect(calls).toEqual([]);
+  it("draws nothing when the caller supplies no action", () => {
+    // A non-director never reaches this tab, but the prop is optional and a
+    // card whose button does nothing is furniture.
+    const c = roundsTab({ roundLocks: LOCKED, onRecalculateRound: null });
+    expect(button(c, RECALC_BTN)).toBeFalsy();
+    expect(c.textContent).not.toContain("handicaps are frozen");
   });
 });
 
@@ -187,47 +196,124 @@ describe("recalculating a locked round", () => {
     // THE POINT OF ALL OF THIS. The box auto-saves on a 700ms debounce and
     // App only learns the new value when Firestore echoes it back, so a
     // director who types 12 and taps Recalculate straight away must not
-    // freeze the 8 he was correcting. The form hands over what it is holding.
+    // preview, or freeze, the 8 he was correcting. The form hands over what
+    // it is holding — on the PREVIEW call as well as the write, since the
+    // preview is what the dialog then reports as about to happen.
     const seen = [];
     const c = roundsTab({
       roundLocks: LOCKED,
-      onRecalcHandicaps: async (r, inputs) => { seen.push({ r, inputs }); return { locked: true }; },
+      onRecalculateRound: async (r, opts) => { seen.push({ r, ...opts }); return RECALC(); },
     });
-    const box = chBox(c);
-    fireEvent.change(box, { target: { value: "12" } });
+    fireEvent.change(chBox(c), { target: { value: "12" } });
     // No timers advanced: the debounce is deliberately still pending.
-    fireEvent.click(button(c, "Recalculate"));
-    await confirmWith("Recalculate");
+    fireEvent.click(button(c, RECALC_BTN));
     await waitFor(() => expect(seen).toHaveLength(1));
-    expect(seen[0].r).toBe(1);
+    expect(seen[0]).toMatchObject({ r: 1, preview: true });
     expect(seen[0].inputs.chOverrides[1].p1).toBe("12");
+
+    await waitFor(() => expect(document.body.textContent).toContain("Move 1 handicap"));
+    typeToConfirm("RECALCULATE");
+    await confirmWith("Recalculate");
+    await waitFor(() => expect(seen).toHaveLength(2));
+    expect(seen[1].preview).toBeUndefined();
+    expect(seen[1].inputs.chOverrides[1].p1).toBe("12");
   });
 
   it("flushes the pending save before it freezes anything", async () => {
     // The snapshot and the stored override have to agree — a frozen 12 with
     // an 8 still in bc_hcp_overrides is a round that reverts the next time
     // anybody recalculates it.
-    const writes = [];
     const order = [];
     const c = roundsTab({
       roundLocks: LOCKED,
-      onSetRound: async (r) => { writes.push(r); order.push("save"); },
-      onRecalcHandicaps: async () => { order.push("recalc"); return { locked: true }; },
+      onSetRound: async () => { order.push("save"); },
+      onRecalculateRound: async (r, o) => { order.push(o?.preview ? "preview" : "recalc"); return RECALC(); },
     });
     fireEvent.change(chBox(c), { target: { value: "12" } });
-    fireEvent.click(button(c, "Recalculate"));
-    await confirmWith("Recalculate");
-    await waitFor(() => expect(order).toContain("recalc"));
-    expect(order).toEqual(["save", "recalc"]);
+    fireEvent.click(button(c, RECALC_BTN));
+    await waitFor(() => expect(order).toContain("preview"));
+    expect(order).toEqual(["save", "preview"]);
+  });
+
+  // In numbers, not in prose. "Some handicaps may change" is the sentence
+  // that gets tapped through; a name and two figures is the one that gets
+  // read, and it is the list that will actually land because it was built by
+  // the same call that lands it.
+  it("names the handicaps it is about to move", async () => {
+    const c = roundsTab({
+      roundLocks: LOCKED,
+      onRecalculateRound: async () => RECALC({
+        rows: [{ pid: "p1", name: "Aaron J", from: 8, to: 12 }, { pid: "p2", name: "Paul W", from: 14, to: 13 }],
+        unchanged: 3,
+      }),
+    });
+    fireEvent.click(button(c, RECALC_BTN));
+    await waitFor(() => expect(document.body.textContent).toContain("Move 2 handicaps"));
+    expect(document.body.textContent).toContain("Aaron J: 8 → 12");
+    expect(document.body.textContent).toContain("Paul W: 14 → 13");
+    expect(document.body.textContent).toContain("2 Course Handicaps will change and 3 will not");
+  });
+
+  // The allowance is the case that exposed this. It is applied downstream of
+  // the snapshot, so correcting a round from 100% to 50% moves every stroke
+  // in it and not one stored Course Handicap — and a dialog that read only
+  // the players told the director their fix was somewhere else.
+  it("reports a round-level setting even when no stored handicap moves", async () => {
+    const c = roundsTab({
+      roundLocks: LOCKED,
+      onRecalculateRound: async () => RECALC({
+        rows: [], unchanged: 4,
+        settings: [{ key: "allowance", label: "Handicap allowance", from: { pct: 100 }, to: { pct: 50 } }],
+      }),
+    });
+    fireEvent.click(button(c, RECALC_BTN));
+    await waitFor(() => expect(document.body.textContent).toContain("Re-score a round that has been played?"));
+    expect(document.body.textContent).toContain("Handicap allowance: 100% → 50%");
+    expect(document.body.textContent).toContain("No stored Course Handicap moves");
+  });
+
+  // The useful answer, and the one a director has no other way to get: the
+  // correction was on the points side, which is live already, and there is
+  // nothing to land.
+  it("says so, and offers nothing, when nothing would move", async () => {
+    const seen = [];
+    const c = roundsTab({
+      roundLocks: LOCKED,
+      onRecalculateRound: async (r, o) => { seen.push(o); return RECALC({ rows: [], unchanged: 4 }); },
+    });
+    fireEvent.click(button(c, RECALC_BTN));
+    await waitFor(() => expect(document.body.textContent).toContain("Nothing to recalculate"));
+    expect(document.body.querySelector('input[aria-label="Type RECALCULATE to continue"]')).toBeFalsy();
+    expect(seen).toHaveLength(1);          // the preview, and nothing after it
   });
 
   it("warns that strokes move, and does nothing if the answer is no", async () => {
     const seen = [];
-    const c = roundsTab({ roundLocks: LOCKED, onRecalcHandicaps: async () => { seen.push(1); return {}; } });
-    fireEvent.click(button(c, "Recalculate"));
-    await waitFor(() => expect(document.body.textContent).toContain("Strokes are re-allocated"));
+    const c = roundsTab({
+      roundLocks: LOCKED,
+      onRecalculateRound: async (r, o) => { seen.push(o); return RECALC(); },
+    });
+    fireEvent.click(button(c, RECALC_BTN));
+    await waitFor(() => expect(document.body.textContent).toContain("This re-allocates strokes on holes that have already been played"));
     await confirmWith("Cancel");
-    expect(seen).toEqual([]);
+    expect(seen).toHaveLength(1);          // the preview only
+  });
+
+  // A one-tap confirm on the only act in the app that re-scores a played
+  // round is the reflex, not the check.
+  it("holds the write back until the word is typed", async () => {
+    const seen = [];
+    const c = roundsTab({
+      roundLocks: LOCKED,
+      onRecalculateRound: async (r, o) => { seen.push(o); return RECALC(); },
+    });
+    fireEvent.click(button(c, RECALC_BTN));
+    await waitFor(() => expect(document.body.textContent).toContain("Type RECALCULATE to continue"));
+    await confirmWith("Recalculate");
+    expect(seen).toHaveLength(1);          // refused: nothing typed
+    typeToConfirm("RECALCULATE");
+    await confirmWith("Recalculate");
+    await waitFor(() => expect(seen).toHaveLength(2));
   });
 });
 
@@ -239,11 +325,13 @@ describe("what the form tells a director who types into a frozen round", () => {
     expect(document.body.textContent).toContain("tap Recalculate");
   });
 
-  it("points a final round at Reopen", async () => {
+  // The dead end that sent the one director who needed this into the Firebase
+  // console. It names the door rather than stopping at "no".
+  it("points a final round at the way back in", async () => {
     const c = roundsTab({ roundLocks: FINAL });
     fireEvent.focusIn(chBox(c));
     await waitFor(() => expect(document.body.textContent).toContain("Round 1 is final"));
-    expect(document.body.textContent).toContain("Reopen it");
+    expect(document.body.textContent).toContain("Correct a finished round");
   });
 });
 

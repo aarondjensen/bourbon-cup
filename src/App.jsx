@@ -28,10 +28,18 @@ import { holeFill } from "./lib/holeFill";
 import {
   ROUND_LOCKS_COL, buildRoundLockDoc, refreshRoundLockDoc,
   markRoundFinal, unfinalizeRound, clearRoundLockDoc,
-  roundLockState, currentRoundNumber, lastFinalRoundNumber, isRoundFinal,
+  roundLockState, scoringRoundNumber,
   unfinalizedRoundNumbers, openRoundAfter,
   LOCK_OPEN, LOCK_FINAL, LOCK_STATE_LABEL,
 } from "./lib/roundLocks";
+import {
+  amendableRoundNumbers, describeRefreshImpact, recordAmendment, describeSettingValue,
+} from "./lib/roundAmend";
+import {
+  SCORE_EDITS_COL, inAmendmentWindow, amendSeqOf,
+  buildScoreEdit, buildHandicapEdit, buildSettingEdit,
+  scoreEditDocId, handicapEditDocId,
+} from "./lib/scoreEdits";
 import {
   concealHoleData, countdownHoleData, concealCtpData, isConcealing,
   revealState, revealSummary, HOLE_COUNT,
@@ -4593,6 +4601,9 @@ export default function App() {
   const [courses, setCourses] = useState([]);
   const [matches, setMatches] = useState([]);
   const [holeData, setHoleData] = useState({});
+  // The amendment edit log, keyed by document id. Empty except while a
+  // finalized round is reopened and being corrected — see lib/scoreEdits.
+  const [scoreEdits, setScoreEdits] = useState({});
   // One signature document per signed card — see lib/cardSigs. Kept as the
   // raw row array rather than keyed by match, because every consumer either
   // looks one match up (sigForMatch) or folds the whole round at once
@@ -4696,6 +4707,7 @@ export default function App() {
   // And for the cards themselves, so the save path can name the score a
   // failed write is reverting FROM without reading through React state.
   const holeDataRef = useRef({});
+  const scoreEditsRef = useRef({});
   // And for the CTP records, which confirming appends to the same way.
   const ctpDataRef = useRef({});
   const lockInputsRef = useRef({ players: [], tRounds: [], courses: [], hcpOverrides: {}, teeAssignments: {} });
@@ -5087,6 +5099,23 @@ export default function App() {
       holeDataRef.current = hd;   // keep the ref hot for the save path
       setHoleData(hd);
     }));
+    // ── The amendment edit log ──────────────────────────────────────
+    // Empty for every round of every ordinary tournament: rows only exist
+    // while a FINALIZED round has been reopened and somebody is correcting it
+    // (see lib/scoreEdits), and the whole set is a handful of holes.
+    //
+    // Subscribed rather than queried on demand because the writer needs it.
+    // `from` on an edit row is the score as it stood when the round was
+    // reopened, and it is written ONCE — a director who types 5, sees it is
+    // wrong and types 4 must produce "7 → 4", not "5 → 4". Knowing whether a
+    // row already exists for that hole is what makes that possible, and a
+    // query per keystroke to find out is not.
+    unsubs.push(db.subscribe(SCORE_EDITS_COL, f, rows => {
+      const map = {};
+      (rows || []).forEach(r => { if (r?.id) map[r.id] = r; });
+      scoreEditsRef.current = map;   // the save path reads the ref, not state
+      setScoreEdits(map);
+    }));
     // Whether photo uploads are switched on. One tiny document, subscribed
     // with the rest because every phone needs it and it never changes — see
     // onBudgetAlert in functions/index.js, which only writes it on a
@@ -5389,10 +5418,115 @@ export default function App() {
   // On a rejection Firestore rolls its own local mutation back and the
   // subscription re-fires with the truth, which repaints the cell by itself.
   // All this has to do is say so, loudly enough to be acted on.
+  // ── Recording a correction ───────────────────────────────────────────
+  // Writes one row per hole that moves while a FINALIZED round is reopened,
+  // which is what the re-finalize notification is built from (see
+  // lib/scoreEdits and functions/amendmentNotice).
+  //
+  // Silent and free on every other write in the app's life. The first line is
+  // the gate: an ordinary round taking its first scores has no amend_count,
+  // so a whole weekend of tapping never reaches Firestore through here.
+  //
+  // Fire-and-forget on purpose. This is bookkeeping ABOUT a score, and a
+  // failure to record it must never stop the score itself from saving — the
+  // score is what the field agreed to and the log is how we describe it
+  // afterwards. A dropped row costs one line of a notification; a dropped
+  // score costs a hole.
+  const recordScoreEdit = useCallback((pid, rnd, holeIdx, score) => {
+    const lock = roundLocksRef.current?.[rnd];
+    if (!inAmendmentWindow(lock)) return;
+    const amendSeq = amendSeqOf(lock);
+    const hole = holeIdx + 1;
+    const id = scoreEditDocId({ round: rnd, amendSeq, playerId: pid, hole });
+    const edit = buildScoreEdit({
+      tournamentId: TOURNAMENT_ID,
+      round: rnd,
+      amendSeq,
+      playerId: pid,
+      hole,
+      from: holeDataRef.current?.[`${pid}_${rnd}`]?.[holeIdx],
+      to: score,
+      by: userRef.current?.name || null,
+      previous: scoreEditsRef.current?.[id] || null,
+    });
+    if (!edit) return;
+    // A hole put back to the number it started at is not a correction. Drop
+    // the row so the notification does not report a change that, by the time
+    // anybody reads it, is not one — see buildScoreEdit's three returns.
+    if (edit.revert) {
+      delete scoreEditsRef.current[edit.id];
+      db.delete(SCORE_EDITS_COL, edit.id);
+      return;
+    }
+    scoreEditsRef.current = { ...scoreEditsRef.current, [id]: { ...scoreEditsRef.current[id], ...edit } };
+    db.upsert(SCORE_EDITS_COL, edit);
+  }, []);
+
+  // The handicap half of the same record. `impact` is roundAmend's
+  // describeRefreshImpact — already exactly the rows whose CH moved, so this
+  // writes what the recalculate's own confirm dialog just showed the director
+  // rather than re-deriving it and risking a different answer.
+  const recordHandicapEdits = useCallback((rnd, lock, impact) => {
+    const amendSeq = amendSeqOf(lock);
+    if (!amendSeq) return;   // a refresh outside an amendment moves nobody's signed card
+    // The round's own terms, when they moved. Recorded alongside the player
+    // rows rather than instead of them, because the two are independent: an
+    // allowance correction moves every stroke in the round and not one stored
+    // Course Handicap, so a run that reports zero player rows can still be the
+    // one the whole field needs to hear about.
+    (impact?.settings || []).forEach(d => {
+      const edit = buildSettingEdit({
+        tournamentId: TOURNAMENT_ID,
+        round: rnd,
+        amendSeq,
+        field: d.key,
+        label: d.label,
+        // Already the readable form the recalculate dialog printed — an
+        // allowance object and two eighteen-long arrays have no place in a
+        // notification body.
+        from: describeSettingValue(d.from),
+        to: describeSettingValue(d.to),
+        by: userRef.current?.name || null,
+      });
+      if (edit) db.upsert(SCORE_EDITS_COL, edit);
+    });
+    (impact?.rows || []).forEach(row => {
+      const id = handicapEditDocId({ round: rnd, amendSeq, playerId: row.pid });
+      const edit = buildHandicapEdit({
+        tournamentId: TOURNAMENT_ID,
+        round: rnd,
+        amendSeq,
+        playerId: row.pid,
+        from: row.from,
+        to: row.to,
+        by: userRef.current?.name || null,
+        previous: scoreEditsRef.current?.[id] || null,
+      });
+      if (!edit) return;
+      // A second recalculate that lands a player back on the handicap he was
+      // reopened with. Same argument as a reverted hole.
+      if (edit.revert) {
+        delete scoreEditsRef.current[edit.id];
+        db.delete(SCORE_EDITS_COL, edit.id);
+        return;
+      }
+      scoreEditsRef.current = { ...scoreEditsRef.current, [id]: { ...scoreEditsRef.current[id], ...edit } };
+      db.upsert(SCORE_EDITS_COL, edit);
+    });
+  }, []);
+
   const onSaveHole = useCallback(async (pid, rnd, holeIdx, score, courseId) => {
     // Freeze BEFORE the score lands, so the very first hole of a round is
     // already scoring off the snapshot.
     ensureRoundLock(rnd);
+    // ── Is this a CORRECTION to a finished round? ──────────────────
+    // Recorded before the optimistic update below, because the previous
+    // score is one of the two numbers the record is made of and the write
+    // that follows is about to overwrite it in the ref.
+    //
+    // A no-op for every score typed on a tee box: recordScoreEdit returns
+    // immediately unless the round has been reopened after being finalized.
+    recordScoreEdit(pid, rnd, holeIdx, score);
     // ── Edition scoping ──
     // Scores and matches were the last two collections still building their
     // document ids by hand instead of through editionDocId. Nothing has
@@ -5445,7 +5579,7 @@ export default function App() {
       db.upsertStrict("bc_hole_scores", id, data),
       `Hole ${holeIdx + 1} didn't save`,
     );
-  }, [ensureRoundLock, trackWrite]);
+  }, [ensureRoundLock, trackWrite, recordScoreEdit]);
 
   const onAddPlayer = useCallback(async (p) => { await db.upsert("bc_players", p); }, []);
   const onUpdatePlayer = useCallback(async (p) => { await db.upsert("bc_players", p); }, []);
@@ -6118,6 +6252,116 @@ export default function App() {
     return next;
   }, [onLockRound]);
 
+  // ── Amending a finalized round ───────────────────────────────────────
+  // The deliberate way back into a closed round. FINAL → LOCKED, which is
+  // the state roundLocks already defines as "frozen snapshot, still movable
+  // by a deliberate act" — so this introduces no new lifecycle, it just
+  // reaches a state the app could previously only leave.
+  //
+  // Two things separate it from onFinalizeRound(rnd, false), which it is
+  // otherwise a synonym for:
+  //
+  //   • it reaches ANY final round, not the most recent one, so the wrong
+  //     hole somebody found in Friday's round on Sunday morning is fixable
+  //     without unwinding the two rounds after it.
+  //   • it STAMPS the lock (lib/roundAmend's recordAmendment) with who, when
+  //     and why. A round that has been reopened is a round whose result the
+  //     field agreed to once and then saw changed, and that must not be
+  //     indistinguishable afterwards from one nobody touched. The reason is
+  //     the director's own words and is kept forever.
+  //
+  // It moves no stroke. See onRecalculateRound below, which is the act that
+  // does, and is deliberately separate from this one.
+  const onAmendRound = useCallback(async (rnd, { reason = "" } = {}) => {
+    const lock = roundLocksRef.current?.[rnd];
+    if (!lock?.locked || !lock.final) return null;
+    const by = userRef.current?.name || null;
+    const next = recordAmendment(unfinalizeRound(lock, by), { by, reason });
+    // Loud, so a refusal THROWS rather than resolving to null. db.upsert
+    // swallows a rejection by default, and an amendment that quietly did not
+    // land is precisely the failure this whole flow exists to stop being
+    // invisible: the sheet would close, the round would look reopened, and it
+    // would be final again on the next reload. Local state is only advanced
+    // once the write has actually gone.
+    try { await db.upsert(ROUND_LOCKS_COL, next, { loud: true }); }
+    catch { return null; }
+    roundLocksRef.current = { ...roundLocksRef.current, [rnd]: next };
+    setRoundLocksData(p => ({ ...p, [rnd]: next }));
+    return next;
+  }, []);
+
+  // ── Recalculating a round ────────────────────────────────────────────
+  // Re-takes the handicap snapshot against current live values. This is the
+  // ONLY act in the app that moves a stroke in a round that has already been
+  // played, and it exists because the alternative is worse: a director who
+  // corrects a round's allowance, or a player's index, or the tee they were
+  // put on, and re-finalizes has otherwise changed a stored field and nothing
+  // else — the leaderboard reads the frozen snapshot and never moves. That is
+  // the app taking an edit, showing it back, and discarding its effect.
+  //
+  // Kept separate from the amendment above rather than folded into it, in
+  // both directions:
+  //
+  //   • most amendments are score corrections, and a score needs no
+  //     recalculate at all — the strokes were right, a number was typed
+  //     wrong. Re-deriving every handicap for those would put a whole field's
+  //     Course Handicaps at the mercy of whatever GHIN synced last night.
+  //   • the point-side settings (Nassau pots, hole points, par points,
+  //     counting scores) need neither an amendment nor this: scoring.js reads
+  //     the LIVE value over the snapshot for all of them, so those corrections
+  //     land on the leaderboard the moment they save. See lib/roundAmend.
+  //
+  // Refused on a final round, which is what makes the amendment a real gate
+  // rather than a speed bump — the round must be reopened first.
+  //
+  // Returns { lock, impact } so the caller can report what actually moved.
+  // `preview: true` builds and diffs the snapshot WITHOUT writing it, which is
+  // what lets the confirm list the handicaps that are about to move rather
+  // than estimating them — the list shown is then the list that lands, built
+  // by the same call that will land it.
+  //
+  // `inputs` is the same escape hatch onLockRound carries, and for the same
+  // reason: the Admin form's handicap boxes auto-save on a 700ms debounce, so
+  // between a director typing a corrected figure and tapping Recalculate sit
+  // that debounce and a Firestore echo that has to come back through the
+  // subscription before lockInputsRef knows anything. The form flushes its
+  // write first AND hands over what it wrote; reading the ref there would
+  // snapshot the number being corrected.
+  const onRecalculateRound = useCallback(async (rnd, { preview = false, inputs = null } = {}) => {
+    const prev = roundLocksRef.current?.[rnd];
+    if (!prev?.locked || prev.final) return null;
+    const { players, tRounds: rds, courses: crs, hcpOverrides, teeAssignments } = lockInputsRef.current;
+    const next = refreshRoundLockDoc({
+      tournamentId: TOURNAMENT_ID,
+      round: rnd,
+      players,
+      tRounds: rds,
+      courses: crs,
+      chOverrides: inputs?.chOverrides || hcpOverrides,
+      teeAssignments: inputs?.teeAssignments || teeAssignments,
+      lockedBy: userRef.current?.name || null,
+      previous: prev,
+    });
+    // Diffed BEFORE the write, against the snapshot still in hand, so the
+    // report is of what this recalculate did and not of what the next
+    // subscription frame happens to say.
+    const impact = describeRefreshImpact({ locks: roundLocksRef.current, round: rnd, nextLock: next });
+    if (preview) return { lock: next, impact };
+    // Loud for the same reason as the amendment: a recalculate that was
+    // refused must not report a list of moved handicaps that never moved.
+    try { await db.upsert(ROUND_LOCKS_COL, next, { loud: true }); }
+    catch { return null; }
+    roundLocksRef.current = { ...roundLocksRef.current, [rnd]: next };
+    setRoundLocksData(p => ({ ...p, [rnd]: next }));
+    // A moved Course Handicap belongs on the card's record beside a moved
+    // hole, and for the same reason: it changes the net on every hole the man
+    // played. Telling him about a corrected 7 while his handicap quietly went
+    // from 12 to 14 is telling him the smaller half. Recorded only after the
+    // write lands, so a refused recalculate logs nothing.
+    recordHandicapEdits(rnd, prev, impact);
+    return { lock: next, impact };
+  }, [recordHandicapEdits]);
+
   // Hand a round back to live handicaps. Only for a round locked by a stray
   // score before the event actually started — never reachable while final.
   // eslint-disable-next-line no-unused-vars
@@ -6168,14 +6412,18 @@ export default function App() {
     () => roundForToday({ tRounds, rounds: tournamentRounds }),
     [tRounds, tournamentRounds]
   );
-  const currentRound = useMemo(() => {
-    const lowestOpen = currentRoundNumber(roundLocksData, tournamentRounds);
-    // Never onto a round that is already FINAL: a finalized round is closed
-    // to everybody, and landing the tab on one would trade a wrong-round
-    // score for a dead screen on the day it is being played.
-    if (roundToday != null && !isRoundFinal(roundLocksData, roundToday)) return roundToday;
-    return lowestOpen;
-  }, [roundLocksData, tournamentRounds, roundToday]);
+  //
+  // The rule itself lives in lib/roundLocks (scoringRoundNumber) rather than
+  // here, because lib/roundAmend has to be able to answer "does reopening
+  // Round 2 move the field?" with the SAME rule this draws the gate with. A
+  // dialog that promises the gate will stay put and then moves it is worse
+  // than no dialog. Never onto a round that is already FINAL: a finalized
+  // round is closed to everybody, and landing the tab on one would trade a
+  // wrong-round score for a dead screen on the day it is being played.
+  const currentRound = useMemo(
+    () => scoringRoundNumber({ locks: roundLocksData, allRounds: tournamentRounds, roundToday }),
+    [roundLocksData, tournamentRounds, roundToday]
+  );
 
   // ── This edition's row in the archive ────────────────────────────────
   // Computed from the cards by the same engine the leaderboard uses (see
@@ -6427,8 +6675,14 @@ export default function App() {
     () => openRoundAfter(roundLocksData, tournamentRounds, finalizeTarget),
     [roundLocksData, tournamentRounds, finalizeTarget]
   );
-  const finalizeLastFinal = useMemo(
-    () => lastFinalRoundNumber(roundLocksData, tournamentRounds),
+  // ── What can be AMENDED ──────────────────────────────────────────
+  // Every final round, not merely the most recent one. The sheet's old
+  // reopen pointed at lastFinalRoundNumber and nothing else, which answered
+  // "I finalized one hole too early" and could not answer "we found a wrong
+  // hole in Friday's round on Sunday morning" — Round 2 of a finished cup was
+  // unreachable from inside the app while 3 and 4 stood. See lib/roundAmend.
+  const amendableRounds = useMemo(
+    () => amendableRoundNumbers(roundLocksData, tournamentRounds),
     [roundLocksData, tournamentRounds]
   );
 
@@ -6518,23 +6772,19 @@ export default function App() {
   // tournament that only a director can perform.
   const canFinalize = isDirector && tournamentRounds.length > 0;
   // ── The way back into a finished round ───────────────────────────
-  // Both land on Admin → Rounds, in the one place a round's handicaps are
-  // edited, and they are deliberately TWO acts rather than one button:
+  // Deliberately TWO acts rather than one button, and they live in two
+  // places because they answer two different questions:
   //
-  //   reopen      FINAL → LOCKED (unfinalizeRound). Re-enables the form and
-  //               the recalculate below, and on its own moves no stroke —
-  //               scoring still answers to the frozen snapshot.
-  //   recalculate re-takes that snapshot (refreshRoundLockDoc), which is the
-  //               ONLY thing that makes a corrected Course Handicap land on a
-  //               round that has already been frozen.
+  //   reopen      the Finalize sheet's Correct a finished round, which is
+  //               `onAmendRound` above. FINAL → LOCKED, stamped with who,
+  //               when and why. It moves no stroke on its own.
+  //   recalculate Admin → Rounds, on the round the HANDICAPS form is
+  //               editing — `onRecalculateRound` above. Re-takes the frozen
+  //               snapshot, which is the ONLY thing that makes a corrected
+  //               Course Handicap land on a round already played.
   //
-  // Two decisions, said out loud in that order: "this round is open again",
-  // then "score it off these numbers now". One button doing both would
-  // re-score a round every time a director reopened one to look at it.
-  const reopenRound = canFinalize ? ((rnd) => onFinalizeRound(rnd, false)) : null;
-  const recalcHandicaps = canFinalize
-    ? ((rnd, inputs) => onLockRound(rnd, { refresh: true, inputs }))
-    : null;
+  // One button doing both would re-score a round every time a director
+  // reopened one to look at it.
   // The notification itself: whichever stage the round has reached, and only
   // until the director puts THAT STAGE away. Dismissing "all scores are in"
   // leaves the "ready to finalize" bar still to come.
@@ -7112,8 +7362,7 @@ export default function App() {
                path that used to be a row in the More menu. Null when there is
                no round to finalize, which is what hides the control. */
             onOpenFinalize={canFinalize ? openFinalize : null}
-            onReopenRound={reopenRound}
-            onRecalcHandicaps={recalcHandicaps}
+            onRecalculateRound={canFinalize ? onRecalculateRound : null}
             finalizeRound={currentRound}
             finalizeReady={finalizeReady}
             /* The RAW trip document, not the normalized house: a link
@@ -7219,11 +7468,16 @@ export default function App() {
           liveRound={currentRound}
           onPickRound={setFinalizePick}
           nextRound={finalizeNextRound}
-          lastFinal={finalizeLastFinal}
+          amendable={amendableRounds}
+          scoreEdits={scoreEdits}
+          roundLocks={roundLocksData}
+          allRounds={tournamentRounds}
+          roundToday={roundToday}
           progress={finalizeProgress}
           cards={finalizeCards}
           tPlayers={tPlayers}
           onFinalizeRound={onFinalizeRound}
+          onAmendRound={onAmendRound}
           onAttestAll={() => onAttestAllInRound(finalizeTarget, cardsInRound(finalizeTarget))}
           notify={notify}
           onClose={() => setFinalizeOpen(false)}

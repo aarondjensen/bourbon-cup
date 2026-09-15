@@ -85,12 +85,29 @@
 // who is out. A hard block reads as safer than it is: a gate with no way
 // past it strands the whole field on a round nobody is playing. The
 // director is trusted; they are just not allowed to do it by accident.
+//
+// ── AND SO IS UNDOING IT ───────────────────────────────────────────
+// The same argument, one step further along, is why the bottom of this sheet
+// can reopen ANY finalized round rather than only the most recent. The old
+// control answered "I tapped Finalize one hole early" and nothing else, so a
+// wrong hole found in Friday's round on Sunday morning — signed, attested,
+// two rounds buried — had no answer inside the app at all. The fix was a
+// Firebase console edit on raw document ids, performed from a golf course by
+// the one person least able to verify it.
+//
+// It is gated rather than hidden: the cost is stated first (computed, off
+// lib/roundAmend, so the dialog cannot promise the field will not be moved
+// and then move it), then a typed word and a reason that stays on the round
+// forever. What it does NOT do is move a stroke — see lib/roundAmend's note
+// on why the recalculate is a separate, later, deliberate act.
 import { useState } from "react";
 import { BC, FONT, ON_AMBER, ALPHA, FS } from "../theme";
 import { Popup, ConfirmModal } from "./Popup";
 import { useConfirm } from "../lib/useConfirm";
 import { playerLookup } from "../lib/players";
 import { SegmentedToggle } from "./ui";
+import { describeAmendImpact, amendImpactLines } from "../lib/roundAmend";
+import { inAmendmentWindow, amendSeqOf, editsForAmendment, playersAffected } from "../lib/scoreEdits";
 
 // `progress` throughout this file is one roundScoreProgress() result
 // (lib/scoreGuard) — entered / total / missing / missingBy / complete,
@@ -254,11 +271,20 @@ export function DirectorFinalizeAlert({ round, nextRound, progress, cards, stage
 // field has already moved off.
 export function FinalizeRoundSheet({
   round, rounds = [], liveRound, onPickRound,
-  nextRound, lastFinal, progress, cards, tPlayers,
-  onFinalizeRound, onAttestAll, notify, onClose,
+  nextRound, amendable = [], scoreEdits, roundLocks, allRounds, roundToday = null,
+  progress, cards, tPlayers,
+  onFinalizeRound, onAmendRound, onAttestAll, notify, onClose,
 }) {
   const { confirm, confirmModal } = useConfirm();
   const [busy, setBusy] = useState(false);
+  // Which final round the amend row is pointed at. Defaults to the most
+  // recent one — that is the overwhelmingly common case ("I tapped Finalize
+  // one hole early") and making it the default keeps the routine path one tap
+  // deep, with the picker there for the rare trip back to Friday.
+  const [amendPick, setAmendPick] = useState(null);
+  const amendTarget = amendPick != null && amendable.includes(amendPick)
+    ? amendPick
+    : (amendable.length ? amendable[amendable.length - 1] : null);
   const { nameOf, shortOf } = playerLookup(tPlayers);
 
   const outList = progress.missingBy
@@ -338,25 +364,88 @@ export function FinalizeRoundSheet({
     } finally { setBusy(false); }
   };
 
-  const doReopen = async () => {
+  // ── Amending a finalized round ─────────────────────────────────────
+  // Two dialogs, not one, and the pair is the whole protection. A single
+  // confirm on an action this rare is a button with a speed bump in front of
+  // it — the reflex that defeats it is the same reflex that produced the
+  // mistake being fixed.
+  //
+  //   1. WHAT IT COSTS. Computed off lib/roundAmend, not written down here,
+  //      so the dialog cannot promise the field will not be moved and then
+  //      move it. It names the gate, the rounds that stay final, the fact
+  //      that no stroke moves on its own, and whether the recorded result
+  //      goes stale.
+  //   2. WHY. A typed word to get past the reflex, and a reason in the
+  //      director's own words, kept on the lock forever. The reason is the
+  //      part that earns its keep months later: a round with amend_count 1
+  //      and no explanation is a mystery nobody can resolve, and this is the
+  //      only moment the person who knows is standing right here.
+  //
+  // Neither dialog is skippable and the order is deliberate — the cost is
+  // stated before the commitment is asked for, so a director who reads the
+  // first one and thinks better of it has cancelled nothing but a question.
+  // The second dialog: the typed word and the reason, together. One step
+  // rather than two because they are the same beat — "prove you meant this,
+  // and say what for" — and splitting them into a third modal is where a
+  // director starts tapping through rather than reading.
+  const promptReason = (target) => confirm({
+    eyebrow: `Round ${target}`,
+    title: "Why is this round being reopened?",
+    message: "This is kept on the round permanently, and it is what anybody looking at this tournament later will have to go on.",
+    reasonPrompt: {
+      label: "Reason",
+      placeholder: "e.g. Hole 7 was posted to the wrong player and signed before anyone noticed",
+    },
+    requireText: "AMEND",
+    confirmLabel: `Reopen Round ${target}`,
+    destructive: true,
+  });
+
+  const doAmend = async () => {
+    if (amendTarget == null) return;
+    const impact = describeAmendImpact({
+      locks: roundLocks,
+      allRounds: allRounds || rounds,
+      round: amendTarget,
+      roundToday,
+    });
+    if (!impact.amendable) {
+      notify(`Round ${amendTarget} is not final`, "error");
+      return;
+    }
+
     const ok = await confirm({
-      eyebrow: `Round ${lastFinal}`,
-      title: `Reopen Round ${lastFinal}?`,
+      eyebrow: `Round ${amendTarget}`,
+      title: `Reopen Round ${amendTarget} to correct it?`,
       message: [
-        `Scoring moves back to Round ${lastFinal}${round != null && round !== lastFinal ? `, and Round ${round} closes until Round ${lastFinal} is finalized again.` : "."}`,
+        `Round ${amendTarget} is finished and its result has been agreed. Reopening it is on the record permanently.`,
         "",
-        "Handicaps stay frozen exactly as they are — reopening changes what can be typed, not a stroke already allocated.",
+        ...amendImpactLines(impact).map(l => `• ${l}`),
       ].join("\n"),
-      confirmLabel: "Reopen",
+      confirmLabel: "Continue",
+      destructive: true,
     });
     if (!ok) return;
+
+    const reason = await promptReason(amendTarget);
+    if (reason == null) return;
+
     setBusy(true);
     try {
-      const res = await onFinalizeRound(lastFinal, false);
-      notify(res ? `Round ${lastFinal} reopened for scoring` : "Could not reopen the round — try again", res ? "success" : "error");
-      if (res) onClose();
+      const res = await onAmendRound(amendTarget, { reason });
+      if (!res) {
+        notify("Could not reopen the round — nothing was changed", "error");
+        return;
+      }
+      notify(
+        impact.gateMoves && impact.gateTo != null
+          ? `Round ${amendTarget} reopened — scoring is on Round ${impact.gateTo}`
+          : `Round ${amendTarget} reopened for corrections`,
+        "success"
+      );
+      onClose();
     } catch {
-      notify("Could not reopen the round — try again", "error");
+      notify("Could not reopen the round — nothing was changed", "error");
     } finally { setBusy(false); }
   };
 
@@ -397,6 +486,24 @@ export function FinalizeRoundSheet({
   };
 
   const pct = progress.total ? Math.round((progress.entered / progress.total) * 100) : 0;
+
+  // ── What finalizing is about to SEND ────────────────────────────────
+  // Only for a round that was reopened. Finalizing an amended round pushes
+  // "your card was corrected" to everybody whose card moved and everybody who
+  // signed it with them (functions/amendmentNotice), and that is a message a
+  // director cannot recall and cannot see the effect of. Naming the count
+  // here is the difference between a deliberate act and a surprise — and a
+  // zero is as informative as a number, because it says the correction was on
+  // the points side and nobody's card moved at all.
+  const amendLock = round != null ? roundLocks?.[round] : null;
+  const amending = inAmendmentWindow(amendLock);
+  const pendingEdits = amending
+    ? editsForAmendment(scoreEdits, round, amendSeqOf(amendLock))
+    : [];
+  const editedPlayers = amending
+    ? playersAffected(scoreEdits, round, amendSeqOf(amendLock)).length
+    : 0;
+  const roundWide = pendingEdits.some(e => e.kind === "setting");
 
   return (
     <Popup onClose={busy ? undefined : onClose} maxWidth={380} padding={18} portal showClose={!busy}>
@@ -553,6 +660,25 @@ export function FinalizeRoundSheet({
             {" "}You can reopen it afterwards if you need to.
           </div>
 
+          {/* A reopened round is being finalized for the SECOND time, and this
+              one notifies people. Said before the button rather than after. */}
+          {amending && (
+            <div style={{
+              fontSize: FS.label, lineHeight: 1.45, marginBottom: 12,
+              padding: "8px 10px", borderRadius: 8,
+              background: `${BC.amber}${ALPHA.wash}`,
+              border: `1px solid ${BC.amber}${ALPHA.hair}`,
+              color: BC.t2,
+            }}>
+              <span style={{ fontWeight: 800, color: BC.amberInk }}>Reopened round. </span>
+              {roundWide
+                ? "Finalizing tells everyone who played this round that its terms changed and their strokes may have moved."
+                : editedPlayers
+                  ? `Finalizing tells ${editedPlayers} player${editedPlayers === 1 ? "" : "s"} their card was corrected, and the players who signed with them.`
+                  : "No card has changed, so nobody is notified. Finalizing simply closes the round again."}
+            </div>
+          )}
+
           {/* Attest All Signed — above Finalize, because when both are on
               screen this is nearly always the one that should be tapped
               first: it settles the round properly and then Finalize becomes
@@ -585,23 +711,64 @@ export function FinalizeRoundSheet({
           <div style={{ fontSize: FS.lead, fontWeight: 800, color: BC.t1, marginBottom: 8 }}>
             The tournament is over
           </div>
-          <div style={{ fontSize: FS.small, color: BC.t2, lineHeight: 1.45, marginBottom: lastFinal != null ? 8 : 0 }}>
+          <div style={{ fontSize: FS.small, color: BC.t2, lineHeight: 1.45, marginBottom: amendTarget != null ? 8 : 0 }}>
             Every round is final. Scoring is closed for the tournament.
           </div>
         </>
       )}
 
-      {/* The way back. Without it, one mistimed tap locks the whole field
-          out of the round they are standing on. */}
-      {lastFinal != null && (
-        <button onClick={doReopen} disabled={busy} style={{
-          width: "100%", padding: "10px 0", marginTop: 8, borderRadius: 8,
-          background: "transparent", border: "none", color: BC.t3,
-          fontSize: FS.small, fontWeight: 700, cursor: busy ? "default" : "pointer",
-          textDecoration: "underline", textUnderlineOffset: 3, fontFamily: FONT,
-        }}>
-          Reopen Round {lastFinal}
-        </button>
+      {/* ── The way back ──────────────────────────────────────────────
+          Without it, one mistimed tap locks the whole field out of the round
+          they are standing on — and, more slowly and much worse, a wrong hole
+          found after the round was signed off has no answer inside the app at
+          all.
+
+          Drawn QUIET on purpose. It is a real door and it is the last thing
+          on the sheet, under a rule, in small type: a director who came here
+          to finalize the round in front of them should not be able to read
+          this as one of the two things this screen is for. The weight it
+          needs is in the dialogs behind it, not in the button.
+
+          The picker appears only with more than one final round, on the same
+          rule as the finalize picker above — a control that asks a question
+          it already knows the answer to is one more thing to tap past. */}
+      {amendTarget != null && onAmendRound && (
+        <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${BC.bdr}` }}>
+          <div style={{ fontSize: FS.label, fontWeight: 700, letterSpacing: 1, color: BC.t3, marginBottom: 8 }}>
+            CORRECT A FINISHED ROUND
+          </div>
+
+          {amendable.length > 1 && (
+            <div style={{ marginBottom: 10 }}>
+              <SegmentedToggle
+                variant="pills"
+                snug
+                options={amendable.map(r => [r, `Rd ${r}`])}
+                value={amendTarget}
+                onChange={setAmendPick}
+              />
+            </div>
+          )}
+
+          {/* The one thing the dialogs behind the button do NOT say, and the
+              one a director gets wrong: reopening is half the job. What
+              reopening costs is computed and printed by the confirm itself
+              (amendImpactLines), so restating any of it here would be a
+              second copy that cannot be kept honest. */}
+          <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.45, marginBottom: 10 }}>
+            Handicaps stay frozen until you recalculate it in Admin → Rounds.
+          </div>
+
+          <button onClick={doAmend} disabled={busy} style={{
+            width: "100%", padding: "10px 0", borderRadius: 8,
+            background: "transparent", border: `1px solid ${BC.bdr}`,
+            color: BC.t2, fontSize: FS.small, fontWeight: 700,
+            cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1,
+            fontFamily: FONT,
+          }}>
+            Reopen Round {amendTarget}…
+          </button>
+        </div>
       )}
 
       <ConfirmModal modal={confirmModal} />

@@ -7,7 +7,7 @@ describe("NOTIFICATION_TYPES", () => {
     // payload. If this test is what broke, the fix is in BOTH files or the
     // gate stops matching — and it fails open, so the symptom would be a
     // push somebody switched off still arriving.
-    expect(NOTIFICATION_TYPES).toEqual(["attest_ready", "card_final", "round_final"]);
+    expect(NOTIFICATION_TYPES).toEqual(["attest_ready", "card_final", "round_final", "card_amended"]);
   });
 });
 
@@ -15,20 +15,17 @@ describe("normalizeTypePrefs", () => {
   it("is all on for a token registered before the switches existed", () => {
     // No `types` map at all. The honest reading is "never turned anything
     // off", not "wants nothing".
-    expect(normalizeTypePrefs(undefined)).toEqual({
-      attest_ready: true, card_final: true, round_final: true,
-    });
-    expect(normalizeTypePrefs(null)).toEqual({
-      attest_ready: true, card_final: true, round_final: true,
-    });
-    expect(normalizeTypePrefs({})).toEqual({
-      attest_ready: true, card_final: true, round_final: true,
-    });
+    const allOn = {
+      attest_ready: true, card_final: true, round_final: true, card_amended: true,
+    };
+    expect(normalizeTypePrefs(undefined)).toEqual(allOn);
+    expect(normalizeTypePrefs(null)).toEqual(allOn);
+    expect(normalizeTypePrefs({})).toEqual(allOn);
   });
 
   it("mutes only on an explicit false", () => {
     expect(normalizeTypePrefs({ card_final: false })).toEqual({
-      attest_ready: true, card_final: false, round_final: true,
+      attest_ready: true, card_final: false, round_final: true, card_amended: true,
     });
   });
 
