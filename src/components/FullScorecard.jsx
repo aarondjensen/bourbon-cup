@@ -350,7 +350,7 @@ export function ScoreCell({ score, par, strokes = 0, size = CELL, color, skin = 
 export function FullScorecard({
   match, result, format, holePars, holeHcps, tPlayers, getScore,
   viewer = "A", showHeader = true, conceal = null, ownSideOnly = false,
-  waves = null,
+  waves = null, foursome = null,
 }) {
   if (!result) return null;
 
@@ -441,8 +441,28 @@ export function FullScorecard({
   // strokes, by construction (see App.jsx onTapScore). Grouped once here
   // rather than inside `nine()`, which runs twice (OUT and IN).
   const shared = formatIsSharedBall(format);
-  const teamAGroups = shared ? [match.teamA] : match.teamA.map(pid => [pid]);
-  const teamBGroups = shared ? [match.teamB] : match.teamB.map(pid => [pid]);
+  // ── A FOURSOME's card, on a match bigger than one ─────────────────
+  // Team Best Ball's match is eight a side across four tee times, and the
+  // four men who walked together keep a card between them exactly like every
+  // other foursome in the tournament. `foursome` is those four: the card is
+  // cut to their rows and everything that COMPARES the two sides comes off
+  // it — the side's number, the running MATCH line, the nines, the overall
+  // in the header. None of that is theirs. The side's best six of eight is
+  // an eight-man fact and it is read on the Leaderboard.
+  //
+  // What is left is what a foursome signs for: par, stroke index, and four
+  // rows of gross with the strokes dotted on the holes they fall. Which is
+  // also why this is safe on a sealed round without a single check — there
+  // is nothing on it that compares anybody to anybody.
+  const solo = foursome?.length ? foursome.filter(Boolean) : null;
+  const inSolo = (pid) => !solo || solo.includes(pid);
+  const cut = (groups) => groups.map(g => g.filter(inSolo)).filter(g => g.length);
+  const teamAGroups = cut(shared ? [match.teamA] : match.teamA.map(pid => [pid]));
+  const teamBGroups = cut(shared ? [match.teamB] : match.teamB.map(pid => [pid]));
+  // One wave needs no heading naming it, and the wave labels are the MATCH's
+  // waves — a card cut to one of them would print three headings with
+  // nothing under them.
+  const waveRows = solo ? null : waves;
 
   // ── The running line, computed once over all 18 ──
   // Same currency as the row that prints it, from A's perspective, and
@@ -525,7 +545,7 @@ export function FullScorecard({
   //  overall in the header are one fact stated three times, and the moment
   //  any of them owns its own wording they are free to disagree about tense.
 
-  const nineCells = (showHeader && !conceal ? (() => {
+  const nineCells = (showHeader && !conceal && !solo ? (() => {
     const { showFront, showBack } = nassauSegmentVisibility(match, result.holePoints);
     return [
       showFront ? { key: "f", label: "F9", st: nineSt[0] } : null,
@@ -737,11 +757,11 @@ export function FullScorecard({
     // A shared-ball side is left alone: its "rows" are already one per side
     // rather than one per man, and that format's match never spans a wave.
     const PlayerRows = (tid, groups) => {
-      if (!waves?.length || shared) return groups.map((pids) => PlayerRow(pids, tid));
+      if (!waveRows?.length || shared) return groups.map((pids) => PlayerRow(pids, tid));
       const roster = tid === "A" ? match.teamA : match.teamB;
       const out = [];
       const drawn = new Set();
-      waves.forEach((w) => {
+      waveRows.forEach((w) => {
         const set = new Set(w.pids || []);
         const mine = roster.filter((pid) => set.has(pid));
         if (!mine.length) return;
@@ -926,19 +946,24 @@ export function FullScorecard({
             see, the one line that says so. Written as a block per side
             rather than "hide team B" because the reader is on either side of
             this card, and it is always the OTHER one that goes. */}
-        {hiddenSide("A") ? SealedSide("A") : <>
+        {solo ? <>
           {PlayerRows("A", teamAGroups)}
-          {SideRow("A")}
-        </>}
-        {!hiddenMatch && MatchRow}
-        {/* The MATCH row is a floating chip; without a team label under it
-            Team B's first row would butt straight into its border. */}
-        <div style={{ marginTop: 5 }}>
-          {hiddenSide("B") ? SealedSide("B") : <>
-            {PlayerRows("B", teamBGroups)}
-            {SideRow("B")}
+          {PlayerRows("B", teamBGroups)}
+        </> : <>
+          {hiddenSide("A") ? SealedSide("A") : <>
+            {PlayerRows("A", teamAGroups)}
+            {SideRow("A")}
           </>}
-        </div>
+          {!hiddenMatch && MatchRow}
+          {/* The MATCH row is a floating chip; without a team label under it
+              Team B's first row would butt straight into its border. */}
+          <div style={{ marginTop: 5 }}>
+            {hiddenSide("B") ? SealedSide("B") : <>
+              {PlayerRows("B", teamBGroups)}
+              {SideRow("B")}
+            </>}
+          </div>
+        </>}
       </div>
     );
   };
@@ -951,7 +976,19 @@ export function FullScorecard({
           its own at the end of its MATCH row. */}
       {/* Wraps rather than truncates: a half-printed name is no legend at
           all, and this is the only place the four are spelled out. */}
-      {showHeader && <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+      {/* A foursome's card has no two sides to put a result between, so the
+          header is the four names and nothing else — still the legend for
+          the initials below, which is the job it was doing anyway. Drawn in
+          their own side's colour: they are all on it. */}
+      {showHeader && solo && (
+        <div style={{
+          fontSize: FS.label, fontWeight: 800, lineHeight: 1.3, marginBottom: 4,
+          color: teamColor(match.teamA.includes(solo[0]) ? "A" : "B"),
+        }}>
+          {solo.map(nameOf).join(" / ")}
+        </div>
+      )}
+      {showHeader && !solo && <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
         <span style={{ flex: 1, minWidth: 0, fontSize: FS.label, fontWeight: 800, lineHeight: 1.3, color: BC.teamA }}>
           {sideNames(match, "A", nameOf).join(" / ")}
         </span>

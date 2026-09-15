@@ -279,8 +279,11 @@ export function FinalizeRoundSheet({
   const cardIssues = () => {
     const lines = [];
     if (unsignedCount) lines.push(`• ${unsignedCount} card${unsignedCount === 1 ? "" : "s"} not signed at all`);
-    (cards?.awaiting || []).slice(0, 5).forEach(({ match, pending }) => {
-      lines.push(`• Match ${match.matchNumber ?? "?"} — waiting on ${pending.map(shortOf).join(", ")}`);
+    // A card's own label, because a card is not always a match: a Team Best
+    // Ball round is signed in tee waves and "Match 1" would name all four of
+    // them (lib/cardSigs).
+    (cards?.awaiting || []).slice(0, 5).forEach(({ card, pending }) => {
+      lines.push(`• ${card.label} — waiting on ${pending.map(shortOf).join(", ")}`);
     });
     if (awaitingCount > 5) lines.push(`• …and ${awaitingCount - 5} more signed but unattested`);
     return lines.join("\n");
@@ -477,24 +480,24 @@ export function FinalizeRoundSheet({
                     maxHeight: 116, overflowY: "auto", overscrollBehavior: "contain",
                     background: BC.inp, borderRadius: 8, padding: "6px 10px",
                   }}>
-                    {cards.unsigned.map(m => (
-                      <div key={m.id} style={{
+                    {cards.unsigned.map(c => (
+                      <div key={c.id} style={{
                         display: "flex", justifyContent: "space-between", gap: 10,
                         fontSize: FS.small, color: BC.t2, padding: "3px 0",
                       }}>
                         <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          Match {m.matchNumber ?? "?"}
+                          {c.label}
                         </span>
                         <span style={{ color: BC.t3, fontWeight: 700, flexShrink: 0 }}>not signed</span>
                       </div>
                     ))}
-                    {cards.awaiting.map(({ match: m, pending }) => (
-                      <div key={m.id} style={{
+                    {cards.awaiting.map(({ card: c, pending }) => (
+                      <div key={c.id} style={{
                         display: "flex", justifyContent: "space-between", gap: 10,
                         fontSize: FS.small, color: BC.t2, padding: "3px 0",
                       }}>
                         <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          Match {m.matchNumber ?? "?"}
+                          {c.label}
                         </span>
                         <span style={{ color: BC.warn, fontWeight: 700, flexShrink: 0, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {pending.map(shortOf).join(", ")}

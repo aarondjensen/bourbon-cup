@@ -407,17 +407,22 @@ describe("Scoring", () => {
     mounts(<ScoreEntry {...scoring({ matches: [], groups: {} })} />);
   });
 
-  // ── A team round has no card to sign ──────────────────────────────
-  // cardComplete/missingForCard read matchPids, which for every other
-  // format is one foursome and for Team Best Ball is teamA + teamB — the
-  // whole side across every tee time. Before `teamRound` gated it in
-  // App.jsx, a wave that had posted its own eighteen was told it couldn't
-  // sign because a man on a DIFFERENT tee time — same team or the other
-  // one — still had holes open, and the note named him. The running
-  // ▲/▼ status under each hole had the same problem in the other
-  // direction: it is a score for the whole side, not this foursome, and
+  // ── A team round's card is the FOURSOME ───────────────────────────
+  // cardComplete/missingForCard used to read the MATCH, which for every
+  // other format is one foursome and for Team Best Ball is teamA + teamB —
+  // the whole side across every tee time. A wave that had posted its own
+  // eighteen was told it couldn't sign because a man on a DIFFERENT tee
+  // time, same team or the other one, still had holes open, and the note
+  // named him. The round was given no sign-off ritual at all rather than
+  // scope it, which is the wrong end of the stick: the four men who walked
+  // together kept a card between them like every other foursome, and the
+  // eight-a-side match is a thing the engine computes, not a thing anybody
+  // signs. It is a card per WAVE now (lib/cardSigs).
+  //
+  // The running ▲/▼ status under each hole is a different question and still
+  // stands down: it is a score for the whole side, not this foursome, and
   // printing it is the result the Final Countdown exists to hold back.
-  describe("a team round has no card to sign", () => {
+  describe("a team round's card is the foursome", () => {
     const openRound = { ...bestBallRound, sealed: false };
     const fullCard = () => {
       const card = {};
@@ -425,21 +430,46 @@ describe("Scoring", () => {
       return card;
     };
 
-    it("never shows the can't-sign note, even when other waves are wide open", () => {
-      // p1's own wave finishes all eighteen; nobody else has posted anything.
+    it("promotes to the sign CTA on the wave's own eighteen", () => {
+      // p1's own wave finishes all eighteen; nobody else has posted a stroke.
+      // The other three waves are no more this card's business than another
+      // foursome's would be on any other round.
       const holeData = {};
       for (const pid of waves[0]) holeData[`${pid}_4`] = fullCard();
       const t = render(<ScoreEntry {...scoring({ holeData, tRounds: [openRound] })} />).container.textContent;
+      expect(t).toContain("Complete — Sign Card");
       expect(t).not.toContain("Can't sign");
     });
 
-    it("never promotes to the sign CTA, even once the whole match is complete", () => {
+    it("does not promote while the wave itself is short", () => {
+      // Everybody in the round is finished EXCEPT one man in p1's own wave.
       const holeData = {};
       for (const pid of pids) holeData[`${pid}_4`] = fullCard();
+      delete holeData[`${waves[0][3]}_4`];
       const t = render(<ScoreEntry {...scoring({ holeData, tRounds: [openRound] })} />).container.textContent;
       expect(t).toContain("Full Scorecard");
       expect(t).not.toContain("Complete — Sign Card");
-      expect(t).not.toContain("a player in this match signs it");
+    });
+
+    // The card behind the button is the four men's, like any other format's.
+    // The side's best seven of eight is an eight-man fact and it is read on
+    // the Leaderboard; nobody in this foursome is signing for it.
+    it("draws only the foursome on the card", () => {
+      const holeData = {};
+      for (const pid of pids) holeData[`${pid}_4`] = fullCard();
+      const r = render(<ScoreEntry {...scoring({ holeData, tRounds: [openRound] })} />);
+      fireEvent.click(r.getByText("Complete — Sign Card"));
+      const sheet = r.baseElement.querySelector("[data-popup]");
+      expect(sheet).toBeTruthy();
+      const t = sheet.textContent;
+      // The four who walked it, named in the header — and nobody from the
+      // other three waves, on either side.
+      expect(t).toContain("Player 1 / Player 2 / Player 3 / Player 4");
+      for (let n = 5; n <= 16; n++) expect(t).not.toContain(`Player ${n}`);
+      // And nothing that compares two sides: no side NET row, no running
+      // MATCH line. The side's best seven of eight is an eight-man fact.
+      expect(t).not.toContain("NET");
+      expect(t).not.toContain("MATCH");
     });
 
     it("shows no running match-status glyphs under the holes", () => {

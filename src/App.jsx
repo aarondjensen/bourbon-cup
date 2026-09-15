@@ -129,9 +129,10 @@ import { liveEdition } from "./lib/defaultEdition";
 import { prefetchArchive } from "./lib/useArchive";
 import { TRIP_SETTINGS_ID, houseFrom, tripSchedule, tripDates } from "./lib/tripInfo";
 import {
-  cardSigBareId, sigForMatch, cardComplete, missingForCard, skippedHoles,
+  cardSigBareId, sigForCard, cardComplete, missingForCard, skippedHoles,
   nonSignerPids, isFullyAttested, cardState,
   roundCardProgress, pendingAttestations, attestedPids, withdrawnIds,
+  matchCard, waveCard, cardsForRound,
 } from "./lib/cardSigs";
 import { useHoleAdvance, nineComplete } from "./lib/useHoleAdvance";
 import { roundForToday } from "./lib/scoringGate";
@@ -1253,6 +1254,11 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   //
   // Structural rather than a check on the format's name: anything whose match
   // outgrows a foursome lands on the safe side of it.
+  // Superseded on the one format that set it: Team Best Ball's card is now
+  // cut to the FOURSOME (see `foursomeCard` below), so there is no other
+  // side on it to withhold. Left in place because it is the rule for any
+  // future format whose match outgrows a foursome without being drawn into
+  // waves — and inert whenever a foursome is passed.
   const ownSideOnly = formatPerSide(format) == null;
 
   // ── The scoring unit: this screen is a TEE GROUP, not a match ────
@@ -1460,25 +1466,6 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // what stops three partners being left with a card that can never be
   // signed — see lib/cardSigs. Scoring is untouched: his holes still count.
   const withdrawn = useMemo(() => withdrawnIds(tPlayers), [tPlayers]);
-  // ── A team round has no card to sign ──────────────────────────────
-  // Card signing was ported from MnQ, where a match IS a foursome — one
-  // card, four players, and "everybody in the match" is exactly who is
-  // standing over it. Team Best Ball breaks that: the match is the WHOLE
-  // side across every tee time (`matchPlayers` = teamA + teamB, up to
-  // sixteen men), so `cardComplete`/`missingForCard` were asking whether
-  // every wave of BOTH teams had finished, not whether the foursome on
-  // screen had. A group standing on the 3rd could never sign — and the
-  // "can't sign" note named men in a completely different wave, on the
-  // same team or the opposing one, who had nothing to do with the card
-  // this group was holding.
-  //
-  // There is no fix that scopes it to "this wave" either: the signature
-  // document is keyed by match id, and every wave of a team round shares
-  // ONE match id, so a per-wave sign would need a per-wave document this
-  // format has never written. Rather than invent that data shape, the
-  // round simply has no sign-off ritual — it is finalized by the director
-  // as a whole, and the result is revealed at the Final Countdown, not
-  // agreed to card by card on the course.
   // ── What a match box's status bar says ───────────────────────────
   // ABSOLUTE — it names the leader — where every other verdict on this screen
   // is from the reader's own side. The reason is that a boxed screen holds a
@@ -1533,6 +1520,31 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   };
 
   const teamRound = formatGroupsByTeam(format);
+  // ── THE CARD, which is not always the match ───────────────────────
+  // On every format but Team Best Ball a card IS the match — four men, one
+  // card, and everybody in the match is standing over it. Team Best Ball's
+  // match is the whole SIDE across four tee times, so the four men on screen
+  // are a foursome like any other and the card is theirs; the eight-a-side
+  // match is a thing the engine computes, not a thing anybody signs.
+  //
+  // That is the whole of the difference, and it lives in lib/cardSigs. Every
+  // question below — is it complete, who has not posted, who signed, who
+  // still has to attest — is asked of this and answers the same way on every
+  // round in the tournament.
+  const card = match
+    ? (teamRound ? waveCard(match, cardPids, unit?.groupIdx ?? null) : matchCard(match))
+    : null;
+  // The four men whose card this is, on a match bigger than one. Null on
+  // every other format, where the match IS the foursome and the card is
+  // already theirs. It is `card.pids` — the same four the signature is taken
+  // from, so what a man reads and what he swears to cannot differ.
+  //
+  // Declared HERE rather than beside `ownSideOnly`, which is the rule it
+  // supersedes and sits two hundred lines up: `const` does not hoist a value,
+  // and reading `teamRound` from up there is a ReferenceError on every render
+  // that has a match to score. This screen has shipped that exact bug once —
+  // see the note above `withdrawn`.
+  const foursomeCard = teamRound ? (card?.pids || null) : null;
   // ── Whether the per-hole status rows under the strips can be drawn ──
   // They say where ONE match stands after each hole, from the reader's own
   // side. A team round has no match small enough for that to mean anything
@@ -1550,22 +1562,22 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // to hold back, and gross is what makes the turn card safe there at all.
   // See the note at the top of components/TurnCard.
   const turnBars = !teamRound && !conceal;
-  const sig = match && !teamRound ? sigForMatch(cardSigs, match.id) : null;
-  const signState = match && !teamRound ? cardState(match, sig, withdrawn) : "open";
+  const sig = card ? sigForCard(cardSigs, card) : null;
+  const signState = card ? cardState(card, sig, withdrawn) : "open";
   const signed = signState !== "open";
-  const complete = match && !teamRound ? cardComplete(match, holeData, withdrawn) : false;
+  const complete = card ? cardComplete(card, holeData, withdrawn) : false;
   // Whether the Full Scorecard button is allowed to promote to the sign CTA.
   // A signature is a claim by somebody IN the match — `signed_by` lands on the
   // card and every attestation is checked against the roster of that match —
   // so a director looking at another group's card gets the read-only
   // scorecard, however complete it is. Attesting is already gated the same way
   // inside SignedCardPanel.
-  const canSign = complete && matchPids.includes(userPid);
-  const missingCard = match && !teamRound && !complete && !signed ? missingForCard(match, holeData, withdrawn) : [];
+  const canSign = complete && (card?.pids || []).includes(userPid);
+  const missingCard = card && !complete && !signed ? missingForCard(card, holeData, withdrawn) : [];
   // Holes the WHOLE group skipped, which is a different sentence from one man
   // missing one hole — see lib/cardSigs.skippedHoles. The match status on
   // screen is computed without them, so it is provisional until they are in.
-  const skipped = match && !teamRound && !complete && !signed ? skippedHoles(match, holeData, withdrawn) : [];
+  const skipped = card && !complete && !signed ? skippedHoles(card, holeData, withdrawn) : [];
 
   // ── The turn ─────────────────────────────────────────────────────
   // The 10th tee is where a wrong number is still cheap to fix: the group is
@@ -2484,13 +2496,14 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
       {matchSelector}
       {groupPicker}
       <SignedCardPanel
-        match={match} sig={sig} result={result} format={format}
+        card={card} match={match} sig={sig} result={result} format={format}
         holePars={holePars} holeHcps={holeHcps} course={course}
         tPlayers={tPlayers} getScore={getScore} viewer={userTeam}
         userPid={userPid} notify={notify} isDirector={isDirector}
         conceal={conceal} ownSideOnly={ownSideOnly} waves={cardWaves}
-        onAttest={() => onAttestCard(match, userPid)}
-        onUnsign={() => onUnsignCard(match)}
+        foursome={foursomeCard}
+        onAttest={() => onAttestCard(card, userPid)}
+        onUnsign={() => onUnsignCard(card)}
       />
     </>
   );
@@ -2821,9 +2834,10 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
           holePars={holePars} holeHcps={holeHcps} course={course}
           tPlayers={tPlayers} getScore={getScore} viewer={userTeam}
           conceal={conceal} ownSideOnly={ownSideOnly} waves={cardWaves}
+          foursome={foursomeCard}
           onClose={() => setShowSign(false)}
           onSign={async () => {
-            const res = await onSignCard(match, userPid);
+            const res = await onSignCard(card, userPid);
             if (res) {
               setShowSign(false);
               notify("Card signed — waiting on the others to attest", "success");
@@ -2872,7 +2886,7 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
                   holePars={holePars} holeHcps={holeHcps} course={course}
                   tPlayers={tPlayers} getScore={getScore}
                   viewer={userTeam} conceal={conceal} ownSideOnly={ownSideOnly}
-                  waves={cardWaves}
+                  waves={cardWaves} foursome={foursomeCard}
                 />
               </div>
             ))}
@@ -5819,19 +5833,29 @@ export default function App() {
   // computed `[...seen, me]` from the same snapshot, and the second write
   // dropped the first. A map merges key by key and cannot lose one. See
   // lib/cardSigs, which reads the map and the old array as one list.
-  const onSignCard = useCallback(async (match, pid) => {
-    if (!match || !pid) return null;
-    // A match whose only member is the signer has nobody left to attest.
+  const onSignCard = useCallback(async (card, pid) => {
+    if (!card || !pid) return null;
+    // A card whose only member is the signer has nobody left to attest.
     // Rather than leaving it stuck at "waiting on 0 players" forever, it
     // attests itself at signing time — with `attested_by` populated, not
     // just the boolean, so the FINAL badge and the attester chips can never
     // disagree about the same card. (MnQ learned this one the hard way.)
-    const others = nonSignerPids(match, { signed_by: pid }, withdrawnRef.current);
+    const others = nonSignerPids(card, { signed_by: pid }, withdrawnRef.current);
     const doc = {
-      id: editionDocId(cardSigBareId(match.round, match.id)),
+      id: editionDocId(cardSigBareId(card.round, card.id)),
       tournament_id: TOURNAMENT_ID,
-      round_number: match.round,
-      match_id: match.id,
+      round_number: card.round,
+      // Both. `card_id` is what every lookup matches on; `match_id` is the
+      // match the card's scores are still settled into, and it is the field
+      // a director reading the console navigates by. On every format but
+      // Team Best Ball the two are the same string — see lib/cardSigs.
+      card_id: card.id,
+      match_id: card.matchId,
+      // Who the card belongs to, written down rather than left to be derived
+      // from the match. The push that tells the others to attest is a Cloud
+      // Function, and a match is not a card on a Team Best Ball round — see
+      // cardPlayerIds in functions/index.js.
+      card_pids: card.pids,
       signed_by: pid,
       signed_at: new Date().toISOString(),
       // Empty in both branches — when `others` is empty there is nobody to
@@ -5866,14 +5890,14 @@ export default function App() {
   // force-attest sets it, and every screen reads completeness off the map
   // through isFullyAttested rather than off this flag. A missed push is the
   // whole cost, where the old shape lost the attestation itself.
-  const onAttestCard = useCallback(async (match, pid) => {
-    if (!match || !pid) return null;
-    const sig = sigForMatch(cardSigsRef.current, match.id);
+  const onAttestCard = useCallback(async (card, pid) => {
+    if (!card || !pid) return null;
+    const sig = sigForCard(cardSigsRef.current, card);
     if (!sig) return null;
     const seen = new Set([...attestedPids(sig), pid]);
-    const done = nonSignerPids(match, sig, withdrawnRef.current).every(p => seen.has(p));
+    const done = nonSignerPids(card, sig, withdrawnRef.current).every(p => seen.has(p));
     return db.upsert("bc_card_sigs", {
-      id: sig.id || editionDocId(cardSigBareId(match.round, match.id)),
+      id: sig.id || editionDocId(cardSigBareId(card.round, card.id)),
       tournament_id: TOURNAMENT_ID,
       attests: { [pid]: { at: new Date().toISOString() } },
       attested: done,
@@ -5884,10 +5908,10 @@ export default function App() {
   // "No signature" and "a signature that has been withdrawn" are the same
   // state — the card is a draft again — and one of them is a row that has
   // to be filtered out of every count downstream.
-  const onUnsignCard = useCallback(async (match) => {
-    const sig = match ? sigForMatch(cardSigsRef.current, match.id) : null;
+  const onUnsignCard = useCallback(async (card) => {
+    const sig = card ? sigForCard(cardSigsRef.current, card) : null;
     if (!sig) return null;
-    return db.delete("bc_card_sigs", sig.id || editionDocId(cardSigBareId(match.round, match.id)));
+    return db.delete("bc_card_sigs", sig.id || editionDocId(cardSigBareId(card.round, card.id)));
   }, []);
 
   // The director's escape hatch, ported from MnQ's handleAttestAllWeek: the
@@ -5897,20 +5921,20 @@ export default function App() {
   // one round. It cannot invent a signature — an unsigned card is still
   // unsigned afterwards, which is deliberate: force-attesting a card nobody
   // signed would be the app inventing the whole ritual, not just the reply.
-  const onAttestAllInRound = useCallback(async (round, roundMatches) => {
-    const pending = (roundMatches || []).filter(m => {
-      const sig = sigForMatch(cardSigsRef.current, m.id);
-      return sig && !isFullyAttested(m, sig, withdrawnRef.current);
+  const onAttestAllInRound = useCallback(async (round, roundCards) => {
+    const pending = (roundCards || []).filter(c => {
+      const sig = sigForCard(cardSigsRef.current, c);
+      return sig && !isFullyAttested(c, sig, withdrawnRef.current);
     });
-    for (const m of pending) {
-      const sig = sigForMatch(cardSigsRef.current, m.id);
+    for (const c of pending) {
+      const sig = sigForCard(cardSigsRef.current, c);
       const at = new Date().toISOString();
       await db.upsert("bc_card_sigs", {
         ...sig,
         // Every outstanding attester at once, as map keys, so a player who
         // taps Attest in the same moment merges with the force rather than
         // fighting it.
-        attests: Object.fromEntries(nonSignerPids(m, sig, withdrawnRef.current).map(pid => [pid, { at, forced: true }])),
+        attests: Object.fromEntries(nonSignerPids(c, sig, withdrawnRef.current).map(pid => [pid, { at, forced: true }])),
         attested: true,
         attested_forced_at: at,
       });
@@ -6211,12 +6235,23 @@ export default function App() {
     () => roundScoreProgress(enrichedMatches, holeData, currentRound),
     [enrichedMatches, holeData, currentRound]
   );
+  // ── The round's CARDS ─────────────────────────────────────────────
+  // What gets signed, which is the match on every format but Team Best Ball
+  // and the tee WAVE on that one — see lib/cardSigs. Built here rather than
+  // inside the counters, because the two things that count cards (the
+  // finalize gate and the attestation badge) have to be counting the same
+  // population as the Scoring tab is signing.
+  const cardsInRound = useCallback((round) => cardsForRound({
+    matches: enrichedMatches, round, groups: groupsData?.[round],
+    formatId: enrichedRounds.find(r => r.round_number === round)?.format,
+  }), [enrichedMatches, groupsData, enrichedRounds]);
+
   // The same round counted the other way: how many of its cards have been
   // signed, and how many of those every non-signer has attested. See
   // lib/cardSigs.
   const roundCards = useMemo(
-    () => roundCardProgress(enrichedMatches, cardSigs, currentRound, withdrawnIds(tPlayers)),
-    [enrichedMatches, cardSigs, currentRound, tPlayers]
+    () => roundCardProgress(cardsInRound(currentRound), cardSigs, withdrawnIds(tPlayers)),
+    [cardsInRound, cardSigs, currentRound, tPlayers]
   );
   // ── Push: foreground rendering and the app badge ─────────────────────
   // FCM does not display anything while the tab is focused, so the
@@ -6280,10 +6315,9 @@ export default function App() {
   // with no reachable button would never clear.
   const myPendingAttest = useMemo(
     () => pendingAttestations(
-      enrichedMatches.filter(m => m.round === currentRound),
-      cardSigs, user?.player_id, withdrawnIds(tPlayers),
+      cardsInRound(currentRound), cardSigs, user?.player_id, withdrawnIds(tPlayers),
     ),
-    [enrichedMatches, cardSigs, currentRound, user?.player_id, tPlayers]
+    [cardsInRound, cardSigs, currentRound, user?.player_id, tPlayers]
   );
   useEffect(() => { syncAppBadge(myPendingAttest.length); }, [myPendingAttest.length]);
 
@@ -6380,8 +6414,8 @@ export default function App() {
   const finalizeCards = useMemo(
     () => (finalizeTarget === currentRound
       ? roundCards
-      : roundCardProgress(enrichedMatches, cardSigs, finalizeTarget, withdrawnIds(tPlayers))),
-    [finalizeTarget, currentRound, roundCards, enrichedMatches, cardSigs, tPlayers]
+      : roundCardProgress(cardsInRound(finalizeTarget), cardSigs, withdrawnIds(tPlayers))),
+    [finalizeTarget, currentRound, roundCards, cardsInRound, cardSigs, tPlayers]
   );
   // Where scoring lands once this one is frozen — the next round for the live
   // round, and nothing at all for a stranded one. See openRoundAfter.
@@ -7186,10 +7220,7 @@ export default function App() {
           cards={finalizeCards}
           tPlayers={tPlayers}
           onFinalizeRound={onFinalizeRound}
-          onAttestAll={() => onAttestAllInRound(
-            finalizeTarget,
-            enrichedMatches.filter(m => m.round === finalizeTarget),
-          )}
+          onAttestAll={() => onAttestAllInRound(finalizeTarget, cardsInRound(finalizeTarget))}
           notify={notify}
           onClose={() => setFinalizeOpen(false)}
         />

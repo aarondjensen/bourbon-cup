@@ -303,14 +303,35 @@ const nameOf = async (playerId) => {
 // ═══════════════════════════════════════════════════════════════════
 //  TRIGGER 1 — a card was signed → the others need to attest
 // ═══════════════════════════════════════════════════════════════════
+// ── Who a card belongs to ──────────────────────────────────────────
+// The signature document says so itself, and that is new. It used to be
+// derived — read the match, take its players — which is right on every
+// format but one: Team Best Ball's match is EIGHT A SIDE across four tee
+// times, and a card there is one WAVE of four (see src/lib/cardSigs). Derived
+// from the match, a foursome signing its own card pushed "time to attest" at
+// all fifteen other men, twelve of whom the app will not even offer the
+// button to.
+//
+// So the client writes `card_pids`, and this prefers it. The fallback is the
+// old derivation, and it is load-bearing in both directions: every signature
+// already in Firestore predates the field, and a phone on an older bundle
+// goes on writing documents without it. On every format but Team Best Ball
+// the two answers are the same list.
+const cardPlayerIds = async (sig) => {
+  const own = Array.isArray(sig?.card_pids) ? sig.card_pids.filter(Boolean) : [];
+  if (own.length) return own;
+  return matchPlayerIds(sig?.match_id);
+};
+
 // Fires on the CREATE of a bc_card_sigs document. A create is a signature;
 // the updates that follow are attestations arriving one at a time, and
 // re-firing on those would push "time to attest" at the very people who
 // just did, over and over.
 //
-// Recipients are the match's players minus the signer and minus anyone who
-// has somehow already attested. A card that auto-attested at signing time
-// (a match with nobody else in it) has no recipients and sends nothing.
+// Recipients are the CARD's players minus the signer and minus anyone who
+// has somehow already attested — see cardPlayerIds above for why that is not
+// the match's. A card that auto-attested at signing time (nobody else on it)
+// has no recipients and sends nothing.
 exports.onCardSigned = onDocumentWritten("bc_card_sigs/{docId}", async (event) => {
   try {
     const before = event.data.before?.exists ? event.data.before.data() : null;
@@ -323,7 +344,7 @@ exports.onCardSigned = onDocumentWritten("bc_card_sigs/{docId}", async (event) =
       return;
     }
 
-    const pids = await matchPlayerIds(match_id);
+    const pids = await cardPlayerIds(after);
     const recipients = pids.filter(pid => pid !== signed_by && !attested_by.includes(pid));
     if (!recipients.length) {
       logger.info("onCardSigned: nobody to notify", { match_id, round_number });
@@ -361,7 +382,7 @@ exports.onCardAttested = onDocumentWritten("bc_card_sigs/{docId}", async (event)
     if (after.attested_forced_at) return;           // director housekeeping, not news
 
     const { match_id, round_number, tournament_id } = after;
-    const pids = await matchPlayerIds(match_id);
+    const pids = await cardPlayerIds(after);
     if (!pids.length) return;
 
     await broadcast(pids, {

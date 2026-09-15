@@ -40,19 +40,100 @@
 // subscribes to (holeData[`${pid}_${round}`][holeIdx] = gross), and
 // `cardSigs` is the array of signature documents from bc_card_sigs.
 
-import { matchPlayers } from "./groups";
+import { matchPlayers, formatGroupsByTeam, scoringUnits } from "./groups";
+import { groupKey, groupLabel } from "./ctp";
 import { holesEntered } from "./scoreGuard";
 
-// One card per match. The match id already encodes the round, but the round
-// goes in the id too so a human reading the Firestore console can see which
-// round a stray document belongs to without cross-referencing.
-export const cardSigBareId = (round, matchId) => `bc_sig_r${round}_${matchId}`;
+// ══════════════════════════════════════════════════════════════════
+//  What a CARD is
+// ══════════════════════════════════════════════════════════════════
+//
+// Everything below used to take a MATCH, because on every format but one a
+// card IS the match: four men, one card, and the people who sign it are the
+// people in it.
+//
+// Team Best Ball breaks that and it broke this. Its match is the WHOLE SIDE
+// — eight men across four tee times — so "every player in the match has all
+// eighteen" was asking about two waves on a different tee, and the "can't
+// sign yet" note named men this foursome never saw. The round was therefore
+// given no sign-off ritual at all, which is the wrong end of the stick: the
+// four men who walked together kept a card between them exactly like every
+// other foursome in the tournament, and they are the four who can swear to
+// it. The eight-a-side MATCH is a thing the ENGINE computes; it is not a
+// thing anybody signs.
+//
+// So a card is its own object — `{ id, round, pids, matchId, label }` — and
+// the match is only where it comes from.
+//
+//   every other format   one card, the match
+//   Team Best Ball       one card per TEE WAVE
+//
+// ── Why the wave's id is its players and not its slot ──────────────
+// `${match.id}#3` would follow the SLOT: rebuild the tee sheet and the
+// signature that belonged to the 8:20 wave lands on whoever is in slot three
+// now — four men shown a card they never signed, as signed. Keyed by the
+// men, a director who moves somebody between waves orphans the signature
+// instead, and the card reads unsigned. One of those fails wrong and the
+// other fails safe.
+//
+// `groupKey` is lib/ctp's, and it is the same question that module asks of
+// the same thing — which tee group is this — so the two cannot answer it
+// differently.
+export const matchCard = (match) => ({
+  id: match.id,
+  round: match.round,
+  matchId: match.id,
+  pids: matchPlayers(match),
+  label: `Match ${match.matchNumber ?? "?"}`,
+});
 
-// The signature document for one match, or null. Matched on match_id rather
+export const waveCard = (match, pids, groupIdx = null) => ({
+  id: `${match.id}#${groupKey(pids)}`,
+  round: match.round,
+  matchId: match.id,
+  pids: (pids || []).filter(Boolean),
+  label: groupLabel(groupIdx),
+});
+
+// Every card in a match. Through `scoringUnits`, so the cards a round is
+// signed in are exactly the groups the Scoring tab draws it in — a wave that
+// appears on one phone and not in the finalize gate's count is how a round
+// sits one card short with nobody able to say which.
+//
+// An undrawn team round has one unit holding all sixteen, so it has one card.
+// That is the old behaviour and the safe one: there are no waves to sign yet.
+export const cardsForMatch = ({ match, groups, formatId }) => {
+  if (!match) return [];
+  if (!formatGroupsByTeam(formatId)) return [matchCard(match)];
+  return scoringUnits({ match, groups, formatId })
+    .map(u => waveCard(match, u.pids, u.groupIdx));
+};
+
+// Every card in a round, for the gate that counts them all.
+export const cardsForRound = ({ matches, round, groups, formatId }) =>
+  (matches || [])
+    .filter(m => m.round === round)
+    .flatMap(match => cardsForMatch({ match, groups, formatId }));
+
+// The round goes in the document id as well as the card's own key, so a human
+// reading the Firestore console can see which round a stray document belongs
+// to without cross-referencing.
+export const cardSigBareId = (round, cardId) => `bc_sig_r${round}_${cardId}`;
+
+// The signature document for one card, or null. Matched on a FIELD rather
 // than on the document id so it keeps working for a namespaced edition
 // (editionDocId rewrites ids; it does not rewrite fields).
-export const sigForMatch = (cardSigs, matchId) =>
-  (cardSigs || []).find(s => s.match_id === matchId) || null;
+//
+// `match_id` is the fallback, and it is what every signature written before
+// cards existed carries. On every format but Team Best Ball a card's id IS
+// its match id, so those documents go on resolving untouched; Team Best Ball
+// has none to resolve, because it could not be signed at all.
+export const sigForCard = (cardSigs, card) => {
+  if (!card) return null;
+  return (cardSigs || []).find(s => (
+    s.card_id ? s.card_id === card.id : s.match_id === card.id
+  )) || null;
+};
 
 // ── Completeness ────────────────────────────────────────────────────
 // A card can only be signed when every player in the match has all 18.
@@ -85,19 +166,19 @@ const notWithdrawn = (pids, withdrawnPids) => {
   return pids.filter(pid => !out.has(pid));
 };
 
-// Everybody in the match still expected to post a card.
-export const activePids = (match, withdrawnPids) =>
-  notWithdrawn(matchPlayers(match), withdrawnPids);
+// Everybody on the card still expected to post scores.
+export const activePids = (card, withdrawnPids) =>
+  notWithdrawn(card?.pids || [], withdrawnPids);
 
 // The roster's withdrawn ids, as a Set. One place, so a screen cannot ask the
 // question a slightly different way.
 export const withdrawnIds = (players) =>
   new Set((players || []).filter(p => p?.withdrawn === true).map(p => p.player_id));
 
-export const cardComplete = (match, holeData, withdrawnPids) => {
-  const pids = activePids(match, withdrawnPids);
-  if (!pids.length || match?.round == null) return false;
-  return pids.every(pid => holesEntered(holeData, pid, match.round) >= 18);
+export const cardComplete = (card, holeData, withdrawnPids) => {
+  const pids = activePids(card, withdrawnPids);
+  if (!pids.length || card?.round == null) return false;
+  return pids.every(pid => holesEntered(holeData, pid, card.round) >= 18);
 };
 
 // Which holes each player is missing, for the "can't sign yet" strip.
@@ -139,14 +220,14 @@ export const cardComplete = (match, holeData, withdrawnPids) => {
 // requires all 18. The note answers "what is stopping me signing RIGHT NOW
 // that I could go fix", and neither an unplayed hole nor the one being
 // played is that.
-export const missingForCard = (match, holeData, withdrawnPids) => {
-  if (match?.round == null) return [];
+export const missingForCard = (card, holeData, withdrawnPids) => {
+  if (card?.round == null) return [];
   // The frontier is still read off EVERYBODY who has a score, a withdrawn man
   // included: his holes are real and they say where the group got to. He is
   // only dropped from who is expected to fill the gaps.
-  const all = matchPlayers(match);
+  const all = card.pids || [];
   const pids = notWithdrawn(all, withdrawnPids);
-  const scoreAt = (pid, h) => holeData?.[`${pid}_${match.round}`]?.[h];
+  const scoreAt = (pid, h) => holeData?.[`${pid}_${card.round}`]?.[h];
   const touched = [];
   for (let h = 0; h < 18; h++) if (all.some(pid => scoreAt(pid, h) > 0)) touched.push(h);
   const frontier = touched.length ? touched[touched.length - 1] : -1;
@@ -181,12 +262,12 @@ export const missingForCard = (match, holeData, withdrawnPids) => {
 // without it — the front nine, the back nine and the overall are all provisional
 // until it is filled. That is worth saying in those words rather than as four
 // men each missing the same hole.
-export const skippedHoles = (match, holeData, withdrawnPids) => {
-  if (match?.round == null) return [];
-  const all = matchPlayers(match);
+export const skippedHoles = (card, holeData, withdrawnPids) => {
+  if (card?.round == null) return [];
+  const all = card.pids || [];
   const pids = notWithdrawn(all, withdrawnPids);
   if (!pids.length) return [];
-  const scoreAt = (pid, h) => holeData?.[`${pid}_${match.round}`]?.[h];
+  const scoreAt = (pid, h) => holeData?.[`${pid}_${card.round}`]?.[h];
   const touched = [];
   for (let h = 0; h < 18; h++) if (all.some(pid => scoreAt(pid, h) > 0)) touched.push(h);
   const frontier = touched.length ? touched[touched.length - 1] : -1;
@@ -229,53 +310,59 @@ export const attestedPids = (sig) => {
 // ── Signature state ─────────────────────────────────────────────────
 // Everyone in the match except whoever signed it. These are the players
 // the card is waiting on.
-export const nonSignerPids = (match, sig, withdrawnPids) =>
-  activePids(match, withdrawnPids).filter(pid => pid !== sig?.signed_by);
+export const nonSignerPids = (card, sig, withdrawnPids) =>
+  activePids(card, withdrawnPids).filter(pid => pid !== sig?.signed_by);
 
 // A card is fully attested when every non-signer has attested. The
 // degenerate case — a match somehow containing only the signer — counts as
 // attested rather than hanging forever on an empty list, which mirrors
 // MnQ's autoAttest branch at signing time.
-export const isFullyAttested = (match, sig, withdrawnPids) => {
+export const isFullyAttested = (card, sig, withdrawnPids) => {
   if (!sig) return false;
-  const pending = nonSignerPids(match, sig, withdrawnPids);
+  const pending = nonSignerPids(card, sig, withdrawnPids);
   const attested = attestedPids(sig);
   return pending.length === 0 || pending.every(pid => attested.includes(pid));
 };
 
 // Three states, named once so the UI never re-derives them inconsistently:
 // "open" (no signature), "signed" (signed, waiting on attesters), "final".
-export const cardState = (match, sig, withdrawnPids) =>
-  !sig ? "open" : isFullyAttested(match, sig, withdrawnPids) ? "final" : "signed";
+export const cardState = (card, sig, withdrawnPids) =>
+  !sig ? "open" : isFullyAttested(card, sig, withdrawnPids) ? "final" : "signed";
 
 // ── Round-level progress ────────────────────────────────────────────
-// What the director's finalize gate reads. Counts EVERY match in the round,
+// What the director's finalize gate reads. Counts EVERY card in the round,
 // which is the same population roundScoreProgress counts over — the two are
 // meant to be read side by side in the finalize sheet.
 //
+// CARDS, not matches, so a Team Best Ball round is counted in the four waves
+// it is actually signed in. Counted by match it would read "1 card" for a
+// round sixteen men played, and be complete the moment any one wave signed.
+// The caller builds the list (cardsForRound) because only it knows the
+// round's format and draw.
+//
 // `complete` is the whole round attested, and is what promotes the
-// ready-to-finalize notification. A round with no matches drawn is not
-// complete, for the same reason an empty round is not a finished one there.
-export function roundCardProgress(matches, cardSigs, round, withdrawnPids) {
-  const rnd = round == null ? [] : (matches || []).filter(m => m.round === round);
+// ready-to-finalize notification. A round with no cards is not complete, for
+// the same reason an empty round is not a finished one there.
+export function roundCardProgress(cards, cardSigs, withdrawnPids) {
+  const all = cards || [];
   let signed = 0, attested = 0;
   const unsigned = [], awaiting = [];
-  rnd.forEach(m => {
-    const sig = sigForMatch(cardSigs, m.id);
-    if (!sig) { unsigned.push(m); return; }
+  all.forEach(card => {
+    const sig = sigForCard(cardSigs, card);
+    if (!sig) { unsigned.push(card); return; }
     signed++;
-    if (isFullyAttested(m, sig, withdrawnPids)) attested++;
+    if (isFullyAttested(card, sig, withdrawnPids)) attested++;
     else awaiting.push({
-      match: m,
-      pending: nonSignerPids(m, sig, withdrawnPids).filter(pid => !attestedPids(sig).includes(pid)),
+      card,
+      pending: nonSignerPids(card, sig, withdrawnPids).filter(pid => !attestedPids(sig).includes(pid)),
     });
   });
   return {
-    total: rnd.length,
+    total: all.length,
     signed, attested,
-    unsigned,   // matches with no signature at all
-    awaiting,   // signed matches, with who they are waiting on
-    complete: rnd.length > 0 && attested === rnd.length,
+    unsigned,   // cards with no signature at all
+    awaiting,   // signed cards, with who they are waiting on
+    complete: all.length > 0 && attested === all.length,
   };
 }
 
@@ -284,18 +371,18 @@ export function roundCardProgress(matches, cardSigs, round, withdrawnPids) {
 // without attesting should carry the count wherever they are, not only on
 // the screen showing that match.
 //
-// Callers pass the matches they consider ACTIONABLE (App scopes it to the
+// Callers pass the cards they consider ACTIONABLE (App scopes it to the
 // current round), because a badge counting something the app has no button
 // for is a badge that never clears.
-export function pendingAttestations(matches, cardSigs, pid, withdrawnPids) {
+export function pendingAttestations(cards, cardSigs, pid, withdrawnPids) {
   if (!pid) return [];
   const out = withdrawnPids instanceof Set ? withdrawnPids : new Set(withdrawnPids || []);
   // A man who withdrew is not asked to attest the card he walked off.
   if (out.has(pid)) return [];
-  return (matches || []).filter(m => {
-    if (!matchPlayers(m).includes(pid)) return false;
-    const sig = sigForMatch(cardSigs, m.id);
+  return (cards || []).filter(card => {
+    if (!(card.pids || []).includes(pid)) return false;
+    const sig = sigForCard(cardSigs, card);
     if (!sig || sig.signed_by === pid) return false;
-    return !attestedPids(sig).includes(pid) && !isFullyAttested(m, sig, withdrawnPids);
+    return !attestedPids(sig).includes(pid) && !isFullyAttested(card, sig, withdrawnPids);
   });
 }
