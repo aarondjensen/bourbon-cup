@@ -4,7 +4,7 @@
 // noticing, because who rode with whom changes no score.
 import { describe, it, expect } from "vitest";
 import {
-  splitEvenly, autoBuildGroups, formatGroupsByTeam, isFoursomeFormat, groupIssues, hasGroupIssues, sidesInRound, GROUP_TARGET, assignPlayersToGroup, groupSizeAfter, groupFitsAfter, scoringUnits, unitForPlayer, readableUnits,
+  splitEvenly, autoBuildGroups, formatGroupsByTeam, isFoursomeFormat, groupIssues, hasGroupIssues, sidesInRound, GROUP_TARGET, assignPlayersToGroup, groupSizeAfter, groupFitsAfter, scoringUnits, unitForPlayer, readableUnits, swapPlayersInDraw,
 } from "./groups";
 
 const A8 = ["a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8"];
@@ -570,5 +570,69 @@ describe("readableUnits", () => {
   it("survives an empty draw and a missing unit list", () => {
     expect(readableUnits({ units: [], sealed: true, otherSide })).toEqual({ open: [], floor: null });
     expect(readableUnits({ units: null, sealed: true, otherSide })).toEqual({ open: [], floor: null });
+  });
+});
+
+
+// ── Correcting a pairing ────────────────────────────────────────────
+// The verb the Matches tab was missing. What is pinned is that a swap is a
+// straight substitution: every match and every tee time keeps its exact size,
+// because the alternative — delete and rebuild — is what this replaced and it
+// moved men off their tee times as a side effect.
+describe("swapPlayersInDraw", () => {
+  const draw = () => ({
+    matches: [
+      { id: "m1", round: 1, teamA: ["a1", "a2"], teamB: ["b1", "b2"] },
+      { id: "m2", round: 1, teamA: ["a3", "a4"], teamB: ["b3", "b4"] },
+    ],
+    groups: [["a1", "b1", "a2", "b2"], ["a3", "b3", "a4", "b4"]],
+  });
+
+  it("trades two players between two matches, and their tee times with them", () => {
+    const { matches, groups } = swapPlayersInDraw({ ...draw(), a: "a2", b: "a3" });
+    expect(matches).toEqual([
+      { id: "m1", teamA: ["a1", "a3"], teamB: ["b1", "b2"] },
+      { id: "m2", teamA: ["a2", "a4"], teamB: ["b3", "b4"] },
+    ]);
+    expect(groups).toEqual([["a1", "b1", "a3", "b2"], ["a2", "b3", "a4", "b4"]]);
+  });
+
+  it("returns PATCHES, never the match it was handed", () => {
+    // The matches this is given are App's enriched ones — they carry the
+    // round's nassau pots and form of play for the leaderboard to price
+    // against. Handing one back whole is how a stale copy of the round's
+    // setup ends up stored on a match document.
+    const enriched = [{
+      id: "m1", round: 1, teamA: ["a1", "a2"], teamB: ["b1", "b2"],
+      nassau: { front: 1 }, scoring_type: "match", matchNumber: 3,
+    }];
+    const { matches } = swapPlayersInDraw({ matches: enriched, groups: [], a: "a1", b: "a2" });
+    expect(Object.keys(matches[0]).sort()).toEqual(["id", "teamA", "teamB"]);
+  });
+
+  it("substitutes a man who is not in the draw at all", () => {
+    // The late arrival / the man who cannot play. One match changes, and the
+    // outgoing player simply has no seat afterwards.
+    const { matches, groups } = swapPlayersInDraw({ ...draw(), a: "a2", b: "sub" });
+    expect(matches).toEqual([{ id: "m1", teamA: ["a1", "sub"], teamB: ["b1", "b2"] }]);
+    expect(groups[0]).toEqual(["a1", "b1", "sub", "b2"]);
+    expect(groups.flat()).not.toContain("a2");
+  });
+
+  it("never changes the size of a match or of a tee time", () => {
+    const before = draw();
+    const { groups } = swapPlayersInDraw({ ...before, a: "a1", b: "b4" });
+    expect(groups.map(g => g.length)).toEqual(before.groups.map(g => g.length));
+    const { matches } = swapPlayersInDraw({ ...before, a: "a1", b: "b4" });
+    matches.forEach(m => expect(m.teamA.length + m.teamB.length).toBe(4));
+  });
+
+  it("is a no-op for a missing or self-directed swap", () => {
+    const before = draw();
+    [["a1", "a1"], ["a1", null], [null, "a1"]].forEach(([a, b]) => {
+      const out = swapPlayersInDraw({ ...before, a, b });
+      expect(out.matches).toEqual([]);
+      expect(out.groups).toEqual(before.groups);
+    });
   });
 });

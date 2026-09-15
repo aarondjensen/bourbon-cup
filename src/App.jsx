@@ -6157,18 +6157,37 @@ export default function App() {
       reveal_cursor: n,
     }, { loud: true });
   }, []);
+  // ── The draw's two writes ────────────────────────────────────────
+  // Both are LOUD and both go through trackWrite, which is the pattern the
+  // score path has used since lib/connection landed and the one these two
+  // were the last tee-box writes still missing.
+  //
+  // `db.upsert` and `db.delete` swallow a rejection into null, so every
+  // control on the Matches tab — create, delete, drag, auto-build — reported
+  // success whether or not the write landed. A rules denial ROLLS THE LOCAL
+  // COPY BACK (see lib/connection), so the one case that needed saying was
+  // the one case that looked identical to working.
+  //
+  // Neither is awaited by its caller any more, and that half matters more on
+  // a golf course than the toast does: offline, setDoc neither resolves nor
+  // rejects, so a caller that awaited one sat there forever and never ran the
+  // line after it. See the note on createMatch in components/MatchSetup.
+  //
   // Groups are written whole — the document is one round's list, and a
   // partial update of an array has no meaning here.
-  const onSaveGroups = useCallback(async (round, groups) => {
-    await db.upsert(GROUPS_COL, {
+  const onSaveGroups = useCallback((round, groups) => trackWrite(
+    db.upsert(GROUPS_COL, {
       id: groupsDocId(round), tournament_id: TOURNAMENT_ID, round_number: round,
       groups: encodeGroups(groups),
-    });
-  }, []);
-  const onSetMatch = useCallback(async (m) => {
-    if (m._delete) { await db.delete("bc_matches", m.id); }
-    else { await db.upsert("bc_matches", m); }
-  }, []);
+    }, { loud: true }),
+    `Round ${round}'s tee sheet didn't save`,
+  ), [trackWrite]);
+  const onSetMatch = useCallback((m) => trackWrite(
+    m._delete
+      ? db.delete("bc_matches", m.id, { loud: true })
+      : db.upsert("bc_matches", m, { loud: true }),
+    m._delete ? "That match didn't delete" : "That match didn't save",
+  ), [trackWrite]);
 
   // Erase one player's card for one round, and the only call in the app that
   // destroys a posted score. It is the counterpart to deleting a match:

@@ -406,9 +406,17 @@ export const db = {
       return null;
     }
   },
-  delete: async (col, id) => {
+  // `loud` as on upsert above, and for the same reason: a delete the rules
+  // refused and a delete that went through were the same `null` to the
+  // caller, so the one control in the app that removes a match could report
+  // success on a write that never happened.
+  delete: async (col, id, { loud = false } = {}) => {
     try { await writeTracker.track(deleteDoc(doc(_db, col, String(id))), col); return true; }
-    catch(e) { console.error("db.delete", col, e); return null; }
+    catch(e) {
+      if (loud) throw e;
+      console.error("db.delete", col, e);
+      return null;
+    }
   },
   // `withId` makes the DOCUMENT ID win over a stored `id` field. Every row
   // already carries one either way (see rowOf above); this is for

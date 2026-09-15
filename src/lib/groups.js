@@ -361,6 +361,50 @@ export function assignPlayersToGroup({ groups, pids, gi }) {
   return next;
 }
 
+// ── Correcting a pairing ───────────────────────────────────────────
+// Trade two players' places in the draw. THE fix-up this tab was missing:
+// a match could be created and it could be deleted, and there was nothing in
+// between — so "Pete and Jim are the wrong way round" cost two deletes (each
+// with its own scores confirmation), two rebuilds from the pools, and two
+// drags to put the foursomes back on the times they came off, because a
+// deleted match takes its players out of their group and a new one lands on
+// the first open slot rather than the one it left.
+//
+// It is a straight substitution, which is what makes it safe: each man takes
+// the other's exact seat in whatever match and whatever group he was in, so
+// no match changes size, no group changes size, and the tee sheet keeps its
+// shape. The one asymmetry is a swap with somebody who is NOT in the draw —
+// a late arrival, a man dropping out — where the mapping simply leaves the
+// outgoing player with no seat, which is what "substitute" means.
+//
+// SIDES ARE NOT CHECKED HERE. Swapping across sides would move a man onto the
+// opposing team for one round, which is a different act from correcting a
+// pairing; the caller is where that is refused, because it is the caller that
+// knows what side an ungrouped pool player is on.
+//
+// Returns only the matches that actually changed, so the caller writes one
+// document per pairing touched rather than the whole round — and returns each
+// as a PATCH (`{ id, teamA, teamB }`) rather than a whole match, which is not
+// tidiness. The matches this is handed are App's ENRICHED ones: they carry the
+// round's nassau pots, form of play, hole scoring and hole points copied onto
+// them for the leaderboard to price against. Spreading one back into a write
+// would persist that copy — and a pot stored on a match is exactly the stale
+// second copy `createMatch` refuses to write in the first place, going stale
+// the moment a director corrects the round's setup.
+export function swapPlayersInDraw({ matches, groups, a, b }) {
+  if (!a || !b || a === b) return { matches: [], groups: groups || [] };
+  const sub = (pid) => (pid === a ? b : pid === b ? a : pid);
+  const holds = (m) => matchPlayers(m).some(p => p === a || p === b);
+  return {
+    matches: (matches || []).filter(holds).map(m => ({
+      id: m.id,
+      teamA: (m.teamA || []).map(sub),
+      teamB: (m.teamB || []).map(sub),
+    })),
+    groups: (groups || []).map(g => g.map(sub)),
+  };
+}
+
 // The matches riding in a group, in the order given. Lets a group card name
 // what is actually playing in it rather than only who is sitting in it.
 export const matchesInGroup = ({ group, matches }) =>
