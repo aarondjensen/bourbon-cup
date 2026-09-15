@@ -2378,9 +2378,15 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // ── The sealed-round banner ──────────────────────────────────────
   // Costs this screen a row, and only on the one round that is sealed. It is
   // worth it: without a line saying so, a status strip full of padlocks reads
-  // as an app that has broken rather than a round that is being kept. It also
-  // states the one thing a player on the 7th needs to know — keep entering
-  // scores, the numbers are landing, you just aren't being shown the answer.
+  // as an app that has broken rather than a round that is being kept.
+  //
+  // ONE line. It was three — a heading reading SEALED ROUND, a summary
+  // answering "Sealed — nothing revealed yet" under it, and two sentences
+  // under that. The word sealed twice, and the only actionable half of it
+  // ("keep entering scores — the numbers are landing, you just aren't being
+  // shown the answer") at the end of the last sentence of the smallest type
+  // on the densest screen in the app. It is the tail of the heading now; see
+  // lib/reveal.revealSummary, which is what fills it.
   const sealedBanner = conceal ? (
     <div style={{
       display: "flex", alignItems: "center", gap: 8, width: "100%",
@@ -2389,13 +2395,11 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
       fontFamily: FONT,
     }}>
       <span aria-hidden="true" style={{ fontSize: FS.small, lineHeight: 1 }}>🔒</span>
-      <span style={{ minWidth: 0, flex: 1 }}>
-        <span style={{ display: "block", fontSize: FS.small, fontWeight: 800, letterSpacing: 0.5, color: BC.amberInk }}>
-          SEALED ROUND — {revealSummary(conceal.through)}
-        </span>
-        <span style={{ display: "block", fontSize: FS.label, color: BC.t3, lineHeight: 1.35 }}>
-          Keep posting scores. Nobody sees the match until the reveal.
-        </span>
+      <span style={{
+        minWidth: 0, flex: 1, fontSize: FS.small, fontWeight: 800,
+        letterSpacing: 0.5, color: BC.amberInk,
+      }}>
+        SEALED ROUND — {revealSummary(conceal.through)}
       </span>
     </div>
   ) : null;
