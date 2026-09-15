@@ -42,7 +42,7 @@ import {
 } from "./lib/scoreEdits";
 import {
   concealHoleData, countdownHoleData, concealCtpData, isConcealing,
-  revealState, revealSummary, HOLE_COUNT,
+  revealState, HOLE_COUNT,
   COUNTDOWN_HASH, wantsCountdown, revealPending,
 } from "./lib/reveal";
 import { usePullToRefresh } from "./lib/usePullToRefresh";
@@ -2383,34 +2383,24 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
     );
   })() : null;
 
-  // ── The sealed-round banner ──────────────────────────────────────
-  // Costs this screen a row, and only on the one round that is sealed. It is
-  // worth it: without a line saying so, a status strip full of padlocks reads
-  // as an app that has broken rather than a round that is being kept.
+  // ── There is no sealed-round banner ──────────────────────────────
+  // There was one, and it went through three shapes: three lines, then two,
+  // then one reading "SEALED ROUND — keep posting scores". It is gone.
   //
-  // ONE line. It was three — a heading reading SEALED ROUND, a summary
-  // answering "Sealed — nothing revealed yet" under it, and two sentences
-  // under that. The word sealed twice, and the only actionable half of it
-  // ("keep entering scores — the numbers are landing, you just aren't being
-  // shown the answer") at the end of the last sentence of the smallest type
-  // on the densest screen in the app. It is the tail of the heading now; see
-  // lib/reveal.revealSummary, which is what fills it.
-  const sealedBanner = conceal ? (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 8, width: "100%",
-      marginBottom: 8, padding: "5px 10px", borderRadius: 8, flexShrink: 0,
-      background: `${BC.amber}${ALPHA.wash}`, border: `1px solid ${BC.amber}${ALPHA.line}`,
-      fontFamily: FONT,
-    }}>
-      <span aria-hidden="true" style={{ fontSize: FS.small, lineHeight: 1 }}>🔒</span>
-      <span style={{
-        minWidth: 0, flex: 1, fontSize: FS.small, fontWeight: 800,
-        letterSpacing: 0.5, color: BC.amberInk,
-      }}>
-        SEALED ROUND — {revealSummary(conceal.through)}
-      </span>
-    </div>
-  ) : null;
+  // The screen was already saying it, to everybody who can see this screen:
+  // the match state reads 🔒 SEALED (see matchBar), every hole that has not
+  // been turned over carries its own padlock, and the score buttons go on
+  // taking scores throughout — which is the whole content of "keep posting
+  // scores", demonstrated rather than announced. The banner spent a row of
+  // the tightest vertical budget in the app (see useFitDensity) restating
+  // two of those. A director additionally gets a padlock per wave in the
+  // group picker, but that row is his alone and was never what this was for.
+  //
+  // The worry it was built against is worth naming so nobody re-derives it:
+  // "a strip full of padlocks reads as an app that has broken". A padlock is
+  // a deliberate icon, and the round it appears on is the one round of the
+  // year the whole field has been told about in advance. It did not need a
+  // caption.
 
   // ── The Nassau status row — front nine, overall, back nine ────────
   // The two strips above keep their existing job unchanged: a per-hole
@@ -2439,8 +2429,8 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // scoring.verdictText, which dropped them.
   //
   // Hidden while sealed, same as the running match under each hole: this
-  // IS the match state, said louder, and the sealedBanner already explains
-  // why nobody is seeing it.
+  // IS the match state, said louder, and the padlock on the match state
+  // above is what says nobody is seeing it.
   //
   // The words are scoring.verdictText — said from the reader's own side,
   // which is what "did I win it" needs and what `statusText` is not.
@@ -2504,7 +2494,6 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   if (signed) return shell(
     <>
       {offRoundBanner}
-      {sealedBanner}
       {matchSelector}
       {groupPicker}
       <SignedCardPanel
@@ -2660,7 +2649,6 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   return shell(
     <>
       {offRoundBanner}
-      {sealedBanner}
       {matchSelector}
       {groupPicker}
 

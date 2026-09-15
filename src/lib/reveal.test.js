@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  resolveSealed, HOLE_COUNT, sealDefaultFor, isSealedRound, revealedThrough, isFullyRevealed, isConcealing, revealState, concealedRoundNumbers, concealHoleData, countdownHoleData, concealCtpData, stepReveal, revealSummary, wantsCountdown, revealPending,
+  resolveSealed, HOLE_COUNT, sealDefaultFor, isSealedRound, revealedThrough, isFullyRevealed, isConcealing, revealState, concealedRoundNumbers, concealHoleData, countdownHoleData, concealCtpData, stepReveal, wantsCountdown, revealPending,
   sideReveal, revealedForSide, revealHole, sidesPending, nextHoleForSide,
   revealCursor, countdownHole, canAdvanceHole, canGoBackHole,
   COUNTDOWN_HASH, COUNTDOWN_PATH,
@@ -320,13 +320,6 @@ describe("stepReveal", () => {
     expect(stepReveal(17, 1)).toBe(18);
     expect(stepReveal(18, 1)).toBe(18);
     expect(stepReveal(undefined, 1)).toBe(1);
-  });
-});
-
-describe("revealSummary", () => {
-  it("says nothing is out rather than '0 of 18'", () => {
-    expect(revealSummary(0)).toBe("keep posting scores");
-    expect(revealSummary(6)).toBe("6 of 18 holes revealed");
   });
 });
 
@@ -1136,16 +1129,6 @@ describe("what the board says, at the four corners", () => {
       sealed: true, concealing: false, through: 18, sides: { A: 18, B: 18 }, hole: 18,
       canNext: false, canBack: false,
     });
-  });
-
-  it("words the summary the same way at every count", () => {
-    expect(revealSummary(0)).toBe("keep posting scores");
-    expect(revealSummary(1)).toBe("1 of 18 holes revealed");
-    expect(revealSummary(17)).toBe("17 of 18 holes revealed");
-    expect(revealSummary(18)).toBe("18 of 18 holes revealed");
-    // It never says "0 of 18", in either direction.
-    expect(revealSummary(-1)).toBe("keep posting scores");
-    expect(revealSummary(0)).not.toContain("0 of");
   });
 });
 

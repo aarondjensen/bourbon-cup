@@ -472,24 +472,6 @@ export function concealCtpData(ctpData, tRounds) {
 export const stepReveal = (through, by) =>
   Math.max(0, Math.min(HOLE_COUNT, (Number(through) || 0) + by));
 
-// What the board says about a concealing round, in one line — the tail of it,
-// after the words SEALED ROUND.
-//
-// Before anything is turned over there is no progress to report, so it says
-// the one thing a man standing on the 7th needs instead: his scores are
-// landing, he is only not being shown the answer. A status strip full of
-// padlocks reads as an app that has broken otherwise, and that is the whole
-// reason this banner exists.
-//
-// It used to answer "Sealed — nothing revealed yet", under a heading that
-// already said SEALED ROUND, over a second line that then spent two sentences
-// on it. Three lines of a phone, the word sealed twice, and the only
-// actionable half buried at the end of the last one.
-export const revealSummary = (through) =>
-  through <= 0
-    ? "keep posting scores"
-    : `${through} of ${HOLE_COUNT} holes revealed`;
-
 // ── Where the television is pointed ─────────────────────────────────
 // One URL, bookmarked on the machine wired to the TV, surviving the refresh
 // somebody will inevitably perform two minutes before everyone sits down.
