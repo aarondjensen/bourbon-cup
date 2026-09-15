@@ -163,7 +163,7 @@ export function CardSignerNote() {
 export function SignCardSheet({
   cards = [], format, holePars, holeHcps, course, tPlayers, getScore,
   viewer, onSign, onClose, signLabel = "Sign Card",
-  conceal = null, ownSideOnly = false, waves = null,
+  conceal = null, ownSideOnly = false, waves = null, foursome = null,
 }) {
   const [busy, setBusy] = useState(false);
 
@@ -194,7 +194,7 @@ export function SignCardSheet({
               match={c.match} result={c.result} format={format}
               holePars={holePars} holeHcps={holeHcps} course={course}
               tPlayers={tPlayers} getScore={getScore} viewer={viewer}
-              conceal={conceal} ownSideOnly={ownSideOnly} waves={waves} />
+              conceal={conceal} ownSideOnly={ownSideOnly} waves={waves} foursome={foursome} />
           </div>
         ))}
       </div>
@@ -234,10 +234,14 @@ export function SignCardSheet({
 // holding the phone. Nobody sees more than one primary action here —
 // the signer sees none, an attester sees Attest, and once they have
 // attested they see the wait.
+// `card` is what was SIGNED — the match on every format but Team Best Ball,
+// and the tee wave on that one (lib/cardSigs). `match` is still passed
+// because the scorecard under this panel is drawn from it: the card says who
+// swore to these numbers, the match says what they add up to.
 export function SignedCardPanel({
-  match, sig, result, format, holePars, holeHcps, course, tPlayers, getScore,
+  card, match, sig, result, format, holePars, holeHcps, course, tPlayers, getScore,
   viewer, userPid, onAttest, onUnsign, notify, isDirector = false, conceal = null,
-  ownSideOnly = false, waves = null,
+  ownSideOnly = false, waves = null, foursome = null,
 }) {
   const { confirm, confirmModal } = useConfirm();
   const [busy, setBusy] = useState(false);
@@ -248,9 +252,13 @@ export function SignedCardPanel({
   // A man who walked in owes nobody an attestation and is owed none, so the
   // card does not sit waiting on him forever.
   const withdrawn = withdrawnIds(tPlayers);
-  const pending = nonSignerPids(match, sig, withdrawn);
-  const final = isFullyAttested(match, sig, withdrawn);
-  const inMatch = [...(match.teamA || []), ...(match.teamB || [])].includes(userPid);
+  const pending = nonSignerPids(card, sig, withdrawn);
+  const final = isFullyAttested(card, sig, withdrawn);
+  // On the CARD, not in the match. On a Team Best Ball round the match is
+  // sixteen men and the card is the four who kept it — the other twelve are
+  // no more entitled to attest this one than they are to attest any other
+  // foursome's, and they are offered nothing.
+  const inMatch = (card?.pids || []).includes(userPid);
   const iSigned = sig.signed_by === userPid;
   const iAttested = attestedBy.includes(userPid);
   const canAttest = inMatch && !iSigned && !iAttested && !final;
@@ -276,7 +284,7 @@ export function SignedCardPanel({
     // says none of that, because for the four of them none of it is true.
     const asDirector = !inMatch || final;
     const ok = await confirm({
-      eyebrow: `Round ${match.round}`,
+      eyebrow: `Round ${card?.round ?? match.round}`,
       title: final ? "Unsign this final card?" : "Unsign this card?",
       message: [
         `${nameOf(sig.signed_by)}'s signature is removed and every attestation on it is cleared.`,
@@ -327,7 +335,7 @@ export function SignedCardPanel({
           match={match} result={result} format={format}
           holePars={holePars} holeHcps={holeHcps} course={course}
           tPlayers={tPlayers} getScore={getScore} viewer={viewer}
-          conceal={conceal} ownSideOnly={ownSideOnly} waves={waves} />
+          conceal={conceal} ownSideOnly={ownSideOnly} waves={waves} foursome={foursome} />
       </div>
 
       {/* ── The status block ── */}
