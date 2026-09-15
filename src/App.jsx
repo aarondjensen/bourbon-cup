@@ -6226,6 +6226,17 @@ export default function App() {
   // is the single act that closes N to entry and opens N+1, on every device
   // at once. See "The round gate" above ScoreEntry.
   const onFinalizeRound = useCallback(async (rnd, final) => {
+    // ── Not the sealed round, not before the room has seen it ────────
+    // The gate, at the one place every finalize goes through, rather than on
+    // the sheet alone. Finalizing the closing round early is the single act
+    // in this app that ruins an evening and shows the man who did it nothing:
+    // the round-final push lands on sixteen OTHER phones with the pins in it,
+    // and a round whose seal was never explicitly written unseals itself the
+    // moment the lock arrives (see resolveSealed) — the whole thing straight
+    // onto the leaderboard with the field sitting in front of a television.
+    // See lib/reveal.revealPending. The sheet disables the button; this is
+    // what makes that a rule rather than a UI state.
+    if (final && revealPending(enrichedRounds.find(r => r.round_number === rnd))) return null;
     let lock = roundLocksRef.current?.[rnd];
     // Finalizing a round nobody locked (all scores entered elsewhere, say)
     // still needs a snapshot — take one now rather than leaving it open.
@@ -6238,7 +6249,7 @@ export default function App() {
     roundLocksRef.current = { ...roundLocksRef.current, [rnd]: next };
     setRoundLocksData(p => ({ ...p, [rnd]: next }));
     return next;
-  }, [onLockRound]);
+  }, [onLockRound, enrichedRounds]);
 
   // ── Amending a finalized round ───────────────────────────────────────
   // The deliberate way back into a closed round. FINAL → LOCKED, which is
@@ -6642,6 +6653,11 @@ export default function App() {
   const finalizeTarget = finalizePick != null && finalizeRounds.includes(finalizePick)
     ? finalizePick
     : currentRound;
+  // Whether THIS round is the one the room has not watched yet. Not
+  // `ceremonyPending` below, which speaks for the live round: the picker can
+  // put the sheet on any unfinalized round, and the gate has to follow it.
+  const finalizeHeld = revealPending(
+    enrichedRounds.find(r => r.round_number === finalizeTarget));
   // The same two counts the alert reads, for whichever round the sheet is on.
   // Separate memos rather than reusing the pair above: those are the live
   // round's and the alert depends on them staying that way.
@@ -7463,6 +7479,7 @@ export default function App() {
           roundToday={roundToday}
           progress={finalizeProgress}
           cards={finalizeCards}
+          held={finalizeHeld}
           tPlayers={tPlayers}
           onFinalizeRound={onFinalizeRound}
           onAmendRound={onAmendRound}
