@@ -84,7 +84,7 @@
 // -------
 // Two fields on the round document (`bc_rounds`):
 //
-//   sealed         — boolean. Set from the Rounds tab; on for Team Best Ball
+//   sealed         — boolean. Set from the Formats tab; on for Team Best Ball
 //                    and off for everything else. An UNSET flag falls back to
 //                    that same default while the round is still live, so a
 //                    round nobody edited is not played in the open; a round
@@ -106,14 +106,14 @@ export const HOLE_COUNT = 18;
 // first. Either captain may go first; this is only what the screen offers.
 export const SIDES = ["A", "B"];
 
-// The formats whose rounds open sealed in the Rounds tab. Team Best Ball is
+// The formats whose rounds open sealed in the Formats tab. Team Best Ball is
 // the closing round and the reveal is what it is for; every other format is
 // off unless a director says otherwise.
 export const SEAL_DEFAULT_FORMATS = ["team_best_ball"];
 
 export const sealDefaultFor = (format) => SEAL_DEFAULT_FORMATS.includes(format);
 
-// The rule, in ONE place — the Rounds tab seeds the form from it and the
+// The rule, in ONE place — the Formats tab seeds the form from it and the
 // board reads it. A stored flag always wins; an unset one falls back to the
 // format's default, but only while the round is still live.
 //
@@ -302,7 +302,7 @@ export const isConcealing = (tr) =>
 // leaderboard and the evening is over before it started.
 //
 // IT IS NOW THE GATE ON THE ACT, NOT JUST THE PROMPT. Suppressing the nudge
-// left the button itself sitting there — Admin → Rounds → Finalize Round 4,
+// left the button itself sitting there — Admin → Formats → Finalize Round 4,
 // two taps, on the one round where there is nothing to look at afterwards
 // that would tell a director what he had just done. Every consequence above
 // is invisible on his own screen: the push goes to everybody else's phone,

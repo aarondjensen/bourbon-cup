@@ -138,7 +138,7 @@ export function scoringClosedMessage(verdict, round) {
   if (verdict.reason === "not-yet") {
     return {
       title: `Round ${round} hasn't started`,
-      body: "Scoring opens on the day it's played. A director can open it early from Admin → Rounds.",
+      body: "Scoring opens on the day it's played. A director can open it early from Admin → Formats.",
     };
   }
   if (verdict.reason === "past") {

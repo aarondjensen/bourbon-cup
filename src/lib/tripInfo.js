@@ -144,7 +144,7 @@ export const tripSchedule = ({ rounds, tRounds, courses }) =>
 // THE TOURNAMENT'S OWN PAIR IS THE SOURCE OF TRUTH — `start_date` and
 // `end_date` on bc_settings/<edition>__tournament, set in Admin → Event.
 // Everything else that shows a date reads down from it: the round picker in
-// Admin → Rounds offers the days between them, and Trip Info's banner is them.
+// Admin → Formats offers the days between them, and Trip Info's banner is them.
 //
 // They were derived from the round dates first, and that was the wrong way
 // round. A director knows the weekend before they know which course is on

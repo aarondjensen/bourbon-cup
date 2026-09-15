@@ -87,10 +87,10 @@ const props = () => ({
 const byText = (re) => [...document.body.querySelectorAll("button")]
   .find(b => re.test((b.textContent || "").trim()));
 
-// Admin → Rounds → the COURSE field → a library row's Edit.
+// Admin → Formats → the COURSE field → a library row's Edit.
 const openCourseEditor = async () => {
   const { container } = render(<AdminView {...props()} />);
-  fireEvent.click([...container.querySelectorAll("button")].find(b => /rounds/i.test(b.textContent || "")));
+  fireEvent.click([...container.querySelectorAll("button")].find(b => /formats/i.test(b.textContent || "")));
   await act(async () => { fireEvent.click([...container.querySelectorAll("button")].find(b => (b.textContent || "").includes("Treetops"))); });
   await act(async () => { fireEvent.click(byText(/^Edit$/)); });
   const name = [...document.body.querySelectorAll("input")].find(i => i.value === "Treetops");

@@ -856,14 +856,14 @@ each half fails silently in its own direction:
 - **Nassau pots, hole values, par points and counting scores** are read off
   the round document over the snapshot, *always*, a final round included
   (`getRoundHolePoints` and its neighbours in `scoring.js`). So the Nassau
-  allotment that was wrong for a format is corrected in Admin → Rounds and it
+  allotment that was wrong for a format is corrected in Admin → Formats and it
   lands on the leaderboard immediately — **no reopen, no recalculate**, on a
   round the field finished yesterday. The round's value wins over any stale
   copy on a match, which is why `MatchSetup` deliberately never writes one.
 - **Handicaps, allowance, mode, tees and the course** come off the snapshot.
   Correcting one of those changes a stored field and *nothing else* until the
   snapshot is re-taken. That is **Recalculate**, at the foot of HANDICAPS in
-  Admin → Rounds, on every LOCKED round that is not final — it is the one act
+  Admin → Formats, on every LOCKED round that is not final — it is the one act
   in the app that moves a stroke in a round already played, so it previews the
   exact handicaps about to change, in numbers, behind a typed `RECALCULATE`.
   It says so when nothing moves, which is the useful answer: the correction
@@ -1040,6 +1040,36 @@ Consequences worth knowing:
   matches were played — but not towards closest-ever, biggest-ever, or a best
   week.
 
+## Courses have two doors
+
+**Admin → Formats → the COURSE field** opens the library over the round it is
+about to be assigned to, and **Admin → Event → Courses** is the same library as
+a card of its own. One component — `src/components/CourseLibrary.jsx` — in two
+modes, because a second copy is how the two come to disagree about what a
+course is.
+
+What differs is only the primary tap: in the picker a row ASSIGNS the course to
+the round the picker was opened from and closes, and an Edit button opens the
+editor; on the Event card a row opens the editor, and the R chips still assign.
+The editor itself — name, city, state, tee boxes, re-fetch tees from the golf
+API, and the eighteen-hole par/index/yardage card — lives at AdminView's top
+level and is reached by setting one piece of state, which is what lets it
+survive the picker closing underneath it and what lets both doors share it.
+
+The Event card exists because courses outlive the draw. A stroke index typed
+wrong is noticed in February, and the only way at it was to pick a round you
+were not setting up. Nothing moved: the picker is exactly where it was.
+
+**The tab formerly called Rounds is called Formats.** Its state key is still
+`rounds` — it names what the tab is for, and renaming it would churn every
+reference for a string nobody sees. Same trade the `money` key makes.
+
+The search is one box covering both halves — the saved library filters as you
+type, and two characters in, `/api/courses2` (RapidAPI) and `/api/courses`
+(GolfCourseAPI) are asked as well. One page each, once per search: this is a
+box a director opens a few times a year, and paging on every keystroke spends
+real quota. A long result list says so and asks for more of the name.
+
 ## Trip Info
 
 **☰ → Trip Info**, read-only for everybody including the director. The three
@@ -1056,14 +1086,14 @@ what are we playing.
   and that was backwards — a director knows the weekend in February and the
   draw in July, so deriving left the app unable to answer "when is it" for
   exactly the months everybody asks.
-- **Each round's day** is `bc_rounds.date`, picked in Admin → Rounds beside
+- **Each round's day** is `bc_rounds.date`, picked in Admin → Formats beside
   that round's course and tee times. It is a *choice from the trip's days*, not
   a free calendar; the plain date box only appears when the tournament has no
   dates set yet.
 - **Courses** come off the rounds — `bc_rounds.course_id` → `bc_courses`, where
   the director already picks them. Tapping a schedule row opens that course's
   **scorecard** — par, stroke index and yardage per hole, with a tee picker.
-  Read-only, same numbers the director edits in Admin → Courses.
+  Read-only, same numbers the director edits in Admin → Event → Courses.
 - **The house** is the one genuinely new fact typed for this screen:
   `bc_settings/<edition>__trip` (`house_name`, `house_url`, `house_address`),
   set in Admin → Event.

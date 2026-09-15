@@ -36,9 +36,9 @@
 //
 // Tee times are deliberately NOT stored here — they already live on the
 // round document as `tee_time`, a pipe-delimited list ("8:30|8:40|8:50")
-// that the Rounds tab has always written. Group i goes off at time i.
+// that the Formats tab has always written. Group i goes off at time i.
 //
-// Which makes the tee-time list the group list. The Rounds tab writes one
+// Which makes the tee-time list the group list. The Formats tab writes one
 // box per group, labelled G1–G4, so by the time a director reaches the
 // Matches tab the round's groups already exist — there is nothing to create,
 // only matches to drop into them. This document holds who rides in each,
@@ -70,10 +70,10 @@ export const decodeGroups = (raw) => (raw || [])
 export const GROUP_TARGET = 4;
 
 // Minutes between consecutive groups when the round setup doesn't imply
-// one. Matches the spread the Rounds tab has always auto-filled.
+// one. Matches the spread the Formats tab has always auto-filled.
 export const DEFAULT_TEE_INTERVAL = 10;
 
-// How many tee times the Rounds tab always writes (G1–G4). A sixteen-player
+// How many tee times the Formats tab always writes (G1–G4). A sixteen-player
 // field is four foursomes, so this is the whole tee sheet in the normal case
 // and the floor in every other.
 export const TEE_SLOTS = 4;
@@ -169,7 +169,7 @@ export const trimGroups = (groups) => {
   return out;
 };
 
-// How many groups a round has: one per tee time the Rounds tab set, never
+// How many groups a round has: one per tee time the Formats tab set, never
 // fewer than the four it always writes, and never fewer than are already
 // occupied (an eighteen-player field needs a fifth, and its players must not
 // vanish because the tee sheet only lists four).

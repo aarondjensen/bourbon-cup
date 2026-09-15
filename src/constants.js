@@ -882,3 +882,8 @@ export const traditionalDefaultFor = (formatId) => {
 // among 16 players + the director, and Firebase rules can layer on top
 // later if needed.
 export const DIRECTOR_CODE = "bcdir";
+
+// The state filter on the course search, and the state box in the course
+// editor. Here rather than beside either one: two copies of a fifty-item
+// list is two places for somebody to leave DC out of.
+export const US_STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"];

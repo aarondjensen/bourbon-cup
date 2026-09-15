@@ -1227,7 +1227,7 @@ describe("revealPending", () => {
   // will not let me finish the tournament" is a worse failure than the one
   // this prevents.
   //
-  // The door is the Final Countdown toggle in Admin → Rounds, and it is the
+  // The door is the Final Countdown toggle in Admin → Formats, and it is the
   // right one: turning the ceremony off is exactly what somebody not holding
   // a ceremony does. An EXPLICIT false always wins over the format default
   // (see resolveSealed), so it works on the live round with scores already in

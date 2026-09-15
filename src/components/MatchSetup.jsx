@@ -12,11 +12,11 @@
 //             format it is a real decision, so it gets a real editor.
 //
 // Tee times are the thread between them, and they belong to the ROUND: the
-// Rounds tab writes one box per group (G1–G4), group i goes off at slot i,
+// Formats tab writes one box per group (G1–G4), group i goes off at slot i,
 // and every match inherits the time of the group its players ride in. So the
 // round's tee sheet IS its group list — this tab never creates a group, adds
 // one, or removes one, because a group is a tee time and tee times are set on
-// the Rounds tab. It only says which match rides in which.
+// the Formats tab. It only says which match rides in which.
 //
 // Which is what the picker on each match row does. Pick the group and the
 // match takes that group's tee time. That is the way a Singles draw is
@@ -129,7 +129,7 @@ export function MatchSetup({
   const base = storedGroups
     || (autoFoursomes ? autoBuildGroups({ formatId: tr?.format, matches: canonicalMatchOrder(rndMatches) }) : []);
   // The round's TEE TIMES are the groups, so the slots are there from the
-  // moment the Rounds tab is filled in — four of them, empty and waiting.
+  // moment the Formats tab is filled in — four of them, empty and waiting.
   // Nothing on this tab adds one.
   const groups = padGroups(base, teeSlotCount({ tr, groups: base }));
 
@@ -157,7 +157,7 @@ export function MatchSetup({
   const rawTimes = teeTimeList(tr);
   // The tee times themselves are all this tab needs now: the first tee and the
   // spread were only ever read out in prose that no longer exists, and they
-  // live on the Rounds tab, which is where they are set.
+  // live on the Formats tab, which is where they are set.
   const times = expandTeeTimes(rawTimes, Math.max(groups.length, TEE_SLOTS));
 
   // `formatId` is what turns the mixed-foursome check on. Without it
@@ -1127,7 +1127,7 @@ export function MatchSetup({
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: g.length ? 7 : 0 }}>
                   {/* The time this group goes off, read off the round, and the
-                      only name it needs. Not an input: the Rounds tab's boxes
+                      only name it needs. Not an input: the Formats tab's boxes
                       are the one place tee times are typed, and editing them
                       there re-spaces the whole sheet instead of leaving one
                       slot out of step. The player count stays here — this is
