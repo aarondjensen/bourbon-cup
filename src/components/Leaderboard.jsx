@@ -936,7 +936,7 @@ function RoundSection({
         {/* Nothing under the header but the score. The tee, the handicap
             terms, the scoring type and the counting rule all used to sit
             here; all of it is setup detail, and this is a board players read
-            for the score. The Rounds tab is where a round's terms belong. */}
+            for the score. The Formats tab is where a round's terms belong. */}
       </button>
 
       {open && (

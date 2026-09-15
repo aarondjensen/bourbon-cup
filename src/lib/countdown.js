@@ -44,7 +44,7 @@ export function teeOffAt(dateStr, minutesList) {
 }
 
 // The round's own tee sheet, off the round document. `tee_time` is the
-// pipe-delimited list of slots the director types in Admin → Rounds
+// pipe-delimited list of slots the director types in Admin → Formats
 // ("8:30|8:40|8:50"), so the EARLIEST of them is when the field goes out —
 // not the first in the string, which is only the first group the director
 // happened to type.

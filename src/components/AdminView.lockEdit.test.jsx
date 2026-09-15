@@ -112,7 +112,7 @@ const props = (over = {}) => ({
 
 const roundsTab = (over = {}) => {
   const { container } = render(<AdminView {...props(over)} />);
-  fireEvent.click([...container.querySelectorAll("button")].find(b => /rounds/i.test(b.textContent || "")));
+  fireEvent.click([...container.querySelectorAll("button")].find(b => /formats/i.test(b.textContent || "")));
   return container;
 };
 const button = (container, label) =>

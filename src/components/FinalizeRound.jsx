@@ -780,7 +780,7 @@ export function FinalizeRoundSheet({
               (amendImpactLines), so restating any of it here would be a
               second copy that cannot be kept honest. */}
           <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.45, marginBottom: 10 }}>
-            Handicaps stay frozen until you recalculate it in Admin → Rounds.
+            Handicaps stay frozen until you recalculate it in Admin → Formats.
           </div>
 
           <button onClick={doAmend} disabled={busy} style={{

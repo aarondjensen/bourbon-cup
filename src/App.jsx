@@ -3082,7 +3082,7 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
           Leaderboard names its rounds ("Treetops · 2-Man Best Ball"). The
           round number is already the pill the reader just tapped, and the
           setup detail that used to sit under it — format blurb, counting
-          rule, hole points, first tee — is either on the Rounds tab or
+          rule, hole points, first tee — is either on the Formats tab or
           repeated below: every match card carries its own tee time, and so
           does every row of the tee sheet. */}
       <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 12, overflow: "hidden" }}>
@@ -4124,7 +4124,7 @@ function SlideMenu({ open, onClose, onNavigate, user, view, alerts, onEditions, 
     // the tab links out to it — see components/PhotosView.
     { key: "photos",    label: "Photos",            icon: "📸" },
     // Admin carries the finalize flag now that the Finalize row is gone: the
-    // sheet lives under Admin → Rounds, so the trail from the amber dot on
+    // sheet lives under Admin → Formats, so the trail from the amber dot on
     // the More tab has to end there rather than at a row that no longer
     // exists.
     ...(user?.isDirector ? [{ key: "admin", label: "Admin Settings", icon: "⚙️", flag: alerts?.finalize }] : []),
@@ -4946,7 +4946,7 @@ export default function App() {
       setTournamentLocation(tLocation);
       setRoundCount(tourn?.round_count ?? null);
       // The trip's first and last day — the source of truth for every date
-      // in the app. Trip Info's banner is this pair, and Admin → Rounds
+      // in the app. Trip Info's banner is this pair, and Admin → Formats
       // offers the days between them. See lib/tripInfo.
       setTripDates({ start_date: tourn?.start_date || "", end_date: tourn?.end_date || "" });
       // Remember it for the next cold start, so the splash opens on this.
@@ -6110,7 +6110,7 @@ export default function App() {
   const onSetRound = useCallback(async (r) => { await db.upsert("bc_rounds", r); }, []);
   // ── Turning a hole over ──────────────────────────────────────────
   // A merge write of ONE field on the round document, deliberately kept off
-  // the Rounds tab's auto-save path (see lib/reveal.js): the reveal is a live
+  // the Formats tab's auto-save path (see lib/reveal.js): the reveal is a live
   // act performed in front of the room, and it must not be something a
   // director can trigger by editing a tee time. `bc_rounds` is director-only
   // in the rules, so who may do this is already settled there.
@@ -6783,7 +6783,7 @@ export default function App() {
   const viewerTeam = tPlayers.find(p => p.player_id === user.player_id)?.team || user.team || "A";
 
   // Whether there is a round to finalize at all. Was a More-menu row; it is
-  // now only the guard on the sheet and on Admin → Rounds' control, since
+  // now only the guard on the sheet and on Admin → Formats' control, since
   // More is where a PLAYER goes and finalizing is the one act on the
   // tournament that only a director can perform.
   const canFinalize = isDirector && tournamentRounds.length > 0;
@@ -6794,7 +6794,7 @@ export default function App() {
   //   reopen      the Finalize sheet's Correct a finished round, which is
   //               `onAmendRound` above. FINAL → LOCKED, stamped with who,
   //               when and why. It moves no stroke on its own.
-  //   recalculate Admin → Rounds, on the round the HANDICAPS form is
+  //   recalculate Admin → Formats, on the round the HANDICAPS form is
   //               editing — `onRecalculateRound` above. Re-takes the frozen
   //               snapshot, which is the ONLY thing that makes a corrected
   //               Course Handicap land on a round already played.
@@ -7374,7 +7374,7 @@ export default function App() {
             budgetLines={budgetLines}
             onSaveBudgetLine={onSaveBudgetLine}
             onDeleteBudgetLine={onDeleteBudgetLine}
-            /* Admin → Rounds' route to the Finalize sheet — the early-finalize
+            /* Admin → Formats' route to the Finalize sheet — the early-finalize
                path that used to be a row in the More menu. Null when there is
                no round to finalize, which is what hides the control. */
             onOpenFinalize={canFinalize ? openFinalize : null}

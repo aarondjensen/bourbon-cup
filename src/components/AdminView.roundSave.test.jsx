@@ -3,7 +3,7 @@
 //  The round form saves what it lets you edit.
 // ══════════════════════════════════════════════════════════════════
 //
-// The Rounds tab has no Save button — every edit commits on its own — which
+// The Formats tab has no Save button — every edit commits on its own — which
 // makes "did that land?" a question the screen has to answer honestly. It did
 // not on a FINAL round: `roundIsFinal` discarded the entire write while half
 // the form's controls stayed live, so a director retyping a final round's
@@ -89,11 +89,11 @@ const props = (over = {}) => ({
   ...over,
 });
 
-// The Rounds tab, mounted, with every write it makes collected.
+// The Formats tab, mounted, with every write it makes collected.
 const roundsTab = (roundLocks = {}) => {
   const writes = [];
   const { container } = render(<AdminView {...props({ roundLocks, onSetRound: async (r) => { writes.push(r); } })} />);
-  const tab = [...container.querySelectorAll("button")].find(b => /rounds/i.test(b.textContent || ""));
+  const tab = [...container.querySelectorAll("button")].find(b => /formats/i.test(b.textContent || ""));
   fireEvent.click(tab);
   return { container, writes };
 };
@@ -262,7 +262,7 @@ describe("the round form's inputs", () => {
 // which is the hardest place to recover a zoomed viewport from — there is no
 // page to scroll back to, just a card that no longer fits the screen.
 describe("the course editor", () => {
-  // Rounds tab → the COURSE field opens the picker → Edit opens the editor.
+  // Formats tab → the COURSE field opens the picker → Edit opens the editor.
   const openEditor = () => {
     const { container } = roundsTab();
     const course = [...container.querySelectorAll("button")]

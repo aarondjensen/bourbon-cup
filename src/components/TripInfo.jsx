@@ -54,7 +54,7 @@ const Card = ({ children, style }) => (
 //  The course sheet — what a schedule row opens
 // ══════════════════════════════════════════════════════════════════
 //
-// The same card the director edits in Admin → Courses, read-only, plus a tee
+// The same card the director edits in Admin → Event → Courses, read-only, plus a tee
 // picker. Every number on it was already in the app and had never been on a
 // screen a player could reach: "what am I looking at on Saturday, and which
 // hole is the stroke hole" is the question a golfer asks the night before, and
@@ -185,7 +185,7 @@ function CourseSheet({ course, rounds, onClose, isDirector }) {
           // "the director can add the pars" learns nothing they can act on.
           <div style={{ fontSize: FS.small, color: BC.t3, lineHeight: 1.5 }}>
             No scorecard saved for this course yet.
-            {isDirector && " Add the pars and stroke indexes in Admin → Rounds, on the course picker."}
+            {isDirector && " Add the pars and stroke indexes in Admin → Event, on the Courses card."}
           </div>
         )}
       </div>
@@ -419,7 +419,7 @@ export function TripInfo({ tournamentName, tournamentLocation, house, schedule, 
         <Card style={{ borderStyle: "dashed" }}>
           <div style={{ fontSize: FS.small, color: BC.t2, lineHeight: 1.5 }}>
             {isDirector
-              ? "Nothing to show yet. Set the dates and the house in Admin → Event, and each round's course in Admin → Rounds."
+              ? "Nothing to show yet. Set the dates and the house in Admin → Event, and each round's course in Admin → Formats."
               : "The director hasn't set the trip up yet. Dates, courses and the house will show up here once they do."}
           </div>
         </Card>

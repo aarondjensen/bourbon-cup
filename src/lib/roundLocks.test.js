@@ -314,7 +314,7 @@ describe("describeHiChangeImpact", () => {
 //  Correcting a handicap on a round that is already frozen
 // ══════════════════════════════════════════════════════════════════
 //
-// The end-to-end guarantee behind Admin → Rounds' Reopen / Recalculate pair,
+// The end-to-end guarantee behind Admin → Formats' Reopen / Recalculate pair,
 // pinned across the two modules that actually decide it. Scoring reads the
 // snapshot before it reads anything else (getRoundCH), so a correction typed
 // into a frozen round is inert until the snapshot is re-taken — and a test

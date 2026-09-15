@@ -15,7 +15,7 @@
 //
 // Nothing about the code changed in the move. This is a lift — the same
 // functions in the same order, with the imports they were already using
-// re-pointed one directory up. That was deliberate: the Rounds tab
+// re-pointed one directory up. That was deliberate: the Formats tab
 // auto-saves to the live tournament on every keystroke, so a refactor and a
 // relocation in one commit would leave no way to tell which of them broke a
 // write.
@@ -67,6 +67,7 @@ import {
   resolveHolePoints,
   resolveParPoints,
   resolveScoring,
+  US_STATES,
 } from "../constants";
 import {
   TOURNAMENT_ID,
@@ -167,6 +168,9 @@ import {
   playerFormSig,
 } from "../lib/formDirty";
 import {
+  CourseLibrary,
+} from "./CourseLibrary";
+import {
   EditionSwitcher,
 } from "./EditionSwitcher";
 import {
@@ -256,7 +260,7 @@ const TeeSwatch = ({ tee, index = 0, size = 12, round = false, active = false })
 // ── Admin View ──
 
 // ── Round form comparison ──────────────────────────────────────────────
-// The Rounds tab auto-saves by diffing the form against Firestore, so both
+// The Formats tab auto-saves by diffing the form against Firestore, so both
 // sides have to resolve their defaults identically or the tab would write
 // on every visit. This mirrors scoring.getRoundHandicapMode, which reads the
 // same default off the FORMAT — it used to be `round === 4 ? "full"`, a
@@ -327,7 +331,7 @@ const roundCounting = (format, raw) => {
 // looks at it.
 //
 // `final` is the guard on the other end: a round already in the books seeds
-// OFF, so opening a finished tournament's Rounds tab can never black out a
+// OFF, so opening a finished tournament's Formats tab can never black out a
 // result the field has already seen. It only applies to the SEED — once the
 // flag is stored the stored value wins, which is what keeps a sealed round
 // from un-sealing itself the moment it is finalized. The reveal happens after
@@ -364,7 +368,7 @@ const roundHoleScoring = (format, raw) => {
   return raw === HOLE_SCORING_BEST_BALL ? HOLE_SCORING_BEST_BALL : HOLE_SCORING_FORMAT;
 };
 
-// Everything the Rounds tab owns for one round.
+// Everything the Formats tab owns for one round.
 const roundSignature = (r) => JSON.stringify([
   roundSettingsSignature(r), liveEntries(r.ch_overrides), liveEntries(r.tee_assignments),
 ]);
@@ -409,7 +413,7 @@ const echoedSlice = (written, round, key, incomingSlice) =>
 // it was a Best Ball round), and never leave one answered off-screen (Medal's
 // unit, and the format's recommended allowance, both lived in `title`
 // tooltips — which a phone never shows).
-// The Rounds tab's player grid: name | HI | Round CH | tee | delta. Declared
+// The Formats tab's player grid: name | HI | Round CH | tee | delta. Declared
 // once because the header row, and every player row under it, have to agree —
 // they were built from the same template string in three places, which is how
 // the header and the rows drifted apart the last time a column moved.
@@ -639,7 +643,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
         tRounds,
         roundLocks,
         // The documents rather than this screen's editing copies of them: an
-        // export is a backup of what is STORED, and the Rounds tab's in-flight
+        // export is a backup of what is STORED, and the Formats tab's in-flight
         // state is not that yet.
         chOverrides: hcpOverridesFromDb,
         teeAssignments: teeAssignmentsFromDb,
@@ -1019,7 +1023,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
     setTimeout(() => setChDeltas(prev => { const n = {...prev}; delete n[key]; return n; }), 3500);
   };
 
-  // ══ Rounds tab: auto-save ═══════════════════════════════════════════
+  // ══ Formats tab: auto-save ═══════════════════════════════════════════
   // The round form has no Save button — every edit commits on its own.
   // Three rules keep that from becoming a write storm or a data-loss bug:
   //
@@ -1351,7 +1355,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
 
   // ── Course Search (ported from WBC) ──
   // Tee colours (TEE_COLORS / resolveTeeColor / TeeSwatch) are module-level,
-  // shared with the tee pickers on the Rounds tab.
+  // shared with the tee pickers on the Formats tab.
 
   // Query the course APIs (RapidAPI + GolfCourseAPI) and return parsed
   // results. No state writes — shared by the debounced search box AND the
@@ -1443,6 +1447,15 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
       } catch(err) { console.log("Course fetch failed:", err); return []; }
   };
 
+  // An API result has no scorecard until somebody reviews one, and the editor
+  // draws eighteen boxes off these two arrays — an absent one is eighteen
+  // holes of nothing to type in.
+  const withScorecard = (c) => ({
+    ...c,
+    hole_pars: c.hole_pars?.length ? c.hole_pars : Array(18).fill(4),
+    hole_handicaps: c.hole_handicaps?.length ? c.hole_handicaps : Array(18).fill(0).map((_, i) => i + 1),
+  });
+
   const doCourseSearch = (query, stateOverride) => {
     setCourseSearch(query);
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
@@ -1501,7 +1514,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
   // page in when a focused input is under 16px and does not zoom back out —
   // so tapping the Nassau box left a director on a viewport they had to pinch
   // out of, with the form's left-hand labels off the side of the screen. The
-  // theme says exactly this next to the FS scale; the Rounds tab's numeric
+  // theme says exactly this next to the FS scale; the Formats tab's numeric
   // fields were the ones that never got it, because they are the smallest
   // boxes in the app and 14px looked like the way to fit them.
   //
@@ -1537,7 +1550,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
            The key stays `money`. It names what the tab is FOR, which is a
            wider thing than the sub-tab that shares its label, and renaming
            it would churn every reference for a string nobody sees. */
-        options={[["players","Players"],["rounds","Rounds"],["matches","Matches"],["money","Budget"],["tournament","Event"]]}
+        options={[["players","Players"],["rounds","Formats"],["matches","Matches"],["money","Budget"],["tournament","Event"]]}
         value={tab}
         onChange={setTab}
       />
@@ -3512,13 +3525,12 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
         />
       )}
 
-      {/* ── Course library ───────────────────────────────────────────
-          Was a top-level "Courses" tab. Assigning a course is a ROUND
-          decision, so the library opens over the round it acts on: the old
-          flow made you leave the round you were setting up, work an R1–R4
-          grid against a flat list, and navigate back. Nothing it could do was
-          lost — the row chips still assign to any round, and search, add,
-          edit and remove are all still here.
+      {/* ── Course library, opened from a round ──────────────────────
+          Assigning a course is a ROUND decision, so the library opens over
+          the round it acts on rather than making you leave the round you were
+          setting up, work an R1–R4 grid against a flat list, and navigate
+          back. The list itself is shared with the Courses card on the Event
+          tab — same component, same editor; see CourseLibrary.
 
           One search box, always open, covering both halves. "Do I already
           have this one?" and "can I find it?" are the same typing, and the
@@ -3527,129 +3539,32 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
       {coursePicker && (
         <Popup onClose={() => setCoursePicker(false)} maxWidth={460} padding={0} outerPadding={12} portal zIndex={450}
           innerStyle={{ background: BC.card, border: `1px solid ${BC.amber}${ALPHA.line}`, borderRadius: 16 }}>
-          <div>
-            {/* Sticky so the search box stays reachable while a long library
-                scrolls under it — the card itself is the scroll container. */}
-            <div style={{ padding: "12px 14px", borderBottom: `1px solid ${BC.bdr}`, position: "sticky", top: 0, background: BC.card, zIndex: 1 }}>
+          <CourseLibrary
+            mode="round"
+            editRound={editRound}
+            rounds={tournamentRounds}
+            courses={courses}
+            tRounds={tRounds}
+            libraryCourses={libraryCourses}
+            search={courseSearch}
+            onSearch={doCourseSearch}
+            stateFilter={courseStateFilter}
+            onStateFilter={s => { setCourseStateFilter(s); if (courseSearch.trim().length >= 2) doCourseSearch(courseSearch, s); }}
+            searchLoading={searchLoading}
+            searchResults={searchResults}
+            onRowTap={async (c) => { await assignCourseToRound(editRound, c.id); setCoursePicker(false); }}
+            onAssign={assignCourseToRound}
+            onEdit={setCoursePreview}
+            onDelete={c => onAddCourse({ ...c, _delete: true })}
+            onPreview={c => setCoursePreview(withScorecard(c))}
+            confirm={confirm}
+            header={(
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                 <span style={{ fontSize: FS.small, fontWeight: 700, color: BC.gold }}>COURSE FOR RD {editRound}</span>
                 <button onClick={() => setCoursePicker(false)} style={{ background: "transparent", border: "none", color: BC.t3, fontSize: FS.title, cursor: "pointer", lineHeight: 1, padding: 0 }}>✕</button>
               </div>
-              <div style={{ display: "flex", gap: 6 }}>
-                <select value={courseStateFilter} onChange={e => { setCourseStateFilter(e.target.value); if (courseSearch.trim().length >= 2) doCourseSearch(courseSearch, e.target.value); }}
-                  style={{ width: 64, padding: "9px 6px", background: BC.inp, border: `1px solid ${BC.amber}${ALPHA.line}`, borderRadius: 8, color: BC.t1, fontSize: FS.lead, flexShrink: 0 }}>
-                  <option value="">All</option>
-                  {["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"].map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-                {/* FS.lead is 16px, which is what stops iOS Safari zooming the
-                    page on focus — under 16px it zooms in and never back. */}
-                <input value={courseSearch} onChange={e => doCourseSearch(e.target.value)} placeholder="Search courses…"
-                  style={{ flex: 1, minWidth: 0, padding: "9px 12px", background: BC.inp, border: `1px solid ${BC.amber}${ALPHA.line}`, borderRadius: 8, color: BC.t1, fontSize: FS.lead, outline: "none", boxSizing: "border-box" }} />
-                {courseSearch !== "" && (
-                  <button onClick={() => doCourseSearch("")} style={{ flexShrink: 0, padding: "0 10px", borderRadius: 8, background: "transparent", border: `1px solid ${BC.bdr}`, color: BC.t3, fontSize: FS.lead, cursor: "pointer" }}>✕</button>
-                )}
-              </div>
-            </div>
-
-            {libraryCourses.map((c, i) => {
-              const onThisRound = tRounds.find(t => t.round_number === editRound)?.course_id === c.id;
-              return (
-              <div key={c.id} style={{ borderBottom: i < libraryCourses.length - 1 ? `1px solid ${BC.bdr}${ALPHA.hair}` : "none", padding: "10px 14px" }}>
-                {/* Two lines, because at popup width the name and six controls
-                    on one row left the name about 150px and wrapping. Line one
-                    is the primary action — it puts this course on the round the
-                    picker was opened from and closes. Line two is everything
-                    else: the other rounds, edit, remove. */}
-                <button onClick={async () => { await assignCourseToRound(editRound, c.id); setCoursePicker(false); }}
-                  style={{ display: "block", width: "100%", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: FS.body, color: onThisRound ? BC.amberInk : BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {onThisRound && "✓ "}{c.name}
-                  </div>
-                  <div style={{ fontSize: FS.label, color: BC.t3, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{[c.city, c.state].filter(Boolean).join(", ")} · Par {c.par} · Slope {c.slope}</div>
-                </button>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 7 }}>
-                  <div style={{ display: "flex", gap: 3, flex: 1 }}>
-                    {[1,2,3,4].map(r => {
-                      const tr = tRounds.find(t => t.round_number === r);
-                      const isAssigned = tr?.course_id === c.id;
-                      const otherCourse = tr?.course_id && tr.course_id !== c.id && courses.find(x => x.id === tr.course_id);
-                      return (
-                        <button key={r} onClick={async () => {
-                          if (isAssigned) {
-                            await assignCourseToRound(r, null);
-                          } else if (otherCourse) {
-                            if (await confirm(`Replace ${otherCourse.name} for Rd ${r}?`)) await assignCourseToRound(r, c.id);
-                          } else {
-                            await assignCourseToRound(r, c.id);
-                          }
-                        }} style={{
-                          padding: "3px 6px", borderRadius: 4, fontSize: FS.label, fontWeight: 700, cursor: "pointer", minWidth: 24, textAlign: "center",
-                          background: isAssigned ? BC.amber : "transparent",
-                          color: isAssigned ? ON_AMBER : BC.t3,
-                          border: `1px solid ${isAssigned ? BC.amber : BC.bdr}`,
-                        }}>R{r}</button>
-                      );
-                    })}
-                  </div>
-                  <button onClick={() => setCoursePreview(c)} title="Edit course name, tees & scorecard" style={{ background: "transparent", border: `1px solid ${BC.bdr}`, color: BC.t3, cursor: "pointer", fontSize: FS.label, fontWeight: 700, borderRadius: 4, padding: "3px 6px" }}>Edit</button>
-                  <button onClick={async () => { if (await confirm(`Remove ${c.name}?`)) onAddCourse({ ...c, _delete: true }); }} style={{ background: "transparent", border: "none", color: BC.t3, cursor: "pointer", fontSize: FS.body, padding: "2px 4px" }}>✕</button>
-                </div>
-              </div>
-              );
-            })}
-            {courses.length === 0 && <div style={{ padding: "16px 14px", color: BC.t3, fontSize: FS.small }}>No courses yet — search above.</div>}
-            {courses.length > 0 && libraryCourses.length === 0 && (
-              <div style={{ padding: "10px 14px", color: BC.t3, fontSize: FS.label }}>Nothing saved matches “{courseSearch.trim()}”.</div>
             )}
-
-            <div style={{ padding: 14, borderTop: `1px solid ${BC.bdr}` }}>
-              {searchLoading && <div style={{ textAlign: "center", padding: 12, color: BC.t3, fontSize: FS.small }}>Searching…</div>}
-
-              {!searchLoading && courseSearch.trim().length >= 2 && searchResults.length === 0 && (
-                <div style={{ textAlign: "center", padding: "10px 0", color: BC.t3, fontSize: FS.small }}>Nothing found for “{courseSearch}”</div>
-              )}
-
-              {/* ── A broad search is not a broken one ──
-                  One query per search, deliberately: this box is used a few
-                  times a year, and fetching page after page on every keystroke
-                  spends real quota to make one-word searches exhaustive.
-                  See the note on fetchCourseResults.
-
-                  What that costs is this line. "Dunes" returns a page of
-                  courses with Dunes somewhere in the name — Kiva Dunes, Wild
-                  Dunes, clubs whose COURSE is called the Dunes — and Forest
-                  Dunes is simply not among the ones that came back. The
-                  screen showed twenty results, which reads as a search that
-                  cannot find your course rather than one that found too many.
-                  Saying the count and what to do about it is the whole fix.
-
-                  Only on a long list: on three results there is nothing to
-                  narrow and the line would be noise. */}
-              {!searchLoading && searchResults.length >= 8 && (
-                <div style={{ textAlign: "center", padding: "2px 0 10px", color: BC.t3, fontSize: FS.label, lineHeight: 1.45 }}>
-                  {searchResults.length} matches — add more of the name to narrow it.
-                </div>
-              )}
-
-              {!searchLoading && searchResults.filter(c => !courses.find(ex => ex.name.toLowerCase() === c.name.toLowerCase())).map(c => (
-                <button key={c.id} onClick={() => setCoursePreview({ ...c, hole_pars: c.hole_pars?.length ? c.hole_pars : Array(18).fill(4), hole_handicaps: c.hole_handicaps?.length ? c.hole_handicaps : Array(18).fill(0).map((_,i)=>i+1) })}
-                  style={{ display: "block", width: "100%", background: BC.inp, border: `1px solid ${BC.bdr}`, borderRadius: 10, padding: "10px 14px", cursor: "pointer", textAlign: "left", color: BC.t1, marginBottom: 6 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ fontWeight: 600, fontSize: FS.body }}>{c.name}</span>
-                        {c._incompleteData && <span style={{ fontSize: FS.micro, background: `${BC.danger}${ALPHA.tint}`, border: `1px solid ${BC.danger}${ALPHA.hair}`, color: BC.danger, borderRadius: 4, padding: "1px 5px", fontWeight: 700 }}>⚠ incomplete</span>}
-                        {c._source && <span style={{ fontSize: FS.micro, background: `${BC.amber}${ALPHA.wash}`, border: `1px solid ${BC.amber}${ALPHA.hair}`, color: BC.amberInk, borderRadius: 4, padding: "1px 5px", fontWeight: 600 }}>{c._source}</span>}
-                      </div>
-                      <div style={{ fontSize: FS.label, color: BC.t3 }}>{[c.city, c.state].filter(Boolean).join(", ")}{c.par ? ` · Par ${c.par}` : ""}{c.slope && c.slope !== 113 ? ` · Slope ${c.slope}` : ""}</div>
-                    </div>
-                    <span style={{ color: BC.amberInk, fontSize: FS.small, fontWeight: 700 }}>Preview →</span>
-                  </div>
-                </button>
-              ))}
-
-            </div>
-          </div>
+          />
         </Popup>
       )}
 
@@ -3768,7 +3683,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                           <select value={draft.state||""} onChange={e => setDraft(p => ({...p, state: e.target.value}))}
                             style={{ ...ti, width: 58 }}>
                             <option value="">—</option>
-                            {["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"].map(s => <option key={s} value={s}>{s}</option>)}
+                            {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
                           </select>
                         </div>
                       </div>
@@ -4177,6 +4092,43 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
             </div>
           </div>
 
+          {/* ── Courses ──────────────────────────────────────────────
+              The same library the round picker opens, given a door of its
+              own. Courses outlive the draw — a stroke index typed wrong is
+              noticed in February, and the only way at it used to be Admin →
+              Formats, pick a round, open the picker for a round you were not
+              setting up. Here they are what they actually are: a thing the
+              tournament has, beside the house and the dates.
+
+              One component, two modes, no second copy of the list — see
+              CourseLibrary. Search (saved and the golf APIs), the R chips,
+              remove; a row opens the full editor, which is the same sheet
+              either door reaches, so tees and the scorecard are edited in one
+              place however you got there. */}
+          <div style={{ ...TournHeadStyle, marginBottom: 6 }}>Courses</div>
+          <div style={TournCardStyle}>
+            <CourseLibrary
+              mode="library"
+              rounds={tournamentRounds}
+              courses={courses}
+              tRounds={tRounds}
+              libraryCourses={libraryCourses}
+              search={courseSearch}
+              onSearch={doCourseSearch}
+              stateFilter={courseStateFilter}
+              onStateFilter={s => { setCourseStateFilter(s); if (courseSearch.trim().length >= 2) doCourseSearch(courseSearch, s); }}
+              searchLoading={searchLoading}
+              searchResults={searchResults}
+              onRowTap={setCoursePreview}
+              onAssign={assignCourseToRound}
+              onEdit={setCoursePreview}
+              onDelete={c => onAddCourse({ ...c, _delete: true })}
+              onPreview={c => setCoursePreview(withScorecard(c))}
+              confirm={confirm}
+            />
+          </div>
+
+
           {/* Access — the password that stands between "signed in with
               Google" and "can change the tournament". Both codes are shown
               outright: only a director reaches this tab and only a director
@@ -4367,8 +4319,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
           <div style={TournCardStyle}>
             <div style={{ fontSize: FS.small, color: BC.t2, lineHeight: 1.45, marginBottom: 10 }}>
               Everybody&rsquo;s scorecards as a CSV, gross and net, laid out like the
-              old scoring spreadsheet. Open it in Google Sheets if you ever need to
-              run a round without the app.
+              old scoring spreadsheet.
             </div>
             {/* One per round, then the lot. They wrap on a phone rather than
                 squeezing to five columns nobody can hit with a thumb. */}
