@@ -546,6 +546,40 @@ await check("a member CANNOT settle their own side bet in a locked year", () =>
 await check("a member CANNOT claim a roster name in a locked year", () =>
   assertFails(setDoc(doc(peteDb(), "bc_players/p_locked"), { auth_uid: "pete" }, { merge: true })));
 
+// ── …except a photo ─────────────────────────────────────────────────
+// The one member write the lock deliberately does not reach, and the reason
+// is what the lock is for: it freezes a RESULT. An album is not one. See the
+// canPostMedia() block in firestore.rules — men go on finding shots of a trip
+// on their phones for years after the cup it belonged to was settled.
+const lockedPhoto = (uid, over = {}) => ({
+  tournament_id: "bc_2019", kind: "photo", host: "storage", uploadedBy: uid, ...over,
+});
+
+await check("a member CAN post a photo to a locked year", () =>
+  assertSucceeds(setDoc(doc(peteDb(), "bc_media/med_bc_2019_p1"), lockedPhoto("pete"))));
+
+await check("...and can caption and remove their own out of one", async () => {
+  await assertSucceeds(setDoc(doc(peteDb(), "bc_media/med_bc_2019_p1"), { caption: "12th tee" }, { merge: true }));
+  await assertSucceeds(deleteDoc(doc(peteDb(), "bc_media/med_bc_2019_p1")));
+});
+
+// Everything else about bc_media is unchanged by this — only the lock clause
+// came off, so the author gate that makes `uploadedBy` trustworthy still holds
+// inside a frozen year.
+await check("...but not one under somebody else's name", () =>
+  assertFails(setDoc(doc(peteDb(), "bc_media/med_bc_2019_p2"), lockedPhoto("alice"))));
+
+await check("...nor touch somebody else's photo in one", async () => {
+  await seed("bc_media/med_bc_2019_a1", lockedPhoto("alice"));
+  await assertFails(setDoc(doc(peteDb(), "bc_media/med_bc_2019_a1"), { caption: "mine now" }, { merge: true }));
+  await assertFails(deleteDoc(doc(peteDb(), "bc_media/med_bc_2019_a1")));
+});
+
+await check("and a non-member still cannot post to a locked year", () => {
+  const bob = env.authenticatedContext("bob").firestore();
+  return assertFails(setDoc(doc(bob, "bc_media/med_bc_2019_b1"), lockedPhoto("bob")));
+});
+
 // The attack the `request.resource` half of editionOpen() exists for: without
 // it, a member could pick a document up out of a frozen year and set it down
 // in an open one, which is an edit to the locked tournament by another name.
@@ -742,6 +776,17 @@ await check("...but can claim one in the demo", async () => {
   await assertSucceeds(setDoc(doc(env.authenticatedContext("reviewer").firestore(), "bc_players/p_demo"),
     { auth_uid: "reviewer" }, { merge: true }));
 });
+
+// bc_media is the one collection the edition lock does not reach (see
+// canPostMedia). The demo confinement still does, and has to: a photo posted
+// by a store reviewer must not land in the cup's own library.
+await check("a stamped member cannot post a photo into the cup", () =>
+  assertFails(setDoc(doc(env.authenticatedContext("reviewer").firestore(), "bc_media/med_bc_2026_rev"),
+    { tournament_id: "bc_2026", kind: "photo", host: "storage", uploadedBy: "reviewer" })));
+
+await check("...but can inside the demo", () =>
+  assertSucceeds(setDoc(doc(env.authenticatedContext("reviewer").firestore(), "bc_media/med_bc_demo_rev"),
+    { tournament_id: "bc_demo", kind: "photo", host: "storage", uploadedBy: "reviewer" })));
 
 await check("the reviewer code is still not a way to a crown", () =>
   assertFails(setDoc(doc(env.authenticatedContext("rev2").firestore(), "bc_accounts/rev2"),

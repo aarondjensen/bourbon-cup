@@ -49,6 +49,14 @@
 // card, scorecard and photo in a locked edition stays visible to everybody,
 // guests included — freezing a tournament is not the same as hiding it.
 //
+// It does not stop a PHOTO either, and that is the one deliberate hole in it.
+// bc_media is gated on canPostMedia() rather than canWriteEdition() (see
+// firestore.rules), because what this freezes is a RESULT — a score, a
+// signature, a bet — and an album is not one. Men go on finding shots of a
+// trip on their phones for years after the cup it belonged to was settled,
+// and until that hole existed the year they wanted to add them to was the one
+// year that refused.
+//
 // A DIRECTOR IS EXEMPT, in the rules and here. Somebody has to be able to fix
 // a locked year, and a flag that can strand a tournament nobody can correct is
 // a worse bug than the one it fixes.

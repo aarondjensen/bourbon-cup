@@ -720,11 +720,15 @@ the threat model does not apply. Read off `firestore.rules` rather than
 remembered:
 
 - **Uploading requires a membership.** `allow create` on `bc_media` needs
-  `canWriteEdition()`, which needs `isMember()`, which needs the tournament
+  `canPostMedia()`, which needs `isMember()`, which needs the tournament
   password — and `request.resource.data.uploadedBy == request.auth.uid`, so a
   photo cannot be posted under somebody else's name. The uploaders are sixteen
   men who have played the same tournament since 2015 and see each other every
-  July.
+  July. (`canPostMedia()` is `canWriteEdition()` without the edition lock —
+  photos are the one member write a finished year still accepts, because the
+  lock freezes a result and an album is not one. The demo confinement it does
+  keep is the part that matters here: a reviewer's photo cannot reach the
+  cup's library.)
 - **A guest can look and cannot post.** Reads are `isOpen()`; a guest holds no
   auth token at all, so every write rule refuses them before the UI is
   consulted.

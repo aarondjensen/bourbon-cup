@@ -284,6 +284,33 @@ export function uploadFailureMessage(err, count = 1) {
   return `That photo couldn't be added.${many}`;
 }
 
+// ── Whose name goes on a photo ─────────────────────────────────────
+// The roster row's, when the account has one in the edition on screen. In the
+// year being played it always does. In a past cup it never does: those ten
+// tournaments were imported from the spreadsheets and not one of their roster
+// rows has an account behind it, so the app runs as a player-less SPECTATOR
+// there and `user.name` is the literal word "Viewing". A photo of the 2019
+// trip credited to "Viewing" is worse than one credited to nobody.
+//
+// So the fallback is the account's own name, off Google or Apple, shortened
+// to the form the rest of the app uses — first name and last initial. A full
+// "Aaron Jensen" under a grid of "Aaron J" reads as a different man.
+//
+// An empty string is the floor, not a placeholder: PhotosView already draws an
+// em dash for a photo with no name on it, and Apple hands back no name at all
+// unless the user chose to share it.
+export const shortName = (full) => {
+  const parts = String(full || "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "";
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}`;
+};
+
+export const photoCredit = ({ rosterName, accountName } = {}) => {
+  const roster = String(rosterName || "").trim();
+  return roster || shortName(accountName);
+};
+
 // ── The name a saved photo lands under ─────────────────────────────
 // This ends up in somebody's camera roll or Downloads folder, so it carries
 // the cup's name rather than the generated id alone.
