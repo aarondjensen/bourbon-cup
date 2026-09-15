@@ -472,7 +472,7 @@ function ChDeltaBadge({ delta }) {
 // is "nothing is running", and the two have to be tellable apart.
 const EXPORT_ALL = "all";
 
-export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCaptain, editionId, isDemoAdmin = false, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, roundCount, tournamentRounds, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks, payments, duesAmount, onLogPayment, onDeletePayment, onSaveDues, onSetPlayerDues, onOpenFinalize, onRecalculateRound, finalizeRound, finalizeReady, trip, onSaveTrip, startDate, endDate, budgetLines, onSaveBudgetLine, onDeleteBudgetLine }) {
+export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCaptain, editionId, isDemoAdmin = false, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, roundCount, tournamentRounds, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks, payments, duesAmount, onLogPayment, onDeletePayment, onSaveDues, onSetPlayerDues, onOpenFinalize, onRecalculateRound, finalizeRound, currentRound, finalizeReady, trip, onSaveTrip, startDate, endDate, budgetLines, onSaveBudgetLine, onDeleteBudgetLine }) {
   const [tab, setTab] = useState("players");
   // Which half of the $ tab. Budget leads because it is the half a director
   // fills in first — you cannot say what to charge until you know what the
@@ -1367,10 +1367,23 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
   // timer is cancelled first, then the captured payload is written.
   useEffect(() => () => flushRoundSave(), [editRound, flushRoundSave]);
 
-  // Which round the Matches tab is editing. The builder's own selection
-  // state lives in MatchSetup; this stays here so the chosen round survives
-  // a trip to another admin tab.
-  const [matchRound, setMatchRound] = useState(1);
+  // Which round the Matches tab is editing. The builder's own selection state
+  // lives in MatchSetup; this stays here so the chosen round survives a trip
+  // to another admin tab.
+  //
+  // RESOLVED rather than stored, and off the scoring gate's own answer
+  // (`currentRound` — today's round, else the lowest unfinalized). Seeded at 1
+  // it opened on Round 1 every time the console was left, because App unmounts
+  // AdminView with the tab: on the Saturday of a four-round week a director
+  // reaching for the draw landed on Friday's finished round, which is the same
+  // hazard `scoringRoundNumber` exists to keep the SCORING tab off. Holding the
+  // tap and falling back also survives the chosen round being deleted while it
+  // is on screen — the same shape GroupsView uses for the player's copy.
+  const [pickedMatchRound, setPickedMatchRound] = useState(null);
+  const matchRound = pickedMatchRound != null && tournamentRounds.includes(pickedMatchRound)
+    ? pickedMatchRound
+    : (tournamentRounds.includes(currentRound) ? currentRound : (tournamentRounds[0] ?? 1));
+  const setMatchRound = setPickedMatchRound;
   const [showEditions, setShowEditions] = useState(false);
 
   if (!user.isDirector) return (

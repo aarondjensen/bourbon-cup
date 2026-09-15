@@ -108,7 +108,7 @@ import {
   teeTimeForMatch, parseTeeTime, formatTeeTime, DEFAULT_TEE_INTERVAL, TEE_SLOTS,
   roundPlaySetup, orderMatchesForRound, numberMatches, groupIndexForMatch,
   scoringUnits, unitForPlayer, readableUnits, teeTimeList, expandTeeTimes, stripAMPM,
-  formatGroupsByTeam, formatPerSide,
+  formatGroupsByTeam, formatPerSide, sidesInRound,
 } from "./lib/groups";
 import { firstTeeAt } from "./lib/countdown";
 import { groupKey, tagAheadOfPlay, resolvePin, OVERRIDE_KEY } from "./lib/ctp";
@@ -3021,7 +3021,11 @@ const teamTagStyle = {
 // actually has on the morning of a round: who am I playing, and when do I
 // tee off. The second one comes from the round's playing groups (see
 // lib/groups.js) — group i goes off at slot i of the round's tee_time list.
-function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound, teams }) {
+//
+// Exported for the same reason ScoreEntry is: it lives here because it reads
+// half of App's state, and a screen nothing can mount is a screen that ships
+// dead on tap. See GroupsView.teeSheet.test.jsx.
+export function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound, teams, currentRound }) {
   // Every round the director set up in Admin belongs on this tab, drawn or
   // not. Listing only the rounds that already have pairings made a round
   // vanish between "the schedule is set" and "the draw is made", which is
@@ -3044,9 +3048,19 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
   // director's tap and falling back to the first live round also survives a
   // round being deleted while it is on screen.
   const [pickedRound, setPickedRound] = useState(null);
+  // The round this opens on is the one the field is PLAYING, not the first one
+  // of the week. `currentRound` is the scoring gate's own answer (today's
+  // round, else the lowest unfinalized — lib/roundLocks.scoringRoundNumber), so
+  // the tab a player opens looking for his tee time cannot land him on a round
+  // that finished yesterday while the one he is standing on is a tap away in
+  // small type. One rule for both, because two would drift.
+  //
+  // When every round is final the event is over and any answer lands on a
+  // finalized round, so this keeps the old one — the ten archived editions are
+  // read from the start, not from the end.
   const activeRound = pickedRound != null && rounds.includes(pickedRound)
     ? pickedRound
-    : (rounds[0] ?? 1);
+    : (rounds.includes(currentRound) ? currentRound : (rounds[0] ?? 1));
   const rndMatches = matches.filter(m => m.round === activeRound);
   const tr = tRounds.find(t => t.round_number === activeRound);
   const course = courses.find(c => c.id === tr?.course_id);
@@ -3065,6 +3079,42 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
   // Matches read best in the order they go off — which is also the order
   // their numbers were handed out in, so the cards below count up.
   const ordered = orderMatchesForRound({ matches: rndMatches, groups, times });
+
+  // ── When one match is not one pairing ────────────────────────────
+  // Team Best Ball's match is the whole side against the whole side, so this
+  // tab drew ONE card: sixteen names, "MATCH 9", and no tee time — because a
+  // match spread over four groups has no single time of its own
+  // (teeTimeForMatch returns "" by design). The director had built four waves
+  // with four times on them and not one of them reached the field, on the
+  // round the cup is decided in.
+  //
+  // It is the same tab either way. On every other format a match IS a tee
+  // time, so the match cards already answer "when do I go off". Where the two
+  // come apart, the TEE SHEET is what a player opens this for — and it is the
+  // admin tab's own answer for the same format, which is what keeps the
+  // console and the phone saying one thing.
+  //
+  // The 8v8 does not need a card of its own to be said: the banner above
+  // already reads TEAM BEST BALL, and every wave below is stamped with the
+  // side it belongs to.
+  const spansGroups = formatPerSide(tr?.format) == null;
+  const teeSheet = spansGroups && groups.length > 0 && rndMatches.length > 0;
+  // Which side each man is on, off the DRAW rather than the roster — the same
+  // read MatchSetup makes, and for the same reason: it is the match that will
+  // be scored.
+  const sideOfPid = sidesInRound(rndMatches);
+  const waveSide = (g) => {
+    const sides = new Set((g || []).map(pid => sideOfPid.get(pid)).filter(Boolean));
+    return sides.size === 1 ? [...sides][0] : null;
+  };
+  // Anybody playing this round who has not been given a time yet. A draw gets
+  // built over an evening, and a man who opens this tab halfway through has to
+  // find himself on it — "not drawn yet" is an answer, an absence is not. It
+  // is the same argument the round list above is built on.
+  const undrawn = teeSheet
+    ? [...new Set(rndMatches.flatMap(m => [...(m.teamA || []), ...(m.teamB || [])]))]
+      .filter(pid => !groups.some(g => g.includes(pid)))
+    : [];
 
   return (
     <div style={{ fontFamily: FONT }}>
@@ -3113,7 +3163,44 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
           follow each team's logo — see theme.js `withBrand`), not the
           tournament chrome, so a player finds their side by color here the
           same way they do on the board. */}
-      {ordered.map((m, i) => {
+      {/* One card per tee time. The same rail-and-tag identity the match cards
+          below carry, because they are the same tab answering the same
+          question — who am I with, and when. */}
+      {teeSheet && groups.map((g, gi) => {
+        if (!g.length) return null;
+        const side = waveSide(g);
+        const rail = side ? teamColor(side) : BC.bdr;
+        return (
+          <div key={gi} style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: "12px 14px", marginBottom: 8 }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 4 }}>
+              <div style={{ ...teamTagStyle, color: rail, marginBottom: 0, minWidth: 0 }}>
+                {side ? (teams?.[side]?.name || `Team ${side}`) : "TEE TIME"}
+              </div>
+              <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 800, letterSpacing: 1, whiteSpace: "nowrap" }}>
+                {times[gi] || "—"}
+              </div>
+            </div>
+            <div style={{ borderLeft: `3px solid ${rail}`, paddingLeft: 8 }}>
+              {g.map(pid => (
+                <div key={pid} style={{ fontSize: FS.body, fontWeight: 600, color: BC.t1, lineHeight: 1.35 }}>{nameOf(pid)}</div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+
+      {undrawn.length > 0 && (
+        <div style={{ background: BC.card, borderRadius: 12, border: `1px dashed ${BC.bdr}`, padding: "12px 14px", marginBottom: 8 }}>
+          <div style={{ ...teamTagStyle, color: BC.t3 }}>No tee time yet</div>
+          <div style={{ borderLeft: `3px solid ${BC.bdr}`, paddingLeft: 8 }}>
+            {undrawn.map(pid => (
+              <div key={pid} style={{ fontSize: FS.body, fontWeight: 600, color: BC.t2, lineHeight: 1.35 }}>{nameOf(pid)}</div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!teeSheet && ordered.map((m, i) => {
         const teeTime = teeTimeForMatch({ groups, times, match: m });
         return (
         <div key={m.id} style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: "12px 14px", marginBottom: 8 }}>
@@ -7174,6 +7261,7 @@ export default function App() {
             courses={courses}
             groups={groupsData}
             teams={teams}
+            currentRound={currentRound}
           />
         )}
         {view === "betting" && (
@@ -7404,6 +7492,11 @@ export default function App() {
             onOpenFinalize={canFinalize ? openFinalize : null}
             onRecalculateRound={canFinalize ? onRecalculateRound : null}
             finalizeRound={currentRound}
+            /* The round the Matches tab opens on. Named for itself rather than
+               reusing `finalizeRound` above: they happen to be the same number
+               today, and a tab seeded off a prop named for finalizing is one
+               refactor away from being seeded off the wrong one. */
+            currentRound={currentRound}
             finalizeReady={finalizeReady}
             /* The RAW trip document, not the normalized house: a link
                lib/tripInfo would refuse still has to appear in the box so the

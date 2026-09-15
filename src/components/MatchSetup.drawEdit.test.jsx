@@ -20,6 +20,10 @@
 //   match got no tee time, the pools stayed lit, no toast came, and a deleted
 //   match left its four players standing on a tee time.
 //
+//   A SIDE COULD BE THE WRONG SIZE. A 2-Man Best Ball is two a side and there
+//   is no other reading of one, but the cap was advisory — a red line saying
+//   "check the selection" under a Create button that made the 3v1 anyway.
+//
 //   A PAIRING COULD NOT BE CORRECTED. "Pete and Jim are the wrong way round"
 //   cost two deletes, two rebuilds and two drags to put the foursomes back on
 //   the times they came off. It is two taps now.
@@ -252,5 +256,70 @@ describe("re-timing a match without a drag", () => {
     fireEvent.pointerDown(grip("M1"), { pointerId: 1, clientX: 10, clientY: 10 });
     fireEvent.pointerUp(grip("M1"), { pointerId: 1, clientX: 10, clientY: 10 });
     expect(screen.queryByText(/M1 lifted/)).toBeNull();
+  });
+});
+
+
+describe("a side is the size the format says", () => {
+  // Not a warning. The engine has no reading of a 3v1 best ball or a 2v1
+  // single, so an over-filled side is not a match to be flagged — it is a tap
+  // that should not land.
+  // The POOL row, specifically. A selected man is also named on the strokes
+  // card above the button, so a bare getByText finds two of him.
+  const pick = (...names) => names.forEach(n => {
+    const inPool = screen.getAllByText(n).find(el => /CH /.test(el.parentElement?.textContent || ""));
+    fireEvent.click(inPool || screen.getByText(n));
+  });
+
+  it("refuses the third man on a 2-a-side format, and says why", () => {
+    const p = props();
+    render(<MatchSetup {...p} />);
+    pick("APlayer1", "APlayer2", "APlayer3");
+    expect(p.notify.mock.calls[0]).toEqual([expect.stringMatching(/2-Man Best Ball is 2 a side/), "error"]);
+    pick("BPlayer1", "BPlayer2");
+    fireEvent.click(screen.getByText(/^Create Match/));
+    expect(p.onSetMatch.mock.calls[0][0].teamA).toEqual(["A1", "A2"]);
+  });
+
+  it("refuses the second man on Singles", () => {
+    const p = props({ tRounds: [{ round_number: 1, format: "singles", tee_time: "8:00|8:10|8:20|8:30", course_id: "c1" }] });
+    render(<MatchSetup {...p} />);
+    pick("APlayer1", "APlayer2");
+    expect(p.notify.mock.calls[0]).toEqual([expect.stringMatching(/Singles is 1 a side/), "error"]);
+  });
+
+  it("tapping a name off makes room for another", () => {
+    const p = props();
+    render(<MatchSetup {...p} />);
+    pick("APlayer1", "APlayer2");
+    pick("APlayer2");                       // off again
+    pick("APlayer5");
+    pick("BPlayer1", "BPlayer2");
+    fireEvent.click(screen.getByText(/^Create Match/));
+    expect(p.onSetMatch.mock.calls[0][0].teamA).toEqual(["A1", "A5"]);
+  });
+
+  it("does not offer Create until both sides are full", () => {
+    render(<MatchSetup {...props()} />);
+    pick("APlayer1", "BPlayer1");
+    // One a side is a complete Singles match and half a 2-man one. The button
+    // used to light here and create the 1v1.
+    expect(screen.queryByText(/^Create Match/)).toBeNull();
+    pick("APlayer2", "BPlayer2");
+    expect(screen.getByText(/^Create Match/)).toBeTruthy();
+  });
+
+  it("still lets a teammate format pick its four", () => {
+    // perSide is null there, and the cap is the tee time's four instead.
+    const p = props({
+      round: 4,
+      tRounds: [{ round_number: 4, format: "team_best_ball", tee_time: "8:00|8:10|8:20|8:30", course_id: "c1" }],
+      storedGroups: [[], [], [], []],
+    });
+    render(<MatchSetup {...p} />);
+    pick("APlayer1", "APlayer2", "APlayer3", "APlayer4");
+    expect(screen.getByText(/off 8:00/)).toBeTruthy();
+    pick("APlayer5");
+    expect(p.notify.mock.calls[0]).toEqual([expect.stringMatching(/A tee time holds 4/), "error"]);
   });
 });

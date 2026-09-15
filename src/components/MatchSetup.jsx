@@ -459,7 +459,14 @@ export function MatchSetup({
 
   const createMatch = async () => {
     if (!teamASel.length || !teamBSel.length) { notify("Select players for both teams", "error"); return; }
-    if (roundFinal) { notify(`Round ${round} is final — reopen it on Scoring to change the draw`, "error"); return; }
+    // Belt and braces behind pickPlayer's cap and the button's own condition.
+    // The selection cannot reach here the wrong size; if it ever did, this is
+    // the write that would put a 3v1 into a format with no reading of one.
+    if (perSide != null && (teamASel.length !== perSide || teamBSel.length !== perSide)) {
+      notify(`${fmt?.label} is ${sizeHint}`, "error");
+      return;
+    }
+    if (blockedByFinal()) return;
     // The mirror of the delete hazard. A player's holes live on the player
     // and the round, so a new match does not start empty when its players
     // have already posted — it opens with those holes on its card. Re-drawing
@@ -765,12 +772,18 @@ export function MatchSetup({
     return chs.map(({ pid, ch }) => ({ pid, ch, strokes: hcpMode === "full" ? ch : ch - minCH }));
   })();
 
-  const sizeHint = perSide ? `${perSide} per side` : "any number per side";
-  const sizeOff = !!perSide && (teamASel.length > perSide || teamBSel.length > perSide);
+  const sizeHint = perSide ? `${perSide} a side` : "any number per side";
 
   // The players lifted for a teammate foursome, whichever column they came
   // from. One side only — see pickPlayer.
   const foursomeSel = teamASel.length ? teamASel : teamBSel;
+
+  // Whether the selection is a MATCH yet. A format with a fixed side size is
+  // only ready at exactly that size — the button used to light on one name a
+  // side, so a 2-Man Best Ball could be created as a 1v1 with nothing said.
+  const selectionReady = teammateGroups ? foursomeSel.length > 0
+    : perSide != null ? (teamASel.length === perSide && teamBSel.length === perSide)
+      : (teamASel.length > 0 && teamBSel.length > 0);
 
   // Tapping a name in a pool.
   //
@@ -785,6 +798,14 @@ export function MatchSetup({
   //    being built, so the cap belongs on the selection — refusing at the
   //    end, after somebody has picked six men, is telling them off for
   //    something the screen let them do.
+  //
+  // Every OTHER format has a cap of its own and it is the format's `perSide`:
+  // a 2-Man Best Ball is two a side and a Singles match is one, and neither can
+  // be anything else. That used to be advisory — a red line reading "check the
+  // selection" under a Create button that created the 3v1 anyway — which is the
+  // same "the screen let them do it" the note above refuses for tee times. The
+  // engine has no reading of a 3v1 best ball, so there is nothing to warn
+  // about: it is not a match.
   const pickPlayer = (tid, pid, on) => {
     // A lifted name is asking a different question of this column — "who does
     // he change places with" — so while one is up, a pool tap answers that
@@ -800,6 +821,9 @@ export function MatchSetup({
         notify(`A tee time holds ${GROUP_TARGET} — tap one off first`, "error");
         return;
       }
+    } else if (perSide != null && sel.length >= perSide) {
+      notify(`${fmt?.label} is ${sizeHint} — tap one off first`, "error");
+      return;
     }
     setSel([...sel, pid]);
   };
@@ -1087,12 +1111,6 @@ export function MatchSetup({
         })}
       </div>
 
-      {sizeOff && (
-        <div style={{ fontSize: FS.label, color: BC.danger, marginBottom: 8, textAlign: "center" }}>
-          {fmt?.label} is {sizeHint} — check the selection.
-        </div>
-      )}
-
       {strokes && (
         <div style={{ ...cardStyle, padding: "10px 12px", marginBottom: 10 }}>
           <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1, marginBottom: 8 }}>
@@ -1124,7 +1142,7 @@ export function MatchSetup({
           A teammate format needs no opponent, so it lights on the first name
           picked rather than waiting for a second column that is never coming
           — which is what made this button look broken on Team Best Ball. */}
-      {(teammateGroups ? foursomeSel.length > 0 : (teamASel.length > 0 && teamBSel.length > 0)) && (
+      {selectionReady && (
         <button onClick={teammateGroups ? createFoursome : createMatch} style={{
           width: "100%", padding: "10px 20px", borderRadius: 10, border: "none", fontSize: FS.body, fontWeight: 700,
           cursor: "pointer", background: `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})`,
