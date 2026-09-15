@@ -117,7 +117,7 @@ const settle = async (fn) => {
   finally { vi.useRealTimers(); }
 };
 
-// ── The re-price confirm ────────────────────────────────────────────
+// ── The confirm in front of a final round's points ──────────────────
 // A FINAL round asks once, on the first points edit, before the change lands —
 // a director had no other way to learn that this one live field on an
 // otherwise read-only form moves a result the field has already seen.
@@ -130,7 +130,7 @@ const settle = async (fn) => {
 // the debounce it arms. Splitting them arms the save with a REAL timer and
 // then advances a fake clock, which fires nothing and reads as "the write
 // never happened".
-const editPot = async (container, label, value, answer = "Re-price it") => {
+const editPot = async (container, label, value, answer = "Change the points") => {
   vi.useFakeTimers();
   try {
     fireEvent.change(potBox(container, label), { target: { value } });
@@ -138,15 +138,15 @@ const editPot = async (container, label, value, answer = "Re-price it") => {
     if (answer) {
       const btn = [...document.body.querySelectorAll("button")]
         .find(b => (b.textContent || "").trim() === answer);
-      expect(btn, `"${answer}" not found — the re-price confirm did not open`).toBeTruthy();
+      expect(btn, `"${answer}" not found — the points confirm did not open`).toBeTruthy();
       await act(async () => { fireEvent.click(btn); });
     }
     await act(async () => { vi.advanceTimersByTime(1500); });
   } finally { vi.useRealTimers(); }
 };
 
-const repriceOffered = () => [...document.body.querySelectorAll("button")]
-  .some(b => (b.textContent || "").trim() === "Re-price it");
+const pointsConfirmOffered = () => [...document.body.querySelectorAll("button")]
+  .some(b => (b.textContent || "").trim() === "Change the points");
 
 describe("the round form's Nassau pots", () => {
   it("writes the new overall pot on an open round", async () => {
@@ -164,7 +164,7 @@ describe("the round form's Nassau pots", () => {
   // The bug. A final round took the number and threw the write away, so the
   // pots on screen and the points on the leaderboard disagreed until a reload
   // put the old ones back.
-  it("writes it on a FINAL round, once the re-price is confirmed", async () => {
+  it("writes it on a FINAL round, once the change is confirmed", async () => {
     const { container, writes } = roundsTab({ 1: { locked: true, final: true } });
     await editPot(container, "OVR", "2");
     expect(writes.length).toBeGreaterThan(0);
@@ -181,7 +181,7 @@ describe("the round form's Nassau pots", () => {
     expect(potBox(container, "OVR").value).toBe("3");
   });
 
-  it("writes nothing when the re-price is declined", async () => {
+  it("writes nothing when the confirm is declined", async () => {
     const { container, writes } = roundsTab({ 1: { locked: true, final: true } });
     await editPot(container, "OVR", "2", "Cancel");
     expect(writes).toEqual([]);
@@ -194,7 +194,7 @@ describe("the round form's Nassau pots", () => {
     await editPot(container, "OVR", "2");
     await editPot(container, "F9", "4", null);   // no dialog to answer this time
     expect(writes.at(-1).nassau_front).toBe(4);
-    expect(repriceOffered()).toBe(false);
+    expect(pointsConfirmOffered()).toBe(false);
   });
 
   // An OPEN round is the routine case and must never see the dialog.
@@ -202,7 +202,7 @@ describe("the round form's Nassau pots", () => {
     const { container, writes } = roundsTab();
     await editPot(container, "OVR", "2", null);
     expect(writes.at(-1).nassau_overall).toBe(2);
-    expect(repriceOffered()).toBe(false);
+    expect(pointsConfirmOffered()).toBe(false);
   });
 });
 
@@ -326,30 +326,40 @@ describe("opening a round", () => {
 
 // ── The toast on a final round says what actually happened ──────────
 // A final round's save toasts, because the auto-save status line is four
-// sections below the fold and the edit that usually reaches a finished round
-// moves a leaderboard sixteen men have already seen.
+// sections below the fold and most of the form above it is read-only.
 //
-// It used to say "re-priced — the leaderboard has moved" for EVERY save,
-// including the two a final round still takes that move no points at all: the
-// date and the tee time. Correcting a date and being told the standings just
-// shifted is alarming and untrue — and it spends the sentence that has to
-// carry weight on the day it is real.
+// It said "re-priced — the leaderboard has moved" for EVERY save, including
+// the two a final round still takes that move no points at all: the date and
+// the tee time. Correcting a date and being told the standings just shifted is
+// alarming and untrue. The warning itself belongs before the edit, where the
+// confirm above already puts it — by the time a toast arrives there is nothing
+// left to decide.
 describe("saving a final round", () => {
   const dateBox = (container) => container.querySelector('input[type="date"]');
   const lastToast = (toasts) => toasts.at(-1) || "";
 
-  it("says re-priced when a point value moved", async () => {
+  it("names the format when a point value moved", async () => {
     const { container, toasts } = roundsTab({ 1: { locked: true, final: true } });
     await editPot(container, "OVR", "2");
-    expect(lastToast(toasts)).toMatch(/re-priced — the leaderboard has moved/);
+    expect(lastToast(toasts)).toBe("Rd 1 Format updated");
   });
 
-  it("does not say re-priced when only the date moved", async () => {
+  it("just says saved when only the date moved", async () => {
     const { container, writes, toasts } = roundsTab({ 1: { locked: true, final: true } });
     await settle(() => fireEvent.change(dateBox(container), { target: { value: "2026-07-17" } }));
     // The edit landed — this is about the wording, not a new refusal.
     expect(writes.at(-1).date).toBe("2026-07-17");
-    expect(lastToast(toasts)).toBe("Round 1 saved");
+    expect(lastToast(toasts)).toBe("Rd 1 saved");
+  });
+
+  // The word nobody outside this file uses. A director changes the Nassau
+  // pots; he does not re-price them.
+  it("never says re-priced", async () => {
+    const { container, toasts } = roundsTab({ 1: { locked: true, final: true } });
+    await editPot(container, "OVR", "2");
+    await settle(() => fireEvent.change(dateBox(container), { target: { value: "2026-07-17" } }));
+    expect(toasts.join(" ")).not.toMatch(/re-pric/i);
+    expect(document.body.textContent).not.toMatch(/re-pric/i);
   });
 
   // Nothing is said on a round still being played: the status line under the
