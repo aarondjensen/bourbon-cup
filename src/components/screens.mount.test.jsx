@@ -472,6 +472,29 @@ describe("Scoring", () => {
       expect(t).not.toContain("MATCH");
     });
 
+    // ── The director, standing over somebody else's foursome ────────
+    // He is the one who fixes a wrong number, and he cannot fix what he
+    // cannot find. The card behind the button is whichever foursome the
+    // screen is pointed at — his own, or the one he walked to with the crown
+    // — never the sixteen-man match and never a different wave's.
+    it("gives whoever is on screen that foursome's card, not another's", () => {
+      const holeData = {};
+      for (const pid of pids) holeData[`${pid}_4`] = fullCard();
+      // A director on Team B, whose own wave is the second one off.
+      const r = render(<ScoreEntry {...scoring({
+        holeData, tRounds: [openRound],
+        user: { ...field[8], isDirector: true },
+      })} />);
+      fireEvent.click(r.getByText(/Complete — Sign Card|Full Scorecard/));
+      const t = r.baseElement.querySelector("[data-popup]").textContent;
+      for (const pid of waves[1]) {
+        expect(t).toContain(field[pids.indexOf(pid)].name);
+      }
+      // Not the wave that went off first, and not the other twelve.
+      expect(t).not.toContain("Player 1 /");
+      expect(t).not.toContain("Player 5");
+    });
+
     it("shows no running match-status glyphs under the holes", () => {
       const holeData = {};
       for (const pid of waves[0]) {

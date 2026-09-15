@@ -62,8 +62,12 @@ const card = ({ format = "singles", mode = "low_man", grossB = 5 } = {}) => {
 // the playing handicap the dots on it were allocated from ("VC18").
 const rows = (container, label) => [...container.querySelectorAll("div")]
   .filter(d => d.children.length > 2 && d.children[0].textContent.startsWith(label));
-const totalOf = (row) => row.children[row.children.length - 1].textContent.trim();
-const holesOf = (row) => [...row.children].slice(1, -1).map(c => c.textContent.trim());
+// A row is: label, nine hole cells, the NINE's total (OUT / IN), then the
+// eighteen-hole TOTAL column — which is drawn on both blocks and filled only
+// on the back. See sumCell in the component.
+const totalOf = (row) => row.children[row.children.length - 2].textContent.trim();
+const sum18Of = (row) => row.children[row.children.length - 1].textContent.trim();
+const holesOf = (row) => [...row.children].slice(1, -2).map(c => c.textContent.trim());
 
 describe("the NET row's total, under low_man", () => {
   it("states no total on either nine", () => {
@@ -109,5 +113,30 @@ describe("the rounds that keep their total", () => {
     const dots = rows(card({ format: "double_dot" }), "DOTS");
     expect(dots.length).toBeGreaterThan(0);
     expect(dots.some(r => totalOf(r) !== "")).toBe(true);
+  });
+});
+
+// ── The TOTAL column ────────────────────────────────────────────────
+// Drawn on both nines so the two blocks line up, filled only on the back:
+// there is no eighteen to total halfway through one, and a total under the
+// front nine would be that nine's own number said twice.
+describe("the eighteen-hole TOTAL column", () => {
+  it("is empty on the front block and filled on the back", () => {
+    const gross = rows(card({ mode: "full" }), "VC");
+    expect(gross).toHaveLength(2);      // one block each nine
+    expect(sum18Of(gross[0])).toBe("");
+    expect(sum18Of(gross[1])).toBe("90");   // eighteen 5s
+  });
+
+  it("gives both blocks the same number of columns", () => {
+    const gross = rows(card({ mode: "full" }), "VC");
+    expect(gross[0].children.length).toBe(gross[1].children.length);
+  });
+
+  // The rule the rest of this file is about reaches the new column too: a
+  // low-man total is not a score whichever column it is printed in.
+  it("states no eighteen-hole net under low_man either", () => {
+    const net = rows(card(), "NET");
+    net.forEach(r => expect(sum18Of(r)).toBe(""));
   });
 });

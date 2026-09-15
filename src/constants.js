@@ -33,6 +33,22 @@ export const TEAM_A = { id: "A", name: "Team Alpha", color: "#005c2b", accent: "
 export const TEAM_B = { id: "B", name: "Team Beta",  color: "#103c40", accent: "#46b4c0", glow: "rgba(70,180,192,0.2)", short: "β", logo: LOGO_TEAM_B };
 
 export const getTeam = (tid) => tid === "A" ? TEAM_A : TEAM_B;
+
+// True when a foursome is a team's OWN players — nobody rides with an
+// opponent. Team Best Ball is the only format that says so (see the note on
+// `groupsByTeam` below): a side of seven or eight plays as a side, so the
+// draw for it is that side split into waves, not a tee sheet of 2v2
+// foursomes. It is the ONE format question the draw asks that the scoring
+// engine never does — who walked with whom changes no result, it changes the
+// tee sheet.
+//
+// Here rather than in lib/groups, which is where it used to live and where
+// its callers still read it from: that module imports `editionDocId` from
+// firebase, and this is a bare FORMATS lookup that the Full Scorecard needs.
+// A component drawing a grid of numbers should not pull the database in to
+// ask which format it is.
+export const formatGroupsByTeam = (formatId) =>
+  !!FORMATS.find(f => f.id === formatId)?.groupsByTeam;
 export const oppTeam = (tid) => tid === "A" ? TEAM_B : TEAM_A;
 
 // ── Tournament identity ──

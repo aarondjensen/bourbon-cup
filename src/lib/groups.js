@@ -45,7 +45,7 @@
 // never how many there are or when they go off.
 
 import { editionDocId } from "../firebase";
-import { FORMATS } from "../constants";
+import { FORMATS, formatGroupsByTeam } from "../constants";
 
 export const GROUPS_COL = "bc_groups";
 export const groupsDocId = (round) => editionDocId(`bc_groups_r${round}`);
@@ -189,15 +189,12 @@ export const formatPerSide = (formatId) => FORMATS.find(f => f.id === formatId)?
 // and the director never has to think about it.
 export const isFoursomeFormat = (formatId) => formatPerSide(formatId) === 2;
 
-// True when a foursome is a team's OWN players — nobody rides with an
-// opponent. Team Best Ball is the only format that says so (see the note on
-// `groupsByTeam` in constants.js): a side of seven or eight plays as a side,
-// so the draw for it is that side split into waves, not a tee sheet of 2v2
-// foursomes. It is the ONE format question this module asks that the scoring
-// engine never does — who walked with whom changes no result, it changes the
-// tee sheet.
-export const formatGroupsByTeam = (formatId) =>
-  !!FORMATS.find(f => f.id === formatId)?.groupsByTeam;
+// Re-exported from constants, where it now lives. It is a bare FORMATS
+// lookup and it had no business sitting behind this module's `editionDocId`
+// import: the Full Scorecard asks it, and asking it from here dragged
+// firebase into a component that draws a grid of numbers. Every caller that
+// already reads it from `lib/groups` goes on working.
+export { formatGroupsByTeam };
 
 // A side split into as-even groups as its size allows, never more than a
 // foursome in one. Even rather than greedy on purpose: a side of five sliced
