@@ -89,13 +89,19 @@ const props = (over = {}) => ({
   ...over,
 });
 
-// The Formats tab, mounted, with every write it makes collected.
+// The Formats tab, mounted, with every write and every toast it makes
+// collected.
 const roundsTab = (roundLocks = {}) => {
   const writes = [];
-  const { container } = render(<AdminView {...props({ roundLocks, onSetRound: async (r) => { writes.push(r); } })} />);
+  const toasts = [];
+  const { container } = render(<AdminView {...props({
+    roundLocks,
+    onSetRound: async (r) => { writes.push(r); },
+    notify: (msg) => { toasts.push(msg); },
+  })} />);
   const tab = [...container.querySelectorAll("button")].find(b => /formats/i.test(b.textContent || ""));
   fireEvent.click(tab);
-  return { container, writes };
+  return { container, writes, toasts };
 };
 
 // The box beside a label on the POINTS AT STAKE row.
@@ -315,5 +321,43 @@ describe("opening a round", () => {
   it("writes nothing on its own", async () => {
     const { writes } = await settle(() => roundsTab({ 1: { locked: true, final: true } }));
     expect(writes).toEqual([]);
+  });
+});
+
+// ── The toast on a final round says what actually happened ──────────
+// A final round's save toasts, because the auto-save status line is four
+// sections below the fold and the edit that usually reaches a finished round
+// moves a leaderboard sixteen men have already seen.
+//
+// It used to say "re-priced — the leaderboard has moved" for EVERY save,
+// including the two a final round still takes that move no points at all: the
+// date and the tee time. Correcting a date and being told the standings just
+// shifted is alarming and untrue — and it spends the sentence that has to
+// carry weight on the day it is real.
+describe("saving a final round", () => {
+  const dateBox = (container) => container.querySelector('input[type="date"]');
+  const lastToast = (toasts) => toasts.at(-1) || "";
+
+  it("says re-priced when a point value moved", async () => {
+    const { container, toasts } = roundsTab({ 1: { locked: true, final: true } });
+    await editPot(container, "OVR", "2");
+    expect(lastToast(toasts)).toMatch(/re-priced — the leaderboard has moved/);
+  });
+
+  it("does not say re-priced when only the date moved", async () => {
+    const { container, writes, toasts } = roundsTab({ 1: { locked: true, final: true } });
+    await settle(() => fireEvent.change(dateBox(container), { target: { value: "2026-07-17" } }));
+    // The edit landed — this is about the wording, not a new refusal.
+    expect(writes.at(-1).date).toBe("2026-07-17");
+    expect(lastToast(toasts)).toBe("Round 1 saved");
+  });
+
+  // Nothing is said on a round still being played: the status line under the
+  // form is the answer there, and it is enough.
+  it("stays quiet on a round that is not final", async () => {
+    const { container, writes, toasts } = roundsTab();
+    await settle(() => fireEvent.change(dateBox(container), { target: { value: "2026-07-17" } }));
+    expect(writes.at(-1).date).toBe("2026-07-17");
+    expect(toasts).toEqual([]);
   });
 });
