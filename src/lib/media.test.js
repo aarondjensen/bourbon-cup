@@ -5,6 +5,7 @@ import {
   resizePlan, squareCropPlan, validateSource,
   takenTime, sortByTaken, canDelete, saveFilename,
   photoUploadsAllowed, uploadsDisabledReason, ENCODINGS, MAX_UPLOAD_BYTES,
+  photoCredit, shortName,
 } from "./media";
 
 describe("mediaDocId / paths", () => {
@@ -327,5 +328,50 @@ describe("constants the rest of the app shares", () => {
 
   it("keeps the thumbnail well under the display size", () => {
     expect(THUMB_EDGE).toBeLessThan(DISPLAY_EDGE);
+  });
+});
+
+describe("photoCredit", () => {
+  it("uses the roster name when the account has one in this edition", () => {
+    expect(photoCredit({ rosterName: "Aaron J", accountName: "Aaron Jensen" })).toBe("Aaron J");
+  });
+
+  // The case this exists for: every past cup was imported with no accounts on
+  // its roster, so the app is a spectator there and has no roster name to use.
+  it("falls back to the account's name when there is no roster row", () => {
+    expect(photoCredit({ accountName: "Aaron Jensen" })).toBe("Aaron J");
+  });
+
+  it("never lands the spectator's placeholder on a photo", () => {
+    // App.jsx passes the LINKED roster row, which is undefined for a
+    // spectator — the word "Viewing" is never one of these two inputs.
+    expect(photoCredit({ rosterName: undefined, accountName: "Paul Wysocki" })).toBe("Paul W");
+  });
+
+  it("is empty rather than a placeholder when neither is known", () => {
+    // Apple hands back no name unless the user shares it. PhotosView draws an
+    // em dash for this, which is honest.
+    expect(photoCredit({})).toBe("");
+    expect(photoCredit()).toBe("");
+  });
+});
+
+describe("shortName", () => {
+  it("is first name and last initial, the way every other screen writes it", () => {
+    expect(shortName("Tim Connelly")).toBe("Tim C");
+  });
+
+  it("takes the LAST word's initial, not the middle one", () => {
+    expect(shortName("Ben Thomas Telly")).toBe("Ben T");
+  });
+
+  it("leaves a single name alone", () => {
+    expect(shortName("Weezy")).toBe("Weezy");
+  });
+
+  it("survives extra whitespace and nothing at all", () => {
+    expect(shortName("  Jim   Hile  ")).toBe("Jim H");
+    expect(shortName("")).toBe("");
+    expect(shortName(null)).toBe("");
   });
 });

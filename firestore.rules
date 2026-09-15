@@ -641,17 +641,39 @@ service cloud.firestore {
              .data.get('uploadsDisabled', false) == false;
     }
 
+    // ── A PHOTO IS NOT TOURNAMENT DATA ────────────────────────────
+    // This is the one member write in the project that is NOT gated on
+    // canWriteEdition(), and the difference is exactly one clause: the lock.
+    //
+    // The lock freezes a RESULT. It exists so that a score, a signature or a
+    // bet in a cup that is over cannot move — see editionOpen() above and
+    // src/lib/editionLock.js. A photo of the 12th at Boyne in 2019 is none of
+    // those: it changes no score, no card, no match and no total. It is the
+    // album of a trip sixteen men took, and they go on finding shots of it on
+    // their phones for years — which is precisely the window the lock was
+    // shutting, for the one thing it was never meant to shut. Uploading to a
+    // finished year came back as an opaque permission error.
+    //
+    // Everything else canWriteEdition() asks still holds, which is why this is
+    // spelled out rather than dropped to isMember(). A demo-only membership
+    // stays confined to demo editions by the same both-ends check it gets
+    // everywhere else, so a store reviewer's photo cannot land in the cup's
+    // library.
+    function canPostMedia() {
+      return isMember() && (!demoOnlyMember() || bothEndsDemo());
+    }
+
     match /bc_media/{doc} {
       allow read: if isOpen();
-      allow create: if canWriteEdition()
+      allow create: if canPostMedia()
                     && photoUploadsOn()
                     && request.resource.data.uploadedBy == request.auth.uid;
       allow update: if isDirector()
-                    || (canWriteEdition()
+                    || (canPostMedia()
                         && resource.data.uploadedBy == request.auth.uid
                         && request.resource.data.uploadedBy == resource.data.uploadedBy);
       allow delete: if isDirector()
-                    || (canWriteEdition()
+                    || (canPostMedia()
                         && resource.data.uploadedBy == request.auth.uid
                         && resource.data.host == 'storage');
     }

@@ -72,7 +72,7 @@ const AdminView = lazy(() =>
 // that never opens the tab downloads neither. See lib/useArchive for why the
 // history is a static asset rather than ten Firestore subscriptions.
 const DataView = lazy(() => import("./components/DataView"));
-import { photoUploadsAllowed, uploadsDisabledReason, CONFIG_COL, PHOTOS_CONFIG_ID } from "./lib/media";
+import { photoUploadsAllowed, uploadsDisabledReason, photoCredit, CONFIG_COL, PHOTOS_CONFIG_ID } from "./lib/media";
 import { REPORTS_COL, buildReport, reportsByMedia } from "./lib/mediaReports";
 import { initForegroundNotifications, initNotificationTaps, syncAppBadge } from "./lib/notifications";
 import { tapFeedback, commitFeedback, applyNativeChrome } from "./lib/platform";
@@ -5775,7 +5775,13 @@ export default function App() {
       file,
       tid: getActiveTournamentId(),
       uid,
-      uploaderName: user?.name || "",
+      // NOT `user.name`. In a past cup nobody is linked to the imported
+      // roster, so that name is the spectator's "Viewing" — see photoCredit,
+      // which falls back to the account's own name in exactly that case.
+      uploaderName: photoCredit({
+        rosterName: linkedPlayer(tPlayers, uid)?.name,
+        accountName: authUser?.displayName,
+      }),
       // Passed straight through to the tile the gallery already drew for this
       // photo. It is the screen's own progress, so the screen owns what it
       // looks like; this layer only forwards it.
@@ -6949,11 +6955,13 @@ export default function App() {
         {view === "photos" && (
           /* `canPost` is membership, not a role: everybody who has been through
              the password screen posts photos, the same way everybody scores.
-             The one identity held back is the spectator — somebody who opened a
-             finished year they are not in. The rules would take that write, since
-             they only ask for a membership; not offering it is the same judgement
-             the claim screen makes, that a year you are only looking at is not
-             one you add to. */
+             The SPECTATOR used to be held back here, and that was the wrong
+             read of what a spectator is. It is not "somebody who wasn't on the
+             trip" — the ten imported cups carry a roster of sixteen with no
+             account behind any of them, so EVERY man is a spectator in the
+             year he actually played, and the album of 2019 was the one album
+             nobody could add to. A guest still cannot: no uid, and the rules
+             would refuse the write. */
           <Suspense fallback={<LoadingPanel label="Photos" />}>
           <PhotosView
             items={media}
@@ -6965,7 +6973,7 @@ export default function App() {
                is no longer edition-scoped, so `is_demo` cannot contain it. A
                demo administrator still deletes their own, like any member. */
             isDirector={isDirectorUser}
-            canPost={!!authUser?.uid && user?.player_id !== SPECTATOR_ID && photoUploadsAllowed(photoConfig)}
+            canPost={!!authUser?.uid && photoUploadsAllowed(photoConfig)}
             uploadsBlockedReason={photoUploadsAllowed(photoConfig) ? "" : uploadsDisabledReason(photoConfig)}
             onUpload={onUploadPhoto}
             onDelete={onDeletePhoto}
