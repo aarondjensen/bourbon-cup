@@ -88,7 +88,7 @@ import {
 import { playerCaptainSide, captainForSide } from "../lib/captains";
 import {
   DEFAULT_TEE_INTERVAL,
-  TEE_SLOTS,
+  TEE_SLOTS, teeSlotCount,
   formatTeeTime,
   matchPlayers,
   parseTeeTime,
@@ -2365,10 +2365,16 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
               const teeTimes = roundTeeTime ? roundTeeTime.split("|") : ["","","",""];
               // These boxes ARE the round's groups — G1 is who goes off first,
               // and the Matches tab fills them rather than inventing groups of
-              // its own (see lib/groups.js). Four covers a sixteen-player
-              // field; a round that already carries more keeps every one of
-              // them, and gets a box for each.
-              const slots = Math.max(teeTimes.length, TEE_SLOTS);
+              // its own (see lib/groups.js).
+              //
+              // teeSlotCount, not a local max, because it is the one answer to
+              // "how many tee times has this round got" and the Matches tab
+              // draws its cards from it. Computed here it drifted: this box
+              // counted only the times STORED, so a round whose draw had spread
+              // onto a fifth tee time showed four boxes and a fifth card, and
+              // the fifth time could not be typed at all.
+              const stored = groupsFromDb?.[editRound] || [];
+              const slots = teeSlotCount({ tr: { tee_time: roundTeeTime }, groups: stored });
               // The spread to keep when the FIRST tee moves, measured from the
               // later slots. It cannot be measured from times[1] - times[0]:
               // the box writes through on every keystroke, so by the time this
@@ -2402,12 +2408,54 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                 }
                 setRoundTeeTime(times.join("|"));
               };
-              const tt = roundTeeTime ? roundTeeTime.split("|") : ["","","",""];
+              const tt = roundTeeTime ? roundTeeTime.split("|") : ["", "", "", ""];
+              // ── A fifth tee time, and a sixth ──
+              // The sheet was capped at four with nothing to say so: `slots`
+              // could only ever grow from times already STORED, and the only
+              // writer wrote exactly `slots` of them, so the string could never
+              // get longer. Four is the Bourbon Cup's field and will be for a
+              // while — but a round that needs five had no way to say it, and
+              // the Matches tab's own note about an eighteen-player field
+              // described a sheet nobody could actually build.
+              //
+              // The new slot opens with the time the spread implies, so adding
+              // one is one tap rather than one tap and a number.
+              const addSlot = () => {
+                const times = [...tt];
+                while (times.length < slots) times.push("");
+                const t0 = parseTeeTime(times[0]);
+                times.push(t0 == null ? "" : formatTeeTime(t0 + laterSpread(times) * times.length));
+                setRoundTeeTime(times.join("|"));
+              };
+              // Only ever the LAST one, and never one somebody is standing on:
+              // a slot's identity is its POSITION, so removing a middle one
+              // would shift every later group onto the wrong time. An occupied
+              // last slot says so rather than being dropped and coming
+              // straight back — teeSlotCount floors the count at the groups
+              // that exist, which is what stops a removed tee time taking four
+              // men off the sheet with it.
+              const canRemoveSlot = slots > TEE_SLOTS;
+              const removeSlot = () => {
+                if (!canRemoveSlot) return;
+                if ((stored[slots - 1] || []).length) {
+                  notify(`The last tee time has players on it — move them first`, "error");
+                  return;
+                }
+                setRoundTeeTime(tt.slice(0, slots - 1).join("|"));
+              };
+              const stepBtn = {
+                ...InputStyle, marginBottom: 0, flexShrink: 0, width: 26, padding: "2px 0",
+                fontSize: FS.lead, fontWeight: 800, textAlign: "center", cursor: "pointer",
+                background: "transparent", color: BC.gold, fontFamily: FONT, lineHeight: 1.1,
+              };
               return (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                // Wraps, so a fifth box drops under the first rather than
+                // squeezing four already-scaled inputs down to nothing. At the
+                // four this event actually plays it is the row it always was.
+                <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
                   <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.gold, flexShrink: 0 }}>TEE TIMES</div>
                   {Array.from({ length: slots }, (_, i) => (
-                    <div key={i} style={{ flex: 1, display: "flex", alignItems: "center", gap: 3 }}>
+                    <div key={i} style={{ flex: "1 1 54px", maxWidth: 88, display: "flex", alignItems: "center", gap: 3, minWidth: 0 }}>
                       <span style={{ fontSize: FS.label, color: BC.t3, flexShrink: 0, fontWeight: 600 }}>G{i + 1}</span>
                       <input
                         value={stripAMPM(tt[i] || "")}
@@ -2420,6 +2468,10 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                       />
                     </div>
                   ))}
+                  {canRemoveSlot && (
+                    <button type="button" onClick={removeSlot} aria-label="Remove the last tee time" style={stepBtn}>−</button>
+                  )}
+                  <button type="button" onClick={addSlot} aria-label="Add a tee time" style={stepBtn}>+</button>
                 </div>
               );
             })()}

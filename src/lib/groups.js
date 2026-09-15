@@ -361,6 +361,28 @@ export function assignPlayersToGroup({ groups, pids, gi }) {
   return next;
 }
 
+// ── Two directors on two devices ───────────────────────────────────
+// One round's groups are ONE document written whole, so two people editing
+// the same sheet is last-write-wins: A drags a match, B drags another against
+// a sheet that predates A's write, and A's move is gone. Firestore has no
+// compare-and-set outside a transaction, and a transaction is exactly the
+// wrong tool here — `runTransaction` needs a server round trip and REJECTS
+// with no signal, which would take the whole tee sheet down on the golf
+// course to protect against something that only happens indoors.
+//
+// So the loss is not prevented; it is made SAYABLE. Every write is stamped
+// with the session that made it, and a snapshot carrying somebody else's stamp
+// for a sheet this client has been editing is the one moment worth speaking
+// up: the draw on screen is about to change under the director's hand, and
+// without this the only symptom is his last drag quietly undoing itself.
+//
+// `edited` is what keeps it quiet — a director who has not touched this
+// round's sheet this session is not being told about somebody working on it,
+// because nothing of his was at stake. `lastWriter` is what keeps it to once
+// per handover rather than once per snapshot.
+export const isForeignGroupEdit = ({ writer, clientId, lastWriter, edited }) =>
+  !!writer && !!edited && writer !== clientId && writer !== lastWriter;
+
 // ── Correcting a pairing ───────────────────────────────────────────
 // Trade two players' places in the draw. THE fix-up this tab was missing:
 // a match could be created and it could be deleted, and there was nothing in
