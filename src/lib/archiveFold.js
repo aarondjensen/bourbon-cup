@@ -30,6 +30,8 @@
 // is not a candidate for closest-ever or biggest-blowout, and a week that is
 // two rounds old is not somebody's best week.
 
+import { formatOwnBall } from "../constants";
+
 const sum = (xs) => xs.reduce((a, b) => a + b, 0);
 const byNum = (f) => (a, b) => f(a) - f(b);
 const pairKey = (a, b) => [a, b].sort().join("|");
@@ -223,11 +225,17 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
     // Ranked on to par, not on gross: a 78 at a par 71 is not the better round
     // and every course here is a different one — thirty-six of them, none
     // played twice.
-    if (!r.best || c.tp < r.best.toPar || (c.tp === r.best.toPar && c.g < r.best.gross)) r.best = shot;
+    //
+    // A shared ball is not his best round, by the same rule that keeps it out
+    // of LOW ROUNDS (see formatOwnBall). Both halves have to agree or the tab
+    // contradicts itself on one screen: a player's card reading "Best round —
+    // 62" above an all-time list whose lowest is his 64.
+    const own = formatOwnBall(meta.format);
+    if (own && (!r.best || c.tp < r.best.toPar || (c.tp === r.best.toPar && c.g < r.best.gross))) r.best = shot;
     const y = yearRow(c.p, c.year);
     if (y) {
       y.rounds += 1; y.toPar += c.tp;
-      if (!y.best || c.tp < y.best.toPar) y.best = shot;
+      if (own && (!y.best || c.tp < y.best.toPar)) y.best = shot;
     }
     // Clutch, off the status at the turn. Down three with nine to play and
     // won it is a fact nobody could recover from a final margin, which is why
@@ -308,7 +316,12 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
   played.forEach((r) => r.byYear.forEach((y) => {
     if (y.rounds >= 4) weeks.push({ id: r.id, name: r.name, year: y.year, toPar: y.toPar, rounds: y.rounds });
   }));
+  // A low round is a round somebody SHOT, so a card is only a candidate when
+  // he played his own ball from the tee to the hole — see formatOwnBall. The
+  // shared-ball days are still everywhere else on this tab: they count towards
+  // a career, a week and the course passport, where the side is the subject.
   const rankedCards = cards
+    .filter((c) => formatOwnBall(roundIx.get(roundKey(c))?.format))
     .map((c) => ({ ...c, name: named(c.p), course: roundIx.get(roundKey(c))?.course || "" }))
     .sort(byNum((c) => c.tp));
 

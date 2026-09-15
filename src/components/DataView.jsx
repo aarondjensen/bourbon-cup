@@ -187,8 +187,6 @@ function YearRow({ e, live, teams, open, onToggle }) {
 // year, computed over every year including the one being played.
 function CupRecords({ data }) {
   const r = data.records;
-  const never = data.editions.filter((e) => e.complete).length > 0
-    && data.editions.every((e) => e.clinchedAfter == null);
   return (
     <Section label="Cup records" note={`${r.cupsPlayed} FINISHED`}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: r.hardest ? 12 : 0 }}>
@@ -200,15 +198,6 @@ function CupRecords({ data }) {
       {!!r.halved.length && (
         <div style={{ fontSize: FS.small, color: BC.t2, marginBottom: 6 }}>
           🏆 Halved: {r.halved.map((e) => e.year).join(", ")}
-        </div>
-      )}
-      {never && (
-        // True of all ten so far, and worth saying out loud: Round 4 is worth
-        // more than the first three put together, so no lead has ever been
-        // safe going into Sunday. If a cup is ever clinched early this line
-        // disappears on its own rather than becoming a lie.
-        <div style={{ fontSize: FS.small, color: BC.t2 }}>
-          No cup has ever been decided before the final round.
         </div>
       )}
     </Section>
@@ -473,7 +462,10 @@ function PlayerRecords({ data }) {
 
   return (
     <Section label="Records" note="ALL YEARS">
-      {list("LOW ROUNDS", r.lowRounds, (c) => (
+      {/* OWN BALL is the whole qualification, and it belongs on the label:
+          without it the list silently drops a scramble 62 that two men still
+          talk about, and nothing on the screen says why. */}
+      {list("LOW ROUNDS · OWN BALL", r.lowRounds, (c) => (
         <>
           <span style={{ flex: 1, minWidth: 0, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</span>
           <span style={{ fontWeight: 800, color: BC.amberInk }}>{c.g}</span>
