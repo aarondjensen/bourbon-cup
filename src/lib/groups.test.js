@@ -4,7 +4,7 @@
 // noticing, because who rode with whom changes no score.
 import { describe, it, expect } from "vitest";
 import {
-  splitEvenly, autoBuildGroups, formatGroupsByTeam, isFoursomeFormat, groupIssues, hasGroupIssues, sidesInRound, GROUP_TARGET, assignPlayersToGroup, groupSizeAfter, groupFitsAfter, scoringUnits, unitForPlayer, readableUnits, swapPlayersInDraw,
+  splitEvenly, autoBuildGroups, formatGroupsByTeam, isFoursomeFormat, groupIssues, hasGroupIssues, sidesInRound, GROUP_TARGET, assignPlayersToGroup, groupSizeAfter, groupFitsAfter, scoringUnits, unitForPlayer, readableUnits, swapPlayersInDraw, isForeignGroupEdit, teeSlotCount, TEE_SLOTS,
 } from "./groups";
 
 const A8 = ["a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8"];
@@ -634,5 +634,62 @@ describe("swapPlayersInDraw", () => {
       expect(out.matches).toEqual([]);
       expect(out.groups).toEqual(before.groups);
     });
+  });
+});
+
+
+// ── Two directors on two devices ────────────────────────────────────
+// A round's groups are one document written whole, so a concurrent edit is
+// last-write-wins and the loser's drag undoes itself on screen with nothing
+// said. It is not prevented — a transaction would reject with no signal and
+// take the tee sheet down on a golf course — so what is pinned here is that
+// it gets SAID, and that it stays quiet the rest of the time.
+describe("isForeignGroupEdit", () => {
+  const base = { writer: "them", clientId: "me", lastWriter: "me", edited: true };
+
+  it("speaks up when somebody else writes a sheet this session has edited", () => {
+    expect(isForeignGroupEdit(base)).toBe(true);
+  });
+
+  it("says nothing about this session's own writes", () => {
+    expect(isForeignGroupEdit({ ...base, writer: "me" })).toBe(false);
+  });
+
+  it("says nothing to a director who has not touched this round", () => {
+    // Somebody else building a draw is not news until something of yours is
+    // at stake.
+    expect(isForeignGroupEdit({ ...base, edited: false })).toBe(false);
+  });
+
+  it("says it once per handover, not once per snapshot", () => {
+    expect(isForeignGroupEdit({ ...base, lastWriter: "them" })).toBe(false);
+  });
+
+  it("says nothing about a document written before the stamp existed", () => {
+    [undefined, null, ""].forEach(writer => {
+      expect(isForeignGroupEdit({ ...base, writer })).toBe(false);
+    });
+  });
+});
+
+// ── A fifth tee time ────────────────────────────────────────────────
+describe("teeSlotCount", () => {
+  it("floors at the four the Formats tab always writes", () => {
+    expect(teeSlotCount({ tr: { tee_time: "" }, groups: [] })).toBe(TEE_SLOTS);
+    expect(teeSlotCount({ tr: { tee_time: "8:00|8:10" }, groups: [] })).toBe(TEE_SLOTS);
+  });
+
+  it("grows with the times a director has typed", () => {
+    expect(teeSlotCount({ tr: { tee_time: "8:00|8:10|8:20|8:30|8:40" }, groups: [] })).toBe(5);
+    expect(teeSlotCount({ tr: { tee_time: "8:00|8:10|8:20|8:30|8:40|8:50" }, groups: [] })).toBe(6);
+  });
+
+  it("never drops below the groups that already exist", () => {
+    // A tee time removed out from under an occupied wave would take four men
+    // off the sheet with it.
+    expect(teeSlotCount({
+      tr: { tee_time: "8:00|8:10|8:20|8:30" },
+      groups: [[], [], [], [], ["a1", "a2", "a3", "a4"]],
+    })).toBe(5);
   });
 });

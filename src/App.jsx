@@ -108,7 +108,7 @@ import {
   teeTimeForMatch, parseTeeTime, formatTeeTime, DEFAULT_TEE_INTERVAL, TEE_SLOTS,
   roundPlaySetup, orderMatchesForRound, numberMatches, groupIndexForMatch,
   scoringUnits, unitForPlayer, readableUnits, teeTimeList, expandTeeTimes, stripAMPM,
-  formatGroupsByTeam, formatPerSide, sidesInRound,
+  formatGroupsByTeam, formatPerSide, sidesInRound, isForeignGroupEdit,
 } from "./lib/groups";
 import { firstTeeAt } from "./lib/countdown";
 import { groupKey, tagAheadOfPlay, resolvePin, OVERRIDE_KEY } from "./lib/ctp";
@@ -4294,6 +4294,12 @@ function SlideMenu({ open, onClose, onNavigate, user, view, alerts, onEditions, 
 
 
 // ── Main App ──
+// This browser session, for the one write in the project two people can make
+// at the same time (see isForeignGroupEdit). Not an identity and not stored
+// anywhere it outlives the tab: it only has to be different from whatever the
+// other phone is stamping.
+const CLIENT_ID = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+
 export default function App() {
   // ── Who is using the app ──────────────────────────────────────────
   // Three layers, resolving in this order on a cold start:
@@ -4785,6 +4791,13 @@ export default function App() {
   // over, which is exactly the kind of staleness this feature exists to
   // prevent. Refs are always current.
   const roundLocksRef = useRef({});
+  // The rounds whose tee sheet THIS session has written, and who wrote each
+  // one last. Both only feed the "changed on another device" notice — see
+  // isForeignGroupEdit — so they are refs: nothing on screen is drawn from
+  // them, and a set that re-rendered the app on every write would be worse
+  // than the problem it reports.
+  const myGroupEdits = useRef(new Set());
+  const lastGroupWriter = useRef({});
   // Same reasoning for the signature rows: attesting is read-modify-write
   // against the CURRENT document (append this player to `attested_by`), and
   // a useCallback that closed over the state array would append to whatever
@@ -5157,7 +5170,23 @@ export default function App() {
     }));
     unsubs.push(db.subscribe(GROUPS_COL, f, rows => {
       const data = {};
-      rows.forEach(r => { if (r.round_number) data[r.round_number] = decodeGroups(r.groups); });
+      rows.forEach(r => {
+        if (!r.round_number) return;
+        data[r.round_number] = decodeGroups(r.groups);
+        // Somebody else's edit of a sheet this session has been editing. The
+        // draw on screen is about to change under the director's hand; saying
+        // so is the difference between that and his last drag appearing to
+        // undo itself. See isForeignGroupEdit.
+        if (isForeignGroupEdit({
+          writer: r.updated_by,
+          clientId: CLIENT_ID,
+          lastWriter: lastGroupWriter.current[r.round_number],
+          edited: myGroupEdits.current.has(r.round_number),
+        })) {
+          notify(`Round ${r.round_number}'s tee sheet was changed on another device`, "error");
+        }
+        if (r.updated_by) lastGroupWriter.current[r.round_number] = r.updated_by;
+      });
       setGroupsData(data);
     }));
     unsubs.push(db.subscribe(ROUND_LOCKS_COL, f, rows => {
@@ -5227,7 +5256,11 @@ export default function App() {
     // the index of tournaments) so there is no filter to apply.
     unsubs.push(db.subscribe(EDITIONS_COL, [], rows => setEditionRows(rows || [])));
     return () => unsubs.forEach(u => u());
-  }, []);
+    // `notify` is a useCallback with no deps of its own, so naming it here is
+    // honest about what the block reads without ever re-running it — this
+    // effect opens every subscription in the app and must not be torn down
+    // and rebuilt by a dependency that changes.
+  }, [notify]);
 
   // ── The photo index, subscribed only once somebody opens Photos ──
   // Deliberately NOT in the block above. Every other subscription there is
@@ -6262,13 +6295,23 @@ export default function App() {
   //
   // Groups are written whole — the document is one round's list, and a
   // partial update of an array has no meaning here.
-  const onSaveGroups = useCallback((round, groups) => trackWrite(
-    db.upsert(GROUPS_COL, {
-      id: groupsDocId(round), tournament_id: TOURNAMENT_ID, round_number: round,
-      groups: encodeGroups(groups),
-    }, { loud: true }),
-    `Round ${round}'s tee sheet didn't save`,
-  ), [trackWrite]);
+  const onSaveGroups = useCallback((round, groups) => {
+    // Remembered before the write, not after: the snapshot can come back
+    // before an await would, and a round this client has edited is what
+    // decides whether somebody else's edit of it is worth mentioning.
+    myGroupEdits.current.add(round);
+    return trackWrite(
+      db.upsert(GROUPS_COL, {
+        id: groupsDocId(round), tournament_id: TOURNAMENT_ID, round_number: round,
+        groups: encodeGroups(groups),
+        // Additive, and read by nothing that existed before them — an older
+        // bundle goes on reading `groups` and ignoring both.
+        updated_by: CLIENT_ID,
+        updated_at: Date.now(),
+      }, { loud: true }),
+      `Round ${round}'s tee sheet didn't save`,
+    );
+  }, [trackWrite]);
   const onSetMatch = useCallback((m) => trackWrite(
     m._delete
       ? db.delete("bc_matches", m.id, { loud: true })

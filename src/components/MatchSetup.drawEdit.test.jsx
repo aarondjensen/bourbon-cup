@@ -323,3 +323,49 @@ describe("a side is the size the format says", () => {
     expect(p.notify.mock.calls[0]).toEqual([expect.stringMatching(/A tee time holds 4/), "error"]);
   });
 });
+
+
+describe("a fifth tee time is a real tee time", () => {
+  // The Formats tab can write one now (AdminView.teeSlots.test.jsx). This is
+  // the other half: that the draw actually has somewhere to put a fifth
+  // foursome. It did not — `firstOpenGroup` returned -1 over four full slots
+  // and the drop target refused, so a fifth match could be created and then
+  // never placed.
+  const five = (over = {}) => props({
+    tRounds: [{ round_number: 1, format: "best_ball", tee_time: "8:00|8:10|8:20|8:30|8:40", course_id: "c1" }],
+    ...over,
+  });
+
+  it("draws a card for it", () => {
+    render(<MatchSetup {...five()} />);
+    ["8:00", "8:10", "8:20", "8:30", "8:40"].forEach(t => expect(screen.getByText(t)).toBeTruthy());
+  });
+
+  it("takes the fifth foursome a four-slot sheet had nowhere to put", async () => {
+    const full = [["A1", "B1", "A2", "B2"], ["A3", "B3", "A4", "B4"], ["A5", "B5", "A6", "B6"], ["A7", "B7", "A8", "B8"]];
+    // Sixteen men are already out; the next pairing is the last four, which
+    // only a fifth tee time can hold.
+    const roster20 = [...roster,
+      { player_id: "A9", name: "APlayer9", team: "A", handicap_index: 10 },
+      { player_id: "A10", name: "APlayer10", team: "A", handicap_index: 10 },
+      { player_id: "B9", name: "BPlayer9", team: "B", handicap_index: 10 },
+      { player_id: "B10", name: "BPlayer10", team: "B", handicap_index: 10 }];
+    const p = five({
+      tPlayers: roster20,
+      matches: [
+        { id: "x1", round: 1, matchNumber: 1, teamA: ["A1", "A2"], teamB: ["B1", "B2"] },
+        { id: "x2", round: 1, matchNumber: 2, teamA: ["A3", "A4"], teamB: ["B3", "B4"] },
+        { id: "x3", round: 1, matchNumber: 3, teamA: ["A5", "A6"], teamB: ["B5", "B6"] },
+        { id: "x4", round: 1, matchNumber: 4, teamA: ["A7", "A8"], teamB: ["B7", "B8"] },
+      ],
+      storedGroups: full,
+    });
+    render(<MatchSetup {...p} />);
+    ["APlayer9", "APlayer10", "BPlayer9", "BPlayer10"]
+      .forEach(n => fireEvent.click(screen.getByText(n)));
+    fireEvent.click(screen.getByText(/^Create Match/));
+    await waitFor(() => expect(p.onSaveGroups).toHaveBeenCalled());
+    expect(p.onSaveGroups.mock.calls[0][1][4]).toEqual(["A9", "B9", "A10", "B10"]);
+    expect(p.notify.mock.calls[0]).toEqual([expect.stringMatching(/off 8:40/), "success"]);
+  });
+});
