@@ -37,7 +37,7 @@ import {
   stripAMPM, teeSlotCount, padGroups, trimGroups, firstOpenGroup, groupHasRoom,
   matchPlayers, matchSeq, formatPerSide, isFoursomeFormat, formatGroupsByTeam,
   assignPlayersToGroup, groupFitsAfter,
-  groupIndexForMatch, assignMatchToGroup, swapMatchIntoGroup,
+  groupIndexForMatch, assignMatchToGroup, swapMatchIntoGroup, swapPlayersInDraw,
   groupIssues, hasGroupIssues, sidesInRound,
   orderMatchesForRound, canonicalMatchOrder,
 } from "../lib/groups";
@@ -79,10 +79,25 @@ export function MatchSetup({
   // drop. Two taps beats drag-and-drop on a phone, and it is reversible —
   // tapping the lifted chip again puts them back down.
   const [held, setHeld] = useState(null);
+  // The player lifted for a SWAP — a pid, from a match row or from a pool.
+  // Tap a second name on the same side and the two trade places (see
+  // swapPlayersInDraw). Distinct from `held` above, which lifts a player to
+  // move him between TEE TIMES on a team format; this one changes who is
+  // playing whom.
+  const [heldName, setHeldName] = useState(null);
   // The match being dragged to another tee time: { id, over }, where `over` is
   // the group slot under the finger. Committed on pointerup — nothing is
   // written to Firestore while a finger is still down.
   const [drag, setDrag] = useState(null);
+  // A match lifted by TAPPING its grip rather than dragging it. Tap, scroll to
+  // the tee time you want, tap it — which is the only way to reach a tee card
+  // that is not on screen when the drag starts, because a drag cannot scroll
+  // the page underneath itself (see moveDrag's autoscroll, which only covers
+  // the part of the sheet within a flick of the finger).
+  const [heldMatch, setHeldMatch] = useState(null);
+  // Whether the current pointer gesture has actually travelled. A press that
+  // never moves is a TAP, and a tap lifts rather than re-times.
+  const gesture = useRef(null);
   // Live tee-time section rects, read during a drag to work out which one the
   // finger is over. Kept in a ref rather than state so measuring never
   // triggers a render.
@@ -220,6 +235,12 @@ export function MatchSetup({
     if (gi >= 0 && gi < byGroup.length) byGroup[gi].push(m); else loose.push(m);
   });
 
+  // The match a TAP has lifted, and the tee time it is sitting on. Resolved
+  // once here rather than per card: every card asks the same two questions of
+  // it, and one of them walks the whole groups list.
+  const liftedMatch = heldMatch ? rndMatches.find(m => m.id === heldMatch) : null;
+  const liftedFrom = liftedMatch ? groupIndexForMatch({ groups, match: liftedMatch }) : -1;
+
   // What to call a group in prose. Its tee time, because that is now the only
   // name it carries on screen — the G-numbers are gone, so a message that said
   // "G3" would be pointing at a label the director cannot see. Falls back to
@@ -255,7 +276,19 @@ export function MatchSetup({
   // shrink back to its tee times without a "remove group" button.
   const saveGroups = (next) => onSaveGroups(round, trimGroups(next));
 
+  // The one sentence a final round answers every draw edit with. It was said
+  // by four handlers and not by the three below, and the three below are the
+  // ones a TEAM format reaches — so the closing round, the one whose draw is
+  // most plainly part of its result, printed "its draw is locked to its
+  // result" above three live controls.
+  const blockedByFinal = () => {
+    if (!roundFinal) return false;
+    notify(`Round ${round} is final — reopen it on Scoring to change the draw`, "error");
+    return true;
+  };
+
   const buildGroups = async () => {
+    if (blockedByFinal()) return;
     if (!rndMatches.length) { notify("Create the round's matches first", "error"); return; }
     if (storedGroups?.length && !(await confirm({
       title: "Rebuild groups?",
@@ -272,6 +305,7 @@ export function MatchSetup({
   // gi < 0 drops the held player out of every group (back to unassigned).
   const moveHeldTo = (gi) => {
     if (!held) return;
+    if (blockedByFinal()) return;
     const next = groups.map(g => g.filter(p => p !== held));
     if (gi >= 0) next[gi] = [...next[gi], held];
     saveGroups(next);
@@ -295,6 +329,17 @@ export function MatchSetup({
   // rather than leaning on haptics to say what is happening.
   const buzz = (ms) => { try { navigator.vibrate?.(ms); } catch { /* unsupported */ } };
 
+  // How far a finger may travel and still count as a tap rather than a drag.
+  // Generous, because it is measured against a thumb on a moving golf cart
+  // path: under this the gesture LIFTS the match, over it the gesture re-times
+  // it, and getting that boundary wrong in the tight direction turns every
+  // intended tap into a one-slot drag.
+  const TAP_SLOP = 10;
+  // How close to the edge of the scroll container the finger has to get before
+  // the sheet starts coming to it, and how fast it comes.
+  const EDGE = 64;
+  const EDGE_STEP = 14;
+
   const startDrag = (e, m) => {
     if (!canDragRow(m)) return;
     // Capture keeps the moves coming to the row once the finger slides off it,
@@ -302,16 +347,40 @@ export function MatchSetup({
     // active; the drag still works off the row's own events without it.
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
     buzz(12);
+    gesture.current = { x: e.clientX, y: e.clientY, moved: false };
+    // Pressing a match abandons whatever else was lifted — see `lift` above
+    // for why only one thing is ever up at a time.
+    if (heldMatch && heldMatch !== m.id) setHeldMatch(null);
+    if (heldName) setHeldName(null);
     setDrag({ id: m.id, over: groupIndexForMatch({ groups, match: m }) });
   };
   const moveDrag = (e) => {
     if (!drag) return;
+    const g = gesture.current;
+    if (g && !g.moved
+      && (Math.abs(e.clientX - g.x) > TAP_SLOP || Math.abs(e.clientY - g.y) > TAP_SLOP)) {
+      g.moved = true;
+    }
+    // ── The sheet comes to the finger ──
+    // A drag cannot scroll the page it is on: the grip carries `touch-action:
+    // none` (which is what leaves every other pixel of the row to the
+    // scroller) and it holds pointer capture, so a tee card below the fold was
+    // simply unreachable — on Singles, where four cards carry two match rows
+    // each, that is most of the sheet. Nudging the app's own scroller while
+    // the finger sits near its edge is the standard answer and costs nothing
+    // when the finger is nowhere near one.
+    const scroller = sectionRefs.current[0]?.closest(".bc-app-body");
+    if (scroller) {
+      const r = scroller.getBoundingClientRect();
+      if (e.clientY < r.top + EDGE) scroller.scrollTop -= EDGE_STEP;
+      else if (e.clientY > r.bottom - EDGE) scroller.scrollTop += EDGE_STEP;
+    }
     // Sections do not move while dragging, so their rects stay a stable ruler
     // to measure the finger against.
     let over = -1;
     Object.entries(sectionRefs.current).forEach(([gi, el]) => {
-      const r = el?.getBoundingClientRect();
-      if (r && e.clientY >= r.top && e.clientY <= r.bottom) over = Number(gi);
+      const rect = el?.getBoundingClientRect();
+      if (rect && e.clientY >= rect.top && e.clientY <= rect.bottom) over = Number(gi);
     });
     // A pulse as the target changes — the moment the drop would land somewhere
     // new is the one worth feeling, not every pixel of travel.
@@ -321,10 +390,24 @@ export function MatchSetup({
   const endDrag = () => {
     if (!drag) return;
     const { id, over } = drag;
+    const moved = !!gesture.current?.moved;
+    gesture.current = null;
     setDrag(null);
+    // A press that never travelled is a TAP, and a tap lifts the match instead
+    // of re-timing it. Tapping the same grip again puts it back down, which is
+    // the same two-tap gesture the player chips have used all along.
+    if (!moved) { setHeldMatch(h => (h === id ? null : id)); return; }
     // Released off every section: nothing to land on, so nothing happens. A
     // match is never dropped OUT of the draw by letting go in the wrong place.
     if (over < 0) return;
+    moveMatchTo(id, over);
+  };
+
+  // The commit, shared by the drag's drop and the lifted match's "Move here".
+  // One path, so a tap and a drag can never land a match differently.
+  const moveMatchTo = (id, over) => {
+    setHeldMatch(null);
+    if (blockedByFinal()) return;
     const m = rndMatches.find(x => x.id === id);
     if (!m) return;
     const from = groupIndexForMatch({ groups, match: m });
@@ -334,7 +417,7 @@ export function MatchSetup({
     // An ungrouped match has nowhere to send the occupants, so it is turned
     // away rather than quietly evicting them.
     if (from < 0 && !groupHasRoom({ group: groups[over], need: matchPlayers(m).length })) {
-      notify(`${slotName(over)} is full — drop it on an open time`, "error");
+      notify(`${slotName(over)} is full — pick an open time`, "error");
       return;
     }
     const { groups: next, displaced } = swapMatchIntoGroup({
@@ -344,7 +427,7 @@ export function MatchSetup({
     // Where every row is standing NOW, and which arrangement to spend it on.
     // Taken before the write, because after it the old positions are gone.
     const tops = {};
-    Object.entries(rowRefs.current).forEach(([id, el]) => { if (el) tops[id] = el.offsetTop; });
+    Object.entries(rowRefs.current).forEach(([rid, el]) => { if (el) tops[rid] = el.offsetTop; });
     pendingFlip.current = { tops, key: JSON.stringify(trimGroups(next)) };
 
     saveGroups(next);
@@ -365,6 +448,7 @@ export function MatchSetup({
   // it is a tee time, and the round still has that tee time — so this is the
   // one-tap way back from a group drawn wrong, not a deletion.
   const clearGroup = async (gi) => {
+    if (blockedByFinal()) return;
     if (!(await confirm({
       title: `Clear the ${slotName(gi)} group?`,
       message: "Its players go back to the unassigned pool. Every other tee time is left alone.",
@@ -394,7 +478,15 @@ export function MatchSetup({
       ].join("\n"),
       confirmLabel: "Create anyway",
     }))) return;
-    await onSetMatch({
+    // NOT awaited, and that is the whole of the fix. Firestore's setDoc does
+    // not resolve offline — it does not reject either, it just sits in the
+    // local queue until signal comes back (see lib/connection) — so awaiting
+    // it meant that on the one phone this console actually runs on, in the one
+    // place it actually runs, everything below this line never happened: the
+    // match got no tee time, the pools stayed lit, and no toast ever came. The
+    // write is tracked by App and speaks up if it is REFUSED; a write that is
+    // merely waiting for signal is the app working.
+    onSetMatch({
       // Edition-scoped like every other document the app writes — see the
       // note in App.onSaveHole for why these two collections were the last
       // ones building their ids by hand. Existing matches keep the id they
@@ -437,7 +529,7 @@ export function MatchSetup({
   // somebody joined and orphan every signature on the round.
   const teamMatchId = editionDocId(`bc_match_r${round}_teams`);
 
-  const ensureTeamMatch = async () => {
+  const ensureTeamMatch = () => {
     // The roster IS the two sides. Not realPlayers: the borrowed ball is not a
     // person and no roster screen shows it, but Team Best Ball counts the best
     // N nets on a side, and a side of seven against a side of eight is not the
@@ -463,7 +555,8 @@ export function MatchSetup({
     const existing = rndMatches.find(m => m.id === teamMatchId);
     if (existing && same(existing.teamA, teamA) && same(existing.teamB, teamB)) return true;
 
-    await onSetMatch({
+    // Fired, not awaited — see createMatch above.
+    onSetMatch({
       id: teamMatchId,
       tournament_id: TOURNAMENT_ID,
       round,
@@ -487,7 +580,7 @@ export function MatchSetup({
       notify(`A tee time holds ${GROUP_TARGET}`, "error");
       return;
     }
-    if (!(await ensureTeamMatch())) return;
+    if (!ensureTeamMatch()) return;
     saveGroups(assignPlayersToGroup({ groups, pids, gi }));
     setTeamASel([]); setTeamBSel([]);
     notify(times[gi] ? `Off ${stripAMPM(times[gi])} — ${pids.map(shortOf).join(", ")}` : "Foursome added", "success");
@@ -528,7 +621,11 @@ export function MatchSetup({
       destructive: true,
     });
     if (!ok) return;
-    await onSetMatch({ ...m, _delete: true });
+    // Fired, not awaited. Awaiting it left the worst half of this operation
+    // undone on a phone with no signal: the match went (the local cache echoes
+    // a delete immediately) and its four players stayed standing on a tee
+    // time, which CHECK then reported as "grouped but has no match".
+    onSetMatch({ ...m, _delete: true });
     // Players of a deleted match have nothing left to tee off for.
     if (storedGroups) {
       const gone = new Set(matchPlayers(m));
@@ -562,6 +659,85 @@ export function MatchSetup({
     }))) return;
     const n = await onDiscardRoundScores(round, pid);
     notify(`Erased ${n} hole${n === 1 ? "" : "s"} for ${nameOf(pid)}`, "success");
+  };
+
+  // ── Correcting a pairing ─────────────────────────────────────────
+  // Tap a name in a match row to lift him, tap another to trade their places.
+  // The missing third verb: a match could be CREATED and it could be DELETED,
+  // and "Pete and Jim are the wrong way round" — which is most of what a
+  // director actually does once the captains start nominating — had to be
+  // spelled as two deletes and two rebuilds, with four confirmations in front
+  // of them once anybody had teed off, and both foursomes then dragged back
+  // onto the times they came off.
+  //
+  // A straight substitution instead: each man takes the other's seat in
+  // whatever match and whatever tee time he was in, so nothing changes size
+  // and the sheet keeps its shape (see swapPlayersInDraw).
+  //
+  // The second name can come from a POOL as well as from a match, which is the
+  // same act with one side of it empty — a late arrival in, a man who cannot
+  // play out.
+  const swapSide = (pid) => sideOfPid.get(pid) || teamOf(pid);
+
+  const lift = (pid) => {
+    // One lifted thing at a time. Building a pairing, correcting one, and
+    // re-timing a match are three jobs, and two of them lit at once is a
+    // screen saying two things about what the next tap does.
+    setTeamASel([]); setTeamBSel([]); setHeldMatch(null); setHeld(null);
+    setHeldName(pid);
+  };
+
+  const liftOrSwap = async (pid) => {
+    if (!heldName) { lift(pid); return; }
+    if (heldName === pid) { setHeldName(null); return; }
+    if (roundFinal) { setHeldName(null); blockedByFinal(); return; }
+    // Across the two sides this is a change of mind about WHO to move, not a
+    // request to put a man on the opposing team for a round. Same reading
+    // pickPlayer gives a tap in the other column on a teammate format.
+    if (swapSide(heldName) !== swapSide(pid)) { setHeldName(pid); return; }
+    const from = heldName;
+    // Both men keep their own holes — scores are keyed to the player and the
+    // round, never to the match — so what moves is which CARD those holes are
+    // read on. Worth saying once, in front of the tap, for the same reason
+    // deleting a scored match is.
+    const carried = incomingScores({ holeData, round, pids: [from, pid] });
+    if (carried.length && !(await confirm({
+      eyebrow: `Round ${round}`,
+      title: "Swap two players with scores posted?",
+      message: [
+        `${describeScored(carried, nameOf)} — holes already posted in Round ${round}.`,
+        "",
+        "Scores belong to the player and the round, not to the match, so each man's holes follow him into the match he lands in.",
+      ].join("\n"),
+      confirmLabel: "Swap anyway",
+    }))) { setHeldName(null); return; }
+    const { matches: changed, groups: nextGroups } = swapPlayersInDraw({
+      matches: rndMatches, groups: storedGroups || [], a: from, b: pid,
+    });
+    setHeldName(null);
+    if (!changed.length) return;
+    // Composed field by field rather than spread, and the names rebuilt off
+    // the new ids: `teamANames` is the fallback a screen reads when a player
+    // id no longer resolves, so leaving yesterday's pair on it would put the
+    // old pairing back on screen the moment somebody left the roster.
+    changed.forEach(patch => {
+      const was = rndMatches.find(x => x.id === patch.id);
+      onSetMatch({
+        id: patch.id,
+        tournament_id: was?.tournament_id || TOURNAMENT_ID,
+        round,
+        teamA: patch.teamA,
+        teamB: patch.teamB,
+        teamANames: patch.teamA.map(nameOf),
+        teamBNames: patch.teamB.map(nameOf),
+      });
+    });
+    // Only when the round HAS a stored sheet. A 2-man round nobody has grouped
+    // by hand derives its foursomes from the matches, so they follow the swap
+    // on their own and writing them here would materialize a document the
+    // round was doing without.
+    if (storedGroups) saveGroups(nextGroups);
+    notify(`${shortOf(from)} and ${shortOf(pid)} swapped`, "success");
   };
 
   // ── Pools ────────────────────────────────────────────────────────
@@ -610,6 +786,11 @@ export function MatchSetup({
   //    end, after somebody has picked six men, is telling them off for
   //    something the screen let them do.
   const pickPlayer = (tid, pid, on) => {
+    // A lifted name is asking a different question of this column — "who does
+    // he change places with" — so while one is up, a pool tap answers that
+    // rather than starting a new pairing. It is the substitution case: the
+    // pool is exactly the men with no match to be swapped out of.
+    if (heldName) { liftOrSwap(pid); return; }
     const [sel, setSel] = tid === "A" ? [teamASel, setTeamASel] : [teamBSel, setTeamBSel];
     const [other, setOther] = tid === "A" ? [teamBSel, setTeamBSel] : [teamASel, setTeamASel];
     if (on) { setSel(sel.filter(x => x !== pid)); return; }
@@ -630,8 +811,8 @@ export function MatchSetup({
     const team = teams[teamOf(pid)] || teams.B;
     const lifted = held === pid;
     return (
-      <button key={pid} onClick={() => setHeld(lifted ? null : pid)} style={{
-        padding: "5px 9px", borderRadius: 8, cursor: "pointer", fontFamily: FONT,
+      <button key={pid} onClick={() => !roundFinal && setHeld(lifted ? null : pid)} style={{
+        padding: "5px 9px", borderRadius: 8, cursor: roundFinal ? "default" : "pointer", fontFamily: FONT,
         fontSize: FS.small, fontWeight: 700, textAlign: "left",
         background: lifted ? BC.amber : team.color + "44",
         border: `1.5px solid ${lifted ? BC.amber : team.accent + ALPHA.line}`,
@@ -645,16 +826,42 @@ export function MatchSetup({
   // line instead, a 2-man pairing had to wrap once its half of the row
   // narrowed, and it wrapped wherever the width ran out: "AARON J / PETE" over
   // "C". A name is the unit that breaks, not a character inside it.
-  const nameStack = (names, color, align) => (
-    <div style={{ display: "flex", flexDirection: "column", minWidth: 0, textAlign: align }}>
-      {(names || []).map((nm, i) => (
-        <span key={i} style={{
-          fontSize: FS.body, fontWeight: 600, lineHeight: 1.3, color,
-          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-        }}>{nm}</span>
-      ))}
+  // Each name is the swap control (see liftOrSwap), so they are buttons rather
+  // than spans — but drawn exactly as the spans were, because a row of names
+  // that suddenly looked like a row of buttons would be four boxes competing
+  // with the one control on the row that IS a box, the ✕. The lifted man goes
+  // amber, which is the same thing a lifted player chip does two cards down.
+  const nameStack = (pids, color, align) => (
+    <div style={{ display: "flex", flexDirection: "column", minWidth: 0, textAlign: align, alignItems: align === "right" ? "flex-end" : "flex-start" }}>
+      {(pids || []).map(({ pid, name }, i) => {
+        const lifted = heldName === pid;
+        return (
+          <button
+            key={pid || i}
+            onClick={() => !roundFinal && liftOrSwap(pid)}
+            style={{
+              fontSize: FS.body, fontWeight: 600, lineHeight: 1.3, textAlign: align,
+              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+              maxWidth: "100%", fontFamily: FONT, border: "none", padding: 0,
+              background: "transparent", cursor: roundFinal ? "default" : "pointer",
+              color: lifted ? BC.amberInk : color,
+              textDecoration: lifted ? "underline" : "none",
+              textUnderlineOffset: 3,
+            }}
+          >{name}</button>
+        );
+      })}
     </div>
   );
+
+  // The pids a side is drawn from, paired with the name each one renders as —
+  // `sideNames` already resolves the stored-name fallback, so this only zips
+  // the two together for the buttons above.
+  const sideOf = (m, side) => {
+    const pids = (side === "B" ? m?.teamB : m?.teamA) || [];
+    const names = sideNames(m, side, nameOf);
+    return pids.map((pid, i) => ({ pid, name: names[i] }));
+  };
 
   // One match, as it appears under its tee time. The M-number is what a drag
   // changes, since both the number and the time belong to the slot rather than
@@ -670,6 +877,9 @@ export function MatchSetup({
   const matchRow = (m) => {
     const dragging = drag?.id === m.id;
     const draggable = canDragRow(m);
+    // Tapped up, waiting for a tee time. Drawn like the drag's own lifted
+    // state, because it is the same state reached by a different gesture.
+    const lifted = heldMatch === m.id;
     // Held amber for a beat after it lands, so the two that traded are named
     // by the screen and not only by the toast.
     const justSwapped = swapped?.has(m.id);
@@ -698,14 +908,14 @@ export function MatchSetup({
           // Transform and opacity only: dragging must never reflow the list,
           // because moveDrag measures the SECTION rects against the finger and
           // a list that shifts under its own measurement oscillates.
-          opacity: drag && !dragging ? 0.4 : 1,
-          transform: dragging ? "scale(1.02)" : "none",
+          opacity: (drag && !dragging) || (heldMatch && !lifted) ? 0.4 : 1,
+          transform: dragging || lifted ? "scale(1.02)" : "none",
           // No transition on transform: the FLIP drives it with the Web
           // Animations API, and a CSS transition on the same property would
           // fight the keyframes and drag the slide out to its own duration.
           transition: "opacity 120ms ease, box-shadow 120ms ease, background 400ms ease",
-          background: dragging ? BC.inp : justSwapped ? `${BC.amber}${ALPHA.tint}` : "transparent",
-          boxShadow: dragging ? `0 4px 14px ${SCRIM}` : "none",
+          background: dragging || lifted ? BC.inp : justSwapped ? `${BC.amber}${ALPHA.tint}` : "transparent",
+          boxShadow: dragging || lifted ? `0 4px 14px ${SCRIM}` : "none",
         }}
       >
         {/* Left track: the grip, then team A.
@@ -738,19 +948,19 @@ export function MatchSetup({
               cursor: draggable ? (dragging ? "grabbing" : "grab") : "default",
             }}
           >
-            {draggable && <span aria-hidden style={{ fontSize: FS.small, lineHeight: 1, color: dragging ? BC.amberInk : BC.t3 }}>⠿</span>}
-            <span style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 0.5, minWidth: 22, color: dragging ? BC.amberInk : BC.gold }}>
+            {draggable && <span aria-hidden style={{ fontSize: FS.small, lineHeight: 1, color: dragging || lifted ? BC.amberInk : BC.t3 }}>⠿</span>}
+            <span style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 0.5, minWidth: 22, color: dragging || lifted ? BC.amberInk : BC.gold }}>
               M{m.matchNumber ?? "?"}
             </span>
           </div>
-          {nameStack(sideNames(m, "A", nameOf), teams.A.accent, "left")}
+          {nameStack(sideOf(m, "A"), teams.A.accent, "left")}
         </div>
         {/* One rung down from the names, and grey: punctuation between them,
             not one of them. It is also the row's axis, so it never moves. */}
         <span style={{ fontSize: FS.small, color: BC.t3 }}>vs</span>
         {/* Right track, mirrored: team B reading toward the axis, then the ✕. */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, justifyContent: "flex-end" }}>
-          {nameStack(sideNames(m, "B", nameOf), teams.B.accent, "right")}
+          {nameStack(sideOf(m, "B"), teams.B.accent, "right")}
           <button onClick={() => deleteMatch(m)} style={xBtn}>✕</button>
         </div>
       </div>
@@ -770,7 +980,10 @@ export function MatchSetup({
         style={{ marginBottom: 10 }}
         options={tournamentRounds.map(r => [r, `Rd ${r}`])}
         value={round}
-        onChange={(r) => { setRound(r); setTeamASel([]); setTeamBSel([]); setHeld(null); }}
+        onChange={(r) => {
+          setRound(r); setTeamASel([]); setTeamBSel([]);
+          setHeld(null); setHeldName(null); setHeldMatch(null); setDrag(null);
+        }}
       />
 
       {/* Round context — the course and the format, both set on other tabs and
@@ -953,6 +1166,13 @@ export function MatchSetup({
       {matchFitsGroup && groups.map((g, gi) => {
         const rows = byGroup[gi];
         const over = drag?.over === gi;
+        // The same three questions the drag answers under the finger, asked of
+        // a match that was TAPPED instead. One set of rules either way — the
+        // tap and the drop both commit through moveMatchTo.
+        const offerMove = !!liftedMatch && liftedFrom !== gi;
+        const liftedSwaps = offerMove
+          && !groupHasRoom({ group: g, need: matchPlayers(liftedMatch).length });
+        const liftedRefused = liftedSwaps && liftedFrom < 0;
         const tooMany = g.length > GROUP_TARGET;
         // What letting go here would do, worked out while the finger is still
         // down. A full tee time trades places rather than stacking up, and
@@ -964,7 +1184,9 @@ export function MatchSetup({
           && !groupHasRoom({ group: g, need: matchPlayers(dragged).length });
         // Nowhere to send this one's occupants — see endDrag.
         const wouldRefuse = wouldSwap && draggedFrom < 0;
-        const edge = over ? (wouldRefuse ? BC.danger : BC.amber) : tooMany ? BC.danger + ALPHA.line : BC.bdr;
+        const edge = over ? (wouldRefuse ? BC.danger : BC.amber)
+          : offerMove && !liftedRefused ? BC.amber + ALPHA.line
+          : tooMany ? BC.danger + ALPHA.line : BC.bdr;
         return (
           <div
             key={gi}
@@ -1011,16 +1233,27 @@ export function MatchSetup({
               </span>
               {/* Only while a drag is over this card: what letting go would do.
                   Empty the rest of the time, which is most of the time. */}
-              <span style={{
-                fontSize: FS.label, fontWeight: 700, textAlign: "right", minWidth: 0,
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                color: wouldRefuse ? BC.danger : BC.amberInk,
-              }}>
-                {wouldRefuse ? "FULL"
-                  : wouldSwap ? "SWAP"
-                  : over && draggedFrom !== gi ? "MOVE HERE"
-                  : ""}
-              </span>
+              {offerMove && !drag ? (
+                liftedRefused ? (
+                  <span style={{ fontSize: FS.label, fontWeight: 700, textAlign: "right", color: BC.danger }}>FULL</span>
+                ) : (
+                  <button
+                    onClick={() => moveMatchTo(liftedMatch.id, gi)}
+                    style={{ ...miniBtn, padding: "3px 8px", justifySelf: "end" }}
+                  >{liftedSwaps ? "Swap" : "Move"} here</button>
+                )
+              ) : (
+                <span style={{
+                  fontSize: FS.label, fontWeight: 700, textAlign: "right", minWidth: 0,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  color: wouldRefuse ? BC.danger : BC.amberInk,
+                }}>
+                  {wouldRefuse ? "FULL"
+                    : wouldSwap ? "SWAP"
+                    : over && draggedFrom !== gi ? "MOVE HERE"
+                    : ""}
+                </span>
+              )}
             </div>
             {rows.length === 0 && (
               <div style={{ fontSize: FS.label, color: over ? BC.amberInk : BC.t3, fontWeight: 700, letterSpacing: 0.5, padding: "2px 0" }}>
@@ -1058,10 +1291,20 @@ export function MatchSetup({
         </div>
       )}
 
-      {/* No "drag ⠿ to move a match" instruction. The ⠿ on every row is the
-          affordance, and the drag now narrates itself while it is happening —
-          the target card says SWAP, MOVE HERE or FULL under the finger, and
-          the rows slide into their new times when it lands. */}
+      {/* No "drag ⠿ to move a match" instruction, and no "tap a name to swap
+          two players" one either. The ⠿ on every row is the affordance, the
+          drag narrates itself while it is happening — the target card says
+          SWAP, MOVE HERE or FULL under the finger — and the two lines below
+          exist only while something is actually lifted. A lifted state is an
+          event, and saying what the next tap does is not the same as standing
+          explanation of a control nobody has touched. */}
+      {(heldName || liftedMatch) && (
+        <div style={{ fontSize: FS.label, color: BC.t3, textAlign: "center", marginBottom: 8, lineHeight: 1.4 }}>
+          {heldName
+            ? `${nameOf(heldName)} lifted — tap the man he changes places with, or tap him again to cancel.`
+            : `M${liftedMatch.matchNumber ?? "?"} lifted — tap a tee time to move it, or tap M${liftedMatch.matchNumber ?? "?"} again to cancel.`}
+        </div>
+      )}
       {matchFitsGroup && <div style={{ marginBottom: 14 }} />}
 
       {/* ── Scores with no match ──
@@ -1108,9 +1351,16 @@ export function MatchSetup({
               Auto-build keeps its button — for these formats it is the only
               way to fill the sheet in one move, since a match spanning several
               groups has no single time to be dropped onto. */}
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16, marginBottom: 8 }}>
-            <button onClick={buildGroups} style={miniBtn}>Auto-build</button>
-          </div>
+          {/* Off on a final round, like the other Auto-build. This branch is
+              the one a TEAM format reaches, and it used to draw all three of
+              its controls — this button, the chips and the ✕ — live under a
+              banner reading "its draw is locked to its result". The closing
+              round is the one round that banner is most true of. */}
+          {!roundFinal && (
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16, marginBottom: 8 }}>
+              <button onClick={buildGroups} style={miniBtn}>Auto-build</button>
+            </div>
+          )}
 
           {groups.map((g, gi) => {
             const over = g.length > GROUP_TARGET;
@@ -1151,7 +1401,7 @@ export function MatchSetup({
                   </span>
                   {held
                     ? <button onClick={() => moveHeldTo(gi)} style={{ ...miniBtn, padding: "4px 8px" }}>Move {shortOf(held)} here</button>
-                    : g.length > 0 && <button onClick={() => clearGroup(gi)} style={xBtn}>✕</button>}
+                    : g.length > 0 && !roundFinal && <button onClick={() => clearGroup(gi)} style={xBtn}>✕</button>}
                 </div>
                 <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                   {g.map(pid => playerChip(pid))}
