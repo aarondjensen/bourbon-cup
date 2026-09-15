@@ -373,6 +373,17 @@ const roundSignature = (r) => JSON.stringify([
   roundSettingsSignature(r), liveEntries(r.ch_overrides), liveEntries(r.tee_assignments),
 ]);
 
+// ── What a match is WORTH ──────────────────────────────────────────────
+// The fields scoring.js reads LIVE over a final round's snapshot, and so the
+// only ones whose edit moves a leaderboard the field has already been shown
+// (getRoundHolePoints and its neighbours — see "WHAT IS FROZEN" in scoring).
+// Handicaps, allowance, tees and the course come off the snapshot and move
+// nothing until a recalculate; format and the two scoring axes are refused on
+// a final round outright. Everything else on the form — the date, the tee
+// times, the seal — was never a price at all.
+const PRICING_FIELDS = ["nassau_front", "nassau_back", "nassau_overall", "hole_points", "par_points", "counting_scores"];
+const pricingSignature = (r) => JSON.stringify(PRICING_FIELDS.map(k => r?.[k] ?? null));
+
 // Adopt a whole per-round document map, optionally holding one round's
 // existing slice — see the hydration effects for when that applies.
 const adoptRoundMap = (incoming, holdRound) => (prev) => {
@@ -1253,7 +1264,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
   const [autoSave, setAutoSave] = useState(null); // { phase: "saving"|"saved"|"error", round }
 
   // The three documents the Save button used to write, in the same order.
-  const writeRound = useStableCallback(async ({ round, payload, sig }) => {
+  const writeRound = useStableCallback(async ({ round, payload, sig, priced }) => {
     lastWrittenRef.current = { round, payload, sig };
     setAutoSave({ phase: "saving", round });
     try {
@@ -1290,16 +1301,27 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
       // director editing a live round is looking at the form.
       //
       // A FINAL round is different in two ways at once. The edit that reaches
-      // it is nearly always one of the point values — everything else is
-      // read-only — and that edit re-scores a result sixteen men have already
-      // been told. It also happens at the top of a long form, four sections
-      // above a status line nobody scrolls to.
+      // it is usually one of the point values — most of the rest is read-only
+      // — and that edit re-scores a result sixteen men have already been told.
+      // It also happens at the top of a long form, four sections above a
+      // status line nobody scrolls to.
       //
       // So it toasts. `notify` is portaled over everything (see the Toast
       // note in CLAUDE.md), which is the whole reason it can be trusted to
       // arrive where the status line cannot be seen.
+      //
+      // ── But only a price says it was re-priced ──────────────────────
+      // A final round still takes a date and a tee time, and neither moves a
+      // point. Saying "re-priced — the leaderboard has moved" over a corrected
+      // date tells a director a finished result just shifted under the field,
+      // which is alarming and untrue — and the day it IS true the sentence
+      // has already been spent. `priced` is computed against what Firestore
+      // holds, at the moment the save is armed, so it covers everything the
+      // debounce coalesced.
       if (roundIsFinalRef.current[round]) {
-        notify(`Round ${round} re-priced — the leaderboard has moved`, "success");
+        notify(priced
+          ? `Round ${round} re-priced — the leaderboard has moved`
+          : `Round ${round} saved`, "success");
       }
     } catch (err) {
       console.error("Round auto-save failed", err);
@@ -1330,10 +1352,14 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
     // than trade writes with Firestore forever.
     const written = lastWrittenRef.current;
     if (written && written.round === editRound && written.sig === formSig) return;
-    pendingSaveRef.current = { round: editRound, payload: savedRound, sig: formSig };
+    // Both sides are normalized the same way (see storedRound and formRound),
+    // so a round that merely has no stored `hole_points` does not read as a
+    // re-price the first time anything else is saved.
+    const priced = pricingSignature(savedRound) !== pricingSignature(storedRound);
+    pendingSaveRef.current = { round: editRound, payload: savedRound, sig: formSig, priced };
     saveTimerRef.current = setTimeout(flushRoundSave, AUTOSAVE_MS);
     return () => { if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; } };
-  }, [formSeeded, roundDirty, savedRound, formSig, editRound, flushRoundSave]);
+  }, [formSeeded, roundDirty, savedRound, storedRound, formSig, editRound, flushRoundSave]);
 
   // Leaving the round (or the console) commits whatever is still queued.
   // Declared after the debounce effect so its cleanup runs second: the
