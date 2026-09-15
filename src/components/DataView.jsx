@@ -38,6 +38,11 @@ const card = themedStyle(() => ({ background: BC.card, borderRadius: 12, border:
 const eyebrow = themedStyle(() => ({ fontSize: FS.label, fontWeight: 800, color: BC.t3, letterSpacing: 1 }));
 const hair = () => `1px solid ${BC.bdr}${ALPHA.hair}`;
 
+// Strokes gained, always signed. A bare "0.4" beside a "-1.2" reads as a
+// score; the plus is what says this is a margin over somebody.
+const fmtSg = (n) => n == null ? "—" : `${n > 0 ? "+" : ""}${n.toFixed(1)}`;
+const sgColor = (n) => n == null ? BC.t1 : n > 0 ? BC.green : n < 0 ? BC.danger : BC.t1;
+
 const Section = ({ label, note, children, style }) => (
   <div style={{ ...card, padding: 14, ...style }}>
     <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
@@ -353,6 +358,22 @@ function PlayerCard({ p, data, activeYear }) {
         <Stat label="Avg round" value={toParText(p.avgToPar)} sub={`${p.rounds} RDS`} />
       </div>
 
+      {/* Both, never one. Gross is who plays the best golf and net is who
+          plays best to his number, and they answer differently often enough
+          that showing either alone picks a side in the argument. */}
+      {(p.sg != null || p.sgNetPer != null) && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginBottom: 14 }}>
+          <Stat
+            label="SG gross / rd" value={fmtSg(p.sg)} sub={`${p.sgRounds} RDS · VS FIELD`}
+            color={sgColor(p.sg)}
+          />
+          <Stat
+            label="SG net / rd" value={fmtSg(p.sgNetPer)} sub={`${p.sgNets} RDS · VS FIELD`}
+            color={sgColor(p.sgNetPer)}
+          />
+        </div>
+      )}
+
       {p.best && (
         <div style={{ fontSize: FS.small, color: BC.t2, marginBottom: 12 }}>
           <strong style={{ color: BC.amberInk }}>Best round</strong> — {p.best.gross} ({fmtScore(p.best.toPar)})
@@ -518,6 +539,38 @@ function PlayerRecords({ data }) {
   );
 }
 
+// ── Strokes gained ────────────────────────────────────────────────
+// Against the field, which the note says because "strokes gained" with no
+// benchmark named is not a number anybody can read. See archiveFold: this is
+// SG Total — the field's average less his own, inside one round so the course
+// and the day cancel — and deliberately not the shot-level split, which a
+// scorecard cannot support because it does not know where the ball was.
+function StrokesGained({ data }) {
+  const sg = data.strokesGained;
+  if (!sg || !(sg.gross.length || sg.net.length || sg.best.length)) return null;
+  const rate = (key, rounds) => (p) => (
+    <>
+      <span style={{ flex: 1, minWidth: 0, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
+      <span style={{ width: 48, textAlign: "right", fontWeight: 800, color: sgColor(p[key]) }}>{fmtSg(p[key])}</span>
+      <span style={{ width: 52, textAlign: "right", color: BC.t3 }}>{p[rounds]} RDS</span>
+    </>
+  );
+
+  return (
+    <Section label="Strokes gained" note="VS THE FIELD · OWN BALL">
+      <RecordList label="PER ROUND · GROSS" rows={sg.gross} render={rate("sg", "sgRounds")} />
+      <RecordList label="PER ROUND · NET" rows={sg.net} render={rate("sgNetPer", "sgNets")} />
+      <RecordList label="BEST ROUND" rows={sg.best} render={(r) => (
+        <>
+          <span style={{ flex: 1, minWidth: 0, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</span>
+          <span style={{ width: 48, textAlign: "right", fontWeight: 800, color: sgColor(r.sg) }}>{fmtSg(r.sg)}</span>
+          <span style={{ width: 52, textAlign: "right", color: BC.t3 }}>{r.year} R{r.round}</span>
+        </>
+      )} />
+    </Section>
+  );
+}
+
 // ── Streaks ───────────────────────────────────────────────────────
 // Two cards rather than one, because nine boards in a single card is a wall
 // and the split does the grouping that a sentence would otherwise have to.
@@ -664,6 +717,7 @@ function PlayerHalf({ data, activeYear, myId, teams }) {
         data={data} open={open} setOpen={setOpen}
       />
       {scope === "career" && <PlayerRecords data={data} />}
+      {scope === "career" && <StrokesGained data={data} />}
       {scope === "career" && <Streaks data={data} />}
     </div>
   );
