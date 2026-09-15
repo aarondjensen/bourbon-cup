@@ -862,12 +862,32 @@ each half fails silently in its own direction:
   copy on a match, which is why `MatchSetup` deliberately never writes one.
 - **Handicaps, allowance, mode, tees and the course** come off the snapshot.
   Correcting one of those changes a stored field and *nothing else* until the
-  snapshot is re-taken. That is **Recalculate**, in Admin → Rounds, and it
-  appears only on a round that has been amended and not yet recalculated — it
-  is the one act in the app that moves a stroke in a round already played, so
-  it previews the exact handicaps about to change, in numbers, behind a typed
-  `RECALCULATE`. It says so when nothing moves, which is the useful answer:
-  the correction was on the points side and has already landed.
+  snapshot is re-taken. That is **Recalculate**, at the foot of HANDICAPS in
+  Admin → Rounds, on every LOCKED round that is not final — it is the one act
+  in the app that moves a stroke in a round already played, so it previews the
+  exact handicaps about to change, in numbers, behind a typed `RECALCULATE`.
+  It says so when nothing moves, which is the useful answer: the correction
+  was on the points side and has already landed.
+
+  **A final round is not offered it**, and that is what makes the amendment a
+  real gate rather than a speed bump — the round has to be reopened first, and
+  `onRecalculateRound` refuses one outright rather than leaving it to the UI.
+  Every other locked round IS offered it, because a round locks on its first
+  score and from that moment the form is editing fields the scoring has
+  stopped reading: a wrong tee spotted on the third hole is the gate-with-no-
+  door again, a day earlier. The card's heading is the one thing the amendment
+  changes — a round somebody REOPENED is waiting on this and says so.
+
+  **It flushes the form's pending save first and hands over what it wrote.**
+  The Round CH boxes auto-save on a 700ms debounce and App only hears the new
+  value when Firestore echoes it back, so a director who types 12 and taps
+  straight away would otherwise preview, and freeze, the 8 he was correcting.
+  Same `inputs` escape hatch `onLockRound` carries, and for the same reason.
+
+  Reopen and Recalculate are deliberately **two acts in two places**: the
+  sheet acts on a round the tournament has finished with, the Admin card acts
+  on the round the form in front of you is editing. One button doing both
+  would re-score a round every time a director reopened one to look at it.
 
 `roundAmend.cascade.test.js` pins both halves against the real scoring engine.
 If the first ever broke, a director would correct a pot and watch a leaderboard

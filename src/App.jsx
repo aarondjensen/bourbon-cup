@@ -6319,7 +6319,15 @@ export default function App() {
   // what lets the confirm list the handicaps that are about to move rather
   // than estimating them — the list shown is then the list that lands, built
   // by the same call that will land it.
-  const onRecalculateRound = useCallback(async (rnd, { preview = false } = {}) => {
+  //
+  // `inputs` is the same escape hatch onLockRound carries, and for the same
+  // reason: the Admin form's handicap boxes auto-save on a 700ms debounce, so
+  // between a director typing a corrected figure and tapping Recalculate sit
+  // that debounce and a Firestore echo that has to come back through the
+  // subscription before lockInputsRef knows anything. The form flushes its
+  // write first AND hands over what it wrote; reading the ref there would
+  // snapshot the number being corrected.
+  const onRecalculateRound = useCallback(async (rnd, { preview = false, inputs = null } = {}) => {
     const prev = roundLocksRef.current?.[rnd];
     if (!prev?.locked || prev.final) return null;
     const { players, tRounds: rds, courses: crs, hcpOverrides, teeAssignments } = lockInputsRef.current;
@@ -6329,8 +6337,8 @@ export default function App() {
       players,
       tRounds: rds,
       courses: crs,
-      chOverrides: hcpOverrides,
-      teeAssignments,
+      chOverrides: inputs?.chOverrides || hcpOverrides,
+      teeAssignments: inputs?.teeAssignments || teeAssignments,
       lockedBy: userRef.current?.name || null,
       previous: prev,
     });
@@ -6764,23 +6772,19 @@ export default function App() {
   // tournament that only a director can perform.
   const canFinalize = isDirector && tournamentRounds.length > 0;
   // ── The way back into a finished round ───────────────────────────
-  // Both land on Admin → Rounds, in the one place a round's handicaps are
-  // edited, and they are deliberately TWO acts rather than one button:
+  // Deliberately TWO acts rather than one button, and they live in two
+  // places because they answer two different questions:
   //
-  //   reopen      FINAL → LOCKED (unfinalizeRound). Re-enables the form and
-  //               the recalculate below, and on its own moves no stroke —
-  //               scoring still answers to the frozen snapshot.
-  //   recalculate re-takes that snapshot (refreshRoundLockDoc), which is the
-  //               ONLY thing that makes a corrected Course Handicap land on a
-  //               round that has already been frozen.
+  //   reopen      the Finalize sheet's Correct a finished round, which is
+  //               `onAmendRound` above. FINAL → LOCKED, stamped with who,
+  //               when and why. It moves no stroke on its own.
+  //   recalculate Admin → Rounds, on the round the HANDICAPS form is
+  //               editing — `onRecalculateRound` above. Re-takes the frozen
+  //               snapshot, which is the ONLY thing that makes a corrected
+  //               Course Handicap land on a round already played.
   //
-  // Two decisions, said out loud in that order: "this round is open again",
-  // then "score it off these numbers now". One button doing both would
-  // re-score a round every time a director reopened one to look at it.
-  const reopenRound = canFinalize ? ((rnd) => onFinalizeRound(rnd, false)) : null;
-  const recalcHandicaps = canFinalize
-    ? ((rnd, inputs) => onLockRound(rnd, { refresh: true, inputs }))
-    : null;
+  // One button doing both would re-score a round every time a director
+  // reopened one to look at it.
   // The notification itself: whichever stage the round has reached, and only
   // until the director puts THAT STAGE away. Dismissing "all scores are in"
   // leaves the "ready to finalize" bar still to come.

@@ -750,10 +750,13 @@ export function FinalizeRoundSheet({
             </div>
           )}
 
+          {/* The one thing the dialogs behind the button do NOT say, and the
+              one a director gets wrong: reopening is half the job. What
+              reopening costs is computed and printed by the confirm itself
+              (amendImpactLines), so restating any of it here would be a
+              second copy that cannot be kept honest. */}
           <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.45, marginBottom: 10 }}>
-            Reopening Round {amendTarget} lets its scores and settings be edited again, and
-            is recorded on the round permanently. Handicaps stay frozen until you recalculate
-            it in Admin → Rounds.
+            Handicaps stay frozen until you recalculate it in Admin → Rounds.
           </div>
 
           <button onClick={doAmend} disabled={busy} style={{
