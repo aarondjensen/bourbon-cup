@@ -31,6 +31,7 @@ import { fmtPts, fmtScore } from "../scoring";
 import { formatLabel } from "../constants";
 import { switchEdition } from "../lib/editions";
 import { useArchive } from "../lib/useArchive";
+import { streakWhere } from "../lib/streaks";
 
 // ── Small shared furniture ────────────────────────────────────────
 const card = themedStyle(() => ({ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 12 }));
@@ -445,20 +446,24 @@ function PlayerCard({ p, data, activeYear }) {
   );
 }
 
+// A ranked list under a label: 1, 2, 3 down the left and whatever the record
+// is across the row. Every board on this half of the tab is one of these.
+const RecordList = ({ label, rows = [], render }) => !!rows.length && (
+  <div style={{ marginBottom: 12 }}>
+    <div style={eyebrow}>{label}</div>
+    {rows.map((x, i) => (
+      <div key={i} style={{ display: "flex", gap: 8, padding: "4px 0", borderTop: i ? hair() : "none", fontSize: FS.small }}>
+        <span style={{ width: 14, color: BC.t3, fontWeight: 800 }}>{i + 1}</span>
+        {render(x)}
+      </div>
+    ))}
+  </div>
+);
+
 // ── Personal records ──────────────────────────────────────────────
 function PlayerRecords({ data }) {
   const r = data.records;
-  const list = (label, rows, render) => !!rows.length && (
-    <div style={{ marginBottom: 12 }}>
-      <div style={eyebrow}>{label}</div>
-      {rows.map((x, i) => (
-        <div key={i} style={{ display: "flex", gap: 8, padding: "4px 0", borderTop: i ? hair() : "none", fontSize: FS.small }}>
-          <span style={{ width: 14, color: BC.t3, fontWeight: 800 }}>{i + 1}</span>
-          {render(x)}
-        </div>
-      ))}
-    </div>
-  );
+  const list = (label, rows, render) => <RecordList label={label} rows={rows} render={render} />;
 
   return (
     <Section label="Records" note="ALL YEARS">
@@ -510,6 +515,52 @@ function PlayerRecords({ data }) {
         </>
       ))}
     </Section>
+  );
+}
+
+// ── Streaks ───────────────────────────────────────────────────────
+// Two cards rather than one, because nine boards in a single card is a wall
+// and the split does the grouping that a sentence would otherwise have to.
+// The hole streaks are all inside one cup (see archiveFold), so the span on
+// the right is always a week somebody could go and check.
+function Streaks({ data }) {
+  const s = data.streaks;
+  const row = (color) => (x) => (
+    <>
+      <span style={{ flex: 1, minWidth: 0, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{x.name}</span>
+      <span style={{ width: 26, textAlign: "right", fontWeight: 800, color }}>{x.len}</span>
+      <span style={{ width: 84, textAlign: "right", color: BC.t3, fontSize: FS.micro }}>{streakWhere(x)}</span>
+    </>
+  );
+  const hot = row(BC.amberInk);
+  const cold = row(BC.danger);
+  const any = (...boards) => boards.some((b) => b && b.length);
+
+  if (!any(s.cupsWon, s.matchWins, s.holesWon, s.netPar, s.noDouble,
+    s.cupsLost, s.winless, s.holesLost, s.noPar)) return null;
+
+  return (
+    <>
+      {any(s.cupsWon, s.matchWins, s.holesWon, s.netPar, s.noDouble) && (
+        <Section label="Streaks" note="ALL YEARS">
+          <RecordList label="CUPS WON IN A ROW" rows={s.cupsWon} render={hot} />
+          <RecordList label="MATCHES WON IN A ROW" rows={s.matchWins} render={hot} />
+          <RecordList label="HOLES WON IN A ROW" rows={s.holesWon} render={hot} />
+          {/* OWN BALL, like LOW ROUNDS above and for the same reason — a net
+              par on a scramble ball is a par the side made. */}
+          <RecordList label="NET PAR OR BETTER · OWN BALL" rows={s.netPar} render={hot} />
+          <RecordList label="HOLES WITHOUT A NET DOUBLE" rows={s.noDouble} render={hot} />
+        </Section>
+      )}
+      {any(s.cupsLost, s.winless, s.holesLost, s.noPar) && (
+        <Section label="Cold streaks" note="ALL YEARS">
+          <RecordList label="CUPS LOST IN A ROW" rows={s.cupsLost} render={cold} />
+          <RecordList label="MATCHES WITHOUT A WIN" rows={s.winless} render={cold} />
+          <RecordList label="HOLES LOST IN A ROW" rows={s.holesLost} render={cold} />
+          <RecordList label="HOLES WITHOUT A NET PAR" rows={s.noPar} render={cold} />
+        </Section>
+      )}
+    </>
   );
 }
 
@@ -613,6 +664,7 @@ function PlayerHalf({ data, activeYear, myId, teams }) {
         data={data} open={open} setOpen={setOpen}
       />
       {scope === "career" && <PlayerRecords data={data} />}
+      {scope === "career" && <Streaks data={data} />}
     </div>
   );
 }

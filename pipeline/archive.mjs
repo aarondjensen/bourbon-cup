@@ -40,15 +40,24 @@
 //
 // ── What is NOT in here ───────────────────────────────────────────
 // Hole-by-hole scores. 11,340 of them is most of a megabyte, and nothing on
-// the tab asks a question below the level of a round. The one hole-level fact
-// that earns its place is `a9`, the match status at the turn, because "down
-// three and won it" cannot be recovered from a final margin.
+// the tab asks for the number written on a hole. Three hole-level facts earn
+// their place because nothing above them can reconstruct what they say:
+//
+//   a9      the match status at the turn — "down three and won it" cannot be
+//           recovered from a final margin.
+//   np/hr   eighteen characters each, what the hole did rather than what was
+//           written on it (src/lib/streaks.js). A streak is a claim about two
+//           holes being next to each other, and a card that ships its birdies
+//           as a COUNT has thrown the order away. 36 bytes a card against the
+//           ~800 the scores would cost.
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PLAYERS, norm } from "./players.mjs";
 import { buildVerified, appView, scoreMatch } from "../src/lib/historyVerify.js";
 import { historyPlayerId } from "../src/lib/historyImport.js";
+import { buildStrokeMap, resolveHoleHcps } from "../src/scoring.js";
+import { encodeHoles, holeMark, netMark, HOLES_PER_ROUND } from "../src/lib/streaks.js";
 
 const DATA_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "data");
 const read = (f) => JSON.parse(readFileSync(join(DATA_DIR, f), "utf8"));
@@ -119,9 +128,19 @@ const factsFor = (edition) => {
     })
     .sort((a, b) => a.round - b.round);
 
+  // Every hole's result, from the side of the man whose card it is. Banked
+  // here because this is where the engine is asked; a card has no idea which
+  // match it was in.
+  const holeRes = {};
   const matches = built.bc_matches
     .map((m) => {
       const res = scoreMatch(built, view, m);
+      [["A", m.teamA], ["B", m.teamB]].forEach(([side, ids]) => {
+        (ids || []).forEach((pid) => {
+          holeRes[`${m.round}_${pid}`] = encodeHoles((res.holes || [])
+            .map((h) => holeMark(h.winner, side, h.played)));
+        });
+      });
       return {
         year,
         round: m.round,
@@ -150,6 +169,14 @@ const factsFor = (edition) => {
   // `d` is double bogey OR WORSE. The sheets' own bucket was the same, which
   // is why their identity only reconstructs on the 47% of rounds where nobody
   // went past a double.
+  // Strokes for a handicap on a round, memoized: the map is the same for every
+  // man off the same number, and there are 630 cards to build one for.
+  const strokeCache = {};
+  const strokesFor = (round, ch) => (strokeCache[`${round}_${ch}`] ||= buildStrokeMap(
+    Number(ch) || 0,
+    resolveHoleHcps(courseFor(round), view.roundLocks[round]),
+  ));
+
   const parByRound = Object.fromEntries(rounds.map((r) => [r.round, r.par]));
   const parsByRound = Object.fromEntries(built.bc_rounds.map((r) => {
     const c = courseFor(r.round_number);
@@ -169,14 +196,34 @@ const factsFor = (edition) => {
         else if (v === 1) bo += 1; else d += 1;
       });
       const fact = matchFacts.find((f) => f.year === year && f.round === r.round && f.player === r.player);
+      const ch = view.roundLocks[r.round]?.players?.[pid]?.ch ?? r.course_handicap;
       return {
         year,
         round: r.round,
         p: r.player,
         g: gross,
-        ch: view.roundLocks[r.round]?.players?.[pid]?.ch ?? r.course_handicap,
+        ch,
         tp: gross - (parByRound[r.round] ?? 72),
         e, b, pr, bo, d,
+        // The net card, hole by hole, bucketed (src/lib/streaks.js). Net is
+        // his own full course handicap allocated down the stroke index — the
+        // same arithmetic lib/scoresExport prints in its NET block and the
+        // same one lib/archiveLive does for the running year.
+        //
+        // NOT the sheets' own `net` and `strokes_received` columns, which do
+        // not survive being checked: on eight of the forty rounds their net is
+        // not their own gross less their own strokes, and on seven the strokes
+        // are not the handicap they recorded either. Same call the birdie
+        // counts above make, for the same reason — a number the app can
+        // compute for this year too beats a number only the sheets have.
+        np: encodeHoles(Array.from({ length: HOLES_PER_ROUND }, (_, h) => {
+          const g = holes[h];
+          if (g == null) return null;
+          return netMark(g - (strokesFor(r.round, ch)[h] || 0) - (pars[h] ?? 4));
+        })),
+        // How the hole went for his side. Empty when he was not in a match
+        // that round, which is a gap and not a run of halves.
+        hr: holeRes[`${r.round}_${pid}`] || encodeHoles([]),
         // Match status at the turn, from the player's own side. Absent on
         // Round 4, which is one team match against another and never had one.
         ...(fact && fact.after9 != null ? { a9: fact.after9 } : {}),

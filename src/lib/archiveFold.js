@@ -23,7 +23,11 @@
 //   editions  { year, teamA, teamB, roster:[{p,t}], complete? }
 //   rounds    { year, round, format, course, par, rating, slope }
 //   matches   { year, round, A:[id], B:[id], ptsA, ptsB }
-//   cards     { year, round, p, g, ch, tp, e, b, pr, bo, d, a9? }
+//   cards     { year, round, p, g, ch, tp, e, b, pr, bo, d, a9?, np?, hr? }
+//
+// `np` and `hr` are the eighteen-character streak marks — the net card and the
+// hole results, one letter a hole. See src/lib/streaks.js, which owns what a
+// letter means; a card written before they existed simply has no streaks.
 //
 // `complete: false` on an edition marks the year still being played. It is the
 // one flag that changes an answer rather than adding to it: an unfinished cup
@@ -31,6 +35,10 @@
 // two rounds old is not somebody's best week.
 
 import { formatOwnBall } from "../constants";
+import {
+  HOLES_PER_ROUND, NET_BOGEY_OR_WORSE, NET_DOUBLE_OR_WORSE, NET_MARKS,
+  NET_PAR_OR_BETTER, longestRun,
+} from "./streaks";
 
 const sum = (xs) => xs.reduce((a, b) => a + b, 0);
 const byNum = (f) => (a, b) => f(a) - f(b);
@@ -325,6 +333,112 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
     .map((c) => ({ ...c, name: named(c.p), course: roundIx.get(roundKey(c))?.course || "" }))
     .sort(byNum((c) => c.tp));
 
+  // ── Streaks ─────────────────────────────────────────────────────
+  // What happened on consecutive holes, which is the one question a round
+  // summary cannot answer: a card ships its birdies as a COUNT, and a count
+  // has thrown away the order they came in. The marks are per hole and per
+  // card (lib/streaks); the job here is to lay one man's cards end to end in
+  // the order he played them and find the longest run.
+  //
+  // Across ROUNDS, because the run that ends a Saturday and opens a Sunday is
+  // one run and it is the one people remember. Not across CUPS: this event is
+  // played once a year, so a run carried over the New Year is a claim about
+  // two holes twelve months apart, and the men it would flatter most are the
+  // ones who happened to par the 18th. Worse, a man who played 2019 and next
+  // played 2023 has no card in between for it to break on — his last hole of
+  // one cup and his first of the other would read as consecutive. So a cup
+  // starts every hole streak fresh, and each one is locatable to a week
+  // somebody could go and check.
+  //
+  // Match and cup streaks DO cross years, because that is what those records
+  // are: "he has won his last seven" is a sentence about matches, and a cup
+  // defended is a cup defended.
+  //
+  // Nor can a run cross a hole with no mark on it: an unplayed hole, a match
+  // the other side never finished, or a shared-ball round. See longestRun.
+  const cardsByPlayer = new Map();
+  cards.slice()
+    .sort((a, b) => a.year - b.year || a.round - b.round)
+    .forEach((c) => {
+      if (!cardsByPlayer.has(c.p)) cardsByPlayer.set(c.p, []);
+      cardsByPlayer.get(c.p).push(c);
+    });
+
+  // `ownBall` is the LOW ROUNDS rule again, and for the same reason: a net par
+  // on a scramble ball is a par the side made. A shared-ball round is not
+  // skipped over, it is eighteen gaps — there is no evidence either way about
+  // holes he did not play by himself, so a run cannot be carried through them.
+  const holeSeq = (cs, key, ownBall) => {
+    const out = [];
+    let lastYear = null;
+    cs.forEach((c) => {
+      // The break between one cup and the next, as a gap like any other.
+      if (lastYear != null && c.year !== lastYear) out.push({ v: null, year: c.year, round: null, hole: 0 });
+      lastYear = c.year;
+      const marks = ownBall && !formatOwnBall(roundIx.get(roundKey(c))?.format)
+        ? "" : String(c[key] || "");
+      for (let h = 0; h < HOLES_PER_ROUND; h++) {
+        out.push({ v: marks[h] || null, year: c.year, round: c.round, hole: h + 1 });
+      }
+    });
+    return out;
+  };
+
+  // Cups in the order he PLAYED them, not in calendar order. A man cannot
+  // defend a cup he did not travel to, and ending his run on the year he was
+  // at somebody's wedding would be a record about attendance. Only finished
+  // cups, like every other record here, and a halved cup is neither won nor
+  // lost so it ends both runs.
+  const cupsOrdered = editionRows.slice().sort((a, b) => a.year - b.year).filter((e) => e.complete);
+  const cupSeq = (id) => cupsOrdered
+    .filter((e) => e.roster.some((r) => r.p === id))
+    .map((e) => {
+      const t = e.roster.find((r) => r.p === id).t;
+      return { v: e.halved ? "H" : e.winnerSide === t ? "W" : "L", year: e.year, round: null };
+    });
+
+  const matchesOrdered = matches.slice().sort((a, b) => a.year - b.year || a.round - b.round);
+  const matchSeq = (id) => matchesOrdered
+    .filter((m) => m.A.includes(id) || m.B.includes(id))
+    .map((m) => {
+      const mine = m.A.includes(id) ? m.ptsA : m.ptsB;
+      const theirs = m.A.includes(id) ? m.ptsB : m.ptsA;
+      return { v: mine > theirs ? "W" : mine < theirs ? "L" : "H", year: m.year, round: m.round };
+    });
+
+  const streakRows = careerRows.map((r) => {
+    const cs = cardsByPlayer.get(r.id) || [];
+    const res = holeSeq(cs, "hr", false);
+    const net = holeSeq(cs, "np", true);
+    const cup = cupSeq(r.id);
+    const mat = matchSeq(r.id);
+    return {
+      id: r.id, name: r.name,
+      cupsWon: longestRun(cup, (v) => v === "W"),
+      cupsLost: longestRun(cup, (v) => v === "L"),
+      matchWins: longestRun(mat, (v) => v === "W"),
+      // Literally without a WIN — a halve continues it. It is the run a man
+      // wants to end, and he does not end it by halving.
+      winless: longestRun(mat, (v) => v !== "W"),
+      holesWon: longestRun(res, (v) => v === "W"),
+      holesLost: longestRun(res, (v) => v === "L"),
+      netPar: longestRun(net, (v) => NET_PAR_OR_BETTER.has(v)),
+      noDouble: longestRun(net, (v) => NET_MARKS.has(v) && !NET_DOUBLE_OR_WORSE.has(v)),
+      noPar: longestRun(net, (v) => NET_BOGEY_OR_WORSE.has(v)),
+    };
+  });
+
+  // Two is the floor. A run of one is not a streak, it is a thing that
+  // happened once, and a board of them would be every golfer who has ever
+  // won a hole. Ties go to the older run, then to the name, so the list is
+  // the same on every phone.
+  const board = (key, n = 3) => streakRows
+    .map((s) => (s[key] ? { id: s.id, name: s.name, ...s[key] } : null))
+    .filter((s) => s && s.len >= 2)
+    .sort((a, b) => b.len - a.len || a.from.year - b.from.year
+      || String(a.name).localeCompare(String(b.name)))
+    .slice(0, n);
+
   const top = (xs, n = 5) => xs.slice(0, n);
   const records = {
     lowRounds: top(rankedCards),
@@ -343,6 +457,18 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
     hardest: courseRows.filter((c) => c.cards).slice().sort((a, b) => b.avgToPar - a.avgToPar)[0] || null,
     easiest: courseRows.filter((c) => c.cards).slice().sort(byNum((c) => c.avgToPar))[0] || null,
     cupsPlayed: finished.length,
+  };
+
+  const streaks = {
+    cupsWon: board("cupsWon"),
+    matchWins: board("matchWins"),
+    holesWon: board("holesWon"),
+    netPar: board("netPar"),
+    noDouble: board("noDouble"),
+    cupsLost: board("cupsLost"),
+    winless: board("winless"),
+    holesLost: board("holesLost"),
+    noPar: board("noPar"),
   };
 
   return {
@@ -368,5 +494,7 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
     courses: courseRows,
     roundDrama,
     records,
+    streaks,
+    streakOf: (id) => streakRows.find((s) => s.id === id) || null,
   };
 };
