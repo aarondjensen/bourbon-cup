@@ -44,8 +44,9 @@ afterEach(cleanup);
 
 const teams = { A: { id: "A", name: "Irons", accent: "#00ae52" }, B: { id: "B", name: "Drivers", accent: "#46b4c0" } };
 const tPlayers = [
-  // Signed in, and holds both roles.
-  { player_id: "p1", name: "Dave K", first_name: "Dave", last_name: "Kelly", team: "A", handicap_index: 9.4, auth_uid: "u1" },
+  // Signed in, and holds both roles. GHIN-linked, so a save that drops the
+  // link is the thing the tests below guard against.
+  { player_id: "p1", name: "Dave K", first_name: "Dave", last_name: "Kelly", team: "A", handicap_index: 9.4, auth_uid: "u1", ghin_number: "1234567", ghin_name: "David Kelly", ghin_rev_date: "2026-01-01", ghin_synced_at: "2026-01-02T00:00:00.000Z" },
   // Signed in, holds neither.
   { player_id: "p2", name: "Paul W", first_name: "Paul", last_name: "Wynn", team: "A", handicap_index: 4.1, auth_uid: "u2" },
   // Never signed in — there is no membership document to flag.
@@ -197,5 +198,27 @@ describe("what a tap costs", () => {
       .filter(b => /^confirm$/i.test((b.textContent || "").trim())).pop();
     await act(async () => { fireEvent.click(yes); });
     expect(grants).toEqual([["u2", "A"]]);
+  });
+
+  // The edit button's seed never carried the four ghin_* fields into the
+  // form, so `editingPlayer.ghin_number` started every sheet as undefined —
+  // not what the roster row actually held. Toggling a role (or renaming, or
+  // anything else that makes the form dirty) then saved straight over Dave's
+  // real GHIN link with `ghin_number: null`, because doSave spreads
+  // `ghinFields` unconditionally. Reported as "tagging a player captain
+  // unlinked their GHIN" — it would have done the same for any edit at all.
+  it("carries the player's existing GHIN link through a role toggle", async () => {
+    let saved = null;
+    const c = sheet("Dave K", { onUpdatePlayer: async (patch) => { saved = patch; } });
+    await act(async () => { fireEvent.click(horn(c)); }); // Dave already captains Irons — this stands him down.
+    await act(async () => { fireEvent.click(press(c, "SAVE")); });
+    const yes = [...c.querySelectorAll("button")]
+      .filter(b => /^confirm$/i.test((b.textContent || "").trim())).pop();
+    await act(async () => { fireEvent.click(yes); });
+    expect(saved).toBeTruthy();
+    expect(saved.ghin_number).toBe("1234567");
+    expect(saved.ghin_name).toBe("David Kelly");
+    expect(saved.ghin_rev_date).toBe("2026-01-01");
+    expect(saved.ghin_synced_at).toBe("2026-01-02T00:00:00.000Z");
   });
 });

@@ -1609,7 +1609,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                       {synced && <span style={{ fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.2, color: BC.hcpBlue, border: `1px solid ${BC.hcpBlue}${ALPHA.line}`, background: BC.hcpBlue + ALPHA.tint, borderRadius: 3, padding: "1px 3px", lineHeight: 1 }}>G</span>}
                     </span>
                     <span style={{ flex: 1, minWidth: 8 }} />
-                    <button onClick={() => setEditingPlayer(seedPlayerForm({ pid: p.player_id, team: p.team, first: p.first_name || (p.last_name ? "" : (p.name || "")), last: p.last_name || "", nick: p.name || "", hi: String(p.handicap_index), ov: (p.hi_override != null && String(p.hi_override).trim() !== "") ? String(p.hi_override) : "", dir: playerIsDirector(memberships, p), cap: captainOf(p) === p.team, wd: p.withdrawn === true }))} style={{
+                    <button onClick={() => setEditingPlayer(seedPlayerForm({ pid: p.player_id, team: p.team, first: p.first_name || (p.last_name ? "" : (p.name || "")), last: p.last_name || "", nick: p.name || "", hi: String(p.handicap_index), ov: (p.hi_override != null && String(p.hi_override).trim() !== "") ? String(p.hi_override) : "", dir: playerIsDirector(memberships, p), cap: captainOf(p) === p.team, wd: p.withdrawn === true, ghin_number: p.ghin_number || null, ghin_name: p.ghin_name || null, ghin_rev_date: p.ghin_rev_date || null, ghin_synced_at: p.ghin_synced_at || null }))} style={{
                       fontSize: FS.label, padding: "2px 8px", borderRadius: 4, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer", flexShrink: 0,
                     }}>Edit</button>
                   </div>
