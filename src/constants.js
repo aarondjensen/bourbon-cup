@@ -63,10 +63,23 @@ export const oppTeam = (tid) => tid === "A" ? TEAM_B : TEAM_A;
 export const TOURNAMENT_TITLE = "The Bourbon Cup";
 export const TOURNAMENT_LOCATION = "Gaylord, MI";
 
-// The tournament's own photo site — every year that was photographed before
-// the app had a gallery of its own. The Photos tab links out to it rather than
-// trying to be it; see src/components/PhotosView.jsx.
-export const PHOTO_LIBRARY_URL = "https://thebourboncup.com/photos";
+// ── The tournament's own photo site, when there is one ─────────────
+// Every year that was photographed before the app had a gallery of its own.
+// The Photos tab links out to it rather than trying to be it, and renders
+// NOTHING when this is blank — see src/components/PhotosView.jsx.
+//
+// **Blank because the page it named does not exist.** This was
+// `https://thebourboncup.com/photos`, and the site has no such route: the app
+// is one page addressed by HASH (`/#photos`, see lib/deepLink), and
+// `vercel.json` rewrites only `/finalcountdown`. So every player who tapped
+// "The full photo library ↗" got Vercel's 404 — a dead end shipped at the
+// bottom of the tab, on the one screen that invites a tap.
+//
+// Put a real URL here and the row comes back. It has to be a page that is
+// actually served: a `/photos` route added to `vercel.json`, an album on
+// whatever host holds the old years, anything that answers. Not a path this
+// repo would like to have.
+export const PHOTO_LIBRARY_URL = "";
 
 // ── Points to win the cup ──
 // Normally null: the leaderboard works the target out from the schedule —
