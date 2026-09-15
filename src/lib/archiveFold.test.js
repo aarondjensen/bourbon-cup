@@ -166,6 +166,95 @@ describe("the cards", () => {
   });
 });
 
+// ── Streaks ───────────────────────────────────────────────────────
+// The marks themselves are pinned in streaks.test.js. What is pinned here is
+// what the fold refuses to carry a run through.
+describe("streaks", () => {
+  const holes = (np, hr) => ({ np, hr });
+  const cup = (year, cards, format = "best_ball") => ({
+    players: toy.players,
+    editions: [{
+      year, teamA: "REDS", teamB: "BLUES", complete: true,
+      roster: [{ p: "a", t: "A" }, { p: "c", t: "B" }],
+    }],
+    rounds: [{ year, round: 1, format, course: "Toy", par: 72 },
+      { year, round: 2, format, course: "Toy", par: 72 }],
+    matches: [{ year, round: 1, A: ["a"], B: ["c"], ptsA: 3, ptsB: 0 }],
+    cards,
+  });
+  const card = (year, round, p, marks) => ({
+    year, round, p, g: 80, ch: 8, tp: 8, e: 0, b: 0, pr: 0, bo: 0, d: 0, ...marks,
+  });
+
+  it("carries a run from one round into the next", () => {
+    const f = foldArchive(cup(2001, [
+      card(2001, 1, "a", holes("111111111111111PPP", "------------------")),
+      card(2001, 2, "a", holes("PPPPP1111111111111", "------------------")),
+    ]));
+    // Three to finish Friday and five to open Saturday is one run of eight.
+    expect(f.streaks.netPar[0].len).toBe(8);
+    expect(f.streaks.netPar[0].from.round).toBe(1);
+    expect(f.streaks.netPar[0].to.round).toBe(2);
+  });
+
+  it("starts a new cup fresh, so no run is twelve months long", () => {
+    const one = cup(2001, [card(2001, 2, "a", holes("1111111111111111PP", ""))]);
+    const two = cup(2002, [card(2002, 1, "a", holes("PPPP11111111111111", ""))]);
+    const f = foldArchive({
+      players: toy.players,
+      editions: [...one.editions, ...two.editions],
+      rounds: [...one.rounds, ...two.rounds],
+      matches: [...one.matches, ...two.matches],
+      cards: [...one.cards, ...two.cards],
+    });
+    // Two to end 2001 and four to open 2002 is a four, not a six.
+    expect(f.streaks.netPar[0].len).toBe(4);
+    expect(f.streaks.netPar[0].from.year).toBe(2002);
+  });
+
+  it("will not carry a net run through a shared ball", () => {
+    const base = cup(2001, [
+      card(2001, 1, "a", holes("PPPPPPPPPPPPPPPPPP", "")),
+      card(2001, 2, "a", holes("PPPPPPPPPPPPPPPPPP", "")),
+    ]);
+    expect(foldArchive(base).streaks.netPar[0].len).toBe(36);
+    // The same two cards with a scramble in the middle of them: the shared
+    // ball is eighteen gaps, so 36 becomes two 18s.
+    const split = { ...base, rounds: base.rounds.map((r) => r.round === 2 ? { ...r, format: "scramble" } : r) };
+    expect(foldArchive(split).streaks.netPar[0].len).toBe(18);
+  });
+
+  it("counts a halved hole as neither won nor lost", () => {
+    const f = foldArchive(cup(2001, [
+      card(2001, 1, "a", holes("", "WWHWW-------------")),
+    ]));
+    expect(f.streaks.holesWon[0].len).toBe(2);
+    expect(f.streaks.holesLost).toEqual([]);
+  });
+
+  it("counts a halve into a winless run, because it is not a win", () => {
+    const f = foldArchive({
+      ...toy,
+      editions: [{ ...toy.editions[0], complete: true }],
+    });
+    // b halved his singles and was on the winning four-ball, so his longest
+    // run without a win is the one halve.
+    expect(f.streakOf("b").winless.len).toBe(1);
+    expect(f.streakOf("d").winless.len).toBe(2);
+  });
+
+  it("keeps a run of one off the board", () => {
+    const f = foldArchive(cup(2001, [card(2001, 1, "a", holes("", "W-W-W-------------"))]));
+    expect(f.streaks.holesWon).toEqual([]);
+  });
+
+  it("says nothing at all about cards with no marks on them", () => {
+    const f = foldArchive(toy);
+    expect(f.streaks.netPar).toEqual([]);
+    expect(f.streaks.holesWon).toEqual([]);
+  });
+});
+
 describe("an unfinished cup is not a record", () => {
   const running = {
     ...toy,
@@ -277,6 +366,38 @@ describe("the committed archive", () => {
     expect(shared.size).toBeGreaterThan(0);
     expect(f.records.lowRounds.filter((c) => shared.has(`${c.year}_${c.round}`))).toEqual([]);
     expect(f.career.filter((r) => r.best && shared.has(`${r.best.year}_${r.best.round}`))).toEqual([]);
+  });
+
+  it("gives every card eighteen streak marks", () => {
+    archive.cards.forEach((c) => {
+      expect(c.np).toHaveLength(18);
+      expect(c.hr).toHaveLength(18);
+      expect(c.np).toMatch(/^[EBP123-]{18}$/);
+      expect(c.hr).toMatch(/^[WLH-]{18}$/);
+    });
+  });
+
+  // Every hole streak is inside one cup, so the span on screen is always a
+  // week somebody could go and check.
+  it("keeps every hole streak inside a single year", () => {
+    ["holesWon", "holesLost", "netPar", "noDouble", "noPar"].forEach((k) => {
+      expect(f.streaks[k].length).toBeGreaterThan(0);
+      f.streaks[k].forEach((s) => expect(s.from.year).toBe(s.to.year));
+    });
+  });
+
+  // And no net streak is standing on a ball two men shared.
+  it("runs no net streak through a shared-ball round", () => {
+    const shared = new Set(archive.rounds
+      .filter((r) => ["scramble", "pinehurst", "shamble"].includes(r.format))
+      .map((r) => `${r.year}_${r.round}`));
+    ["netPar", "noDouble", "noPar"].forEach((k) => {
+      f.streaks[k].forEach((s) => {
+        for (let round = s.from.round; round <= s.to.round; round++) {
+          expect(shared.has(`${s.from.year}_${round}`)).toBe(false);
+        }
+      });
+    });
   });
 
   it("counts every card's holes as eighteen", () => {

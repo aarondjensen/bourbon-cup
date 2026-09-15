@@ -23,12 +23,13 @@
 // (historyVerify proves it on every `npm test`), so which one wins is a
 // question of freshness, not of truth: the live one can have a director's
 // correction on it that the committed archive has not been rebuilt for.
-import { computeMatchResult, getRoundCourseCtx } from "../scoring";
+import { computeMatchResult, getRoundCourseCtx, buildStrokeMap } from "../scoring";
 import { DEFAULT_FORMAT, SCORING_TYPE_MATCH } from "../constants";
 import { isRoundFinal } from "./roundLocks";
 import { realPlayers } from "./players";
 import { scheduledRounds } from "./rounds";
 import { aliasIndex, norm } from "./archiveFold";
+import { encodeHoles, holeMark, netMark } from "./streaks";
 
 export const HOLES_PER_ROUND = 18;
 
@@ -103,6 +104,11 @@ export const liveFacts = ({
   // Matches, scored by the app's engine — the same call the leaderboard makes,
   // so a live row and an archived one are the same kind of fact.
   const front = {};
+  // Every hole's result, written from the side of the man whose card it is —
+  // the streak marks (lib/streaks). Banked here for the same reason `front`
+  // is: this is where the engine gets asked, and a card row does not know
+  // which match it was in.
+  const holeRes = {};
   const matchRows = matches
     .filter((m) => roundNumbers.includes(m.round))
     .map((m) => {
@@ -121,6 +127,12 @@ export const liveFacts = ({
         (m.teamA || []).forEach((p) => { front[`${m.round}_${p}`] = turn; });
         (m.teamB || []).forEach((p) => { front[`${m.round}_${p}`] = -turn; });
       }
+      [["A", m.teamA], ["B", m.teamB]].forEach(([side, ids]) => {
+        (ids || []).forEach((p) => {
+          holeRes[`${m.round}_${p}`] = encodeHoles((res.holes || [])
+            .map((h) => holeMark(h.winner, side, h.played)));
+        });
+      });
       return {
         year, round: m.round,
         A: (m.teamA || []).map(cid).filter(Boolean).sort(),
@@ -158,6 +170,15 @@ export const liveFacts = ({
       if (played.length !== HOLES_PER_ROUND) return;
       const pars = ctx(round).holePars || [];
       const gross = played.reduce((s, h) => s + card[h], 0);
+      const ch = roundLocks?.[round]?.players?.[p.player_id]?.ch ?? null;
+      // The net card, hole by hole, bucketed — his own full course handicap
+      // allocated down the stroke index, which is what lib/scoresExport prints
+      // as a net card and what pipeline/archive.mjs writes for the ten years
+      // that are over. No handicap means no net card rather than a net card
+      // off scratch: a round that has not locked has nothing to freeze, and
+      // eighteen holes silently scored off zero strokes would read as the best
+      // streak anybody ever had.
+      const strokes = ch == null ? null : buildStrokeMap(Number(ch) || 0, ctx(round).holeHcps || []);
       const parSum = played.reduce((s, h) => s + (pars[h] ?? 4), 0);
       let e = 0, b = 0, pr = 0, bo = 0, d = 0;
       played.forEach((h) => {
@@ -169,9 +190,14 @@ export const liveFacts = ({
       cardRows.push({
         year, round, p: cid(p.player_id),
         g: gross,
-        ch: roundLocks?.[round]?.players?.[p.player_id]?.ch ?? null,
+        ch,
         tp: gross - parSum,
         e, b, pr, bo, d,
+        np: encodeHoles(strokes == null ? [] : Array.from({ length: HOLES_PER_ROUND }, (_, h) => {
+          const g = card[h];
+          return g > 0 ? netMark(g - (strokes[h] || 0) - (pars[h] ?? 4)) : null;
+        })),
+        hr: holeRes[`${round}_${p.player_id}`] || encodeHoles([]),
         ...(turn != null ? { a9: turn } : {}),
       });
     });
