@@ -3731,11 +3731,33 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
             // siblings, and the picker's backdrop painted straight over it.
             // With both on <body> the ladder in Popup.jsx actually applies:
             // picker 450 < editor 500 (content) < ConfirmModal 900 (modal).
+            //
+            // `viewportFit align="start"` is load-bearing too, and it was the
+            // one thing this editor was missing that every other typed-into
+            // popup in the app already had — the player sheet above, GhinLink,
+            // SideBets, Ledger, Budget, EditionSwitcher, TripInfo. Without it
+            // the overlay is sized to the LAYOUT viewport, which no mobile
+            // browser shrinks for the keyboard, and the card is centred in it.
+            // So tapping into the name field moved the card: the shell resizes
+            // under the keys and a centred card re-centres, jumping it a
+            // hundred-odd pixels while a thumb is still on its way back down.
+            // What the director sees is the sheet closing on them a second or
+            // two after they put the cursor in — their tap landed on the
+            // backdrop the card used to be over, and a backdrop tap discards a
+            // draft course. Pinned to the visible rect and aligned to its top,
+            // the card does not move when the keyboard arrives, and the whole
+            // of it stays above the keys instead of half of it hiding behind
+            // them.
+            //
+            // It brings the card's own scrolling with it: a viewportFit Popup
+            // hands scrolling to the content (see Popup.jsx), so the frame is
+            // header / scroller / actions, exactly as the player sheet is.
             return (
-              <Popup onClose={() => setCoursePreview(null)} maxWidth={420} padding={0} portal innerStyle={{ background: BC.card, borderRadius: 16, border: `1px solid ${BC.amber}${ALPHA.line}` }}>
+              <Popup onClose={() => setCoursePreview(null)} maxWidth={420} padding={0} portal viewportFit align="start"
+                innerStyle={{ background: BC.card, borderRadius: 16, border: `1px solid ${BC.amber}${ALPHA.line}`, display: "flex", flexDirection: "column" }}>
 
                   {/* Header */}
-                  <div style={{ padding: "14px 16px 10px", borderBottom: `1px solid ${BC.bdr}`, position: "sticky", top: 0, background: BC.card, zIndex: 1 }}>
+                  <div style={{ flexShrink: 0, padding: "14px 16px 10px", borderBottom: `1px solid ${BC.bdr}`, background: BC.card }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                       <div style={{ flex: 1, marginRight: 8 }}>
                         <input value={draft.name} onChange={e => setDraft(p => ({...p, name: e.target.value}))}
@@ -3759,7 +3781,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                     )}
                   </div>
 
-                  <div style={{ padding: "12px 16px" }}>
+                  <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", padding: "12px 16px" }}>
                     {/* Tee Boxes */}
                     <div style={{ marginBottom: 14 }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, gap: 6 }}>
@@ -3866,8 +3888,12 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                       })}
                     </div>
 
-                    {/* Actions */}
-                    <div style={{ display: "flex", gap: 8 }}>
+                  </div>
+
+                  {/* Actions — pinned to the foot of the frame, like the player
+                      sheet's. Inside the scroller they sat below eighteen holes
+                      of scorecard, so Save was something you had to go and find. */}
+                  <div style={{ flexShrink: 0, display: "flex", gap: 8, padding: "10px 16px", borderTop: `1px solid ${BC.bdr}` }}>
                       <button onClick={() => setCoursePreview(null)} style={{ flex: 1, padding: "10px 0", borderRadius: 8, background: "transparent", border: `1px solid ${BC.bdr}`, color: BC.t3, fontSize: FS.small, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
                       <button onClick={async () => {
                         const firstTee = draft.tee_boxes?.[0];
@@ -3899,7 +3925,6 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                         doCourseSearch("");
                         notify(`${finalCourse.name} ${isExisting ? "updated" : "added"}!`, "success");
                       }} style={{ flex: 2, padding: "10px 0", borderRadius: 8, background: courseDirty ? `linear-gradient(135deg, ${BC.amber}, ${BC.amberDim})` : BC.inp, border: `1px solid ${courseDirty ? "transparent" : BC.bdr}`, color: courseDirty ? ON_AMBER : BC.t3, fontSize: FS.body, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>{isExisting ? "✓ Save Changes" : "✓ Add Course"}</button>
-                    </div>
                   </div>
               </Popup>
             );
