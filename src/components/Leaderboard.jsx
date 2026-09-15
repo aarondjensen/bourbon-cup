@@ -223,40 +223,58 @@ function SegmentPill({ label, pot, st, pts }) {
       }}>
         {label}{pot ? ` · ${fmtPts(pot)}` : ""}
       </div>
-      {/* A badge, not a button: the label above it is the heading and this is
-          the one fact under it, so it is sized to the figure rather than to
-          the room. It was a rung larger and a third taller, which made three
-          of them across the panel read as the controls they are not.
+      {/* A badge sized to its figure, not to the column. It filled the
+          third it sits in, which is what made three of them read as a row of
+          controls — a segmented picker, and one you could not press. It hugs
+          the number now and centres under its own label.
 
-          A HALVED pot takes the seam the Scoring tab paints a shared hole
-          with — team A's wash in the upper-left wedge, team B's in the lower
-          right, off the same splitFill the strip uses. "½ – ½" said it in
-          words while every other badge said it in colour, and a pot that was
-          split is exactly what that diagonal means everywhere else in the
-          app. A wash rather than the strip's solid team colour, because this
-          one has to be printed on — but a third rather than the won badge's
-          fifteen percent: that badge's TEXT carries its team colour, and a
-          halved one has no single text colour to carry it, so the wedges have
-          to do the telling. At fifteen they are two barely different pale
-          tints and the seam disappears, which is the one thing this must
-          not do. */}
-      <div style={{
-        textAlign: "center", padding: "3px 2px", borderRadius: 6,
-        fontSize: FS.label, fontWeight: 800, lineHeight: 1.15,
-        background: settled && win ? `${color}${ALPHA.tint}`
-          : settled && halved ? splitFill(`${teamColor("A")}${ALPHA.line}`, `${teamColor("B")}${ALPHA.line}`)
-          : "transparent",
-        border: `1px ${settled ? "solid" : "dashed"} ${settled ? (win ? `${color}${ALPHA.line}` : BC.bdr) : `${BC.bdr}`}`,
-        color: settled ? (halved ? BC.t2 : color) : st.played ? color : BC.t3,
-        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-      }}>
-        {perHole ? (
-          <>
-            <span style={{ color: BC.teamA }}>{fmtPts(pts.A)}</span>
-            <span style={{ color: BC.t3 }}>{" – "}</span>
-            <span style={{ color: BC.teamB }}>{fmtPts(pts.B)}</span>
-          </>
-        ) : shown}
+          A HALVED pot wears exactly what a won one wears: the same wash, the
+          same weight, the same size, and its figures in the two teams'
+          colours — the treatment the points badge beside it already uses for
+          a split nine. What makes it a HALVE rather than a win is the seam,
+          the diagonal the Scoring tab paints a shared hole with, off the same
+          splitFill the strip uses.
+
+          The EDGE stays a neutral hairline while a won badge's takes its
+          team's colour — the one part of the treatment that does not carry
+          across, because no border can be two colours at once. Drawing it as
+          a 1px ring of the split behind the badge does work and was tried:
+          the fill is fifteen percent and therefore see-through, so the ring
+          composites up through it and the badge lands near half strength,
+          louder than the two it sits between. A hairline is the quieter
+          wrong answer and this panel can afford it.
+
+          Which is why the wash can stay at the won badge's fifteen percent.
+          It could not while the text was grey: two pale tints with nothing
+          else to tell them apart have no visible seam, and the first cut of
+          this went to a third to compensate — louder than every other badge,
+          for a result that is not louder. Colouring the halves puts the
+          telling back in the type, where the rest of this panel keeps it. */}
+      <div style={{ display: "flex", justifyContent: "center" }}>
+        <div style={{
+          textAlign: "center", padding: "2px 12px", borderRadius: 5,
+          fontSize: FS.label, fontWeight: 800, lineHeight: 1.2,
+          background: settled && win ? `${color}${ALPHA.tint}`
+            : settled && halved ? splitFill(`${teamColor("A")}${ALPHA.tint}`, `${teamColor("B")}${ALPHA.tint}`)
+            : "transparent",
+          border: `1px ${settled ? "solid" : "dashed"} ${settled ? (win ? `${color}${ALPHA.line}` : BC.bdr) : `${BC.bdr}`}`,
+          color: settled ? (halved ? BC.t2 : color) : st.played ? color : BC.t3,
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
+        }}>
+          {perHole ? (
+            <>
+              <span style={{ color: BC.teamA }}>{fmtPts(pts.A)}</span>
+              <span style={{ color: BC.t3 }}>{" – "}</span>
+              <span style={{ color: BC.teamB }}>{fmtPts(pts.B)}</span>
+            </>
+          ) : settled && halved ? (
+            <>
+              <span style={{ color: BC.teamA }}>½</span>
+              <span style={{ color: BC.t3 }}>{" – "}</span>
+              <span style={{ color: BC.teamB }}>½</span>
+            </>
+          ) : shown}
+        </div>
       </div>
     </div>
   );
