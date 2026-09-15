@@ -153,8 +153,9 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
         w: 0, l: 0, h: 0, pts: 0, matches: 0,
         rounds: 0, toPar: 0, holesToPar: 0,
         e: 0, b: 0, pr: 0, bo: 0, d: 0,
-        best: null, byFormat: {}, byYear: [],
-        sgGross: 0, sgNet: 0, sgRounds: 0, sgNets: 0, bestSg: null,
+        best: null, bestNet: null, byFormat: {}, byYear: [],
+        netRounds: 0, netToPar: 0, nE: 0, nB: 0, nP: 0, nBo: 0, nD: 0,
+        sgGross: 0, sgNet: 0, sgRounds: 0, sgNets: 0, bestSg: null, bestSgNet: null,
         cupsWon: 0, cupsLost: 0, cupsHalved: 0,
         comebacks: 0, collapses: 0,
       });
@@ -174,6 +175,7 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
         year: e.year, team: t,
         teamName: t === "A" ? e.teamA : e.teamB,
         w: 0, l: 0, h: 0, pts: 0, matches: 0, rounds: 0, toPar: 0, best: null,
+        netRounds: 0, netToPar: 0, bestNet: null,
         sgGross: 0, sgNet: 0, sgRounds: 0, sgNets: 0,
       });
       if (e.complete) {
@@ -283,13 +285,52 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
     return { gross, net };
   };
 
+  // ── Net, beside gross ───────────────────────────────────────────
+  // Every figure below has two readings, and until the Gross/Net toggle the
+  // tab only ever showed one of them. That was not neutral: a gross board is
+  // a board about who has the lowest handicap, and on a record where the
+  // field runs from scratch to thirty-three it is the same four names on
+  // everything. Paul S has ten gross birdies and two hundred and two net.
+  //
+  // The round figure is exact arithmetic — `tp` is gross against par and `ch`
+  // is the handicap the round was played off, so net against par is `tp - ch`
+  // and net score is `g - ch`. The same net card lib/scoresExport prints.
+  //
+  // The hole COUNTS come off the `np` marks instead (lib/streaks), because
+  // eagles, birdies and pars are per hole and no round total can recover
+  // them. This is what CLAUDE.md's "two definitions of a birdie on one screen
+  // is worse than either" was protecting, and the answer it was waiting for:
+  // one at a time, with a chip that says which. Net was uncomputable for the
+  // running year until the marks shipped; now both halves of the tab can say
+  // it, which was the actual objection.
+  const netOf = (c) => {
+    if (c.ch == null) return null;
+    const marks = String(c.np || "");
+    const n = (set) => [...marks].filter((m) => set.has(m)).length;
+    return {
+      score: c.g - c.ch,
+      toPar: c.tp - c.ch,
+      e: n(new Set(["E"])), b: n(new Set(["B"])), pr: n(new Set(["P"])),
+      bo: n(new Set(["1"])), d: n(NET_DOUBLE_OR_WORSE),
+    };
+  };
+
   // ── Cards ───────────────────────────────────────────────────────
   cards.forEach((c) => {
     const r = row(c.p);
     const meta = roundIx.get(roundKey(c)) || {};
     r.rounds += 1; r.toPar += c.tp;
     r.e += c.e || 0; r.b += c.b || 0; r.pr += c.pr || 0; r.bo += c.bo || 0; r.d += c.d || 0;
-    const shot = { year: c.year, round: c.round, gross: c.g, toPar: c.tp, course: meta.course || "", par: meta.par ?? null };
+    const net = netOf(c);
+    if (net) {
+      r.netRounds += 1; r.netToPar += net.toPar;
+      r.nE += net.e; r.nB += net.b; r.nP += net.pr; r.nBo += net.bo; r.nD += net.d;
+    }
+    const shot = {
+      year: c.year, round: c.round, gross: c.g, toPar: c.tp,
+      net: net ? net.score : null, netToPar: net ? net.toPar : null,
+      course: meta.course || "", par: meta.par ?? null,
+    };
     // Ranked on to par, not on gross: a 78 at a par 71 is not the better round
     // and every course here is a different one — thirty-six of them, none
     // played twice.
@@ -300,16 +341,21 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
     // 62" above an all-time list whose lowest is his 64.
     const own = formatOwnBall(meta.format);
     if (own && (!r.best || c.tp < r.best.toPar || (c.tp === r.best.toPar && c.g < r.best.gross))) r.best = shot;
+    if (own && net && (!r.bestNet || net.toPar < r.bestNet.netToPar
+      || (net.toPar === r.bestNet.netToPar && net.score < r.bestNet.net))) r.bestNet = shot;
     const y = yearRow(c.p, c.year);
     if (y) {
       y.rounds += 1; y.toPar += c.tp;
+      if (net) { y.netRounds += 1; y.netToPar += net.toPar; }
       if (own && (!y.best || c.tp < y.best.toPar)) y.best = shot;
+      if (own && net && (!y.bestNet || net.toPar < y.bestNet.netToPar)) y.bestNet = shot;
     }
     const sg = own ? gainOn(c) : null;
     if (sg) {
       r.sgRounds += 1; r.sgGross += sg.gross;
       if (sg.net != null) { r.sgNets += 1; r.sgNet += sg.net; }
       if (!r.bestSg || sg.gross > r.bestSg.sg) r.bestSg = { ...shot, sg: sg.gross };
+      if (sg.net != null && (!r.bestSgNet || sg.net > r.bestSgNet.sg)) r.bestSgNet = { ...shot, sg: sg.net };
       if (y) {
         y.sgRounds += 1; y.sgGross += sg.gross;
         if (sg.net != null) { y.sgNets += 1; y.sgNet += sg.net; }
@@ -332,16 +378,19 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
       .map((y) => ({
         ...y,
         avgToPar: y.rounds ? y.toPar / y.rounds : null,
+        avgNetToPar: y.netRounds ? y.netToPar / y.netRounds : null,
         sg: y.sgRounds ? y.sgGross / y.sgRounds : null,
         sgNetPer: y.sgNets ? y.sgNet / y.sgNets : null,
       })),
     avgToPar: r.rounds ? r.toPar / r.rounds : null,
+    avgNetToPar: r.netRounds ? r.netToPar / r.netRounds : null,
     // Per ROUND rather than totalled: a total is a record about turning up,
     // and this board already sits next to MOST APPEARANCES.
     sg: r.sgRounds ? r.sgGross / r.sgRounds : null,
     sgNetPer: r.sgNets ? r.sgNet / r.sgNets : null,
     ppm: r.matches ? r.pts / r.matches : null,
     birdiesPerRound: r.rounds ? (r.e + r.b) / r.rounds : null,
+    birdiesPerRoundNet: r.netRounds ? (r.nE + r.nB) / r.netRounds : null,
     debut: r.years.length ? Math.min(...r.years) : null,
     last: r.years.length ? Math.max(...r.years) : null,
   })).sort((a, b) => b.pts - a.pts || (a.avgToPar ?? Infinity) - (b.avgToPar ?? Infinity)
@@ -400,8 +449,10 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
   const finished = editionRows.filter((e) => e.complete);
   const played = careerRows.filter((r) => r.matches > 0 || r.rounds > 0);
   const weeks = [];
+  const netWeeks = [];
   played.forEach((r) => r.byYear.forEach((y) => {
     if (y.rounds >= 4) weeks.push({ id: r.id, name: r.name, year: y.year, toPar: y.toPar, rounds: y.rounds });
+    if (y.netRounds >= 4) netWeeks.push({ id: r.id, name: r.name, year: y.year, toPar: y.netToPar, rounds: y.netRounds });
   }));
   // A low round is a round somebody SHOT, so a card is only a candidate when
   // he played his own ball from the tee to the hole — see formatOwnBall. The
@@ -412,8 +463,19 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
     // `id` as well as `p`: it is the card's golfer either way, and every other
     // board on the tab names him `id`. A screen filtering boards by player
     // should not have to know which kind of row it is holding.
-    .map((c) => ({ ...c, id: c.p, name: named(c.p), course: roundIx.get(roundKey(c))?.course || "" }))
-    .sort(byNum((c) => c.tp));
+    .map((c) => ({
+      ...c, id: c.p, name: named(c.p), course: roundIx.get(roundKey(c))?.course || "",
+      net: c.ch == null ? null : c.g - c.ch,
+      netToPar: c.ch == null ? null : c.tp - c.ch,
+    }));
+
+  // Two rankings of the same cards. Gross settles ties on the lower score and
+  // so does net, because a 71 at a par 71 is the better round than a 74 at a
+  // par 74 to nobody, but two men level against par are separated by the one
+  // who took fewer shots to get there.
+  const byGross = rankedCards.slice().sort((a, b) => a.tp - b.tp || a.g - b.g);
+  const byNet = rankedCards.filter((c) => c.netToPar != null)
+    .sort((a, b) => a.netToPar - b.netToPar || a.net - b.net);
 
   // ── Streaks ─────────────────────────────────────────────────────
   // What happened on consecutive holes, which is the one question a round
@@ -545,8 +607,10 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
 
     return {
       records: {
-        lowRounds: top(rankedCards),
+        lowRounds: top(byGross),
+        lowRoundsNet: top(byNet),
         bestWeeks: top(weeks.slice().sort(byNum((w) => w.toPar))),
+        bestWeeksNet: top(netWeeks.slice().sort(byNum((w) => w.toPar))),
         mostPoints: top(played.flatMap((r) => r.byYear.filter((y) => y.matches).map((y) => ({ id: r.id, name: r.name, ...y })))
           .sort((a, b) => b.pts - a.pts)),
         mostApps: top(played.slice().sort((a, b) => b.apps - a.apps || String(a.name).localeCompare(String(b.name)))),
@@ -554,6 +618,7 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
         // cups' worth — below that one hot weekend tops the list forever.
         bestRate: top(played.filter((r) => r.matches >= 12).sort((a, b) => b.ppm - a.ppm)),
         mostBirdies: top(played.filter((r) => r.rounds).slice().sort((a, b) => (b.e + b.b) - (a.e + a.b))),
+        mostBirdiesNet: top(played.filter((r) => r.netRounds).slice().sort((a, b) => (b.nE + b.nB) - (a.nE + a.nB))),
         comebacks: top(played.filter((r) => r.comebacks).sort((a, b) => b.comebacks - a.comebacks)),
       },
       strokesGained: {
@@ -562,6 +627,9 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
         // One round, not an average: the most dominant day anybody has had.
         best: top(played.filter((r) => r.bestSg)
           .map((r) => ({ id: r.id, name: r.name, ...r.bestSg }))
+          .sort((a, b) => b.sg - a.sg)),
+        bestNet: top(played.filter((r) => r.bestSgNet)
+          .map((r) => ({ id: r.id, name: r.name, ...r.bestSgNet }))
           .sort((a, b) => b.sg - a.sg)),
         minRounds: SG_MIN_ROUNDS,
       },

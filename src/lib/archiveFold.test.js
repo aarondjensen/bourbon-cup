@@ -166,6 +166,133 @@ describe("the cards", () => {
   });
 });
 
+// ── Gross and net ─────────────────────────────────────────────────
+// Every figure with two readings. The round numbers are exact arithmetic off
+// `tp` and `ch`; the hole counts come off the `np` marks, because eagles and
+// birdies are per hole and no round total can recover them.
+describe("net, beside gross", () => {
+  const roundOf = (cards, format = "best_ball") => ({
+    players: toy.players,
+    editions: [{
+      year: 2001, teamA: "REDS", teamB: "BLUES", complete: true,
+      roster: cards.map((c) => ({ p: c.p, t: "A" })),
+    }],
+    rounds: [{ year: 2001, round: 1, format, course: "Toy", par: 72 }],
+    matches: [],
+    cards: cards.map((c) => ({ year: 2001, round: 1, e: 0, b: 0, pr: 0, bo: 0, d: 0, ...c })),
+  });
+
+  it("takes net score off the handicap and net-to-par with it", () => {
+    const f = foldArchive(roundOf([
+      { p: "a", g: 90, ch: 18, tp: 18, np: "P".repeat(18) },
+      { p: "c", g: 80, ch: 4, tp: 8, np: "P".repeat(18) },
+    ]));
+    expect(f.careerOf("a").bestNet.net).toBe(72);
+    expect(f.careerOf("a").bestNet.netToPar).toBe(0);
+    expect(f.careerOf("a").avgNetToPar).toBe(0);
+    expect(f.careerOf("c").bestNet.net).toBe(76);
+    expect(f.careerOf("c").avgNetToPar).toBe(4);
+  });
+
+  it("counts net eagles, birdies, pars and bogeys off the marks", () => {
+    const f = foldArchive(roundOf([
+      { p: "a", g: 80, ch: 8, tp: 8, e: 1, b: 2, pr: 3, bo: 4, d: 8, np: "EEBBBPPPP111122233" },
+      { p: "c", g: 85, ch: 8, tp: 13, np: "P".repeat(18) },
+    ]));
+    const r = f.careerOf("a");
+    expect([r.nE, r.nB, r.nP, r.nBo, r.nD]).toEqual([2, 3, 4, 4, 5]);
+    // Double OR WORSE, the same bucket the gross counts use: "2" and "3".
+    expect(r.nD).toBe(3 + 2);
+    // Gross is untouched and still the round summary's own.
+    expect([r.e, r.b, r.pr, r.bo, r.d]).toEqual([1, 2, 3, 4, 8]);
+  });
+
+  it("has no net reading at all for a card with no handicap", () => {
+    const f = foldArchive(roundOf([
+      { p: "a", g: 80, ch: null, tp: 8, np: "P".repeat(18) },
+      { p: "c", g: 85, ch: null, tp: 13, np: "P".repeat(18) },
+    ]));
+    expect(f.careerOf("a").netRounds).toBe(0);
+    expect(f.careerOf("a").bestNet).toBeNull();
+    expect(f.careerOf("a").avgNetToPar).toBeNull();
+    // And it is still a round, and still a gross one.
+    expect(f.careerOf("a").rounds).toBe(1);
+    expect(f.careerOf("a").best.gross).toBe(80);
+  });
+
+  it("ranks the net board on net against par, not on the net score", () => {
+    const f = foldArchive(roundOf([
+      // a is level net off 90; c is one under net off 80.
+      { p: "a", g: 90, ch: 18, tp: 18, np: "P".repeat(18) },
+      { p: "c", g: 80, ch: 9, tp: 8, np: "P".repeat(18) },
+    ]));
+    expect(f.records.lowRoundsNet.map((c) => [c.name, c.net, c.netToPar]))
+      .toEqual([["Cal C", 71, -1], ["Amy A", 72, 0]]);
+  });
+
+  // Against par first, and only then on the score — which can only ever
+  // separate two rounds at DIFFERENT pars, because inside one round level
+  // against par is the same net number.
+  it("separates two men level against par by the one who took fewer shots", () => {
+    const two = {
+      players: toy.players,
+      editions: [{
+        year: 2001, teamA: "REDS", teamB: "BLUES", complete: true,
+        roster: [{ p: "a", t: "A" }, { p: "c", t: "B" }],
+      }],
+      rounds: [
+        { year: 2001, round: 1, format: "singles", course: "Long", par: 73 },
+        { year: 2001, round: 2, format: "singles", course: "Short", par: 70 },
+      ],
+      matches: [],
+      cards: [
+        // Both one under net. a went round a par 73 in 72 net, c a par 70 in 69.
+        { year: 2001, round: 1, p: "a", g: 82, ch: 10, tp: 9, e: 0, b: 0, pr: 0, bo: 0, d: 0, np: "P".repeat(18) },
+        { year: 2001, round: 2, p: "c", g: 79, ch: 10, tp: 9, e: 0, b: 0, pr: 0, bo: 0, d: 0, np: "P".repeat(18) },
+      ],
+    };
+    const f = foldArchive(two);
+    expect(f.records.lowRoundsNet.map((c) => [c.name, c.net, c.netToPar]))
+      .toEqual([["Cal C", 69, -1], ["Amy A", 72, -1]]);
+  });
+
+  it("keeps a shared ball off the net board too", () => {
+    const f = foldArchive(roundOf([
+      { p: "a", g: 70, ch: 10, tp: -2, np: "P".repeat(18) },
+      { p: "c", g: 71, ch: 10, tp: -1, np: "P".repeat(18) },
+    ], "scramble"));
+    expect(f.records.lowRoundsNet).toEqual([]);
+    expect(f.careerOf("a").bestNet).toBeNull();
+    // But it is still a net round for his average — a card is a card.
+    expect(f.careerOf("a").netRounds).toBe(1);
+  });
+
+  it("ranks net birdies on the marks and gross ones on the summary", () => {
+    const f = foldArchive(roundOf([
+      // a made one gross birdie and eight net ones.
+      { p: "a", g: 90, ch: 18, tp: 18, e: 0, b: 1, pr: 2, bo: 7, d: 8, np: "BBBBBBBB1111111111" },
+      { p: "c", g: 74, ch: 2, tp: 2, e: 0, b: 4, pr: 9, bo: 5, d: 0, np: "BB1111111111111111" },
+    ]));
+    expect(f.records.mostBirdies.map((r) => r.name)).toEqual(["Cal C", "Amy A"]);
+    expect(f.records.mostBirdiesNet.map((r) => r.name)).toEqual(["Amy A", "Cal C"]);
+    expect(f.careerOf("a").birdiesPerRoundNet).toBe(8);
+  });
+
+  // On the real record, which is the whole reason the chip is worth having.
+  it("names different men on the committed archive", () => {
+    const f = foldArchive(archive);
+    const names = (rows) => rows.map((r) => r.name);
+    expect(names(f.records.lowRounds)).not.toEqual(names(f.records.lowRoundsNet));
+    expect(names(f.records.mostBirdies)).not.toEqual(names(f.records.mostBirdiesNet));
+    expect(f.records.lowRoundsNet).toHaveLength(5);
+    expect(f.records.bestWeeksNet).toHaveLength(5);
+    expect(f.strokesGained.bestNet).toHaveLength(5);
+    // Every net card ranks under par or close to it: handicaps are what they
+    // are for. Gross, the same board is four rounds by one man.
+    expect(new Set(names(f.records.lowRoundsNet)).size).toBeGreaterThan(1);
+  });
+});
+
 // ── The core sixteen ──────────────────────────────────────────────
 describe("the core", () => {
   // n cups, each with the same two men, so appearances are the only variable.

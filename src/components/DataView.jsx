@@ -404,7 +404,7 @@ const WLH = ({ w, l, h }) => (
 // because eight numbers across a phone is either unreadable or a sideways
 // scroll — the same reason the table above it is two rows per player rather
 // than eight columns.
-function PlayerCard({ p, data, activeYear }) {
+function PlayerCard({ p, data, activeYear, net = false }) {
   const partners = useMemo(() => data.partnersOf(p.id).slice(0, 6), [data, p.id]);
   const h2h = useMemo(() => data.h2hOf(p.id).filter((r) => r.matches).slice(0, 6), [data, p.id]);
   // Record only, no rate. Points per match is comparable BETWEEN PLAYERS and
@@ -416,6 +416,8 @@ function PlayerCard({ p, data, activeYear }) {
     .sort((a, b) => b.matches - a.matches), [p.byFormat]);
 
   const line = { display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderTop: hair(), fontSize: FS.small };
+  const bestRound = net ? p.bestNet : p.best;
+  const rate = net ? p.birdiesPerRoundNet : p.birdiesPerRound;
 
   return (
     <div style={{ padding: "10px 14px 14px", borderTop: hair() }}>
@@ -423,7 +425,11 @@ function PlayerCard({ p, data, activeYear }) {
         <Stat label="Cups" value={p.apps} sub={p.debut === p.last ? `${p.debut}` : `${p.debut}–${p.last}`} />
         <Stat label="Won" value={p.cupsWon} sub={p.cupsHalved ? `${p.cupsHalved} halved` : null} color={BC.green} />
         <Stat label="Pts/match" value={p.ppm == null ? "—" : p.ppm.toFixed(2)} />
-        <Stat label="Avg round" value={toParText(p.avgToPar)} sub={`${p.rounds} RDS`} />
+        <Stat
+          label={net ? "Avg net" : "Avg round"}
+          value={toParText(net ? p.avgNetToPar : p.avgToPar)}
+          sub={`${net ? p.netRounds : p.rounds} RDS`}
+        />
       </div>
 
       {/* Both, never one. Gross is who plays the best golf and net is who
@@ -442,23 +448,25 @@ function PlayerCard({ p, data, activeYear }) {
         </div>
       )}
 
-      {p.best && (
+      {bestRound && (
         <div style={{ fontSize: FS.small, color: BC.t2, marginBottom: 12 }}>
-          <strong style={{ color: BC.amberInk }}>Best round</strong> — {p.best.gross} ({fmtScore(p.best.toPar)})
-          {p.best.course ? ` at ${p.best.course}` : ""} · {p.best.year} R{p.best.round}
+          <strong style={{ color: BC.amberInk }}>{net ? "Best net round" : "Best round"}</strong>
+          {" — "}{net ? bestRound.net : bestRound.gross} ({fmtScore(net ? bestRound.netToPar : bestRound.toPar)})
+          {bestRound.course ? ` at ${bestRound.course}` : ""} · {bestRound.year} R{bestRound.round}
         </div>
       )}
 
       {/* The card, not the match: birdies are his alone whatever format the
-          round was played in. */}
-      <div style={eyebrow}>THE CARD</div>
+          round was played in. Net counts come off the per-hole marks, gross
+          off the round summary — see netOf in lib/archiveFold. */}
+      <div style={eyebrow}>{net ? "THE CARD · NET" : "THE CARD · GROSS"}</div>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", margin: "6px 0 14px", fontSize: FS.small, color: BC.t2 }}>
-        <span>🦅 {p.e}</span>
-        <span style={{ color: BC.birdieRed }}>● {p.b} birdies</span>
-        <span>PAR {p.pr}</span>
-        <span>BOGEY {p.bo}</span>
-        <span>DBL+ {p.d}</span>
-        {p.birdiesPerRound != null && <span style={{ color: BC.t3 }}>{p.birdiesPerRound.toFixed(1)}/RD</span>}
+        <span>🦅 {net ? p.nE : p.e}</span>
+        <span style={{ color: BC.birdieRed }}>● {net ? p.nB : p.b} birdies</span>
+        <span>PAR {net ? p.nP : p.pr}</span>
+        <span>BOGEY {net ? p.nBo : p.bo}</span>
+        <span>DBL+ {net ? p.nD : p.d}</span>
+        {rate != null && <span style={{ color: BC.t3 }}>{rate.toFixed(1)}/RD</span>}
       </div>
 
       {(p.comebacks > 0 || p.collapses > 0) && (
@@ -478,7 +486,7 @@ function PlayerCard({ p, data, activeYear }) {
             </span>
             <span style={{ width: 62, textAlign: "right" }}><WLH w={y.w} l={y.l} h={y.h} /></span>
             <span style={{ width: 42, textAlign: "right", fontWeight: 700, color: BC.amberInk }}>{fmtPts(y.pts)}</span>
-            <span style={{ width: 34, textAlign: "right", color: BC.t3 }}>{toParText(y.avgToPar)}</span>
+            <span style={{ width: 34, textAlign: "right", color: BC.t3 }}>{toParText(net ? y.avgNetToPar : y.avgToPar)}</span>
           </div>
         ))}
       </div>
@@ -536,7 +544,7 @@ function PlayerCard({ p, data, activeYear }) {
 }
 
 // ── Personal records ──────────────────────────────────────────────
-function PlayerRecords({ data, note = "ALL YEARS" }) {
+function PlayerRecords({ data, note = "ALL YEARS", net = false }) {
   const r = data.records;
   const list = (label, rows, render) => <RecordList label={label} rows={rows} render={render} />;
 
@@ -545,15 +553,15 @@ function PlayerRecords({ data, note = "ALL YEARS" }) {
       {/* OWN BALL is the whole qualification, and it belongs on the label:
           without it the list silently drops a scramble 62 that two men still
           talk about, and nothing on the screen says why. */}
-      {list("LOW ROUNDS · OWN BALL", r.lowRounds, (c) => (
+      {list("LOW ROUNDS · OWN BALL", net ? r.lowRoundsNet : r.lowRounds, (c) => (
         <>
           <span style={{ flex: 1, minWidth: 0, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</span>
-          <span style={{ fontWeight: 800, color: BC.amberInk }}>{c.g}</span>
-          <span style={{ width: 34, textAlign: "right", color: BC.t3 }}>{fmtScore(c.tp)}</span>
+          <span style={{ fontWeight: 800, color: BC.amberInk }}>{net ? c.net : c.g}</span>
+          <span style={{ width: 34, textAlign: "right", color: BC.t3 }}>{fmtScore(net ? c.netToPar : c.tp)}</span>
           <span style={{ width: 34, textAlign: "right", color: BC.t3 }}>{c.year}</span>
         </>
       ))}
-      {list("BEST WEEK", r.bestWeeks, (w) => (
+      {list("BEST WEEK", net ? r.bestWeeksNet : r.bestWeeks, (w) => (
         <>
           <span style={{ flex: 1, minWidth: 0, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{w.name}</span>
           <span style={{ fontWeight: 800, color: BC.amberInk }}>{fmtScore(w.toPar)}</span>
@@ -567,11 +575,11 @@ function PlayerRecords({ data, note = "ALL YEARS" }) {
           <span style={{ width: 34, textAlign: "right", color: BC.t3 }}>{y.year}</span>
         </>
       ))}
-      {list("BIRDIES OR BETTER", r.mostBirdies, (p) => (
+      {list("BIRDIES OR BETTER", net ? r.mostBirdiesNet : r.mostBirdies, (p) => (
         <>
           <span style={{ flex: 1, minWidth: 0, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
-          <span style={{ fontWeight: 800, color: BC.birdieRed }}>{p.e + p.b}</span>
-          <span style={{ width: 52, textAlign: "right", color: BC.t3 }}>{p.rounds} RDS</span>
+          <span style={{ fontWeight: 800, color: BC.birdieRed }}>{net ? p.nE + p.nB : p.e + p.b}</span>
+          <span style={{ width: 52, textAlign: "right", color: BC.t3 }}>{net ? p.netRounds : p.rounds} RDS</span>
         </>
       ))}
       {/* Twelve matches is three cups' worth. Below that one hot weekend tops
@@ -599,9 +607,17 @@ function PlayerRecords({ data, note = "ALL YEARS" }) {
 // SG Total — the field's average less his own, inside one round so the course
 // and the day cancel — and deliberately not the shot-level split, which a
 // scorecard cannot support because it does not know where the ball was.
-function StrokesGained({ data, note = "" }) {
+function StrokesGained({ data, note = "", net = false }) {
   const sg = data.strokesGained;
-  if (!sg || !(sg.gross.length || sg.net.length || sg.best.length)) return null;
+  if (!sg) return null;
+  // One basis, the one the chip asks for. It used to draw both boards, on the
+  // argument that gross is who plays the best golf and net is who plays best
+  // to his handicap and showing either alone picks a side — which was right
+  // while nothing on screen let anybody choose. A chip is the better answer
+  // to it: the reader picks, and the section is half as long.
+  const perRound = net ? sg.net : sg.gross;
+  const bestRound = net ? sg.bestNet : sg.best;
+  if (!(perRound.length || bestRound.length)) return null;
   const rate = (key, rounds) => (p) => (
     <>
       <span style={{ flex: 1, minWidth: 0, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
@@ -614,10 +630,14 @@ function StrokesGained({ data, note = "" }) {
     <Section label="Strokes gained" note={`${note ? `${note} · ` : ""}VS THE FIELD`}>
       {/* OWN BALL rides the board labels now that the note carries the field —
           it is a fact about which rounds counted, and the boards are what it
-          is a fact about. */}
-      <RecordList label="PER ROUND · GROSS · OWN BALL" rows={sg.gross} render={rate("sg", "sgRounds")} />
-      <RecordList label="PER ROUND · NET · OWN BALL" rows={sg.net} render={rate("sgNetPer", "sgNets")} />
-      <RecordList label="BEST ROUND · OWN BALL" rows={sg.best} render={(r) => (
+          is a fact about. The basis is on them too: this section is the one
+          place a GROSS and a NET number are the same shape and one strokes
+          gained figure read as the other is not obviously wrong. */}
+      <RecordList
+        label={`PER ROUND · ${net ? "NET" : "GROSS"} · OWN BALL`} rows={perRound}
+        render={net ? rate("sgNetPer", "sgNets") : rate("sg", "sgRounds")}
+      />
+      <RecordList label={`BEST ROUND · ${net ? "NET" : "GROSS"} · OWN BALL`} rows={bestRound} render={(r) => (
         <>
           <span style={{ flex: 1, minWidth: 0, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</span>
           <span style={{ width: 48, textAlign: "right", fontWeight: 800, color: sgColor(r.sg) }}>{fmtSg(r.sg)}</span>
@@ -683,7 +703,7 @@ function Streaks({ data, note = "ALL YEARS" }) {
 // old NOW/THEN split coming back through the window: both scopes are about
 // the same subject, and the default is the career, because that is the thing
 // this tab could not say before.
-function CareerTable({ rows, teamOf, myId, activeYear, data, open, setOpen }) {
+function CareerTable({ rows, teamOf, myId, activeYear, data, open, setOpen, net = false }) {
   if (!rows.length) return <Empty>No players yet</Empty>;
   const COLS = "1fr 38px 38px 38px 50px";
   const head = { fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1, textAlign: "center" };
@@ -699,6 +719,11 @@ function CareerTable({ rows, teamOf, myId, activeYear, data, open, setOpen }) {
       {rows.map((p, i) => {
         const isOpen = open === p.id;
         const mine = p.id === myId;
+        // The chips are directly above this table, so the sub-line carries
+        // the numbers and not a word saying which basis they are on. The
+        // boards further down the screen do carry it — see boardNote.
+        const avg = net ? p.avgNetToPar : p.avgToPar;
+        const best = net ? p.bestNet : p.best;
         return (
           <div key={p.id} style={{ borderBottom: i < rows.length - 1 ? hair() : "none", background: mine ? BC.amber + ALPHA.wash : "transparent" }}>
             <button onClick={() => setOpen(isOpen ? null : p.id)} style={{
@@ -722,11 +747,14 @@ function CareerTable({ rows, teamOf, myId, activeYear, data, open, setOpen }) {
               <div style={{ display: "flex", gap: 12, marginTop: 3, marginLeft: 12, fontSize: FS.micro, color: BC.t3, letterSpacing: 0.4 }}>
                 <span>{p.apps ? `${p.apps} CUP${p.apps === 1 ? "" : "S"}` : "—"}</span>
                 <span>{p.rounds ? `${p.rounds} RD${p.rounds === 1 ? "" : "S"}` : "NO CARD"}</span>
-                {p.avgToPar != null && <span>AVG <strong style={{ color: BC.t2, fontWeight: 700 }}>{toParText(p.avgToPar)}</strong></span>}
-                {p.best && <span>BEST <strong style={{ color: BC.t2, fontWeight: 700 }}>{p.best.gross}</strong> ({fmtScore(p.best.toPar)}) {p.best.year}</span>}
+                {avg != null && <span>AVG <strong style={{ color: BC.t2, fontWeight: 700 }}>{toParText(avg)}</strong></span>}
+                {best && (
+                  <span>BEST <strong style={{ color: BC.t2, fontWeight: 700 }}>{net ? best.net : best.gross}</strong>
+                    {" "}({fmtScore(net ? best.netToPar : best.toPar)}) {best.year}</span>
+                )}
               </div>
             </button>
-            {isOpen && <PlayerCard p={p} data={data} activeYear={activeYear} />}
+            {isOpen && <PlayerCard p={p} data={data} activeYear={activeYear} net={net} />}
           </div>
         );
       })}
@@ -751,6 +779,20 @@ function PlayerHalf({ data, activeYear, myId, teams }) {
   // ALL is one tap away, and it is where the whole record lives: John S's 64
   // is the lowest round anybody has played here and he played two cups.
   const [field, setField] = useState("core");
+  // ── Gross or net ─────────────────────────────────────────────────
+  // Gross by default, because it is the number written on the card and the
+  // one somebody quotes on the tee. But a gross board is a board about who
+  // has the lowest handicap, and on a field running from scratch to
+  // thirty-three that is the same four names on everything — Paul S has ten
+  // gross birdies and two hundred and two net, and until this chip existed
+  // half the field had never appeared on a record list at all.
+  //
+  // One basis at a time, never both: CLAUDE.md's rule that two definitions of
+  // a birdie on one screen is worse than either. What has changed is that a
+  // chip says which, and that lib/archiveLive can compute net for the running
+  // year now that the streak marks ship — which was the actual objection.
+  const [basis, setBasis] = useState("gross");
+  const net = basis === "net";
   const [open, setOpen] = useState(null);
 
   const core = data.core || NO_CORE;
@@ -766,6 +808,10 @@ function PlayerHalf({ data, activeYear, myId, teams }) {
   const fieldNote = onlyCore
     ? `CORE ${core.size}`
     : `ALL ${data.career.filter((p) => p.apps || p.matches).length}`;
+  // The boards sit a long way below the chips, so each one says which field
+  // AND which basis it is drawn on rather than relying on a control that has
+  // scrolled off the top.
+  const boardNote = `${fieldNote} · ${net ? "NET" : "GROSS"}`;
 
   const thisYear = data.edition(activeYear);
   const teamOf = useMemo(() => {
@@ -812,13 +858,21 @@ function PlayerHalf({ data, activeYear, myId, teams }) {
             style={{ marginBottom: 0 }}
           />
         )}
+        <Chips
+          options={[["gross", "Gross"], ["net", "Net"]]}
+          value={basis} onChange={setBasis}
+          style={{ marginBottom: 0 }}
+        />
       </div>
       <CareerTable
         rows={rows} teamOf={teamOf} myId={myId} activeYear={activeYear}
-        data={data} open={open} setOpen={setOpen}
+        data={data} open={open} setOpen={setOpen} net={net}
       />
-      {scope === "career" && <PlayerRecords data={boards} note={fieldNote} />}
-      {scope === "career" && <StrokesGained data={boards} note={fieldNote} />}
+      {scope === "career" && <PlayerRecords data={boards} note={boardNote} net={net} />}
+      {scope === "career" && <StrokesGained data={boards} note={fieldNote} net={net} />}
+      {/* Not the basis. NET PAR OR BETTER and HOLES WITHOUT A NET DOUBLE are
+          net by construction — they are read off the net marks and there is
+          no gross reading of them to offer. The labels say so themselves. */}
       {scope === "career" && <Streaks data={boards} note={fieldNote} />}
     </div>
   );
