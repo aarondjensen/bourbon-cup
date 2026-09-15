@@ -3112,9 +3112,6 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
         const teeTime = teeTimeForMatch({ groups, times, match: m });
         return (
         <div key={m.id} style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: "12px 14px", marginBottom: 8 }}>
-          <div style={{ fontSize: FS.label, color: BC.t3, marginBottom: 8, fontWeight: 800, letterSpacing: 1, textAlign: "center" }}>
-            MATCH {m.matchNumber ?? i + 1}{teeTime ? `  ·  ${teeTime}` : ""}
-          </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10 }}>
             {/* Team A — its color rail LEFT */}
             <div style={{ minWidth: 0, textAlign: "left", borderLeft: `3px solid ${teamColor("A")}`, paddingLeft: 8 }}>
@@ -3123,8 +3120,23 @@ function GroupsView({ matches, tRounds, tPlayers, courses, groups: groupsByRound
                 <div key={pid} style={{ fontSize: FS.body, fontWeight: 600, color: BC.t1, lineHeight: 1.3 }}>{nameOf(pid)}</div>
               ))}
             </div>
-            {/* vs */}
-            <div style={{ fontSize: FS.small, color: BC.t3, fontWeight: 700, padding: "0 4px" }}>vs</div>
+            {/* The middle column IS the axis of the card, so the match number
+                and its tee time live on it rather than in a row of their own
+                above. That row was a full line of card height spent on two
+                short facts, and it pushed the names — the thing the tab is
+                opened for — further down every card on the list.
+
+                It replaces "vs" rather than joining it. Two columns of names
+                facing each other across a rail already say they are playing
+                each other; a third line of centre text would have made the
+                axis taller than either side. */}
+            <div style={{
+              fontSize: FS.label, color: BC.t3, fontWeight: 800, letterSpacing: 1,
+              padding: "0 4px", textAlign: "center", whiteSpace: "nowrap", lineHeight: 1.45,
+            }}>
+              <div>MATCH {m.matchNumber ?? i + 1}</div>
+              {teeTime && <div style={{ letterSpacing: 0.4 }}>{teeTime}</div>}
+            </div>
             {/* Team B — its color rail RIGHT */}
             <div style={{ minWidth: 0, textAlign: "right", borderRight: `3px solid ${teamColor("B")}`, paddingRight: 8 }}>
               <div style={{ ...teamTagStyle, color: teamColor("B") }}>{teams?.B?.name || "Team B"}</div>
