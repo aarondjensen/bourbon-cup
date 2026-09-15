@@ -2865,13 +2865,18 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
           the two sides' names and the match's status, so each card says
           whose it is without anything here labelling it — which is also why
           the popup's own title drops the match number when there are two:
-          it could only ever name one of them. */}
+          it could only ever name one of them.
+
+          The title said SCORECARD before the round, on a popup opened by a
+          button reading Full Scorecard, above a card. Three times, and the
+          only part of it a reader could not already see was WHICH round and
+          which match — so that is all it says now. */}
       {showScorecard && (
         <Popup onClose={() => setShowScorecard(false)} maxWidth={480} padding={0} outerPadding={12}
           innerStyle={{ background: BC.card, border: `1px solid ${BC.amber}${ALPHA.line}`, borderRadius: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderBottom: `1px solid ${BC.bdr}` }}>
             <div style={{ fontSize: FS.small, fontWeight: 800, color: BC.amberInk, letterSpacing: 1 }}>
-              SCORECARD — RD {match.round}
+              RD {match.round}
               {!boxed && match.matchNumber ? ` · MATCH ${match.matchNumber}` : ""}
             </div>
             <button onClick={() => setShowScorecard(false)} style={{
