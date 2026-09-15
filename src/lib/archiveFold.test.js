@@ -108,6 +108,57 @@ describe("the cards", () => {
     expect(flipped.careerOf("a").best.gross).toBe(66);
   });
 
+  // A scramble card is two names on one ball, so it is a side's number and
+  // not anybody's round. The rule is formatOwnBall in src/constants.js, and it
+  // has to hold in both places a low round is printed.
+  it("keeps a shared ball out of the low rounds and off a man's best", () => {
+    const shared = foldArchive({
+      ...toy,
+      rounds: [
+        { year: 2001, round: 1, format: "scramble", course: "Toy Links", par: 72 },
+        { year: 2001, round: 2, format: "singles", course: "Toy Dunes", par: 70 },
+      ],
+      cards: [
+        { year: 2001, round: 1, p: "a", g: 62, tp: -10, e: 0, b: 0, pr: 0, bo: 0, d: 0 },
+        { year: 2001, round: 1, p: "b", g: 62, tp: -10, e: 0, b: 0, pr: 0, bo: 0, d: 0 },
+        { year: 2001, round: 2, p: "a", g: 75, tp: 5, e: 0, b: 0, pr: 0, bo: 0, d: 0 },
+      ],
+    });
+    expect(shared.records.lowRounds.map((c) => c.gross ?? c.g)).toEqual([75]);
+    expect(shared.careerOf("a").best.gross).toBe(75);
+    // And he has no best round at all if the shared ball is all he played.
+    expect(shared.careerOf("b").best).toBeNull();
+    // The round still happened: it counts towards his rounds and his to par.
+    expect(shared.careerOf("b").rounds).toBe(1);
+  });
+
+  it("counts a shamble out too — his own ball, off somebody else's drive", () => {
+    const shamble = foldArchive({
+      ...toy,
+      rounds: [
+        { year: 2001, round: 1, format: "shamble", course: "Toy Links", par: 72 },
+        { year: 2001, round: 2, format: "singles", course: "Toy Dunes", par: 70 },
+      ],
+      cards: [
+        { year: 2001, round: 1, p: "a", g: 68, tp: -4, e: 0, b: 0, pr: 0, bo: 0, d: 0 },
+        { year: 2001, round: 2, p: "a", g: 75, tp: 5, e: 0, b: 0, pr: 0, bo: 0, d: 0 },
+      ],
+    });
+    expect(shamble.careerOf("a").best.gross).toBe(75);
+  });
+
+  // A round row that has not arrived yet is not a reason to blank a decade of
+  // records — an unknown format counts.
+  it("counts a card whose round it cannot find", () => {
+    const orphan = foldArchive({
+      ...toy,
+      rounds: [],
+      cards: [{ year: 2001, round: 9, p: "a", g: 70, tp: 0, e: 0, b: 0, pr: 0, bo: 0, d: 0 }],
+    });
+    expect(orphan.careerOf("a").best.gross).toBe(70);
+    expect(orphan.records.lowRounds).toHaveLength(1);
+  });
+
   it("counts a comeback off the status at the turn, not the final margin", () => {
     expect(f.careerOf("a").comebacks).toBe(1);
     expect(f.careerOf("c").collapses).toBe(1);
@@ -215,6 +266,17 @@ describe("the committed archive", () => {
 
   it("splits every career into wins, losses and halves that add up", () => {
     f.career.forEach((r) => expect(r.w + r.l + r.h).toBe(r.matches));
+  });
+
+  // Six of the ten lowest cards in the record were scramble balls, each
+  // printed twice because both partners sign it. On the real archive:
+  it("ranks no shared ball among the low rounds", () => {
+    const shared = new Set(archive.rounds
+      .filter((r) => ["scramble", "pinehurst", "shamble"].includes(r.format))
+      .map((r) => `${r.year}_${r.round}`));
+    expect(shared.size).toBeGreaterThan(0);
+    expect(f.records.lowRounds.filter((c) => shared.has(`${c.year}_${c.round}`))).toEqual([]);
+    expect(f.career.filter((r) => r.best && shared.has(`${r.best.year}_${r.best.round}`))).toEqual([]);
   });
 
   it("counts every card's holes as eighteen", () => {

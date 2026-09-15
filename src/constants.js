@@ -306,7 +306,11 @@ export const FORMATS = [
     desc: "All players drive, choose best drive, each plays their own ball in.",
     hole: "The better of the side's two net balls.",
     holeOptions: [HOLE_SCORING_BEST_BALL, HOLE_SCORING_TEAM_TOTAL],
-    unit: UNIT_STROKES, perSide: 2,
+    // Every man finishes his own ball, so the engine scores it off two nets
+    // like a Best Ball — but the tee shot is somebody else's, which is why
+    // `sharedTeeShot` is here and `sharedBall` is not. Nothing in the engine
+    // reads it; formatOwnBall does, for the records that rank one man's card.
+    unit: UNIT_STROKES, perSide: 2, sharedTeeShot: true,
     forms: [SCORING_TYPE_MATCH, SCORING_TYPE_TOTAL], formDefault: SCORING_TYPE_MATCH,
     nassau: { front: 1, back: 1, overall: 2 },
     allowance: { pct: 90 }, handicapMode: HANDICAP_MODE_LOW_MAN,
@@ -392,6 +396,26 @@ export const isSplitAllowance = (spec) => !!spec && spec.low != null;
 // in the engine and the wording of the admin prompt.
 export const formatIsSharedBall = (formatId) =>
   !!FORMATS.find(f => f.id === formatId)?.sharedBall;
+
+// Did the man whose name is on the card play that ball from the tee to the
+// hole? Scramble and Pinehurst are one ball a side, and a Shamble is played
+// off somebody else's drive — in all three the gross is a number the side
+// made, not a round anybody shot alone.
+//
+// It is what separates a personal record from a team one. LOW ROUNDS ranked
+// every card until it existed, and the top of the list was six scramble
+// scores, each printed TWICE because both partners sign the same ball: 2019's
+// 62 was one ball with two names on it, sitting above a 64 somebody really did
+// go out and shoot.
+//
+// An unrecognized id counts. The three formats that fail this are named in the
+// catalog, so the only way to reach an unknown one is a round row that never
+// arrived — and emptying a decade of records because a subscription is a frame
+// late is a worse answer than counting a card that might not qualify.
+export const formatOwnBall = (formatId) => {
+  const f = FORMATS.find(x => x.id === formatId);
+  return !(f?.sharedBall || f?.sharedTeeShot);
+};
 
 // A round's allowance, fully resolved for scoring.
 //
