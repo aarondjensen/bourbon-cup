@@ -132,6 +132,7 @@ import {
   BUDGET_COL, budgetLineId, buildBudgetLine, budgetLineError,
 } from "./lib/budget";
 import { EDITIONS_COL, isDemoEdition, findDemoEdition, switchEdition } from "./lib/editions";
+import { findEditionDoc } from "./lib/editionDocs";
 import { lockNotice, isEditionLocked, demoOnlyAdmin } from "./lib/editionLock";
 import { liveEdition } from "./lib/defaultEdition";
 import { prefetchArchive } from "./lib/useArchive";
@@ -5109,9 +5110,16 @@ export default function App() {
       setPlayersLoaded(true);
     }));
     unsubs.push(db.subscribe("bc_settings", f, rows => {
-      const tn = rows.find(r => r.id === editionDocId("team_names"));
+      // ── Found by either id shape, never by the flag ──
+      // `editionDocId` answers "which shape does this edition write?" out of a
+      // per-device localStorage flag that a first-time reader does not have
+      // yet — so on a cold start every one of these lookups used to miss, and
+      // the app rendered Team Alpha over the real field until something wrote
+      // or somebody reloaded. See lib/editionDocs for the whole of it.
+      const settingsDoc = (bareId) => findEditionDoc(rows, bareId, TOURNAMENT_ID);
+      const tn = settingsDoc("team_names");
       if (tn) setTeamNames({ A: tn.teamA || DEFAULT_TEAM_NAMES.A, B: tn.teamB || DEFAULT_TEAM_NAMES.B });
-      const tourn = rows.find(r => r.id === editionDocId("tournament"));
+      const tourn = settingsDoc("tournament");
       const tName = tourn?.name?.trim() || TOURNAMENT_TITLE;
       const tLocation = tourn?.location?.trim() || TOURNAMENT_LOCATION;
       setTournamentName(tName);
@@ -5125,7 +5133,7 @@ export default function App() {
       writeTournamentIdentity({ name: tName, location: tLocation });
       // Branding: apply to the live BC theme immediately (using the current
       // mode via ref), then store it so a later theme toggle re-applies it.
-      const br = rows.find(r => r.id === editionDocId("branding"));
+      const br = settingsDoc("branding");
       const b = br
         ? { teamA: br.teamA || null, teamB: br.teamB || null, tournamentAccent: br.tournamentAccent || null }
         : null;
@@ -5134,9 +5142,9 @@ export default function App() {
       // The trip cost, one number for the whole field. Absent means no ledger
       // has ever been set up, which resolves to 0 and takes the BALANCE DUE
       // card off every My Account screen — see lib/ledger's hasLedger.
-      const dues = rows.find(r => r.id === editionDocId(DUES_SETTINGS_ID));
+      const dues = settingsDoc(DUES_SETTINGS_ID);
       setDuesAmount(round2(dues?.amount ?? 0));
-      setTripDoc(rows.find(r => r.id === editionDocId(TRIP_SETTINGS_ID)) || null);
+      setTripDoc(settingsDoc(TRIP_SETTINGS_ID) || null);
     }));
     unsubs.push(db.subscribe("bc_rounds", f, rows => setTRounds(rows)));
     // No skins listener, because skins are not stored: they are derived from
@@ -5187,7 +5195,9 @@ export default function App() {
       setCtpData(cd);
     }));
     unsubs.push(db.subscribe("bc_tournament_settings", f, rows => {
-      const s = rows.find(r => r.id === editionDocId("bc_settings_main"));
+      // Either id shape, as above: a first load that missed this one showed an
+      // empty skins pot and everybody opted out of every side game.
+      const s = findEditionDoc(rows, "bc_settings_main", TOURNAMENT_ID);
       if (s?.skins_pot != null) setSkinsPot(s.skins_pot);
       // `Array.isArray` is the whole test: an absent field reads as null
       // (everybody in), a stored [] reads as [] (nobody in).

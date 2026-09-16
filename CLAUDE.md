@@ -429,6 +429,37 @@ is what stops a player who opened 2019 from being asked to bind their account
 to a roster row on a finished tournament — and the scope is what keeps a player
 who has never claimed a name meeting the claim screen on the year being played.
 
+### An edition's singletons have two id shapes, and reads must take either
+
+`team_names`, `tournament`, `branding`, the dues figure, the trip document and
+`bc_settings_main` are found by document id, and there are two of those:
+`bc_2025` predates editions and stores them BARE (`team_names`), every edition
+made since is namespaced (`bc_2026__team_names`). `editionDocId` in
+`firebase.js` picks a shape for WRITING out of `_editionNamespaced`, a
+per-device localStorage flag written only when somebody switches editions —
+and reconciled from `bc_editions` a moment after startup.
+
+**A first-time reader has no flag.** So it starts on bare ids, which is the
+wrong shape for the cup being played, and if the `bc_settings` snapshot lands
+before the edition document has repaired the flag, every lookup in it misses.
+A snapshot callback does not run again until a document changes, so the app
+sits there rendering its own fallbacks — **Team Alpha and Team Beta over the
+real field**, the default title and location, no branding colours, a zero skins
+pot — until somebody writes or reloads.
+
+It is first-load-only, which is why it went unseen for so long: every phone
+that has had the app a day carries the flag, and a player signing in reloads
+several times before reaching a leaderboard. The scoreboard door is what
+exposed it — a cold start with an empty localStorage, straight to the board,
+with no second load to hide behind.
+
+**`findEditionDoc` in `lib/editionDocs` is the reading half**, and it never
+asks the flag: the rows are already filtered to one edition's `tournament_id`,
+so neither id shape can name another year's document, and both are accepted.
+Anything that finds a singleton by id goes through it — a
+`rows.find(r => r.id === editionDocId(…))` is a per-device flag deciding
+whether a read hits, and `editionDocs.test.js` fails if one comes back.
+
 ## Sign-in
 
 Three steps, each seen once: sign in with Google or Apple (`src/lib/auth.js`),
