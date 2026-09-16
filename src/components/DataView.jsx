@@ -31,6 +31,7 @@ import { fmtPts, fmtScore } from "../scoring";
 import { formatLabel } from "../constants";
 import { switchEdition } from "../lib/editions";
 import { useArchive } from "../lib/useArchive";
+import { RECENT_CUPS, RECENT_MIN } from "../lib/archiveFold";
 import { streakWhere } from "../lib/streaks";
 import { royaleHoles } from "../lib/matchRoyale";
 
@@ -54,6 +55,36 @@ const Section = ({ label, note, action, children, style }) => (
     {children}
   </div>
 );
+
+// ── How far back ──────────────────────────────────────────────────
+// Two buttons rather than a chip per depth: Last 2, Last 3, Last 4 and Last 5
+// as four chips is most of a phone's width spent on one question, and it caps
+// the answer at whatever set somebody thought of.
+//
+// It only appears when the scope it belongs to is the one selected — there is
+// nothing for it to step while the table is showing a career — and each end
+// goes flat at its limit rather than disappearing, so the control does not
+// change shape under a thumb.
+const Stepper = ({ value, min, max, onChange, label }) => {
+  const btn = (delta, glyph, at) => (
+    <button
+      onClick={() => !at && onChange(value + delta)}
+      disabled={at} aria-label={`${label} ${delta > 0 ? "more" : "fewer"}`}
+      style={{
+        width: 26, height: 26, borderRadius: 999, cursor: at ? "default" : "pointer",
+        fontFamily: FONT, fontSize: FS.small, fontWeight: 800, lineHeight: 1,
+        background: "transparent", border: `1px solid ${BC.bdr}`,
+        color: at ? BC.bdr : BC.t2,
+      }}
+    >{glyph}</button>
+  );
+  return (
+    <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+      {btn(-1, "−", value <= min)}
+      {btn(1, "+", value >= max)}
+    </div>
+  );
+};
 
 // ── Gross or net, on the card it applies to ───────────────────────
 // Small enough to live in a card's own header, because that is where the
@@ -905,7 +936,16 @@ function PlayerHalf({ data, activeYear, myId, teams }) {
   const [open, setOpen] = useState(null);
 
   const core = data.core || NO_CORE;
-  const recentYears = data.recentYears || NO_YEARS;
+  // How many cups back "recent" reaches. Three to begin with, because that is
+  // the answer most people want, and a stepper because which of two, three or
+  // four is a question about what the reader is looking for.
+  const [back, setBack] = useState(RECENT_CUPS);
+  const recentMax = data.recentMax || RECENT_CUPS;
+  const depth = Math.min(Math.max(RECENT_MIN, back), recentMax);
+  const recentYears = useMemo(
+    () => (data.recentYears ? data.recentYears(depth) : NO_YEARS),
+    [data, depth],
+  );
   const onlyCore = field === "core" && core.size > 0;
   // Asked of the fold rather than filtered here, because a board has to be
   // cut to the field BEFORE it is cut to five: filtering a finished top five
@@ -955,11 +995,19 @@ function PlayerHalf({ data, activeYear, myId, teams }) {
           men on the right — they are different questions and a single row of
           four chips would read as one. */}
       <div style={{ display: "flex", gap: 8, justifyContent: "space-between", flexWrap: "wrap", marginBottom: 12 }}>
-        <Chips
-          options={[["career", "Career"], ["recent", `Last ${recentYears.length}`], ["year", String(activeYear)]]}
-          value={scope} onChange={(v) => { setScope(v); setOpen(null); }}
-          style={{ marginBottom: 0 }}
-        />
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+          <Chips
+            options={[["career", "Career"], ["recent", `Last ${recentYears.length}`], ["year", String(activeYear)]]}
+            value={scope} onChange={(v) => { setScope(v); setOpen(null); }}
+            style={{ marginBottom: 0 }}
+          />
+          {scope === "recent" && (
+            <Stepper
+              value={depth} min={RECENT_MIN} max={recentMax} label="Cups back"
+              onChange={(v) => { setBack(v); setOpen(null); }}
+            />
+          )}
+        </div>
         {core.size > 0 && (
           <Chips
             options={[["core", `Core ${core.size}`], ["all", "All"]]}

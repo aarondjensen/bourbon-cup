@@ -79,16 +79,27 @@ export const aliasIndex = (players = []) => {
 export const CORE_MIN_APPS = 4;
 
 // ── Recent form ───────────────────────────────────────────────────
-// The last three cups PLAYED, not a man's own last three appearances. "How
-// has he been going lately" is a question about the same three weekends for
-// everybody — measuring one man over 2023-25 and another over 2017-25 because
-// he missed seven of them is not a comparison, and the table would put the
-// two side by side as though it were.
+// The last N cups PLAYED, not a man's own last N appearances. "How has he
+// been going lately" is a question about the same weekends for everybody —
+// measuring one man over 2023-25 and another over 2017-25 because he missed
+// seven of them is not a comparison, and the table would put the two side by
+// side as though it were.
 //
-// Three because a cup is a week: one is a hot weekend, two cannot tell a
-// trend from a coincidence, and four is most of the record for a man who
-// started in 2022.
+// Three is where the chip STARTS, not what it is stuck on: one cup is a hot
+// weekend, two cannot tell a trend from a coincidence, and past four you are
+// reading most of the record of a man who started in 2022. Which of those a
+// reader wants is a question about what he is looking for, so the screen asks
+// him rather than answering for him — see the stepper on the scope chip.
 export const RECENT_CUPS = 3;
+
+// Two is the floor. One cup is not form, it is a year, and the scope chip
+// beside this one already offers a single year by name.
+export const RECENT_MIN = 2;
+
+// How far back the chip can reach: everything but the earliest cup, so the
+// last position is still a slice and not the whole record. Never below the
+// floor, for a project with two cups in it.
+export const recentMax = (cups) => Math.max(RECENT_MIN, cups - 1);
 
 // ── The fold ──────────────────────────────────────────────────────
 export const foldArchive = ({ players = [], editions = [], rounds = [], matches = [], cards = [] } = {}) => {
@@ -819,9 +830,16 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
 
   return {
     years: allYears,
-    // The last three cups played, newest first. One place, so the chip and
-    // the table cannot disagree about which weekends "recent" means.
-    recentYears: allYears.slice(0, RECENT_CUPS),
+    // The last N cups played, newest first. A function rather than a list,
+    // because how far back is the reader's to choose — and one place, so the
+    // chip and the table cannot disagree about which weekends it means.
+    //
+    // Never all of them: the top of this same chip group already says Career,
+    // and a "Last 10" that is the career under another name is a control
+    // whose last position does nothing.
+    recentYears: (n = RECENT_CUPS) =>
+      allYears.slice(0, Math.min(Math.max(RECENT_MIN, n), recentMax(allYears.length))),
+    recentMax: recentMax(allYears.length),
     careerOver,
     editions: editionRows,
     edition: (year) => edIx.get(year) || null,
