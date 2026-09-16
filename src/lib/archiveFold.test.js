@@ -900,6 +900,67 @@ describe("the committed archive", () => {
     });
   });
 
+  // ── The tournament records ──────────────────────────────────────
+  it("ranks the hardest day against the course's rating, not its par", () => {
+    // The field shot worse at Harbor Shores in 2020; Glenoaks 2017 is where
+    // they played worst for what the course was.
+    expect(f.records.hardest.year).toBe(2017);
+    expect(f.records.hardest.rated).toBe(true);
+    // And the raw to-par board would have named a different day.
+    const byToPar = f.courses.filter((c) => c.cards)
+      .slice().sort((a, b) => b.avgToPar - a.avgToPar)[0];
+    expect(byToPar.year).toBe(2020);
+    // Both ends are ranked the same way, so nothing mixes the two scales.
+    expect(f.records.easiest.rated).toBe(true);
+    expect(f.records.easiest.difficulty).toBeLessThan(f.records.hardest.difficulty);
+  });
+
+  it("names the hardest and easiest WEEK, which no board ranked", () => {
+    expect(f.records.hardestWeek.year).toBe(2016);
+    expect(f.records.easiestWeek.year).toBe(2023);
+    expect(f.records.hardestWeek.avgToPar).toBeGreaterThan(f.records.easiestWeek.avgToPar);
+  });
+
+  it("finds the round somebody swept", () => {
+    const [top] = f.records.roundRouts;
+    expect([top.year, top.round, top.won, top.lost]).toEqual([2024, 1, 16, 0]);
+    expect(top.winner).toBe("Silver Foxes");
+    // Every rout is a round somebody actually won.
+    f.records.roundRouts.forEach((x) => expect(x.margin).toBeGreaterThan(0));
+  });
+
+  it("counts the rounds that finished level", () => {
+    expect(f.records.roundsPlayed).toBe(40);
+    expect(f.records.levelRounds).toBe(3);
+  });
+
+  // Wire-to-wire and the comebacks are complements: between them they sort
+  // every finished, unhalved cup into one of two kinds.
+  it("splits every cup into led-from-the-front or came-from-behind", () => {
+    const wire = f.records.wireToWire.map((e) => e.year).sort();
+    const back = f.records.cupComebacks.map((e) => e.year).sort();
+    expect(wire).toEqual([2019, 2020, 2021, 2023, 2024]);
+    expect(wire.filter((y) => back.includes(y))).toEqual([]);
+    const decided = f.editions.filter((e) => e.complete && !e.halved).length;
+    expect(wire.length + back.length).toBe(decided);
+  });
+
+  it("names the years the lead actually changed", () => {
+    expect(f.records.leadChanges[0].year).toBe(2016);
+    expect(f.records.leadChanges[0].changes).toBe(3);
+    f.records.leadChanges.forEach((e) => expect(e.changes).toBeGreaterThan(0));
+  });
+
+  it("totals ten years in one line", () => {
+    expect(f.records.totals).toEqual({
+      cups: 10, matches: 170, cards: 630, holes: 11340, birdies: 665, courses: 36,
+    });
+    // The holes are the cards times eighteen, and the courses are the ones
+    // the passport counts.
+    expect(f.records.totals.holes).toBe(f.records.totals.cards * 18);
+    expect(f.records.totals.courses).toBe(new Set(archive.rounds.map((r) => r.course)).size);
+  });
+
   it("gives every card eighteen streak marks", () => {
     archive.cards.forEach((c) => {
       expect(c.np).toHaveLength(18);

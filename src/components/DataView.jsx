@@ -304,12 +304,29 @@ function CupRecords({ data }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: r.hardest ? 12 : 0 }}>
         {r.closest && <Stat label="Closest" value={r.closest.year} sub={`${r.closest.winner} by ${fmtPts(r.closest.margin)}`} color={BC.amberInk} />}
         {r.biggest && <Stat label="Biggest" value={r.biggest.year} sub={`${r.biggest.winner} by ${fmtPts(r.biggest.margin)}`} />}
-        {r.hardest && <Stat label="Hardest day" value={toParText(r.hardest.avgToPar)} sub={`${r.hardest.course} · ${r.hardest.year}`} color={BC.danger} />}
-        {r.easiest && <Stat label="Kindest day" value={toParText(r.easiest.avgToPar)} sub={`${r.easiest.course} · ${r.easiest.year}`} color={BC.green} />}
+        {/* The WEEK, which the course passport cannot answer — it ranks
+            rounds, and twelve and a half shots separate the hardest cup from
+            the easiest. */}
+        {r.hardestWeek && <Stat label="Hardest week" value={r.hardestWeek.year} sub={`FIELD ${toParText(r.hardestWeek.avgToPar)}`} color={BC.danger} />}
+        {r.easiestWeek && <Stat label="Easiest week" value={r.easiestWeek.year} sub={`FIELD ${toParText(r.easiestWeek.avgToPar)}`} color={BC.green} />}
+        {/* Ranked against the course's own rating rather than its par — see
+            avgDiff in archiveFold. The number is how far over the rating the
+            field went, which is the same shape as a to-par and a fairer one
+            when no two rounds were played on the same course. */}
+        {r.hardest && <Stat label="Hardest day" value={toParText(r.hardest.difficulty)} sub={`${r.hardest.course} · ${r.hardest.year}`} color={BC.danger} />}
+        {r.easiest && <Stat label="Easiest day" value={toParText(r.easiest.difficulty)} sub={`${r.easiest.course} · ${r.easiest.year}`} color={BC.green} />}
       </div>
       {!!r.halved.length && (
-        <div style={{ fontSize: FS.small, color: BC.t2, marginBottom: 12 }}>
+        <div style={{ fontSize: FS.small, color: BC.t2, marginBottom: 6 }}>
           🏆 Halved: {r.halved.map((e) => e.year).join(", ")}
+        </div>
+      )}
+      {/* The exact complement of the comeback board below: between them they
+          sort every cup ever played into one of two kinds. A line rather than
+          a board because the years are the whole answer. */}
+      {!!r.wireToWire?.length && (
+        <div style={{ fontSize: FS.small, color: BC.t2, marginBottom: 12 }}>
+          🏁 Wire to wire: {r.wireToWire.map((e) => e.year).sort().join(", ")}
         </div>
       )}
       <RecordList label="BIGGEST COMEBACK" rows={r.cupComebacks} render={(e) => (
@@ -348,6 +365,56 @@ function RoundDrama({ data }) {
           </div>
         </div>
       ))}
+
+      <div style={{ height: 14 }} />
+
+      {/* The bars above count lead changes per ROUND NUMBER, averaged over
+          ten years. These are the YEARS they happened in, which is the form
+          anybody actually argues about. */}
+      <RecordList label="LEAD CHANGES" rows={data.records.leadChanges} render={(e) => (
+        <>
+          <span style={{ width: 34, color: BC.gold, fontWeight: 700 }}>{e.year}</span>
+          <span style={{ flex: 1, minWidth: 0, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.winner || "—"}</span>
+          <span style={{ fontWeight: 800, color: BC.amberInk }}>{e.changes}</span>
+        </>
+      )} />
+
+      <RecordList label="BIGGEST ROUND" rows={data.records.roundRouts} render={(x) => (
+        <>
+          <span style={{ width: 34, color: BC.gold, fontWeight: 700 }}>{x.year}</span>
+          <span style={{ flex: 1, minWidth: 0, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{x.winner}</span>
+          <span style={{ fontWeight: 800, color: BC.amberInk }}>{fmtPts(x.won)}–{fmtPts(x.lost)}</span>
+          <span style={{ width: 28, textAlign: "right", color: BC.t3 }}>R{x.round}</span>
+        </>
+      )} />
+
+      {/* A fact about the cup rather than about a team, and the other end of
+          the same list. */}
+      {!!data.records.roundsPlayed && (
+        <div style={{ fontSize: FS.small, color: BC.t2 }}>
+          ⚖️ {data.records.levelRounds} of {data.records.roundsPlayed} rounds finished level
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// ── Ten years in one card ─────────────────────────────────────────
+// The totals nobody can get from a board, and the thing people screenshot.
+function CupTotals({ data }) {
+  const t = data.records.totals;
+  if (!t || !t.cards) return null;
+  const n = (x) => x.toLocaleString();
+  return (
+    <Section label="The cup in numbers" note="EVERY YEAR">
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
+        <Stat label="Cups" value={n(t.cups)} />
+        <Stat label="Matches" value={n(t.matches)} />
+        <Stat label="Courses" value={n(t.courses)} />
+        <Stat label="Cards" value={n(t.cards)} />
+        <Stat label="Holes" value={n(t.holes)} />
+        <Stat label="Birdies+" value={n(t.birdies)} color={BC.birdieRed} />
+      </div>
     </Section>
   );
 }
@@ -464,6 +531,7 @@ function TournamentHalf({ data, editions, activeYear, teams }) {
       </div>
       <RoundDrama data={data} />
       <Passport data={data} />
+      <CupTotals data={data} />
     </div>
   );
 }
