@@ -132,6 +132,7 @@ const GAME_KEY = (label) => {
 // (see team-brand.mjs) — rename it there and the colour lookup stops finding
 // its team.
 const DISPLAY_NAMES = {
+  2017: { A: "Greensmen" },
   2019: { A: "DefCon8", B: "BulleitProof" },
   2022: { A: "Sautering Irons", B: "HileDrivers" },
   2023: { A: "Master Tees", B: "Weezervoir Dogs" },

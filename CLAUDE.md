@@ -395,6 +395,22 @@ that side keeps the app's palette. 2016–2018 have no banner colour at all, and
 Drivers red from the one hex Aaron had to name, which the file says so about. **No logos** — only 2024's workbook has one embedded, and the sheets for
 the other years hold none.
 
+**A banner can also keep the wrong half of a pair.** 2020's Family Biz played
+in blue and orange and the banner recorded the orange — `#FFC281`, the pale end
+of it, which survives neither theme: `withBrand` lifts a brand colour for the
+dark page, where that one lands on the same cream as the gold this app writes
+years in, and walks it down for the light one, where it lands on khaki. The
+blue holds both, so the blue is what `NAMED_BY_HAND` stores. That table is for
+a side the banner cannot answer for — no colour, or the wrong one of two — and
+everything else is read.
+
+**What a team was CALLED is a third thing**, and it is `DISPLAY_NAMES` in
+`pipeline/editions.mjs`: the Master Input's team cell is a lookup key, short and
+shouted (TEES, B9B, G-MEN), and 2017's G-MEN went by the Greensmen. The sheet's
+own spelling is kept beside it as `teams_as_written`, because that is what the
+scoreboard banner is matched on when the colours are read — rename it there
+instead and the colour lookup stops finding its team.
+
 **The course handicap is stored, not derived.** Handicaps were pasted into
 those sheets as values, per round, already rounded and blended; no single index
 reproduces them. So each round is imported already LOCKED and FINAL with the
@@ -1039,6 +1055,16 @@ Consequences worth knowing:
 - **An unfinished cup is not a record.** It still counts towards careers — those
   matches were played — but not towards closest-ever, biggest-ever, or a best
   week.
+- **A day is ranked against days played the same way.** `formatOwnBall` already
+  kept a shared ball out of the low rounds, a man's best round and strokes
+  gained; it decides the DAY records too. The five scrambles in the record came
+  in around level as a field, a dozen shots under the kindest own-ball day, so
+  ranked together they took the whole bottom of the board and EASIEST DAY named
+  the draw rather than a golf course. Own-ball days and shared-ball days now
+  rank apart — two pairs on Cup records, two groups under the passport's
+  Hardest first — and the week is averaged over the own-ball rounds alone,
+  since three of the ten cups have no shared ball in them at all and were being
+  compared with seven that do.
 
 ## Courses have two doors
 

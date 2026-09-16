@@ -783,6 +783,55 @@ describe("an unfinished cup is not a record", () => {
   });
 });
 
+describe("a day is ranked against days played the same way", () => {
+  // A cup whose scramble morning is the lowest field score of the week by
+  // eight shots, which is what a scramble morning always is.
+  const mixed = {
+    ...toy,
+    rounds: [
+      { year: 2001, round: 1, format: "singles", course: "Toy Links", par: 72, rating: 72, slope: 113 },
+      { year: 2001, round: 2, format: "scramble", course: "Toy Dunes", par: 72, rating: 72, slope: 113 },
+    ],
+    cards: [
+      { year: 2001, round: 1, p: "a", g: 82, tp: 10, e: 0, b: 0, pr: 0, bo: 0, d: 0 },
+      { year: 2001, round: 1, p: "c", g: 84, tp: 12, e: 0, b: 0, pr: 0, bo: 0, d: 0 },
+      { year: 2001, round: 2, p: "a", g: 74, tp: 2, e: 0, b: 0, pr: 0, bo: 0, d: 0 },
+      { year: 2001, round: 2, p: "c", g: 76, tp: 4, e: 0, b: 0, pr: 0, bo: 0, d: 0 },
+    ],
+  };
+  const f = foldArchive(mixed);
+
+  it("keeps the shared ball out of the easiest day and gives it its own", () => {
+    expect(f.records.easiest.round).toBe(1);
+    expect(f.records.hardest.round).toBe(1);
+    expect(f.records.easiestShared.round).toBe(2);
+    expect(f.records.hardestShared.round).toBe(2);
+  });
+
+  it("marks each round in the passport with which kind it was", () => {
+    expect(f.courses.map((c) => [c.round, c.ownBall])).toEqual([[1, true], [2, false]]);
+  });
+
+  it("averages the week over the own-ball rounds", () => {
+    // Every card: 10, 12, 2, 4. The own-ball ones: 10 and 12.
+    expect(f.editions[0].avgToPar).toBeCloseTo(7, 6);
+    expect(f.editions[0].avgOwnToPar).toBeCloseTo(11, 6);
+  });
+
+  it("has no own-ball day to name when the whole cup was shared", () => {
+    const allShared = foldArchive({
+      ...mixed,
+      rounds: mixed.rounds.map((r) => ({ ...r, format: "scramble" })),
+    });
+    expect(allShared.records.hardest).toBeNull();
+    expect(allShared.records.easiest).toBeNull();
+    expect(allShared.records.easiestShared.round).toBe(2);
+    expect(allShared.editions[0].avgOwnToPar).toBeNull();
+    // And no week to rank, rather than a week ranked on nothing.
+    expect(allShared.records.hardestWeek).toBeNull();
+  });
+});
+
 describe("the running total after each round", () => {
   it("accumulates, and keeps each round's own split", () => {
     const f = foldArchive(toy);
@@ -839,6 +888,13 @@ describe("the committed archive", () => {
     expect([...named].filter((id) => !known.has(id))).toEqual([]);
   });
 
+  // The Master Input's team cell is a key, not a banner — G-MEN is what the
+  // 2017 workbook does lookups against, and the Greensmen is what they were
+  // called. pipeline/editions.mjs keeps both; this is the one that shows.
+  it("names each side the way the team was known", () => {
+    expect(f.editions.find((e) => e.year === 2017).teamA).toBe("Greensmen");
+  });
+
   it("totals each year to what its own matches add up to", () => {
     f.editions.forEach((e) => {
       const mine = archive.matches.filter((m) => m.year === e.year);
@@ -883,6 +939,10 @@ describe("the committed archive", () => {
     // 2022 wrote its teams in coloured type: Irons navy, Drivers red.
     const y2022 = f.editions.find((e) => e.year === 2022);
     expect(y2022.brand).toEqual({ A: { color: "#073763" }, B: { color: "#CC0000" } });
+    // Family Biz played in blue and orange and the banner kept the orange —
+    // the pale end of it, which survives neither theme. The blue is named by
+    // hand in pipeline/team-brand.mjs, and a rebuild must not walk it back.
+    expect(f.editions.find((e) => e.year === 2020).brand.A).toEqual({ color: "#4A86E8" });
   });
 
   // Absent is not an error, and it is not the same as a black banner either:
@@ -915,10 +975,60 @@ describe("the committed archive", () => {
     expect(f.records.easiest.difficulty).toBeLessThan(f.records.hardest.difficulty);
   });
 
+  // The five scrambles in the record came in between +1.0 and -0.3 as a
+  // field, and the shamble and the pinehurst a dozen shots under the worst
+  // own-ball day. Ranked together they are the whole bottom of the board, and
+  // EASIEST DAY is then a fact about the draw rather than about a golf course.
+  it("ranks a shared-ball day only against other shared-ball days", () => {
+    // Purgatory hosted both ends of it in one weekend: the singles on
+    // Saturday is the kindest own-ball day in ten years, and the scramble
+    // round it the next morning is the kindest shared one.
+    expect([f.records.easiest.year, f.records.easiest.round]).toEqual([2021, 2]);
+    expect(f.records.easiest.ownBall).toBe(true);
+    expect([f.records.easiestShared.year, f.records.easiestShared.round]).toEqual([2021, 3]);
+    expect(f.records.easiestShared.ownBall).toBe(false);
+    // The hardest day is an own-ball day either way — the shared ones are
+    // nowhere near it — but it is ranked in the same company all the same.
+    expect(f.records.hardest.ownBall).toBe(true);
+    expect(f.records.hardestShared.ownBall).toBe(false);
+    // Neither board can reach into the other.
+    const shared = new Set(archive.rounds
+      .filter((r) => ["scramble", "pinehurst", "shamble"].includes(r.format))
+      .map((r) => `${r.year}_${r.round}`));
+    expect(shared.has(`${f.records.easiest.year}_${f.records.easiest.round}`)).toBe(false);
+    expect(shared.has(`${f.records.easiestShared.year}_${f.records.easiestShared.round}`)).toBe(true);
+    // And the two are not comparable, which is the point: every shared-ball
+    // day in the record played easier than every own-ball one.
+    expect(f.records.hardestShared.difficulty).toBeLessThan(f.records.easiest.difficulty);
+  });
+
   it("names the hardest and easiest WEEK, which no board ranked", () => {
     expect(f.records.hardestWeek.year).toBe(2016);
     expect(f.records.easiestWeek.year).toBe(2023);
-    expect(f.records.hardestWeek.avgToPar).toBeGreaterThan(f.records.easiestWeek.avgToPar);
+    expect(f.records.hardestWeek.avgOwnToPar).toBeGreaterThan(f.records.easiestWeek.avgOwnToPar);
+  });
+
+  // Three of the ten cups had no shared ball in them at all, so a week
+  // average over every card ranks the DRAW: 2023 comes out four and a half
+  // shots kinder than it played, and 2016 not a stroke kinder than it did.
+  it("measures a week over its own-ball rounds", () => {
+    const e = (year) => f.editions.find((x) => x.year === year);
+    // 2016, 2020 and 2022 played four own-ball rounds: nothing to strip.
+    [2016, 2020, 2022].forEach((year) => {
+      expect(e(year).avgOwnToPar).toBeCloseTo(e(year).avgToPar, 6);
+    });
+    // Every other year had one, and every one of them played harder than the
+    // raw average says.
+    [2017, 2018, 2019, 2021, 2023, 2024, 2025].forEach((year) => {
+      expect(e(year).avgOwnToPar).toBeGreaterThan(e(year).avgToPar);
+    });
+    // Which reorders the middle of the board: 2019 opened with a scramble and
+    // is the third-hardest week in the record on own-ball rounds, where every
+    // card put it fifth.
+    const rank = (key) => f.editions.slice()
+      .sort((a, b) => b[key] - a[key]).map((x) => x.year).indexOf(2019);
+    expect(rank("avgOwnToPar")).toBe(2);
+    expect(rank("avgToPar")).toBe(4);
   });
 
   it("finds the round somebody swept", () => {

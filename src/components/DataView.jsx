@@ -305,16 +305,21 @@ function CupRecords({ data }) {
         {r.closest && <Stat label="Closest" value={r.closest.year} sub={`${r.closest.winner} by ${fmtPts(r.closest.margin)}`} color={BC.amberInk} />}
         {r.biggest && <Stat label="Biggest" value={r.biggest.year} sub={`${r.biggest.winner} by ${fmtPts(r.biggest.margin)}`} />}
         {/* The WEEK, which the course passport cannot answer — it ranks
-            rounds, and twelve and a half shots separate the hardest cup from
-            the easiest. */}
-        {r.hardestWeek && <Stat label="Hardest week" value={r.hardestWeek.year} sub={`FIELD ${toParText(r.hardestWeek.avgToPar)}`} color={BC.danger} />}
-        {r.easiestWeek && <Stat label="Easiest week" value={r.easiestWeek.year} sub={`FIELD ${toParText(r.easiestWeek.avgToPar)}`} color={BC.green} />}
+            rounds, and eight shots separate the hardest cup from the
+            easiest. Own-ball rounds only, like the days below it. */}
+        {r.hardestWeek && <Stat label="Hardest week" value={r.hardestWeek.year} sub={`FIELD ${toParText(r.hardestWeek.avgOwnToPar)}`} color={BC.danger} />}
+        {r.easiestWeek && <Stat label="Easiest week" value={r.easiestWeek.year} sub={`FIELD ${toParText(r.easiestWeek.avgOwnToPar)}`} color={BC.green} />}
         {/* Ranked against the course's own rating rather than its par — see
             avgDiff in archiveFold. The number is how far over the rating the
             field went, which is the same shape as a to-par and a fairer one
-            when no two rounds were played on the same course. */}
+            when no two rounds were played on the same course.
+            The two pairs are the two kinds of day, ranked apart: a scramble
+            field comes in around level and would take both ends of one
+            board. */}
         {r.hardest && <Stat label="Hardest day" value={toParText(r.hardest.difficulty)} sub={`${r.hardest.course} · ${r.hardest.year}`} color={BC.danger} />}
         {r.easiest && <Stat label="Easiest day" value={toParText(r.easiest.difficulty)} sub={`${r.easiest.course} · ${r.easiest.year}`} color={BC.green} />}
+        {r.hardestShared && <Stat label="Hardest shared ball" value={toParText(r.hardestShared.difficulty)} sub={`${formatLabel(r.hardestShared.format).toUpperCase()} · ${r.hardestShared.year}`} color={BC.danger} />}
+        {r.easiestShared && <Stat label="Easiest shared ball" value={toParText(r.easiestShared.difficulty)} sub={`${formatLabel(r.easiestShared.format).toUpperCase()} · ${r.easiestShared.year}`} color={BC.green} />}
       </div>
       {!!r.halved.length && (
         <div style={{ fontSize: FS.small, color: BC.t2, marginBottom: 6 }}>
@@ -428,29 +433,53 @@ function CupTotals({ data }) {
 // nothing repeated there is no other comparison to make.
 function Passport({ data }) {
   const [sort, setSort] = useState("year");
-  const rows = useMemo(() => {
-    const xs = data.courses.filter((c) => c.course);
-    return sort === "hard"
-      ? [...xs].sort((a, b) => (b.avgToPar ?? -99) - (a.avgToPar ?? -99))
-      : xs;
-  }, [data.courses, sort]);
+  const rows = useMemo(() => data.courses.filter((c) => c.course), [data.courses]);
+  // Hardest first is two boards, not one. A scramble field comes in around
+  // level and a shamble a few shots over, so ranked together the shared-ball
+  // days take the whole bottom of the list and the reader is being told that
+  // The Dream in 2024 played easier than anywhere else in ten years, when
+  // what happened there is that two men played one ball. Same rule the
+  // records use — see rankedDays in archiveFold.
+  //
+  // By year stays one list: that sort is a chronology, and nothing in it is
+  // being compared with anything.
+  const groups = useMemo(() => {
+    if (sort !== "hard") return [{ key: "all", label: "", rows }];
+    const byHard = (xs) => xs.slice().sort((a, b) => (b.avgToPar ?? -99) - (a.avgToPar ?? -99));
+    return [
+      { key: "own", label: "Own ball", rows: byHard(rows.filter((c) => c.ownBall)) },
+      { key: "shared", label: "Shared ball", rows: byHard(rows.filter((c) => !c.ownBall)) },
+    ].filter((g) => g.rows.length);
+  }, [rows, sort]);
   const distinct = useMemo(() => new Set(rows.map((c) => c.course)).size, [rows]);
 
   return (
     <Section label="The courses" note={`${distinct} COURSES · ${rows.length} ROUNDS`}>
       <Chips options={[["year", "By year"], ["hard", "Hardest first"]]} value={sort} onChange={setSort} />
-      {rows.map((c) => (
-        <div key={`${c.year}_${c.round}`} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderTop: hair() }}>
-          <div style={{ fontSize: FS.micro, fontWeight: 800, color: BC.t3, width: 46, letterSpacing: 0.4 }}>{c.year} R{c.round}</div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: FS.small, color: BC.t1, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.course}</div>
-            <div style={{ fontSize: FS.micro, color: BC.t3, letterSpacing: 0.4 }}>
-              PAR {c.par}{c.slope ? ` · ${c.rating}/${c.slope}` : ""}{c.low ? ` · LOW ${c.low}` : ""}
+      {groups.map((g, gi) => (
+        <div key={g.key}>
+          {groups.length > 1 && (
+            <div style={{ ...eyebrow, marginTop: gi ? 14 : 0, marginBottom: 2 }}>{g.label.toUpperCase()}</div>
+          )}
+          {g.rows.map((c) => (
+            <div key={`${c.year}_${c.round}`} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderTop: hair() }}>
+              <div style={{ fontSize: FS.micro, fontWeight: 800, color: BC.t3, width: 46, letterSpacing: 0.4 }}>{c.year} R{c.round}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: FS.small, color: BC.t1, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.course}</div>
+                <div style={{ fontSize: FS.micro, color: BC.t3, letterSpacing: 0.4 }}>
+                  {/* The format on a shared-ball day only. It is what the
+                      number under it means — the side's ball, not a man's —
+                      and the own-ball days are the norm this tab already
+                      assumes everywhere else. */}
+                  {!c.ownBall && `${formatLabel(c.format).toUpperCase()} · `}
+                  PAR {c.par}{c.slope ? ` · ${c.rating}/${c.slope}` : ""}{c.low ? ` · LOW ${c.low}` : ""}
+                </div>
+              </div>
+              <div style={{ fontSize: FS.small, fontWeight: 800, color: (c.avgToPar ?? 0) > 12 ? BC.danger : BC.t2, width: 44, textAlign: "right" }}>
+                {toParText(c.avgToPar)}
+              </div>
             </div>
-          </div>
-          <div style={{ fontSize: FS.small, fontWeight: 800, color: (c.avgToPar ?? 0) > 12 ? BC.danger : BC.t2, width: 44, textAlign: "right" }}>
-            {toParText(c.avgToPar)}
-          </div>
+          ))}
         </div>
       ))}
     </Section>
