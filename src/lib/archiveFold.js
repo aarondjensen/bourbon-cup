@@ -20,7 +20,7 @@
 // ── The row shapes ────────────────────────────────────────────────
 //   players   { id, name, aka[] }        the registry; `aka` is how a live
 //                                        roster row finds its canonical id
-//   editions  { year, teamA, teamB, roster:[{p,t}], complete? }
+//   editions  { year, teamA, teamB, roster:[{p,t}], complete?, brand? }
 //   rounds    { year, round, format, course, par, rating, slope }
 //   matches   { year, round, A:[id], B:[id], ptsA, ptsB }
 //   cards     { year, round, p, g, ch, tp, e, b, pr, bo, d, a9?, np?, hr?, mr? }
@@ -141,6 +141,11 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
       year: e.year,
       name: e.name || "",
       teamA: e.teamA, teamB: e.teamB,
+      // The colours that year was actually played in, where its own workbook
+      // recorded them. Absent is not an error — 2016 to 2018 had no banner
+      // colour at all, and a side the banner says nothing about keeps the
+      // app's palette.
+      brand: e.brand || null,
       scoreA, scoreB, complete, halved,
       winner: !complete || halved ? null : scoreA > scoreB ? e.teamA : e.teamB,
       winnerSide: !complete || halved ? null : scoreA > scoreB ? "A" : "B",
