@@ -957,20 +957,80 @@ function Streaks({ data, note = "ALL YEARS" }) {
 // Cups as a record rather than a count, because "10 CUPS" says he turned up
 // and 5–4–1 says how it went. The same shape as the match record beside it
 // and as the head-to-heads on the card, so one reading serves all three.
+// ── What each column sorts on ─────────────────────────────────────
+// A record is two numbers and an order has to pick one, so each of these says
+// which: wins first, then fewest losses, which is how anybody reads 5-4-1
+// against 5-5-0 out loud. Every one falls through to the name, so the table
+// is in the same order on every phone.
+//
+// `dir` is the direction a column opens on — the interesting end first, which
+// is most for a record and A-Z for a name. Tapping the same head again turns
+// it round.
+const SORTS = {
+  pts: { dir: -1, by: (p) => [p.pts] },
+  cups: { dir: -1, by: (p) => [p.cupsWon, -p.cupsLost] },
+  matches: { dir: -1, by: (p) => [p.w, -p.l] },
+  name: { dir: 1, by: () => [] },
+};
+
+const bySort = (key, flip) => {
+  const spec = SORTS[key] || SORTS.pts;
+  const dir = spec.dir * (flip ? -1 : 1);
+  return (a, b) => {
+    const [xa, xb] = [spec.by(a), spec.by(b)];
+    for (let i = 0; i < xa.length; i++) {
+      if ((xa[i] ?? 0) !== (xb[i] ?? 0)) return ((xa[i] ?? 0) - (xb[i] ?? 0)) * dir;
+    }
+    return String(a.name).localeCompare(String(b.name)) * (key === "name" ? dir : 1);
+  };
+};
+
+// A column head that sorts. It has to look like it does, and the arrow is the
+// cheapest way to say both that it can and which way it went — shown only on
+// the column actually in force, so three of the four stay quiet.
+const SortHead = ({ label, k, align = "center", sort, setSort }) => {
+  const on = sort.key === k;
+  const dir = SORTS[k].dir * (on && sort.flip ? -1 : 1);
+  return (
+    <button
+      onClick={() => setSort((s) => ({ key: k, flip: s.key === k ? !s.flip : false }))}
+      aria-label={`Sort by ${label}`}
+      style={{
+        fontSize: FS.label, fontWeight: 700, letterSpacing: 1,
+        display: "flex", alignItems: "center", gap: 3, padding: 0, minWidth: 0,
+        justifyContent: align === "right" ? "flex-end" : align === "center" ? "center" : "flex-start",
+        background: "transparent", border: "none", cursor: "pointer", fontFamily: FONT,
+        color: on ? BC.amberInk : BC.t3,
+      }}
+    >
+      <span>{label}</span>
+      <span style={{ fontSize: FS.micro, opacity: on ? 1 : 0 }}>{dir < 0 ? "▼" : "▲"}</span>
+    </button>
+  );
+};
+
 function CareerTable({ rows, teamOf, myId, activeYear, data, open, setOpen }) {
+  // Points to begin with, because that is the standing — but the table is the
+  // one place a man looks for his own name, and which column he wants it
+  // ordered by is his business rather than something this decides for him.
+  const [sort, setSort] = useState({ key: "pts", flip: false });
+  const sorted = useMemo(
+    () => rows.slice().sort(bySort(sort.key, sort.flip)),
+    [rows, sort],
+  );
   if (!rows.length) return <Empty>No players yet</Empty>;
   const COLS = "1fr 56px 68px 50px";
-  const head = { fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1, textAlign: "center" };
+  const th = { sort, setSort };
 
   return (
     <div style={{ ...card, overflow: "hidden" }}>
-      <div style={{ display: "grid", gridTemplateColumns: COLS, padding: "8px 12px", borderBottom: `1px solid ${BC.bdr}`, ...head, textAlign: "left" }}>
-        <div>PLAYER</div>
-        <div style={head}>CUPS</div>
-        <div style={head}>MATCHES</div>
-        <div style={{ ...head, textAlign: "right" }}>PTS</div>
+      <div style={{ display: "grid", gridTemplateColumns: COLS, padding: "8px 12px", borderBottom: `1px solid ${BC.bdr}`, alignItems: "center" }}>
+        <SortHead label="PLAYER" k="name" align="left" {...th} />
+        <SortHead label="CUPS" k="cups" {...th} />
+        <SortHead label="MATCHES" k="matches" {...th} />
+        <SortHead label="PTS" k="pts" align="right" {...th} />
       </div>
-      {rows.map((p, i) => {
+      {sorted.map((p, i) => {
         const isOpen = open === p.id;
         const mine = p.id === myId;
         return (
