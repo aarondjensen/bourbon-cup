@@ -485,7 +485,7 @@ describe("trailing into the last round and winning anyway", () => {
     cards: [],
   });
 
-  it("counts the deficit going into the last round", () => {
+  it("counts the deficit at the boundary where it was deepest", () => {
     // Down 8–2 after two, then 9–0: won by 3 from 6 down.
     const f = foldArchive(cupOf(2001, [[1, 4], [1, 4], [9, 0]]));
     const [cb] = f.records.cupComebacks;
@@ -495,10 +495,9 @@ describe("trailing into the last round and winning anyway", () => {
     expect(cb.margin).toBe(3);
   });
 
-  // The PENULTIMATE round, not round three by number — so a cup played over
-  // three rounds or five is still asked what had to be overturned on the
-  // last day.
-  it("asks about the penultimate round, whatever its number", () => {
+  // Any boundary, whatever the cup's length — nothing here is tied to round
+  // three by number.
+  it("looks at every boundary, whatever the cup's length", () => {
     expect(foldArchive(cupOf(2001, [[0, 5], [9, 0]])).records.cupComebacks[0].after).toBe(1);
     expect(foldArchive(cupOf(2002, [[1, 1], [1, 1], [1, 1], [0, 5], [9, 0]]))
       .records.cupComebacks[0].after).toBe(4);
@@ -526,14 +525,45 @@ describe("trailing into the last round and winning anyway", () => {
     expect(f.records.cupComebacks.map((c) => [c.year, c.deficit])).toEqual([[2002, 9], [2001, 3]]);
   });
 
-  // On the real record: three in ten years, and 2025 is the extreme of it.
-  it("finds 2025 on the committed archive", () => {
-    const f = foldArchive(archive);
+  // A deficit faced early still counts. Measuring only the final round found
+  // three cups and called 2016 a one-point comeback when they had been five
+  // down on Friday night.
+  it("counts a deficit from any round, not only the last", () => {
+    const f = foldArchive(cupOf(2001, [[0, 8], [9, 0], [9, 0], [1, 1]]));
     const [cb] = f.records.cupComebacks;
-    expect(cb.year).toBe(2025);
-    expect(cb.deficit).toBe(11);
-    expect(cb.after).toBe(3);
-    expect(f.records.cupComebacks.map((c) => c.year)).toEqual([2025, 2016, 2018]);
+    // Eight down after R1, in front from R2 on, and it is still a comeback.
+    expect(cb.deficit).toBe(8);
+    expect(cb.after).toBe(1);
+  });
+
+  it("counts a round 2 deficit a side had already recovered from", () => {
+    // Level after R1, four down after R2, ahead after R3, wins.
+    const f = foldArchive(cupOf(2001, [[2, 2], [0, 4], [6, 0], [2, 2]]));
+    const [cb] = f.records.cupComebacks;
+    expect(cb.deficit).toBe(4);
+    expect(cb.after).toBe(2);
+  });
+
+  // The same deficit with less left to fix it is the harder hole.
+  it("breaks a tie toward the later round", () => {
+    // Five down after R1 and five down again after R2.
+    const f = foldArchive(cupOf(2001, [[0, 5], [3, 3], [9, 0]]));
+    const [cb] = f.records.cupComebacks;
+    expect(cb.deficit).toBe(5);
+    expect(cb.after).toBe(2);
+  });
+
+  it("never reads the final round as a deficit to have overcome", () => {
+    // Ahead at every boundary, and the last round is not a boundary at all.
+    expect(foldArchive(cupOf(2001, [[5, 0], [5, 0], [0, 4]])).records.cupComebacks).toEqual([]);
+  });
+
+  // On the real record: five of the ten cups, and the two the old measure
+  // could not see are 2017 and 2022.
+  it("finds five on the committed archive, 2025 deepest", () => {
+    const f = foldArchive(archive);
+    expect(f.records.cupComebacks.map((c) => [c.year, c.deficit, c.after]))
+      .toEqual([[2025, 11, 3], [2017, 8, 1], [2022, 7, 1], [2016, 5, 1], [2018, 5, 1]]);
   });
 });
 

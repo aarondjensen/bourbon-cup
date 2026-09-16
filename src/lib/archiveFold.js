@@ -775,25 +775,34 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
     hardest: courseRows.filter((c) => c.cards).slice().sort((a, b) => b.avgToPar - a.avgToPar)[0] || null,
     easiest: courseRows.filter((c) => c.cards).slice().sort(byNum((c) => c.avgToPar))[0] || null,
     cupsPlayed: finished.length,
-    // ── Trailing going into the last round, and won anyway ────────
-    // Measured after the PENULTIMATE round rather than after round three by
-    // number, so a cup that is ever played over three rounds or five is still
-    // asked the right question: what did they have to overturn on the last
-    // day.
+    // ── The deepest hole a winner climbed out of ──────────────────
+    // Measured at EVERY round boundary, not just the last one. It started as
+    // "trailing going into the final round", which is the most dramatic
+    // version of the question and also the narrowest: it found three cups in
+    // ten years and it called 2016 and 2018 one-point comebacks when both
+    // sides had been five down on Friday night. A deficit is a deficit
+    // whenever it was faced.
     //
-    // Three in ten years, which is what makes it a record rather than a
-    // curiosity — and the reason is the format: Round 4 is worth more than the
-    // first three put together, so a lead going into Sunday has never been
-    // safe. 2025 is the extreme of it, eleven down and won by two.
+    // Five of the ten cups now qualify, and the two the old measure could not
+    // see are the 2017 G-MEN (eight down after R1) and 2022's HileDrivers
+    // (seven). The round is named beside the number, because eight down with
+    // three rounds left and eight down with one are not the same afternoon
+    // and the reader is better placed to weigh that than a formula is.
+    //
+    // A tie goes to the LATER round — the same deficit with less left to fix
+    // it is the harder hole — which is why 2025 still reads after R3 rather
+    // than after R2, having been eleven down at both.
     cupComebacks: top(finished
       .filter((e) => !e.halved && e.winnerSide && e.rounds.length > 1)
       .map((e) => {
-        const before = e.rounds[e.rounds.length - 2];
-        const lead = e.winnerSide === "A" ? before.cumA - before.cumB : before.cumB - before.cumA;
-        return { ...e, deficit: -lead, after: before.round };
+        const deepest = e.rounds.slice(0, -1).reduce((worst, r) => {
+          const deficit = e.winnerSide === "A" ? r.cumB - r.cumA : r.cumA - r.cumB;
+          return !worst || deficit >= worst.deficit ? { deficit, after: r.round } : worst;
+        }, null);
+        return { ...e, ...deepest };
       })
       .filter((e) => e.deficit > 0)
-      .sort((a, b) => b.deficit - a.deficit || b.margin - a.margin)),
+      .sort((a, b) => b.deficit - a.deficit || b.after - a.after || b.margin - a.margin)),
   };
 
   // The cup's records and the unfiltered player boards, as one object — the
