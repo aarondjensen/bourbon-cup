@@ -6,7 +6,7 @@ import { db, writeFailure, TOURNAMENT_ID, getTournamentYear, getActiveTournament
 import { PROVIDERS, signIn, signOutUser, onAuthUser, consumeRedirectResult, isCancelled, whenAuthReady } from "./lib/auth";
 import { claimPlayer, linkedPlayer, isClaimed, readMembership, isDirectorAccount, joinWithCode, setDirector, setCaptain, ACCOUNTS_COL, deleteAccount } from "./lib/accounts";
 import { captainSideFor, captainPatch } from "./lib/captains";
-import { GUEST_USER, isGuest, readGuestMode, writeGuestMode } from "./lib/guest";
+import { GUEST_USER, isGuest, readGuestMode, writeGuestMode, readBoardMode, writeBoardMode } from "./lib/guest";
 import {
   TROPHY_PHOTO, LOGO_TEAM_A, LOGO_TEAM_A_WHITE, LOGO_TEAM_B, TROPHY_SILHOUETTE,
   resolveTeams, DEFAULT_TEAM_NAMES, TOURNAMENT_TITLE, TOURNAMENT_LOCATION,
@@ -335,13 +335,13 @@ const AppleMark = ({ size = 18, color = "#FFFFFF" }) => (
 );
 
 // ── Screen 1: sign in ───────────────────────────────────────────────
-// Two providers and a guest door. The guest door is deliberately the
+// Two providers, a scoreboard door and a guest door. The guest door is deliberately the
 // quietest thing on the screen — a link under a hairline, not a third
 // button of the same weight — because it is not the way in for anybody
 // playing in the tournament, and a player who takes it lands somewhere
 // they cannot post a score from. See lib/guest.js for why it grants
 // nothing at all and needs no rules of its own.
-function SignInScreen({ tournamentName, tournamentLocation, initialError, onGuest }) {
+function SignInScreen({ tournamentName, tournamentLocation, initialError, onGuest, onBoard }) {
   const [busy, setBusy] = useState(null);
   // Whether a popup can actually be opened yet — see lib/auth.js. On a
   // fresh home-screen install the auth iframe is a cold network fetch, and
@@ -405,6 +405,25 @@ function SignInScreen({ tournamentName, tournamentLocation, initialError, onGues
           write rule in the project refuses them at `request.auth != null`
           without ever reaching a membership check. */}
       <div style={{ width: "100%", maxWidth: 340, marginTop: 2, paddingTop: 14, borderTop: `1px solid ${BC.bdr}${ALPHA.hair}`, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+        {/* ── The scoreboard door ───────────────────────────────────
+            A real button, above the guest link and not beside it, because
+            it is the door most of the people who reach this screen want:
+            everybody following along from home is here to read one number,
+            and until this existed the only thing on offer was the whole
+            app. It is the same guest underneath — see lib/guest.js — shown
+            the leaderboard and nothing else.
+
+            Outlined rather than filled: the two provider buttons above it
+            are still the way in for the sixteen men playing, and this must
+            not read as the primary action on a tournament's own login
+            screen. No line under it. "View the leaderboard" is a button
+            that says what it does. */}
+        <button onClick={onBoard} disabled={!!busy} style={{
+          width: "100%", padding: "11px 16px", borderRadius: 12, marginBottom: 4,
+          background: "transparent", border: `1px solid ${BC.amber}${ALPHA.line}`,
+          color: BC.amberInk, fontFamily: FONT, fontSize: FS.body, fontWeight: 800,
+          letterSpacing: 0.2, cursor: busy ? "default" : "pointer",
+        }}>View the leaderboard</button>
         <button onClick={onGuest} disabled={!!busy} style={{
           background: "transparent", border: "none", color: BC.t2,
           fontFamily: FONT, fontSize: FS.small, fontWeight: 700, letterSpacing: 0.3,
@@ -4329,6 +4348,11 @@ export default function App() {
   // See lib/guest.js. Read from localStorage at mount so a tester who opened
   // the app last week arrives back inside it.
   const [guestMode, setGuestMode] = useState(readGuestMode);
+  // That same guest, held to the leaderboard: no bottom nav, no menu, no
+  // other tab reachable. The door for everybody following the cup from
+  // home. A second flag on one identity rather than a second identity —
+  // see lib/guest.js — and never set without the one above it.
+  const [boardMode, setBoardMode] = useState(readBoardMode);
   // Whether the roster subscription has delivered anything at all. "No link
   // found" means nothing until it has.
   const [playersLoaded, setPlayersLoaded] = useState(false);
@@ -4358,7 +4382,10 @@ export default function App() {
       // who looked around first and then signed in properly, and the phone
       // that was handed to somebody who did — leaving the flag set would
       // hold the app in guest mode behind a perfectly good session.
-      if (u) { writeGuestMode(false); setGuestMode(false); }
+      if (u) {
+        writeGuestMode(false); setGuestMode(false);
+        writeBoardMode(false); setBoardMode(false);
+      }
     });
   }, []);
 
@@ -4393,7 +4420,10 @@ export default function App() {
   // Default landing view. Leaderboard is the right home base — the
   // most-glanced screen during a round, and the natural place for a
   // user reopening the app to check current state.
-  const [view, setView] = useState("leaderboard");
+  // `viewState` rather than `view`: what the app is SHOWING is derived from
+  // it a few hundred lines below, because the scoreboard door pins the
+  // answer to the leaderboard. See `view` beside `boardOnly`.
+  const [viewState, setView] = useState("leaderboard");
   // ── The round summary ──
   // A round number, or null. Opened by the chip on a round's header on the
   // Leaderboard and by a tapped round-final notification, which is why it
@@ -4636,6 +4666,20 @@ export default function App() {
   // screen below is drawing from.
   const guesting = isGuest(user);
 
+  // Running as the scoreboard: a guest who came through the "View the
+  // leaderboard" button rather than the guest link. Derived from the
+  // identity as well as the flag for the same reason `guesting` is —
+  // signing in for real must not leave a phone pinned to one screen.
+  const boardOnly = guesting && boardMode;
+
+  // What the app is showing. In board mode it is the leaderboard whatever
+  // the state says, which is what makes "nothing else" true rather than
+  // merely undrawn: the nav and the menu are withheld below, but a hash
+  // (`#photos`, from a shared link or a stale service-worker tap) reaches
+  // setView without going through either of them, and would otherwise
+  // strand a reader on a tab with nothing to navigate away with.
+  const view = boardOnly ? "leaderboard" : viewState;
+
   // Keep that cache current. What gets written is the live roster row, so
   // it can never be staler than what is on screen — and it is cleared the
   // moment the roster says this account has no name, which is how a
@@ -4682,6 +4726,11 @@ export default function App() {
     setBootstrapDirector(false);
     writeGuestMode(toGuest);
     setGuestMode(toGuest);
+    // Never inherited. The password screen's guest link asks for the whole
+    // app read-only, and leaving a scoreboard flag standing from an earlier
+    // visit would hand them one screen of it.
+    writeBoardMode(false);
+    setBoardMode(false);
     if (toGuest) setView("leaderboard");
     await signOutUser();
   }, []);
@@ -4694,6 +4743,24 @@ export default function App() {
     setGuestMode(true);
     setView("leaderboard");
   }, []);
+
+  // The scoreboard door, from the same screen. The guest flag AND the board
+  // flag, written together here and cleared together in doSignOut — board
+  // mode is that guest shown one screen, so a board flag without a guest
+  // flag would be a reader with no identity at all.
+  const enterBoard = useCallback(() => {
+    writeGuestMode(true);
+    setGuestMode(true);
+    writeBoardMode(true);
+    setBoardMode(true);
+    setView("leaderboard");
+  }, []);
+
+  // And the way out of it, which is the only control on the screen: no nav
+  // to reach My Account's exit with, so leaving is the button where the bar
+  // would be. A plain sign-out — there is no session to drop, so all it does
+  // is put the sign-in screen back.
+  const exitBoard = useCallback(() => { doSignOut(); }, [doSignOut]);
 
   const [tRounds, setTRounds] = useState([]);
   const [courses, setCourses] = useState([]);
@@ -6886,7 +6953,7 @@ export default function App() {
   const chrome = { tournamentName, tournamentLocation };
   if (!guesting) {
     if (authUser === undefined || (authUser && member === undefined) || (authUser && member && !user && !playersLoaded)) return <LoginSplash {...chrome} />;
-    if (!authUser) return <SignInScreen {...chrome} initialError={authError} onGuest={enterGuest} />;
+    if (!authUser) return <SignInScreen {...chrome} initialError={authError} onGuest={enterGuest} onBoard={enterBoard} />;
     if (!member) return (
       <GateScreen {...chrome} authUser={authUser} onSignOut={doSignOut}
         onGuest={() => doSignOut({ toGuest: true })}
@@ -7578,9 +7645,15 @@ export default function App() {
         <div className="bc-nav-spacer" aria-hidden="true" style={{ flexShrink: 0, height: 12 }} />
       </div>
 
-      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} user={user} view={view}
-        alerts={{ finalize: finalizeReady, balance: balanceDue }}
-        onEditions={() => setEditionsOpen(true)} navH={navH} />
+      {/* Not rendered at all in board mode. The More tab that opens it is
+          withheld below, so nothing can set `menuOpen` — but a drawer that
+          exists is a drawer one stray call re-opens, and "nothing else"
+          should be true of the tree and not only of the bar. */}
+      {!boardOnly && (
+        <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} user={user} view={view}
+          alerts={{ finalize: finalizeReady, balance: balanceDue }}
+          onEditions={() => setEditionsOpen(true)} navH={navH} />
+      )}
 
       {/* Every year the cup has been played. Opened from the menu by anybody;
           `canManage` is what adds the create/delete half for a director, who
@@ -7705,8 +7778,28 @@ export default function App() {
           scroll area shortens by exactly its height with nothing to predict.
           Null while this device is on the cup, which is nearly always. */}
       <EditionBanner viewing={activeEdition} live={liveEditionRow} />
-      {/* padding matches the content column's `0 4px` so the five tabs line up
-          with the cards above them instead of being 4px wider on each side. */}
+      {/* ── The scoreboard's bar ─────────────────────────────────────
+          One control where the five tabs would be, and it is the way back to
+          the sign-in screen. The bar's BOX is kept — it paints the bottom
+          band, carries the home-indicator inset, seats the slide menu's
+          measurement and holds the edition banner — because a shell that
+          drops its last flex row on one route is a second layout to keep
+          honest. Same minHeight as a tab, so the bar is the same bar.
+
+          A reader who taps it is not losing anything: board mode is a
+          localStorage flag and no account, so this is a re-render, and the
+          button that put them here is on the screen it returns to. */}
+      {boardOnly ? (
+        <div style={{ maxWidth: 520, margin: "0 auto", display: "flex", justifyContent: "center", padding: "0 4px" }}>
+          <button onClick={exitBoard} style={{
+            padding: "12px 20px", minHeight: 52, background: "transparent", border: "none",
+            color: BC.t2, fontFamily: FONT, fontSize: FS.small, fontWeight: 700, letterSpacing: 0.3,
+            textDecoration: "underline", textUnderlineOffset: 3, cursor: "pointer",
+          }}>Sign in</button>
+        </div>
+      ) : (
+      /* padding matches the content column's `0 4px` so the five tabs line up
+         with the cards above them instead of being 4px wider on each side. */
       <div style={{ maxWidth: 520, margin: "0 auto", display: "flex", padding: "0 4px" }}>
         {navItems.map(item => {
           const active = view === item.key;
@@ -7757,6 +7850,7 @@ export default function App() {
           );
         })}
       </div>
+      )}
       </div>
     </div>
   );
