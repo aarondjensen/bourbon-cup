@@ -58,6 +58,7 @@ import { buildVerified, appView, scoreMatch } from "../src/lib/historyVerify.js"
 import { historyPlayerId } from "../src/lib/historyImport.js";
 import { buildStrokeMap, resolveHoleHcps } from "../src/scoring.js";
 import { encodeHoles, holeMark, netMark, HOLES_PER_ROUND } from "../src/lib/streaks.js";
+import { matchRoyale, netByHole } from "../src/lib/matchRoyale.js";
 
 const DATA_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "data");
 const read = (f) => JSON.parse(readFileSync(join(DATA_DIR, f), "utf8"));
@@ -182,6 +183,23 @@ const factsFor = (edition) => {
     const c = courseFor(r.round_number);
     return [r.round_number, c?.hole_pars || []];
   }));
+  // ── Match Royale, a round at a time ─────────────────────────────
+  // The whole FIELD of that round, not one match — every golfer against every
+  // other on every hole. Computed here because it needs everybody's card at
+  // once, which the per-player loop below does not have.
+  const royaleFor = {};
+  backbone.playerRound.filter((r) => r.year === year).forEach((r) => {
+    const pid = historyPlayerId(year, r.player);
+    const ch = view.roundLocks[r.round]?.players?.[pid]?.ch ?? r.course_handicap;
+    (royaleFor[r.round] ||= {})[r.player] = netByHole(
+      view.holeData[`${pid}_${r.round}`] || {},
+      strokesFor(r.round, ch),
+    );
+  });
+  const royale = Object.fromEntries(
+    Object.entries(royaleFor).map(([round, nets]) => [round, matchRoyale(nets)]),
+  );
+
   const cards = backbone.playerRound
     .filter((r) => r.year === year)
     .map((r) => {
@@ -224,6 +242,12 @@ const factsFor = (edition) => {
         // How the hole went for his side. Empty when he was not in a match
         // that round, which is a gap and not a run of halves.
         hr: holeRes[`${r.round}_${pid}`] || encodeHoles([]),
+        // Match Royale — his share of the little matches against the rest of
+        // the field on every hole. Four places is a tenth of a hole at the
+        // scale it is read on; the full float would double the field's bytes
+        // to say nothing anybody can see.
+        ...(royale[r.round]?.[r.player] != null
+          ? { mr: Number(royale[r.round][r.player].toFixed(4)) } : {}),
         // Match status at the turn, from the player's own side. Absent on
         // Round 4, which is one team match against another and never had one.
         ...(fact && fact.after9 != null ? { a9: fact.after9 } : {}),
