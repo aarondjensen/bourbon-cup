@@ -114,6 +114,7 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
   const editionRows = editions.map((e) => {
     const mine = matches.filter((m) => m.year === e.year);
     const myCards = cards.filter((c) => c.year === e.year);
+    const myOwnCards = myCards.filter((c) => formatOwnBall(roundIx.get(roundKey(c))?.format));
     let cumA = 0, cumB = 0;
     const rows = [...new Set(mine.map((m) => m.round))].sort((a, b) => a - b).map((round) => {
       const rm = mine.filter((m) => m.round === round);
@@ -165,6 +166,12 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
       clinchedAfter,
       field: (e.roster || []).length,
       avgToPar: myCards.length ? sum(myCards.map((c) => c.tp)) / myCards.length : null,
+      // The week as a comparison with other weeks, which is a different
+      // number: a year with a scramble in it averages four or five shots
+      // lower, and three of the ten cups have no shared ball at all. So
+      // HARDEST WEEK ranks on this and never on the line above it, or it is
+      // ranking the DRAW rather than the golf.
+      avgOwnToPar: myOwnCards.length ? sum(myOwnCards.map((c) => c.tp)) / myOwnCards.length : null,
       roster: e.roster || [],
     };
   }).sort((a, b) => b.year - a.year);
@@ -523,6 +530,9 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
     const rc = cards.filter((c) => c.year === r.year && c.round === r.round);
     return {
       ...r,
+      // Which kind of day it was, because the two kinds do not rank against
+      // each other — see rankedDays below.
+      ownBall: formatOwnBall(r.format),
       avgToPar: rc.length ? sum(rc.map((c) => c.tp)) / rc.length : null,
       avgGross: rc.length ? sum(rc.map((c) => c.g)) / rc.length : null,
       // ── How hard the day was, allowing for the course ───────────
@@ -817,11 +827,25 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
   // A day ranks on its differential where the round has a rating and on to
   // par where it does not — never a mix inside one comparison, so the board
   // cannot put a differential above a to-par and call it harder.
-  const rated = courseRows.filter((c) => c.cards && c.avgDiff != null);
-  const rankedDays = (rated.length ? rated : courseRows.filter((c) => c.cards))
-    .map((c) => ({ ...c, difficulty: c.avgDiff ?? c.avgToPar, rated: c.avgDiff != null }));
+  //
+  // And never a mix of FORMATS either. A scramble is two men and one ball:
+  // the five of them in the record came in between +2.8 and −0.2 as a field,
+  // a dozen shots under the kindest own-ball day, which swept the bottom of
+  // this board and made EASIEST DAY a fact about the draw rather than about a
+  // golf course. The shamble and the pinehurst sit just above them for the
+  // same reason. So the two kinds are ranked apart, by the
+  // rule the low rounds, the best round and strokes gained already use
+  // (formatOwnBall) — a day is compared with the days somebody played the
+  // same way.
+  const rankDays = (rows) => {
+    const rated = rows.filter((c) => c.cards && c.avgDiff != null);
+    return (rated.length ? rated : rows.filter((c) => c.cards))
+      .map((c) => ({ ...c, difficulty: c.avgDiff ?? c.avgToPar, rated: c.avgDiff != null }));
+  };
+  const rankedDays = rankDays(courseRows.filter((c) => c.ownBall));
+  const rankedSharedDays = rankDays(courseRows.filter((c) => !c.ownBall));
 
-  const playedCups = finished.filter((e) => e.avgToPar != null);
+  const playedCups = finished.filter((e) => e.avgOwnToPar != null);
 
   // ── The cup's own records ───────────────────────────────────────
   // Not a player board and not filtered by one: which year was closest is the
@@ -834,14 +858,21 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
     // Ranked on the differential where a round has a rating, which reorders
     // the hard end: the field shot worse at Harbor Shores in 2020, but
     // Glenoaks in 2017 is where they played worst for what the course was.
+    //
+    // Own-ball days, which is every day anybody played his own ball to the
+    // hole. The shared-ball days keep their own pair below rather than being
+    // dropped: a scramble is a real round, it is simply not the same question.
     hardest: rankedDays.slice().sort((a, b) => b.difficulty - a.difficulty)[0] || null,
     easiest: rankedDays.slice().sort(byNum((c) => c.difficulty))[0] || null,
+    hardestShared: rankedSharedDays.slice().sort((a, b) => b.difficulty - a.difficulty)[0] || null,
+    easiestShared: rankedSharedDays.slice().sort(byNum((c) => c.difficulty))[0] || null,
     // ── The week, not the day ───────────────────────────────────
-    // The course passport ranks rounds and nothing ranks cups. Twelve and a
-    // half shots separate the hardest week from the easiest, which is most of
-    // a round.
-    hardestWeek: playedCups.slice().sort((a, b) => b.avgToPar - a.avgToPar)[0] || null,
-    easiestWeek: playedCups.slice().sort(byNum((e) => e.avgToPar))[0] || null,
+    // The course passport ranks rounds and nothing ranks cups. Eight shots
+    // separate the hardest week from the easiest, which is half a round —
+    // measured over the own-ball rounds alone, since a year's mix of formats
+    // is not a fact about how the week played.
+    hardestWeek: playedCups.slice().sort((a, b) => b.avgOwnToPar - a.avgOwnToPar)[0] || null,
+    easiestWeek: playedCups.slice().sort(byNum((e) => e.avgOwnToPar))[0] || null,
     cupsPlayed: finished.length,
     // ── A round somebody swept ──────────────────────────────────
     // Every match in a round taken, or near enough. The 2024 Silver Foxes won
@@ -883,7 +914,7 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
     // whenever it was faced.
     //
     // Five of the ten cups now qualify, and the two the old measure could not
-    // see are the 2017 G-MEN (eight down after R1) and 2022's HileDrivers
+    // see are the 2017 Greensmen (eight down after R1) and 2022's HileDrivers
     // (seven). The round is named beside the number, because eight down with
     // three rounds left and eight down with one are not the same afternoon
     // and the reader is better placed to weigh that than a formula is.

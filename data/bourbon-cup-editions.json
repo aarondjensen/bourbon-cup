@@ -625,6 +625,10 @@
       "year": 2017,
       "name": "The Bourbon Cup 2017",
       "teams": {
+        "A": "Greensmen",
+        "B": "B9B"
+      },
+      "teams_as_written": {
         "A": "G-MEN",
         "B": "B9B"
       },
@@ -2550,7 +2554,7 @@
       },
       "brand": {
         "A": {
-          "color": "#FFC281"
+          "color": "#4A86E8"
         },
         "B": {
           "color": "#96FF96"

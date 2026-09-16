@@ -103,9 +103,19 @@ export const accentFrom = ({ fill, ink }) => {
 // red is the sheet's own #CC0000, the colour that year uses for Drivers points
 // further down the scoreboard, rather than a hex invented here.
 //
-// A year belongs in this table only when the workbook genuinely does not carry
-// the colour. Everything else is read.
+// A year belongs in this table only when the banner cannot answer for the
+// side: it carries no colour for it, or it carries the wrong half of a pair
+// the team played in. Everything else is read.
 const NAMED_BY_HAND = {
+  // Family Biz played in blue AND orange, and the banner kept the orange —
+  // #FFC281, which is the pale end of it. The app lifts a brand colour for
+  // the dark theme and walks it down for the light one (theme.withBrand), and
+  // that pale orange survives neither trip: it lands on cream in the dark,
+  // where it is the same colour as the gold this tab writes every year in,
+  // and on #7a704a in the light, which is khaki. The blue does hold both —
+  // #59a1ff at 7.5:1 on the dark page, #4074b8 at 4.6:1 on the light one, and
+  // blue at both ends. So the pair's other half is the one stored.
+  2020: { A: "#4A86E8" },   // Family Biz, blue
   2022: { B: "#CC0000" },   // Drivers, red
 };
 
