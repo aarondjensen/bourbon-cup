@@ -3,7 +3,9 @@
 // what it refuses to count, is worth pinning.
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { foldArchive, aliasIndex, norm, CORE_MIN_APPS, RECENT_CUPS } from "./archiveFold.js";
+import {
+  foldArchive, aliasIndex, norm, CORE_MIN_APPS, RECENT_CUPS, RECENT_MIN, recentMax,
+} from "./archiveFold.js";
 
 const read = (f) => JSON.parse(readFileSync(new URL(`../../data/${f}`, import.meta.url), "utf8"));
 const archive = read("bourbon-cup-archive.json");
@@ -347,15 +349,43 @@ describe("recent form", () => {
     cards: [],
   };
 
-  it("is the last three cups PLAYED, newest first", () => {
+  it("opens on the last three cups PLAYED, newest first", () => {
     const f = foldArchive(many);
     expect(RECENT_CUPS).toBe(3);
-    expect(f.recentYears).toEqual([2005, 2004, 2003]);
+    expect(f.recentYears()).toEqual([2005, 2004, 2003]);
+  });
+
+  // How far back is the reader's to choose.
+  it("reaches back as far as it is asked to", () => {
+    const f = foldArchive(many);
+    expect(f.recentYears(2)).toEqual([2005, 2004]);
+    expect(f.recentYears(4)).toEqual([2005, 2004, 2003, 2002]);
+  });
+
+  // One cup is not form, it is a year, and the chip beside it already offers
+  // a single year by name.
+  it("will not go below two", () => {
+    const f = foldArchive(many);
+    expect(RECENT_MIN).toBe(2);
+    expect(f.recentYears(1)).toEqual([2005, 2004]);
+    expect(f.recentYears(0)).toEqual([2005, 2004]);
+  });
+
+  // And never all of them: Career is the position above it on the same chip
+  // group, so a last-N that IS the career is a control doing nothing.
+  it("stops short of the whole record", () => {
+    const f = foldArchive(many);
+    expect(f.recentMax).toBe(4);
+    expect(recentMax(5)).toBe(4);
+    expect(f.recentYears(99)).toHaveLength(4);
+    // A project with two cups in it still has a floor.
+    expect(recentMax(2)).toBe(2);
+    expect(recentMax(1)).toBe(2);
   });
 
   it("re-totals a career over only those years", () => {
     const f = foldArchive(many);
-    const [a] = f.careerOver(f.recentYears).filter((r) => r.id === "a");
+    const [a] = f.careerOver(f.recentYears()).filter((r) => r.id === "a");
     expect(a.apps).toBe(3);
     expect(a.matches).toBe(3);
     expect(a.w).toBe(3);
@@ -369,7 +399,7 @@ describe("recent form", () => {
 
   it("re-counts cups won rather than carrying the career's", () => {
     const f = foldArchive(many);
-    const [a] = f.careerOver(f.recentYears).filter((r) => r.id === "a");
+    const [a] = f.careerOver(f.recentYears()).filter((r) => r.id === "a");
     expect(a.cupsWon).toBe(3);
     expect(a.cupsLost).toBe(0);
     expect(f.careerOf("a").cupsWon).toBe(3);
@@ -380,7 +410,7 @@ describe("recent form", () => {
   // figure it is being read against.
   it("carries the career rate alongside the slice's", () => {
     const f = foldArchive(many);
-    const [a] = f.careerOver(f.recentYears).filter((r) => r.id === "a");
+    const [a] = f.careerOver(f.recentYears()).filter((r) => r.id === "a");
     expect(a.ppm).toBe(3);
     expect(a.careerPpm).toBe(9 / 5);
   });
