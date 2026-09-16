@@ -78,6 +78,18 @@ export const aliasIndex = (players = []) => {
 // them in and one out with nothing to say why.
 export const CORE_MIN_APPS = 4;
 
+// ── Recent form ───────────────────────────────────────────────────
+// The last three cups PLAYED, not a man's own last three appearances. "How
+// has he been going lately" is a question about the same three weekends for
+// everybody — measuring one man over 2023-25 and another over 2017-25 because
+// he missed seven of them is not a comparison, and the table would put the
+// two side by side as though it were.
+//
+// Three because a cup is a week: one is a hot weekend, two cannot tell a
+// trend from a coincidence, and four is most of the record for a man who
+// started in 2022.
+export const RECENT_CUPS = 3;
+
 // ── The fold ──────────────────────────────────────────────────────
 export const foldArchive = ({ players = [], editions = [], rounds = [], matches = [], cards = [] } = {}) => {
   const nameOf = new Map(players.map((p) => [p.id, p.name]));
@@ -399,6 +411,68 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
   const careerIx = new Map(careerRows.map((r) => [r.id, r]));
   const named = (id) => careerIx.get(id)?.name || nameOf.get(id) || id;
 
+  // ── A career, over a chosen set of years ────────────────────────
+  // The same row shape the table already draws, re-totalled over some of a
+  // man's years instead of all of them — which is what "recent form" is.
+  //
+  // Summed off `byYear` rather than re-walked off the cards, because byYear
+  // is where every per-year total already lives and a second pass over the
+  // cards would be a second definition of a win to drift.
+  //
+  // What it cannot slice is the hole counts and the partnerships: those are
+  // career-wide on the row and stay so. The table does not draw them, and the
+  // panel that does says CAREER on nothing it shows — the same compromise the
+  // single-year scope has always made.
+  const careerOver = (years) => {
+    const want = new Set(years);
+    return careerRows.map((r) => {
+      const ys = r.byYear.filter((y) => want.has(y.year));
+      if (!ys.length) return null;
+      const sum = (k) => ys.reduce((acc, y) => acc + (y[k] || 0), 0);
+      const pick = (key, cmp) => ys.map((y) => y[key]).filter(Boolean).slice().sort(cmp)[0] || null;
+      const rounds = sum("rounds"), matches = sum("matches");
+      const netRounds = sum("netRounds"), sgRounds = sum("sgRounds"), sgNets = sum("sgNets");
+      // A cup won is the edition's own answer, not something byYear carries —
+      // and it has to be re-asked per year or a three-cup slice would report
+      // a decade of them.
+      const cups = ys.reduce((acc, y) => {
+        const e = edIx.get(y.year);
+        if (!e || !e.complete) return acc;
+        if (e.halved) acc.cupsHalved += 1;
+        else if (e.winnerSide === y.team) acc.cupsWon += 1;
+        else acc.cupsLost += 1;
+        return acc;
+      }, { cupsWon: 0, cupsLost: 0, cupsHalved: 0 });
+      return {
+        ...r, ...cups,
+        apps: ys.length,
+        years: ys.map((y) => y.year).sort((a, b) => a - b),
+        debut: Math.min(...ys.map((y) => y.year)),
+        last: Math.max(...ys.map((y) => y.year)),
+        w: sum("w"), l: sum("l"), h: sum("h"), pts: sum("pts"), matches, rounds,
+        toPar: sum("toPar"), netToPar: sum("netToPar"), netRounds,
+        sgRounds, sgNets,
+        best: pick("best", (a, b) => a.toPar - b.toPar || a.gross - b.gross),
+        bestNet: pick("bestNet", (a, b) => a.netToPar - b.netToPar || a.net - b.net),
+        avgToPar: rounds ? sum("toPar") / rounds : null,
+        avgNetToPar: netRounds ? sum("netToPar") / netRounds : null,
+        ppm: matches ? sum("pts") / matches : null,
+        sg: sgRounds ? sum("sgGross") / sgRounds : null,
+        sgNetPer: sgNets ? sum("sgNet") / sgNets : null,
+        // What the slice is being read AGAINST. The whole point of a form
+        // table is the comparison, and a number with nothing beside it is
+        // just a smaller version of the career table.
+        careerPpm: r.ppm,
+        careerSg: r.sg,
+        careerSgNetPer: r.sgNetPer,
+        careerAvgToPar: r.avgToPar,
+        careerAvgNetToPar: r.avgNetToPar,
+      };
+    }).filter(Boolean)
+      .sort((a, b) => b.pts - a.pts || (a.avgToPar ?? Infinity) - (b.avgToPar ?? Infinity)
+        || String(a.name).localeCompare(String(b.name)));
+  };
+
   const partnerRows = [...partners.values()]
     .map((p) => ({ ...p, aName: named(p.a), bName: named(p.b), ppm: p.matches ? p.pts / p.matches : 0 }))
     .sort((a, b) => b.matches - a.matches || b.ppm - a.ppm);
@@ -601,6 +675,11 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
         || String(a.name).localeCompare(String(b.name)))
       .slice(0, n);
 
+    // The lowest card in each round number, one row each.
+    const bestPerRound = (list) => roundNumbers
+      .map((rd) => top(list.filter((c) => c.round === rd), 1)[0] || null)
+      .filter(Boolean);
+
     const sgBoard = (key, rounds) => top(played
       .filter((r) => r[key] != null && r[rounds] >= SG_MIN_ROUNDS)
       .sort((a, b) => b[key] - a[key]));
@@ -609,6 +688,13 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
       records: {
         lowRounds: top(byGross),
         lowRoundsNet: top(byNet),
+        // One row per round NUMBER rather than a board each: four boards of
+        // five is twenty rows to answer "who owns Sunday", and the answer is
+        // one name. The round number is the interesting axis because the
+        // format follows it — R2 has been singles every year of the cup and
+        // R4 team best ball every year.
+        bestByRound: bestPerRound(byGross),
+        bestByRoundNet: bestPerRound(byNet),
         bestWeeks: top(weeks.slice().sort(byNum((w) => w.toPar))),
         bestWeeksNet: top(netWeeks.slice().sort(byNum((w) => w.toPar))),
         mostPoints: top(played.flatMap((r) => r.byYear.filter((y) => y.matches).map((y) => ({ id: r.id, name: r.name, ...y })))
@@ -686,8 +772,14 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
   const records = { ...cupRecords, ...allBoards.records };
   const { strokesGained, streaks } = allBoards;
 
+  const allYears = editionRows.map((e) => e.year);
+
   return {
-    years: editionRows.map((e) => e.year),
+    years: allYears,
+    // The last three cups played, newest first. One place, so the chip and
+    // the table cannot disagree about which weekends "recent" means.
+    recentYears: allYears.slice(0, RECENT_CUPS),
+    careerOver,
     editions: editionRows,
     edition: (year) => edIx.get(year) || null,
     career: careerRows,
