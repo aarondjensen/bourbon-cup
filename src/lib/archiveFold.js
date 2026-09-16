@@ -23,7 +23,7 @@
 //   editions  { year, teamA, teamB, roster:[{p,t}], complete? }
 //   rounds    { year, round, format, course, par, rating, slope }
 //   matches   { year, round, A:[id], B:[id], ptsA, ptsB }
-//   cards     { year, round, p, g, ch, tp, e, b, pr, bo, d, a9?, np?, hr? }
+//   cards     { year, round, p, g, ch, tp, e, b, pr, bo, d, a9?, np?, hr?, mr? }
 //
 // `np` and `hr` are the eighteen-character streak marks — the net card and the
 // hole results, one letter a hole. See src/lib/streaks.js, which owns what a
@@ -167,6 +167,7 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
         e: 0, b: 0, pr: 0, bo: 0, d: 0,
         best: null, bestNet: null, byFormat: {}, byYear: [],
         netRounds: 0, netToPar: 0, nE: 0, nB: 0, nP: 0, nBo: 0, nD: 0,
+        mrSum: 0, mrRounds: 0,
         sgGross: 0, sgNet: 0, sgRounds: 0, sgNets: 0, bestSg: null, bestSgNet: null,
         cupsWon: 0, cupsLost: 0, cupsHalved: 0,
         comebacks: 0, collapses: 0,
@@ -187,7 +188,7 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
         year: e.year, team: t,
         teamName: t === "A" ? e.teamA : e.teamB,
         w: 0, l: 0, h: 0, pts: 0, matches: 0, rounds: 0, toPar: 0, best: null,
-        netRounds: 0, netToPar: 0, bestNet: null,
+        netRounds: 0, netToPar: 0, bestNet: null, mrSum: 0, mrRounds: 0,
         sgGross: 0, sgNet: 0, sgRounds: 0, sgNets: 0,
       });
       if (e.complete) {
@@ -333,6 +334,16 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
     const meta = roundIx.get(roundKey(c)) || {};
     r.rounds += 1; r.toPar += c.tp;
     r.e += c.e || 0; r.b += c.b || 0; r.pr += c.pr || 0; r.bo += c.bo || 0; r.d += c.d || 0;
+    // ── Match Royale ────────────────────────────────────────────
+    // The workbook's own metric (lib/matchRoyale), averaged over his rounds
+    // the way the workbook averaged it — over ALL FOUR, a shared ball
+    // included. That is the one place this half of the tab does not apply
+    // formatOwnBall, and deliberately: this is the sheets' number, it was
+    // computed that way for ten years, and a Match Royale that quietly
+    // covered three rounds would not be the figure anybody remembers.
+    if (c.mr != null) {
+      r.mrSum += c.mr; r.mrRounds += 1;
+    }
     const net = netOf(c);
     if (net) {
       r.netRounds += 1; r.netToPar += net.toPar;
@@ -359,6 +370,7 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
     if (y) {
       y.rounds += 1; y.toPar += c.tp;
       if (net) { y.netRounds += 1; y.netToPar += net.toPar; }
+      if (c.mr != null) { y.mrSum += c.mr; y.mrRounds += 1; }
       if (own && (!y.best || c.tp < y.best.toPar)) y.best = shot;
       if (own && net && (!y.bestNet || net.toPar < y.bestNet.netToPar)) y.bestNet = shot;
     }
@@ -391,11 +403,13 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
         ...y,
         avgToPar: y.rounds ? y.toPar / y.rounds : null,
         avgNetToPar: y.netRounds ? y.netToPar / y.netRounds : null,
+        matRoy: y.mrRounds ? y.mrSum / y.mrRounds : null,
         sg: y.sgRounds ? y.sgGross / y.sgRounds : null,
         sgNetPer: y.sgNets ? y.sgNet / y.sgNets : null,
       })),
     avgToPar: r.rounds ? r.toPar / r.rounds : null,
     avgNetToPar: r.netRounds ? r.netToPar / r.netRounds : null,
+    matRoy: r.mrRounds ? r.mrSum / r.mrRounds : null,
     // Per ROUND rather than totalled: a total is a record about turning up,
     // and this board already sits next to MOST APPEARANCES.
     sg: r.sgRounds ? r.sgGross / r.sgRounds : null,
@@ -432,6 +446,7 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
       const pick = (key, cmp) => ys.map((y) => y[key]).filter(Boolean).slice().sort(cmp)[0] || null;
       const rounds = sum("rounds"), matches = sum("matches");
       const netRounds = sum("netRounds"), sgRounds = sum("sgRounds"), sgNets = sum("sgNets");
+      const mrRounds = sum("mrRounds");
       // A cup won is the edition's own answer, not something byYear carries —
       // and it has to be re-asked per year or a three-cup slice would report
       // a decade of them.
@@ -451,7 +466,8 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
         last: Math.max(...ys.map((y) => y.year)),
         w: sum("w"), l: sum("l"), h: sum("h"), pts: sum("pts"), matches, rounds,
         toPar: sum("toPar"), netToPar: sum("netToPar"), netRounds,
-        sgRounds, sgNets,
+        sgRounds, sgNets, mrRounds,
+        matRoy: mrRounds ? sum("mrSum") / mrRounds : null,
         best: pick("best", (a, b) => a.toPar - b.toPar || a.gross - b.gross),
         bestNet: pick("bestNet", (a, b) => a.netToPar - b.netToPar || a.net - b.net),
         avgToPar: rounds ? sum("toPar") / rounds : null,
@@ -463,6 +479,7 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
         // table is the comparison, and a number with nothing beside it is
         // just a smaller version of the career table.
         careerPpm: r.ppm,
+        careerMatRoy: r.matRoy,
         careerSg: r.sg,
         careerSgNetPer: r.sgNetPer,
         careerAvgToPar: r.avgToPar,
@@ -704,6 +721,18 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
         // cups' worth — below that one hot weekend tops the list forever.
         bestRate: top(played.filter((r) => r.matches >= 12).sort((a, b) => b.ppm - a.ppm)),
         mostBirdies: top(played.filter((r) => r.rounds).slice().sort((a, b) => (b.e + b.b) - (a.e + a.b))),
+        // Eight rounds, the same floor the strokes gained boards use — it is
+        // a rate, and a rate needs a denominator worth trusting.
+        matRoy: top(played.filter((r) => r.matRoy != null && r.mrRounds >= SG_MIN_ROUNDS)
+          .sort((a, b) => b.matRoy - a.matRoy)),
+        // The best single round of it, and this one IS own-ball — a shared
+        // ball gives both partners the identical figure, so a pinehurst pair
+        // would take two lines of the board with one performance, which is
+        // the LOW ROUNDS problem exactly. The career average above is left
+        // over all four rounds because that is the workbook's own metric and
+        // the workbook averaged all four.
+        matRoyRounds: top(rankedCards.filter((c) => c.mr != null)
+          .slice().sort((a, b) => b.mr - a.mr)),
         mostBirdiesNet: top(played.filter((r) => r.netRounds).slice().sort((a, b) => (b.nE + b.nB) - (a.nE + a.nB))),
         comebacks: top(played.filter((r) => r.comebacks).sort((a, b) => b.comebacks - a.comebacks)),
       },

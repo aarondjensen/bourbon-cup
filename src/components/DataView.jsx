@@ -32,6 +32,7 @@ import { formatLabel } from "../constants";
 import { switchEdition } from "../lib/editions";
 import { useArchive } from "../lib/useArchive";
 import { streakWhere } from "../lib/streaks";
+import { royaleHoles } from "../lib/matchRoyale";
 
 // ── Small shared furniture ────────────────────────────────────────
 const card = themedStyle(() => ({ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, marginBottom: 12 }));
@@ -449,6 +450,17 @@ function PlayerCard({ p, data, activeYear, net = false }) {
         </div>
       )}
 
+      {/* 9.0 is average, so the colour turns on nine rather than on zero. */}
+      {p.matRoy != null && (
+        <div style={{ fontSize: FS.small, color: BC.t2, marginBottom: 12 }}>
+          <strong style={{ color: BC.amberInk }}>Match Royale</strong>
+          {" — "}{royaleHoles(p.matRoy).toFixed(1)} of 18 holes' worth of the field beaten
+          <span style={{ color: royaleHoles(p.matRoy) >= 9 ? BC.green : BC.danger, fontWeight: 700 }}>
+            {` (${royaleHoles(p.matRoy) >= 9 ? "+" : ""}${(royaleHoles(p.matRoy) - 9).toFixed(1)})`}
+          </span>
+        </div>
+      )}
+
       {bestRound && (
         <div style={{ fontSize: FS.small, color: BC.t2, marginBottom: 12 }}>
           <strong style={{ color: BC.amberInk }}>{net ? "Best net round" : "Best round"}</strong>
@@ -591,6 +603,27 @@ function PlayerRecords({ data, note = "ALL YEARS", net = false }) {
           <span style={{ flex: 1, minWidth: 0, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{y.name}</span>
           <span style={{ fontWeight: 800, color: BC.amberInk }}>{fmtPts(y.pts)}</span>
           <span style={{ width: 34, textAlign: "right", color: BC.t3 }}>{y.year}</span>
+        </>
+      ))}
+      {/* The workbook's own metric, in the form it printed it: holes' worth of
+          the field beaten. 9.0 is dead average — half of fifteen opponents
+          over eighteen holes — which is why it is worth a label rather than a
+          bare fraction nobody can place. */}
+      {list("MATCH ROYALE · HOLES OF THE FIELD BEATEN", r.matRoy, (p) => (
+        <>
+          <span style={{ flex: 1, minWidth: 0, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
+          {/* Two places. A career average over forty rounds regresses hard
+              toward nine, so one decimal prints the whole core board as 9.3,
+              9.3, 9.2, 9.2, 9.2 — a ranking nobody can read. */}
+          <span style={{ width: 38, textAlign: "right", fontWeight: 800, color: BC.amberInk }}>{royaleHoles(p.matRoy).toFixed(2)}</span>
+          <span style={{ width: 52, textAlign: "right", color: BC.t3 }}>{p.mrRounds} RDS</span>
+        </>
+      ))}
+      {list("MATCH ROYALE · BEST ROUND · OWN BALL", r.matRoyRounds, (c) => (
+        <>
+          <span style={{ flex: 1, minWidth: 0, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</span>
+          <span style={{ width: 38, textAlign: "right", fontWeight: 800, color: BC.amberInk }}>{royaleHoles(c.mr).toFixed(1)}</span>
+          <span style={{ width: 52, textAlign: "right", color: BC.t3 }}>{c.year} R{c.round}</span>
         </>
       ))}
       {list("BIRDIES OR BETTER", net ? r.mostBirdiesNet : r.mostBirdies, (p) => (

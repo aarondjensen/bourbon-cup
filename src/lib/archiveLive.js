@@ -30,6 +30,7 @@ import { realPlayers } from "./players";
 import { scheduledRounds } from "./rounds";
 import { aliasIndex, norm } from "./archiveFold";
 import { encodeHoles, holeMark, netMark } from "./streaks";
+import { matchRoyale, netByHole } from "./matchRoyale";
 
 export const HOLES_PER_ROUND = 18;
 
@@ -158,6 +159,26 @@ export const liveFacts = ({
     .filter((m) => m.A.length && m.B.length && m.holesPlayed > 0)
     .map(({ holesPlayed, ...row }) => row);
 
+  // ── Match Royale, a round at a time ─────────────────────────────
+  // Needs the whole FIELD of a round at once — every golfer against every
+  // other on every hole — so it cannot be done inside the per-player loop
+  // below. Complete cards only, for the same reason that loop uses: a man
+  // through fourteen holes would beat the field on the fourteen he has
+  // played and be credited with a round.
+  const royale = {};
+  roundNumbers.forEach((round) => {
+    const c = ctx(round);
+    const nets = {};
+    roster.forEach((p) => {
+      const card = holeData[`${p.player_id}_${round}`] || {};
+      if (Object.keys(card).filter((h) => card[h] > 0).length !== HOLES_PER_ROUND) return;
+      const ch = roundLocks?.[round]?.players?.[p.player_id]?.ch;
+      if (ch == null) return;
+      nets[p.player_id] = netByHole(card, buildStrokeMap(Number(ch) || 0, c.holeHcps || []));
+    });
+    royale[round] = matchRoyale(nets);
+  });
+
   // Cards — COMPLETE rounds only. A man through fourteen is not having a good
   // week, he is unfinished, and folding his card into an average would put
   // whoever had played least on top — the same trap the Low Net board avoids
@@ -198,6 +219,8 @@ export const liveFacts = ({
           return g > 0 ? netMark(g - (strokes[h] || 0) - (pars[h] ?? 4)) : null;
         })),
         hr: holeRes[`${round}_${p.player_id}`] || encodeHoles([]),
+        ...(royale[round]?.[p.player_id] != null
+          ? { mr: Number(royale[round][p.player_id].toFixed(4)) } : {}),
         ...(turn != null ? { a9: turn } : {}),
       });
     });
