@@ -665,12 +665,33 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
   // cups, like every other record here, and a halved cup is neither won nor
   // lost so it ends both runs.
   const cupsOrdered = editionRows.slice().sort((a, b) => a.year - b.year).filter((e) => e.complete);
+  // The cup everybody's "current" run is measured against.
+  const latestCup = cupsOrdered[cupsOrdered.length - 1]?.year ?? null;
   const cupSeq = (id) => cupsOrdered
     .filter((e) => e.roster.some((r) => r.p === id))
     .map((e) => {
       const t = e.roster.find((r) => r.p === id).t;
       return { v: e.halved ? "H" : e.winnerSide === t ? "W" : "L", year: e.year, round: null };
     });
+
+  // ── The run a man is ON ─────────────────────────────────────────
+  // Not the best he ever had — the one still going. Read off the END of his
+  // cup sequence rather than scanned for, which is the whole difference: a
+  // longest streak is a fact about a career and a current one is a fact about
+  // this week, and the first cannot answer "who is on a run right now".
+  //
+  // It has to have reached the LATEST cup to count. A longest streak counts
+  // consecutive appearances and steps over a year a man missed, because he
+  // cannot defend a cup he did not travel to — but a man whose last cup was
+  // 2019 is not currently on anything, and reporting him on three would be
+  // the board saying something it does not mean.
+  const currentRun = (seq, want) => {
+    const last = seq[seq.length - 1];
+    if (!last || last.year !== latestCup || last.v !== want) return null;
+    let i = seq.length - 1;
+    while (i > 0 && seq[i - 1].v === want) i -= 1;
+    return { len: seq.length - i, from: seq[i], to: last };
+  };
 
   const matchesOrdered = matches.slice().sort((a, b) => a.year - b.year || a.round - b.round);
   const matchSeq = (id) => matchesOrdered
@@ -691,6 +712,8 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
       id: r.id, name: r.name,
       cupsWon: longestRun(cup, (v) => v === "W"),
       cupsLost: longestRun(cup, (v) => v === "L"),
+      cupsWonNow: currentRun(cup, "W"),
+      cupsLostNow: currentRun(cup, "L"),
       matchWins: longestRun(mat, (v) => v === "W"),
       // Literally without a WIN — a halve continues it. It is the run a man
       // wants to end, and he does not end it by halving.
@@ -790,11 +813,13 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
       },
       streaks: {
         cupsWon: board("cupsWon"),
+        cupsWonNow: board("cupsWonNow"),
         matchWins: board("matchWins"),
         holesWon: board("holesWon"),
         netPar: board("netPar"),
         noDouble: board("noDouble"),
         cupsLost: board("cupsLost"),
+        cupsLostNow: board("cupsLostNow"),
         winless: board("winless"),
         holesLost: board("holesLost"),
         noPar: board("noPar"),
