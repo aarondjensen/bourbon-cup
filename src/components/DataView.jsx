@@ -583,7 +583,12 @@ const WLH = ({ w, l, h }) => (
 // because eight numbers across a phone is either unreadable or a sideways
 // scroll — the same reason the table above it is two rows per player rather
 // than eight columns.
-function PlayerCard({ p, data, activeYear, net = false }) {
+function PlayerCard({ p, data, activeYear }) {
+  // The basis lives here rather than on the table's header, because the table
+  // no longer shows a gross or net number — this card is the only thing left
+  // that does, and a control belongs with what it controls.
+  const [basis, setBasis] = useState("gross");
+  const net = basis === "net";
   const partners = useMemo(() => data.partnersOf(p.id).slice(0, 6), [data, p.id]);
   const h2h = useMemo(() => data.h2hOf(p.id).filter((r) => r.matches).slice(0, 6), [data, p.id]);
   // Record only, no rate. Points per match is comparable BETWEEN PLAYERS and
@@ -600,10 +605,13 @@ function PlayerCard({ p, data, activeYear, net = false }) {
 
   return (
     <div style={{ padding: "10px 14px 14px", borderTop: hair() }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+        <BasisToggle value={basis} onChange={setBasis} />
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 14 }}>
         <Stat label="Cups" value={p.apps} sub={p.debut === p.last ? `${p.debut}` : `${p.debut}–${p.last}`} />
         <Stat label="Won" value={p.cupsWon} sub={p.cupsHalved ? `${p.cupsHalved} halved` : null} color={BC.green} />
-        <Stat label="Pts/match" value={p.ppm == null ? "—" : p.ppm.toFixed(2)} />
+        <Stat label="Pts/match" value={p.ppm == null ? "—" : p.ppm.toFixed(2)} sub={`${p.rounds} RDS`} />
         <Stat
           label={net ? "Avg net" : "Avg round"}
           value={toParText(net ? p.avgNetToPar : p.avgToPar)}
@@ -937,39 +945,31 @@ function Streaks({ data, note = "ALL YEARS" }) {
 // old NOW/THEN split coming back through the window: both scopes are about
 // the same subject, and the default is the career, because that is the thing
 // this tab could not say before.
+// ── The standing ──────────────────────────────────────────────────
+// Two records and the points they add up to. It used to carry a sub-line as
+// well — rounds, scoring average, best round, form — which is four more
+// numbers on the row a man reads to find his own name, and every one of them
+// is on the card behind the tap where there is room to label it.
+//
+// Cups as a record rather than a count, because "10 CUPS" says he turned up
+// and 5–4–1 says how it went. The same shape as the match record beside it
+// and as the head-to-heads on the card, so one reading serves all three.
 function CareerTable({ rows, teamOf, myId, activeYear, data, open, setOpen }) {
-  // Its own, like every other card's — this one drives the AVG and BEST on
-  // each row's sub-line, and the panel a row opens onto.
-  const [basis, setBasis] = useState("gross");
-  const net = basis === "net";
   if (!rows.length) return <Empty>No players yet</Empty>;
-  const COLS = "1fr 38px 38px 38px 50px";
+  const COLS = "1fr 56px 68px 50px";
   const head = { fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1, textAlign: "center" };
-  const cell = { fontSize: FS.small, fontWeight: 600, textAlign: "center" };
 
   return (
     <div style={{ ...card, overflow: "hidden" }}>
       <div style={{ display: "grid", gridTemplateColumns: COLS, padding: "8px 12px", borderBottom: `1px solid ${BC.bdr}`, ...head, textAlign: "left" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          <span>PLAYER</span>
-          <BasisToggle value={basis} onChange={setBasis} />
-        </div>
-        <div style={head}>W</div><div style={head}>L</div><div style={head}>H</div>
+        <div>PLAYER</div>
+        <div style={head}>CUPS</div>
+        <div style={head}>MATCHES</div>
         <div style={{ ...head, textAlign: "right" }}>PTS</div>
       </div>
       {rows.map((p, i) => {
         const isOpen = open === p.id;
         const mine = p.id === myId;
-        // The chips are directly above this table, so the sub-line carries
-        // the numbers and not a word saying which basis they are on. The
-        // boards further down the screen do carry it — see boardNote.
-        const avg = net ? p.avgNetToPar : p.avgToPar;
-        const best = net ? p.bestNet : p.best;
-        // The "vs" in recent form vs total history. A slice of a career with
-        // no career beside it is just a smaller table; the delta is the whole
-        // reason to look. Points per match, because that is the cup's own
-        // currency and the column the table is already sorted by.
-        const form = p.careerPpm != null && p.ppm != null ? p.ppm - p.careerPpm : null;
         return (
           <div key={p.id} style={{ borderBottom: i < rows.length - 1 ? hair() : "none", background: mine ? BC.amber + ALPHA.wash : "transparent" }}>
             <button onClick={() => setOpen(isOpen ? null : p.id)} style={{
@@ -985,27 +985,16 @@ function CareerTable({ rows, teamOf, myId, activeYear, data, open, setOpen }) {
                   }}>{p.name}</span>
                   <span style={{ fontSize: FS.small, color: BC.t3, transform: isOpen ? "rotate(90deg)" : "none", display: "inline-block" }}>›</span>
                 </div>
-                <div style={{ ...cell, color: BC.green }}>{p.w}</div>
-                <div style={{ ...cell, color: BC.danger }}>{p.l}</div>
-                <div style={{ ...cell, color: BC.t3 }}>{p.h}</div>
-                <div style={{ ...cell, textAlign: "right", fontWeight: 700, color: BC.amberInk }}>{fmtPts(p.pts)}</div>
-              </div>
-              <div style={{ display: "flex", gap: 12, marginTop: 3, marginLeft: 12, fontSize: FS.micro, color: BC.t3, letterSpacing: 0.4 }}>
-                <span>{p.apps ? `${p.apps} CUP${p.apps === 1 ? "" : "S"}` : "—"}</span>
-                <span>{p.rounds ? `${p.rounds} RD${p.rounds === 1 ? "" : "S"}` : "NO CARD"}</span>
-                {avg != null && <span>AVG <strong style={{ color: BC.t2, fontWeight: 700 }}>{toParText(avg)}</strong></span>}
-                {best && (
-                  <span>BEST <strong style={{ color: BC.t2, fontWeight: 700 }}>{net ? best.net : best.gross}</strong>
-                    {" "}({fmtScore(net ? best.netToPar : best.toPar)}) {best.year}</span>
-                )}
-                {form != null && (
-                  <span>FORM <strong style={{ color: form > 0 ? BC.green : form < 0 ? BC.danger : BC.t2, fontWeight: 700 }}>
-                    {`${form > 0 ? "+" : ""}${form.toFixed(2)}`}
-                  </strong></span>
-                )}
+                <div style={{ fontSize: FS.small, fontWeight: 600, textAlign: "center" }}>
+                  <WLH w={p.cupsWon} l={p.cupsLost} h={p.cupsHalved} />
+                </div>
+                <div style={{ fontSize: FS.small, fontWeight: 600, textAlign: "center" }}>
+                  <WLH w={p.w} l={p.l} h={p.h} />
+                </div>
+                <div style={{ fontSize: FS.small, fontWeight: 700, textAlign: "right", color: BC.amberInk }}>{fmtPts(p.pts)}</div>
               </div>
             </button>
-            {isOpen && <PlayerCard p={p} data={data} activeYear={activeYear} net={net} />}
+            {isOpen && <PlayerCard p={p} data={data} activeYear={activeYear} />}
           </div>
         );
       })}
@@ -1069,18 +1058,12 @@ function PlayerHalf({ data, activeYear, myId, teams }) {
   const rows = useMemo(() => {
     const mine = (p) => (p.apps || p.matches) && (!onlyCore || core.has(p.id));
     if (scope === "career") return data.career.filter(mine);
-    // The last three cups, re-totalled — the same table, a shorter record.
-    if (scope === "recent") return (data.careerOver?.(recentYears) || []).filter(mine);
-    const played = data.career.filter(mine);
-    return played
-      .map((p) => {
-        const y = p.byYear.find((x) => x.year === activeYear);
-        if (!y) return null;
-        return { ...p, ...y, apps: 1, byYear: p.byYear, best: y.best, avgToPar: y.avgToPar };
-      })
-      .filter(Boolean)
-      .sort((a, b) => b.pts - a.pts || (a.avgToPar ?? Infinity) - (b.avgToPar ?? Infinity)
-        || String(a.name).localeCompare(String(b.name)));
+    // Both slices go through the same re-totaller. A single year used to be
+    // stitched together here from `byYear`, which carried no cup result — so
+    // the CUPS column would have shown a man's whole decade beside one year's
+    // matches. careerOver re-asks the edition, so it cannot.
+    const years = scope === "recent" ? recentYears : [activeYear];
+    return (data.careerOver?.(years) || []).filter(mine);
   }, [data, core, onlyCore, scope, activeYear, recentYears]);
 
   // Yours first. Not a sort — the table's order is the standing and moving a
