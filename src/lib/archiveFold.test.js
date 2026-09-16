@@ -3,7 +3,7 @@
 // what it refuses to count, is worth pinning.
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { foldArchive, aliasIndex, norm, CORE_MIN_APPS } from "./archiveFold.js";
+import { foldArchive, aliasIndex, norm, CORE_MIN_APPS, RECENT_CUPS } from "./archiveFold.js";
 
 const read = (f) => JSON.parse(readFileSync(new URL(`../../data/${f}`, import.meta.url), "utf8"));
 const archive = read("bourbon-cup-archive.json");
@@ -290,6 +290,104 @@ describe("net, beside gross", () => {
     // Every net card ranks under par or close to it: handicaps are what they
     // are for. Gross, the same board is four rounds by one man.
     expect(new Set(names(f.records.lowRoundsNet)).size).toBeGreaterThan(1);
+  });
+});
+
+// ── Best by round, and recent form ────────────────────────────────
+describe("best by round", () => {
+  const cup = (cards) => ({
+    players: toy.players,
+    editions: [{
+      year: 2001, teamA: "REDS", teamB: "BLUES", complete: true,
+      roster: [{ p: "a", t: "A" }, { p: "c", t: "B" }],
+    }],
+    rounds: [1, 2, 3, 4].map((round) => ({ year: 2001, round, format: "singles", course: "Toy", par: 72 })),
+    matches: [],
+    cards: cards.map((c) => ({ year: 2001, ch: 8, e: 0, b: 0, pr: 0, bo: 0, d: 0, np: "P".repeat(18), ...c })),
+  });
+
+  it("gives one row per round, lowest in that round", () => {
+    const f = foldArchive(cup([
+      { round: 1, p: "a", g: 80, tp: 8 }, { round: 1, p: "c", g: 76, tp: 4 },
+      { round: 2, p: "a", g: 74, tp: 2 }, { round: 2, p: "c", g: 79, tp: 7 },
+      { round: 4, p: "a", g: 90, tp: 18 },
+    ]));
+    expect(f.records.bestByRound.map((c) => [c.round, c.name, c.g]))
+      .toEqual([[1, "Cal C", 76], [2, "Amy A", 74], [4, "Amy A", 90]]);
+  });
+
+  it("names a round nobody has played not at all", () => {
+    const f = foldArchive(cup([{ round: 2, p: "a", g: 74, tp: 2 }]));
+    expect(f.records.bestByRound.map((c) => c.round)).toEqual([2]);
+  });
+
+  it("has a net board of its own, which can name a different man", () => {
+    const f = foldArchive(cup([
+      { round: 1, p: "a", g: 90, ch: 20, tp: 18 },
+      { round: 1, p: "c", g: 76, ch: 2, tp: 4 },
+    ]));
+    expect(f.records.bestByRound[0].name).toBe("Cal C");
+    expect(f.records.bestByRoundNet[0].name).toBe("Amy A");
+  });
+});
+
+describe("recent form", () => {
+  const years = [2001, 2002, 2003, 2004, 2005];
+  const many = {
+    players: toy.players,
+    editions: years.map((year) => ({
+      year, teamA: "REDS", teamB: "BLUES", complete: true,
+      roster: [{ p: "a", t: "A" }, { p: "c", t: "B" }],
+    })),
+    rounds: years.map((year) => ({ year, round: 1, format: "singles", course: "Toy", par: 72 })),
+    // a loses the first two cups 0-3 and wins the last three 3-0.
+    matches: years.map((year, i) => ({
+      year, round: 1, A: ["a"], B: ["c"], ptsA: i < 2 ? 0 : 3, ptsB: i < 2 ? 3 : 0,
+    })),
+    cards: [],
+  };
+
+  it("is the last three cups PLAYED, newest first", () => {
+    const f = foldArchive(many);
+    expect(RECENT_CUPS).toBe(3);
+    expect(f.recentYears).toEqual([2005, 2004, 2003]);
+  });
+
+  it("re-totals a career over only those years", () => {
+    const f = foldArchive(many);
+    const [a] = f.careerOver(f.recentYears).filter((r) => r.id === "a");
+    expect(a.apps).toBe(3);
+    expect(a.matches).toBe(3);
+    expect(a.w).toBe(3);
+    expect(a.l).toBe(0);
+    expect(a.pts).toBe(9);
+    expect(a.years).toEqual([2003, 2004, 2005]);
+    // Against the whole record, which is 3-2.
+    expect(f.careerOf("a").w).toBe(3);
+    expect(f.careerOf("a").l).toBe(2);
+  });
+
+  it("re-counts cups won rather than carrying the career's", () => {
+    const f = foldArchive(many);
+    const [a] = f.careerOver(f.recentYears).filter((r) => r.id === "a");
+    expect(a.cupsWon).toBe(3);
+    expect(a.cupsLost).toBe(0);
+    expect(f.careerOf("a").cupsWon).toBe(3);
+    expect(f.careerOf("a").cupsLost).toBe(2);
+  });
+
+  // The "vs" in recent form vs total history: the slice carries the career
+  // figure it is being read against.
+  it("carries the career rate alongside the slice's", () => {
+    const f = foldArchive(many);
+    const [a] = f.careerOver(f.recentYears).filter((r) => r.id === "a");
+    expect(a.ppm).toBe(3);
+    expect(a.careerPpm).toBe(9 / 5);
+  });
+
+  it("leaves out a man who played none of them", () => {
+    const f = foldArchive(many);
+    expect(f.careerOver([1999]).length).toBe(0);
   });
 });
 

@@ -109,6 +109,7 @@ const toParText = (n) => (n == null ? "—" : fmtScore(Math.round(n * 10) / 10))
 // One shared empty set, so a fold without one does not hand a NEW set to a
 // memo on every render and re-filter every board for nothing.
 const NO_CORE = new Set();
+const NO_YEARS = [];
 
 // ══════════════════════════════════════════════════════════════════
 //  TOURNAMENT
@@ -561,6 +562,23 @@ function PlayerRecords({ data, note = "ALL YEARS", net = false }) {
           <span style={{ width: 34, textAlign: "right", color: BC.t3 }}>{c.year}</span>
         </>
       ))}
+      {/* One row a round, numbered by ROUND rather than by rank — the round
+          number is what the row is about, and 1..4 down the left would read
+          as a leaderboard of four men. */}
+      {!!(net ? r.bestByRoundNet : r.bestByRound)?.length && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={eyebrow}>BEST BY ROUND · OWN BALL</div>
+          {(net ? r.bestByRoundNet : r.bestByRound).map((c, i) => (
+            <div key={c.round} style={{ display: "flex", gap: 8, padding: "4px 0", borderTop: i ? hair() : "none", fontSize: FS.small }}>
+              <span style={{ width: 20, color: BC.t3, fontWeight: 800 }}>R{c.round}</span>
+              <span style={{ flex: 1, minWidth: 0, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</span>
+              <span style={{ fontWeight: 800, color: BC.amberInk }}>{net ? c.net : c.g}</span>
+              <span style={{ width: 34, textAlign: "right", color: BC.t3 }}>{fmtScore(net ? c.netToPar : c.tp)}</span>
+              <span style={{ width: 34, textAlign: "right", color: BC.t3 }}>{c.year}</span>
+            </div>
+          ))}
+        </div>
+      )}
       {list("BEST WEEK", net ? r.bestWeeksNet : r.bestWeeks, (w) => (
         <>
           <span style={{ flex: 1, minWidth: 0, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{w.name}</span>
@@ -724,6 +742,11 @@ function CareerTable({ rows, teamOf, myId, activeYear, data, open, setOpen, net 
         // boards further down the screen do carry it — see boardNote.
         const avg = net ? p.avgNetToPar : p.avgToPar;
         const best = net ? p.bestNet : p.best;
+        // The "vs" in recent form vs total history. A slice of a career with
+        // no career beside it is just a smaller table; the delta is the whole
+        // reason to look. Points per match, because that is the cup's own
+        // currency and the column the table is already sorted by.
+        const form = p.careerPpm != null && p.ppm != null ? p.ppm - p.careerPpm : null;
         return (
           <div key={p.id} style={{ borderBottom: i < rows.length - 1 ? hair() : "none", background: mine ? BC.amber + ALPHA.wash : "transparent" }}>
             <button onClick={() => setOpen(isOpen ? null : p.id)} style={{
@@ -751,6 +774,11 @@ function CareerTable({ rows, teamOf, myId, activeYear, data, open, setOpen, net 
                 {best && (
                   <span>BEST <strong style={{ color: BC.t2, fontWeight: 700 }}>{net ? best.net : best.gross}</strong>
                     {" "}({fmtScore(net ? best.netToPar : best.toPar)}) {best.year}</span>
+                )}
+                {form != null && (
+                  <span>FORM <strong style={{ color: form > 0 ? BC.green : form < 0 ? BC.danger : BC.t2, fontWeight: 700 }}>
+                    {`${form > 0 ? "+" : ""}${form.toFixed(2)}`}
+                  </strong></span>
                 )}
               </div>
             </button>
@@ -796,6 +824,7 @@ function PlayerHalf({ data, activeYear, myId, teams }) {
   const [open, setOpen] = useState(null);
 
   const core = data.core || NO_CORE;
+  const recentYears = data.recentYears || NO_YEARS;
   const onlyCore = field === "core" && core.size > 0;
   // Asked of the fold rather than filtered here, because a board has to be
   // cut to the field BEFORE it is cut to five: filtering a finished top five
@@ -823,9 +852,11 @@ function PlayerHalf({ data, activeYear, myId, teams }) {
   // either way — a scope is which slice of a man's record you are reading,
   // not a different table.
   const rows = useMemo(() => {
-    const played = data.career.filter((p) => (p.apps || p.matches)
-      && (!onlyCore || core.has(p.id)));
-    if (scope === "career") return played;
+    const mine = (p) => (p.apps || p.matches) && (!onlyCore || core.has(p.id));
+    if (scope === "career") return data.career.filter(mine);
+    // The last three cups, re-totalled — the same table, a shorter record.
+    if (scope === "recent") return (data.careerOver?.(recentYears) || []).filter(mine);
+    const played = data.career.filter(mine);
     return played
       .map((p) => {
         const y = p.byYear.find((x) => x.year === activeYear);
@@ -835,7 +866,7 @@ function PlayerHalf({ data, activeYear, myId, teams }) {
       .filter(Boolean)
       .sort((a, b) => b.pts - a.pts || (a.avgToPar ?? Infinity) - (b.avgToPar ?? Infinity)
         || String(a.name).localeCompare(String(b.name)));
-  }, [data.career, core, onlyCore, scope, activeYear]);
+  }, [data, core, onlyCore, scope, activeYear, recentYears]);
 
   // Yours first. Not a sort — the table's order is the standing and moving a
   // man up it would be a lie — so the row is highlighted where it belongs and
@@ -847,7 +878,7 @@ function PlayerHalf({ data, activeYear, myId, teams }) {
           four chips would read as one. */}
       <div style={{ display: "flex", gap: 8, justifyContent: "space-between", flexWrap: "wrap", marginBottom: 12 }}>
         <Chips
-          options={[["career", "Career"], ["year", String(activeYear)]]}
+          options={[["career", "Career"], ["recent", `Last ${recentYears.length}`], ["year", String(activeYear)]]}
           value={scope} onChange={(v) => { setScope(v); setOpen(null); }}
           style={{ marginBottom: 0 }}
         />
