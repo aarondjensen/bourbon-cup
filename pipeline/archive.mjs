@@ -261,6 +261,19 @@ const factsFor = (edition) => {
       name: edition.name,
       teamA: edition.teams?.A || "A",
       teamB: edition.teams?.B || "B",
+      // The colours that year was played in, off its own SCOREBOARD banner
+      // (pipeline/team-brand.mjs). The import already writes them to a
+      // branding doc, so switching INTO 2022 in the app paints the Irons
+      // navy — but the Data tab reads the archive, and without this it drew a
+      // decade of teams in whatever colours the CURRENT edition happens to
+      // use. One side only where the banner gave one side only: 2023 and 2024
+      // wrote their second team in black on white, which is not a colour.
+      ...(edition.brand?.A?.color || edition.brand?.B?.color ? {
+        brand: {
+          ...(edition.brand?.A?.color ? { A: { color: edition.brand.A.color } } : {}),
+          ...(edition.brand?.B?.color ? { B: { color: edition.brand.B.color } } : {}),
+        },
+      } : {}),
       roster: built.bc_players
         .filter((p) => !p.borrowed)
         .map((p) => ({ p: cid(p.player_id), t: p.team }))

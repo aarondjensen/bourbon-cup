@@ -839,6 +839,37 @@ describe("the committed archive", () => {
     expect(f.career.filter((r) => r.best && shared.has(`${r.best.year}_${r.best.round}`))).toEqual([]);
   });
 
+  // Each year was played in its own colours, off its own SCOREBOARD banner.
+  // Without them the Data tab drew a decade of teams in whatever colours the
+  // CURRENT edition happens to use.
+  it("carries the colours a year was played in", () => {
+    const branded = f.editions.filter((e) => e.brand);
+    expect(branded.length).toBeGreaterThanOrEqual(7);
+    branded.forEach((e) => {
+      const sides = Object.values(e.brand);
+      expect(sides.length).toBeGreaterThan(0);
+      sides.forEach((b) => expect(b.color).toMatch(/^#[0-9A-Fa-f]{6}$/));
+    });
+    // 2022 wrote its teams in coloured type: Irons navy, Drivers red.
+    const y2022 = f.editions.find((e) => e.year === 2022);
+    expect(y2022.brand).toEqual({ A: { color: "#073763" }, B: { color: "#CC0000" } });
+  });
+
+  // Absent is not an error, and it is not the same as a black banner either:
+  // both mean the side keeps the app's palette.
+  it("leaves the years with no banner colour without one", () => {
+    [2016, 2017, 2018].forEach((year) => {
+      expect(f.editions.find((e) => e.year === year).brand).toBeNull();
+    });
+    // 2023 and 2024 wrote their second team in black on white, which is not a
+    // colour — one side only, and the other falls back.
+    [2023, 2024].forEach((year) => {
+      const { brand } = f.editions.find((e) => e.year === year);
+      expect(brand.A.color).toMatch(/^#/);
+      expect(brand.B).toBeUndefined();
+    });
+  });
+
   it("gives every card eighteen streak marks", () => {
     archive.cards.forEach((c) => {
       expect(c.np).toHaveLength(18);

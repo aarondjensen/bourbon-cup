@@ -25,7 +25,7 @@
 // folds 2016. So a match that finishes moves a career record on the next
 // render, without a rebuild and without a second definition of a win.
 import { useMemo, useState } from "react";
-import { BC, FONT, FS, ALPHA, playerNameColor, themedStyle } from "../theme";
+import { BC, FONT, FS, ALPHA, playerNameColor, themedStyle, brandAccent } from "../theme";
 import { SegmentedToggle, StickyTop } from "./ui";
 import { fmtPts, fmtScore } from "../scoring";
 import { formatLabel } from "../constants";
@@ -141,6 +141,22 @@ const toParText = (n) => (n == null ? "—" : fmtScore(Math.round(n * 10) / 10))
 // One shared empty set, so a fold without one does not hand a NEW set to a
 // memo on every render and re-filter every board for nothing.
 const NO_CORE = new Set();
+
+// ── The colours a year was actually played in ─────────────────────
+// Each edition's own, off its SCOREBOARD banner and shipped on the archive
+// row (pipeline/team-brand.mjs). Without this the tab drew a decade of teams
+// in whatever colours the CURRENT edition happens to use — the Sautering
+// Irons' navy came out in 2026's green, and every winner on the year-by-year
+// table was the same two colours whoever they were.
+//
+// Resolved through theme.brandAccent, which is the same treatment a branding
+// doc gets when you switch INTO that year — so a year reads the same colour on
+// this tab as it does on its own leaderboard. A side the banner says nothing
+// about — 2016 to 2018 had no colour at all, and 2023 and 2024 wrote their
+// second team in black on white — keeps the app's palette, which is what
+// `teams` already holds.
+const editionAccent = (edition, side, teams) =>
+  brandAccent(edition?.brand?.[side]?.color) || teams[side].accent;
 const NO_YEARS = [];
 
 // ══════════════════════════════════════════════════════════════════
@@ -163,7 +179,9 @@ const NO_YEARS = [];
 const YEAR_COLS = "44px 1fr 74px 40px 14px";
 
 function YearRow({ e, live, teams, open, onToggle }) {
-  const accent = e.winnerSide === "A" ? teams.A.accent : e.winnerSide === "B" ? teams.B.accent : BC.t3;
+  const teamA = editionAccent(e, "A", teams);
+  const teamB = editionAccent(e, "B", teams);
+  const accent = e.winnerSide === "A" ? teamA : e.winnerSide === "B" ? teamB : BC.t3;
   const result = e.halved ? "HALVED"
     : !e.complete ? (e.rounds.length ? "IN PROGRESS" : "NOT STARTED")
       : e.winner || "—";
@@ -194,9 +212,9 @@ function YearRow({ e, live, teams, open, onToggle }) {
           {/* The two sides in full, which the row above deliberately does not
               carry — and the location, which used to sit on the card head. */}
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8, fontSize: FS.small }}>
-            <span style={{ fontWeight: 800, color: teams.A.accent }}>{e.teamA || "—"} {fmtPts(e.scoreA)}</span>
+            <span style={{ fontWeight: 800, color: teamA }}>{e.teamA || "—"} {fmtPts(e.scoreA)}</span>
             <span style={{ color: BC.t3 }}>vs</span>
-            <span style={{ fontWeight: 800, color: teams.B.accent }}>{e.teamB || "—"} {fmtPts(e.scoreB)}</span>
+            <span style={{ fontWeight: 800, color: teamB }}>{e.teamB || "—"} {fmtPts(e.scoreB)}</span>
             <span style={{
               flex: 1, minWidth: 0, textAlign: "right", fontSize: FS.micro, color: BC.t3, letterSpacing: 0.4,
               whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
@@ -226,7 +244,7 @@ function YearRow({ e, live, teams, open, onToggle }) {
               </div>
               <div style={{
                 fontSize: FS.small, fontWeight: 800, textAlign: "right",
-                color: r.cumA > r.cumB ? teams.A.accent : r.cumB > r.cumA ? teams.B.accent : BC.t3,
+                color: r.cumA > r.cumB ? teamA : r.cumB > r.cumA ? teamB : BC.t3,
               }}>{fmtPts(r.cumA)}–{fmtPts(r.cumB)}</div>
             </div>
           ))}

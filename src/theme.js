@@ -340,7 +340,28 @@ export const themedStyle = (build) => {
   return style;
 };
 
+// Which mode the live BC currently holds. Kept beside applyBCTheme rather
+// than on BC itself, so the palette object stays a bag of colours and nothing
+// iterating it has to know to skip a string that is not one.
+let currentMode = initialBCMode;
+
+// ── One stored brand colour, resolved for display ─────────────────
+// Exactly what withBrand does to a branding doc's colour, for callers that
+// need it OUTSIDE a theme rebuild: lifted, because the stored value is the
+// banner's true colour and only the display is brightened, and on a light
+// page walked down until it clears contrast.
+//
+// The Data tab is the caller. It paints ten years of team colours on one
+// screen (see editionAccent in DataView) and cannot rebuild the theme once
+// per year to get them.
+export const brandAccent = (hex) => {
+  if (!hex) return null;
+  const lifted = liftHex(hex);
+  return currentMode === "light" ? shadeToContrast(lifted, BC.bg, TEXT_CONTRAST) : lifted;
+};
+
 export const applyBCTheme = (mode, brand = null) => {
+  currentMode = mode;
   const next = getBCTheme(mode, brand);
   for (const key in next) BC[key] = next[key];
   // After BC, never before: the builders read it on their next property read.
