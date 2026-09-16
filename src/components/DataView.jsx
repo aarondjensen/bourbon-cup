@@ -44,13 +44,44 @@ const hair = () => `1px solid ${BC.bdr}${ALPHA.hair}`;
 const fmtSg = (n) => n == null ? "—" : `${n > 0 ? "+" : ""}${n.toFixed(1)}`;
 const sgColor = (n) => n == null ? BC.t1 : n > 0 ? BC.green : n < 0 ? BC.danger : BC.t1;
 
-const Section = ({ label, note, children, style }) => (
+const Section = ({ label, note, action, children, style }) => (
   <div style={{ ...card, padding: 14, ...style }}>
-    <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
       <div style={eyebrow}>{String(label).toUpperCase()}</div>
       {note && <div style={{ fontSize: FS.micro, color: BC.t3, letterSpacing: 0.4, marginLeft: "auto" }}>{note}</div>}
+      {action && <div style={{ marginLeft: note ? 0 : "auto" }}>{action}</div>}
     </div>
     {children}
+  </div>
+);
+
+// ── Gross or net, on the card it applies to ───────────────────────
+// Small enough to live in a card's own header, because that is where the
+// question belongs: whether LOW ROUNDS is reading gross or net is a fact
+// about LOW ROUNDS, and a single control at the top of a long screen answers
+// it for boards that have scrolled out of sight.
+//
+// Each card keeps its own, so the answer can differ between them. That is the
+// point rather than an oversight — the low rounds are worth reading net and
+// the birdies gross, and one switch made that a choice between them.
+//
+// Cards with only one reading do not get one: the streak boards are net by
+// construction, read off the net marks with no gross version to offer.
+const BasisToggle = ({ value, onChange }) => (
+  <div style={{ display: "flex", gap: 1, borderRadius: 999, overflow: "hidden", border: `1px solid ${BC.bdr}` }}>
+    {[["gross", "GROSS"], ["net", "NET"]].map(([v, label]) => {
+      const on = v === value;
+      return (
+        <button
+          key={v} onClick={() => onChange(v)} aria-pressed={on} style={{
+            padding: "3px 8px", cursor: "pointer", fontFamily: FONT, border: "none",
+            background: on ? BC.amber + ALPHA.wash : "transparent",
+            color: on ? BC.amberInk : BC.t3,
+            fontSize: FS.micro, fontWeight: on ? 800 : 600, letterSpacing: 0.6,
+          }}
+        >{label}</button>
+      );
+    })}
   </div>
 );
 
@@ -557,12 +588,14 @@ function PlayerCard({ p, data, activeYear, net = false }) {
 }
 
 // ── Personal records ──────────────────────────────────────────────
-function PlayerRecords({ data, note = "ALL YEARS", net = false }) {
+function PlayerRecords({ data, note = "ALL YEARS" }) {
+  const [basis, setBasis] = useState("gross");
+  const net = basis === "net";
   const r = data.records;
   const list = (label, rows, render) => <RecordList label={label} rows={rows} render={render} />;
 
   return (
-    <Section label="Records" note={note}>
+    <Section label="Records" note={note} action={<BasisToggle value={basis} onChange={setBasis} />}>
       {/* OWN BALL is the whole qualification, and it belongs on the label:
           without it the list silently drops a scramble 62 that two men still
           talk about, and nothing on the screen says why. */}
@@ -658,7 +691,9 @@ function PlayerRecords({ data, note = "ALL YEARS", net = false }) {
 // SG Total — the field's average less his own, inside one round so the course
 // and the day cancel — and deliberately not the shot-level split, which a
 // scorecard cannot support because it does not know where the ball was.
-function StrokesGained({ data, note = "", net = false }) {
+function StrokesGained({ data, note = "" }) {
+  const [basis, setBasis] = useState("gross");
+  const net = basis === "net";
   const sg = data.strokesGained;
   if (!sg) return null;
   // One basis, the one the chip asks for. It used to draw both boards, on the
@@ -678,17 +713,19 @@ function StrokesGained({ data, note = "", net = false }) {
   );
 
   return (
-    <Section label="Strokes gained" note={`${note ? `${note} · ` : ""}VS THE FIELD`}>
-      {/* OWN BALL rides the board labels now that the note carries the field —
-          it is a fact about which rounds counted, and the boards are what it
-          is a fact about. The basis is on them too: this section is the one
-          place a GROSS and a NET number are the same shape and one strokes
-          gained figure read as the other is not obviously wrong. */}
+    <Section
+      label="Strokes gained" note={`${note ? `${note} · ` : ""}VS FIELD`}
+      action={<BasisToggle value={basis} onChange={setBasis} />}
+    >
+      {/* OWN BALL rides the board labels — it is a fact about which rounds
+          counted, and the boards are what it is a fact about. The BASIS does
+          not: the toggle in the header above says which, and repeating it on
+          every label is the restatement the house style keeps off a phone. */}
       <RecordList
-        label={`PER ROUND · ${net ? "NET" : "GROSS"} · OWN BALL`} rows={perRound}
+        label="PER ROUND · OWN BALL" rows={perRound}
         render={net ? rate("sgNetPer", "sgNets") : rate("sg", "sgRounds")}
       />
-      <RecordList label={`BEST ROUND · ${net ? "NET" : "GROSS"} · OWN BALL`} rows={bestRound} render={(r) => (
+      <RecordList label="BEST ROUND · OWN BALL" rows={bestRound} render={(r) => (
         <>
           <span style={{ flex: 1, minWidth: 0, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</span>
           <span style={{ width: 48, textAlign: "right", fontWeight: 800, color: sgColor(r.sg) }}>{fmtSg(r.sg)}</span>
@@ -754,7 +791,11 @@ function Streaks({ data, note = "ALL YEARS" }) {
 // old NOW/THEN split coming back through the window: both scopes are about
 // the same subject, and the default is the career, because that is the thing
 // this tab could not say before.
-function CareerTable({ rows, teamOf, myId, activeYear, data, open, setOpen, net = false }) {
+function CareerTable({ rows, teamOf, myId, activeYear, data, open, setOpen }) {
+  // Its own, like every other card's — this one drives the AVG and BEST on
+  // each row's sub-line, and the panel a row opens onto.
+  const [basis, setBasis] = useState("gross");
+  const net = basis === "net";
   if (!rows.length) return <Empty>No players yet</Empty>;
   const COLS = "1fr 38px 38px 38px 50px";
   const head = { fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 1, textAlign: "center" };
@@ -763,7 +804,10 @@ function CareerTable({ rows, teamOf, myId, activeYear, data, open, setOpen, net 
   return (
     <div style={{ ...card, overflow: "hidden" }}>
       <div style={{ display: "grid", gridTemplateColumns: COLS, padding: "8px 12px", borderBottom: `1px solid ${BC.bdr}`, ...head, textAlign: "left" }}>
-        <div>PLAYER</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <span>PLAYER</span>
+          <BasisToggle value={basis} onChange={setBasis} />
+        </div>
         <div style={head}>W</div><div style={head}>L</div><div style={head}>H</div>
         <div style={{ ...head, textAlign: "right" }}>PTS</div>
       </div>
@@ -840,20 +884,6 @@ function PlayerHalf({ data, activeYear, myId, teams }) {
   // ALL is one tap away, and it is where the whole record lives: John S's 64
   // is the lowest round anybody has played here and he played two cups.
   const [field, setField] = useState("core");
-  // ── Gross or net ─────────────────────────────────────────────────
-  // Gross by default, because it is the number written on the card and the
-  // one somebody quotes on the tee. But a gross board is a board about who
-  // has the lowest handicap, and on a field running from scratch to
-  // thirty-three that is the same four names on everything — Paul S has ten
-  // gross birdies and two hundred and two net, and until this chip existed
-  // half the field had never appeared on a record list at all.
-  //
-  // One basis at a time, never both: CLAUDE.md's rule that two definitions of
-  // a birdie on one screen is worse than either. What has changed is that a
-  // chip says which, and that lib/archiveLive can compute net for the running
-  // year now that the streak marks ship — which was the actual objection.
-  const [basis, setBasis] = useState("gross");
-  const net = basis === "net";
   const [open, setOpen] = useState(null);
 
   const core = data.core || NO_CORE;
@@ -870,10 +900,7 @@ function PlayerHalf({ data, activeYear, myId, teams }) {
   const fieldNote = onlyCore
     ? `CORE ${core.size}`
     : `ALL ${data.career.filter((p) => p.apps || p.matches).length}`;
-  // The boards sit a long way below the chips, so each one says which field
-  // AND which basis it is drawn on rather than relying on a control that has
-  // scrolled off the top.
-  const boardNote = `${fieldNote} · ${net ? "NET" : "GROSS"}`;
+
 
   const thisYear = data.edition(activeYear);
   const teamOf = useMemo(() => {
@@ -922,18 +949,13 @@ function PlayerHalf({ data, activeYear, myId, teams }) {
             style={{ marginBottom: 0 }}
           />
         )}
-        <Chips
-          options={[["gross", "Gross"], ["net", "Net"]]}
-          value={basis} onChange={setBasis}
-          style={{ marginBottom: 0 }}
-        />
       </div>
       <CareerTable
         rows={rows} teamOf={teamOf} myId={myId} activeYear={activeYear}
-        data={data} open={open} setOpen={setOpen} net={net}
+        data={data} open={open} setOpen={setOpen}
       />
-      {scope === "career" && <PlayerRecords data={boards} note={boardNote} net={net} />}
-      {scope === "career" && <StrokesGained data={boards} note={fieldNote} net={net} />}
+      {scope === "career" && <PlayerRecords data={boards} note={fieldNote} />}
+      {scope === "career" && <StrokesGained data={boards} note={fieldNote} />}
       {/* Not the basis. NET PAR OR BETTER and HOLES WITHOUT A NET DOUBLE are
           net by construction — they are read off the net marks and there is
           no gross reading of them to offer. The labels say so themselves. */}
