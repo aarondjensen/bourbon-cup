@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   GUEST_ID, GUEST_KEY, GUEST_USER, isGuest, readGuestMode, writeGuestMode,
+  BOARD_KEY, readBoardMode, writeBoardMode,
 } from "./guest";
 import { SPECTATOR_ID, BOOTSTRAP_DIRECTOR } from "../firebase";
 
@@ -106,5 +107,59 @@ describe("the guest flag", () => {
     vi.stubGlobal("localStorage", undefined);
     expect(readGuestMode()).toBe(false);
     expect(() => writeGuestMode(true)).not.toThrow();
+  });
+});
+
+describe("the scoreboard flag", () => {
+  let store;
+  beforeEach(() => {
+    store = memoryStorage();
+    vi.stubGlobal("localStorage", store);
+  });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it("is its own key, not the guest one", () => {
+    // They are written together and cleared together, but they answer
+    // different questions — "who is this" and "how much of the app do they
+    // get" — and one key doing both is how a guest ends up pinned to the
+    // leaderboard, or a scoreboard reader handed five tabs.
+    expect(BOARD_KEY).not.toBe(GUEST_KEY);
+  });
+
+  it("is off until it is set", () => {
+    expect(readBoardMode()).toBe(false);
+  });
+
+  it("round trips, and leaves no key behind", () => {
+    writeBoardMode(true);
+    expect(readBoardMode()).toBe(true);
+    writeBoardMode(false);
+    expect(readBoardMode()).toBe(false);
+    expect(store.has(BOARD_KEY)).toBe(false);
+  });
+
+  it("does not turn the guest flag on by itself", () => {
+    // App writes the pair; this module does not, and a board flag standing
+    // alone must not resolve to an identity.
+    writeBoardMode(true);
+    expect(readGuestMode()).toBe(false);
+  });
+
+  it("reads anything other than the set value as off", () => {
+    store.setItem(BOARD_KEY, "0");
+    expect(readBoardMode()).toBe(false);
+  });
+
+  it("survives storage that throws, and storage that is absent", () => {
+    vi.stubGlobal("localStorage", {
+      getItem: () => { throw new Error("blocked"); },
+      setItem: () => { throw new Error("blocked"); },
+      removeItem: () => { throw new Error("blocked"); },
+    });
+    expect(readBoardMode()).toBe(false);
+    expect(() => writeBoardMode(true)).not.toThrow();
+    vi.stubGlobal("localStorage", undefined);
+    expect(readBoardMode()).toBe(false);
+    expect(() => writeBoardMode(true)).not.toThrow();
   });
 });

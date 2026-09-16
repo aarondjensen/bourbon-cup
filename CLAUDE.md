@@ -540,6 +540,36 @@ needs a membership) and Delete Account (there is no account to delete —
 guideline 5.1.1(v) is about accounts the app lets you CREATE). Photos and side
 bets were already gated on a uid and needed no change.
 
+### The scoreboard door
+
+**Sign-in screen → "View the leaderboard"** — the same guest, shown one
+screen. No bottom nav, no menu, no other tab reachable, and a single **Sign
+in** where the bar's five tabs would be.
+
+It is for everybody following the cup from home, which is most of the people
+who ever reach that screen: the wives, the group text, the men who could not
+get the week off. Until it existed the only door on offer to them handed over
+the whole app — a draw, a betting sheet, a photo library and four tabs of
+admin-adjacent detail — to answer "who's up?".
+
+**A second flag on one identity, not a fourth way in.** `bc_board` in
+`lib/guest.js` beside `bc_guest`, written and cleared together (App's
+`enterBoard` / `doSignOut`). There is nothing for a new identity to buy: a
+guest already reads everything and writes nothing, structurally, and this is a
+question about what the app DRAWS rather than about what the database accepts.
+Signing in for real clears both, the same way it already cleared the guest
+flag — a stale flag must never pin a signed-in player to one screen.
+
+**The view is pinned, not merely undrawn.** `boardOnly` derives the shown
+`view` in App rather than only hiding the controls that change it, because
+`setView` is also reached by a deep-linked hash — `#photos` off a shared link
+or a stale service-worker tap would otherwise strand a reader on a tab with no
+nav to leave by. The slide menu is not rendered at all.
+
+No rules, no deploy, no console setting — for the same reason the guest door
+needs none. `scoreboardDoor.test.js` pins the four decisions that make
+"nothing else" true; the flag itself is tested in `guest.test.js`.
+
 ### Deleting an account
 
 **My Account → Delete Account**, which calls the `deleteAccount` callable in

@@ -90,3 +90,44 @@ export const writeGuestMode = (on) => {
     else localStorage.removeItem(GUEST_KEY);
   } catch { /* blocked storage */ }
 };
+
+// ── The scoreboard door ────────────────────────────────────────────
+// The same guest, narrowed to one screen: the leaderboard, with no bottom
+// nav, no menu and no other tab reachable from it.
+//
+// It is a SECOND flag on the SAME identity rather than a fourth way in,
+// which is the only part of this worth defending. A guest already reads
+// everything and writes nothing — that guarantee is structural and is
+// argued above — so "leaderboard only" has nothing to add to it and
+// nothing to weaken; it is a question about what the app DRAWS, not about
+// what the database will accept. Building it as its own identity would
+// have meant a second set of allowances to keep in step with the guest's,
+// and the app has three player-less identities already.
+//
+// Who it is for: the wives, the group text, the four men who could not get
+// the week off. They want the score and they are never going to sign in,
+// and until this existed the only door on the sign-in screen for them was
+// one that hands over the whole app — five tabs, a draw, a betting sheet
+// and a photo library — to answer "who's up?".
+//
+// Board mode implies guest mode, and the pair is only ever written
+// together (App's enterBoard / doSignOut). It is read at mount like the
+// guest flag and for the same reason: somebody who opened the scoreboard
+// on Friday is opening it again on Saturday, and being asked to find the
+// button a second time is the thing a bookmark is supposed to prevent.
+export const BOARD_KEY = "bc_board";
+
+export const readBoardMode = () => {
+  try {
+    if (typeof localStorage === "undefined") return false;
+    return localStorage.getItem(BOARD_KEY) === "1";
+  } catch { return false; }
+};
+
+export const writeBoardMode = (on) => {
+  try {
+    if (typeof localStorage === "undefined") return;
+    if (on) localStorage.setItem(BOARD_KEY, "1");
+    else localStorage.removeItem(BOARD_KEY);
+  } catch { /* blocked storage */ }
+};
