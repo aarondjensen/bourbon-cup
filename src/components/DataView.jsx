@@ -908,14 +908,16 @@ function Streaks({ data, note = "ALL YEARS" }) {
   const cold = row(BC.danger);
   const any = (...boards) => boards.some((b) => b && b.length);
 
-  if (!any(s.cupsWon, s.matchWins, s.holesWon, s.netPar, s.noDouble,
-    s.cupsLost, s.winless, s.holesLost, s.noPar)) return null;
+  if (!any(s.cupsWon, s.cupsWonNow, s.matchWins, s.holesWon, s.netPar, s.noDouble,
+    s.cupsLost, s.cupsLostNow, s.winless, s.holesLost, s.noPar)) return null;
 
   return (
     <>
-      {any(s.cupsWon, s.matchWins, s.holesWon, s.netPar, s.noDouble) && (
+      {any(s.cupsWon, s.cupsWonNow, s.matchWins, s.holesWon, s.netPar, s.noDouble) && (
         <Section label="Streaks" note={note}>
           <RecordList label="CUPS WON IN A ROW" rows={s.cupsWon} render={hot} />
+          {/* The run still going, beside the best there has ever been. */}
+          <RecordList label="CUPS WON IN A ROW · CURRENT" rows={s.cupsWonNow} render={hot} />
           <RecordList label="MATCHES WON IN A ROW" rows={s.matchWins} render={hot} />
           <RecordList label="HOLES WON IN A ROW" rows={s.holesWon} render={hot} />
           {/* OWN BALL, like LOW ROUNDS above and for the same reason — a net
@@ -924,9 +926,10 @@ function Streaks({ data, note = "ALL YEARS" }) {
           <RecordList label="HOLES WITHOUT A NET DOUBLE" rows={s.noDouble} render={hot} />
         </Section>
       )}
-      {any(s.cupsLost, s.winless, s.holesLost, s.noPar) && (
+      {any(s.cupsLost, s.cupsLostNow, s.winless, s.holesLost, s.noPar) && (
         <Section label="Cold streaks" note={note}>
           <RecordList label="CUPS LOST IN A ROW" rows={s.cupsLost} render={cold} />
+          <RecordList label="CUPS LOST IN A ROW · CURRENT" rows={s.cupsLostNow} render={cold} />
           <RecordList label="MATCHES WITHOUT A WIN" rows={s.winless} render={cold} />
           <RecordList label="HOLES LOST IN A ROW" rows={s.holesLost} render={cold} />
           <RecordList label="HOLES WITHOUT A NET PAR" rows={s.noPar} render={cold} />

@@ -744,6 +744,67 @@ describe("streaks", () => {
     expect(f.streakOf("d").winless.len).toBe(2);
   });
 
+  // ── The run still going ─────────────────────────────────────────
+  describe("current cup streaks", () => {
+    const years = [2001, 2002, 2003, 2004];
+    const cups = (results) => ({
+      players: toy.players,
+      editions: years.map((year) => ({
+        year, teamA: "REDS", teamB: "BLUES", complete: true,
+        roster: [{ p: "a", t: "A" }, { p: "c", t: "B" }],
+      })),
+      rounds: years.map((year) => ({ year, round: 1, format: "singles", course: "Toy", par: 72 })),
+      // `results` is a's result per year; c gets the other side of it.
+      matches: years.map((year, i) => ({
+        year, round: 1, A: ["a"], B: ["c"],
+        ptsA: results[i] === "W" ? 3 : 0, ptsB: results[i] === "W" ? 0 : 3,
+      })),
+      cards: [],
+    });
+
+    it("reads the run off the end, not the best one in the career", () => {
+      // a wins the first three, loses the last two — his best is 3, his
+      // current is nothing, and his current LOSING run is 1 (under the floor).
+      const f = foldArchive(cups(["W", "W", "W", "L"]));
+      expect(f.streakOf("a").cupsWon.len).toBe(3);
+      expect(f.streakOf("a").cupsWonNow).toBeNull();
+      expect(f.streakOf("a").cupsLostNow.len).toBe(1);
+      // And his opponent is on the other side of all of it.
+      expect(f.streakOf("c").cupsWonNow.len).toBe(1);
+    });
+
+    it("names the run when it reaches the latest cup", () => {
+      const f = foldArchive(cups(["L", "W", "W", "W"]));
+      const now = f.streakOf("a").cupsWonNow;
+      expect(now.len).toBe(3);
+      expect(now.from.year).toBe(2002);
+      expect(now.to.year).toBe(2004);
+      expect(f.streaks.cupsWonNow[0].name).toBe("Amy A");
+    });
+
+    // The rule that separates a current streak from a longest one. A longest
+    // run steps over a year a man missed; a current run cannot, or the board
+    // reports somebody as on a run he stopped being on years ago.
+    it("is nothing at all for a man who missed the latest cup", () => {
+      const base = cups(["W", "W", "W", "W"]);
+      const f = foldArchive({
+        ...base,
+        // a skips the last cup entirely.
+        editions: base.editions.map((e) => (e.year === 2004
+          ? { ...e, roster: [{ p: "b", t: "A" }, { p: "c", t: "B" }] } : e)),
+        matches: base.matches.map((m) => (m.year === 2004 ? { ...m, A: ["b"] } : m)),
+      });
+      expect(f.streakOf("a").cupsWon.len).toBe(3);
+      expect(f.streakOf("a").cupsWonNow).toBeNull();
+    });
+
+    it("keeps a run of one off the board, like every other streak", () => {
+      const f = foldArchive(cups(["L", "L", "L", "W"]));
+      expect(f.streakOf("a").cupsWonNow.len).toBe(1);
+      expect(f.streaks.cupsWonNow).toEqual([]);
+    });
+  });
+
   it("keeps a run of one off the board", () => {
     const f = foldArchive(cup(2001, [card(2001, 1, "a", holes("", "W-W-W-------------"))]));
     expect(f.streaks.holesWon).toEqual([]);
@@ -1069,6 +1130,17 @@ describe("the committed archive", () => {
     // the passport counts.
     expect(f.records.totals.holes).toBe(f.records.totals.cards * 18);
     expect(f.records.totals.courses).toBe(new Set(archive.rounds.map((r) => r.course)).size);
+  });
+
+  it("has somebody on a live cup run, and its other side", () => {
+    const core = f.boards(f.core).streaks;
+    expect(core.cupsWonNow[0].name).toBe("TJ C");
+    expect(core.cupsWonNow[0].len).toBe(4);
+    expect(core.cupsWonNow[0].to.year).toBe(2025);
+    // Three men are on three straight losses.
+    expect(core.cupsLostNow.map((x) => x.len)).toEqual([3, 3, 3]);
+    // Every current run has to reach the most recent cup.
+    [...core.cupsWonNow, ...core.cupsLostNow].forEach((x) => expect(x.to.year).toBe(2025));
   });
 
   it("gives every card eighteen streak marks", () => {
