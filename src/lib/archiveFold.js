@@ -525,6 +525,20 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
       ...r,
       avgToPar: rc.length ? sum(rc.map((c) => c.tp)) / rc.length : null,
       avgGross: rc.length ? sum(rc.map((c) => c.g)) / rc.length : null,
+      // ── How hard the day was, allowing for the course ───────────
+      // To par says what the field SHOT; the differential says how they
+      // played, which is a different question when no two rounds were on the
+      // same course. Thirty-six courses over forty rounds and none repeated,
+      // so a par 73 off 74.8/145 and a par 70 off 68/120 are not comparable
+      // on to par at all: the harder course collects a bigger number for
+      // being harder, which is what the number was supposed to measure.
+      //
+      // The USGA's own arithmetic — (gross - rating) x 113 / slope — which is
+      // what a handicap differential is. Null when a round has no rating, and
+      // the boards fall back to to par for those.
+      avgDiff: rc.length && r.rating && r.slope
+        ? sum(rc.map((c) => (c.g - r.rating) * 113 / r.slope)) / rc.length
+        : null,
       low: rc.length ? Math.min(...rc.map((c) => c.g)) : null,
       cards: rc.length,
     };
@@ -780,6 +794,35 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
 
   const allBoards = playerBoards(null);
 
+  // Each round's own result, one row per round of every cup.
+  const roundResults = editionRows.flatMap((e) => e.rounds.map((r) => ({
+    year: e.year,
+    round: r.round,
+    ptsA: r.ptsA,
+    ptsB: r.ptsB,
+    margin: Math.abs(r.ptsA - r.ptsB),
+    winner: r.ptsA > r.ptsB ? e.teamA : r.ptsB > r.ptsA ? e.teamB : null,
+    won: Math.max(r.ptsA, r.ptsB),
+    lost: Math.min(r.ptsA, r.ptsB),
+  })));
+
+  // The margin crossing zero between one round and the next.
+  const leadChangesIn = (e) => e.rounds.reduce((n, r, i) => {
+    if (i === 0) return n;
+    const before = Math.sign(e.rounds[i - 1].cumA - e.rounds[i - 1].cumB);
+    const after = Math.sign(r.cumA - r.cumB);
+    return before && after && before !== after ? n + 1 : n;
+  }, 0);
+
+  // A day ranks on its differential where the round has a rating and on to
+  // par where it does not — never a mix inside one comparison, so the board
+  // cannot put a differential above a to-par and call it harder.
+  const rated = courseRows.filter((c) => c.cards && c.avgDiff != null);
+  const rankedDays = (rated.length ? rated : courseRows.filter((c) => c.cards))
+    .map((c) => ({ ...c, difficulty: c.avgDiff ?? c.avgToPar, rated: c.avgDiff != null }));
+
+  const playedCups = finished.filter((e) => e.avgToPar != null);
+
   // ── The cup's own records ───────────────────────────────────────
   // Not a player board and not filtered by one: which year was closest is the
   // same answer whoever is being listed.
@@ -788,9 +831,49 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
     closest: finished.filter((e) => !e.halved).slice().sort(byNum((e) => e.margin))[0] || null,
     biggest: finished.slice().sort((a, b) => b.margin - a.margin)[0] || null,
     halved: finished.filter((e) => e.halved),
-    hardest: courseRows.filter((c) => c.cards).slice().sort((a, b) => b.avgToPar - a.avgToPar)[0] || null,
-    easiest: courseRows.filter((c) => c.cards).slice().sort(byNum((c) => c.avgToPar))[0] || null,
+    // Ranked on the differential where a round has a rating, which reorders
+    // the hard end: the field shot worse at Harbor Shores in 2020, but
+    // Glenoaks in 2017 is where they played worst for what the course was.
+    hardest: rankedDays.slice().sort((a, b) => b.difficulty - a.difficulty)[0] || null,
+    easiest: rankedDays.slice().sort(byNum((c) => c.difficulty))[0] || null,
+    // ── The week, not the day ───────────────────────────────────
+    // The course passport ranks rounds and nothing ranks cups. Twelve and a
+    // half shots separate the hardest week from the easiest, which is most of
+    // a round.
+    hardestWeek: playedCups.slice().sort((a, b) => b.avgToPar - a.avgToPar)[0] || null,
+    easiestWeek: playedCups.slice().sort(byNum((e) => e.avgToPar))[0] || null,
     cupsPlayed: finished.length,
+    // ── A round somebody swept ──────────────────────────────────
+    // Every match in a round taken, or near enough. The 2024 Silver Foxes won
+    // Round 1 sixteen to nothing and nothing on this tab has ever said so.
+    roundRouts: top(roundResults.filter((r) => r.margin > 0)
+      .sort((a, b) => b.margin - a.margin || a.year - b.year)),
+    // And the other end of the same list, which is a fact about the cup
+    // rather than about a team: three of forty rounds have finished level.
+    levelRounds: roundResults.filter((r) => r.margin === 0).length,
+    roundsPlayed: roundResults.length,
+    // ── Led from the front ──────────────────────────────────────
+    // Never behind at any boundary. It is the exact complement of the
+    // comeback board below, so the two together sort every cup ever played
+    // into one of two kinds.
+    wireToWire: finished.filter((e) => !e.halved && e.winnerSide
+      && e.rounds.every((r) => (e.winnerSide === "A" ? r.cumA - r.cumB : r.cumB - r.cumA) >= 0)),
+    // ── The lead crossing zero ──────────────────────────────────
+    // roundDrama counts these per ROUND, averaged over the years. This names
+    // the years, which is the form anybody actually argues about.
+    leadChanges: top(editionRows
+      .map((e) => ({ ...e, changes: leadChangesIn(e) }))
+      .filter((e) => e.changes > 0)
+      .sort((a, b) => b.changes - a.changes || b.year - a.year)),
+    // ── Ten years in one line ───────────────────────────────────
+    totals: {
+      cups: finished.length,
+      matches: matches.length,
+      cards: cards.length,
+      holes: cards.length * HOLES_PER_ROUND,
+      birdies: sum(cards.map((c) => (c.e || 0) + (c.b || 0))),
+      courses: new Set(rounds.map((r) => r.course).filter(Boolean)).size,
+    },
     // ── The deepest hole a winner climbed out of ──────────────────
     // Measured at EVERY round boundary, not just the last one. It started as
     // "trailing going into the final round", which is the most dramatic
