@@ -1722,10 +1722,28 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   //
   // Nothing director-only hangs off the bottom of this any more: the whole
   // height belongs to the four player cards. See the note above ScoreEntry.
-  const shell = (children) => (
+  //
+  // ── ownScroll: the one branch that must NOT do that ──────────────
+  // A screen whose content carries its own scroller has to be allowed to
+  // shrink to the view, or the scroller never gets a height smaller than its
+  // content and therefore never scrolls. That is the signed card (see
+  // SignedCardPanel): a scrollable scorecard with the attest row pinned under
+  // it, both of which need the panel to have been given the viewport's height
+  // and not the scorecard's.
+  //
+  // Left as `1 0 auto` it broke in a way only a phone could show. The shell
+  // took the whole scorecard's height, the panel handed all of it to the
+  // inner box, and the attest row landed the better part of a thousand pixels
+  // below the fold — reachable only by scrolling the page. A finger cannot:
+  // it lands inside that inner box, which IS a scroll container and has
+  // nothing to scroll, so the touch is swallowed there and never chains out
+  // to the app body that could have moved. A mouse wheel chains straight past
+  // it, which is why every desktop test of this passed.
+  const shell = (children, { ownScroll = false } = {}) => (
     <div ref={fitRef} style={{
       fontFamily: FONT,
-      display: "flex", flexDirection: "column", flex: "1 0 auto", minHeight: 0,
+      display: "flex", flexDirection: "column",
+      flex: ownScroll ? "1 1 auto" : "1 0 auto", minHeight: 0,
     }}>
       {/* Portals to the app header's right-hand slot — occupies nothing here,
           on any branch. */}
@@ -2527,7 +2545,11 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
         onAttest={() => onAttestCard(card, userPid)}
         onUnsign={() => onUnsignCard(card)}
       />
-    </>
+    </>,
+    // The panel scrolls the scorecard itself and pins the attest row under
+    // it. Both need the shell to have been sized to the VIEW — see the note
+    // on ownScroll above the shell.
+    { ownScroll: true },
   );
 
   // ── One score card ───────────────────────────────────────────────
