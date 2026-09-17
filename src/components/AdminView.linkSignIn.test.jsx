@@ -175,3 +175,50 @@ describe("what the badges say about it", () => {
     expect(c.textContent).toContain("sign in and claim this name first");
   });
 });
+
+// ── Naming him and naming him captain are one act ─────────────────
+// The armband is why a director opens this sheet at all — a man cannot be
+// made captain of a year he is a stranger in. Reading the pick out of the
+// FORM rather than waiting for it to be saved is what keeps that one Save:
+// otherwise the badge stays inert behind a line that has just stopped being
+// true, and the fix is to save, close the sheet and open it again.
+describe("the armband, on the same visit", () => {
+  const horn = (c) => c.querySelector('button[aria-label="Irons captain"]');
+
+  it("lights as soon as an account is picked", async () => {
+    const c = sheet("TJ M");
+    expect(horn(c).disabled).toBe(true);
+    await act(async () => { fireEvent.change(picker(c), { target: { value: "u_tj" } }); });
+    expect(horn(c).disabled).toBe(false);
+    // And the line explaining why it was out goes with it.
+    expect(c.textContent).not.toContain("set Signed in as below");
+  });
+
+  it("goes back out if the director changes their mind", async () => {
+    const c = sheet("TJ M");
+    await act(async () => { fireEvent.change(picker(c), { target: { value: "u_tj" } }); });
+    await act(async () => { fireEvent.change(picker(c), { target: { value: "" } }); });
+    expect(horn(c).disabled).toBe(true);
+  });
+
+  it("writes the link and the captaincy in one Save", async () => {
+    let saved = null; const grants = [];
+    const c = sheet("TJ M", {
+      onUpdatePlayer: async (p) => { saved = p; },
+      onSetCaptain: async (...a) => { grants.push(a); return { ok: true }; },
+    });
+    await act(async () => { fireEvent.change(picker(c), { target: { value: "u_tj" } }); });
+    await act(async () => { fireEvent.click(horn(c)); });
+    await act(async () => { fireEvent.click(press(c, "SAVE")); });
+    // Both named on the way past, because both are about to happen.
+    expect(c.textContent).toContain("Sign-in: link tj@example.com");
+    expect(c.textContent).toContain("Captain of Irons");
+    const yes = [...c.querySelectorAll("button")]
+      .filter(b => /^confirm$/i.test((b.textContent || "").trim())).pop();
+    await act(async () => { fireEvent.click(yes); });
+    expect(saved.auth_uid).toBe("u_tj");
+    // The armband goes onto the membership that was picked, not onto the
+    // roster row — it is the uid the rules read (lib/captains).
+    expect(grants).toEqual([["u_tj", "A"]]);
+  });
+});

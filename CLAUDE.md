@@ -816,6 +816,48 @@ that file.
   three outcomes in the console: membership document gone, roster row surviving
   with `auth_uid: null`, Auth user gone.
 
+### A claim is one edition's
+
+The link lives on the ROSTER ROW (`bc_players.auth_uid`), and every edition has
+its own roster, so a claim is a fact about one year. `cloneEdition` copies the
+row whole and carries it FORWARD; nothing carries one back. And switching
+editions writes the spectator, which drops a man PAST the claim screen — the
+only place `claimPlayer` is ever called from.
+
+So the man who first signed in on the year being played is a stranger in every
+earlier one, with no screen he could fix it from, and everything that joins a
+roster row to a membership reads him as somebody who has never signed in: the
+crown, the **armband**, his own balance. The symptom is two greyed-out role
+badges under "they need to sign in and claim this name first", said to the one
+man who has.
+
+**Admin → Players → Edit → Signed in as** is the way in, beside the unlink that
+was already there — `linkPatch` beside `unlinkPatch` in `lib/accounts`. It
+offers every membership holding no name in THIS edition (holding one in another
+edition is the ordinary case and the whole point), and it needs no rules change:
+`bc_players` is already `canAdminEdition()`, which is not gated on the lock —
+so it reaches a finished year, where a member's own claim would be refused.
+
+Three things about it worth keeping:
+
+- **The claim cannot repair this itself.** There is no key that matches the same
+  man across editions — a clone mints fresh ids, the imported years carry their
+  own — and all that is left is the display name, which is the shape that
+  eventually collides. Guessing wrong claims a man to another man's record in a
+  year nobody is looking at.
+- **A pick counts as the membership before it is saved**, so the armband lights
+  on the same sheet. Naming a man and naming him captain is one act and both
+  writes land in one Save; making it two means opening the sheet twice, with the
+  roles greyed out in between under a line that has stopped being true.
+- **The picker is labelled with the name that account claimed elsewhere**, not
+  just its email (`loadAccountNames`, one query per ten uids, asked only while
+  such a sheet is open). Apple's Hide My Email hands out a per-app relay
+  address, and this is the one screen where picking the wrong man writes his
+  phone onto another man's record.
+
+A `demo_only` membership is never offered — the rules confine it to demo
+editions, so it would be a link whose every subsequent write comes back refused.
+
 ## Directors
 
 **One director appoints the next, in Admin → Players.** The crown toggle in the

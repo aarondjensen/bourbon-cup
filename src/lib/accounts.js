@@ -358,12 +358,57 @@ export const linkableAccounts = (memberships, players) => {
     .sort((a, b) => String(a.email || "").localeCompare(String(b.email || "")));
 };
 
-// What to call one in a picker. The email, because it is the only thing a
-// membership carries that a person recognises — the uid is a random string
-// and the roster row that would carry a name is, by definition, in another
-// edition this screen never loaded.
-export const membershipLabel = (m) =>
-  m?.email || `${m?.provider || "account"} sign-in · ${String(m?.uid || m?.id || "").slice(0, 6)}`;
+// ── Who an account belongs to ───────────────────────────────────────
+// The membership itself carries an email and nothing else a person would
+// recognise, and an email does not always answer it: Apple's Hide My Email
+// hands out a per-app relay address, so half the picker can read
+// `a1b2c3d4@privaterelay.appleid.com` — which names nobody, on the one
+// screen where picking the wrong man writes his phone onto another man's
+// record.
+//
+// The name he claimed in ANOTHER edition does answer it, and that row is
+// one query away. It is not loaded already, deliberately: every screen in
+// the app subscribes to one edition, which is the reason this whole
+// asymmetry exists (see linkPatch above).
+//
+// One query per ten uids, which is Firestore's `in` limit, asked when the
+// player sheet opens on an unclaimed row and not otherwise. `db.get`
+// swallows a failure into an empty list, and that is the right answer here
+// — the picker falls back to the email rather than refusing to open.
+export async function loadAccountNames(uids) {
+  const list = [...new Set((uids || []).filter(Boolean))];
+  const out = {};
+  for (let i = 0; i < list.length; i += 10) {
+    const rows = await db.get("bc_players", [
+      { field: "auth_uid", op: "in", value: list.slice(i, i + 10) },
+    ]);
+    for (const r of rows) {
+      // The most recent claim wins. A director's unlink leaves the row
+      // behind rather than moving it, so an account can have held two names
+      // over the years, and the one he is using is the one he claimed last.
+      const held = out[r.auth_uid];
+      if (!held || String(r.auth_linked_at || "") >= String(held.at || "")) {
+        out[r.auth_uid] = { name: r.name || "", at: r.auth_linked_at || "" };
+      }
+    }
+  }
+  return out;
+}
+
+// What to call one in a picker: the name it holds elsewhere, then the thing
+// that tells two accounts apart. The uid is a random string, so it is the
+// last resort and truncated — it is there to disambiguate, not to be read.
+//
+// `names` is what loadAccountNames returned, and it is optional: without it
+// this is the email alone, which is what the picker shows for the moment
+// before the lookup lands and for every account that has never claimed a
+// name anywhere.
+export const membershipLabel = (m, names) => {
+  const uid = String(m?.uid || m?.id || "");
+  const known = m?.email || `${m?.provider || "account"} sign-in · ${uid.slice(0, 6)}`;
+  const held = names?.[uid]?.name || "";
+  return held ? `${held} · ${known}` : known;
+};
 
 // ── Deleting an account ─────────────────────────────────────────────
 // App Store review guideline 5.1.1(v): an app that lets you create an

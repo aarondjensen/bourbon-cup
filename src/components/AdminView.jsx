@@ -80,6 +80,7 @@ import {
   isClaimed,
   linkPatch,
   linkableAccounts,
+  loadAccountNames,
   membershipFor,
   membershipLabel,
   playerIsDirector,
@@ -785,6 +786,28 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
   const [handicapMode, setHandicapMode] = useState({}); // per round
   const [chDeltas, setChDeltas] = useState({});
   const [editingPlayer, setEditingPlayer] = useState(null); // { pid, first, last, nick, hi, ov, dir }
+  // ── Who each signed-in account is ───────────────────────────────
+  // uid → the name that account holds in whichever edition it claimed one,
+  // for the sign-in picker on an unclaimed row. An email is what a
+  // membership carries and it does not always identify anybody — Apple's
+  // Hide My Email relay address names nobody at all — and this is the screen
+  // where picking the wrong man writes his phone onto another man's record.
+  //
+  // Asked only while such a sheet is open, and keyed on the uids rather than
+  // on the arrays: `memberships` and `tPlayers` are live snapshots whose
+  // identity changes on every write in the project, so depending on them
+  // would re-run the query all weekend for a control nobody has open.
+  const [accountNames, setAccountNames] = useState({});
+  const sheetPid = editingPlayer?.isNew ? null : (editingPlayer?.pid || null);
+  const sheetUnclaimed = !!sheetPid && !isClaimed((tPlayers || []).find(x => x.player_id === sheetPid));
+  const membershipUids = (memberships || []).map(m => m.uid || m.id).filter(Boolean).sort().join(",");
+  useEffect(() => {
+    if (!sheetUnclaimed) return undefined;
+    let alive = true;
+    loadAccountNames(membershipUids ? membershipUids.split(",") : [])
+      .then((names) => { if (alive) setAccountNames(names); });
+    return () => { alive = false; };
+  }, [sheetUnclaimed, membershipUids]);
   const [teeAssignments, setTeeAssignments] = useState({}); // { round: { pid: teeName } }
   // Which player's row is open for a tee of their own. One at a time: two open
   // rows is two lists of the same swatches on screen with nothing saying which
@@ -1735,8 +1758,28 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
             // Mirrors the rules exactly (firestore.rules, bc_accounts
             // update) so the button is never offered for a write that
             // would come back refused.
-            const theirMembership = isNew ? null : membershipFor(memberships, p);
-            const isSelf = !!theirMembership && theirMembership.uid === user?.auth_uid;
+            // The accounts this row could be joined to — every membership not
+            // already holding a name in THIS edition. It is what makes the two
+            // badges below reachable at all for a man who signed in on a
+            // different year: both of them find his membership through the
+            // roster row's `auth_uid` (membershipFor), and until something
+            // writes it there is nothing to find.
+            const linkChoices = isNew ? [] : linkableAccounts(memberships, tPlayers);
+            // The one the director has picked but not yet saved, which counts
+            // as the membership from here down. Naming a man and naming him
+            // captain is ONE act — "this is TJ, and TJ captains Irons" — and
+            // the two writes land in the same Save either way. Making it two
+            // Saves means opening the sheet twice to do one thing, with the
+            // roles greyed out in between under a line that is no longer true.
+            const pendingLink = (!isNew && p && !isClaimed(p) && editingPlayer.linkUid)
+              ? (linkChoices.find(m => (m.uid || m.id) === editingPlayer.linkUid) || null)
+              : null;
+            const theirMembership = (isNew ? null : membershipFor(memberships, p)) || pendingLink;
+            // The document id and the `uid` field hold the same value for a
+            // membership the app minted; one typed into the console by hand —
+            // which is how the FIRST director is made — may carry only the id.
+            const theirUid = theirMembership ? (theirMembership.uid || theirMembership.id) : null;
+            const isSelf = !!theirUid && theirUid === user?.auth_uid;
             const canGrantDirector = !isNew && !isDemoAdmin && !!theirMembership && !isSelf;
             // The armband. Unlike the crown a director MAY set their own — both
             // captains here will be directors, and captaining your own side is
@@ -1744,13 +1787,6 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
             // a membership document, because that is where the flag lives and
             // what the rules read (lib/captains).
             const canGrantCaptain = !isNew && !!theirMembership;
-            // The accounts this row could be joined to — every membership not
-            // already holding a name in THIS edition. It is what makes the two
-            // badges above reachable at all for a man who signed in on a
-            // different year: both of them find his membership through the
-            // roster row's `auth_uid` (membershipFor), and until something
-            // writes it there is nothing to find.
-            const linkChoices = isNew ? [] : linkableAccounts(memberships, tPlayers);
             const capSide = isNew ? null : (editingPlayer.team || p?.team);
             const heldBy = capSide ? captainForSide(memberships, tPlayers, editionId, capSide, membershipFor) : null;
             const captainHint = isNew
@@ -1915,14 +1951,12 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                 changes.push(editingPlayer.ghin_number ? `GHIN: linked #${editingPlayer.ghin_number}` : "GHIN: unlinked");
               const cutSignIn = !!editingPlayer.unlink && isClaimed(p);
               if (cutSignIn) changes.push(`Sign-in: unlink ${accountLabel(p)} — they'll pick their name again next time they open the app`);
-              // The other direction. Only on a row nobody holds — the picker
-              // is not drawn on a claimed one, and re-checking here is what
-              // keeps a stale form from writing over a claim that landed
-              // while this sheet was open.
-              const joinTo = !isClaimed(p) && editingPlayer.linkUid
-                ? linkChoices.find((m) => (m.uid || m.id) === editingPlayer.linkUid)
-                : null;
-              if (joinTo) changes.push(`Sign-in: link ${membershipLabel(joinTo)}`);
+              // The other direction. `pendingLink` is already only ever a row
+              // nobody holds — the picker is not drawn on a claimed one, and
+              // that re-check is what keeps a stale form from writing over a
+              // claim that landed while this sheet was open.
+              const joinTo = pendingLink;
+              if (joinTo) changes.push(`Sign-in: link ${membershipLabel(joinTo, accountNames)}`);
               if (changes.length === 0) { close(); return; }
               const oldEff = oldOv != null ? oldOv : (parseFloat(p.handicap_index) || 0);
               const newEff = newOv != null ? newOv : (parseFloat(editingPlayer.hi) || 0);
@@ -1954,16 +1988,16 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                 : "\n\nThey narrate their side of the Final Countdown from their own phone.";
               if (capChanged && !newCap) impact += "\n\nTheir side will have no captain until you name one — only a director can turn its holes over.";
               // What linking actually buys, because none of it is on this
-              // screen: it is this tournament only, and it is what puts the
-              // crown and the armband within reach of the row.
-              if (joinTo) impact += `\n\nThis links them for ${tournamentName || "this tournament"} only — every other year is separate. They stop being a spectator here, and you can make them a director or a captain.`;
+              // screen: it is this tournament only, and it is somebody's
+              // phone that becomes this man on it.
+              if (joinTo) impact += `\n\nThis links them for ${tournamentName || "this tournament"} only — every other year is separate. That phone stops being a spectator here and is ${newName} in it.`;
               if (await confirm({ title: "Confirm changes", message: changes.join("\n") + impact })) {
                 onUpdatePlayer({ ...p, team: newTeam, name: newName, first_name: first, last_name: last, handicap_index: parseFloat(editingPlayer.hi) || 0, hi_override: newOv, withdrawn: editingPlayer.wd === true, ...ghinFields, ...(cutSignIn ? unlinkPatch() : {}), ...(joinTo ? linkPatch(joinTo) : {}) });
                 // A separate document, and one the rules police, so it is
                 // reported separately: the roster edit above can succeed
                 // while this is refused.
                 if (dirChanged) {
-                  const res = await onSetDirector(theirMembership.uid, newDir);
+                  const res = await onSetDirector(theirUid, newDir);
                   if (!res.ok) notify(res.error, "error");
                   else notify(newDir ? `${newName} is a director` : `${newName} is no longer a director`, "success");
                 }
@@ -1972,7 +2006,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                 // Standing the old captain down is App's job — it is a second
                 // membership and this sheet is about one player.
                 if (capChanged) {
-                  const res = await onSetCaptain(theirMembership.uid, newCap ? capSide : null);
+                  const res = await onSetCaptain(theirUid, newCap ? capSide : null);
                   if (!res.ok) notify(res.error, "error");
                   else notify(newCap ? `${newName} captains ${teamNames[capSide] || capSide}` : `${newName} is no longer captain`, "success");
                 }
@@ -2162,7 +2196,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                       >
                         <option value="">Not signed in</option>
                         {linkChoices.map((m) => (
-                          <option key={m.uid || m.id} value={m.uid || m.id}>{membershipLabel(m)}</option>
+                          <option key={m.uid || m.id} value={m.uid || m.id}>{membershipLabel(m, accountNames)}</option>
                         ))}
                       </select>
                     </div>
