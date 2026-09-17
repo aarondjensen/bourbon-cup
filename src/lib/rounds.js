@@ -36,6 +36,7 @@
 // every year since 2016, so that is the useful thing to put in the box.
 import { weekdayName } from "./dates";
 import { teeTimeList, parseTeeTime, formatTeeTime } from "./groups";
+import { getRoundTee } from "../scoring";
 
 export const DEFAULT_ROUND_COUNT = 4;
 
@@ -163,10 +164,58 @@ export const roundsBeyondCount = (args) => {
 // date and no tee sheet says the day, one with times and no day says the
 // time. With neither there is nothing to say — the caller shows TBD, which
 // is where this started.
-export const roundWhen = (tr) => {
+// `tee` is the tee BOX — the name of the one tee the whole field is playing,
+// from roundTeeBox below. It rides on the end rather than in the middle
+// because the two facts in front of it are what the group text asks for; the
+// tee box is what a man wants once he knows he is on the 8:30.
+//
+// It is appended only when there is a `when` to append it to. A round with a
+// tee box and neither a day nor a tee sheet would otherwise fill the slot
+// where "when does this go off" belongs with a colour, which answers a
+// different question — the caller's TBD is the true thing to say there.
+export const roundWhen = (tr, { tee } = {}) => {
   const day = weekdayName(tr?.date);
   const times = teeTimeList(tr).map(parseTeeTime).filter((v) => v != null);
   const first = times.length ? Math.min(...times) : null;
-  const tee = first == null ? "" : formatTeeTime(first, { ampm: true });
-  return [day, tee].filter(Boolean).join(" · ");
+  const time = first == null ? "" : formatTeeTime(first, { ampm: true });
+  const when = [day, time].filter(Boolean).join(" · ");
+  return when && tee ? `${when} · ${tee}` : when;
+};
+
+// ── Which tee, when the whole field is on one ─────────────────────
+//
+// Only under One tee (`uniform_tee` on the round — AdminView's HANDICAPS
+// section). Under Any tee there is no single answer: a field with three men
+// on the golds has a tee box per player, and the board naming one of them
+// would be naming the majority and calling it the round.
+//
+// Resolved through `getRoundTee` per player rather than off the assignment
+// map directly, because that is the same door every stroke dot in the app
+// goes through — so a locked round answers from its frozen snapshot and the
+// board can never print a tee the strokes were not calculated against.
+//
+// The single distinct answer, or nothing. A field that has drifted off its
+// one tee — a man added to the roster after the switch was set, who is
+// therefore still on the round's fallback — is a field this line cannot
+// describe in one word, and an empty string is what puts the slot back to
+// the day and the time alone.
+//
+// With no roster at all it is the fallback itself: a round set up in
+// February has a course and a tee and nobody entered yet, and that IS the
+// tee the field will be on. Same chain `resolveTeeSpec` falls through — the
+// round's own `tee_box`, then the first box on the card.
+export const roundTeeBox = ({ tr, tPlayers, teeAssignments, roundLocks, course } = {}) => {
+  if (!tr?.uniform_tee) return "";
+  const fallback = tr.tee_box || course?.tee_boxes?.[0]?.name || "";
+  const names = new Set(
+    (tPlayers || [])
+      .map((p) => getRoundTee({
+        roundLocks, round: tr.round_number, pid: p?.player_id,
+        teeAssignments, roundTee: tr.tee_box,
+      }) || fallback)
+      .map((n) => String(n || "").trim())
+      .filter(Boolean),
+  );
+  if (!names.size) return fallback;
+  return names.size === 1 ? [...names][0] : "";
 };

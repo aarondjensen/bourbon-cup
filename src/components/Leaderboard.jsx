@@ -53,7 +53,7 @@ import { TeamBestBallScoreboard } from "./TeamBestBallScoreboard";
 import { StickyTop } from "./ui";
 import ErrorBoundary from "./ErrorBoundary";
 import { isRoundFinal } from "../lib/roundLocks";
-import { scheduledRounds, roundWhen } from "../lib/rounds";
+import { scheduledRounds, roundWhen, roundTeeBox } from "../lib/rounds";
 import { HOLE_COUNT, revealState, stepReveal, COUNTDOWN_HASH, COUNTDOWN_PATH } from "../lib/reveal";
 // The television screen, and nothing else opens it. Sixteen phones load the
 // scoreboard every few minutes all weekend; one of them, once, opens the
@@ -899,8 +899,9 @@ function RoundSection({
               board at all. */}
           {holesPlayed === 0 ? (
             /* A round nobody has teed off in has no score, so the slot says
-               when it goes off instead — the weekday and the first tee time,
-               which is what the group text is about on the night before.
+               when it goes off instead — the weekday, the first tee time and,
+               when the field is on one tee, which tee. That is what the group
+               text is about on the night before.
 
                The test is HOLES, not whether the draw exists. Both were TBD
                under the old one only by luck: an undrawn round has no matches
@@ -1150,8 +1151,16 @@ export function TeamLeaderboard({
         && (isRoundFinal(roundLocks, rnd) || results.every(({ match: m, result: r }) => matchSettled(m, r, tr?.format || DEFAULT_FORMAT)));
       out[rnd] = {
         results, pts, avail, holesPlayed, course, seal,
-        // The day and the first tee time, for a round that has no score yet.
-        when: roundWhen(tr),
+        // The day and the first tee time, for a round that has no score yet —
+        // plus the tee box, on a round the director has set the whole field on
+        // one tee. "Which tees are we playing?" is the third question in the
+        // group text, it is decided weeks before the draw, and the board had
+        // no room it was costing to answer it: the slot is a line of its own
+        // and it was two facts wide. Under Any tee there is no single tee to
+        // name and nothing is added — see lib/rounds.
+        when: roundWhen(tr, {
+          tee: roundTeeBox({ tr, tPlayers, teeAssignments, roundLocks, course }),
+        }),
         // Whether anybody has been paired off yet. The board draws a round
         // the moment the director picks a course for it, which is weeks
         // before the draw exists, so this is what stops an undrawn round
@@ -1162,7 +1171,7 @@ export function TeamLeaderboard({
       };
     });
     return out;
-  }, [roundNumbers, matchResults, tRounds, courses, roundLocks]);
+  }, [roundNumbers, matchResults, tRounds, courses, roundLocks, tPlayers, teeAssignments]);
 
   // ── The reader's own side of a sealed round ──────────────────────
   // The ONE place the unsealed hole data is used, and it is used a column at

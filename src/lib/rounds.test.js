@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   scheduledRounds, resolveRoundCount, allRounds, roundsBeyondCount, clampRoundCount,
-  roundWhen, DEFAULT_ROUND_COUNT, MAX_ROUND_COUNT,
+  roundWhen, roundTeeBox, DEFAULT_ROUND_COUNT, MAX_ROUND_COUNT,
 } from "./rounds";
 
 describe("scheduledRounds", () => {
@@ -199,5 +199,82 @@ describe("roundWhen", () => {
   it("reads an afternoon tee time the way a golfer types it", () => {
     // parseTeeTime's rule: a bare 1–4 is the afternoon.
     expect(roundWhen({ date: friday, tee_time: "2:00" })).toBe("Friday · 2:00 PM");
+  });
+});
+
+// ── Which tee, when the field is on one ───────────────────────────
+// The third fact in the group text, and the one the board had no answer for.
+// It only exists under One tee: a field with three men on the golds has a tee
+// box per player, and naming one of them would be naming the majority and
+// calling it the round.
+describe("roundTeeBox", () => {
+  const friday = "2026-08-14";
+  const course = { tee_boxes: [{ name: "White" }, { name: "Blue" }, { name: "Gold" }] };
+  const tPlayers = ["a1", "a2", "b1", "b2"].map((pid) => ({ player_id: pid }));
+  const all = (tee) => ({ 3: Object.fromEntries(tPlayers.map((p) => [p.player_id, tee])) });
+
+  it("names the tee the whole field is assigned", () => {
+    expect(roundTeeBox({
+      tr: { round_number: 3, uniform_tee: true }, tPlayers, course,
+      teeAssignments: all("Blue"),
+    })).toBe("Blue");
+  });
+
+  it("says nothing under Any tee, however uniform the assignments are", () => {
+    expect(roundTeeBox({
+      tr: { round_number: 3 }, tPlayers, course, teeAssignments: all("Blue"),
+    })).toBe("");
+  });
+
+  it("falls back to the tee an unassigned field is already scored off", () => {
+    // resolveTeeSpec's own chain: the round's tee_box, then the first box on
+    // the card. A round set up in February has a course, a tee and nobody
+    // entered yet, and that IS the tee the field will be on.
+    expect(roundTeeBox({
+      tr: { round_number: 3, uniform_tee: true }, tPlayers, course, teeAssignments: {},
+    })).toBe("White");
+    expect(roundTeeBox({
+      tr: { round_number: 3, uniform_tee: true, tee_box: "Gold" }, tPlayers, course,
+      teeAssignments: {},
+    })).toBe("Gold");
+    expect(roundTeeBox({
+      tr: { round_number: 3, uniform_tee: true }, tPlayers: [], course, teeAssignments: {},
+    })).toBe("White");
+  });
+
+  it("says nothing when the field has drifted off its one tee", () => {
+    // A man added to the roster after the switch was set is still on the
+    // round's fallback, so there is no one word for where the field is.
+    const drifted = all("Blue");
+    drifted[3].c1 = undefined;
+    expect(roundTeeBox({
+      tr: { round_number: 3, uniform_tee: true },
+      tPlayers: [...tPlayers, { player_id: "c1" }],
+      course, teeAssignments: drifted,
+    })).toBe("");
+  });
+
+  it("answers from a locked round's frozen snapshot", () => {
+    // getRoundTee is the one door every stroke dot goes through, so the board
+    // can never print a tee the strokes were not calculated against.
+    expect(roundTeeBox({
+      tr: { round_number: 3, uniform_tee: true }, tPlayers, course,
+      teeAssignments: all("Blue"),
+      roundLocks: {
+        3: { locked: true, players: Object.fromEntries(tPlayers.map((p) => [p.player_id, { tee: "Gold" }])) },
+      },
+    })).toBe("Gold");
+  });
+
+  it("rides on the end of the when line, and only when there is one", () => {
+    expect(roundWhen({ date: friday, tee_time: "8:30|8:40" }, { tee: "Blue" }))
+      .toBe("Friday · 8:30 AM · Blue");
+    expect(roundWhen({ tee_time: "8:30" }, { tee: "Blue" })).toBe("8:30 AM · Blue");
+    // Nothing to ride beside: the slot answers "when does this go off", and a
+    // colour on its own answers a different question. The caller's TBD is the
+    // true thing to say there.
+    expect(roundWhen({}, { tee: "Blue" })).toBe("");
+    expect(roundWhen({ date: friday, tee_time: "8:30" }, { tee: "" }))
+      .toBe("Friday · 8:30 AM");
   });
 });
