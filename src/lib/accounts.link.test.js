@@ -20,15 +20,27 @@
 // that eventually collides, and getting it wrong claims a man to another man's
 // record in a year nobody is looking at. So it is the director's, beside the
 // unlink that was already there.
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// The roster, for the lookup at the foot of this file. Empty for everything
+// above it, which is what the old mock was.
+const rows = { bc_players: [] };
+const asked = [];
 
 vi.mock("../firebase", () => ({
-  db: { get: async () => [], getById: async () => null, upsert: async () => null, upsertStrict: async () => null },
+  db: {
+    get: async (col, filters = []) => {
+      asked.push(filters);
+      return (rows[col] || []).filter((r) => filters.every((f) =>
+        (f.op === "in" ? f.value.includes(r[f.field]) : r[f.field] === f.value)));
+    },
+    getById: async () => null, upsert: async () => null, upsertStrict: async () => null,
+  },
   TOURNAMENT_ID: "bc_2025",
   writeFailure: () => "failed",
 }));
 
-const { linkPatch, linkableAccounts, membershipLabel, unlinkPatch } = await import("./accounts");
+const { linkPatch, linkableAccounts, loadAccountNames, membershipLabel, unlinkPatch } = await import("./accounts");
 
 const acct = (uid, extra = {}) => ({ id: uid, uid, email: `${uid}@example.com`, ...extra });
 
@@ -108,7 +120,7 @@ describe("linkableAccounts", () => {
 });
 
 describe("membershipLabel", () => {
-  it("is the email, which is the only thing a person recognises", () => {
+  it("is the email when nothing else is known about the account", () => {
     expect(membershipLabel(acct("u_tj"))).toBe("u_tj@example.com");
   });
 
@@ -118,5 +130,53 @@ describe("membershipLabel", () => {
     expect(membershipLabel({ uid: "abc123xyz", provider: "apple" }))
       .toBe("apple sign-in · abc123");
     expect(membershipLabel({ uid: "abc123xyz" })).toBe("account sign-in · abc123");
+  });
+
+  // And the name it holds in whichever edition it claimed one, which is the
+  // half an email cannot always do — see loadAccountNames below.
+  it("leads with the name once that has been looked up", () => {
+    expect(membershipLabel(acct("u_tj"), { u_tj: { name: "TJ M" } }))
+      .toBe("TJ M · u_tj@example.com");
+    // Not yet looked up, or never claimed anywhere: the email alone, which
+    // is what it always was.
+    expect(membershipLabel(acct("u_tj"), {})).toBe("u_tj@example.com");
+    expect(membershipLabel(acct("u_tj"), null)).toBe("u_tj@example.com");
+  });
+});
+
+// ── Who an account belongs to ─────────────────────────────────────
+// Apple's Hide My Email gives a per-app relay address, so an email can name
+// nobody at all — on the one screen where picking the wrong man writes his
+// phone onto another man's record. The name he claimed in another edition
+// answers it, and that row is one query away.
+describe("loadAccountNames", () => {
+  beforeEach(() => { rows.bc_players = []; asked.length = 0; });
+
+  it("asks ten uids at a time, which is Firestore's `in` limit", async () => {
+    await loadAccountNames(Array.from({ length: 23 }, (_, i) => `u${i}`));
+    expect(asked.length).toBe(3);
+    expect(asked[0][0].value.length).toBe(10);
+    expect(asked[2][0].value.length).toBe(3);
+  });
+
+  it("names each account off whichever row it claimed last", async () => {
+    rows.bc_players = [
+      { id: "a", player_id: "a", name: "TJ M", auth_uid: "u_tj", auth_linked_at: "2025-06-01T00:00:00.000Z" },
+      { id: "b", player_id: "b", name: "TJ Moore", auth_uid: "u_tj", auth_linked_at: "2026-06-01T00:00:00.000Z" },
+    ];
+    // A director's unlink leaves the row behind rather than moving it, so an
+    // account can have held two names over the years.
+    expect((await loadAccountNames(["u_tj"])).u_tj.name).toBe("TJ Moore");
+  });
+
+  it("asks nothing when there is nobody to ask about", async () => {
+    expect(await loadAccountNames([])).toEqual({});
+    expect(await loadAccountNames(null)).toEqual({});
+    expect(asked.length).toBe(0);
+  });
+
+  it("drops the duplicates rather than paying for them twice", async () => {
+    await loadAccountNames(["u1", "u1", "u2"]);
+    expect(asked[0][0].value).toEqual(["u1", "u2"]);
   });
 });
