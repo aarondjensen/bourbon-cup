@@ -57,6 +57,7 @@ import { MissingCardNote, CardSignerNote, SignCardSheet, SignedCardPanel } from 
 import { SideBets } from "./components/SideBets";
 import { AccountView } from "./components/AccountView";
 import { TripInfo } from "./components/TripInfo";
+import { PlayersView } from "./components/PlayersView";
 // ── Split off the main bundle ─────────────────────────────────────
 // The gallery is the one screen whose weight nobody else should pay for: it
 // carries the image pipeline, it is opened by a minority of the field, and it
@@ -4216,6 +4217,11 @@ function SlideMenu({ open, onClose, onNavigate, user, view, alerts, onEditions, 
     // BEFORE the tournament — when is it, where are we staying, what are we
     // playing — and the only one anybody opens in June.
     { key: "trip",      label: "Trip Info",        icon: "🏡" },
+    // The field, with what each man is playing off and what he gets in each
+    // round. Admin → Players minus the crown and the sign-in link — see
+    // components/PlayersView. It sits under Trip Info because it answers the
+    // fourth question of that same week-before group text: who's coming.
+    { key: "players",   label: "Players",          icon: "⛳" },
     // One row, two subjects. This was Player Analytics and Historical Data,
     // and the split was along the wrong axis: it cut NOW from THEN, so the
     // same question — how has this player done — lived on one row for this
@@ -7480,6 +7486,28 @@ export default function App() {
             schedule={schedule}
             dates={dates}
             isDirector={isDirector}
+          />
+        )}
+        {view === "players" && (
+          /* Read-only for everybody, a director included: every fact on it is
+             edited in Admin → Players and in Admin → Formats, and a second
+             place to type a handicap is a second place for it to disagree.
+             `tournamentRounds` rather than the round documents, so a round
+             the draw knows about but nobody has set up still gets a column —
+             its cells say so (a dash) instead of the column being absent. */
+          <PlayersView
+            tPlayers={tPlayers}
+            teams={teams}
+            rounds={tournamentRounds}
+            tRounds={enrichedRounds}
+            courses={courses}
+            /* The same three inputs the scoring engine resolves a Course
+               Handicap from. A locked round answers out of `roundLocks` and
+               ignores the other two, which is what stops Friday's column from
+               moving when Saturday's GHIN sync lands. */
+            roundLocks={roundLocksData}
+            hcpOverrides={hcpOverridesData}
+            teeAssignments={teeAssignmentsData}
           />
         )}
         {view === "data" && (

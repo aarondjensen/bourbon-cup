@@ -67,6 +67,7 @@ vi.mock("../firebase", () => ({
 }));
 
 import { TripInfo } from "./TripInfo";
+import { PlayersView } from "./PlayersView";
 import { BudgetAdmin } from "./Budget";
 import { LedgerAdmin } from "./Ledger";
 import { SideBets } from "./SideBets";
@@ -118,6 +119,23 @@ describe("Trip Info", () => {
   it("renders a tournament nobody has scheduled yet", () => {
     // The state a director sees in February, and the one nobody develops in.
     mounts(<TripInfo tournamentName="The Bourbon Cup" schedule={[]} dates={{}} />);
+  });
+});
+
+describe("Players", () => {
+  it("renders the field with a round CH column each", () => {
+    mounts(<PlayersView
+      tPlayers={players} teams={teams} rounds={[1]} tRounds={tRounds} courses={courses}
+      roundLocks={{}} hcpOverrides={{}} teeAssignments={{}}
+    />);
+  });
+  it("renders a tournament with no roster and no rounds", () => {
+    // February. Both teams still draw their headers — an empty screen would
+    // say the tab was broken rather than that nobody has been entered.
+    mounts(<PlayersView
+      tPlayers={[]} teams={teams} rounds={[]} tRounds={[]} courses={[]}
+      roundLocks={{}} hcpOverrides={{}} teeAssignments={{}}
+    />);
   });
 });
 
