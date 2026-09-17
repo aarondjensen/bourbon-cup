@@ -301,6 +301,70 @@ export const unlinkPatch = () => ({
   auth_uid: null, auth_email: null, auth_provider: null, auth_linked_at: null,
 });
 
+// ── And the other direction, which did not exist ────────────────────
+// A claim writes the uid onto ONE roster row: the one in the edition the man
+// was standing in when he tapped his name. Nothing carries it sideways.
+//
+// Cloning carries it FORWARD — `cloneEdition` copies the roster row whole,
+// `auth_uid` included — so a man claimed in 2025 is claimed in the 2026 that
+// was cloned from it, and the asymmetry stays invisible. It bites the other
+// way round: sign in for the first time on the year being played, switch to
+// any earlier one, and the app does not know you. `linkedPlayer` finds
+// nothing, so the edition switch leaves you a SPECTATOR on a tournament whose
+// roster has your name on it — no scores of your own, no card, and no way for
+// a director to make you a captain there, because the badge reaches your
+// membership THROUGH the roster row (see membershipFor).
+//
+// The claim cannot fix itself: matching the same man across editions has no
+// key to do it with. A clone mints fresh ids (`p_<stamp>_<i>`) and the
+// imported years use their own (`hist_2019_paulw`), so all that is left is
+// the display name — and "first name, last initial" is exactly the shape that
+// eventually collides. Guessing wrong here claims a man to another man's
+// record, in a year nobody is looking at.
+//
+// So it is the director's, which is what the unlink beside it already is, and
+// it is the same two facts every other link carries: the account, and when.
+// `auth_provider` is not among them — it is read off the sign-in that made
+// the claim, and there is no sign-in here to read.
+export const linkPatch = (membership) => {
+  const uid = membership?.uid || membership?.id;
+  if (!uid) return null;
+  return {
+    auth_uid: uid,
+    auth_email: membership.email || null,
+    auth_provider: membership.provider || null,
+    auth_linked_at: new Date().toISOString(),
+  };
+};
+
+// The accounts a director may link this edition's row to: every membership
+// that has not already claimed a name HERE.
+//
+// Scoped to this edition on purpose — an account claimed in 2026 is exactly
+// the one you want to offer on 2025's roster, and excluding it would leave
+// the list empty for the only case this exists for. What it does exclude is
+// somebody already holding a name in the year on screen, which would end with
+// one uid on two rows in one tournament — a state `linkedPlayer` resolves by
+// taking the first, and no screen expects.
+//
+// `demo_only` memberships are left out as well. They are minted by the
+// reviewer code and `canWriteEdition` confines them to demo editions, so
+// offering one on the cup is offering a link whose every subsequent write
+// the rules refuse.
+export const linkableAccounts = (memberships, players) => {
+  const taken = new Set((players || []).map((p) => p.auth_uid).filter(Boolean));
+  return (memberships || [])
+    .filter((m) => (m?.uid || m?.id) && !m.demo_only && !taken.has(m.uid || m.id))
+    .sort((a, b) => String(a.email || "").localeCompare(String(b.email || "")));
+};
+
+// What to call one in a picker. The email, because it is the only thing a
+// membership carries that a person recognises — the uid is a random string
+// and the roster row that would carry a name is, by definition, in another
+// edition this screen never loaded.
+export const membershipLabel = (m) =>
+  m?.email || `${m?.provider || "account"} sign-in · ${String(m?.uid || m?.id || "").slice(0, 6)}`;
+
 // ── Deleting an account ─────────────────────────────────────────────
 // App Store review guideline 5.1.1(v): an app that lets you create an
 // account has to let you delete it from inside the app, without emailing

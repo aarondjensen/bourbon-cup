@@ -78,7 +78,10 @@ import {
   accountLabel,
   accountsUnreadable,
   isClaimed,
+  linkPatch,
+  linkableAccounts,
   membershipFor,
+  membershipLabel,
   playerIsDirector,
   readAccessCode,
   setAccessCode,
@@ -1741,6 +1744,13 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
             // a membership document, because that is where the flag lives and
             // what the rules read (lib/captains).
             const canGrantCaptain = !isNew && !!theirMembership;
+            // The accounts this row could be joined to — every membership not
+            // already holding a name in THIS edition. It is what makes the two
+            // badges above reachable at all for a man who signed in on a
+            // different year: both of them find his membership through the
+            // roster row's `auth_uid` (membershipFor), and until something
+            // writes it there is nothing to find.
+            const linkChoices = isNew ? [] : linkableAccounts(memberships, tPlayers);
             const capSide = isNew ? null : (editingPlayer.team || p?.team);
             const heldBy = capSide ? captainForSide(memberships, tPlayers, editionId, capSide, membershipFor) : null;
             const captainHint = isNew
@@ -1748,7 +1758,14 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
               : accountsUnreadable(memberships)
                 ? "Can't read the accounts list, so no captain can be named. Re-publish firestore.rules, then reopen this."
                 : !theirMembership
-                  ? "They need to sign in and claim this name first."
+                  // The old wording was wrong for the case that actually
+                  // happens. A man who signed in on the year being played HAS
+                  // signed in; his name here is simply a different row, and
+                  // "sign in first" sends a director looking for a problem
+                  // that is not there. Point at the control instead.
+                  ? (linkChoices.length
+                    ? "Nobody is signed in to this name here — set Signed in as below."
+                    : "They need to sign in and claim this name first.")
                   : null;
             // Four different reasons the toggle can be unavailable, and
             // they want four different actions from the director. Telling
@@ -1769,7 +1786,13 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                 : !theirMembership
                   ? (isClaimed(p)
                       ? "They've claimed this name but haven't entered the invite code on this build yet — ask them to open the app once."
-                      : "They need to sign in and claim this name first.")
+                      // Worded exactly as the captain's is, because it is the
+                      // same missing membership and the two hints are
+                      // de-duplicated on the way to the screen. Two spellings
+                      // of one condition print as two separate problems.
+                      : linkChoices.length
+                        ? "Nobody is signed in to this name here — set Signed in as below."
+                        : "They need to sign in and claim this name first.")
                   : isSelf
                     ? "You can't change your own — that's what stops the last director locking everyone out. Ask the other director, or edit it in the Firebase console."
                     // The toggle is available and says Director. Every other
@@ -1892,6 +1915,14 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                 changes.push(editingPlayer.ghin_number ? `GHIN: linked #${editingPlayer.ghin_number}` : "GHIN: unlinked");
               const cutSignIn = !!editingPlayer.unlink && isClaimed(p);
               if (cutSignIn) changes.push(`Sign-in: unlink ${accountLabel(p)} — they'll pick their name again next time they open the app`);
+              // The other direction. Only on a row nobody holds — the picker
+              // is not drawn on a claimed one, and re-checking here is what
+              // keeps a stale form from writing over a claim that landed
+              // while this sheet was open.
+              const joinTo = !isClaimed(p) && editingPlayer.linkUid
+                ? linkChoices.find((m) => (m.uid || m.id) === editingPlayer.linkUid)
+                : null;
+              if (joinTo) changes.push(`Sign-in: link ${membershipLabel(joinTo)}`);
               if (changes.length === 0) { close(); return; }
               const oldEff = oldOv != null ? oldOv : (parseFloat(p.handicap_index) || 0);
               const newEff = newOv != null ? newOv : (parseFloat(editingPlayer.hi) || 0);
@@ -1922,8 +1953,12 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                 ? `\n\nThey narrate their side of the Final Countdown from their own phone. ${heldBy.name} stops being captain.`
                 : "\n\nThey narrate their side of the Final Countdown from their own phone.";
               if (capChanged && !newCap) impact += "\n\nTheir side will have no captain until you name one — only a director can turn its holes over.";
+              // What linking actually buys, because none of it is on this
+              // screen: it is this tournament only, and it is what puts the
+              // crown and the armband within reach of the row.
+              if (joinTo) impact += `\n\nThis links them for ${tournamentName || "this tournament"} only — every other year is separate. They stop being a spectator here, and you can make them a director or a captain.`;
               if (await confirm({ title: "Confirm changes", message: changes.join("\n") + impact })) {
-                onUpdatePlayer({ ...p, team: newTeam, name: newName, first_name: first, last_name: last, handicap_index: parseFloat(editingPlayer.hi) || 0, hi_override: newOv, withdrawn: editingPlayer.wd === true, ...ghinFields, ...(cutSignIn ? unlinkPatch() : {}) });
+                onUpdatePlayer({ ...p, team: newTeam, name: newName, first_name: first, last_name: last, handicap_index: parseFloat(editingPlayer.hi) || 0, hi_override: newOv, withdrawn: editingPlayer.wd === true, ...ghinFields, ...(cutSignIn ? unlinkPatch() : {}), ...(joinTo ? linkPatch(joinTo) : {}) });
                 // A separate document, and one the rules police, so it is
                 // reported separately: the roster edit above can succeed
                 // while this is refused.
@@ -2085,15 +2120,13 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                       )}
                     </div>
                   )}
-                  {/* The sign-in bound to this name. Read-only apart from
-                      cutting it: there is nothing to type here, because the
-                      link is made by the player signing in and tapping
-                      their own name, never by the director assigning one.
-                      Unlinking is the fix for the two things that do go
-                      wrong — somebody claimed the wrong name, or somebody
-                      changed phones and lost the account they used. Like
-                      the GHIN link above, it only writes into the form;
-                      Save commits it. */}
+                  {/* The sign-in bound to this name. The link is normally
+                      made by the player signing in and tapping his own name;
+                      unlinking is the fix for the two things that go wrong —
+                      somebody claimed the wrong name, or somebody changed
+                      phones and lost the account they used. Like the GHIN
+                      link above, it only writes into the form; Save commits
+                      it. */}
                   {!isNew && isClaimed(p) && (
                     <div>
                       <span style={lbl}>Signed in as</span>
@@ -2107,6 +2140,31 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                           {editingPlayer.unlink ? "Keep" : "Unlink"}
                         </button>
                       </div>
+                    </div>
+                  )}
+                  {/* ── And the way IN, which did not exist ──
+                      A claim writes the uid onto one roster row, in the
+                      edition the man was standing in. Cloning carries it
+                      forward and nothing carries it back, so somebody who
+                      first signed in on the year being played is a stranger
+                      in every earlier one — a spectator on a tournament whose
+                      roster has his name on it, and unreachable by the
+                      captain badge, which finds his membership through this
+                      field. See linkPatch in lib/accounts for why the claim
+                      cannot work this out for itself. */}
+                  {!isNew && !isClaimed(p) && linkChoices.length > 0 && (
+                    <div>
+                      <span style={lbl}>Signed in as</span>
+                      <select
+                        value={editingPlayer.linkUid || ""}
+                        onChange={(e) => set({ linkUid: e.target.value })}
+                        style={{ ...inp, cursor: "pointer" }}
+                      >
+                        <option value="">Not signed in</option>
+                        {linkChoices.map((m) => (
+                          <option key={m.uid || m.id} value={m.uid || m.id}>{membershipLabel(m)}</option>
+                        ))}
+                      </select>
                     </div>
                   )}
                   {/* Index, the GHIN link, and Override on one row — all
