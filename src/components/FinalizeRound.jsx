@@ -165,19 +165,40 @@ const opensClause = (round, nextRound, liveRound) => {
 // over here: a director who puts away "ready for the Final Countdown" before
 // the room sits down must still be told, an hour later, that the round now
 // wants finalizing. Sharing the "ready" tag would have eaten it.
-export function DirectorFinalizeAlert({ round, nextRound, progress, cards, stage = "ready", onOpen, onDismiss }) {
-  // The loud bar covers both of the late stages — a filled amber frame with a
+// ── AND A FOURTH RUNG, WHICH IS NOT THE DIRECTOR'S ─────────────────
+// `stage: "captain"` is the same bar shown to a man who is a CAPTAIN and not
+// a director, and it is the only thing in the app that has ever told him the
+// evening is his.
+//
+// He has a card — his side's contributions on the hole, the nuggets, and the
+// number he lands on, in his team's colour with the reveal button under it
+// (see FinalCountdown's captainBand). It is rendered on HIS phone and nowhere
+// else. Until this existed the only door to it was the amber button on round
+// 4's leaderboard panel: inside a round section, on a tab he has no reason to
+// open, unlabelled as anything to do with him. A control nobody can find is a
+// control that does not exist, and the moment it is needed he is standing up
+// in front of the room.
+//
+// A director who is also a captain — which is both of them, most years — keeps
+// the "countdown" rung instead. Two bars stacked above every tab is a worse
+// answer than one, and the director's own tap lands in the same place.
+export function DirectorFinalizeAlert({ round, nextRound, progress, cards, teamName = null, stage = "ready", onOpen, onDismiss }) {
+  // The loud bar covers the three late stages — a filled amber frame with a
   // pulsing dot. What changes between them is the sentence and where the tap
-  // goes, not the weight: both mean the round is waiting on the director.
+  // goes, not the weight: every one of them means the round is waiting on the
+  // person reading it.
   const toCountdown = stage === "countdown";
-  const ready = stage === "ready" || toCountdown;
+  const captain = stage === "captain";
+  const ready = stage === "ready" || toCountdown || captain;
   const outstanding = cards?.total ? cards.total - cards.attested : 0;
 
-  const headline = toCountdown
-    ? `Round ${round} is ready for the Final Countdown!`
-    : stage === "ready"
-      ? `Round ${round} is ready to finalize`
-      : `Round ${round} — all ${progress.total} scores are in`;
+  const headline = captain
+    ? `Round ${round} — you're revealing for ${teamName || "your side"}`
+    : toCountdown
+      ? `Round ${round} is ready for the Final Countdown!`
+      : stage === "ready"
+        ? `Round ${round} is ready to finalize`
+        : `Round ${round} — all ${progress.total} scores are in`;
 
   const allCards = cards?.total
     ? `All ${cards.total} card${cards.total === 1 ? "" : "s"} signed and attested`
@@ -195,11 +216,19 @@ export function DirectorFinalizeAlert({ round, nextRound, progress, cards, stage
   // wayfinding is in the tap, and the words are free to be what the moment
   // actually is. The cards are in, the golf is over and the room is about to
   // sit down.
-  const subhead = toCountdown
-    ? `${allCards} — LFG!!!!`
-    : stage === "ready"
-      ? `${allCards} — ${opensClause(round, nextRound, round).replace(" for scoring", "")}`
-      : `Waiting on ${outstanding} card${outstanding === 1 ? "" : "s"} — finalize or attest for them`;
+  //
+  // The captain's rung is the OTHER exception, and it breaks the rule above
+  // deliberately: his tap lands on the Leaderboard, one button short of the
+  // thing he is looking for, and the whole reason this bar exists is that
+  // nobody has ever told him the card is there. Naming the next tap is the
+  // single piece of information the rung is for.
+  const subhead = captain
+    ? "Open the Final Countdown for your captain's card"
+    : toCountdown
+      ? `${allCards} — LFG!!!!`
+      : stage === "ready"
+        ? `${allCards} — ${opensClause(round, nextRound, round).replace(" for scoring", "")}`
+        : `Waiting on ${outstanding} card${outstanding === 1 ? "" : "s"} — finalize or attest for them`;
 
   return (
     <div style={{ flexShrink: 0, padding: "0 10px 6px", fontFamily: FONT }}>
