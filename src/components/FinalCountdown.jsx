@@ -478,7 +478,7 @@ function BallRow({ strokes, name, net, par, tid, counted, nameLane, compact }) {
 // Alphabetical rather than roster order for the same reason: roster order is
 // whatever the director typed, it differs between the two sides, and it is
 // not a thing anybody can look a name up in. A is at the top left.
-function SideColumn({ tid, teamName, score, balls, par, countN, compact, revealed, won, waitingOn, celebrate }) {
+function SideColumn({ tid, teamName, score, balls, par, countN, compact, revealed, won, celebrate }) {
   const col = teamColor(tid);
   // ── The number, AGAINST PAR ──
   // It used to be the side's raw total — 25, 18 — which is the sum of six or
@@ -578,13 +578,19 @@ function SideColumn({ tid, teamName, score, balls, par, countN, compact, reveale
       </div>
       {/* A side still waiting on its captain says so, rather than sitting
           under a dash that reads the same as a hole nobody posted. This is
-          the half of the screen the room is looking at while he talks. */}
+          the half of the screen the room is looking at while he talks.
+
+          TWO WORDS, AND NOT THE TEAM'S NAME. It read "SHOT CALLERS TO TELL
+          IT", directly under SHOT CALLERS set in the team's own colour at
+          three times the size — the name twice in two lines, and the second
+          one the smaller and greyer of the two, which is the copy nobody
+          needs. What is left is the only part that was ever news. */}
       {!revealed && (
         <div style={{
           fontSize: compact ? 11 : T.promptSm, fontWeight: 800, letterSpacing: "0.22em",
           color: BC.t3, textAlign: "center", lineHeight: 1.5,
           padding: compact ? "6px 0" : 0,
-        }}>{waitingOn || "WAITING"}</div>
+        }}>TO REVEAL</div>
       )}
       {/* ONE list, on both screens. The ORDER is alphabetical, and it is the
           same order on hole 18 as it was on hole 1 — a man keeps his line, and
@@ -1527,8 +1533,7 @@ export function FinalCountdown({
           <SideColumn tid="A" teamName={tA.name} score={hr?.aScore} balls={ballsFor("A")}
             par={holePars?.[holeIdx]} countN={countN} compact={compact}
             revealed={showA} won={showVerdict && winner === "A"}
-            celebrate={showVerdict && clincher === "A"}
-            waitingOn={`${tA.name.toUpperCase()} TO TELL IT`} />
+            celebrate={showVerdict && clincher === "A"} />
           {/* No "vs" between them. It was a television flourish from when each
               side was a name over one enormous number and the gap between them
               was empty; two eight-man lists do not need to be told they are
@@ -1536,8 +1541,7 @@ export function FinalCountdown({
           <SideColumn tid="B" teamName={tB.name} score={hr?.bScore} balls={ballsFor("B")}
             par={holePars?.[holeIdx]} countN={countN} compact={compact}
             revealed={showB} won={showVerdict && winner === "B"}
-            celebrate={showVerdict && clincher === "B"}
-            waitingOn={`${tB.name.toUpperCase()} TO TELL IT`} />
+            celebrate={showVerdict && clincher === "B"} />
         </>,
       )}
 

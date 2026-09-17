@@ -619,7 +619,12 @@ describe("a hole the other captain still owes", () => {
     expect(t).toContain("HOLE 4");
     expect(t).toContain("Paul W");
     expect(t).not.toContain("Andy H");
-    expect(t).toContain("SHOT CALLERS TO TELL IT");
+    // One side is still owed. It used to be checked by the label naming the
+    // team — "SHOT CALLERS TO TELL IT" — under a card already set in that
+    // team's name and colour. The label says TO REVEAL now and nothing else,
+    // so the count is what tells the two apart, which is the sturdier test:
+    // it is the SIDE that is blank, not the wording.
+    expect(t.split("TO REVEAL").length - 1).toBe(1);
   });
 
   // A cleared board shows neither, whoever is looking at it.
