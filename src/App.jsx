@@ -7045,9 +7045,24 @@ export default function App() {
   // at the Leaderboard — where the way onto the television lives — and, because
   // the snooze is remembered per stage, keeps its own dismissal separate from
   // the "ready to finalize" bar that follows it after the eighteenth hole.
-  const alertStage = isDirector && roundStage
+  //
+  // ── And a rung for the captain, who had nothing ──────────────────
+  // A captain who is not also a director was told nothing at all. His card is
+  // real and it is on his own phone (FinalCountdown's captainBand), and the
+  // only way to it was the amber button inside round 4's leaderboard section
+  // — a place he has no reason to be, on the one evening he is the one being
+  // waited for. Same bar, same moment, worded for him, and it lands him on
+  // the Leaderboard with that button under his thumb.
+  //
+  // A director keeps the director's rung even when he is also a captain: two
+  // bars above every tab is worse than one, and his tap goes to the same
+  // screen. `myCaptainSide` is edition-scoped (lib/captains), so a man who
+  // captained last year gets nothing this year, which is right.
+  const alertStage = roundStage && isDirector
     ? (roundStage === "ready" && ceremonyPending ? "countdown" : roundStage)
-    : null;
+    : roundStage === "ready" && ceremonyPending && myCaptainSide
+      ? "captain"
+      : null;
   const showFinalizeAlert = !!alertStage
     && finalizeSnoozed !== finalizeSnoozeTag(currentRound, alertStage);
 
@@ -7266,11 +7281,16 @@ export default function App() {
           progress={roundProgress}
           cards={roundCards}
           stage={alertStage}
+          teamName={myCaptainSide ? teamNames[myCaptainSide] : null}
           /* The countdown rung walks him to the Leaderboard instead of
              raising the finalize sheet: the way onto the television is the
              button on that round's sealed panel, and the sheet is the thing
-             he must NOT reach for yet. */
-          onOpen={alertStage === "countdown" ? () => setView("leaderboard") : openFinalize}
+             he must NOT reach for yet. The captain's rung goes to the same
+             screen — and for him the finalize sheet is not merely premature,
+             it is a director's control he cannot use. */
+          onOpen={alertStage === "countdown" || alertStage === "captain"
+            ? () => setView("leaderboard")
+            : openFinalize}
           onDismiss={() => snoozeFinalizeAlert(currentRound, alertStage)}
         />
       )}

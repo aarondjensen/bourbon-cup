@@ -98,3 +98,51 @@ describe("DirectorFinalizeAlert", () => {
     expect(screen.getByText("Round 3 is ready for the Final Countdown!")).toBeTruthy();
   });
 });
+
+// ══════════════════════════════════════════════════════════════════
+//  The rung that is not the director's
+// ══════════════════════════════════════════════════════════════════
+//
+// A captain who is not also a director was told nothing. His card is real and
+// it renders on his own phone — his side's contributions on the hole, the
+// nuggets, the number he lands on, the reveal button — and the only door to
+// it was an amber button inside round 4's leaderboard section, on a tab he
+// has no reason to open, labelled nothing about him.
+//
+// It surfaced the first time a captain who was not a director was asked to
+// run the reveal: he could not find his card, on the evening he was the one
+// the room was waiting for.
+describe("the captain's rung", () => {
+  it("tells him it is his side, by name", () => {
+    bar({ stage: "captain", teamName: "Shot Callers" });
+    expect(screen.getByText("Round 4 — you're revealing for Shot Callers")).toBeTruthy();
+  });
+
+  // The one piece of information the whole rung exists to carry. Every other
+  // rung leaves the wayfinding to the tap, because every other rung lands on
+  // the thing it names; this one lands one button short of it.
+  it("says where the card is", () => {
+    bar({ stage: "captain", teamName: "Irons" });
+    expect(screen.getByText("Open the Final Countdown for your captain's card")).toBeTruthy();
+  });
+
+  it("never asks him to finalize, which he cannot do", () => {
+    const { container } = bar({ stage: "captain", teamName: "Irons" });
+    const seen = container.cloneNode(true);
+    seen.querySelectorAll("style").forEach((n) => n.remove());
+    expect(seen.textContent).not.toMatch(/finaliz/i);
+  });
+
+  it("is the loud bar, like the two rungs beside it", () => {
+    const { container } = bar({ stage: "captain", teamName: "Irons" });
+    expect(!!container.querySelector('[style*="bcFinalizePulse"]')).toBe(true);
+  });
+
+  // A team whose name has not arrived yet still gets a sentence rather than
+  // "revealing for null" — the subscriptions land over several frames and
+  // this bar is chrome above every tab.
+  it("survives a name that has not loaded", () => {
+    bar({ stage: "captain" });
+    expect(screen.getByText("Round 4 — you're revealing for your side")).toBeTruthy();
+  });
+});
