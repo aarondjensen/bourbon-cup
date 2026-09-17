@@ -127,10 +127,66 @@ describe("holePrompt", () => {
       .toBe("NO SCORES ON THIS HOLE YET");
   });
 
-  it("never names a ball that missed the cut", () => {
-    const balls = [ball("Tim C", 4), ball("Rudy T", 2, false)];
-    const p = holePrompt({ balls, par: 4, countN: 1, score: 4 });
-    expect(p.notes.join(" ")).not.toContain("Rudy");
+  // ══════════════════════════════════════════════════════════════
+  //  The hole where more men made it than the format could count
+  // ══════════════════════════════════════════════════════════════
+  //
+  // This used to read "never names a ball that missed the cut", and the hole
+  // that reversed it: four counted, FIVE men at net one under. The card named
+  // four of them, and the fifth was standing in the room.
+  //
+  // Worth knowing WHY that is the only shape this ever takes. The engine
+  // counts the N BEST balls, so an uncounted ball is never worse than a
+  // counted one by definition — if a birdie missed the cut, every ball that
+  // made it is a birdie or better, and which four of five identical scores
+  // "counted" is an arbitrary tie-break inside the engine. There is no
+  // fourth-best of five equal numbers, so there is nobody to leave out.
+  describe("more men than slots", () => {
+    const five = () => [
+      ball("Dave K", 3), ball("John S", 3), ball("Paul W", 3),
+      ball("Tim C", 3), ball("Wes B", 3, false),
+    ];
+
+    it("says five, names five, and says four counted", () => {
+      const p = holePrompt({ balls: five(), par: 4, countN: 4, score: 12 });
+      expect(p.notes[0]).toBe("Five net birdies — Dave K, John S, Paul W, Tim C and Wes B (four counted)");
+    });
+
+    it("leaves the number alone", () => {
+      // The fifth birdie is named and contributes nothing. −4 is the four
+      // that counted, against four pars, and it does not move.
+      const p = holePrompt({ balls: five(), par: 4, countN: 4, score: 12 });
+      expect(p.headline).toBe("YOUR SIDE −4");
+      expect(p.counted).toBe(4);
+    });
+
+    it("stays short when everybody who made it counted", () => {
+      // Which is nearly every hole. The count is spoken only when the two
+      // numbers genuinely differ — otherwise it is a number restating a list
+      // the reader can see.
+      const p = holePrompt({ balls: [ball("Dave K", 3), ball("John S", 3)], par: 4, countN: 2, score: 6 });
+      expect(p.notes[0]).toBe("Net birdies — Dave K and John S");
+      expect(p.notes.join(" ")).not.toContain("counted");
+    });
+
+    it("counts each kind against its own slots", () => {
+      // Two eagles and three birdies into four slots: both eagles count and
+      // one birdie is squeezed out. Each line reports its own arithmetic
+      // rather than the hole's.
+      const balls = [
+        ball("Dave K", 2), ball("John S", 2),
+        ball("Paul W", 3), ball("Tim C", 3), ball("Wes B", 3, false),
+      ];
+      const p = holePrompt({ balls, par: 4, countN: 4, score: 10 });
+      expect(p.notes[0]).toBe("Net eagles — Dave K and John S");
+      expect(p.notes[1]).toBe("Three net birdies — Paul W, Tim C and Wes B (two counted)");
+    });
+
+    it("still says it in the singular", () => {
+      const balls = [ball("Dave K", 3), ball("John S", 3, false)];
+      const p = holePrompt({ balls, par: 4, countN: 1, score: 3 });
+      expect(p.notes[0]).toBe("Two net birdies — Dave K and John S (one counted)");
+    });
   });
 });
 
@@ -379,10 +435,12 @@ describe("the nugget window, from both sides", () => {
       expect(run(2)).toContain("two in a row");
       expect(run(3)).toContain("three in a row");
       expect(run(7)).toContain("seven in a row");
-      // Past the words, it falls back to the digit rather than saying
-      // "undefined in a row" — eight is off the end of the list, and a
-      // captain reading "Dave K — 8 in a row" is fine.
-      expect(run(8)).toContain("8 in a row");
+      // Eight is the longest a run can be on one side of a nine, and the
+      // words reach it.
+      expect(run(8)).toContain("eight in a row");
+      // Past them it falls back to the digit rather than saying "undefined in
+      // a row", and a captain reading "Dave K — 9 in a row" is fine.
+      expect(run(9)).toContain("9 in a row");
     });
 
     // One line, not three. He is standing in front of fifteen people.

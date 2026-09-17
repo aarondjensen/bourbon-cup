@@ -26,10 +26,22 @@
 // and a net bogey read out to a room is a man being named for a bad hole in
 // front of the person he cost. This screen will not do that.
 //
-// A ball that DID NOT COUNT is never notable however good it was — on a
-// best-six-of-eight the ninth-best birdie did not happen, as far as the number
-// is concerned, and shouting it out invites the argument the format exists to
-// avoid.
+// A ball that DID NOT COUNT is still a birdie the man made, and the card says
+// so. That is a reversal, and the hole that forced it is worth writing down:
+// four balls counted, and FIVE men were at net one under. The card named four
+// of them. There is no fourth-best of five identical scores — which four
+// "counted" is an arbitrary tie-break inside the engine — so the fifth man
+// stood in the room and heard his own birdie left out of a list of birdies,
+// which is precisely the argument the old rule was written to avoid.
+//
+// So every ball that beat par is named, and when fewer of them counted than
+// were made, the line SAYS SO: "Five net birdies — … (four counted)". The
+// number the side is measured by has not moved an inch; the captain simply
+// stops reading out a list that is missing somebody standing in front of him.
+//
+// `ballNote` keeps the old rule and is still what the NUGGETS read, on
+// purpose. "The first net eagle of the round" is a claim about the scoring,
+// and an eagle the format threw away did not move it. See holeNuggets.
 //
 // Pure — no React, no Firebase, no theme. Given balls and a par it returns
 // text. Everything about how it looks lives in the component.
@@ -41,16 +53,20 @@ export const BIRDIE = "birdie";
 export const netToPar = (ball, par) =>
   ball?.net == null || !Number.isFinite(par) ? null : ball.net - par;
 
-// What one ball is worth saying about, or null. Only ever a ball that COUNTED
-// — see the note above.
-export const ballNote = (ball, par) => {
-  if (!ball?.counted) return null;
+// What one ball is worth saying about, purely on the SCORE — whether the
+// format counted it is a separate question and a separate reader's.
+export const ballScoreNote = (ball, par) => {
   const rel = netToPar(ball, par);
   if (rel == null) return null;
   if (rel <= -2) return EAGLE;
   if (rel === -1) return BIRDIE;
   return null;
 };
+
+// The same question asked of a ball that MADE THE NUMBER. What the nuggets
+// read: "the first net eagle of the round" is a claim about the scoring, and
+// an eagle the format threw away did not move it.
+export const ballNote = (ball, par) => (ball?.counted ? ballScoreNote(ball, par) : null);
 
 // "−3", "+2", "E" — the side's number against the par it took to make it. On
 // a best-N format the side's score is the sum of N balls, so the par it is
@@ -87,7 +103,11 @@ export const sayNames = (names) => {
 //   counted   — how many balls made the number, for the "best 6 of 8" line.
 const countedBalls = (balls) => (balls || []).filter((b) => b.counted && b.net != null);
 
-const runWord = (n) => (["", "", "two", "three", "four", "five", "six", "seven"][n] || `${n}`);
+// Spelled, because it is read aloud. "Five net birdies" is a sentence; "5 net
+// birdies" is a caption a man has to convert while he is talking.
+const WORDS = ["none", "one", "two", "three", "four", "five", "six", "seven", "eight"];
+const countWord = (n) => WORDS[n] ?? `${n}`;
+const runWord = countWord;
 
 // "Mash Brothers" → "Mash Brothers'", "Irons" → "Irons'", "Drivers" → "Drivers'".
 // A team name ending in s takes the bare apostrophe; anything else takes 's.
@@ -196,20 +216,31 @@ export function holePrompt({ balls, par, countN, score, history, teamName }) {
   // "your side, four under" is a prompt he has to translate first.
   const headline = `${teamName || "YOUR SIDE"} ${fmtRel(rel)}`;
 
+  // Every ball that beat par, counted or not — see the note at the top of the
+  // file. Read off `posted` rather than `counted`, which is the whole change.
   const eagles = [], birdies = [];
-  counted.forEach((b) => {
-    const note = ballNote(b, par);
-    if (note === EAGLE) eagles.push(b.name);
-    else if (note === BIRDIE) birdies.push(b.name);
+  posted.forEach((b) => {
+    const note = ballScoreNote(b, par);
+    if (note === EAGLE) eagles.push(b);
+    else if (note === BIRDIE) birdies.push(b);
   });
 
+  // One line per kind. It stays the short form — "Net birdies — Dave and
+  // John" — whenever every one of them made the number, which is nearly every
+  // hole; the count is only spoken when the two numbers genuinely differ, and
+  // then it leads, because "five net birdies" is the thing he says first.
+  const line = (group, one, many) => {
+    const names = sayNames(group.map((b) => b.name));
+    const made = group.length;
+    const kept = group.filter((b) => b.counted).length;
+    if (made === kept) return `Net ${made > 1 ? many : one} — ${names}`;
+    const lead = countWord(made);
+    return `${lead[0].toUpperCase()}${lead.slice(1)} net ${made > 1 ? many : one} — ${names} (${countWord(kept)} counted)`;
+  };
+
   const notes = [];
-  if (eagles.length) {
-    notes.push(`Net ${eagles.length > 1 ? "eagles" : "eagle"} — ${sayNames(eagles)}`);
-  }
-  if (birdies.length) {
-    notes.push(`Net ${birdies.length > 1 ? "birdies" : "birdie"} — ${sayNames(birdies)}`);
-  }
+  if (eagles.length) notes.push(line(eagles, "eagle", "eagles"));
+  if (birdies.length) notes.push(line(birdies, "birdie", "birdies"));
   // Nothing to shout about is a real thing that happens on a par 3 everybody
   // pars, and saying so beats an empty panel the captain reads as a bug.
   if (!notes.length) notes.push("Nothing to shout about — read the number");
