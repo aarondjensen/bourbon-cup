@@ -799,94 +799,128 @@ describe("what the nuggets claim to know", () => {
 });
 
 // ══════════════════════════════════════════════════════════════════
-//  The other end of the card
+//  The outlier, measured against the side and not against par
 // ══════════════════════════════════════════════════════════════════
 //
-// The card is fun facts, not a leaderboard. A side can be four under with
-// four net birdies and still have somebody who made a net quad on the same
-// eight balls, and leaving that out leaves out the half of it everybody
-// enjoyed — it is the hole this exists for.
+// It began as a hard line at three over net, and a hard line is wrong in both
+// directions at once:
 //
-// A net triple is not the "bad hole read out to the room" the header refuses:
-// three over AFTER his strokes is the ball off the cart path, and the man who
-// made it is the first to tell it. One over is Tuesday.
-describe("the blow-up", () => {
+//   • on a brutal hole where the side went +2 +2 +2 +3 +3 +3 +3 +4, the man on
+//     +4 played it as well as anybody and got shouted at for it
+//   • and on the hole this was reported from — seven net birdies and one net
+//     DOUBLE — the interesting ball was three clear of the whole side and said
+//     nothing, because +2 is not +3
+//
+// So the question is how far he is from how HIS OWN SIDE played the hole.
+describe("the outlier", () => {
   const b = (name, net, counted = false) => ({ pid: name, name, net, counted });
-  const hole = (balls, { par = 4, countN = 4, score = 12 } = {}) => ({ balls, par, countN, score });
+  // A side's eight balls given as net-to-par, which is how these read.
+  const side = (rels, par = 4) => rels.map((r, i) =>
+    b(String.fromCharCode(65 + i) + " P", par + r, r <= 0));
+  const say = (rels, par = 4) => blowUpNote(side(rels, par), par);
+
+  it("names the double when everybody else made birdie", () => {
+    // The hole it exists for. Three clear of a side that was all at −1, and
+    // the old rule missed it by one shot.
+    expect(say([-1, -1, -1, -1, -1, -1, -1, 2])).toBe("💥 H P — net double");
+  });
+
+  it("leaves the worst ball alone on a hole that beat everybody", () => {
+    // +4 against a side that went +2 to +3. He played it as well as anybody
+    // there, and par has nothing to do with it.
+    expect(say([2, 2, 2, 3, 3, 3, 3, 4])).toBe(null);
+  });
+
+  it("still names a genuine blow-up on an ordinary hole", () => {
+    expect(say([-1, 0, 0, 0, 0, 1, 1, 4])).toContain("net quad");
+  });
+
+  // The measure is the MIDDLE of the rest, not the next-worst ball. Two men
+  // blowing up together is more of a story, and a next-worst test cancels it
+  // out exactly then.
+  it("is not defeated by two men blowing up together", () => {
+    expect(say([0, 0, 0, 0, 0, 0, 3, 3])).toBe("💥 G P and H P — net triple");
+  });
+
+  it("names the worst and everybody level with it, never a list", () => {
+    const out = say([0, 0, 0, 0, 0, 1, 2, 4]);
+    expect(out).toBe("💥 H P — net quad");
+    // Not the +2 and the +1 underneath it — a run of bad numbers read out is
+    // the thing the header refuses.
+    expect(out).not.toContain("G P");
+  });
+
+  it("never calls a par a blow-up, however far clear of the side", () => {
+    // Seven net eagles and a net par. He is three clear and it is still a par.
+    expect(say([-2, -2, -2, -2, -2, -2, -2, 0])).toBe(null);
+    // One over against the same side IS the story.
+    expect(say([-2, -2, -2, -2, -2, -2, -2, 1])).toBe("💥 H P — net bogey");
+  });
+
+  it("says nothing when the side was all over the place", () => {
+    // A spread is not an outlier: the worst ball is the tail of a run rather
+    // than a man standing on his own.
+    expect(say([0, 0, 1, 1, 2, 2, 2, 3])).toBe(null);
+  });
+
+  it("wants enough balls for 'the side' to mean something", () => {
+    expect(say([-1, 2])).toBe(null);          // two balls: no middle to take
+    expect(say([-1, -1, 2])).toContain("net double");
+    expect(blowUpNote([], 4)).toBe(null);
+    expect(blowUpNote(null, 4)).toBe(null);
+  });
+
+  it("is not thrown by a hole still being posted", () => {
+    const partial = [b("A P", 3), b("B P", null), b("C P", null), b("D P", 6)];
+    // Two posted balls is not a side. It says nothing rather than calling the
+    // second man in an outlier.
+    expect(blowUpNote(partial, 4)).toBe(null);
+    // No par is no answer either.
+    expect(blowUpNote(side([-1, -1, -1, 2]), undefined)).toBe(null);
+  });
+
+  it("has a word for every number it can reach", () => {
+    expect(overWord(1)).toBe("bogey");
+    expect(overWord(2)).toBe("double");
+    expect(overWord(3)).toBe("triple");
+    expect(overWord(4)).toBe("quad");
+    // Past a quad nobody has a word, so it says the number — spelled, because
+    // the card is read out loud.
+    expect(overWord(5)).toBe("five-over");
+    expect(overWord(6)).toBe("six-over");
+  });
+});
+
+// ── And where it sits on the card ───────────────────────────────────
+describe("the outlier on the card", () => {
+  const b = (name, net, counted = false) => ({ pid: name, name, net, counted });
 
   it("rides alongside the good news rather than instead of it", () => {
-    // Aaron's hole, exactly: four net birdies, four under, and a quad.
+    // Aaron's hole: four net birdies, four under, and one man who blew up.
     const balls = [
-      b("Aaron J", 3, true), b("Ben T", 3, true), b("Christopher M", 3, true), b("Dave R", 3, true),
-      b("Jim H", 8),
+      b("Aaron J", 3, true), b("Ben T", 3, true), b("Christopher M", 3, true),
+      b("Dave R", 3, true), b("Jim H", 8),
     ];
-    const p = holePrompt({ ...hole(balls), teamName: "Mash Brothers" });
+    const p = holePrompt({ balls, par: 4, countN: 4, score: 12, teamName: "Mash Brothers" });
     expect(p.headline).toBe("Mash Brothers −4");
     expect(p.notes[0]).toBe("Net birdies — Aaron J, Ben T, Christopher M and Dave R");
     expect(p.nuggets).toContain("💥 Jim H — net quad");
   });
 
   it("is never crowded out by the two-nugget cap", () => {
-    // Three good-news lines compete for two places. The blow-up is appended
+    // Three good-news lines compete for two places. The outlier is appended
     // after the cap, so it cannot lose that tie-break — which it would have,
-    // to every one of them.
-    const balls = [b("Paul W", 2, true), b("Dave K", 3, true), b("Jim H", 9)];
-    const past = [hole([b("Paul W", 3, true), b("Dave K", 4, true), b("Jim H", 4, true)], { countN: 3, score: 11 })];
-    const out = holeNuggets({ ...hole(balls, { countN: 2, score: 5 }), history: past, teamName: "Irons" });
+    // to every one of them, on exactly the hole it is funniest.
+    const balls = [b("Paul W", 2, true), b("Dave K", 3, true), b("Tim C", 4, true), b("Jim H", 9)];
+    const past = [{ balls: [b("Paul W", 3, true), b("Dave K", 4, true)], par: 4, countN: 2, score: 7 }];
+    const out = holeNuggets({ balls, par: 4, countN: 2, score: 5, history: past, teamName: "Irons" });
     expect(out.length).toBe(3);
     expect(out[out.length - 1]).toContain("Jim H");
     expect(out.join(" ")).toContain("First net eagle so far");
   });
 
-  it("has a word for it on its own", () => {
-    expect(overWord(3)).toBe("triple");
-    expect(overWord(4)).toBe("quad");
-    expect(overWord(5)).toBe("five-over");
-  });
-
-  it("says it the way a golfer says it", () => {
-    const say = (net) => holeNuggets({ ...hole([b("Jim H", net)], { countN: 1, score: net }) }).join(" ");
-    expect(say(7)).toContain("net triple");
-    expect(say(8)).toContain("net quad");
-    // Past a quad nobody has a word, so it says the number — spelled, because
-    // the card is read out loud.
-    expect(say(9)).toContain("net five-over");
-    expect(say(10)).toContain("net six-over");
-  });
-
-  it("draws the line high, and leaves an ordinary bad hole alone", () => {
-    const quiet = (net) => holeNuggets({ ...hole([b("Jim H", net)], { countN: 1, score: net }) }).join(" ");
-    expect(quiet(5)).not.toContain("Jim H");   // bogey
-    expect(quiet(6)).not.toContain("Jim H");   // double
-    expect(quiet(7)).toContain("Jim H");       // triple — the line
-  });
-
-  it("names the worst of them and everybody level with it", () => {
-    const balls = [b("Jim H", 8), b("Joe E", 8), b("Shaun W", 7)];
-    const out = holeNuggets({ ...hole(balls, { countN: 3, score: 23 }) }).join(" ");
-    // Both quads, and not the triple underneath them: a list of bad numbers
-    // read out is the thing the header refuses.
-    expect(out).toContain("💥 Jim H and Joe E — net quad");
-    expect(out).not.toContain("Shaun W");
-  });
-
-  it("reads every posted ball, because it never counted by definition", () => {
-    // On a best-N hole the worst ball is the one the format threw away, so
-    // asking only the counted ones would find nothing, ever.
-    const balls = [b("Paul W", 3, true), b("Jim H", 8, false)];
-    expect(holeNuggets({ ...hole(balls, { countN: 1, score: 3 }) }).join(" ")).toContain("Jim H");
-  });
-
-  it("has nothing to say about a hole nobody blew up", () => {
-    const balls = [b("Paul W", 3, true), b("Dave K", 4, true)];
-    expect(holeNuggets({ ...hole(balls, { countN: 2, score: 7 }) }).join(" ")).not.toContain("💥");
-  });
-
-  it("is not confused by a hole with no score on it", () => {
-    expect(blowUpNote([{ pid: "x", name: "Jim H", net: null }], 4)).toBe(null);
-    expect(blowUpNote([], 4)).toBe(null);
-    expect(blowUpNote(null, 4)).toBe(null);
-    // No par is no answer, not a blow-up.
-    expect(blowUpNote([{ pid: "x", name: "Jim H", net: 9 }], undefined)).toBe(null);
+  it("has nothing to say about a hole nobody stood out on", () => {
+    const balls = [b("Paul W", 3, true), b("Dave K", 4, true), b("Tim C", 4, true)];
+    expect(holeNuggets({ balls, par: 4, countN: 2, score: 7 }).join(" ")).not.toContain("💥");
   });
 });

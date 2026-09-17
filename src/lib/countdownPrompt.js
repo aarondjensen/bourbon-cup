@@ -26,17 +26,20 @@
 // and a net bogey read out to a room is a man being named for a bad hole in
 // front of the person he cost. This screen will not do that.
 //
-// AND THE OTHER END OF IT, WHICH IS NOT THE SAME THING. A net TRIPLE is not a
-// bad hole, it is a story — the ball off the cart path, the one that never came
-// out of the bunker — and the man who made it is the first to tell it. The
-// card is fun facts, not a leaderboard: a side can be four under with four net
-// birdies and still have somebody who made a net quad on the same hole, and
-// leaving that out is leaving out the half of it everybody enjoyed.
+// AND THE OTHER END OF IT, WHICH IS NOT THE SAME THING. The one ball that
+// stands apart from the rest of the side is not a bad hole, it is a story —
+// the ball off the cart path, the one that never came out of the bunker — and
+// the man who made it is the first to tell it. The card is fun facts, not a
+// leaderboard: a side can be four under with four net birdies and still have
+// somebody who blew up on the same hole, and leaving that out is leaving out
+// the half of it everybody enjoyed.
 //
-// The line is drawn HIGH on purpose. Three over net, after his strokes, is
-// rare enough to be funny; one over is Tuesday, and naming a man for it is the
-// thing the paragraph above refuses. It rides after the good news rather than
-// instead of it, and it never affects the number.
+// IT IS MEASURED AGAINST THE SIDE, NOT AGAINST PAR, and that distinction is
+// the whole of it — see blowUpNote. Naming a man for a bad NUMBER is what the
+// paragraph above refuses; naming him for being three clear of everybody he
+// played the hole with is a different thing, and on a hole where the rest of
+// them made birdie it is the only thing anybody wants to hear. It rides after
+// the good news rather than instead of it, and it never affects the number.
 //
 // A ball that DID NOT COUNT is still a birdie the man made, and the card says
 // so. That is a reversal, and the hole that forced it is worth writing down:
@@ -81,28 +84,65 @@ export const ballScoreNote = (ball, par) => {
 export const ballNote = (ball, par) => (ball?.counted ? ballScoreNote(ball, par) : null);
 
 // ── The other end of the card ───────────────────────────────────────
-// Three over net or worse. It never counts on a best-N hole — by definition
-// it is the ball the format threw away — so this reads every posted ball and
-// not the counted ones, and it changes nothing about the number.
-export const BLOWUP_AT = 3;
+// It is AGAINST THE SIDE, not against par, and that is the whole of it.
+//
+// It started as a hard line at three over net, and a hard line is wrong in
+// both directions at once. On a brutal par 3 where the side went +2, +2, +2,
+// +3, +3, +3, +3, +4, the man on +4 played the hole as well as anybody and got
+// shouted at for it. And on the hole this was actually reported from — seven
+// net birdies and one net DOUBLE — the interesting ball was three clear of the
+// entire side and said nothing at all, because +2 is not +3.
+//
+// So the question is how far he is from how his own side played the hole, and
+// nothing else. A man two clear of the middle of eight balls is the story
+// wherever par happens to be.
+//
+// The MEDIAN of the other balls rather than the next-worst one, because two
+// men blowing up together is MORE of a story and a next-worst test cancels it
+// out exactly then: [0,0,0,0,0,0,+3,+3] would read as no gap at all.
+export const OUTLIER_GAP = 3;
 
-const OVER_WORD = { 3: "triple", 4: "quad" };
+// A par is never a blow-up, however far clear of the side it is. Seven net
+// eagles and a net par is a hole seven men will talk about on their own.
+export const OUTLIER_FLOOR = 1;
+
+// Enough balls for "how the side played it" to mean anything — the worst one,
+// and at least two to take a middle of.
+const OUTLIER_MIN_BALLS = 3;
+
+const OVER_WORD = { 1: "bogey", 2: "double", 3: "triple", 4: "quad" };
 
 // What a golfer calls it. Past a quad nobody has a word, so it says the
 // number — spelled, because the card is read out loud.
 export const overWord = (rel) => OVER_WORD[rel] || `${countWord(rel)}-over`;
 
-// The worst ball on the hole, if it is worth a shout, and everybody level with
-// it. ONE line: a hole where three men blew up is a hole where the story is
-// the worst of them, and reading out a list of bad numbers is the thing the
+const median = (sorted) => {
+  const n = sorted.length;
+  return n % 2 ? sorted[(n - 1) / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2;
+};
+
+// The ball that stands apart from the rest of the side, and everybody level
+// with it. ONE line: a hole where three men blew up is a hole where the story
+// is the worst of them, and reading out a list of bad numbers is the thing the
 // header refuses.
+//
+// Reads every POSTED ball rather than the counted ones. On a best-N hole the
+// outlier is by definition the ball the format threw away, so asking only the
+// counted ones would find nothing, ever — and it moves no number either way.
 export const blowUpNote = (balls, par) => {
   const rels = (balls || [])
     .filter((b) => b?.net != null)
     .map((b) => ({ b, rel: netToPar(b, par) }))
-    .filter((e) => e.rel != null && e.rel >= BLOWUP_AT);
-  if (!rels.length) return null;
+    .filter((e) => e.rel != null);
+  if (rels.length < OUTLIER_MIN_BALLS) return null;
+
   const worst = Math.max(...rels.map((e) => e.rel));
+  if (worst < OUTLIER_FLOOR) return null;
+
+  const rest = rels.filter((e) => e.rel < worst).map((e) => e.rel).sort((a, b) => a - b);
+  if (rest.length < 2) return null;
+  if (worst - median(rest) < OUTLIER_GAP) return null;
+
   const who = rels.filter((e) => e.rel === worst).map((e) => e.b.name);
   return `💥 ${sayNames(who)} — net ${overWord(worst)}`;
 };
