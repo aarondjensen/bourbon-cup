@@ -120,6 +120,8 @@ const stripCell = (c, n) => buttons(c).concat([...c.querySelectorAll("div")])
 //  draws a control whose write would be refused.
 describe("who gets a reveal button", () => {
   it("gives a captain exactly one, and it is his own side's", () => {
+    // Default width, which the component reads as a television — a captain
+    // driving from a laptop has no card and so no preview step. One tap.
     const a = screen({ A: 1, B: 1 }, CAPTAIN_A);
     expect(sideButtons(a)).toHaveLength(1);
     expect(sideButtons(a)[0].textContent).toBe("REVEAL MASH BROTHERS · HOLE 2");
@@ -164,7 +166,10 @@ describe("who gets a reveal button", () => {
     setWidth(PHONE);
     const a = screen({ A: 1, B: 1 }, CAPTAIN_A);
     expect(sideButtons(a)).toHaveLength(1);
-    expect(sideButtons(a)[0].textContent).toBe("REVEAL MASH BROTHERS · HOLE 2");
+    // PREVIEW rather than REVEAL: on a phone his first tap opens his own card
+    // and the second is the reveal. The question this test asks is WHO gets a
+    // button, and he gets exactly one.
+    expect(sideButtons(a)[0].textContent).toBe("PREVIEW MASH BROTHERS · HOLE 2");
     cleanup();
     expect(sideButtons(screen({ A: 1, B: 1 }, SPECTATOR))).toEqual([]);
   });
