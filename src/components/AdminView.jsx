@@ -151,6 +151,9 @@ import {
   apiUrl,
   isNative,
 } from "../lib/platform";
+// The index is rendered through `fmtHI` wherever it is shown to a golfer: a
+// plus handicap is stored negative, and "-2.1 → -1.8" in a tooltip is a
+// number no golfer has ever written down.
 import {
   fmtHI,
 } from "../lib/ghin";
@@ -789,6 +792,20 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
   // itself; see the hydration effect and formRound below.
   const [handicapMode, setHandicapMode] = useState({}); // per round
   const [chDeltas, setChDeltas] = useState({});
+  // ── Who the last GHIN sync moved ────────────────────────────────
+  // `{ [player_id]: { from, to, delta } }`, replaced whole on every run of the
+  // batch sync (see GhinSyncButton's onDeltas). The toast can only say "3
+  // updated", and three of sixteen is a roster to scroll looking for numbers
+  // nobody wrote down — so the rows that moved carry the same ▲/▼ badge a tee
+  // change raises in the Formats tab.
+  //
+  // Deliberately NOT stored on the player document. It is a fact about the
+  // sync that just ran, and a stored one would outlive its own truth: a
+  // director who types an index by hand afterwards would leave a badge
+  // claiming a move GHIN made to a number that is no longer there. Losing it
+  // on a reload is the right trade — the answer it gives is "what did I just
+  // change", and that question is asked while the screen is still open.
+  const [ghinDeltas, setGhinDeltas] = useState({});
   const [editingPlayer, setEditingPlayer] = useState(null); // { pid, first, last, nick, hi, ov, dir }
   // ── Who each signed-in account is ───────────────────────────────
   // uid → the name that account holds in whichever edition it claimed one,
@@ -1697,7 +1714,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                     headers stay on the same columns as the rows. */}
                 <span style={{ display: "inline-flex", alignItems: "center", width: 56, flexShrink: 0 }}>
                   {team.id === "A" && (
-                    <GhinSyncButton players={realPlayers(tPlayers)} onUpdatePlayer={onUpdatePlayer} notify={notify} confirm={confirm} compact />
+                    <GhinSyncButton players={realPlayers(tPlayers)} onUpdatePlayer={onUpdatePlayer} notify={notify} confirm={confirm} onDeltas={setGhinDeltas} compact />
                   )}
                 </span>
                 <span style={{ flex: 1, minWidth: 8 }} />
@@ -1719,6 +1736,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                 const overridden = p.hi_override != null && String(p.hi_override).trim() !== "";
                 const effHI = overridden ? p.hi_override : p.handicap_index;
                 const synced = !overridden && !!p.ghin_number;
+                const moved = ghinDeltas[p.player_id];
                 return (
                   <div key={p.player_id} style={{ background: BC.card, borderRadius: 6, padding: "4px 8px", border: `1px solid ${BC.bdr}`, display: "flex", flexDirection: "row", alignItems: "center", gap: 6, boxShadow: `inset 3px 0 0 ${team.accent}${ALPHA.line}`, marginBottom: 2 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 5, flexBasis: "52%", flexGrow: 0, flexShrink: 1, minWidth: 0 }}>
@@ -1738,13 +1756,36 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                     </div>
                     {/* Index column doubles as the sync-status glyph: amber * =
                         override, blue G = synced from GHIN, plain = manual. */}
-                    <span title={overridden ? `Director override — GHIN/base index is ${p.handicap_index}` : (synced ? "Synced from GHIN" : "Manual index")}
+                    <span title={overridden ? `Director override — GHIN/base index is ${fmtHI(p.handicap_index)}` : (synced ? "Synced from GHIN" : "Manual index")}
                       style={{ display: "inline-flex", alignItems: "center", gap: 4, width: 56, flexShrink: 0 }}>
+                      {/* Through `fmtHI`, like every other index in the app: a
+                          plus handicap is STORED negative (see lib/ghin), and
+                          this column printed the stored value raw — so the one
+                          man in the field playing off a plus read "-2.1" here
+                          and "+2.1" on every screen a golfer sees. It matters
+                          more now the badge beside it names the pair he moved
+                          between. */}
                       <span style={{ fontSize: FS.small, fontWeight: overridden ? 700 : 500, color: overridden ? BC.amberInk : playerNameColor() }}>
-                        {effHI}{overridden ? "*" : ""}
+                        {fmtHI(effHI)}{overridden ? "*" : ""}
                       </span>
                       {synced && <span style={{ fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.2, color: BC.hcpBlue, border: `1px solid ${BC.hcpBlue}${ALPHA.line}`, background: BC.hcpBlue + ALPHA.tint, borderRadius: 3, padding: "1px 3px", lineHeight: 1 }}>G</span>}
                     </span>
+                    {/* What the last GHIN sync did to this man's index. Outside
+                        the 56px index column on purpose: it appears and
+                        disappears with a sync, and inside the column it would
+                        push the number off the header the whole card is
+                        aligned to. An override row still gets one — the base
+                        index moved even though the strokes did not, and that
+                        is exactly when a director wants to revisit the
+                        override. The tooltip is where that is said, because
+                        the badge is the same badge either way. */}
+                    {moved && (
+                      <span
+                        title={`GHIN sync: index ${fmtHI(moved.from)} → ${fmtHI(moved.to)}${overridden ? " — override still wins" : ""}`}
+                        style={{ display: "inline-flex", alignItems: "center", flexShrink: 0, opacity: overridden ? 0.6 : 1 }}>
+                        <ChDeltaBadge delta={moved.delta} />
+                      </span>
+                    )}
                     <span style={{ flex: 1, minWidth: 8 }} />
                     <button onClick={() => setEditingPlayer(seedPlayerForm({ pid: p.player_id, team: p.team, first: p.first_name || (p.last_name ? "" : (p.name || "")), last: p.last_name || "", nick: p.name || "", hi: String(p.handicap_index), ov: (p.hi_override != null && String(p.hi_override).trim() !== "") ? String(p.hi_override) : "", dir: playerIsDirector(memberships, p), cap: captainOf(p) === p.team, wd: p.withdrawn === true, ghin_number: p.ghin_number || null, ghin_name: p.ghin_name || null, ghin_rev_date: p.ghin_rev_date || null, ghin_synced_at: p.ghin_synced_at || null }))} style={{
                       fontSize: FS.label, padding: "2px 8px", borderRadius: 4, border: `1px solid ${BC.bdr}`, background: "transparent", color: BC.t3, cursor: "pointer", flexShrink: 0,
