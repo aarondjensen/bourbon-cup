@@ -26,6 +26,18 @@
 // and a net bogey read out to a room is a man being named for a bad hole in
 // front of the person he cost. This screen will not do that.
 //
+// AND THE OTHER END OF IT, WHICH IS NOT THE SAME THING. A net TRIPLE is not a
+// bad hole, it is a story — the ball off the cart path, the one that never came
+// out of the bunker — and the man who made it is the first to tell it. The
+// card is fun facts, not a leaderboard: a side can be four under with four net
+// birdies and still have somebody who made a net quad on the same hole, and
+// leaving that out is leaving out the half of it everybody enjoyed.
+//
+// The line is drawn HIGH on purpose. Three over net, after his strokes, is
+// rare enough to be funny; one over is Tuesday, and naming a man for it is the
+// thing the paragraph above refuses. It rides after the good news rather than
+// instead of it, and it never affects the number.
+//
 // A ball that DID NOT COUNT is still a birdie the man made, and the card says
 // so. That is a reversal, and the hole that forced it is worth writing down:
 // four balls counted, and FIVE men were at net one under. The card named four
@@ -67,6 +79,33 @@ export const ballScoreNote = (ball, par) => {
 // read: "the first net eagle of the round" is a claim about the scoring, and
 // an eagle the format threw away did not move it.
 export const ballNote = (ball, par) => (ball?.counted ? ballScoreNote(ball, par) : null);
+
+// ── The other end of the card ───────────────────────────────────────
+// Three over net or worse. It never counts on a best-N hole — by definition
+// it is the ball the format threw away — so this reads every posted ball and
+// not the counted ones, and it changes nothing about the number.
+export const BLOWUP_AT = 3;
+
+const OVER_WORD = { 3: "triple", 4: "quad" };
+
+// What a golfer calls it. Past a quad nobody has a word, so it says the
+// number — spelled, because the card is read out loud.
+export const overWord = (rel) => OVER_WORD[rel] || `${countWord(rel)}-over`;
+
+// The worst ball on the hole, if it is worth a shout, and everybody level with
+// it. ONE line: a hole where three men blew up is a hole where the story is
+// the worst of them, and reading out a list of bad numbers is the thing the
+// header refuses.
+export const blowUpNote = (balls, par) => {
+  const rels = (balls || [])
+    .filter((b) => b?.net != null)
+    .map((b) => ({ b, rel: netToPar(b, par) }))
+    .filter((e) => e.rel != null && e.rel >= BLOWUP_AT);
+  if (!rels.length) return null;
+  const worst = Math.max(...rels.map((e) => e.rel));
+  const who = rels.filter((e) => e.rel === worst).map((e) => e.b.name);
+  return `💥 ${sayNames(who)} — net ${overWord(worst)}`;
+};
 
 // "−3", "+2", "E" — the side's number against the par it took to make it. On
 // a best-N format the side's score is the sum of N balls, so the par it is
@@ -203,7 +242,14 @@ export function holeNuggets({ balls, par, countN, score, history, teamName }) {
     }
   }
 
-  return out.slice(0, 2);
+  // ── And the blow-up, which is never crowded out ──
+  // Appended AFTER the cap rather than competing for a place in it. The hole
+  // that made this necessary was four net birdies, four under, and a net quad
+  // on the same eight balls — three good-news lines, and the one everybody in
+  // the room actually wanted to hear would have lost the tie-break to every
+  // one of them. It goes last because it is the punchline.
+  const blow = blowUpNote(balls, par);
+  return blow ? [...out.slice(0, 2), blow] : out.slice(0, 2);
 }
 
 // ── The quiet hole, said a different way each time ──────────────────

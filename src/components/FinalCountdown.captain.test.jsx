@@ -110,8 +110,23 @@ const mount = (reveal, extra = {}) => render(
 // Everything below asserts against THIS element, because the leak that matters
 // is one inside the band: the television's own chips are supposed to name the
 // men on the hole the room is looking at.
-const cardOf = (c) => [...c.querySelectorAll("div")]
-  .find((d) => (d.style.border || "").startsWith("2px solid") && /^HOLE \d/.test(d.textContent)) || null;
+// By its NAME, not by its first words. The card's own "HOLE n" heading is
+// conditional now — it sits directly under the screen's, so it prints only on
+// the beat where the two differ (his side is a hole behind and he is about to
+// reveal one the room has not reached).
+const cardOf = (c) => c.querySelector('[aria-label="Captain\'s card"]') || null;
+
+// Which hole the card is ABOUT, which is the question these tests ask. Its own
+// heading when it carries one; otherwise the screen's, which is what its
+// absence means.
+const cardHole = (c) => {
+  const card = cardOf(c);
+  if (!card) return null;
+  const own = /^HOLE (\d+)/.exec(card.textContent);
+  if (own) return Number(own[1]);
+  const screenHole = /HOLE (\d+)/.exec(c.textContent);
+  return screenHole ? Number(screenHole[1]) : null;
+};
 
 const captainA = { isDirector: false, captainSide: "A" };
 
@@ -202,15 +217,16 @@ describe("who the card is for", () => {
     expect(cardOf(mount({ A: 2, B: 1 }, captainA))).toBe(null);
     cleanup();
     // The other captain, same instant, does get one — it is his turn.
-    const b = cardOf(mount({ A: 2, B: 1 }, { isDirector: false, captainSide: "B" }));
-    expect(b.textContent).toMatch(/^HOLE 2/);
+    const c = mount({ A: 2, B: 1 }, { isDirector: false, captainSide: "B" });
+    expect(cardOf(c)).toBeTruthy();
+    expect(cardHole(c)).toBe(2);
   });
 
   it("is there for both when the sides are level and either may open the hole", () => {
     setWidth(PHONE);
-    expect(cardOf(mount({ A: 5, B: 5 }, captainA)).textContent).toMatch(/^HOLE 6/);
+    expect(cardHole(mount({ A: 5, B: 5 }, captainA))).toBe(6);
     cleanup();
-    expect(cardOf(mount({ A: 5, B: 5 }, { isDirector: false, captainSide: "B" })).textContent).toMatch(/^HOLE 6/);
+    expect(cardHole(mount({ A: 5, B: 5 }, { isDirector: false, captainSide: "B" }))).toBe(6);
   });
 
   it("is absent once his side has nothing left to show", () => {
@@ -241,15 +257,21 @@ describe("which hole the card holds", () => {
     const c = mount({ A: 3, B: 3 }, captainA);
     // The room is on hole 3 — the one both captains have finished telling.
     expect(c.textContent).toContain("HOLE 3PAR 4 · HANDICAP 3");
-    // His card is on hole 4, which nobody has seen.
+    // His card is on hole 4, which nobody has seen — and because that is NOT
+    // the hole on screen, the card carries its own heading to say so. This is
+    // the beat the heading exists for.
     expect(cardOf(c).textContent).toMatch(/^HOLE 4PAR 4 · HANDICAP 4/);
+    expect(cardHole(c)).toBe(4);
   });
 
   it("follows his own counter, not the other side's", () => {
     setWidth(PHONE);
     // B has opened hole 4 and is talking; A is next on the same hole.
     const c = mount({ A: 3, B: 4 }, captainA);
-    expect(cardOf(c).textContent).toMatch(/^HOLE 4/);
+    expect(cardHole(c)).toBe(4);
+    // And it does NOT reprint the heading: hole 4 is the hole on screen, so
+    // the card would be saying it a second time forty pixels lower.
+    expect(cardOf(c).textContent).not.toMatch(/^HOLE /);
   });
 
   // The director has cleared the board and moved the room on to hole 4 with
@@ -259,7 +281,7 @@ describe("which hole the card holds", () => {
     setWidth(PHONE);
     const c = mount({ A: 3, B: 3, cursor: 4 }, captainA);
     expect(c.textContent).toContain("HOLE 4PAR 4 · HANDICAP 4");
-    expect(cardOf(c).textContent).toMatch(/^HOLE 4/);
+    expect(cardHole(c)).toBe(4);
   });
 
   // A side may be at most one hole ahead — the ceremony written down. A state
@@ -599,5 +621,52 @@ describe("a hole that is not fully posted", () => {
     // No number, and no man named off a half-posted hole.
     expect(card.textContent).not.toContain("Mash Brothers −");
     expect(card.textContent).not.toContain("Net birdie");
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  His phone is a script, not a scoreboard
+// ══════════════════════════════════════════════════════════════════
+//
+// Photographed: the middle of a captain's phone was the other side's list
+// half cut off by the scroll container, a band of nothing, and eighteen
+// ticker cells — with the one thing he is holding the phone to READ below all
+// of it. Two rows of nine is 76px of a 393px screen, and the ticker answers
+// "where are we in the round", which he can see on the television he is
+// standing next to.
+describe("what his phone spends its height on", () => {
+  // The ticker, by the one thing only it has: a row of numbered cells. Nine
+  // of them on a phone, which splits it in two, and all eighteen on a
+  // television, which does not.
+  const ticker = (c) => [...c.querySelectorAll("div")]
+    .find((d) => (d.children.length === 9 || d.children.length === 18)
+      && [...d.children].every((x) => /^\d+$/.test(x.textContent || "")));
+
+  it("drops the hole ticker while he has a card to read", () => {
+    setWidth(PHONE);
+    expect(ticker(mount({ A: 3, B: 3 }, captainA))).toBeFalsy();
+  });
+
+  it("keeps it for everybody else", () => {
+    setWidth(PHONE);
+    // A player watching on his own phone: no card, so the ticker is the only
+    // thing telling him where the round is.
+    expect(ticker(mount({ A: 3, B: 3 }, { isDirector: false, captainSide: null }))).toBeTruthy();
+    cleanup();
+    // And the television, which is where it belongs most.
+    setWidth(TV);
+    expect(ticker(mount({ A: 3, B: 3 }, captainA))).toBeTruthy();
+  });
+
+  it("puts the card above the two lists, not under them", () => {
+    setWidth(PHONE);
+    const c = mount({ A: 3, B: 3 }, captainA);
+    const card = cardOf(c);
+    const list = [...c.querySelectorAll("div")].find((d) => /^Mash Brothers/.test(d.textContent)
+      && d.style.overflow === "hidden" && d.style.minWidth === "0px");
+    expect(card).toBeTruthy();
+    expect(list).toBeTruthy();
+    // DOCUMENT_POSITION_FOLLOWING: the list comes after the card.
+    expect(!!(card.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
   });
 });

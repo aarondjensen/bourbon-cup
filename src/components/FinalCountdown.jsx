@@ -1151,7 +1151,15 @@ export function FinalCountdown({
     </div>
   );
 
-  const strip = (
+  // ── NOT ON THE PHONE OF A CAPTAIN WHO IS UP ──────────────────────
+  // Eighteen cells in two rows is 76px of a 393px screen, and for the man
+  // holding the card it is the one thing on it he has no use for: the ticker
+  // answers "where are we in the round", which he can see on the television he
+  // is standing next to, and it sat directly between his own side's numbers
+  // and the script he is about to read off them. His phone is a script, not a
+  // scoreboard. Everybody else's — the television, a player watching, a
+  // director driving — keeps it.
+  const strip = (compact && myPrompt) ? null : (
     <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: compact ? 4 : 0 }}>
       {compact
         ? <>{stripRow(0, 9)}{stripRow(9, HOLE_COUNT)}</>
@@ -1217,7 +1225,11 @@ export function FinalCountdown({
   // Dave and John, AND the first eagle of the round…") and the rule between
   // them was a pause he does not take.
   const captainBand = myPrompt ? (
-    <div style={{
+    // Named, because it is one region among several on a screen that is
+    // otherwise all numbers — and because it is no longer the element that
+    // starts with "HOLE n". It used to be identified by that, here and in the
+    // tests, and the heading is conditional now (see below).
+    <div aria-label="Captain's card" style={{
       flexShrink: 0, padding: "clamp(6px, 0.9vw, 18px) clamp(9px, 1.2vw, 24px)",
       borderRadius: "clamp(6px, 0.8vw, 16px)",
       background: `${teamColor(captainSide)}${ALPHA.wash}`,
@@ -1233,25 +1245,38 @@ export function FinalCountdown({
           of his mouth, and the one thing on the card he has to be sure of at a
           glance — in the same weight and the same colour as the two facts
           about it. WHICH HOLE is the heading; par and stroke index are the
-          detail under it. */}
-      <div style={{ fontSize: T.cardHole, fontWeight: 800, letterSpacing: "0.08em", color: BC.t1, lineHeight: 1.05 }}>
-        HOLE {myPrompt.hole}
-      </div>
-      <div style={{ fontSize: T.cardLabel, fontWeight: 800, letterSpacing: "0.16em", color: BC.t3, marginTop: "0.15em" }}>
-        {[
-          myPrompt.par ? `PAR ${myPrompt.par}` : null,
-          // The stroke index too. It is why a man is getting a shot on this
-          // hole and not the last one, which is the question the room asks the
-          // moment a net eagle is announced — and the card is the only thing
-          // in his hand that can answer it.
-          myPrompt.si ? `HANDICAP ${myPrompt.si}` : null,
-        ].filter(Boolean).join(" · ")}
-      </div>
+          detail under it.
+
+          ── AND ONLY WHEN IT IS NOT THE ONE ABOVE IT ──
+          The card sits directly under the screen's own hole header now, so on
+          the ordinary hole this was "HOLE 6 · PAR 3 · HANDICAP 18" printed
+          twice within 40px, the second copy smaller than the first. It earns
+          its place on exactly the beat where the two genuinely differ: his
+          side is a hole behind and he is about to reveal 7 while the room is
+          still looking at 6. That is news, and on that beat it is the most
+          important thing on his phone. */}
+      {myPrompt.hole !== hole && (
+        <>
+          <div style={{ fontSize: T.cardHole, fontWeight: 800, letterSpacing: "0.08em", color: BC.t1, lineHeight: 1.05 }}>
+            HOLE {myPrompt.hole}
+          </div>
+          <div style={{ fontSize: T.cardLabel, fontWeight: 800, letterSpacing: "0.16em", color: BC.t3, marginTop: "0.15em", marginBottom: "0.25em" }}>
+            {[
+              myPrompt.par ? `PAR ${myPrompt.par}` : null,
+              // The stroke index too. It is why a man is getting a shot on this
+              // hole and not the last one, which is the question the room asks
+              // the moment a net eagle is announced — and the card is the only
+              // thing in his hand that can answer it.
+              myPrompt.si ? `HANDICAP ${myPrompt.si}` : null,
+            ].filter(Boolean).join(" · ")}
+          </div>
+        </>
+      )}
 
       {/* The contributions, then the fun of them. Still told apart by colour —
           one is this hole, the other is the round it sits in — but read as one
           run of lines, because that is how they are spoken. */}
-      <div style={{ marginTop: "0.35em", display: "flex", flexDirection: "column", gap: "0.2em" }}>
+      <div style={{ marginTop: myPrompt.hole !== hole ? "0.35em" : 0, display: "flex", flexDirection: "column", gap: "0.2em" }}>
         {myPrompt.notes.map((n) => (
           <span key={n} style={{ fontSize: T.cardLine, fontWeight: 700, color: BC.t1, lineHeight: 1.3 }}>{n}</span>
         ))}
@@ -1506,6 +1531,19 @@ export function FinalCountdown({
         )}
       </div>
 
+      {/* ── The captain's script, before the numbers it describes ──
+          It used to be the LAST thing on his phone, under the two side
+          columns and under the hole ticker, which put the one thing he is
+          holding the phone to read below a scroll and 76px of cells. The
+          middle of the screen was the other side's list, half cut off by the
+          scroll container, and a band of nothing.
+
+          It is null on the television by construction (see myPrompt), so this
+          changes nothing there. On his phone it now sits directly under the
+          hole header, where the first thing under "HOLE 6" is what he says
+          about hole 6; the two lists keep the room below it and scroll. */}
+      {captainBand}
+
       {/* Side by side on a television, STACKED on a phone. Four names across
           half of 393px is "CHRI…"; across the whole of it they fit, which is
           the entire argument. The "vs" between them is a television flourish
@@ -1546,7 +1584,6 @@ export function FinalCountdown({
       )}
 
       {strip}
-      {captainBand}
       {controls}
     </>
   );

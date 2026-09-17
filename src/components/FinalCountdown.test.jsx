@@ -714,11 +714,20 @@ describe("a captain's phone", () => {
     expect(t).toContain("Net birdie — Paul W");
   });
 
-  // A net bogey is never read out — see lib/countdownPrompt for why.
+  // A net bogey is never read out — see lib/countdownPrompt for why. A net
+  // TRIPLE is, and that is a different thing: three over after his strokes is
+  // a story, one over is Tuesday.
+  //
+  // Read off the CARD rather than off a slice of the whole screen. The card
+  // sits above the side columns now, so slicing forward from its first line
+  // swept in both eight-man lists — where every name on the side appears by
+  // design, and the assertion passed for the wrong reason the moment it moved.
   it("never names the man who made the bogey", () => {
-    const t = screen({ A: 1, B: 1 }, captain).textContent;
-    const band = t.slice(t.indexOf("PAR 4 · HANDICAP 2"));
-    expect(band).not.toContain("Tim C");
+    const c = screen({ A: 1, B: 1 }, captain);
+    const card = c.querySelector('[aria-label="Captain\'s card"]');
+    expect(card).toBeTruthy();
+    expect(card.textContent).toContain("Net birdie — Paul W");
+    expect(card.textContent).not.toContain("Tim C");
   });
 
   it("names his side rather than calling it his", () => {
