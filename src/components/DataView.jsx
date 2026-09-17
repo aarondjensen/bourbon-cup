@@ -346,6 +346,45 @@ function CupRecords({ data }) {
   );
 }
 
+// ── Strokes gained, as a cup record ───────────────────────────────
+// The team board is NET, and that is the interesting choice rather than an
+// oversight. The two sides are drafted to balance on handicap, so a gross
+// board would mostly report which captain got the better draft; net asks
+// which side played above ITSELF, which is what a team result is about.
+//
+// Per man, because a side can field seven own-ball cards against the other's
+// eight — a total would hand it the difference and call it golf.
+function TeamStrokesGained({ data, teams }) {
+  const r = data.records;
+  const rows = r.sgTeamRounds || [];
+  if (!rows.length && !r.tightestField) return null;
+  return (
+    <Section label="Strokes gained" note="VS FIELD">
+      {(r.tightestField || r.widestField) && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: rows.length ? 14 : 0 }}>
+          {/* How far apart the field was, in strokes a round. A low number is
+              a cup where the handicaps did their job; a high one is a week
+              somebody ran away with. */}
+          {r.tightestField && <Stat label="Tightest field" value={r.tightestField.year} sub={`±${r.tightestField.spread.toFixed(1)} A ROUND`} color={BC.green} />}
+          {r.widestField && <Stat label="Widest field" value={r.widestField.year} sub={`±${r.widestField.spread.toFixed(1)} A ROUND`} color={BC.amberInk} />}
+        </div>
+      )}
+      <RecordList label="BEST TEAM ROUND · NET, PER MAN" rows={rows} render={(o) => (
+        <>
+          <span style={{ width: 34, color: BC.gold, fontWeight: 700 }}>{o.year}</span>
+          <span style={{
+            flex: 1, minWidth: 0, fontWeight: 700, letterSpacing: 0.3,
+            color: editionAccent(data.edition(o.year), o.side, teams),
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          }}>{o.team || (o.side === "A" ? teams.A.name : teams.B.name)}</span>
+          <span style={{ width: 48, textAlign: "right", fontWeight: 800, color: sgColor(o.per) }}>{fmtSg(o.per)}</span>
+          <span style={{ width: 28, textAlign: "right", color: BC.t3 }}>R{o.round}</span>
+        </>
+      )} />
+    </Section>
+  );
+}
+
 // ── Where the cup turns ───────────────────────────────────────────
 // Measured from a fixed side of each year so a swing is a swing whichever
 // team was listed first. It answers the oldest argument in the group text:
@@ -559,6 +598,7 @@ function TournamentHalf({ data, editions, activeYear, teams }) {
         ))}
       </div>
       <RoundDrama data={data} />
+      <TeamStrokesGained data={data} teams={teams} />
       <Passport data={data} />
       <CupTotals data={data} />
     </div>
@@ -857,12 +897,24 @@ function StrokesGained({ data, note = "" }) {
   // to it: the reader picks, and the section is half as long.
   const perRound = net ? sg.net : sg.gross;
   const bestRound = net ? sg.bestNet : sg.best;
+  const worstRound = net ? sg.worstNet : sg.worst;
+  const weeks = net ? sg.weeksNet : sg.weeks;
   if (!(perRound.length || bestRound.length)) return null;
   const rate = (key, rounds) => (p) => (
     <>
       <span style={{ flex: 1, minWidth: 0, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
       <span style={{ width: 48, textAlign: "right", fontWeight: 800, color: sgColor(p[key]) }}>{fmtSg(p[key])}</span>
       <span style={{ width: 52, textAlign: "right", color: BC.t3 }}>{p[rounds]} RDS</span>
+    </>
+  );
+  // One shape for every board that ranks a single performance: the man, what
+  // he gained, and where. The right-hand column is what changes — a round
+  // names its day, a week names how many rounds it was.
+  const one = (where, w = 52) => (r) => (
+    <>
+      <span style={{ flex: 1, minWidth: 0, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</span>
+      <span style={{ width: 48, textAlign: "right", fontWeight: 800, color: sgColor(r.sg) }}>{fmtSg(r.sg)}</span>
+      <span style={{ width: w, textAlign: "right", color: BC.t3 }}>{where(r)}</span>
     </>
   );
 
@@ -879,13 +931,16 @@ function StrokesGained({ data, note = "" }) {
         label="PER ROUND · OWN BALL" rows={perRound}
         render={net ? rate("sgNetPer", "sgNets") : rate("sg", "sgRounds")}
       />
-      <RecordList label="BEST ROUND · OWN BALL" rows={bestRound} render={(r) => (
-        <>
-          <span style={{ flex: 1, minWidth: 0, color: BC.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</span>
-          <span style={{ width: 48, textAlign: "right", fontWeight: 800, color: sgColor(r.sg) }}>{fmtSg(r.sg)}</span>
-          <span style={{ width: 52, textAlign: "right", color: BC.t3 }}>{r.year} R{r.round}</span>
-        </>
-      )} />
+      <RecordList label="BEST ROUND · OWN BALL" rows={bestRound} render={one((r) => `${r.year} R${r.round}`)} />
+      {/* The other end of the same list, and the reason it is here: a board
+          of good days alone is a record that can only ever congratulate, and
+          the cold streaks already settled that this cup takes the other kind
+          in good part. */}
+      <RecordList label="WORST ROUND · OWN BALL" rows={worstRound} render={one((r) => `${r.year} R${r.round}`)} />
+      {/* A whole cup of it, totalled rather than averaged — "he took a
+          hundred shots off the field that year" is the claim, and every man
+          inside one cup played the same rounds. */}
+      <RecordList label="BEST WEEK · OWN BALL" rows={weeks} render={one((r) => `${r.year} · ${r.rounds} RDS`, 74)} />
     </Section>
   );
 }
