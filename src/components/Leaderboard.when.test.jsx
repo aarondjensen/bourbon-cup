@@ -87,3 +87,39 @@ describe("a round that has not been played", () => {
     expect(board({ tRounds: bare })).toContain("TBD");
   });
 });
+
+// ── And which tee, when the field is on one ────────────────────────
+// "Which tees are we playing?" is the third question in the group text and it
+// is settled weeks before the draw. The slot is a line of its own and it was
+// two facts wide, so answering it costs the board nothing.
+describe("a round the whole field plays off one tee", () => {
+  // The switch is a property of the ROUND (AdminView's One tee), and the tee
+  // itself comes off the assignments it writes for every player.
+  const oneTee = (round, tee) => ({
+    tRounds: tRounds.map((t) => (t.round_number === round ? { ...t, uniform_tee: true } : t)),
+    teeAssignments: { [round]: Object.fromEntries(tPlayers.map((p) => [p.player_id, tee])) },
+  });
+
+  it("names the tee beside the first tee time", () => {
+    const { tRounds: trs, teeAssignments } = oneTee(2, "Blue");
+    expect(board({ tRounds: trs, teeAssignments })).toContain("SUNDAY · 9:00 AM · BLUE");
+  });
+
+  it("leaves a round on Any tee saying the day and the time alone", () => {
+    // Round 2 is the one switched on above; round 4 is not, and a board where
+    // one round answers is a board where the others must not.
+    const { tRounds: trs, teeAssignments } = oneTee(2, "Blue");
+    const text = board({ tRounds: trs, teeAssignments });
+    expect(text).toContain("SATURDAY · 7:50 AM");
+    expect(text).not.toContain("SATURDAY · 7:50 AM · ");
+  });
+
+  it("adds nothing to a round that is being played", () => {
+    // Round 1 has scores, so the slot holds them — the tee box never displaces
+    // a score.
+    const { tRounds: trs, teeAssignments } = oneTee(1, "Blue");
+    const text = board({ tRounds: trs, teeAssignments });
+    expect(text).toContain("3–0");
+    expect(text).not.toContain("BLUE");
+  });
+});
