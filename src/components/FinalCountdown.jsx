@@ -128,7 +128,14 @@ const T = {
   // third score.
   cupGoal:  `clamp(17px, ${vwh(2.3)}, 48px)`,
   hole:     `clamp(20px, ${vwh(3.0)}, 62px)`,
-  terms:    `clamp(9px,  ${vwh(1.2)}, 24px)`,
+  // The two detail lines under the hole number, and they are capped on HEIGHT
+  // harder than anything else here — 1.55vh against the 2.16 `vwh` would give
+  // them. Two lines at the old size cost 66px of a 1080p screen, more than the
+  // hole number itself, for the par, the stroke index, the counting rule and
+  // the hole's value: four facts nobody reads from twelve feet until they are
+  // looking for one of them. Every pixel of it comes off the eight rows below,
+  // which is what pushed the card past both headers.
+  terms:    "clamp(9px,  min(1.2vw, 1.55vh), 24px)",
   // The side's own number is capped HARDER than the rest — 9.7vh against the
   // 10.2 `vwh` would give it — because it is the single tallest thing between
   // the hole header and the strip, and the eight rows under it are what it
@@ -505,13 +512,37 @@ function SideColumn({ tid, teamName, score, balls, par, countN, compact, reveale
       // side, so it may not spill across the screen.
       position: "relative", overflow: "hidden",
       minWidth: 0, display: "flex", flexDirection: "column",
+      // ── The card is bounded by the stage, and centres INSIDE it ──
+      // It used to be content-height, centred in the stage by the row's
+      // `alignItems`. Centring a box that is TALLER than its container pushes
+      // it out of both ends equally, and that is exactly what the television
+      // showed: the tinted card and its border riding up through "BEST 4 OF 8"
+      // and down over the hole ticker, 17px each way at 1080p and 20px at 720p.
+      // Nothing clipped it, because the stage has to stay `visible` for the
+      // trophy behind it.
+      //
+      // Stretched, the card is the stage's height exactly, so it cannot reach
+      // either header however tall its contents get — the `overflow: hidden`
+      // already here for the confetti is what makes that a guarantee rather
+      // than a hope. `justifyContent` then does the centring that
+      // `alignItems` used to, from the inside, where there is a floor and a
+      // ceiling. The type below is sized so it fits with room to spare; this
+      // is what happens when a window is shorter than anything anticipated.
+      justifyContent: "center",
       alignItems: "center", gap: compact ? 4 : "clamp(2px, min(0.7vw, 1.1vh), 14px)",
       // The bottom is deliberately deeper than the top: the eighth name sits
       // against it, and the top edge has the team's own name above it doing
       // the same job.
+      //
+      // Both are capped on HEIGHT at 1vh now that the card spans the whole
+      // stage. This is the card's own frame rather than anything anybody
+      // reads, and it is the right place to find the last few pixels a short
+      // window needs — the alternative was the row padding, and that was asked
+      // for (see BallRow) because the eighth name was sitting on the card's
+      // edge. Taking it back would undo the fix and land in the same place.
       padding: compact
         ? "6px 10px 10px"
-        : `clamp(3px, min(1vw, 1.6vh), 20px) clamp(4px, 0.8vw, 16px) clamp(6px, ${vwh(0.8)}, 20px)`,
+        : `clamp(3px, min(1vw, 1vh), 20px) clamp(4px, 0.8vw, 16px) clamp(6px, min(0.8vw, 1vh), 20px)`,
       borderRadius: "clamp(8px, 1vw, 20px)",
       background: won && revealed ? `${col}${ALPHA.wash}` : "transparent",
       border: `2px solid ${won && revealed ? `${col}${ALPHA.line}` : "transparent"}`,
@@ -885,7 +916,16 @@ export function FinalCountdown({
       style={{
         position: "fixed", inset: 0, zIndex: 4000, background: BC.bg, color: BC.t1,
         fontFamily: FONT, display: "flex", flexDirection: "column",
-        padding: `clamp(8px, ${vwh(1.2)}, 26px)`, gap: `clamp(6px, ${vwh(0.9)}, 18px)`,
+        // ── The air between the blocks, capped on HEIGHT ──
+        // `vwh` caps at 1.8× the vw figure, which is a no-op at 16:9 — so
+        // these two were effectively sized on width alone, and five gaps plus
+        // two paddings is 89px of a 720p screen spent on nothing anybody
+        // reads. It is the first place to look when the page is short, and it
+        // is where the room for the eight rows came from: everything else on
+        // this screen is a number or a name, and the card had been spilling
+        // through both headers to find the same pixels.
+        padding: "clamp(8px, min(1.2vw, 1.4vh), 26px)",
+        gap: "clamp(6px, min(0.9vw, 1.1vh), 18px)",
         userSelect: "none", overflow: "hidden",
       }}>
       {children}
@@ -1474,7 +1514,11 @@ export function FinalCountdown({
         {
           display: "flex", gap: compact ? 10 : "clamp(6px, 1vw, 22px)",
           flexDirection: compact ? "column" : "row",
-          alignItems: compact ? "stretch" : "center",
+          // Stretch on BOTH, and on the television that is the fix for the
+          // card spilling into the two headers — see the note on SideColumn's
+          // own justifyContent. A phone stacks them and scrolls, so there the
+          // word means the width.
+          alignItems: "stretch",
           justifyContent: compact ? "flex-start" : "center",
           overflowY: compact ? "auto" : "visible",
           overscrollBehavior: "contain",

@@ -207,7 +207,8 @@ describe("a hole half turned over", () => {
     expect(after(b, hole)).toBe(true);
     // And well clear of the rows it used to print through.
     const rows = [...c.querySelectorAll("div")]
-      .filter(d => d.style.borderRightColor === "transparent" && d.style.justifyContent === "center");
+      .filter(d => d.style.borderRightColor === "transparent" && d.style.justifyContent === "center"
+        && d.style.flexDirection !== "column");
     expect(after(b, rows[0])).toBe(true);
   });
 
@@ -351,7 +352,8 @@ describe("a man's ball", () => {
     // cannot read — and on this format "you didn't count" is half the
     // conversation in the room. The tint and the rail say who made the number.
     const balls = (c) => [...c.querySelectorAll("div")]
-      .filter(d => d.style.borderRightColor === "transparent" && d.style.justifyContent === "center");
+      .filter(d => d.style.borderRightColor === "transparent" && d.style.justifyContent === "center"
+        && d.style.flexDirection !== "column");
     setWidth(TV);
     const tv = balls(screen({ A: 1, B: 1 }));
     expect(tv.length).toBe(6);
@@ -378,7 +380,8 @@ describe("a man's ball", () => {
     // No grid anywhere: eight men, eight rows, on both screens.
     expect([...c.querySelectorAll("div")].filter(d => d.style.display === "grid")).toEqual([]);
     const rows = [...c.querySelectorAll("div")]
-      .filter(d => d.style.borderRightColor === "transparent" && d.style.justifyContent === "center");
+      .filter(d => d.style.borderRightColor === "transparent" && d.style.justifyContent === "center"
+        && d.style.flexDirection !== "column");
     expect(rows.length).toBe(6);
     rows.forEach((row) => {
       const [name, dots, score] = [...row.children];
@@ -410,6 +413,46 @@ describe("a man's ball", () => {
     const t = header(screen({ A: 1, B: 1 }));
     expect(t.style.flexDirection).toBe(p.style.flexDirection);
     expect(t.style.alignItems).toBe(p.style.alignItems);
+  });
+
+  // ══════════════════════════════════════════════════════════════
+  //  The card is BOUNDED by the stage, not centred in it
+  // ══════════════════════════════════════════════════════════════
+  //
+  // Photographed off the television: the winning side's tinted card and its
+  // border riding up through "BEST 4 OF 8 · 1 POINT" and down over the hole
+  // ticker. 17px each way at 1080p, 20px at 720p, and symmetric — which is
+  // the tell. The card was content-height and the stage centred it with
+  // `alignItems`, so a card taller than its container came out of BOTH ends
+  // by half the overflow each.
+  //
+  // jsdom lays nothing out, so there is no height here to measure. What is
+  // testable is the mechanism, and it is the whole of the fix: the row
+  // STRETCHES its cards so each one is exactly the stage's height, the card
+  // centres its own contents from the inside where there is a floor and a
+  // ceiling, and its `overflow: hidden` is what turns that into a guarantee.
+  // Put `alignItems: center` back on the row and the spill returns.
+  it("stretches the two cards to the stage rather than centring them in it", () => {
+    // `minWidth: 0` tells the card from the SHELL, which also clips and is
+    // also a column, and whose text also starts with the team's name because
+    // the cup band across the top names it too.
+    const card = (c) => [...c.querySelectorAll("div")]
+      .find(d => d.style.overflow === "hidden" && d.style.flexDirection === "column"
+        && d.style.minWidth === "0px" && /^Mash Brothers/.test(d.textContent));
+    setWidth(TV);
+    const c = screen({ A: 1, B: 1 });
+    const tv = card(c);
+    expect(tv).toBeTruthy();
+    // Centred from the INSIDE. This is what `alignItems` on the row used to
+    // do from the outside, and the difference is that this one has a floor.
+    expect(tv.style.justifyContent).toBe("center");
+    // And the clip that makes it a bound rather than a preference.
+    expect(tv.style.overflow).toBe("hidden");
+    // The row that holds them stretches on both screens — on a phone that
+    // word means the width, which is why it is safe to share.
+    const row = tv.parentElement;
+    expect(row.style.alignItems).toBe("stretch");
+    expect(row.style.alignItems).not.toBe("center");
   });
 });
 
