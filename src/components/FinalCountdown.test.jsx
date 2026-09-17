@@ -94,7 +94,10 @@ describe("a hole half turned over", () => {
     expect(t).toContain("HOLE 1");
     expect(t).toContain("Paul W");
     expect(t).not.toContain("Andy H");
-    expect(t).toContain("SHOT CALLERS TO TELL IT");
+    // Exactly one side is waiting. The label no longer names the team — it
+    // sits under the team's own name in the team's own colour — so what is
+    // checked is which side is BLANK, plus the count.
+    expect(t.split("TO REVEAL").length - 1).toBe(1);
   });
 
   // The one thing the screen must never do early. Both sides' numbers are in
@@ -473,7 +476,8 @@ describe("the side's number", () => {
 
   it("says nothing for a side whose captain has not spoken", () => {
     const t = screen({ A: 1, B: 0 }).textContent;
-    expect(t).toContain("SHOT CALLERS TO TELL IT");
+    expect(t).toContain("TO REVEAL");
+    expect(t.split("TO REVEAL").length - 1).toBe(1);
   });
 });
 
@@ -796,7 +800,7 @@ describe("a captain's phone", () => {
     expect(at({ A: 1, B: 1 })).not.toContain("First net eagle");
     cleanup();
     // Announcing hole 3, which IS the eagle — now it is his to call.
-    expect(at({ A: 2, B: 2 })).toContain("First net eagle of the round — Paul W");
+    expect(at({ A: 2, B: 2 })).toContain("First net eagle so far — Paul W");
   });
 
   it("says nothing while the other captain is talking", () => {
@@ -994,8 +998,8 @@ describe("the hole arrows", () => {
     // neither side has been told.
     const t = screen({ A: 7, B: 7, cursor: 8 }).textContent;
     expect(t).toContain("HOLE 8");
-    expect(t).toContain("MASH BROTHERS TO TELL IT");
-    expect(t).toContain("SHOT CALLERS TO TELL IT");
+    // Both of them, which is what a cleared board is.
+    expect(t.split("TO REVEAL").length - 1).toBe(2);
     expect(t).not.toContain("Paul W");
     expect(t).not.toContain("Andy H");
   });

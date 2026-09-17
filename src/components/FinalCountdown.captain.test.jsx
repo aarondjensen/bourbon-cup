@@ -156,7 +156,7 @@ describe("the card never reaches the television", () => {
     expect(t).not.toContain("Net birdie");
     expect(t).not.toContain("in a row");
     expect(t).not.toContain("First net eagle");
-    expect(t).not.toContain("best hole of the round");
+    expect(t).not.toContain("best hole so far");
     // And nothing about hole 5, which is the hole the card would have held.
     expect(t).not.toContain("HANDICAP 5");
   });
@@ -334,7 +334,7 @@ describe("no unrevealed hole reaches the card", () => {
     const read = reader(two);
     const card = cardOf(mount({ A: 1, B: 1 }, { ...captainA, ownResult: r, ownGetScore: read }));
     expect(card.textContent).toMatch(/^HOLE 2/);
-    expect(card.textContent).toContain("First net eagle of the round — Paul W");
+    expect(card.textContent).toContain("First net eagle so far — Paul W");
     expect(card.textContent).not.toContain("Zephyrus");
   });
 
@@ -349,7 +349,7 @@ describe("no unrevealed hole reaches the card", () => {
     const read = reader(two);
     const card = cardOf(mount({ A: 1, B: 1 }, { ...captainA, ownResult: r, ownGetScore: read }));
     expect(card.textContent).toContain("Mash Brothers −2");
-    expect(card.textContent).toContain("Mash Brothers' best hole of the round");
+    expect(card.textContent).toContain("Mash Brothers' best hole so far");
   });
 
   // The mirror, and the half that proves the card is not simply mute. Walk the
@@ -389,7 +389,7 @@ describe("no unrevealed hole reaches the card", () => {
     // One tap later it is the hole in hand, and it is his to call.
     const after = cardOf(mount({ A: 2, B: 2 }, { ...captainA, ownResult: r, ownGetScore: read }));
     expect(after.textContent).toMatch(/^HOLE 3/);
-    expect(after.textContent).toContain("First net eagle of the round — Zephyrus Quill");
+    expect(after.textContent).toContain("First net eagle so far — Zephyrus Quill");
   });
 
   // ── The strongest form of the invariant ──────────────────────────
@@ -505,7 +505,7 @@ describe("the window, at every point in the reveal", () => {
       // The first hole has nothing behind it and gets no star; every one after
       // it is the best of what the room has seen.
       if (k === 0) expect(text).not.toContain("best hole");
-      else expect(text).toContain("Mash Brothers' best hole of the round");
+      else expect(text).toContain("Mash Brothers' best hole so far");
       cleanup();
     }
   });

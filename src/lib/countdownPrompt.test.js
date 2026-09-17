@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { holePrompt, holeNuggets, possessive, ballNote, relToPar, fmtRel, sayNames, EAGLE, BIRDIE } from "./countdownPrompt";
+import { holePrompt, holeNuggets, possessive, ballNote, relToPar, fmtRel, sayNames, quietLine, QUIET_LINES, EAGLE, BIRDIE } from "./countdownPrompt";
 
 // What the captain reads out to the room before he taps. The whole test of
 // this module is whether it names the right men — a net eagle nobody
@@ -116,7 +116,9 @@ describe("holePrompt", () => {
     const p = holePrompt({ balls, par: 3, countN: 2, score: 6 });
     expect(p.ready).toBe(true);
     expect(p.headline).toBe("YOUR SIDE E");
-    expect(p.notes).toEqual(["Nothing to shout about — read the number"]);
+    // The first of the five. Which one is a function of how many quiet holes
+    // have already gone by, and with no history behind it this is hole one.
+    expect(p.notes).toEqual([QUIET_LINES[0]]);
   });
 
   // He is standing in front of the room. "The group hasn't finished posting"
@@ -223,7 +225,7 @@ describe("nuggets", () => {
 
   it("calls the first net eagle of the round", () => {
     const now = hole([["Paul W", 2], ["Dave K", 4]]);
-    expect(holeNuggets({ ...now, history: [] }).join(" ")).toContain("First net eagle of the round — Paul W");
+    expect(holeNuggets({ ...now, history: [] }).join(" ")).toContain("First net eagle so far — Paul W");
   });
 
   it("only calls it once", () => {
@@ -271,11 +273,11 @@ describe("nuggets", () => {
     expect(holeNuggets({ ...missed, history: [] })).toEqual([]);
   });
 
-  it("calls the best hole of the round so far", () => {
+  it("calls the best hole so far so far", () => {
     const past = [hole([["Tim C", 4], ["Ben T", 4]]), hole([["Tim C", 4], ["Ben T", 3]])];
     const now = hole([["Tim C", 3], ["Ben T", 3]]);
     expect(holeNuggets({ ...now, history: past, teamName: "Mash Brothers" }).join(" "))
-      .toContain("Mash Brothers' best hole of the round");
+      .toContain("Mash Brothers' best hole so far");
   });
 
   it("does not call a level hole anybody's best", () => {
@@ -347,7 +349,7 @@ describe("the nugget window, from both sides", () => {
       // window, and there is no argument the module can take that would let it
       // in. The caller decides; see FinalCountdown's `history`.
       const out = holeNuggets({ ...now, history: past, teamName: "Irons" });
-      expect(out.join(" ")).toContain("First net eagle of the round — Paul W");
+      expect(out.join(" ")).toContain("First net eagle so far — Paul W");
     });
 
     // The mirror, and the half that proves the window is READ. Same current
@@ -468,14 +470,14 @@ describe("the nugget window, from both sides", () => {
     });
   });
 
-  describe("the best hole of the round", () => {
+  describe("the best hole so far", () => {
     const level = mk([["Tim C", 4], ["Ben T", 4]]);      // E
     const oneUnder = mk([["Tim C", 4], ["Ben T", 3]]);   // −1
     const twoUnder = mk([["Tim C", 3], ["Ben T", 3]]);   // −2
 
     it("fires only when it beats every hole the room has watched", () => {
       expect(holeNuggets({ ...twoUnder, history: [level, oneUnder], teamName: "Irons" }).join(" "))
-        .toContain("Irons' best hole of the round");
+        .toContain("Irons' best hole so far");
     });
 
     // The mirror: the same −2 hole, with a −2 already turned over. Equal is
@@ -678,7 +680,7 @@ describe("holePrompt, when the hole is not ready", () => {
     const p = holePrompt({ balls: [b("Tim C", 4)], par: undefined, countN: 1, score: 4, teamName: "Irons" });
     expect(p.ready).toBe(true);
     expect(p.headline).toBe("Irons —");
-    expect(p.notes).toEqual(["Nothing to shout about — read the number"]);
+    expect(p.notes).toEqual([QUIET_LINES[0]]);
   });
 
   it("reports how many made the number and how many were needed", () => {
@@ -706,5 +708,92 @@ describe("possessive, on a name a director typed", () => {
     expect(possessive("   ")).toBe("");
     expect(possessive(null)).toBe("");
     expect(possessive(undefined)).toBe("");
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  The quiet hole, said a different way each time
+// ══════════════════════════════════════════════════════════════════
+//
+// Four men par a par 3 and there is nothing to name. Saying so is right — an
+// empty panel reads as a bug — but it was ONE string, and a captain who hit
+// two flat holes in an evening read the identical sentence out twice. On a
+// screen whose whole job is to be spoken aloud that does not land as
+// consistency; it lands as a stuck app.
+describe("the quiet line", () => {
+  // A hole in the window, in the shape holePrompt's caller builds them.
+  const quiet = (n = 2) => ({
+    balls: Array.from({ length: n }, (_, i) => ({ pid: `q${i}`, name: `Q${i}`, net: 4, counted: true })),
+    par: 4, countN: n, score: 4 * n,
+  });
+  const loud = () => ({
+    balls: [{ pid: "p", name: "Paul W", net: 3, counted: true }],
+    par: 4, countN: 1, score: 3,
+  });
+  const say = (history) => holePrompt({ ...quiet(), history }).notes[0];
+
+  it("moves on each time the side has a flat hole", () => {
+    const seen = [0, 1, 2, 3, 4].map((n) => say(Array.from({ length: n }, quiet)));
+    expect(seen).toEqual(QUIET_LINES);
+    // Every one of them different, which is the whole point.
+    expect(new Set(seen).size).toBe(QUIET_LINES.length);
+  });
+
+  it("comes back round rather than running out", () => {
+    // Five is unusual and six would be a strange evening, but a sixth flat
+    // hole must not read "undefined".
+    expect(say(Array.from({ length: 5 }, quiet))).toBe(QUIET_LINES[0]);
+    expect(say(Array.from({ length: 7 }, quiet))).toBe(QUIET_LINES[2]);
+  });
+
+  it("counts the flat holes and not the holes", () => {
+    // Three holes behind him, one of them flat: this is his SECOND quiet
+    // hole, whatever hole number it happens to be.
+    expect(say([loud(), quiet(), loud()])).toBe(QUIET_LINES[1]);
+  });
+
+  it("does not let an unplayed hole advance it", () => {
+    // A hole nobody posted is not quiet, it is unplayed — and the window can
+    // hold one when a group is still on the course.
+    const blank = { balls: [], par: 4, countN: 4, score: null };
+    expect(say([blank, blank])).toBe(QUIET_LINES[0]);
+  });
+
+  it("is the same words every time that hole is looked at", () => {
+    // A director stepping the room back a hole and forward again must not
+    // hand the captain a different script for a hole he has already read.
+    const past = [quiet(), loud(), quiet()];
+    expect(say(past)).toBe(say(past));
+    expect(quietLine(past)).toBe(say(past));
+  });
+
+  it("is never reached when there is a name to say", () => {
+    const p = holePrompt({ ...loud(), history: [quiet(), quiet()] });
+    expect(p.notes[0]).toBe("Net birdie — Paul W");
+    QUIET_LINES.forEach((l) => expect(p.notes).not.toContain(l));
+  });
+});
+
+// ── "So far", which is not a hedge ──────────────────────────────────
+// Both nuggets read "of the round" — said on the sixth of eighteen, in a room
+// whose entire point is that nobody knows what is coming. A captain reading
+// that is telling fifteen people no better hole is on its way, and he cannot
+// know it: the window means he is looking at six holes and the sentence
+// claims all eighteen.
+describe("what the nuggets claim to know", () => {
+  const b = (name, net, counted = true) => ({ pid: name, name, net, counted });
+  const hole = (nets, { par = 4, countN = null } = {}) => {
+    const balls = nets.map(([n, v]) => b(n, v));
+    const need = countN ?? balls.length;
+    return { balls, par, countN: need, score: balls.map((x) => x.net).reduce((a, c) => a + c, 0) };
+  };
+
+  it("never says 'of the round' about a round still being turned over", () => {
+    const eagle = hole([["Paul W", 2]], { countN: 1 });
+    const out = holeNuggets({ ...eagle, history: [hole([["Tim C", 4]], { countN: 1 })], teamName: "Irons" });
+    const all = out.join(" ");
+    expect(all).not.toContain("of the round");
+    expect(all).toContain("First net eagle so far — Paul W");
+    expect(all).toContain("Irons' best hole so far");
   });
 });

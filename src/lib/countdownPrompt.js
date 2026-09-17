@@ -132,11 +132,18 @@ export const possessive = (name) => {
 // a nugget compiled from a hole the room has not seen is the ending, leaked
 // through the one thing on this screen nobody would think to check.
 //
-// "The first net eagle of the round" said on the third hole means first of the
-// three everybody has watched. If it quietly meant first of eighteen, it would
-// be telling the room there is no other eagle coming, on an evening whose
-// entire point is that nobody knows what is coming. The caller passes the
-// window; this module never reaches outside it, and it has no way to.
+// AND THEY SAY "SO FAR", WHICH IS NOT A HEDGE. The window is the guarantee;
+// the wording is what stops the guarantee from being undone out loud. Both
+// lines read "of the round" — "the first net eagle OF THE ROUND", "their best
+// hole OF THE ROUND" — said on the sixth of eighteen, in a room whose entire
+// point is that nobody knows what is coming. A captain reading that is telling
+// fifteen people no better hole is on its way, which is the ending, arrived at
+// early, and he cannot even know it is true: the cap means he is looking at
+// six holes and the sentence claims all eighteen.
+//
+// "So far" is the true one and it is also the more exciting one — it says the
+// evening is still running. The caller passes the window; this module never
+// reaches outside it, and now it never talks as though it had.
 //
 // Scoped to the captain's OWN SIDE, which is the only round he can see all of
 // and the only one he is narrating. The other side's eagles are their
@@ -155,7 +162,7 @@ export function holeNuggets({ balls, par, countN, score, history, teamName }) {
   const eaglesNow = now.filter((b) => ballNote(b, par) === EAGLE).map((b) => b.name);
   const eagleBefore = past.some((h) => countedBalls(h.balls).some((b) => ballNote(b, h.par) === EAGLE));
   if (eaglesNow.length && !eagleBefore) {
-    out.push(`🦅 First net eagle of the round — ${sayNames(eaglesNow)}`);
+    out.push(`🦅 First net eagle so far — ${sayNames(eaglesNow)}`);
   }
 
   // ── A man on a run ──
@@ -192,12 +199,50 @@ export function holeNuggets({ balls, par, countN, score, history, teamName }) {
       .map((h) => relToPar(h.score, h.par, Number.isFinite(h.countN) && h.countN > 0 ? h.countN : countedBalls(h.balls).length))
       .filter((v) => v != null);
     if (before.length && rel < Math.min(...before)) {
-      out.push(`⭐ ${possessive(side)} best hole of the round`);
+      out.push(`⭐ ${possessive(side)} best hole so far`);
     }
   }
 
   return out.slice(0, 2);
 }
+
+// ── The quiet hole, said a different way each time ──────────────────
+// Four men par a par 3 and there is genuinely nothing to name. Saying so is
+// right — an empty panel reads as a bug to the man holding it — but it was ONE
+// string, and a captain who hit two flat holes in an evening read the identical
+// sentence out twice. On a screen whose whole job is to be spoken aloud that
+// does not land as consistency, it lands as a stuck app.
+//
+// So they cycle, and the index is HOW MANY QUIET HOLES HAVE ALREADY GONE BY
+// rather than the hole number: it is the repeat that has to be avoided, and
+// two flat holes six apart are as obvious as two in a row. Nothing repeats
+// until all five are spent, and the fifth one back round is twenty minutes
+// after the first.
+//
+// Derived rather than random, for the same reason everything else here is: a
+// captain re-reading a hole the director stepped back to must find the same
+// words on it, and `history` is the only state this module has.
+export const QUIET_LINES = [
+  "Nothing to shout about — read the number",
+  "Quiet one — straight to the number",
+  "No fireworks — just the number",
+  "Everybody made their four — read it out",
+  "Nothing doing here — the number says it",
+];
+
+// Was this hole one of the quiet ones? The same test the notes above make,
+// asked of a hole in the window — a hole nobody has posted is not quiet, it
+// is unplayed, and it must not advance the cycle.
+const isQuiet = (h) => {
+  const posted = (h?.balls || []).filter((b) => b.net != null);
+  if (!posted.length || h?.score == null) return false;
+  return !posted.some((b) => ballScoreNote(b, h.par) != null);
+};
+
+export const quietLine = (history) => {
+  const before = (history || []).filter(isQuiet).length;
+  return QUIET_LINES[before % QUIET_LINES.length];
+};
 
 export function holePrompt({ balls, par, countN, score, history, teamName }) {
   const all = balls || [];
@@ -243,7 +288,7 @@ export function holePrompt({ balls, par, countN, score, history, teamName }) {
   if (birdies.length) notes.push(line(birdies, "birdie", "birdies"));
   // Nothing to shout about is a real thing that happens on a par 3 everybody
   // pars, and saying so beats an empty panel the captain reads as a bug.
-  if (!notes.length) notes.push("Nothing to shout about — read the number");
+  if (!notes.length) notes.push(quietLine(history));
 
   return {
     ready: true,
