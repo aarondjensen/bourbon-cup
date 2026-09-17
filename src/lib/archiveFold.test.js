@@ -665,6 +665,86 @@ describe("strokes gained", () => {
     // The best single round has no floor — it is one round by definition.
     expect(f.strokesGained.best[0].name).toBe("Amy A");
   });
+
+  // ── The other end, and the whole week ───────────────────────────
+  it("ranks the worst round from the bottom, not the top", () => {
+    const f = foldArchive(round1({ a: [70, 0], b: [80, 0], c: [90, 0] }));
+    expect(f.strokesGained.best[0].name).toBe("Amy A");
+    expect(f.strokesGained.worst[0].name).toBe("Cal C");
+    expect(f.strokesGained.worst[0].sg).toBeCloseTo(-10, 9);
+  });
+
+  it("keeps a week off the board until it is three own-ball rounds", () => {
+    const week = (rounds) => ({
+      players: toy.players,
+      editions: [{
+        year: 2001, teamA: "REDS", teamB: "BLUES", complete: true,
+        roster: [{ p: "a", t: "A" }, { p: "c", t: "B" }],
+      }],
+      rounds: rounds.map((n) => ({ year: 2001, round: n, format: "best_ball", course: `Toy ${n}`, par: 72 })),
+      matches: [],
+      cards: rounds.flatMap((n) => [
+        { year: 2001, round: n, p: "a", g: 70, ch: 0, tp: -2, e: 0, b: 0, pr: 0, bo: 0, d: 0 },
+        { year: 2001, round: n, p: "c", g: 80, ch: 0, tp: 8, e: 0, b: 0, pr: 0, bo: 0, d: 0 },
+      ]),
+    });
+    expect(foldArchive(week([1, 2])).strokesGained.weeks).toEqual([]);
+    const three = foldArchive(week([1, 2, 3])).strokesGained.weeks;
+    expect(three[0].name).toBe("Amy A");
+    // Five a round, three rounds — TOTALLED over the week, not averaged.
+    expect(three[0].sg).toBeCloseTo(15, 9);
+    expect(three[0].rounds).toBe(3);
+  });
+});
+
+// ── Strokes gained as a cup record ────────────────────────────────
+// The team board is net and per man; the field spread is gross and per round.
+describe("a side's day in strokes gained", () => {
+  // Eight men, four a side, one own-ball round.
+  const ids = ["a", "b", "c", "d", "e", "f", "g", "h"];
+  const cup = (gs, format = "best_ball", days = [1]) => ({
+    players: ids.map((id) => ({ id, name: id.toUpperCase(), aka: [id] })),
+    editions: [{
+      year: 2001, teamA: "REDS", teamB: "BLUES", complete: true,
+      roster: ids.map((p, i) => ({ p, t: i < 4 ? "A" : "B" })),
+    }],
+    rounds: days.map((n) => ({ year: 2001, round: n, format, course: `Toy ${n}`, par: 72 })),
+    matches: [],
+    cards: days.flatMap((n) => ids.map((p, i) => ({
+      year: 2001, round: n, p, g: gs[i], ch: 0, tp: gs[i] - 72, e: 0, b: 0, pr: 0, bo: 0, d: 0,
+    }))),
+  });
+
+  it("names the side that played above itself, per man", () => {
+    // REDS average 75, BLUES 85; the field is 80.
+    const f = foldArchive(cup([74, 75, 75, 76, 84, 85, 85, 86]));
+    const top = f.records.sgTeamRounds[0];
+    expect(top.team).toBe("REDS");
+    expect(top.men).toBe(4);
+    expect(top.per).toBeCloseTo(5, 9);
+    // One board, one side: the other half of a round is always negative.
+    expect(f.records.sgTeamRounds).toHaveLength(1);
+  });
+
+  it("leaves a shared ball out of it, like every other own-ball board", () => {
+    expect(foldArchive(cup([74, 75, 75, 76, 84, 85, 85, 86], "scramble")).records.sgTeamRounds).toEqual([]);
+  });
+
+  it("refuses a day half a side did not play own ball", () => {
+    const thin = cup([74, 75, 75, 76, 84, 85, 85, 86]);
+    // Three cards a side is not a team performance.
+    thin.cards = thin.cards.filter((c) => !["d", "h"].includes(c.p));
+    expect(foldArchive(thin).records.sgTeamRounds).toEqual([]);
+  });
+
+  it("measures how far apart a field was, in strokes a round", () => {
+    // Two days, because one round a man is noise rather than a level.
+    const tight = foldArchive(cup([79, 80, 80, 81, 79, 80, 80, 81], "best_ball", [1, 2]));
+    const wide = foldArchive(cup([60, 70, 80, 90, 100, 70, 80, 90], "best_ball", [1, 2]));
+    expect(tight.records.tightestField.spread).toBeLessThan(wide.records.tightestField.spread);
+    // One cup is both ends of its own board.
+    expect(tight.records.widestField.year).toBe(2001);
+  });
 });
 
 // ── Streaks ───────────────────────────────────────────────────────

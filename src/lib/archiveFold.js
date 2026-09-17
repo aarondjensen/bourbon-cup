@@ -191,7 +191,8 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
         best: null, bestNet: null, byFormat: {}, byYear: [],
         netRounds: 0, netToPar: 0, nE: 0, nB: 0, nP: 0, nBo: 0, nD: 0,
         mrSum: 0, mrRounds: 0,
-        sgGross: 0, sgNet: 0, sgRounds: 0, sgNets: 0, bestSg: null, bestSgNet: null,
+        sgGross: 0, sgNet: 0, sgRounds: 0, sgNets: 0,
+        bestSg: null, bestSgNet: null, worstSg: null, worstSgNet: null,
         cupsWon: 0, cupsLost: 0, cupsHalved: 0,
         comebacks: 0, collapses: 0,
       });
@@ -402,7 +403,9 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
       r.sgRounds += 1; r.sgGross += sg.gross;
       if (sg.net != null) { r.sgNets += 1; r.sgNet += sg.net; }
       if (!r.bestSg || sg.gross > r.bestSg.sg) r.bestSg = { ...shot, sg: sg.gross };
+      if (!r.worstSg || sg.gross < r.worstSg.sg) r.worstSg = { ...shot, sg: sg.gross };
       if (sg.net != null && (!r.bestSgNet || sg.net > r.bestSgNet.sg)) r.bestSgNet = { ...shot, sg: sg.net };
+      if (sg.net != null && (!r.worstSgNet || sg.net < r.worstSgNet.sg)) r.worstSgNet = { ...shot, sg: sg.net };
       if (y) {
         y.sgRounds += 1; y.sgGross += sg.gross;
         if (sg.net != null) { y.sgNets += 1; y.sgNet += sg.net; }
@@ -738,6 +741,9 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
   // puts on a rate, for the same reason. Below it one calm morning in a gale
   // tops the board forever, which is a record about the weather.
   const SG_MIN_ROUNDS = 8;
+  // A cup hands out three or four own-ball rounds depending on how many of
+  // its days were shared-ball, so three is the floor that keeps every year in.
+  const SG_WEEK_MIN = 3;
 
   const playerBoards = (ids) => {
     const mine = (x) => !ids || ids.has(x.id ?? x.p);
@@ -759,6 +765,13 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
     const bestPerRound = (list) => roundNumbers
       .map((rd) => top(list.filter((c) => c.round === rd), 1)[0] || null)
       .filter(Boolean);
+
+    const sgWeeks = (key, roundsKey) => top(played
+      .flatMap((r) => r.byYear
+        .filter((y) => y[roundsKey] >= SG_WEEK_MIN)
+        .map((y) => ({ id: r.id, name: r.name, year: y.year, sg: y[key], rounds: y[roundsKey] })))
+      .filter(mine)
+      .sort((a, b) => b.sg - a.sg));
 
     const sgBoard = (key, rounds) => top(played
       .filter((r) => r[key] != null && r[rounds] >= SG_MIN_ROUNDS)
@@ -809,6 +822,23 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
         bestNet: top(played.filter((r) => r.bestSgNet)
           .map((r) => ({ id: r.id, name: r.name, ...r.bestSgNet }))
           .sort((a, b) => b.sg - a.sg)),
+        // The other end of the same list. A board of good days with no bad
+        // ones is a record that only ever congratulates, and the cold streaks
+        // already settled that this cup can take the other kind.
+        worst: top(played.filter((r) => r.worstSg)
+          .map((r) => ({ id: r.id, name: r.name, ...r.worstSg }))
+          .sort((a, b) => a.sg - b.sg)),
+        worstNet: top(played.filter((r) => r.worstSgNet)
+          .map((r) => ({ id: r.id, name: r.name, ...r.worstSgNet }))
+          .sort((a, b) => a.sg - b.sg)),
+        // ── A whole cup of it ───────────────────────────────────
+        // TOTALLED over the week rather than averaged, because "he took a
+        // hundred and seven shots off the field that year" is the claim, and
+        // the round count is the same for everybody inside one cup — the
+        // format is whatever the format was that day. Three own-ball rounds
+        // is the floor, since a cup gives either three or four.
+        weeks: sgWeeks("sgGross", "sgRounds"),
+        weeksNet: sgWeeks("sgNet", "sgNets"),
         minRounds: SG_MIN_ROUNDS,
       },
       streaks: {
@@ -828,6 +858,54 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
   };
 
   const allBoards = playerBoards(null);
+
+  // ── A side's day, in strokes gained ─────────────────────────────
+  // NET, and that is the interesting choice. The two teams are drafted to
+  // balance on handicap, so a gross board would mostly report which side got
+  // the better draft; net asks which side played above ITSELF, which is the
+  // question a team result is actually about.
+  //
+  // Per man rather than totalled, because a side can field seven own-ball
+  // cards against the other's eight and a total would hand it the difference.
+  const sideOf = new Map();
+  editionRows.forEach((e) => e.roster.forEach((r) => sideOf.set(`${e.year}_${r.p}`, r.t)));
+
+  const teamSg = new Map();
+  cards.forEach((c) => {
+    if (!formatOwnBall(roundIx.get(roundKey(c))?.format)) return;
+    const g = gainOn(c);
+    const t = sideOf.get(`${c.year}_${c.p}`);
+    if (!g || g.net == null || !t) return;
+    const k = `${c.year}_${c.round}_${t}`;
+    const o = teamSg.get(k) || { year: c.year, round: c.round, side: t, total: 0, men: 0 };
+    o.total += g.net; o.men += 1;
+    teamSg.set(k, o);
+  });
+
+  // Four men is half a side. Below that it is not a team performance, it is
+  // whoever happened to have an own-ball card that day.
+  const teamRounds = [...teamSg.values()]
+    .filter((o) => o.men >= 4)
+    .map((o) => {
+      const e = edIx.get(o.year);
+      return { ...o, per: o.total / o.men, team: o.side === "A" ? e?.teamA : e?.teamB };
+    })
+    .sort((a, b) => b.per - a.per);
+
+  // ── How evenly matched a field was ──────────────────────────────
+  // The spread of per-round strokes gained across everybody who played it. A
+  // low number is a cup where the handicaps did their job and everybody
+  // turned up at roughly the same level; a high one is a cup somebody ran
+  // away with. 2016 is twice the 2024 figure.
+  const sgSpread = editionRows.filter((e) => e.complete).map((e) => {
+    const vals = careerRows
+      .map((r) => r.byYear.find((y) => y.year === e.year))
+      .filter((y) => y && y.sgRounds >= 2)
+      .map((y) => y.sgGross / y.sgRounds);
+    if (vals.length < 4) return null;
+    const mean = sum(vals) / vals.length;
+    return { ...e, spread: Math.sqrt(sum(vals.map((v) => (v - mean) ** 2)) / vals.length) };
+  }).filter(Boolean);
 
   // Each round's own result, one row per round of every cup.
   const roundResults = editionRows.flatMap((e) => e.rounds.map((r) => ({
@@ -921,6 +999,10 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
       .map((e) => ({ ...e, changes: leadChangesIn(e) }))
       .filter((e) => e.changes > 0)
       .sort((a, b) => b.changes - a.changes || b.year - a.year)),
+    // ── Strokes gained, as a cup record ─────────────────────────
+    sgTeamRounds: top(teamRounds.filter((o) => o.per > 0)),
+    tightestField: sgSpread.slice().sort(byNum((e) => e.spread))[0] || null,
+    widestField: sgSpread.slice().sort((a, b) => b.spread - a.spread)[0] || null,
     // ── Ten years in one line ───────────────────────────────────
     totals: {
       cups: finished.length,
