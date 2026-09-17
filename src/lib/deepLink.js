@@ -24,12 +24,12 @@
 // once at module load by AUTO_COUNTDOWN and owned by the Leaderboard
 // thereafter; answering it here would have two things acting on one hash.
 
-// The tabs a link may select. The five on the bottom nav plus the four the
+// The tabs a link may select. The five on the bottom nav plus the five the
 // menu reaches — but not `menu` itself, which opens a drawer rather than a
 // view, and would leave the app on the tab underneath it.
 const TABS = new Set([
   "scoring", "groups", "leaderboard", "betting",
-  "account", "trip", "data", "photos", "admin",
+  "account", "trip", "players", "data", "photos", "admin",
 ]);
 
 // `#round/3` — the round summary, over the leaderboard.
