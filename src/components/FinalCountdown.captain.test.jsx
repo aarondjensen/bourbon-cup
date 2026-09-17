@@ -23,7 +23,7 @@
 // The existing FinalCountdown.test.jsx covers the television. This file is the
 // phone, and only the phone.
 import { describe, it, expect, afterEach } from "vitest";
-import { render, cleanup } from "@testing-library/react";
+import { render, cleanup, fireEvent, act } from "@testing-library/react";
 import { FinalCountdown } from "./FinalCountdown";
 import { computeMatchResult } from "../scoring";
 
@@ -90,7 +90,20 @@ const getScore = reader(holeData);
 // `ownResult` is the captain's own side scored off the UNCUT map — it holds the
 // hole he is about to reveal, which is the whole reason this screen is
 // dangerous. In production App hands it exactly this. Defaults here match.
-const mount = (reveal, extra = {}) => render(
+// ── PREVIEW, then REVEAL ──
+// His card waits for him to ask for it now (see `previewKey` in the
+// component): the button under it reads PREVIEW until he taps it, and only
+// then does the card appear and the button become REVEAL. Every test below
+// asserts what is ON the card, so the helper takes that first tap for them —
+// the two-step itself is pinned in its own block at the foot of this file.
+const preview = (c) => {
+  const btn = [...c.querySelectorAll("button")]
+    .find((b) => /^PREVIEW /.test((b.textContent || "").trim()));
+  if (btn) act(() => { fireEvent.click(btn); });
+  return c;
+};
+
+const mountRaw = (reveal, extra = {}) => render(
   <FinalCountdown
     match={match} result={result} getScore={getScore}
     ownResult={result} ownGetScore={getScore}
@@ -104,6 +117,8 @@ const mount = (reveal, extra = {}) => render(
   />,
 ).container;
 
+const mount = (...args) => preview(mountRaw(...args));
+
 // The card itself, not the screen around it. It is the only 2px-bordered div
 // whose text opens with the hole number — the side columns open with a team
 // name, the clinch band with a team name, and the reveal control is a button.
@@ -115,6 +130,17 @@ const mount = (reveal, extra = {}) => render(
 // the beat where the two differ (his side is a hole behind and he is about to
 // reveal one the room has not reached).
 const cardOf = (c) => c.querySelector('[aria-label="Captain\'s card"]') || null;
+
+// The SCRIPT half of the card — what he reads out — with the hole's own eight
+// scores taken off the end. The list names every man on his side by design
+// (it is the hole he is about to reveal, on his own phone), so a test asking
+// "is this name on the card" has to say which half it means.
+const scriptOf = (c) => {
+  const card = cardOf(c);
+  if (!card) return "";
+  const list = card.querySelector('[aria-label="Hole scores"]');
+  return card.textContent.replace(list ? list.textContent : "", "");
+};
 
 // Which hole the card is ABOUT, which is the question these tests ask. Its own
 // heading when it carries one; otherwise the screen's, which is what its
@@ -330,7 +356,10 @@ describe("no unrevealed hole reaches the card", () => {
     expect(card).toBeTruthy();
     expect(card.textContent).toMatch(/^HOLE 2/);
     // Nothing off hole 18 or the back nine.
-    expect(card.textContent).not.toContain("Zephyrus");
+    // The SCRIPT, not the score list: his name is on his own side and the list
+    // carries every man on it for the hole in hand, which is allowed. What must
+    // not appear is anything he did on a hole nobody has seen.
+    expect(scriptOf(c)).not.toContain("Zephyrus");
     expect(card.textContent).not.toContain("eagle");
     expect(card.textContent).not.toContain("Eagle");
     // And no superlative built from a hole better than this one.
@@ -354,10 +383,14 @@ describe("no unrevealed hole reaches the card", () => {
     two.a3_4[13] = 1;   // hole 14 — Zephyrus, unseen
     const r = scored(two);
     const read = reader(two);
-    const card = cardOf(mount({ A: 1, B: 1 }, { ...captainA, ownResult: r, ownGetScore: read }));
+    const c = mount({ A: 1, B: 1 }, { ...captainA, ownResult: r, ownGetScore: read });
+    const card = cardOf(c);
     expect(card.textContent).toMatch(/^HOLE 2/);
     expect(card.textContent).toContain("First net eagle so far — Paul W");
-    expect(card.textContent).not.toContain("Zephyrus");
+    // The SCRIPT, not the score list: his name is on his own side and the list
+    // carries every man on it for the hole in hand, which is allowed. What must
+    // not appear is anything he did on a hole nobody has seen.
+    expect(scriptOf(c)).not.toContain("Zephyrus");
   });
 
   // The same trap on the superlative: the side's best hole of the night so far
@@ -402,16 +435,18 @@ describe("no unrevealed hole reaches the card", () => {
     const read = reader(nextUp);
 
     // Announcing hole 2, hole 3 is one past the edge.
-    const before = cardOf(mount({ A: 1, B: 1 }, { ...captainA, ownResult: r, ownGetScore: read }));
-    expect(before.textContent).toMatch(/^HOLE 2/);
-    expect(before.textContent).not.toContain("Zephyrus");
-    expect(before.textContent).not.toContain("eagle");
+    const c1 = mount({ A: 1, B: 1 }, { ...captainA, ownResult: r, ownGetScore: read });
+    expect(cardOf(c1).textContent).toMatch(/^HOLE 2/);
+    // Again the script rather than the whole card: he is on this side, so the
+    // hole-2 list names him at whatever he made on HOLE 2. The eagle is on 3.
+    expect(scriptOf(c1)).not.toContain("Zephyrus");
+    expect(cardOf(c1).textContent).not.toContain("eagle");
     cleanup();
 
     // One tap later it is the hole in hand, and it is his to call.
-    const after = cardOf(mount({ A: 2, B: 2 }, { ...captainA, ownResult: r, ownGetScore: read }));
-    expect(after.textContent).toMatch(/^HOLE 3/);
-    expect(after.textContent).toContain("First net eagle so far — Zephyrus Quill");
+    const c2 = mount({ A: 2, B: 2 }, { ...captainA, ownResult: r, ownGetScore: read });
+    expect(cardOf(c2).textContent).toMatch(/^HOLE 3/);
+    expect(cardOf(c2).textContent).toContain("First net eagle so far — Zephyrus Quill");
   });
 
   // ── The strongest form of the invariant ──────────────────────────
@@ -668,5 +703,127 @@ describe("what his phone spends its height on", () => {
     expect(list).toBeTruthy();
     // DOCUMENT_POSITION_FOLLOWING: the list comes after the card.
     expect(!!(card.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  Look, then show
+// ══════════════════════════════════════════════════════════════════
+//
+// Two taps, and the gap between them is the ceremony: he reads his side's
+// hole off his own phone, tells the room what is on it, and only then does it
+// go up on the television.
+//
+// It used to be one. His card appeared the instant it became his turn —
+// before he had asked for it, while the other captain was still finishing —
+// and the button under it said REVEAL. So the thing he was preparing to
+// announce and the thing that announced it were one tap apart, with nothing in
+// between to mark "I have read this" from "the room has seen it".
+describe("preview, then reveal", () => {
+  const btnText = (c) => [...c.querySelectorAll("button")]
+    .map((b) => (b.textContent || "").trim());
+  const mine = (c) => btnText(c).find((t) => /MASH BROTHERS/.test(t));
+  const tap = (c, re) => {
+    const b = [...c.querySelectorAll("button")].find((x) => re.test((x.textContent || "").trim()));
+    expect(b, `no button matching ${re}`).toBeTruthy();
+    act(() => { fireEvent.click(b); });
+  };
+
+  it("offers a PREVIEW and no card at all", () => {
+    setWidth(PHONE);
+    const c = mountRaw({ A: 3, B: 3 }, captainA);
+    expect(mine(c)).toBe("PREVIEW MASH BROTHERS · HOLE 4");
+    expect(cardOf(c)).toBe(null);
+  });
+
+  it("opens the card on the first tap and writes nothing", () => {
+    setWidth(PHONE);
+    const moved = [];
+    const c = mountRaw({ A: 3, B: 3 }, { ...captainA, onAdvance: (...a) => moved.push(a) });
+    tap(c, /^PREVIEW /);
+    expect(cardOf(c)).toBeTruthy();
+    expect(moved).toEqual([]);
+    // And the button is the reveal it always was. (The ▸ nudge is a separate
+    // question — it means "the room is waiting on you", which is true before
+    // the preview as well as after, so it is deliberately not the thing that
+    // changes here.)
+    expect(mine(c)).toMatch(/^▸?\s*REVEAL MASH BROTHERS · HOLE 4$/);
+  });
+
+  it("reveals on the second", () => {
+    setWidth(PHONE);
+    const moved = [];
+    const c = mountRaw({ A: 3, B: 3 }, { ...captainA, onAdvance: (...a) => moved.push(a) });
+    tap(c, /^PREVIEW /);
+    tap(c, /REVEAL /);
+    expect(moved).toEqual([["A", 4]]);
+  });
+
+  // Keyed to the side AND the hole, so nothing has to clear it. A stale flag
+  // would hand him a REVEAL over a card he had not looked at.
+  it("asks again on the next hole", () => {
+    setWidth(PHONE);
+    const c = mountRaw({ A: 3, B: 3 }, captainA);
+    tap(c, /^PREVIEW /);
+    expect(cardOf(c)).toBeTruthy();
+    cleanup();
+    // His side has moved on; this is the next hole, unpreviewed.
+    const next = mountRaw({ A: 4, B: 4 }, captainA);
+    expect(mine(next)).toBe("PREVIEW MASH BROTHERS · HOLE 5");
+    expect(cardOf(next)).toBe(null);
+  });
+
+  // The step belongs to the man with the card. A director driving the OTHER
+  // side has nothing to preview there, and the television has no card at all.
+  it("is his own side's button and nobody else's", () => {
+    setWidth(PHONE);
+    const both = mountRaw({ A: 3, B: 3 }, { isDirector: true, captainSide: "A" });
+    expect(btnText(both).find((t) => /MASH BROTHERS/.test(t))).toMatch(/^PREVIEW /);
+    expect(btnText(both).find((t) => /SHOT CALLERS/.test(t))).toMatch(/^▸?\s*REVEAL /);
+    cleanup();
+    setWidth(TV);
+    const tv = mountRaw({ A: 3, B: 3 }, { isDirector: true, captainSide: "A" });
+    expect(btnText(tv).find((t) => /MASH BROTHERS/.test(t))).toMatch(/REVEAL /);
+    expect(btnText(tv).some((t) => /^PREVIEW/.test(t))).toBe(false);
+  });
+});
+
+// ── What he is previewing ───────────────────────────────────────────
+// The lines above the list name three men; the list is the hole. It is what
+// he reads off when somebody asks what HE made, and it is the reason the
+// preview step is worth a tap at all — a summary he cannot check against the
+// card in his hand is a summary he has to trust out loud.
+describe("the hole's own scores, on the card", () => {
+  const listOf = (c) => cardOf(c)?.querySelector('[aria-label="Hole scores"]') || null;
+
+  it("carries every man on his side, and only his side", () => {
+    setWidth(PHONE);
+    const rows = [...listOf(mount({ A: 1, B: 1 }, captainA)).children];
+    expect(rows.length).toBe(match.teamA.length);
+    const text = listOf(mount({ A: 1, B: 1 }, captainA)).textContent;
+    expect(text).toContain("Paul W");
+    // Nobody from the other side, which is the whole guarantee of this screen.
+    expect(text).not.toContain("Andy H");
+    expect(text).not.toContain("Nick R");
+  });
+
+  it("marks the balls that made the number", () => {
+    setWidth(PHONE);
+    const rows = [...listOf(mount({ A: 1, B: 1 }, captainA)).children];
+    const lit = rows.filter((r) => r.style.borderLeftColor !== "transparent");
+    // At least one, and not all of them — the format counts a subset.
+    expect(lit.length).toBeGreaterThan(0);
+    expect(lit.length).toBeLessThanOrEqual(rows.length);
+  });
+
+  it("says nothing rather than blank for a ball not posted", () => {
+    setWidth(PHONE);
+    const d = flat();
+    delete d.a2_4[1];
+    const r = scored(d);
+    const c = mount({ A: 1, B: 1 }, { ...captainA, ownResult: r, ownGetScore: reader(d) });
+    // A hole still coming in reads "·", which is the difference between "he
+    // has not put it in" and "he made nothing".
+    expect(listOf(c).textContent).toContain("·");
   });
 });

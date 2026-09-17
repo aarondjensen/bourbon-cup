@@ -6,7 +6,7 @@
 // of it — which can come apart from the arithmetic, because the component has
 // both sides' balls in hand the whole time and chooses which to draw.
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/react";
+import { render, cleanup, fireEvent, act } from "@testing-library/react";
 import { FinalCountdown } from "./FinalCountdown";
 import { computeMatchResult } from "../scoring";
 
@@ -693,16 +693,30 @@ describe("a captain's phone", () => {
   // The card is a PHONE thing — see the two tests at the bottom of this block.
   beforeEach(() => setWidth(PHONE));
 
+  // His card waits to be asked for: the button reads PREVIEW until he taps it,
+  // and only then does the card appear and the button become REVEAL. Every
+  // test below is about what is ON the card, so this takes that first tap for
+  // them; the two-step itself is pinned in FinalCountdown.captain.test.jsx.
+  const opened = (c) => {
+    const b = [...c.querySelectorAll("button")]
+      .find((x) => /^PREVIEW /.test((x.textContent || "").trim()));
+    if (b) act(() => { fireEvent.click(b); });
+    return c;
+  };
+
   it("gives him one button and it is his own side's", () => {
-    const t = screen({ A: 1, B: 1 }, captain).textContent;
-    expect(t).toContain("REVEAL MASH BROTHERS · HOLE 2");
-    expect(t).not.toContain("REVEAL SHOT CALLERS");
+    const c = screen({ A: 1, B: 1 }, captain);
+    expect(c.textContent).toContain("PREVIEW MASH BROTHERS · HOLE 2");
+    expect(c.textContent).not.toContain("SHOT CALLERS · HOLE");
+    // Still one button, and still his, once he has looked.
+    expect(opened(c).textContent).toContain("REVEAL MASH BROTHERS · HOLE 2");
+    expect(c.textContent).not.toContain("REVEAL SHOT CALLERS");
   });
 
   // The whole reason his phone has the hole before the room does: he is
   // reading it out. It is his OWN side, which is never hidden from him.
   it("tells him what to say before he taps", () => {
-    const t = screen({ A: 1, B: 1 }, captain).textContent;
+    const t = opened(screen({ A: 1, B: 1 }, captain)).textContent;
     // The stroke index too — it is why a man is getting a shot on this hole
     // and not the last one, which is what the room asks the moment a net eagle
     // is announced.
@@ -723,15 +737,20 @@ describe("a captain's phone", () => {
   // swept in both eight-man lists — where every name on the side appears by
   // design, and the assertion passed for the wrong reason the moment it moved.
   it("never names the man who made the bogey", () => {
-    const c = screen({ A: 1, B: 1 }, captain);
+    const c = opened(screen({ A: 1, B: 1 }, captain));
     const card = c.querySelector('[aria-label="Captain\'s card"]');
     expect(card).toBeTruthy();
     expect(card.textContent).toContain("Net birdie — Paul W");
-    expect(card.textContent).not.toContain("Tim C");
+    // The SCRIPT, with the hole's own scores taken off the end. That list
+    // carries every man on his side by design — it is the hole he is about to
+    // reveal, on his own phone — so the question "is he named" has to say
+    // which half of the card it means.
+    const list = card.querySelector('[aria-label="Hole scores"]');
+    expect(card.textContent.replace(list.textContent, "")).not.toContain("Tim C");
   });
 
   it("names his side rather than calling it his", () => {
-    const t = screen({ A: 1, B: 1 }, captain).textContent;
+    const t = opened(screen({ A: 1, B: 1 }, captain)).textContent;
     expect(t).toContain("Mash Brothers −1");
     expect(t).not.toContain("YOUR SIDE");
     // And no "YOU'RE UP" — his phone put the card up, it is his side's
@@ -749,7 +768,7 @@ describe("a captain's phone", () => {
   // meant starting at the bottom, going up for the names and coming back
   // down, every hole, eighteen times, in front of everybody.
   it("puts the hole, then the men, then the number", () => {
-    const t = screen({ A: 1, B: 1 }, captain).textContent;
+    const t = opened(screen({ A: 1, B: 1 }, captain)).textContent;
     const hole = t.indexOf("PAR 4 · HANDICAP 2");
     const names = t.indexOf("Net birdie — Paul W");
     const number = t.indexOf("Mash Brothers −1");
@@ -761,7 +780,7 @@ describe("a captain's phone", () => {
   it("puts a nugget with the men, ahead of the number", () => {
     // "…from Paul, AND the first eagle of the round — the Mash Brothers are…"
     // is one breath. The stats belong to the build-up, not to the payoff.
-    const t = screen({ A: 1, B: 1 }, captain).textContent;
+    const t = opened(screen({ A: 1, B: 1 }, captain)).textContent;
     const names = t.indexOf("Net birdie — Paul W");
     const nugget = t.indexOf("in a row");
     const number = t.indexOf("Mash Brothers −1");
@@ -777,7 +796,7 @@ describe("a captain's phone", () => {
   it("compiles a nugget only from holes the room has seen", () => {
     // Every hole in this fixture is identical: a1 nets a birdie on all
     // eighteen. On hole 2 that is his SECOND in a row and the card says so.
-    const t = screen({ A: 1, B: 1 }, captain).textContent;
+    const t = opened(screen({ A: 1, B: 1 }, captain)).textContent;
     expect(t).toContain("Paul W — two in a row");
     cleanup();
     // On hole 1 there is no history at all, so there is no run to call —
@@ -804,12 +823,13 @@ describe("a captain's phone", () => {
         reveal={reveal} totals={{ A: 3, B: 1 }} toWin={12.5} clincher={null}
         isDirector={false} captainSide="A" onAdvance={() => {}} onClose={() => {}}
       />,
-    ).container.textContent;
+    ).container;
+    const text = (reveal) => opened(at(reveal)).textContent;
 
-    expect(at({ A: 1, B: 1 })).not.toContain("First net eagle");
+    expect(text({ A: 1, B: 1 })).not.toContain("First net eagle");
     cleanup();
     // Announcing hole 3, which IS the eagle — now it is his to call.
-    expect(at({ A: 2, B: 2 })).toContain("First net eagle so far — Paul W");
+    expect(text({ A: 2, B: 2 })).toContain("First net eagle so far — Paul W");
   });
 
   it("says nothing while the other captain is talking", () => {
@@ -828,7 +848,7 @@ describe("a captain's phone", () => {
   // failure is silent and total. The screen refuses on its own instead.
   it("never draws the card on a big screen, whoever is signed in", () => {
     setWidth(TV);
-    const t = screen({ A: 1, B: 1 }, captain).textContent;
+    const t = opened(screen({ A: 1, B: 1 }, captain)).textContent;
     expect(t).not.toContain("Net birdie — Paul W");
     expect(t).not.toContain("in a row");
     expect(t).not.toContain("PAR 4 · HANDICAP 2");

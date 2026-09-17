@@ -722,13 +722,16 @@ export function FinalCountdown({
   const goNext = useCallback(() => { if (canNext) onSetHole(hole + 1); }, [canNext, onSetHole, hole]);
   const goBack = useCallback(() => { if (canBack) onSetHole(hole - 1); }, [canBack, onSetHole, hole]);
 
-  const revealSide = useCallback((side) => {
+  // The first tap of the two opens his own card and writes nothing; the second
+  // is the reveal that was always here. See the note on `previewKey`.
+  const revealSide = (side) => {
+    if (needsPreview(side)) { setPreviewKey(myKey); return; }
     if (!onAdvance) return;
     const next = nextHoleForSide({ sealed: true, reveal_a: outA, reveal_b: outB }, side);
     if (next == null) return;
     if (!sidesPending({ sealed: true, reveal_a: outA, reveal_b: outB }).includes(side)) return;
     onAdvance(side, next);
-  }, [outA, outB, onAdvance]);
+  };
 
   // One step back, for the mistap. It takes the LEADING side back, which is
   // the one that just moved — walking the trailing side backwards would open
@@ -853,6 +856,42 @@ export function FinalCountdown({
   // uncut own-side pass. Null for a director who captains nothing, and null
   // once his side has no holes left. See lib/countdownPrompt.
   const myNext = captainSide ? nextHoleForSide({ sealed: true, reveal_a: outA, reveal_b: outB }, captainSide) : null;
+
+  // ── LOOK, THEN SHOW ──────────────────────────────────────────────
+  // Two taps, not one, and the gap between them is the whole ceremony: the
+  // captain reads his side's hole off his own phone, tells the room what is on
+  // it, and only then does it go up on the television.
+  //
+  // It used to be one. His card appeared the instant it became his turn —
+  // before he had asked for it, while the other captain was still finishing —
+  // and the button under it said REVEAL. Which meant the thing he was
+  // preparing to announce and the thing that announced it were one tap apart,
+  // with nothing in between to mark "I have read this" from "the room has seen
+  // it". PREVIEW is that mark.
+  //
+  // KEYED TO THE SIDE AND THE HOLE, so it resets itself. A hole moving on is
+  // the next hole un-previewed, with no effect to clear it and no way for a
+  // stale flag to hand somebody a REVEAL button over a card he has not looked
+  // at.
+  //
+  // LOCAL, and deliberately not on the round document. It records that one man
+  // looked at his own side's hole, which is a thing his phone already lets him
+  // do — nothing is revealed by it, nobody else needs to know, and putting it
+  // in Firestore would be a write and a rules clause for a fact with a
+  // lifetime of about forty seconds.
+  const [previewKey, setPreviewKey] = useState(null);
+  const myKey = captainSide && myNext != null ? `${captainSide}:${myNext}` : null;
+  // Is there a card to be had at all? Every condition the card itself had,
+  // asked before the preview gate, so a man with no card to look at is never
+  // shown a PREVIEW button that would do nothing.
+  const cardAvailable = compact && !!captainSide && myNext != null && !!ownResult
+    && sidesPending({ sealed: true, reveal_a: outA, reveal_b: outB }).includes(captainSide);
+  const previewed = !!myKey && previewKey === myKey;
+  // Whose button is a PREVIEW rather than a REVEAL. Only ever his own side,
+  // and only while he has not looked: a director's other-side button, and the
+  // television's pair, stay one tap.
+  const needsPreview = (side) => cardAvailable && captainSide === side && !previewed;
+
   const myPrompt = (() => {
     // ── Never on the shared screen ──
     // The commentary is a script for one man, and on the television it is not
@@ -871,11 +910,11 @@ export function FinalCountdown({
     // loses his card. That is the right way round: a captain narrating to a
     // room is holding a phone, and the alternative is trusting a login on the
     // one screen that cannot be untold.
-    if (!compact) return null;
-    if (!captainSide || myNext == null || !ownResult) return null;
-    // Not his go. The other captain is talking and this band would be him
-    // reading ahead over the top of it.
-    if (!sidesPending({ sealed: true, reveal_a: outA, reveal_b: outB }).includes(captainSide)) return null;
+    // Every one of those conditions is `cardAvailable` above — and the card
+    // additionally waits for him to ASK. Before PREVIEW his phone carries the
+    // hole header, the two columns and the button, and nothing about a hole
+    // nobody has seen.
+    if (!cardAvailable || !previewed) return null;
     const idx = myNext - 1;
     const src = { result: ownResult, getScore: ownGetScore || getScore };
     const own = ownResult.holes?.[idx];
@@ -897,12 +936,19 @@ export function FinalCountdown({
     // built on nobody knowing what is coming. lib/countdownPrompt has no way
     // to reach past what it is handed, and this is where the handing happens.
     const history = Array.from({ length: idx }, (_, i) => holeAt(i));
+    const balls = ballsFor(captainSide, idx, src);
     return {
       hole: myNext,
       par: holePars?.[idx] ?? null,
       si: holeHcps?.[idx] ?? null,
+      // The eight balls themselves, which the card draws under the script.
+      // The summary above them names three men; this is the hole, and it is
+      // what he is reading off when somebody in the room asks what HE made.
+      // His own side, on his own phone, on the hole he is about to reveal —
+      // the same allowance the card has always had.
+      balls,
       ...holePrompt({
-        balls: ballsFor(captainSide, idx, src),
+        balls,
         par: holePars?.[idx],
         countN: ownResult.counting?.[idx] ?? null,
         score: scoreAt(own),
@@ -1183,6 +1229,10 @@ export function FinalCountdown({
     // the same tap.
     const held = !done && !due(side);
     const waiting = !shown[side] && hole > 0;
+    // The first of his two taps. It opens his own card and puts nothing on the
+    // television, so it is deliberately NOT the ▸ nudge — that arrow means
+    // "the room is waiting on you", and it is still true after he has looked.
+    const preview = needsPreview(side);
     return (
       <button key={side} onClick={() => revealSide(side)} disabled={done || held} style={{
         flex: 1, minWidth: 0,
@@ -1200,6 +1250,7 @@ export function FinalCountdown({
       }}>
         {done ? `${team.name.toUpperCase()} · ALL OUT`
           : held ? `WAITING ON ${(side === "A" ? tB : tA).name.toUpperCase()}`
+          : preview ? `PREVIEW ${team.name.toUpperCase()} · HOLE ${next}`
           : `${waiting ? "▸ " : ""}REVEAL ${team.name.toUpperCase()} · HOLE ${next}`}
       </button>
     );
@@ -1288,10 +1339,52 @@ export function FinalCountdown({
         ))}
       </div>
 
+      {/* ── The eight balls, under the script ──
+          The lines above name three men; this is the hole. It is what he reads
+          off when somebody asks what HE made, and it is the reason PREVIEW
+          exists — a summary he cannot check against the card in his hand is a
+          summary he has to trust out loud.
+
+          The ones that made the number are lit in the side's colour and carry
+          its rail, exactly as they will a second later on the television, so
+          the thing he looked at and the thing the room sees are the same
+          drawing. A ball nobody posted reads "·" rather than a blank, which on
+          a hole still coming in is the difference between "he hasn't put it in"
+          and "he made nothing". */}
+      <div aria-label="Hole scores" style={{
+        marginTop: "0.5em", paddingTop: "0.45em",
+        borderTop: `1px solid ${teamColor(captainSide)}${ALPHA.line}`,
+        display: "flex", flexDirection: "column", gap: 2,
+      }}>
+        {(myPrompt.balls || []).map((b) => {
+          const rel = b.net == null || myPrompt.par == null ? null : b.net - myPrompt.par;
+          return (
+            <div key={b.pid} style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "1px 6px", borderRadius: 4,
+              borderLeft: `3px solid ${b.counted ? teamColor(captainSide) : "transparent"}`,
+              background: b.counted ? `${teamColor(captainSide)}${ALPHA.tint}` : "transparent",
+            }}>
+              <span style={{
+                flex: 1, minWidth: 0, fontSize: T.cardLabel, fontWeight: 800,
+                color: b.counted ? BC.t1 : BC.t2,
+                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+              }}>{b.name}</span>
+              <StrokeDots strokes={b.strokes} compact />
+              <span style={{
+                flexShrink: 0, width: "2.7em", textAlign: "center",
+                fontSize: T.cardLabel, fontWeight: 800,
+                color: rel != null && rel < 0 ? BC.danger : b.counted ? BC.t1 : BC.t2,
+              }}>{rel == null ? "·" : fmtRel(rel)}</span>
+            </div>
+          );
+        })}
+      </div>
+
       {/* The line he lands on. Bigger than everything above it, because it is
           the only part of the card the room is waiting for. */}
       <div style={{
-        marginTop: "0.5em", paddingTop: "0.45em",
+        marginTop: "0.45em", paddingTop: "0.4em",
         borderTop: `1px solid ${teamColor(captainSide)}${ALPHA.line}`,
         fontSize: T.cardTotal, fontWeight: 800, letterSpacing: 1,
         color: teamColor(captainSide), lineHeight: 1.15,
