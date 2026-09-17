@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { holePrompt, holeNuggets, possessive, ballNote, relToPar, fmtRel, sayNames, quietLine, QUIET_LINES, EAGLE, BIRDIE } from "./countdownPrompt";
+import { holePrompt, holeNuggets, possessive, ballNote, relToPar, fmtRel, sayNames, quietLine, QUIET_LINES, blowUpNote, overWord, EAGLE, BIRDIE } from "./countdownPrompt";
 
 // What the captain reads out to the room before he taps. The whole test of
 // this module is whether it names the right men — a net eagle nobody
@@ -795,5 +795,98 @@ describe("what the nuggets claim to know", () => {
     expect(all).not.toContain("of the round");
     expect(all).toContain("First net eagle so far — Paul W");
     expect(all).toContain("Irons' best hole so far");
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  The other end of the card
+// ══════════════════════════════════════════════════════════════════
+//
+// The card is fun facts, not a leaderboard. A side can be four under with
+// four net birdies and still have somebody who made a net quad on the same
+// eight balls, and leaving that out leaves out the half of it everybody
+// enjoyed — it is the hole this exists for.
+//
+// A net triple is not the "bad hole read out to the room" the header refuses:
+// three over AFTER his strokes is the ball off the cart path, and the man who
+// made it is the first to tell it. One over is Tuesday.
+describe("the blow-up", () => {
+  const b = (name, net, counted = false) => ({ pid: name, name, net, counted });
+  const hole = (balls, { par = 4, countN = 4, score = 12 } = {}) => ({ balls, par, countN, score });
+
+  it("rides alongside the good news rather than instead of it", () => {
+    // Aaron's hole, exactly: four net birdies, four under, and a quad.
+    const balls = [
+      b("Aaron J", 3, true), b("Ben T", 3, true), b("Christopher M", 3, true), b("Dave R", 3, true),
+      b("Jim H", 8),
+    ];
+    const p = holePrompt({ ...hole(balls), teamName: "Mash Brothers" });
+    expect(p.headline).toBe("Mash Brothers −4");
+    expect(p.notes[0]).toBe("Net birdies — Aaron J, Ben T, Christopher M and Dave R");
+    expect(p.nuggets).toContain("💥 Jim H — net quad");
+  });
+
+  it("is never crowded out by the two-nugget cap", () => {
+    // Three good-news lines compete for two places. The blow-up is appended
+    // after the cap, so it cannot lose that tie-break — which it would have,
+    // to every one of them.
+    const balls = [b("Paul W", 2, true), b("Dave K", 3, true), b("Jim H", 9)];
+    const past = [hole([b("Paul W", 3, true), b("Dave K", 4, true), b("Jim H", 4, true)], { countN: 3, score: 11 })];
+    const out = holeNuggets({ ...hole(balls, { countN: 2, score: 5 }), history: past, teamName: "Irons" });
+    expect(out.length).toBe(3);
+    expect(out[out.length - 1]).toContain("Jim H");
+    expect(out.join(" ")).toContain("First net eagle so far");
+  });
+
+  it("has a word for it on its own", () => {
+    expect(overWord(3)).toBe("triple");
+    expect(overWord(4)).toBe("quad");
+    expect(overWord(5)).toBe("five-over");
+  });
+
+  it("says it the way a golfer says it", () => {
+    const say = (net) => holeNuggets({ ...hole([b("Jim H", net)], { countN: 1, score: net }) }).join(" ");
+    expect(say(7)).toContain("net triple");
+    expect(say(8)).toContain("net quad");
+    // Past a quad nobody has a word, so it says the number — spelled, because
+    // the card is read out loud.
+    expect(say(9)).toContain("net five-over");
+    expect(say(10)).toContain("net six-over");
+  });
+
+  it("draws the line high, and leaves an ordinary bad hole alone", () => {
+    const quiet = (net) => holeNuggets({ ...hole([b("Jim H", net)], { countN: 1, score: net }) }).join(" ");
+    expect(quiet(5)).not.toContain("Jim H");   // bogey
+    expect(quiet(6)).not.toContain("Jim H");   // double
+    expect(quiet(7)).toContain("Jim H");       // triple — the line
+  });
+
+  it("names the worst of them and everybody level with it", () => {
+    const balls = [b("Jim H", 8), b("Joe E", 8), b("Shaun W", 7)];
+    const out = holeNuggets({ ...hole(balls, { countN: 3, score: 23 }) }).join(" ");
+    // Both quads, and not the triple underneath them: a list of bad numbers
+    // read out is the thing the header refuses.
+    expect(out).toContain("💥 Jim H and Joe E — net quad");
+    expect(out).not.toContain("Shaun W");
+  });
+
+  it("reads every posted ball, because it never counted by definition", () => {
+    // On a best-N hole the worst ball is the one the format threw away, so
+    // asking only the counted ones would find nothing, ever.
+    const balls = [b("Paul W", 3, true), b("Jim H", 8, false)];
+    expect(holeNuggets({ ...hole(balls, { countN: 1, score: 3 }) }).join(" ")).toContain("Jim H");
+  });
+
+  it("has nothing to say about a hole nobody blew up", () => {
+    const balls = [b("Paul W", 3, true), b("Dave K", 4, true)];
+    expect(holeNuggets({ ...hole(balls, { countN: 2, score: 7 }) }).join(" ")).not.toContain("💥");
+  });
+
+  it("is not confused by a hole with no score on it", () => {
+    expect(blowUpNote([{ pid: "x", name: "Jim H", net: null }], 4)).toBe(null);
+    expect(blowUpNote([], 4)).toBe(null);
+    expect(blowUpNote(null, 4)).toBe(null);
+    // No par is no answer, not a blow-up.
+    expect(blowUpNote([{ pid: "x", name: "Jim H", net: 9 }], undefined)).toBe(null);
   });
 });
