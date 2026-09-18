@@ -9,11 +9,12 @@
 //
 //  Three ideas drive the layout:
 //
-//    1. ONE THING AT A TIME. Rounds are collapsible sections. A round
-//       that has finished auto-collapses the moment a later round goes
-//       live, so the screen is always focused on what's being played.
-//       The collapsed bar still carries the round's point split, so
-//       nothing is hidden — just folded.
+//    1. ONE THING AT A TIME. Rounds are collapsible sections. Every
+//       earlier round folds away the moment a later one goes out — a
+//       score posted in it, after its first tee time — whether or not
+//       the earlier one was ever finalized, so the screen is always on
+//       what is being played. The collapsed bar still carries the
+//       round's point split, so nothing is hidden — just folded.
 //
 //    2. POINTS ARE THE CURRENCY. Every level of the view answers "who
 //       has how many, and how many are left": the cup bar up top, the
@@ -54,6 +55,7 @@ import { StickyTop } from "./ui";
 import ErrorBoundary from "./ErrorBoundary";
 import { isRoundFinal } from "../lib/roundLocks";
 import { scheduledRounds, roundWhen, roundTeeBox } from "../lib/rounds";
+import { roundUnderWay } from "../lib/scoringGate";
 import { HOLE_COUNT, revealState, stepReveal, COUNTDOWN_HASH, COUNTDOWN_PATH } from "../lib/reveal";
 // The television screen, and nothing else opens it. Sixteen phones load the
 // scoreboard every few minutes all weekend; one of them, once, opens the
@@ -1030,6 +1032,41 @@ function RoundSection({
   );
 }
 
+// ── The round the board is about ───────────────────────────────────
+// One round, and every other one folds under its collapsed bar.
+//
+// A round is OUT once both halves are true — somebody has posted a score in
+// it, and the clock is past its first tee time (`roundUnderWay`, in
+// lib/scoringGate, which owns the second half and the defaults for the
+// editions that carry no dates at all). The last one out is the answer, and
+// that is the fix: this used to open every round whose state was "live", and
+// live meant scored-but-not-settled, so a Friday round waiting on one group
+// to attest sat open above Saturday's for the whole of Saturday. A round that
+// is genuinely finished still wins when it is the last one out — that is the
+// Sunday-evening board, and there is nothing later to show.
+//
+// The tee time is the half that is easy to leave out, and leaving it out
+// folds away the round the field is standing on: a score reaches tomorrow's
+// round before anybody tees off in it often enough — a director entering a
+// card the night before, a phone left on the wrong round at breakfast — and
+// one stray number would otherwise move the whole board on a day early.
+//
+// But it only ever holds a round back in FAVOUR of one still being played.
+// When the last round out is over, nothing is being folded away and the
+// early card is the most recent thing there is to show: the demo edition is
+// exactly that shape before its middle round tees off — yesterday's round in
+// the books, today's nine holes in — and answering "yesterday" to a reviewer
+// who opened the app at eight would be the rule protecting nothing.
+function boardRound({ roundNumbers, roundMeta, tRounds, now }) {
+  const scored = roundNumbers.filter((r) => roundMeta[r].holesPlayed > 0);
+  if (!scored.length) return null;
+  const out = scored.filter((r) => roundUnderWay({ tRounds, round: r, now }));
+  const last = scored[scored.length - 1];
+  if (out.includes(last)) return last;
+  const playing = out.filter((r) => roundMeta[r].state === "live");
+  return playing.length ? playing[playing.length - 1] : last;
+}
+
 // ══════════════════════════════════════════════════════════════════
 //  TeamLeaderboard
 // ══════════════════════════════════════════════════════════════════
@@ -1194,18 +1231,26 @@ export function TeamLeaderboard({
     return out;
   }, [roundNumbers, roundMeta, matches, ownHoleData, courses, tRounds, tPlayers, hcpOverrides, teeAssignments, roundLocks]);
 
-  // Which rounds open by default: every live round, plus any round still
-  // being revealed — that one IS the screen everybody is looking at, and its
-  // revealed-holes-only view reads as "upcoming" until the first hole is
-  // turned over, which would have folded it away at exactly the wrong moment.
+  // ── Which rounds open by default ─────────────────────────────────
+  // ONE THING AT A TIME, which is the first idea at the top of this file: the
+  // board opens on the round the field is out on and folds every earlier one
+  // away. `boardRound` below is the choice; a concealing round is added to it
+  // rather than ranked by it.
   const defaultOpen = useMemo(() => {
-    const live = roundNumbers.filter((r) => roundMeta[r].state === "live"
-      || (roundMeta[r].seal?.concealing && roundMeta[r].drawn));
-    if (live.length) return new Set(live);
-    const played = roundNumbers.filter((r) => roundMeta[r].holesPlayed > 0);
-    if (played.length) return new Set([played[played.length - 1]]);
-    return new Set(roundNumbers.slice(0, 1));
-  }, [roundNumbers, roundMeta]);
+    // A sealed round is scored off holes the board cannot see (lib/reveal), so
+    // it has no score to be the latest round on and reads as upcoming right up
+    // to the moment the reveal ends — which is the evening everybody is
+    // looking at it. It opens on its own panel and on its own terms.
+    const open = new Set(roundNumbers.filter(
+      (r) => roundMeta[r].seal?.concealing && roundMeta[r].drawn,
+    ));
+    const current = boardRound({ roundNumbers, roundMeta, tRounds, now: new Date() });
+    if (current != null) open.add(current);
+    // Nothing played and nothing sealed: the tournament has not started, and
+    // the first round is what it is about.
+    if (!open.size) roundNumbers.slice(0, 1).forEach((r) => open.add(r));
+    return open;
+  }, [roundNumbers, roundMeta, tRounds]);
 
   // Cup totals — banked points only. A segment's points don't land here
   // until it's decided, which is what makes the pending figure below a
