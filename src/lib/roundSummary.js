@@ -208,12 +208,13 @@ export const roundSummary = ({
     .map((r) => ({ pid: r.pid, name: r.name, gross: r.gross, ch: r.ch, net: r.net }));
 
   // The money hole is one designated hole a round, lowest net, ties split —
-  // in the rounds the director has it switched on for. A round it is off in
-  // reports NULL rather than a winner: a shared-ball round would otherwise
-  // name a scramble pair as taking a hole nobody is paying out on, which is
-  // exactly the confusion the switch exists to end. See lib/betting.
+  // in the rounds it is PLAYED in, which is not every round of the draw. A
+  // shared-ball round is never offered it, and the director can decline any
+  // of the rest. Either way this reports NULL rather than a winner: naming a
+  // scramble pair as taking a hole nobody is paying out on is exactly the
+  // confusion the rule exists to end. See lib/betting.
   const mhNumber = moneyHole(buyIns?.moneyHoleNumber);
-  const mhPlayed = moneyHolePlaysRound(round, buyIns?.moneyHoleRounds);
+  const mhPlayed = moneyHolePlaysRound(round, buyIns?.moneyHoleRounds, { tRounds, roundLocks });
   const mhWinners = mhPlayed
     ? moneyHoleRows({
       round, hole: mhNumber, field: moneyField, holeData,
