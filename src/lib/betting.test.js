@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { inField, computeSkins, strokeMapsFor, lowNetRows, ctpTags, ctpPinTotal, moneyHole, moneyHoleRows, moneyHoleWins, moneyHolePars, moneyHoleRoundsIn, moneyHolePlaysRound, DEFAULT_MONEY_HOLE } from "./betting";
+import { inField, computeSkins, strokeMapsFor, lowNetRows, ctpTags, ctpPinTotal, moneyHole, moneyHoleRows, moneyHoleWins, moneyHolePars, moneyHoleRoundsIn, moneyHolePlaysRound, moneyHoleSwitchedOn, moneyHoleFormatAllows, roundFormat, DEFAULT_MONEY_HOLE } from "./betting";
 
 const course = {
   id: "c1",
@@ -324,10 +324,88 @@ describe("moneyHolePars", () => {
 });
 
 // ── Which rounds the money hole is played in ──────────────────────────
-// The switch a director reaches for on a shared-ball round, where both
-// partners post the same net and a side would take two of the round's shares
-// for one ball. Absent means every round, so a tournament that predates the
-// switch plays exactly as it did.
+// Two answers and they are different kinds of thing — the FORMAT rules a
+// shared-ball round out, and the director can decline any of the rest.
+// `moneyHoleSwitchedOn` is only the second of the two, which is what the
+// console's switches read and write; `moneyHolePlaysRound` is both.
+//
+// Absent means every round, so a tournament that predates the console plays
+// exactly as it did apart from the rule.
+describe("moneyHoleSwitchedOn — the director's answer alone", () => {
+  it("absent means on", () => {
+    expect(moneyHoleSwitchedOn(2, null)).toBe(true);
+    expect(moneyHoleSwitchedOn(2, undefined)).toBe(true);
+  });
+
+  it("reads the list", () => {
+    expect(moneyHoleSwitchedOn(2, [1, 3])).toBe(false);
+    expect(moneyHoleSwitchedOn(3, [1, 3])).toBe(true);
+  });
+
+  it("an empty list is off everywhere", () => {
+    expect(moneyHoleSwitchedOn(1, [])).toBe(false);
+  });
+
+  // The separation is the point: the stored list is the director's ANSWER and
+  // knows nothing about formats. Folding the rule into it would drop the
+  // scramble round out of storage, and switching that round to Singles in
+  // June would leave the game off it with nobody having chosen that.
+  it("says nothing about the format", () => {
+    expect(moneyHoleSwitchedOn(1, null)).toBe(true);
+  });
+});
+
+// The rule. A shared ball is not a per-player game: both partners post the
+// one gross, their nets differ because each allocates off his own handicap,
+// and the weaker half of the pair takes the hole off a ball he half hit.
+describe("moneyHoleFormatAllows", () => {
+  it("rules out the shared-ball formats", () => {
+    expect(moneyHoleFormatAllows("scramble")).toBe(false);
+    expect(moneyHoleFormatAllows("pinehurst")).toBe(false);
+  });
+
+  it("allows every format where a man plays his own ball in", () => {
+    ["singles", "best_ball", "team_total", "team_best_ball", "double_dot", "tilt", "stableford"]
+      .forEach(f => expect(moneyHoleFormatAllows(f)).toBe(true));
+  });
+
+  // A Shamble is somebody else's DRIVE and each man's own ball in, so the
+  // nets are real scores. It is out of the Data tab's low rounds
+  // (formatOwnBall) and in here, and the two questions are not the same one.
+  it("allows a shamble", () => {
+    expect(moneyHoleFormatAllows("shamble")).toBe(true);
+  });
+
+  // A round with no format yet is not a shared ball. It is offered, the same
+  // way an absent buy-in list means everybody.
+  it("allows a round that has not been given a format", () => {
+    expect(moneyHoleFormatAllows(null)).toBe(true);
+    expect(moneyHoleFormatAllows(undefined)).toBe(true);
+    expect(moneyHoleFormatAllows("no_such_format")).toBe(true);
+  });
+});
+
+// Lock first, the way roundSetup reads the course: a round PLAYED as a
+// scramble stays one, so re-pointing the draw in October cannot hand out a
+// hole nobody played for.
+describe("roundFormat", () => {
+  const rs = [{ round_number: 1, format: "singles" }];
+
+  it("reads the round document", () => {
+    expect(roundFormat({ round: 1, tRounds: rs, roundLocks: {} })).toBe("singles");
+  });
+
+  it("prefers the lock", () => {
+    const locks = { 1: { locked: true, format: "scramble" } };
+    expect(roundFormat({ round: 1, tRounds: rs, roundLocks: locks })).toBe("scramble");
+  });
+
+  it("is null for a round with neither", () => {
+    expect(roundFormat({ round: 9, tRounds: rs, roundLocks: {} })).toBeNull();
+    expect(roundFormat({ round: 1 })).toBeNull();
+  });
+});
+
 describe("moneyHoleRoundsIn", () => {
   it("an absent list is every round", () => {
     expect(moneyHoleRoundsIn([1, 2, 3, 4], null)).toEqual([1, 2, 3, 4]);
@@ -349,6 +427,29 @@ describe("moneyHoleRoundsIn", () => {
   it("holds no round list at all", () => {
     expect(moneyHoleRoundsIn(null, [1])).toEqual([]);
   });
+
+  // The rule, over a draw. Round 3 is the scramble and it is out whatever the
+  // director stored — including when he named it.
+  it("never plays a shared-ball round", () => {
+    const rs = [
+      { round_number: 1, format: "singles" },
+      { round_number: 2, format: "best_ball" },
+      { round_number: 3, format: "scramble" },
+      { round_number: 4, format: "pinehurst" },
+    ];
+    const ctx = { tRounds: rs, roundLocks: {} };
+    expect(moneyHoleRoundsIn([1, 2, 3, 4], null, ctx)).toEqual([1, 2]);
+    expect(moneyHoleRoundsIn([1, 2, 3, 4], [1, 3, 4], ctx)).toEqual([1]);
+    expect(moneyHoleRoundsIn([3, 4], null, ctx)).toEqual([]);
+  });
+
+  it("reads a locked round's format off the lock", () => {
+    const rs = [{ round_number: 1, format: "singles" }];
+    expect(moneyHoleRoundsIn([1], null, { tRounds: rs, roundLocks: {} })).toEqual([1]);
+    expect(moneyHoleRoundsIn([1], null, {
+      tRounds: rs, roundLocks: { 1: { locked: true, format: "scramble" } },
+    })).toEqual([]);
+  });
 });
 
 describe("moneyHolePlaysRound", () => {
@@ -363,6 +464,18 @@ describe("moneyHolePlaysRound", () => {
 
   it("an empty list plays nowhere", () => {
     expect(moneyHolePlaysRound(1, [])).toBe(false);
+  });
+
+  it("refuses a shared-ball round the director left switched on", () => {
+    const ctx = { tRounds: [{ round_number: 1, format: "scramble" }], roundLocks: {} };
+    expect(moneyHolePlaysRound(1, null, ctx)).toBe(false);
+    expect(moneyHolePlaysRound(1, [1], ctx)).toBe(false);
+  });
+
+  it("plays an own-ball round the director left switched on", () => {
+    const ctx = { tRounds: [{ round_number: 1, format: "best_ball" }], roundLocks: {} };
+    expect(moneyHolePlaysRound(1, null, ctx)).toBe(true);
+    expect(moneyHolePlaysRound(1, [2], ctx)).toBe(false);
   });
 });
 
@@ -384,10 +497,24 @@ describe("moneyHoleWins over a filtered draw", () => {
     expect(w[0].pid).toBe("p1");
     expect(w[0].share).toBe(160);
   });
+
+  // And the same when it is the FORMAT taking the round out rather than the
+  // director. A scramble in the draw makes the other rounds worth more; it
+  // does not orphan a share.
+  it("pays the whole pot across the rounds the format leaves", () => {
+    const rounds = moneyHoleRoundsIn([1, 2], null, {
+      tRounds: [{ round_number: 1, format: "singles" }, { round_number: 2, format: "scramble" }],
+      roundLocks: {},
+    });
+    expect(rounds).toEqual([1]);
+    const w = moneyHoleWins({ rounds, hole: 18, field: players, holeData: hd, pot: 160 });
+    expect(w.map(x => x.share)).toEqual([160]);
+  });
 });
 
-// The console lists the format alongside the par, because the format is the
-// reason a director reaches for the switch.
+// The console lists the format alongside the par, because on a shared-ball
+// round the format is the whole reason the row has no switch — and `shared`
+// is the same answer the arithmetic uses, so the two cannot disagree.
 describe("moneyHolePars carries the format", () => {
   const course = { id: "c1", holes: Array.from({ length: 18 }, () => ({ par: 4, hcp: 1 })) };
 
@@ -398,6 +525,15 @@ describe("moneyHolePars carries the format", () => {
     ];
     const r = moneyHolePars({ rounds: [1, 2], hole: 18, tRounds, courses: [course], roundLocks: {} });
     expect(r.perRound.map(x => x.format)).toEqual(["scramble", null]);
+    expect(r.perRound.map(x => x.shared)).toEqual([true, false]);
+  });
+
+  it("takes the format off the lock when there is one", () => {
+    const tRounds = [{ round_number: 1, course_id: "c1", format: "singles" }];
+    const locks = { 1: { locked: true, format: "scramble" } };
+    const r = moneyHolePars({ rounds: [1], hole: 18, tRounds, courses: [course], roundLocks: locks });
+    expect(r.perRound[0].format).toBe("scramble");
+    expect(r.perRound[0].shared).toBe(true);
   });
 });
 
@@ -409,9 +545,9 @@ describe("moneyHolePars carries the format", () => {
 // Both partners post the same gross — one ball — but every side game here
 // allocates off each man's OWN full Course Handicap, never the side's team
 // handicap. So the higher handicap of the pair takes more strokes off the
-// shared ball and beats his own partner on it. The money hole has a
-// director's switch to turn the round off (moneyHoleRoundsIn); net skins do
-// not, and on a shared-ball round they go to the weaker player of each side
+// shared ball and beats his own partner on it. The money hole is not OFFERED
+// on such a round any more (moneyHoleFormatAllows); net skins have no such
+// rule, and on a shared-ball round they go to the weaker player of each side
 // on almost every hole.
 describe("a shared ball in a per-player game", () => {
   const PARS = Array(18).fill(4);
@@ -438,10 +574,12 @@ describe("a shared ball in a per-player game", () => {
     expect(low.won).toBe(false);
   });
 
-  it("is what the money hole's round switch is for", () => {
-    // Absent means all; naming the other rounds takes the scramble out.
-    expect(moneyHoleRoundsIn([1, 2, 3, 4], undefined)).toEqual([1, 2, 3, 4]);
-    expect(moneyHoleRoundsIn([1, 2, 3, 4], [2, 3, 4])).toEqual([2, 3, 4]);
+  it("is why the money hole is not offered on this round at all", () => {
+    // Round 1 is the scramble above. It is out with the list absent, which is
+    // the state of every tournament that has never opened the console.
+    const draw = { tRounds, roundLocks: {} };
+    expect(moneyHoleRoundsIn([1], undefined, draw)).toEqual([]);
+    expect(moneyHolePlaysRound(1, undefined, draw)).toBe(false);
   });
 });
 

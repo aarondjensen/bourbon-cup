@@ -25,6 +25,7 @@
 //             is a real pot and it still pays out, but nobody's stake is
 //             recorded.
 import { getRoundCH, buildStrokeMap, resolveHolePars, resolveHoleHcps, lockForRound } from "../scoring";
+import { formatIsSharedBall } from "../constants";
 
 export const HOLES = 18;
 
@@ -232,44 +233,83 @@ export const moneyHole = (n) => {
 };
 
 // ── Which rounds it is played in ──────────────────────────────────────
+// Two answers, and they are different kinds of thing. A round is played only
+// if BOTH say so.
+//
+// ── The format rules it out ──
 // The money hole is a per-PLAYER game — lowest net on one hole — and there is
-// a format in the catalog where that sentence has no answer. On a shared-ball
-// round (2-Man Scramble, Pinehurst) a side plays ONE ball and both partners
-// carry it, so both post the same gross for one golf shot.
+// a family of formats in the catalog where that sentence has no answer. On a
+// shared-ball round (2-Man Scramble, Pinehurst) a side plays ONE ball and both
+// partners carry it, so both post the same gross for one golf shot.
 //
 // The nets are NOT the same, and this comment used to say they were. Every
 // side game in this file allocates off `strokeMapsFor`, which is each man's
 // OWN full Course Handicap — never the side's team handicap, which exists
 // only inside a match result. So the higher handicap of the pair takes more
 // strokes off the shared ball than his partner does and beats him on it: on a
-// scramble the money hole, and the net skins, go to the weaker player of each
-// side, off a ball he only half hit. Two men, one shot, and the one who
-// contributed least to it collects. Nobody at the table agreed to that either,
-// and it is just as invisible until the payout is read out.
+// scramble the money hole would go to the weaker player of each side, off a
+// ball he only half hit. Nobody at the table agreed to that, and it is
+// invisible until the payout is read out on Sunday.
 //
-// The switch below is the answer for the money hole. NET SKINS have no such
-// switch and are still exposed to it — see the audit note in
-// betting.test.js ("a shared ball in a per-player game"); changing who
-// collects is the director's call, not a thing to fix quietly mid-season.
+// That was a director's SWITCH for one season, defaulting to on, on the
+// argument that a group wanting the pair to play for it could have it. It is
+// a rule now: nobody wanted it, the default was the wrong way round, and a
+// warning a director has to act on is a warning a director forgets. So a
+// shared-ball round is not offered the money hole at all — the console shows
+// the row and says why rather than drawing a switch that must not be flipped.
 //
-// The fix is a director's switch rather than a rule, because it is his call:
-// a group that wants the pair playing for it can have it. `only` is a list of
-// round numbers the game is played in, read exactly the way every buy-in
-// field in this file is read — ABSENT MEANS ALL, so a tournament that has
-// never opened the console behaves as it always has, and a stored [] means
-// the money hole is off for the week rather than meaning nobody chose.
+// It reads the format through the LOCK first, the way `roundSetup` reads the
+// course: a round that was played as a scramble stays one, so re-pointing the
+// draw in October cannot hand out a hole nobody played for.
+//
+// NET SKINS have no such rule and are still exposed to the same arithmetic —
+// see the audit note in betting.test.js ("a shared ball in a per-player
+// game"); changing who collects there moves money that has been settled for
+// ten years, and is the director's call rather than a thing to fix quietly.
+//
+// ── The director switched it off ──
+// The rounds the format allows, he can still decline. `only` is a list of
+// round numbers, read exactly the way every buy-in field in this file is
+// read — ABSENT MEANS ALL, so a tournament that has never opened the console
+// behaves as it always has, and a stored [] means the money hole is off for
+// the week rather than meaning nobody chose.
+//
+// The two are kept apart because the stored list is the director's ANSWER and
+// must survive a format it says nothing about: folding the rule into it would
+// drop the scramble round from storage, and switching that round to Singles
+// in June would then leave the game off it with nobody having chosen that.
 //
 // Everything downstream takes the FILTERED list, which is what makes the
-// arithmetic follow the switch: the pot divides by the rounds it is actually
-// played in, so turning the scramble off makes the other three rounds worth
-// more rather than orphaning a quarter of the pot.
-export const moneyHoleRoundsIn = (rounds, only) =>
-  (rounds || []).filter(r => !Array.isArray(only) || only.includes(r));
+// arithmetic follow both: the pot divides by the rounds it is actually played
+// in, so a scramble in the draw makes the other three rounds worth more
+// rather than orphaning a quarter of the pot.
 
-// The same question asked of one round — what the on-course prompt and the
-// round summary need, neither of which holds the whole draw.
-export const moneyHolePlaysRound = (round, only) =>
+// The format a round is played under, lock first. Null when the round has no
+// row and no format yet — which is not a shared ball, so it is offered.
+export const roundFormat = ({ round, tRounds, roundLocks }) =>
+  lockForRound(roundLocks, round)?.format
+  || (tRounds || []).find(t => t.round_number === round)?.format
+  || null;
+
+// The rule. Asked of a format rather than of a round so the console can put
+// it on a row it is already drawing.
+export const moneyHoleFormatAllows = (format) => !formatIsSharedBall(format);
+
+// The director's own answer, one round at a time. This is what the console's
+// switches read and write; everywhere else wants moneyHolePlaysRound.
+export const moneyHoleSwitchedOn = (round, only) =>
   !Array.isArray(only) || only.includes(round);
+
+// Both questions, over a whole draw. `ctx` is `{ tRounds, roundLocks }` —
+// what the format is read out of.
+export const moneyHoleRoundsIn = (rounds, only, ctx) =>
+  (rounds || []).filter(r => moneyHolePlaysRound(r, only, ctx));
+
+// Both questions, asked of one round — what the on-course prompt and the
+// round summary need, neither of which holds the whole draw.
+export const moneyHolePlaysRound = (round, only, ctx) =>
+  moneyHoleSwitchedOn(round, only)
+  && moneyHoleFormatAllows(roundFormat({ round, ...(ctx || {}) }));
 
 // ── Why a par 3 is the wrong hole for it ──────────────────────────────
 // Every par 3 in the tournament already carries the CTP pot, and the two games
@@ -292,8 +332,12 @@ export const moneyHolePlaysRound = (round, only) =>
 export const moneyHolePars = ({ rounds, hole, tRounds, courses, roundLocks }) => {
   const h = moneyHole(hole) - 1;
   const perRound = (rounds || []).map(r => {
-    const { tr, course, pars } = roundSetup({ round: r, tRounds, courses, roundLocks });
-    return { round: r, course, par: course ? pars[h] : null, format: tr?.format || null };
+    const { lock, course, pars } = roundSetup({ round: r, tRounds, courses, roundLocks });
+    const format = lock?.format || tRounds?.find(t => t.round_number === r)?.format || null;
+    // `shared` rather than leaving the console to ask: the row that draws the
+    // format is the row that has to say the game is not offered on it, and
+    // one answer here keeps the console and the arithmetic from disagreeing.
+    return { round: r, course, par: course ? pars[h] : null, format, shared: !moneyHoleFormatAllows(format) };
   });
   return {
     hole: moneyHole(hole),

@@ -17,19 +17,21 @@
 //                 three games use, which already prints what the two of them
 //                 come to.
 //
-//  ── The scramble switch ──────────────────────────────────────────
+//  ── The scramble rule ────────────────────────────────────────────
 //  The money hole is lowest NET, one man's ball. On a shared-ball round —
 //  2-Man Scramble, Pinehurst — a side plays one ball and both partners carry
-//  it, so the pair posts identical gross off an identical team stroke map and
-//  therefore identical net. They do not win the hole between them, they win
-//  it TWICE: two of the round's shares for one golf shot, and nobody finds
-//  out until the money is read out on Sunday.
+//  it, so the pair posts identical gross. Their nets are not identical (each
+//  man allocates off his OWN handicap, see lib/betting), which is worse: the
+//  weaker half of every pair takes the hole off a ball he only half hit, and
+//  nobody finds out until the money is read out on Sunday.
 //
-//  So a shared-ball round says so on its row, and the switch beside it is how
-//  a director takes the game off that round. It is his call and not a rule —
-//  a group that wants the pair playing for it can have it — and the pot then
-//  divides by the rounds it IS played in, so switching one off makes the
-//  others worth more rather than stranding a quarter of the money.
+//  So the money hole is NOT OFFERED on a shared-ball round. It was a switch
+//  for a season, defaulting to on, and the row below is what is left of it:
+//  the round still appears — a director looking for round 3 has to find it —
+//  but it carries the format and the word OFF rather than a control, because
+//  there is nothing here to decide. The pot divides by the rounds that are
+//  played, so a scramble in the draw makes the others worth more rather than
+//  stranding a quarter of the money.
 //
 //  ── The par 3 warning ────────────────────────────────────────────
 //  Every par 3 already carries the CTP pot, and the two games are decided by
@@ -46,21 +48,25 @@
 
 import { BC, FONT, ALPHA, FS } from "../theme";
 import { BuyInEditor } from "./BuyIns";
-import { moneyHolePlaysRound } from "../lib/betting";
-import { formatLabel, formatIsSharedBall } from "../constants";
+import { moneyHoleSwitchedOn } from "../lib/betting";
+import { formatLabel } from "../constants";
 
 const HOLES = 18;
 
 export function MoneyHoleSetup({ hole, pars, only, players, amount, ids, onSetHole, onToggleRound, onChangeBuyIn }) {
-  const rounds = (pars?.perRound || []).map(r => ({ ...r, on: moneyHolePlaysRound(r.round, only) }));
+  // `shared` is the format rule and comes off moneyHolePars; the switch is
+  // the director's own answer. A round is on only if both say so, which is
+  // exactly what moneyHolePlaysRound decides everywhere else.
+  const rounds = (pars?.perRound || []).map(r => ({
+    ...r, on: !r.shared && moneyHoleSwitchedOn(r.round, only),
+  }));
   const playing = rounds.filter(r => r.on);
-  // The two warnings are about the game as it will be PLAYED, so a round the
-  // director has switched off raises neither. A par 3 nobody is playing for
-  // is not a CTP clash, and a course nobody needs the par of is not an open
-  // question.
+  // The two warnings are about the game as it will be PLAYED, so a round that
+  // is off — by the rule or by the switch — raises neither. A par 3 nobody is
+  // playing for is not a CTP clash, and a course nobody needs the par of is
+  // not an open question.
   const warn = playing.filter(r => r.par === 3);
   const unknown = playing.filter(r => r.par == null);
-  const shared = playing.filter(r => formatIsSharedBall(r.format));
 
   return (
     <div style={{ fontFamily: FONT, marginBottom: 12 }}>
@@ -100,7 +106,9 @@ export function MoneyHoleSetup({ hole, pars, only, players, amount, ids, onSetHo
             What the chosen hole plays to round by round — four rounds are
             four courses, so one hole has up to four pars, which is why the
             warnings below are per round rather than per tournament — and the
-            switch that decides whether it is played there at all.
+            switch that decides whether it is played there at all. A
+            shared-ball round draws the row without the switch: see the note
+            at the top.
 
             A switch rather than a chip because the pot follows it: the share
             under the header divides by the rounds left ON. */}
@@ -110,66 +118,63 @@ export function MoneyHoleSetup({ hole, pars, only, players, amount, ids, onSetHo
             <div style={{ fontSize: FS.label, color: BC.t3, lineHeight: 1.4, marginBottom: 6 }}>
               The pot divides by the rounds left on
             </div>
-            {rounds.map(({ round, course, par, format, on }) => (
-              <button
-                key={round}
-                type="button"
-                role="switch"
-                aria-checked={on}
-                onClick={() => onToggleRound?.(round, !on)}
-                style={{
-                  display: "flex", alignItems: "center", gap: 8, width: "100%",
-                  padding: "7px 10px", marginBottom: 4, borderRadius: 8, cursor: "pointer",
-                  fontFamily: FONT, textAlign: "left",
-                  border: `1px solid ${on && par === 3 ? BC.warn : BC.bdr}${on && par === 3 ? "" : ALPHA.line}`,
-                  background: on && par === 3 ? `${BC.warn}${ALPHA.wash}` : on ? BC.inp : "transparent",
-                  opacity: on ? 1 : 0.55,
-                }}
-              >
-                <span style={{ flex: 1, minWidth: 0 }}>
+            {rounds.map(({ round, course, par, format, shared, on }) => {
+              // A shared-ball round is not a switch. It draws the same row —
+              // a director looking for round 3 has to find it — as a plain
+              // div, so there is no control to flip and nothing to undo.
+              const rowStyle = {
+                display: "flex", alignItems: "center", gap: 8, width: "100%",
+                padding: "7px 10px", marginBottom: 4, borderRadius: 8,
+                cursor: shared ? "default" : "pointer",
+                fontFamily: FONT, textAlign: "left",
+                border: `1px solid ${on && par === 3 ? BC.warn : BC.bdr}${on && par === 3 ? "" : ALPHA.line}`,
+                background: on && par === 3 ? `${BC.warn}${ALPHA.wash}` : on ? BC.inp : "transparent",
+                opacity: on ? 1 : 0.55,
+              };
+              const body = (
+                <>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{
+                      display: "block", fontSize: FS.label, fontWeight: 800, letterSpacing: 0.4,
+                      color: on && par === 3 ? BC.warn : on ? BC.t1 : BC.t3,
+                    }}>
+                      RD {round} · {course ? `PAR ${par}` : "NO COURSE"}
+                    </span>
+                    {/* The format, because on a shared-ball round it is the
+                        whole reason the row has no switch — see the note at
+                        the top. This is the one line in the console a
+                        director cannot act without. */}
+                    <span style={{ display: "block", fontSize: FS.label, color: BC.t3, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {formatLabel(format) || "No format yet"}
+                      {shared ? " · one ball, not offered" : ""}
+                    </span>
+                  </span>
                   <span style={{
-                    display: "block", fontSize: FS.label, fontWeight: 800, letterSpacing: 0.4,
-                    color: on && par === 3 ? BC.warn : on ? BC.t1 : BC.t3,
+                    flexShrink: 0, fontSize: FS.label, fontWeight: 800, letterSpacing: 0.6,
+                    padding: "3px 8px", borderRadius: 999,
+                    background: on ? `${BC.amber}${ALPHA.wash}` : "transparent",
+                    border: `1px solid ${on ? BC.amber : BC.bdr}${ALPHA.line}`,
+                    color: on ? BC.amberInk : BC.t3,
                   }}>
-                    RD {round} · {course ? `PAR ${par}` : "NO COURSE"}
+                    {on ? "ON" : "OFF"}
                   </span>
-                  {/* The format, because it is the reason a director would
-                      reach for this switch — see the note at the top. */}
-                  <span style={{ display: "block", fontSize: FS.label, color: BC.t3, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {formatLabel(format) || "No format yet"}
-                    {formatIsSharedBall(format) ? " · one ball, both partners" : ""}
-                  </span>
-                </span>
-                <span style={{
-                  flexShrink: 0, fontSize: FS.label, fontWeight: 800, letterSpacing: 0.6,
-                  padding: "3px 8px", borderRadius: 999,
-                  background: on ? `${BC.amber}${ALPHA.wash}` : "transparent",
-                  border: `1px solid ${on ? BC.amber : BC.bdr}${ALPHA.line}`,
-                  color: on ? BC.amberInk : BC.t3,
-                }}>
-                  {on ? "ON" : "OFF"}
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* The shared-ball warning. Not a refusal, for the same reason the par
-            3 one is not: the director sets the draw and may have a reason. */}
-        {shared.length > 0 && (
-          <div style={{
-            display: "flex", gap: 8, padding: "10px 14px",
-            borderTop: `1px solid ${BC.warn}${ALPHA.line}`,
-            background: `${BC.warn}${ALPHA.wash}`,
-          }}>
-            <span style={{ fontSize: FS.body, flexShrink: 0 }}>⚠️</span>
-            <span style={{ fontSize: FS.label, color: BC.t2, lineHeight: 1.5, minWidth: 0 }}>
-              <span style={{ display: "block", fontWeight: 800, color: BC.warn, letterSpacing: 0.4, marginBottom: 2 }}>
-                {shared.length === 1 ? `ROUND ${shared[0].round} IS` : `ROUNDS ${shared.map(x => x.round).join(", ")} ARE`} A SHARED BALL
-              </span>
-              Both partners post the same net, so a side wins it twice. Switch
-              {shared.length === 1 ? " it " : " them "}off unless you mean it.
-            </span>
+                </>
+              );
+              return shared
+                ? <div key={round} style={rowStyle}>{body}</div>
+                : (
+                  <button
+                    key={round}
+                    type="button"
+                    role="switch"
+                    aria-checked={on}
+                    onClick={() => onToggleRound?.(round, !on)}
+                    style={rowStyle}
+                  >
+                    {body}
+                  </button>
+                );
+            })}
           </div>
         )}
 

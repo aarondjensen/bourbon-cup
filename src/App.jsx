@@ -122,7 +122,7 @@ import { parseDeepLink } from "./lib/deepLink";
 import {
   inField, roundSetup, strokeMapsFor, roundCHs, computeSkins, lowNetRows, ctpTags, ctpPinTotal,
   moneyHole, moneyHoleRows, moneyHoleWins, moneyHolePars,
-  moneyHoleRoundsIn, moneyHolePlaysRound,
+  moneyHoleRoundsIn, moneyHolePlaysRound, moneyHoleSwitchedOn,
 } from "./lib/betting";
 import { SIDE_BETS_COL, sideBetId, buildSideBet, toggleSettled } from "./lib/sideBets";
 import {
@@ -1871,9 +1871,9 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   //     hole before does not re-announce
   //   • once per round per session
   //   • there has to be a pot — a game nobody has priced is not news
-  //   • the money hole has to be PLAYED this round. A director who switched
-  //     it off on the scramble must not have the app announce it on the tee
-  //     of a round it will not pay out on.
+  //   • the money hole has to be PLAYED this round — a round the format
+  //     rules out (a shared ball) or the director switched off must not have
+  //     the app announce it on the tee of a round it will not pay out on.
   //   • somebody in THIS group has to be in it
   //   • and nobody in the group can have scored the money hole already, which
   //     is what stops a back-filled card announcing a hole that is played
@@ -1884,9 +1884,10 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   const moneyHolePot = (buyIns?.moneyHoleAmount || 0) > 0
     ? moneyHoleField.length * buyIns.moneyHoleAmount : 0;
   // The rounds it is actually played in — what the pot divides by, so the
-  // figure on the tee is the share of the rounds left ON rather than of the
-  // whole draw. See lib/betting's moneyHoleRoundsIn.
-  const moneyHoleRoundList = moneyHoleRoundsIn(rounds, buyIns?.moneyHoleRounds);
+  // figure on the tee is the share of the rounds it PLAYS rather than of the
+  // whole draw. A shared-ball round is not one of them. See lib/betting's
+  // moneyHoleRoundsIn.
+  const moneyHoleRoundList = moneyHoleRoundsIn(rounds, buyIns?.moneyHoleRounds, { tRounds, roundLocks });
 
   // The session guard is per GROUP, for the same reason the CTP one is: the
   // announcement is made to the men walking to that tee, and a device that
@@ -1896,7 +1897,7 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   const maybePromptMoneyHole = (pids, h, score, priorScore) => {
     if (score <= 0 || priorScore > 0) return;
     if (moneyHolePot <= 0) return;
-    if (!moneyHolePlaysRound(match.round, buyIns?.moneyHoleRounds)) return;
+    if (!moneyHolePlaysRound(match.round, buyIns?.moneyHoleRounds, { tRounds, roundLocks })) return;
     if (h !== moneyHoleIdx - 1) return;
     const key = `${myGroupKey || unit?.key || match.id}_${match.round}`;
     if (promptedMoneyHole.current[key]) return;
@@ -3485,11 +3486,12 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
       chs: roundCHs({ round, field: moneyHoleField, ...ctx }),
     });
 
-  // The rounds it is PLAYED in. A director switches it off on a shared-ball
-  // round — both partners post the same net there, so a side would win it
-  // twice — and everything below divides by what is left rather than by the
-  // whole draw. See lib/betting's moneyHoleRoundsIn.
-  const moneyHoleRoundList = moneyHoleRoundsIn(roundList, buyIns?.moneyHoleRounds);
+  // The rounds it is PLAYED in. A shared-ball round is never one of them —
+  // both partners carry the one ball and the weaker half of the pair takes
+  // the hole off it — and the director can decline any of the rest.
+  // Everything below divides by what is left rather than by the whole draw.
+  // See lib/betting's moneyHoleRoundsIn.
+  const moneyHoleRoundList = moneyHoleRoundsIn(roundList, buyIns?.moneyHoleRounds, { tRounds, roundLocks });
   // The pot divides by the ROUNDS and a tied hole splits ITS share — the same
   // shape as low net, and for the same reason: a tie must not make one hole
   // pay out more in total than a clean one. See lib/betting.
@@ -3506,6 +3508,12 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // on the pot card gets only the rounds being played.
   const moneyHoleParInfo = moneyHolePars({ rounds: roundList, hole: holeNum, tRounds, courses, roundLocks });
   const moneyHolePlayingPar3 = moneyHoleParInfo.par3.filter(x => moneyHoleRoundList.includes(x.round));
+  // A draw with nothing but shared balls in it. The empty state says so
+  // rather than "switched off", which would send a director to a console
+  // whose switches are all already on. `shared` is moneyHolePars' own answer,
+  // so the screen and the arithmetic cannot disagree about it.
+  const moneyHoleAllShared = moneyHoleParInfo.perRound.length > 0
+    && moneyHoleParInfo.perRound.every(x => x.shared);
   const moneyHoleLeaders = Object.values(moneyHoleWinners.reduce((acc, w) => {
     const e = acc[w.pid] || (acc[w.pid] = { pid: w.pid, count: 0, best: null, money: 0 });
     e.count += 1;
@@ -4090,7 +4098,12 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                  in a fifth round nobody chose while "not round 2" would not.
                  Written sorted so the strip on the pot card reads in order. */
               onToggleRound={(r, on) => {
-                const now = moneyHoleRoundsIn(roundList, buyIns?.moneyHoleRounds);
+                /* The director's OWN answer, not the played list: folding the
+                   format rule into what gets stored would drop a scramble
+                   round out of it, and switching that round to Singles in
+                   June would leave the game off it with nobody having said
+                   so. See lib/betting. */
+                const now = roundList.filter(x => moneyHoleSwitchedOn(x, buyIns?.moneyHoleRounds));
                 const next = on ? [...now, r] : now.filter(x => x !== r);
                 onUpdateBuyIns({ money_hole_rounds: [...new Set(next)].sort((a, b) => a - b) });
               }}
@@ -4143,7 +4156,12 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
             </>
           ) : (
             <div style={{ background: BC.card, borderRadius: 8, border: `1px solid ${BC.bdr}`, padding: "14px 12px", fontSize: FS.small, color: BC.t3, textAlign: "center" }}>
-              The money hole is switched off for every round.
+              {/* Which of the two answers emptied it. "Switched off" over a
+                  draw of scrambles would send a director to a console whose
+                  switches are all already on. */}
+              {moneyHoleAllShared
+                ? "Every round is a shared ball — the money hole is not played."
+                : "The money hole is switched off for every round."}
             </div>
           )}
         </div>

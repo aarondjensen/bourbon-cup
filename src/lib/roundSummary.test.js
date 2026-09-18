@@ -215,9 +215,8 @@ describe("roundSummary", () => {
     expect(roundSummary(base).moneyHole.hole).toBe(18);
   });
 
-  // A round the director switched the money hole off in — the scramble,
-  // usually, where both partners post the same net. It reports NOTHING, so
-  // the sheet cannot name a winner of a hole nobody is paying out on.
+  // A round the director switched the money hole off in. It reports NOTHING,
+  // so the sheet cannot name a winner of a hole nobody is paying out on.
   it("reports no money hole on a round it is switched off in", () => {
     const holeData = { ...base.holeData, p3_1: { ...card(5), 17: 2 } };
     const s = roundSummary({ ...base, holeData, buyIns: { moneyHoleNumber: 18, moneyHoleRounds: [2] } });
@@ -228,6 +227,33 @@ describe("roundSummary", () => {
     const holeData = { ...base.holeData, p3_1: { ...card(5), 17: 2 } };
     const s = roundSummary({ ...base, holeData, buyIns: { moneyHoleNumber: 18, moneyHoleRounds: [1] } });
     expect(s.moneyHole.winners.map(w => w.pid)).toEqual(["p3"]);
+  });
+
+  // And the round nobody switches off, because it is never offered: a shared
+  // ball. Both partners post the one ball, their nets differ because each
+  // allocates off his own handicap, and the sheet would otherwise name the
+  // weaker half of a pair as taking a hole nobody is paying out on.
+  it("reports no money hole on a shared-ball round, switch or no switch", () => {
+    const holeData = { ...base.holeData, p3_1: { ...card(5), 17: 2 } };
+    const scramble = [{ ...tRounds[0], format: "scramble" }];
+    expect(roundSummary({ ...base, tRounds: scramble, holeData,
+      buyIns: { moneyHoleNumber: 18 } }).moneyHole).toBeNull();
+    // Named in the stored list and still not played — the rule is not a
+    // default the switch can talk round.
+    expect(roundSummary({ ...base, tRounds: scramble, holeData,
+      buyIns: { moneyHoleNumber: 18, moneyHoleRounds: [1] } }).moneyHole).toBeNull();
+  });
+
+  // The lock is read first, the way the course is. A round PLAYED as a
+  // scramble stays one, so re-pointing the draw in October cannot hand out a
+  // hole nobody played for.
+  it("reads a locked round's format off the lock", () => {
+    const holeData = { ...base.holeData, p3_1: { ...card(5), 17: 2 } };
+    const s = roundSummary({
+      ...base, holeData, buyIns: { moneyHoleNumber: 18 },
+      roundLocks: { 1: { locked: true, format: "scramble" } },
+    });
+    expect(s.moneyHole).toBeNull();
   });
 
   // ── The buy-in fields ─────────────────────────────────────────────
