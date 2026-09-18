@@ -6,7 +6,7 @@
 import { describe, it, expect } from "vitest";
 import {
   roundForToday, isScoringOpen, roundDate, hasRoundDates,
-  firstTeeMinutes, scoringClosedMessage, SCORING_LEAD_MIN,
+  firstTeeMinutes, scoringClosedMessage, SCORING_LEAD_MIN, roundUnderWay,
 } from "./scoringGate";
 
 const week = [
@@ -118,5 +118,39 @@ describe("scoringClosedMessage", () => {
     expect(scoringClosedMessage({ open: false, reason: "not-yet" }, 3).title).toContain("Round 3");
     expect(scoringClosedMessage({ open: false, reason: "past" }, 1).body).toContain("director");
     expect(scoringClosedMessage({ open: false, reason: "too-early" }, 4).body).toContain("half an hour");
+  });
+});
+
+// ── roundUnderWay ──────────────────────────────────────────────────
+// The scoreboard's half of this file: the leaderboard folds every earlier
+// round away once one is out, and a score alone is not enough to say so.
+describe("roundUnderWay", () => {
+  const today = "2026-07-18";
+
+  it("is out once the clock passes the first tee time", () => {
+    expect(roundUnderWay({ tRounds: week, round: 4, today, now: at(13, 1) })).toBe(true);
+    expect(roundUnderWay({ tRounds: week, round: 4, today, now: at(13) })).toBe(true);
+  });
+
+  it("is not out before it, however many scores have landed in it", () => {
+    // The card a director enters the night before, and the phone left on the
+    // wrong round at breakfast. Neither is a reason to fold Friday away.
+    expect(roundUnderWay({ tRounds: week, round: 4, today, now: at(12, 59) })).toBe(false);
+  });
+
+  it("is not out on a round dated for a later day", () => {
+    expect(roundUnderWay({ tRounds: week, round: 2, today: "2026-07-16", now: at(23) })).toBe(false);
+  });
+
+  it("is out on a round already played", () => {
+    expect(roundUnderWay({ tRounds: week, round: 1, today, now: at(5) })).toBe(true);
+  });
+
+  it("takes an undated round, or one with no tee sheet, at its word", () => {
+    // The ten imported years, the demo, and any tournament a director has
+    // drawn but not yet scheduled. Same defaults as the gate above.
+    expect(roundUnderWay({ tRounds: week, round: 3, today, now: at(4) })).toBe(true);
+    expect(roundUnderWay({ tRounds: [{ round_number: 1 }], round: 1, today, now: at(4) })).toBe(true);
+    expect(roundUnderWay({ round: 1, today, now: at(4) })).toBe(true);
   });
 });

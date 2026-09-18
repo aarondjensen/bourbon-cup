@@ -1,5 +1,6 @@
 // ══════════════════════════════════════════════════════════════════
-//  scoringGate — which round a phone lands on, and when it may post.
+//  scoringGate — which round a phone lands on, when it may post, and
+//  whether the field is out on it yet.
 // ══════════════════════════════════════════════════════════════════
 //
 // Ported from WBC, where the gate was written against a specific failure:
@@ -151,4 +152,31 @@ export function scoringClosedMessage(verdict, round) {
     title: `Round ${round} opens closer to your tee time`,
     body: "Scoring unlocks half an hour before the first group goes off.",
   };
+}
+
+// ── Has this round actually started? ───────────────────────────────
+// A different question from the gate above, asked by the scoreboard rather
+// than by the Scoring tab: not "may this phone post" but "is the field out
+// on this round". The board folds every earlier round away once one is, so
+// the answer has to be about the morning rather than about the documents —
+// a score can reach a round before anybody tees off in it (a director
+// entering a card the night before, a phone left on tomorrow's round), and
+// a stray number is not a reason to fold away the round the field is
+// standing on.
+//
+// Only the CLOCK half lives here; the caller supplies the score. Same
+// defaults as everything else in this file: an undated round, or a dated one
+// with no tee sheet, is taken at its word, because those are the editions
+// that will never carry a time and the alternative is a board that never
+// moves on.
+export function roundUnderWay({
+  tRounds, round, today = todayISO(), now = new Date(),
+} = {}) {
+  const date = roundDate(tRounds, round);
+  if (!date) return true;            // undated → the score is the only evidence there is
+  if (date > today) return false;    // a score in a round dated for tomorrow is a mis-post
+  if (date < today) return true;
+  const tee = firstTeeMinutes(tRounds, round);
+  if (tee == null) return true;      // no tee sheet → under way as soon as it is scored
+  return now.getHours() * 60 + now.getMinutes() >= tee;
 }
