@@ -38,7 +38,7 @@
 import { useState, useEffect, useRef } from "react";
 import { BC, FONT, SCRIM, ALPHA, ON_AMBER, FS, themedStyle } from "../theme";
 import { Popup } from "./Popup";
-import { searchGhinGolfers, syncGhinNumbers, parseGhinHI, fmtHI } from "../lib/ghin";
+import { searchGhinGolfers, syncGhinNumbers, parseGhinHI, fmtHI, hiDelta } from "../lib/ghin";
 
 const US_STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"];
 
@@ -379,7 +379,16 @@ function shortReason(reasons) {
 // `confirm` (optional): a promise-based confirmation (useConfirm's) shown
 // before syncing, so the director sees exactly what will happen. `compact`
 // renders just an emoji button (for placing beside a column header).
-export function GhinSyncButton({ players, onUpdatePlayer, notify, confirm, compact }) {
+//
+// `onDeltas` (optional): handed `{ [player_id]: { from, to, delta } }` for the
+// men whose index MOVED, once per run. The toast can only carry a count, and
+// "3 updated" of sixteen names leaves the director scrolling a roster looking
+// for three numbers he has no record of — so the roster marks them itself.
+// It is called on every completed run, including one where nobody moved, and
+// the map it hands over is the whole answer — a receiver that REPLACES what
+// it holds is what stops a row accumulating marks from three Saturdays of
+// syncs, each describing a number since overwritten.
+export function GhinSyncButton({ players, onUpdatePlayer, notify, confirm, compact, onDeltas }) {
   const [busy, setBusy] = useState(false);
   const linked = (players || []).filter(p => p?.ghin_number);
 
@@ -402,6 +411,7 @@ export function GhinSyncButton({ players, onUpdatePlayer, notify, confirm, compa
       const map = await syncGhinNumbers(linked.map(p => p.ghin_number));
       let changed = 0, same = 0, failed = 0;
       const reasons = [];
+      const deltas = {};
       for (const p of linked) {
         // Trimmed — see the note in the single-player resync above.
         const res = map[String(p.ghin_number).trim()];
@@ -417,8 +427,18 @@ export function GhinSyncButton({ players, onUpdatePlayer, notify, confirm, compa
           ghin_synced_at: new Date().toISOString(),
         };
         if (parseFloat(p.handicap_index) === hi) { await onUpdatePlayer(patch); same++; }
-        else { await onUpdatePlayer({ ...patch, handicap_index: hi }); changed++; }
+        else {
+          await onUpdatePlayer({ ...patch, handicap_index: hi });
+          changed++;
+          // Rounded to a tenth, so a move that survives the rounding is the
+          // only one that gets a badge. `changed` counts the write, which is
+          // the honest thing for it to count; the badge is about the number
+          // on screen, and a number that reads the same did not move.
+          const d = hiDelta(p.handicap_index, hi);
+          if (d) deltas[p.player_id] = { from: parseFloat(p.handicap_index), to: hi, delta: d };
+        }
       }
+      onDeltas?.(deltas);
       // A count with no reason is a dead end: the proxy computed the actual
       // upstream error for every one of these and the toast used to throw it
       // away, leaving "16 failed" and nothing to act on. The reasons are all

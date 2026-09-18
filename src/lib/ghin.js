@@ -77,3 +77,25 @@ export async function syncGhinNumbers(numbers) {
   }
   return byNumber;
 }
+
+// ── How far an index moved in a sync ────────────────────────────────
+// A Handicap Index is carried to one decimal, so the gap between two of them
+// is too — and `12.5 - 12.1` is 0.39999999999999947 in binary floating point,
+// which reaches a two-character badge as exactly that. Rounded to a tenth
+// here rather than at the call site, so the next thing that wants to name a
+// move — a toast, a log row — gets the same number rather than its own
+// rounding of it.
+//
+// Signed the way the stored index is: a plus handicap is NEGATIVE (see
+// parseGhinHI), so +2.1 → +1.8 is stored -2.1 → -1.8 and comes back as +0.3.
+// The index got higher, which is what it did — a plus player losing a tenth
+// of his plus reads the same direction as anybody else gaining one.
+//
+// null when either end is unknown, 0 when it did not move. Those are
+// different answers: a caller asking "did this move" must not read a golfer
+// with no handicap on file as one who held steady.
+export function hiDelta(from, to) {
+  const a = parseFloat(from), b = parseFloat(to);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+  return Math.round((b - a) * 10) / 10;
+}
