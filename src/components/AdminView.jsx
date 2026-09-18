@@ -111,6 +111,7 @@ import {
   LOCK_FINAL,
   LOCK_OPEN,
   describeHiChangeImpact,
+  lockedHiDrift,
   roundLockState,
 } from "../lib/roundLocks";
 import { amendNeedsRefresh, describeSettingValue } from "../lib/roundAmend";
@@ -150,6 +151,9 @@ import {
   apiUrl,
   isNative,
 } from "../lib/platform";
+import {
+  fmtHI,
+} from "../lib/ghin";
 import {
   calcCH,
   calcCHForCourse,
@@ -872,6 +876,22 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
   // behind a typed RECALCULATE.
   const canRecalc = roundIsLocked && !roundIsFinal;
   const [recalcBusy, setRecalcBusy] = useState(false);
+
+  // Which of this round's frozen indexes the roster has since moved away from
+  // — see lockedHiDrift. Computed here rather than in the row so the count at
+  // the foot of HANDICAPS and the mark on the rows are the same list: a
+  // heading saying three moved with two marks under it is worse than either.
+  //
+  // `realPlayers` so it counts the same men the rows below draw — 2020's
+  // compiled card has no index to drift.
+  const hiDrift = useMemo(
+    () => lockedHiDrift(roundLocks, editRound, realPlayers(tPlayers)),
+    [roundLocks, editRound, tPlayers],
+  );
+  const hiDriftBy = useMemo(
+    () => Object.fromEntries(hiDrift.map((d) => [d.pid, d])),
+    [hiDrift],
+  );
 
   // Recalculating re-derives every player's Course Handicap for the round
   // from live values, which CHANGES A FINISHED RESULT. So it says what it is
@@ -3388,6 +3408,13 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                     // for reference; the per-round control below overrides the CH.
                     const hiOverridden = p.hi_override != null && String(p.hi_override).trim() !== "";
                     const effHI = lockedRow?.hi ?? (hiOverridden ? p.hi_override : p.handicap_index);
+                    // ...and when that frozen figure has stopped agreeing with
+                    // the roster, the row says so. A GHIN sync writes
+                    // `handicap_index`, the Players tab takes the new number
+                    // immediately, and this column correctly goes on printing
+                    // the old one — which read as a broken screen, because
+                    // nothing on it named the gap or the way to close it.
+                    const drift = hiDriftBy[p.player_id];
                     const override = hcpOverrides[editRound]?.[p.player_id]; // per-round CH override
                     const hasOverride = override !== undefined && override !== "";
                     const tr2 = tRounds.find(t => t.round_number === editRound);
@@ -3445,8 +3472,36 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                         {/* FS.small, the same as the name and the CH box
                             beside it: the three read as one row of a table,
                             and a 10px index next to a 12px name read as a
-                            footnote on it. */}
-                        <div title={hiOverridden ? `Index override (base ${p.handicap_index})` : undefined} style={{ fontSize: FS.small, color: hiOverridden ? BC.amberInk : BC.t3, fontWeight: hiOverridden ? 700 : 400, textAlign: "center" }}>{effHI}{hiOverridden ? "*" : ""}</div>
+                            footnote on it.
+
+                            The drift mark under it is amber rather than the
+                            green/red a CH delta is drawn in — this is not a
+                            stroke the round gained or lost, it is a number
+                            that has gone out of date, and amber is what every
+                            other exception on this row is marked with. The
+                            arrow is the direction the ROSTER moved, so it
+                            points the same way as the badge a tee change
+                            raises. */}
+                        <div
+                          title={drift
+                            ? `Frozen at ${fmtHI(drift.frozen)} when the round locked — the roster now reads ${fmtHI(drift.live)}`
+                            : (hiOverridden ? `Index override (base ${p.handicap_index})` : undefined)}
+                          style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", lineHeight: 1.15 }}>
+                          {/* `fmtHI` on the way out only — `effHI` stays the
+                              stored number because calcCHForCourse below reads
+                              it, and parseFloat("+2.1") is 2.1, which is the
+                              wrong side of scratch. The column printed the raw
+                              value, so the one man off a plus read "-2.1" here
+                              and "+2.1" on every screen a golfer sees; beside a
+                              drift mark whose tooltip names both figures, that
+                              contradiction is on one row. */}
+                          <span style={{ fontSize: FS.small, color: hiOverridden ? BC.amberInk : BC.t3, fontWeight: hiOverridden ? 700 : 400 }}>{fmtHI(effHI)}{hiOverridden ? "*" : ""}</span>
+                          {drift && (
+                            <span style={{ fontSize: FS.micro, fontWeight: 800, color: BC.amberInk, whiteSpace: "nowrap" }}>
+                              {drift.delta > 0 ? "▲" : "▼"}{Math.abs(drift.delta)}
+                            </span>
+                          )}
+                        </div>
                         <input
                           type="number" step="1"
                           // readOnly (not disabled) when final so the tap still
@@ -3605,9 +3660,12 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                     the confirm behind it: the handicaps about to move, in
                     numbers, behind a typed RECALCULATE.
 
-                The heading is the one thing the amendment changes — a round
-                that was REOPENED is waiting on this and says so; one that
-                merely locked this morning is not waiting on anything.
+                The heading is the one thing that changes underneath it, and
+                it has three readings — a round that was REOPENED is waiting on
+                this and says so; a round whose frozen indexes the roster has
+                since moved past counts them, which is the actual answer to
+                "why does the HI column disagree with the Players tab"; and one
+                that merely locked this morning is not waiting on anything.
 
                 A round reopened purely to fix a typed score needs no tap here
                 at all: the strokes were right, and the confirm says so rather
@@ -3620,7 +3678,9 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                 <div style={{ fontSize: FS.small, fontWeight: 700, color: BC.amberInk, marginBottom: 4 }}>
                   {wasReopened
                     ? `Round ${editRound} was reopened`
-                    : `Round ${editRound}'s handicaps are frozen`}
+                    : hiDrift.length
+                      ? `Round ${editRound} is scoring on ${hiDrift.length} index${hiDrift.length === 1 ? "" : "es"} the roster has moved past`
+                      : `Round ${editRound}'s handicaps are frozen`}
                 </div>
                 {/* The one line, and it is the asymmetry this whole flow was
                     built around: strokes are frozen, points are not. A
