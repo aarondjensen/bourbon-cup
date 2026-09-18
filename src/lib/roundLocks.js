@@ -386,6 +386,40 @@ export function describeHiChangeImpact(locks, allRounds = [1, 2, 3, 4]) {
   };
 }
 
+// ── What a locked round has drifted away from ───────────────────────
+// Every player in `players` whose live effective index is no longer the one
+// frozen in this round's snapshot, with the gap between them.
+//
+// It exists because the freeze is invisible on the screen that shows it. The
+// Formats tab's HI column answers to the snapshot — correctly, that is the
+// whole guarantee above — and a GHIN sync writes `handicap_index`, so the two
+// legitimately part company. The column went on printing the frozen figure
+// with nothing on the row to say it had stopped tracking the roster, and a
+// director who had just watched the Players tab take the new index read that
+// as the app failing to update. The number is right; the silence was not.
+//
+// Rounded to a tenth on the way out: 12.4 - 8.1 is 4.300000000000001 in
+// binary floating point, and a badge two characters wide cannot hold that.
+//
+// A player with no frozen row is NOT drift. That is the late substitute, who
+// is already scoring off live values by design (see the resolution rule in
+// scoring.js) — marking them would claim a gap that is not there.
+export function lockedHiDrift(locks, round, players) {
+  if (!isRoundLocked(locks, round)) return [];
+  const out = [];
+  (players || []).forEach((p) => {
+    const row = lockedPlayerEntry(locks, round, p.player_id);
+    if (!row || row.hi == null) return;
+    const frozen = Number(row.hi);
+    const live = getEffectiveHI(p.player_id, players);
+    if (!Number.isFinite(frozen) || !Number.isFinite(live)) return;
+    const delta = Math.round((live - frozen) * 10) / 10;
+    if (delta === 0) return;
+    out.push({ pid: p.player_id, name: p.name || p.player_id, frozen, live, delta });
+  });
+  return out;
+}
+
 // Short human string for the lock badge / tooltip.
 export function describeLock(lock) {
   if (!lock?.locked) return "Not locked — scoring off live handicaps.";
