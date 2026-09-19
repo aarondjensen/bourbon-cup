@@ -635,9 +635,16 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
     // television in front of the whole field.
     //
     // So the round is not withheld — a backup missing Round 4 is a broken
-    // backup, and the director can already read those numbers on the Scoring
-    // tab — but it is never handed over silently. Named, confirmed, then
-    // exported, which is the same trade the group picker's padlock makes.
+    // backup, and this file is the answer to the Saturday Firestore cannot be
+    // reached, which is the day the closing round most needs recovering — but
+    // it is never handed over silently. Named, confirmed, then exported.
+    //
+    // It is now the ONLY place in the app that will put the other side's
+    // sealed numbers in front of a director, and that is deliberate rather
+    // than left over: the Scoring tab's padlocked pill used to be the other
+    // one, and it was removed because a screen is read in a room. A file is
+    // not. It is asked for by name, it lands in a downloads folder, and the
+    // only reason to open it is the one this button exists for.
     const sealedIn = (round == null ? tournamentRounds : [round])
       .filter(r => isConcealing((tRounds || []).find(t => t.round_number === r)));
     if (sealedIn.length) {
