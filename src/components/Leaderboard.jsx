@@ -40,7 +40,7 @@ import { playerLookup, realPlayers, sideNames } from "../lib/players";
 import {
   FORMATS, NASSAU_DEFAULT, DEFAULT_FORMAT,
   POINT_METHOD_TRADITIONAL, TROPHY_SILHOUETTE, CUP_POINTS_TO_WIN,
-  isPointsPerHole, holePointsTotal,
+  isPointsPerHole, holePointsTotal, formatGroupsByTeam,
 } from "../constants";
 import {
   computeMatchResult, getRoundCourseCtx, holeFormatFor, settlesOnTotal,
@@ -382,6 +382,33 @@ function MatchCard({
   const scoreboardFormat = format === "team_best_ball";
   const showScoreboard = expanded && scoreboardFormat && expandLevel === "points";
   const showFullCard = expanded && (!scoreboardFormat || expandLevel === "full");
+  // ── The other side's card, before the round is in the books ───────
+  // A team round's match is the whole SIDE — sixteen men across four tee
+  // waves — so the full card behind this row is not a foursome's card, it is
+  // everybody's. Two taps on the board is the shortest route in the app to
+  // the opposing eight's holes, and it was open for the whole of a round
+  // being played: the blackout never reached it, because the blackout works
+  // by subtracting scores and this card is only drawn on a round that has
+  // scores left in it.
+  //
+  // So until the round is FINAL the card is cut to the reader's own side —
+  // the same `ownSideOnly` the Scoring tab has always passed, for the same
+  // reason, and a team is still never hidden from itself. The moment the
+  // director puts the round in the books the result is public and the whole
+  // card is what everybody came for.
+  //
+  // The lock rather than the seal, deliberately. `isConcealing` already takes
+  // the rows away entirely on a sealed round, so gating on it would leave the
+  // one round that reaches here — a Team Best Ball round a director chose to
+  // play in the open, or one whose `sealed` flag was never written — exactly
+  // as exposed as before. "In the books" has no timing to get wrong and is
+  // true of every imported year, so nothing on the old cups moves.
+  //
+  // `formatGroupsByTeam` rather than the format's name: it is the flag that
+  // says a side plays as a side, which is the whole of why the eight opposite
+  // are strangers to this card.
+  const teamRound = formatGroupsByTeam(format);
+  const ownSideOnly = teamRound && !isRoundFinal(roundLocks, match.round);
   const opts = segOpts(match, format);
   // What the holes were actually scored as — see the note on holeFormatFor. The
   // strip below paints a hole from its two numbers, and on a best-ball override
@@ -632,7 +659,8 @@ function MatchCard({
               match={match} result={result} format={format}
               holePars={cardCtx.holePars} holeHcps={cardCtx.holeHcps} course={cardCtx.course}
               tPlayers={tPlayers} getScore={getScore} viewer={viewer}
-              showHeader={false}
+              showHeader={false} ownSideOnly={ownSideOnly}
+              hiddenNote="FULL CARD WHEN THE ROUND IS FINAL"
             />
           </div>
         </div>
