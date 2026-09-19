@@ -394,8 +394,20 @@ describe("Scoring", () => {
       });
     });
 
-    it("offers every wave once the round is not sealed at all", () => {
+    it("is not opened by a director switching the seal off", () => {
+      // The Formats tab refuses that switch on a live closing round now, and
+      // `resolveSealed` refuses the stored value behind it — so a document
+      // carrying `sealed: false` changes nothing here either.
       const open = { ...bestBallRound, sealed: false };
+      const t = text(scoring({ user: director, tRounds: [open] }));
+      expect(t).not.toContain("8:10");
+      expect(t).not.toContain("8:30");
+    });
+
+    it("offers every wave on a round that is genuinely not sealed", () => {
+      // A finished round a director unsealed — the one case the switch still
+      // answers, and the one the imported years arrive in.
+      const open = { ...bestBallRound, sealed: false, final: true };
       const t = text(scoring({ user: director, tRounds: [open] }));
       expect(t).toContain("8:10");
       expect(t).not.toContain("🔒");

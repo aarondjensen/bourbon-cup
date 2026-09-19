@@ -126,30 +126,52 @@ export const SEAL_DEFAULT_FORMATS = ["team_best_ball"];
 export const sealDefaultFor = (format) => SEAL_DEFAULT_FORMATS.includes(format);
 
 // The rule, in ONE place — the Formats tab seeds the form from it and the
-// board reads it. A stored flag always wins; an unset one falls back to the
-// format's default, but only while the round is still live.
+// board reads it.
 //
-// It used to be explicit-only at read time: a document that had never carried
-// the flag was not sealed, whatever its format. The reasoning was that
-// nothing already in the books should go dark because this shipped, and that
-// half is still right — hence `final`.
+// THE CLOSING ROUND IS NOT A ROUND WITH A SWITCH ON IT. While a seal-default
+// format's round is still live, this returns true no matter what the document
+// says — an unset flag, and a `false` a director set. The Formats tab's Off
+// position is refused on that round for the same reason (see AdminView), so
+// the two cannot disagree about what the board is drawing.
 //
-// The other half was backwards, and round 4 of the live cup is what showed
-// it. The seed only reached the document if a director happened to open that
-// round's form, so a Team Best Ball round nobody edited was played in the
-// open: opponents' scores and the match status on every phone on the course,
-// which is the one thing the reveal exists to prevent. The two failures are
-// not comparable. Sealing a finished round by mistake hides a result until
-// somebody turns it over — visible, and a toggle away. NOT sealing a live one
-// spoils the ending for the whole field, and there is no undo for what
-// sixteen people have already read.
+// It got here in two steps, and both were the same mistake from opposite
+// ends. First it was explicit-only: a document that had never carried the
+// flag was not sealed, whatever its format — and the seed only reached the
+// document if a director happened to open that round's form, so a Team Best
+// Ball round nobody edited was played in the open. An unset flag started
+// defaulting to the format.
 //
-// So an unset flag now defaults to the format. `final` is the guard on the
-// other end, and it is what keeps every imported year visible: history is
-// written locked and final (see historyImport), so none of it is reachable
-// by this fallback.
-export const resolveSealed = (format, raw, final) =>
-  raw == null ? (!final && sealDefaultFor(format)) : !!raw;
+// That left the OTHER half of the same hole, and it is the wider one: a
+// stored `false`. One tap on a form that auto-saves, months before anybody
+// tees off, and round 4's cup points are live on sixteen phones — the whole
+// evening given away by a control nobody looks at again. "A director can turn
+// it off in the year somebody wants the last round live" was the argument for
+// the switch, and it is not worth what it costs: that year, the way to put the
+// round on the board is to walk the reveal (ALL, two taps) and finalize, which
+// takes seconds and cannot happen by accident in February.
+//
+// The two failures are not comparable, which is the whole reason this is
+// asymmetric. Sealing a round by mistake hides a result until somebody turns
+// it over — visible, recoverable, and a toggle away the moment the round is
+// final. NOT sealing a live one spoils the ending for the whole field, and
+// there is no undo for what sixteen people have already read.
+//
+// `final` is the guard on the other end and it is untouched. It is what keeps
+// every imported year visible — history is written locked and final (see
+// historyImport), so none of it is reachable by the force above — and it is
+// what leaves the switch working on a round that is over, which is the only
+// time turning the seal off answers a real question.
+export const resolveSealed = (format, raw, final) => {
+  if (!final && sealDefaultFor(format)) return true;
+  return raw == null ? false : !!raw;
+};
+
+// May the Formats tab offer to turn the seal OFF? Asked by the switch, so the
+// control and the rule above are the same decision rather than two that have
+// to be kept in step. A live seal-default round is the one case it may not:
+// `resolveSealed` would return true regardless, and a switch whose Off
+// position does nothing is a control that lies to the director holding it.
+export const canUnseal = (format, final) => !!final || !sealDefaultFor(format);
 
 // Is this round played behind the blackout at all?
 //

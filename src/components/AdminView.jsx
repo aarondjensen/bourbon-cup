@@ -105,7 +105,7 @@ import {
   realPlayers,
 } from "../lib/players";
 import {
-  resolveSealed, isConcealing, revealPending,
+  resolveSealed, canUnseal, isConcealing, revealPending,
 } from "../lib/reveal";
 import {
   LOCK_FINAL,
@@ -3059,9 +3059,17 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
 
                 It is a per-round switch rather than a property of the format
                 because sealing a round is a decision about the DAY, not about
-                how a hole is scored — and because a director needs to be able
-                to turn it off in the year somebody wants the last round live.
-                It opens ON for Team Best Ball and OFF for everything else.
+                how a hole is scored. It opens ON for Team Best Ball and OFF
+                for everything else.
+
+                ON IS NOT OPTIONAL ON A LIVE TEAM BEST BALL ROUND, and Off is
+                refused there — see canUnseal in lib/reveal, which is the same
+                decision the board reads, so the switch cannot say one thing
+                while the leaderboard does another. One tap here in February,
+                on a form that auto-saves, put round 4's cup points live on
+                sixteen phones; the switch comes back the moment the round is
+                final, which is the only time turning it off answers a real
+                question.
 
                 What is NOT here: how far the countdown has got. That is driven
                 from the Leaderboard, in front of the room, and putting it on
@@ -3095,10 +3103,30 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                   sealed: next,
                 });
               };
+              // Off is refused while the closing round is still live. Drawn
+              // and disabled rather than removed: the switch keeps its shape,
+              // so the tab does not reflow when a round is finalized, and the
+              // position the director cannot pick is the one he can see is
+              // unavailable. The title says why — a tooltip rather than a line
+              // under the switch, which is where this control's prose already
+              // went once.
+              // The same `roundFormat || storedRound.format` the save payload
+              // reads: the form's own field is empty for the render before the
+              // seed effect lands, and an empty format is not a seal-default
+              // one — so asking it raw would flash an enabled Off on the one
+              // frame nobody is looking at but the tests are.
+              const offAllowed = canUnseal(roundFormat || storedRound.format, roundIsFinal);
               return (
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ ...segTrack({ compact: true }), width: "fit-content", marginBottom: 8 }}>
-                    <button onClick={() => setSeal(false)} title="Scored and shown live, like every other round" style={pill(!sealed)}>
+                    <button
+                      onClick={() => offAllowed && setSeal(false)}
+                      disabled={!offAllowed}
+                      title={offAllowed
+                        ? "Scored and shown live, like every other round"
+                        : "The closing round is played sealed. Available once the round is final."}
+                      style={{ ...pill(!sealed), ...(offAllowed ? null : { cursor: "not-allowed", opacity: 0.4 }) }}
+                    >
                       Off{!sealed && <SegRule compact />}
                     </button>
                     <button onClick={() => setSeal(true)} title="Sealed all day, revealed hole by hole at the house" style={pill(sealed)}>

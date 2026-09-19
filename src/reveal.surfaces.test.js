@@ -335,9 +335,21 @@ describe("resolveSealed's unset-flag fallback", () => {
     expect(resolveSealed("team_best_ball", null, true)).toBe(false);
   });
 
-  it("still takes an explicit flag over both", () => {
-    expect(resolveSealed("team_best_ball", false, false)).toBe(false);
+  it("still takes an explicit flag over both — once the round is final", () => {
+    expect(resolveSealed("team_best_ball", false, true)).toBe(false);
     expect(resolveSealed("singles", true, true)).toBe(true);
+  });
+
+  // And refuses it before then. This is the surface question, not the
+  // arithmetic one: a stored `false` on the live closing round is the whole
+  // of what stood between the field and round 4's cup points, and it was one
+  // tap on a form that auto-saves.
+  it("will not let a live Team Best Ball round be unsealed at all", () => {
+    expect(resolveSealed("team_best_ball", false, false)).toBe(true);
+    const open = [{ round_number: 4, format: "team_best_ball", sealed: false }];
+    const hd = { a1_4: { 0: 4 } };
+    expect(concealHoleData(hd, open)).not.toBe(hd);
+    expect(concealHoleData(hd, open)).toEqual({});
   });
 
   // End to end, on the map: an imported year's closing round is scored.
