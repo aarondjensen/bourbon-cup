@@ -697,6 +697,99 @@ describe("strokes gained", () => {
   });
 });
 
+// ── One cup, round by round ───────────────────────────────────────
+describe("a year's strokes gained by round", () => {
+  // Two men, and whatever days are asked for.
+  const year = (days) => ({
+    players: toy.players,
+    editions: [{
+      year: 2001, teamA: "REDS", teamB: "BLUES", complete: true,
+      roster: [{ p: "a", t: "A" }, { p: "c", t: "B" }],
+    }],
+    rounds: days.map((d) => ({
+      year: 2001, round: d.round, format: d.format || "best_ball", course: `Toy ${d.round}`, par: 72,
+    })),
+    matches: [],
+    cards: days.flatMap((d) => Object.entries(d.scores).map(([p, g]) => ({
+      year: 2001, round: d.round, p, g, ch: 0, tp: g - 72, e: 0, b: 0, pr: 0, bo: 0, d: 0,
+    }))),
+  });
+
+  it("names a column per round and totals the row", () => {
+    const t = foldArchive(year([
+      { round: 1, scores: { a: 70, c: 80 } },
+      { round: 2, scores: { a: 74, c: 78 } },
+    ])).sgYear(2001);
+    expect(t.rounds).toEqual([1, 2]);
+    const a = t.rows[0];
+    expect(a.name).toBe("Amy A");
+    expect(a.by[1].gross).toBeCloseTo(5, 9);
+    expect(a.by[2].gross).toBeCloseTo(2, 9);
+    // The total is the SUM of the columns shown, so the row adds up on screen.
+    expect(a.gross).toBeCloseTo(7, 9);
+    expect(a.grossRounds).toBe(2);
+    // Gross descending, and the other half of a field is always the negative.
+    expect(t.rows[1].gross).toBeCloseTo(-7, 9);
+  });
+
+  it("leaves a shared-ball day off the columns entirely", () => {
+    const t = foldArchive(year([
+      { round: 1, scores: { a: 70, c: 80 } },
+      { round: 2, format: "scramble", scores: { a: 64, c: 64 } },
+      { round: 3, scores: { a: 74, c: 78 } },
+    ])).sgYear(2001);
+    // R1 R3, which is what the board's OWN BALL label is answering for.
+    expect(t.rounds).toEqual([1, 3]);
+    expect(t.rows[0].by[2]).toBeUndefined();
+    expect(t.rows[0].grossRounds).toBe(2);
+  });
+
+  it("drops a round one man played alone, which is not a field", () => {
+    const t = foldArchive(year([
+      { round: 1, scores: { a: 70, c: 80 } },
+      { round: 2, scores: { a: 74 } },
+    ])).sgYear(2001);
+    expect(t.rounds).toEqual([1]);
+  });
+
+  it("totals a man over the rounds he played, not the rounds there were", () => {
+    const t = foldArchive(year([
+      { round: 1, scores: { a: 70, c: 80 } },
+      { round: 2, scores: { a: 74, c: 78, d: 76 } },
+    ])).sgYear(2001);
+    const c = t.rows.find((r) => r.id === "c");
+    const d = t.rows.find((r) => r.id === "d");
+    expect(c.grossRounds).toBe(2);
+    expect(d.grossRounds).toBe(1);
+    expect(d.by[1]).toBeUndefined();
+    expect(d.gross).toBeCloseTo(d.by[2].gross, 9);
+  });
+
+  it("carries the side so a row can be drawn in its team's colour", () => {
+    const t = foldArchive(year([{ round: 1, scores: { a: 70, c: 80 } }])).sgYear(2001);
+    expect(t.rows.find((r) => r.id === "a").teamName).toBe("REDS");
+    expect(t.rows.find((r) => r.id === "c").side).toBe("B");
+  });
+
+  it("says nothing about a year that was never played", () => {
+    expect(foldArchive(toy).sgYear(1999)).toBeNull();
+  });
+
+  // The real ten, through the same door the screen uses.
+  it("answers every finished year the archive holds", () => {
+    const f = foldArchive(archive);
+    f.years.forEach((y) => {
+      const t = f.sgYear(y);
+      if (!t) return;
+      expect(t.rounds.length).toBeGreaterThan(0);
+      t.rows.forEach((r) => {
+        const sum = t.rounds.reduce((acc, n) => acc + (r.by[n]?.gross ?? 0), 0);
+        expect(r.gross).toBeCloseTo(sum, 6);
+      });
+    });
+  });
+});
+
 // ── Strokes gained as a cup record ────────────────────────────────
 // The team board is net and per man; the field spread is gross and per round.
 describe("a side's day in strokes gained", () => {

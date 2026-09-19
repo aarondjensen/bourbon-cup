@@ -945,6 +945,82 @@ function StrokesGained({ data, note = "" }) {
   );
 }
 
+// ── One cup, round by round ───────────────────────────────────────
+// The card above this is ten years deep and answers nothing about the week
+// being played. This is the week: a row a man, a column a round, his cup
+// total beside it.
+//
+// It shows EVERYBODY who teed off, ignoring the Core/All chip the table above
+// it obeys. That filter exists because a ten-year standing should not put a
+// one-cup guest among the regulars — an argument about comparing careers, and
+// there are no careers here. Every man in this table played the same days. It
+// also fails badly the one way that matters: 2016's John S played two cups,
+// so Core hides him, and he holds the best strokes gained week anybody has
+// ever had. A card about 2016 that leaves out the best week of 2016 is worse
+// than an extra name.
+//
+// The ROUNDS ARE THE ONES IT CAN ANSWER FOR — a scramble is not on it, which
+// is why a year with one reads R1 R2 R4 and why the board says OWN BALL.
+function YearStrokesGained({ data, year, teams }) {
+  const [basis, setBasis] = useState("gross");
+  const net = basis === "net";
+  const cup = useMemo(() => (data.sgYear ? data.sgYear(year) : null), [data, year]);
+  // Sorted on what is being SHOWN. A net column under a gross order is a
+  // table whose first row is not its best row.
+  const rows = useMemo(() => (cup
+    ? cup.rows.slice().sort((a, b) => (net ? b.net - a.net : b.gross - a.gross))
+    : []), [cup, net]);
+  const edition = useMemo(() => data.edition(year), [data, year]);
+  if (!cup || !rows.length) return null;
+
+  const cols = `minmax(0, 1fr) repeat(${cup.rounds.length}, 40px) 48px`;
+  const cell = (v, w) => (
+    <div style={{ fontSize: FS.small, fontWeight: w, textAlign: "right", color: sgColor(v) }}>{fmtSg(v)}</div>
+  );
+
+  return (
+    <Section
+      label="Strokes gained" note={`${year} · VS FIELD`}
+      action={<BasisToggle value={basis} onChange={setBasis} />}
+    >
+      {/* OWN BALL rides the column heads rather than a line under them, the
+          way it rides every other board's label on this tab — it is the
+          answer to "where is R3", which a year with a scramble in it would
+          otherwise make somebody hunt for. */}
+      <div style={{ display: "grid", gridTemplateColumns: cols, gap: 6, ...eyebrow, paddingBottom: 4 }}>
+        <div style={{ minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>BY ROUND · OWN BALL</div>
+        {cup.rounds.map((n) => <div key={n} style={{ textAlign: "right" }}>R{n}</div>)}
+        <div style={{ textAlign: "right" }}>TOTAL</div>
+      </div>
+      {rows.map((r) => (
+        <div key={r.id} style={{
+          display: "grid", gridTemplateColumns: cols, gap: 6,
+          alignItems: "center", padding: "5px 0", borderTop: hair(),
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+            <div style={{
+              width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+              background: r.side ? editionAccent(edition, r.side, teams) : BC.t3,
+            }} />
+            <span style={{
+              fontSize: FS.small, color: BC.t1, fontWeight: 600,
+              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+            }}>{r.name}</span>
+          </div>
+          {/* A round he did not play is a dash, and his total is over the
+              rounds he did. The dashes in his row are what say so. */}
+          {cup.rounds.map((n) => {
+            const g = r.by[n];
+            const v = g ? (net ? g.net : g.gross) : null;
+            return <div key={n}>{cell(v, 600)}</div>;
+          })}
+          {cell(net ? (r.netRounds ? r.net : null) : (r.grossRounds ? r.gross : null), 800)}
+        </div>
+      ))}
+    </Section>
+  );
+}
+
 // ── Streaks ───────────────────────────────────────────────────────
 // Two cards rather than one, because nine boards in a single card is a wall
 // and the split does the grouping that a sentence would otherwise have to.
@@ -1218,6 +1294,10 @@ function PlayerHalf({ data, activeYear, myId, teams }) {
         rows={rows} teamOf={teamOf} myId={myId} activeYear={activeYear}
         data={data} open={open} setOpen={setOpen}
       />
+      {/* One cup's own strokes gained, on the scope that is about one cup.
+          The boards below it are ten years deep and only drawn for Career —
+          a "best round" board over a single week is a list of that week. */}
+      {scope === "year" && <YearStrokesGained data={data} year={activeYear} teams={teams} />}
       {scope === "career" && <PlayerRecords data={boards} note={fieldNote} />}
       {scope === "career" && <StrokesGained data={boards} note={fieldNote} />}
       {/* Not the basis. NET PAR OR BETTER and HOLES WITHOUT A NET DOUBLE are

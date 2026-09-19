@@ -907,6 +907,67 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
     return { ...e, spread: Math.sqrt(sum(vals.map((v) => (v - mean) ** 2)) / vals.length) };
   }).filter(Boolean);
 
+  // ── One cup, round by round ─────────────────────────────────────
+  // Every board above this answers "over ten years". This answers "this
+  // week", which is the question somebody standing on Sunday's first tee
+  // actually has, and the one the tab could not answer at all: a year scope
+  // showed a career table and nothing else.
+  //
+  // One row a man, one column a ROUND, and his week beside it. The week is
+  // the SUM of the rounds shown and not an average, so the column adds up on
+  // screen — a reader who doubts a total can add the row.
+  //
+  // Own ball only, like every other strokes gained figure here, and the
+  // ROUNDS IT NAMES are the ones it could answer for rather than every round
+  // of the cup: a scramble column would be eighteen dashes with a field
+  // average behind it that is a field of shared balls. So a year whose third
+  // day was a scramble reads R1 R2 R4, and the year is what says why.
+  //
+  // A function rather than a computed table, because it is one year out of
+  // eleven and the caller knows which — folding all of them would be ten
+  // tables nobody opens.
+  const sgYear = (year) => {
+    const days = rounds
+      .filter((r) => r.year === year && formatOwnBall(r.format))
+      .map((r) => r.round)
+      // A field of one is not a field, the same rule gainOn applies. A round
+      // with one card in it is dropped here rather than drawn as a column of
+      // nulls.
+      .filter((n) => (fieldAvg.get(`${year}_${n}`)?.cards || 0) >= 2)
+      .sort((a, b) => a - b);
+    if (!days.length) return null;
+    const wanted = new Set(days);
+    const teamOf = new Map((edIx.get(year)?.roster || []).map((r) => [r.p, r.t]));
+    const e = edIx.get(year);
+    const byId = new Map();
+    cards.forEach((c) => {
+      if (c.year !== year || !wanted.has(c.round)) return;
+      const sg = gainOn(c);
+      if (!sg) return;
+      let r = byId.get(c.p);
+      if (!r) {
+        const side = teamOf.get(c.p) || null;
+        r = {
+          id: c.p, name: nameOf.get(c.p) || c.p, side,
+          teamName: side === "A" ? e?.teamA : side === "B" ? e?.teamB : "",
+          by: {}, gross: 0, net: 0, grossRounds: 0, netRounds: 0,
+        };
+        byId.set(c.p, r);
+      }
+      r.by[c.round] = sg;
+      r.gross += sg.gross; r.grossRounds += 1;
+      if (sg.net != null) { r.net += sg.net; r.netRounds += 1; }
+    });
+    // Gross descending is the order the fold hands over; a screen showing net
+    // re-sorts on what it is showing, which is what a reader expects of a
+    // column that is on screen.
+    return {
+      year,
+      rounds: days,
+      rows: [...byId.values()].sort((a, b) => b.gross - a.gross),
+    };
+  };
+
   // Each round's own result, one row per round of every cup.
   const roundResults = editionRows.flatMap((e) => e.rounds.map((r) => ({
     year: e.year,
@@ -1064,6 +1125,7 @@ export const foldArchive = ({ players = [], editions = [], rounds = [], matches 
     careerOver,
     editions: editionRows,
     edition: (year) => edIx.get(year) || null,
+    sgYear,
     career: careerRows,
     careerOf: (id) => careerIx.get(id) || null,
     partners: partnerRows,
