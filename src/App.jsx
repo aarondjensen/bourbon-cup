@@ -43,7 +43,7 @@ import {
 import {
   concealHoleData, countdownHoleData, concealCtpData, isConcealing,
   revealState, HOLE_COUNT,
-  COUNTDOWN_HASH, wantsCountdown, revealPending,
+  COUNTDOWN_HASH, wantsCountdown, revealPending, ceremonyRoundNumber,
 } from "./lib/reveal";
 import { usePullToRefresh } from "./lib/usePullToRefresh";
 import { useFitDensity } from "./lib/useFitDensity";
@@ -4224,7 +4224,11 @@ function LoadingPanel({ label }) {
 // that used to be hardcoded here was only ever right at the default text
 // size on a phone whose nav was exactly that tall; anywhere else the menu
 // sank into the bar or floated off it.
-function SlideMenu({ open, onClose, onNavigate, user, view, alerts, onEditions, navH }) {
+// Exported for its test, like ScoreEntry and BettingView below it. What is
+// pinned there is which rows exist for whom — the Final Countdown row is the
+// app's only unconditional door onto the television, and "unconditional" is a
+// claim a test has to keep honest.
+export function SlideMenu({ open, onClose, onNavigate, user, view, alerts, onEditions, onCountdown, navH }) {
   const dragRef = useRef(null);
   const startYRef = useRef(null);
   const [dragY, setDragY] = useState(0);
@@ -4277,6 +4281,19 @@ function SlideMenu({ open, onClose, onNavigate, user, view, alerts, onEditions, 
     // The active year rides on the row so the menu says which tournament is on
     // screen without opening anything.
     { key: "editions",  label: "Tournaments",      icon: "🏆", action: onEditions, value: String(getTournamentYear()) },
+    // ── The way onto the television ────────────────────────────────
+    // For the two or three people who drive it — a director or a captain —
+    // and null for everybody else, which is what keeps it off fifteen phones.
+    //
+    // IT IS HERE BECAUSE THE OTHER DOOR CAN VANISH. The countdown used to be
+    // reachable only from a button inside the amber panel on round 4's
+    // leaderboard section, and that panel is drawn only while the round is
+    // CONCEALING and DRAWN and its section is OPEN. Every one of those is a
+    // way for the button to disappear on the one evening it is needed, and
+    // two of them are states a director can reach by accident. A row in the
+    // menu has no such conditions: it is there whenever the edition has a
+    // round with a ceremony attached, whatever the board is doing.
+    ...(onCountdown ? [{ key: "countdown", label: "Final Countdown", icon: "📺", action: onCountdown }] : []),
     // Was a link out to thebourboncup.com/photos. It is now a tab in the app,
     // because a photo taken on the tee has to be able to go somewhere from the
     // phone that took it. The site is still where the older years live, and
@@ -4480,6 +4497,13 @@ export default function App() {
   // none of which the board is given.
   const [summaryRound, setSummaryRound] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  // ── The door onto the television that cannot close ───────────────
+  // A request, not a view: { id, round }, or null. The countdown itself lives
+  // inside TeamLeaderboard — it is a portal over the whole app, raised from
+  // that screen's own state — so the menu row switches to the tab and hands
+  // it the round to open on. Cleared when the screen closes, so the request
+  // cannot re-fire the next time somebody opens the Leaderboard.
+  const [countdownRequest, setCountdownRequest] = useState(null);
   const [editionsOpen, setEditionsOpen] = useState(false);
   const [ctpData, setCtpData] = useState({});     // { "round_hole": record }
   const [skinsPot, setSkinsPot] = useState(0);
@@ -6902,6 +6926,16 @@ export default function App() {
   );
 
   const isDirector = !!user?.isDirector;
+  // ── Which round has a ceremony attached ──────────────────────────
+  // Off the FORMAT, so it survives every state that takes the leaderboard's
+  // own button away. See ceremonyRoundNumber in lib/reveal for why that is
+  // the question and not "what is concealing right now".
+  const ceremonyRound = ceremonyRoundNumber(enrichedRounds);
+  // And whether it is walkable. The countdown draws ONE match, so a round
+  // nobody has been paired into would open a black screen in front of the
+  // room — worse than no row at all.
+  const ceremonyDrawn = ceremonyRound != null
+    && enrichedMatches.some(m => m.round === ceremonyRound);
   // Which of the two finalize prompts, if either, this round has earned.
   // "Ready" is still the blunt, fully-settled definition — every card
   // ATTESTED, not merely every score typed, because the round is over when
@@ -7406,6 +7440,10 @@ export default function App() {
             roundLocks={roundLocksData}
             viewer={viewerTeam}
             canReveal={isDirector}
+            /* The menu's way in. Cleared on close so it cannot re-fire the
+               next time this tab mounts — see countdownRequest above. */
+            countdownRequest={countdownRequest}
+            onCountdownClosed={() => setCountdownRequest(null)}
             onSetReveal={onSetReveal}
             onSetHole={onSetHole}
             captainSide={myCaptainSide}
@@ -7751,7 +7789,15 @@ export default function App() {
       {!boardOnly && (
         <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={setView} user={user} view={view}
           alerts={{ finalize: finalizeReady, balance: balanceDue }}
-          onEditions={() => setEditionsOpen(true)} navH={navH} />
+          onEditions={() => setEditionsOpen(true)}
+          /* Directors and captains, and only on a round somebody can actually
+             walk. Null for everybody else, which is what keeps the row off
+             fifteen phones — the television does not come through here, it is
+             pointed at /finalcountdown and needs no role at all. */
+          onCountdown={ceremonyDrawn && (isDirector || !!myCaptainSide)
+            ? () => { setView("leaderboard"); setCountdownRequest({ id: Date.now(), round: ceremonyRound }); }
+            : null}
+          navH={navH} />
       )}
 
       {/* Every year the cup has been played. Opened from the menu by anybody;

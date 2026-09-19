@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  resolveSealed, canUnseal, HOLE_COUNT, sealDefaultFor, isSealedRound, revealedThrough, isFullyRevealed, isConcealing, revealState, concealedRoundNumbers, concealHoleData, countdownHoleData, concealCtpData, stepReveal, wantsCountdown, revealPending,
+  resolveSealed, canUnseal, ceremonyRun, ceremonyRoundNumber, HOLE_COUNT, sealDefaultFor, isSealedRound, revealedThrough, isFullyRevealed, isConcealing, revealState, concealedRoundNumbers, concealHoleData, countdownHoleData, concealCtpData, stepReveal, wantsCountdown, revealPending,
   sideReveal, revealedForSide, revealHole, sidesPending, nextHoleForSide,
   revealCursor, countdownHole, canAdvanceHole, canGoBackHole,
   COUNTDOWN_HASH, COUNTDOWN_PATH,
@@ -1289,5 +1289,67 @@ describe("revealPending", () => {
   it("goes false on REVEAL ALL, which is the way out that is left", () => {
     const dark = sealed({ reveal_a: 3, reveal_b: 3 });
     expect(revealPending({ ...dark, reveal_a: 18, reveal_b: 18 })).toBe(false);
+  });
+});
+
+// ── The door that must not close ────────────────────────────────────
+// The way onto the television was a button inside the amber panel on the
+// Leaderboard, and that panel only exists while the round is CONCEALING. Every
+// state that stopped it concealing took the door with it — including the two
+// where a director most needs it: a round finalized before the ceremony ran,
+// and a round whose seal was released. So the menu row asks the FORMAT.
+describe("ceremonyRun", () => {
+  const tbb = (o) => ({ round_number: 4, format: "team_best_ball", ...o });
+
+  it("is false until both sides are out", () => {
+    expect(ceremonyRun(tbb({ sealed: true }))).toBe(false);
+    expect(ceremonyRun(tbb({ sealed: true, reveal_a: 18, reveal_b: 9 }))).toBe(false);
+    expect(ceremonyRun(tbb({ sealed: true, reveal_a: 18, reveal_b: 18 }))).toBe(true);
+    expect(ceremonyRun(tbb({ sealed: true, reveal_through: 18 }))).toBe(true);
+  });
+
+  // The whole reason it exists. `isFullyRevealed` reads revealedThrough, which
+  // answers eighteen for anything that is not sealed — so a round released
+  // from the seal reads as walked whether or not anybody walked it.
+  it("does not mistake an unsealed round for one that has been walked", () => {
+    const released = tbb({ sealed: false, final: true });
+    expect(isFullyRevealed(released)).toBe(true);
+    expect(ceremonyRun(released)).toBe(false);
+  });
+});
+
+describe("ceremonyRoundNumber", () => {
+  const tbb = (n, o) => ({ round_number: n, format: "team_best_ball", ...o });
+  const other = (n) => ({ round_number: n, format: "singles" });
+
+  it("finds the closing round whatever state it is in", () => {
+    [{ sealed: true }, { sealed: false }, { final: true },
+      { sealed: true, final: true }, {}].forEach((state) => {
+      expect(ceremonyRoundNumber([other(1), other(2), tbb(4, state)])).toBe(4);
+    });
+  });
+
+  it("is null when the edition has no round with a ceremony", () => {
+    expect(ceremonyRoundNumber([other(1), other(2)])).toBe(null);
+    expect(ceremonyRoundNumber([])).toBe(null);
+    expect(ceremonyRoundNumber(null)).toBe(null);
+  });
+
+  it("prefers a ceremony still to be run", () => {
+    const walked = tbb(2, { sealed: true, reveal_through: 18 });
+    const pending = tbb(4, { sealed: true });
+    expect(ceremonyRoundNumber([walked, pending])).toBe(4);
+    expect(ceremonyRoundNumber([pending, walked])).toBe(4);
+  });
+
+  it("falls back to the last one when every ceremony has been run", () => {
+    expect(ceremonyRoundNumber([
+      tbb(2, { sealed: true, reveal_through: 18 }),
+      tbb(4, { sealed: true, reveal_through: 18 }),
+    ])).toBe(4);
+  });
+
+  it("ignores a round with no number rather than answering undefined", () => {
+    expect(ceremonyRoundNumber([{ format: "team_best_ball" }])).toBe(null);
   });
 });

@@ -203,10 +203,20 @@ const clampHole = (n) => {
 // `reveal_through` is what this was before the sides came apart, and it is
 // still what a director's ALL button writes and what every round sealed
 // before this shipped carries. It reads as both counters at once.
-export const revealedForSide = (tr, side) => {
-  if (!isSealedRound(tr)) return HOLE_COUNT;
+// What the DOCUMENT says a side has had turned over, with no view about
+// whether the round is sealed. Split out from `revealedForSide` because the
+// two questions came apart: "how much may this reader see" short-circuits to
+// everything on an unsealed round, and "has the ceremony been run" must not —
+// a round released from the seal has still never been walked, and that is
+// exactly the round a director needs the television for. See ceremonyRun.
+const storedRevealForSide = (tr, side) => {
   const own = side === "B" ? tr?.reveal_b : tr?.reveal_a;
   return clampHole(own == null ? tr?.reveal_through : own);
+};
+
+export const revealedForSide = (tr, side) => {
+  if (!isSealedRound(tr)) return HOLE_COUNT;
+  return storedRevealForSide(tr, side);
 };
 
 export const sideReveal = (tr) => ({ A: revealedForSide(tr, "A"), B: revealedForSide(tr, "B") });
@@ -349,6 +359,46 @@ export const isConcealing = (tr) =>
 // and `reopenRound` is untouched, so a round frozen by mistake before any of
 // this existed can still be handed back.
 export const revealPending = (tr) => isSealedRound(tr) && !isFullyRevealed(tr);
+
+// ── Has the ceremony been run? ──────────────────────────────────────
+// Off the stored counters alone. `isFullyRevealed` cannot answer this: it
+// reads `revealedThrough`, which returns eighteen for any round that is not
+// sealed — so a round the seal has let go of reads as fully revealed whether
+// it was walked in front of the room or never opened at all.
+export const ceremonyRun = (tr) =>
+  Math.min(storedRevealForSide(tr, "A"), storedRevealForSide(tr, "B")) >= HOLE_COUNT;
+
+// ── The round the Final Countdown is FOR ────────────────────────────
+// Asked by the one door that must never disappear — the menu row that opens
+// the television — so it deliberately knows nothing about seals, locks or
+// what the board is currently drawing.
+//
+// THE REASON IT IS NOT `concealedRoundNumbers`. The way onto the countdown
+// used to be a single button inside the amber panel on the Leaderboard, and
+// that panel only exists while the round is CONCEALING. Every state that made
+// the round stop concealing took the door with it — including the two where a
+// director most needs it: a round finalized before the ceremony ran, and a
+// round whose seal was released. The ceremony is the one thing still owed in
+// both, and there was no way to start it from inside the app.
+//
+// So: the format decides, not the state. A round of a seal-default format is
+// a round with a countdown attached, for as long as the app can see it. The
+// one preference expressed here is for a ceremony still to be RUN — on the
+// impossible day an edition holds two of them, the unwalked one is the one
+// somebody is looking for.
+//
+// Returns a round number or null. It does not ask whether the round is drawn;
+// the caller has the matches and a countdown with no match to walk is a dead
+// tap, so that check belongs where the answer is.
+export const ceremonyRoundNumber = (tRounds) => {
+  const all = (tRounds || [])
+    .filter((tr) => sealDefaultFor(tr?.format) && Number.isFinite(tr?.round_number))
+    .sort((a, b) => a.round_number - b.round_number);
+  if (!all.length) return null;
+  const pending = all.filter((tr) => !ceremonyRun(tr));
+  const pick = pending.length ? pending : all;
+  return pick[pick.length - 1].round_number;
+};
 
 const roundOf = (tRounds, round) =>
   (tRounds || []).find((t) => t.round_number === round) || null;
