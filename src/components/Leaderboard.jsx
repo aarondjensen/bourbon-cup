@@ -1135,6 +1135,7 @@ export function TeamLeaderboard({
   matches, holeData, ownHoleData, countdownHoleData, courses, tRounds, tPlayers, teams,
   hcpOverrides, teeAssignments, roundLocks, viewer,
   canReveal = false, onSetReveal, onSetHole, captainSide = null, autoCountdown = false, onOpenSummary,
+  countdownRequest = null, onCountdownClosed,
 }) {
   const [expandedMatch, setExpandedMatch] = useState(null);
   // Which sub-level the expanded match is showing — only meaningful for a
@@ -1403,6 +1404,22 @@ export function TeamLeaderboard({
     const rnd = roundNumbers.find((r) => roundMeta[r]?.seal?.sealed && roundMeta[r]?.drawn);
     if (rnd != null) { setAutoOpened(true); setCountdownRound(rnd); }
   }
+  // ── The menu's way in ────────────────────────────────────────────
+  // App raises the tab and hands over { id, round }; this opens on it, once
+  // per id. Resolved during render for the same reason `autoOpened` is — an
+  // effect would paint the scoreboard for a frame first, in front of a room.
+  //
+  // `served` starts at null rather than at the incoming id on purpose. The
+  // row switches to this tab and sets the request in the same act, so the
+  // component MOUNTS with the request already in hand; seeding from the prop
+  // would mark it served before it had been honoured and the row would do
+  // nothing at all. App clears it on close, which is what stops a served
+  // request re-firing the next time somebody opens the Leaderboard.
+  const [servedRequest, setServedRequest] = useState(null);
+  if (countdownRequest && countdownRequest.id !== servedRequest) {
+    setServedRequest(countdownRequest.id);
+    if (countdownRequest.round != null) setCountdownRound(countdownRequest.round);
+  }
   // The URL follows the screen, so a refresh in front of sixteen people comes
   // back to where it was.
   //
@@ -1422,7 +1439,11 @@ export function TeamLeaderboard({
     } catch { /* a browser that refuses to rewrite its own URL still runs the countdown */ }
   };
   const openCountdown = (rnd) => { setCountdownRound(rnd); setCountdownUrl(true); };
-  const closeCountdown = () => { setCountdownRound(null); setCountdownUrl(false); };
+  const closeCountdown = () => {
+    setCountdownRound(null);
+    setCountdownUrl(false);
+    onCountdownClosed?.();
+  };
 
   const countdown = countdownRound != null && (() => {
     const rnd = countdownRound;
@@ -1506,9 +1527,22 @@ export function TeamLeaderboard({
     if (!seal?.sealed) return null;
     const drive = canReveal && onSetReveal ? (n) => onSetReveal(rnd, null, n) : null;
     if (!seal.concealing) {
+      // Sealed, and no longer holding anything back — the ceremony is over
+      // and the round is on the board. The director keeps the stepper (the
+      // way back from a stray tap), and the way onto the television stays
+      // with it: a countdown somebody wants to walk again, or a round
+      // finalized before it was ever run, both arrive here.
       return drive ? (
         <div style={{ marginTop: 8, background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}` }}>
           <RevealControl through={seal.through} onSet={drive} />
+          <div style={{ padding: "0 12px 12px" }}>
+            <button onClick={() => openCountdown(rnd)} style={{
+              width: "100%", padding: "8px 0", borderRadius: 8,
+              background: "transparent", border: `1px solid ${BC.bdr}`,
+              color: BC.t2, fontFamily: FONT, fontSize: FS.label, fontWeight: 800,
+              letterSpacing: 1, cursor: "pointer",
+            }}>📺 OPEN THE FINAL COUNTDOWN</button>
+          </div>
         </div>
       ) : null;
     }
