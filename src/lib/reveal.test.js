@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  resolveSealed, HOLE_COUNT, sealDefaultFor, isSealedRound, revealedThrough, isFullyRevealed, isConcealing, revealState, concealedRoundNumbers, concealHoleData, countdownHoleData, concealCtpData, stepReveal, wantsCountdown, revealPending,
+  resolveSealed, canUnseal, HOLE_COUNT, sealDefaultFor, isSealedRound, revealedThrough, isFullyRevealed, isConcealing, revealState, concealedRoundNumbers, concealHoleData, countdownHoleData, concealCtpData, stepReveal, wantsCountdown, revealPending,
   sideReveal, revealedForSide, revealHole, sidesPending, nextHoleForSide,
   revealCursor, countdownHole, canAdvanceHole, canGoBackHole,
   COUNTDOWN_HASH, COUNTDOWN_PATH,
@@ -29,12 +29,18 @@ describe("sealDefaultFor", () => {
 
 describe("isSealedRound", () => {
   // A stored flag is the director's word and always wins, in both directions.
-  it("takes the stored flag over everything", () => {
+  it("takes the stored flag over everything, ONCE THE ROUND IS FINAL", () => {
     expect(isSealedRound(round(4, { format: "team_best_ball", sealed: true }))).toBe(true);
-    expect(isSealedRound(round(4, { format: "team_best_ball", sealed: false }))).toBe(false);
-    // Even on a finished round, and even against the format.
     expect(isSealedRound(round(4, { format: "team_best_ball", sealed: false, final: true }))).toBe(false);
     expect(isSealedRound(round(1, { format: "best_ball", sealed: true }))).toBe(true);
+  });
+
+  // The closing round has no off switch while it is live. A stored `false`
+  // there is one tap on an auto-saving form, months before anybody tees off,
+  // and it puts round 4's cup points on sixteen phones — so it is refused
+  // rather than obeyed, and the Formats tab refuses to offer it (canUnseal).
+  it("refuses an unseal on a Team Best Ball round that is still live", () => {
+    expect(isSealedRound(round(4, { format: "team_best_ball", sealed: false }))).toBe(true);
   });
 
   // The reason this fallback exists. The seed only reaches the document when a
@@ -70,7 +76,41 @@ describe("resolveSealed", () => {
     expect(resolveSealed("team_best_ball", undefined, false)).toBe(true);
     expect(resolveSealed("best_ball", null, false)).toBe(false);
     expect(resolveSealed("best_ball", true, true)).toBe(true);
-    expect(resolveSealed("team_best_ball", false, false)).toBe(false);
+    // The one the switch cannot write: a live closing round seals whatever
+    // the document says.
+    expect(resolveSealed("team_best_ball", false, false)).toBe(true);
+    expect(resolveSealed("team_best_ball", false, true)).toBe(false);
+  });
+
+  // Every other format is untouched by the force above — a director sealing
+  // Saturday's scramble, or leaving it live, still decides it.
+  it("leaves every other format's switch alone", () => {
+    expect(resolveSealed("best_ball", false, false)).toBe(false);
+    expect(resolveSealed("scramble", true, false)).toBe(true);
+    expect(resolveSealed("singles", false, false)).toBe(false);
+  });
+});
+
+// The switch and the rule are one decision. canUnseal is what the Formats tab
+// asks before it draws Off as a thing you can tap, so the control can never
+// offer a position resolveSealed would then ignore.
+describe("canUnseal", () => {
+  it("refuses Off on a live Team Best Ball round and nowhere else", () => {
+    expect(canUnseal("team_best_ball", false)).toBe(false);
+    expect(canUnseal("team_best_ball", true)).toBe(true);
+    expect(canUnseal("best_ball", false)).toBe(true);
+    expect(canUnseal("singles", false)).toBe(true);
+    expect(canUnseal(undefined, false)).toBe(true);
+  });
+
+  it("agrees with resolveSealed in every case it refuses", () => {
+    // The contract: wherever Off is refused, writing false would have been
+    // ignored. Asserted rather than described, because the two live in one
+    // file precisely so they cannot drift.
+    [["team_best_ball", false], ["team_best_ball", true],
+      ["best_ball", false], ["singles", true]].forEach(([fmt, final]) => {
+      if (!canUnseal(fmt, final)) expect(resolveSealed(fmt, false, final)).toBe(true);
+    });
   });
 });
 
@@ -372,10 +412,17 @@ describe("a live Team Best Ball round nobody flagged", () => {
     expect(concealHoleData(holes, history)).toBe(holes);
   });
 
-  // And a director who deliberately wants it live keeps that.
-  it("respects an explicit unseal", () => {
-    const open = [{ round_number: 4, format: "team_best_ball", sealed: false }];
+  // And a director who wants it live keeps that — once the round is over.
+  // While it is live the unseal is refused (see resolveSealed), which is what
+  // stops one tap in February putting the closing round on the board.
+  it("respects an explicit unseal on a finished round", () => {
+    const open = [{ round_number: 4, format: "team_best_ball", sealed: false, final: true }];
     expect(concealHoleData(holes, open)).toBe(holes);
+  });
+
+  it("but not on a live one — the round still comes off the board", () => {
+    const open = [{ round_number: 4, format: "team_best_ball", sealed: false }];
+    expect(concealHoleData(holes, open)).not.toBe(holes);
   });
 });
 
@@ -1227,17 +1274,20 @@ describe("revealPending", () => {
   // will not let me finish the tournament" is a worse failure than the one
   // this prevents.
   //
-  // The door is the Final Countdown toggle in Admin → Formats, and it is the
-  // right one: turning the ceremony off is exactly what somebody not holding
-  // a ceremony does. An EXPLICIT false always wins over the format default
-  // (see resolveSealed), so it works on the live round with scores already in
-  // it, not just on a fresh one.
-  it("goes false the moment a director switches the seal off", () => {
+  // The door is NOT the Final Countdown toggle any more, and that is the
+  // point: on a live closing round the switch is refused, so flipping it
+  // cannot end the ceremony early. What ends it is REVEAL ALL — two taps on
+  // the reveal control, in front of the room, which is where a decision not
+  // to hold a ceremony belongs.
+  it("does not go false when a director switches the seal off mid-round", () => {
     const dark = sealed({ reveal_a: 3, reveal_b: 3 });
     expect(revealPending(dark)).toBe(true);
-    expect(revealPending({ ...dark, sealed: false })).toBe(false);
-    // And the round is then an ordinary one everywhere else too, so nothing
-    // is left holding its scores back either.
-    expect(isConcealing({ ...dark, sealed: false })).toBe(false);
+    expect(revealPending({ ...dark, sealed: false })).toBe(true);
+    expect(isConcealing({ ...dark, sealed: false })).toBe(true);
+  });
+
+  it("goes false on REVEAL ALL, which is the way out that is left", () => {
+    const dark = sealed({ reveal_a: 3, reveal_b: 3 });
+    expect(revealPending({ ...dark, reveal_a: 18, reveal_b: 18 })).toBe(false);
   });
 });

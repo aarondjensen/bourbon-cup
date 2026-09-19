@@ -10,13 +10,21 @@
 //
 // The blackout did not reach it, and could not: it works by SUBTRACTING
 // scores (lib/reveal), and this card is only ever drawn on a round that has
-// scores left in it. A sealed round draws no match rows at all — so the one
-// round that gets here is a Team Best Ball round being played in the open,
-// which is exactly the round somebody taps twice on a tee box.
+// scores left in it. A sealed round draws no match rows at all — so the round
+// that got here was a Team Best Ball round being played in the open, which at
+// the time was one tap on the Formats tab away.
 //
-// The rule pinned here: until the round is FINAL, the card is the reader's
-// own side. Not the seal — the LOCK — because the seal is a per-round
-// director switch and the whole failure is the round where it is off.
+// THE SEAL HAS SINCE CLOSED THAT DOOR FIRST: `resolveSealed` refuses an
+// unseal on a live closing round, so the rows are gone before any of this
+// applies. This file therefore pins TWO things, and the second is the reason
+// the first is not enough on its own:
+//
+//   • the composite: a live team round puts nothing on the board, whatever
+//     its `sealed` flag says;
+//   • the SECOND LOCK: the card opens on the ROUND LOCK, not on the seal's
+//     say-so. Asserted in the state where the two disagree — the round
+//     released from the seal, the lock not yet landed — because a guarantee
+//     that only holds while another guarantee holds is one guarantee.
 import { describe, it, expect, afterEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/react";
 import { TeamLeaderboard } from "./Leaderboard";
@@ -56,12 +64,15 @@ const bestBall = (over = {}) => ({
   round_number: 4, format: "team_best_ball", course_id: "c1", tee_box: "White",
   handicap_mode: "full", scoring_type: "points",
   counting_scores: { holes: Array(18).fill(2) },
-  // Played in the open. This is the state the fix is about: `isConcealing` is
-  // false, so the board draws the round like any other and the card behind the
-  // row is reachable.
-  sealed: false,
   ...over,
 });
+
+// The round released from the seal but NOT in the books — `sealed: false` with
+// `final` on the document (which is what lets the unseal through at all) and
+// no row in `roundLocks`. Contrived on purpose: it is the one state that
+// reaches the match card with the round not final, and it is exactly the
+// disagreement the second lock exists to survive.
+const released = bestBall({ sealed: false, final: true });
 
 const singles = {
   round_number: 1, format: "singles", course_id: "c1", tee_box: "White",
@@ -126,9 +137,9 @@ const openCard = (result, taps) => {
 
 const NOTE = "FULL CARD WHEN THE ROUND IS FINAL";
 
-const live = [singles, bestBall()];
+const live = [singles, released];
 
-describe("a team round's full card, while the round is being played", () => {
+describe("a team round's full card, while the round is not in the books", () => {
   it("draws the reader's own side and says where the rest is", () => {
     const c = openCard(board({ tRounds: live }), 2);
     OURS.forEach((ini) => expect(cell(c, ini)).toBe(true));
@@ -167,14 +178,43 @@ describe("and once the director puts the round in the books", () => {
   });
 });
 
-describe("a sealed round never gets this far", () => {
-  it("has no match row to tap at all", () => {
-    // Belt and braces on the ordinary case: `isConcealing` takes the rows away
-    // before any of the above applies. Tapping everything the section draws
-    // must still put nothing of either side on screen.
-    const r = board({ tRounds: [singles, bestBall({ sealed: true, reveal_through: 0 })] });
+describe("and the outer wall, which closes it first", () => {
+  // The seal takes the rows away entirely, so none of the above is reached on
+  // a round anybody actually plays. Tapping everything the section draws must
+  // put nothing of either side on screen, and no cup points either.
+  const noRows = (tr) => {
+    const r = board({ tRounds: [singles, tr] });
+    // What the board says at rest — the section opens itself on a concealing
+    // round, so this is what a player finds when he taps the tab.
+    const atRest = r.container.textContent;
+    // And then every control on it, in case one of them is a way in. The
+    // round header is among them, so the section ends up closed; the
+    // assertions below are about what is never drawn, not about the panel.
     r.getAllByRole("button").forEach((b) => fireEvent.click(b));
     [...OURS, ...THEIRS].forEach((ini) => expect(cell(r.container, ini)).toBe(false));
+    // 27 is what B banks on this fixture, and it must not appear in either
+    // state — not on the round's score slot, not in the cup bar, not in a
+    // per-hole tally behind a tap.
+    [atRest, r.container.textContent].forEach((t) => expect(t).not.toContain("27"));
+    return atRest;
+  };
+
+  it("draws no match row on a sealed round", () => {
+    expect(noRows(bestBall({ sealed: true, reveal_through: 0 }))).toContain("WAITING ON THE FINAL COUNTDOWN");
+  });
+
+  it("draws none on a round a director tried to unseal mid-play", () => {
+    // The whole of what stood between the field and round 4's cup points.
+    expect(noRows(bestBall({ sealed: false }))).toContain("WAITING ON THE FINAL COUNTDOWN");
+  });
+
+  it("draws none on a round whose flag was never written", () => {
+    expect(noRows(bestBall())).toContain("WAITING ON THE FINAL COUNTDOWN");
+  });
+
+  it("holds until the eighteenth hole AND the director", () => {
+    expect(noRows(bestBall({ sealed: true, reveal_through: 18 })))
+      .toContain("WAITING ON THE FINAL COUNTDOWN");
   });
 });
 
