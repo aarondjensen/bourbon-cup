@@ -1100,9 +1100,6 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // null for "the one I am in". Only ever offered on a format whose match
   // spans several — see `units` below and the picker further down.
   const [pickedUnit, setPickedUnit] = useState(null);
-  // The round the director has deliberately unlocked the other side's tee
-  // groups on, or null. See `sealedToOwnSide` below.
-  const [unlockedRound, setUnlockedRound] = useState(null);
   // A director's explicit choice of round. null means "follow the tournament",
   // which is what everybody starts on and what everybody who is not a director
   // is pinned to. Held here rather than lifted, for the same reason the match
@@ -1320,18 +1317,31 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // are keeping are the two you can see anyway. A picker that walks the whole
   // draw is a different thing, and it arrived after that reasoning.
   //
-  // So: on a concealing round the picker will not take you to the OTHER SIDE
-  // without being asked twice. Your own side's other waves stay reachable,
-  // which is the same line every other surface in the app draws — a team is
-  // never hidden from itself (see the note at the top of lib/reveal), and a
-  // director checking their own side's card is not learning the result.
+  // So: on a concealing round the picker does not take you to the OTHER SIDE
+  // at all. Your own side's other waves stay reachable, which is the same
+  // line every other surface in the app draws — a team is never hidden from
+  // itself (see the note at the top of lib/reveal), and a director checking
+  // their own side's card is not learning the result.
   //
-  // Stored as the ROUND it was unlocked for rather than a boolean, so it
-  // resolves rather than needing to be cleared: walking to another round, or
-  // the round landing, re-locks it with no effect to fire. It is deliberately
-  // not persisted — the next time the app opens, the seal is back on.
-  const otherSideShown = unlockedRound != null && unlockedRound === match?.round;
-  const sealedToOwnSide = !!conceal && !otherSideShown;
+  // ── AND THERE IS NO WAY THROUGH IT ────────────────────────────────
+  // It used to be a padlock with a confirm behind it: the other side's waves
+  // were listed, tapping one asked "you are trying to access the other team's
+  // scores", and Proceed showed them. That is a door, and a door is what the
+  // blackout is not allowed to have. The man holding it is a director who is
+  // also PLAYING in the round — the single reader the seal exists to keep
+  // honest — and a one-tap confirm in front of a spoiler is not a safeguard,
+  // it is a speed bump with the ending on the other side of it. It also made
+  // the guarantee conditional on a man's self-restraint, which is precisely
+  // the thing this app refuses to build: every other surface subtracts the
+  // numbers rather than trusting a screen not to draw them.
+  //
+  // Nothing is stranded by closing it. A wave is scored by the men walking
+  // it — any of the other side's eight can post their own group's card from
+  // their own phone — so the director's picker was never the only way in,
+  // only the widest. The moment the round is turned over and finalized the
+  // seal lifts of its own accord and every wave is reachable again, which is
+  // when a correction is made anyway.
+  const sealedToOwnSide = !!conceal;
   // Which side of the DRAW a player is on, because that is what a card is
   // scored into. See lib/groups.readableUnits for what a sealed round then
   // does with it, and for the floor that used to step over this filter
@@ -2280,47 +2290,38 @@ export function ScoreEntry({ user, matches, holeData, onSaveHole, tPlayers, cour
   // is holding in their head. A wave with no time set falls back to its
   // position, which is at least in the order they go off.
   //
-  // ── The locked half ──
-  // On a concealing round the other side's waves are still LISTED — the row
-  // keeps its size, so unlocking does not reflow the screen under a thumb —
-  // but they wear a padlock and tapping one asks first. The confirm names what
-  // it costs, because the man tapping it is usually also playing in the round.
+  // ── The sealed half ──
+  // On a concealing round it lists the reader's OWN SIDE's waves and nothing
+  // else — `openUnits`, which is `readableUnits` with the other side's tee
+  // groups taken out (lib/groups). There is no padlocked pill and no confirm
+  // behind one: a control that shows the other team's card when you tap it
+  // twice still shows the other team's card. See the note on
+  // `sealedToOwnSide`.
+  //
+  // Which also means the row can drop to one pill, or to none at all, on the
+  // closing round — and then it does not render, because a picker offering
+  // the group you are already in is a row of height spent on nothing.
+  //
+  // Wave numbers are read off the FULL draw (`units.indexOf`), not off the
+  // filtered row, so the director's own waves keep the numbers the tee sheet
+  // gives them rather than being renumbered 1..n by whichever ones survived
+  // the filter.
   //
   // A pill rather than a button under the row: this screen is fit to the
   // device (useFitDensity), so a control of its own would come out of the
   // score buttons' height for a question asked once a year.
-  const groupPicker = isDirector && units.length > 1 ? (() => {
+  const groupPicker = isDirector && openUnits.length > 1 ? (() => {
     const times = teeTimes;
-    const locked = (u) => sealedToOwnSide && (u.pids || []).some(otherSidePlayer);
-    const unlockThen = async (key) => {
-      // Short on purpose. The man tapping this is a director standing on a
-      // golf course or sitting in the room, and he already knows what the seal
-      // is for — the sentence he needs is the one that says he is about to
-      // walk through it. An explanation of the countdown underneath it is
-      // three lines he has to read past to find the two buttons.
-      const ok = await confirm({
-        title: "Warning",
-        message: "You are trying to access the other team's scores, which are intentionally hidden.",
-        confirmLabel: "Proceed",
-      });
-      if (!ok) return;
-      setUnlockedRound(match.round);
-      switchToUnit(key);
-    };
     return (
       <SegmentedToggle
         variant="pills"
         style={{ marginBottom: 10 }}
-        options={units.map((u, i) => [
+        options={openUnits.map((u) => [
           u.key,
-          `${locked(u) ? "🔒 " : ""}${u.groupIdx == null ? "Ungrouped" : (stripAMPM(times[u.groupIdx]) || `Wave ${i + 1}`)}`,
+          u.groupIdx == null ? "Ungrouped" : (stripAMPM(times[u.groupIdx]) || `Wave ${units.indexOf(u) + 1}`),
         ])}
-        value={unit?.key ?? units[0].key}
-        onChange={(key) => {
-          const u = units.find(x => x.key === key);
-          if (u && locked(u)) return unlockThen(key);
-          switchToUnit(key);
-        }}
+        value={unit?.key ?? openUnits[0].key}
+        onChange={switchToUnit}
       />
     );
   })() : null;

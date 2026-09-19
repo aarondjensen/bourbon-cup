@@ -356,20 +356,22 @@ describe("Scoring", () => {
       expect(t).not.toContain("Player 9");  // the other side
     });
 
-    it("padlocks the other side's waves for a director", () => {
+    it("does not offer the other side's waves to a director AT ALL", () => {
+      // The crown is not an exemption. These two waves are Team B's, and on a
+      // concealing round they are not on the picker, not padlocked on it, and
+      // not reachable from it.
       const t = text(scoring({ user: director }));
-      expect(t).toContain("🔒 8:10");
-      expect(t).toContain("🔒 8:30");
+      expect(t).not.toContain("8:10");
+      expect(t).not.toContain("8:30");
+      expect(t).not.toContain("🔒");
     });
 
-    it("leaves a director's own side unlocked", () => {
+    it("still offers a director their own side's other wave", () => {
       // A team is never hidden from itself — the line every other surface in
       // the app draws. Checking your own side's card is not the result.
       const t = text(scoring({ user: director }));
       expect(t).toContain("8:00");
       expect(t).toContain("8:20");
-      expect(t).not.toContain("🔒 8:00");
-      expect(t).not.toContain("🔒 8:20");
     });
 
     it("lands a director on their own group, not on the first tee time", () => {
@@ -378,23 +380,28 @@ describe("Scoring", () => {
       expect(t).not.toContain("Player 9");
     });
 
-    it("asks before it opens one, and shows nothing until answered", async () => {
-      const { container, getByText } = render(<ScoreEntry {...scoring({ user: director })} />);
-      fireEvent.click(getByText("🔒 8:10"));
-      // The confirm is up, naming what the tap costs.
-      await waitFor(() => expect(document.body.textContent).toContain("intentionally hidden"));
-      // And nothing has moved behind it.
-      expect(container.textContent).not.toContain("Player 9");
+    it("has no confirm behind it, because there is nothing to confirm", async () => {
+      // The door used to be a padlocked pill and a "Proceed". Tapping every
+      // control the screen draws must never raise it, and must never put an
+      // opponent's name on screen — walking to 8:20 is his own side's other
+      // wave and is the whole of what the picker can still reach.
+      const { container } = render(<ScoreEntry {...scoring({ user: director })} />);
+      container.querySelectorAll("button").forEach((b) => fireEvent.click(b));
+      await waitFor(() => expect(container.textContent).toContain("Player 5"));
+      expect(document.body.textContent).not.toContain("intentionally hidden");
+      [9, 10, 11, 12, 13, 14, 15, 16].forEach((n) => {
+        expect(document.body.textContent).not.toContain(`Player ${n}`);
+      });
     });
 
-    it("padlocks nothing once the round is not sealed at all", () => {
+    it("offers every wave once the round is not sealed at all", () => {
       const open = { ...bestBallRound, sealed: false };
       const t = text(scoring({ user: director, tRounds: [open] }));
       expect(t).toContain("8:10");
       expect(t).not.toContain("🔒");
     });
 
-    it("padlocks nothing once the countdown has finished and the round is final", () => {
+    it("offers every wave once the countdown has finished and the round is final", () => {
       // Sealed, fully revealed, and in the books. The round is over and
       // public; there is nothing left to protect and the picker goes back to
       // being a picker.
@@ -404,11 +411,26 @@ describe("Scoring", () => {
       expect(t).not.toContain("🔒");
     });
 
-    it("keeps the padlocks on after the eighteenth until the round is final", () => {
+    it("keeps the other side off it after the eighteenth until the round is final", () => {
       // The ceremony finishing is not the round going in the books — see
       // isConcealing in lib/reveal.
       const walked = { ...bestBallRound, reveal_through: 18 };
-      expect(text(scoring({ user: director, tRounds: [walked] }))).toContain("🔒");
+      const t = text(scoring({ user: director, tRounds: [walked] }));
+      expect(t).not.toContain("8:10");
+      expect(t).not.toContain("8:30");
+    });
+
+    it("draws no picker at all when the director's own side has one wave", () => {
+      // Two waves, one per side. Filtered to his own, the row would be a
+      // single pill naming the group he is already standing in.
+      const twoWaves = [[...teamA.slice(0, 4)], [...teamB.slice(0, 4)]];
+      const t = text(scoring({
+        user: director,
+        groups: { 4: twoWaves },
+        tRounds: [{ ...bestBallRound, tee_time: "8:00|8:10" }],
+      }));
+      expect(t).not.toContain("8:00");
+      expect(t).not.toContain("8:10");
     });
   });
   it("renders it for a director, who gets the group picker", () => {

@@ -792,6 +792,12 @@ export const unitForPlayer = (units, pid) =>
 // side's, and `otherSide` is asked of ANY player in the unit: a wave a
 // director grouped across both teams is withheld rather than half-shown.
 //
+// THERE IS NO OVERRIDE ON TOP OF THIS. The Scoring tab used to draw the
+// withheld units anyway, padlocked, and hand them over on a confirm. It does
+// not any more — see the note on `sealedToOwnSide` in App.jsx. What this
+// function returns is what the picker lists, full stop, which is what makes
+// `open` a guarantee rather than a default.
+//
 // ── The floor is the part that bit ──
 // A screen still has to be about somebody, so the caller falls back to the
 // first unit when the reader's own side has no group at all. `scoringUnits`
@@ -802,8 +808,7 @@ export const unitForPlayer = (units, pid) =>
 //
 // `floor` is therefore the first unit CUT TO THE READER'S OWN SIDE rather
 // than the first unit whole. His own eight are the men he is walking with;
-// the other side is not his to see, and a director who needs that card has
-// the deliberate second ask for it.
+// the other side is not his to see, and there is nothing that asks again.
 //
 // Returns `{ open, floor }` — `open` is what the picker may list, `floor` is
 // what to fall back to when nothing in `open` fits. Both are the units

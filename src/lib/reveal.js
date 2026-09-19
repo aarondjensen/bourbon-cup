@@ -20,11 +20,12 @@
 //     and the director has put the round in the books. No points banked, no
 //     hole strip, no status, nothing in the cup total.
 //   • a player still sees THEIR OWN SIDE's numbers on the SCORING screen,
-//     for every hole their team has posted. "Only your own team" is the
-//     whole ask; a blackout that hid a team from itself would just be an
-//     off switch. It is not on the leaderboard — that screen is read for
-//     the RESULT, and a scorecard of a round whose result is being withheld
-//     is a reader doing the arithmetic himself.
+//     for every hole their team has posted, and NOTHING of the other side's
+//     — not a wave of it, not behind a confirm, not with a crown on.
+//     "Only your own team" is the whole ask; a blackout that hid a team from
+//     itself would just be an off switch. It is not on the leaderboard —
+//     that screen is read for the RESULT, and a scorecard of a round whose
+//     result is being withheld is a reader doing the arithmetic himself.
 //   • the director turns the holes over from the countdown, one tap each,
 //     and the television in the room follows.
 //
@@ -67,10 +68,21 @@
 // screen that is supposed to walk the round has hole `through - 1` as the
 // last one that exists, and no hole after it to leak.
 //
-// The Scoring tab is the exception, and has to be: somebody standing on the
-// 7th is entering four cards, two of which belong to the other side. What is
-// concealed there is what the entries ADD UP TO — the side totals, the match
-// state, the running line — not the numbers being typed.
+// The Scoring tab is the exception, and has to be: somebody has to write the
+// numbers down. What is concealed there is what the entries ADD UP TO — the
+// side totals, the match state, the running line — not the numbers being
+// typed.
+//
+// The exception is exactly as wide as that, and no wider. It is the card in
+// front of the man holding the phone: on a concealing round the Scoring tab
+// offers only the tee groups that are wholly his own side's (see
+// `readableUnits` in lib/groups, and the note on `sealedToOwnSide` in App),
+// and on Team Best Ball the draw is teammates riding together, so the other
+// eight are never on his screen in the first place. THERE IS NO OVERRIDE ON
+// TOP OF IT — the group picker used to draw the other side's waves padlocked
+// and hand them over on a confirm, and it does not any more. A door with a
+// warning on it is still a door, and the man opening it is a director who is
+// also playing in the round.
 //
 // WHAT THIS IS NOT
 // ----------------
