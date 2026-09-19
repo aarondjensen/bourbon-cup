@@ -361,6 +361,49 @@ export function assignPlayersToGroup({ groups, pids, gi }) {
   return next;
 }
 
+// ── Re-timing a whole wave ─────────────────────────────────────────
+// Trade two tee times' occupants, as a unit.
+//
+// The wave-level verb the by-hand editor had none of. `assignPlayersToGroup`
+// above moves men INTO a slot, which is how a wave gets built in the first
+// place, but a wave that already exists could only be re-timed a chip at a
+// time — and if the time the director wanted was taken, not even then: the
+// target had to be emptied first and both waves rebuilt from the pools. The
+// one edit a director actually makes to a Team Best Ball draw, "the Alpha
+// four go off last", was the one edit that cost the most.
+//
+// Every other format already has this and reaches it by a different road: a
+// match that fits in a foursome IS its group, so dragging the match row onto
+// another tee time re-times the wave, and `swapMatchIntoGroup` works out who
+// gets displaced. A format whose match holds the whole side has no such row
+// to drag — sixteen men cannot be dropped on one tee — so the SLOT has to be
+// the thing that moves, and then there is nothing to work out: the two slots
+// simply trade.
+//
+// A trade rather than a move, because a tee sheet has fixed capacity and is
+// usually full by the time anybody wants this. "These four go last" is always
+// also "and whoever was last comes forward", so a move that only wrote one
+// end would either overfill the target or silently ungroup its occupants.
+//
+// Which is also what makes it the SAFE wave-level verb: each slot receives a
+// list that was already legal where it came from, so nothing can overflow and
+// no capacity question has to be asked. The button is never drawn dead and
+// never refuses after the tap.
+//
+// A slot past the end opens the list up to it — same rule its two neighbours
+// above follow. The round HAS that tee time; this document just had no
+// occasion to mention it yet.
+export function swapGroupSlots({ groups, a, b }) {
+  const next = (groups || []).map(g => [...g]);
+  if (a == null || b == null || a < 0 || b < 0 || a === b) return next;
+  // Two empty slots trading is nothing happening, and padding the list out to
+  // say so would grow the stored document by a tee time nobody is standing on.
+  if (!next[a]?.length && !next[b]?.length) return next;
+  while (next.length <= Math.max(a, b)) next.push([]);
+  [next[a], next[b]] = [next[b], next[a]];
+  return next;
+}
+
 // ── Two directors on two devices ───────────────────────────────────
 // One round's groups are ONE document written whole, so two people editing
 // the same sheet is last-write-wins: A drags a match, B drags another against

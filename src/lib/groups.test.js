@@ -4,7 +4,7 @@
 // noticing, because who rode with whom changes no score.
 import { describe, it, expect } from "vitest";
 import {
-  splitEvenly, autoBuildGroups, formatGroupsByTeam, isFoursomeFormat, groupIssues, hasGroupIssues, sidesInRound, GROUP_TARGET, assignPlayersToGroup, groupSizeAfter, groupFitsAfter, scoringUnits, unitForPlayer, readableUnits, swapPlayersInDraw, isForeignGroupEdit, teeSlotCount, TEE_SLOTS,
+  splitEvenly, autoBuildGroups, formatGroupsByTeam, isFoursomeFormat, groupIssues, hasGroupIssues, sidesInRound, GROUP_TARGET, assignPlayersToGroup, swapGroupSlots, groupSizeAfter, groupFitsAfter, scoringUnits, unitForPlayer, readableUnits, swapPlayersInDraw, isForeignGroupEdit, teeSlotCount, TEE_SLOTS,
 } from "./groups";
 
 const A8 = ["a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8"];
@@ -230,6 +230,86 @@ describe("assignPlayersToGroup", () => {
     waves.forEach((w, i) => { groups = assignPlayersToGroup({ groups, pids: w, gi: i }); });
     expect(groups).toEqual(waves);
     const issues = groupIssues({ groups, matches: wholeSide(), formatId: "team_best_ball" });
+    expect(hasGroupIssues(issues)).toBe(false);
+  });
+});
+
+// ── Re-timing a whole wave ─────────────────────────────────────────
+// The verb the chip editor was missing. Every case here is a tee sheet that
+// is already FULL, because that is the state a director is in when he wants
+// this — which is exactly why it has to be a trade and not a move.
+describe("swapGroupSlots", () => {
+  const sheet = () => [
+    ["a1", "a2", "a3", "a4"],
+    ["b1", "b2", "b3", "b4"],
+    ["a5", "a6", "a7", "a8"],
+    ["b5", "b6", "b7", "b8"],
+  ];
+
+  it("trades two waves' tee times", () => {
+    expect(swapGroupSlots({ groups: sheet(), a: 0, b: 3 })).toEqual([
+      ["b5", "b6", "b7", "b8"],
+      ["b1", "b2", "b3", "b4"],
+      ["a5", "a6", "a7", "a8"],
+      ["a1", "a2", "a3", "a4"],
+    ]);
+  });
+
+  it("leaves every other tee time alone", () => {
+    const out = swapGroupSlots({ groups: sheet(), a: 1, b: 2 });
+    expect(out[0]).toEqual(["a1", "a2", "a3", "a4"]);
+    expect(out[3]).toEqual(["b5", "b6", "b7", "b8"]);
+  });
+
+  // Moving a wave onto an empty time is the same operation with one end
+  // blank, which is what lets the editor draw one button rather than two
+  // verbs that have to be told apart before they are tapped.
+  it("moves a wave onto an empty tee time", () => {
+    const out = swapGroupSlots({ groups: [["a1", "a2"], []], a: 0, b: 1 });
+    expect(out).toEqual([[], ["a1", "a2"]]);
+  });
+
+  // The guarantee that makes this the safe wave-level verb: each slot
+  // receives a list that was already legal where it came from, so there is no
+  // capacity question for the button to ask or the tap to refuse.
+  it("can never overfill a tee time", () => {
+    const groups = [["a1", "a2", "a3", "a4"], ["b1"]];
+    const out = swapGroupSlots({ groups, a: 0, b: 1 });
+    expect(out.every(g => g.length <= GROUP_TARGET)).toBe(true);
+    expect(out).toEqual([["b1"], ["a1", "a2", "a3", "a4"]]);
+  });
+
+  it("never leaves a player teeing off twice", () => {
+    const out = swapGroupSlots({ groups: sheet(), a: 0, b: 2 }).flat();
+    expect(new Set(out).size).toBe(out.length);
+    expect(out.length).toBe(16);
+  });
+
+  // A round HAS the tee time whether or not the groups document has mentioned
+  // it — same rule assignPlayersToGroup and assignMatchToGroup follow.
+  it("opens the list up to a later tee time", () => {
+    expect(swapGroupSlots({ groups: [["a1"]], a: 0, b: 2 })).toEqual([[], [], ["a1"]]);
+  });
+
+  it("does not mutate the groups it was given", () => {
+    const groups = sheet();
+    swapGroupSlots({ groups, a: 0, b: 1 });
+    expect(groups).toEqual(sheet());
+  });
+
+  it("is a no-op on a slot dropped back on itself, or on nothing", () => {
+    const groups = sheet();
+    expect(swapGroupSlots({ groups, a: 1, b: 1 })).toEqual(sheet());
+    expect(swapGroupSlots({ groups, a: 1, b: -1 })).toEqual(sheet());
+    expect(swapGroupSlots({ groups, a: null, b: 2 })).toEqual(sheet());
+    expect(swapGroupSlots({ groups: undefined, a: 0, b: 1 })).toEqual([]);
+  });
+
+  // Re-timing is a tee-sheet edit and nothing else: the draw it produces has
+  // to still be a legal Team Best Ball draw, with no wave holding both teams.
+  it("keeps a teammate tee sheet clean", () => {
+    const out = swapGroupSlots({ groups: sheet(), a: 0, b: 1 });
+    const issues = groupIssues({ groups: out, matches: wholeSide(), formatId: "team_best_ball" });
     expect(hasGroupIssues(issues)).toBe(false);
   });
 });

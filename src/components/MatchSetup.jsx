@@ -36,7 +36,7 @@ import {
   autoBuildGroups, expandTeeTimes, teeTimeList,
   stripAMPM, teeSlotCount, padGroups, trimGroups, firstOpenGroup, groupHasRoom,
   matchPlayers, matchSeq, formatPerSide, isFoursomeFormat, formatGroupsByTeam,
-  assignPlayersToGroup, groupFitsAfter,
+  assignPlayersToGroup, groupFitsAfter, swapGroupSlots,
   groupIndexForMatch, assignMatchToGroup, swapMatchIntoGroup, swapPlayersInDraw,
   groupIssues, hasGroupIssues, sidesInRound,
   orderMatchesForRound, canonicalMatchOrder,
@@ -79,6 +79,15 @@ export function MatchSetup({
   // drop. Two taps beats drag-and-drop on a phone, and it is reversible —
   // tapping the lifted chip again puts them back down.
   const [held, setHeld] = useState(null);
+  // The WAVE lifted for a re-time: a slot index, on a format whose foursomes
+  // are built by hand. Tap a tee time's grip to lift the four men standing on
+  // it, tap another tee time to trade places with it.
+  //
+  // Distinct from `held` above, which lifts one man out of a wave. Every other
+  // format re-times a wave by dragging its match row, because there the match
+  // IS the foursome; a team format's match holds the whole side, so the SLOT
+  // has to be the thing that moves.
+  const [heldGroup, setHeldGroup] = useState(null);
   // The player lifted for a SWAP — a pid, from a match row or from a pool.
   // Tap a second name on the same side and the two trade places (see
   // swapPlayersInDraw). Distinct from `held` above, which lifts a player to
@@ -310,6 +319,43 @@ export function MatchSetup({
     if (gi >= 0) next[gi] = [...next[gi], held];
     saveGroups(next);
     setHeld(null);
+  };
+
+  // ── Re-timing a whole wave ───────────────────────────────────────
+  // Lift the four men standing on a tee time, tap another tee time, and the
+  // two trade places. The move a director actually makes to a Team Best Ball
+  // draw — "the Alpha four go off last" — and the one this editor had no verb
+  // for: a wave could be built from the pools and it could be cleared, and
+  // moving one that already existed meant four lifts and four drops, or a
+  // Clear and a rebuild of both waves when the time you wanted was taken.
+  //
+  // Two taps, like every other lift on this tab, and the same gesture the
+  // match rows already answer to. Tapping the lifted grip again puts it back
+  // down.
+  const liftGroup = (gi) => {
+    if (blockedByFinal()) return;
+    // One lifted thing at a time — a screen with a man and a wave both up is
+    // a screen saying two things about what the next tap does.
+    setHeld(null); setHeldName(null); setHeldMatch(null);
+    setTeamASel([]); setTeamBSel([]);
+    setHeldGroup(heldGroup === gi ? null : gi);
+  };
+
+  const dropGroupOn = (gi) => {
+    if (heldGroup == null) return;
+    const from = heldGroup;
+    setHeldGroup(null);
+    if (blockedByFinal() || from === gi) return;
+    // A trade, so neither end can overflow and there is no capacity to check
+    // before the write — see swapGroupSlots.
+    const landing = groups[gi] || [];
+    saveGroups(swapGroupSlots({ groups, a: from, b: gi }));
+    notify(
+      landing.length
+        ? `${slotName(from)} and ${slotName(gi)} swapped tee times`
+        : `Off ${slotName(gi)} — ${(groups[from] || []).map(shortOf).join(", ")}`,
+      "success",
+    );
   };
 
   // ── Moving a match between tee times ─────────────────────────────
@@ -690,7 +736,7 @@ export function MatchSetup({
     // One lifted thing at a time. Building a pairing, correcting one, and
     // re-timing a match are three jobs, and two of them lit at once is a
     // screen saying two things about what the next tap does.
-    setTeamASel([]); setTeamBSel([]); setHeldMatch(null); setHeld(null);
+    setTeamASel([]); setTeamBSel([]); setHeldMatch(null); setHeld(null); setHeldGroup(null);
     setHeldName(pid);
   };
 
@@ -812,6 +858,7 @@ export function MatchSetup({
     // rather than starting a new pairing. It is the substitution case: the
     // pool is exactly the men with no match to be swapped out of.
     if (heldName) { liftOrSwap(pid); return; }
+    setHeldGroup(null);
     const [sel, setSel] = tid === "A" ? [teamASel, setTeamASel] : [teamBSel, setTeamBSel];
     const [other, setOther] = tid === "A" ? [teamBSel, setTeamBSel] : [teamASel, setTeamASel];
     if (on) { setSel(sel.filter(x => x !== pid)); return; }
@@ -835,7 +882,7 @@ export function MatchSetup({
     const team = teams[teamOf(pid)] || teams.B;
     const lifted = held === pid;
     return (
-      <button key={pid} onClick={() => !roundFinal && setHeld(lifted ? null : pid)} style={{
+      <button key={pid} onClick={() => { if (roundFinal) return; setHeldGroup(null); setHeld(lifted ? null : pid); }} style={{
         padding: "5px 9px", borderRadius: 8, cursor: roundFinal ? "default" : "pointer", fontFamily: FONT,
         fontSize: FS.small, fontWeight: 700, textAlign: "left",
         background: lifted ? BC.amber : team.color + "44",
@@ -1006,7 +1053,7 @@ export function MatchSetup({
         value={round}
         onChange={(r) => {
           setRound(r); setTeamASel([]); setTeamBSel([]);
-          setHeld(null); setHeldName(null); setHeldMatch(null); setDrag(null);
+          setHeld(null); setHeldName(null); setHeldMatch(null); setHeldGroup(null); setDrag(null);
         }}
       />
 
@@ -1388,10 +1435,24 @@ export function MatchSetup({
             const side = teammateGroups ? groupSide(g) : null;
             const mixed = teammateGroups && g.length > 0 && !side;
             const sideTeam = side ? teams[side] : null;
+            // This wave is up, waiting for a tee time to land on. Drawn like
+            // a lifted match row: raised, and its grip lit amber.
+            const lifted = heldGroup === gi;
+            // A wave has to have men in it to be worth moving, and a final
+            // round's draw is part of its result.
+            const canLift = teammateGroups && g.length > 0 && !roundFinal;
             return (
               <div key={gi} style={{
                 ...cardStyle, padding: "9px 11px", marginBottom: 6,
-                border: `1px solid ${mixed || over ? BC.danger + ALPHA.line : held ? BC.amber + ALPHA.line : sideTeam ? sideTeam.accent + ALPHA.line : BC.bdr}`,
+                // Lifted beats every other reading of this card — including
+                // the red ones. A wave the director is holding is the one
+                // thing on screen the next tap is about.
+                border: `1px solid ${lifted ? BC.amber : mixed || over ? BC.danger + ALPHA.line : held || heldGroup != null ? BC.amber + ALPHA.line : sideTeam ? sideTeam.accent + ALPHA.line : BC.bdr}`,
+                transition: "opacity 120ms ease, box-shadow 120ms ease",
+                // The other cards step back while one is up, so the sheet
+                // reads as "this one is moving" rather than as four equals.
+                opacity: heldGroup != null && !lifted ? 0.55 : 1,
+                boxShadow: lifted ? `0 4px 14px ${SCRIM}` : "none",
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: g.length ? 7 : 0 }}>
                   {/* The time this group goes off, read off the round, and the
@@ -1401,10 +1462,32 @@ export function MatchSetup({
                       slot out of step. The player count stays here — this is
                       the editor where players are placed one at a time, so
                       "how many are in this one" is the thing being watched. */}
-                  <span style={{
-                    fontSize: FS.small, fontWeight: 800, flexShrink: 0, minWidth: 46,
-                    color: times[gi] ? BC.t1 : BC.t3,
-                  }}>{times[gi] ? stripAMPM(times[gi]) : "—"}</span>
+                  {/* The time doubles as the wave's grip. It is already the
+                      only name this card carries, it is the thing the move
+                      CHANGES, and it is the one control a director's thumb can
+                      find on a card whose other pixels are chips — the same
+                      reason the match rows put the M-number inside their grip.
+                      A ⠿ in front of it is what says it can be picked up.
+                      Padded out to Apple's 44px minimum, negative-margined
+                      back so the header does not grow a row taller. */}
+                  {canLift ? (
+                    <button onClick={() => liftGroup(gi)} style={{
+                      display: "flex", alignItems: "center", gap: 4, flexShrink: 0,
+                      minHeight: 44, padding: "0 6px", margin: "-8px 0 -8px -6px",
+                      background: "transparent", border: "none", cursor: "pointer", fontFamily: FONT,
+                    }}>
+                      <span aria-hidden style={{ fontSize: FS.small, lineHeight: 1, color: lifted ? BC.amberInk : BC.t3 }}>⠿</span>
+                      <span style={{
+                        fontSize: FS.small, fontWeight: 800, minWidth: 46, textAlign: "left",
+                        color: lifted ? BC.amberInk : times[gi] ? BC.t1 : BC.t3,
+                      }}>{times[gi] ? stripAMPM(times[gi]) : "—"}</span>
+                    </button>
+                  ) : (
+                    <span style={{
+                      fontSize: FS.small, fontWeight: 800, flexShrink: 0, minWidth: 46,
+                      color: times[gi] ? BC.t1 : BC.t3,
+                    }}>{times[gi] ? stripAMPM(times[gi]) : "—"}</span>
+                  )}
                   <span style={{
                     fontSize: FS.label, color: mixed || over ? BC.danger : sideTeam ? sideTeam.accent : BC.t3,
                     fontWeight: 700, flex: 1, minWidth: 0,
@@ -1417,9 +1500,20 @@ export function MatchSetup({
                     {g.length} player{g.length !== 1 ? "s" : ""}
                     {mixed ? " · both teams" : ""}{over ? " · too many" : ""}
                   </span>
+                  {/* Three states, in the order the next tap resolves them.
+                      A held WAVE labels its own card nothing — its grip is
+                      amber and tapping that again is how it comes back down —
+                      so the ✕ stays reachable underneath it.
+
+                      Swap or Move here, said by the target rather than
+                      explained anywhere: an occupied time trades, an empty one
+                      just receives, and the word on the button is the whole
+                      difference. */}
                   {held
                     ? <button onClick={() => moveHeldTo(gi)} style={{ ...miniBtn, padding: "4px 8px" }}>Move {shortOf(held)} here</button>
-                    : g.length > 0 && !roundFinal && <button onClick={() => clearGroup(gi)} style={xBtn}>✕</button>}
+                    : heldGroup != null && !lifted
+                      ? <button onClick={() => dropGroupOn(gi)} style={{ ...miniBtn, padding: "4px 8px" }}>{g.length ? "Swap" : "Move here"}</button>
+                      : g.length > 0 && !roundFinal && <button onClick={() => clearGroup(gi)} style={xBtn}>✕</button>}
                 </div>
                 <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                   {g.map(pid => playerChip(pid))}
