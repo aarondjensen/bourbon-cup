@@ -341,18 +341,36 @@ export function ScoreCell({ score, par, strokes = 0, size = CELL, color, skin = 
 //                             this phone wrote a stroke of their card.
 //
 //                             NOT tied to the reveal, and that is the point.
-//                             This popup is a COURSE tool — the card the
-//                             group keeps while they are playing — and the
-//                             detailed result of a finished round is read off
-//                             the Leaderboard, which draws both sides in full
-//                             the moment the round stops concealing. So the
-//                             other side never needs to arrive here, and a
-//                             rule with no timing in it cannot be got wrong
+//                             A rule with no timing in it cannot be got wrong
 //                             by a lock state arriving in the wrong order.
+//                             The Scoring tab sets it unconditionally because
+//                             that popup is a COURSE tool — the card the group
+//                             keeps while they are playing — and the detailed
+//                             result belongs on the Leaderboard.
+//
+//                             The LEADERBOARD now sets it too, and only until
+//                             the round is final. Two taps on a team round's
+//                             row was the shortest way in the app to the
+//                             opposing eight's holes, and it stood open for
+//                             the whole of a round being played. Which means
+//                             "the other side is read off the board" is true
+//                             of a round in the books and of nothing else.
 //
 //                             The reader's OWN side stays visible in full,
 //                             other waves included: a team is never hidden
 //                             from itself.
+//    hiddenNote             — the line drawn where the withheld side's card
+//                             would be, when nothing is sealed. It has to say
+//                             where the rest of it IS, and that answer depends
+//                             on which screen is asking: the Scoring tab sends
+//                             you to the leaderboard, and the leaderboard —
+//                             which now withholds it too, until the round is
+//                             in the books — has to send you to the round
+//                             being final instead. Printing the Scoring tab's
+//                             line on the board would be the card telling a
+//                             reader to go to the screen he is already on.
+//                             A sealed round overrides it: SEALED UNTIL THE
+//                             REVEAL is the truer answer and it outranks both.
 //    course                 — no longer read. The card used to print a terms
 //                             line under the header — course · format ·
 //                             scoring · match play — and it restated things
@@ -368,7 +386,7 @@ export function ScoreCell({ score, par, strokes = 0, size = CELL, color, skin = 
 export function FullScorecard({
   match, result, format, holePars, holeHcps, tPlayers, getScore,
   viewer = "A", showHeader = true, conceal = null, ownSideOnly = false,
-  waves = null, foursome = null,
+  waves = null, foursome = null, hiddenNote = "FULL CARD ON THE LEADERBOARD",
 }) {
   if (!result) return null;
 
@@ -397,11 +415,11 @@ export function FullScorecard({
   // row per nine, each one a control saying "no". A row of nothing is not
   // information, it is furniture.
   //
-  // No reveal state in it either. This sheet is the card the group keeps on
-  // the course; the detailed result of a finished round is read off the
-  // Leaderboard, which draws both sides in full once the round stops
-  // concealing. So on a match bigger than a foursome the other side is simply
-  // never here, and the rule has no timing to get wrong.
+  // No reveal state in it either — the callers decide, and neither asks the
+  // seal. The Scoring tab withholds the other side for as long as that screen
+  // exists; the Leaderboard withholds it until the round is in the books. So
+  // on a match bigger than a foursome the other side is simply never here
+  // while the round is being played, and the rule has no timing to get wrong.
   const hiddenSide = (tid) => ownSideOnly && tid !== mySide;
   // The match cannot be stated with one side's card missing, so the running
   // row goes with it rather than printing a line of padlocks under a gap.
@@ -810,7 +828,7 @@ export function FullScorecard({
       }}>
         {conceal && <span style={{ fontSize: FS.micro, opacity: 0.6 }} title="Sealed until the reveal">🔒</span>}
         <span style={{ fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.4, color: teamColor(tid) }}>
-          {conceal ? "SEALED UNTIL THE REVEAL" : "FULL CARD ON THE LEADERBOARD"}
+          {conceal ? "SEALED UNTIL THE REVEAL" : hiddenNote}
         </span>
       </div>
     );
