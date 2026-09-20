@@ -36,6 +36,28 @@ export const HOLES = 18;
 export const inField = (players, ids) =>
   ids == null ? players : players.filter(p => ids.includes(p.player_id));
 
+// COUNTED or TYPED, in one line — the two shapes described at the top of this
+// file. A buy-in price beats a typed figure whenever there is one, and a game
+// with neither is worth nothing rather than NaN.
+//
+// Here rather than in the screen that draws a pot card, because the winnings
+// board and the Betting tab have to agree about what every pot holds before
+// they can agree about who is owed out of it.
+export const potFor = (field, amount, typed = 0) =>
+  (Number(amount) || 0) > 0
+    ? (field?.length || 0) * Number(amount)
+    : (Number(typed) || 0);
+
+// What one unit of a pot is worth — one skin, one pin, one round. EXACT, and
+// rounded only where it prints: a $80 pot over 36 skins is $2.2222, and ten of
+// them are $22.22 rather than ten times $2.22, which is $22.20. That divergence
+// is how a leaderboard and a settlement come to disagree about the same money.
+//
+// Zero units is zero rather than a division by zero — a pot nobody has won out
+// of yet is intact, not infinite.
+export const shareOf = (pot, units) =>
+  units > 0 ? (Number(pot) || 0) / units : 0;
+
 // A round's course and hole tables, resolved through the round LOCK when there
 // is one. A locked round froze its course, so reading the live round doc
 // instead would re-par a settled hole if the director later re-pointed the
@@ -389,9 +411,68 @@ export const moneyHoleRows = ({ round, hole, field, holeData, maps, chs }) => {
 // splits ITS share rather than paying out twice — so a tie cannot make one
 // hole worth more than a clean one. A round nobody has posted yields nothing
 // and is not counted as decided.
+// ══════════════════════════════════════════════════════════════════
+//  The books — every game's winners, with what each win is worth
+// ══════════════════════════════════════════════════════════════════
+//
+// Four functions, one shape: a flat list of `{ pid, round, share, … }`, one
+// entry per win. That uniformity is the point — a board that sums them does
+// not have to know that a skin divides by skins won while low net divides by
+// rounds, and the four different answers to "what does equal-lowest mean"
+// (see the money hole note above) stay here where they are written down.
+//
+// They are what Admin → Budget → Winnings adds up, and what the Betting tab's
+// own leader cards are drawn from. One author, because a payout computed in
+// two places is a payout read out twice on Sunday with two different numbers.
+
+// One round's skins, resolving the round's own pars and stroke maps. The
+// low-level `computeSkins` takes those already worked out; this is the form a
+// screen holding nothing but the draw can call.
+export const roundSkins = ({ round, gross, field, holeData, ...ctx }) =>
+  computeSkins({
+    round, gross, field, holeData,
+    pars: roundSetup({ round, ...ctx }).pars,
+    // Gross draws no strokes, so it needs no maps.
+    maps: gross ? null : strokeMapsFor({ round, field, ...ctx }),
+  });
+
+// Every skin won across the draw. The pot divides by skins WON rather than by
+// holes or by rounds, because a tie pushes and the hole carries — so a week
+// that pushes half its holes makes every skin that did land worth more.
+export const skinWins = ({ rounds, gross, field, holeData, pot, ...ctx }) => {
+  const won = (rounds || []).flatMap(r =>
+    roundSkins({ round: r, gross, field, holeData, ...ctx })
+      .filter(s => s.winner)
+      .map(s => ({ ...s, round: r })));
+  const share = shareOf(pot, won.length);
+  return won.map(s => ({ ...s, pid: s.winner.pid, name: s.winner.name, share }));
+};
+
+// Every round's low net, with its share. The pot divides by the ROUNDS and a
+// tied round splits ITS share — a tie must not make one round pay out more in
+// total than a clean one, which dividing by wins would have done.
+export const lowNetWins = ({ rounds, field, holeData, pot, ...ctx }) => {
+  const list = rounds || [];
+  const share = shareOf(pot, list.length);
+  return list.flatMap(r => {
+    const winners = lowNetRows({ round: r, field, holeData, ...ctx }).filter(x => x.won);
+    return winners.map(w => ({ ...w, round: r, share: share / winners.length }));
+  });
+};
+
+// Every pin taken, with its share. The pot divides by the par 3s the WEEK
+// holds, not by the ones already taken — see ctpPinTotal for why. So a pin is
+// worth the same on Friday morning as on Sunday afternoon, and a week with
+// pins left unclaimed leaves money in the pot rather than inflating the rest.
+export const ctpWins = ({ rounds, field, ctpData, pot, ...ctx }) => {
+  const share = shareOf(pot, ctpPinTotal({ rounds, ...ctx }).pins);
+  return ctpTags({ rounds, field, ctpData, ...ctx })
+    .map(t => ({ ...t, pid: t.player_id, share }));
+};
+
 export const moneyHoleWins = ({ rounds, hole, field, holeData, mapsFor, pot }) => {
   const list = rounds || [];
-  const share = list.length ? (pot || 0) / list.length : 0;
+  const share = shareOf(pot, list.length);
   return list.flatMap(r => {
     const winners = moneyHoleRows({ round: r, hole, field, holeData, maps: mapsFor?.(r) }).filter(x => x.won);
     return winners.map(w => ({ ...w, share: share / winners.length, round: r }));
