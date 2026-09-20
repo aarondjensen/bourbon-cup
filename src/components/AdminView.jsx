@@ -1263,12 +1263,58 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
 
   useEffect(() => {
     if (seededRound && seed.sig === storedSettingsSig) return;
+    // ── Which of the two re-seeds is this? ─────────────────────────
+    // A DOCUMENT arriving for the round already on screen, or the form being
+    // pointed at a DIFFERENT round. The two guards below belong only to the
+    // first, and letting them reach the second is what leaked one round's
+    // settings onto another.
+    //
+    // Both guards say the same thing: "the form already holds these values,
+    // leave it alone". That is true of a document echoing back to the round
+    // the director is looking at — he may have typed something newer on top
+    // of it, and re-seeding would take his keystrokes away. It is NOT true
+    // the moment the pills move: the boxes then hold the round he came FROM,
+    // and `lastWrittenRef` outlives a round switch, so a round he had edited
+    // earlier in the session came back matching its own guard.
+    //
+    // And the damage was not confined to the screen. `setSeed` above is what
+    // marks the round hydrated, which is what arms the auto-save — so the
+    // form sat there holding the other round's format, form of play, tee
+    // time, date, counting scores and `sealed`, decided it was dirty, and
+    // wrote every one of them onto this round. Editing a hole contribution
+    // on round 4, glancing at round 1 and coming back turned the Final
+    // Countdown off.
+    //
+    // `seededRound` is exactly the flag that tells them apart, and it is read
+    // BEFORE setSeed overwrites it.
+    const sameRound = seededRound;
     setSeed({ round: editRound, sig: storedSettingsSig });
-    // A queued write owns the form — re-seeding would discard the very
-    // edits it is about to send.
-    if (pendingSaveRef.current?.round === editRound) return;
-    const written = lastWrittenRef.current;
-    if (written && written.round === editRound && roundSettingsSignature(written.payload) === storedSettingsSig) return;
+    if (sameRound) {
+      // ── A FORM WITH UNSAVED EDITS IS NEWER THAN THE DOCUMENT ──────
+      // The one rule the other two are special cases of, and the one that
+      // was missing. A director types 5, the debounce sends it, and he types
+      // 4 before Firestore answers — the echo of 5 then arrives describing a
+      // round that is already out of date, and seeding from it put 5 back in
+      // the box under his thumb and wrote it out again.
+      //
+      // `pendingSaveRef` did not cover that: it is cleared the moment the
+      // write is FLUSHED, and the echo arrives after. What is still true at
+      // that moment is that the form and the document disagree, and when
+      // they disagree on the round being edited it is the form that is
+      // ahead. So it holds, and the debounce writes it.
+      if (roundDirty) return;
+      // The two below are now the cheap path rather than the guarantee: both
+      // imply the form is dirty, so the rule above already covers them. They
+      // stay because an echo lands on every keystroke, and answering it with
+      // thirteen setState calls that write back the values already in the
+      // boxes is a re-render per character for nothing.
+      //
+      // A queued write owns the form — re-seeding would discard the very
+      // edits it is about to send.
+      if (pendingSaveRef.current?.round === editRound) return;
+      const written = lastWrittenRef.current;
+      if (written && written.round === editRound && roundSettingsSignature(written.payload) === storedSettingsSig) return;
+    }
     setRoundFormat(storedRound.format);
     setRoundDate(storedRound.date);
     setRoundTeeTime(storedRound.tee_time);
@@ -1282,7 +1328,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
     setSealed(storedRound.sealed_seed);
     setUniformTee(storedRound.uniform_tee);
     setHandicapMode(prev => ({ ...prev, [editRound]: storedRound.handicap_mode }));
-  }, [seed, seededRound, editRound, storedSettingsSig, storedRound]);
+  }, [seed, seededRound, editRound, storedSettingsSig, storedRound, roundDirty]);
 
   // The two per-round maps arrive as whole documents spanning every round,
   // so they are adopted wholesale — the Matches tab reads the other rounds'
