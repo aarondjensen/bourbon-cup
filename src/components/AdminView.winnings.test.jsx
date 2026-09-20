@@ -9,7 +9,7 @@
 // buy-ins, the typed skins pot — and a board handed none of them does not
 // error, it renders "No pots yet" over a tournament with four live pots.
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/react";
+import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
 
 vi.mock("../firebase", () => ({
   db: { subscribe: () => () => {}, upsert: async () => null, delete: async () => null, get: async () => [] },
@@ -125,5 +125,65 @@ describe("Admin → Budget → Winnings", () => {
   // and four $0 rows say less than one empty state.
   it("says so when no game has a pot", () => {
     expect(winnings({ buyIns: {}, skinsPot: 0 }).textContent).toContain("No pots yet");
+  });
+});
+
+// Where the money ended up is group-text news, and this tab is inside an Admin
+// nobody but a director can open — so it has to be able to leave.
+describe("sending it to the group", () => {
+  const clipboard = [];
+  const withClipboard = (writeText) => {
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+  };
+  afterEach(() => { clipboard.length = 0; delete navigator.share; delete navigator.canShare; });
+
+  const copy = (over = {}) => {
+    const c = winnings(over);
+    fireEvent.click([...c.querySelectorAll("button")].find(b => /^COPY$/i.test((b.textContent || "").trim())));
+  };
+
+  it("puts the whole board on the clipboard as prose", async () => {
+    withClipboard(async (t) => { clipboard.push(t); });
+    copy();
+    await waitFor(() => expect(clipboard).toHaveLength(1));
+    const text = clipboard[0];
+    expect(text).toContain("Demo — winnings");
+    expect(text).toContain("Aaron J — $40 (18 skins)");
+    expect(text).toContain("Paul W — $20 (1 CTP)");
+    expect(text).toContain("skins net");
+  });
+
+  it("says it copied", async () => {
+    const said = [];
+    withClipboard(async () => {});
+    const c = winnings({ notify: (msg, kind) => said.push([msg, kind]) });
+    fireEvent.click([...c.querySelectorAll("button")].find(b => /^COPY$/i.test((b.textContent || "").trim())));
+    await waitFor(() => expect(said).toHaveLength(1));
+    expect(said[0][0]).toMatch(/group text/i);
+    expect(said[0][1]).toBe("success");
+  });
+
+  // The clipboard is refused outside a secure context and in some in-app
+  // browsers, and the text is not on screen to read off — so a refusal falls
+  // through to the OS sheet rather than leaving a director with nothing.
+  it("offers the share sheet when the clipboard refuses", async () => {
+    const shared = [];
+    withClipboard(async () => { throw new Error("denied"); });
+    navigator.canShare = () => true;
+    navigator.share = async (data) => { shared.push(data); };
+    copy();
+    await waitFor(() => expect(shared).toHaveLength(1));
+    expect(shared[0].text).toContain("Aaron J");
+  });
+
+  // Told it failed, rather than told it copied when it did not — a man who
+  // pastes nothing into the thread finds out in front of everybody.
+  it("says so when neither route works", async () => {
+    const said = [];
+    withClipboard(async () => { throw new Error("denied"); });
+    const c = winnings({ notify: (msg, kind) => said.push([msg, kind]) });
+    fireEvent.click([...c.querySelectorAll("button")].find(b => /^COPY$/i.test((b.textContent || "").trim())));
+    await waitFor(() => expect(said).toHaveLength(1));
+    expect(said[0][1]).toBe("error");
   });
 });

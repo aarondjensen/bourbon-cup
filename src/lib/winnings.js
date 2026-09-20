@@ -37,6 +37,7 @@ import {
   inField, potFor, skinWins, ctpWins, lowNetWins, moneyHoleWins,
   moneyHole, moneyHoleRoundsIn, strokeMapsFor,
 } from "./betting";
+import { money, round2 } from "./ledger";
 
 // Every pot, every winner and every share, in one pass. The four games come
 // back in the order the Betting tab lists them, and the money hole is labelled
@@ -160,3 +161,65 @@ export const winningsBooks = ({
 // Is there a board to draw at all? A tournament whose director has never set a
 // buy-in has four empty pots, and four $0 rows say less than one empty state.
 export const hasPots = (books) => (books?.games || []).some(g => g.pot > 0);
+
+// ══════════════════════════════════════════════════════════════════
+//  The same board, as something you can send
+// ══════════════════════════════════════════════════════════════════
+//
+// Where the money ends up is group-text news, and the screen it is on is a
+// director-only tab inside an Admin nobody else can open. So it has to be able
+// to leave — and what leaves is PROSE, not the table.
+//
+// A phone message has no columns. Anything laid out with spaces arrives with
+// its alignment collapsed by whatever app is rendering it, which is why this
+// is one sentence a man rather than the grid on screen. The breakdown loses
+// its money and keeps its COUNT for the same reason: "4 skins, 3 low net" is
+// what somebody says out loud, and the total beside his name is the news.
+const UNIT = {
+  skins: (n) => `${n} skin${n === 1 ? "" : "s"}`,
+  ctp: (n) => `${n} CTP${n === 1 ? "" : "s"}`,
+  // No plural — "3 low nets" is not a thing anybody says.
+  lownet: (n) => `${n} low net`,
+  // THE GAME, not the tab. The tab is named after its hole because a tab has
+  // room for two characters; in a sentence the field calls it the money hole,
+  // and it stays true when a director moves it to the ninth.
+  moneyhole: (n) => `${n} money hole${n === 1 ? "" : "s"}`,
+};
+
+export const winningsText = (books, { title } = {}) => {
+  const rows = books?.rows || [];
+  const games = books?.games || [];
+  const head = title ? `${title} — winnings` : "Winnings";
+  if (!rows.length) return `${head}\n\nNothing won yet.`;
+
+  const body = rows.map(r => {
+    const how = games
+      .filter(g => r.games[g.key])
+      .map(g => (UNIT[g.key] || (n => `${n} × ${g.label}`))(r.games[g.key].count))
+      .join(", ");
+    return `${r.name} — ${money(r.total)}${how ? ` (${how})` : ""}`;
+  });
+
+  // What is still in the hat, which is the one thing the list cannot show: a
+  // week with pins nobody hit has money nobody has won, and the men reading
+  // this are the ones who can still go and take it. Dropped once the pots are
+  // all spoken for, where "$360 of $360" is a sentence about nothing.
+  const foot = [
+    // Compared at the CENT, the way both halves of it print. A pot divided
+    // three ways and added back up is $39.99999999999999, and an untouched
+    // float here would print "$40 of $40 paid out" over a week where nothing
+    // is left — a sentence that sends somebody looking for money that is not
+    // there.
+    round2(books.paid) < round2(books.pot)
+      ? `${money(books.paid)} of ${money(books.pot)} paid out`
+      : `${money(books.paid)} paid out`,
+    // Only where there is a skins pot to qualify. Gross and net name different
+    // winners, and a list that does not say which it is can be read as the
+    // other one.
+    games.some(g => g.key === "skins" && g.pot > 0)
+      ? `skins ${books.gross ? "gross" : "net"}`
+      : null,
+  ].filter(Boolean).join(" · ");
+
+  return [head, "", ...body, "", foot].join("\n");
+};

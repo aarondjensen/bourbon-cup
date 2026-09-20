@@ -4270,6 +4270,11 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
               hcpOverrides={hcpOverridesFromDb}
               teeAssignments={teeAssignmentsFromDb}
               teams={teams}
+              /* Heads the copied text, so what lands in the group text says
+                 which tournament it is off — a screenshot has the app around
+                 it and a pasted list has nothing. */
+              tournamentName={tournamentName}
+              notify={notify}
             />
           ) : moneyTab === "budget" ? (
             <BudgetAdmin

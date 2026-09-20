@@ -18,8 +18,9 @@
 import { useMemo, useState } from "react";
 import { BC, FONT, ALPHA, FS } from "../theme";
 import { SegmentedToggle } from "./ui";
-import { winningsBooks, hasPots } from "../lib/winnings";
+import { winningsBooks, hasPots, winningsText } from "../lib/winnings";
 import { money } from "../lib/ledger";
+import { sendText, SAVED } from "../lib/fileSave";
 
 const Card = ({ children, style }) => (
   <div style={{
@@ -51,7 +52,7 @@ const Empty = ({ title, sub }) => (
 
 export function WinningsAdmin({
   tPlayers, tRounds, rounds, courses, holeData, ctpData, buyIns, skinsPot,
-  roundLocks, hcpOverrides, teeAssignments, teams,
+  roundLocks, hcpOverrides, teeAssignments, teams, tournamentName, notify,
 }) {
   // Skins is the only game with two readings and the app stores no answer to
   // which one the field is playing — see lib/winnings. Net is the game as this
@@ -65,6 +66,22 @@ export function WinningsAdmin({
     ctpData: ctpData || {}, buyIns, skinsPot, gross,
     tPlayers, tRounds, courses, roundLocks, hcpOverrides, teeAssignments,
   }), [tPlayers, tRounds, rounds, courses, holeData, ctpData, buyIns, skinsPot, roundLocks, hcpOverrides, teeAssignments, gross]);
+
+  // ── Getting it off the screen ──
+  // Where the money ended up is group-text news, and this tab is inside an
+  // Admin nobody but a director can open — so what the board says has to be
+  // able to leave, as prose rather than as a table (see winningsText).
+  //
+  // The routes and their order are lib/fileSave's; what belongs here is what
+  // to SAY about each one. "Copied" is not true of all three, and a man told
+  // the winnings are on his clipboard when they are not finds out in front of
+  // the group. A share sheet is its own confirmation and a dismissed one is
+  // not a failure, so both stay silent.
+  const send = async () => {
+    const status = await sendText(winningsText(books, { title: tournamentName }));
+    if (status === SAVED.copied) notify?.("Copied — paste it into the group text", "success");
+    if (status === SAVED.failed) notify?.("Couldn't copy the winnings", "error");
+  };
 
   if (!hasPots(books)) {
     return <Empty title="No pots yet" sub="Side-game buy-ins are set on the Betting tab." />;
@@ -123,7 +140,17 @@ export function WinningsAdmin({
         <Empty title="Nothing won yet" sub="Winnings appear as the cards come in." />
       ) : (
         <Card>
-          <Head right={`${books.rows.length} PAID`}>WINNINGS</Head>
+          <Head right={
+            <button
+              type="button"
+              onClick={send}
+              style={{
+                background: "transparent", border: "none", padding: 0,
+                fontFamily: FONT, fontSize: FS.label, fontWeight: 700,
+                letterSpacing: 0.6, color: BC.amberInk, cursor: "pointer",
+              }}
+            >COPY</button>
+          }>WINNINGS</Head>
           {books.rows.map(r => (
             <div key={r.pid} style={{
               display: "flex", alignItems: "center", gap: 8,

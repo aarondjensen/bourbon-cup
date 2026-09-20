@@ -2,7 +2,7 @@
 // that never happened, or save a file somebody just declined to save. The
 // status is the only thing standing between that and what the screen says.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { saveTextFile, savedMessage, SAVED } from "./fileSave";
+import { saveTextFile, sendText, savedMessage, SAVED } from "./fileSave";
 
 const TEXT = "Round 1,,,Kaufman - White\r\n";
 const NAME = "The Bourbon Cup - Round 1.csv";
@@ -115,6 +115,65 @@ describe("on a native build", () => {
     // nobody knows did not happen is the worst of them.
     setNavigator({ canShare: () => false, share: async () => {} });
     expect(await saveTextFile({ name: NAME, text: TEXT, native: true })).toBe(SAVED.failed);
+  });
+});
+
+// The other direction: text going into a message rather than a file going
+// onto a machine. Same statuses, opposite order, and no download at all — a
+// .txt in the downloads folder is further from the group text than the
+// clipboard is.
+describe("sendText", () => {
+  const BODY = "The Bourbon Cup 2026 — winnings\n\nHank W — $136 (4 skins)";
+
+  it("copies, in preference to a share sheet it could have used", async () => {
+    let copied = null;
+    setNavigator({ ...sharer(), clipboard: { writeText: async (t) => { copied = t; } } });
+    expect(await sendText(BODY)).toBe(SAVED.copied);
+    expect(copied).toBe(BODY);
+    expect(shared).toEqual([]);
+  });
+
+  // The clipboard is refused outside a secure context and in some in-app
+  // browsers, and this text is not on screen to read off.
+  it("falls through to the sheet when the clipboard refuses", async () => {
+    setNavigator({ ...sharer(), clipboard: { writeText: async () => { throw new Error("denied"); } } });
+    expect(await sendText(BODY)).toBe(SAVED.shared);
+    expect(shared).toEqual([{ text: BODY }]);
+  });
+
+  // Shares TEXT, so the file test `canShare` performs says nothing about it —
+  // only a definite no counts, and a browser without canShare at all is not
+  // one.
+  it("shares on a browser that has no canShare", async () => {
+    setNavigator({
+      share: async (data) => { shared.push(data); },
+      clipboard: { writeText: async () => { throw new Error("denied"); } },
+    });
+    expect(await sendText(BODY)).toBe(SAVED.shared);
+  });
+
+  it("does not share when the browser says it cannot", async () => {
+    setNavigator({
+      canShare: () => false, share: async (data) => { shared.push(data); },
+      clipboard: { writeText: async () => { throw new Error("denied"); } },
+    });
+    expect(await sendText(BODY)).toBe(SAVED.failed);
+    expect(shared).toEqual([]);
+  });
+
+  // Dismissed is not failed — the screen says nothing about either, but they
+  // must stay tellable apart here.
+  it("reports a dismissed sheet as cancelled", async () => {
+    setNavigator({
+      ...sharer(() => { const e = new Error("x"); e.name = "AbortError"; throw e; }),
+      clipboard: { writeText: async () => { throw new Error("denied"); } },
+    });
+    expect(await sendText(BODY)).toBe(SAVED.cancelled);
+  });
+
+  it("says so when there is no route at all", async () => {
+    setNavigator({});
+    expect(await sendText(BODY)).toBe(SAVED.failed);
   });
 });
 

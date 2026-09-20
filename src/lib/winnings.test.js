@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { winningsBooks, hasPots } from "./winnings";
+import { winningsBooks, hasPots, winningsText } from "./winnings";
 import { potFor, shareOf } from "./betting";
 
 // One par 3 (the first hole), eighteen holes, stroke index in hole order.
@@ -199,5 +199,73 @@ describe("winningsBooks", () => {
 
   it("knows a tournament that has priced a game", () => {
     expect(hasPots(books())).toBe(true);
+  });
+});
+
+// A phone message has no columns, so what leaves this screen is prose — see
+// the note over winningsText.
+describe("winningsText", () => {
+  const text = (over) => winningsText(books(over), { title: "The Bourbon Cup 2026" });
+
+  it("heads it with the tournament, so a pasted list says what it is of", () => {
+    expect(text().split("\n")[0]).toBe("The Bourbon Cup 2026 — winnings");
+  });
+
+  it("falls back to a bare heading with no tournament name", () => {
+    expect(winningsText(books()).split("\n")[0]).toBe("Winnings");
+  });
+
+  it("gives each man a line: his money, then where it came from", () => {
+    expect(text()).toContain("One — $40 (18 skins)");
+  });
+
+  it("says a single win in the singular", () => {
+    const t = text({
+      buyIns: { ctpAmount: 10 },
+      ctpData: { "1_0": { player_id: "p2", distance_ft: 4 } },
+    });
+    expect(t).toContain("Two — $20 (1 CTP)");
+  });
+
+  // The game, not the tab. A tab has room for two characters; a sentence does
+  // not have to be read as "1 hole 18".
+  it("calls the money hole the money hole", () => {
+    const t = text({ buyIns: { moneyHoleAmount: 10, moneyHoleNumber: 1 } });
+    expect(t).toMatch(/1 money hole\b/);
+  });
+
+  // What is still in the hat is the one thing the list cannot show, and the
+  // men reading it are the ones who can go and take it.
+  it("says what is left in the pots when something is", () => {
+    // Both games priced, and not one of the week's two pins taken.
+    const t = text({ buyIns: { skinsAmount: 10, ctpAmount: 10 } });
+    expect(t).toContain("$40 of $80 paid out");
+  });
+
+  it("does not say it twice when the pots are all spoken for", () => {
+    expect(text()).toContain("$40 paid out");
+    expect(text()).not.toContain("of $40");
+  });
+
+  // Gross and net name different winners, so a list that does not say which it
+  // is can be read as the other one.
+  it("names the skins reading it was scored on", () => {
+    expect(text()).toContain("skins net");
+    expect(winningsText(books({ gross: true }), {})).toContain("skins gross");
+  });
+
+  // …and does not qualify a game that is not being played for money.
+  it("says nothing about skins when there is no skins pot", () => {
+    const t = text({
+      buyIns: { ctpAmount: 10 },
+      ctpData: { "1_0": { player_id: "p2", distance_ft: 4 } },
+    });
+    expect(t).not.toContain("skins");
+  });
+
+  it("says so rather than sending an empty list", () => {
+    expect(winningsText(winningsBooks({
+      roster: players, rounds: [], holeData: {}, ctpData: {}, buyIns: {}, ...ctx,
+    }), {})).toContain("Nothing won yet.");
   });
 });
