@@ -120,7 +120,8 @@ import {
 import { summarizeEdition, sameSummary } from "./lib/editionSummary";
 import { parseDeepLink } from "./lib/deepLink";
 import {
-  inField, roundSetup, strokeMapsFor, roundCHs, computeSkins, lowNetRows, ctpTags, ctpPinTotal,
+  inField, roundSetup, strokeMapsFor, roundCHs, lowNetRows, ctpTags, ctpPinTotal,
+  potFor, shareOf, roundSkins, skinWins, lowNetWins,
   moneyHole, moneyHoleRows, moneyHoleWins, moneyHolePars,
   moneyHoleRoundsIn, moneyHolePlaysRound, moneyHoleSwitchedOn,
 } from "./lib/betting";
@@ -3347,17 +3348,22 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // The pot is COUNTED from the buy-ins once a buy-in price exists. Until one
   // does, the hand-typed pot stands and stays editable — which is the only
   // thing a tournament already under way has.
+  //
+  // `potFor` is lib/betting's, and so is every share below it: Admin → Budget
+  // → Winnings adds these four pots up per player, and a second expression of
+  // "what is this pot worth" here is how that board and this one come to name
+  // different money for the same game.
   const skinsCounted = (buyIns?.skinsAmount || 0) > 0;
-  const skinsPotValue = skinsCounted ? skinsField.length * buyIns.skinsAmount : skinsPot;
-  const ctpPotValue = (buyIns?.ctpAmount || 0) > 0 ? ctpField.length * buyIns.ctpAmount : 0;
+  const skinsPotValue = potFor(skinsField, buyIns?.skinsAmount, skinsPot);
+  const ctpPotValue = potFor(ctpField, buyIns?.ctpAmount);
   const lowNetField = inField(roster, buyIns?.lowNetIn);
-  const lowNetPotValue = (buyIns?.lowNetAmount || 0) > 0 ? lowNetField.length * buyIns.lowNetAmount : 0;
+  const lowNetPotValue = potFor(lowNetField, buyIns?.lowNetAmount);
   // ── The money hole ──
   // One designated hole a round, lowest net, ties SPLIT. `moneyHole`
   // normalises the stored number, so an absent or nonsense value scores the
   // eighteenth rather than the first — see lib/betting.
   const moneyHoleField = inField(roster, buyIns?.moneyHoleIn);
-  const moneyHolePot = (buyIns?.moneyHoleAmount || 0) > 0 ? moneyHoleField.length * buyIns.moneyHoleAmount : 0;
+  const moneyHolePot = potFor(moneyHoleField, buyIns?.moneyHoleAmount);
   const holeNum = moneyHole(buyIns?.moneyHoleNumber);
 
   // The rounds that actually exist, not a hardcoded 1-4: a two-round
@@ -3410,22 +3416,22 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   const setupFor = (round) => roundSetup({ round, tRounds, courses, roundLocks });
   const strokeMapsForRound = (round) => strokeMapsFor({ round, field: skinsField, ...ctx });
 
-  const skinsFor = (round, gross) => computeSkins({
-    round, gross, field: skinsField, holeData,
-    pars: setupFor(round).pars,
-    maps: gross ? null : strokeMapsForRound(round),
-  });
+  const skinsFor = (round, gross) => roundSkins({ round, gross, field: skinsField, holeData, ...ctx });
 
-  const allSkins = roundList.flatMap(r => skinsFor(r, grossMode).filter(s => s.winner).map(s => ({ ...s, round: r })));
+  // Every skin the week has produced, and what one is worth — lib/betting's
+  // books, so Admin → Budget → Winnings is adding up the same skins at the
+  // same price rather than a second derivation of them.
+  //
+  // The share is EXACT, and rounded only where it prints. It used to be
+  // rounded to the cent HERE and then multiplied by a player's skin count,
+  // which is how this row came to disagree with the Settle tab about the same
+  // money: a $80 pot over 36 skins is $2.2222 a skin, and ten of them are
+  // $22.22 — not ten times $2.22, which is $22.20.
+  const allSkins = skinWins({ rounds: roundList, gross: grossMode, field: skinsField, holeData, pot: skinsPotValue, ...ctx });
   const skinCount = {};
   allSkins.forEach(s => { skinCount[s.winner.pid] = (skinCount[s.winner.pid] || 0) + 1; });
   const totalSkins = allSkins.length;
-  // Exact, and rounded only where it prints. It used to be rounded to the cent
-  // HERE and then multiplied by a player's skin count, which is how this row
-  // came to disagree with the Settle tab about the same money: a $80 pot over
-  // 36 skins is $2.2222 a skin, and ten of them are $22.22 — not ten times
-  // $2.22, which is $22.20.
-  const perSkin = totalSkins > 0 ? skinsPotValue / totalSkins : 0;
+  const perSkin = shareOf(skinsPotValue, totalSkins);
 
   // ── What the field card is drawn from ──
   // The shown round's setup, skins and stroke maps, resolved once. Every one
@@ -3458,13 +3464,10 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // same share, and a tied round splits ITS share between the co-winners — so
   // a tie cannot make one round pay out more in total than a clean one, which
   // dividing by wins would have done.
-  const lowNetRoundShare = roundList.length ? lowNetPotValue / roundList.length : 0;
-  const lowNetWins = roundList.flatMap(r => {
-    const winners = lowNetFor(r).filter(x => x.won);
-    return winners.map(w => ({ ...w, round: r, share: lowNetRoundShare / winners.length }));
-  });
-  const lowNetDecided = new Set(lowNetWins.map(w => w.round)).size;
-  const lowNetLeaders = Object.values(lowNetWins.reduce((acc, w) => {
+  const lowNetRoundShare = shareOf(lowNetPotValue, roundList.length);
+  const lowNetWinners = lowNetWins({ rounds: roundList, field: lowNetField, holeData, pot: lowNetPotValue, ...ctx });
+  const lowNetDecided = new Set(lowNetWinners.map(w => w.round)).size;
+  const lowNetLeaders = Object.values(lowNetWinners.reduce((acc, w) => {
     const e = acc[w.pid] || (acc[w.pid] = { pid: w.pid, count: 0, best: null, money: 0 });
     e.count += 1;
     e.money += w.share;
@@ -3496,7 +3499,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
   // The pot divides by the ROUNDS and a tied hole splits ITS share — the same
   // shape as low net, and for the same reason: a tie must not make one hole
   // pay out more in total than a clean one. See lib/betting.
-  const moneyHoleShare = moneyHoleRoundList.length ? moneyHolePot / moneyHoleRoundList.length : 0;
+  const moneyHoleShare = shareOf(moneyHolePot, moneyHoleRoundList.length);
   const moneyHoleWinners = moneyHoleWins({
     rounds: moneyHoleRoundList, hole: holeNum, field: moneyHoleField, holeData,
     mapsFor: moneyHoleMapsFor, pot: moneyHolePot,
@@ -7733,6 +7736,15 @@ export default function App() {
             budgetLines={budgetLines}
             onSaveBudgetLine={onSaveBudgetLine}
             onDeleteBudgetLine={onDeleteBudgetLine}
+            /* Admin → Budget → Winnings: what each man is owed out of the
+               side games, added up across all four. Read-only, and derived
+               from the same books the Betting tab draws — see lib/winnings.
+               The RAW ctp map, like the raw holes this console already gets:
+               a director who can unseal a round in two taps gains nothing
+               from a concealed one. */
+            ctpData={ctpData}
+            buyIns={buyIns}
+            skinsPot={skinsPot}
             /* Admin → Formats' route to the Finalize sheet — the early-finalize
                path that used to be a row in the More menu. Null when there is
                no round to finalize, which is what hides the control. */

@@ -203,6 +203,7 @@ import {
 } from "./ui";
 import { LedgerAdmin } from "./Ledger";
 import { BudgetAdmin } from "./Budget";
+import { WinningsAdmin } from "./Winnings";
 import {
   ledgerRows, ledgerTotals,
 } from "../lib/ledger";
@@ -483,7 +484,7 @@ function ChDeltaBadge({ delta }) {
 // is "nothing is running", and the two have to be tellable apart.
 const EXPORT_ALL = "all";
 
-export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCaptain, editionId, isDemoAdmin = false, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, roundCount, tournamentRounds, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks, payments, duesAmount, onLogPayment, onDeletePayment, onSaveDues, onSetPlayerDues, onOpenFinalize, onRecalculateRound, finalizeRound, currentRound, finalizeReady, trip, onSaveTrip, startDate, endDate, budgetLines, onSaveBudgetLine, onDeleteBudgetLine }) {
+export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCaptain, editionId, isDemoAdmin = false, tRounds, courses, matches, onAddPlayer, onUpdatePlayer, onRemovePlayer, onAddCourse, onSetRound, onSetMatch, holeData, onDiscardRoundScores, teams, teamNames, onSaveTeamNames, brand, onSaveBranding, tournamentName, tournamentLocation, roundCount, tournamentRounds, onSaveTournament, hcpOverridesFromDb, teeAssignmentsFromDb, groupsFromDb, onSaveGroups, notify, roundLocks, payments, duesAmount, onLogPayment, onDeletePayment, onSaveDues, onSetPlayerDues, onOpenFinalize, onRecalculateRound, finalizeRound, currentRound, finalizeReady, trip, onSaveTrip, startDate, endDate, budgetLines, onSaveBudgetLine, onDeleteBudgetLine, ctpData, buyIns, skinsPot }) {
   const [tab, setTab] = useState("players");
   // Which half of the $ tab. Budget leads because it is the half a director
   // fills in first — you cannot say what to charge until you know what the
@@ -4220,19 +4221,57 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
           trip cost cover the budget?), and splitting them would put that
           comparison nowhere.
 
-          Nothing here has anything to do with the golf, or with the Betting
-          tab — skins and side bets are settled between players. This is money
+          Neither of those two has anything to do with the golf: they are money
           owed to the DIRECTOR, who fronted the whole thing months ago. See
-          lib/budget and lib/ledger. */}
+          lib/budget and lib/ledger.
+
+          WINNINGS is the third sub-tab and the other direction entirely —
+          money the field owes each other out of the side games, added up per
+          player so the payout is one figure a man rather than four tabs to
+          read off a phone. It is the same arithmetic the Betting tab shows,
+          never a second copy of it (lib/winnings), and it is never netted
+          against the two above. */}
       {tab === "money" && (
         <div>
           <SegmentedToggle
-            options={[["budget", "Budget"], ["accounting", "Accounting"]]}
+            options={[["budget", "Budget"], ["accounting", "Accounting"], ["winnings", "Winnings"]]}
             value={moneyTab}
             onChange={setMoneyTab}
             style={{ marginBottom: 12 }}
           />
-          {moneyTab === "budget" ? (
+          {/* The third half of the money, and it is nobody's half: skins, CTP,
+              low net and the money hole are settled between PLAYERS. It is
+              here because this is the money tab and there is nowhere else in
+              Admin that is, and it is a sub-tab rather than a card on one of
+              the other two so that nothing about it can read as netting
+              against the trip — a man can be square on his dues and up $140
+              on the side games. Read-only; see components/Winnings. */}
+          {moneyTab === "winnings" ? (
+            <WinningsAdmin
+              /* The borrowed ball is a card, not a person, and it cannot be
+                 paid out. Same cut every other roster-facing screen makes. */
+              tPlayers={realPlayers(tPlayers)}
+              tRounds={tRounds}
+              rounds={tournamentRounds}
+              courses={courses}
+              /* The raw maps, like everything else on this console — the
+                 director can unseal a round in two taps, so withholding a
+                 sealed round's skins from him buys nothing. See the audit in
+                 sealedRound.screens.test.jsx. */
+              holeData={holeData}
+              ctpData={ctpData || {}}
+              buyIns={buyIns}
+              skinsPot={skinsPot}
+              roundLocks={roundLocks}
+              /* The DOCUMENTS, not this form's working copy: the board scores
+                 off what every other surface scores off, so an override being
+                 typed into the Formats tab cannot move a payout before it is
+                 saved. */
+              hcpOverrides={hcpOverridesFromDb}
+              teeAssignments={teeAssignmentsFromDb}
+              teams={teams}
+            />
+          ) : moneyTab === "budget" ? (
             <BudgetAdmin
               lines={budgetLines || []}
               playerCount={realPlayers(tPlayers).length}
