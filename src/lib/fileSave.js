@@ -112,3 +112,45 @@ export const saveTextFile = async ({ name, text, mime = "text/csv;charset=utf-8"
   }
   return (await copyText(text)) ? SAVED.copied : SAVED.failed;
 };
+
+// ── Text that is going into a message, not a file ─────────────────
+// `saveTextFile` above answers "get this onto a machine". This answers "get
+// this into the thread" — the winnings a director reads out on Sunday, which
+// belong in the group text rather than in a downloads folder.
+//
+// So the routes invert, and there is no download among them at all: a .txt in
+// the downloads folder is further from a message than the clipboard is, on
+// every device.
+//
+//   clipboard  first, and it is what the button says. Pasting is the act
+//              somebody is already halfway through.
+//   share      navigator.share with TEXT, which has no `files` and so needs
+//              no canShare on the phones that matter. It is the fallback
+//              rather than the lead: the clipboard is refused outside a
+//              secure context and in some in-app browsers, and this text is
+//              not on screen to read off, so a refusal has to go somewhere
+//              rather than leaving a director holding nothing.
+//
+// Ordering it the other way would be a button reading Copy that opens a sheet
+// — the same surprise this file's header warns about, pointed the other way.
+const shareBody = async (text) => {
+  try {
+    // `canShare` with no files is a weaker test than the file one above and
+    // some browsers do not implement it at all, so its ABSENCE is not an
+    // answer — only a definite no is.
+    if (navigator.canShare && !navigator.canShare({ text })) return false;
+    if (!navigator.share) return false;
+    await navigator.share({ text });
+    return true;
+  } catch (err) {
+    if (err?.name === "AbortError") return CANCELLED;
+    return false;
+  }
+};
+
+export const sendText = async (text) => {
+  if (await copyText(text)) return SAVED.copied;
+  const r = await shareBody(text);
+  if (r === CANCELLED) return SAVED.cancelled;
+  return r ? SAVED.shared : SAVED.failed;
+};
