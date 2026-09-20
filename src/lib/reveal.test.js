@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  resolveSealed, canUnseal, ceremonyRun, ceremonyRoundNumber, HOLE_COUNT, sealDefaultFor, isSealedRound, revealedThrough, isFullyRevealed, isConcealing, revealState, concealedRoundNumbers, concealHoleData, countdownHoleData, concealCtpData, stepReveal, wantsCountdown, revealPending,
+  resolveSealed, canUnseal, sealWarning, ceremonyRun, ceremonyRoundNumber, HOLE_COUNT, sealDefaultFor, isSealedRound, revealedThrough, isFullyRevealed, isConcealing, revealState, concealedRoundNumbers, concealHoleData, countdownHoleData, concealCtpData, stepReveal, wantsCountdown, revealPending,
   sideReveal, revealedForSide, revealHole, sidesPending, nextHoleForSide,
   revealCursor, countdownHole, canAdvanceHole, canGoBackHole,
   COUNTDOWN_HASH, COUNTDOWN_PATH,
@@ -1351,5 +1351,49 @@ describe("ceremonyRoundNumber", () => {
 
   it("ignores a round with no number rather than answering undefined", () => {
     expect(ceremonyRoundNumber([{ format: "team_best_ball" }])).toBe(null);
+  });
+});
+
+// ── The badge on the Formats tab ────────────────────────────────────
+// A backstop for a state the app no longer produces. It is tested rather than
+// trusted precisely because nothing on screen can reach it: the day something
+// does, this is what decides whether the director is told.
+describe("sealWarning", () => {
+  it("fires on a live Team Best Ball round whose seal is off", () => {
+    expect(sealWarning("team_best_ball", false, false)).toBe(true);
+  });
+
+  it("does not fire when the seal is on", () => {
+    expect(sealWarning("team_best_ball", true, false)).toBe(false);
+  });
+
+  // The seal protects a result nobody has seen. Off on a round that is over is
+  // a fact, and a warning on round 4 of all ten archived cups is a warning
+  // nobody reads.
+  it("does not fire on a round that is in the books", () => {
+    expect(sealWarning("team_best_ball", false, true)).toBe(false);
+    expect(sealWarning("team_best_ball", true, true)).toBe(false);
+  });
+
+  it("says nothing about a format the reveal was never for", () => {
+    ["singles", "best_ball", "scramble", "fourball", undefined, null]
+      .forEach((fmt) => expect(sealWarning(fmt, false, false)).toBe(false));
+  });
+
+  // The two halves have to agree: wherever the switch may be turned off, the
+  // badge is the thing that says it was.
+  it("is the exact complement of the rule that forces the seal on", () => {
+    [["team_best_ball", false], ["team_best_ball", true],
+      ["singles", false], ["scramble", true]].forEach(([fmt, final]) => {
+      // A round the rule forces sealed can never be warned about, because it
+      // can never be off.
+      if (resolveSealed(fmt, false, final) === true) {
+        expect(sealWarning(fmt, resolveSealed(fmt, false, final), final)).toBe(false);
+      }
+      // And wherever Off is on offer, the badge is reachable.
+      if (canUnseal(fmt, final) && sealDefaultFor(fmt)) {
+        expect(sealWarning(fmt, false, final)).toBe(!final);
+      }
+    });
   });
 });

@@ -105,7 +105,7 @@ import {
   realPlayers,
 } from "../lib/players";
 import {
-  resolveSealed, canUnseal, isConcealing, revealPending,
+  resolveSealed, canUnseal, sealWarning, isConcealing, revealPending,
 } from "../lib/reveal";
 import {
   LOCK_FINAL,
@@ -455,11 +455,40 @@ const ROUND_PLAYER_COLS = "minmax(0, 140px) 34px 58px 32px 22px";
 // the spacing, for the one heading that opened the card — that heading is gone
 // (the round pills above it already name the round), so every remaining one is
 // separating a group of settings from the group before it.
-function RoundSectionHeading({ children }) {
+function RoundSectionHeading({ children, badge = null }) {
   return (
     <div style={{ marginTop: 14, marginBottom: 8, paddingTop: 12, borderTop: `1px solid ${BC.bdr}` }}>
-      <div style={{ fontSize: FS.label, fontWeight: 800, letterSpacing: 1.4, color: BC.gold }}>{children}</div>
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+        fontSize: FS.label, fontWeight: 800, letterSpacing: 1.4, color: BC.gold,
+      }}>
+        <span style={{ minWidth: 0 }}>{children}</span>
+        {badge}
+      </div>
     </div>
+  );
+}
+
+// ── The closing round, not being held back ─────────────────────────
+// The drawing of `sealWarning` (lib/reveal), which owns when this is true and
+// why it is a backstop rather than something a director meets.
+//
+// A label and a tooltip, in that order, and no sentence under the switch:
+// the row it sits on already names what is off, and the section below it is
+// the control that turns it back on.
+function SealOffWarning() {
+  return (
+    <span
+      title="Team Best Ball is the round the reveal exists for. With this off, every score in it is live on the leaderboard as it is posted."
+      style={{
+        flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 4,
+        padding: "2px 7px 3px", borderRadius: 999,
+        background: `${BC.danger}${ALPHA.tint}`, border: `1px solid ${BC.danger}`,
+        color: BC.danger, fontSize: FS.micro, fontWeight: 800, letterSpacing: 0.8,
+      }}
+    >
+      <span aria-hidden="true">⚠</span> SHOWN LIVE
+    </span>
   );
 }
 
@@ -2470,6 +2499,23 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                   setCounting(null);
                   setHolePoints(null);
                   setParPoints(null);
+                  // ── And the seal, which was the one this list forgot ──
+                  // Every other field here is re-derived from the NEW format;
+                  // `sealed` was carried over from the old one. So a round set
+                  // up as a fourball and then changed to Team Best Ball kept
+                  // the fourball's Off — the switch read Off on the closing
+                  // round, and the write stored it.
+                  //
+                  // Nothing leaked: `resolveSealed` forces the seal on while a
+                  // seal-default round is live, so the board held. But the
+                  // switch said one thing and the board did another, on the
+                  // one control where a director's whole confidence in the
+                  // evening is what he read off it.
+                  //
+                  // Through the shared rule rather than `sealDefaultFor`
+                  // alone, so the format's default and the final-round guard
+                  // stay in the one place that owns them (lib/reveal).
+                  setSealed(roundSealedSeed(id, null, roundIsFinal));
                 }} style={{
                   // FS.lead for the same reason as the numeric boxes above:
                   // iOS zooms a focused <select> under 16px exactly as it does
@@ -3122,7 +3168,11 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
                 from the Leaderboard, in front of the room, and putting it on
                 a tab that auto-saves would make giving the ending away a
                 side effect of editing a tee time. */}
-            <RoundSectionHeading>
+            <RoundSectionHeading
+              badge={sealWarning(roundFormat || storedRound.format, sealed, roundIsFinal)
+                ? <SealOffWarning />
+                : null}
+            >
               THE FINAL COUNTDOWN
             </RoundSectionHeading>
             {(() => {

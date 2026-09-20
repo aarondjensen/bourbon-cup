@@ -166,6 +166,24 @@ export const resolveSealed = (format, raw, final) => {
   return raw == null ? false : !!raw;
 };
 
+// ── The closing round, advertising that it will not be held back ────
+// True when a round of a seal-default format is NOT sealed and is not yet in
+// the books. It is what the Formats tab's warning badge reads.
+//
+// The three rules above make this unreachable through the app — `resolveSealed`
+// forces the seal on while such a round is live, `canUnseal` refuses the Off
+// position there, and picking the format sets the switch. It is asserted on
+// screen anyway, because every one of those three is code and code is what
+// produced the state they exist to prevent: a round carrying `sealed: false`
+// from before the rule existed, a document edited in the console, the next
+// format-change handler that forgets a field the way the last one did.
+//
+// `final` is what keeps it off the archived years. A seal protects a result
+// nobody has seen; off on a round that is over is a fact, not a problem, and
+// a warning drawn on round 4 of all ten old cups is a warning nobody reads.
+export const sealWarning = (format, sealed, final) =>
+  !final && sealDefaultFor(format) && !sealed;
+
 // May the Formats tab offer to turn the seal OFF? Asked by the switch, so the
 // control and the rule above are the same decision rather than two that have
 // to be kept in step. A live seal-default round is the one case it may not:
