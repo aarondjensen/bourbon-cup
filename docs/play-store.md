@@ -723,8 +723,9 @@ they always were on paper.
 • SCORING — your group's card, with strokes worked out for the format you are
   playing: fourball, scramble, Pinehurst, singles.
 • MATCHES — the whole draw, every round, with tee times and playing groups.
-• BETTING — skins, closest-to-the-pin and side bets between players, settled by
-  both sides agreeing rather than by the app deciding.
+• GAMES — skins, closest-to-the-pin, low net and the group's hole of the week,
+  scored off the same cards as everything else. No money, no payments, no
+  purchases.
 • TRIP INFO — when it is, where everybody is staying, and the scorecard for
   every course on the schedule.
 • DATA — ten cups of career records, head-to-heads, partnerships, and where

@@ -1412,10 +1412,15 @@ negative one is not — that is a refund, and refunds belong in the ledger.
 ### The ledger
 
 What each man owes the director for the weekend, and what he has paid so far.
-Nothing to do with the golf, and nothing to do with the Betting tab either —
-skins and side bets are settled between players; this is money owed to the
-person who fronted the rooms and the greens fees months ago, usually paid back
-in installments across the summer.
+Nothing to do with the golf, and nothing to do with the Games tab either — the
+side games are settled between players; this is money owed to the person who
+fronted the rooms and the greens fees months ago, usually paid back in
+installments across the summer.
+
+**This is the one place in the app that is still denominated in dollars, and
+that is deliberate** — see "The side games carry no currency" below. Splitting
+the cost of a rented house is expense-sharing and no store has ever treated it
+as anything else.
 
 Three pieces, and only the third is a collection:
 
@@ -1466,6 +1471,56 @@ database got a flat $90 total.
 **Both need `firestore.rules` deployed** to work: `bc_ledger` and `bc_budget`
 are new collections, and until the rules land the default-deny at the bottom of
 that file refuses every read of them. App first, rules second, as always.
+
+## The side games carry no currency
+
+Skins, closest-to-the-pin, low net, the money hole and the 1v1 ledger all used
+to render through `money` in `lib/ledger` — a dollar sign, grouped thousands,
+cents when there were any. They go through **`lib/tally`** now, which writes
+the same figure with no denomination at all.
+
+**Why.** App Review rejected 1.0 (4) on 8 Sep 2026 under guideline 2.3.6,
+holding that the app "includes tips, tools, predictions or other information
+related to real money gambling, real money betting, or real money skill-based
+gaming" and must carry the Gambling age-rating descriptor. Selecting that
+descriptor asks the developer to confirm gambling licensing in every territory
+the app ships to and to geo-restrict the rest — a declaration that is not true
+of sixteen men playing skins in a rented house, and one there is no licence to
+attach to. `app-store.md` has the thread.
+
+**Nothing about the games changed.** Same buy-in, same arithmetic, same
+division of the same total. What is gone is the app's claim that the number on
+screen is dollars. No payment ever moved through this app and none does now;
+what changes hands does so between sixteen men in a house, as it always did.
+
+**There is no unit word, on purpose.** "Points" was the obvious label and is
+taken — the CUP is scored in points ("POINTS AT STAKE" on a match, "MOST
+POINTS IN A CUP" in the records, a `PTS` column on the career table), and a
+second meaning on that word one tab away from the first is how somebody ends
+up asking whether their skins count toward the cup. "Units" and "chips" are
+gambling vocabulary, which is the thing being removed; a "credit" reads as a
+virtual currency and carries its own store rules. Every figure already sits
+under a label saying what it is — TOTAL, EACH, per skin, per round, per pin —
+so the number needs no noun.
+
+**The vocabulary went with it**, user-facing strings only — every key, state
+value, collection name and function name is untouched, so nothing about
+persistence or the tests moved:
+
+| Was | Is |
+| --- | --- |
+| Betting (nav tab) | **Games** |
+| Side Bet (sub-tab) | **1v1** |
+| POT | **TOTAL** |
+| BUY-INS / BUY-IN | **WHO'S IN** / **EACH** |
+| MARK PAID, SAYS PAID | **MARK SETTLED**, **SAYS SETTLED** |
+| Admin → Budget → Winnings | Admin → Budget → **Results** |
+| WINNINGS (heading) | **EACH MAN** |
+
+**`money` in `lib/ledger` stays**, and only the dues ledger and the budget use
+it. Those are real money owed the director, they are expense-sharing rather
+than a game, and confusing the two is how somebody "consistency-fixes" the
+dollar sign back onto a skins board.
 
 ## The api/ handlers during local dev
 

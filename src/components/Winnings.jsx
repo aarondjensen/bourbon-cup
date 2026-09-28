@@ -19,7 +19,7 @@ import { useMemo, useState } from "react";
 import { BC, FONT, ALPHA, FS } from "../theme";
 import { SegmentedToggle } from "./ui";
 import { winningsBooks, hasPots, winningsText } from "../lib/winnings";
-import { money } from "../lib/ledger";
+import { tally as money } from "../lib/tally";
 import { sendText, SAVED } from "../lib/fileSave";
 
 const Card = ({ children, style }) => (
@@ -84,7 +84,7 @@ export function WinningsAdmin({
   };
 
   if (!hasPots(books)) {
-    return <Empty title="No pots yet" sub="Side-game buy-ins are set on the Betting tab." />;
+    return <Empty title="Nothing set up yet" sub="What each side game is worth is set on the Games tab." />;
   }
 
   const played = books.games.filter(g => g.pot > 0);
@@ -104,7 +104,7 @@ export function WinningsAdmin({
           nobody hit or rounds nobody finished leave money that is still in the
           hat on Sunday morning. */}
       <Card>
-        <Head right="POT · WON">POTS</Head>
+        <Head right="TOTAL · WON">GAMES</Head>
         {played.map(g => (
           <div key={g.key} style={{
             display: "flex", alignItems: "baseline", gap: 8,
@@ -137,7 +137,7 @@ export function WinningsAdmin({
       </Card>
 
       {books.rows.length === 0 ? (
-        <Empty title="Nothing won yet" sub="Winnings appear as the cards come in." />
+        <Empty title="Nothing won yet" sub="Results appear as the cards come in." />
       ) : (
         <Card>
           <Head right={
@@ -150,7 +150,7 @@ export function WinningsAdmin({
                 letterSpacing: 0.6, color: BC.amberInk, cursor: "pointer",
               }}
             >COPY</button>
-          }>WINNINGS</Head>
+          }>EACH MAN</Head>
           {books.rows.map(r => (
             <div key={r.pid} style={{
               display: "flex", alignItems: "center", gap: 8,

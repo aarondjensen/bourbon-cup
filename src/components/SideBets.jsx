@@ -20,11 +20,15 @@ import {
   sideBetError, sortSideBets, sideBetTotals, canDeleteSideBet, inSideBet,
   settleState, hasSettled, MAX_DETAIL,
 } from "../lib/sideBets";
+import { tally } from "../lib/tally";
 
-const money = (n) => `$${(Number(n) || 0).toFixed(2)}`;
-// A total is whole money on a card whose header runs three numbers across a
-// phone — the same call the skins pot makes, for the same reason.
-const potMoney = (n) => `$${Math.round(Number(n) || 0).toLocaleString()}`;
+// No currency, here or on the four scored games — see lib/tally for the
+// review finding that decided it. One formatter rather than the two this
+// file used to carry: a total and a share want the same treatment once the
+// dollar sign is gone, and `tally` already hides decimals a whole figure
+// does not have.
+const money = tally;
+const potMoney = tally;
 
 export function SideBets({ players, bets, user, authUid, teams, onAddBet, onDeleteBet, onSettleBet, confirm }) {
   const [adding, setAdding] = useState(false);
@@ -92,7 +96,7 @@ export function SideBets({ players, bets, user, authUid, teams, onAddBet, onDele
 
   const remove = async (b) => {
     const ok = await confirm({
-      title: "Delete this bet?",
+      title: "Delete this?",
       message: `${nameOf(b.player_a)} vs ${nameOf(b.player_b)} · ${money(b.amount)}. This removes the record for everybody.`,
       confirmLabel: "Delete",
       destructive: true,
@@ -110,11 +114,11 @@ export function SideBets({ players, bets, user, authUid, teams, onAddBet, onDele
       <div style={{ background: BC.card, borderRadius: 12, marginBottom: 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
         <div style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>AT STAKE</div>
+            <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>TOTAL</div>
             <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold }}>{potMoney(totals.atStake)}</div>
           </div>
           <div style={{ flex: 1, minWidth: 0, textAlign: "center" }}>
-            <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>BETS</div>
+            <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>COUNT</div>
             <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.amberInk, overflow: "hidden", textOverflow: "ellipsis" }}>{totals.count}</div>
           </div>
           <div style={{ flex: 1, minWidth: 0, textAlign: "right" }}>
@@ -171,17 +175,17 @@ export function SideBets({ players, bets, user, authUid, teams, onAddBet, onDele
         <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, padding: "60px 20px", textAlign: "center" }}>
           <div style={{ fontSize: FS.jumbo, marginBottom: 12, opacity: 0.4 }}>🤝</div>
           {/* Filtered-to-empty is a different answer from nothing-exists, and
-              saying "No side bets yet" over a tournament with nine of them
+              saying "Nothing on the board yet" over a tournament with nine of them
               reads as the tab having lost them. */}
           <div style={{ fontSize: FS.lead, fontWeight: 700, color: BC.t1, marginBottom: 6 }}>
-            {mineOnly ? "None of these are yours" : "No side bets yet"}
+            {mineOnly ? "None of these are yours" : "Nothing on the board yet"}
           </div>
           <div style={{ fontSize: FS.small, color: BC.t3, maxWidth: 280, margin: "0 auto", lineHeight: 1.5 }}>
             {mineOnly
-              ? "You are not in any of the bets on the board. Switch to All to see everybody else's."
+              ? "You are not in any of these. Switch to All to see everybody else's."
               : canAdd
                 ? "Anything you have going with somebody else — a press, long drive, first to break 85, cornhole, etc."
-                : "Bets players have going with each other show up here."}
+                : "What two players agree between themselves shows up here."}
           </div>
         </div>
       ) : (
@@ -219,7 +223,7 @@ export function SideBets({ players, bets, user, authUid, teams, onAddBet, onDele
                   {deletable && (
                     <button
                       type="button"
-                      aria-label="Delete this bet"
+                      aria-label="Delete this"
                       onClick={() => remove(b)}
                       style={{
                         flexShrink: 0, background: "transparent", border: "none", padding: "2px 0 2px 6px",
@@ -292,14 +296,14 @@ function SettleStrip({ state, otherName, markerName, canAct, onToggle, busy }) {
   // rather than on the state — a spectator must not be offered a REOPEN whose
   // write the rules would refuse.
   const [status, label, style] = {
-    open:     ["", "MARK PAID", chip("transparent", BC.amberInk, `1px solid ${BC.bdr}`)],
-    confirm:  [`${markerName} SAYS PAID`, "CONFIRM", chip(BC.amber, ON_AMBER)],
+    open:     ["", "MARK SETTLED", chip("transparent", BC.amberInk, `1px solid ${BC.bdr}`)],
+    confirm:  [`${markerName} SAYS SETTLED`, "CONFIRM", chip(BC.amber, ON_AMBER)],
     waiting:  [`WAITING ON ${otherName}`, "UNDO", chip("transparent", BC.t3, `1px solid ${BC.bdr}`)],
     settled:  ["SETTLED ✓", "REOPEN", chip("transparent", BC.t3, `1px solid ${BC.bdr}`)],
     // Not your bet. You are told where it got to and asked for nothing —
     // including, when one side has claimed it, WHO claimed it, because that
     // is the half of the record an onlooker might be asked to remember.
-    watching: [markerName ? `${markerName} SAYS PAID` : "", null, null],
+    watching: [markerName ? `${markerName} SAYS SETTLED` : "", null, null],
   }[state] || ["", null, null];
 
   const showButton = canAct && !!label;
@@ -457,7 +461,7 @@ function AddBetSheet({ players, me, onCancel, onSave }) {
               background: BC.amber, color: ON_AMBER, opacity: saving ? 0.6 : 1,
             }}
           >
-            {saving ? "Saving…" : "Add bet"}
+            {saving ? "Saving…" : "Add"}
           </button>
         </div>
       </div>

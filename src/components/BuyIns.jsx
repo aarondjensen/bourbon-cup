@@ -23,6 +23,7 @@
 
 import { useState } from "react";
 import { BC, FONT, ALPHA, FS, ON_AMBER, teamColor } from "../theme";
+import { tally } from "../lib/tally";
 
 export function BuyInEditor({ players, amount, ids, onChange }) {
   // Local while typing; committed on blur, like the pot field. Seeded from
@@ -57,8 +58,10 @@ export function BuyInEditor({ players, amount, ids, onChange }) {
       {/* What one seat costs. Zero means the pot is not being counted from
           buy-ins at all, and whatever was typed into the pot stands. */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderBottom: `1px solid ${BC.bdr}` }}>
-        <span style={{ fontSize: FS.label, fontWeight: 800, color: BC.t3, letterSpacing: 0.8 }}>BUY-IN</span>
-        <span style={{ fontSize: FS.body, fontWeight: 800, color: BC.gold }}>$</span>
+        {/* EACH, not BUY-IN, and no currency glyph beside the field — see
+            lib/tally. What one seat is worth is a number the field agreed on;
+            the app divides it and never says what it is denominated in. */}
+        <span style={{ fontSize: FS.label, fontWeight: 800, color: BC.t3, letterSpacing: 0.8 }}>EACH</span>
         {/* FS.lead, and it has to stay at or above it. At FS.body mobile
             Safari zoomed the page in the moment this field took focus and did
             not zoom back out — on this app it CANNOT, because the theme locks
@@ -79,7 +82,7 @@ export function BuyInEditor({ players, amount, ids, onChange }) {
           }}
         />
         <span style={{ flex: 1, fontSize: FS.small, color: BC.t3, textAlign: "right" }}>
-          {list.length} in · ${(list.length * (parseFloat(amt) || 0)).toFixed(2)}
+          {list.length} in · {tally(list.length * (parseFloat(amt) || 0))}
         </span>
       </div>
 

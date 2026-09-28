@@ -7,7 +7,7 @@
 // half that fails silently: every figure on this board is derived from props
 // AdminView had no reason to carry before it existed — the ctp map, the
 // buy-ins, the typed skins pot — and a board handed none of them does not
-// error, it renders "No pots yet" over a tournament with four live pots.
+// error, it renders the empty state over a tournament with four live games.
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
 
@@ -84,21 +84,21 @@ const winnings = (over = {}) => {
   const { container } = render(<AdminView {...props(over)} />);
   const tap = (re) => fireEvent.click([...container.querySelectorAll("button")].find(b => re.test(b.textContent || "")));
   tap(/budget/i);
-  tap(/^Winnings$/i);
+  tap(/^Results$/i);
   return container;
 };
 
 describe("Admin → Budget → Winnings", () => {
   it("is reachable from the money tab", () => {
-    expect(winnings().textContent).toContain("WINNINGS");
+    expect(winnings().textContent).toContain("EACH MAN");
   });
 
   it("adds a man's games up into one figure", () => {
     const text = winnings().textContent;
-    // Two men in at $20: a $40 skins pot, and Aaron won all eighteen.
+    // Two men in at 20 each: a 40 skins total, and Aaron won all eighteen.
     expect(text).toContain("Aaron J");
-    expect(text).toContain("$40");
-    // And the pin Paul took, out of a $20 CTP pot with one par 3 on the week.
+    expect(text).toContain("40");
+    // And the pin Paul took, out of a 20 CTP total with one par 3 on the week.
     expect(text).toContain("Paul W");
   });
 
@@ -106,7 +106,7 @@ describe("Admin → Budget → Winnings", () => {
   // hat, and a board that printed the pot as spoken for would have a director
   // handing out money the field has not won.
   it("shows what each pot holds beside what it has paid", () => {
-    expect(winnings().textContent).toContain("POT");
+    expect(winnings().textContent).toContain("TOTAL · WON");
   });
 
   // Everything here is derived. Nothing on this tab may write.
@@ -122,9 +122,9 @@ describe("Admin → Budget → Winnings", () => {
   });
 
   // A tournament whose director has never priced a game has nothing to add up,
-  // and four $0 rows say less than one empty state.
+  // and four zero rows say less than one empty state.
   it("says so when no game has a pot", () => {
-    expect(winnings({ buyIns: {}, skinsPot: 0 }).textContent).toContain("No pots yet");
+    expect(winnings({ buyIns: {}, skinsPot: 0 }).textContent).toContain("Nothing set up yet");
   });
 });
 
@@ -148,8 +148,8 @@ describe("sending it to the group", () => {
     await waitFor(() => expect(clipboard).toHaveLength(1));
     const text = clipboard[0];
     expect(text).toContain("Demo — winnings");
-    expect(text).toContain("Aaron J — $40 (18 skins)");
-    expect(text).toContain("Paul W — $20 (1 CTP)");
+    expect(text).toContain("Aaron J — 40 (18 skins)");
+    expect(text).toContain("Paul W — 20 (1 CTP)");
     expect(text).toContain("skins net");
   });
 

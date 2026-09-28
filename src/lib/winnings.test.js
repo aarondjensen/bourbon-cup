@@ -49,8 +49,8 @@ describe("potFor", () => {
 });
 
 describe("shareOf", () => {
-  // Exact, and rounded only where it prints — ten skins out of an $80/36 pot
-  // are $22.22, not ten times $2.22.
+  // Exact, and rounded only where it prints — ten skins out of an 80/36
+  // total are 22.22, not ten times 2.22.
   it("does not round", () => {
     expect(shareOf(80, 36) * 10).toBeCloseTo(22.222, 3);
   });
@@ -216,7 +216,7 @@ describe("winningsText", () => {
   });
 
   it("gives each man a line: his money, then where it came from", () => {
-    expect(text()).toContain("One — $40 (18 skins)");
+    expect(text()).toContain("One — 40 (18 skins)");
   });
 
   it("says a single win in the singular", () => {
@@ -224,7 +224,7 @@ describe("winningsText", () => {
       buyIns: { ctpAmount: 10 },
       ctpData: { "1_0": { player_id: "p2", distance_ft: 4 } },
     });
-    expect(t).toContain("Two — $20 (1 CTP)");
+    expect(t).toContain("Two — 20 (1 CTP)");
   });
 
   // The game, not the tab. A tab has room for two characters; a sentence does
@@ -239,12 +239,12 @@ describe("winningsText", () => {
   it("says what is left in the pots when something is", () => {
     // Both games priced, and not one of the week's two pins taken.
     const t = text({ buyIns: { skinsAmount: 10, ctpAmount: 10 } });
-    expect(t).toContain("$40 of $80 paid out");
+    expect(t).toContain("40 of 80 paid out");
   });
 
   it("does not say it twice when the pots are all spoken for", () => {
-    expect(text()).toContain("$40 paid out");
-    expect(text()).not.toContain("of $40");
+    expect(text()).toContain("40 paid out");
+    expect(text()).not.toContain("of 40");
   });
 
   // Gross and net name different winners, so a list that does not say which it

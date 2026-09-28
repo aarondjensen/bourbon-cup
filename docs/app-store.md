@@ -557,10 +557,12 @@ than a fallback, and the note below says so in that order.
 > the demo; the completed tournaments are unaffected. Nothing behind those
 > screens is a purchase, a subscription, or a different app.
 >
-> **On the Betting tab:** the app records wagers players agree with each other
-> in person, and settles them in person. It processes no payments, contains no
-> in-app purchases, and has no connection to any payment provider. The dollar
-> figures are a shared notepad.
+> **On the Games tab:** skins, closest-to-the-pin, low net and one nominated
+> hole, all scored off the same cards the rest of the app uses. Each game has a
+> total the group agrees on and the app divides it among the winners. There is
+> no currency anywhere in it: the figures carry no denomination, the app holds
+> no money, processes no payments, contains no in-app purchases and has no
+> connection to any payment provider.
 >
 > **Account deletion** is at My Account → Delete Account, and removes the
 > authentication account, the membership record and all personal identifiers.
@@ -842,9 +844,10 @@ playing: fourball, scramble, Pinehurst, singles.
 
 MATCHES — the whole draw, every round, with tee times and playing groups.
 
-BETTING — skins, closest-to-the-pin and side bets between players, settled by
-both sides agreeing rather than by the app deciding. The app records what was
-agreed; it moves no money and has no purchases of any kind.
+GAMES — skins, closest-to-the-pin, low net and the group's hole of the week,
+scored off the same cards as everything else. The app keeps each game's totals
+and works out who took what; it holds no money, handles no payment of any kind
+and contains no purchases.
 
 TRIP INFO — when it is, where everybody is staying, and the scorecard for every
 course on the schedule.
