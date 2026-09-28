@@ -4284,7 +4284,7 @@ export function AdminView({ user, tPlayers, memberships, onSetDirector, onSetCap
       {tab === "money" && (
         <div>
           <SegmentedToggle
-            options={[["budget", "Budget"], ["accounting", "Accounting"], ["winnings", "Winnings"]]}
+            options={[["budget", "Budget"], ["accounting", "Accounting"], ["winnings", "Results"]]}
             value={moneyTab}
             onChange={setMoneyTab}
             style={{ marginBottom: 12 }}

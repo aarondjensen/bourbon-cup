@@ -130,6 +130,9 @@ import {
   LEDGER_COL, DUES_SETTINGS_ID, paymentId, buildPayment, paymentError,
   balanceFor, owesMoney, round2,
 } from "./lib/ledger";
+// The side games carry no currency — see lib/tally. `money` above stays for
+// the dues ledger, which is real money owed the director for the trip.
+import { tally } from "./lib/tally";
 import {
   BUDGET_COL, budgetLineId, buildBudgetLine, budgetLineError,
 } from "./lib/budget";
@@ -3580,13 +3583,6 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
     onUpdatePot(Number.isFinite(amt) && amt > 0 ? amt : 0);
   };
 
-  // A POT is always whole money — a buy-in times a head count — so its cents
-  // are two characters of noise on the largest figure on the screen, and the
-  // header now runs three numbers across a phone. A SHARE of one is not
-  // whole: $250 across seven skins is $35.71, and rounding that would be
-  // rounding somebody's money. Display only — the editor still seeds from,
-  // and writes, the exact value.
-  const potMoney = (n) => `$${Math.round(n || 0).toLocaleString()}`;
 
   const empty = (icon, title, sub) => (
     <div style={{ background: BC.card, borderRadius: 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
@@ -3615,7 +3611,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
             director who moves it to the ninth gets a tab called 9, which is
             still what the field will call it. */}
         <SegmentedToggle
-          options={[["skins", "Skins"], ["ctp", "CTP"], ["lownet", "Low Net"], ["moneyhole", String(holeNum)], ["sidebet", "Side Bet"]]}
+          options={[["skins", "Skins"], ["ctp", "CTP"], ["lownet", "Low Net"], ["moneyhole", String(holeNum)], ["sidebet", "1v1"]]}
           value={activeTab} onChange={setActiveTab} letterSpacing={0.5} dividers snug
         />
       </StickyTop>
@@ -3632,13 +3628,13 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
           <div style={{ background: BC.card, borderRadius: 12, marginBottom: editBuyIns === "skins" ? 0 : 12, border: `1px solid ${BC.bdr}`, overflow: "hidden" }}>
             <div style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>POT</div>
+                <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>TOTAL</div>
                 {/* Once a buy-in price is set the pot is COUNTED, not typed, so
                     the inline editor gives way — the way to change it is to
                     change who is in. A tournament with no buy-in price keeps
                     the hand-typed pot exactly as it was. */}
                 {skinsCounted ? (
-                  <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold }}>{potMoney(skinsPotValue)}</div>
+                  <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold }}>{tally(skinsPotValue)}</div>
                 ) : editPot ? (
                   <input autoFocus type="number" inputMode="decimal" value={potInput} onChange={e => setPotInput(e.target.value)}
                     onBlur={commitPot}
@@ -3660,7 +3656,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                       background: "transparent", border: "none", padding: 0, textAlign: "left",
                       cursor: user?.isDirector ? "pointer" : "default",
                     }}>
-                    {potMoney(skinsPot)}
+                    {tally(skinsPot)}
                   </button>
                 )}
               </div>
@@ -3678,7 +3674,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
               </div>
               <div style={{ flex: 1, minWidth: 0, textAlign: "right" }}>
                 <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>EACH</div>
-                <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.amberInk, overflow: "hidden", textOverflow: "ellipsis" }}>${perSkin.toFixed(2)}</div>
+                <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.amberInk, overflow: "hidden", textOverflow: "ellipsis" }}>{tally(perSkin)}</div>
               </div>
             </div>
             {user?.isDirector && (
@@ -3689,10 +3685,10 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                 style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "8px 14px", borderTop: `1px solid ${BC.bdr}`, width: "100%", background: "transparent", borderLeft: "none", borderRight: "none", borderBottom: "none", fontFamily: FONT }}
               >
                 <span style={{ flex: 1, fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.6 }}>
-                  {skinsField.length} IN{skinsCounted ? ` · $${buyIns.skinsAmount} EACH` : ""}
+                  {skinsField.length} IN{skinsCounted ? ` · ${buyIns.skinsAmount} EACH` : ""}
                 </span>
                 <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.amberInk, letterSpacing: 0.6 }}>
-                  BUY-INS {editBuyIns === "skins" ? "▾" : "▸"}
+                  WHO'S IN {editBuyIns === "skins" ? "▾" : "▸"}
                 </span>
               </button>
             )}
@@ -3729,7 +3725,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                     <div style={{ width: 8, height: 8, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
                     <span style={{ flex: 1, fontSize: FS.body, fontWeight: 600, color: BC.t1 }}>{p?.name || pid}</span>
                     <span style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>{count} skin{count !== 1 ? "s" : ""}</span>
-                    <span style={{ fontSize: FS.small, color: BC.t3 }}>${(count * perSkin).toFixed(2)}</span>
+                    <span style={{ fontSize: FS.small, color: BC.t3 }}>{tally(count * perSkin)}</span>
                   </div>
                 );
               })}
@@ -3771,7 +3767,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                     fallback. CTP never had a hand-entered pot to preserve, so
                     it is counted from the buy-ins or it is nothing.
                     Hidden from players until there IS one: this card is new,
-                    and "$0.00" is not worth a row on a tournament whose
+                    and a zero is not worth a row on a tournament whose
                     director has not set a CTP buy-in. The director keeps it
                     either way — it is where they set one. */}
                 {(ctpPotValue > 0 || user?.isDirector) && (
@@ -3779,7 +3775,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                   <div style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>CTP POT</div>
-                      <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold }}>${ctpPotValue.toFixed(2)}</div>
+                      <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold }}>{tally(ctpPotValue)}</div>
                     </div>
                     {/* N OF M, and the share divided by M — the par 3s the
                         week actually holds, not the ones already won. See
@@ -3791,7 +3787,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                         {tags.length} of {ctpPins.pins} pin{ctpPins.pins !== 1 ? "s" : ""} taken
                       </div>
                       <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>
-                        ${perPin.toFixed(2)} / pin
+                        {tally(perPin)} / pin
                       </div>
                     </div>
                   </div>
@@ -3813,10 +3809,10 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                       style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "8px 14px", borderTop: `1px solid ${BC.bdr}` }}
                     >
                       <span style={{ flex: 1, fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.6 }}>
-                        {ctpField.length} IN{(buyIns?.ctpAmount || 0) > 0 ? ` · $${buyIns.ctpAmount} EACH` : ""}
+                        {ctpField.length} IN{(buyIns?.ctpAmount || 0) > 0 ? ` · ${buyIns.ctpAmount} EACH` : ""}
                       </span>
                       <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.amberInk, letterSpacing: 0.6 }}>
-                        BUY-INS {editBuyIns === "ctp" ? "▾" : "▸"}
+                        WHO'S IN {editBuyIns === "ctp" ? "▾" : "▸"}
                       </span>
                     </div>
                   )}
@@ -3962,11 +3958,11 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
               <div style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>LOW NET POT</div>
-                  <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold }}>${lowNetPotValue.toFixed(2)}</div>
+                  <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold }}>{tally(lowNetPotValue)}</div>
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: FS.label, color: BC.t3 }}>{lowNetDecided} of {roundList.length} decided</div>
-                  <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>${lowNetRoundShare.toFixed(2)} / round</div>
+                  <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>{tally(lowNetRoundShare)} / round</div>
                 </div>
               </div>
               {user?.isDirector && (
@@ -3975,10 +3971,10 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                   style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "8px 14px", borderTop: `1px solid ${BC.bdr}` }}
                 >
                   <span style={{ flex: 1, fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.6 }}>
-                    {lowNetField.length} IN{(buyIns?.lowNetAmount || 0) > 0 ? ` · $${buyIns.lowNetAmount} EACH` : ""}
+                    {lowNetField.length} IN{(buyIns?.lowNetAmount || 0) > 0 ? ` · ${buyIns.lowNetAmount} EACH` : ""}
                   </span>
                   <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.amberInk, letterSpacing: 0.6 }}>
-                    BUY-INS {editBuyIns === "lownet" ? "▾" : "▸"}
+                    WHO'S IN {editBuyIns === "lownet" ? "▾" : "▸"}
                   </span>
                 </div>
               )}
@@ -4008,7 +4004,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                     <div style={{ width: 8, height: 8, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
                     <span style={{ flex: 1, minWidth: 0, fontSize: FS.body, fontWeight: 600, color: BC.t1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p?.name || pid}</span>
                     <span style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>{count} round{count !== 1 ? "s" : ""}</span>
-                    <span style={{ fontSize: FS.small, color: BC.t3 }}>${money.toFixed(2)}</span>
+                    <span style={{ fontSize: FS.small, color: BC.t3 }}>{tally(money)}</span>
                   </div>
                 );
               })}
@@ -4037,11 +4033,11 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
               <div style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: FS.label, color: BC.t3, fontWeight: 700, letterSpacing: 1 }}>MONEY HOLE · {holeNum}</div>
-                  <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold }}>${moneyHolePot.toFixed(2)}</div>
+                  <div style={{ fontSize: FS.title, fontWeight: 800, color: BC.gold }}>{tally(moneyHolePot)}</div>
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: FS.label, color: BC.t3 }}>{moneyHoleDecided} of {moneyHoleRoundList.length} decided</div>
-                  <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>${moneyHoleShare.toFixed(2)} / round</div>
+                  <div style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>{tally(moneyHoleShare)} / round</div>
                 </div>
               </div>
 
@@ -4074,7 +4070,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                   style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "8px 14px", borderTop: `1px solid ${BC.bdr}`, width: "100%", background: "transparent", borderLeft: "none", borderRight: "none", borderBottom: "none", fontFamily: FONT }}
                 >
                   <span style={{ flex: 1, fontSize: FS.label, fontWeight: 700, color: BC.t3, letterSpacing: 0.6, textAlign: "left" }}>
-                    {moneyHoleField.length} IN{(buyIns?.moneyHoleAmount || 0) > 0 ? ` · $${buyIns.moneyHoleAmount} EACH` : ""}
+                    {moneyHoleField.length} IN{(buyIns?.moneyHoleAmount || 0) > 0 ? ` · ${buyIns.moneyHoleAmount} EACH` : ""}
                   </span>
                   <span style={{ fontSize: FS.label, fontWeight: 700, color: BC.amberInk, letterSpacing: 0.6 }}>
                     SET UP {editBuyIns === "moneyhole" ? "▾" : "▸"}
@@ -4131,7 +4127,7 @@ function BettingView({ tPlayers, tRounds, rounds, currentRound, courses, holeDat
                     <div style={{ width: 8, height: 8, borderRadius: "50%", background: team?.accent || BC.t3, flexShrink: 0 }} />
                     <span style={{ flex: 1, minWidth: 0, fontSize: FS.body, fontWeight: 600, color: BC.t1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p?.name || pid}</span>
                     <span style={{ fontSize: FS.body, fontWeight: 700, color: BC.amberInk }}>{count} hole{count !== 1 ? "s" : ""}</span>
-                    <span style={{ fontSize: FS.small, color: BC.t3 }}>${money.toFixed(2)}</span>
+                    <span style={{ fontSize: FS.small, color: BC.t3 }}>{tally(money)}</span>
                   </div>
                 );
               })}
@@ -7155,7 +7151,10 @@ export default function App() {
     { key: "scoring",     label: "Scoring",     icon: "score" },
     { key: "groups",      label: "Matches",     icon: "groups" },
     { key: "leaderboard", label: "Leaderboard", icon: "trophy" },
-    { key: "betting",     label: "Betting",     icon: "betting" },
+    // LABEL only. The key is what a tab's state, its deep links and every
+    // test refer to, and renaming it would rewrite persistence to change a
+    // word on screen. See lib/tally for why the word changed.
+    { key: "betting",     label: "Games",       icon: "betting" },
     { key: "menu",        label: "More",        icon: "menu" },
   ];
 

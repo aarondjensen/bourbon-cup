@@ -37,7 +37,10 @@ import {
   inField, potFor, skinWins, ctpWins, lowNetWins, moneyHoleWins,
   moneyHole, moneyHoleRoundsIn, strokeMapsFor,
 } from "./betting";
-import { money, round2 } from "./ledger";
+import { round2 } from "./ledger";
+// No currency on the side games — see lib/tally. round2 above is
+// arithmetic and stays; only the rendering changed.
+import { tally as money } from "./tally";
 
 // Every pot, every winner and every share, in one pass. The four games come
 // back in the order the Betting tab lists them, and the money hole is labelled

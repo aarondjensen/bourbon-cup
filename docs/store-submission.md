@@ -547,6 +547,20 @@ build already attached.
 > single most likely thing to draw a reviewer's question, and answering it
 > before it is asked costs one line and saves a rejection round trip.
 
+**UPDATE, 28 Sep 2026: the reserve was spent, and further than a rename.**
+Rather than carry the Gambling descriptor — whose own App Store Connect warning
+asks the developer to confirm gambling licensing in every territory and
+geo-restrict the rest, which is not true of this app and has no licence to
+attach — the side games stopped being denominated in money at all. `lib/tally`
+renders every figure with no currency, the nav tab is **Games**, and the
+vocabulary went with it. See CLAUDE.md, "The side games carry no currency".
+
+The dues ledger and the budget keep real dollars: splitting the cost of a
+rented house is expense-sharing, and no store has ever treated it otherwise.
+
+What follows is the reasoning as it stood before that, kept because it is why
+the rename alone was never going to be enough.
+
 **The rename is still in reserve, and 8 Sep is not the day to reach for it.**
 Renaming **Betting** to something like **Games** was the fix held back for a
 rejection that quotes the app rather than the form. This one quotes the app —
