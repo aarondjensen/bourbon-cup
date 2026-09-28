@@ -49,9 +49,10 @@ export const sideBetId = (now, rand) =>
 // form somebody closes.
 export const sideBetError = ({ playerA, playerB, amount }) => {
   if (!playerA || !playerB) return "Pick both players.";
-  if (playerA === playerB) return "A bet needs two different players.";
+  if (playerA === playerB) return "Pick two different players.";
   const amt = Number(amount);
   if (!Number.isFinite(amt) || amt <= 0) return "Enter an amount.";
+  if (!Number.isInteger(amt)) return "Whole numbers only.";
   return null;
 };
 

@@ -145,7 +145,7 @@ export function SideBets({ players, bets, user, authUid, teams, onAddBet, onDele
             letterSpacing: 0.8,
           }}
         >
-          + ADD BET
+          + ADD
         </button>
       )}
 
@@ -402,7 +402,7 @@ function AddBetSheet({ players, me, onCancel, onSave }) {
     // and the classic centred overlay sits under the keyboard.
     <Popup onClose={saving ? undefined : onCancel} maxWidth={400} padding={16} portal viewportFit align="start">
       <div style={{ fontFamily: FONT }}>
-        <div style={{ fontSize: FS.lead, fontWeight: 800, color: BC.t1, marginBottom: 14 }}>New side bet</div>
+        <div style={{ fontSize: FS.lead, fontWeight: 800, color: BC.t1, marginBottom: 14 }}>New 1v1</div>
 
         <div style={{ marginBottom: 12 }}>
           {label("BETWEEN")}
@@ -415,21 +415,18 @@ function AddBetSheet({ players, me, onCancel, onSave }) {
 
         <div style={{ marginBottom: 12 }}>
           {label("AMOUNT")}
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: FS.lead, fontWeight: 800, color: BC.gold }}>$</span>
-            <input
-              type="number" inputMode="decimal" value={amount} placeholder="0.00"
-              onChange={e => { setErr(null); setAmount(e.target.value); }}
-              style={{ ...field, fontWeight: 800, color: BC.gold }}
-            />
-          </div>
+          <input
+            type="text" inputMode="numeric" pattern="[0-9]*" value={amount} placeholder="0"
+            onChange={e => { setErr(null); setAmount(e.target.value.replace(/\D/g, "")); }}
+            style={{ ...field, fontWeight: 800, color: BC.gold }}
+          />
         </div>
 
         <div style={{ marginBottom: 4 }}>
           {label("DETAIL")}
           <textarea
             value={detail} rows={3} maxLength={MAX_DETAIL}
-            placeholder="The terms — what has to happen, and who pays."
+            placeholder="The terms — what has to happen."
             onChange={e => setDetail(e.target.value)}
             style={{ ...field, resize: "vertical", lineHeight: 1.4 }}
           />

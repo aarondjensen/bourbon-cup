@@ -39,6 +39,9 @@ describe("sideBetError", () => {
     expect(sideBetError({ playerA: "p1", playerB: "p2", amount: "" })).toMatch(/amount/i);
     expect(sideBetError({ playerA: "p1", playerB: "p2", amount: "abc" })).toMatch(/amount/i);
   });
+  it("takes whole numbers only", () => {
+    expect(sideBetError({ playerA: "p1", playerB: "p2", amount: "7.50" })).toMatch(/whole/i);
+  });
 });
 
 describe("buildSideBet", () => {
